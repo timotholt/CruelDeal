@@ -36,7 +36,7 @@ export const DeckScreen = (props: DeckScreenProps) => {
         if (props.activeScreen === 'DECK') {
             setActiveTab('CARDS');
             // Reset mode if we leave/enter to keep things fresh
-            if (ui.pendingLevelIncrement > 0) {
+            if (ui.pendingLevelIncrement() > 0) {
                 setIsProgressionOpen(true);
             }
         } else {

@@ -1,10 +1,21 @@
 import { createSignal, Show, ErrorBoundary } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
 import { api } from './services/api';
 import { UserProfile } from './types';
 import { MainNavigator } from './components/MainNavigator';
 import { LoginScreen } from './components/screens/LoginScreen';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000,
+    },
+  },
+});
 
 /**
  * AppContent Component
@@ -48,43 +59,45 @@ export default function App() {
   };
 
   return (
-    <ErrorBoundary fallback={(err) => (
-        <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-red-500 font-mono text-sm p-4 text-center">
-            <div class="text-xl mb-4 text-white font-black italic">CRITICAL ERROR</div>
-            <div class="max-w-md break-words whitespace-pre-wrap opacity-80">{err?.message || "Unknown rendering error"}</div>
-            <button 
-                class="mt-8 px-6 py-2 bg-indigo-600 text-white font-bold italic tracking-tighter skew-x-[-12deg] hover:bg-indigo-500 transition-colors"
-                onClick={() => window.location.reload()}
-            >
-                REBOOT SYSTEM
-            </button>
-        </div>
-    )}>
-        <Show 
-            when={profile()} 
-            fallback={
-                <Show when={isAuthenticating()} fallback={
-                    <LoginScreen onLogin={performLogin} />
-                }>
-                    <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
-                        {error() ? (
-                            <div class="text-red-500 animate-none flex flex-col items-center gap-4">
-                                <span>Error: {error()}</span>
-                                <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
-                            </div>
-                        ) : (
-                            "Linking Neural Grid..."
-                        )}
-                    </div>
-                </Show>
-            }
-        >
-            <UIProvider>
-              <UserProvider initialUser={profile()!}>
-                <AppContent />
-              </UserProvider>
-            </UIProvider>
-        </Show>
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary fallback={(err) => (
+          <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-red-500 font-mono text-sm p-4 text-center">
+              <div class="text-xl mb-4 text-white font-black italic">CRITICAL ERROR</div>
+              <div class="max-w-md break-words whitespace-pre-wrap opacity-80">{err?.message || "Unknown rendering error"}</div>
+              <button 
+                  class="mt-8 px-6 py-2 bg-indigo-600 text-white font-bold italic tracking-tighter skew-x-[-12deg] hover:bg-indigo-500 transition-colors"
+                  onClick={() => window.location.reload()}
+              >
+                  REBOOT SYSTEM
+              </button>
+          </div>
+      )}>
+          <Show 
+              when={profile()} 
+              fallback={
+                  <Show when={isAuthenticating()} fallback={
+                      <LoginScreen onLogin={performLogin} />
+                  }>
+                      <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
+                          {error() ? (
+                              <div class="text-red-500 animate-none flex flex-col items-center gap-4">
+                                  <span>Error: {error()}</span>
+                                  <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
+                              </div>
+                          ) : (
+                              "Linking Neural Grid..."
+                          )}
+                      </div>
+                  </Show>
+              }
+          >
+              <UIProvider>
+                <UserProvider initialUser={profile()!}>
+                  <AppContent />
+                </UserProvider>
+              </UIProvider>
+          </Show>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }

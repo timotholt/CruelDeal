@@ -145,5 +145,37 @@ export const profileService = {
                 progressionData: getProgressionDataInternal(updated)
             };
         });
+    },
+
+    async saveDeck(userId: string, deckId: number, cardIds: string[]): Promise<UserProfile> {
+        return lockedMutation(async () => {
+            verifySession(userId);
+            await simulateNetwork(200, 400);
+            const user = getPersistedProfile();
+            if (!user || user.id !== userId) throw new ApiError('ERR_UNAUTHORIZED', 'Sync error.');
+            
+            const updated = { 
+                ...user, 
+                decks: { ...user.decks, [deckId]: cardIds } 
+            };
+            persistUserProfile(updated);
+            return updated;
+        });
+    },
+
+    async renameDeck(userId: string, deckId: number, name: string): Promise<UserProfile> {
+        return lockedMutation(async () => {
+            verifySession(userId);
+            await simulateNetwork(200, 400);
+            const user = getPersistedProfile();
+            if (!user || user.id !== userId) throw new ApiError('ERR_UNAUTHORIZED', 'Sync error.');
+            
+            const updated = { 
+                ...user, 
+                deckNames: { ...user.deckNames, [deckId]: name } 
+            };
+            persistUserProfile(updated);
+            return updated;
+        });
     }
 };

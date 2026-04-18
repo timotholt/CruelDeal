@@ -1,6 +1,7 @@
 
-import { createContext, useContext, createSignal, onMount, createEffect, createMemo, JSX } from 'solid-js';
+import { createContext, useContext, createSignal, createEffect, createMemo, JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { createQuery, useQueryClient, createMutation } from '@tanstack/solid-query';
 import { UserProfile, StoreData, SeasonPassData, ProgressionData, ActivityLogEntry, ApiResponse } from '../types';
 import { audio } from '../services/audio';
 import { api } from '../services/api';
@@ -15,12 +16,12 @@ interface UserContextType {
     isMutating: () => boolean;
     seasonPassData: () => SeasonPassData | null;
     isSeasonLoading: () => boolean;
-    syncSeasonPass: () => Promise<void>;
+    syncSeasonPass: () => Promise<any>;
     debugSwitchSeason: () => Promise<void>; 
     progressionData: () => ProgressionData | null;
     activityLog: () => ActivityLogEntry[];
     isProgressionLoading: () => boolean;
-    syncProgression: (showLoading?: boolean) => Promise<void>;
+    syncProgression: () => Promise<any>;
     
     collectionSort: () => CollectionSortOption;
     setCollectionSort: (s: CollectionSortOption) => void;
@@ -30,7 +31,7 @@ interface UserContextType {
     toggleCollectionFilterTag: (tag: string) => void;
 
     performSynchronizedAction: (apiCall: () => Promise<ApiResponse<any>>, options?: { visualDelay?: number, sfx?: string }) => Promise<boolean>;
-    syncStore: () => Promise<void>;
+    syncStore: () => Promise<any>;
     upgradeCard: (id: string) => Promise<void>;
     debugAddLevels: (amount: number) => Promise<void>;
     setActiveDeck: (id: number) => void;
@@ -42,6 +43,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType>();
 
 export const UserProvider = (props: { children: JSX.Element; initialUser: UserProfile | (() => UserProfile) }) => {
+    const queryClient = useQueryClient();
     const getInitialUser = () => typeof props.initialUser === 'function' ? (props.initialUser as any)() : props.initialUser;
     
     console.log("UserProvider: Initializing with profile id:", getInitialUser()?.id);
@@ -54,82 +56,91 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
             setUser(reconcile(u));
         }
     });
-    const [storeData, setStoreData] = createSignal<StoreData | null>(null);
-    const [isStoreLoading, setIsStoreLoading] = createSignal(false);
-    const [isMutating, setIsMutating] = createSignal(false);
-    const [seasonPassData, setSeasonPassData] = createSignal<SeasonPassData | null>(null);
-    const [isSeasonLoading, setIsSeasonLoading] = createSignal(false);
-    const [progressionData, setProgressionData] = createSignal<ProgressionData | null>(null);
-    const [activityLog, setActivityLog] = createSignal<ActivityLogEntry[]>([]);
-    const [isProgressionLoading, setIsProgressionLoading] = createSignal(false);
 
+    const [isMutating, setIsMutating] = createSignal(false);
     const [collectionSort, setCollectionSort] = createSignal<CollectionSortOption>('Cost');
     const [collectionFilterSearch, setCollectionFilterSearch] = createSignal('');
     const [collectionFilterTags, setCollectionFilterTags] = createSignal<string[]>([]);
 
     const ui = useUI();
 
+    // Secondary Data Queries
+    const storeQuery = createQuery(() => ({
+        queryKey: ['store', user.id],
+        queryFn: async () => {
+            const res = await api.store.offers.list(user.id);
+            if (!res.success) throw new Error(res.error || 'Failed to fetch store');
+            return res.data;
+        },
+        enabled: !!user.id && user.id.length >= 2,
+    }));
+
+    const seasonQuery = createQuery(() => ({
+        queryKey: ['season', user.id],
+        queryFn: async () => {
+            const res = await api.season.get(user.id);
+            if (!res.success) throw new Error(res.error || 'Failed to fetch season');
+            return res.data;
+        },
+        enabled: !!user.id && user.id.length >= 2,
+    }));
+
+    const progressionQuery = createQuery(() => ({
+        queryKey: ['progression', user.id],
+        queryFn: async () => {
+            const res = await api.progression.get(user.id);
+            if (!res.success) throw new Error(res.error || 'Failed to fetch progression');
+            return res.data;
+        },
+        enabled: !!user.id && user.id.length >= 2,
+    }));
+
+    const activityLogQuery = createQuery(() => ({
+        queryKey: ['activityLog'],
+        queryFn: async () => {
+            const res = await api.progression.logs();
+            if (!res.success) throw new Error(res.error || 'Failed to fetch logs');
+            return res.data || [];
+        },
+        enabled: !!user.id && user.id.length >= 2,
+    }));
+
     const toggleCollectionFilterTag = (tag: string) => {
         setCollectionFilterTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
     };
 
-    const syncSeasonPass = async () => {
-        const userId = user.id;
-        if (!userId || userId.length < 2) {
-            console.warn("UserContext: Skipping syncSeasonPass - no valid userId", userId);
-            return;
+    const saveDeckMutation = createMutation(() => ({
+        mutationFn: async ({ deckId, cardIds }: { deckId: number, cardIds: string[] }) => {
+            const res = await api.profile.saveDeck(user.id, deckId, cardIds);
+            if (!res.success) throw new Error(res.error || 'Failed to save deck');
+            return res.data;
+        },
+        onSuccess: (updatedProfile) => {
+            if (updatedProfile) setUser(reconcile(updatedProfile));
         }
-        setIsSeasonLoading(true);
-        const res = await api.season.get(userId);
-        if (res.success) {
-            setSeasonPassData(res.data);
+    }));
+
+    const renameDeckMutation = createMutation(() => ({
+        mutationFn: async ({ deckId, name }: { deckId: number, name: string }) => {
+            const res = await api.profile.renameDeck(user.id, deckId, name);
+            if (!res.success) throw new Error(res.error || 'Failed to rename deck');
+            return res.data;
+        },
+        onSuccess: (updatedProfile) => {
+            if (updatedProfile) setUser(reconcile(updatedProfile));
         }
-        setIsSeasonLoading(false);
-    };
+    }));
+
+    const syncSeasonPass = () => queryClient.invalidateQueries({ queryKey: ['season', user.id] });
+    const syncProgression = () => Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['progression', user.id] }),
+        queryClient.invalidateQueries({ queryKey: ['activityLog'] })
+    ]);
+    const syncStore = () => queryClient.invalidateQueries({ queryKey: ['store', user.id] });
 
     const debugSwitchSeason = async () => {
-        setIsSeasonLoading(true);
         await api.season.debugNext();
         await syncSeasonPass();
-        setIsSeasonLoading(false);
-    };
-
-    const syncProgression = async (showLoading = false) => {
-        const userId = user.id;
-        if (!userId || userId.length < 2) {
-            console.warn("UserContext: Skipping syncProgression - no valid userId", userId);
-            return;
-        }
-        if (showLoading) setIsProgressionLoading(true);
-        const [progRes, logRes] = await Promise.all([
-            api.progression.get(userId),
-            api.progression.logs()
-        ]);
-        if (progRes.success) setProgressionData(progRes.data);
-        if (logRes.success) setActivityLog(logRes.data || []);
-        setIsProgressionLoading(false);
-    };
-
-    const syncStore = async (showLoading = false) => {
-        const userId = user.id;
-        if (!userId || userId.length < 2) {
-            console.warn("UserContext: Skipping syncStore - no valid userId", userId);
-            return;
-        }
-        if (showLoading) setIsStoreLoading(true);
-        try {
-            const res = await api.store.offers.list(userId);
-            if (res.success && res.data) {
-                console.log("UserContext: Store sync success, items:", res.data.offers.length);
-                setStoreData(res.data);
-            } else {
-                console.error("UserContext: Store sync failed", res.error);
-            }
-        } catch (e) {
-            console.error("UserContext: Store sync exception", e);
-        } finally {
-            setIsStoreLoading(false);
-        }
     };
 
     const performSynchronizedAction = async (
@@ -147,8 +158,10 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
                     }
                     
                     setUser(reconcile(data.updatedProfile));
-                    if (data.activityLog) setActivityLog(data.activityLog);
-                    if (data.progressionData) setProgressionData(data.progressionData);
+                    
+                    // Trigger refetches if data changed on server
+                    if (data.activityLog) queryClient.setQueryData(['activityLog'], data.activityLog);
+                    if (data.progressionData) queryClient.setQueryData(['progression', user.id], data.progressionData);
                     
                     const sfxKey = options?.sfx || 'sfx_purchase';
                     audio.play(sfxKey as any, 0.5);
@@ -156,6 +169,9 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
                     return true;
                 }
             }
+            return false;
+        } catch (e) {
+            console.error("Action failed:", e);
             return false;
         } finally {
             setIsMutating(false);
@@ -171,7 +187,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         
         if (success) {
             ui.signalLevelUp(1);
-            await syncProgression(false);
+            await syncProgression();
         }
     };
 
@@ -183,7 +199,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         
         if (success) {
             ui.signalLevelUp(amount);
-            await syncProgression(false);
+            await syncProgression();
         }
     };
 
@@ -195,35 +211,19 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
     };
 
     const updateDeck = (deckId: number, cardIds: string[]) => {
+        // Optimistic update of local store
         setUser("decks", deckId, cardIds);
+        saveDeckMutation.mutate({ deckId, cardIds });
     };
 
     const renameDeck = (deckId: number, name: string) => {
+        // Optimistic update of local store
         setUser("deckNames", deckId, name);
+        renameDeckMutation.mutate({ deckId, name });
     };
 
     createEffect(() => {
         console.log("UserContext: Current user in store:", JSON.parse(JSON.stringify(user)));
-    });
-
-    onMount(() => {
-        console.log("UserContext: onMount - userId:", user.id);
-        if (user.id && user.id.length >= 2) {
-            syncStore(true);
-            syncSeasonPass();
-            syncProgression(true);
-        }
-    });
-    
-    // We can also use createEffect to react to user.id changes if it ever changes
-    createEffect(() => {
-        const userId = user.id;
-        console.log("UserContext: createEffect (user.id) - userId:", userId);
-        if (userId && userId.length >= 2) {
-            syncStore(true);
-            syncSeasonPass();
-            syncProgression(true);
-        }
     });
 
     const activeDeck = createMemo(() => {
@@ -233,9 +233,18 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
 
     return (
         <UserContext.Provider value={{ 
-            user, storeData, isStoreLoading, isMutating,
-            seasonPassData, isSeasonLoading, syncSeasonPass, debugSwitchSeason,
-            progressionData, activityLog, isProgressionLoading, syncProgression,
+            user, 
+            storeData: () => storeQuery.data ?? null, 
+            isStoreLoading: () => storeQuery.isLoading, 
+            isMutating,
+            seasonPassData: () => seasonQuery.data ?? null, 
+            isSeasonLoading: () => seasonQuery.isLoading, 
+            syncSeasonPass, 
+            debugSwitchSeason,
+            progressionData: () => progressionQuery.data ?? null, 
+            activityLog: () => activityLogQuery.data ?? [], 
+            isProgressionLoading: () => progressionQuery.isLoading || activityLogQuery.isLoading, 
+            syncProgression,
             collectionSort, setCollectionSort, collectionFilterSearch, setCollectionFilterSearch,
             collectionFilterTags, toggleCollectionFilterTag,
             performSynchronizedAction, syncStore, 

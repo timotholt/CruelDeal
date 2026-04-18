@@ -23,7 +23,7 @@ export const ProgressionScreen = (props: ProgressionScreenProps) => {
     
     const { visualLevel, visualGain, isTicking, isShifted, lappingIndices, isFlare } = useLevelChaser(
         () => user.level, 
-        () => ui.pendingLevelIncrement, 
+        ui.pendingLevelIncrement, 
         ui.clearLevelUpSignal
     );
 

@@ -37,6 +37,10 @@ export const api = {
             }),
         addLevels: (userId: string, increment: number) => 
             safeExecute(() => profileService.addCollectionLevels(userId, increment)),
+        saveDeck: (userId: string, deckId: number, cardIds: string[]) =>
+            safeExecute(() => profileService.saveDeck(userId, deckId, cardIds)),
+        renameDeck: (userId: string, deckId: number, name: string) =>
+            safeExecute(() => profileService.renameDeck(userId, deckId, name)),
     },
 
     match: {
