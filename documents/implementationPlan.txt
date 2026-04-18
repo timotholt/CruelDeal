@@ -1,0 +1,561 @@
+# cardgame_implementation_plan_02.txt
+PLAN_VERSION: 1.1.0
+TARGET_SPEC: cardgamespec_01.txt (SPEC_VERSION: 1.3.0)
+
+============================================================
+PURPOSE
+============================================================
+
+This document defines a STRICT, STEP-BY-STEP IMPLEMENTATION PLAN
+for LLMs to build the 3-lane card game defined in cardgamespec_01.txt.
+
+Rules for any LLM following this plan:
+
+- Do NOT skip steps.
+- Do NOT merge steps unless explicitly allowed.
+- After each step, run at least one simple, measurable test.
+- Only move to the next step if tests pass.
+- If a step depends on a broken earlier step, FIX THE EARLIER STEP FIRST.
+
+React is MANDATORY for the UI layer and will be introduced in
+a dedicated phase after the core engine logic is stable.
+
+A database layer MUST be defined conceptually as interfaces
+(e.g. repositories) but does NOT need a real DB implementation
+in this plan.
+
+This plan has 34 steps.
+
+============================================================
+PHASE 0 – PROJECT & TOOLING SETUP (Steps 1–4)
+============================================================
+
+STEP 1 – Create Project Skeleton
+--------------------------------
+Goal:
+- Create a minimal TypeScript + React project structure.
+
+Required top-level structure:
+- package.json
+- tsconfig.json
+- src/
+  - engine/ (core game logic)
+  - ui/ (React components)
+  - shared/ (types, constants)
+- test/ or __tests__/ (for unit tests)
+- public/ (if using CRA/Vite)
+
+Tests:
+- Run `npm test` (or equivalent) with a dummy test.
+- Run `npm run dev` or `npm start` to verify the dev server launches,
+  even if the UI just shows "Hello".
+
+------------------------------------------------------------
+STEP 2 – Install Dependencies
+-----------------------------
+Goal:
+- Install minimal dependencies:
+
+Required:
+- React + ReactDOM
+- TypeScript + ts-node (if needed)
+- A bundler (e.g., Vite, CRA, Next, etc. – choose one)
+- A test framework (Jest or Vitest recommended)
+
+Disallowed at this stage:
+- No DB drivers (Postgres, Mongo, etc.).
+- No heavy UI libraries yet (MUI, Tailwind) unless absolutely needed.
+
+Tests:
+- Confirm React app renders a simple `<App />` component.
+- Confirm one sample unit test runs and passes.
+
+------------------------------------------------------------
+STEP 3 – Link to Spec in Code Comments
+--------------------------------------
+Goal:
+- At the top of core files (e.g., src/engine/index.ts, src/shared/types.ts, src/ui/App.tsx), add comments:
+
+Example:
+// Implements cardgamespec_01.txt (SPEC_VERSION: 1.3.0)
+// Follows cardgame_implementation_plan_02.txt (PLAN_VERSION: 1.1.0)
+
+Tests:
+- Manual verification only.
+
+------------------------------------------------------------
+STEP 4 – Create a Minimal Manual Test Harness
+---------------------------------------------
+Goal:
+- Create a simple script in src/engine/manualHarness.ts that can be run with:
+  - `npm run engine:test:manual` or similar
+
+This harness is allowed to:
+- Import GameState, CardDefinition, etc.
+- Log results of logic functions for quick debugging.
+
+Tests:
+- Run the harness and confirm it prints something known (e.g., "Manual harness OK").
+
+============================================================
+PHASE 1 – CORE TYPES & MODELS (Steps 5–11)
+============================================================
+
+STEP 5 – Implement Zone Type
+----------------------------
+Goal:
+- Implement the Zone union exactly as in cardgamespec_01.txt.
+
+Example:
+export type Zone =
+  | "DECK"
+  | "HAND"
+  | "BOARD"
+  | "DISCARDED"
+  | "DESTROYED"
+  | "BANISHED";
+
+Tests:
+- Compile-time: ensure only these values are allowed.
+- Runtime: optional assertion that unknown strings are rejected.
+
+------------------------------------------------------------
+STEP 6 – Implement CardDefinition
+---------------------------------
+Goal:
+- Implement CardDefinition with fields:
+  - id, name, rarity, baseCost, basePower, tags, baseText, effect
+
+Tests:
+- Create a sample CardDefinition (e.g., Spirit Tiger).
+- Unit test: assert keys and types.
+
+------------------------------------------------------------
+STEP 7 – Implement CardInstance
+-------------------------------
+Goal:
+- Implement CardInstance exactly as per spec (including created, startedInDeck, etc.).
+
+Tests:
+- Instantiate a sample CardInstance in a test.
+- Assert all fields present and correct default values assigned.
+
+------------------------------------------------------------
+STEP 8 – Implement LocationDefinition & LocationInstance
+--------------------------------------------------------
+Goal:
+- Implement:
+  - LocationDefinition
+  - LocationInstance (at minimum: definitionId, plus optional runtime state)
+
+Tests:
+- Create a sample location and a LocationInstance.
+- Confirm compilation and shape.
+
+------------------------------------------------------------
+STEP 9 – Implement Lane Structure Type
+--------------------------------------
+Goal:
+- Implement Lane type:
+
+type Lane = {
+  location: LocationInstance;
+  p1Slots: [CardInstance | null, CardInstance | null, CardInstance | null, CardInstance | null];
+  p2Slots: [CardInstance | null, CardInstance | null, CardInstance | null, CardInstance | null];
+};
+
+Tests:
+- Create a Lane with null slots and dummy location.
+- Test: assert p1Slots.length === 4 and p2Slots.length === 4.
+
+------------------------------------------------------------
+STEP 10 – Implement GameState
+-----------------------------
+Goal:
+- Implement GameState exactly as defined in the spec.
+
+Tests:
+- Create a minimal GameState in a test.
+- Assert:
+  - lanes.length === 3
+  - each lane has correct slots.
+  - energy, priority, piles exist and are properly initialized.
+
+------------------------------------------------------------
+STEP 11 – Define EffectFunction Type
+------------------------------------
+Goal:
+- Define the unified EffectFunction type as per spec.
+
+Tests:
+- Create a dummy effect function satisfying the type.
+- Use TypeScript to confirm signature correctness.
+
+============================================================
+PHASE 2 – FACTORIES & HELPERS (Steps 12–16)
+============================================================
+
+STEP 12 – Implement createCardInstance
+--------------------------------------
+Goal:
+- Implement function:
+  createCardInstance(def: CardDefinition, owner: "p1" | "p2", createdInZone: Zone, createdBy?: CreatedBy): CardInstance
+
+Behavior:
+- baseCost/currentCost = def.baseCost
+- basePower/currentPower = def.basePower
+- baseText/currentText = def.baseText
+- startedInDeck = (createdInZone === "DECK")
+- created = !startedInDeck
+- createdInZone = createdInZone
+- zone = createdInZone or adjusted if needed
+
+Tests:
+- Unit test: deck-created vs hand-created instance behave as expected for startedInDeck/created flags.
+
+------------------------------------------------------------
+STEP 13 – Implement createEmptyLane
+-----------------------------------
+Goal:
+- Implement createEmptyLane(locationDef: LocationDefinition): Lane
+
+Tests:
+- Assert:
+  - All p1Slots and p2Slots are null.
+  - LocationInstance wraps the LocationDefinition correctly.
+
+------------------------------------------------------------
+STEP 14 – Implement createInitialGameState
+-----------------------------------------
+Goal:
+- createInitialGameState(p1DeckDefs, p2DeckDefs, locationDefs[3]): GameState
+
+Behavior:
+- Build decks (p1, p2) as CardInstances with createdInZone="DECK".
+- Lanes created using createEmptyLane.
+- turn = 1, maxTurns = 6
+- energy = {p1: 1, p2: 1}
+- priority may default to "p1" initially or null until first calculation.
+
+Tests:
+- Test that:
+  - decks.p1.length === 12, decks.p2.length === 12
+  - lanes.length === 3
+  - energy.p1 === 1, energy.p2 === 1
+
+------------------------------------------------------------
+STEP 15 – Implement Logging/Debug Helpers
+-----------------------------------------
+Goal:
+- Implement:
+  - logGameStateSummary(gameState)
+  - logLaneSummary(gameState, laneIndex)
+
+Tests:
+- Use manual harness to print output for a fresh GameState.
+- Manual verification that it’s human-readable.
+
+------------------------------------------------------------
+STEP 16 – Implement Simple Random Utilities (Optional)
+------------------------------------------------------
+Goal:
+- Implement deterministic RNG utility if needed (seedable).
+  - E.g., for selecting random cards in a testable way.
+
+Tests:
+- Confirm RNG outputs stable sequence for same seed.
+
+============================================================
+PHASE 3 – CORE OPERATIONS (Steps 17–23)
+============================================================
+
+STEP 17 – Implement Internal Collection Helpers
+-----------------------------------------------
+Goal:
+- Write utilities to:
+  - Find CardInstance by instanceId in all possible places.
+  - Move CardInstance between arrays / lanes.
+  - Clear lane slots safely.
+
+Tests:
+- A suite of small tests:
+  - Insert card, move it, and assert location/slot/bucket changes correctly.
+
+------------------------------------------------------------
+STEP 18 – Implement DestroyCard
+-------------------------------
+Goal:
+- DestroyCard(instanceId):
+  - If on BOARD:
+    - Remove from lane slot (set slot to null).
+  - Set zone="DESTROYED".
+  - Push into destroyedPiles[owner].
+
+Tests:
+- Start with card on BOARD.
+- DestroyCard.
+- Assert lane slot null + card in destroyedPiles[owner].
+
+------------------------------------------------------------
+STEP 19 – Implement DiscardCard
+-------------------------------
+Goal:
+- DiscardCard(instanceId):
+  - HAND → DISCARDED
+  - Move card from hands[owner] to discardPiles[owner].
+  - zone="DISCARDED".
+
+Tests:
+- Put a card in hands.p1.
+- DiscardCard.
+- Assert correctly moved and zone updated.
+
+------------------------------------------------------------
+STEP 20 – Implement BanishCard
+------------------------------
+Goal:
+- BanishCard(instanceId):
+  - From any zone, remove card from the relevant collection.
+  - zone="BANISHED".
+  - Push into banishedPiles[owner].
+  - If from BOARD, clear slot.
+
+Tests:
+- Test from BOARD, HAND, DESTROYED.
+- Assert card only appears in banishedPiles and nowhere else.
+
+------------------------------------------------------------
+STEP 21 – Implement MoveCard
+----------------------------
+Goal:
+- MoveCard(instanceId, targetLane, targetSlot):
+  - Only valid from BOARD.
+  - Validate lane in [0..2] and slot in [0..3].
+  - Choose rule if target slot occupied (prefer disallow/NO-OP at first).
+
+Tests:
+- Move from lane 0, slot 0 to lane 2, slot 3.
+- Assert old slot null, new slot points to card.
+
+------------------------------------------------------------
+STEP 22 – Implement ModifyPower and ModifyCost
+----------------------------------------------
+Goal:
+- ModifyPower(instanceId, delta)
+- ModifyCost(instanceId, delta)
+  - Apply to currentPower and currentCost.
+  - Enforce minimum cost >= 0.
+
+Tests:
+- Apply modifications, assert new values.
+- Test negative deltas.
+
+------------------------------------------------------------
+STEP 23 – Implement CreateCard and CopyCard
+-------------------------------------------
+Goal:
+- CreateCard(defId, owner, zone, lane?, slot?, createdBy?) using createCardInstance.
+- Place correctly in GameState (deck, hand, board).
+- CopyCard(instanceId, targetLane, targetSlot) uses source instance’s definition.
+
+Tests:
+- Create to HAND and BOARD.
+- Copy a BOARD card to another lane and assert it’s a distinct instanceId.
+
+============================================================
+PHASE 4 – POWER, PRIORITY, AND WINNER LOGIC (Steps 24–29)
+============================================================
+
+STEP 24 – Implement Power Calculation Helpers
+---------------------------------------------
+Goal:
+- Implement:
+  - calculateLanePower(gameState, laneIndex, owner)
+  - calculateTotalBoardPower(gameState, owner)
+
+Tests:
+- Place known-power cards on board and assert results.
+
+------------------------------------------------------------
+STEP 25 – Implement Priority Calculation
+----------------------------------------
+Goal:
+- Implement updatePriority(gameState):
+  - Compare total board power.
+  - Ties → "p1".
+
+Tests:
+- Two scenarios:
+  - p1 > p2 → priority "p1"
+  - p2 > p1 → priority "p2"
+  - equal → "p1"
+
+------------------------------------------------------------
+STEP 26 – Implement Lane Outcome Function
+-----------------------------------------
+Goal:
+- Implement:
+  - computeLaneOutcome(gameState, laneIndex): "p1" | "p2" | "tie"
+
+Behavior:
+- Use calculateLanePower for both players for that lane.
+- Compare and return result.
+
+Tests:
+- Several scenarios:
+  - p1 > p2 → "p1"
+  - p2 > p1 → "p2"
+  - equal → "tie"
+
+------------------------------------------------------------
+STEP 27 – Implement Match Outcome Function (WINNER LOGIC)
+----------------------------------------------------------
+Goal:
+- Implement:
+  - computeMatchOutcome(gameState): "p1" | "p2" | "draw"
+
+Behavior:
+1. For lanes 0, 1, 2:
+   - Get laneResult = computeLaneOutcome(gameState, laneIndex).
+2. Count lane wins:
+   - lanesWonP1, lanesWonP2.
+3. If lanesWonP1 > lanesWonP2 → "p1".
+4. If lanesWonP2 > lanesWonP1 → "p2".
+5. If equal:
+   - Option A (simple): return "draw".
+   - Option B (optional tie-breaker): compare total board power and decide.
+   - Whatever rule is chosen MUST be documented and consistent.
+
+THIS STEP DEFINES WHERE THE END-OF-GAME WINNER IS DETERMINED.
+
+Tests:
+- Scenario where p1 wins 2 lanes → "p1".
+- Scenario where p2 wins 2 lanes → "p2".
+- Scenario with 1–1 and one tied lane → "draw" (unless tie-breaker chosen).
+
+------------------------------------------------------------
+STEP 28 – Integrate Winner Logic Into runEndOfGame
+--------------------------------------------------
+Goal:
+- Implement runEndOfGame(gameState) that:
+  1. Resolves EndOfGame abilities.
+  2. Calls computeMatchOutcome(gameState).
+  3. Returns an object:
+     {
+       outcome: "p1" | "p2" | "draw",
+       laneResults: ["p1"|"p2"|"tie", ...],
+       finalGameState: GameState
+     }
+
+Tests:
+- Small integration test: invoke runEndOfGame on a pre-configured state
+  and assert outcome matches expectations.
+
+============================================================
+PHASE 5 – TURN SEQUENCE (Steps 30–32)
+============================================================
+
+STEP 29 – Implement runStartOfGame
+----------------------------------
+Goal:
+- Implement runStartOfGame(gameState):
+  - Runs StartOfGame card and location effects in correct order.
+
+Tests:
+- Use stub effects that log order.
+- Assert lane and order rules are followed.
+
+------------------------------------------------------------
+STEP 30 – Implement runStartOfTurn
+----------------------------------
+Goal:
+- runStartOfTurn(gameState):
+  - Increments energy.
+  - Draws cards.
+  - Calls updatePriority.
+  - Triggers StartOfTurn abilities.
+
+Tests:
+- Check energy increments (cap at 6) and cards drawn correctly.
+
+------------------------------------------------------------
+STEP 31 – Implement runRevealPhase
+----------------------------------
+Goal:
+- runRevealPhase(gameState, newlyPlayedCardIdsByPlayer):
+  - Reveal and resolve OnReveal / Text effects in correct priority/lane/slot order.
+
+Tests:
+- Use stub effects that append to a log array.
+- Assert the sequence matches spec.
+
+------------------------------------------------------------
+STEP 32 – Implement runEndOfTurn
+--------------------------------
+Goal:
+- runEndOfTurn(gameState):
+  - Triggers EndOfTurn card effects as per ordering.
+
+Tests:
+- Stub EndOfTurn effects and check order via logs.
+
+============================================================
+PHASE 6 – FULL TURN RUNNER & REACT WIREFRAME (Steps 33–34)
+============================================================
+
+STEP 33 – Implement playTurn() and Basic React UI
+-------------------------------------------------
+Goal:
+- Implement:
+  - playTurn(gameState, p1Plays, p2Plays) that:
+    1. Calls runStartOfTurn.
+    2. Applies plays (using playCard logic).
+    3. Calls runRevealPhase.
+    4. Calls runEndOfTurn.
+  - A minimal React UI in src/ui:
+    - Shows:
+      - Current turn and energy.
+      - Lanes with slots.
+      - Cards in hand.
+    - Provides:
+      - A way to click a card and a lane to "queue" a play.
+      - A button to "Resolve Turn" that calls playTurn.
+
+Tests:
+- Manual: run dev server, click around, ensure no runtime errors.
+- Automated: shallow test that App renders without crashing.
+
+------------------------------------------------------------
+STEP 34 – Define Conceptual Database Interfaces
+-----------------------------------------------
+Goal:
+- Define a conceptual “database” layer as interfaces, NO actual DB:
+
+Examples:
+- interface GameRepository {
+    saveGame(state: GameState): Promise<void>;
+    loadGame(id: string): Promise<GameState | null>;
+  }
+
+- interface DeckRepository {
+    getDeckForPlayer(playerId: string): Promise<CardDefinition[]>;
+  }
+
+Implementation:
+- Provide in-memory stub implementations:
+  - InMemoryGameRepository
+  - InMemoryDeckRepository
+
+Tests:
+- Save a GameState and load it back.
+- Confirm equality.
+
+============================================================
+END OF IMPLEMENTATION PLAN
+============================================================
+
+Summary of where the winner is determined:
+- The winner computation is implemented in STEP 27 via computeMatchOutcome(gameState),
+  and integrated into runEndOfGame(gameState) in STEP 28.
+- These functions constitute the canonical “who won the game?” logic and MUST be used
+  by both engine code and React UI to display results.

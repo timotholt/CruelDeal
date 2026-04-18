@@ -1,0 +1,6 @@
+{
+  "name": "REMIX:SolidJs Galactic Snap",
+  "description": "A fast-paced 3-column card battler with complex effect interactions (On Reveal, On Going, Destroy, Move).",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

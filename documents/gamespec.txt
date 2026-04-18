@@ -1,0 +1,317 @@
+# cardgamespec_01.txt
+SPEC_VERSION: 1.4.0
+
+============================================================
+CARD GAME SPECIFICATION — 3-LANE SNAP-STYLE BATTLE SYSTEM
+============================================================
+
+This is the authoritative specification for a deterministic,
+Marvel Snap–inspired card game. This file defines all models,
+rules, timing windows, resolution order, and allowed mechanics.
+All LLMs MUST follow this spec when generating cards, code, or
+game logic. No deviations are permitted without a SPEC_VERSION
+update.
+
+============================================================
+1. PURPOSE
+============================================================
+This document establishes:
+- Game rules
+- Zones
+- Card templates and instances
+- Locations
+- Turn timing windows
+- Priority determination
+- Lane structure (4 slots per player)
+- Card placement rules
+- Ability categories (OnReveal, Ongoing, Text, etc.)
+- Allowed effect categories
+- State mutation operations
+- LLM guardrails
+
+The spec ensures compatibility among multiple AI coding agents.
+
+============================================================
+2. HIGH-LEVEL GAME OVERVIEW
+============================================================
+
+Players: 2
+Lanes: 3
+Turns: 6
+Deck Size: 12 cards
+Max Hand Size: 7 cards
+
+Energy System:
+- Turn 1: 1 Energy
+- Each turn: +1 Energy
+- Maximum: 6 Energy
+- Cards played per turn are limited by CURRENT ENERGY and
+  available lane slots; there is NO fixed limit of 1 card
+  per turn.
+
+Win Condition:
+- At end of game, each lane is scored.
+- The player who wins 2 out of 3 lanes wins the match.
+- Tie-Breaker: NONE. If the lane count is tied (e.g. 1-1-1),
+  the match is a DRAW. Total Power is NOT used.
+
+This game is NOT:
+- A roguelike
+- A grid/tactical movement game
+- A system with HP, XP, armor, equipment, or inventories
+- A combat system with “attacking” or “blocking”
+
+LLMs MUST NOT introduce forbidden mechanics.
+
+============================================================
+3. ZONES
+============================================================
+
+Cards may only exist in the following zones:
+
+Zone =
+  "DECK" |
+  "HAND" |
+  "BOARD" |
+  "DISCARDED" |
+  "DESTROYED" |
+  "BANISHED";
+
+Definitions:
+- DECK:        Cards that began in the deck or were inserted into the deck.
+- HAND:        Cards drawn or created in hand.
+- BOARD:       Cards currently in play on a lane slot.
+- DISCARDED:   Cards discarded from hand (via discard effects).
+- DESTROYED:   Cards destroyed on the board (via destroy effects) or burned from deck.
+- BANISHED:    Cards removed from the game permanently (cannot return).
+
+============================================================
+4. CARD DEFINITIONS (STATIC)
+============================================================
+
+A CardDefinition is the immutable library template.
+
+CardDefinition:
+{
+  "id": "string",
+  "name": "string",
+  "rarity": "Common | Rare | Epic | Legendary",
+
+  "baseCost": number,
+  "basePower": number,
+
+  "tags": [
+    "OnReveal",
+    "Ongoing",
+    "Text",
+    "StartOfGame",
+    "StartOfTurn",
+    "EndOfTurn",
+    "EndOfGame",
+    "Move",
+    "Summon",
+    "Buff"
+  ],
+
+  "baseText": "string",
+  "effect": "string"
+}
+
+============================================================
+5. CARD INSTANCES (RUNTIME)
+============================================================
+
+Each physical copy of a card in the match is represented as:
+
+type CardInstance = {
+  instanceId: string;
+  definitionId: string;
+  owner: "p1" | "p2";
+
+  // POSITION
+  zone: Zone;
+  laneIndex: number | null;   // 0,1,2 when on BOARD, else null
+  slotIndex: number | null;   // 0=FrontLeft, 1=FrontRight, 2=BackLeft, 3=BackRight
+  faceUp: boolean;
+  turnPlayed: number | null;
+
+  // STATS
+  baseCost: number;
+  currentCost: number;
+  basePower: number;
+  currentPower: number;
+
+  // ABILITIES & TEXT
+  baseText: string;
+  currentText: string;
+  abilityEnabled: boolean;
+  hasResolvedOnReveal: boolean;
+
+  // CREATION METADATA
+  startedInDeck: boolean;
+  created: boolean;
+  createdInZone: "DECK" | "HAND" | "BOARD" | null;
+};
+
+============================================================
+6. LOCATION DEFINITIONS
+============================================================
+
+LocationDefinition:
+{
+  "id": "string",
+  "name": "string",
+  "description": "string",
+  "effect": "string"
+}
+
+============================================================
+7. LANE STRUCTURE (4 SLOTS PER PLAYER)
+============================================================
+
+Each of the 3 lanes contains up to FOUR cards PER PLAYER.
+
+slotIndex:
+  0 = Front Left
+  1 = Front Right
+  2 = Back Left
+  3 = Back Right
+
+Placement order: 0 → 1 → 2 → 3 (First Available).
+
+When a card is played (dragged) to a lane, it is assigned the
+first available slot index IMMEDIATELY, even if it is Face Down.
+
+============================================================
+8. GAMESTATE MODEL
+============================================================
+
+type GameState = {
+  turn: number;
+  maxTurns: 6;
+
+  energy: {
+    p1: number;
+    p2: number;
+  };
+
+  priority: "p1" | "p2";
+
+  lanes: [
+    {
+      location: LocationInstance;
+      p1Slots: [CardInstance | null, ...]; // Fixed 4
+      p2Slots: [CardInstance | null, ...]; // Fixed 4
+    },
+    // ... (3 lanes total)
+  ];
+
+  hands: { p1: CardInstance[]; p2: CardInstance[]; };
+  decks: { p1: CardInstance[]; p2: CardInstance[]; };
+  discardPiles: { p1: CardInstance[]; p2: CardInstance[]; };
+  destroyedPiles: { p1: CardInstance[]; p2: CardInstance[]; };
+  banishedPiles: { p1: CardInstance[]; p2: CardInstance[]; };
+};
+
+============================================================
+9. ABILITY TAGS
+============================================================
+
+[Same as original spec - Tags drive engine hooks]
+
+============================================================
+10. PRIORITY RULES
+============================================================
+
+Priority is calculated at the START of each turn.
+
+Steps:
+1. Compute total visible board power for p1 and p2.
+2. Higher total = priority.
+3. If visible power is tied, priority = "p1" (or random).
+   (Note: Game-winning tie-breakers are different; this is just for reveal order).
+4. Priority remains LOCKED for the entire turn.
+
+============================================================
+11. TURN ORDER (TIMELINE)
+============================================================
+
+-----------------------------
+11.1 START OF GAME
+-----------------------------
+[Standard StartOfGame triggers]
+
+-----------------------------
+11.2 START OF TURN
+-----------------------------
+1. Increase energy (cap 6).
+2. Draw Phase:
+   - Each player draws 1 card.
+   - **FULL HAND RULE**: If hand size is >= 7, the card is NOT drawn.
+     The deck count remains unchanged. No card is burned.
+3. Calculate Priority.
+4. Resolve StartOfTurn abilities.
+
+-----------------------------
+11.3 REVEAL PHASE
+-----------------------------
+1. Reveal Order:
+   - Priority player reveals ALL their played cards first.
+   - Non-priority player reveals second.
+2. OnReveal Resolution:
+   - **FACE DOWN RULE**: If a card is destroyed/moved/returned while Face Down,
+     its OnReveal effect DOES NOT trigger.
+3. Location Interactions.
+
+-----------------------------
+11.4 END OF TURN
+-----------------------------
+1. Resolve EndOfTurn abilities.
+2. Increment turn.
+
+-----------------------------
+11.5 END OF GAME
+-----------------------------
+1. Resolve EndOfGame abilities.
+2. Scoring:
+   - Win = 2 out of 3 Lanes.
+   - **TIE BREAKER**: NONE. If players tie on lanes (e.g. 1-1-1 or 0-0-3 ties),
+     it is a DRAW. Total Power is NOT used.
+
+============================================================
+12. EFFECT FUNCTION SIGNATURE
+============================================================
+
+type EffectFunction = (
+  gameState: GameState,
+  source: CardInstance,
+  context: { player: "p1" | "p2"; lane: number; slot: number; }
+) => GameState;
+
+============================================================
+13. LEGAL OPERATIONS
+============================================================
+
+DestroyCard(instanceId)
+DiscardCard(instanceId)
+BanishCard(instanceId)
+
+MoveCard(instanceId, targetLane)
+  // Auto-fills the first available slot (0->1->2->3) in targetLane.
+  // If lane is full (4 cards), the move FAILS and card stays put.
+
+CreateCard(...)
+ModifyPower(...)
+ModifyCost(...)
+ReplaceLocation(...)
+DisableAbility(...)
+
+============================================================
+14. RESOLUTION ORDER RULES
+============================================================
+1. Lane 0 → 1 → 2.
+2. Reveal: Priority Player → Non-Priority Player.
+
+============================================================
+END OF SPEC
+============================================================

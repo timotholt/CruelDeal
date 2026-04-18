@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Galactic Snap</title>
+    
+    <!-- PRELOAD CRITICAL FONTS -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/ibmplexsans/v19/z3mm7DpwR9_92I965YV8_autx_G-1X9Wdg.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="https://fonts.gstatic.com/s/ibmplexsanscondensed/v18/n08eW-uYfS27mXW79P0A-D_N7S8X9Wv-pT_v.woff2" as="font" type="font/woff2" crossorigin>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- display=block combined with our CSS lock ensures zero system-font leakage -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=block" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"IBM Plex Sans"', 'sans-serif'],
+              condensed: ['"IBM Plex Sans Condensed"', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      html { font-size: 130%; }
+      * { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+      input, textarea { -webkit-user-select: text; user-select: text; }
+      ::-webkit-scrollbar { display: none; }
+      * { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* FONT LOADING LOCK */
+      body:not(.fonts-ready) #root {
+        opacity: 0;
+        visibility: hidden;
+      }
+      body.fonts-ready #root {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.5s ease-in;
+      }
+
+      @keyframes pop {
+        0% { transform: scale(0.8); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .animate-pop { animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+      .animated-bg {
+        background: linear-gradient(-45deg, #1e1b4b, #2e1065, #581c87, #1e3a8a, #4c1d95, #020617);
+        background-size: 400% 400%;
+        animation: bg-gradient 15s ease infinite;
+      }
+      @keyframes bg-gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hidden; }
+      .touch-none { touch-action: none; }
+
+      /* PROGRESSION SYSTEM STABLE ANIMATIONS */
+      @keyframes hex-glow { 
+        0%, 100% { filter: brightness(1) drop-shadow(0 0 2px var(--glow-color)); } 
+        50% { filter: brightness(1.1) drop-shadow(0 0 4px var(--glow-color)) drop-shadow(0 0 8px var(--glow-color)); } 
+      }
+      .animate-hex-glow { animation: hex-glow 3s infinite ease-in-out; }
+
+      @keyframes badge-gain { 
+        0% { transform: scale(1); filter: brightness(1); } 
+        30% { transform: scale(1.4); filter: brightness(1.6) drop-shadow(0 0 12px #ef4444); } 
+        100% { transform: scale(1); filter: brightness(1); } 
+      }
+      .animate-badge-gain { animation: badge-gain 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+      @keyframes reward-drift-pure { 
+        0% { transform: translate3d(-50%, -50%, 0); opacity: 0; } 
+        10% { opacity: 1; } 
+        100% { transform: translate3d(-50%, -320px, 0); opacity: 0; } 
+      }
+      .reward-float-container { animation: reward-drift-pure 8.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+      @keyframes success-flare { 
+        0% { filter: brightness(1) drop-shadow(0 0 0px var(--flare-color)); } 
+        40% { filter: brightness(3.5) drop-shadow(0 0 45px var(--flare-color)); } 
+        100% { filter: brightness(1) drop-shadow(0 0 5px rgba(255,255,255,0.1)); } 
+      }
+      .animate-success-flare { animation: success-flare 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+      @keyframes intensity-pulse { 
+        0%, 100% { filter: brightness(1); text-shadow: 0 0 5px rgba(255,255,255,0); } 
+        50% { 
+            filter: brightness(2.8); 
+            text-shadow: 0 0 16px rgba(99,102,241,0.4), 0 0 32px rgba(255,255,255,0.4); 
+        } 
+      }
+      .animate-intensity-pulse { animation: intensity-pulse 1.5s ease-in-out infinite; }
+
+      @keyframes completion-flare { 
+        0% { transform: scale(1); filter: brightness(1); text-shadow: 0 0 0px rgba(255,255,255,0); } 
+        20% { transform: scale(1.2); filter: brightness(8); text-shadow: 0 0 40px rgba(99,102,241,1), 0 0 80px rgba(255,255,255,1); } 
+        100% { transform: scale(1); filter: brightness(1); text-shadow: 0 0 10px rgba(99,102,241,0.3); } 
+      }
+      .animate-completion-flare { animation: completion-flare 3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "pixi.js": "https://esm.sh/pixi.js@7.4.0",
+    "@pixi/react": "https://esm.sh/@pixi/react@7.1.2?external=react,react-dom,pixi.js",
+    "howler": "https://esm.sh/howler@2.2.4",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-black text-white overflow-hidden flex justify-center items-center">
+    <div id="root" class="w-full h-full"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
