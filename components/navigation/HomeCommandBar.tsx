@@ -260,6 +260,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     variant="blue" 
                     fullWidth 
                     size="md" 
+                    padding="0.5rem"
                     onClick={() => props.onNavigate('GAME')} 
                     class="shadow-blue-900/50" 
                 >
@@ -272,6 +273,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     variant={isMainDeckValid() ? 'success' : 'danger'} 
                     fullWidth 
                     size="md" 
+                    padding="0.5rem"
                     onClick={() => props.onNavigate('DECK')} 
                     holdDuration={500}
                     onHoldComplete={() => setIsRollerOpen(true)}
@@ -287,10 +289,11 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     variant="blue" 
                     fullWidth 
                     size="md" 
+                    padding="0.5rem"
                     onClick={() => props.onNavigate('GAME')} 
                     class="shadow-blue-900/50"
                 >
-                    {`PLAY\nLADDER`}
+                    {`PLAY\n\u00A0\u00A0LADDER\u00A0\u00A0`}
                 </SlantedButton>
             </div>
 

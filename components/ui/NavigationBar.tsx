@@ -43,7 +43,7 @@ export const NavigationBar = (props: NavigationBarProps) => {
 
                 <div class="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none z-10" />
 
-                <div class="flex items-start justify-between px-1 pt-1.5 pb-2 gap-1.5 relative z-30">
+                <div class="flex items-start justify-between px-2 pt-1.5 pb-2 gap-1.5 relative z-30">
                     <NavItem 
                         label={t('NAV_SEASON')} 
                         active={props.activeScreen === 'SEASON'}
