@@ -52,15 +52,16 @@ export const GameText = (props: GameTextProps) => {
         clone.style.cssText = `
             position: absolute; visibility: hidden; left: -9999px; top: -9999px;
             font-size: ${props.baseFontSize}rem; line-height: 0.95;
-            white-space: ${isMultiLine() ? 'normal' : 'pre'};
-            width: ${isMultiLine() ? `${containerW}px` : 'auto'};
+            white-space: ${isMultiLine() ? 'pre-line' : 'pre'};
+            width: auto;
+            max-width: ${isMultiLine() ? `${containerW}px` : 'none'};
             font-family: "IBM Plex Sans Condensed", sans-serif; 
             font-weight: 900; 
             font-style: ${italic() ? 'italic' : 'normal'};
             text-transform: uppercase; 
             letter-spacing: ${letterSpacing()};
-            padding-left: ${italic() ? '0.15em' : '0'};
-            padding-right: ${italic() ? '0.25em' : '0'};
+            padding-left: ${italic() ? '0.15rem' : '0'};
+            padding-right: ${italic() ? '0.25rem' : '0'};
         `;
         clone.innerText = props.text;
         document.body.appendChild(clone);
@@ -72,7 +73,7 @@ export const GameText = (props: GameTextProps) => {
       const safetyBuffer = italic() ? 0.96 : 0.98;
       const adjustedContainerW = containerW * safetyBuffer;
 
-      const scaleW = isMultiLine() ? 1 : adjustedContainerW / (dims.w || 1);
+      const scaleW = adjustedContainerW / (dims.w || 1);
       const scaleH = containerH / (dims.h || 1);
       
       const targetScale = Math.min(maxScale(), Math.max(minScale(), Math.min(scaleW, scaleH)));
@@ -105,15 +106,15 @@ export const GameText = (props: GameTextProps) => {
           width: isMultiLine() ? '100%' : 'max-content',
           "line-height": "0.95",
           "text-align": isLeftAligned() ? 'left' : 'center',
-          "white-space": isMultiLine() ? 'normal' : 'pre',
+          "white-space": isMultiLine() ? 'pre-line' : 'pre',
           "font-style": italic() ? 'italic' : 'normal',
           "font-weight": 900,
           "letter-spacing": letterSpacing(),
           "will-change": 'transform',
           "-webkit-box-orient": 'vertical',
           "-webkit-line-clamp": maxLines(),
-          "padding-left": italic() ? '0.15em' : '0',
-          "padding-right": italic() ? '0.25em' : '0',
+          "padding-left": italic() ? '0.15rem' : '0',
+          "padding-right": italic() ? '0.25rem' : '0',
         }} 
       >
         {props.text}

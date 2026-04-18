@@ -41,10 +41,10 @@ export const SlantedButton = (props: SlantedButtonProps) => {
     };
 
     const sizeConfigs = {
-        xs: { height: "h-[1.65rem]", fontSize: 0.8, padding: "px-1" },
-        sm: { height: "h-7", fontSize: 0.95, padding: "px-2" },
-        md: { height: "h-10", fontSize: 1.1, padding: "px-3" },
-        lg: { height: "h-16", fontSize: 1.4, padding: "px-4" }
+        xs: { height: "h-[1.65rem]", fontSize: 0.8, padding: "0.25rem" },
+        sm: { height: "h-7", fontSize: 0.95, padding: "0.5rem" },
+        md: { height: "h-10", fontSize: 1.1, padding: "0.75rem" },
+        lg: { height: "h-16", fontSize: 1.4, padding: "1rem" }
     };
 
     const config = () => sizeConfigs[size()];
@@ -142,10 +142,16 @@ export const SlantedButton = (props: SlantedButtonProps) => {
                 </div>
                 
                 {/* SLANTED CONTENT WRAPPER */}
-                <div class={`relative z-20 h-full w-full pointer-events-none flex items-center ${containerJustify()} skew-x-[-9deg] min-w-0 ${config().padding}`}>
+                <div 
+                    class={`relative z-20 h-full w-full pointer-events-none flex items-center ${containerJustify()} skew-x-[-9deg] min-w-0`}
+                    style={{ "padding-left": config().padding, "padding-right": config().padding }}
+                >
                     <div class={`flex items-center ${containerJustify()} gap-0 w-full h-full min-w-0 ${isHolding() ? 'opacity-40' : 'opacity-100'}`}>
                         {props.icon && (
-                            <div class={`shrink-0 flex items-center justify-center drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] ${hasChildren() ? 'pr-0.5' : ''}`}>
+                            <div 
+                                class={`shrink-0 flex items-center justify-center drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)]`}
+                                style={{ "padding-right": hasChildren() ? '0.125rem' : '0' }}
+                            >
                                 {props.icon}
                             </div>
                         )}
