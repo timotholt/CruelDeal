@@ -59,6 +59,7 @@ export const GameText = (props: GameTextProps) => {
             font-style: ${italic() ? 'italic' : 'normal'};
             text-transform: uppercase; 
             letter-spacing: ${letterSpacing()};
+            padding-left: ${italic() ? '0.15em' : '0'};
             padding-right: ${italic() ? '0.25em' : '0'};
         `;
         clone.innerText = props.text;
@@ -68,7 +69,7 @@ export const GameText = (props: GameTextProps) => {
         MEASUREMENT_CACHE[cacheKey] = dims;
       }
 
-      const safetyBuffer = italic() ? 0.92 : 1.0;
+      const safetyBuffer = italic() ? 0.96 : 0.98;
       const adjustedContainerW = containerW * safetyBuffer;
 
       const scaleW = isMultiLine() ? 1 : adjustedContainerW / (dims.w || 1);
@@ -111,7 +112,8 @@ export const GameText = (props: GameTextProps) => {
           "will-change": 'transform',
           "-webkit-box-orient": 'vertical',
           "-webkit-line-clamp": maxLines(),
-          "padding-right": italic() ? '0.2rem' : '0',
+          "padding-left": italic() ? '0.15em' : '0',
+          "padding-right": italic() ? '0.25em' : '0',
         }} 
       >
         {props.text}
