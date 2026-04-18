@@ -62,20 +62,26 @@ export const RewardItemVisual = (props: RewardItemVisualProps) => {
     
     return (
         <div class={`flex flex-col items-center justify-center pointer-events-none w-full h-full ${props.class || ''}`}>
-            {/* ICON LAYER */}
+            {/* ICON LAYER - This is the primary vertical anchor */}
             <div class="flex items-center justify-center transition-transform duration-500">
                 <RewardIconGraphic type={props.type} level={props.level} size={props.size || 'sm'} cardDef={props.cardDef} amount={props.amount} />
             </div>
             
-            {/* TEXT LABEL LAYER */}
+            {/* 
+                TEXT LABEL LAYER - We use h-0 + overflow-visible so this description 
+                doesn't "push" the icon upwards in the parent flex container.
+                This ensures the icon stays perfectly centered in the thermometer.
+            */}
             <Show when={props.amount && props.type !== 'card'}>
-                <div class={`${isLarge() ? 'mt-4' : 'mt-1'} flex flex-col items-center justify-center leading-none w-full`}>
-                    <span class={`
-                        ${props.size === 'xl' ? 'text-4xl' : (props.size === 'lg' ? 'text-xl' : 'text-[0.55rem]')} 
-                        font-black uppercase tracking-tighter text-white drop-shadow-[0_1px_3px_rgba(0,0,0,1)] text-center italic
-                    `}>
-                        {props.amount} {props.type}
-                    </span>
+                <div class="h-0 flex flex-col items-center overflow-visible w-full translate-y-[-2px]">
+                    <div class={`${isLarge() ? 'mt-4' : 'mt-1'} flex flex-col items-center justify-center leading-none w-full`}>
+                        <span class={`
+                            ${props.size === 'xl' ? 'text-4xl' : (props.size === 'lg' ? 'text-xl' : 'text-[0.55rem]')} 
+                            font-black uppercase tracking-tighter text-white drop-shadow-[0_1px_3px_rgba(0,0,0,1)] text-center italic
+                        `}>
+                            {props.amount} {props.type}
+                        </span>
+                    </div>
                 </div>
             </Show>
         </div>
