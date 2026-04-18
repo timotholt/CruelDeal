@@ -75,16 +75,19 @@ export const HexBadge = (props: HexBadgeProps) => {
         xl: { box: 'w-[4.8rem] h-[4.8rem]', strokeWidth: 5 }
     };
 
-    const v = () => variants[merged.variant];
-    const s = () => sizeConfigs[merged.size];
+    const currentVariant = () => variants[merged.variant] || variants.secondary;
+    const s = () => sizeConfigs[merged.size || 'md'] || sizeConfigs.md;
 
     const resolved = children(() => props.children);
-    const isTextLike = () => typeof resolved() === 'string' || typeof resolved() === 'number';
+    const isTextLike = () => {
+        const res = resolved();
+        return typeof res === 'string' || typeof res === 'number';
+    };
 
     return (
         <div 
             class={`relative ${s().box} flex items-center justify-center shrink-0 ${merged.class}`}
-            style={merged.glow ? { filter: `drop-shadow(0 0 10px ${v().glowColor})` } : {}}
+            style={merged.glow ? { filter: `drop-shadow(0 0 10px ${currentVariant().glowColor})` } : {}}
         >
             <svg 
                 viewBox="0 0 100 100" 
@@ -118,14 +121,14 @@ export const HexBadge = (props: HexBadgeProps) => {
                 {/* Main Hex Body */}
                 <path 
                     d="M50 2 L95 25 L95 75 L50 98 L5 75 L5 25 Z" 
-                    fill={v().fill}
+                    fill={currentVariant().fill}
                 />
 
                 {/* Outermost Stroke */}
                 <path 
                     d="M50 2 L95 25 L95 75 L50 98 L5 75 L5 25 Z" 
                     fill="none" 
-                    stroke={v().stroke} 
+                    stroke={currentVariant().stroke} 
                     stroke-width={s().strokeWidth} 
                     stroke-linejoin="round"
                 />
@@ -134,7 +137,7 @@ export const HexBadge = (props: HexBadgeProps) => {
                 <path 
                     d="M50 5 L91 26 L91 74 L50 95 L9 74 L9 26 Z" 
                     fill="none" 
-                    stroke={v().innerStroke} 
+                    stroke={currentVariant().innerStroke} 
                     stroke-width="1.8" 
                     opacity="0.3"
                     stroke-linejoin="round"
@@ -144,11 +147,11 @@ export const HexBadge = (props: HexBadgeProps) => {
             <div class="relative z-10 w-full h-full flex items-center justify-center pointer-events-none">
                 <div class="w-[82%] h-[82%] flex items-center justify-center">
                     {isTextLike() ? (
-                        <span class={`${v().text} font-black italic tracking-tighter uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,1)] text-[0.85em] leading-none`}>
+                        <span class={`${currentVariant().text} font-black italic tracking-tighter uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,1)] text-[0.85em] leading-none`}>
                             {resolved()}
                         </span>
                     ) : (
-                        <div class={`w-full h-full flex items-center justify-center ${v().text}`}>
+                        <div class={`w-full h-full flex items-center justify-center ${currentVariant().text}`}>
                             {resolved()}
                         </div>
                     )}

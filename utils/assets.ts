@@ -42,9 +42,9 @@ export const AUDIO_MANIFEST = {
     'sfx_space_shimmer': 'https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3',
 
     // --- BGM TRACKS ---
-    // Using alternative sources for BGM to bypass intermittent 403s
-    'bgm_menu': 'https://www.chosic.com/wp-content/uploads/2021/04/Rise-of-the-Monarch.mp3', 
-    'bgm_game': 'https://www.chosic.com/wp-content/uploads/2021/07/Interstellar-Destiny.mp3'
+    // Using high-reliability CDN sources for background music
+    'bgm_menu': 'https://cdn.pixabay.com/audio/2022/03/10/audio_c330f69910.mp3', // Sci-fi ambient
+    'bgm_game': 'https://cdn.pixabay.com/audio/2024/02/09/audio_6de44bd833.mp3'  // Cyberpunk battle
 };
 
 export type SfxKey = keyof typeof AUDIO_MANIFEST;

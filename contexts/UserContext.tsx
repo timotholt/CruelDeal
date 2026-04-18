@@ -35,6 +35,7 @@ interface UserContextType {
     debugAddLevels: (amount: number) => Promise<void>;
     setActiveDeck: (id: number) => void;
     updateDeck: (id: number, cardIds: string[]) => void;
+    renameDeck: (id: number, name: string) => void;
     activeDeck: () => string[];
 }
 
@@ -197,6 +198,10 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         setUser("decks", deckId, cardIds);
     };
 
+    const renameDeck = (deckId: number, name: string) => {
+        setUser("deckNames", deckId, name);
+    };
+
     createEffect(() => {
         console.log("UserContext: Current user in store:", JSON.parse(JSON.stringify(user)));
     });
@@ -234,7 +239,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
             collectionSort, setCollectionSort, collectionFilterSearch, setCollectionFilterSearch,
             collectionFilterTags, toggleCollectionFilterTag,
             performSynchronizedAction, syncStore, 
-            upgradeCard, debugAddLevels, setActiveDeck, updateDeck, activeDeck
+            upgradeCard, debugAddLevels, setActiveDeck, updateDeck, renameDeck, activeDeck
         }}>
             {props.children}
         </UserContext.Provider>

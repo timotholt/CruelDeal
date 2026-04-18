@@ -14,8 +14,11 @@ interface CardInspectorProps {
 }
 
 export const CardInspector = (props: CardInspectorProps) => {
-    const isInstance = (c: any): c is CardInstance => c && 'instanceId' in c;
-    const def = () => isInstance(props.card) ? props.card.def : props.card as CardDefinition;
+    const isInstance = (c: any): c is CardInstance => c && typeof c === 'object' && 'instanceId' in c;
+    const def = () => {
+        if (!props.card) return { name: 'Unknown', rarity: 'Common', id: 'unknown' } as CardDefinition;
+        return isInstance(props.card) ? props.card.def : props.card as CardDefinition;
+    };
     
     const isOwned = () => props.user.collection.includes(def().id);
     const currentRarity = () => props.user.cardRarities[def().id] || def().rarity;

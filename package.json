@@ -12,6 +12,8 @@
   "dependencies": {
     "@google/genai": "^1.30.0",
     "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/solid-query": "^5.99.0",
+    "@tanstack/solid-virtual": "^3.13.24",
     "howler": "2.2.4",
     "pixi.js": "7.4.0",
     "solid-js": "^1.9.12",

@@ -10,6 +10,7 @@ import { InboxScreen } from './screens/InboxScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { NavigationBar } from './ui/NavigationBar';
+import { InspectorOverlay } from './InspectorOverlay';
 import { audio } from '../services/audio';
 
 /**
@@ -86,6 +87,9 @@ export const MainNavigator = () => {
             <Show when={activeScreen() !== 'GAME'}>
                 <NavigationBar activeScreen={activeScreen()} onNavigate={handleNavigate} />
             </Show>
+
+            {/* Global Inspector Overlay (z-index managed internally via portals/absolute positioning) */}
+            <InspectorOverlay />
         </div>
     );
 };

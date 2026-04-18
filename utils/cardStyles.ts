@@ -18,8 +18,30 @@ export const EFFECT_GLOWS: Record<string, string> = {
 };
 
 export const getCardVisualState = (card: CardInstance | CardDefinition) => {
-    const isInstance = (c: any): c is CardInstance => c && 'instanceId' in c;
+    if (!card) return {
+        def: { name: 'Unknown', imageUrl: '', rarity: 'Common', tags: [], id: '', basePower: 0, baseCost: 0, description: '' } as CardDefinition,
+        currentPower: 0,
+        currentCost: 0,
+        powerColor: 'text-white',
+        costColor: 'text-white',
+        primaryColor: RARITY_COLORS.Common,
+        glowColor: 'rgba(255,255,255,0.1)',
+        rarity: 'Common' as CardRarity
+    };
+
+    const isInstance = (c: any): c is CardInstance => c && typeof c === 'object' && 'instanceId' in c;
     const def = isInstance(card) ? card.def : card;
+
+    if (!def || typeof def !== 'object' || !('name' in def)) return {
+        def: { name: 'Unknown', imageUrl: '', rarity: 'Common', tags: [], id: '', basePower: 0, baseCost: 0, baseText: '', description: '', effect: '' } as CardDefinition,
+        currentPower: 0,
+        currentCost: 0,
+        powerColor: 'text-white',
+        costColor: 'text-white',
+        primaryColor: RARITY_COLORS.Common,
+        glowColor: 'rgba(255,255,255,0.1)',
+        rarity: 'Common' as CardRarity
+    };
     
     // Stats
     const currentPower = isInstance(card) ? card.totalPower : def.basePower;

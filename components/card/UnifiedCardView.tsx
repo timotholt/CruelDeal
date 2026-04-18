@@ -1,7 +1,7 @@
 
 import { createMemo, Show } from 'solid-js';
 import { CardDefinition, CardInstance } from '../../types';
-import { getCardVisualState } from '../../utils/cardStyles';
+import { getCardVisualState, RARITY_COLORS } from '../../utils/cardStyles';
 import { CardBadge } from './CardBadge';
 import { GameText } from '../ui/GameText';
 
@@ -27,6 +27,19 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
     
     // Derived state should be reactive to props.card changes
     const visual = createMemo(() => getCardVisualState(props.card));
+
+    const getPrimaryColor = () => {
+        const v = visual();
+        if (props.borderOverride) return props.borderOverride;
+        if (v && v.primaryColor) return v.primaryColor;
+        return (RARITY_COLORS && RARITY_COLORS.Common) || '#94a3b8';
+    };
+
+    const getGlowColor = () => {
+        const v = visual();
+        if (v && v.glowColor) return v.glowColor;
+        return 'rgba(0,0,0,0.1)';
+    };
 
     // Base card width at md scale
     const baseWidth = 5.2; // rem
@@ -60,19 +73,21 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
                     "font-size": `${scale()}rem`, // Master scale for all 'em' units
                     "aspect-ratio": '5/7',
                     "border-radius": '0.45em',
-                    "box-shadow": `0 0 0.6em ${visual().glowColor}, inset 0 0 0.5em rgba(0,0,0,0.6)`,
-                    "border": `0.15em solid ${props.borderOverride || visual().primaryColor}`,
+                    "box-shadow": `0 0 0.6em ${getGlowColor()}, inset 0 0 0.5em rgba(0,0,0,0.6)`,
+                    "border": `0.15em solid ${getPrimaryColor()}`,
                     "background-color": '#0f172a'
                 }}
             >
                 {/* 1. Art Layer */}
                 <div class="absolute inset-0 bg-black">
-                    <img 
-                        src={visual().def.imageUrl} 
-                        alt={visual().def.name} 
-                        class="w-full h-full object-cover pointer-events-none transition-transform duration-700 [@media(hover:hover)]:group-hover:scale-105 opacity-90" 
-                        referrerPolicy="no-referrer"
-                    />
+                    <Show when={visual()}>
+                        <img 
+                            src={visual()?.def?.imageUrl || ''} 
+                            alt={visual()?.def?.name || ''} 
+                            class="w-full h-full object-cover pointer-events-none transition-transform duration-700 [@media(hover:hover)]:group-hover:scale-105 opacity-90" 
+                            referrerPolicy="no-referrer"
+                        />
+                    </Show>
                 </div>
 
                 {/* 2. Polish Overlays */}
@@ -80,8 +95,10 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
                 <div class="absolute inset-0 border border-white/10 pointer-events-none rounded-[inherit]" />
 
                 {/* 3. Badges */}
-                <CardBadge value={() => visual().currentCost} type="cost" colorClass={() => visual().costColor} />
-                <CardBadge value={() => visual().currentPower} type="power" colorClass={() => visual().powerColor} />
+                <Show when={visual()}>
+                    <CardBadge value={() => visual()?.currentCost || 0} type="cost" colorClass={() => visual()?.costColor || 'text-white'} />
+                    <CardBadge value={() => visual()?.currentPower || 0} type="power" colorClass={() => visual()?.powerColor || 'text-white'} />
+                </Show>
 
                 {/* 4. Nameplate Overlay */}
                 <div 
@@ -95,12 +112,14 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
                     }}
                 >
                      <div class="w-full h-[35%]">
-                        <GameText 
-                            text={visual().def.name} 
-                            baseFontSize={1.1} 
-                            maxScale={4.0} 
-                            class="font-black italic uppercase tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]"
-                        />
+                        <Show when={visual()}>
+                            <GameText 
+                                text={visual()?.def?.name || ''} 
+                                baseFontSize={1.1} 
+                                maxScale={4.0} 
+                                class="font-black italic uppercase tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]"
+                            />
+                        </Show>
                      </div>
                 </div>
             </div>
