@@ -1,5 +1,4 @@
-
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { createSignal, onCleanup, untrack } from 'solid-js';
 
 export type ActionStatus = 'idle' | 'processing' | 'success' | 'error';
 
@@ -14,72 +13,88 @@ interface UseSynchronizedActionProps {
  * Encapsulates the visual logic for a transaction.
  * Synchronizes component-local success state with context-level data commitment.
  */
-export const useSynchronizedAction = ({ 
-    onAction, 
-    holdDuration = 0,
-    resetDelay = 4000 
-}: UseSynchronizedActionProps) => {
-    const [status, setStatus] = useState<ActionStatus>('idle');
-    const [holdProgress, setHoldProgress] = useState(0);
-    const [isHolding, setIsHolding] = useState(false);
-    const timerRef = useRef<number | null>(null);
+export const useSynchronizedAction = (props: UseSynchronizedActionProps) => {
+    const [status, setStatus] = createSignal<ActionStatus>('idle');
+    const [holdProgress, setHoldProgress] = createSignal(0);
+    const [isHolding, setIsHolding] = createSignal(false);
+    let timerId: number | null = null;
 
-    const execute = useCallback(async () => {
-        if (status !== 'idle') return;
+    const holdDuration = () => props.holdDuration ?? 0;
+    const resetDelay = () => props.resetDelay ?? 4000;
+
+    const execute = async () => {
+        if (status() !== 'idle') return;
 
         setStatus('processing');
         
-        // The onAction call (performSynchronizedAction in Context) handles the delay internally.
-        // It only resolves AFTER the theatrical window closes and the data is committed.
-        const success = await onAction();
+        const success = await props.onAction();
 
         if (success) {
-            // Flip to success at the EXACT same time header updates and sound plays
             setStatus('success');
             
-            // Auto-reset button state after user sees results
             setTimeout(() => {
                 setStatus('idle');
                 setHoldProgress(0);
-            }, resetDelay);
+            }, resetDelay());
         } else {
-            // Revert on failure or insufficient funds
             setStatus('idle');
             setHoldProgress(0);
         }
-    }, [onAction, status, resetDelay]);
+    };
 
-    const cancelHold = useCallback(() => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        timerRef.current = null;
+    const cancelHold = () => {
+        if (timerId !== null) clearInterval(timerId);
+        timerId = null;
         setIsHolding(false);
-        if (status === 'idle') setHoldProgress(0);
-    }, [status]);
+        if (untrack(() => status()) === 'idle') setHoldProgress(0);
+    };
 
-    const startHold = useCallback(() => {
-        if (status !== 'idle' || holdDuration <= 0) return;
+    const startHold = () => {
+        const dur = holdDuration();
+        if (untrack(() => status()) !== 'idle' || dur <= 0) return;
+        const onAction = props.onAction;
+        const resetDelayVal = resetDelay();
+        const setHP = setHoldProgress;
+        const setS = setStatus;
+
         setIsHolding(true);
         const startTime = Date.now();
         
-        timerRef.current = window.setInterval(() => {
+        timerId = window.setInterval(() => {
             const elapsed = Date.now() - startTime;
-            const p = Math.min((elapsed / holdDuration) * 100, 100);
-            setHoldProgress(p);
+            const p = Math.min((elapsed / dur) * 100, 100);
+            setHP(p);
             
             if (p >= 100) {
                 cancelHold();
-                execute();
+                
+                (async () => {
+                   if (untrack(() => status()) !== 'idle') return;
+                   setS('processing');
+                   const success = await onAction();
+                   if (success) {
+                       setS('success');
+                       setTimeout(() => {
+                           setS('idle');
+                           setHP(0);
+                       }, resetDelayVal);
+                   } else {
+                       setS('idle');
+                       setHP(0);
+                   }
+                })();
             }
         }, 16);
-    }, [status, holdDuration, execute, cancelHold]);
+    };
 
-    useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+    onCleanup(() => { if (timerId !== null) clearInterval(timerId); });
 
     return {
         status,
         holdProgress,
         isHolding,
-        execute: holdDuration > 0 ? undefined : execute, // Direct click if no hold
+        execute: () => holdDuration() > 0 ? undefined : execute(), // Return a function that calls execute
+        actualExecute: execute,
         bind: {
             onPointerDown: startHold,
             onPointerUp: cancelHold,

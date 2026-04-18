@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { CardDefinition } from '../types';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
@@ -17,9 +16,9 @@ export interface CollectionDragState {
 interface UseCollectionDragProps {
   onAdd: (id: string) => void;
   onRemove: (id: string) => void;
-  scrollRef: React.RefObject<HTMLElement>;
-  vaultRef: React.RefObject<HTMLElement>;
-  archiveRef: React.RefObject<HTMLElement>;
+  scrollRef: () => HTMLElement;
+  vaultRef: () => HTMLElement;
+  archiveRef: () => HTMLElement;
 }
 
 // Gesture Constants
@@ -29,12 +28,18 @@ const PICKUP_DELAY = 220;
 const FRICTION = 0.95; 
 const MIN_VELOCITY = 0.1;
 
-export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiveRef }: UseCollectionDragProps) => {
-    const { user } = useUser();
-    const { inspect } = useUI();
-    const [dragState, setDragState] = useState<CollectionDragState | null>(null);
+/**
+ * useCollectionDrag
+ * Custom hook for high-performance drag and drop within the collection screens.
+ * Handles gesture arbitration between scrolling and dragging.
+ */
+export const useCollectionDrag = (props: UseCollectionDragProps) => {
+    const user = useUser();
+    const ui = useUI();
+    const [dragState, setDragState] = createSignal<CollectionDragState | null>(null);
     
-    const stateRef = useRef({
+    // Non-reactive internal state for performance and synchronous accuracy
+    const state = {
         isScrolling: false,
         isDragging: false,
         isIntentLocked: false, 
@@ -46,39 +51,38 @@ export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiv
         lastTime: 0,
         velocity: 0,
         samples: [] as { dy: number, dt: number }[]
-    });
+    };
 
-    const inertiaFrameRef = useRef<number | null>(null);
-    const dragTargetRef = useRef<HTMLElement | null>(null);
-    const pickupTimerRef = useRef<number | null>(null);
+    let inertiaFrame: number | null = null;
+    let dragTarget: HTMLElement | null = null;
+    let pickupTimer: number | null = null;
 
-    const runInertia = useCallback(() => {
+    const runInertia = () => {
         function step() {
-            const el = scrollRef.current;
+            const el = props.scrollRef();
             if (!el) return;
-            const g = stateRef.current;
-            el.scrollTop -= g.velocity;
-            g.velocity *= FRICTION;
-            if (el.scrollTop <= 0 || el.scrollTop >= el.scrollHeight - el.clientHeight) g.velocity = 0;
-            if (Math.abs(g.velocity) > MIN_VELOCITY) {
-                inertiaFrameRef.current = requestAnimationFrame(step);
+            el.scrollTop -= state.velocity;
+            state.velocity *= FRICTION;
+            if (el.scrollTop <= 0 || el.scrollTop >= el.scrollHeight - el.clientHeight) state.velocity = 0;
+            if (Math.abs(state.velocity) > MIN_VELOCITY) {
+                inertiaFrame = requestAnimationFrame(step);
             } else {
-                g.velocity = 0;
-                inertiaFrameRef.current = null;
+                state.velocity = 0;
+                inertiaFrame = null;
             }
         }
         step();
-    }, [scrollRef]);
+    };
 
-    const stopInertia = useCallback(() => {
-        if (inertiaFrameRef.current !== null) {
-            cancelAnimationFrame(inertiaFrameRef.current);
-            inertiaFrameRef.current = null;
+    const stopInertia = () => {
+        if (inertiaFrame !== null) {
+            cancelAnimationFrame(inertiaFrame);
+            inertiaFrame = null;
         }
-    }, []);
+    };
 
-    const handlePointerDown = useCallback((
-        e: React.PointerEvent, 
+    const handlePointerDown = (
+        e: PointerEvent, 
         card: CardDefinition | null,
         origin: 'archive' | 'vault'
     ) => {
@@ -86,7 +90,7 @@ export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiv
         stopInertia();
 
         const target = e.currentTarget as HTMLElement;
-        dragTargetRef.current = target;
+        dragTarget = target;
         try { 
             // Lock all pointer events to this element until release
             target.setPointerCapture(e.pointerId); 
@@ -97,23 +101,21 @@ export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiv
         const rect = target.getBoundingClientRect();
         const startPos = { x: e.clientX, y: e.clientY };
         
-        const isOwned = user.collection.includes(card?.id || '');
-        const inDeck = user.decks[user.activeDeckId]?.includes(card?.id || '');
+        const isOwned = user.user.collection.includes(card?.id || '');
+        const inDeck = user.user.decks[user.user.activeDeckId]?.includes(card?.id || '');
         const canDrag = card && (origin === 'vault' || (isOwned && !inDeck));
 
-        stateRef.current = {
-            isScrolling: false,
-            isDragging: false,
-            isIntentLocked: false,
-            startPos,
-            lastValidPos: startPos,
-            startScrollTop: scrollRef.current?.scrollTop || 0,
-            hasCard: !!card,
-            lastY: e.clientY,
-            lastTime: performance.now(),
-            velocity: 0,
-            samples: []
-        };
+        state.isScrolling = false;
+        state.isDragging = false;
+        state.isIntentLocked = false;
+        state.startPos = startPos;
+        state.lastValidPos = startPos;
+        state.startScrollTop = props.scrollRef()?.scrollTop || 0;
+        state.hasCard = !!card;
+        state.lastY = e.clientY;
+        state.lastTime = performance.now();
+        state.velocity = 0;
+        state.samples = [];
 
         setDragState({
             card: card || ({} as CardDefinition),
@@ -126,62 +128,62 @@ export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiv
         });
 
         if (canDrag) {
-            pickupTimerRef.current = window.setTimeout(() => {
-                stateRef.current.isIntentLocked = true;
+            pickupTimer = window.setTimeout(() => {
+                state.isIntentLocked = true;
                 // If we aren't scrolling, and enough time passed, we are likely dragging
-                if (!stateRef.current.isScrolling) {
-                    stateRef.current.isDragging = true;
+                if (!state.isScrolling) {
+                    state.isDragging = true;
                 }
             }, PICKUP_DELAY);
         }
-    }, [scrollRef, stopInertia, user]);
+    };
 
-    useEffect(() => {
-        if (!dragState) return;
+    createEffect(() => {
+        const ds = dragState();
+        if (!ds) return;
 
         const handlePointerMove = (e: PointerEvent) => {
-            const g = stateRef.current;
             const now = performance.now();
-            const dt = now - g.lastTime;
-            const deltaX = e.clientX - g.startPos.x;
-            const deltaY = e.clientY - g.startPos.y;
+            const dt = now - state.lastTime;
+            const deltaX = e.clientX - state.startPos.x;
+            const deltaY = e.clientY - state.startPos.y;
             const moveDist = Math.hypot(deltaX, deltaY);
 
-            g.lastValidPos = { x: e.clientX, y: e.clientY };
+            state.lastValidPos = { x: e.clientX, y: e.clientY };
 
             if (dt > 0) {
-                const dy = e.clientY - g.lastY;
-                g.samples.push({ dy, dt });
-                if (g.samples.length > 3) g.samples.shift();
-                const totalDy = g.samples.reduce((sum, s) => sum + s.dy, 0);
-                const totalDt = g.samples.reduce((sum, s) => sum + s.dt, 0);
-                g.velocity = totalDy / (totalDt / 16.67);
-                g.lastY = e.clientY;
-                g.lastTime = now;
+                const dy = e.clientY - state.lastY;
+                state.samples.push({ dy, dt });
+                if (state.samples.length > 3) state.samples.shift();
+                const totalDy = state.samples.reduce((sum, s) => sum + s.dy, 0);
+                const totalDt = state.samples.reduce((sum, s) => sum + s.dt, 0);
+                state.velocity = totalDy / (totalDt / 16.67);
+                state.lastY = e.clientY;
+                state.lastTime = now;
             }
 
             // GESTURE ARBITRATION
-            if (!g.isScrolling && !g.isDragging) {
+            if (!state.isScrolling && !state.isDragging) {
                 // If they move primarily horizontal OR the pickup timer finished, it's a DRAG
-                if (Math.abs(deltaX) > DRAG_MOVE_THRESHOLD || (g.isIntentLocked && moveDist > DRAG_MOVE_THRESHOLD)) {
-                    g.isDragging = true;
-                    if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
+                if (Math.abs(deltaX) > DRAG_MOVE_THRESHOLD || (state.isIntentLocked && moveDist > DRAG_MOVE_THRESHOLD)) {
+                    state.isDragging = true;
+                    if (pickupTimer) clearTimeout(pickupTimer);
                 } 
                 // If they move primarily vertical and intent isn't locked, it's a SCROLL
-                else if (Math.abs(deltaY) > SCROLL_MIN_THRESHOLD && !g.isIntentLocked) {
-                    g.isScrolling = true;
-                    if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
+                else if (Math.abs(deltaY) > SCROLL_MIN_THRESHOLD && !state.isIntentLocked) {
+                    state.isScrolling = true;
+                    if (pickupTimer) clearTimeout(pickupTimer);
                 }
             }
 
-            if (g.isScrolling && scrollRef.current) {
-                scrollRef.current.scrollTop = g.startScrollTop - deltaY;
+            if (state.isScrolling && props.scrollRef()) {
+                props.scrollRef().scrollTop = state.startScrollTop - deltaY;
                 return;
             }
 
-            if (g.isDragging) {
+            if (state.isDragging) {
                 if (e.cancelable) e.preventDefault();
-                if (!dragState.active && moveDist > DRAG_MOVE_THRESHOLD) {
+                if (!ds.active && moveDist > DRAG_MOVE_THRESHOLD) {
                     setDragState(prev => prev ? { ...prev, active: true } : null);
                 }
                 setDragState(prev => prev ? { ...prev, currentPos: { x: e.clientX, y: e.clientY } } : null);
@@ -189,63 +191,67 @@ export const useCollectionDrag = ({ onAdd, onRemove, scrollRef, vaultRef, archiv
         };
 
         const handlePointerUp = (e: PointerEvent) => {
-            if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-            if (dragTargetRef.current) {
-                try { dragTargetRef.current.releasePointerCapture(e.pointerId); } catch {
+            if (pickupTimer) clearTimeout(pickupTimer);
+            if (dragTarget) {
+                try { dragTarget.releasePointerCapture(e.pointerId); } catch {
                     // Silently fail if pointer capture cannot be released
                 }
-                dragTargetRef.current = null;
+                dragTarget = null;
             }
 
-            const g = stateRef.current;
-            const endX = e.type === 'pointercancel' ? g.lastValidPos.x : e.clientX;
-            const endY = e.type === 'pointercancel' ? g.lastValidPos.y : e.clientY;
-            const moveDist = Math.hypot(endX - g.startPos.x, endY - g.startPos.y);
+            const endX = e.type === 'pointercancel' ? state.lastValidPos.x : e.clientX;
+            const endY = e.type === 'pointercancel' ? state.lastValidPos.y : e.clientY;
+            const moveDist = Math.hypot(endX - state.startPos.x, endY - state.startPos.y);
 
-            const isInside = (ref: React.RefObject<HTMLElement>, x: number, y: number) => {
-                if (!ref.current) return false;
-                const rect = ref.current.getBoundingClientRect();
+            const isInside = (el: HTMLElement, x: number, y: number) => {
+                if (!el) return false;
+                const rect = el.getBoundingClientRect();
                 return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
             };
 
+            const dsNow = dragState();
             // RESOLVE INTERACTION
-            if (g.isDragging && dragState.active && g.hasCard) {
+            if (state.isDragging && dsNow?.active && state.hasCard) {
                 // Was definitely a drag
-                if (dragState.origin === 'archive' && isInside(vaultRef, endX, endY)) {
-                    onAdd(dragState.card.id);
-                } else if (dragState.origin === 'vault' && isInside(archiveRef, endX, endY)) {
-                    onRemove(dragState.card.id);
+                if (dsNow.origin === 'archive' && isInside(props.vaultRef(), endX, endY)) {
+                    props.onAdd(dsNow.card.id);
+                } else if (dsNow.origin === 'vault' && isInside(props.archiveRef(), endX, endY)) {
+                    props.onRemove(dsNow.card.id);
                 }
             } 
-            else if (!g.isScrolling && !g.isDragging && g.hasCard) {
+            else if (!state.isScrolling && !state.isDragging && state.hasCard && dsNow) {
                 // If the finger release happened within a small radius of the start,
                 // and we didn't scroll or drag, it's a Tap.
                 if (moveDist < DRAG_MOVE_THRESHOLD) {
-                    inspect(dragState.card);
+                    ui.inspect(dsNow.card);
                 }
             }
 
             // Final inertia scroll
-            if (g.isScrolling && Math.abs(g.velocity) > MIN_VELOCITY) {
-                inertiaFrameRef.current = requestAnimationFrame(runInertia);
+            if (state.isScrolling && Math.abs(state.velocity) > MIN_VELOCITY) {
+                requestAnimationFrame(runInertia);
             }
 
             setDragState(null);
-            g.isScrolling = false;
-            g.isDragging = false;
+            state.isScrolling = false;
+            state.isDragging = false;
         };
 
         window.addEventListener('pointermove', handlePointerMove, { passive: false });
         window.addEventListener('pointerup', handlePointerUp);
         window.addEventListener('pointercancel', handlePointerUp);
 
-        return () => {
+        onCleanup(() => {
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
             window.removeEventListener('pointercancel', handlePointerUp);
-            if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-        };
-    }, [dragState, inspect, onAdd, onRemove, scrollRef, vaultRef, archiveRef, runInertia]);
+        });
+    });
+
+    onCleanup(() => {
+        if (pickupTimer) clearTimeout(pickupTimer);
+        stopInertia();
+    });
 
     return { dragState, handlePointerDown };
 };

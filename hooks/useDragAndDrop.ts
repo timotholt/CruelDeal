@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { CardInstance, CardDefinition, LocationDefinition, GameState } from '../types';
 import { canInteractWithCard, canPlayCardToLane, PendingMove } from '../services/planning';
 
@@ -14,9 +14,9 @@ export interface DragState {
 }
 
 interface UseDragAndDropProps {
-    gameState: GameState;
-    pendingMoves: PendingMove[];
-    isResolving: boolean;
+    gameState: () => GameState | null;
+    pendingMoves: () => PendingMove[];
+    isResolving: () => boolean;
     setPendingMoves: (moves: PendingMove[]) => void;
     setInspectingCard: (c: CardInstance | CardDefinition | null) => void;
     setInspectingLocation: (l: LocationDefinition | null) => void;
@@ -25,37 +25,24 @@ interface UseDragAndDropProps {
     onDrop?: (success: boolean) => void;
 }
 
-export const useDragAndDrop = ({
-    gameState,
-    pendingMoves,
-    isResolving,
-    setPendingMoves,
-    setInspectingCard,
-    setInspectingLocation,
-    setSelectedCardIdx,
-    setShowUndoMenu,
-    onDrop
-}: UseDragAndDropProps) => {
-    const [dragState, setDragState] = useState<DragState | null>(null);
-    const hasMovedRef = useRef(false);
-    
-    // Use a ref for pending moves to avoid stale closure during the move lifecycle
-    const pendingMovesRef = useRef(pendingMoves);
-    useEffect(() => {
-        pendingMovesRef.current = pendingMoves;
-    }, [pendingMoves]);
+export const useDragAndDrop = (props: UseDragAndDropProps) => {
+    const [dragState, setDragState] = createSignal<DragState | null>(null);
+    let hasMoved = false;
 
-    const handleCardPointerDown = useCallback((
-        e: React.PointerEvent, 
+    const handleCardPointerDown = (
+        e: PointerEvent, 
         card: CardInstance, 
         origin: { type: 'hand', index: number } | { type: 'lane', laneIdx: number }
     ) => {
-        if (isResolving) return;
+        if (props.isResolving()) return;
+
+        const currentGameState = props.gameState();
+        if (!currentGameState) return;
 
         // Check if interaction is allowed (Energy check happens here)
-        if (!canInteractWithCard(gameState, pendingMovesRef.current, card, origin)) return;
+        if (!canInteractWithCard(currentGameState, props.pendingMoves(), card, origin)) return;
 
-        hasMovedRef.current = false;
+        hasMoved = false;
         
         const target = e.currentTarget as HTMLElement;
         const rect = target.getBoundingClientRect();
@@ -69,34 +56,36 @@ export const useDragAndDrop = ({
             offset: { x: e.clientX - rect.left, y: e.clientY - rect.top },
             rect
         });
-    }, [gameState, isResolving]);
+    };
 
-    useEffect(() => {
-        if (!dragState) return;
+    createEffect(() => {
+        const currentDrag = dragState();
+        if (!currentDrag) return;
 
         const handleMove = (e: PointerEvent) => {
-            const dist = Math.sqrt(Math.pow(e.clientX - dragState.startPos.x, 2) + Math.pow(e.clientY - dragState.startPos.y, 2));
+            const dist = Math.sqrt(Math.pow(e.clientX - currentDrag.startPos.x, 2) + Math.pow(e.clientY - currentDrag.startPos.y, 2));
             
             // 8px threshold to start "active" dragging to distinguish from tap/inspect
-            if (!dragState.active && dist > 8) {
-                hasMovedRef.current = true;
+            if (!currentDrag.active && dist > 8) {
+                hasMoved = true;
                 setDragState(prev => prev ? { ...prev, active: true, currentPos: { x: e.clientX, y: e.clientY } } : null);
                 
                 // Now we are sure it's a drag, lock other UI
-                setSelectedCardIdx(null);
-                setShowUndoMenu(false);
-                setInspectingCard(null);
-                setInspectingLocation(null);
-            } else if (dragState.active) {
+                props.setSelectedCardIdx(null);
+                props.setShowUndoMenu(false);
+                props.setInspectingCard(null);
+                props.setInspectingLocation(null);
+            } else if (currentDrag.active) {
                 setDragState(prev => prev ? { ...prev, currentPos: { x: e.clientX, y: e.clientY } } : null);
             }
         };
 
         const handleUp = (e: PointerEvent) => {
-            if (!dragState) return;
+            const drag = dragState();
+            if (!drag) return;
 
             // If it never met the drag threshold, treat as a potential click/tap
-            if (!hasMovedRef.current) {
+            if (!hasMoved) {
                 setDragState(null);
                 return;
             }
@@ -106,24 +95,25 @@ export const useDragAndDrop = ({
             const handZone = elements.find(el => el.getAttribute('data-drop-zone') === 'hand');
 
             let success = false;
+            const currentGameState = props.gameState();
 
-            if (laneZone) {
+            if (laneZone && currentGameState) {
                 const laneIdx = parseInt(laneZone.getAttribute('data-lane-idx') || '0', 10);
                 // Validate if dropping to this lane is possible (Capacity check)
-                if (canPlayCardToLane(gameState, pendingMovesRef.current, dragState.card.instanceId, laneIdx, dragState.origin)) {
-                    const existing = pendingMovesRef.current.filter(m => m.cardInstanceId !== dragState.card.instanceId);
-                    setPendingMoves([...existing, { cardInstanceId: dragState.card.instanceId, laneIdx }]);
+                if (canPlayCardToLane(currentGameState, props.pendingMoves(), drag.card.instanceId, laneIdx, drag.origin)) {
+                    const existing = props.pendingMoves().filter(m => m.cardInstanceId !== drag.card.instanceId);
+                    props.setPendingMoves([...existing, { cardInstanceId: drag.card.instanceId, laneIdx }]);
                     success = true;
                 }
             } else if (handZone || (!laneZone && !handZone)) {
                 // Return to hand if dropped in hand zone or empty space
-                if (dragState.origin.type === 'lane') {
-                    setPendingMoves(pendingMovesRef.current.filter(m => m.cardInstanceId !== dragState.card.instanceId));
+                if (drag.origin.type === 'lane') {
+                    props.setPendingMoves(props.pendingMoves().filter(m => m.cardInstanceId !== drag.card.instanceId));
                     success = true;
                 }
             }
 
-            onDrop?.(success);
+            props.onDrop?.(success);
             setDragState(null);
         };
 
@@ -131,12 +121,12 @@ export const useDragAndDrop = ({
         window.addEventListener('pointerup', handleUp);
         window.addEventListener('pointercancel', handleUp);
 
-        return () => {
+        onCleanup(() => {
             window.removeEventListener('pointermove', handleMove);
             window.removeEventListener('pointerup', handleUp);
             window.removeEventListener('pointercancel', handleUp);
-        };
-    }, [dragState, gameState, setPendingMoves, onDrop, setSelectedCardIdx, setShowUndoMenu, setInspectingCard, setInspectingLocation]);
+        });
+    });
 
     return {
         dragState,

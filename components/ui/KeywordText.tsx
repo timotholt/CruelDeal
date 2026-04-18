@@ -1,34 +1,32 @@
-import React from 'react';
+import { Show } from 'solid-js';
 
 interface KeywordTextProps {
     text: string;
-    className?: string;
+    class?: string;
 }
 
-export const KeywordText: React.FC<KeywordTextProps> = ({ text, className = '' }) => {
-    if (!text) return null;
-
-    // Basic parser for keywords
-    // Looks for specific prefixes like "On Reveal:"
-    
-    const parts = text.split(':');
+export const KeywordText = (props: KeywordTextProps) => {
+    const parts = () => props.text?.split(':') || [];
     const keywords = ['On Reveal', 'On Going', 'On Destroy', 'On Move', 'On Discard'];
     
     // Check if the first part matches a keyword
-    const hasKeyword = parts.length > 1 && keywords.some(k => parts[0].trim().includes(k));
-
-    if (hasKeyword) {
-        return (
-            <span className={className}>
-               <span className="text-yellow-400 font-black uppercase tracking-wider mr-1">{parts[0]}:</span>
-               <span className="font-medium text-white/90 shadow-black drop-shadow-sm">{parts.slice(1).join(':')}</span>
-            </span>
-        );
-    }
+    const hasKeyword = () => parts().length > 1 && keywords.some(k => parts()[0].trim().includes(k));
 
     return (
-        <span className={`font-bold text-white/90 shadow-black drop-shadow-sm ${className}`}>
-            {text}
-        </span>
+        <Show when={props.text}>
+            <Show 
+                when={hasKeyword()} 
+                fallback={
+                    <span class={`font-bold text-white/90 shadow-black drop-shadow-sm ${props.class || ''}`}>
+                        {props.text}
+                    </span>
+                }
+            >
+                <span class={props.class}>
+                   <span class="text-yellow-400 font-black uppercase tracking-wider mr-1">{parts()[0]}:</span>
+                   <span class="font-medium text-white/90 shadow-black drop-shadow-sm">{parts().slice(1).join(':')}</span>
+                </span>
+            </Show>
+        </Show>
     );
 };

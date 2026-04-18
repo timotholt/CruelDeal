@@ -1,29 +1,90 @@
+import { createSignal, Show, ErrorBoundary } from 'solid-js';
+import { UIProvider } from './contexts/UIContext';
+import { UserProvider } from './contexts/UserContext';
+import { api } from './services/api';
+import { UserProfile } from './types';
+import { MainNavigator } from './components/MainNavigator';
+import { LoginScreen } from './components/screens/LoginScreen';
 
-import { createSignal } from 'solid-js';
-
-function App() {
-  const [count, setCount] = createSignal(0);
-
+/**
+ * AppContent Component
+ * The main container for the application once the user profile is loaded.
+ */
+function AppContent() {
   return (
-    <div class="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans p-8">
-      <h1 class="text-4xl font-bold mb-4 text-indigo-400">Galactic Snap: SolidJS Edition</h1>
-      <p class="text-xl mb-8 opacity-80">Phase 1: Environment & Foundation Successful</p>
-      
-      <div class="bg-slate-900 p-6 rounded-xl border border-indigo-500/30 flex flex-col items-center shadow-2xl">
-        <span class="text-6xl font-mono mb-4">{count()}</span>
-        <button 
-          onClick={() => setCount(count() + 1)}
-          class="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
-        >
-          Increment Reactive Signal
-        </button>
-      </div>
-
-      <div class="mt-12 text-sm text-slate-500">
-        Ready for Phase 2: Reactive State Layer
-      </div>
+    <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
+      <MainNavigator />
     </div>
   );
 }
 
-export default App;
+/**
+ * App Entry Component
+ * Handles the initial data fetching and provider initialization.
+ */
+export default function App() {
+  const [profile, setProfile] = createSignal<UserProfile | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = createSignal(false);
+
+  const performLogin = async () => {
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      console.log("App: Starting profile sync (u1)...");
+      const res = await api.profile.get('u1');
+      if (res.success && res.data) {
+        console.log("App: Profile sync successful", res.data);
+        setProfile(res.data);
+      } else {
+        setError("Failed to load profile data.");
+      }
+    } catch (e) {
+      console.error("Profile sync failed", e);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  return (
+    <ErrorBoundary fallback={(err) => (
+        <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-red-500 font-mono text-sm p-4 text-center">
+            <div class="text-xl mb-4 text-white font-black italic">CRITICAL ERROR</div>
+            <div class="max-w-md break-words whitespace-pre-wrap opacity-80">{err?.message || "Unknown rendering error"}</div>
+            <button 
+                class="mt-8 px-6 py-2 bg-indigo-600 text-white font-bold italic tracking-tighter skew-x-[-12deg] hover:bg-indigo-500 transition-colors"
+                onClick={() => window.location.reload()}
+            >
+                REBOOT SYSTEM
+            </button>
+        </div>
+    )}>
+        <Show 
+            when={profile()} 
+            fallback={
+                <Show when={isAuthenticating()} fallback={
+                    <LoginScreen onLogin={performLogin} />
+                }>
+                    <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
+                        {error() ? (
+                            <div class="text-red-500 animate-none flex flex-col items-center gap-4">
+                                <span>Error: {error()}</span>
+                                <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
+                            </div>
+                        ) : (
+                            "Linking Neural Grid..."
+                        )}
+                    </div>
+                </Show>
+            }
+        >
+            <UIProvider>
+              <UserProvider initialUser={profile()!}>
+                <AppContent />
+              </UserProvider>
+            </UIProvider>
+        </Show>
+    </ErrorBoundary>
+  );
+}

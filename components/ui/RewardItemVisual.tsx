@@ -1,5 +1,4 @@
-
-import React from 'react';
+import { Show, Switch, Match } from 'solid-js';
 import { CreditIcon, GoldIcon, CardIcon, BoosterIcon, OmegaBoxIcon, TokenIcon } from './CurrencyIcons';
 import { CardDefinition } from '../../types';
 import { Card } from '../Card';
@@ -11,76 +10,74 @@ interface RewardItemVisualProps {
     amount?: string | number;
     imageUrl?: string;
     level?: number;
-    className?: string;
+    class?: string;
     size?: 'sm' | 'lg' | 'xl';
     cardDef?: CardDefinition; 
 }
 
-/**
- * REWARD ITEM VISUAL
- * Focused on pure centering of the icon graphic.
- */
-export const RewardItemVisual: React.FC<RewardItemVisualProps> = ({ 
-    type, 
-    amount, 
-    level, 
-    className = "",
-    size = 'sm',
-    cardDef
-}) => {
-    const isLarge = size === 'lg' || size === 'xl';
-    
-    return (
-        <div className={`flex flex-col items-center justify-center pointer-events-none w-full h-full ${className}`}>
-            {/* ICON LAYER */}
-            <div className="flex items-center justify-center transition-transform duration-500">
-                <RewardIconGraphic type={type} level={level} size={size} cardDef={cardDef} amount={amount} />
-            </div>
-            
-            {/* TEXT LABEL LAYER */}
-            {amount && type !== 'card' && (
-                <div className={`${isLarge ? 'mt-4' : 'mt-1'} flex flex-col items-center justify-center leading-none w-full`}>
-                    <span className={`
-                        ${size === 'xl' ? 'text-4xl' : (size === 'lg' ? 'text-xl' : 'text-[0.55rem]')} 
-                        font-black uppercase tracking-tighter text-white drop-shadow-[0_1px_3px_rgba(0,0,0,1)] text-center italic
-                    `}>
-                        {amount} {type}
-                    </span>
-                </div>
-            )}
-        </div>
-    );
-};
-
-export const RewardIconGraphic: React.FC<{ 
+export const RewardIconGraphic = (props: { 
     type: SeasonRewardType; 
     level?: number; 
-    size?: 'sm' | 'lg' | 'xl';
+    size: 'sm' | 'lg' | 'xl';
     cardDef?: CardDefinition;
     amount?: string | number;
-}> = ({ type, level: _level, size = 'sm', cardDef, amount: _amount }) => {
-    const isHero = size === 'xl';
-    const iconSize = size; 
+}) => {
+    const isHero = () => props.size === 'xl';
+    const iconSize = () => props.size; 
 
-    switch (type) {
-        case 'gold': return <GoldIcon size={iconSize} animate={isHero} />;
-        case 'credits': return <CreditIcon size={iconSize} />;
-        case 'tokens': return <TokenIcon size={iconSize} animate={isHero} />;
-        case 'card': 
-            if (cardDef) {
-                return (
-                    <div className={`${isHero ? 'w-44' : (size === 'lg' ? 'w-36' : 'w-9')} aspect-[5/7] flex items-center justify-center shadow-2xl`}>
+    return (
+        <Switch fallback={null}>
+            <Match when={props.type === 'gold'}>
+                <GoldIcon size={iconSize()} animate={isHero()} />
+            </Match>
+            <Match when={props.type === 'credits'}>
+                <CreditIcon size={iconSize()} />
+            </Match>
+            <Match when={props.type === 'tokens'}>
+                <TokenIcon size={iconSize()} animate={isHero()} />
+            </Match>
+            <Match when={props.type === 'card'}>
+                <Show when={props.cardDef} fallback={<CardIcon size={iconSize()} />}>
+                    <div class={`${isHero() ? 'w-44' : (props.size === 'lg' ? 'w-36' : 'w-9')} aspect-[5/7] flex items-center justify-center shadow-2xl`}>
                         <Card 
-                            card={cardDef} 
-                            size={isHero ? 'lg' : (size === 'lg' ? 'md' : 'xs')} 
+                            card={props.cardDef!} 
+                            size={isHero() ? 'lg' : (props.size === 'lg' ? 'md' : 'xs')} 
                             borderOverride="white" 
                         />
                     </div>
-                );
-            }
-            return <CardIcon size={iconSize} />;
-        case 'booster': return <BoosterIcon size={iconSize} />;
-        case 'box': return <OmegaBoxIcon size={iconSize} />;
-        default: return null;
-    }
+                </Show>
+            </Match>
+            <Match when={props.type === 'booster'}>
+                <BoosterIcon size={iconSize()} />
+            </Match>
+            <Match when={props.type === 'box'}>
+                <OmegaBoxIcon size={iconSize()} />
+            </Match>
+        </Switch>
+    );
+};
+
+export const RewardItemVisual = (props: RewardItemVisualProps) => {
+    const isLarge = () => props.size === 'lg' || props.size === 'xl';
+    
+    return (
+        <div class={`flex flex-col items-center justify-center pointer-events-none w-full h-full ${props.class || ''}`}>
+            {/* ICON LAYER */}
+            <div class="flex items-center justify-center transition-transform duration-500">
+                <RewardIconGraphic type={props.type} level={props.level} size={props.size || 'sm'} cardDef={props.cardDef} amount={props.amount} />
+            </div>
+            
+            {/* TEXT LABEL LAYER */}
+            <Show when={props.amount && props.type !== 'card'}>
+                <div class={`${isLarge() ? 'mt-4' : 'mt-1'} flex flex-col items-center justify-center leading-none w-full`}>
+                    <span class={`
+                        ${props.size === 'xl' ? 'text-4xl' : (props.size === 'lg' ? 'text-xl' : 'text-[0.55rem]')} 
+                        font-black uppercase tracking-tighter text-white drop-shadow-[0_1px_3px_rgba(0,0,0,1)] text-center italic
+                    `}>
+                        {props.amount} {props.type}
+                    </span>
+                </div>
+            </Show>
+        </div>
+    );
 };

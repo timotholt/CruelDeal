@@ -1,6 +1,5 @@
 
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, createSignal, JSX } from 'solid-js';
 import { CardInstance, CardDefinition, LocationDefinition, SeasonRewardType, ProgressionRewardType } from '../types';
 import { audio } from '../services/audio';
 
@@ -26,38 +25,38 @@ interface InspectingCard {
 }
 
 interface UIContextType {
-    inspectingCard: InspectingCard | null;
-    inspectingLocation: LocationDefinition | null;
-    inspectingCurrency: { type: 'gold' | 'credits', amount: number } | null;
-    inspectingBox: BoxReward | null;
-    inspectingReward: SeasonRewardInfo | null;
+    inspectingCard: () => InspectingCard | null;
+    inspectingLocation: () => LocationDefinition | null;
+    inspectingCurrency: () => { type: 'gold' | 'credits', amount: number } | null;
+    inspectingBox: () => BoxReward | null;
+    inspectingReward: () => SeasonRewardInfo | null;
     inspect: (item: any, options?: { borderOverride?: string }) => void;
     closeInspector: () => void;
-    storeScrollTarget: string | null;
+    storeScrollTarget: () => string | null;
     setStoreScrollTarget: (id: string | null) => void;
     // Level Up Flow
-    pendingLevelIncrement: number;
+    pendingLevelIncrement: () => number;
     signalLevelUp: (increment: number) => void;
     clearLevelUpSignal: () => void;
     // Activity Log Modal
-    isActivityLogOpen: boolean;
+    isActivityLogOpen: () => boolean;
     openActivityLog: () => void;
     closeActivityLog: () => void;
 }
 
-const UIContext = createContext<UIContextType | null>(null);
+const UIContext = createContext<UIContextType>();
 
-export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [inspectingCard, setInspectingCard] = useState<InspectingCard | null>(null);
-    const [inspectingLocation, setInspectingLocation] = useState<LocationDefinition | null>(null);
-    const [inspectingCurrency, setInspectingCurrency] = useState<{ type: 'gold' | 'credits', amount: number } | null>(null);
-    const [inspectingBox, setInspectingBox] = useState<BoxReward | null>(null);
-    const [inspectingReward, setInspectingReward] = useState<SeasonRewardInfo | null>(null);
-    const [storeScrollTarget, setStoreScrollTarget] = useState<string | null>(null);
-    const [pendingLevelIncrement, setPendingLevelIncrement] = useState(0);
-    const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+export const UIProvider = (props: { children: JSX.Element }) => {
+    const [inspectingCard, setInspectingCard] = createSignal<InspectingCard | null>(null);
+    const [inspectingLocation, setInspectingLocation] = createSignal<LocationDefinition | null>(null);
+    const [inspectingCurrency, setInspectingCurrency] = createSignal<{ type: 'gold' | 'credits', amount: number } | null>(null);
+    const [inspectingBox, setInspectingBox] = createSignal<BoxReward | null>(null);
+    const [inspectingReward, setInspectingReward] = createSignal<SeasonRewardInfo | null>(null);
+    const [storeScrollTarget, setStoreScrollTarget] = createSignal<string | null>(null);
+    const [pendingLevelIncrement, setPendingLevelIncrement] = createSignal(0);
+    const [isActivityLogOpen, setIsActivityLogOpen] = createSignal(false);
 
-    const inspect = useCallback((item: any, options?: { borderOverride?: string }) => {
+    const inspect = (item: any, options?: { borderOverride?: string }) => {
         if (!item) return; 
         audio.playUiClick();
         
@@ -78,33 +77,33 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         else if ('description' in item) {
             setInspectingLocation(item);
         }
-    }, []);
+    };
 
-    const closeInspector = useCallback(() => { 
+    const closeInspector = () => { 
         setInspectingCard(null); 
         setInspectingLocation(null); 
         setInspectingCurrency(null); 
         setInspectingBox(null); 
         setInspectingReward(null); 
-    }, []);
+    };
 
-    const signalLevelUp = useCallback((increment: number) => {
+    const signalLevelUp = (increment: number) => {
         setPendingLevelIncrement(increment);
-    }, []);
+    };
 
-    const clearLevelUpSignal = useCallback(() => {
+    const clearLevelUpSignal = () => {
         setPendingLevelIncrement(0);
-    }, []);
+    };
 
-    const openActivityLog = useCallback(() => {
+    const openActivityLog = () => {
         audio.playUiClick();
         setIsActivityLogOpen(true);
-    }, []);
+    };
 
-    const closeActivityLog = useCallback(() => {
+    const closeActivityLog = () => {
         audio.playUiClick();
         setIsActivityLogOpen(false);
-    }, []);
+    };
 
     return (
         <UIContext.Provider value={{ 
@@ -113,7 +112,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             pendingLevelIncrement, signalLevelUp, clearLevelUpSignal,
             isActivityLogOpen, openActivityLog, closeActivityLog
         }}>
-            {children}
+            {props.children}
         </UIContext.Provider>
     );
 };

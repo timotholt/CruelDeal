@@ -1,5 +1,3 @@
-
-import React from 'react';
 import { LocationDefinition } from '../../types';
 import { LocationCard } from '../LocationCard';
 
@@ -11,39 +9,33 @@ interface LocationCenterProps {
     onInspect: () => void;
 }
 
-export const LocationCenter: React.FC<LocationCenterProps> = ({ 
-    locationDef, 
-    playerPower, 
-    opponentPower, 
-    winningPlayer,
-    onInspect 
-}) => {
+export const LocationCenter = (props: LocationCenterProps) => {
     
     // Determine colors based on win state
-    const p1Color = winningPlayer === 'p1' ? 'bg-green-900 border-green-500' : 'bg-slate-800 border-slate-600';
-    const p2Color = winningPlayer === 'p2' ? 'bg-green-900 border-green-500' : 'bg-slate-800 border-slate-600';
+    const p1Color = () => props.winningPlayer === 'p1' ? 'bg-green-900 border-green-500' : 'bg-slate-800 border-slate-600';
+    const p2Color = () => props.winningPlayer === 'p2' ? 'bg-green-900 border-green-500' : 'bg-slate-800 border-slate-600';
     
     // If losing, show red
-    const p1Final = winningPlayer === 'p2' ? 'bg-red-900 border-red-500' : p1Color;
-    const p2Final = winningPlayer === 'p1' ? 'bg-red-900 border-red-500' : p2Color;
+    const p1Final = () => props.winningPlayer === 'p2' ? 'bg-red-900 border-red-500' : p1Color();
+    const p2Final = () => props.winningPlayer === 'p1' ? 'bg-red-900 border-red-500' : p2Color();
 
     return (
-        <div className="w-full px-1 z-10 flex-none flex items-center justify-center relative my-3">
+        <div class="w-full px-1 z-10 flex-none flex items-center justify-center relative my-3">
              {/* Opponent Power Bubble (Top) */}
-             <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold border-2 z-30 shadow-lg transition-colors duration-500 ${p2Final}`}>
-                {opponentPower}
+             <div class={`absolute -top-3 left-1/2 -translate-x-1/2 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold border-2 z-30 shadow-lg transition-colors duration-500 ${p2Final()}`}>
+                {props.opponentPower}
              </div>
     
              {/* The Card */}
              <LocationCard 
-                location={locationDef} 
+                location={props.locationDef} 
                 size="sm" 
-                onClick={onInspect}
+                onClick={props.onInspect}
              />
     
              {/* Player Power Bubble (Bottom) */}
-             <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold border-2 z-30 shadow-lg transition-colors duration-500 ${p1Final}`}>
-                {playerPower}
+             <div class={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold border-2 z-30 shadow-lg transition-colors duration-500 ${p1Final()}`}>
+                {props.playerPower}
              </div>
         </div>
     );

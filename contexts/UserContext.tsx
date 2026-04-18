@@ -1,6 +1,6 @@
 
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, createSignal, onMount, createEffect, createMemo, JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { UserProfile, StoreData, SeasonPassData, ProgressionData, ActivityLogEntry, ApiResponse } from '../types';
 import { audio } from '../services/audio';
 import { api } from '../services/api';
@@ -10,23 +10,23 @@ export type CollectionSortOption = 'Cost' | 'Power' | 'Name' | 'Newest';
 
 interface UserContextType {
     user: UserProfile;
-    storeData: StoreData | null;
-    isStoreLoading: boolean;
-    isMutating: boolean; // NEW: Global blocking indicator
-    seasonPassData: SeasonPassData | null;
-    isSeasonLoading: boolean;
+    storeData: () => StoreData | null;
+    isStoreLoading: () => boolean;
+    isMutating: () => boolean;
+    seasonPassData: () => SeasonPassData | null;
+    isSeasonLoading: () => boolean;
     syncSeasonPass: () => Promise<void>;
     debugSwitchSeason: () => Promise<void>; 
-    progressionData: ProgressionData | null;
-    activityLog: ActivityLogEntry[];
-    isProgressionLoading: boolean;
+    progressionData: () => ProgressionData | null;
+    activityLog: () => ActivityLogEntry[];
+    isProgressionLoading: () => boolean;
     syncProgression: (showLoading?: boolean) => Promise<void>;
     
-    collectionSort: CollectionSortOption;
+    collectionSort: () => CollectionSortOption;
     setCollectionSort: (s: CollectionSortOption) => void;
-    collectionFilterSearch: string;
+    collectionFilterSearch: () => string;
     setCollectionFilterSearch: (s: string) => void;
-    collectionFilterTags: string[];
+    collectionFilterTags: () => string[];
     toggleCollectionFilterTag: (tag: string) => void;
 
     performSynchronizedAction: (apiCall: () => Promise<ApiResponse<any>>, options?: { visualDelay?: number, sfx?: string }) => Promise<boolean>;
@@ -35,71 +35,107 @@ interface UserContextType {
     debugAddLevels: (amount: number) => Promise<void>;
     setActiveDeck: (id: number) => void;
     updateDeck: (id: number, cardIds: string[]) => void;
-    activeDeck: string[];
+    activeDeck: () => string[];
 }
 
-const UserContext = createContext<UserContextType | null>(null);
+const UserContext = createContext<UserContextType>();
 
-export const UserProvider: React.FC<{ children: ReactNode; initialUser: UserProfile }> = ({ children, initialUser }) => {
-    const [user, setUser] = useState<UserProfile>(initialUser);
-    const [storeData, setStoreData] = useState<StoreData | null>(null);
-    const [isStoreLoading, setIsStoreLoading] = useState(false);
-    const [isMutating, setIsMutating] = useState(false); // New state for blocking overlay
-    const [seasonPassData, setSeasonPassData] = useState<SeasonPassData | null>(null);
-    const [isSeasonLoading, setIsSeasonLoading] = useState(false);
-    const [progressionData, setProgressionData] = useState<ProgressionData | null>(null);
-    const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
-    const [isProgressionLoading, setIsProgressionLoading] = useState(false);
+export const UserProvider = (props: { children: JSX.Element; initialUser: UserProfile | (() => UserProfile) }) => {
+    const getInitialUser = () => typeof props.initialUser === 'function' ? (props.initialUser as any)() : props.initialUser;
+    
+    console.log("UserProvider: Initializing with profile id:", getInitialUser()?.id);
+    const [user, setUser] = createStore<UserProfile>(getInitialUser());
+    
+    createEffect(() => {
+        const u = getInitialUser();
+        if (u) {
+            console.log("UserContext: Reconciling store with fresh user data:", u.username, u.credits);
+            setUser(reconcile(u));
+        }
+    });
+    const [storeData, setStoreData] = createSignal<StoreData | null>(null);
+    const [isStoreLoading, setIsStoreLoading] = createSignal(false);
+    const [isMutating, setIsMutating] = createSignal(false);
+    const [seasonPassData, setSeasonPassData] = createSignal<SeasonPassData | null>(null);
+    const [isSeasonLoading, setIsSeasonLoading] = createSignal(false);
+    const [progressionData, setProgressionData] = createSignal<ProgressionData | null>(null);
+    const [activityLog, setActivityLog] = createSignal<ActivityLogEntry[]>([]);
+    const [isProgressionLoading, setIsProgressionLoading] = createSignal(false);
 
-    const [collectionSort, setCollectionSort] = useState<CollectionSortOption>('Cost');
-    const [collectionFilterSearch, setCollectionFilterSearch] = useState('');
-    const [collectionFilterTags, setCollectionFilterTags] = useState<string[]>([]);
+    const [collectionSort, setCollectionSort] = createSignal<CollectionSortOption>('Cost');
+    const [collectionFilterSearch, setCollectionFilterSearch] = createSignal('');
+    const [collectionFilterTags, setCollectionFilterTags] = createSignal<string[]>([]);
 
     const ui = useUI();
 
-    const toggleCollectionFilterTag = useCallback((tag: string) => {
+    const toggleCollectionFilterTag = (tag: string) => {
         setCollectionFilterTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-    }, []);
+    };
 
-    const syncSeasonPass = useCallback(async () => {
+    const syncSeasonPass = async () => {
+        const userId = user.id;
+        if (!userId || userId.length < 2) {
+            console.warn("UserContext: Skipping syncSeasonPass - no valid userId", userId);
+            return;
+        }
         setIsSeasonLoading(true);
-        const res = await api.season.get(user.id);
+        const res = await api.season.get(userId);
         if (res.success) {
             setSeasonPassData(res.data);
         }
         setIsSeasonLoading(false);
-    }, [user.id]);
+    };
 
-    const debugSwitchSeason = useCallback(async () => {
+    const debugSwitchSeason = async () => {
         setIsSeasonLoading(true);
         await api.season.debugNext();
         await syncSeasonPass();
         setIsSeasonLoading(false);
-    }, [syncSeasonPass]);
+    };
 
-    const syncProgression = useCallback(async (showLoading = false) => {
+    const syncProgression = async (showLoading = false) => {
+        const userId = user.id;
+        if (!userId || userId.length < 2) {
+            console.warn("UserContext: Skipping syncProgression - no valid userId", userId);
+            return;
+        }
         if (showLoading) setIsProgressionLoading(true);
         const [progRes, logRes] = await Promise.all([
-            api.progression.get(user.id),
+            api.progression.get(userId),
             api.progression.logs()
         ]);
         if (progRes.success) setProgressionData(progRes.data);
         if (logRes.success) setActivityLog(logRes.data || []);
         setIsProgressionLoading(false);
-    }, [user.id]);
+    };
 
-    const syncStore = useCallback(async (showLoading = false) => {
+    const syncStore = async (showLoading = false) => {
+        const userId = user.id;
+        if (!userId || userId.length < 2) {
+            console.warn("UserContext: Skipping syncStore - no valid userId", userId);
+            return;
+        }
         if (showLoading) setIsStoreLoading(true);
-        const res = await api.store.offers.list(user.id);
-        if (res.success) setStoreData(res.data);
-        setIsStoreLoading(false);
-    }, [user.id]);
+        try {
+            const res = await api.store.offers.list(userId);
+            if (res.success && res.data) {
+                console.log("UserContext: Store sync success, items:", res.data.offers.length);
+                setStoreData(res.data);
+            } else {
+                console.error("UserContext: Store sync failed", res.error);
+            }
+        } catch (e) {
+            console.error("UserContext: Store sync exception", e);
+        } finally {
+            setIsStoreLoading(false);
+        }
+    };
 
-    const performSynchronizedAction = useCallback(async (
+    const performSynchronizedAction = async (
         apiCall: () => Promise<ApiResponse<any>>, 
         options?: { visualDelay?: number, sfx?: string }
     ): Promise<boolean> => {
-        setIsMutating(true); // START BLOCKING
+        setIsMutating(true);
         try {
             const res = await apiCall();
             if (res.success && res.data) {
@@ -109,23 +145,26 @@ export const UserProvider: React.FC<{ children: ReactNode; initialUser: UserProf
                         await new Promise(resolve => setTimeout(resolve, options.visualDelay));
                     }
                     
-                    setUser(data.updatedProfile);
+                    setUser(reconcile(data.updatedProfile));
                     if (data.activityLog) setActivityLog(data.activityLog);
                     if (data.progressionData) setProgressionData(data.progressionData);
                     
-                    audio.play((options?.sfx || 'sfx_victory') as any, 0.5);
+                    const sfxKey = options?.sfx || 'sfx_purchase';
+                    audio.play(sfxKey as any, 0.5);
+
                     return true;
                 }
             }
             return false;
         } finally {
-            setIsMutating(false); // STOP BLOCKING
+            setIsMutating(false);
         }
-    }, []);
+    };
 
-    const upgradeCard = useCallback(async (cardId: string) => {
+    const upgradeCard = async (cardId: string) => {
+        const userId = user.id;
         const success = await performSynchronizedAction(
-            () => api.profile.upgradeCard(user.id, cardId),
+            () => api.profile.upgradeCard(userId, cardId),
             { visualDelay: 800 }
         );
         
@@ -133,41 +172,59 @@ export const UserProvider: React.FC<{ children: ReactNode; initialUser: UserProf
             ui.signalLevelUp(1);
             await syncProgression(false);
         }
-    }, [user.id, ui, syncProgression, performSynchronizedAction]);
+    };
 
-    const debugAddLevels = useCallback(async (amount: number) => {
-        // Correctly handle the response from addLevels using the synchronized pattern
+    const debugAddLevels = async (amount: number) => {
+        const userId = user.id;
         const success = await performSynchronizedAction(
-            () => api.profile.addLevels(user.id, amount)
+            () => api.profile.addLevels(userId, amount)
         );
         
         if (success) {
             ui.signalLevelUp(amount);
             await syncProgression(false);
         }
-    }, [user.id, ui, syncProgression, performSynchronizedAction]);
+    };
 
-    const setActiveDeck = useCallback(async (deckId: number) => {
+    const setActiveDeck = async (deckId: number) => {
         const res = await api.profile.updateDeck(user.id, deckId);
         if (res.success && res.data) {
-            setUser(res.data);
+            setUser(reconcile(res.data));
         }
-    }, [user.id]);
+    };
 
-    const updateDeck = useCallback((deckId: number, cardIds: string[]) => {
-        setUser(prev => ({
-            ...prev,
-            decks: { ...prev.decks, [deckId]: cardIds }
-        }));
-    }, []);
+    const updateDeck = (deckId: number, cardIds: string[]) => {
+        setUser("decks", deckId, cardIds);
+    };
 
-    useEffect(() => {
-        syncStore(true);
-        syncSeasonPass();
-        syncProgression(true);
-    }, [user.id, syncStore, syncSeasonPass, syncProgression]);
+    createEffect(() => {
+        console.log("UserContext: Current user in store:", JSON.parse(JSON.stringify(user)));
+    });
 
-    const activeDeck = useMemo(() => user.decks[user.activeDeckId] || [], [user.decks, user.activeDeckId]);
+    onMount(() => {
+        console.log("UserContext: onMount - userId:", user.id);
+        if (user.id && user.id.length >= 2) {
+            syncStore(true);
+            syncSeasonPass();
+            syncProgression(true);
+        }
+    });
+    
+    // We can also use createEffect to react to user.id changes if it ever changes
+    createEffect(() => {
+        const userId = user.id;
+        console.log("UserContext: createEffect (user.id) - userId:", userId);
+        if (userId && userId.length >= 2) {
+            syncStore(true);
+            syncSeasonPass();
+            syncProgression(true);
+        }
+    });
+
+    const activeDeck = createMemo(() => {
+        if (!user || !user.decks) return [];
+        return user.decks[user.activeDeckId] || [];
+    });
 
     return (
         <UserContext.Provider value={{ 
@@ -178,7 +235,9 @@ export const UserProvider: React.FC<{ children: ReactNode; initialUser: UserProf
             collectionFilterTags, toggleCollectionFilterTag,
             performSynchronizedAction, syncStore, 
             upgradeCard, debugAddLevels, setActiveDeck, updateDeck, activeDeck
-        }}>{children}</UserContext.Provider>
+        }}>
+            {props.children}
+        </UserContext.Provider>
     );
 };
 

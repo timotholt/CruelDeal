@@ -1,16 +1,13 @@
-
-import React from 'react';
+import { For, Show, JSX } from 'solid-js';
 import { useGame } from '../contexts/GameContext';
 import { VfxKey } from '../types';
 import { ExplosionVfx } from './vfx/ExplosionVfx';
 import { WarpVfx } from './vfx/WarpVfx';
 
-export const VfxLayer: React.FC = () => {
+export const VfxLayer = () => {
     const { activeVfx } = useGame();
 
-    if (activeVfx.length === 0) return null;
-
-    const getPositionStyle = (vfx: typeof activeVfx[0]): React.CSSProperties => {
+    const getPositionStyle = (vfx: any): JSX.CSSProperties => {
         if (vfx.laneIdx === undefined || vfx.slotIdx === undefined) return {};
 
         const laneCenters = ['16.66%', '50%', '83.33%'];
@@ -34,27 +31,38 @@ export const VfxLayer: React.FC = () => {
             top,
             transform: `translate(-50%, -50%) translateX(${xOffset})`,
             position: 'absolute',
-            zIndex: 50, 
-            pointerEvents: 'none'
+            'z-index': 50, 
+            'pointer-events': 'none'
         };
     };
 
-    const renderEffect = (id: VfxKey) => {
-        switch(id) {
-            case 'vfx_explosion_small': return <ExplosionVfx />;
-            case 'vfx_warp_trail': return <WarpVfx />;
-            case 'vfx_dust_motes': return null; // Ambient handled by CSS/Background
-            default: return <div className="w-10 h-10 bg-white/50 rounded-full animate-ping pointer-events-none"></div>;
-        }
+    const RenderEffect = (props: { id: VfxKey }) => {
+        return (
+            <Show when={props.id !== 'vfx_dust_motes'}>
+                <Show when={props.id === 'vfx_explosion_small'}>
+                    <ExplosionVfx />
+                </Show>
+                <Show when={props.id === 'vfx_warp_trail'}>
+                    <WarpVfx />
+                </Show>
+                <Show when={props.id !== 'vfx_explosion_small' && props.id !== 'vfx_warp_trail'}>
+                    <div class="w-10 h-10 bg-white/50 rounded-full animate-ping pointer-events-none" />
+                </Show>
+            </Show>
+        );
     };
 
     return (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {activeVfx.map(vfx => (
-                <div key={vfx.id} style={getPositionStyle(vfx)}>
-                    {renderEffect(vfx.vfxId)}
-                </div>
-            ))}
-        </div>
+        <Show when={activeVfx().length > 0}>
+            <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                <For each={activeVfx()}>
+                    {(vfx) => (
+                        <div style={getPositionStyle(vfx)}>
+                            <RenderEffect id={vfx.vfxId} />
+                        </div>
+                    )}
+                </For>
+            </div>
+        </Show>
     );
 };

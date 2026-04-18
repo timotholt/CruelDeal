@@ -1,20 +1,20 @@
-import React from 'react';
 import { GameText } from '../ui/GameText';
+import { JSX } from 'solid-js';
 
 interface NavItemProps {
     label: string;
-    icon: React.ReactNode;
+    icon: JSX.Element;
     active: boolean;
     onClick: () => void;
 }
 
-const NavItemComponent: React.FC<NavItemProps> = ({ label, icon, onClick, active }) => {
+export const NavItem = (props: NavItemProps) => {
     /**
      * UI REFINEMENT: 
      * Inactive buttons now use a brighter, high-contrast border (white/25) 
      * to feel like chiseled glass modules that catch the ambient light.
      */
-    const variantStyles = active 
+    const variantStyles = () => props.active 
         ? "from-indigo-600 to-purple-900 border-indigo-400 shadow-[0_0.2rem_0_rgba(79,70,229,0.5)]"
         : "bg-white/[0.04] border-white/25 shadow-none hover:bg-white/[0.08] hover:border-white/40 transition-all";
 
@@ -22,40 +22,40 @@ const NavItemComponent: React.FC<NavItemProps> = ({ label, icon, onClick, active
 
     return (
         <button 
-            onClick={onClick}
-            className="flex-1 min-w-0 h-12 relative group outline-none overflow-visible active:scale-[0.97] transition-transform"
+            onClick={() => props.onClick()}
+            class="flex-1 min-w-0 h-12 relative group outline-none overflow-visible active:scale-[0.97] transition-transform"
         >
             {/* BACKGROUND LAYER */}
-            <div className={`
+            <div class={`
                 absolute inset-0 rounded skew-x-[-9deg] border
-                ${active ? 'bg-gradient-to-b' : ''}
-                ${variantStyles}
+                ${props.active ? 'bg-gradient-to-b' : ''}
+                ${variantStyles()}
             `} />
             
             {/* CONTENT LAYER */}
-            <div className={`
+            <div class={`
                 relative h-full flex flex-col items-center justify-center skew-x-[-9deg] px-1
             `}>
-                <div className={`
+                <div class={`
                     mb-1 scale-90 transition-all duration-300
                     ${textShadowClass}
-                    ${active ? 'text-white scale-100' : 'text-slate-400 group-hover:text-slate-200'}
+                    ${props.active ? 'text-white scale-100' : 'text-slate-400 group-hover:text-slate-200'}
                 `}>
-                    {icon}
+                    {props.icon}
                 </div>
                 
-                <div className="w-full h-3.5 flex items-center justify-center">
+                <div class="w-full h-3.5 flex items-center justify-center">
                     <GameText 
-                        text={label}
+                        text={props.label}
                         baseFontSize={0.75}
                         minScale={0.4}
                         maxScale={1.0}
                         skewFactor={0.9}
                         maxLines={1}
-                        className={`
+                        class={`
                             font-black italic tracking-tighter uppercase transition-colors duration-300
                             ${textShadowClass}
-                            ${active ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}
+                            ${props.active ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}
                         `}
                     />
                 </div>
@@ -63,5 +63,3 @@ const NavItemComponent: React.FC<NavItemProps> = ({ label, icon, onClick, active
         </button>
     );
 };
-
-export const NavItem = React.memo(NavItemComponent);

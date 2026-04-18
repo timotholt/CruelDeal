@@ -1,73 +1,72 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { GameState, GameEvent } from '../types';
 import { moveCardsToBoard, getNextReveal, revealCard, resolveEndOfTurn, startNextTurn, calculateWinner, stepExecutionQueue } from '../services/engine';
 import { PendingMove } from '../services/planning';
 import { api } from '../services/api';
 
 export const useTurnManager = (userId: string) => {
-    const [gameState, setGameState] = useState<GameState | null>(null);
-    const [events, setEvents] = useState<GameEvent[]>([]);
-    const [isResolving, setIsResolving] = useState(false);
-    const [isWaiting, setIsWaiting] = useState(false);
+    const [gameState, setGameState] = createSignal<GameState | null>(null);
+    const [events, setEvents] = createSignal<GameEvent[]>([]);
+    const [isResolving, setIsResolving] = createSignal(false);
+    const [isWaiting, setIsWaiting] = createSignal(false);
     
     // Authorization: Client fetches authoritative state from Server
-    useEffect(() => {
+    createEffect(() => {
+        const uid = userId;
         const initMatch = async () => {
-            const res = await api.match.start(userId);
+            const res = await api.match.start(uid);
             if (res.success && res.data) {
                 setGameState(res.data);
             }
         };
         initMatch();
-    }, [userId]);
+    });
 
-    const gameStateRef = useRef(gameState);
-    useEffect(() => { 
-        gameStateRef.current = gameState; 
-    }, [gameState]);
-
-    const updateStateWithEvents = useCallback((newState: GameState) => {
+    const updateStateWithEvents = (newState: GameState) => {
         if (newState.eventQueue.length > 0) {
              const newEvents = [...newState.eventQueue];
              newState.eventQueue = [];
              setEvents(prev => [...prev, ...newEvents]);
         }
-        setGameState(newState);
-    }, []);
+        setGameState({ ...newState }); 
+    };
 
-    const startResolution = useCallback((p1Moves: PendingMove[], p2Moves: PendingMove[]) => {
-        if (!gameState) return;
+    const startResolution = (p1Moves: PendingMove[], p2Moves: PendingMove[]) => {
+        const current = gameState();
+        if (!current) return;
         setIsWaiting(false);
-        const newState = moveCardsToBoard(gameState, p1Moves, p2Moves);
+        const newState = moveCardsToBoard(current, p1Moves, p2Moves);
         newState.phase = 'resolving';
         updateStateWithEvents(newState);
         setIsResolving(true);
-    }, [gameState, updateStateWithEvents]);
+    };
 
-    useEffect(() => {
-        if (!isResolving) return;
+    createEffect(() => {
+        if (!isResolving()) return;
 
         let active = true;
+        let timerId: ReturnType<typeof setTimeout>;
 
         const runLoop = async () => {
-            if (!active || !gameStateRef.current) return;
-            const currentState = gameStateRef.current;
+            if (!active) return;
+            const currentState = gameState();
+            if (!currentState) return;
             
             if (currentState.executionQueue.length > 0) {
                 const prevDestroyed = currentState.players.p1.stats.destroyedCount + currentState.players.p2.stats.destroyedCount;
                 const nextState = stepExecutionQueue(currentState);
                 updateStateWithEvents(nextState);
                 const newDestroyed = nextState.players.p1.stats.destroyedCount + nextState.players.p2.stats.destroyedCount;
-                setTimeout(runLoop, newDestroyed > prevDestroyed ? 350 : 50);
+                timerId = setTimeout(runLoop, newDestroyed > prevDestroyed ? 350 : 50);
                 return;
             }
 
             const nextReveal = getNextReveal(currentState);
             if (nextReveal) {
-                setTimeout(() => {
-                    if (!active || !gameStateRef.current) return;
-                    const s = revealCard(gameStateRef.current, nextReveal.laneIdx, nextReveal.slotIdx, nextReveal.owner);
+                timerId = setTimeout(() => {
+                    if (!active) return;
+                    const s = revealCard(gameState()!, nextReveal.laneIdx, nextReveal.slotIdx, nextReveal.owner);
                     updateStateWithEvents(s);
                     runLoop(); 
                 }, 600);
@@ -77,7 +76,7 @@ export const useTurnManager = (userId: string) => {
             const s = resolveEndOfTurn(currentState);
             if (s.executionQueue.length > 0) {
                 updateStateWithEvents(s);
-                setTimeout(runLoop, 50); 
+                timerId = setTimeout(runLoop, 50); 
                 return;
             }
             
@@ -91,34 +90,35 @@ export const useTurnManager = (userId: string) => {
                 finalState = startNextTurn(finalState);
                 updateStateWithEvents(finalState);
                 if (finalState.executionQueue.length > 0) {
-                    setTimeout(runLoop, 50);
+                    timerId = setTimeout(runLoop, 50);
                     return;
                 }
                 setIsResolving(false);
             }
         };
 
-        const t = setTimeout(runLoop, 100);
-        return () => {
+        timerId = setTimeout(runLoop, 100);
+        
+        onCleanup(() => {
             active = false;
-            clearTimeout(t);
-        };
+            clearTimeout(timerId);
+        });
+    });
 
-    }, [isResolving, updateStateWithEvents]);
-
-    const restartGame = useCallback(async () => {
+    const restartGame = async () => {
         setGameState(null);
         setEvents([]);
         setIsResolving(false);
         setIsWaiting(false);
         const res = await api.match.start(userId);
         if (res.success && res.data) setGameState(res.data);
-    }, [userId]);
+    };
 
-    const resign = useCallback(() => {
-        if (!gameState || gameState.winner) return;
-        setGameState(prev => prev ? ({ ...prev, winner: 'p2', phase: 'gameover' }) : null);
-    }, [gameState]);
+    const resign = () => {
+        const current = gameState();
+        if (!current || current.winner) return;
+        setGameState({ ...current, winner: 'p2', phase: 'gameover' });
+    };
 
     return {
         gameState,

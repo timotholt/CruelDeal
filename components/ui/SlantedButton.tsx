@@ -1,38 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { createSignal, onCleanup, JSX, children as solidChildren } from 'solid-js';
 import { GameText } from './GameText';
 
 type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'blue' | 'black' | 'glass' | 'ghost';
 
-interface SlantedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface SlantedButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: ButtonVariant;
     fullWidth?: boolean;
     size?: 'xs' | 'sm' | 'md' | 'lg';
-    icon?: React.ReactNode;
+    icon?: JSX.Element;
     holdDuration?: number; 
     onHoldChange?: (isHolding: boolean) => void;
-    onHoldComplete?: (e: React.PointerEvent) => void;
+    onHoldComplete?: (e: PointerEvent) => void;
     onProgressChange?: (progress: number) => void;
+    children?: JSX.Element;
+    class?: string;
 }
 
-export const SlantedButton: React.FC<SlantedButtonProps> = ({ 
-    children, 
-    variant = 'primary', 
-    fullWidth = false,
-    size = 'md',
-    icon,
-    className = '',
-    holdDuration = 0,
-    onHoldChange,
-    onHoldComplete,
-    onProgressChange,
-    onClick,
-    ...props 
-}) => {
-    const [progress, setProgress] = useState(0);
-    const [isHolding, setIsHolding] = useState(false);
-    const timerRef = useRef<number | null>(null);
-    const startTimeRef = useRef<number>(0);
-    const hasTriggeredHold = useRef(false);
+export const SlantedButton = (props: SlantedButtonProps) => {
+    const [progress, setProgress] = createSignal(0);
+    const [isHolding, setIsHolding] = createSignal(false);
+    let timerId: number | null = null;
+    let startTime = 0;
+    let hasTriggeredHold = false;
+
+    const variant = () => props.variant ?? 'primary';
+    const fullWidth = () => props.fullWidth ?? false;
+    const size = () => props.size ?? 'md';
+    const holdDuration = () => props.holdDuration ?? 0;
 
     const variants = {
         primary: "from-indigo-500 to-indigo-800 border-indigo-400 shadow-[0_0.2rem_0_rgb(30,58,138)] bg-gradient-to-b",
@@ -46,10 +40,6 @@ export const SlantedButton: React.FC<SlantedButtonProps> = ({
         ghost: "bg-white/[0.04] border-white/20 shadow-[0_0.15rem_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/30 transition-all",
     };
 
-    /**
-     * RECALIBRATED SIZE CONFIGS
-     * 'sm' reduced to h-7 for a sleeker profile in the store grid.
-     */
     const sizeConfigs = {
         xs: { height: "h-[1.65rem]", fontSize: 0.8, padding: "px-1" },
         sm: { height: "h-7", fontSize: 0.95, padding: "px-2" },
@@ -57,31 +47,36 @@ export const SlantedButton: React.FC<SlantedButtonProps> = ({
         lg: { height: "h-16", fontSize: 1.4, padding: "px-4" }
     };
 
-    const config = sizeConfigs[size];
+    const config = () => sizeConfigs[size()];
 
-    const startHold = (e: React.PointerEvent) => {
-        if (!holdDuration || props.disabled) return;
+    const startHold = (e: PointerEvent) => {
+        const dur = holdDuration();
+        if (!dur || props.disabled) return;
+        const onHoldChange = props.onHoldChange;
+        const onProgressChange = props.onProgressChange;
+        const onHoldComplete = props.onHoldComplete;
+        const onClick = props.onClick;
+
         setIsHolding(true);
         onHoldChange?.(true);
-        hasTriggeredHold.current = false;
-        startTimeRef.current = Date.now();
+        hasTriggeredHold = false;
+        startTime = Date.now();
         
-        timerRef.current = window.setInterval(() => {
-            const elapsed = Date.now() - startTimeRef.current;
-            const p = Math.min((elapsed / holdDuration) * 100, 100);
+        timerId = window.setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const p = Math.min((elapsed / dur) * 100, 100);
             setProgress(p);
             onProgressChange?.(p);
             
-            if (p >= 100 && !hasTriggeredHold.current) {
-                hasTriggeredHold.current = true;
-                if (timerRef.current) clearInterval(timerRef.current);
-                timerRef.current = null;
+            if (p >= 100 && !hasTriggeredHold) {
+                hasTriggeredHold = true;
+                if (timerId !== null) clearInterval(timerId);
+                timerId = null;
                 
                 if (onHoldComplete) {
                     onHoldComplete(e);
                 } else if (onClick) {
-                    const sEvent = { clientX: e.clientX, clientY: e.clientY, target: e.target, currentTarget: e.currentTarget, type: 'click' } as any;
-                    onClick(sEvent);
+                    (onClick as any)(e);
                 }
                 
                 setIsHolding(false);
@@ -92,68 +87,82 @@ export const SlantedButton: React.FC<SlantedButtonProps> = ({
     };
 
     const cancelHold = () => {
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (timerId !== null) { clearInterval(timerId); timerId = null; }
         setIsHolding(false);
-        onHoldChange?.(false);
+        props.onHoldChange?.(false);
         setProgress(0);
-        onProgressChange?.(0);
+        props.onProgressChange?.(0);
     };
 
-    const handleButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-        if (holdDuration > 0 && hasTriggeredHold.current) {
+    const handleButtonClick = (e: MouseEvent) => {
+        // If a hold duration is set, we ignore standard clicks.
+        // The action is triggered exclusively by the hold-completion logic inside startHold.
+        if (holdDuration() > 0) {
             return;
         }
-        onClick?.(e);
+        props.onClick?.(e as any);
     };
 
-    useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+    onCleanup(() => { if (timerId !== null) clearInterval(timerId); });
 
-    const hasExplicitWidth = className.includes('w-') || className.includes('max-w-');
-    const widthClass = fullWidth ? 'w-full' : (hasExplicitWidth ? '' : 'w-max');
+    const hasExplicitWidth = () => props.class?.includes('w-') || props.class?.includes('max-w-');
+    const widthClass = () => fullWidth() ? 'w-full' : (hasExplicitWidth() ? '' : 'w-max');
 
-    const containerJustify = (icon && children !== undefined) ? 'justify-start' : 'justify-center';
+    const hasChildren = () => props.children !== undefined;
+    const containerJustify = () => (props.icon && hasChildren()) ? 'justify-start' : 'justify-center';
     const textJustify = 'justify-center';
 
+    const resolvedChildren = solidChildren(() => props.children);
+    const getChildrenValue = () => {
+        const val = resolvedChildren();
+        if (Array.isArray(val)) return val[0];
+        return val;
+    };
+    const isTextLikeChildren = () => {
+        const val = getChildrenValue();
+        return typeof val === 'string' || typeof val === 'number';
+    };
+
     return (
-        <div className={`relative group ${widthClass} ${config.height} min-w-0 ${props.disabled ? 'opacity-50 pointer-events-none' : ''} ${className}`}>
+        <div class={`relative group ${widthClass()} ${config().height} min-w-0 ${props.disabled ? 'opacity-50 pointer-events-none' : ''} ${props.class ?? ''}`}>
             <button 
-                className={`w-full h-full relative z-10 outline-none`}
-                onPointerDown={holdDuration ? startHold : undefined}
-                onPointerUp={holdDuration ? cancelHold : undefined}
-                onPointerLeave={holdDuration ? cancelHold : undefined}
+                class={`w-full h-full relative z-10 outline-none`}
+                onPointerDown={(e) => holdDuration() ? startHold(e) : undefined}
+                onPointerUp={(_e) => holdDuration() ? cancelHold() : undefined}
+                onPointerLeave={(_e) => holdDuration() ? cancelHold() : undefined}
                 onClick={handleButtonClick}
                 role="button"
-                {...props}
+                disabled={props.disabled}
             >
                 {/* SLANTED BACKGROUND */}
-                <div className={`absolute inset-0 border rounded skew-x-[-9deg] overflow-hidden ${variants[variant]}`}>
-                    {holdDuration > 0 && (
-                        <div className={`absolute inset-y-0 left-0 bg-white/30 transition-all duration-75 ease-linear pointer-events-none`} style={{ width: `${progress}%` }} />
+                <div class={`absolute inset-0 border rounded skew-x-[-9deg] overflow-hidden ${variants[variant()]}`}>
+                    {holdDuration() > 0 && (
+                        <div class={`absolute inset-y-0 left-0 bg-white/30 transition-all duration-75 ease-linear pointer-events-none`} style={{ width: `${progress()}%` }} />
                     )}
                 </div>
                 
                 {/* SLANTED CONTENT WRAPPER */}
-                <div className={`relative z-20 h-full w-full pointer-events-none flex items-center ${containerJustify} skew-x-[-9deg] min-w-0 ${config.padding}`}>
-                    <div className={`flex items-center ${containerJustify} gap-0 w-full h-full min-w-0 ${isHolding ? 'opacity-40' : 'opacity-100'}`}>
-                        {icon && (
-                            <div className={`shrink-0 flex items-center justify-center drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] ${children !== undefined ? 'pr-0.5' : ''}`}>
-                                {icon}
+                <div class={`relative z-20 h-full w-full pointer-events-none flex items-center ${containerJustify()} skew-x-[-9deg] min-w-0 ${config().padding}`}>
+                    <div class={`flex items-center ${containerJustify()} gap-0 w-full h-full min-w-0 ${isHolding() ? 'opacity-40' : 'opacity-100'}`}>
+                        {props.icon && (
+                            <div class={`shrink-0 flex items-center justify-center drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] ${hasChildren() ? 'pr-0.5' : ''}`}>
+                                {props.icon}
                             </div>
                         )}
                         
-                        {children !== undefined && (
-                            <div className={`flex-1 h-full min-w-0 flex items-center ${textJustify}`}>
-                                {typeof children === 'string' || typeof children === 'number' ? (
+                        {hasChildren() && (
+                            <div class={`flex-1 h-full min-w-0 flex items-center ${textJustify}`}>
+                                {isTextLikeChildren() ? (
                                     <GameText 
-                                        text={children.toString()} 
-                                        baseFontSize={config.fontSize} 
+                                        text={getChildrenValue()?.toString() ?? ""} 
+                                        baseFontSize={config().fontSize} 
                                         skewFactor={0.9} 
                                         maxScale={1.5}
-                                        className="text-white font-black italic tracking-tighter uppercase drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)]"
+                                        class="text-white font-black italic tracking-tighter uppercase drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)]"
                                     />
                                 ) : (
-                                    <div className={`flex items-center ${textJustify} drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] w-full h-full min-w-0`}>
-                                        {children}
+                                    <div class={`flex items-center ${textJustify} drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] w-full h-full min-w-0`}>
+                                        {getChildrenValue()}
                                     </div>
                                 )}
                             </div>

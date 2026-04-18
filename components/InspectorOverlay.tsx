@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { useUser } from '../contexts/UserContext';
 import { useUI } from '../contexts/UIContext';
 import { CardInspector } from './inspector/CardInspector';
@@ -9,7 +8,7 @@ import { BoxInspector } from './inspector/BoxInspector';
 import { SeasonRewardInspector } from './inspector/SeasonRewardInspector';
 import { ModalBackdrop } from './ui/ModalBackdrop';
 
-export const InspectorOverlay: React.FC = () => {
+export const InspectorOverlay = () => {
     const { user, upgradeCard } = useUser();
     const { 
         inspectingCard, 
@@ -20,34 +19,44 @@ export const InspectorOverlay: React.FC = () => {
         closeInspector 
     } = useUI();
 
-    const [isInteractionEnabled, setIsInteractionEnabled] = useState(false);
+    const [isInteractionEnabled, setIsInteractionEnabled] = createSignal(false);
 
-    useEffect(() => {
-        const anyActive = inspectingCard || inspectingLocation || inspectingCurrency || inspectingBox || inspectingReward;
+    createEffect(() => {
+        const anyActive = !!(inspectingCard() || inspectingLocation() || inspectingCurrency() || inspectingBox() || inspectingReward());
         if (anyActive) {
             const timer = setTimeout(() => setIsInteractionEnabled(true), 150);
-            return () => clearTimeout(timer);
+            onCleanup(() => clearTimeout(timer));
         } else {
             const timer = setTimeout(() => setIsInteractionEnabled(false), 0);
-            return () => clearTimeout(timer);
+            onCleanup(() => clearTimeout(timer));
         }
-    }, [inspectingCard, inspectingLocation, inspectingCurrency, inspectingBox, inspectingReward]);
-
-    if (!inspectingCard && !inspectingLocation && !inspectingCurrency && !inspectingBox && !inspectingReward) return null;
+    });
 
     const handleBackgroundClick = () => {
-        if (isInteractionEnabled) {
+        if (isInteractionEnabled()) {
             closeInspector();
         }
     };
 
     return (
-        <ModalBackdrop onClose={handleBackgroundClick}>
-            {inspectingReward && <SeasonRewardInspector reward={inspectingReward} />}
-            {inspectingBox && <BoxInspector boxType={inspectingBox.boxType} title={inspectingBox.title} description={inspectingBox.description} />}
-            {inspectingCard && <CardInspector card={inspectingCard.data} user={user} onUpgrade={upgradeCard} borderOverride={inspectingCard.borderOverride} />}
-            {inspectingLocation && <LocationInspector location={inspectingLocation} />}
-            {inspectingCurrency && <CurrencyInspector type={inspectingCurrency.type} amount={inspectingCurrency.amount} />}
-        </ModalBackdrop>
+        <Show when={inspectingCard() || inspectingLocation() || inspectingCurrency() || inspectingBox() || inspectingReward()}>
+            <ModalBackdrop onClose={handleBackgroundClick}>
+                <Show when={inspectingReward()}>
+                    {(reward) => <SeasonRewardInspector reward={reward()} />}
+                </Show>
+                <Show when={inspectingBox()}>
+                    {(box) => <BoxInspector boxType={box().boxType} title={box().title} description={box().description} />}
+                </Show>
+                <Show when={inspectingCard()}>
+                    {(card) => <CardInspector card={card().data} user={user} onUpgrade={upgradeCard} borderOverride={card().borderOverride} />}
+                </Show>
+                <Show when={inspectingLocation()}>
+                    {(loc) => <LocationInspector location={loc()} />}
+                </Show>
+                <Show when={inspectingCurrency()}>
+                    {(cur) => <CurrencyInspector type={cur().type} amount={cur().amount} />}
+                </Show>
+            </ModalBackdrop>
+        </Show>
     );
 };

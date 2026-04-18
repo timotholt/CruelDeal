@@ -1,76 +1,78 @@
-
-import { useState, useEffect } from 'react';
+import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { audio } from '../services/audio';
 import { REWARD_SEQUENCE } from '../services/api/mockData';
 
 const TICK_RATE = 70;
 const LAP_PAUSE = 100;
-const CLIMAX_DURATION = 3000; // Increased from 2000 to 3000 for longer decay
+const CLIMAX_DURATION = 3000; 
 const INITIAL_STABILIZATION_DELAY = 1500;
 const SHIFT_DURATION = 600; 
-const SETTLE_DELAY = 500; // Hold on final number for 0.5s
+const SETTLE_DELAY = 500;
 
-export const useLevelChaser = (targetLevel: number, increment: number, onComplete: () => void) => {
-    const [isTicking, setIsTicking] = useState(increment > 0);
-    const [isWaitingToStart, setIsWaitingToStart] = useState(increment > 0);
-    const [isShifted, setIsShifted] = useState(false);
-    const [visualLevel, setVisualLevel] = useState(targetLevel - increment);
-    const [visualGain, setVisualGain] = useState(increment);
-    const [lappingIndices, setLappingIndices] = useState<Set<number>>(new Set());
-    const [isFlare, setIsFlare] = useState(false);
+export const useLevelChaser = (targetLevel: () => number, increment: () => number, onComplete: () => void) => {
+    const [isTicking, setIsTicking] = createSignal(increment() > 0);
+    const [isWaitingToStart, setIsWaitingToStart] = createSignal(increment() > 0);
+    const [isShifted, setIsShifted] = createSignal(false);
+    const [visualLevel, setVisualLevel] = createSignal(targetLevel() - increment());
+    const [visualGain, setVisualGain] = createSignal(increment());
+    const [lappingIndices, setLappingIndices] = createSignal<Set<number>>(new Set());
+    const [isFlare, setIsFlare] = createSignal(false);
 
-    // 1. Orchestrated Sequence: Wait -> Shift -> Start Ticking
-    useEffect(() => {
-        if (increment > 0) {
+    createEffect(() => {
+        const inc = increment();
+        if (inc > 0) {
             let active = true;
+            setIsTicking(true);
+            setIsWaitingToStart(true);
+            setVisualLevel(targetLevel() - inc);
+            setVisualGain(inc);
+
             const sequence = async () => {
-                // Stage 1: Absolute Center Stabilization
                 await new Promise(resolve => setTimeout(resolve, INITIAL_STABILIZATION_DELAY));
                 if (!active) return;
                 
-                // Stage 2: Slide to left to make room for Gain
                 setIsShifted(true);
                 
-                // Stage 3: Wait for animation, then begin numerical chase
                 await new Promise(resolve => setTimeout(resolve, SHIFT_DURATION));
                 if (!active) return;
                 setIsWaitingToStart(false);
             };
             sequence();
-            return () => { active = false; };
+            onCleanup(() => { active = false; });
         } else {
-            const timer = setTimeout(() => setIsWaitingToStart(false), 0);
-            return () => clearTimeout(timer);
+            setIsWaitingToStart(false);
+            setIsTicking(false);
+            setIsShifted(false);
+            setVisualLevel(targetLevel());
+            setVisualGain(0);
         }
-    }, [increment]);
+    });
 
-    // 2. The Ticking Loop
-    useEffect(() => {
-        if (isWaitingToStart) return;
+    createEffect(() => {
+        if (isWaitingToStart()) return;
 
-        if (!isTicking || visualLevel >= targetLevel) {
-            if (isTicking) {
-                // We reached the end! 
-                const timer = setTimeout(() => setIsTicking(false), 0);
+        const currentTicking = isTicking();
+        const currentVisual = visualLevel();
+        const currentTarget = targetLevel();
+
+        if (!currentTicking || currentVisual >= currentTarget) {
+            if (currentTicking) {
+                setIsTicking(false);
                 
                 const finishSequence = async () => {
-                    // Hold on the final number (0 gain)
                     await new Promise(resolve => setTimeout(resolve, SETTLE_DELAY));
-                    
-                    setIsShifted(false); // Slide back to perfect center
+                    setIsShifted(false);
                     setIsFlare(true);
                     audio.play('sfx_victory', 0.6);
                     onComplete();
                     setTimeout(() => setIsFlare(false), CLIMAX_DURATION);
                 };
-                
                 finishSequence();
-                return () => clearTimeout(timer);
             }
             return;
         }
 
-        const nextLevel = visualLevel + 1;
+        const nextLevel = currentVisual + 1;
         const newLaps = new Set<number>();
         
         REWARD_SEQUENCE.forEach((conf, i) => {
@@ -91,13 +93,13 @@ export const useLevelChaser = (targetLevel: number, increment: number, onComplet
             audio.play('sfx_ui_hover', 0.3);
         }, TICK_RATE + (newLaps.size > 0 ? LAP_PAUSE : 0));
 
-        return () => clearTimeout(timer);
-    }, [isTicking, isWaitingToStart, visualLevel, targetLevel, onComplete]);
+        onCleanup(() => clearTimeout(timer));
+    });
 
     return {
         visualLevel,
         visualGain,
-        isTicking: isTicking && !isWaitingToStart,
+        isTicking: () => isTicking() && !isWaitingToStart(),
         isShifted,
         lappingIndices,
         isFlare

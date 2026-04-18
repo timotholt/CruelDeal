@@ -1,5 +1,3 @@
-
-import React from 'react';
 import { ProgressionTrack } from '../../types';
 import { ProgressionHexButton } from './ProgressionHexButton';
 import { ProgressionProgressBar } from './ProgressionProgressBar';
@@ -11,50 +9,38 @@ interface ProgressionTrackRowProps {
     isSuccess: boolean;
     isGlobalTicking: boolean;
     isLapping?: boolean;
-    isNewlyGained?: boolean;
     onClaim: () => void;
     onClaimAll: () => void;
 }
 
-const ProgressionTrackRowComponent: React.FC<ProgressionTrackRowProps> = ({
-    track,
-    isClaiming,
-    isClaimingAll,
-    isSuccess,
-    isGlobalTicking,
-    isLapping = false,
-    onClaim,
-    onClaimAll
-}) => {
+export const ProgressionTrackRow = (props: ProgressionTrackRowProps) => {
     return (
         <div 
-            className="flex flex-col h-11 px-4 will-change-transform overflow-visible justify-center"
+            class="flex flex-col h-11 px-4 will-change-transform overflow-visible justify-center"
             style={{ contain: 'layout' }} 
         >
-            <div className="flex items-center overflow-visible">
+            <div class="flex items-center overflow-visible">
                 <ProgressionProgressBar 
-                    type={track.type}
-                    currentXP={track.currentXP}
-                    targetXP={track.targetXP}
-                    isLapping={isLapping}
+                    type={props.track.type}
+                    currentXP={props.track.currentXP}
+                    targetXP={props.track.targetXP}
+                    isLapping={props.isLapping || false}
                 />
                 
-                <div className="shrink-0 z-20 transition-transform duration-300 ml-[-0.18rem]">
+                <div class="shrink-0 z-20 transition-transform duration-300 ml-[-0.18rem]">
                     <ProgressionHexButton 
-                        type={track.type}
-                        unclaimedCount={track.unclaimedCount}
-                        rewardAmount={track.nextRewardAmount}
-                        isClaiming={isClaiming}
-                        isClaimingAll={isClaimingAll}
-                        isSuccess={isSuccess}
-                        isGlobalTicking={isGlobalTicking}
-                        onClaim={onClaim}
-                        onClaimAll={onClaimAll}
+                        type={props.track.type}
+                        unclaimedCount={props.track.unclaimedCount}
+                        rewardAmount={props.track.nextRewardAmount}
+                        isClaiming={props.isClaiming}
+                        isClaimingAll={props.isClaimingAll}
+                        isSuccess={props.isSuccess}
+                        isGlobalTicking={props.isGlobalTicking}
+                        onClaim={props.onClaim}
+                        onClaimAll={props.onClaimAll}
                     />
                 </div>
             </div>
         </div>
     );
 };
-
-export const ProgressionTrackRow = React.memo(ProgressionTrackRowComponent);

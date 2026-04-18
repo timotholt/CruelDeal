@@ -1,19 +1,17 @@
-
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, JSX } from 'solid-js';
 import { useGameController } from '../hooks/useGameController';
 
 // Infer the return type from the hook
 type GameController = ReturnType<typeof useGameController>;
 
-const GameContext = createContext<GameController | null>(null);
+const GameContext = createContext<GameController>();
 
-export const GameProvider: React.FC<{ children: ReactNode; onExit?: () => void }> = ({ children, onExit }) => {
-    const controller = useGameController(onExit);
+export const GameProvider = (props: { children: JSX.Element; onExit?: () => void }) => {
+    const controller = useGameController(() => props.onExit?.());
 
     return (
         <GameContext.Provider value={controller}>
-            {children}
+            {props.children}
         </GameContext.Provider>
     );
 };

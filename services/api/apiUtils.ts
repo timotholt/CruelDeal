@@ -29,6 +29,11 @@ export const simulateNetwork = async (minMs = 200, maxMs = 600) => {
  */
 export const verifySession = (userId: string) => {
     if (!userId || userId.length < 2) {
+        console.error(`[SECURITY] Session Validation Failed. userId: "${userId}"`, { 
+            length: userId?.length,
+            isUndefined: userId === undefined,
+            isNull: userId === null
+        });
         throw new ApiError('ERR_UNAUTHORIZED', 'Secure session link severed. Please re-authenticate.');
     }
     return userId; 

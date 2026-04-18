@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import { createEffect, onCleanup, For } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
 import { SlantedButton } from '../ui/SlantedButton';
 import { GameText } from '../ui/GameText';
@@ -30,40 +30,41 @@ const getRelativeTimeString = (isoString: string) => {
     return 'a long time ago';
 };
 
-export const DeckSelector3D: React.FC<DeckSelectorProps> = ({ activeDeckId, onSelectDeck }) => {
-    const { user } = useUser();
-    const deckIds = Object.keys(user.decks).map(Number).sort((a, b) => a - b);
-    const count = deckIds.length;
-    const angleStep = 360 / count;
+/**
+ * DECK SELECTOR 3D
+ * Cylindrical drum interface for high-performance deck selection.
+ */
+export const DeckSelector3D = (props: DeckSelectorProps) => {
+    const user = useUser();
+    const deckIds = () => Object.keys(user.user.decks).map(Number).sort((a, b) => a - b);
+    const count = () => deckIds().length;
+    const angleStep = () => 360 / Math.max(1, count());
     const radius = 110;
 
-    const drumRef = useRef<HTMLDivElement>(null);
-    const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
+    let drumRef: HTMLDivElement | undefined;
+    const itemsRef: (HTMLDivElement | null)[] = [];
     
-    const setItemRef = useCallback((el: HTMLDivElement | null, i: number) => {
-        itemsRef.current[i] = el;
-    }, []);
-
-    const rotationRef = useRef((activeDeckId - 1) * angleStep);
-    const velocityRef = useRef(0);
-    const isDraggingRef = useRef(false);
-    const lastPointerY = useRef(0);
-    const lastTime = useRef(0);
-    const requestRef = useRef<number | null>(null);
+    let rotation = 0; // Initialize in effect
+    let velocity = 0;
+    let isDragging = false;
+    let lastPointerY = 0;
+    let lastTime = 0;
+    let requestId: number | null = null;
     
-    const lastCenteredIndexRef = useRef<number>(activeDeckId - 1);
-    const lastTickStepRef = useRef<number>(activeDeckId - 1);
-    const lastAudioTimeRef = useRef<number>(0);
-    const canPlayAudioRef = useRef<boolean>(true);
+    let lastCenteredIndex = -1;
+    let lastTickStep = -1;
+    let lastAudioTime = 0;
+    let canPlayAudio = true;
 
-    const updateDom = useCallback((rot: number) => {
-        if (!drumRef.current) return;
-        drumRef.current.style.transform = `translate3d(0, 0, -${radius}px) rotateX(${rot}deg)`;
+    const updateDom = (rot: number) => {
+        if (!drumRef) return;
+        drumRef.style.transform = `translate3d(0, 0, -${radius}px) rotateX(${rot}deg)`;
         let currentCenterI = -1;
-        for (let i = 0; i < itemsRef.current.length; i++) {
-            const item = itemsRef.current[i];
+        const step = angleStep();
+        for (let i = 0; i < itemsRef.length; i++) {
+            const item = itemsRef[i];
             if (!item) continue;
-            const angle = -i * angleStep;
+            const angle = -i * step;
             let normalizedAngle = (angle + rot) % 360;
             if (normalizedAngle > 180) normalizedAngle -= 360;
             else if (normalizedAngle < -180) normalizedAngle += 360;
@@ -74,7 +75,7 @@ export const DeckSelector3D: React.FC<DeckSelectorProps> = ({ activeDeckId, onSe
                 item.style.transform = `rotateX(${angle}deg) translate3d(0, 0, ${radius}px) scale(${distanceScale})`;
                 item.style.opacity = Math.max(0.05, opacity).toString();
                 item.style.visibility = 'visible';
-                if (absAngle < (angleStep / 2)) currentCenterI = i;
+                if (absAngle < (step / 2)) currentCenterI = i;
             } else {
                 if (item.style.visibility !== 'hidden') {
                     item.style.visibility = 'hidden';
@@ -82,127 +83,143 @@ export const DeckSelector3D: React.FC<DeckSelectorProps> = ({ activeDeckId, onSe
                 }
             }
         }
-        if (currentCenterI !== -1 && currentCenterI !== lastCenteredIndexRef.current) {
-            const prevItem = itemsRef.current[lastCenteredIndexRef.current];
-            const nextItem = itemsRef.current[currentCenterI];
+        if (currentCenterI !== -1 && currentCenterI !== lastCenteredIndex) {
+            const prevItem = itemsRef[lastCenteredIndex];
+            const nextItem = itemsRef[currentCenterI];
             if (prevItem) { prevItem.classList.remove('is-visually-center'); prevItem.style.zIndex = '10'; }
             if (nextItem) { nextItem.classList.add('is-visually-center'); nextItem.style.zIndex = '50'; }
-            lastCenteredIndexRef.current = currentCenterI;
+            lastCenteredIndex = currentCenterI;
         }
-        const currentStep = Math.round(rot / angleStep);
-        if (currentStep !== lastTickStepRef.current) {
+        const currentStep = Math.round(rot / step);
+        if (currentStep !== lastTickStep) {
             const now = performance.now();
-            const elapsed = now - lastAudioTimeRef.current;
-            if (!isDraggingRef.current && elapsed > 1000) canPlayAudioRef.current = false;
-            if (canPlayAudioRef.current && elapsed > 12) {
+            const elapsed = now - lastAudioTime;
+            if (!isDragging && elapsed > 1000) canPlayAudio = false;
+            if (canPlayAudio && elapsed > 12) {
                 audio.play('sfx_ui_click', 0.45);
-                lastAudioTimeRef.current = now;
+                lastAudioTime = now;
             }
-            lastTickStepRef.current = currentStep;
+            lastTickStep = currentStep;
         }
-    }, [angleStep, radius]);
+    };
 
-    const animate = useCallback(() => {
-        function step() {
-            if (isDraggingRef.current) return;
-            velocityRef.current *= 0.95;
-            rotationRef.current += velocityRef.current;
-            if (Math.abs(velocityRef.current) < 0.35) {
-                const targetIndex = Math.round(rotationRef.current / angleStep);
-                const targetRotation = targetIndex * angleStep;
-                const diff = targetRotation - rotationRef.current;
-                rotationRef.current += diff * 0.45;
-                if (Math.abs(diff) < 0.1) {
-                    rotationRef.current = targetRotation;
-                    velocityRef.current = 0;
-                    updateDom(rotationRef.current);
-                    const finalId = ((targetIndex % count + count) % count) + 1;
-                    if (finalId !== activeDeckId) onSelectDeck(finalId);
+    const animate = () => {
+        const step = () => {
+            if (isDragging) return;
+            velocity *= 0.95;
+            rotation += velocity;
+            const aStep = angleStep();
+            if (Math.abs(velocity) < 0.35) {
+                const targetIndex = Math.round(rotation / aStep);
+                const targetRotation = targetIndex * aStep;
+                const diff = targetRotation - rotation;
+                rotation += diff * 0.45;
+                if (Math.abs(diff) < 0.15) {
+                    rotation = targetRotation;
+                    velocity = 0;
+                    updateDom(rotation);
+                    const c = count();
+                    const finalId = ((targetIndex % c + c) % c) + 1;
+                    if (finalId !== props.activeDeckId) props.onSelectDeck(finalId);
                     return;
                 }
             }
-            updateDom(rotationRef.current);
-            requestRef.current = requestAnimationFrame(step);
-        }
+            updateDom(rotation);
+            requestId = requestAnimationFrame(step);
+        };
         step();
-    }, [angleStep, count, activeDeckId, onSelectDeck, updateDom]);
-
-    useEffect(() => {
-        if (!isDraggingRef.current && velocityRef.current === 0) {
-            rotationRef.current = (activeDeckId - 1) * angleStep;
-            updateDom(rotationRef.current);
-        }
-    }, [activeDeckId, angleStep, updateDom]);
-
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        isDraggingRef.current = true;
-        canPlayAudioRef.current = true;
-        lastAudioTimeRef.current = performance.now();
-        lastPointerY.current = e.clientY;
-        lastTime.current = performance.now();
     };
 
-    const handlePointerMove = (e: React.PointerEvent) => {
-        if (!isDraggingRef.current) return;
+    createEffect(() => {
+        const activeId = props.activeDeckId;
+        if (!isDragging && velocity === 0) {
+            rotation = (activeId - 1) * angleStep();
+            updateDom(rotation);
+        }
+    });
+
+    const handlePointerDown = (e: PointerEvent) => {
+        if (requestId !== null) cancelAnimationFrame(requestId);
+        isDragging = true;
+        canPlayAudio = true;
+        lastAudioTime = performance.now();
+        lastPointerY = e.clientY;
+        lastTime = performance.now();
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+        if (!isDragging) return;
         const now = performance.now();
-        const deltaY = e.clientY - lastPointerY.current;
-        const deltaTime = now - lastTime.current;
-        const rotationDelta = -(deltaY / 100) * angleStep;
-        rotationRef.current += rotationDelta;
-        updateDom(rotationRef.current);
+        const deltaY = e.clientY - lastPointerY;
+        const deltaTime = now - lastTime;
+        const rotationDelta = -(deltaY / 100) * angleStep();
+        rotation += rotationDelta;
+        updateDom(rotation);
         if (deltaTime > 0) {
             const instantVelocity = rotationDelta / (deltaTime / 16.67);
-            velocityRef.current = velocityRef.current * 0.2 + instantVelocity * 0.8;
+            velocity = velocity * 0.2 + instantVelocity * 0.8;
         }
-        lastPointerY.current = e.clientY;
-        lastTime.current = now;
+        lastPointerY = e.clientY;
+        lastTime = now;
     };
 
     const handlePointerUp = () => {
-        if (!isDraggingRef.current) return;
-        isDraggingRef.current = false;
-        requestRef.current = requestAnimationFrame(animate);
+        if (!isDragging) return;
+        isDragging = false;
+        requestId = requestAnimationFrame(animate);
     };
+
+    onCleanup(() => {
+        if (requestId !== null) cancelAnimationFrame(requestId);
+    });
 
     return (
         <div 
-            className="w-full h-64 flex items-center justify-center perspective-[1200px] overflow-hidden select-none touch-none bg-slate-950/40 border-y border-slate-800/50"
+            class="w-full h-64 flex items-center justify-center perspective-[1200px] overflow-hidden select-none touch-none bg-slate-950/40 border-y border-slate-800/50"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
         >
-            <div ref={drumRef} className="relative w-64 h-24 transform-style-3d pointer-events-none will-change-transform">
-                {deckIds.map((id, i) => {
-                    const deckName = user.deckNames[id] || 'UNTITLED';
-                    const stats = user.deckStats[id];
-                    const dateStr = stats ? getRelativeTimeString(stats.lastModified) : 'some time ago';
-                    const isInitialCenter = activeDeckId === id;
-                    const isValid = (user.decks[id]?.length || 0) === 12;
-                    const statsText = `conquest: ${stats?.conquestWins || 0}/${stats?.conquestTotal || 0} (${stats?.conquestWinRate || 0}%) - ladder ${stats?.ladderWins || 0}/${stats?.ladderLosses || 0} (${stats?.ladderWinRate || 0}%)`;
+            <div ref={(el) => drumRef = el} class="relative w-64 h-24 transform-style-3d pointer-events-none will-change-transform">
+                <For each={deckIds()}>
+                    {(id, i) => {
+                        const deckName = () => user.user.deckNames[id] || 'UNTITLED';
+                        const stats = () => user.user.deckStats[id];
+                        const dateStr = () => stats() ? getRelativeTimeString(stats()!.lastModified) : 'some time ago';
+                        const isInitialCenter = () => props.activeDeckId === id;
+                        const isValid = () => (user.user.decks[id]?.length || 0) === 12;
+                        const statsText = () => `conquest: ${stats()?.conquestWins || 0}/${stats()?.conquestTotal || 0} (${stats()?.conquestWinRate || 0}%) - ladder ${stats()?.ladderWins || 0}/${stats()?.ladderLosses || 0} (${stats()?.ladderWinRate || 0}%)`;
 
-                    return (
-                        // Fixed: Ref callback wrapped in braces to return void
-                        <div key={id} ref={el => setItemRef(el, i)} className={`absolute inset-0 backface-hidden transition-opacity duration-300 transform-style-3d will-change-transform ${isInitialCenter ? 'is-visually-center' : ''} ${isValid ? 'deck-valid' : 'deck-invalid'}`} style={{ transform: `rotateX(${-i * angleStep}deg) translate3d(0, 0, ${radius}px)`, opacity: isInitialCenter ? 1 : 0.5, zIndex: isInitialCenter ? 50 : 10 }}>
-                            <SlantedButton variant="secondary" fullWidth size="lg" className="!h-full shadow-2xl drum-item-button">
-                                <div className="flex flex-col items-center justify-center w-full h-full pointer-events-none px-4 py-2">
-                                    <div className="w-full h-8 flex items-center justify-center">
-                                        <GameText text={deckName} baseFontSize={1.4} maxLines={1} className="text-white" />
+                        return (
+                            <div 
+                                ref={el => itemsRef[i()] = el} 
+                                class={`absolute inset-0 backface-hidden transition-opacity duration-300 transform-style-3d will-change-transform ${isInitialCenter() ? 'is-visually-center' : ''} ${isValid() ? 'deck-valid' : 'deck-invalid'}`} 
+                                style={{ 
+                                    transform: `rotateX(${-i() * angleStep()}deg) translate3d(0, 0, ${radius}px)`, 
+                                    opacity: isInitialCenter() ? 1 : 0.5, 
+                                    "z-index": isInitialCenter() ? 50 : 10 
+                                }}
+                            >
+                                <SlantedButton variant="secondary" fullWidth size="lg" class="!h-full shadow-2xl drum-item-button">
+                                    <div class="flex flex-col items-center justify-center w-full h-full pointer-events-none px-4 py-2">
+                                        <div class="w-full h-8 flex items-center justify-center">
+                                            <GameText text={deckName()} baseFontSize={1.4} maxLines={1} class="text-white" />
+                                        </div>
+                                        <div class="w-full h-5 flex items-center justify-center opacity-80">
+                                            <GameText text={statsText()} baseFontSize={0.75} maxLines={1} class="text-white font-bold" />
+                                        </div>
+                                        <div class="w-full h-3 mt-0.5 opacity-50">
+                                            <GameText text={`Changed ${dateStr()}`} baseFontSize={0.65} class="text-white lowercase italic" />
+                                        </div>
                                     </div>
-                                    <div className="w-full h-5 flex items-center justify-center opacity-80">
-                                        <GameText text={statsText} baseFontSize={0.75} maxLines={1} className="text-white font-bold" />
-                                    </div>
-                                    <div className="w-full h-3 mt-0.5 opacity-50">
-                                        <GameText text={`Changed ${dateStr}`} baseFontSize={0.65} className="text-white lowercase italic" />
-                                    </div>
-                                </div>
-                            </SlantedButton>
-                        </div>
-                    );
-                })}
+                                </SlantedButton>
+                            </div>
+                        );
+                    }}
+                </For>
             </div>
-            <div className="absolute left-0 right-0 h-24 border-y border-white/10 pointer-events-none z-0 bg-gradient-to-b from-transparent via-indigo-500/5 to-transparent" />
+            <div class="absolute left-0 right-0 h-24 border-y border-white/10 pointer-events-none z-0 bg-gradient-to-b from-transparent via-indigo-500/5 to-transparent" />
             <style>{`.transform-style-3d { transform-style: preserve-3d; } .backface-hidden { backface-visibility: hidden; } .is-visually-center.deck-valid .drum-item-button > div:first-child { background: linear-gradient(to bottom, #059669, #064e3b) !important; border-color: #34d399 !important; box-shadow: 0 0.2rem 0 #064e3b, 0 0 20px rgba(16, 185, 129, 0.3) !important; } .is-visually-center.deck-invalid .drum-item-button > div:first-child { background: linear-gradient(to bottom, #dc2626, #7f1d1d) !important; border-color: #f87171 !important; box-shadow: 0 0.2rem 0 #7f1d1d, 0 0 20px rgba(239, 68, 68, 0.3) !important; } .is-visually-center { filter: grayscale(0) !important; } div:not(.is-visually-center) { filter: grayscale(0.3); }`}</style>
         </div>
     );

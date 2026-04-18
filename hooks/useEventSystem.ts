@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useRef } from 'react';
+import { createSignal, createEffect } from 'solid-js';
 import { GameEvent, VfxKey } from '../types';
 import { audio } from '../services/audio';
 
@@ -11,14 +11,15 @@ export interface ActiveVfx {
     playerId?: 'p1' | 'p2';
 }
 
-export const useEventSystem = (events: GameEvent[]) => {
-    const [activeVfx, setActiveVfx] = useState<ActiveVfx[]>([]);
-    const processedIds = useRef<Set<string>>(new Set());
+export const useEventSystem = (events: () => GameEvent[]) => {
+    const [activeVfx, setActiveVfx] = createSignal<ActiveVfx[]>([]);
+    const processedIds = new Set<string>();
 
-    useEffect(() => {
-        events.forEach(event => {
-            if (processedIds.current.has(event.id)) return;
-            processedIds.current.add(event.id);
+    createEffect(() => {
+        const currentEvents = events();
+        currentEvents.forEach(event => {
+            if (processedIds.has(event.id)) return;
+            processedIds.add(event.id);
 
             // Strict Discriminated Union check
             if (event.type === 'SFX_PLAY') {
@@ -41,7 +42,7 @@ export const useEventSystem = (events: GameEvent[]) => {
                  }, 1000);
             }
         });
-    }, [events]);
+    });
 
     return {
         activeVfx,

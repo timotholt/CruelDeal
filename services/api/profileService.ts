@@ -39,11 +39,27 @@ export const profileService = {
         verifySession(userId);
         await simulateNetwork(400, 700);
         const persisted = getPersistedProfile();
-        if (persisted && persisted.id === userId) return persisted;
         
-        const newProfile = { ...INITIAL_PROFILE, id: userId } as UserProfile;
-        persistUserProfile(newProfile);
-        return newProfile;
+        const newProfileBase = { ...INITIAL_PROFILE, id: userId } as UserProfile;
+
+        if (persisted && persisted.id === userId) {
+            // Migration: Ensure critical fields exist even if they are missing from persisted storage
+            return {
+                ...newProfileBase,
+                ...persisted,
+                id: userId, // Explicitly enforce the correct ID
+                credits: (typeof persisted.credits === 'number') ? persisted.credits : newProfileBase.credits,
+                gold: (typeof persisted.gold === 'number') ? persisted.gold : newProfileBase.gold,
+                tokens: (typeof persisted.tokens === 'number') ? persisted.tokens : newProfileBase.tokens,
+                decks: persisted.decks || newProfileBase.decks,
+                deckNames: persisted.deckNames || newProfileBase.deckNames,
+                deckStats: persisted.deckStats || newProfileBase.deckStats,
+                cardRarities: persisted.cardRarities || newProfileBase.cardRarities,
+            };
+        }
+        
+        persistUserProfile(newProfileBase);
+        return newProfileBase;
     },
 
     async updateActiveDeck(userId: string, deckId: number): Promise<UserProfile> {

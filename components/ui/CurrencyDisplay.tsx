@@ -1,5 +1,4 @@
-
-import React from 'react';
+import { createEffect } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
 import { SlantedButton } from './SlantedButton';
 import { CreditIcon, GoldIcon, TokenIcon } from './CurrencyIcons';
@@ -10,8 +9,12 @@ interface CurrencyDisplayProps {
     onTokenClick?: () => void;
 }
 
-export const CurrencyDisplay: React.FC<CurrencyDisplayProps> = ({ onCreditClick, onGoldClick, onTokenClick }) => {
-    const { user } = useUser();
+export const CurrencyDisplay = (props: CurrencyDisplayProps) => {
+    const userContext = useUser();
+
+    createEffect(() => {
+        console.log("CurrencyDisplay: rendering with credits:", userContext.user.credits);
+    });
 
     return (
         /* 
@@ -19,38 +22,38 @@ export const CurrencyDisplay: React.FC<CurrencyDisplayProps> = ({ onCreditClick,
            that the buttons are the exact same size on every screen,
            preventing the "stretching" seen on screens with shorter titles.
         */
-        <div className="flex items-center gap-1 w-[11rem] justify-end">
+        <div class="flex items-center gap-1 w-[11rem] justify-end">
              {/* Credits Button */}
              <SlantedButton 
                 variant="blue" 
                 size="xs" 
-                onClick={onCreditClick}
-                className="flex-1 min-w-0"
+                onClick={() => props.onCreditClick?.()}
+                class="flex-1 min-w-[3.2rem]"
                 icon={<CreditIcon size="xs" />}
              >
-                {user.credits}
+                {String(userContext.user.credits)}
              </SlantedButton>
 
              {/* Gold Button */}
              <SlantedButton 
                 variant="warning" 
                 size="xs" 
-                onClick={onGoldClick}
-                className="flex-1 min-w-0"
+                onClick={() => props.onGoldClick?.()}
+                class="flex-1 min-w-[3.2rem]"
                 icon={<GoldIcon size="xs" />}
              >
-                {user.gold}
+                {String(userContext.user.gold)}
              </SlantedButton>
 
              {/* Tokens Button */}
              <SlantedButton 
                 variant="danger" 
                 size="xs" 
-                onClick={onTokenClick}
-                className="flex-1 min-w-0"
+                onClick={() => props.onTokenClick?.()}
+                class="flex-1 min-w-[3.2rem]"
                 icon={<TokenIcon size="xs" />}
              >
-                {user.tokens}
+                {String(userContext.user.tokens)}
              </SlantedButton>
         </div>
     );

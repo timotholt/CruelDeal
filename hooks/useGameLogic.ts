@@ -17,7 +17,7 @@ export const useGameLogic = () => {
         startResolution, 
         restartGame: engineRestart, 
         resign: engineResign 
-    } = useTurnManager(user.id);
+    } = useTurnManager(user().id);
 
     // 2. Input & UI State
     const {
@@ -43,7 +43,8 @@ export const useGameLogic = () => {
     // --- High Level Orchestration ---
 
     const handleEndTurn = async () => {
-        if (!gameState || gameState.phase !== 'planning' || isResolving || isWaiting) return;
+        const current = gameState();
+        if (!current || current.phase !== 'planning' || isResolving() || isWaiting()) return;
         
         // Lock UI
         setIsWaiting(true);
@@ -53,12 +54,12 @@ export const useGameLogic = () => {
         try {
             // AUTHORITATIVE SUBMISSION
             // We no longer send the gameState. We only send our intents (moves).
-            const response = await api.match.submit(user.id, pendingMoves);
+            const response = await api.match.submit(user().id, pendingMoves());
 
             if (response.success && response.data) {
                 const { opponentMoves } = response.data;
                 // Proceed to Resolution (Client-side Replay/Simulation)
-                startResolution(pendingMoves, opponentMoves);
+                startResolution(pendingMoves(), opponentMoves);
                 setPendingMoves([]);
             } else {
                 setIsWaiting(false);
@@ -79,7 +80,7 @@ export const useGameLogic = () => {
     };
 
     const onLocationClick = (laneIdx: number) => {
-         if (isResolving || isWaiting || !gameState || gameState.phase !== 'planning') return;
+         if (isResolving() || isWaiting() || !gameState() || gameState()!.phase !== 'planning') return;
          handleLaneClick(laneIdx);
     };
 

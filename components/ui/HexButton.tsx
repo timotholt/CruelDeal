@@ -1,36 +1,34 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import { createSignal, onCleanup, JSX, mergeProps, splitProps, children as solidChildren, Show } from 'solid-js';
 import { GameText } from './GameText';
 
 type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'blue';
 
-interface HexButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface HexButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: ButtonVariant;
     fullWidth?: boolean;
     size?: 'sm' | 'md' | 'lg';
-    icon?: React.ReactNode;
+    icon?: JSX.Element;
     holdDuration?: number; 
     onHoldChange?: (isHolding: boolean) => void;
     onProgressChange?: (progress: number) => void;
+    class?: string;
 }
 
-export const HexButton: React.FC<HexButtonProps> = ({ 
-    children, 
-    variant = 'primary', 
-    fullWidth = false,
-    size = 'md',
-    icon,
-    className = '',
-    holdDuration = 0,
-    onHoldChange,
-    onProgressChange,
-    onClick,
-    ...props 
-}) => {
-    const [progress, setProgress] = useState(0);
-    const [isHolding, setIsHolding] = useState(false);
-    const timerRef = useRef<number | null>(null);
-    const startTimeRef = useRef<number>(0);
+export const HexButton = (props: HexButtonProps) => {
+    const [progress, setProgress] = createSignal(0);
+    const [isHolding, setIsHolding] = createSignal(false);
+    let timerId: number | null = null;
+    let startTime = 0;
+
+    const merged = mergeProps({ 
+        variant: 'primary' as ButtonVariant, 
+        fullWidth: false,
+        size: 'md' as const,
+        holdDuration: 0,
+        class: ''
+    }, props);
+
+    const [local, rest] = splitProps(merged, ['variant', 'fullWidth', 'size', 'icon', 'holdDuration', 'onHoldChange', 'onProgressChange', 'onClick', 'class', 'children', 'disabled']);
 
     const variants = {
         primary: "from-purple-600 to-purple-900 border-purple-400 shadow-[0_0.2rem_0_rgb(88,28,135)]",
@@ -47,98 +45,97 @@ export const HexButton: React.FC<HexButtonProps> = ({
         lg: { height: "h-14", fontSize: 1.2, padding: "px-6" }
     };
 
-    const config = sizeConfigs[size];
+    const config = () => sizeConfigs[local.size];
 
-    const startHold = (e: React.PointerEvent) => {
-        if (!holdDuration || props.disabled) return;
+    const startHold = (e: PointerEvent) => {
+        const durVal = local.holdDuration;
+        if (!durVal || local.disabled) return;
+        const onProgress = local.onProgressChange;
+        const onHoldChange = local.onHoldChange;
+        const onClick = local.onClick;
+
         setIsHolding(true);
         onHoldChange?.(true);
-        startTimeRef.current = Date.now();
-        timerRef.current = window.setInterval(() => {
-            const elapsed = Date.now() - startTimeRef.current;
-            const p = Math.min((elapsed / holdDuration) * 100, 100);
+        startTime = Date.now();
+        timerId = window.setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const p = Math.min((elapsed / durVal) * 100, 100);
             setProgress(p);
-            onProgressChange?.(p);
+            onProgress?.(p);
             if (p >= 100) {
-                if (timerRef.current) clearInterval(timerRef.current);
-                timerRef.current = null;
+                if (timerId !== null) clearInterval(timerId);
+                timerId = null;
                 setProgress(100);
-                onProgressChange?.(100);
+                onProgress?.(100);
                 setTimeout(() => {
                     if (onClick) {
-                        const syntheticEvent = { 
-                            clientX: e.clientX,
-                            clientY: e.clientY,
-                            target: e.target,
-                            currentTarget: e.currentTarget,
-                            type: 'click',
-                            bubbles: true,
-                            cancelable: true,
-                            nativeEvent: e.nativeEvent,
-                        } as unknown as React.MouseEvent<HTMLButtonElement>;
-                        onClick(syntheticEvent);
+                        (onClick as any)(e);
                     }
                     setIsHolding(false);
                     onHoldChange?.(false);
                     setProgress(0);
-                    onProgressChange?.(0);
+                    onProgress?.(0);
                 }, 60);
             }
         }, 16);
     };
 
     const cancelHold = () => {
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (timerId !== null) { clearInterval(timerId); timerId = null; }
         setIsHolding(false);
-        onHoldChange?.(false);
+        local.onHoldChange?.(false);
         setProgress(0);
-        onProgressChange?.(0);
+        local.onProgressChange?.(0);
     };
 
-    useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+    onCleanup(() => { if (timerId !== null) clearInterval(timerId); });
 
-    const widthClass = fullWidth ? 'w-full' : 'w-max min-w-[3.5rem]';
+    const widthClass = () => local.fullWidth ? 'w-full' : 'w-max min-w-[3.5rem]';
+
+    const resolvedChildren = solidChildren(() => local.children);
+    const isTextLike = () => typeof resolvedChildren() === 'string' || typeof resolvedChildren() === 'number';
 
     return (
-        <div className={`relative group ${widthClass} ${config.height} ${props.disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div class={`relative group ${widthClass()} ${config().height} ${local.disabled ? 'opacity-50 pointer-events-none' : ''}`}>
             <button 
-                className={`w-full h-full relative z-10 active:translate-y-0.5 transition-all outline-none ${className}`}
-                onPointerDown={holdDuration ? startHold : undefined}
-                onPointerUp={holdDuration ? cancelHold : undefined}
-                onPointerLeave={holdDuration ? cancelHold : undefined}
-                onClick={holdDuration ? undefined : onClick}
+                class={`w-full h-full relative z-10 active:translate-y-0.5 transition-all outline-none ${local.class}`}
+                onPointerDown={(e) => local.holdDuration ? startHold(e) : undefined}
+                onPointerUp={() => local.holdDuration ? cancelHold() : undefined}
+                onPointerLeave={() => local.holdDuration ? cancelHold() : undefined}
+                onClick={() => local.holdDuration ? undefined : (local.onClick as any)}
                 role="button"
-                aria-busy={isHolding}
-                {...props}
+                aria-busy={isHolding()}
+                disabled={local.disabled}
+                {...rest}
             >
-                <div className={`absolute inset-0 bg-gradient-to-b border rounded skew-x-[-10deg] group-hover:brightness-110 transition-all duration-200 overflow-hidden ${variants[variant]}`}>
-                    {holdDuration > 0 && (
-                        <div className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-75 ease-linear pointer-events-none" style={{ width: `${progress}%` }} />
-                    )}
+                <div class={`absolute inset-0 bg-gradient-to-b border rounded skew-x-[-10deg] group-hover:brightness-110 transition-all duration-200 overflow-hidden ${variants[local.variant]}`}>
+                    <Show when={local.holdDuration! > 0}>
+                        <div class="absolute inset-y-0 left-0 bg-white/20 transition-all duration-75 ease-linear pointer-events-none" style={{ width: `${progress()}%` }} />
+                    </Show>
                 </div>
                 
-                <div className={`relative z-20 skew-x-[-10deg] ${config.padding} flex items-center justify-center h-full pointer-events-none`}>
-                    <div className={`w-full h-full flex items-center justify-center gap-1.5 transition-opacity ${isHolding ? 'opacity-40' : 'opacity-100'}`}>
-                        {icon && (
-                            <div className="shrink-0 flex items-center justify-center">
-                                {icon}
+                <div class={`relative z-20 skew-x-[-10deg] ${config().padding} flex items-center justify-center h-full pointer-events-none`}>
+                    <div class={`w-full h-full flex items-center justify-center gap-1.5 transition-opacity ${isHolding() ? 'opacity-40' : 'opacity-100'}`}>
+                        <Show when={local.icon}>
+                            <div class="shrink-0 flex items-center justify-center">
+                                {local.icon}
                             </div>
-                        )}
+                        </Show>
                         
-                        {typeof children === 'string' || typeof children === 'number' ? (
-                            <div className="flex-1 h-full min-w-0">
+                        <Show when={isTextLike()} fallback={
+                             <div class="font-black text-white italic tracking-tight uppercase drop-shadow-md flex items-center gap-1 h-full w-full" style={{ "font-size": `${config().fontSize}rem` }}>
+                                {resolvedChildren()}
+                            </div>
+                        }>
+                            <div class="flex-1 h-full min-w-0">
                                 <GameText 
-                                    text={children.toString()} 
-                                    baseFontSize={config.fontSize} 
+                                    text={resolvedChildren()!.toString()} 
+                                    baseFontSize={config().fontSize} 
                                     skewFactor={0.88}
-                                    className="text-white drop-shadow-md font-black italic uppercase tracking-tighter"
+                                    class="text-white drop-shadow-md font-black italic uppercase tracking-tighter"
                                 />
                             </div>
-                        ) : (
-                            <div className="font-black text-white italic tracking-tight uppercase drop-shadow-md flex items-center gap-1 h-full w-full" style={{ fontSize: `${config.fontSize}rem` }}>
-                                {children}
-                            </div>
-                        )}
+                        </Show>
                     </div>
                 </div>
             </button>

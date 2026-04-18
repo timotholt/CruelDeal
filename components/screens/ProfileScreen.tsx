@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import { createSignal, onMount, Show, For } from 'solid-js';
 import { StandardHeader } from '../ui/StandardHeader';
 import { useUser } from '../../contexts/UserContext';
 import { GameText } from '../ui/GameText';
@@ -11,107 +10,115 @@ interface ProfileScreenProps {
     onExit: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onExit }) => {
+export const ProfileScreen = (props: ProfileScreenProps) => {
     const { user } = useUser();
-    const [stats, setStats] = useState<any>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [stats, setStats] = createSignal<any>(null);
+    const [isLoading, setIsLoading] = createSignal(true);
 
-    useEffect(() => {
+    onMount(() => {
         api.stats.account(user.id).then(response => {
             if (response.success) {
                 setStats(response.data);
             }
             setIsLoading(false);
         });
-    }, [user.id]);
+    });
+
+    const conquestWins = () => Object.values(user.deckStats).reduce((a, b: any) => a + b.conquestWins, 0);
 
     return (
-        <div className="w-full h-full flex flex-col bg-transparent overflow-hidden relative">
+        <div class="w-full h-full flex flex-col bg-transparent overflow-hidden relative text-white">
             <StandardHeader 
                 title={`\u00A0\u00A0${t('PROF_TITLE')}`} 
-                className="!pl-0.5 !pr-1"
+                class="!pl-0.5 !pr-1"
                 showCurrency={true}
             />
 
-            <div className="flex-1 flex flex-col overflow-y-auto pb-8">
+            <div class="flex-1 flex flex-col overflow-y-auto pb-8">
                 {/* Profile Header Stats */}
-                <div className="shrink-0 p-4 bg-gradient-to-b from-slate-900/80 to-transparent border-b border-white/5 mb-6">
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="w-16 h-16 rounded-2xl bg-indigo-600 border-2 border-indigo-400 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.4)]">
-                            <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                <div class="shrink-0 p-4 bg-gradient-to-b from-slate-900/80 to-transparent border-b border-white/5 mb-6">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-16 h-16 rounded-2xl bg-indigo-600 border-2 border-indigo-400 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.4)]">
+                            <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                             </svg>
                         </div>
-                        <div className="flex-1">
-                            <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none mb-1">
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase leading-none mb-1">
                                 {user.username}
                             </h2>
-                            <div className="flex items-center gap-2">
-                                <span className="text-[0.6rem] font-black text-indigo-400 uppercase tracking-widest">{t('PROF_GLOBAL_RANK')}: {user.rank}</span>
-                                <div className="w-1 h-1 rounded-full bg-slate-700" />
-                                <span className="text-[0.6rem] font-black text-indigo-400 uppercase tracking-widest">CL: {user.level}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[0.6rem] font-black text-indigo-400 uppercase tracking-widest">{t('PROF_GLOBAL_RANK')}: {user.rank}</span>
+                                <div class="w-1 h-1 rounded-full bg-slate-700" />
+                                <span class="text-[0.6rem] font-black text-indigo-400 uppercase tracking-widest">CL: {user.level}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div class="grid grid-cols-2 gap-2">
                          <StatBox label={t('PROF_COLLECTED')} value={user.collection.length.toString()} />
-                         <StatBox label={t('PROF_CQ_WINS')} value={Object.values(user.deckStats).reduce((a, b: any) => a + b.conquestWins, 0).toString()} />
+                         <StatBox label={t('PROF_CQ_WINS')} value={conquestWins().toString()} />
                     </div>
                 </div>
 
                 {/* Account performance */}
-                <div className="px-4 space-y-4">
-                    {isLoading ? (
-                         <div className="flex items-center justify-center py-20 opacity-20">
-                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <div class="px-4 space-y-4">
+                    <Show when={!isLoading()} fallback={
+                         <div class="flex items-center justify-center py-20 opacity-20">
+                            <div class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                         </div>
-                    ) : stats ? (
-                        <>
-                            <div className="bg-slate-900/40 border border-white/5 rounded-xl p-4">
-                                <h3 className="text-[0.6rem] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">{t('PROF_PERFORMANCE')}</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-300">{t('PROF_TOTAL_MATCHES')}</span>
-                                        <span className="text-sm font-black italic">{stats.totalMatches}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-300">{t('PROF_WIN_RATE')}</span>
-                                        <span className="text-sm font-black italic text-emerald-400">{stats.winRate}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-300">{t('PROF_FASTEST')}</span>
-                                        <span className="text-sm font-black italic">{t('GAME_TURN')} {stats.fastestWinTurn}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-900/40 border border-white/5 rounded-xl p-4">
-                                <h3 className="text-[0.6rem] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">{t('PROF_MILESTONES')}</h3>
-                                <div className="space-y-3">
-                                    {(stats.milestones || []).map((m: any, i: number) => (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <div className="w-6 h-6 rounded bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">{m.icon}</div>
-                                            <span className="text-xs font-bold text-slate-300">{m.text}</span>
+                    }>
+                        <Show when={stats()}>
+                            {(s) => (
+                                <>
+                                    <div class="bg-slate-900/40 border border-white/5 rounded-xl p-4">
+                                        <h3 class="text-[0.6rem] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">{t('PROF_PERFORMANCE')}</h3>
+                                        <div class="space-y-3">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs font-bold text-slate-300">{t('PROF_TOTAL_MATCHES')}</span>
+                                                <span class="text-sm font-black italic">{s().totalMatches}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs font-bold text-slate-300">{t('PROF_WIN_RATE')}</span>
+                                                <span class="text-sm font-black italic text-emerald-400">{s().winRate}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs font-bold text-slate-300">{t('PROF_FASTEST')}</span>
+                                                <span class="text-sm font-black italic">{t('GAME_TURN')} {s().fastestWinTurn}</span>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </>
-                    ) : null}
+                                    </div>
+
+                                    <div class="bg-slate-900/40 border border-white/5 rounded-xl p-4">
+                                        <h3 class="text-[0.6rem] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">{t('PROF_MILESTONES')}</h3>
+                                        <div class="space-y-3">
+                                            <For each={s().milestones || []}>
+                                                {(m: any) => (
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-6 h-6 rounded bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">{m.icon}</div>
+                                                        <span class="text-xs font-bold text-slate-300">{m.text}</span>
+                                                    </div>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </Show>
+                    </Show>
                 </div>
             </div>
 
-            <ModalFooter onClose={onExit} />
+            <ModalFooter onClose={props.onExit} />
         </div>
     );
 };
 
-const StatBox = ({ label, value }: { label: string, value: string }) => (
-    <div className="bg-white/5 border border-white/5 rounded-lg p-2 flex flex-col items-center">
-        <span className="text-[0.45rem] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{label}</span>
-        <div className="h-6 w-full">
-            <GameText text={value} baseFontSize={1.1} className="text-white font-black italic tracking-tighter" />
+const StatBox = (props: { label: string, value: string }) => (
+    <div class="bg-white/5 border border-white/5 rounded-lg p-2 flex flex-col items-center">
+        <span class="text-[0.45rem] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{props.label}</span>
+        <div class="h-6 w-full">
+            <GameText text={props.value} baseFontSize={1.1} class="text-white font-black italic tracking-tighter" />
         </div>
     </div>
 );

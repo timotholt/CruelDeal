@@ -30,12 +30,14 @@ class AudioService {
             const isMusic = key.startsWith('bgm_');
             this.sounds[key] = new Howl({
                 src: [src],
-                // Music uses HTML5 streaming (better for large files, bypasses memory limits)
-                // SFX uses Web Audio (better for low-latency triggers)
-                html5: isMusic, 
+                // We use html5: true for BOTH music and SFX in this environment. 
+                // XHR (Web Audio) is blocked by many CDNs (403/CORS), but the standard 
+                // <audio> tag (HTML5) is usually allowed to stream cross-origin assets.
+                html5: true, 
                 preload: true,
                 volume: isMusic ? 0 : 0.5,
                 loop: isMusic,
+                onload: () => console.log(`Audio Loaded: ${key}`),
                 onloaderror: (id, err) => console.warn(`Audio Load Error [${key}]:`, err),
                 onplayerror: (id, err) => {
                     console.warn(`Audio Play Error [${key}]:`, err);
@@ -45,9 +47,11 @@ class AudioService {
         });
         
         if (Howler.ctx && Howler.ctx.state === 'suspended') {
+            console.log("AudioService: Resuming suspended context...");
             await Howler.ctx.resume();
         }
 
+        console.log("AudioService: Initialized successfully with context state:", Howler.ctx?.state);
         this.initialized = true;
     }
 

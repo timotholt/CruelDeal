@@ -1,20 +1,17 @@
 
-import React, { useCallback } from 'react';
 import { useGameLogic } from './useGameLogic';
 import { useDragAndDrop } from './useDragAndDrop';
 import { useEventSystem } from './useEventSystem';
 import { CardDefinition, CardInstance, LocationDefinition } from '../types';
-// Fixed: Get inspector methods from useUI instead of useUser
 import { useUI } from '../contexts/UIContext';
 
 export const useGameController = (onExit?: () => void) => {
     const logic = useGameLogic();
-    // Fixed: Get inspector methods from useUI instead of useUser
     const { inspect, closeInspector } = useUI();
     const eventSystem = useEventSystem(logic.events);
 
     const dnd = useDragAndDrop({
-        gameState: logic.gameState!,
+        gameState: logic.gameState,
         pendingMoves: logic.pendingMoves,
         isResolving: logic.isResolving,
         setPendingMoves: logic.setPendingMoves,
@@ -27,68 +24,68 @@ export const useGameController = (onExit?: () => void) => {
         }
     });
 
-    const handleCardClick = useCallback((idx: number, isDragging: boolean) => {
-        if (isDragging || !logic.gameState || !logic.gameState.players) return;
+    const handleCardClick = (idx: number, isDragging: boolean) => {
+        const currentGameState = logic.gameState();
+        if (isDragging || !currentGameState || !currentGameState.players) return;
         
-        const card = logic.gameState.players.p1.hand[idx];
+        const card = currentGameState.players.p1.hand[idx];
         if (card) {
             eventSystem.playClick();
             // Trigger logic selection (handles energy/playability checks)
-            // Note: handleCardClick in logic might still block selection if resolving
             logic.handleCardClick(idx, isDragging);
             // Always show inspection on explicit click regardless of phase
             inspect(card);
         }
-    }, [eventSystem, logic, inspect]);
+    };
 
-    const wrappedCloseInspector = useCallback(() => {
+    const wrappedCloseInspector = () => {
         eventSystem.playClick();
         closeInspector();
         logic.setInspectingCard(null);
         logic.setInspectingLocation(null);
-    }, [eventSystem, closeInspector, logic]);
+    };
 
-    const wrappedInspectCard = useCallback((c: CardInstance | CardDefinition) => {
+    const wrappedInspectCard = (c: CardInstance | CardDefinition) => {
         eventSystem.playClick();
         inspect(c);
         logic.setInspectingCard(c);
-    }, [eventSystem, inspect, logic]);
+    };
 
-    const wrappedInspectLocation = useCallback((l: LocationDefinition) => {
+    const wrappedInspectLocation = (l: LocationDefinition) => {
         eventSystem.playClick();
         inspect(l);
         logic.setInspectingLocation(l);
-    }, [eventSystem, inspect, logic]);
+    };
 
-    const handleUndoAll = useCallback(() => {
+    const handleUndoAll = () => {
         eventSystem.playClick();
         logic.handleUndoAll();
-    }, [eventSystem, logic]);
+    };
 
-    const handleEndTurn = useCallback(() => {
+    const handleEndTurn = () => {
         eventSystem.playClick();
         logic.handleEndTurn();
-    }, [eventSystem, logic]);
+    };
 
-    const handleResign = useCallback(() => {
+    const handleResign = () => {
         eventSystem.playClick();
         logic.handleResign();
-    }, [eventSystem, logic]);
+    };
 
-    const restartGame = useCallback(() => {
+    const restartGame = () => {
         eventSystem.playClick();
         logic.restartGame();
-    }, [eventSystem, logic]);
+    };
 
-    const toggleResults = useCallback((val: boolean) => {
+    const toggleResults = (val: boolean) => {
         eventSystem.playClick();
         logic.setIsResultsHidden(val);
-    }, [eventSystem, logic]);
+    };
 
-    const handleLocationClick = useCallback((laneIdx: number) => {
-        if (logic.selectedCardIdx !== null) eventSystem.playSnap();
+    const handleLocationClick = (laneIdx: number) => {
+        if (logic.selectedCardIdx() !== null) eventSystem.playSnap();
         logic.handleLocationClick(laneIdx);
-    }, [eventSystem, logic]);
+    };
 
     return {
         ...logic,
@@ -106,9 +103,9 @@ export const useGameController = (onExit?: () => void) => {
             inspectCard: wrappedInspectCard,
             inspectLocation: wrappedInspectLocation,
             handleLocationClick,
-            handleCardPointerDownHand: (e: React.PointerEvent, card: CardInstance, index: number) => 
+            handleCardPointerDownHand: (e: PointerEvent, card: CardInstance, index: number) => 
                 dnd.handleCardPointerDown(e, card, { type: 'hand', index }),
-            handleCardPointerDownLane: (e: React.PointerEvent, card: CardInstance, laneIdx: number) => 
+            handleCardPointerDownLane: (e: PointerEvent, card: CardInstance, laneIdx: number) => 
                 dnd.handleCardPointerDown(e, card, { type: 'lane', laneIdx })
         }
     };

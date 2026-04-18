@@ -1,15 +1,15 @@
 
-import { useState } from 'react';
+import { createSignal } from 'solid-js';
 import { PendingMove, calculateRemainingEnergy, canPlayCardToLane, canInteractWithCard } from '../services/planning';
 import { GameState, CardDefinition, CardInstance, LocationDefinition } from '../types';
 
-export const useInputHandler = (gameState: GameState | null) => {
-    const [pendingMoves, setPendingMoves] = useState<PendingMove[]>([]);
-    const [selectedCardIdx, setSelectedCardIdx] = useState<number | null>(null);
-    const [showUndoMenu, setShowUndoMenu] = useState(false);
-    const [isResultsHidden, setIsResultsHidden] = useState(false);
-    const [inspectingCard, setInspectingCard] = useState<CardDefinition | CardInstance | null>(null);
-    const [inspectingLocation, setInspectingLocation] = useState<LocationDefinition | null>(null);
+export const useInputHandler = (gameState: () => GameState | null) => {
+    const [pendingMoves, setPendingMoves] = createSignal<PendingMove[]>([]);
+    const [selectedCardIdx, setSelectedCardIdx] = createSignal<number | null>(null);
+    const [showUndoMenu, setShowUndoMenu] = createSignal(false);
+    const [isResultsHidden, setIsResultsHidden] = createSignal(false);
+    const [inspectingCard, setInspectingCard] = createSignal<CardDefinition | CardInstance | null>(null);
+    const [inspectingLocation, setInspectingLocation] = createSignal<LocationDefinition | null>(null);
 
     const resetInput = () => {
         setPendingMoves([]);
@@ -21,19 +21,20 @@ export const useInputHandler = (gameState: GameState | null) => {
     };
 
     const handleCardClick = (idx: number, isDragging: boolean) => {
-        if (isDragging || !gameState || !gameState.players) return;
+        const current = gameState();
+        if (isDragging || !current || !current.players) return;
         
-        const card = gameState.players.p1.hand[idx];
+        const card = current.players.p1.hand[idx];
         if (!card) return;
 
         // Toggle logic: If clicking the same card, deselect
-        if (selectedCardIdx === idx) {
+        if (selectedCardIdx() === idx) {
             setSelectedCardIdx(null);
             return;
         }
 
         // Only allow selection if affordable with *remaining* energy
-        if (canInteractWithCard(gameState, pendingMoves, card, { type: 'hand' })) {
+        if (canInteractWithCard(current, pendingMoves(), card, { type: 'hand' })) {
             setSelectedCardIdx(idx);
         } else {
             setSelectedCardIdx(null);
@@ -44,13 +45,14 @@ export const useInputHandler = (gameState: GameState | null) => {
     };
 
     const handleLaneClick = (laneIdx: number) => {
-        if (selectedCardIdx === null || !gameState || !gameState.players) return false;
+        const current = gameState();
+        if (selectedCardIdx() === null || !current || !current.players) return false;
 
-        const card = gameState.players.p1.hand[selectedCardIdx];
+        const card = current.players.p1.hand[selectedCardIdx()!];
         if (!card) return false;
 
         // Authoritative play check
-        if (canPlayCardToLane(gameState, pendingMoves, card.instanceId, laneIdx, { type: 'hand' })) {
+        if (canPlayCardToLane(current, pendingMoves(), card.instanceId, laneIdx, { type: 'hand' })) {
             setPendingMoves(prev => [...prev, { cardInstanceId: card.instanceId, laneIdx }]);
             // Deselect after play to allow selecting next card
             setSelectedCardIdx(null); 
@@ -67,7 +69,10 @@ export const useInputHandler = (gameState: GameState | null) => {
         setSelectedCardIdx(null);
     };
 
-    const currentEnergy = gameState ? calculateRemainingEnergy(gameState, pendingMoves) : 0;
+    const currentEnergy = () => {
+        const current = gameState();
+        return current ? calculateRemainingEnergy(current, pendingMoves()) : 0;
+    };
 
     return {
         pendingMoves,

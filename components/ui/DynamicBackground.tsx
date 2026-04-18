@@ -1,10 +1,9 @@
-
-import React from 'react';
+import { mergeProps, Show } from 'solid-js';
 
 interface DynamicBackgroundProps {
     opacity?: number;
     showContrastShield?: boolean;
-    className?: string;
+    class?: string;
 }
 
 /**
@@ -12,23 +11,25 @@ interface DynamicBackgroundProps {
  * The authoritative source for Galactic Snap's visual void.
  * Uses the high-performance .animated-bg CSS class defined in index.html.
  */
-export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ 
-    opacity = 1, 
-    showContrastShield = true,
-    className = "" 
-}) => {
+export const DynamicBackground = (props: DynamicBackgroundProps) => {
+    const merged = mergeProps({ 
+        opacity: 1, 
+        showContrastShield: true,
+        class: "" 
+    }, props);
+
     return (
-        <div className={`absolute inset-0 z-0 pointer-events-none overflow-hidden ${className}`}>
+        <div class={`absolute inset-0 z-0 pointer-events-none overflow-hidden ${merged.class}`}>
             {/* The Animated Galaxy Layer */}
             <div 
-                className="absolute inset-0 animated-bg" 
-                style={{ opacity }} 
+                class="absolute inset-0 animated-bg" 
+                style={{ opacity: merged.opacity }} 
             />
             
             {/* The Contrast Shield: Ensures text and cards pop regardless of bg color */}
-            {showContrastShield && (
-                <div className="absolute inset-0 bg-black/40" />
-            )}
+            <Show when={merged.showContrastShield}>
+                <div class="absolute inset-0 bg-black/40" />
+            </Show>
         </div>
     );
 };

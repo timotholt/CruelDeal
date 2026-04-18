@@ -1,5 +1,4 @@
-
-import React, { useCallback } from 'react';
+import { Show } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
 import { useUI } from '../../contexts/UIContext';
 import { Portal } from '../ui/Portal';
@@ -18,58 +17,56 @@ interface ProgressionScreenProps {
     onClose: () => void;
 }
 
-export const ProgressionScreen: React.FC<ProgressionScreenProps> = ({ onClose }) => {
+export const ProgressionScreen = (props: ProgressionScreenProps) => {
     const { user, progressionData, isProgressionLoading } = useUser();
-    const { pendingLevelIncrement, clearLevelUpSignal } = useUI();
+    const ui = useUI();
     
     const { visualLevel, visualGain, isTicking, isShifted, lappingIndices, isFlare } = useLevelChaser(
-        user.level, 
-        pendingLevelIncrement, 
-        clearLevelUpSignal
+        () => user.level, 
+        () => ui.pendingLevelIncrement, 
+        ui.clearLevelUpSignal
     );
 
     const visualTracks = useProgressionTracks(
         visualLevel, 
-        user.level, 
+        () => user.level, 
         progressionData
     );
 
     const { rewardStates, handleClaimAction } = useProgressionClaims(isTicking);
 
-    const handleManualClose = useCallback(() => {
-        clearLevelUpSignal();
-        onClose();
-    }, [clearLevelUpSignal, onClose]);
-
-    if (!progressionData && isProgressionLoading) {
-        return <ProgressionLoading />;
-    }
+    const handleManualClose = () => {
+        ui.clearLevelUpSignal();
+        props.onClose();
+    };
 
     return (
-        <Portal>
-            <div className="fixed inset-0 z-[200] flex flex-col items-center justify-start bg-slate-950 overflow-hidden">
-                <DynamicBackground />
+        <Show when={progressionData() || !isProgressionLoading()} fallback={<ProgressionLoading />}>
+            <Portal>
+                <div class="fixed inset-0 z-[200] flex flex-col items-center justify-start bg-slate-950 overflow-hidden text-white">
+                    <DynamicBackground />
 
-                <div className="w-full h-full max-w-[23rem] flex flex-col relative z-10 overflow-hidden shadow-2xl">
-                    <ProgressionHeader />
+                    <div class="w-full h-full max-w-[23rem] flex flex-col relative z-10 overflow-hidden shadow-2xl">
+                        <ProgressionHeader />
 
-                    <div className="flex-1 flex flex-col min-h-0 relative z-10 overflow-hidden">
-                        <RewardView 
-                            visualLevel={visualLevel}
-                            visualGain={visualGain}
-                            isTicking={isTicking}
-                            isShifted={isShifted}
-                            isFlare={isFlare}
-                            visualTracks={visualTracks}
-                            lappingIndices={lappingIndices}
-                            rewardStates={rewardStates as any}
-                            onClaim={handleClaimAction}
-                        />
+                        <div class="flex-1 flex flex-col min-h-0 relative z-10 overflow-hidden">
+                            <RewardView 
+                                visualLevel={visualLevel()}
+                                visualGain={visualGain()}
+                                isTicking={isTicking()}
+                                isShifted={isShifted()}
+                                isFlare={isFlare()}
+                                visualTracks={visualTracks()}
+                                lappingIndices={lappingIndices()}
+                                rewardStates={rewardStates as any}
+                                onClaim={handleClaimAction}
+                            />
+                        </div>
+
+                        <ModalFooter onClose={handleManualClose} />
                     </div>
-
-                    <ModalFooter onClose={handleManualClose} />
                 </div>
-            </div>
-        </Portal>
+            </Portal>
+        </Show>
     );
 };
