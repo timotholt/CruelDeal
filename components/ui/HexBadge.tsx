@@ -144,7 +144,7 @@ export const HexBadge = (props: HexBadgeProps) => {
             <div class="relative z-10 w-full h-full flex items-center justify-center pointer-events-none">
                 <div class="w-[82%] h-[82%] flex items-center justify-center">
                     {isTextLike() ? (
-                        <span class={`${v().text} font-black italic tracking-tighter uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,1)] text-[0.85em]`}>
+                        <span class={`${v().text} font-black italic tracking-tighter uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,1)] text-[0.85em] leading-none`}>
                             {resolved()}
                         </span>
                     ) : (

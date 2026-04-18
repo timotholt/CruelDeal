@@ -37,8 +37,8 @@ export const SeasonHeroSection = (props: SeasonHeroSectionProps) => {
 
             {/* VARIANT BADGE */}
             <div class="relative z-30 mb-[0.5em]">
-                <div class={`${isPremiumActive() ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-800 border-slate-600'} px-3 py-0.5 rounded-full border shadow-2xl transition-colors duration-1000`}>
-                    <span class="text-[0.55rem] font-black text-white italic uppercase tracking-widest whitespace-nowrap drop-shadow-sm">
+                <div class={`${isPremiumActive() ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-800 border-slate-600'} px-3 py-0.5 rounded-full border shadow-2xl transition-colors duration-1000 flex items-center justify-center`}>
+                    <span class="text-[0.55rem] font-black text-white italic uppercase tracking-widest whitespace-nowrap drop-shadow-sm leading-none">
                         {props.variantName || "SEASON VARIANT"}
                     </span>
                 </div>

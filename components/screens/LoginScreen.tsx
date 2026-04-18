@@ -72,7 +72,7 @@ export const LoginScreen = (props: LoginScreenProps) => {
           </SlantedButton>
       </div>
 
-      <div class="mt-4 text-slate-400 text-[0.45rem] text-center leading-relaxed font-medium whitespace-nowrap z-10 animate-slide-up opacity-0" style="animation-delay: 0.3s">
+      <div class="mt-4 text-slate-400 text-[0.45rem] text-center leading-relaxed font-medium whitespace-nowrap z-10 animate-slide-up opacity-0" style={{ "animation-delay": "0.3s" }}>
           {t('LOGIN_FOOTER')}
       </div>
       
