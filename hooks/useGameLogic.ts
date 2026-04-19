@@ -17,7 +17,7 @@ export const useGameLogic = () => {
         startResolution, 
         restartGame: engineRestart, 
         resign: engineResign 
-    } = useTurnManager(user().id);
+    } = useTurnManager(user.id);
 
     // 2. Input & UI State
     const {
@@ -54,7 +54,7 @@ export const useGameLogic = () => {
         try {
             // AUTHORITATIVE SUBMISSION
             // We no longer send the gameState. We only send our intents (moves).
-            const response = await api.match.submit(user().id, pendingMoves());
+            const response = await api.match.submit(user.id, pendingMoves());
 
             if (response.success && response.data) {
                 const { opponentMoves } = response.data;

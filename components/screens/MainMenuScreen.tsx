@@ -6,13 +6,15 @@ import { NewsCard } from '../menu/NewsCard';
 import { UserProfileDropdown } from '../menu/UserProfileDropdown';
 import { useUI } from '../../contexts/UIContext';
 import { api } from '../../services/api';
+import { useNavigate } from '@tanstack/solid-router';
 
 interface MainMenuScreenProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate?: (screen: ScreenKey) => void;
   onLogout: () => void;
 }
 
 export const MainMenuScreen = (props: MainMenuScreenProps) => {
+  const navigate = useNavigate();
   const { setStoreScrollTarget } = useUI();
   const userContext = useUser();
   const [content, setContent] = createSignal<any>(null);
@@ -32,8 +34,13 @@ export const MainMenuScreen = (props: MainMenuScreenProps) => {
   });
 
   const handleCurrencyClick = (sectionId: string) => {
-      props.onNavigate('STORE');
+      navigate({ to: '/store' });
       setStoreScrollTarget(sectionId);
+  };
+
+  const handleInternalNavigate = (screen: ScreenKey) => {
+      const path = screen === 'MENU' ? '/' : `/${screen.toLowerCase()}`;
+      navigate({ to: path });
   };
 
   return (
@@ -43,7 +50,7 @@ export const MainMenuScreen = (props: MainMenuScreenProps) => {
           <StandardHeader 
               title={userContext.user.username}
               class="!pl-0.5 !pr-1"
-              leftContent={<UserProfileDropdown onLogout={props.onLogout} onNavigate={props.onNavigate} />}
+              leftContent={<UserProfileDropdown onLogout={props.onLogout} onNavigate={handleInternalNavigate} />}
               showCurrency={true}
               onCreditClick={() => handleCurrencyClick('store-credits')}
               onGoldClick={() => handleCurrencyClick('store-gold')}
@@ -56,7 +63,7 @@ export const MainMenuScreen = (props: MainMenuScreenProps) => {
               </div>
               <div 
                 class="w-full aspect-video rounded-2xl bg-gradient-to-br from-indigo-900/60 to-slate-900/60 border border-indigo-500/30 backdrop-blur-sm relative overflow-hidden p-5 flex flex-col justify-end mb-6 shadow-2xl group cursor-pointer" 
-                onClick={() => props.onNavigate('STORE')}
+                onClick={() => handleInternalNavigate('STORE')}
               >
                     <div class="absolute inset-0 bg-[url('https://picsum.photos/seed/space/400/200')] opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700" />
                     <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />

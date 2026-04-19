@@ -5,13 +5,15 @@ import { SlantedButton } from '../ui/SlantedButton';
 import { audio } from '../../services/audio';
 import { Portal } from '../ui/Portal';
 import { GameText } from '../ui/GameText';
+import { useNavigate } from '@tanstack/solid-router';
 
 interface HomeCommandBarProps {
-    onNavigate: (screen: ScreenKey) => void;
+    onNavigate?: (screen: ScreenKey) => void;
     isActive: boolean;
 }
 
 const getRelativeTimeString = (isoString: string) => {
+// ... existing helper ...
     const date = new Date(isoString);
     const now = new Date();
     const diffInMs = now.getTime() - date.getTime();
@@ -24,7 +26,14 @@ const getRelativeTimeString = (isoString: string) => {
 
 export const HomeCommandBar = (props: HomeCommandBarProps) => {
     const user = useUser();
+    const navigate = useNavigate();
     const [isRollerOpen, setIsRollerOpen] = createSignal(false);
+
+    const internalNavigate = (screen: ScreenKey) => {
+        audio.play('sfx_ui_navigate');
+        const path = screen === 'MENU' ? '/' : `/${screen.toLowerCase()}`;
+        navigate({ to: path });
+    };
 
     createEffect(() => {
         if (!props.isActive && isRollerOpen()) {
@@ -245,7 +254,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     variant="blue" 
                     size="sm" 
                     fullWidth 
-                    onClick={() => props.onNavigate('HISTORY')} 
+                    onClick={() => internalNavigate('HISTORY')} 
                     class="shadow-blue-900/40" 
                     icon={
                         <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -261,7 +270,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     fullWidth 
                     size="md" 
                     padding="0.5rem"
-                    onClick={() => props.onNavigate('GAME')} 
+                    onClick={() => internalNavigate('GAME')} 
                     class="shadow-blue-900/50" 
                 >
                     {`PLAY\nCONQUEST`}
@@ -274,7 +283,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     fullWidth 
                     size="md" 
                     padding="0.5rem"
-                    onClick={() => props.onNavigate('DECK')} 
+                    onClick={() => internalNavigate('DECK')} 
                     holdDuration={500}
                     onHoldComplete={() => setIsRollerOpen(true)}
                     class="shadow-slate-900/40 transition-transform"
@@ -290,7 +299,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     fullWidth 
                     size="md" 
                     padding="0.5rem"
-                    onClick={() => props.onNavigate('GAME')} 
+                    onClick={() => internalNavigate('GAME')} 
                     class="shadow-blue-900/50"
                 >
                     {`PLAY\n\u00A0\u00A0LADDER\u00A0\u00A0`}
@@ -302,7 +311,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     variant="blue" 
                     size="sm" 
                     fullWidth
-                    onClick={() => props.onNavigate('RANK')} 
+                    onClick={() => internalNavigate('RANK')} 
                     class="shadow-blue-900/40"
                 >
                     {user.user?.rank?.toString() ?? '10'}

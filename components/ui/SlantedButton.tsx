@@ -98,7 +98,7 @@ export const SlantedButton = (props: SlantedButtonProps) => {
     };
 
     const handleButtonClick = (e: MouseEvent) => {
-        if (holdDuration() > 0) return;
+        if (holdDuration() > 0 && hasTriggeredHold) return;
         props.onClick?.(e as any);
     };
 

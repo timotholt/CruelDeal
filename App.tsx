@@ -4,7 +4,8 @@ import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
 import { api } from './services/api';
 import { UserProfile } from './types';
-import { MainNavigator } from './components/MainNavigator';
+import { router } from './router';
+import { RouterProvider } from '@tanstack/solid-router';
 import { LoginScreen } from './components/screens/LoginScreen';
 
 const queryClient = new QueryClient({
@@ -24,7 +25,7 @@ const queryClient = new QueryClient({
 function AppContent() {
   return (
     <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
-      <MainNavigator />
+      <RouterProvider router={router} />
     </div>
   );
 }
