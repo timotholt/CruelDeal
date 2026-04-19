@@ -59,13 +59,20 @@ export const useSynchronizedAction = (props: UseSynchronizedActionProps) => {
 
         setIsHolding(true);
         const startTime = Date.now();
+        const ANIM_DELAY = 250;
         
         timerId = window.setInterval(() => {
             const elapsed = Date.now() - startTime;
-            const p = Math.min((elapsed / dur) * 100, 100);
+            
+            // The visual bar only starts moving after ANIM_DELAY
+            const visualElapsed = Math.max(0, elapsed - ANIM_DELAY);
+            const remainingDur = Math.max(1, dur - ANIM_DELAY);
+            const p = Math.min((visualElapsed / remainingDur) * 100, 100);
+            
             setHP(p);
             
-            if (p >= 100) {
+            // The actual interaction still completes at the full duration
+            if (elapsed >= dur) {
                 cancelHold();
                 
                 (async () => {

@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { CurrencyDisplay } from './CurrencyDisplay';
 import { PremiumHeaderBase } from './PremiumHeaderBase';
+import { GameText } from './GameText';
 
 interface StandardHeaderProps {
     title: string;
@@ -19,16 +20,22 @@ export const StandardHeader = (props: StandardHeaderProps) => {
             class={`pt-1 pb-2 px-1 ${props.class || ''}`}
             innerClass="justify-between"
         >
-            {/* Left Section - Title Anchored */}
-            <div class="flex-none flex justify-start items-center gap-1.5 pr-2">
+            {/* Left Section - Flexible Title */}
+            <div class="flex-1 min-w-0 flex justify-start items-center gap-1.5 pr-2">
                 {props.leftContent}
-                <h1 class="text-[1.4rem] font-black text-white tracking-tighter uppercase drop-shadow-[0_2px_5px_rgba(0,0,0,0.8)] whitespace-nowrap italic font-sans leading-none">
-                    {props.title}
-                </h1>
+                <div class="h-6 flex-1 min-w-0 flex items-center">
+                    <GameText 
+                        text={props.title}
+                        baseFontSize={1.4}
+                        maxScale={1}
+                        minScale={0.5}
+                        class="justify-start text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.8)] !font-sans uppercase italic"
+                    />
+                </div>
             </div>
 
-            {/* Right Section - Currency Modules */}
-            <div class="flex-1 flex justify-end items-center gap-1.5">
+            {/* Right Section - Currency Modules (Anchored) */}
+            <div class="flex-none flex justify-end items-center gap-1.5">
                 {props.rightContent}
                 <Show when={props.showCurrency}>
                     <CurrencyDisplay 

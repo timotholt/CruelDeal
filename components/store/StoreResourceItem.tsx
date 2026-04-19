@@ -1,4 +1,4 @@
-import { createSignal, createMemo, onCleanup, Show, onMount } from 'solid-js';
+import { createSignal, createMemo, onCleanup, Show, onMount, Switch, Match } from 'solid-js';
 import { SlantedButton } from '../ui/SlantedButton';
 import { GameText } from '../ui/GameText';
 import { useUser } from '../../contexts/UserContext';
@@ -124,24 +124,26 @@ export const StoreResourceItem = (props: StoreResourceItemProps) => {
 
             <div class="w-full relative z-10">
                 <div class="h-3 flex items-center justify-center mb-0.5 overflow-visible">
-                    <Show when={action.isHolding() && !isLocked() && !isPermanentlyClaimed()}>
-                        <span class="text-[0.45rem] font-black text-white uppercase tracking-widest animate-pulse drop-shadow-black">
-                            {t('UI_HOLD_BUY')}
-                        </span>
-                    </Show>
-                    <Show when={isProcessing()}>
-                         <span class="text-[0.45rem] font-black text-cyan-300 uppercase tracking-[0.3em] leading-none animate-pulse drop-shadow-cyan">
-                            {t('UI_SYNCING')}
-                         </span>
-                    </Show>
-                    <Show when={showSuccess() && !isPermanentlyClaimed() /* Only bounce if just happened */}>
-                         <span class="text-[0.45rem] font-black text-emerald-400 uppercase tracking-[0.3em] leading-none animate-bounce drop-shadow-emerald">
-                            {t('UI_SYNCED')}
-                         </span>
-                    </Show>
-                    <Show when={isLocked()}>
-                         <span class="text-[0.45rem] font-black text-slate-500 uppercase tracking-[0.3em] leading-none">Cooldown</span>
-                    </Show>
+                    <Switch>
+                        <Match when={action.isHolding() && !isLocked() && !isPermanentlyClaimed()}>
+                            <span class="text-[0.45rem] font-black text-white uppercase tracking-widest animate-pulse drop-shadow-black">
+                                {t('UI_HOLD_BUY')}
+                            </span>
+                        </Match>
+                        <Match when={isProcessing()}>
+                             <span class="text-[0.45rem] font-black text-cyan-300 uppercase tracking-[0.3em] leading-none animate-pulse drop-shadow-cyan">
+                                {t('UI_SYNCING')}
+                             </span>
+                        </Match>
+                        <Match when={showSuccess() && !isPermanentlyClaimed()}>
+                             <span class="text-[0.45rem] font-black text-emerald-400 uppercase tracking-[0.3em] leading-none animate-bounce drop-shadow-emerald">
+                                {t('UI_SYNCED')}
+                             </span>
+                        </Match>
+                        <Match when={isLocked()}>
+                             <span class="text-[0.45rem] font-black text-slate-500 uppercase tracking-[0.3em] leading-none">Cooldown</span>
+                        </Match>
+                    </Switch>
                 </div>
 
                 <Show when={isLocked() && !showSuccess()} fallback={
