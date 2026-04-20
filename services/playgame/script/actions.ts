@@ -346,8 +346,9 @@ export const revealNextLocation = (): Step => (ctx) => {
 // ---- Turn resolution ---------------------------------------------------
 
 /**
- * Reveal all of the player's currently-pending cards in sequence using
- * the ported reveal cinematic (zoom card face-up, hold, return).
+ * LEGACY — reveal every currently-pending card in arrival order. Kept
+ * for callers that don't care about priority (e.g. one-off tests /
+ * debug flows). The main turn flow uses `revealByPriority()` below.
  */
 export const revealPendingCards = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
@@ -360,8 +361,6 @@ export const revealPendingCards = (): Step => async (ctx) => {
     boardWrap: c.boardWrap,
     sfx: c.sfx,
     onRevealed: (id) => {
-      // Clear each id from state.pending as its flip completes so the
-      // face-up card remains on the board (no longer rendered facedown).
       c.setState(
         produce<MatchState>((s) => {
           s.pending = s.pending.filter((pid) => pid !== id);
@@ -371,10 +370,112 @@ export const revealPendingCards = (): Step => async (ctx) => {
   });
 };
 
+// ---- Snap reveal cadence ------------------------------------------------
+
 /**
- * Enemy picks a random non-full lane and plays one card, flying face-down
- * from above the enemy row and then revealing with the same cinematic
- * as player cards.
+ * Flip every card the player staged this turn FACE-DOWN. Pushes each
+ * id from `playedThisTurn` into `pending` so the BoardCard re-renders
+ * with the `facedown` class. Until this runs, staged cards sit face-up
+ * in their lanes — which is the whole point of the Snap UX.
+ *
+ * Purely a state flip for now (CSS snaps the face change). A later
+ * slice can add a proper 3D flip-to-back animation here.
+ */
+export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const ids = [...c.state.playedThisTurn];
+  if (ids.length === 0) return;
+  c.setState(
+    produce<MatchState>((s) => {
+      for (const id of ids) {
+        if (!s.pending.includes(id)) s.pending.push(id);
+      }
+    }),
+  );
+  // Small beat so the flip registers visually before the next step.
+  await new Promise<void>((r) => setTimeout(r, 250));
+};
+
+/**
+ * Determine which side reveals first. Marvel Snap rule: the player with
+ * higher TOTAL power across the board has priority. Ties go to a coin
+ * flip — here we default to the player for now because we don't yet
+ * track the priority coin state.
+ *
+ * Pulled into its own function so a later slice can swap in the real
+ * snap-priority rules (last-winner-takes-priority, tie-break coin).
+ */
+export const determinePriority = (state: MatchState): 'player' | 'enemy' => {
+  const playerTotal = state.lanes.reduce(
+    (sum, lane) => sum + lane.reduce((s, card) => s + card.power, 0),
+    0,
+  );
+  const enemyTotal = state.enemyLanes.reduce(
+    (sum, lane) => sum + lane.reduce((s, card) => s + card.power, 0),
+    0,
+  );
+  if (playerTotal > enemyTotal) return 'player';
+  if (enemyTotal > playerTotal) return 'enemy';
+  return 'player'; // TODO: track the priority coin for real tie-breaks
+};
+
+/**
+ * Reveal this turn's played cards in priority order: the higher-power
+ * side reveals first, then the other side. Each side's reveal uses the
+ * shared cinematic so there's no code duplication.
+ *
+ * After both batches finish, `playedThisTurn` / `enemyPlayedThisTurn`
+ * are cleared so the next turn starts fresh.
+ */
+export const revealByPriority = (): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const priority = determinePriority(c.state);
+  const playerIds = [...c.state.playedThisTurn];
+  const enemyIds = [...c.state.enemyPlayedThisTurn];
+
+  const revealBatch = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    await revealPendingCinematic({
+      pendingIds: ids,
+      cardElMap: c.cardRefs,
+      boardWrap: c.boardWrap,
+      sfx: c.sfx,
+      onRevealed: (id) => {
+        c.setState(
+          produce<MatchState>((s) => {
+            s.pending = s.pending.filter((pid) => pid !== id);
+          }),
+        );
+      },
+    });
+  };
+
+  if (priority === 'player') {
+    await revealBatch(playerIds);
+    await revealBatch(enemyIds);
+  } else {
+    await revealBatch(enemyIds);
+    await revealBatch(playerIds);
+  }
+
+  // Clear per-turn played lists; next turn's plays start empty.
+  c.setState(
+    produce<MatchState>((s) => {
+      s.playedThisTurn = [];
+      s.enemyPlayedThisTurn = [];
+    }),
+  );
+};
+
+/**
+ * Enemy picks a random non-full lane and plays one card. The card flies
+ * in face-down from above the enemy row and STAYS face-down — reveal is
+ * handled later by `revealByPriority()` so the two sides' cards flip in
+ * the correct Snap order.
+ *
+ * Tracked in both `pending` (so it renders face-down) and
+ * `enemyPlayedThisTurn` (so the reveal step knows which ids are the
+ * enemy's this-turn plays).
  */
 export const enemyPlayRandom = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
@@ -387,11 +488,12 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
   const def = randomCardDef();
   const card = newCardInstance(def);
 
-  // Push into state as pending (face-down) then wait a frame for Solid to render.
+  // Face-down on arrival; tracked as "played this turn" for reveal.
   c.setState(
     produce<MatchState>((s) => {
       s.enemyLanes[lane].push(card);
       s.pending.push(card.id);
+      s.enemyPlayedThisTurn.push(card.id);
     }),
   );
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -415,22 +517,8 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
     boardWrap: c.boardWrap,
     showPreview: false,
   });
-  await new Promise<void>((r) => setTimeout(r, 150));
-
-  // Reveal the enemy card with the same cinematic as player cards.
-  await revealPendingCinematic({
-    pendingIds: [card.id],
-    cardElMap: c.cardRefs,
-    boardWrap: c.boardWrap,
-    sfx: c.sfx,
-    onRevealed: () => {
-      c.setState(
-        produce<MatchState>((s) => {
-          s.pending = s.pending.filter((pid) => pid !== card.id);
-        }),
-      );
-    },
-  });
+  // No reveal here — `revealByPriority` handles it after both sides
+  // have committed their plays.
 };
 
 /**

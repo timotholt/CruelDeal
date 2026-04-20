@@ -15,9 +15,10 @@ import {
   enemyPlayRandom,
   fadeInLocationTile,
   finishResolving,
+  flipPlayerCardsFaceDown,
   hideLocationTiles,
+  revealByPriority,
   revealNextLocation,
-  revealPendingCards,
   setBoardVisible,
   startResolving,
   toast,
@@ -86,21 +87,27 @@ export const openingSequence = (): Step =>
 /**
  * Turn-resolution sequence, triggered by END TURN.
  *
- *   1. Set state.resolving so the UI locks the button
- *   2. Reveal each of the player's pending (face-down) cards
- *   3. Enemy plays a random card into a random lane (fly-in + reveal)
- *   4. Advance turn counter + refill energy, TURN N banner
- *   5. Draw one card into the hand
- *   6. Reveal the next unrevealed location (on turns 2 and 3)
- *   7. Clear state.resolving
+ * Follows the Marvel Snap reveal cadence:
+ *   1. Lock the UI (`startResolving`).
+ *   2. Flip the player's this-turn plays face-down — they were sitting
+ *      face-up in lane since the player dropped them.
+ *   3. Enemy commits its plays face-down (fly-in, no reveal yet).
+ *   4. Priority-ordered reveal: whichever side has higher total power
+ *      flips its cards face-up first, then the other side follows.
+ *   5. Turn bookkeeping (counter + energy + TURN N banner).
+ *   6. Draw one into hand.
+ *   7. Reveal next location on turns 2 / 3.
+ *   8. Unlock the UI.
  */
 export const resolveTurnFlow = (): Step =>
   serial(
     startResolving(),
-    revealPendingCards(),
+    flipPlayerCardsFaceDown(),
     wait(200),
     enemyPlayRandom(),
-    wait(300),
+    wait(250),
+    revealByPriority(),
+    wait(200),
     advanceTurn(),
     wait(200),
     drawHandCard(),

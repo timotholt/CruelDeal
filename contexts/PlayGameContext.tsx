@@ -67,7 +67,11 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   };
 
   /**
-   * Move a card from hand to a lane in face-down (pending) state.
+   * Move a card from hand to a lane. The card lands FACE-UP and is
+   * tracked in `playedThisTurn` so the end-turn flow knows to flip it
+   * face-down before the reveal cadence. Matches Marvel Snap: you see
+   * your own plays commit visibly until END TURN locks them in.
+   *
    * Returns `true` on success, `false` if blocked (lane full, etc.).
    */
   const stageCardInLane = (cardId: string, laneIdx: number): boolean => {
@@ -81,7 +85,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
         s.hand = s.hand.filter((c) => c.id !== cardId);
         s.energy = Math.max(0, s.energy - card.cost);
         s.lanes[laneIdx].push({ ...card, placements: {} });
-        s.pending.push(cardId);
+        s.playedThisTurn.push(cardId);
       }),
     );
     return true;

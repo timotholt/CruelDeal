@@ -57,6 +57,8 @@ export function createMatchState(): MatchState {
     targeting: null,
     auras: {},
     pending: [],
+    playedThisTurn: [],
+    enemyPlayedThisTurn: [],
     incoming: [],
     history: [],
     resolving: false,
@@ -76,6 +78,7 @@ export function snapshotState(state: MatchState): MatchSnapshot {
       hand: state.hand,
       lanes: state.lanes,
       pending: state.pending,
+      playedThisTurn: state.playedThisTurn,
     }),
   ) as MatchSnapshot;
 }
@@ -86,6 +89,7 @@ export function restoreState(state: MatchState, snapshot: MatchSnapshot): void {
   state.hand = snapshot.hand;
   state.lanes = snapshot.lanes;
   state.pending = snapshot.pending;
+  state.playedThisTurn = snapshot.playedThisTurn ?? [];
 }
 
 /** Push a snapshot onto the undo stack, bounded to 50 entries. */

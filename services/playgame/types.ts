@@ -57,6 +57,7 @@ export interface MatchSnapshot {
   hand: CardInstance[];
   lanes: CardInstance[][];
   pending: string[];
+  playedThisTurn: string[];
 }
 
 export interface MatchState {
@@ -77,8 +78,25 @@ export interface MatchState {
    * Plain object (not a Map) so it plays nicely inside a Solid `createStore`.
    */
   auras: Record<string, unknown>;
-  /** Card ids currently face-down (played this turn, awaiting reveal). */
+  /**
+   * Card ids currently rendered face-down on the board. In the Snap
+   * reveal cadence this is populated at END TURN (player cards flip
+   * down, enemy cards fly in face-down), then drained during the
+   * priority-ordered reveal.
+   */
   pending: string[];
+  /**
+   * Player card ids staged into lanes on the CURRENT turn. They start
+   * face-up (not in `pending`); `flipPlayerCardsFaceDown` moves them
+   * into `pending` at END TURN. Cleared after the reveal batch finishes.
+   */
+  playedThisTurn: string[];
+  /**
+   * Enemy card ids played on the CURRENT turn (flown in face-down).
+   * Mirrors `playedThisTurn` on the opponent side so the reveal step
+   * knows exactly which cards belong to which side.
+   */
+  enemyPlayedThisTurn: string[];
   /**
    * Temporary buffer for cards that have left their source (deck, board,
    * opponent, or conjured from thin air) but have not yet been committed
