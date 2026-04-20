@@ -270,10 +270,10 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
                     fullWidth 
                     size="md" 
                     padding="0.5rem"
-                    onClick={() => internalNavigate('GAME')} 
+                    onClick={() => internalNavigate('PLAY')} 
                     class="shadow-blue-900/50" 
                 >
-                    {`PLAY\nCONQUEST`}
+                    {`NEW\nGAME`}
                 </SlantedButton>
             </div>
 

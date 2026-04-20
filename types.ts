@@ -18,7 +18,7 @@ export interface ApiErrorPayload {
 }
 
 // --- UI Types ---
-export type ScreenKey = 'MENU' | 'GAME' | 'DECK' | 'SEASON' | 'STORE' | 'PROFILE' | 'INBOX' | 'RANK' | 'PROGRESSION' | 'HISTORY' | 'SETTINGS';
+export type ScreenKey = 'MENU' | 'GAME' | 'PLAY' | 'DECK' | 'SEASON' | 'STORE' | 'PROFILE' | 'INBOX' | 'RANK' | 'PROGRESSION' | 'HISTORY' | 'SETTINGS';
 
 export type CollectionTab = 'CARDS' | 'COMICS' | 'INVENTORY';
 

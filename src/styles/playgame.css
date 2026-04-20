@@ -1,0 +1,974 @@
+  :root {
+    --bg-0: #07090d;
+    --bg-1: #10151c;
+    --bg-2: #18222d;
+    --panel: rgba(12, 16, 22, 0.84);
+    --line: rgba(146, 164, 190, 0.2);
+    --line-strong: rgba(195, 215, 242, 0.34);
+    --text: #f2f4ee;
+    --muted: #8d9aa8;
+    --accent: #ffcf5b;
+    --accent-2: #42d6b1;
+    --warn: #ff8a5a;
+    --danger: #ff4d6d;
+    --p1: #4aa8ff;
+    --p2: #ff6f61;
+    --card-bg: linear-gradient(160deg, #26303b 0%, #111820 55%, #090d12 100%);
+    --card-edge: rgba(220, 232, 245, 0.2);
+    --enemy-card-bg: linear-gradient(160deg, #3a2025 0%, #1a1014 58%, #0b080a 100%);
+    --lane-bg: rgba(255,255,255,0.035);
+    --lane-bg-2: rgba(255,255,255,0.065);
+    --font-display: 'Unica One', 'Bebas Neue', Impact, sans-serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    /* ----------------------------------------------------------------
+       BOARD SIZING — 9:16 portrait column, Marvel Snap style.
+
+       The board is a fixed-aspect-ratio column centred in the viewport.
+       On portrait phones it fills the full width. On wide/landscape
+       screens (desktop, tablet landscape) it is letterboxed so it never
+       exceeds the 9:16 ratio — keeping all card sizes proportional.
+
+       Single source of truth: --board-w drives everything.
+       --board-w = the narrowest of:
+         • 9/16 of viewport height  (landscape / desktop)
+         • 100% of viewport width   (portrait phone)
+         • 420px hard cap           (very tall monitors)
+       ---------------------------------------------------------------- */
+    /* Board width — capped so the 9:16 column never exceeds the viewport
+       in either dimension. On portrait phones this equals 100vw; on wide
+       or very tall screens it shrinks so the height stays ≤ 100vh too.  */
+    --board-w: min(calc(100vh * 9 / 16), 100vw, 420px);
+    /* Board height — always exactly 9:16. Excess viewport height becomes
+       pitch-black letterbox bars above and below (handled by board-wrap). */
+    --board-h: calc(var(--board-w) * 16 / 9);
+
+    /* Gap between location strip and the lane-slot rows above/below it. */
+    --location-gap: 24px;
+
+    /* Side breathing room inside the board. */
+    --board-pad-x: 8px;
+
+    /* Gaps between the 3 lanes and between the 2 cards in a lane. */
+    --lane-gap: 6px;
+    --slot-gap: 4px;
+
+    /* Inner padding inside each lane frame. */
+    --lane-pad-x: 5px;
+    --lane-pad-top: 5px;
+    --lane-pad-bottom: 5px;
+
+    /* Available width for the 3 lanes combined. */
+    --lanes-total-w: calc(var(--board-w) - 2 * var(--board-pad-x) - 2 * var(--lane-gap));
+
+    /* One lane's width. */
+    --lane-w: calc(var(--lanes-total-w) / 3);
+
+    /* Space inside a lane for 2 cards side-by-side (after padding + slot gap). */
+    --lane-inner-w: calc(var(--lane-w) - 2 * var(--lane-pad-x) - var(--slot-gap));
+
+    /* ----------------------------------------------------------------
+       CARD DIMENSIONS — MANDATORY 5:7 (width:height = 5:7) everywhere.
+       --card-w  = half the inner lane width  (2 cards sit side-by-side)
+       --card-h  = card-w × 7/5 = card-w × 1.4   ← never change this
+       This ratio must never be overridden anywhere in the stylesheet.
+       ---------------------------------------------------------------- */
+    --card-w: calc(var(--lane-inner-w) / 2);
+    --card-h: calc(var(--card-w) * 1.4);
+
+    /* Location strip height — significantly taller for longer text. */
+    --location-h: calc(var(--card-w) * 1.5);
+
+    /* One lane's 2×2 play area total height. */
+    --lane-play-h: calc(2 * var(--card-h) + var(--slot-gap) + var(--lane-pad-top) + var(--lane-pad-bottom));
+
+    /* Hand cards — same 5:7 ratio, slightly larger than lane cards. */
+    --hand-card-w: calc(var(--card-w) * 1.18);
+    --hand-card-h: calc(var(--hand-card-w) * 1.4);
+  }
+  * { box-sizing: border-box; }
+  .hint {
+    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+    line-height: 1.7; padding: 8px 0;
+  }
+  .inspect-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    background: rgba(0,0,0,0.62);
+    backdrop-filter: blur(5px);
+  }
+  .inspect-overlay.open { display: flex; }
+  .inspect-panel {
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 10px;
+    background: linear-gradient(160deg, #28313b 0%, #121920 58%, #080c10 100%);
+    box-shadow: 0 28px 90px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.12);
+    color: var(--text);
+  }
+  .inspect-card {
+    width: min(52vh, 430px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .inspect-location {
+    width: min(72vw, 560px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .inspect-art {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-height: 0;
+  }
+  .inspect-card .inspect-art {
+    flex: 0 0 390px;
+    overflow: visible;
+    width: 100%;
+  }
+  .inspect-card-render {
+    width: var(--hand-card-w);
+    height: var(--hand-card-h);
+    transform: scale(3.05);
+    transform-origin: center;
+    cursor: default;
+    pointer-events: none;
+    transition: none;
+  }
+  .inspect-card-render:hover {
+    transform: scale(3.05);
+    border-color: var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .inspect-location-render {
+    width: var(--lane-w);
+    height: var(--location-h);
+    min-width: var(--lane-w);
+    transform: scale(2.35);
+    transform-origin: center;
+  }
+  .inspect-location .inspect-art {
+    height: 210px;
+    width: 100%;
+    overflow: visible;
+  }
+  .inspect-kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+  }
+  .inspect-title {
+    margin-top: 10px;
+    font-family: var(--font-display);
+    font-size: 36px;
+    letter-spacing: 0.08em;
+    line-height: 1;
+  }
+  .inspect-subtitle {
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .inspect-body {
+    padding-top: 0;
+  }
+  .inspect-card .inspect-body,
+  .inspect-location .inspect-body {
+    border-top: none;
+  }
+  .inspect-rules {
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 1.35;
+    text-align: center;
+    color: var(--text);
+  }
+  .inspect-section h3 {
+    margin: 0 0 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .inspect-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+  .inspect-row b { color: var(--text); font-weight: 600; text-align: right; }
+  .var-select {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+  }
+  .var-select button {
+    font-family: var(--font-mono); font-size: 9px; padding: 3px 7px;
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    border-radius: 3px; cursor: pointer;
+  }
+  .var-select button.active { background: var(--accent); color: #111; border-color: var(--accent); }
+
+  /* board-wrap: covers the full viewport with position:fixed so its size
+     is always exactly the viewport — no dependency on parent height chains.
+     The 9:16 board column is flex-centered inside it. */
+  .board-wrap {
+    position: fixed;
+    inset: 0;                  /* top:0 right:0 bottom:0 left:0 */
+    display: flex;
+    align-items: center;       /* vertical centre → letterbox bars top/bottom */
+    justify-content: center;
+    background: #000;          /* letterbox colour */
+    overflow: hidden;
+    z-index: 1;
+  }
+  /* Subtle grid texture — clipped to the board column only */
+  .board-wrap::before {
+    content: '';
+    position: absolute;
+    width: var(--board-w);
+    height: var(--board-h);
+    background:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse at 50% 47%, #000 0%, #000 50%, transparent 82%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* The board: fixed 9:16 column, never taller than the viewport. */
+  .board {
+    position: relative;
+    width: var(--board-w);
+    height: var(--board-h);   /* ← fixed 9:16, not 100vh */
+    max-height: 100vh;         /* safety: never clip on very short screens */
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 8px var(--board-pad-x) 0;
+    overflow: hidden;
+    z-index: 1;
+    background:
+      radial-gradient(80% 40% at 50% -5%, rgba(95, 128, 144, 0.30) 0%, transparent 100%),
+      radial-gradient(60% 35% at 110% 100%, rgba(96, 52, 64, 0.28) 0%, transparent 100%),
+      radial-gradient(60% 38% at -10% 100%, rgba(33, 92, 78, 0.26) 0%, transparent 100%),
+      var(--bg-0);
+    /* Hidden until JS renders content — prevents flash of unsized layout. */
+    visibility: hidden;
+  }
+  .board.ready {
+    visibility: visible;
+  }
+  /* The lane rows + locations sit in a flex column with their own gap */
+  .board-game-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    justify-content: center;
+  }
+  .playgame-root.debug-on .board-game-area { background: rgba(0,255,0,0.15); }
+  /* Gap between lane rows and the location strip */
+  .board-game-area > .row.enemy-row  { margin-bottom: var(--location-gap); }
+  .board-game-area > .row.locations  { margin-bottom: var(--location-gap); }
+  .lane-map {
+    position: absolute;
+    width: var(--lane-w);
+    border-radius: 10px;
+    background-position: center;
+    background-size: cover;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+    transition: opacity 180ms ease;
+    z-index: 0;
+  }
+  .lane-map::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.28);
+  }
+  .board.maps-enabled .lane-map {
+    opacity: 1;
+  }
+  .board > *,
+  .board-game-area > .row {
+    position: relative;
+    z-index: 1;
+  }
+  .hand { flex: 0 0 auto; margin-bottom: auto; /* pushes action-bar to bottom */ }
+  /* 3 lanes use CSS grid columns inside each row.
+     Using 1fr columns (instead of fixed --lane-w) means the grid itself
+     self-distributes any rounding error, and lanes always fill the row
+     cleanly — this is key for responsiveness. */
+  .row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--lane-gap);
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+  }
+  .row.locations {
+    height: var(--location-h);
+  }
+  .lane-slots {
+    /* 2×2 landing grid — mandatory layout, mirrors Marvel Snap.
+       2 columns × 2 rows, each cell sized to hold one 5:7 card. */
+    display: grid;
+    grid-template-columns: repeat(2, var(--card-w));
+    grid-template-rows: repeat(2, var(--card-h));
+    gap: var(--slot-gap);
+    justify-items: center;
+    align-items: center;
+    /* Total size is driven by the card dimensions — no flex stretching. */
+    width: calc(2 * var(--card-w) + var(--slot-gap) + 2 * var(--lane-pad-x));
+    height: var(--lane-play-h);
+    margin: 0 auto;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    padding: var(--lane-pad-top) var(--lane-pad-x) var(--lane-pad-bottom);
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    box-shadow: none;
+    overflow: visible;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .board.dragging-card .player-row .lane-slots {
+    background:
+      linear-gradient(180deg, var(--lane-bg-2), var(--lane-bg)),
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08), transparent 72%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 36px rgba(0,0,0,0.18);
+  }
+  .board.maps-enabled .lane-slots {
+    background: transparent;
+    box-shadow: none;
+  }
+  .board.maps-enabled .location {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
+      rgba(18, 22, 28, 0.4);
+  }
+  /* Slot: exactly one card-sized cell in the 2×2 grid.
+     Width and height are explicit so the 5:7 ratio is always honoured. */
+  .slot {
+    width: var(--card-w);
+    height: var(--card-h);
+    border: 0;
+    border-radius: 6px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: visible;
+  }
+  .board.dragging-card .player-row .slot:empty {
+    background: rgba(255,255,255,0.045);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045);
+  }
+  .board.dragging-card .player-row .lane-slots.drop-target .slot.next-drop {
+    box-shadow: inset 0 0 0 1px rgba(255,207,91,0.58), 0 0 10px rgba(255,207,91,0.14);
+  }
+  /* ----------------------------------------------------------------
+     CARD INTERNALS — all sizing relative to --card-w so everything
+     scales proportionally as the board shrinks or grows.
+
+     Reference card size at design time: --card-w ≈ 58px (desktop).
+     Fractions below are tuned to that baseline.
+     ---------------------------------------------------------------- */
+
+  /* Derived typographic / badge scale tokens — computed once from --card-w. */
+  :root {
+    --card-font-name:  calc(var(--card-w) * 0.20);   /* ~11.6px at 58px */
+    --card-font-type:  calc(var(--card-w) * 0.13);   /* ~7.5px  */
+    --card-font-badge: calc(var(--card-w) * 0.175);  /* ~10px   */
+    --card-badge-size: calc(var(--card-w) * 0.33);   /* ~19px   */
+    --card-badge-off:  calc(var(--card-w) * -0.08);  /* -8% bleed (middle ground to prevent overlap) */
+    --card-pad:        calc(var(--card-w) * 0.075);  /* ~4.4px  */
+    --card-bar-h:      calc(var(--card-w) * 0.062);  /* ~3.6px  */
+    --card-radius:     calc(var(--card-w) * 0.10);   /* ~5.8px  */
+
+    /* Hand cards use the same tokens scaled by 1.18 */
+    --hcard-font-name:  calc(var(--hand-card-w) * 0.20);
+    --hcard-font-type:  calc(var(--hand-card-w) * 0.13);
+    --hcard-font-badge: calc(var(--hand-card-w) * 0.175);
+    --hcard-badge-size: calc(var(--hand-card-w) * 0.33);
+    --hcard-badge-off:  calc(var(--hand-card-w) * -0.08);
+    --hcard-pad:        calc(var(--hand-card-w) * 0.075);
+    --hcard-bar-h:      calc(var(--hand-card-w) * 0.062);
+    --hcard-radius:     calc(var(--hand-card-w) * 0.10);
+  }
+
+  /* ── Cards ─────────────────────────────────────────────────────────
+     card.js renders: .card > .cost, .power, .bar, .name, .type
+     All sizing tokens come from --hcard-* (hand) or --card-* (lane).
+     DO NOT add wrapper elements here — the renderer doesn't output them.
+     ----------------------------------------------------------------- */
+  .card {
+    position: relative;
+    width: var(--hand-card-w); height: var(--hand-card-h);
+    aspect-ratio: 5 / 7;
+    background: var(--card-bg);
+    border: 1px solid var(--card-edge);
+    border-radius: var(--hcard-radius);
+    display: grid;
+    grid-template-rows: var(--hcard-badge-size) 1fr var(--hcard-badge-size);
+    padding: var(--hcard-pad);
+    color: var(--text);
+    font-family: var(--font-body);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+    overflow: visible;
+  }
+  .card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(166, 109, 255, 0.6);
+    box-shadow: 0 14px 30px rgba(166,109,255,0.25), 0 6px 14px rgba(0,0,0,0.4);
+  }
+  .card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 14px 30px rgba(166,109,255,0.4);
+  }
+  .card.target-valid {
+    outline: 2px dashed var(--accent-2);
+    outline-offset: 4px;
+  }
+  .card.enemy { border-color: rgba(255, 111, 97, 0.3); background: var(--enemy-card-bg); }
+
+  /* Cost badge (top-left circle) */
+  .card .cost {
+    position: absolute;
+    top: var(--hcard-badge-off); left: var(--hcard-badge-off);
+    width: var(--hcard-badge-size); height: var(--hcard-badge-size);
+    border-radius: 50%;
+    background: var(--p1);
+    color: #061024; font-weight: 700; font-size: var(--hcard-font-badge);
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #061024;
+  }
+  .card.enemy .cost { background: var(--p2); }
+
+  /* Power badge (top-right pill) */
+  .card .power {
+    position: absolute;
+    top: var(--hcard-badge-off); right: var(--hcard-badge-off);
+    min-width: var(--hcard-badge-size); height: var(--hcard-badge-size);
+    border-radius: calc(var(--hcard-badge-size) * 0.3);
+    background: #f0d060; color: #2a1a00; font-weight: 800; font-size: var(--hcard-font-badge);
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 calc(var(--hcard-badge-size) * 0.22);
+    border: 2px solid #061024;
+    font-family: var(--font-mono);
+  }
+  .card .power.buffed  { background: #2dd4a7; color: #052e22; }
+  .card .power.debuffed { background: #ff6080; color: #3a0616; }
+
+  .card .name {
+    font-family: var(--font-display); font-size: var(--hcard-font-name);
+    letter-spacing: 0.06em; text-align: center; line-height: 1.1;
+    align-self: center; overflow: hidden;
+  }
+  .card .bar {
+    height: var(--hcard-bar-h); border-radius: 2px; margin: 2px 0;
+  }
+  .card .type {
+    font-family: var(--font-mono); font-size: var(--hcard-font-type);
+    color: var(--muted); text-align: center;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    align-self: end; overflow: hidden;
+  }
+
+  /* Facedown cards */
+  .card.facedown {
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
+    border-color: var(--card-edge);
+  }
+  .card.facedown .name, .card.facedown .type,
+  .card.facedown .cost, .card.facedown .power, .card.facedown .bar { visibility: hidden; }
+  .card.facedown::before {
+    content: ''; position: absolute; inset: 50% 0 0 0;
+    background: radial-gradient(circle at 50% 0, var(--accent), transparent 40%);
+    opacity: 0.7;
+  }
+
+  /* Lane cards — smaller tokens, same structure */
+  .lane-slots .card {
+    width: var(--card-w); height: var(--card-h);
+    padding: var(--card-pad);
+    border-radius: var(--card-radius);
+    grid-template-rows: var(--card-badge-size) 1fr var(--card-badge-size);
+  }
+  .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
+  .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
+  .lane-slots .card .name { font-size: var(--card-font-name); }
+  .lane-slots .card .type { font-size: var(--card-font-type); }
+  .lane-slots .card .bar  { height: var(--card-bar-h); }
+  .lane-slots .card .cost {
+    top: var(--card-badge-off); left: var(--card-badge-off);
+    width: var(--card-badge-size); height: var(--card-badge-size);
+    font-size: var(--card-font-badge);
+  }
+  .lane-slots .card .power {
+    top: var(--card-badge-off); right: var(--card-badge-off);
+    min-width: var(--card-badge-size); height: var(--card-badge-size);
+    font-size: var(--card-font-badge);
+    padding: 0 calc(var(--card-badge-size) * 0.22);
+    border-radius: calc(var(--card-badge-size) * 0.3);
+  }
+
+  /* ── Location cards ─────────────────────────────────────────────── */
+  .location {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
+      linear-gradient(145deg, rgba(81, 66, 48, 0.72), rgba(18, 22, 28, 0.92));
+    border: 1px solid rgba(255, 207, 91, 0.44);
+    border-radius: calc(var(--card-w) * 0.10);
+    padding: calc(var(--card-w) * 0.10) calc(var(--card-w) * 0.18);
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
+    position: relative;
+    box-shadow: 0 16px 34px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+    min-width: 0;
+    overflow: visible;
+    cursor: pointer;
+  }
+  .lane-score {
+    position: absolute;
+    width:  calc(var(--card-w) * 0.40);
+    height: calc(var(--card-w) * 0.40);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(var(--card-w) * 0.08);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: calc(var(--card-w) * 0.20);
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    z-index: 2;
+  }
+  .lane-score.enemy-score {
+    top: calc(var(--card-w) * -0.20);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #7f382f;
+    color: #ffe8e4;
+  }
+  .lane-score.player-score {
+    bottom: calc(var(--card-w) * -0.20);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2b5f91;
+    color: #e5f3ff;
+  }
+  .location .loc-name {
+    font-family: var(--font-display); font-size: calc(var(--card-w) * 0.20);
+    letter-spacing: 0.10em; text-align: center; color: var(--text); line-height: 1;
+    max-width: 100%; overflow: hidden;
+  }
+  .location .loc-desc {
+    font-size: calc(var(--card-w) * 0.125); color: var(--muted); text-align: center;
+    line-height: 1.3; font-family: var(--font-mono);
+    max-width: 100%; overflow: hidden;
+  }
+  /* Face-down location tile — shows a "???" placeholder before reveal */
+  .location--hidden {
+    background:
+      repeating-linear-gradient(45deg, #1a1f3a 0 6px, #12172a 6px 12px);
+    border-color: rgba(146,164,190,0.15);
+  }
+  .location--hidden .loc-name {
+    color: var(--muted);
+    letter-spacing: 0.2em;
+  }
+
+  /* Hand */
+  .hand {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 4px 8px 0;
+    position: relative;
+    min-height: calc(var(--hand-card-h) + 10px);
+    --hand-scale: 1;
+    --hand-gap: 6px;
+    gap: var(--hand-gap);
+    flex-wrap: nowrap;
+    overflow: visible;
+  }
+.hand .card {
+    transform-origin: bottom center;
+    transform: scale(var(--hand-scale));
+    flex: 0 0 var(--hand-card-w);
+    margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
+  }
+  .hand .card:hover {
+    transform: translateY(-10px) scale(calc(var(--hand-scale) * 1.05));
+    z-index: 5;
+  }
+
+  /* Flying card used during play animation */
+  .flying-card {
+    position: absolute;
+    z-index: 180;
+    pointer-events: none;
+    transform-style: preserve-3d;
+    perspective: 1200px;
+    aspect-ratio: 5 / 7;
+    will-change: transform, left, top, width, height;
+  }
+  .flying-card .face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    border-radius: 8px;
+    transition: transform 0s;
+  }
+  .flying-card .face.back {
+    transform: rotateY(180deg);
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
+    border: 1px solid var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .flying-card .face.back::after {
+    content: ''; position: absolute; inset: 20% 15%;
+    background: radial-gradient(ellipse, rgba(166,109,255,0.6), transparent 70%);
+  }
+
+  /* ── Top HUD bar ───────────────────────────────────────────────── */
+  .hud-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+  .playgame-root.debug-on .hud-top { background: rgba(255,0,0,0.3); }
+  .hud-player {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .hud-player--opponent { flex-direction: row-reverse; }
+  .hud-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--bg-2), var(--bg-1));
+    border: 1px solid var(--line-strong);
+    flex-shrink: 0;
+  }
+  .hud-name {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+  .hud-turn {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.18em;
+    text-align: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .hud-turn b { color: var(--text); font-weight: 700; }
+  .hud-energy { color: var(--muted); }
+  .hud-energy b { color: var(--accent); }
+
+  /* ── Bottom action bar ──────────────────────────────────────────── */
+  .action-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 6px 8px 8px;
+    flex: 0 0 auto;
+    gap: 8px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.28));
+  }
+
+  /* RETREAT — left */
+  .retreat-btn {
+    justify-self: start;
+    min-width: 90px;
+    font-family: var(--font-display); letter-spacing: 0.14em;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid rgba(255, 77, 109, 0.38);
+    padding: 7px 14px; border-radius: 6px;
+    cursor: pointer; font-size: 11px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .retreat-btn:hover {
+    background: rgba(255, 77, 109, 0.12);
+    border-color: var(--danger);
+  }
+
+  /* Energy / Undo crystal — centre */
+  .energy-crystal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none; background: transparent;
+    padding: 0;
+    font-family: var(--font-mono);
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .energy-crystal .crystal {
+    width: 44px; height: 44px;
+    background: radial-gradient(circle at 35% 30%, #bfe8ff 0%, #6cc3ff 40%, #1a4a80 100%);
+    clip-path: polygon(50% 0, 100% 30%, 85% 100%, 15% 100%, 0 30%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 18px; color: #06162a;
+    box-shadow: 0 0 18px rgba(108,195,255,0.5);
+    transition: transform 0.1s;
+  }
+  .energy-crystal:hover .crystal { transform: scale(1.08); filter: brightness(1.15); }
+  .energy-crystal:active .crystal { transform: scale(0.94); }
+
+  /* END TURN — right */
+  .end-turn {
+    justify-self: end;
+    min-width: 90px;
+    font-family: var(--font-display); letter-spacing: 0.15em;
+    background: linear-gradient(160deg, var(--accent) 0%, #6a32c0 100%);
+    color: #fff; border: none; padding: 7px 14px; border-radius: 6px;
+    cursor: pointer; font-size: 12px;
+    box-shadow: 0 0 14px rgba(166,109,255,0.35);
+    white-space: nowrap;
+    transition: filter 0.15s;
+    text-align: center;
+  }
+  .end-turn:hover { filter: brightness(1.1); }
+  .end-turn:disabled {
+    opacity: 0.42;
+    filter: grayscale(0.75);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Drag visuals */
+  .lane-slots.drop-target {
+    background: rgba(166,109,255,0.1);
+    border-color: var(--accent);
+  }
+  .hand .card.dragging { opacity: 0.25; }
+  .card.pending {
+    outline: none;
+  }
+
+  /* Target mode overlay */
+  .target-hint {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(166,109,255,0.95); color: #111;
+    font-family: var(--font-mono); font-size: 11px; padding: 6px 12px;
+    border-radius: 20px; z-index: 150;
+    letter-spacing: 0.1em;
+  }
+
+  @keyframes vfxHalo {
+    0% { opacity: 0.9; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.15); }
+  }
+
+  /* Toast */
+  .toast-area {
+    position: absolute; top: var(--message-center-y, 50%); left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 150; pointer-events: none;
+  }
+  .toast-area::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: min(820px, 88vw); height: 118px;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.58) 18%, rgba(0,0,0,0.72) 50%, rgba(0,0,0,0.58) 82%, rgba(0,0,0,0) 100%);
+    filter: blur(10px);
+    pointer-events: none;
+    transition: opacity 180ms ease;
+    z-index: -1;
+  }
+  .toast-area.has-message::before { opacity: 1; }
+  .toast {
+    position: relative;
+    font-family: var(--font-display); letter-spacing: 0.18em;
+    font-size: 38px; color: #fff;
+    white-space: nowrap;
+    text-shadow: 0 0 12px var(--accent), 0 0 24px var(--accent);
+    opacity: 0;
+    animation: toastIn var(--toast-duration, 1100ms) ease-out forwards;
+  }
+  @keyframes toastIn {
+    0%   { opacity: 0; transform: translateY(12px) scale(0.9); }
+    12%  { opacity: 1; transform: translateY(0) scale(1); }
+    88%  { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  }
+
+  @keyframes vfxHalo {
+    0%   { opacity: 0.9; transform: scale(1); }
+    100% { opacity: 0;   transform: scale(1.15); }
+  }
+
+  .vfx-burst .fx-layer {
+    animation: vfx-burst-anim 0.5s var(--vfx-delay, 0ms) cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+  }
+  @keyframes vfx-burst-anim {
+    0% { transform: scale(0); opacity: 0; box-shadow: inset 0 0 0px var(--vfx-color, white); }
+    50% { opacity: 1; box-shadow: inset 0 0 20px var(--vfx-color, white); }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .vfx-pulse .stat-layer {
+    animation: vfx-pulse-anim 0.4s var(--vfx-delay, 0ms) cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+  }
+  @keyframes vfx-pulse-anim {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+  }
+
+  /* Status Particles (Micro) */
+  .vfx-particle {
+    position: absolute; width: 4px; height: 4px; background: white;
+    border-radius: 50%; pointer-events: none; opacity: 0;
+    animation: vfx-particle-anim var(--vfx-duration, 0.5s) var(--vfx-delay, 0ms) ease-out both;
+  }
+  @keyframes vfx-particle-anim {
+    0% { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--vfx-dx, 20px), var(--vfx-dy, -20px)) scale(0); opacity: 0; }
+  }
+
+  .vfx-focus {
+    animation: vfx-focus-anim 1s var(--vfx-delay, 0ms) ease-out both;
+  }
+  @keyframes vfx-focus-anim {
+    0% { filter: blur(10px) brightness(0); opacity: 0; }
+    100% { filter: blur(0px) brightness(1.2); opacity: 1; }
+  }
+
+  .vfx-blur {
+    animation: vfx-blur-anim 1.2s var(--vfx-delay, 0ms) ease-in-out both;
+  }
+  @keyframes vfx-blur-anim {
+    0% { filter: blur(0px) brightness(1.2); opacity: 1; }
+    100% { filter: blur(1px) brightness(0.5); opacity: 1; }
+  }
+
+  .vfx-hide {
+    animation: vfx-hide-anim var(--vfx-duration, 1ms) var(--vfx-delay, 0ms) both;
+  }
+  @keyframes vfx-hide-anim {
+    0%, 100% { opacity: 0; visibility: hidden; }
+  }
+
+  /* Timeline primitives — applied directly to card elements by Timeline.play() */
+  @keyframes vfx-pop-anim {
+    0%   { transform: scale(var(--vfx-scale-start, 0)); opacity: 0; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes vfx-flash-anim {
+    0%, 100% { filter: none; }
+    50%      { filter: brightness(1.8) drop-shadow(0 0 12px var(--vfx-color, #fff)); }
+  }
+  @keyframes vfx-shake-anim {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 2px); }
+    40% { transform: translate(3px, -2px); }
+    60% { transform: translate(-2px, 3px); }
+    80% { transform: translate(2px, -3px); }
+  }
+  @keyframes vfx-flip-anim {
+    0%   { transform: rotateY(180deg); }
+    100% { transform: rotateY(0deg); }
+  }
+
+  /* Script Engine: game-UI fade used by setBoardVisible().
+     The toast area stays visible so banners (e.g. GALACTIC SNAP) can appear
+     while the board itself is still hidden. */
+  .board > .hud-top,
+  .board > .board-game-area,
+  .board > .hand,
+  .board > .action-bar {
+    transition: opacity 600ms ease;
+  }
+  .playgame-root.board-hidden .board > .hud-top,
+  .playgame-root.board-hidden .board > .board-game-area,
+  .playgame-root.board-hidden .board > .hand,
+  .playgame-root.board-hidden .board > .action-bar {
+    opacity: 0;
+  }
+
+  /* --------------------------------------------------------------------
+     RESPONSIVE OVERRIDES
+     Because every dimension derives from --board-w, we only need to
+     adjust that one variable (and a few tight-space tweaks). No need
+     to retune card sizes, lane sizes, paddings, etc. at each breakpoint.
+     -------------------------------------------------------------------- */
+  /* Portrait phones — board already fills width via the min() formula. */
+  @media (max-width: 500px) {
+    .app { grid-template-columns: 1fr; }
+    .panel { width: min(280px, 82vw); }
+    .dev-panel-toggle {
+      left: 6px; top: 6px; width: 28px; height: 28px;
+      font-size: 14px; opacity: 0.72;
+    }
+    .hud-name { font-size: 9px; max-width: 60px; }
+    .retreat-btn { font-size: 9px; padding: 5px 10px; }
+    .end-turn   { font-size: 9px; padding: 5px 12px; }
+    .energy-crystal .crystal { width: 38px; height: 38px; font-size: 16px; }
+  }
+
+  /* Very narrow phones (iPhone SE, etc.) */
+  @media (max-width: 380px) {
+    :root {
+      --lane-gap: 4px;
+      --slot-gap: 3px;
+      --lane-pad-x: 3px;
+    }
+  }
