@@ -9,11 +9,17 @@
 
 import { serial, wait, type Step } from './runner';
 import {
+  advanceTurn,
   dealPlayerCard,
+  drawHandCard,
+  enemyPlayRandom,
   fadeInLocationTile,
+  finishResolving,
   hideLocationTiles,
   revealNextLocation,
+  revealPendingCards,
   setBoardVisible,
+  startResolving,
   toast,
 } from './actions';
 
@@ -75,4 +81,30 @@ export const openingSequence = (): Step =>
 
     // Reveal the first location
     revealNextLocation(),
+  );
+
+/**
+ * Turn-resolution sequence, triggered by END TURN.
+ *
+ *   1. Set state.resolving so the UI locks the button
+ *   2. Reveal each of the player's pending (face-down) cards
+ *   3. Enemy plays a random card into a random lane (fly-in + reveal)
+ *   4. Advance turn counter + refill energy, TURN N banner
+ *   5. Draw one card into the hand
+ *   6. Reveal the next unrevealed location (on turns 2 and 3)
+ *   7. Clear state.resolving
+ */
+export const resolveTurnFlow = (): Step =>
+  serial(
+    startResolving(),
+    revealPendingCards(),
+    wait(200),
+    enemyPlayRandom(),
+    wait(300),
+    advanceTurn(),
+    wait(200),
+    drawHandCard(),
+    wait(200),
+    revealNextLocation(),
+    finishResolving(),
   );

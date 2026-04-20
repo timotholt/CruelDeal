@@ -11,9 +11,9 @@ import { VfxHost, useVfx } from '../game/VfxHost';
 import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
 import type { CardInstance, LocationInstance } from '@/services/playgame/types';
 import { CARD_POOL } from '@/services/playgame/cards';
-import { createScript } from '@/services/playgame/script/runner';
+import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
-import { openingSequence } from '@/services/playgame/script/flows';
+import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
 
 interface PlayScreenProps {
   onExit?: () => void;
@@ -31,6 +31,25 @@ export const PlayScreen = (props: PlayScreenProps) => {
     </div>
   );
 };
+
+/**
+ * Shared drag state: a module-level mutable object that both <HandCard>
+ * (setter on dragstart) and <PlayBoard>'s delegated drop handler (reader
+ * on dragover/drop) write to. A plain object is fine — the values are
+ * only read inside native drag events, never in Solid's reactive graph.
+ */
+const dragState: { id: string | null } = { id: null };
+
+/**
+ * Lane-map art shipped with the /play screen. Files live in public/art/maps/
+ * so Vite serves them at the root. Order is shuffled per match so each
+ * session picks a different 3 of 3 (for now all 3 are used).
+ */
+const LANE_MAPS = [
+  '/art/maps/Cathedrawl.png',
+  '/art/maps/Jungle.png',
+  '/art/maps/Laboratory.png',
+];
 
 /** Fisher–Yates shuffle (matches the helper in the demo's board.js). */
 function shuffle<T>(items: T[]): T[] {
@@ -61,7 +80,10 @@ const BoardSizer = () => {
 // PlayBoard — mirrors <div class="board"> from demo index.html.
 const PlayBoard = (props: { onExit?: () => void }) => {
   const { state, setState, actions, isResolving } = usePlayGame();
-  const { cardRefs } = useVfx();
+  const { cardRefs, boardRef } = useVfx();
+  // Script instance — captured in onMount so END TURN can replay flows
+  // against the same ctx used by the opening sequence.
+  let script: Script | undefined;
 
   // Power totals per lane (demo does this in renderLocations()).
   const playerPower = (laneIdx: number) =>
@@ -79,23 +101,107 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     if (!boardEl || !toastAreaEl) return;
     boardEl.classList.add('ready');
 
+    // ── Lane maps ──────────────────────────────────────────────────────
+    // Mirrors createLaneMaps() + layoutLaneMaps() from the demo's
+    // board.js. Three <div class="lane-map"> overlays are absolutely
+    // positioned over each lane column and fade from 0→1 when the
+    // matching location is revealed (handled by the reveal cinematic).
+    const mapPaths = shuffle([...LANE_MAPS]).slice(0, 3);
+    const mapEls: HTMLDivElement[] = mapPaths.map((path, i) => {
+      const el = document.createElement('div');
+      el.className = 'lane-map';
+      el.dataset.lane = String(i);
+      el.style.cssText = `position:absolute; pointer-events:none; background-image:url("${path}")`;
+      boardEl!.prepend(el);
+      return el;
+    });
+    const layoutLaneMaps = () => {
+      const boardRect = boardEl!.getBoundingClientRect();
+      for (let i = 0; i < 3; i++) {
+        const top = boardEl!.querySelector(`.enemy-row [data-lane="${i}"]`) as HTMLElement | null;
+        const bot = boardEl!.querySelector(`.player-row [data-lane="${i}"]`) as HTMLElement | null;
+        const map = mapEls[i];
+        if (!top || !bot || !map) continue;
+        const topRect = top.getBoundingClientRect();
+        const botRect = bot.getBoundingClientRect();
+        map.style.left = `${topRect.left - boardRect.left}px`;
+        map.style.top = `${topRect.top - boardRect.top}px`;
+        map.style.width = `${topRect.width}px`;
+        map.style.height = `${botRect.bottom - topRect.top}px`;
+      }
+    };
+    // Initial layout (once the DOM has painted) + relayout on resize.
+    requestAnimationFrame(layoutLaneMaps);
+    const ro = new ResizeObserver(layoutLaneMaps);
+    ro.observe(boardEl);
+    onCleanup(() => {
+      ro.disconnect();
+      mapEls.forEach((el) => el.remove());
+    });
+
+    // ── Drag-and-drop ─────────────────────────────────────────────────
+    // Delegated dragover/drop on the board, mirroring the demo's setup
+    // in index.html. Hand cards are flagged draggable; dragstart stores
+    // the card id on a closure var; dropping on a player lane stages it.
+    const getPlayerLaneSlots = (target: EventTarget | null): HTMLElement | null => {
+      let el = target as HTMLElement | null;
+      while (el && el !== boardEl) {
+        if (el.classList?.contains('lane-slots') && el.dataset.side === 'player') return el;
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (!dragState.id) return;
+      const slotEl = getPlayerLaneSlots(e.target);
+      if (!slotEl) return;
+      const lane = Number(slotEl.dataset.lane);
+      if (state.lanes[lane].length >= 4) return;
+      e.preventDefault();
+      boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      slotEl.classList.add('drop-target');
+    };
+    const onDragLeave = (e: DragEvent) => {
+      const slotEl = getPlayerLaneSlots(e.target);
+      const related = (e as DragEvent).relatedTarget as Node | null;
+      if (slotEl && !slotEl.contains(related)) slotEl.classList.remove('drop-target');
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const slotEl = getPlayerLaneSlots(e.target);
+      boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      if (!slotEl || !dragState.id) return;
+      const lane = Number(slotEl.dataset.lane);
+      actions.stageCardInLane(dragState.id, lane);
+    };
+    boardEl.addEventListener('dragover', onDragOver);
+    boardEl.addEventListener('dragleave', onDragLeave);
+    boardEl.addEventListener('drop', onDrop);
+    onCleanup(() => {
+      boardEl!.removeEventListener('dragover', onDragOver);
+      boardEl!.removeEventListener('dragleave', onDragLeave);
+      boardEl!.removeEventListener('drop', onDrop);
+    });
+
+    // ── Opening sequence ──────────────────────────────────────────────
     // Seed a randomised draw queue and kick off the opening cinematic.
     // The script engine mutates state through our Solid setState so
     // cards fly into the hand reactively.
     const drawQueue = shuffle([...CARD_POOL]).slice(0, 8);
+    const boardWrapEl = boardRef();
+    if (!boardWrapEl) return;
     const ctx: PlayScriptCtx = {
       state,
       setState,
       boardEl,
+      boardWrap: boardWrapEl,
       toastArea: toastAreaEl,
       cardRefs,
       drawQueue,
     };
-    const script = createScript(ctx);
+    script = createScript(ctx);
     void script.run(openingSequence());
-
-    // Cancel the flow if the screen unmounts mid-animation.
-    onCleanup(() => script.cancel());
+    onCleanup(() => script?.cancel());
   });
 
   const handScale = createMemo(() => {
@@ -180,7 +286,12 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         <button
           class="end-turn"
           disabled={isResolving()}
-          onClick={() => actions.endTurn()}
+          onClick={() => {
+            // Run the full resolve-turn flow: reveal pending → enemy play
+            // → advance turn → draw → maybe reveal next location.
+            if (state.resolving || !script) return;
+            void script.run(resolveTurnFlow());
+          }}
         >
           END TURN
         </button>
@@ -199,8 +310,6 @@ const LaneSlots = (props: {
   laneIdx: number;
   cards: CardInstance[];
 }) => {
-  const { actions, state } = usePlayGame();
-
   // Build 4 slots, mapping cards[s] -> grid index.
   // Player: s==0 -> grid 0 (top-left), s==1 -> 1, s==2 -> 2, s==3 -> 3.
   // Enemy:  s==0 -> grid 2 (bottom-left), s==1 -> 3, s==2 -> 0, s==3 -> 1.
@@ -210,24 +319,11 @@ const LaneSlots = (props: {
     return props.cards[s];
   };
 
-  const canDrop = () =>
-    props.side === 'player' &&
-    state.hand.length > 0 &&
-    props.cards.length < 4 &&
-    !state.resolving;
-
   return (
     <div
       class={'lane-slots ' + (props.side === 'enemy' ? 'top' : 'bot')}
       data-lane={props.laneIdx}
       data-side={props.side}
-      onClick={() => {
-        // Demo: clicking a lane plays the first hand card into it.
-        // Temporary interaction until drag-and-drop is wired in a later slice.
-        if (!canDrop()) return;
-        const first = state.hand[0];
-        if (first) actions.stageCardInLane(first.id, props.laneIdx);
-      }}
     >
       <For each={[0, 1, 2, 3]}>
         {(gridIdx) => (
@@ -326,6 +422,22 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
     return '';
   };
 
+  const onDragStart = (e: DragEvent) => {
+    // Mirrors the demo's onDragStart: flag the card id on the shared
+    // module-level dragState, add `.dragging` for CSS, and tell the
+    // native DnD system what's allowed.
+    dragState.id = props.card.id;
+    (e.currentTarget as HTMLElement).classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', props.card.id);
+    }
+  };
+  const onDragEnd = (e: DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove('dragging');
+    dragState.id = null;
+  };
+
   return (
     <div
       ref={bindCardRef(props.card.id)}
@@ -333,6 +445,8 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
       data-card-id={props.card.id}
       style={{ opacity: props.playable ? 1 : 0.5 }}
       draggable={true}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>
