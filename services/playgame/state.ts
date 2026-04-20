@@ -57,6 +57,7 @@ export function createMatchState(): MatchState {
     targeting: null,
     auras: {},
     pending: [],
+    incoming: [],
     history: [],
     resolving: false,
   };

@@ -96,6 +96,9 @@ const PlayBoard = (props: { onExit?: () => void }) => {
   // the same in Solid via onMount.
   let boardEl: HTMLDivElement | undefined;
   let toastAreaEl: HTMLDivElement | undefined;
+  // Deck anchor — visual origin for the draw-slide animation. Positioned
+  // absolutely at the right edge of the board via CSS (see playgame.css).
+  let deckEl: HTMLDivElement | undefined;
 
   onMount(() => {
     if (!boardEl || !toastAreaEl) return;
@@ -153,6 +156,10 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     };
     const onDragOver = (e: DragEvent) => {
       if (!dragState.id) return;
+      // Lock out drops while the end-turn flow is running — otherwise a
+      // mid-reveal drop would push a new id into state.pending AFTER the
+      // reveal snapshot was taken, stranding the card face-down.
+      if (state.resolving) return;
       const slotEl = getPlayerLaneSlots(e.target);
       if (!slotEl) return;
       const lane = Number(slotEl.dataset.lane);
@@ -170,6 +177,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       e.preventDefault();
       const slotEl = getPlayerLaneSlots(e.target);
       boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      if (state.resolving) return;
       if (!slotEl || !dragState.id) return;
       const lane = Number(slotEl.dataset.lane);
       actions.stageCardInLane(dragState.id, lane);
@@ -198,6 +206,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       toastArea: toastAreaEl,
       cardRefs,
       drawQueue,
+      deckEl,
     };
     script = createScript(ctx);
     void script.run(openingSequence());
@@ -289,13 +298,36 @@ const PlayBoard = (props: { onExit?: () => void }) => {
           onClick={() => {
             // Run the full resolve-turn flow: reveal pending → enemy play
             // → advance turn → draw → maybe reveal next location.
-            if (state.resolving || !script) return;
+            // `isResolving()` is derived from state.resolving, so the
+            // disabled attribute and this guard share a source of truth.
+            if (isResolving() || !script) return;
             void script.run(resolveTurnFlow());
           }}
         >
           END TURN
         </button>
       </div>
+
+      {/* Deck anchor — invisible marker used as the visual origin for the
+          draw-slide animation. Positioned at the right edge of the board
+          (outside the hand) so cards clearly fly IN from the deck. */}
+      <div
+        ref={deckEl}
+        class="deck-anchor"
+        style={{
+          position: 'absolute',
+          right: '4px',
+          bottom: '80px',
+          width: '48px',
+          height: '68px',
+          'border-radius': '6px',
+          background: 'linear-gradient(135deg,#222,#111)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          'box-shadow': '0 2px 6px rgba(0,0,0,0.5)',
+          'pointer-events': 'none',
+          opacity: 0.6,
+        }}
+      />
 
       <div class="toast-area" id="toastArea" ref={toastAreaEl} />
     </div>

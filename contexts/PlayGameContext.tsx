@@ -18,7 +18,6 @@
 
 import {
   createContext,
-  createSignal,
   useContext,
   type Accessor,
   type JSX,
@@ -53,7 +52,11 @@ const Ctx = createContext<PlayGameContextValue>();
 
 export const PlayGameProvider = (props: { children: JSX.Element }) => {
   const [state, setState] = createStore<MatchState>(createMatchState());
-  const [isResolving, setIsResolving] = createSignal(false);
+  // Single source of truth: state.resolving (a store field). Components
+  // read it reactively via this accessor so the legacy `isResolving()`
+  // call sites keep working, and the script-engine actions that toggle
+  // state.resolving directly stay in sync automatically.
+  const isResolving: Accessor<boolean> = () => state.resolving;
 
   /** Deal a card from the pool into the hand (max 7). Returns the new card. */
   const drawCard = (): CardInstance | null => {
@@ -102,7 +105,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
    */
   const endTurn = async (): Promise<void> => {
     if (isResolving()) return;
-    setIsResolving(true);
+    setState('resolving', true);
     try {
       setState(
         produce<MatchState>((s) => {
@@ -115,7 +118,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
       const drawn = drawCard();
       void drawn;
     } finally {
-      setIsResolving(false);
+      setState('resolving', false);
     }
   };
 

@@ -12,6 +12,11 @@ import { produce, type SetStoreFunction } from 'solid-js/store';
 import { Timeline } from '@/services/vfx/timeline';
 import { flyFaceDownToSlot } from '@/services/vfx/animations/fly-face-down';
 import { revealPendingCinematic } from '@/services/vfx/animations/reveal-cinematic';
+import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
+import {
+  captureHandRects,
+  playLayoutSlide,
+} from '@/services/vfx/animations/layout-flip';
 import type { Step } from './runner';
 import type { CardDef, CardInstance, MatchState } from '../types';
 import { newCardInstance, randomCardDef } from '../state';
@@ -34,6 +39,12 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   cardRefs: Map<string, HTMLElement>;
   /** Queue of card defs to deal from, pre-seeded by the flow. */
   drawQueue: CardDef[];
+  /**
+   * Deck anchor element — the visual origin for draw slides. Optional;
+   * when absent, slide animations fall back to a synthetic point outside
+   * the board edge so nothing breaks.
+   */
+  deckEl?: HTMLElement;
   /** Optional SFX hook (passed through to the reveal cinematic). */
   sfx?: (name: string) => void;
   /** True once the caller cancels (e.g. on screen unmount). */
@@ -93,36 +104,159 @@ export const fadeInLocationTile = (laneIndex: number, ms = 400): Step => (ctx) =
 // ---- Cards --------------------------------------------------------------
 
 /**
- * Deal one card from `ctx.drawQueue` (or the random pool if the queue is
- * empty) into the player's hand and pop it in with a vfx-pop animation.
+ * Compute the deck-origin rect. Prefers the live `.deck-anchor` element
+ * when one is mounted; falls back to a synthetic point just off the
+ * right edge of the board so the slide still has a direction.
+ */
+const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
+  if (c.deckEl && c.deckEl.isConnected) return c.deckEl.getBoundingClientRect();
+  const b = c.boardEl.getBoundingClientRect();
+  // Roughly one hand-card's worth of width, off the right edge, roughly
+  // aligned with the hand row.
+  const w = 70;
+  const h = 100;
+  return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
+};
+
+/**
+ * Stage 1 of the two-stage draw pipeline: pull `count` cards off the
+ * draw queue (falling back to `randomCardDef()` if the queue is empty)
+ * and push them into `state.incoming`. No animation — this is purely
+ * the logical "card has left the deck" step. Other effects (play-from-
+ * table, steal from opponent, conjure) can populate `state.incoming`
+ * the same way and share the commit animation below.
+ */
+export const drawFromDeck = (count = 1): Step => (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const picks: CardInstance[] = [];
+  for (let i = 0; i < count; i++) {
+    const def = c.drawQueue.shift() ?? randomCardDef();
+    picks.push(newCardInstance(def));
+  }
+  c.setState(
+    produce<MatchState>((s) => {
+      s.incoming.push(...picks);
+    }),
+  );
+  return Promise.resolve();
+};
+
+/**
+ * Push an already-constructed `CardInstance` into `state.incoming`.
+ * Used by non-deck sources (board steals, generated cards, etc.) so
+ * they can share `commitIncomingToHand`'s animation.
+ */
+export const queueIncoming = (instance: CardInstance): Step => (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  c.setState(
+    produce<MatchState>((s) => {
+      s.incoming.push(instance);
+    }),
+  );
+  return Promise.resolve();
+};
+
+/**
+ * Stage 2 of the two-stage draw pipeline: drain `state.incoming` into
+ * `state.hand`, one card at a time, sliding each one in from the deck
+ * anchor while the rest of the hand smoothly reflows via the FLIP
+ * technique. Caps the hand at 7 (extras are silently discarded — a
+ * later slice can surface a "HAND FULL" toast).
+ */
+export const commitIncomingToHand = (
+  opts: { stagger?: number; popDuration?: number } = {},
+): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const stagger = opts.stagger ?? 120;
+  const popDuration = opts.popDuration ?? 320;
+
+  // Snapshot the incoming queue once. If the queue is mutated during the
+  // animation (unlikely but possible), those extras wait for the next
+  // commit step.
+  const batch = [...c.state.incoming];
+  if (batch.length === 0) return;
+
+  for (let i = 0; i < batch.length; i++) {
+    const card = batch[i];
+
+    // Hand cap: discard the overflow and the corresponding incoming entry.
+    if (c.state.hand.length >= 7) {
+      c.setState(
+        produce<MatchState>((s) => {
+          s.incoming = s.incoming.filter((x) => x.id !== card.id);
+        }),
+      );
+      continue;
+    }
+
+    // Capture existing hand rects BEFORE the mutation so the FLIP slide
+    // animates the reflow on top of the slide-in.
+    const oldIds = c.state.hand.map((h) => h.id);
+    const oldRects = captureHandRects(oldIds, c.cardRefs);
+
+    // Move this card from incoming -> hand in one atomic setState so the
+    // UI never briefly shows the card in neither list.
+    c.setState(
+      produce<MatchState>((s) => {
+        s.incoming = s.incoming.filter((x) => x.id !== card.id);
+        s.hand.push(card);
+      }),
+    );
+
+    // Wait one frame for Solid to render the new hand DOM.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    // Play the hand-reflow slide for survivors and the deck slide for
+    // the new card in parallel.
+    playLayoutSlide(oldRects, c.cardRefs);
+    const startRect = deckSourceRect(c);
+    const slidePromise = slideFromDeckToHand({
+      cardId: card.id,
+      startRect,
+      cardElMap: c.cardRefs,
+      boardWrap: c.boardWrap,
+      sfx: c.sfx,
+    });
+
+    // Pop the newly drawn card after the slide lands.
+    await slidePromise;
+    const el = c.cardRefs.get(card.id);
+    if (el) {
+      const tl = new Timeline();
+      tl.add(el, 'vfx-pop', { 'scale-start': '0.8' }, popDuration, 0);
+      tl.play();
+      await new Promise<void>((r) => setTimeout(r, popDuration + 40));
+    }
+
+    // Short beat before the next card so a multi-draw reads as a sequence.
+    if (i < batch.length - 1) {
+      await new Promise<void>((r) => setTimeout(r, stagger));
+    }
+  }
+};
+
+/**
+ * Deal one card to the player's hand — the classic single-card draw.
+ * Now implemented on top of the two-stage pipeline so every draw path
+ * (opening sequence, end-of-turn, future effects) uses the same slide.
+ *
+ * Signature preserved for backwards compatibility with the opening
+ * sequence; the `card` arg, if provided, goes straight into `incoming`
+ * without touching the draw queue.
  */
 export const dealPlayerCard = (
   card?: CardDef,
-  { popDuration = 400 }: { popDuration?: number } = {},
+  { popDuration = 320 }: { popDuration?: number } = {},
 ): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const def = card ?? c.drawQueue.shift() ?? randomCardDef();
-  const instance: CardInstance = newCardInstance(def);
-
-  // Push into the Solid store; reactivity re-renders the hand with the
-  // new card. We then await a microtask so Solid has time to render,
-  // THEN we look up the card's DOM element via cardRefs (VfxHost).
-  c.setState(
-    produce<MatchState>((s) => {
-      s.hand.push(instance);
-    }),
-  );
-
-  // Yield to the event loop so Solid commits the new DOM node.
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
-
-  const el = c.cardRefs.get(instance.id);
-  if (!el) return;
-
-  const tl = new Timeline();
-  tl.add(el, 'vfx-pop', { 'scale-start': '0' }, popDuration, 0);
-  tl.play();
-  await new Promise<void>((r) => setTimeout(r, popDuration + 40));
+  if (card) {
+    await (queueIncoming(newCardInstance(card)) as (x: typeof ctx) => Promise<void>)(ctx);
+  } else {
+    await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
+  }
+  await (
+    commitIncomingToHand({ popDuration }) as (x: typeof ctx) => Promise<void>
+  )(ctx);
 };
 
 // ---- Location reveal ----------------------------------------------------
@@ -316,13 +450,15 @@ export const advanceTurn = (): Step => async (ctx) => {
 };
 
 /**
- * Draw one card into the player's hand with a vfx-pop animation, unless
- * the hand is already full (>=7). Composed on top of dealPlayerCard().
+ * Draw one card into the player's hand with the deck-slide + FLIP
+ * reflow animation. Two-stage under the hood: draw into `incoming`,
+ * then commit. Skips the work entirely when the hand is already full.
  */
 export const drawHandCard = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   if (c.state.hand.length >= 7) return;
-  await (dealPlayerCard() as (c: typeof ctx) => Promise<void>)(ctx);
+  await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
+  await (commitIncomingToHand() as (x: typeof ctx) => Promise<void>)(ctx);
 };
 
 /** Mark the match as no-longer-resolving so the END TURN button re-enables. */

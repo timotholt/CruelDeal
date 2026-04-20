@@ -79,6 +79,14 @@ export interface MatchState {
   auras: Record<string, unknown>;
   /** Card ids currently face-down (played this turn, awaiting reveal). */
   pending: string[];
+  /**
+   * Temporary buffer for cards that have left their source (deck, board,
+   * opponent, or conjured from thin air) but have not yet been committed
+   * to the hand. Two-stage draw: populate `incoming`, then a commit step
+   * animates each entry into `hand`. Lets multi-source draws (deck +
+   * effect + steal) share a single commit animation.
+   */
+  incoming: CardInstance[];
   /** Undo stack (bounded). */
   history: MatchSnapshot[];
   /** True while end-turn resolution is running. */

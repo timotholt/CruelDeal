@@ -1,0 +1,101 @@
+/**
+ * Slide a face-down card from a source rect (usually the deck anchor) into
+ * the hand slot currently occupied by the card with id `cardId`, then flip
+ * face-up on landing.
+ *
+ * The caller is responsible for mutating state FIRST (so the destination
+ * hand slot is rendered and `cardElMap.get(cardId)` resolves).
+ *
+ * Mirrors `flyFaceDownToSlot` but:
+ *   - lands in the hand (the flip reveals the real face, not face-down).
+ *   - the target element is briefly hidden during the flight and then
+ *     revealed when the flyer disappears, giving a clean swap.
+ */
+import type { StartRect } from './fly-face-down';
+
+export interface SlideFromDeckOpts {
+  /** ID of the target card already rendered in the hand. */
+  cardId: string;
+  /** Source rectangle in viewport coordinates (deck anchor rect). */
+  startRect: StartRect | DOMRect;
+  /** Fly duration (ms). */
+  flyDur?: number;
+  /** Flip duration (ms) after the card lands. */
+  flipDur?: number;
+  /** ID -> element map (one per card, populated via refs). */
+  cardElMap: Map<string, HTMLElement>;
+  /** Board container (the flyer is appended here, positioned absolute). */
+  boardWrap: HTMLElement;
+  /** Optional sfx hook for the 'draw' effect. */
+  sfx?: (name: string) => void;
+}
+
+/** Resolves after the flyer has flipped face-up and been removed. */
+export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
+  const {
+    cardId,
+    startRect,
+    flyDur = 360,
+    flipDur = 220,
+    cardElMap,
+    boardWrap,
+    sfx,
+  } = opts;
+
+  const slotEl = cardElMap.get(cardId);
+  if (!slotEl) return Promise.resolve();
+
+  const boardRect = boardWrap.getBoundingClientRect();
+  const destRect = slotEl.getBoundingClientRect();
+
+  // Hide the real target while the flyer stands in for it.
+  const prevVisibility = slotEl.style.visibility;
+  slotEl.style.visibility = 'hidden';
+
+  const flyer = document.createElement('div');
+  flyer.className = 'flying-card';
+  flyer.style.position = 'absolute';
+  flyer.style.left = startRect.left - boardRect.left + 'px';
+  flyer.style.top = startRect.top - boardRect.top + 'px';
+  flyer.style.width = startRect.width + 'px';
+  flyer.style.height = startRect.height + 'px';
+  flyer.style.transform = 'rotateY(180deg) scale(1)';
+  flyer.style.transformOrigin = 'center center';
+  flyer.style.pointerEvents = 'none';
+  flyer.style.willChange = 'transform, left, top, width, height';
+
+  const back = document.createElement('div');
+  back.className = 'face back';
+  flyer.appendChild(back);
+  boardWrap.appendChild(flyer);
+
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      sfx?.('draw');
+      // Stage 1: slide + scale into the hand slot (still face-down).
+      flyer.style.transition = [
+        `left ${flyDur}ms cubic-bezier(.4,0,.2,1)`,
+        `top ${flyDur}ms cubic-bezier(.4,0,.2,1)`,
+        `width ${flyDur}ms cubic-bezier(.4,0,.2,1)`,
+        `height ${flyDur}ms cubic-bezier(.4,0,.2,1)`,
+        `transform ${flyDur}ms cubic-bezier(.4,0,.2,1)`,
+      ].join(', ');
+      flyer.style.left = destRect.left - boardRect.left + 'px';
+      flyer.style.top = destRect.top - boardRect.top + 'px';
+      flyer.style.width = destRect.width + 'px';
+      flyer.style.height = destRect.height + 'px';
+      flyer.style.transform = 'rotateY(180deg) scale(1)';
+
+      // Stage 2: flip face-up in place, then reveal the real slot card.
+      setTimeout(() => {
+        flyer.style.transition = `transform ${flipDur}ms cubic-bezier(.2,0,.4,1)`;
+        flyer.style.transform = 'rotateY(0deg) scale(1)';
+        setTimeout(() => {
+          flyer.remove();
+          slotEl.style.visibility = prevVisibility;
+          resolve();
+        }, flipDur + 20);
+      }, flyDur + 20);
+    });
+  });
+}
