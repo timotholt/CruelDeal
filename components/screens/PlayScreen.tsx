@@ -6,7 +6,7 @@
  * demo). Card and location rendering mirrors `ui/card.js` / `ui/location.js`.
  */
 
-import { For, Show, createMemo, onCleanup, onMount } from 'solid-js';
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { VfxHost, useVfx } from '../game/VfxHost';
 import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
 import type { CardInstance, LocationInstance } from '@/services/playgame/types';
@@ -50,6 +50,27 @@ const LANE_MAPS = [
   '/art/maps/Jungle.png',
   '/art/maps/Laboratory.png',
 ];
+
+/**
+ * Inspector target. `card` mode shows a blown-up card face-up; `location`
+ * mode shows a lane location (revealed or hidden). Null = closed.
+ *
+ * Defined at module scope so any sub-component (HandCard, BoardCard,
+ * LocationTile) can open the inspector without needing to thread props
+ * or a separate context through the tree. This mirrors the demo's
+ * singleton `Inspector` (ccg/vfx-engine/project/ui/inspector.js).
+ */
+type InspectTarget =
+  | { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; laneIdx?: number }
+  | { kind: 'location'; location: LocationInstance; laneIdx: number; playerPower: number; enemyPower: number };
+
+const [inspectTarget, setInspectTarget] = createSignal<InspectTarget | null>(null);
+const openInspect = (t: InspectTarget) => {
+  setInspectTarget(t);
+};
+const closeInspect = () => {
+  setInspectTarget(null);
+};
 
 /** Fisher–Yates shuffle (matches the helper in the demo's board.js). */
 function shuffle<T>(items: T[]): T[] {
@@ -308,29 +329,112 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         </button>
       </div>
 
-      {/* Deck anchor — invisible marker used as the visual origin for the
-          draw-slide animation. Positioned at the right edge of the board
-          (outside the hand) so cards clearly fly IN from the deck. */}
+      {/* Deck anchor — a pure positioning marker for the draw-slide
+          animation. Sits just outside the right edge of the board (off-
+          screen relative to the visible board area) so slides clearly
+          originate from "the deck" without rendering anything visible
+          behind the hand. A later slice can swap this for a real deck
+          stack sprite. */}
       <div
         ref={deckEl}
         class="deck-anchor"
+        aria-hidden="true"
         style={{
           position: 'absolute',
-          right: '4px',
-          bottom: '80px',
+          right: '-80px',
+          bottom: '120px',
           width: '48px',
           height: '68px',
-          'border-radius': '6px',
-          background: 'linear-gradient(135deg,#222,#111)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          'box-shadow': '0 2px 6px rgba(0,0,0,0.5)',
+          visibility: 'hidden',
           'pointer-events': 'none',
-          opacity: 0.6,
         }}
       />
 
       <div class="toast-area" id="toastArea" ref={toastAreaEl} />
+
+      {/* Inspector overlay — opens when any card or location is clicked.
+          Uses the existing .inspect-overlay / .inspect-panel CSS from
+          the demo (src/styles/playgame.css). */}
+      <InspectOverlay />
     </div>
+  );
+};
+
+// ─── InspectOverlay ─────────────────────────────────────────────────────
+// Shows a large read-only version of the clicked card or location.
+// Mirrors ccg/vfx-engine/project/ui/inspector.js.
+const InspectOverlay = () => {
+  // ESC closes — same as the demo's keydown handler.
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeInspect();
+    };
+    window.addEventListener('keydown', onKey);
+    onCleanup(() => window.removeEventListener('keydown', onKey));
+  });
+
+  const onOverlayClick = (e: MouseEvent) => {
+    // Only close when the click hits the overlay itself (not the panel).
+    if (e.target === e.currentTarget) closeInspect();
+  };
+
+  return (
+    <Show when={inspectTarget()} keyed>
+      {(t) => (
+        <div class="inspect-overlay open" onClick={onOverlayClick}>
+          <Show when={t.kind === 'card' && t} keyed>
+            {(tc) => {
+              if (tc.kind !== 'card') return null;
+              const c = tc.card;
+              const powerClass =
+                c.power > c.basePower ? 'buffed' : c.power < c.basePower ? 'debuffed' : '';
+              return (
+                <div class="inspect-panel inspect-card">
+                  <div class="inspect-art">
+                    <div
+                      class={'card inspect-card-render' + (tc.side === 'enemy' ? ' enemy' : '')}
+                    >
+                      <div class="cost">{c.cost}</div>
+                      <div class={'power ' + powerClass}>{c.power}</div>
+                      <div class="bar" style={{ background: c.art }} />
+                      <div class="name">{c.name}</div>
+                      <div class="type">{c.type}</div>
+                    </div>
+                  </div>
+                  <div class="inspect-body">
+                    <div class="inspect-rules">{c.text || '\u00a0'}</div>
+                  </div>
+                </div>
+              );
+            }}
+          </Show>
+          <Show when={t.kind === 'location' && t} keyed>
+            {(tl) => {
+              if (tl.kind !== 'location') return null;
+              const loc = tl.location;
+              const revealed = loc.revealed;
+              return (
+                <div class="inspect-panel inspect-location">
+                  <div class="inspect-art">
+                    <div class="location inspect-location-render">
+                      <div class="lane-score enemy-score">{tl.enemyPower}</div>
+                      <div class="loc-name">{revealed ? loc.name : '???'}</div>
+                      <div class="loc-desc">{revealed ? loc.desc : ''}</div>
+                      <div class="lane-score player-score">{tl.playerPower}</div>
+                    </div>
+                  </div>
+                  <div class="inspect-body">
+                    <div class="inspect-rules">
+                      {revealed ? loc.desc : 'Reveals on a future turn.'}
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+          </Show>
+        </div>
+      )}
+    </Show>
   );
 };
 
@@ -364,7 +468,14 @@ const LaneSlots = (props: {
           // receives the card directly (not an accessor).
           <div class="slot" data-slot={gridIdx}>
             <Show when={slotCardForGrid(gridIdx)} keyed>
-              {(c) => <BoardCard card={c} enemy={props.side === 'enemy'} />}
+              {(c) => (
+                <BoardCard
+                  card={c}
+                  enemy={props.side === 'enemy'}
+                  side={props.side}
+                  laneIdx={props.laneIdx}
+                />
+              )}
             </Show>
           </div>
         )}
@@ -382,10 +493,22 @@ const LocationTile = (props: {
   playerPower: number;
   enemyPower: number;
 }) => {
+  const onClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    openInspect({
+      kind: 'location',
+      location: props.location,
+      laneIdx: props.laneIdx,
+      playerPower: props.playerPower,
+      enemyPower: props.enemyPower,
+    });
+  };
   return (
     <div
       class={'location' + (props.location.revealed ? '' : ' location--hidden')}
       data-lane={props.laneIdx}
+      onClick={onClick}
+      style={{ cursor: 'pointer' }}
     >
       <div class="lane-score enemy-score">{props.enemyPower}</div>
       <div class="loc-name">{props.location.revealed ? props.location.name : '???'}</div>
@@ -398,7 +521,12 @@ const LocationTile = (props: {
 // ─── BoardCard ───────────────────────────────────────────────────────────
 // A card sitting in a lane slot. Face-down while in state.pending; face-up
 // otherwise. Mirrors ui/card.js's DOM.
-const BoardCard = (props: { card: CardInstance; enemy?: boolean }) => {
+const BoardCard = (props: {
+  card: CardInstance;
+  enemy?: boolean;
+  side: 'player' | 'enemy';
+  laneIdx: number;
+}) => {
   const { state } = usePlayGame();
   const { bindCardRef } = useVfx();
 
@@ -420,6 +548,20 @@ const BoardCard = (props: { card: CardInstance; enemy?: boolean }) => {
     return (direction * magnitude).toFixed(1) + 'deg';
   };
 
+  const onClick = (e: MouseEvent) => {
+    // Face-down (pending) cards stay a mystery — the demo blocks the
+    // inspector for these too.
+    if (isFaceDown()) return;
+    e.stopPropagation();
+    openInspect({
+      kind: 'card',
+      card: props.card,
+      zone: 'board',
+      side: props.side,
+      laneIdx: props.laneIdx,
+    });
+  };
+
   return (
     <div
       ref={bindCardRef(props.card.id)}
@@ -430,7 +572,8 @@ const BoardCard = (props: { card: CardInstance; enemy?: boolean }) => {
         (isPending() ? ' pending' : '')
       }
       data-card-id={props.card.id}
-      style={{ '--card-tilt': tilt() }}
+      style={{ '--card-tilt': tilt(), cursor: isFaceDown() ? 'default' : 'pointer' }}
+      onClick={onClick}
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>
@@ -469,16 +612,28 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
     (e.currentTarget as HTMLElement).classList.remove('dragging');
     dragState.id = null;
   };
+  const onClick = (e: MouseEvent) => {
+    // Clicks after a drag are suppressed by the browser automatically
+    // when the drag actually moves. This fires only on genuine taps.
+    e.stopPropagation();
+    openInspect({
+      kind: 'card',
+      card: props.card,
+      zone: 'hand',
+      side: 'player',
+    });
+  };
 
   return (
     <div
       ref={bindCardRef(props.card.id)}
       class="card"
       data-card-id={props.card.id}
-      style={{ opacity: props.playable ? 1 : 0.5 }}
+      style={{ opacity: props.playable ? 1 : 0.5, cursor: 'pointer' }}
       draggable={true}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onClick={onClick}
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>

@@ -294,15 +294,16 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
   }
   await new Promise<void>((r) => setTimeout(r, 1300));
 
-  // Stage 3: hold sharp
-  await new Promise<void>((r) => setTimeout(r, 1000));
+  // Stage 3: brief hold sharp before blurring
+  await new Promise<void>((r) => setTimeout(r, 200));
 
-  // Stage 4: blur map in place
+  // Stage 4: blur map in place — shortened so the player doesn't wait
+  // on a long filter transition before the tile flips in.
   if (laneEl) {
-    laneEl.style.transition = 'filter 600ms ease';
+    laneEl.style.transition = 'filter 350ms ease';
     laneEl.style.filter = 'blur(1px)';
   }
-  await new Promise<void>((r) => setTimeout(r, 600));
+  await new Promise<void>((r) => setTimeout(r, 350));
 
   // Stage 5: flip the revealed flag — Solid rerenders the tile with real name
   c.setState(
@@ -331,7 +332,7 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
   await new Promise<void>((r) => setTimeout(r, 600));
 
   // Stage 7: short tail so the next beat doesn't step on this one
-  await new Promise<void>((r) => setTimeout(r, 1500));
+  await new Promise<void>((r) => setTimeout(r, 500));
 };
 
 /** Reveal the next unrevealed lane in order, if any. */
