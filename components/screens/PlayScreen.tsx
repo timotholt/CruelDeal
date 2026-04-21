@@ -14,6 +14,7 @@ import { CARD_POOL } from '@/services/playgame/cards';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
+import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Portal } from '../ui/Portal';
 import { ZoomInspector } from './ZoomInspector';
 
@@ -104,6 +105,20 @@ const BoardSizer = () => {
 const PlayBoard = (props: { onExit?: () => void }) => {
   const { state, setState, actions, isResolving } = usePlayGame();
   const { cardRefs, boardRef } = useVfx();
+
+  const handleUndoPending = () => {
+    // playedThisTurn tracks face-up staged cards; last one is what undo pops
+    const lastPlayedId = state.playedThisTurn[state.playedThisTurn.length - 1];
+    if (!lastPlayedId) return;
+    // Capture lane rect BEFORE state change
+    const oldRects = captureHandRects([lastPlayedId], cardRefs);
+    actions.undoPending();
+    // After Solid re-renders card into hand, FLIP-slide from lane -> hand
+    requestAnimationFrame(() => {
+      playLayoutSlide(oldRects, cardRefs);
+    });
+  };
+
   // Script instance — captured in onMount so END TURN can replay flows
   // against the same ctx used by the opening sequence.
   let script: Script | undefined;
@@ -312,7 +327,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         <button
           class="energy-crystal"
           title="Tap to use energy / hold to undo"
-          onClick={() => actions.undoPending()}
+          onClick={handleUndoPending}
         >
           <div class="crystal">{state.energy}</div>
         </button>

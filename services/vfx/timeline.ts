@@ -109,7 +109,8 @@ export class Timeline {
       setTimeout(() => {
         if (!el.isConnected) return;
         el.style.removeProperty('animation');
-        el.style.removeProperty('opacity');
+        // Do NOT remove opacity — Solid manages it reactively via inline style.
+        // Removing it would reset playable dimming to CSS default (1.0).
         el.style.removeProperty('transform');
         el.style.removeProperty('filter');
       }, endTime + 50);
