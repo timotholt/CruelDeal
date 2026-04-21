@@ -107,13 +107,13 @@ const PlayBoard = (props: { onExit?: () => void }) => {
   const { cardRefs, boardRef } = useVfx();
 
   const handleUndoPending = () => {
-    // playedThisTurn tracks face-up staged cards; last one is what undo pops
     const lastPlayedId = state.playedThisTurn[state.playedThisTurn.length - 1];
     if (!lastPlayedId) return;
-    // Capture lane rect BEFORE state change
-    const oldRects = captureHandRects([lastPlayedId], cardRefs);
+    // Capture lane card rect + all current hand card rects before mutation
+    const allIds = [lastPlayedId, ...state.hand.map((c) => c.id)];
+    const oldRects = captureHandRects(allIds, cardRefs);
     actions.undoPending();
-    // After Solid re-renders card into hand, FLIP-slide from lane -> hand
+    // Slide lane card to hand position + slide existing hand cards apart
     requestAnimationFrame(() => {
       playLayoutSlide(oldRects, cardRefs);
     });
@@ -192,6 +192,10 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       }
       return null;
     };
+    const clearDropState = () => {
+      boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      boardEl!.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
+    };
     const onDragOver = (e: DragEvent) => {
       if (!dragState.id) return;
       // Lock out drops while the end-turn flow is running — otherwise a
@@ -203,27 +207,49 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       const lane = Number(slotEl.dataset.lane);
       if (state.lanes[lane].length >= 4) return;
       e.preventDefault();
-      boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      clearDropState();
       slotEl.classList.add('drop-target');
+      // Highlight the specific next-empty slot with yellow outline
+      const nextSlot = [...slotEl.querySelectorAll('.slot')].find(
+        (s) => !s.querySelector('.card'),
+      ) as HTMLElement | undefined;
+      nextSlot?.classList.add('next-drop');
     };
     const onDragLeave = (e: DragEvent) => {
       const slotEl = getPlayerLaneSlots(e.target);
       const related = (e as DragEvent).relatedTarget as Node | null;
-      if (slotEl && !slotEl.contains(related)) slotEl.classList.remove('drop-target');
+      if (slotEl && !slotEl.contains(related)) {
+        slotEl.classList.remove('drop-target');
+        slotEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
+      }
     };
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
       const slotEl = getPlayerLaneSlots(e.target);
-      boardEl!.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
+      clearDropState();
+      boardEl!.classList.remove('dragging-card');
       if (state.resolving) return;
       if (!slotEl || !dragState.id) return;
       const lane = Number(slotEl.dataset.lane);
+      // Capture all hand rects before mutation so survivors can FLIP-slide together
+      const handIds = state.hand.map((c) => c.id);
+      const oldRects = captureHandRects(handIds, cardRefs);
       actions.stageCardInLane(dragState.id, lane);
+      // After Solid re-renders, slide remaining hand cards into their new positions
+      requestAnimationFrame(() => {
+        playLayoutSlide(oldRects, cardRefs);
+      });
     };
+    const onDragStart = () => boardEl!.classList.add('dragging-card');
+    const onDragEnd = () => { boardEl!.classList.remove('dragging-card'); clearDropState(); };
+    boardEl.addEventListener('dragstart', onDragStart);
+    boardEl.addEventListener('dragend', onDragEnd);
     boardEl.addEventListener('dragover', onDragOver);
     boardEl.addEventListener('dragleave', onDragLeave);
     boardEl.addEventListener('drop', onDrop);
     onCleanup(() => {
+      boardEl!.removeEventListener('dragstart', onDragStart);
+      boardEl!.removeEventListener('dragend', onDragEnd);
       boardEl!.removeEventListener('dragover', onDragOver);
       boardEl!.removeEventListener('dragleave', onDragLeave);
       boardEl!.removeEventListener('drop', onDrop);
@@ -583,7 +609,7 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
       ref={bindCardRef(props.card.id)}
       class="card"
       data-card-id={props.card.id}
-      style={{ opacity: props.playable ? 1 : 0.5, cursor: 'pointer' }}
+      style={{ opacity: props.playable ? 1 : 0.5, cursor: 'pointer', transition: 'opacity 0.5s ease' }}
       draggable={true}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}

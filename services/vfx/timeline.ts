@@ -108,11 +108,21 @@ export class Timeline {
       const endTime = events.reduce((m, ev) => Math.max(m, ev.delay + ev.duration), 0);
       setTimeout(() => {
         if (!el.isConnected) return;
+        // Solid's reactive opacity is already in inline style (we never removeProperty it).
+        // Save it before clearing the animation so we can trigger a proper transition.
+        const solidOpacity = el.style.opacity;
         el.style.removeProperty('animation');
-        // Do NOT remove opacity — Solid manages it reactively via inline style.
-        // Removing it would reset playable dimming to CSS default (1.0).
         el.style.removeProperty('transform');
         el.style.removeProperty('filter');
+        // CSS animations override transitions, so the jump from animation exit (opacity:1)
+        // back to Solid's value is instant. To trigger the CSS transition, briefly set
+        // opacity to 1 (matching the animation's exit), then restore in a double-RAF.
+        if (solidOpacity && solidOpacity !== '1') {
+          el.style.opacity = '1';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (el.isConnected) el.style.opacity = solidOpacity;
+          }));
+        }
       }, endTime + 50);
     }
   }
