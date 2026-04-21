@@ -14,6 +14,8 @@ import { CARD_POOL } from '@/services/playgame/cards';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
+import { Portal } from '../ui/Portal';
+import { ZoomInspector } from './ZoomInspector';
 
 interface PlayScreenProps {
   onExit?: () => void;
@@ -61,8 +63,8 @@ const LANE_MAPS = [
  * singleton `Inspector` (ccg/vfx-engine/project/ui/inspector.js).
  */
 type InspectTarget =
-  | { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; laneIdx?: number }
-  | { kind: 'location'; location: LocationInstance; laneIdx: number; playerPower: number; enemyPower: number };
+  | { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; laneIdx?: number; element: HTMLElement }
+  | { kind: 'location'; location: LocationInstance; laneIdx: number; playerPower: number; enemyPower: number; element: HTMLElement };
 
 const [inspectTarget, setInspectTarget] = createSignal<InspectTarget | null>(null);
 const openInspect = (t: InspectTarget) => {
@@ -243,6 +245,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
   });
 
   return (
+    <>
     <div class="board" id="board" ref={boardEl}>
       {/* TOP HUD */}
       <div class="hud-top">
@@ -351,89 +354,22 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       />
 
       <div class="toast-area" id="toastArea" ref={toastAreaEl} />
-
-      {/* Inspector overlay — opens when any card or location is clicked.
-          Uses the existing .inspect-overlay / .inspect-panel CSS from
-          the demo (src/styles/playgame.css). */}
-      <InspectOverlay />
     </div>
+
+    {/* Inspector overlay — portaled to body to avoid layout breakage */}
+    <Portal>
+      <InspectOverlay />
+    </Portal>
+    </>
   );
 };
 
 // ─── InspectOverlay ─────────────────────────────────────────────────────
-// Shows a large read-only version of the clicked card or location.
-// Mirrors ccg/vfx-engine/project/ui/inspector.js.
+// Zoom inspector — clones card and transforms to center with text below.
 const InspectOverlay = () => {
-  // ESC closes — same as the demo's keydown handler.
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeInspect();
-    };
-    window.addEventListener('keydown', onKey);
-    onCleanup(() => window.removeEventListener('keydown', onKey));
-  });
-
-  const onOverlayClick = (e: MouseEvent) => {
-    // Only close when the click hits the overlay itself (not the panel).
-    if (e.target === e.currentTarget) closeInspect();
-  };
-
   return (
     <Show when={inspectTarget()} keyed>
-      {(t) => (
-        <div class="inspect-overlay open" onClick={onOverlayClick}>
-          <Show when={t.kind === 'card' && t} keyed>
-            {(tc) => {
-              if (tc.kind !== 'card') return null;
-              const c = tc.card;
-              const powerClass =
-                c.power > c.basePower ? 'buffed' : c.power < c.basePower ? 'debuffed' : '';
-              return (
-                <div class="inspect-panel inspect-card">
-                  <div class="inspect-art">
-                    <div
-                      class={'card inspect-card-render' + (tc.side === 'enemy' ? ' enemy' : '')}
-                    >
-                      <div class="cost">{c.cost}</div>
-                      <div class={'power ' + powerClass}>{c.power}</div>
-                      <div class="bar" style={{ background: c.art }} />
-                      <div class="name">{c.name}</div>
-                      <div class="type">{c.type}</div>
-                    </div>
-                  </div>
-                  <div class="inspect-body">
-                    <div class="inspect-rules">{c.text || '\u00a0'}</div>
-                  </div>
-                </div>
-              );
-            }}
-          </Show>
-          <Show when={t.kind === 'location' && t} keyed>
-            {(tl) => {
-              if (tl.kind !== 'location') return null;
-              const loc = tl.location;
-              const revealed = loc.revealed;
-              return (
-                <div class="inspect-panel inspect-location">
-                  <div class="inspect-art">
-                    <div class="location inspect-location-render">
-                      <div class="lane-score enemy-score">{tl.enemyPower}</div>
-                      <div class="loc-name">{revealed ? loc.name : '???'}</div>
-                      <div class="loc-desc">{revealed ? loc.desc : ''}</div>
-                      <div class="lane-score player-score">{tl.playerPower}</div>
-                    </div>
-                  </div>
-                  <div class="inspect-body">
-                    <div class="inspect-rules">
-                      {revealed ? loc.desc : 'Reveals on a future turn.'}
-                    </div>
-                  </div>
-                </div>
-              );
-            }}
-          </Show>
-        </div>
-      )}
+      {(t) => <ZoomInspector target={t} onClose={closeInspect} />}
     </Show>
   );
 };
@@ -501,6 +437,7 @@ const LocationTile = (props: {
       laneIdx: props.laneIdx,
       playerPower: props.playerPower,
       enemyPower: props.enemyPower,
+      element: e.currentTarget as HTMLElement,
     });
   };
   return (
@@ -559,6 +496,7 @@ const BoardCard = (props: {
       zone: 'board',
       side: props.side,
       laneIdx: props.laneIdx,
+      element: e.currentTarget as HTMLElement,
     });
   };
 
@@ -621,6 +559,7 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
       card: props.card,
       zone: 'hand',
       side: 'player',
+      element: e.currentTarget as HTMLElement,
     });
   };
 
