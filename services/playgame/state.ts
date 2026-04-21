@@ -12,17 +12,16 @@
 import { CARD_POOL } from './cards';
 import { LOCATIONS } from './locations';
 import type { CardDef, CardInstance, LocationInstance, MatchSnapshot, MatchState } from './types';
+import { newShortId } from '@/utils/id';
 
-/** Short random id used for card instances. */
-function uid(): string {
-  return Math.random().toString(36).slice(2, 9);
-}
-
-/** Build a live `CardInstance` from a static `CardDef`. */
+/** Instantiate a card from a definition (gives it an id + base stats).
+ *  ID generation routes through the `utils/id` wall so the engine refactor
+ *  can swap in a seeded-RNG-derived id for deterministic client prediction
+ *  without touching this call site. */
 export function newCardInstance(def: CardDef): CardInstance {
   return {
     ...def,
-    id: uid(),
+    id: newShortId(),
     basePower: def.power,
   };
 }
