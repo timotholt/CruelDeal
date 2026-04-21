@@ -39,7 +39,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       // Wait for animation to complete, then close
       setTimeout(() => {
         props.onClose();
-      }, 600);
+      }, 200);
     } else {
       props.onClose();
     }
@@ -63,8 +63,9 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       height: rect.height + 'px',
       margin: '0',
       zIndex: '1000',
-      transition: 'all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       cursor: 'pointer',
+      'pointer-events': 'auto',
     });
 
     // Click on cloned card closes inspector
@@ -101,7 +102,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
     // Dim board
     const board = document.querySelector('.board') as HTMLElement;
     if (board) {
-      board.style.filter = 'brightness(0.3)';
+      board.style.filter = 'brightness(0.15)';
     }
 
     // Handle escape key
@@ -109,12 +110,8 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       if (e.key === 'Escape') handleClose();
     };
 
-    // Click outside cloned card closes
-    const handleClick = (e: MouseEvent) => {
-      if (!cloneRef?.contains(e.target as Node)) {
-        handleClose();
-      }
-    };
+    // Container receives clicks that pass through cloneRef (pointer-events:none)
+    const handleClick = () => handleClose();
 
     window.addEventListener('keydown', handleKeyDown);
     containerRef.addEventListener('click', handleClick);
@@ -149,32 +146,28 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
           position: 'relative',
           width: '100%',
           height: '100%',
+          'pointer-events': 'none',
         }}
       />
 
       {/* Text below card */}
       <Show when={props.target.kind === 'card' && !isClosing()}>
-        {() => {
-          const card = props.target.kind === 'card' ? props.target.card : null;
-          return (
-            <div
-              style={{
-                position: 'fixed',
-                bottom: '10%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                'max-width': '80vw',
-                'text-align': 'center',
-                color: 'white',
-                'font-size': '0.9rem',
-                'z-index': '1001',
-                animation: 'fadeIn 0.4s ease-in 0.2s both',
-              }}
-            >
-              {card?.text || '\u00a0'}
-            </div>
-          );
-        }}
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '10%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            'max-width': '80vw',
+            'text-align': 'center',
+            color: 'white',
+            'font-size': '0.9rem',
+            'z-index': '1001',
+            animation: 'fadeIn 0.4s ease-in 0.1s both',
+          }}
+        >
+          {(props.target as { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; element: HTMLElement }).card?.text || '\u00a0'}
+        </div>
       </Show>
     </div>
   );
