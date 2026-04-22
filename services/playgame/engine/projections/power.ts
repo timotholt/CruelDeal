@@ -33,7 +33,10 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
     power += evalNum(entry.expr.delta, targetCtx);
   }
 
-  // Stage 3: per-card pending buffs (Shuri tag).
+  // Stage 3: one-shot accumulated deltas (Hex Witch OR, Ice Lance OR, etc.)
+  power += card.powerDelta;
+
+  // Stage 4: per-card pending buffs (Shuri tag).
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
     power = Math.floor(power * 2);
   }

@@ -257,6 +257,7 @@ function buildState(
       lane: spec.lane,
       zone: 'LANE',
       revealed: spec.revealed ?? true,
+      powerDelta: 0,
       tags: spec.tags ?? [],
       textOverride: null,
       counters: {},

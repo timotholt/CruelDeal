@@ -33,6 +33,10 @@ export interface CardInstance {
   readonly lane: LaneIdx | null;
   readonly zone: CardZone;
   readonly revealed: boolean;
+  /** Accumulated one-shot power adjustments from ADD_POWER / SET_POWER
+   *  effects. Read by `getCardPower` after Ongoing POWER_ADDs and before
+   *  Shuri doubling. Deltas survive cross-turn; resets only on destroy. */
+  readonly powerDelta: number;
   readonly tags: readonly CardTag[];
   readonly textOverride: TextOverride | null;
   readonly counters: Readonly<Record<string, number>>;
