@@ -261,6 +261,7 @@ function buildState(
       tags: spec.tags ?? [],
       textOverride: null,
       counters: {},
+      spawnSource: { kind: 'SYSTEM' },
     };
     cards[id] = inst;
     (lanesCards[spec.lane].cards[spec.owner] as CardId[]).push(id);

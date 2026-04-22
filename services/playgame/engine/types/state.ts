@@ -23,7 +23,39 @@ export type MatchPhase =
 
 // ---- Card / Location instances --------------------------------------------
 
-export type CardZone = 'DECK' | 'HAND' | 'LANE' | 'DISCARD' | 'REMOVED';
+/**
+ * Where a card physically is in the match.
+ *
+ * DISCARD vs DESTROYED is mechanically load-bearing:
+ *   - DISCARD   = forced-discarded from HAND (Morbius, Apocalypse react to this)
+ *   - DESTROYED = killed on BOARD (Hela resurrects from here; Knull counts this)
+ *
+ * BANISHED = removed from the game entirely (inaccessible to all effects).
+ * Rarely used in base Snap; reserved for the odd banish card.
+ */
+export type CardZone =
+  | 'DECK'
+  | 'HAND'
+  | 'LANE'        // on board
+  | 'DISCARD'     // forced-discarded from hand
+  | 'DESTROYED'   // destroyed from board
+  | 'BANISHED';   // removed from game, no effect can touch
+
+/**
+ * Provenance: why does this card exist in this match?
+ *
+ * Matters for Quinjet-tier effects ("your cards that weren't in your
+ * starting deck cost -1"), Collector triggers ("when a card enters your
+ * hand from something other than a draw"), Mystique-style copies, and
+ * Debrii-style enemy-authored tokens.
+ */
+export type SpawnSource =
+  | { readonly kind: 'DECK_CREATION' }
+  | { readonly kind: 'CARD_CREATED';     readonly sourceCardId: CardId }
+  | { readonly kind: 'LOCATION_CREATED'; readonly sourceLocationId: LocationId }
+  | { readonly kind: 'ENEMY_CREATED';    readonly sourceCardId: CardId }
+  | { readonly kind: 'COPY_OF';          readonly sourceCardId: CardId }
+  | { readonly kind: 'SYSTEM' };          // test fixtures / debug scaffolding
 
 export interface CardInstance {
   readonly id: CardId;
@@ -40,6 +72,8 @@ export interface CardInstance {
   readonly tags: readonly CardTag[];
   readonly textOverride: TextOverride | null;
   readonly counters: Readonly<Record<string, number>>;
+  /** Where this card came from. Immutable across the card's lifetime. */
+  readonly spawnSource: SpawnSource;
 }
 
 export interface LocationInstance {

@@ -10,8 +10,17 @@
  */
 
 import type { CardId, LaneIdx, LocationId, Owner } from './ids';
-import type { CardTag, LaneTag, PendingEffect } from './state';
+import type { CardTag, LaneTag, PendingEffect, SpawnSource } from './state';
 import type { EffectRef, TextOverride } from './ability';
+
+/**
+ * Why a card was discarded from hand. Most effects check the kind to
+ * decide whether to trigger (Morbius only triggers on YOUR discards).
+ */
+export type DiscardReason =
+  | 'FORCED_EFFECT'   // Morbius, Lady Sif, Blade-as-cost
+  | 'HAND_OVERFLOW'   // drew past handCap (rare — engine normally refuses)
+  | 'SURRENDER';      // end-of-match cleanup
 
 export type EnergyReason =
   | 'TURN_START'
@@ -38,7 +47,9 @@ export type MatchEvent =
 
   // --- Card mutations ---
   | { type: 'CARD_POWER_CHANGED'; cardId: CardId; delta: number; cause: EffectRef }
-  | { type: 'CARD_DESTROYED'; cardId: CardId; cause: EffectRef }
+  | { type: 'CARD_DESTROYED'; cardId: CardId; cause: EffectRef }   // board → DESTROYED pile
+  | { type: 'CARD_DISCARDED'; cardId: CardId; reason: DiscardReason; cause: EffectRef }  // hand → DISCARD pile
+  | { type: 'CARD_BANISHED'; cardId: CardId; cause: EffectRef }    // anywhere → BANISHED (inaccessible)
   | { type: 'CARD_MOVED'; cardId: CardId; fromLane: LaneIdx; toLane: LaneIdx; cause: EffectRef }
   | { type: 'CARD_TAG_ADDED'; cardId: CardId; tag: CardTag }
   | { type: 'CARD_TAG_REMOVED'; cardId: CardId; tag: CardTag['kind'] }
@@ -46,9 +57,13 @@ export type MatchEvent =
   | { type: 'CARD_COUNTER_CHANGED'; cardId: CardId; name: string; delta: number }
 
   // --- Deck / hand ---
+  // New-card events carry their spawnSource so the provenance is recorded
+  // on first insertion. CARD_DRAWN does NOT — a draw only moves an existing
+  // card from DECK to HAND, preserving its original spawnSource.
   | { type: 'CARD_DRAWN'; owner: Owner; cardId: CardId; toHand: true }
-  | { type: 'CARD_ADDED_TO_DECK'; owner: Owner; cardId: CardId }
-  | { type: 'CARD_ADDED_TO_LANE'; owner: Owner; cardId: CardId; lane: LaneIdx }
+  | { type: 'CARD_ADDED_TO_DECK'; owner: Owner; cardId: CardId; spawnSource: SpawnSource }
+  | { type: 'CARD_ADDED_TO_HAND'; owner: Owner; cardId: CardId; defId: string; spawnSource: SpawnSource }
+  | { type: 'CARD_ADDED_TO_LANE'; owner: Owner; cardId: CardId; lane: LaneIdx; defId: string; spawnSource: SpawnSource }
   | { type: 'DECK_SHUFFLED'; owner: Owner; newOrder: readonly CardId[] }
 
   // --- Pending effects ---

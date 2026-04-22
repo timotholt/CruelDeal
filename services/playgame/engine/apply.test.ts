@@ -49,6 +49,7 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'PLAYER'): Car
     tags: [],
     textOverride: null,
     counters: {},
+    spawnSource: { kind: 'DECK_CREATION' },
   };
 }
 
@@ -198,7 +199,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
   );
   const c = destroyed.cards['s1' as CardId]!;
-  eq(c.zone, 'DISCARD', 'CARD_DESTROYED: zone=DISCARD');
+  eq(c.zone, 'DESTROYED', 'CARD_DESTROYED: zone=DESTROYED (separate from DISCARD)');
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
   eq(destroyed.lanes[0].cards.PLAYER.length, 0, 'CARD_DESTROYED: removed from lane');
   truthy(c.tags.some(t => t.kind === 'DESTROYED_THIS_TURN'), 'CARD_DESTROYED: tagged DESTROYED_THIS_TURN');
@@ -246,7 +247,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.cards['s1' as CardId]!.counters['other'],  1, 'CARD_COUNTER_CHANGED: separate names independent');
 }
 
-// -- CARD_DRAWN: deck -> hand
+// -- CARD_DRAWN: deck -> hand, preserves spawnSource
 
 {
   const s = emptyState();
@@ -260,6 +261,70 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.deck.PLAYER.length, 0, 'CARD_DRAWN: removed from deck');
   eq(s1.hand.PLAYER.length, 1, 'CARD_DRAWN: added to hand');
   eq(s1.cards['d1' as CardId]!.zone, 'HAND', 'CARD_DRAWN: zone=HAND');
+  eq(s1.cards['d1' as CardId]!.spawnSource, { kind: 'DECK_CREATION' }, 'CARD_DRAWN: preserves spawnSource');
+}
+
+// -- CARD_DISCARDED: hand -> DISCARD pile (Morbius target)
+
+{
+  const s0 = stateWithSentinelInHand();
+  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM' as const };
+  const s1 = run(s0, { type: 'CARD_DISCARDED', cardId: 's1' as CardId, reason: 'FORCED_EFFECT', cause });
+  eq(s1.cards['s1' as CardId]!.zone, 'DISCARD', 'CARD_DISCARDED: zone=DISCARD');
+  eq(s1.hand.PLAYER.length, 0, 'CARD_DISCARDED: removed from hand');
+}
+
+// -- CARD_BANISHED: any → BANISHED (permanent exile)
+
+{
+  const s0 = stateWithSentinelInHand();
+  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM' as const };
+  // From hand:
+  const s1 = run(s0, { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause });
+  eq(s1.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from hand): zone=BANISHED');
+  eq(s1.hand.PLAYER.length, 0, 'CARD_BANISHED: gone from hand');
+  // From lane:
+  const s2 = run(s0,
+    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
+  );
+  eq(s2.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
+  eq(s2.lanes[0].cards.PLAYER.length, 0, 'CARD_BANISHED: gone from lane');
+}
+
+// -- CARD_ADDED_TO_HAND: mints with spawnSource (Agent 13 / Collector)
+
+{
+  const s0 = emptyState();
+  const spawn = { kind: 'CARD_CREATED' as const, sourceCardId: 'agent13' as CardId };
+  const s1 = run(s0, {
+    type: 'CARD_ADDED_TO_HAND',
+    owner: 'PLAYER',
+    cardId: 'spawn1' as CardId,
+    defId: 'grunt',
+    spawnSource: spawn,
+  });
+  eq(s1.cards['spawn1' as CardId]?.zone, 'HAND', 'CARD_ADDED_TO_HAND: zone=HAND');
+  eq(s1.cards['spawn1' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_HAND: spawnSource recorded');
+  eq(s1.hand.PLAYER.length, 1, 'CARD_ADDED_TO_HAND: in hand list');
+}
+
+// -- CARD_ADDED_TO_LANE: mints with spawnSource (Brood / Bar Sinister)
+
+{
+  const s0 = emptyState();
+  const spawn = { kind: 'LOCATION_CREATED' as const, sourceLocationId: 'bar-sinister' as LocationId };
+  const s1 = run(s0, {
+    type: 'CARD_ADDED_TO_LANE',
+    owner: 'PLAYER',
+    cardId: 'spawn2' as CardId,
+    lane: 1,
+    defId: 'grunt',
+    spawnSource: spawn,
+  });
+  eq(s1.cards['spawn2' as CardId]?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
+  eq(s1.cards['spawn2' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
+  eq(s1.lanes[1].cards.PLAYER, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
 }
 
 // -- DECK_SHUFFLED: reorders deck per newOrder

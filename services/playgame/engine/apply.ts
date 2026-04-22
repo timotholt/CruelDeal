@@ -22,6 +22,7 @@ import type {
   MatchLogEntry,
   MatchState,
   PendingEffect,
+  SpawnSource,
 } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
@@ -97,6 +98,8 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
     }
 
     case 'CARD_DESTROYED': {
+      // Board → DESTROYED pile. Distinguished from CARD_DISCARDED so
+      // Hela / Knull can target this specifically.
       const card = state.cards[event.cardId];
       if (!card) return state;
       let s: MatchState = state;
@@ -104,15 +107,38 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
         s = removeFromLane(s, card.owner, card.lane, event.cardId);
       }
       s = patchCard(s, event.cardId, {
-        zone: 'DISCARD',
+        zone: 'DESTROYED',
         lane: null,
         tags: addTagUnique(card.tags, { kind: 'DESTROYED_THIS_TURN' }),
       });
-      // If this card was staging, remove from stagingOrder.
       return {
         ...s,
         stagingOrder: s.stagingOrder.filter(id => id !== event.cardId),
       };
+    }
+
+    case 'CARD_DISCARDED': {
+      // Hand → DISCARD pile. Morbius / Apocalypse subscribe to this.
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      const s1 = removeFromHand(state, card.owner, event.cardId);
+      return patchCard(s1, event.cardId, { zone: 'DISCARD', lane: null });
+    }
+
+    case 'CARD_BANISHED': {
+      // Anywhere → BANISHED (permanent exile, no effect can see it again).
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      let s: MatchState = state;
+      if (card.lane !== null) {
+        s = removeFromLane(s, card.owner, card.lane, event.cardId);
+      }
+      s = removeFromHand(s, card.owner, event.cardId);
+      s = {
+        ...s,
+        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(c => c.id !== event.cardId) },
+      };
+      return patchCard(s, event.cardId, { zone: 'BANISHED', lane: null });
     }
 
     case 'CARD_MOVED': {
@@ -169,24 +195,36 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
     }
 
     case 'CARD_ADDED_TO_DECK': {
-      const card = state.cards[event.cardId];
-      if (!card) return state;
-      const s1 = patchCard(state, event.cardId, { zone: 'DECK', lane: null });
+      // May be creating a brand-new card or repositioning an existing one.
+      const existing = state.cards[event.cardId];
+      const s1 = existing
+        ? patchCard(state, event.cardId, {
+            zone: 'DECK',
+            lane: null,
+            spawnSource: event.spawnSource,
+          })
+        : state;
+      const instance = s1.cards[event.cardId];
+      if (!instance) return state; // caller must have minted the instance first
       return {
         ...s1,
-        deck: { ...s1.deck, [event.owner]: [...s1.deck[event.owner], s1.cards[event.cardId]] },
+        deck: { ...s1.deck, [event.owner]: [...s1.deck[event.owner], instance] },
       };
     }
 
+    case 'CARD_ADDED_TO_HAND': {
+      // Mint-to-hand: Agent 13, Collector, "add a card to your hand" effects.
+      // This creates a fresh CardInstance with the supplied defId and
+      // spawnSource. If an instance already exists at that id, update it.
+      const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'HAND');
+      return addToHand(minted, event.owner, event.cardId);
+    }
+
     case 'CARD_ADDED_TO_LANE': {
-      const card = state.cards[event.cardId];
-      if (!card) return state;
-      const s1 = patchCard(state, event.cardId, {
-        zone: 'LANE',
-        lane: event.lane,
-        owner: event.owner,
-      });
-      return addToLane(s1, event.owner, event.lane, event.cardId);
+      // Mint-to-lane: Brood, Jubilee spawn, Bar Sinister. Creates a fresh
+      // CardInstance directly in a lane.
+      const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'LANE', event.lane);
+      return addToLane(minted, event.owner, event.lane, event.cardId);
     }
 
     case 'DECK_SHUFFLED': {
@@ -304,6 +342,39 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
 }
 
 // ---- Structural helpers ----------------------------------------------------
+
+/** Create a new CardInstance if none exists at `id`, or update the
+ *  existing one's zone/lane/owner/spawnSource. Used by the mint-style
+ *  ADDED_TO_HAND / ADDED_TO_LANE events. */
+function mintOrUpdate(
+  state: MatchState,
+  id: CardId,
+  defId: string,
+  owner: Owner,
+  spawnSource: SpawnSource,
+  zone: 'HAND' | 'LANE',
+  lane: LaneIdx | null = null,
+): MatchState {
+  const existing = state.cards[id];
+  if (existing) {
+    return patchCard(state, id, { defId, owner, zone, lane, spawnSource });
+  }
+  const fresh: CardInstance = {
+    id,
+    defId,
+    version: 1,
+    owner,
+    lane,
+    zone,
+    revealed: zone === 'LANE' ? false : false,
+    powerDelta: 0,
+    tags: [],
+    textOverride: null,
+    counters: {},
+    spawnSource,
+  };
+  return { ...state, cards: { ...state.cards, [id]: fresh } };
+}
 
 function patchCard(state: MatchState, id: CardId, patch: Partial<CardInstance>): MatchState {
   const prev = state.cards[id];
