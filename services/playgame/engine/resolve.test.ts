@@ -79,13 +79,15 @@ function mkCardInstance(defId: string, owner: Owner = 'PLAYER'): CardInstance {
 
 function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}): MatchState {
   idCounter = 0;
+  const t = opts.turn ?? 1;
   return {
-    turn: opts.turn ?? 1,
-    maxEnergy: opts.turn ?? 1,
+    turn: t,
+    maxEnergy: { PLAYER: t, OPP: t },
+    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
     phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'resolve-test',
     priority: opts.priority ?? 'PLAYER',
-    energy: { PLAYER: opts.turn ?? 1, OPP: opts.turn ?? 1 },
+    energy: { PLAYER: t, OPP: t },
     deck: { PLAYER: [], OPP: [] },
     hand: { PLAYER: [], OPP: [] },
     cards: {},

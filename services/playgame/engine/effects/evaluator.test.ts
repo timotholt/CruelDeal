@@ -126,7 +126,8 @@ function buildState(
   }
   return {
     turn: opts.turn ?? 3,
-    maxEnergy: 3,
+    maxEnergy: { PLAYER: 3, OPP: 3 },
+    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
     phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'test-seed',
     priority: 'PLAYER',

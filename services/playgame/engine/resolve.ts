@@ -168,7 +168,8 @@ export function resolveTurn(
   const events: MatchEvent[] = [];
   let s = state;
 
-  // Phase 1: Flip and reveal all staged cards in priority order.
+  // ─── Phase 1  Reveals (priority-ordered) ─────────────────────────────────
+  // Priority holder's cards flip first, in stage order; then the other side.
   const priorityOwner = s.priority;
   const order: Owner[] = priorityOwner === 'PLAYER' ? ['PLAYER', 'OPP'] : ['OPP', 'PLAYER'];
   for (const owner of order) {
@@ -181,7 +182,23 @@ export function resolveTurn(
     }
   }
 
-  // Phase 2: Match end?
+  // ─── END-OF-TURN BOOKKEEPING ─────────────────────────────────────────────
+  // Finish the current turn BEFORE checking for a winner. End-of-turn
+  // location effects (Rickety Bridge destroying the lane, Death's Domain
+  // killing drawn cards, etc.) fire while cleanup runs, so their side-
+  // effects count toward the final board state.
+  //
+  // Phase 2  TURN_ENDED — clears transient tags (DESTROYED_THIS_TURN,
+  //          MOVED_THIS_TURN) + stagingOrder. `@migrate:atTurnEnd` is where
+  //          location `atTurnEnd` abilities will be dispatched in a later
+  //          tier; they must run BEFORE this cleanup event.
+  const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
+  events.push(turnEnded);
+  s = apply(s, turnEnded, manifest);
+
+  // Phase 3  Winner check — only after all end-of-turn bookkeeping has
+  //          settled. If the last turn just finished, the match ends here
+  //          and NO start-of-turn bookkeeping runs.
   if (s.turn >= manifest.constants.turnLimit) {
     const result = computeMatchResult(s, manifest);
     const endEvt: MatchEvent = { type: 'MATCH_ENDED', result };
@@ -190,16 +207,92 @@ export function resolveTurn(
     return { events, state: s };
   }
 
-  // Phase 3: End the current turn (clears transient tags + stagingOrder).
-  const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
-  events.push(turnEnded);
-  s = apply(s, turnEnded, manifest);
-
+  // ─── START-OF-TURN BOOKKEEPING ───────────────────────────────────────────
+  // Deliberate order: energy → priority → draw → location reveal.
+  //
+  //   Energy first so "+N energy next turn" effects (Psylocke, Electra,
+  //   etc.) resolve before anything consumes or displays the new pool.
+  //
+  //   Priority next so it's decided on the clean post-TURN_ENDED board —
+  //   no drawn cards, no newly-revealed location in the picture.
+  //
+  //   Draws run after priority because drawing can't change priority
+  //   (hand contents don't feed the priority computation) but effects
+  //   that react to "card drawn" expect the priority holder for this
+  //   turn to already be known.
+  //
+  //   Location reveal is last — it's a player-facing cinematic, and any
+  //   Ongoing effect tied to the location should kick in after draws and
+  //   energy are already settled.
   const nextTurn = s.turn + 1;
 
-  // Phase 4: Reveal the location for the upcoming turn (turns 1-3 only).
-  if (nextTurn <= 3) {
-    const laneIdx = (nextTurn - 1) as LaneIdx;
+  // Phase 4  Ramp `maxEnergy` (+1 per owner), refill `energy` to
+  //          `maxEnergy + nextTurnEnergyBonus`, then consume the bonus.
+  //          Event order per owner:
+  //            1. MAX_ENERGY_CHANGED  (ramp ceiling by +1)
+  //            2. ENERGY_CHANGED      (refill current to new ceiling + bonus)
+  //            3. NEXT_TURN_ENERGY_BONUS_CHANGED (zero the one-shot bonus)
+  //          Mirrors: `currentEnergy = maxEnergy + energyEarnedLastTurn`.
+  for (const owner of ['PLAYER', 'OPP'] as const) {
+    const ramp: MatchEvent = {
+      type: 'MAX_ENERGY_CHANGED',
+      owner,
+      delta: 1,
+      reason: 'TURN_START',
+    };
+    events.push(ramp);
+    s = apply(s, ramp, manifest);
+
+    const bonus = s.nextTurnEnergyBonus[owner];
+    const target = s.maxEnergy[owner] + bonus;
+    const refillDelta = target - s.energy[owner];
+    if (refillDelta !== 0) {
+      const refill: MatchEvent = {
+        type: 'ENERGY_CHANGED',
+        owner,
+        delta: refillDelta,
+        reason: 'TURN_START',
+      };
+      events.push(refill);
+      s = apply(s, refill, manifest);
+    }
+
+    if (bonus !== 0) {
+      const consume: MatchEvent = {
+        type: 'NEXT_TURN_ENERGY_BONUS_CHANGED',
+        owner,
+        delta: -bonus,
+      };
+      events.push(consume);
+      s = apply(s, consume, manifest);
+    }
+  }
+
+  // Phase 5  Priority for nextTurn + TURN_STARTED.
+  //          `TURN_STARTED` advances `state.turn` to `nextTurn` via apply().
+  const newPriority = computePriorityForNextTurn(s, manifest, rng.fork(`priority:${nextTurn}`));
+  const started: MatchEvent = {
+    type: 'TURN_STARTED',
+    turn: nextTurn,
+    priority: newPriority.owner,
+    priorityReason: newPriority.reason,
+  };
+  events.push(started);
+  s = apply(s, started, manifest);
+
+  // Phase 6  Draws (1 per owner, hand-cap permitting).
+  for (const owner of ['PLAYER', 'OPP'] as const) {
+    const draws = drawStep(s, owner, 1, manifest);
+    for (const e of draws) {
+      events.push(e);
+      s = apply(s, e, manifest);
+    }
+  }
+
+  // Phase 7  Reveal the location for the upcoming turn (turns 2–3).
+  //          `s.turn === nextTurn` now, so the lane index is `turn - 1`.
+  if (s.turn <= 3) {
+    const laneIdx = (s.turn - 1) as LaneIdx;
     const loc = s.lanes[laneIdx].location;
     if (loc && !s.lanes[laneIdx].locationRevealed) {
       const revealEvt: MatchEvent = {
@@ -211,40 +304,6 @@ export function resolveTurn(
       s = apply(s, revealEvt, manifest);
     }
   }
-
-  // Phase 5: Draws (1 per owner per turn, hand-cap permitting).
-  for (const owner of ['PLAYER', 'OPP'] as const) {
-    const draws = drawStep(s, owner, 1, manifest);
-    for (const e of draws) {
-      events.push(e);
-      s = apply(s, e, manifest);
-    }
-  }
-
-  // Phase 6: Refill energy to nextTurn's curve value.
-  const curve = manifest.constants.energyCurve;
-  const target = curve[Math.min(nextTurn, curve.length) - 1] ?? nextTurn;
-  for (const owner of ['PLAYER', 'OPP'] as const) {
-    const delta = target - s.energy[owner];
-    if (delta === 0) continue;
-    const e: MatchEvent = { type: 'ENERGY_CHANGED', owner, delta, reason: 'TURN_START' };
-    events.push(e);
-    s = apply(s, e, manifest);
-  }
-
-  // Phase 7: Compute priority for the upcoming turn, then TURN_STARTED.
-  // Using the projected state AFTER draws/energy — priority reads board
-  // power only, which draws can't change, but we keep the order
-  // consistent with spec §5.
-  const newPriority = computePriorityForNextTurn(s, manifest, rng.fork(`priority:${nextTurn}`));
-  const started: MatchEvent = {
-    type: 'TURN_STARTED',
-    turn: nextTurn,
-    priority: newPriority.owner,
-    priorityReason: newPriority.reason,
-  };
-  events.push(started);
-  s = apply(s, started, manifest);
 
   return { events, state: s };
 }

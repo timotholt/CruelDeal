@@ -63,7 +63,17 @@ export interface ResolvedLocation {
   defId: string;
   name: string;
   desc: string;
+  /** Accent colour (hex) for text/border tinting. */
   art: string;
+  /**
+   * Path to the wide-format map art shipped in `public/art/maps/`.
+   * Pulled verbatim from `manifest.locations[defId].cosmetic.art.map.path`.
+   * Populated for BOTH revealed and unrevealed locations so the lane
+   * overlay can render the correct art from the moment the match starts
+   * (the tile itself still shows "???" until revealed).
+   * `null` when the lane has no location def bound yet.
+   */
+  mapArt: string | null;
   revealed: boolean;
 }
 
@@ -145,12 +155,15 @@ export function getLocation(
   const def = locInst ? manifest.locations[locInst.defId] : null;
   const revealed = lane.locationRevealed;
 
+  const mapArt = def?.cosmetic.art.map.path ?? null;
+
   if (!locInst || !def || !revealed) {
     return {
       defId: locInst?.defId ?? '',
       name: '???',
       desc: '',
       art: def?.cosmetic.accent ?? '#2d3748',
+      mapArt,
       revealed: false,
     };
   }
@@ -159,6 +172,7 @@ export function getLocation(
     name: def.cosmetic.displayName,
     desc: def.cosmetic.description,
     art: def.cosmetic.accent ?? '#2d3748',
+    mapArt,
     revealed: true,
   };
 }

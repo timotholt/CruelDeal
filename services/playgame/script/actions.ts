@@ -415,6 +415,8 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
   // Dispatch turn-bookkeeping events in the order the engine produced them.
   const bookkeepingTypes = new Set([
     'TURN_ENDED',
+    'MAX_ENERGY_CHANGED',
+    'NEXT_TURN_ENERGY_BONUS_CHANGED',
     'ENERGY_CHANGED',
     'TURN_STARTED',
   ]);
@@ -432,63 +434,84 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 };
 
 /**
- * Enemy picks a random non-full lane and plays one card.
- * The card is added to the engine state (CARD_ADDED_TO_HAND + CARD_STAGED)
- * so it appears in `stagingOrder` and gets a CARD_FLIPPED event from
- * captureEngineEndTurn's resolveTurn call.
+ * Enemy plays cards until it runs out of energy, hand space, or lane space.
+ *
+ * Rules:
+ *   - Only plays cards whose `cost <= current OPP energy`.
+ *   - Picks any non-full lane (random choice — Tier 1.3 replaces with
+ *     deterministic engine AI).
+ *   - Dispatches CARD_ADDED_TO_HAND, CARD_STAGED, ENERGY_CHANGED for each
+ *     play so `captureEngineEndTurn` sees the staged cards.
+ *   - Animates each with a face-down fly-in before continuing.
  */
 export const enemyPlayRandom = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
-  // Pick a lane with room.
-  const candidates = [0, 1, 2].filter(
-    (i) => ((c.state.lanes[i as LaneIdx].cards['OPP'] as unknown[]).length ?? 0) < 4,
-  );
-  if (candidates.length === 0) return;
-  const lane = candidates[Math.floor(Math.random() * candidates.length)] as LaneIdx;
-  // @migrate:step-1.3: lane choice still random; engine AI (Tier 1.3) replaces this.
+  const maxPlaysSafety = 6; // guard against infinite loops
 
-  const def = randomManifestCardDef(c.manifest);
-  if (!def) return;
-  const inst = newEngineCardInstance(def, 'OPP');
+  for (let i = 0; i < maxPlaysSafety; i++) {
+    const energy = c.state.energy['OPP'];
+    if (energy <= 0) break;
 
-  // Add to engine hand (OPP), then stage.
-  c.dispatch({
-    type: 'CARD_ADDED_TO_HAND',
-    owner: 'OPP',
-    cardId: inst.id,
-    defId: def.defId,
-    spawnSource: { kind: 'DECK_CREATION' },
-  });
-  c.dispatch({
-    type: 'CARD_STAGED',
-    intentId: `enemy-${inst.id}`,
-    owner: 'OPP',
-    cardId: inst.id,
-    lane,
-    cost: def.cost,
-  });
+    // Affordable cards only. Picking from the manifest pool is a Tier-1.2
+    // stopgap — once the engine deck is pre-populated, read from OPP hand.
+    const pool = Object.values(c.manifest.cards).filter((d) => d.cost <= energy);
+    if (pool.length === 0) break;
+    const def = pool[Math.floor(Math.random() * pool.length)];
 
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    // Pick a lane with room.
+    const laneCandidates = [0, 1, 2].filter(
+      (idx) => (c.state.lanes[idx as LaneIdx].cards['OPP'] as unknown[]).length < 4,
+    );
+    if (laneCandidates.length === 0) break;
+    const lane = laneCandidates[Math.floor(Math.random() * laneCandidates.length)] as LaneIdx;
+    // @migrate:step-1.3: lane + card choice still random; engine AI
+    // (Tier 1.3) replaces this with a deterministic seeded planner.
 
-  // Fly-in animation: enemy card falls from above the slot.
-  const slotEl = c.cardRefs.get(inst.id);
-  if (!slotEl) return;
-  const slotRect = slotEl.getBoundingClientRect();
-  const startRect = {
-    left: slotRect.left,
-    top: slotRect.top - slotRect.height * 1.8,
-    width: slotRect.width,
-    height: slotRect.height,
-  };
+    const inst = newEngineCardInstance(def, 'OPP');
 
-  await flyFaceDownToSlot({
-    cardId: inst.id,
-    startRect,
-    cardElMap: c.cardRefs,
-    boardWrap: c.boardWrap,
-    showPreview: false,
-  });
+    c.dispatch({
+      type: 'CARD_ADDED_TO_HAND',
+      owner: 'OPP',
+      cardId: inst.id,
+      defId: def.defId,
+      spawnSource: { kind: 'DECK_CREATION' },
+    });
+    c.dispatch({
+      type: 'CARD_STAGED',
+      intentId: `enemy-${inst.id}`,
+      owner: 'OPP',
+      cardId: inst.id,
+      lane,
+      cost: def.cost,
+    });
+    c.dispatch({
+      type: 'ENERGY_CHANGED',
+      owner: 'OPP',
+      delta: -def.cost,
+      reason: 'CARD_PLAYED',
+    });
+
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    const slotEl = c.cardRefs.get(inst.id);
+    if (!slotEl) continue;
+    const slotRect = slotEl.getBoundingClientRect();
+    const startRect = {
+      left: slotRect.left,
+      top: slotRect.top - slotRect.height * 1.8,
+      width: slotRect.width,
+      height: slotRect.height,
+    };
+
+    await flyFaceDownToSlot({
+      cardId: inst.id,
+      startRect,
+      cardElMap: c.cardRefs,
+      boardWrap: c.boardWrap,
+      showPreview: false,
+    });
+  }
 };
 
 /**

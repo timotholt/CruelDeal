@@ -77,6 +77,21 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
         energy: { ...state.energy, [event.owner]: state.energy[event.owner] + event.delta },
       };
 
+    case 'MAX_ENERGY_CHANGED':
+      return {
+        ...state,
+        maxEnergy: { ...state.maxEnergy, [event.owner]: state.maxEnergy[event.owner] + event.delta },
+      };
+
+    case 'NEXT_TURN_ENERGY_BONUS_CHANGED':
+      return {
+        ...state,
+        nextTurnEnergyBonus: {
+          ...state.nextTurnEnergyBonus,
+          [event.owner]: state.nextTurnEnergyBonus[event.owner] + event.delta,
+        },
+      };
+
     // ---- Reveal + OR windows ---------------------------------------------
 
     case 'CARD_FLIPPED':

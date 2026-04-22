@@ -133,10 +133,27 @@ export interface MatchLogEntry {
 
 export interface MatchState {
   readonly turn: number;
-  readonly maxEnergy: number;
+  /**
+   * Per-owner energy ceiling for the current turn. Starts at 0 at match
+   * genesis and ramps +1 at each TURN_STARTED. Snap-style energy curve
+   * (1, 2, 3, 4, 5, 6) emerges naturally from "turn 1 ramp = 1, turn 2
+   * ramp = 2, ..." without a separate curve table. Effects that
+   * permanently modify the ceiling (e.g. Electro ongoing) mutate this
+   * via MAX_ENERGY_CHANGED.
+   */
+  readonly maxEnergy: Readonly<Record<Owner, number>>;
+  /**
+   * Per-owner one-shot bonus applied to NEXT turn's refill target.
+   * Written by "next turn +N energy" effects (Psylocke) during turn N;
+   * at the start of turn N+1, `currentEnergy = maxEnergy + bonus` and
+   * the bonus is consumed (reset to 0). NOT persistent — a card that
+   * wants a permanent +N needs to bump maxEnergy directly.
+   */
+  readonly nextTurnEnergyBonus: Readonly<Record<Owner, number>>;
   readonly phase: MatchPhase;
   readonly seed: string;
   readonly priority: Owner;
+  /** Per-owner current energy pool. Replenished to `maxEnergy + bonus` on TURN_STARTED. */
   readonly energy: Readonly<Record<Owner, number>>;
   readonly deck: Readonly<Record<Owner, readonly CardInstance[]>>;
   readonly hand: Readonly<Record<Owner, readonly CardInstance[]>>;

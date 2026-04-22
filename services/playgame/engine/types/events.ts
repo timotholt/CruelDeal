@@ -39,6 +39,14 @@ export type MatchEvent =
   | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneIdx; owner: Owner; cost: number }
   | { type: 'CARD_UNSTAGED'; intentId: string; cardId: CardId }
   | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason }
+  /** Mutates `state.maxEnergy[owner]` by `delta`. Fired at TURN_STARTED for the
+   *  per-turn +1 ramp and by effects that permanently widen the ceiling. */
+  | { type: 'MAX_ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason }
+  /** Mutates `state.nextTurnEnergyBonus[owner]` by `delta`. Written by
+   *  "next turn +N energy" effects during turn N, consumed at the start of
+   *  turn N+1 (the refill target is `maxEnergy + bonus`, then the bonus is
+   *  zeroed via another event with the negated delta). */
+  | { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED'; owner: Owner; delta: number }
 
   // --- Reveal + OR windows ---
   | { type: 'CARD_FLIPPED'; cardId: CardId }

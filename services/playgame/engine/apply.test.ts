@@ -56,7 +56,8 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'PLAYER'): Car
 function emptyState(): MatchState {
   return {
     turn: 1,
-    maxEnergy: 1,
+    maxEnergy: { PLAYER: 1, OPP: 1 },
+    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
     phase: 'AWAITING_INTENT',
     seed: 'test-seed',
     priority: 'PLAYER',

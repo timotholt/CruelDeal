@@ -28,11 +28,15 @@ export { createRng } from './rng';
 
 // ---- Reducer / resolvers ---------------------------------------------------
 export { apply } from './apply';
-export { resolve } from './resolve';
-export { resolveTurn } from './resolveTurn';
+export { resolve, resolveTurn } from './resolve';
+export type { ResolveTurnResult } from './resolve';
 
 // ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
-export { revealCard, evalEffect, MAX_EVAL_DEPTH } from './eval';
+export { revealCard, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
+
+// ---- CLI (headless match driver) -----------------------------------------
+export { createInitialMatchState } from './cli/initState';
+export { runMatch, type RunMatchOptions, type RunMatchResult } from './cli/runMatch';
 
 // ---- Projections -----------------------------------------------------------
 export * as projections from './projections';

@@ -35,8 +35,8 @@
 | 7 | `resolve()` intent dispatcher + `resolveTurn()` turn cascade (priority-ordered reveals, location reveal, draw, energy refill, match-end) | ✅ done |
 | 8a | Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play. | ✅ done |
 | 8b | Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`) | ✅ done |
-| **8c** | **Collapse dual state — deleted old `services/playgame/{state,types,cards,locations}.ts` and `engine/adapter/`. `PlayGameContext` now wraps engine `MatchState` directly; UI reads via `services/playgame/view.ts` selectors.** | **✅ done** |
-| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ next |
+| 8c | Collapse dual state — deleted old `services/playgame/{state,types,cards,locations}.ts` and `engine/adapter/`. `PlayGameContext` now wraps engine `MatchState` directly; UI reads via `services/playgame/view.ts` selectors. | ✅ done |
+| **9** | **Node CLI harness (`npm run engine:cli`) for headless match replay. Lives in `services/playgame/engine/cli/`: `initState` (seeded factory) · `ai` (deterministic plan) · `runMatch` (driver) · `main` (entry). Same seed → identical event log across runs.** | **✅ done** |
 
 #### Step 8b / 8c migration checklist
 

@@ -88,9 +88,15 @@ function createInitialEngineState(seed: string, manifest: Manifest): EngineMatch
     },
   ] as EngineMatchState['lanes'];
 
+  // Turn 1 state is equivalent to "genesis state (turn 0, maxEnergy 0)"
+  // then the turn-1 start-of-turn bookkeeping applied:
+  //   maxEnergy[P|O] += 1 → 1
+  //   currentEnergy = maxEnergy + bonus(0) → 1
+  // We pre-apply this here rather than running a synthetic event cascade.
   return {
     turn: 1,
-    maxEnergy: 1,
+    maxEnergy: { PLAYER: 1, OPP: 1 },
+    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
     phase: 'AWAITING_INTENT' as MatchPhase,
     seed,
     priority: Math.random() < 0.5 ? 'PLAYER' : 'OPP',
@@ -211,7 +217,10 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     if ((lanePair?.['PLAYER']?.length ?? 0) >= 4) return false;
 
     // Push undo snapshot BEFORE the mutation so we can restore it.
-    setUi('history', (prev) => [...prev, raw]);
+    // IMPORTANT: structuredClone so the snapshot doesn't share refs with the
+    // live store. Solid's reconcile() mutates store-owned nodes in place, so
+    // a shallow capture would get corrupted by later dispatches.
+    setUi('history', (prev) => [...prev, structuredClone(raw)]);
 
     const events = resolve(
       raw,
