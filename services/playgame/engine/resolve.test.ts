@@ -40,13 +40,7 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-const mkLoc = (defId: string, extra: Partial<LocationDef> = {}): LocationDef => ({
-  defId, version: 1, name: defId, rarity: 1, abilities: {},
-  cosmetic: { displayName: defId, description: '', art: { map: { path: '' } } },
-  ...extra,
-});
-
-function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
+function mkManifest(cards: CardDef[]): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -54,7 +48,7 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12 },
     cards: byId(cards),
-    locations: byId(locations),
+    locations: {},
     disabled: { cards: [], locations: [] },
   };
 }
@@ -348,7 +342,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
 // -- Location reveal at start of turn 2 (for lane 1) ------------------------
 
 {
-  const manifest = mkManifest([], []);
+  const manifest = mkManifest([]);
   let s = baseState({ turn: 1, priority: 'PLAYER' });
   s = withLocation(s, 1, 'some-loc', false);
   const { events, state: after } = resolveTurn(s, manifest, createRng('loc'));
