@@ -1,18 +1,35 @@
 /**
  * BOOTSTRAP_MANIFEST — the hand-assembled manifest consumed during the
- * 0.2 migration. See spec §3.5 and §10 (Step 3).
+ * 0.2 migration. See spec §3.5.
  *
- * Step 3 will populate `cards` and `locations` by porting the current
- * `services/playgame/cards.ts` and `locations.ts` into this shape.
+ * Step 3 populates cards and locations by porting the demo's
+ * `services/playgame/cards.ts` + `locations.ts` into the spec-compliant
+ * shape. Three locations are pinned 1:1 to the three map images in
+ * `public/art/maps/` — Cathedral, Jungle Trail, Science Lab.
  *
- * For Step 1 this is empty but valid — engine stubs can accept it as
- * a typed parameter without any chicken-and-egg problem.
+ * Bumping `version` here is REQUIRED whenever ability data or stats
+ * change in a way that could desync a mid-flight match. Client
+ * compares Manifest.version during reconnect and refuses to resume a
+ * match from a different version (spec §3.5).
  */
 
-import type { Manifest } from './types';
+import type { CardDef, LocationDef, Manifest } from './types';
+import { CARDS_INDEX } from './content/cards';
+import { LOCATIONS_INDEX } from './content/locations';
+
+const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<string, T> => {
+  const out: Record<string, T> = {};
+  for (const item of items) {
+    if (out[item.defId]) {
+      throw new Error(`BOOTSTRAP_MANIFEST: duplicate defId "${item.defId}"`);
+    }
+    out[item.defId] = item;
+  }
+  return out;
+};
 
 export const BOOTSTRAP_MANIFEST: Manifest = {
-  version: 0,
+  version: 1,
   protocolVersion: 1,
   constants: {
     energyCurve: [1, 2, 3, 4, 5, 6],
@@ -21,8 +38,8 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     laneCapacity: 4,
     deckSize: 12,
   },
-  cards: {},
-  locations: {},
+  cards: byDefId<CardDef>(CARDS_INDEX),
+  locations: byDefId<LocationDef>(LOCATIONS_INDEX),
   disabled: {
     cards: [],
     locations: [],
