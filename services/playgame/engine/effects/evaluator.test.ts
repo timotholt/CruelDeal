@@ -583,6 +583,155 @@ function buildState(
   eq(getCardPower(res.state, 'c2' as CardId, manifest), 5, 'evalEffect direct: friend = 3+2');
 }
 
+// -- Energy primitives: ADJUST_ENERGY / ADJUST_MAX_ENERGY / ADJUST_NEXT_TURN_ENERGY_BONUS
+
+{
+  // Psylocke-ish: "next turn, +1 energy". Then Electra-ish: permanent +1 max.
+  // Then refund-ish: +2 energy now. Exercises all three new DSL kinds and
+  // verifies the emitted events land in state via apply().
+  const psy = mkCard('psy', 2, 2, {
+    abilities: {
+      onReveal: [
+        { kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS', owner: 'SELF_OWNER', delta: { kind: 'LIT', n: 1 } },
+        { kind: 'ADJUST_MAX_ENERGY',             owner: 'SELF_OWNER', delta: { kind: 'LIT', n: 1 } },
+        { kind: 'ADJUST_ENERGY',                 owner: 'SELF_OWNER', delta: { kind: 'LIT', n: 2 } },
+        // Test OPP_OWNER resolution: -1 energy to opponent.
+        { kind: 'ADJUST_ENERGY',                 owner: 'OPP_OWNER',  delta: { kind: 'LIT', n: -1 } },
+      ],
+    },
+  });
+  const manifest = mkManifest([psy]);
+  const s0 = buildState([
+    { def: 'psy', owner: 'PLAYER', lane: 0, revealed: false },
+  ]);
+  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('energy-dsl'));
+
+  // Next-turn bonus for PLAYER: +1
+  eq(res.state.nextTurnEnergyBonus['PLAYER'], 1, 'ADJUST_NEXT_TURN_ENERGY_BONUS: PLAYER +1');
+  // Max energy for PLAYER: baseline (3) + 1
+  eq(res.state.maxEnergy['PLAYER'], 4, 'ADJUST_MAX_ENERGY: PLAYER +1');
+  // Current energy for PLAYER: baseline (0) + 2 = 2
+  eq(res.state.energy['PLAYER'], 2, 'ADJUST_ENERGY: PLAYER +2');
+  // OPP energy: baseline (0) - 1 = -1 (engine allows negative; caller may clamp)
+  eq(res.state.energy['OPP'], -1, 'ADJUST_ENERGY OPP_OWNER: OPP -1');
+
+  // Verify event shapes
+  const energyEvents = res.events.filter(
+    (e) => e.type === 'ENERGY_CHANGED' || e.type === 'MAX_ENERGY_CHANGED' || e.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED',
+  );
+  eq(energyEvents.length, 4, 'Energy primitives emit exactly 4 events');
+  const nextTurn = energyEvents.find((e) => e.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED');
+  eq(nextTurn !== undefined, true, 'NEXT_TURN_ENERGY_BONUS_CHANGED emitted');
+}
+
+// -- Energy primitive edge case: delta=0 is a no-op -----------------------
+
+{
+  const noop = mkCard('noop', 2, 2, {
+    abilities: {
+      onReveal: [
+        { kind: 'ADJUST_ENERGY', owner: 'SELF_OWNER', delta: { kind: 'LIT', n: 0 } },
+      ],
+    },
+  });
+  const manifest = mkManifest([noop]);
+  const s0 = buildState([
+    { def: 'noop', owner: 'PLAYER', lane: 0, revealed: false },
+  ]);
+  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('noop'));
+  eq(
+    res.events.filter((e) => e.type === 'ENERGY_CHANGED').length,
+    0,
+    'ADJUST_ENERGY delta=0 emits no event',
+  );
+}
+
+// -- onMove trigger: Void Hound gains +2 when moved -----------------------
+
+{
+  // Void Hound gains +2 power when it moves. Dune Sapper moves itself on
+  // reveal, so this test pairs the two: Sapper wouldn't trigger onMove
+  // (it has no such ability) — we use a hound-style moved card instead.
+  const teleport = mkCard('teleport', 1, 1, {
+    abilities: {
+      onReveal: [{
+        kind: 'MOVE',
+        target: { kind: 'SELF' },
+        to: { kind: 'RANDOM_N', count: { kind: 'LIT', n: 1 },
+              of: { kind: 'OTHER_LANES', of: { kind: 'SELF' } } },
+      }],
+      onMove: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SELF' },
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    },
+  });
+  const manifest = mkManifest([teleport]);
+  const s0 = buildState([{ def: 'teleport', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('move-trigger'));
+  eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'onMove: base(1) + moveBuff(2) = 3');
+  const moves = res.events.filter((e) => e.type === 'CARD_MOVED');
+  eq(moves.length, 1, 'onMove: exactly 1 CARD_MOVED');
+}
+
+// -- onDestroyed trigger: self-destroying card emits last-breath effect ----
+
+{
+  // Bomber: self-destructs on reveal, dealing 5 damage to opponents in
+  // its lane on the way out. Verifies that `onDestroyed` fires AFTER the
+  // CARD_DESTROYED event and can still reference SELF's pre-destroy lane
+  // (the reducer removes the card from lane arrays but keeps it in
+  // `state.cards`, so SELF-anchored selectors keep resolving).
+  const bomber = mkCard('bomber', 2, 2, {
+    abilities: {
+      onReveal: [{ kind: 'DESTROY', target: { kind: 'SELF' } }],
+      onDestroyed: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'OPP_OWNER' },
+        delta: { kind: 'LIT', n: -5 },
+      }],
+    },
+  });
+  const enemy = mkCard('enemy', 6, 1);
+  const manifest = mkManifest([bomber, enemy]);
+  const s0 = buildState([
+    { def: 'bomber', owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'enemy',  owner: 'OPP',    lane: 0, revealed: true },
+  ]);
+  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('bomber'));
+  eq(getCardPower(res.state, 'c2' as CardId, manifest), 1, 'onDestroyed: enemy 6 - 5 = 1');
+  const destroyed = res.events.filter((e) => e.type === 'CARD_DESTROYED');
+  eq(destroyed.length, 1, 'onDestroyed: exactly 1 CARD_DESTROYED');
+}
+
+// -- onAnyCardPlayedHere trigger: Iron-Fist-style +1 power per play -------
+
+{
+  // A card that gains +1 power every time ANY other card is revealed in
+  // its lane. A fresh reveal here should bump it by 1.
+  const watcher = mkCard('watcher', 2, 2, {
+    abilities: {
+      onAnyCardPlayedHere: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SELF' },
+        delta: { kind: 'LIT', n: 1 },
+      }],
+    },
+  });
+  const grunt = mkCard('grunt', 3, 1);
+  const manifest = mkManifest([watcher, grunt]);
+  const s0 = buildState([
+    { def: 'watcher', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'grunt',   owner: 'PLAYER', lane: 0, revealed: false },
+  ]);
+  const res = revealCard(s0, 'c2' as CardId, manifest, createRng('on-play'));
+  // Watcher starts at 2, grunt reveals, +1 to watcher → 3.
+  eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'onAnyCardPlayedHere: watcher 2 + 1 = 3');
+  // Grunt itself shouldn't trigger for self.
+  eq(getCardPower(res.state, 'c2' as CardId, manifest), 3, 'onAnyCardPlayedHere: grunt unchanged');
+}
+
 // -- Exit -------------------------------------------------------------------
 
 if (failures > 0) {

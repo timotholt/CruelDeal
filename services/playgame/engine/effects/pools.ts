@@ -14,12 +14,21 @@ import type { Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
 
-/** Resolve an owner ref (literal or SELF_OWNER) to a concrete Owner. */
+/**
+ * Resolve an owner ref (literal, SELF_OWNER, or OPP_OWNER) to a concrete
+ * Owner. Returns null when the ref is relative and no self-owner is
+ * available (e.g. a LOCATION-sourced effect with SELF_OWNER — locations
+ * don't have an owner).
+ */
 export function resolveOwnerRef(
-  ref: Owner | 'SELF_OWNER',
+  ref: Owner | 'SELF_OWNER' | 'OPP_OWNER',
   selfOwner: Owner | null,
 ): Owner | null {
   if (ref === 'SELF_OWNER') return selfOwner;
+  if (ref === 'OPP_OWNER') {
+    if (!selfOwner) return null;
+    return selfOwner === 'PLAYER' ? 'OPP' : 'PLAYER';
+  }
   return ref;
 }
 

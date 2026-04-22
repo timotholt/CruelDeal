@@ -103,7 +103,22 @@ export type PendingEffect =
   | { kind: 'SHURI_DOUBLE_NEXT'; owner: Owner; lane: LaneIdx; sourceId: CardId }
   | { kind: 'COULSON_TRIGGER_NEXT'; owner: Owner; lane: LaneIdx; sourceId: CardId }
   | { kind: 'EGO_OVERRIDE'; turn: number }
-  | { kind: 'RICKETY_BRIDGE_DESTROY'; lane: LaneIdx; atEndOfTurn: number };
+  | { kind: 'RICKETY_BRIDGE_DESTROY'; lane: LaneIdx; atEndOfTurn: number }
+  /**
+   * Generic scheduled effect. The DSL's `ADD_PENDING` with a `SCHEDULED`
+   * spec produces this shape. `sourceId` / `owner` / `lane` carry the
+   * authoring-time ctx so the effect resolves SELF/SELF_OWNER selectors
+   * correctly at fire-time (the original source card may have moved,
+   * been destroyed, or been revealed by then).
+   */
+  | {
+      kind: 'SCHEDULED';
+      when: import('./ability').PendingWhen;
+      sourceId: CardId;
+      sourceOwner: Owner | null;
+      sourceLane: LaneIdx | null;
+      effect: import('./ability').EffectExpr;
+    };
 
 // ---- Lane state ------------------------------------------------------------
 

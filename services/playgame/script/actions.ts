@@ -80,6 +80,15 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   _engineEvents?: readonly MatchEvent[];
   /** Final engine state after full turn resolution (from resolveTurn). */
   _engineFinalState?: EngineMatchState;
+  /**
+   * Index into `_engineEvents` where `revealByPriorityFromEngine` stopped
+   * dispatching (exclusive — equals the `TURN_ENDED` index, or
+   * `events.length` if that event is absent). `advanceTurnFromEngine`
+   * resumes from this index so turn-bookkeeping events aren't double-
+   * applied and per-reveal events (already animated inline with each
+   * flip) aren't re-dispatched.
+   */
+  _revealsConsumedUpTo?: number;
 }
 
 // ── Screen / UI visibility ───────────────────────────────────────────────────
@@ -367,63 +376,159 @@ export const captureEngineEndTurn = (): Step => (ctx) => {
   return Promise.resolve();
 };
 
+/** Duration of the FLIP slide used for CARD_MOVED animations (ms). */
+const MOVE_ANIM_DURATION_MS = 360;
+
 /**
- * Reveal all pending cards in the order the engine dictated (priority-first).
- * Dispatches CARD_FLIPPED for each card as its reveal animation completes.
+ * Wait for the next animation frame so Solid can re-render the DOM after
+ * a `dispatch()` call. Used before measuring the new rect in a FLIP
+ * sequence.
+ */
+const nextFrame = (): Promise<void> =>
+  new Promise((r) => requestAnimationFrame(() => r()));
+
+/**
+ * Dispatch a single per-reveal event to the store, playing its matching
+ * animation if any. Per-reveal events are the ones that fire DURING a
+ * card's On Reveal cascade (OR windows, power deltas, moves, destroys,
+ * etc.) — everything between one CARD_FLIPPED and the next, or up to
+ * TURN_ENDED for the final revealed card.
+ *
+ * Animations currently wired:
+ *   - CARD_MOVED: FLIP-slide the card from its old lane slot to its new
+ *     one. Applies to Dune Sapper (self-move OR), Nightcrawler (move-to-
+ *     other-lane OR), and any future `kind: 'MOVE'` emitter.
+ *
+ * Other events currently just dispatch synchronously; add per-type
+ * branches here as animations are authored (CARD_DESTROYED shatter,
+ * CARD_POWER_CHANGED flash, etc.).
+ */
+const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
+  if (event.type === 'CARD_MOVED') {
+    const id = event.cardId as string;
+    const el = c.cardRefs.get(id);
+    const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
+    c.dispatch(event);
+    if (oldRect) {
+      const rects = new Map<string, DOMRect>([[id, oldRect]]);
+      await nextFrame();
+      playLayoutSlide(rects, c.cardRefs, { duration: MOVE_ANIM_DURATION_MS });
+      await new Promise<void>((r) => setTimeout(r, MOVE_ANIM_DURATION_MS));
+    }
+    return;
+  }
+  c.dispatch(event);
+};
+
+/**
+ * Reveal all pending cards in the order the engine dictated (priority-
+ * first), playing out each card's On Reveal cascade inline between its
+ * flip animation and the next card's flip.
+ *
+ * Event-slicing contract: for each `CARD_FLIPPED`, the events strictly
+ * between it and the NEXT `CARD_FLIPPED` (or `TURN_ENDED`, whichever
+ * comes first) constitute that card's per-reveal slice. The slice is
+ * dispatched through `dispatchPerRevealEvent` after the flip cinematic
+ * and before the next flip, so move-on-reveal / damage-on-reveal / spawn-
+ * on-reveal all animate in the correct narrative order.
+ *
+ * `TURN_ENDED` is the handoff boundary: `advanceTurnFromEngine` picks up
+ * at that index to run bookkeeping (cleanup tags, energy ramp, TURN_STARTED,
+ * draws). Caller stores the split index on ctx so the two actions stay
+ * in sync.
  */
 export const revealByPriorityFromEngine = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   const events = c._engineEvents ?? [];
 
-  // CARD_FLIPPED events are already in priority order from resolveTurn.
-  const flippedIds = events
-    .filter((e): e is Extract<MatchEvent, { type: 'CARD_FLIPPED' }> => e.type === 'CARD_FLIPPED')
-    .map((e) => e.cardId as string);
+  // Build an index of CARD_FLIPPED positions and find the TURN_ENDED
+  // boundary in one pass. `turnEndedIdx` defaults to events.length so a
+  // stream with no TURN_ENDED (unlikely, but shape-safe) still terminates.
+  const flippedIndices: Array<{ cardId: string; idx: number }> = [];
+  let turnEndedIdx = events.length;
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (e.type === 'CARD_FLIPPED') {
+      flippedIndices.push({ cardId: e.cardId as string, idx: i });
+    } else if (e.type === 'TURN_ENDED' && turnEndedIdx === events.length) {
+      turnEndedIdx = i;
+    }
+  }
+  c._revealsConsumedUpTo = turnEndedIdx;
 
-  if (flippedIds.length === 0) return;
+  if (flippedIndices.length === 0) return;
 
-  // Only reveal cards that are actually face-down (not yet revealed in engine).
-  const toReveal = flippedIds.filter((id) => {
-    const card = c.state.cards[id as CardId];
+  // Only animate cards still face-down in the UI — CARD_FLIPPED can appear
+  // for cards the engine chose to flip but the UI already considers revealed.
+  const activeFlipped = flippedIndices.filter(({ cardId }) => {
+    const card = c.state.cards[cardId as CardId];
     return card && !card.revealed;
   });
-
-  if (toReveal.length === 0) return;
+  if (activeFlipped.length === 0) return;
 
   await revealPendingCinematic({
-    pendingIds: toReveal,
+    pendingIds: activeFlipped.map(({ cardId }) => cardId),
     cardElMap: c.cardRefs,
     boardWrap: c.boardWrap,
     sfx: c.sfx,
-    onRevealed: (id) => {
-      // Dispatch the engine event so card.revealed becomes true reactively.
+    onRevealed: async (id) => {
+      // Flip first: dispatch CARD_FLIPPED so `card.revealed` becomes true
+      // reactively (this also triggers the face-up paint for the newly-
+      // revealed card).
       c.dispatch({ type: 'CARD_FLIPPED', cardId: id as CardId });
+
+      // Per-reveal slice = (this CARD_FLIPPED, next CARD_FLIPPED ∪ TURN_ENDED).
+      const myIdx = flippedIndices.find((f) => f.cardId === id)?.idx;
+      if (myIdx === undefined) return;
+      const nextIdx = flippedIndices.find((f) => f.idx > myIdx)?.idx ?? turnEndedIdx;
+      const slice = events.slice(myIdx + 1, nextIdx);
+      for (const ev of slice) {
+        if (ev.type === 'CARD_FLIPPED') continue; // belongs to another card
+        await dispatchPerRevealEvent(c, ev);
+      }
     },
   });
 };
 
 /**
- * Advance the turn from the engine's TURN_STARTED event.
- * Dispatches TURN_ENDED, ENERGY_CHANGED, and TURN_STARTED to update
- * turn counter, energy, and priority in the engine state.
- * Resets `ui.isFlipped` so next turn's staged cards show face-up.
+ * Dispatch the remainder of the engine's turn-resolution event stream to
+ * the UI store.
+ *
+ * Design note: this used to carry a WHITELIST of event types to dispatch,
+ * which silently dropped every new `MatchEvent` variant the engine grew
+ * (we lost `MAX_ENERGY_CHANGED` this way). The correct shape is an
+ * EXCLUSION list: dispatch everything by default, skip only the events
+ * that another script action has already played out with its own
+ * animation.
+ *
+ * `CARD_FLIPPED` is dispatched per-card by `revealByPriorityFromEngine`
+ * during the flip cinematic; re-dispatching it here would double-flip
+ * and break priority ordering. Everything else (power deltas, moves,
+ * destroys, draws, location reveals, energy ramps, turn boundaries,
+ * match end) reaches the store.
+ *
+ * Also resets `ui.isFlipped` so next turn's staged cards show face-up.
  */
+const SCRIPT_OWNED_EVENT_TYPES: ReadonlySet<MatchEvent['type']> = new Set<MatchEvent['type']>([
+  'CARD_FLIPPED',        // played out per-card by revealByPriorityFromEngine
+  'LOCATION_REVEALED',   // played out by revealNextLocation cinematic
+  'CARD_DRAWN',          // played out by drawHandCard (Tier 1.1 will unify)
+]);
+
 export const advanceTurnFromEngine = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   const events = c._engineEvents ?? [];
 
-  // Dispatch turn-bookkeeping events in the order the engine produced them.
-  const bookkeepingTypes = new Set([
-    'TURN_ENDED',
-    'MAX_ENERGY_CHANGED',
-    'NEXT_TURN_ENERGY_BONUS_CHANGED',
-    'ENERGY_CHANGED',
-    'TURN_STARTED',
-  ]);
-  for (const event of events) {
-    if (bookkeepingTypes.has(event.type)) {
-      c.dispatch(event);
-    }
+  // Resume from where `revealByPriorityFromEngine` left off (TURN_ENDED
+  // boundary). Events before that index are per-reveal and have already
+  // been dispatched + animated inline with each card's flip cinematic;
+  // re-dispatching them here would double-apply every mutation.
+  const startIdx = c._revealsConsumedUpTo ?? 0;
+
+  for (let i = startIdx; i < events.length; i++) {
+    const event = events[i];
+    if (SCRIPT_OWNED_EVENT_TYPES.has(event.type)) continue;
+    c.dispatch(event);
   }
 
   // Reset the face-up override so next turn's staged cards show face-up.

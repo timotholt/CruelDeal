@@ -88,6 +88,18 @@ export type EffectExpr =
   | { kind: 'ADD_LOCATION_TAG'; lane: Selector; tag: LaneTagSpec }
   | { kind: 'REPLACE_LOCATION'; lane: Selector; newDefId: string }
   | { kind: 'MODIFY_COUNTER'; target: Selector; name: string; delta: NumExpr }
+
+  // ---- Energy (Snap-style: current, max, next-turn bonus) ----
+  // All three emit events with EnergyReason='EFFECT'.
+  /** Add `delta` to the target owner's current energy pool. */
+  | { kind: 'ADJUST_ENERGY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
+  /** Change the owner's max-energy ceiling. Electra-style permanent ramp. */
+  | { kind: 'ADJUST_MAX_ENERGY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
+  /** Grant the owner `delta` bonus energy at the START of their next
+   *  turn. Multiple sources stack additively; engine consumes the bonus
+   *  during start-of-turn bookkeeping. Psylocke, Quinjet, etc. */
+  | { kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
+
   | { kind: 'CALL_BUILTIN'; fn: string; args: Record<string, unknown> }
 
   // Re-entry combinators (cause nested revealCard calls)
@@ -157,11 +169,27 @@ export type LaneTagSpec =
   | { kind: 'ON_FIRE' }
   | { kind: 'SEALED' };
 
+/**
+ * When a `SCHEDULED` pending effect fires. Extend with new phase hooks
+ * (e.g. 'END_OF_TURN', 'BEFORE_REVEALS') as needed.
+ *
+ * - `START_OF_NEXT_TURN`: fires during start-of-turn bookkeeping of turn
+ *   N+1, AFTER the energy refill and priority compute but BEFORE the
+ *   turn's draws. Psylocke, Quinjet, "next turn your cards here get +1
+ *   power" all schedule into this phase.
+ */
+export type PendingWhen = 'START_OF_NEXT_TURN';
+
 export type PendingEffectSpec =
+  // Named card-specific pending effects (retained for back-compat with
+  // the hand-built cleanup logic in `apply.ts`).
   | { kind: 'SHURI_DOUBLE_NEXT' }
   | { kind: 'COULSON_TRIGGER_NEXT' }
   | { kind: 'EGO_OVERRIDE' }
-  | { kind: 'RICKETY_BRIDGE_DESTROY' };
+  | { kind: 'RICKETY_BRIDGE_DESTROY' }
+  // Generic scheduled effect: run any EffectExpr at a future phase.
+  // Prefer this over adding new named kinds to the union above.
+  | { kind: 'SCHEDULED'; when: PendingWhen; effect: EffectExpr };
 
 // ---- Effect provenance (emitted on every mutation event) -------------------
 

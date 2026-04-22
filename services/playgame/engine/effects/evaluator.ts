@@ -30,6 +30,59 @@ import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 
 export const MAX_REVEAL_RECURSION = 16;
 
+/** Names of per-card triggered ability slots that fire outside the reveal
+ *  cascade. Each slot is a `readonly EffectExpr[]` on `CardAbilities`. */
+type TriggerSlot = 'onMove' | 'onDestroyed' | 'onDiscarded' | 'onAnyCardPlayedHere';
+
+/**
+ * Fire a named trigger slot for one card, with a frozen self-context
+ * (useful when the underlying card has been moved/destroyed/discarded
+ * and we still need to resolve SELF-relative selectors against its
+ * state at event time). Returns the concatenated events + final state.
+ *
+ * Depth is inherited + 1 from `parentDepth` so triggered cascades
+ * respect the same recursion cap as the OR evaluator.
+ */
+function fireCardTrigger(
+  state: MatchState,
+  cardId: CardId,
+  selfLane: LaneIdx | null,
+  selfOwner: Owner | null,
+  slot: TriggerSlot,
+  parentRng: Rng,
+  parentDepth: number,
+  manifest: Manifest,
+): EvalResult {
+  const card = state.cards[cardId];
+  if (!card) return { events: [], state };
+  const def = manifest.cards[card.defId];
+  const effs = def?.abilities[slot];
+  if (!effs || effs.length === 0) return { events: [], state };
+  if (parentDepth >= MAX_REVEAL_RECURSION) {
+    const diag: MatchEvent = { type: 'RECURSION_LIMIT_HIT', cardId, depth: parentDepth };
+    return { events: [diag], state: apply(state, diag, manifest) };
+  }
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (let j = 0; j < effs.length; j++) {
+    const subCtx: EffectCtx = {
+      state: s,
+      manifest,
+      self: cardId,
+      selfKind: 'card',
+      selfLane,
+      selfOwner,
+      rng: parentRng.fork(`${slot}:${cardId}:${j}`),
+      source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+      depth: parentDepth + 1,
+    };
+    const res = evalEffect(s, effs[j], subCtx, manifest);
+    events.push(...res.events);
+    s = res.state;
+  }
+  return { events, state: s };
+}
+
 /** Extra fields carried during effect evaluation, on top of EvalCtx. */
 export interface EffectCtx extends EvalCtx {
   /** Forked Rng owned by THIS effect invocation. Always defined during
@@ -89,7 +142,15 @@ export function revealCard(
 
   const def = manifest.cards[card.defId];
   const onReveal = def?.abilities.onReveal ?? [];
-  if (onReveal.length === 0) return { events, state: s };
+  if (onReveal.length === 0) {
+    // No OR abilities, but `onAnyCardPlayedHere` on OTHER same-lane cards
+    // must still fire — "played" = revealed, independent of the revealing
+    // card's own abilities.
+    const post = fireOnAnyCardPlayedHere(s, cardId, rng, depth, manifest);
+    events.push(...post.events);
+    s = post.state;
+    return { events, state: s };
+  }
 
   // Depth cap — emit a diagnostic and return without firing any effects.
   if (depth >= MAX_REVEAL_RECURSION) {
@@ -134,6 +195,50 @@ export function revealCard(
   events.push(close);
   s = apply(s, close, manifest);
 
+  const post = fireOnAnyCardPlayedHere(s, cardId, rng, depth, manifest);
+  events.push(...post.events);
+  s = post.state;
+
+  return { events, state: s };
+}
+
+/**
+ * Fire `onAnyCardPlayedHere` for every OTHER revealed card in the same
+ * lane as `cardId`. "Played" in Snap means revealed, so this is the
+ * correct firing point — invoked whenever a card is newly revealed,
+ * whether or not that card has its own On Reveal abilities.
+ */
+function fireOnAnyCardPlayedHere(
+  state: MatchState,
+  cardId: CardId,
+  parentRng: Rng,
+  parentDepth: number,
+  manifest: Manifest,
+): EvalResult {
+  const flipped = state.cards[cardId];
+  const lane = flipped?.lane;
+  if (!flipped || lane === null || lane === undefined) {
+    return { events: [], state };
+  }
+  const events: MatchEvent[] = [];
+  let s = state;
+  const laneState = s.lanes[lane];
+  for (const owner of ['PLAYER', 'OPP'] as const) {
+    for (const id of laneState.cards[owner]) {
+      if (id === cardId) continue;
+      const other = s.cards[id];
+      if (!other || !other.revealed) continue;
+      const trig = fireCardTrigger(
+        s, id, lane, owner,
+        'onAnyCardPlayedHere',
+        parentRng.fork(`onPlay:${cardId}:${id}`),
+        parentDepth,
+        manifest,
+      );
+      events.push(...trig.events);
+      s = trig.state;
+    }
+  }
   return { events, state: s };
 }
 
@@ -149,10 +254,22 @@ export function evalEffect(
 ): EvalResult {
   // Refresh selfLane/selfOwner off the live state each call — they can
   // change mid-cascade (e.g. after a MOVE emits CARD_MOVED on SELF).
+  //
+  // EXCEPTION: if the card is in a terminal zone (DESTROYED/DISCARD/
+  // BANISHED), `liveSelf.lane` is null but the FROZEN `ctx.selfLane`
+  // (captured by the trigger before the lifecycle event) still reflects
+  // the card's board position at the moment the effect was scheduled.
+  // Preserving it is what makes deathrattles / on-discard-in-lane work.
   const self = ctx.self as CardId | null;
   const liveSelf = self ? state.cards[self] : null;
+  const onBoard = liveSelf && liveSelf.lane !== null;
   const liveCtx: EffectCtx = liveSelf
-    ? { ...ctx, state, selfLane: liveSelf.lane, selfOwner: liveSelf.owner }
+    ? {
+        ...ctx,
+        state,
+        selfLane: onBoard ? liveSelf.lane : ctx.selfLane,
+        selfOwner: liveSelf.owner,
+      }
     : { ...ctx, state };
 
   switch (effect.kind) {
@@ -218,9 +335,17 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
+        const preCard = s.cards[id];
+        const preLane = preCard?.lane ?? null;
+        const preOwner = preCard?.owner ?? null;
         const e: MatchEvent = { type: 'CARD_DESTROYED', cardId: id, cause: ctx.source };
         events.push(e);
         s = apply(s, e, manifest);
+        // Fire onDestroyed for this card, anchored to its pre-destroy lane
+        // so SELF-relative selectors still resolve meaningfully.
+        const trig = fireCardTrigger(s, id, preLane, preOwner, 'onDestroyed', ctx.rng, ctx.depth, manifest);
+        events.push(...trig.events);
+        s = trig.state;
       }
       return { events, state: s };
     }
@@ -230,6 +355,8 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
+        const preCard = s.cards[id];
+        const preOwner = preCard?.owner ?? null;
         const e: MatchEvent = {
           type: 'CARD_DISCARDED',
           cardId: id,
@@ -238,6 +365,10 @@ export function evalEffect(
         };
         events.push(e);
         s = apply(s, e, manifest);
+        // Discard happens from hand, so selfLane is null.
+        const trig = fireCardTrigger(s, id, null, preOwner, 'onDiscarded', ctx.rng, ctx.depth, manifest);
+        events.push(...trig.events);
+        s = trig.state;
       }
       return { events, state: s };
     }
@@ -269,6 +400,10 @@ export function evalEffect(
         };
         events.push(e);
         s = apply(s, e, manifest);
+        // Fire onMove; the card is now in `toLane` so selfLane resolves to it.
+        const trig = fireCardTrigger(s, id, toLane, card.owner, 'onMove', ctx.rng, ctx.depth, manifest);
+        events.push(...trig.events);
+        s = trig.state;
       }
       return { events, state: s };
     }
@@ -550,6 +685,35 @@ export function evalEffect(
       return { events, state: s };
     }
 
+    // ---- Energy ----------------------------------------------------------
+
+    case 'ADJUST_ENERGY': {
+      const owner = resolveOwnerRef(effect.owner, ctx.selfOwner);
+      if (!owner) return { events: [], state };
+      const delta = Math.trunc(evalNum(effect.delta, liveCtx));
+      if (delta === 0) return { events: [], state };
+      const e: MatchEvent = { type: 'ENERGY_CHANGED', owner, delta, reason: 'EFFECT' };
+      return { events: [e], state: apply(state, e, manifest) };
+    }
+
+    case 'ADJUST_MAX_ENERGY': {
+      const owner = resolveOwnerRef(effect.owner, ctx.selfOwner);
+      if (!owner) return { events: [], state };
+      const delta = Math.trunc(evalNum(effect.delta, liveCtx));
+      if (delta === 0) return { events: [], state };
+      const e: MatchEvent = { type: 'MAX_ENERGY_CHANGED', owner, delta, reason: 'EFFECT' };
+      return { events: [e], state: apply(state, e, manifest) };
+    }
+
+    case 'ADJUST_NEXT_TURN_ENERGY_BONUS': {
+      const owner = resolveOwnerRef(effect.owner, ctx.selfOwner);
+      if (!owner) return { events: [], state };
+      const delta = Math.trunc(evalNum(effect.delta, liveCtx));
+      if (delta === 0) return { events: [], state };
+      const e: MatchEvent = { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED', owner, delta };
+      return { events: [e], state: apply(state, e, manifest) };
+    }
+
     // ---- Escape hatch ----------------------------------------------------
 
     case 'CALL_BUILTIN':
@@ -626,6 +790,18 @@ function resolvePendingEffectSpec(
     case 'RICKETY_BRIDGE_DESTROY':
       if (lane === null) return null;
       return { kind: 'RICKETY_BRIDGE_DESTROY', lane, atEndOfTurn: state.turn };
+    case 'SCHEDULED':
+      // Freeze sourceOwner/sourceLane at authoring time so the scheduled
+      // effect resolves SELF-relative selectors correctly even if the
+      // source card moves or is destroyed before it fires.
+      return {
+        kind: 'SCHEDULED',
+        when: spec.when,
+        sourceId,
+        sourceOwner: owner,
+        sourceLane: lane,
+        effect: spec.effect,
+      };
   }
 }
 

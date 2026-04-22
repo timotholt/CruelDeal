@@ -115,8 +115,13 @@ export interface RevealPendingCinematicOpts {
   cardElMap: Map<string, HTMLElement>;
   boardWrap: HTMLElement;
   sfx?: (name: string) => void;
-  /** Invoked after each card finishes so callers can clear state. */
-  onRevealed?: (id: string) => void;
+  /**
+   * Invoked after each card finishes its flip cinematic. The loop awaits
+   * whatever the callback returns, so callers can inject per-card follow-
+   * ups (dispatch `CARD_FLIPPED`, play per-reveal effect animations like
+   * `CARD_MOVED`, etc.) before the next card's flip begins.
+   */
+  onRevealed?: (id: string) => void | Promise<void>;
 }
 
 export async function revealPendingCinematic(opts: RevealPendingCinematicOpts): Promise<void> {
@@ -124,6 +129,6 @@ export async function revealPendingCinematic(opts: RevealPendingCinematicOpts): 
   if (!pendingIds.length) return;
   for (const id of pendingIds) {
     await revealCardCinematic({ cardId: id, cardElMap, boardWrap, sfx });
-    onRevealed?.(id);
+    await onRevealed?.(id);
   }
 }

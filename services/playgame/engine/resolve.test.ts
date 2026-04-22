@@ -484,6 +484,88 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   eq(getLanePower(after, 0, 'PLAYER', manifest), 6, 'lane 0 power = 6');
 }
 
+// -- onEndOfTurn trigger: Kraven-style +2 at end of every turn -------------
+
+{
+  // Card in lane 0 that gains +2 power at the END of each turn. After
+  // staging + resolveTurn, the card should be base(3) + endOfTurn(+2) = 5.
+  const kraven = mkCard('kraven', 3, 2, {
+    abilities: {
+      onEndOfTurn: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SELF' },
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    },
+  });
+  const manifest = mkManifest([kraven]);
+  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  const h = withCardInHand(s, 'kraven'); s = h.state;
+  s = runEvents(s, resolve(s, {
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+  }, createRng('r'), manifest), manifest);
+  const { state: after, events } = resolveTurn(s, manifest, createRng('kraven'));
+  // Power: base(3) + onEndOfTurn(+2) = 5. Kraven was staged this turn, so
+  // the reveal fires first (no onReveal ability), then onEndOfTurn ticks.
+  eq(getCardPower(after, h.cardId, manifest), 5, 'onEndOfTurn: 3 + 2 = 5');
+  // Ordering: the +2 event must fire BEFORE TURN_ENDED (the cleanup event).
+  const idxBuff = events.findIndex(
+    (e) => e.type === 'CARD_POWER_CHANGED' && e.cardId === h.cardId && e.delta === 2,
+  );
+  const idxEnded = events.findIndex((e) => e.type === 'TURN_ENDED');
+  truthy(idxBuff >= 0 && idxBuff < idxEnded, 'onEndOfTurn fires BEFORE TURN_ENDED');
+}
+
+// -- SCHEDULED pending: "next turn +1 energy" (Psylocke-like) --------------
+
+{
+  // Card's On Reveal ADD_PENDINGs a SCHEDULED(START_OF_NEXT_TURN, ADJUST_ENERGY +1).
+  // After resolveTurn, during the next turn's start-of-turn cascade, that
+  // scheduled effect fires and the owner's current energy ticks up one more
+  // than the vanilla refill would grant.
+  const psy = mkCard('psy', 2, 2, {
+    abilities: {
+      onReveal: [{
+        kind: 'ADD_PENDING',
+        effect: {
+          kind: 'SCHEDULED',
+          when: 'START_OF_NEXT_TURN',
+          effect: { kind: 'ADJUST_ENERGY', owner: 'SELF_OWNER', delta: { kind: 'LIT', n: 1 } },
+        },
+      }],
+    },
+  });
+  const manifest = mkManifest([psy]);
+  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  const h = withCardInHand(s, 'psy'); s = h.state;
+  s = runEvents(s, resolve(s, {
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+  }, createRng('r'), manifest), manifest);
+
+  // Before resolveTurn, PLAYER energy = turn(2) - 2(cost) = 0.
+  eq(s.energy['PLAYER'], 0, 'pre-resolveTurn: PLAYER energy spent on psy');
+
+  const { state: after, events } = resolveTurn(s, manifest, createRng('sched'));
+  // Turn advanced to 3. Vanilla refill would land energy at maxEnergy=3.
+  // SCHEDULED effect adds +1 on top → 4.
+  eq(after.turn, 3, 'resolveTurn advanced to turn 3');
+  eq(after.maxEnergy['PLAYER'], 3, 'maxEnergy ramped to 3');
+  eq(after.energy['PLAYER'], 4, 'SCHEDULED fired: energy = maxEnergy + 1');
+
+  // Pending queue must be empty — PENDING_EFFECT_REMOVED fires alongside.
+  eq(after.pendingEffects.length, 0, 'SCHEDULED consumed from pending queue');
+
+  // Event ordering: TURN_STARTED precedes the SCHEDULED effect's ENERGY_CHANGED(EFFECT),
+  // which precedes PENDING_EFFECT_REMOVED.
+  const idxStarted = events.findIndex((e) => e.type === 'TURN_STARTED');
+  const idxEffect = events.findIndex(
+    (e) => e.type === 'ENERGY_CHANGED' && e.reason === 'EFFECT',
+  );
+  const idxRemoved = events.findIndex((e) => e.type === 'PENDING_EFFECT_REMOVED');
+  truthy(idxStarted < idxEffect && idxEffect < idxRemoved,
+    'SCHEDULED order: TURN_STARTED < EFFECT < PENDING_EFFECT_REMOVED');
+}
+
 // ---- Exit ------------------------------------------------------------------
 
 if (failures > 0) {

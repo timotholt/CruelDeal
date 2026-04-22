@@ -26,6 +26,23 @@ export interface CardAbilities {
   onReveal?: EffectExpr[];
   ongoing?: OngoingExpr[];
   activate?: EffectExpr[];              // Tier 0.2 reserves the slot; unused for now
+  /** Fires during end-of-turn bookkeeping for every card of the owner in play.
+   *  Order: one owner's cards first (by lane, then intra-lane order), then the
+   *  other owner's. Runs BEFORE TURN_ENDED (so effects can still see the board). */
+  onEndOfTurn?: EffectExpr[];
+  /** Fires immediately after the card is moved to a new lane (any cause).
+   *  SELF refers to the moved card; `selfLane` is already the NEW lane. */
+  onMove?: EffectExpr[];
+  /** Fires when the card is destroyed (CARD_DESTROYED event). Last chance
+   *  for the card to emit events; SELF still resolves because the reducer
+   *  removes the card from lanes but keeps it in `state.cards`. */
+  onDestroyed?: EffectExpr[];
+  /** Fires when the card is discarded from hand (CARD_DISCARDED event).
+   *  Blade, Swarm, Morbius etc. */
+  onDiscarded?: EffectExpr[];
+  /** Fires when ANY card (friendly or enemy) is played into the same lane
+   *  as this one. Does NOT fire for the card's own stage event. */
+  onAnyCardPlayedHere?: EffectExpr[];
 }
 
 export interface CardDef {

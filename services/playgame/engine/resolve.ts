@@ -17,12 +17,12 @@
 
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
-import type { CardInstance, MatchResult, MatchState } from './types/state';
-import type { LaneIdx, Owner } from './types/ids';
+import type { CardInstance, MatchResult, MatchState, PendingEffect } from './types/state';
+import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
-import { revealCard } from './effects/evaluator';
+import { revealCard, evalEffect, type EffectCtx } from './effects/evaluator';
 import { getLanePower } from './projections/power';
 
 // ============================================================================
@@ -188,6 +188,49 @@ export function resolveTurn(
   // killing drawn cards, etc.) fire while cleanup runs, so their side-
   // effects count toward the final board state.
   //
+  // Phase 1.9  `onEndOfTurn` card triggers. Fixed iteration order:
+  //            lane 0 → 1 → 2, within each lane PLAYER cards first (in
+  //            stage order), then OPP cards. Only revealed cards fire;
+  //            pending (face-down) cards do not. Each trigger runs with
+  //            the card as SELF and a forked RNG keyed on cardId + exprIdx.
+  {
+    const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
+    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+      for (const owner of ['PLAYER', 'OPP'] as const) {
+        const ids = s.lanes[lane].cards[owner];
+        for (const id of ids) {
+          const card = s.cards[id];
+          if (!card || !card.revealed) continue;
+          const def = manifest.cards[card.defId];
+          const effs = def?.abilities.onEndOfTurn;
+          if (!effs || effs.length === 0) continue;
+          triggerFires.push({ cardId: id, effects: effs });
+        }
+      }
+    }
+    for (let i = 0; i < triggerFires.length; i++) {
+      const { cardId, effects: effs } = triggerFires[i];
+      for (let j = 0; j < effs.length; j++) {
+        const card = s.cards[cardId];
+        if (!card) break; // destroyed by a previous trigger this phase
+        const subCtx: EffectCtx = {
+          state: s,
+          manifest,
+          self: cardId,
+          selfKind: 'card',
+          selfLane: card.lane,
+          selfOwner: card.owner,
+          rng: rng.fork(`eot:${cardId}:${j}`),
+          source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+          depth: 0,
+        };
+        const res = evalEffect(s, effs[j], subCtx, manifest);
+        events.push(...res.events);
+        s = res.state;
+      }
+    }
+  }
+
   // Phase 2  TURN_ENDED — clears transient tags (DESTROYED_THIS_TURN,
   //          MOVED_THIS_TURN) + stagingOrder. `@migrate:atTurnEnd` is where
   //          location `atTurnEnd` abilities will be dispatched in a later
@@ -279,6 +322,39 @@ export function resolveTurn(
   };
   events.push(started);
   s = apply(s, started, manifest);
+
+  // Phase 5.5  Fire any SCHEDULED pending effects with when='START_OF_NEXT_TURN'.
+  //            These are the generic DSL counterpart to named pending
+  //            kinds (SHURI/EGO/…) and let cards schedule arbitrary
+  //            EffectExprs to run at the top of the next turn. Remove
+  //            each one as we fire it via PENDING_EFFECT_REMOVED.
+  {
+    const scheduled = s.pendingEffects.filter(
+      (p): p is Extract<PendingEffect, { kind: 'SCHEDULED' }> =>
+        p.kind === 'SCHEDULED' && p.when === 'START_OF_NEXT_TURN',
+    );
+    for (let i = 0; i < scheduled.length; i++) {
+      const pe = scheduled[i];
+      const subCtx: EffectCtx = {
+        state: s,
+        manifest,
+        self: pe.sourceId,
+        selfKind: 'card',
+        selfLane: pe.sourceLane,
+        selfOwner: pe.sourceOwner,
+        rng: rng.fork(`scheduled:${pe.sourceId}:${i}`),
+        source: { sourceId: pe.sourceId, effectKind: 'ON_REVEAL' },
+        depth: 0,
+      };
+      const res = evalEffect(s, pe.effect, subCtx, manifest);
+      events.push(...res.events);
+      s = res.state;
+      // Remove the pending after it fires. Uses structural equality in apply.ts.
+      const remove: MatchEvent = { type: 'PENDING_EFFECT_REMOVED', effect: pe };
+      events.push(remove);
+      s = apply(s, remove, manifest);
+    }
+  }
 
   // Phase 6  Draws (1 per owner, hand-cap permitting).
   for (const owner of ['PLAYER', 'OPP'] as const) {
