@@ -10,6 +10,7 @@ import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import type { CardInstance, LocationInstance, MatchState } from '../types/state';
 import type { OngoingExpr } from '../types/ability';
 import type { Manifest } from '../manifest/types';
+import type { Rng } from '../rng';
 
 /** Ongoing with its provenance resolved. */
 export interface SourcedOngoing {
@@ -36,8 +37,13 @@ export interface EvalCtx {
   readonly selfLane: LaneIdx | null;
   /** Owner of `self`. Locations have no owner. */
   readonly selfOwner: Owner | null;
-  /** Optional "it" binding for FOREACH — implemented in Step 6. */
+  /** Optional "it" binding for FOREACH iteration. */
   readonly it?: CardId;
+  /** Optional RNG. Required for selectors that sample (RANDOM_N,
+   *  FIRST_N with random ordering) and for NumExpr.RANDOM_INT. Pure
+   *  Ongoing projections do NOT supply one — those paths throw if they
+   *  hit a random primitive, which is the spec-mandated behavior. */
+  readonly rng?: Rng;
 }
 
 /** Build an EvalCtx anchored on a source card. */

@@ -24,7 +24,13 @@ export function evalNum(expr: NumExpr, ctx: EvalCtx): number {
       const def = ctx.manifest.cards[ctx.state.cards[ids[0]]?.defId ?? ''];
       return def?.basePower ?? 0;
     }
-    case 'RANDOM_INT':
-      throw new Error('evalNum: RANDOM_INT is only valid inside an effect evaluator (Step 6)');
+    case 'RANDOM_INT': {
+      if (!ctx.rng) {
+        throw new Error('evalNum(RANDOM_INT): requires ctx.rng; Ongoing projections cannot sample randomness');
+      }
+      const lo = Math.floor(evalNum(expr.lo, ctx));
+      const hi = Math.floor(evalNum(expr.hi, ctx));
+      return ctx.rng.int(lo, hi);
+    }
   }
 }

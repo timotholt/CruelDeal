@@ -102,11 +102,92 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       return collectInLane(ctx, lane, 'ANY_OWNER');
     }
 
-    // Step 6 primitives — throw loudly until implemented so we notice.
-    case 'RANDOM_N':
-    case 'FIRST_N':
-      throw new Error(`select: ${sel.kind} not implemented (Step 6)`);
+    case 'RANDOM_N': {
+      if (!ctx.rng) {
+        throw new Error('select(RANDOM_N): requires ctx.rng; Ongoing projections cannot sample randomness');
+      }
+      const pool = select(sel.of, ctx);
+      const n = Math.max(0, Math.floor(evalNum(sel.count, ctx)));
+      if (n === 0 || pool.length === 0) return [];
+      if (n >= pool.length) return ctx.rng.shuffle(pool);
+      // Fisher-Yates partial shuffle: pick the first n of a full shuffle.
+      // Cheap enough for the scale of any one selector call.
+      return ctx.rng.shuffle(pool).slice(0, n);
+    }
+
+    case 'FIRST_N': {
+      const pool = select(sel.of, ctx);
+      const n = Math.max(0, Math.floor(evalNum(sel.count, ctx)));
+      return pool.slice(0, n);
+    }
   }
+}
+
+/**
+ * Resolve a Selector to a set of unique LaneIdx values. Used for MOVE
+ * destinations, REPLACE_LOCATION targets, and any effect whose "to" is
+ * semantically a lane rather than a card.
+ *
+ * Handles LANE_OF / SAME_LANE / OTHER_LANES specially; falls back to
+ * "unique lanes of whatever cards this resolves to" for card selectors.
+ */
+export function selectLanes(sel: Selector, ctx: EvalCtx): Array<0 | 1 | 2> {
+  switch (sel.kind) {
+    case 'SELF':
+      return ctx.selfLane !== null ? [ctx.selfLane] : [];
+
+    case 'LANE_OF':
+    case 'SAME_LANE': {
+      const lane = laneOfSelector(sel.of, ctx);
+      return lane !== null ? [lane] : [];
+    }
+
+    case 'OTHER_LANES': {
+      const mine = laneOfSelector(sel.of, ctx);
+      if (mine === null) return [0, 1, 2];
+      return ([0, 1, 2] as Array<0 | 1 | 2>).filter(l => l !== mine);
+    }
+
+    case 'RANDOM_N': {
+      if (!ctx.rng) throw new Error('selectLanes(RANDOM_N): requires ctx.rng');
+      const pool = selectLanes(sel.of, ctx);
+      const n = Math.max(0, Math.floor(evalNum(sel.count, ctx)));
+      if (n === 0 || pool.length === 0) return [];
+      if (n >= pool.length) return ctx.rng.shuffle(pool);
+      return ctx.rng.shuffle(pool).slice(0, n);
+    }
+
+    case 'FIRST_N': {
+      const pool = selectLanes(sel.of, ctx);
+      const n = Math.max(0, Math.floor(evalNum(sel.count, ctx)));
+      return pool.slice(0, n);
+    }
+
+    default: {
+      // Fall back: evaluate as card selector and collect unique lanes.
+      const ids = select(sel, ctx);
+      const seen = new Set<0 | 1 | 2>();
+      const out: Array<0 | 1 | 2> = [];
+      for (const id of ids) {
+        const c = ctx.state.cards[id];
+        if (c?.lane !== null && c?.lane !== undefined && !seen.has(c.lane)) {
+          seen.add(c.lane);
+          out.push(c.lane);
+        }
+      }
+      return out;
+    }
+  }
+}
+
+function laneOfSelector(sel: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
+  if (sel.kind === 'SELF') return ctx.selfLane;
+  const ids = select(sel, ctx);
+  for (const id of ids) {
+    const c = ctx.state.cards[id];
+    if (c?.lane !== null && c?.lane !== undefined) return c.lane;
+  }
+  return null;
 }
 
 // ---- Predicate evaluation --------------------------------------------------
