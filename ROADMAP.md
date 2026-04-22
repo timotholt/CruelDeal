@@ -22,6 +22,41 @@
   - `resolveTurn(state, seed, manifest) -> MatchEvent[]` — deterministic full-turn resolution.
 - **Success criteria:** A Node CLI can run a full match end-to-end with zero browser.
 
+#### Progress (spec 0.2 step-by-step)
+
+| Step | Scope | Status |
+|---|---|---|
+| 1 | Skeleton + ESLint purity rules | ✅ done |
+| 2 | Seeded RNG (sfc32 + cyrb128 + `fork(tag)`) | ✅ done |
+| 3 | `BOOTSTRAP_MANIFEST` with 10 launch cards + 3 locations pinned to map images | ✅ done |
+| 4 | Projection library (power / lane / reveal / priority / Ongoing collect + Onslaught/Citadel boost) | ✅ done |
+| 5 | `apply()` reducer for all `MatchEvent` variants; zones split into DECK/HAND/LANE/DISCARD/DESTROYED/BANISHED; `spawnSource` provenance | ✅ done |
+| 6 | Effect evaluator (`evalEffect` + `revealCard` with recursive OR cascade, depth cap 16) | ✅ done |
+| 7 | `resolve()` intent dispatcher + `resolveTurn()` turn cascade (priority-ordered reveals, location reveal, draw, energy refill, match-end) | ✅ done |
+| **8a** | **Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play.** | **✅ done** |
+| 8b | Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`) | ⏳ next |
+| 8c | Collapse dual state — delete old `services/playgame/state.ts` + `types.ts`, `PlayGameContext` wraps engine `MatchState` directly | ⏳ future |
+| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ blocked on 8b |
+
+#### Step 8b / 8c migration checklist
+
+Every integration point still owing a cutover is tagged in the code with `@migrate:step-8b` (or `-8c`). Run this to find all pending work:
+
+```bash
+rg '@migrate:step-8' services/playgame contexts/ components/
+```
+
+Current open items (Step 8a left as technical debt):
+
+- **`PlayGameContext.stageCardInLane`** — dual-write: still mutates old state AND calls `bridge.stage()`. Cut over: `resolve({STAGE_CARD})` → events → apply to old-state translator.
+- **`PlayGameContext.drawCard`** — UI mints the card via `randomCardDef()`, then calls `bridge.syncHandCard()`. Cut over: pre-populate an engine deck at match start; UI reads drawn cards from the engine's `CARD_DRAWN` events.
+- **`PlayGameContext.endTurn`** — stub; real resolution happens via `script.run(resolveTurnFlow())` in `PlayScreen.tsx`. Cut over: `script` steps consume the bridge's event stream instead of mutating old state.
+- **`services/playgame/script/actions.ts enemyPlayRandom`** — `Math.random()` lane choice; duplicates engine AI. Cut over: emit an `END_TURN` intent and let the engine's AI hook (Tier 1.3) pick the lane.
+- **`services/playgame/script/actions.ts advanceTurn`** — dup of engine's `TURN_STARTED` event. Delete and subscribe to the engine event.
+- **`services/playgame/script/actions.ts revealByPriority`** — dup of engine's reveal cascade. Drive animations from `OR_WINDOW_OPEN` / `CARD_FLIPPED` events instead.
+- **`services/playgame/state.ts recalcPriority`** — dup of engine's `getPriority` projection. Delete.
+- **`services/playgame/state.ts createMatchState`** — replace with engine's initial state builder once the old `MatchState` type is gone.
+
 ---
 
 ## Tier 1 — Engine Core (blocks multiplayer, replays, anti-cheat)

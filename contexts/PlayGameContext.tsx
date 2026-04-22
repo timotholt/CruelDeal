@@ -31,6 +31,8 @@ import {
   restoreState,
 } from '@/services/playgame/state';
 import type { CardInstance, MatchState } from '@/services/playgame/types';
+import { mountBridge, type Bridge } from '@/services/playgame/engine/adapter';
+import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 
 export interface PlayGameContextValue {
   /** Live reactive state. Read-only from consumers. */
@@ -58,11 +60,29 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   // state.resolving directly stay in sync automatically.
   const isResolving: Accessor<boolean> = () => state.resolving;
 
+  // ─── Engine bridge (Step 8a, shadow mode) ────────────────────────────
+  // @migrate:step-8b — The bridge currently OBSERVES. In Step 8b it will
+  // become authoritative: UI actions will wait for engine events before
+  // mutating old state, and the script engine will subscribe to the
+  // event stream instead of mutating state directly.
+  // @migrate:step-8c — The old `state` store disappears entirely and
+  // this Provider wraps only the engine's MatchState.
+  let bridge: Bridge = mountBridge(state, BOOTSTRAP_MANIFEST, {
+    seed: `match-${Date.now().toString(36)}`,
+  });
+  const assertParity = (label: string): void => {
+    if (bridge.active) bridge.assertParity(state, label);
+  };
+
   /** Deal a card from the pool into the hand (max 7). Returns the new card. */
   const drawCard = (): CardInstance | null => {
     if (state.hand.length >= 7) return null;
     const card = newCardInstance(randomCardDef());
     setState('hand', (h) => [...h, card]);
+    // @migrate:step-8b — Replace with engine-driven draw (CARD_DRAWN
+    // event from a pre-populated deck). For now we sync after the fact.
+    bridge.syncHandCard(card.id, card.name, 'PLAYER');
+    assertParity('drawCard');
     return card;
   };
 
@@ -88,6 +108,11 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
         s.playedThisTurn.push(cardId);
       }),
     );
+    // @migrate:step-8b — This is the obvious consolidation point:
+    // resolve({STAGE_CARD}) becomes authoritative, apply() drives both
+    // the engine state AND (via a reducer-to-old translator) the UI.
+    bridge.stage(cardId, laneIdx as 0 | 1 | 2, 'PLAYER');
+    assertParity('stageCardInLane');
     return true;
   };
 
@@ -119,6 +144,13 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
           s.energy = s.energyMax;
         }),
       );
+      // @migrate:step-8b — Replace this entire stub with bridge.endTurn()
+      // once the VFX layer consumes engine events. The stub + shadow
+      // run-ahead is fine for now because the UI's /play flow in
+      // components/screens/PlayScreen.tsx uses the `script` engine's
+      // resolveTurnFlow(), not this context method, for real resolution.
+      bridge.endTurn();
+      assertParity('endTurn(stub)');
       const drawn = drawCard();
       void drawn;
     } finally {
@@ -127,7 +159,12 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   };
 
   const resetMatch = (): void => {
-    setState(createMatchState());
+    const fresh = createMatchState();
+    setState(fresh);
+    // Re-seed the bridge so the shadow matches the freshly-reset UI.
+    bridge = mountBridge(fresh, BOOTSTRAP_MANIFEST, {
+      seed: `match-${Date.now().toString(36)}`,
+    });
   };
 
   const value: PlayGameContextValue = {
