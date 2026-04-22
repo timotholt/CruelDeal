@@ -408,10 +408,14 @@ const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Prom
     const id = event.cardId as string;
     const el = c.cardRefs.get(id);
     const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
+    
+    // Dispatch synchronously; Solid re-renders the DOM immediately.
     c.dispatch(event);
+    
     if (oldRect) {
       const rects = new Map<string, DOMRect>([[id, oldRect]]);
-      await nextFrame();
+      // No nextFrame() — capture the new rect and start the FLIP slide
+      // in the same task to avoid a painted "snap" frame.
       playLayoutSlide(rects, c.cardRefs, { duration: MOVE_ANIM_DURATION_MS });
       await new Promise<void>((r) => setTimeout(r, MOVE_ANIM_DURATION_MS));
     }
@@ -528,7 +532,20 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
   for (let i = startIdx; i < events.length; i++) {
     const event = events[i];
     if (SCRIPT_OWNED_EVENT_TYPES.has(event.type)) continue;
-    c.dispatch(event);
+
+    if (event.type === 'CARD_MOVED') {
+      const id = event.cardId as string;
+      const el = c.cardRefs.get(id);
+      const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
+      c.dispatch(event);
+      if (oldRect) {
+        const rects = new Map<string, DOMRect>([[id, oldRect]]);
+        playLayoutSlide(rects, c.cardRefs, { duration: MOVE_ANIM_DURATION_MS });
+        await new Promise<void>((r) => setTimeout(r, MOVE_ANIM_DURATION_MS));
+      }
+    } else {
+      c.dispatch(event);
+    }
   }
 
   // Reset the face-up override so next turn's staged cards show face-up.

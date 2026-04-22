@@ -80,6 +80,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   // ── Undo (one-card) ──────────────────────────────────────────────────────
   const handleUndoPending = (): void => {
+    if (isResolving()) return;
     const lastStaged = [...engineState.stagingOrder]
       .reverse()
       .find((id) => engineState.cards[id]?.owner === 'PLAYER');
@@ -208,12 +209,20 @@ export const PlayBoard = (props: PlayBoardProps) => {
         </div>
 
         <div class="action-bar">
-          <button class="retreat-btn" onClick={() => props.onExit?.()}>
+          <button 
+            class="retreat-btn" 
+            disabled={isResolving()}
+            onClick={() => {
+              if (isResolving()) return;
+              props.onExit?.();
+            }}
+          >
             RETREAT
           </button>
           <button
             class="energy-crystal"
             title="Tap to undo last played card"
+            disabled={isResolving()}
             onClick={handleUndoPending}
           >
             <div class="crystal">{engineState.energy['PLAYER']}</div>
