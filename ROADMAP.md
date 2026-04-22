@@ -129,7 +129,7 @@
 
 These don't block current work but need answers before Tier 3 ships:
 
-1. **Priority tie-break:** Real Snap uses "whoever lost priority last round gets it this round." Keep "player always wins ties" stub or implement full rule?
+1. FIXED - **Priority tie-break:** Real Snap uses "whoever lost priority last round gets it this round." Keep "player always wins ties" stub or implement full rule?
 2. **Turn limit:** Hard-coded 6 turns, or configurable per match?
 3. **Retreat / concede:** Immediate forfeit, or surrender on next turn with a grace window?
 4. **Per-card timing rules:** "On Reveal" vs "Ongoing" — model now or post-refactor?
