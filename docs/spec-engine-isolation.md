@@ -373,17 +373,37 @@ export type PoolRef =
 
 // --- Ongoings: read by projections, never fired as events ---
 export type OngoingExpr =
+  // Per-card effects
   | { kind: 'POWER_ADD';            target: Selector; delta: NumExpr; stack: StackingPolicy }
-  | { kind: 'POWER_MULTIPLIER';     target: Selector; factor: NumExpr; stack: StackingPolicy }  // Iron Man (stack: ADDITIVE per Nov 2022 patch)
-  | { kind: 'MULTIPLIER_BOOST';     target: Selector; targetExpr: OngoingExprKind; delta: NumExpr; stack: StackingPolicy } // Onslaught
-  | { kind: 'ON_REVEAL_MULTIPLIER'; target: Selector; factor: NumExpr; stack: StackingPolicy }  // Wong (stack: MULTIPLICATIVE)
   | { kind: 'COST_ADD';             target: Selector; delta: NumExpr; stack: StackingPolicy }
+
+  // Lane-level effects (apply after summing card powers in the lane)
+  | { kind: 'LANE_POWER_MULTIPLIER'; laneScope: LaneScope; factor: NumExpr; stack: StackingPolicy } // Iron Man
+
+  // On Reveal multiplier (affects how many times an OR fires)
+  | { kind: 'ON_REVEAL_MULTIPLIER'; target: Selector; factor: NumExpr; stack: StackingPolicy }  // Wong (stack: MULTIPLICATIVE)
+
+  // Generic Ongoing booster — Onslaught (card) and Onslaught's Citadel (location).
+  // Both do the same thing: double (or scale) every Ongoing numeric parameter at this lane.
+  // Applies uniformly to POWER_ADD.delta, COST_ADD.delta, LANE_POWER_MULTIPLIER.factor,
+  // ON_REVEAL_MULTIPLIER.factor, and any future numeric Ongoing. Boolean Ongoings
+  // (DISABLE_*) are unaffected.
+  | { kind: 'BOOST_ONGOINGS';       scope: LaneScope; factor: NumExpr; excludeSelf?: boolean; stack: StackingPolicy }
+
+  // Boolean auras — not numeric, not boosted by BOOST_ONGOINGS
   | { kind: 'DISABLE_ON_REVEAL';    target: Selector; stack: 'SINGLE' }                         // Cosmo lane aura
   | { kind: 'DISABLE_ONGOING';      target: Selector; stack: 'SINGLE' }                         // Echo, Enchantress aura
   | { kind: 'BLOCK_PLAY';           target: Selector; pred: Predicate; stack: 'SINGLE' }        // Sanctum
-  | { kind: 'COPY_ONGOING_OF';      into: Selector; source: Selector; stack: 'SINGLE' };        // Super Skrull
+
+  // Text copy (Super Skrull)
+  | { kind: 'COPY_ONGOING_OF';      into: Selector; source: Selector; stack: 'SINGLE' };
 
 export type OngoingExprKind = OngoingExpr['kind'];
+
+export type LaneScope = {
+  laneOf: Selector;                 // usually { kind: 'SELF' }
+  ownerFilter: OwnerFilter;         // SELF_OWNER for Iron Man, ANY_OWNER for Citadel
+};
 
 export type StackingPolicy = 'MULTIPLICATIVE' | 'ADDITIVE' | 'MAX' | 'SINGLE';
 
@@ -511,10 +531,14 @@ export function apply(state: MatchState, event: MatchEvent, manifest: Manifest):
 
 ## 5. Projections
 
-### 5.1 Power
+### 5.1 Power — split into `getCardPower` (no lane mult) and `getLanePower` (lane mult applied)
+
+**Critical distinction:** Iron Man is lane-level. Shang-Chi's "destroy cards with Power 10+" checks per-card power, which is NOT lane-multiplied. Shuri's double IS per-card.
 
 ```ts
 // engine/projections/power.ts
+
+// Per-card power: base + additives + per-card tags (Shuri). No lane-level multipliers.
 export function getCardPower(
   state: MatchState,
   cardId: CardId,
@@ -528,76 +552,136 @@ export function getCardPower(
   // Stage 1: base (with text-override resolution for Mystique)
   let power = baseFromResolvedText(state, cardId, manifest);
 
-  // Stage 2: additive bonuses (policy-respecting)
+  // Stage 2: additive bonuses (Onslaught-boosted at collection time — see 5.2)
   power += applicable.POWER_ADD.reduce(sumAdditive, 0);
 
-  // Stage 3: effective multiplier
-  const baseMultSum = applicable.POWER_MULTIPLIER.reduce(sumAdditive, 0);
-  if (baseMultSum > 0) {
-    const boostSum = applicable.MULTIPLIER_BOOST
-      .filter(b => b.targetExpr === 'POWER_MULTIPLIER')
-      .reduce(sumAdditive, 0);
-    const effectiveMult = baseMultSum + boostSum;
-    power = Math.floor(power * effectiveMult);
-  }
-
-  // Stage 4: Shuri pending buff (consumed on first reveal after Shuri)
+  // Stage 3: per-card pending buffs (Shuri)
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
     power = Math.floor(power * 2);
   }
 
   return power;
 }
-```
 
-### 5.2 Ongoing collection with Mystique / Super Skrull dereferencing
-
-```ts
-// engine/projections/ongoing.ts
-export function collectApplicableOngoings(
+// Lane power: sum of per-card powers, then apply LANE_POWER_MULTIPLIER auras (Iron Man, locations).
+export function getLanePower(
   state: MatchState,
-  target: CardId,
+  lane: LaneIdx,
+  owner: Owner,
   manifest: Manifest,
-): GroupedOngoings {
-  const out = emptyGrouped();
-  const disables = gatherLaneDisableAuras(state, manifest);
+): number {
+  const cards = state.lanes[lane].cards[owner].filter(id => state.cards[id].revealed);
+  let total = cards.reduce((s, id) => s + getCardPower(state, id, manifest), 0);
 
-  for (const src of allLiveSources(state)) {
-    if (disables.disableOngoingOn(src)) continue;
-
-    const exprs = resolveOngoingText(state, src, manifest);
-    for (const expr of exprs) {
-      if (expr.kind === 'COPY_ONGOING_OF') {
-        // Super Skrull: dereference source card's ongoings
-        for (const srcCard of select(expr.source, { self: src, state, manifest })) {
-          const copied = resolveOngoingText(state, srcCard, manifest);
-          for (const c of copied) collect(out, target, src, c, state, manifest);
-        }
-        continue;
-      }
-      collect(out, target, src, expr, state, manifest);
-    }
-  }
-  return out;
+  // Collect LANE_POWER_MULTIPLIER auras affecting this (lane, owner) pair.
+  // Iron Man: laneScope = { laneOf: SELF, ownerFilter: SELF_OWNER } → applies only to owner's side.
+  // Some locations are lane-wide ANY_OWNER.
+  const mults = collectLaneMultipliers(state, lane, owner, manifest);
+  // ADDITIVE stacking: base factor 1, each mult adds (factor - 0). Wait: each Iron Man is "double",
+  // meaning factor 2. Two Iron Men would be... actually impossible (one card per defId limit), but
+  // Mystique can copy. ADDITIVE: effective = sum(factors). For 1 Iron Man: 2. For 2: 4. For 0: 1.
+  const effective = mults.length === 0 ? 1 : mults.reduce((s, m) => s + m.factor, 0);
+  return Math.floor(total * effective);
 }
 ```
 
-**Text override chain**: `resolveOngoingText` follows `card.textOverride` recursively with a cycle-detection visited set. Three hops deep hard cap.
+### 5.2 Ongoing collection with Onslaught boost, Mystique/Super Skrull dereferencing
+
+Before computing any projection, every Ongoing's numeric parameter is **scaled** by the aggregated `BOOST_ONGOINGS` factor at its source lane. This is where the "Onslaught doubles Ongoings" uniformity lives — one place, one loop, applies to all numeric Ongoing types.
+
+```ts
+// engine/projections/ongoing.ts
+
+interface SourcedOngoing {
+  sourceCardId: CardId | null;       // null for location Ongoings
+  sourceLane: LaneIdx;
+  sourceOwner: Owner | null;         // null for ANY_OWNER (location)
+  expr: OngoingExpr;                 // with numeric params already boosted
+}
+
+export function collectAllOngoings(state: MatchState, manifest: Manifest): SourcedOngoing[] {
+  // Step 1: Gather raw (un-boosted) Ongoings from all live sources.
+  const raw: SourcedOngoing[] = [];
+  for (const src of allLiveSources(state)) {
+    if (isOngoingDisabled(state, src, manifest)) continue;
+    for (const expr of resolveOngoingText(state, src, manifest)) {
+      if (expr.kind === 'COPY_ONGOING_OF') {
+        // Super Skrull / Mystique: dereference
+        for (const target of select(expr.source, { self: src, state, manifest })) {
+          for (const copied of resolveOngoingText(state, target, manifest)) {
+            raw.push(toSourced(src, copied, state));
+          }
+        }
+        continue;
+      }
+      raw.push(toSourced(src, expr, state));
+    }
+  }
+
+  // Step 2: For each Ongoing, find applicable BOOST_ONGOINGS at its source lane,
+  //         compute aggregated boost factor, and scale the numeric parameter.
+  return raw.map(s => ({ ...s, expr: applyBoostIfAny(s, raw, state) }));
+}
+
+function applyBoostIfAny(entry: SourcedOngoing, allRaw: SourcedOngoing[], state: MatchState): OngoingExpr {
+  // Boosts are themselves Ongoings — they never boost themselves (would recurse), so we
+  // skip BOOST_ONGOINGS when computing the boost factor.
+  if (entry.expr.kind === 'BOOST_ONGOINGS') return entry.expr;
+
+  const boosts = allRaw.filter(b => {
+    if (b.expr.kind !== 'BOOST_ONGOINGS') return false;
+    if (b.sourceLane !== entry.sourceLane) return false;
+    if (b.expr.excludeSelf && b.sourceCardId === entry.sourceCardId) return false;
+    // scope.ownerFilter determines whether boost applies to this owner's Ongoings
+    return ownerMatches(b.expr.scope.ownerFilter, b.sourceOwner, entry.sourceOwner);
+  });
+
+  if (boosts.length === 0) return entry.expr;
+
+  // Additive stacking: aggregate factor = 1 + Σ (boost.factor - 1).
+  // 1× 2-boost → agg = 2. 2× 2-boosts → agg = 3. 1× 3-boost → agg = 3.
+  // This matches Snap's post-Nov-2022 Onslaught patch arithmetic exactly.
+  const agg = boosts.reduce((sum, b) => sum + (evalNum(b.expr.factor) - 1), 1);
+
+  return scaleNumericParams(entry.expr, agg);
+}
+
+function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
+  switch (expr.kind) {
+    case 'POWER_ADD':             return { ...expr, delta:  scaleNum(expr.delta,  agg) };
+    case 'COST_ADD':              return { ...expr, delta:  scaleNum(expr.delta,  agg) };
+    case 'LANE_POWER_MULTIPLIER': return { ...expr, factor: scaleNum(expr.factor, agg) };
+    case 'ON_REVEAL_MULTIPLIER':  return { ...expr, factor: scaleNum(expr.factor, agg) };
+    // Boolean auras: Onslaught doesn't affect them.
+    case 'DISABLE_ON_REVEAL':
+    case 'DISABLE_ONGOING':
+    case 'BLOCK_PLAY':
+    case 'COPY_ONGOING_OF':
+    case 'BOOST_ONGOINGS':
+      return expr;
+  }
+}
+
+// Targeted view for a specific card — filters the full set to those targeting `cardId`.
+export function ongoingsTargeting(state, cardId, manifest): SourcedOngoing[] {
+  return collectAllOngoings(state, manifest)
+    .filter(s => selectorMatches(s.expr, cardId, s, state, manifest));
+}
+```
+
+**Text override chain**: `resolveOngoingText` follows `card.textOverride` recursively with a cycle-detection visited set. Three-hop hard cap.
 
 ### 5.3 Other projections
 
 ```ts
 // engine/projections/reveal.ts
 export function getOnRevealMultiplier(state: MatchState, cardId: CardId, manifest: Manifest): number {
-  const applicable = collectApplicableOngoings(state, cardId, manifest);
-  // Wong-type — MULTIPLICATIVE stack
-  const baseMult = applicable.ON_REVEAL_MULTIPLIER
-    .reduce((p, m) => p * evalNum(m.factor, ctx), 1);
-  // Citadel-type boosts on the OR multiplier — ADDITIVE
-  const boost = applicable.MULTIPLIER_BOOST
-    .filter(b => b.targetExpr === 'ON_REVEAL_MULTIPLIER')
-    .reduce(sumAdditive, 0);
-  return Math.max(1, baseMult + boost);
+  // Boost-scaled Wong-type Ongoings targeting this card. MULTIPLICATIVE stack.
+  // Citadel's effect on Wong is already baked into Wong's factor by collectAllOngoings:
+  // Wong base factor 2 × Citadel boost (agg=2) → factor 4.
+  const mults = ongoingsTargeting(state, cardId, manifest)
+    .filter(s => s.expr.kind === 'ON_REVEAL_MULTIPLIER');
+  return Math.max(1, mults.reduce((p, m) => p * evalNum(m.expr.factor), 1));
 }
 
 export function isOnRevealDisabled(state: MatchState, cardId: CardId, manifest: Manifest): boolean { ... }
@@ -944,31 +1028,41 @@ Add `pnpm engine:cli` script. CI runs 1000 random matches with random seeds; ass
 ```ts
 { defId: 'iron-man', basePower: 0, cost: 5,
   abilities: { ongoing: [
-    { kind: 'POWER_MULTIPLIER',
-      target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+    { kind: 'LANE_POWER_MULTIPLIER',
+      laneScope: { laneOf: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
       factor: { kind: 'LIT', n: 2 },
-      stack: 'ADDITIVE' },    // post-Nov-2022 patch
+      stack: 'ADDITIVE' },
   ]}}
+// "Ongoing: Your total Power is doubled here." — applies to the SUM of owner's cards in
+// this lane, AFTER per-card projections (additives, Shuri). Does not affect On Reveal.
 ```
 
-### Onslaught
+### Onslaught (card) — identical mechanism to Onslaught's Citadel (location)
 ```ts
 { defId: 'onslaught', basePower: 8, cost: 6,
   abilities: { ongoing: [
-    { kind: 'MULTIPLIER_BOOST',
-      target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER',
-                exclude: { kind: 'SELF' } },
-      targetExpr: 'POWER_MULTIPLIER',
-      delta: { kind: 'LIT', n: 2 },
-      stack: 'ADDITIVE' },
-    // Also boosts OR multipliers (Wong)
-    { kind: 'MULTIPLIER_BOOST',
-      target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER',
-                exclude: { kind: 'SELF' } },
-      targetExpr: 'ON_REVEAL_MULTIPLIER',
-      delta: { kind: 'LIT', n: 2 },
+    { kind: 'BOOST_ONGOINGS',
+      scope: { laneOf: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+      factor: { kind: 'LIT', n: 2 },   // doubles every numeric Ongoing parameter at lane
+      excludeSelf: true,                // "your OTHER Ongoing abilities here"
       stack: 'ADDITIVE' },
   ]}}
+// Applies uniformly to Iron Man's ×2 (→ ×4), Wong's 2× OR (→ 4×), Blue Marvel's +1
+// (→ +2), Ant-Man's +1 (→ +2), Patriot's +2 (→ +4), etc. Two Onslaughts via Mystique
+// stack additively: agg = 1 + 1 + 1 = 3, so Iron Man ×2 becomes ×6.
+```
+
+### Onslaught's Citadel (location)
+```ts
+{ defId: 'onslaughts-citadel', /* cost/power irrelevant for locations */
+  abilities: { ongoing: [
+    { kind: 'BOOST_ONGOINGS',
+      scope: { laneOf: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },  // both players
+      factor: { kind: 'LIT', n: 2 },
+      stack: 'ADDITIVE' },
+  ]}}
+// Same primitive as Onslaught-the-card. Differences: ownerFilter is ANY_OWNER (affects
+// both sides) and excludeSelf doesn't apply (locations aren't Ongoing sources they'd boost).
 ```
 
 ### Shuri
@@ -1062,16 +1156,20 @@ Add `pnpm engine:cli` script. CI runs 1000 random matches with random seeds; ass
 
 ## 13. Reference: Verified Math Against Live Snap Behavior
 
-All checked against community sources (snap.untapped.gg, marvelsnapzone.com, r/MarvelSnap patch archaeology):
+All checked against community sources (snap.untapped.gg, marvelsnapzone.com, r/MarvelSnap patch archaeology). In each row, the boost-aggregation formula from §5.2 is `agg = 1 + Σ(factor - 1)`:
 
-- **Wong × Panther (alone)**: OR fires 2× → 5 → 10 → 20. ✓
-- **Wong × Panther × Odin**: 5 → 20 (Panther with Wong), Odin fires 2× (Wong), each fire retriggers Panther 2× (Wong). Final = 20 × 2^4 = **320**. ✓
-- **Citadel (location: doubles Ongoings) × Wong × Panther**: Citadel is `MULTIPLIER_BOOST` on `ON_REVEAL_MULTIPLIER`. Effective OR mult = 2 × 2 = 4. Panther 5 × 2^4 = 80. ✓ (matches community reports)
-- **Iron Man alone**: lane × 2. ✓
-- **Iron Man + Onslaught (post-Nov-2022 patch)**: `ADDITIVE` stacking → base mult 2, boost 2, effective 4. lane × 4. ✓ (Second Dinner patch notes)
-- **Iron Man + 2 Onslaughts**: 2 + 2 + 2 = 6, lane × 6. ✓
-- **2 Wongs (Wong + Mystique copying Wong)**: MULTIPLICATIVE — 2 × 2 = 4× OR multiplier. Panther 5 → 80. ✓
-- **Jubilee pulls Odin, Odin retriggers Jubilee, Jubilee pulls again**: emerges from recursion; bounded by deck exhaustion or depth cap 32. ✓ (Reddit evidence)
+- **Wong × Panther alone**: `getOnRevealMultiplier` = 2 (Wong's factor). Panther OR fires 2× → 5 → 10 → 20. ✓
+- **Wong × Panther × Odin**: Panther 5 → 20 (with Wong), Odin OR fires 2× (Wong); each fire retriggers Panther OR 2× (Wong still alive). Final = 20 × 2^4 = **320**. ✓
+- **Onslaught's Citadel + Wong + Panther**: Citadel is `BOOST_ONGOINGS(factor=2, ANY_OWNER)` at the lane. Wong's Ongoing is boosted: agg = 1 + (2-1) = 2; Wong factor 2 × agg 2 = **4**. Panther OR fires 4× → 5 × 2^4 = 80. ✓
+- **Iron Man alone**: `LANE_POWER_MULTIPLIER` factor 2, no boost → lane × 2. ✓
+- **Iron Man + Onslaught (card)**: Onslaught boosts Iron Man: agg = 2; Iron Man factor 2 × agg 2 = **4**. Lane × 4. ✓ (Second Dinner Nov-2022 patch notes, additive stacking)
+- **Iron Man + 2 Onslaughts (via Mystique)**: agg = 1 + 1 + 1 = 3; Iron Man factor 2 × 3 = **6**. Lane × 6. ✓
+- **Iron Man + Onslaught + Citadel**: Two `BOOST_ONGOINGS` auras at same lane, both ADDITIVE stack; agg = 1 + 1 + 1 = 3; Iron Man ×6. ✓
+- **Onslaught boosts Blue Marvel (+1 → +2)**: Blue Marvel's `POWER_ADD.delta` of 1 × agg 2 = 2. ✓
+- **2 Wongs (Wong + Mystique copying Wong at same lane)**: Two `ON_REVEAL_MULTIPLIER` entries, stacking MULTIPLICATIVELY → 2 × 2 = **4×** OR. Panther 5 → 80. ✓
+- **Jubilee pulls Odin, Odin retriggers Jubilee**: emerges from recursive evaluator; bounded by deck exhaustion or depth cap 32. ✓ (Reddit evidence)
+- **Shang-Chi at Onslaught+Iron Man lane, targeting a 6-power card**: Shang-Chi reads `getCardPower` (per-card) = 6, NOT `getLanePower`. Destroys only if per-card ≥ 10. Lane-level Iron Man boost is irrelevant to this check. ✓ (official rules)
+- **Iron Man does NOT affect OR**: Iron Man has only `LANE_POWER_MULTIPLIER`, no `ON_REVEAL_MULTIPLIER`. `getOnRevealMultiplier` returns 1 unless Wong/Kamar-Taj is present. ✓
 
 ---
 
