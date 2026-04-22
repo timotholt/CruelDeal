@@ -1,45 +1,64 @@
 # engine/ — the pure wall
 
-This folder is the **pure, framework-free, deterministic** game engine. The
-authoritative gameplay rules live here, and ONLY here. Server and client
-both import from this folder to run the same code against the same state.
+Authoritative, pure, deterministic, framework-free game engine for `/play`.
+Server and client both import from this folder to run identical code against
+identical state.
 
-## Rules (enforced by ESLint; see `eslint.config.js`)
+**Specification**: `docs/spec-engine-isolation.md` (Roadmap 0.2).
+
+## Purity contract (ESLint-enforced; see `eslint.config.js`)
 
 Code in `engine/` MUST NOT import:
 
-- `solid-js` / `solid-js/store` (no reactivity)
+- `solid-js` / `solid-js/store` / `solid-js/web` (no reactivity)
 - `@/components/**` (no UI)
 - `@/contexts/**` (no presentation state)
 - `@/services/vfx/**` (no animations)
-- `@/utils/id` (id generation goes through the seeded `rng.uid()` instead)
+- `@/utils/id` (id generation goes through `rng.fork(tag)` instead)
+- `howler` / `pixi.js` (no render / audio libraries)
 
 Code in `engine/` MUST NOT use:
 
 - `Math.random` — randomness flows through the `rng: Rng` parameter
-- `Date.now` / `new Date()` / `performance.now` — time flows through event
-  payloads or the `MatchState` turn counter
-- `fetch` / `XMLHttpRequest` — engine is pure, transport is elsewhere
+- `Date.now` / `new Date()` / `performance.now` — no wallclock reads
+- `fetch` / `XMLHttpRequest` — engine is pure, transport lives outside
 - `crypto.*` — intent ids are generated outside the engine
 - `document` / `window` / any DOM globals
 
-## What goes here
+## Layout
 
-- `apply(state, event, manifest) → state` — pure reducer
-- `resolve(state, intent, rng, manifest) → MatchEvent[]` — pure intent → events
-- `resolveTurn(state, seed, manifest) → MatchEvent[]` — deterministic turn resolution
-- `rng.ts` — seeded PRNG (sfc32)
-- `events.ts` — `MatchEvent` discriminated union
-- `intents.ts` — `MatchIntent` discriminated union
-- `rules/` — per-concern rule modules (staging, draw, priority, etc.)
-- `builtins.ts` — stable-id registry of unique card effects
+```
+engine/
+  apply.ts              pure reducer: (state, event) → state
+  resolve.ts            intent → events (validator + event generator)
+  resolveTurn.ts        full-turn orchestration
+  eval.ts               recursive OR evaluator (revealCard, evalEffect)
+  rng/                  seeded PRNG (sfc32) + Rng interface
+  manifest/             versioned game-data contract + bootstrap
+    types.ts            Manifest, CardDef, LocationDef, ...
+    bootstrap.ts        BOOTSTRAP_MANIFEST (launch card set, hand-assembled)
+  projections/          pure queries over state (power, priority, ...)
+  types/                State, Event, Intent, Ability DSL
+    state.ts
+    events.ts
+    intents.ts
+    ability.ts
+    ids.ts
+```
 
-## What does NOT go here
+## Migration status (spec §10)
 
-- Solid components, Solid stores, reactivity primitives
-- DOM animations, particle emitters, CSS class toggles
-- Server functions, HTTP / SSE / WebSocket code
-- Persistence (DB, localStorage, IndexedDB)
-- Match-state storage (Redis, Durable Objects, etc.)
+- [x] **Step 1** — skeleton + isolation (types, stubs, ESLint).
+- [ ] **Step 2** — RNG (sfc32) + unit tests.
+- [ ] **Step 3** — BOOTSTRAP_MANIFEST populated from current demo cards.
+- [ ] **Step 4** — projections (power, lane power, priority, OR multiplier).
+- [ ] **Step 5** — `apply` reducer, every variant.
+- [ ] **Step 6** — selectors, predicates, numexpr, `evalEffect`, `revealCard`.
+- [ ] **Step 7** — `resolve` for STAGE_CARD / UNSTAGE_CARD intents.
+- [ ] **Step 8** — `resolveTurn` full orchestration + enemy AI.
+- [ ] **Step 9** — event → animation adapter.
+- [ ] **Step 10** — legacy `script/actions.ts` deletion.
+- [ ] **Step 11** — `pnpm engine:cli` headless match harness in CI.
 
-See `PLAY_REFACTOR_PLAN.md` §2 for the target architecture.
+Until a step lands, its function throws `not implemented`. This guarantees
+we never silently run an incomplete engine.
