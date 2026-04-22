@@ -1,0 +1,29 @@
+{
+  "defId": "pyro-monk",
+  "version": 1,
+  "name": "Pyro Monk",
+  "basePower": 4,
+  "cost": 3,
+  "tribes": ["mage"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": { "kind": "SELF" },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "delta": { "kind": "LIT", "n": 1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PYRO MONK",
+    "flavorText": "Meditates by lighting the room.",
+    "rulesText": "On Reveal: All cards in this lane gain +1 Power.",
+    "accent": "#ffb347",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  }
+}

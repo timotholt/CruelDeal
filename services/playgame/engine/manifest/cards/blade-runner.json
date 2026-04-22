@@ -1,0 +1,33 @@
+{
+  "defId": "blade-runner",
+  "version": 1,
+  "name": "Blade Runner",
+  "basePower": 3,
+  "cost": 2,
+  "tribes": ["striker"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": { "kind": "LIT", "n": 1 },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": { "kind": "SELF" },
+            "ownerFilter": "OPP_OWNER"
+          }
+        },
+        "delta": { "kind": "LIT", "n": -1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLADE RUNNER",
+    "flavorText": "Never breaks stride, never breaks eye contact.",
+    "rulesText": "On Reveal: Deal 1 damage to an enemy card here.",
+    "accent": "#ff5a1f",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  }
+}

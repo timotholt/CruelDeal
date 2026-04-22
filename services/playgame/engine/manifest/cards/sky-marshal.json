@@ -1,0 +1,31 @@
+{
+  "defId": "sky-marshal",
+  "version": 1,
+  "name": "Sky Marshal",
+  "basePower": 8,
+  "cost": 5,
+  "tribes": ["guard"],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": { "kind": "SELF" },
+          "ownerFilter": "SELF_OWNER",
+          "exclude": { "kind": "SELF" }
+        },
+        "delta": { "kind": "LIT", "n": 1 },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SKY MARSHAL",
+    "flavorText": "Forms up the line without a word.",
+    "rulesText": "Ongoing: Your other cards here have +1 Power.",
+    "accent": "#ffd95a",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  }
+}

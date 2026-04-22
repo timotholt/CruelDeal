@@ -1,0 +1,29 @@
+{
+  "defId": "thorn-choir",
+  "version": 1,
+  "name": "Thorn Choir",
+  "basePower": 3,
+  "cost": 2,
+  "tribes": ["mage"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "ALL_CARDS",
+          "ownerFilter": "SELF_OWNER",
+          "zoneFilter": "HAND"
+        },
+        "delta": { "kind": "LIT", "n": 1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "THORN CHOIR",
+    "flavorText": "Sings in a key that sharpens steel.",
+    "rulesText": "On Reveal: Give cards in your hand +1 Power.",
+    "accent": "#9cff4a",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  }
+}

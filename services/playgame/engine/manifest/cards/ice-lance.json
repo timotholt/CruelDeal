@@ -1,0 +1,33 @@
+{
+  "defId": "ice-lance",
+  "version": 1,
+  "name": "Ice Lance",
+  "basePower": 2,
+  "cost": 1,
+  "tribes": ["striker"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": { "kind": "LIT", "n": 1 },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": { "kind": "SELF" },
+            "ownerFilter": "OPP_OWNER"
+          }
+        },
+        "delta": { "kind": "LIT", "n": -1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ICE LANCE",
+    "flavorText": "Freezes the gap between swing and answer.",
+    "rulesText": "On Reveal: Afflict an enemy card here with -1 Power.",
+    "accent": "#bfefff",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "defId": "dune-sapper",
+  "version": 1,
+  "name": "Dune Sapper",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": ["striker"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "MOVE",
+        "target": { "kind": "SELF" },
+        "to": {
+          "kind": "RANDOM_N",
+          "count": { "kind": "LIT", "n": 1 },
+          "of": { "kind": "OTHER_LANES", "of": { "kind": "SELF" } }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DUNE SAPPER",
+    "flavorText": "Here, then gone, like weather.",
+    "rulesText": "On Reveal: Move to another location.",
+    "accent": "#e3bdff",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  }
+}

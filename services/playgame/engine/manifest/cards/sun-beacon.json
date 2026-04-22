@@ -1,0 +1,30 @@
+{
+  "defId": "sun-beacon",
+  "version": 1,
+  "name": "Sun Beacon",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": ["guard"],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": { "kind": "SELF" },
+          "ownerFilter": "SELF_OWNER"
+        },
+        "delta": { "kind": "LIT", "n": 1 },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SUN BEACON",
+    "flavorText": "A torch that never asks to be carried.",
+    "rulesText": "Ongoing: Cards you play here get +1 Power.",
+    "accent": "#fff2b5",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  }
+}

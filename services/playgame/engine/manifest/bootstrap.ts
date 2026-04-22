@@ -14,7 +14,7 @@
  */
 
 import type { CardDef, LocationDef, Manifest } from './types';
-import { CARDS_INDEX } from './content/cards';
+import { loadCardsFromJson } from './card-loader';
 import { LOCATIONS_INDEX } from './content/locations';
 
 const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<string, T> => {
@@ -38,7 +38,7 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     laneCapacity: 4,
     deckSize: 12,
   },
-  cards: byDefId<CardDef>(CARDS_INDEX),
+  cards: loadCardsFromJson(),
   locations: byDefId<LocationDef>(LOCATIONS_INDEX),
   disabled: {
     cards: [],

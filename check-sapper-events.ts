@@ -1,5 +1,7 @@
 import { BOOTSTRAP_MANIFEST, createInitialMatchState, resolveTurn, apply, createRng, type CardId } from './services/playgame/engine';
-import { DUNE_SAPPER } from './services/playgame/engine/manifest/content/cards';
+
+const DUNE_SAPPER = BOOTSTRAP_MANIFEST.cards['dune-sapper'];
+if (!DUNE_SAPPER) throw new Error('Dune Sapper not found in manifest');
 
 const s0 = createInitialMatchState('test-seed', BOOTSTRAP_MANIFEST);
 const sapperId = 'sapper1' as CardId;

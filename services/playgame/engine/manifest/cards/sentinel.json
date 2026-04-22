@@ -1,0 +1,30 @@
+{
+  "defId": "sentinel",
+  "version": 1,
+  "name": "Sentinel",
+  "basePower": 5,
+  "cost": 3,
+  "tribes": ["guard"],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": { "kind": "SELF" },
+          "ownerFilter": "SELF_OWNER"
+        },
+        "delta": { "kind": "LIT", "n": 1 },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SENTINEL",
+    "flavorText": "Watch-tower protocol, eternal.",
+    "rulesText": "Ongoing: This lane has +1 Power.",
+    "accent": "#6cc3ff",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  }
+}

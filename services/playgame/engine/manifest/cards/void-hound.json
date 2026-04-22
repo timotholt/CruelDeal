@@ -1,0 +1,17 @@
+{
+  "defId": "void-hound",
+  "version": 1,
+  "name": "Void Hound",
+  "basePower": 6,
+  "cost": 4,
+  "tribes": ["beast"],
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "VOID HOUND",
+    "flavorText": "Every place it's been is one place away.",
+    "rulesText": "When this moves, gain +2 Power.",
+    "accent": "#6b3ea0",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "defId": "hex-witch",
+  "version": 1,
+  "name": "Hex Witch",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": ["mage"],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": { "kind": "LIT", "n": 1 },
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          }
+        },
+        "delta": { "kind": "LIT", "n": 1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HEX WITCH",
+    "flavorText": "Luck is a verb she conjugates casually.",
+    "rulesText": "On Reveal: Give a random friendly card +1 Power.",
+    "accent": "#a66dff",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  }
+}
