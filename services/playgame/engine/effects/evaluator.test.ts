@@ -47,8 +47,8 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
 // mkLoc intentionally omitted — no location-authored OR effects in the
 // Step 6 test surface. Re-introduce when we add location-sourced OR tests.
 
-/** Compile a cards/locations array into a valid Manifest shell. */
-function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
+/** Compile a cards array into a valid Manifest shell. */
+function mkManifest(cards: CardDef[]): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -56,7 +56,7 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12 },
     cards: byId(cards),
-    locations: byId(locations),
+    locations: {},
     disabled: { cards: [], locations: [] },
   };
 }
