@@ -1,16 +1,27 @@
 /**
- * PlayScreen — 1:1 Solid port of the vfx-engine demo's DOM, so the CSS
- * in src/styles/playgame.css applies unchanged.
+ * PlayScreen — Step 8c: consumes the engine's `MatchState` directly.
  *
- * Visual structure matches ccg/vfx-engine/project/index.html (the original
- * demo). Card and location rendering mirrors `ui/card.js` / `ui/location.js`.
+ * All gameplay reads route through `services/playgame/view.ts` selectors
+ * (ResolvedCard / ResolvedLocation). Mutations go through the context's
+ * `actions.*` (which dispatch engine events) or the script engine's
+ * ctx (which calls `dispatch` + VFX). No legacy MatchState.
  */
 
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { VfxHost, useVfx } from '../game/VfxHost';
 import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
-import type { CardInstance, LocationInstance } from '@/services/playgame/types';
-import { CARD_POOL } from '@/services/playgame/cards';
+import {
+  type ResolvedCard,
+  type ResolvedLocation,
+  getPlayerHand,
+  getPlayerLaneCards,
+  getEnemyLaneCards,
+  getLocation,
+  getLanePower,
+} from '@/services/playgame/view';
+import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
+import type { LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { CardDef as ManifestCardDef } from '@/services/playgame/engine/manifest/types';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
@@ -39,15 +50,12 @@ export const PlayScreen = (props: PlayScreenProps) => {
 /**
  * Shared drag state: a module-level mutable object that both <HandCard>
  * (setter on dragstart) and <PlayBoard>'s delegated drop handler (reader
- * on dragover/drop) write to. A plain object is fine — the values are
- * only read inside native drag events, never in Solid's reactive graph.
+ * on dragover/drop) write to.
  */
 const dragState: { id: string | null } = { id: null };
 
 /**
- * Lane-map art shipped with the /play screen. Files live in public/art/maps/
- * so Vite serves them at the root. Order is shuffled per match so each
- * session picks a different 3 of 3 (for now all 3 are used).
+ * Lane-map art shipped with the /play screen. Files live in public/art/maps/.
  */
 const LANE_MAPS = [
   '/art/maps/Cathedrawl.png',
@@ -57,26 +65,17 @@ const LANE_MAPS = [
 
 /**
  * Inspector target. `card` mode shows a blown-up card face-up; `location`
- * mode shows a lane location (revealed or hidden). Null = closed.
- *
- * Defined at module scope so any sub-component (HandCard, BoardCard,
- * LocationTile) can open the inspector without needing to thread props
- * or a separate context through the tree. This mirrors the demo's
- * singleton `Inspector` (ccg/vfx-engine/project/ui/inspector.js).
+ * mode shows a lane location.
  */
 type InspectTarget =
-  | { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; laneIdx?: number; element: HTMLElement }
-  | { kind: 'location'; location: LocationInstance; laneIdx: number; playerPower: number; enemyPower: number; element: HTMLElement };
+  | { kind: 'card'; card: ResolvedCard; zone: 'hand' | 'board'; side: 'player' | 'enemy'; laneIdx?: number; element: HTMLElement }
+  | { kind: 'location'; location: ResolvedLocation; laneIdx: number; playerPower: number; enemyPower: number; element: HTMLElement };
 
 const [inspectTarget, setInspectTarget] = createSignal<InspectTarget | null>(null);
-const openInspect = (t: InspectTarget) => {
-  setInspectTarget(t);
-};
-const closeInspect = () => {
-  setInspectTarget(null);
-};
+const openInspect = (t: InspectTarget) => setInspectTarget(t);
+const closeInspect = () => setInspectTarget(null);
 
-/** Fisher–Yates shuffle (matches the helper in the demo's board.js). */
+/** Fisher–Yates shuffle. */
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -86,8 +85,7 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
-// Sets --board-w / --board-h on :root (mirrors applyBoardSize() from demo).
-// Also sets --message-center-y so toasts land over the locations strip.
+// Sets --board-w / --board-h on :root.
 const BoardSizer = () => {
   const apply = () => {
     const w = Math.min((window.innerHeight * 9) / 16, window.innerWidth, 420);
@@ -108,7 +106,6 @@ const BoardSizer = () => {
   onMount(() => {
     apply();
     window.addEventListener('resize', apply);
-    // Locations render after mount; wait a frame for layout
     requestAnimationFrame(applyToastY);
     window.addEventListener('resize', applyToastY);
     onCleanup(() => {
@@ -121,39 +118,46 @@ const BoardSizer = () => {
 
 // PlayBoard — mirrors <div class="board"> from demo index.html.
 const PlayBoard = (props: { onExit?: () => void }) => {
-  const { state, setState, actions, isResolving, bridge } = usePlayGame();
+  const pg = usePlayGame();
+  const { engineState, setEngineState, dispatch, manifest, ui, setUi, engineRng, isResolving, actions } = pg;
   const { cardRefs, boardRef } = useVfx();
 
+  // Derived UI projections.
+  const playerHand = createMemo<ResolvedCard[]>(() => getPlayerHand(engineState, manifest));
+  const playerLane = (i: LaneIdx): ResolvedCard[] => getPlayerLaneCards(engineState, i, manifest);
+  const enemyLane = (i: LaneIdx): ResolvedCard[] => getEnemyLaneCards(engineState, i, manifest);
+  const laneLoc = (i: LaneIdx): ResolvedLocation => getLocation(engineState, i, manifest);
+  const playerPower = (i: LaneIdx): number => getLanePower(engineState, i, 'PLAYER', manifest);
+  const enemyPower = (i: LaneIdx): number => getLanePower(engineState, i, 'OPP', manifest);
+  const playerHasPriority = createMemo(() => engineState.priority === 'PLAYER');
+  const handScale = createMemo(() => {
+    const n = playerHand().length;
+    if (n <= 4) return 1;
+    if (n <= 5) return 0.9;
+    if (n <= 6) return 0.82;
+    return 0.74;
+  });
+
   const handleUndoPending = () => {
-    const lastPlayedId = state.playedThisTurn[state.playedThisTurn.length - 1];
-    if (!lastPlayedId) return;
-    // Capture lane card rect + all current hand card rects before mutation
-    const allIds = [lastPlayedId, ...state.hand.map((c) => c.id)];
+    // Find last player-staged card in stagingOrder.
+    const lastStaged = [...engineState.stagingOrder]
+      .reverse()
+      .find((id) => engineState.cards[id]?.owner === 'PLAYER');
+    if (!lastStaged) return;
+    // Capture lane card rect + all current hand card rects before mutation.
+    const allIds = [lastStaged as string, ...playerHand().map((c) => c.id)];
     const oldRects = captureHandRects(allIds, cardRefs);
     actions.undoPending();
-    // Slide lane card to hand position + slide existing hand cards apart
     requestAnimationFrame(() => {
       playLayoutSlide(oldRects, cardRefs);
     });
   };
 
-  // Script instance — captured in onMount so END TURN can replay flows
-  // against the same ctx used by the opening sequence.
+  // Script instance for running opening + resolve-turn flows.
   let script: Script | undefined;
 
-  // Power totals per lane (demo does this in renderLocations()).
-  const playerPower = (laneIdx: number) =>
-    state.lanes[laneIdx].reduce((sum, c) => sum + c.power, 0);
-  const enemyPower = (laneIdx: number) =>
-    state.enemyLanes[laneIdx].reduce((sum, c) => sum + c.power, 0);
-
-  // `.board` ships with `visibility: hidden` to avoid a flash of unsized
-  // layout; the demo's JS adds `.ready` once content is rendered. We do
-  // the same in Solid via onMount.
   let boardEl: HTMLDivElement | undefined;
   let toastAreaEl: HTMLDivElement | undefined;
-  // Deck anchor — visual origin for the draw-slide animation. Positioned
-  // absolutely at the right edge of the board via CSS (see playgame.css).
   let deckEl: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -161,10 +165,6 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     boardEl.classList.add('ready');
 
     // ── Lane maps ──────────────────────────────────────────────────────
-    // Mirrors createLaneMaps() + layoutLaneMaps() from the demo's
-    // board.js. Three <div class="lane-map"> overlays are absolutely
-    // positioned over each lane column and fade from 0→1 when the
-    // matching location is revealed (handled by the reveal cinematic).
     const mapPaths = shuffle([...LANE_MAPS]).slice(0, 3);
     const mapEls: HTMLDivElement[] = mapPaths.map((path, i) => {
       const el = document.createElement('div');
@@ -189,7 +189,6 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         map.style.height = `${botRect.bottom - topRect.top}px`;
       }
     };
-    // Initial layout (once the DOM has painted) + relayout on resize.
     requestAnimationFrame(layoutLaneMaps);
     const ro = new ResizeObserver(layoutLaneMaps);
     ro.observe(boardEl);
@@ -199,9 +198,6 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     });
 
     // ── Drag-and-drop ─────────────────────────────────────────────────
-    // Delegated dragover/drop on the board, mirroring the demo's setup
-    // in index.html. Hand cards are flagged draggable; dragstart stores
-    // the card id on a closure var; dropping on a player lane stages it.
     const getPlayerLaneSlots = (target: EventTarget | null): HTMLElement | null => {
       let el = target as HTMLElement | null;
       while (el && el !== boardEl) {
@@ -216,18 +212,14 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     };
     const onDragOver = (e: DragEvent) => {
       if (!dragState.id) return;
-      // Lock out drops while the end-turn flow is running — otherwise a
-      // mid-reveal drop would push a new id into state.pending AFTER the
-      // reveal snapshot was taken, stranding the card face-down.
-      if (state.resolving) return;
+      if (isResolving()) return;
       const slotEl = getPlayerLaneSlots(e.target);
       if (!slotEl) return;
-      const lane = Number(slotEl.dataset.lane);
-      if (state.lanes[lane].length >= 4) return;
+      const lane = Number(slotEl.dataset.lane) as LaneIdx;
+      if (engineState.lanes[lane].cards['PLAYER'].length >= 4) return;
       e.preventDefault();
       clearDropState();
       slotEl.classList.add('drop-target');
-      // Highlight the specific next-empty slot with yellow outline
       const nextSlot = [...slotEl.querySelectorAll('.slot')].find(
         (s) => !s.querySelector('.card'),
       ) as HTMLElement | undefined;
@@ -246,14 +238,12 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       const slotEl = getPlayerLaneSlots(e.target);
       clearDropState();
       boardEl!.classList.remove('dragging-card');
-      if (state.resolving) return;
+      if (isResolving()) return;
       if (!slotEl || !dragState.id) return;
       const lane = Number(slotEl.dataset.lane);
-      // Capture all hand rects before mutation so survivors can FLIP-slide together
-      const handIds = state.hand.map((c) => c.id);
+      const handIds = playerHand().map((c) => c.id);
       const oldRects = captureHandRects(handIds, cardRefs);
       actions.stageCardInLane(dragState.id, lane);
-      // After Solid re-renders, slide remaining hand cards into their new positions
       requestAnimationFrame(() => {
         playLayoutSlide(oldRects, cardRefs);
       });
@@ -274,35 +264,35 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     });
 
     // ── Opening sequence ──────────────────────────────────────────────
-    // Seed a randomised draw queue and kick off the opening cinematic.
-    // The script engine mutates state through our Solid setState so
-    // cards fly into the hand reactively.
-    const drawQueue = shuffle([...CARD_POOL]).slice(0, 8);
+    // Seed the draw queue from the manifest (shuffle, take 8).
+    const drawQueue: ManifestCardDef[] = shuffle(Object.values(manifest.cards)).slice(0, 8);
     const boardWrapEl = boardRef();
     if (!boardWrapEl) return;
+
+    // setPhase helper via setEngineState for RESOLVING ↔ AWAITING_INTENT.
+    const setPhase = (phase: EngineMatchState['phase']) => {
+      setEngineState('phase', phase);
+    };
+
     const ctx: PlayScriptCtx = {
-      state,
-      setState,
+      state: engineState,
+      setState: setEngineState as unknown as PlayScriptCtx['setState'],
+      dispatch,
+      setPhase,
+      ui,
+      setUi,
+      manifest,
+      engineRng,
       boardEl,
       boardWrap: boardWrapEl,
       toastArea: toastAreaEl,
       cardRefs,
       drawQueue,
       deckEl,
-      bridge,
     };
     script = createScript(ctx);
     void script.run(openingSequence());
     onCleanup(() => script?.cancel());
-  });
-
-
-  const handScale = createMemo(() => {
-    const n = state.hand.length;
-    if (n <= 4) return 1;
-    if (n <= 5) return 0.9;
-    if (n <= 6) return 0.82;
-    return 0.74;
   });
 
   return (
@@ -313,63 +303,60 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         <PlayerHud
           name="PLAYER"
           side="left"
-          hasPriority={state.playerHasPriority}
+          hasPriority={playerHasPriority()}
         />
         <div class="hud-turn">
-          TURN <b>{state.turn}</b>
+          TURN <b>{engineState.turn}</b>
           <span class="hud-energy">
             {' \u00b7 '}
-            <b>{state.energy}</b>/<b>{state.energyMax}</b> {'\u26a1'}
+            <b>{engineState.energy['PLAYER']}</b>/<b>{engineState.maxEnergy}</b> {'\u26a1'}
           </span>
         </div>
         <PlayerHud
           name="OPPONENT"
           side="right"
-          hasPriority={!state.playerHasPriority}
+          hasPriority={!playerHasPriority()}
         />
       </div>
 
       {/* GAME AREA: enemy lanes - locations - player lanes */}
       <div class="board-game-area">
         <div class="row enemy-row">
-          <For each={[0, 1, 2]}>
-            {(i) => <LaneSlots side="enemy" laneIdx={i} cards={state.enemyLanes[i]} />}
+          <For each={[0, 1, 2] as const}>
+            {(i) => <LaneSlots side="enemy" laneIdx={i} cards={enemyLane(i)} />}
           </For>
         </div>
 
         <div class="row locations">
-          <For each={state.locations}>
-            {(loc, i) => (
+          <For each={[0, 1, 2] as const}>
+            {(i) => (
               <LocationTile
-                location={loc}
-                laneIdx={i()}
-                playerPower={playerPower(i())}
-                enemyPower={enemyPower(i())}
+                location={laneLoc(i)}
+                laneIdx={i}
+                playerPower={playerPower(i)}
+                enemyPower={enemyPower(i)}
               />
             )}
           </For>
         </div>
 
         <div class="row player-row">
-          <For each={[0, 1, 2]}>
-            {(i) => <LaneSlots side="player" laneIdx={i} cards={state.lanes[i]} />}
+          <For each={[0, 1, 2] as const}>
+            {(i) => <LaneSlots side="player" laneIdx={i} cards={playerLane(i)} />}
           </For>
         </div>
       </div>
 
       {/* HAND */}
       <div class="hand" id="hand" style={{ '--hand-scale': handScale().toFixed(3) }}>
-        <For each={state.hand}>
-          {(card) => <HandCard card={card} playable={card.cost <= state.energy} />}
+        <For each={playerHand()}>
+          {(card) => <HandCard card={card} playable={card.cost <= engineState.energy['PLAYER']} />}
         </For>
       </div>
 
-      {/* ACTION BAR: RETREAT - energy/undo - END TURN */}
+      {/* ACTION BAR */}
       <div class="action-bar">
-        <button
-          class="retreat-btn"
-          onClick={() => props.onExit?.()}
-        >
+        <button class="retreat-btn" onClick={() => props.onExit?.()}>
           RETREAT
         </button>
         <button
@@ -377,16 +364,12 @@ const PlayBoard = (props: { onExit?: () => void }) => {
           title="Tap to use energy / hold to undo"
           onClick={handleUndoPending}
         >
-          <div class="crystal">{state.energy}</div>
+          <div class="crystal">{engineState.energy['PLAYER']}</div>
         </button>
         <button
           class="end-turn"
           disabled={isResolving()}
           onClick={() => {
-            // Run the full resolve-turn flow: reveal pending → enemy play
-            // → advance turn → draw → maybe reveal next location.
-            // `isResolving()` is derived from state.resolving, so the
-            // disabled attribute and this guard share a source of truth.
             if (isResolving() || !script) return;
             void script.run(resolveTurnFlow());
           }}
@@ -395,12 +378,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
         </button>
       </div>
 
-      {/* Deck anchor — a pure positioning marker for the draw-slide
-          animation. Sits just outside the right edge of the board (off-
-          screen relative to the visible board area) so slides clearly
-          originate from "the deck" without rendering anything visible
-          behind the hand. A later slice can swap this for a real deck
-          stack sprite. */}
+      {/* Deck anchor */}
       <div
         ref={deckEl}
         class="deck-anchor"
@@ -419,7 +397,6 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       <div class="toast-area" id="toastArea" ref={toastAreaEl} />
     </div>
 
-    {/* Inspector overlay — portaled to body to avoid layout breakage */}
     <Portal>
       <InspectOverlay />
     </Portal>
@@ -428,7 +405,6 @@ const PlayBoard = (props: { onExit?: () => void }) => {
 };
 
 // ─── InspectOverlay ─────────────────────────────────────────────────────
-// Zoom inspector — clones card and transforms to center with text below.
 const InspectOverlay = () => {
   return (
     <Show when={inspectTarget()} keyed>
@@ -438,17 +414,12 @@ const InspectOverlay = () => {
 };
 
 // ─── LaneSlots ──────────────────────────────────────────────────────────
-// Demo uses a 4-slot 2x2 grid per lane. Opponent mapping reverses the rows
-// so the closest row is nearest the center (see board.js comment).
 const LaneSlots = (props: {
   side: 'player' | 'enemy';
   laneIdx: number;
-  cards: CardInstance[];
+  cards: ResolvedCard[];
 }) => {
-  // Build 4 slots, mapping cards[s] -> grid index.
-  // Player: s==0 -> grid 0 (top-left), s==1 -> 1, s==2 -> 2, s==3 -> 3.
-  // Enemy:  s==0 -> grid 2 (bottom-left), s==1 -> 3, s==2 -> 0, s==3 -> 1.
-  const slotCardForGrid = (gridIdx: number): CardInstance | undefined => {
+  const slotCardForGrid = (gridIdx: number): ResolvedCard | undefined => {
     const mapping = props.side === 'enemy' ? [2, 3, 0, 1] : [0, 1, 2, 3];
     const s = mapping.indexOf(gridIdx);
     return props.cards[s];
@@ -462,9 +433,6 @@ const LaneSlots = (props: {
     >
       <For each={[0, 1, 2, 3]}>
         {(gridIdx) => (
-          // Each slot re-renders reactively: `when` is a getter that reads
-          // props.cards[s] which is a store proxy. Using keyed so the child
-          // receives the card directly (not an accessor).
           <div class="slot" data-slot={gridIdx}>
             <Show when={slotCardForGrid(gridIdx)} keyed>
               {(c) => (
@@ -484,10 +452,8 @@ const LaneSlots = (props: {
 };
 
 // ─── LocationTile ───────────────────────────────────────────────────────
-// Mirrors ui/location.js. Revealed tiles show name + desc; unrevealed show
-// "???" with lane-power scores on both sides.
 const LocationTile = (props: {
-  location: LocationInstance;
+  location: ResolvedLocation;
   laneIdx: number;
   playerPower: number;
   enemyPower: number;
@@ -519,26 +485,29 @@ const LocationTile = (props: {
 };
 
 // ─── BoardCard ───────────────────────────────────────────────────────────
-// A card sitting in a lane slot. Face-down while in state.pending; face-up
-// otherwise. Mirrors ui/card.js's DOM.
 const BoardCard = (props: {
-  card: CardInstance;
+  card: ResolvedCard;
   enemy?: boolean;
   side: 'player' | 'enemy';
   laneIdx: number;
 }) => {
-  const { state } = usePlayGame();
+  const { ui } = usePlayGame();
   const { bindCardRef } = useVfx();
 
-  const isPending = () => state.pending.includes(props.card.id);
-  const isFaceDown = () => isPending();
+  // Face-down logic: unrevealed enemy cards are always face-down; unrevealed
+  // player cards are face-down only during resolution (ui.isFlipped = true).
+  const isFaceDown = () => {
+    if (props.card.revealed) return false;
+    if (props.card.owner === 'OPP') return true;
+    return ui.isFlipped;
+  };
+  const isPending = isFaceDown; // kept for .pending styling parity
   const powerClass = () => {
     const c = props.card;
     if (c.power > c.basePower) return 'buffed';
     if (c.power < c.basePower) return 'debuffed';
     return '';
   };
-  // Deterministic tilt per id (same hash as demo's cardTilt()).
   const tilt = () => {
     let h = 0;
     for (let i = 0; i < props.card.id.length; i++)
@@ -549,8 +518,6 @@ const BoardCard = (props: {
   };
 
   const onClick = (e: MouseEvent) => {
-    // Face-down (pending) cards stay a mystery — the demo blocks the
-    // inspector for these too.
     if (isFaceDown()) return;
     e.stopPropagation();
     openInspect({
@@ -586,9 +553,7 @@ const BoardCard = (props: {
 };
 
 // ─── HandCard ───────────────────────────────────────────────────────────
-// A card in the player's hand. Same DOM as BoardCard minus the tilt/placement,
-// plus an opacity dim when unplayable (cost > current energy).
-const HandCard = (props: { card: CardInstance; playable: boolean }) => {
+const HandCard = (props: { card: ResolvedCard; playable: boolean }) => {
   const { bindCardRef } = useVfx();
 
   const powerClass = () => {
@@ -599,9 +564,6 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
   };
 
   const onDragStart = (e: DragEvent) => {
-    // Mirrors the demo's onDragStart: flag the card id on the shared
-    // module-level dragState, add `.dragging` for CSS, and tell the
-    // native DnD system what's allowed.
     dragState.id = props.card.id;
     (e.currentTarget as HTMLElement).classList.add('dragging');
     if (e.dataTransfer) {
@@ -614,8 +576,6 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
     dragState.id = null;
   };
   const onClick = (e: MouseEvent) => {
-    // Clicks after a drag are suppressed by the browser automatically
-    // when the drag actually moves. This fires only on genuine taps.
     e.stopPropagation();
     openInspect({
       kind: 'card',
@@ -645,3 +605,4 @@ const HandCard = (props: { card: CardInstance; playable: boolean }) => {
     </div>
   );
 };
+

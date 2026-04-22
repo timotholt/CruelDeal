@@ -1,14 +1,14 @@
 /**
- * Script Engine — named actions. Ported from
- * ccg/vfx-engine/project/game/script/actions.js and adapted so state
- * mutations go through Solid's store `setState` instead of direct
- * property writes.
+ * Script Engine — named actions. Step 8c: all state mutations now go through
+ * the engine's MatchState (dispatch → apply → reconcile) or the UI sidecar.
+ * The old MatchState type and bridge are gone.
  *
  * Each action returns a `Step` that resolves when its visible effect is
  * complete. Actions read what they need off `ctx`.
  */
 
-import { produce, type SetStoreFunction } from 'solid-js/store';
+import { type SetStoreFunction } from 'solid-js/store';
+import { unwrap } from 'solid-js/store';
 import { Timeline } from '@/services/vfx/timeline';
 import { flyFaceDownToSlot } from '@/services/vfx/animations/fly-face-down';
 import { revealPendingCinematic } from '@/services/vfx/animations/reveal-cinematic';
@@ -18,61 +18,72 @@ import {
   playLayoutSlide,
 } from '@/services/vfx/animations/layout-flip';
 import type { Step } from './runner';
-import type { CardDef, CardInstance, MatchState } from '../types';
-import { newCardInstance, randomCardDef, recalcPriority } from '../state';
-import { showToast } from '../toast';
-import type { Bridge } from '../engine/adapter/bridge';
+import type { MatchState as EngineMatchState, MatchPhase } from '../engine/types/state';
 import type { MatchEvent } from '../engine/types/events';
-import type { LaneIdx } from '../engine/types/ids';
+import type { CardId, LaneIdx } from '../engine/types/ids';
+import type { Manifest } from '../engine/manifest/types';
+import type { Rng } from '../engine/rng';
+import { resolveTurn } from '../engine/resolve';
+import {
+  type ResolvedCard,
+  type UiState,
+  resolveCard,
+  randomManifestCardDef,
+  newEngineCardInstance,
+} from '../view';
+import { showToast } from '../toast';
+
+// ── Context type ──────────────────────────────────────────────────────────────
 
 /** Ctx fields the actions expect. */
 export interface PlayScriptCtx extends Record<string, unknown> {
-  /** Live match state (read-only — mutate via setState). */
-  state: MatchState;
-  /** Solid store setter. */
-  setState: SetStoreFunction<MatchState>;
+  /** Live engine state (Solid store proxy). Use dispatch() for game mutations. */
+  state: EngineMatchState;
+  /**
+   * Solid store setter for direct path-based engine state updates.
+   * Use only for phase changes and other non-event UI state; all game
+   * mutations should go through dispatch().
+   */
+  setState: SetStoreFunction<Record<string, unknown>>;
+  /** Apply a game event to the engine state. */
+  dispatch: (event: MatchEvent) => void;
+  /** Helper to change the match phase (RESOLVING ↔ AWAITING_INTENT). */
+  setPhase: (phase: MatchPhase) => void;
+  /** UI sidecar state (incoming buffer, undo history, flip flag). */
+  ui: UiState;
+  /** Setter for UI sidecar. */
+  setUi: SetStoreFunction<UiState>;
+  /** Game manifest for card/location def lookups and engine calls. */
+  manifest: Manifest;
+  /** Seeded RNG for engine turn resolution (fork per turn). */
+  engineRng: Rng;
   /** Board root element (`.board`). */
   boardEl: HTMLElement;
-  /** Board-wrap element (`.board-wrap`) — the VFXEngine mount point. The
-   *  reveal cinematic needs this to mount its full-board zoom overlay. */
+  /** Board-wrap element (`.board-wrap`) — the VFXEngine mount point. */
   boardWrap: HTMLElement;
   /** Toast area element (`.toast-area`). */
   toastArea: HTMLElement;
   /** Map from card id -> its live DOM element (from VfxHost). */
   cardRefs: Map<string, HTMLElement>;
   /** Queue of card defs to deal from, pre-seeded by the flow. */
-  drawQueue: CardDef[];
-  /**
-   * Deck anchor element — the visual origin for draw slides. Optional;
-   * when absent, slide animations fall back to a synthetic point outside
-   * the board edge so nothing breaks.
-   */
+  drawQueue: import('../engine/manifest/types').CardDef[];
+  /** Deck anchor element — visual origin for draw slides. */
   deckEl?: HTMLElement;
-  /** Optional SFX hook (passed through to the reveal cinematic). */
+  /** Optional SFX hook. */
   sfx?: (name: string) => void;
   /** True once the caller cancels (e.g. on screen unmount). */
   cancelled?: boolean;
   /**
-   * Engine bridge (Step 8b). When present, end-turn actions consume
-   * engine events instead of duplicating game logic. Absent in
-   * older/test flows that don't wire the bridge.
-   */
-  bridge?: Bridge;
-  /**
-   * Engine events captured by `captureEngineEndTurn()`. Consumed by the
-   * engine-driven reveal and turn-advance actions that follow.
-   * @internal — written by captureEngineEndTurn, read by the *FromEngine actions.
+   * Engine events computed by `captureEngineEndTurn()`. Consumed by the
+   * `*FromEngine` actions that follow for reveal order and turn advancement.
    */
   _engineEvents?: readonly MatchEvent[];
+  /** Final engine state after full turn resolution (from resolveTurn). */
+  _engineFinalState?: EngineMatchState;
 }
 
-// ---- Screen / UI visibility --------------------------------------------
+// ── Screen / UI visibility ───────────────────────────────────────────────────
 
-/**
- * Toggle the `.board-hidden` helper class on `.playgame-root`. The CSS in
- * playgame.css hides the board UI (hud, game area, hand, action bar) with
- * an opacity transition when this class is on.
- */
 export const setBoardVisible = (on: boolean): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
   const root = c.boardEl.closest('.playgame-root') as HTMLElement | null;
@@ -80,7 +91,7 @@ export const setBoardVisible = (on: boolean): Step => (ctx) => {
   return new Promise<void>((r) => setTimeout(r, 620));
 };
 
-// ---- Toasts -------------------------------------------------------------
+// ── Toasts ───────────────────────────────────────────────────────────────────
 
 export const toast = (text: string, opts: { duration?: number } = {}): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
@@ -89,9 +100,8 @@ export const toast = (text: string, opts: { duration?: number } = {}): Step => (
   return new Promise<void>((r) => setTimeout(r, duration + 100));
 };
 
-// ---- Location tiles -----------------------------------------------------
+// ── Location tiles ───────────────────────────────────────────────────────────
 
-/** Immediately hide all 3 location tiles (opacity 0, no transition). */
 export const hideLocationTiles = (): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
   for (let i = 0; i < 3; i++) {
@@ -103,80 +113,72 @@ export const hideLocationTiles = (): Step => (ctx) => {
   return Promise.resolve();
 };
 
-/** Fade in one location tile over `ms` milliseconds. */
 export const fadeInLocationTile = (laneIndex: number, ms = 400): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
   const el = c.boardEl.querySelector(`.location[data-lane="${laneIndex}"]`) as HTMLElement | null;
   if (!el) return Promise.resolve();
   el.style.opacity = '0';
-  // Force reflow so the 0 is committed before transitioning.
   void el.offsetWidth;
   el.style.transition = `opacity ${ms}ms ease`;
   el.style.opacity = '1';
   return new Promise<void>((r) => setTimeout(r, ms));
 };
 
-// ---- Cards --------------------------------------------------------------
+// ── Card draw pipeline ────────────────────────────────────────────────────────
 
-/**
- * Compute the deck-origin rect. Prefers the live `.deck-anchor` element
- * when one is mounted; falls back to a synthetic point just off the
- * right edge of the board so the slide still has a direction.
- */
 const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
   if (c.deckEl && c.deckEl.isConnected) return c.deckEl.getBoundingClientRect();
   const b = c.boardEl.getBoundingClientRect();
-  // Roughly one hand-card's worth of width, off the right edge, roughly
-  // aligned with the hand row.
   const w = 70;
   const h = 100;
   return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
 };
 
 /**
- * Stage 1 of the two-stage draw pipeline: pull `count` cards off the
- * draw queue (falling back to `randomCardDef()` if the queue is empty)
- * and push them into `state.incoming`. No animation — this is purely
- * the logical "card has left the deck" step. Other effects (play-from-
- * table, steal from opponent, conjure) can populate `state.incoming`
- * the same way and share the commit animation below.
+ * Stage 1 of the two-stage draw pipeline: pull cards from the draw queue
+ * (or randomManifestCardDef() fallback), emit CARD_ADDED_TO_HAND events,
+ * and push ResolvedCards into `ui.incoming`.
  */
 export const drawFromDeck = (count = 1): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const picks: CardInstance[] = [];
+  if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return Promise.resolve();
+
   for (let i = 0; i < count; i++) {
-    const def = c.drawQueue.shift() ?? randomCardDef();
-    picks.push(newCardInstance(def));
+    const def = (c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined)
+      ?? randomManifestCardDef(c.manifest);
+    if (!def) continue;
+
+    const inst = newEngineCardInstance(def, 'PLAYER');
+    const event: MatchEvent = {
+      type: 'CARD_ADDED_TO_HAND',
+      owner: 'PLAYER',
+      cardId: inst.id,
+      defId: def.defId,
+      spawnSource: { kind: 'DECK_CREATION' },
+    };
+    c.dispatch(event);
+
+    // Resolve card from the now-updated engine state.
+    const raw = unwrap(c.state) as EngineMatchState;
+    const resolved = resolveCard(inst.id, raw, c.manifest);
+    if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
   }
-  c.setState(
-    produce<MatchState>((s) => {
-      s.incoming.push(...picks);
-    }),
-  );
   return Promise.resolve();
 };
 
 /**
- * Push an already-constructed `CardInstance` into `state.incoming`.
- * Used by non-deck sources (board steals, generated cards, etc.) so
- * they can share `commitIncomingToHand`'s animation.
+ * Push an already-resolved card directly into `ui.incoming`.
+ * Used by non-deck sources (conjure, steal) so they share the commit animation.
  */
-export const queueIncoming = (instance: CardInstance): Step => (ctx) => {
+export const queueIncoming = (resolved: ResolvedCard): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
-  c.setState(
-    produce<MatchState>((s) => {
-      s.incoming.push(instance);
-    }),
-  );
+  c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
   return Promise.resolve();
 };
 
 /**
- * Stage 2 of the two-stage draw pipeline: drain `state.incoming` into
- * `state.hand`, one card at a time, sliding each one in from the deck
- * anchor while the rest of the hand smoothly reflows via the FLIP
- * technique. Caps the hand at 7 (extras are silently discarded — a
- * later slice can surface a "HAND FULL" toast).
+ * Stage 2 of the two-stage draw pipeline: drain `ui.incoming` into the
+ * player hand one card at a time, animating each with a deck-slide + FLIP.
  */
 export const commitIncomingToHand = (
   opts: { stagger?: number; popDuration?: number } = {},
@@ -185,44 +187,28 @@ export const commitIncomingToHand = (
   const stagger = opts.stagger ?? 120;
   const popDuration = opts.popDuration ?? 320;
 
-  // Snapshot the incoming queue once. If the queue is mutated during the
-  // animation (unlikely but possible), those extras wait for the next
-  // commit step.
-  const batch = [...c.state.incoming];
+  const batch = [...c.ui.incoming];
   if (batch.length === 0) return;
 
   for (let i = 0; i < batch.length; i++) {
     const card = batch[i];
 
-    // Hand cap: discard the overflow and the corresponding incoming entry.
-    if (c.state.hand.length >= 7) {
-      c.setState(
-        produce<MatchState>((s) => {
-          s.incoming = s.incoming.filter((x) => x.id !== card.id);
-        }),
-      );
+    // Cap check against current engine hand.
+    if ((c.state.hand['PLAYER'] as unknown[]).length > 7) {
+      c.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((x) => x.id !== card.id));
       continue;
     }
 
-    // Capture existing hand rects BEFORE the mutation so the FLIP slide
-    // animates the reflow on top of the slide-in.
-    const oldIds = c.state.hand.map((h) => h.id);
+    // Note: the card is already in engine hand (added in drawFromDeck).
+    // Just capture rects for the FLIP animation, remove from incoming.
+    const handCards = c.state.hand['PLAYER'];
+    const oldIds = handCards.map((h) => h.id as string).filter((id) => id !== card.id);
     const oldRects = captureHandRects(oldIds, c.cardRefs);
 
-    // Move this card from incoming -> hand in one atomic setState so the
-    // UI never briefly shows the card in neither list.
-    c.setState(
-      produce<MatchState>((s) => {
-        s.incoming = s.incoming.filter((x) => x.id !== card.id);
-        s.hand.push(card);
-      }),
-    );
+    c.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((x) => x.id !== card.id));
 
-    // Wait one frame for Solid to render the new hand DOM.
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-    // Play the hand-reflow slide for survivors and the deck slide for
-    // the new card in parallel.
     playLayoutSlide(oldRects, c.cardRefs);
     const startRect = deckSourceRect(c);
     const slidePromise = slideFromDeckToHand({
@@ -233,7 +219,6 @@ export const commitIncomingToHand = (
       sfx: c.sfx,
     });
 
-    // Pop the newly drawn card after the slide lands.
     await slidePromise;
     const el = c.cardRefs.get(card.id);
     if (el) {
@@ -243,7 +228,6 @@ export const commitIncomingToHand = (
       await new Promise<void>((r) => setTimeout(r, popDuration + 40));
     }
 
-    // Short beat before the next card so a multi-draw reads as a sequence.
     if (i < batch.length - 1) {
       await new Promise<void>((r) => setTimeout(r, stagger));
     }
@@ -251,41 +235,38 @@ export const commitIncomingToHand = (
 };
 
 /**
- * Deal one card to the player's hand — the classic single-card draw.
- * Now implemented on top of the two-stage pipeline so every draw path
- * (opening sequence, end-of-turn, future effects) uses the same slide.
- *
- * Signature preserved for backwards compatibility with the opening
- * sequence; the `card` arg, if provided, goes straight into `incoming`
- * without touching the draw queue.
+ * Deal one card to the player's hand — single-card draw (backward-compat
+ * shortcut for the opening sequence).
  */
 export const dealPlayerCard = (
-  card?: CardDef,
+  def?: import('../engine/manifest/types').CardDef,
   { popDuration = 320 }: { popDuration?: number } = {},
 ): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if (card) {
-    await (queueIncoming(newCardInstance(card)) as (x: typeof ctx) => Promise<void>)(ctx);
+  if (def) {
+    // Pre-specified card: add directly to engine hand + incoming.
+    const inst = newEngineCardInstance(def, 'PLAYER');
+    const event: MatchEvent = {
+      type: 'CARD_ADDED_TO_HAND',
+      owner: 'PLAYER',
+      cardId: inst.id,
+      defId: def.defId,
+      spawnSource: { kind: 'DECK_CREATION' },
+    };
+    c.dispatch(event);
+    const resolved = resolveCard(inst.id, unwrap(c.state) as EngineMatchState, c.manifest);
+    if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
   } else {
     await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
   }
-  await (
-    commitIncomingToHand({ popDuration }) as (x: typeof ctx) => Promise<void>
-  )(ctx);
+  await (commitIncomingToHand({ popDuration }) as (x: typeof ctx) => Promise<void>)(ctx);
 };
 
-// ---- Location reveal ----------------------------------------------------
+// ── Location reveal ───────────────────────────────────────────────────────────
 
 /**
- * Reveal one location with the 6-stage cinematic from the demo's
- * revealLane() (see ccg/vfx-engine/project/index.html ~L665):
- *   1. Hide the ??? tile
- *   2. Fade the lane-map image in (1300ms)
- *   3. Hold sharp (1000ms)
- *   4. Blur the map in place (600ms)
- *   5. Flip state.revealed = true (re-render shows real name)
- *   6. Flip the tile in with a 3D rotateY (500ms)
- *   7. Short tail wait (1500ms)
+ * Reveal one location with a 6-stage cinematic. The engine's
+ * LOCATION_REVEALED event sets `locationRevealed = true` at stage 5.
  */
 export const revealLocation = (laneIndex: number): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
@@ -296,40 +277,32 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
     `.location[data-lane="${laneIndex}"]`,
   ) as HTMLElement | null;
 
-  // Stage 1: hide the ??? tile
   if (tileEl) {
     tileEl.style.transition = 'none';
     tileEl.style.opacity = '0';
   }
 
-  // Stage 2: fade map in
   if (laneEl) {
     laneEl.style.transition = 'opacity 1300ms ease';
     laneEl.style.opacity = '1';
   }
   await new Promise<void>((r) => setTimeout(r, 1300));
-
-  // Stage 3: brief hold sharp before blurring
   await new Promise<void>((r) => setTimeout(r, 200));
 
-  // Stage 4: blur map in place — shortened so the player doesn't wait
-  // on a long filter transition before the tile flips in.
   if (laneEl) {
     laneEl.style.transition = 'filter 350ms ease';
     laneEl.style.filter = 'blur(1px)';
   }
   await new Promise<void>((r) => setTimeout(r, 350));
 
-  // Stage 5: flip the revealed flag — Solid rerenders the tile with real name
-  c.setState(
-    produce<MatchState>((s) => {
-      if (s.locations[laneIndex]) s.locations[laneIndex].revealed = true;
-    }),
-  );
-  // Wait a frame so Solid commits the new DOM before we grab it.
+  // Dispatch LOCATION_REVEALED — engine sets locationRevealed = true.
+  const loc = c.state.lanes[laneIndex as LaneIdx].location;
+  if (loc) {
+    c.dispatch({ type: 'LOCATION_REVEALED', lane: laneIndex as LaneIdx, locationId: loc.id });
+  }
+
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-  // Stage 6: 3D flip the revealed tile in
   const freshTile = c.boardEl.querySelector(
     `.location[data-lane="${laneIndex}"]`,
   ) as HTMLElement | null;
@@ -337,7 +310,6 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
     freshTile.style.transition = 'none';
     freshTile.style.opacity = '0';
     freshTile.style.transform = 'rotateY(90deg) scale(0.85)';
-    // Force layout flush so the starting state actually commits.
     freshTile.getBoundingClientRect();
     freshTile.style.transition =
       'opacity 500ms ease, transform 500ms cubic-bezier(.2,0,.4,1)';
@@ -345,187 +317,162 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
     freshTile.style.transform = 'rotateY(0deg) scale(1)';
   }
   await new Promise<void>((r) => setTimeout(r, 600));
-
-  // Stage 7: short tail so the next beat doesn't step on this one
   await new Promise<void>((r) => setTimeout(r, 500));
 };
 
-/** Reveal the next unrevealed lane in order, if any. */
 export const revealNextLocation = (): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const i = c.state.locations.findIndex((loc) => !loc.revealed);
+  const i = c.state.lanes.findIndex((lane) => !lane.locationRevealed);
   if (i < 0 || i >= 3) return Promise.resolve();
   return (revealLocation(i) as (ctx: typeof c) => Promise<void>)(c);
 };
 
-// ---- Turn resolution ---------------------------------------------------
+// ── Turn resolution ───────────────────────────────────────────────────────────
 
 /**
- * LEGACY — reveal every currently-pending card in arrival order. Kept
- * for callers that don't care about priority (e.g. one-off tests /
- * debug flows). The main turn flow uses `revealByPriority()` below.
+ * Flip player's this-turn staged cards face-down in the UI.
+ *
+ * In the engine, staged cards already have `card.revealed = false`.
+ * The UI was showing them face-up (Snap UX). Setting `ui.isFlipped = true`
+ * tells BoardCard components to stop overriding — they now render face-down.
  */
-export const revealPendingCards = (): Step => async (ctx) => {
+export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const pendingIds = [...c.state.pending];
-  if (pendingIds.length === 0) return;
+  const playerStaged = c.state.stagingOrder.filter(
+    (id) => c.state.cards[id]?.owner === 'PLAYER',
+  );
+  if (playerStaged.length === 0) return;
+  c.setUi('isFlipped', true);
+  await new Promise<void>((r) => setTimeout(r, 250));
+};
+
+// ── Step 8b/8c: Engine-event-driven turn resolution ──────────────────────────
+
+/**
+ * Run `resolveTurn` to get the authoritative event stream for this turn.
+ * Events are stored on ctx for VFX actions to consume; the engine state
+ * is NOT updated yet (VFX actions dispatch events incrementally as
+ * animations play so the UI stays in sync with what the player sees).
+ */
+export const captureEngineEndTurn = (): Step => (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const raw = unwrap(c.state) as EngineMatchState;
+  const result = resolveTurn(
+    raw,
+    c.manifest,
+    c.engineRng.fork(`turn:${raw.turn}`),
+  );
+  c._engineEvents = result.events;
+  c._engineFinalState = result.state;
+  return Promise.resolve();
+};
+
+/**
+ * Reveal all pending cards in the order the engine dictated (priority-first).
+ * Dispatches CARD_FLIPPED for each card as its reveal animation completes.
+ */
+export const revealByPriorityFromEngine = (): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const events = c._engineEvents ?? [];
+
+  // CARD_FLIPPED events are already in priority order from resolveTurn.
+  const flippedIds = events
+    .filter((e): e is Extract<MatchEvent, { type: 'CARD_FLIPPED' }> => e.type === 'CARD_FLIPPED')
+    .map((e) => e.cardId as string);
+
+  if (flippedIds.length === 0) return;
+
+  // Only reveal cards that are actually face-down (not yet revealed in engine).
+  const toReveal = flippedIds.filter((id) => {
+    const card = c.state.cards[id as CardId];
+    return card && !card.revealed;
+  });
+
+  if (toReveal.length === 0) return;
 
   await revealPendingCinematic({
-    pendingIds,
+    pendingIds: toReveal,
     cardElMap: c.cardRefs,
     boardWrap: c.boardWrap,
     sfx: c.sfx,
     onRevealed: (id) => {
-      c.setState(
-        produce<MatchState>((s) => {
-          s.pending = s.pending.filter((pid) => pid !== id);
-        }),
-      );
+      // Dispatch the engine event so card.revealed becomes true reactively.
+      c.dispatch({ type: 'CARD_FLIPPED', cardId: id as CardId });
     },
   });
 };
 
-// ---- Snap reveal cadence ------------------------------------------------
-
 /**
- * Flip every card the player staged this turn FACE-DOWN. Pushes each
- * id from `playedThisTurn` into `pending` so the BoardCard re-renders
- * with the `facedown` class. Until this runs, staged cards sit face-up
- * in their lanes — which is the whole point of the Snap UX.
- *
- * Purely a state flip for now (CSS snaps the face change). A later
- * slice can add a proper 3D flip-to-back animation here.
+ * Advance the turn from the engine's TURN_STARTED event.
+ * Dispatches TURN_ENDED, ENERGY_CHANGED, and TURN_STARTED to update
+ * turn counter, energy, and priority in the engine state.
+ * Resets `ui.isFlipped` so next turn's staged cards show face-up.
  */
-export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
+export const advanceTurnFromEngine = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const ids = [...c.state.playedThisTurn];
-  if (ids.length === 0) return;
-  c.setState(
-    produce<MatchState>((s) => {
-      for (const id of ids) {
-        if (!s.pending.includes(id)) s.pending.push(id);
-      }
-    }),
-  );
-  // Small beat so the flip registers visually before the next step.
-  await new Promise<void>((r) => setTimeout(r, 250));
-};
+  const events = c._engineEvents ?? [];
 
-/**
- * Determine which side reveals first. Marvel Snap rule: the player with
- * higher TOTAL power across the board has priority. Ties go to a coin
- * flip — here we default to the player for now because we don't yet
- * track the priority coin state.
- *
- * Pulled into its own function so a later slice can swap in the real
- * snap-priority rules (last-winner-takes-priority, tie-break coin).
- */
-export const determinePriority = (state: MatchState): 'player' | 'enemy' => {
-  const playerTotal = state.lanes.reduce(
-    (sum, lane) => sum + lane.reduce((s, card) => s + card.power, 0),
-    0,
-  );
-  const enemyTotal = state.enemyLanes.reduce(
-    (sum, lane) => sum + lane.reduce((s, card) => s + card.power, 0),
-    0,
-  );
-  if (playerTotal > enemyTotal) return 'player';
-  if (enemyTotal > playerTotal) return 'enemy';
-  return 'player'; // TODO: track the priority coin for real tie-breaks
-};
-
-/**
- * Reveal this turn's played cards in priority order: the higher-power
- * side reveals first, then the other side. Each side's reveal uses the
- * shared cinematic so there's no code duplication.
- *
- * After both batches finish, `playedThisTurn` / `enemyPlayedThisTurn`
- * are cleared so the next turn starts fresh.
- */
-export const revealByPriority = (): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const priority = determinePriority(c.state);
-  const playerIds = [...c.state.playedThisTurn];
-  const enemyIds = [...c.state.enemyPlayedThisTurn];
-
-  const revealBatch = async (ids: string[]) => {
-    if (ids.length === 0) return;
-    await revealPendingCinematic({
-      pendingIds: ids,
-      cardElMap: c.cardRefs,
-      boardWrap: c.boardWrap,
-      sfx: c.sfx,
-      onRevealed: (id) => {
-        c.setState(
-          produce<MatchState>((s) => {
-            s.pending = s.pending.filter((pid) => pid !== id);
-          }),
-        );
-      },
-    });
-  };
-
-  if (priority === 'player') {
-    await revealBatch(playerIds);
-    await revealBatch(enemyIds);
-  } else {
-    await revealBatch(enemyIds);
-    await revealBatch(playerIds);
+  // Dispatch turn-bookkeeping events in the order the engine produced them.
+  const bookkeepingTypes = new Set([
+    'TURN_ENDED',
+    'ENERGY_CHANGED',
+    'TURN_STARTED',
+  ]);
+  for (const event of events) {
+    if (bookkeepingTypes.has(event.type)) {
+      c.dispatch(event);
+    }
   }
 
-  // Clear per-turn played lists; next turn's plays start empty.
-  c.setState(
-    produce<MatchState>((s) => {
-      s.playedThisTurn = [];
-      s.enemyPlayedThisTurn = [];
-    }),
-  );
+  // Reset the face-up override so next turn's staged cards show face-up.
+  c.setUi('isFlipped', false);
+
+  showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
+  await new Promise<void>((r) => setTimeout(r, 1200));
 };
 
 /**
- * Enemy picks a random non-full lane and plays one card. The card flies
- * in face-down from above the enemy row and STAYS face-down — reveal is
- * handled later by `revealByPriority()` so the two sides' cards flip in
- * the correct Snap order.
- *
- * Tracked in both `pending` (so it renders face-down) and
- * `enemyPlayedThisTurn` (so the reveal step knows which ids are the
- * enemy's this-turn plays).
+ * Enemy picks a random non-full lane and plays one card.
+ * The card is added to the engine state (CARD_ADDED_TO_HAND + CARD_STAGED)
+ * so it appears in `stagingOrder` and gets a CARD_FLIPPED event from
+ * captureEngineEndTurn's resolveTurn call.
  */
 export const enemyPlayRandom = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
-  // Pick a lane with room; bail if all full.
-  const candidates = [0, 1, 2].filter((i) => c.state.enemyLanes[i].length < 4);
-  if (candidates.length === 0) return;
-  const lane = candidates[Math.floor(Math.random() * candidates.length)];
-  // @migrate:step-8b: lane choice still random; engine AI (Tier 1.3) will
-  // replace this with a seeded deterministic pick from the engine's OPP AI.
-
-  const def = randomCardDef();
-  const card = newCardInstance(def);
-
-  // Register with engine BEFORE staging so bridge.stage() can validate zone.
-  // This makes enemy plays visible to the engine's turn resolution (resolveTurn)
-  // so CARD_FLIPPED events are emitted in the correct priority order for both sides.
-  if (c.bridge?.active) {
-    c.bridge.syncHandCard(card.id, card.name, 'OPP');
-    c.bridge.stage(card.id, lane as LaneIdx, 'OPP');
-  }
-
-  // Face-down on arrival; tracked as "played this turn" for reveal.
-  c.setState(
-    produce<MatchState>((s) => {
-      s.enemyLanes[lane].push(card);
-      s.pending.push(card.id);
-      s.enemyPlayedThisTurn.push(card.id);
-    }),
+  // Pick a lane with room.
+  const candidates = [0, 1, 2].filter(
+    (i) => ((c.state.lanes[i as LaneIdx].cards['OPP'] as unknown[]).length ?? 0) < 4,
   );
+  if (candidates.length === 0) return;
+  const lane = candidates[Math.floor(Math.random() * candidates.length)] as LaneIdx;
+  // @migrate:step-1.3: lane choice still random; engine AI (Tier 1.3) replaces this.
+
+  const def = randomManifestCardDef(c.manifest);
+  if (!def) return;
+  const inst = newEngineCardInstance(def, 'OPP');
+
+  // Add to engine hand (OPP), then stage.
+  c.dispatch({
+    type: 'CARD_ADDED_TO_HAND',
+    owner: 'OPP',
+    cardId: inst.id,
+    defId: def.defId,
+    spawnSource: { kind: 'DECK_CREATION' },
+  });
+  c.dispatch({
+    type: 'CARD_STAGED',
+    intentId: `enemy-${inst.id}`,
+    owner: 'OPP',
+    cardId: inst.id,
+    lane,
+    cost: def.cost,
+  });
+
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-  // Synthetic source rect: above the target slot so the card appears to
-  // fall in from off-board.
-  const slotEl = c.cardRefs.get(card.id);
+  // Fly-in animation: enemy card falls from above the slot.
+  const slotEl = c.cardRefs.get(inst.id);
   if (!slotEl) return;
   const slotRect = slotEl.getBoundingClientRect();
   const startRect = {
@@ -536,156 +483,35 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
   };
 
   await flyFaceDownToSlot({
-    cardId: card.id,
+    cardId: inst.id,
     startRect,
     cardElMap: c.cardRefs,
     boardWrap: c.boardWrap,
     showPreview: false,
   });
-  // No reveal here — `revealByPriority` handles it after both sides
-  // have committed their plays.
 };
 
 /**
- * Advance state.turn by 1, refill energy (cap = min(turn, 6)), and show
- * a "TURN N" banner. Mirrors the demo's turn bookkeeping.
- */
-export const advanceTurn = (): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  c.setState(
-    produce<MatchState>((s) => {
-      recalcPriority(s);   // before turn counter increments — uses resolved board state
-      s.turn += 1;
-      s.energyMax = Math.min(s.turn, 6);
-      s.energy = s.energyMax;
-    }),
-  );
-  showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
-  await new Promise<void>((r) => setTimeout(r, 1200));
-};
-
-/**
- * Draw one card into the player's hand with the deck-slide + FLIP
- * reflow animation. Two-stage under the hood: draw into `incoming`,
- * then commit. Skips the work entirely when the hand is already full.
+ * Draw one card into the player's hand with animation.
  */
 export const drawHandCard = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if (c.state.hand.length >= 7) return;
+  if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return;
   await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
   await (commitIncomingToHand() as (x: typeof ctx) => Promise<void>)(ctx);
 };
 
-// ---- Step 8b: Engine-event-driven turn resolution -----------------------
-
-/**
- * Calls `bridge.endTurn()` and stores the resulting event stream on the
- * script context. Must run AFTER all cards (player + enemy) have been
- * staged through the bridge so the engine's resolveTurn sees them.
- *
- * Subsequent `*FromEngine` actions read `ctx._engineEvents` to drive
- * reveal order, turn advancement, and priority — removing the duplicate
- * game logic that previously lived in `advanceTurn` and `revealByPriority`.
- */
-export const captureEngineEndTurn = (): Step => (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  if (c.bridge?.active) {
-    c._engineEvents = c.bridge.endTurn();
-  }
-  return Promise.resolve();
-};
-
-/**
- * Reveal all pending cards in the order the engine dictated (priority-first).
- *
- * Replaces `revealByPriority()` which independently recalculated priority
- * using duplicated logic. Falls back to `revealByPriority()` when no engine
- * events are available (e.g. bridge inactive or bridge didn't cover this turn).
- */
-export const revealByPriorityFromEngine = (): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const events = c._engineEvents ?? [];
-
-  // CARD_FLIPPED events appear in priority order (high-priority side first).
-  const flippedIds = events
-    .filter((e): e is Extract<MatchEvent, { type: 'CARD_FLIPPED' }> => e.type === 'CARD_FLIPPED')
-    .map((e) => e.cardId as string);
-
-  if (flippedIds.length === 0) {
-    // No engine events — fall back to the old priority-recalc path.
-    return (revealByPriority() as (x: typeof ctx) => Promise<void>)(ctx);
-  }
-
-  // Only reveal cards that are actually face-down in the UI (pending).
-  // This guards against stale engine state including already-revealed cards.
-  const toReveal = flippedIds.filter((id) => c.state.pending.includes(id));
-
-  await revealPendingCinematic({
-    pendingIds: toReveal,
-    cardElMap: c.cardRefs,
-    boardWrap: c.boardWrap,
-    sfx: c.sfx,
-    onRevealed: (id) => {
-      c.setState(
-        produce<MatchState>((s) => {
-          s.pending = s.pending.filter((pid) => pid !== id);
-        }),
-      );
-    },
-  });
-
-  // Clear per-turn play lists so the next turn starts fresh.
-  c.setState(
-    produce<MatchState>((s) => {
-      s.playedThisTurn = [];
-      s.enemyPlayedThisTurn = [];
-    }),
-  );
-};
-
-/**
- * Advance the turn using the `TURN_STARTED` event emitted by the engine.
- *
- * Replaces `advanceTurn()` which recalculated priority inline (`recalcPriority`)
- * — now the engine owns that logic and broadcasts the result via the event.
- * Falls back to `advanceTurn()` when engine events are unavailable.
- */
-export const advanceTurnFromEngine = (): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const events = c._engineEvents ?? [];
-
-  const startEvt = events.find(
-    (e): e is Extract<MatchEvent, { type: 'TURN_STARTED' }> => e.type === 'TURN_STARTED',
-  );
-
-  if (startEvt) {
-    c.setState(
-      produce<MatchState>((s) => {
-        s.turn = startEvt.turn;
-        s.energyMax = Math.min(startEvt.turn, 6); // matches manifest energyCurve [1..6]
-        s.energy = s.energyMax;
-        s.playerHasPriority = startEvt.priority === 'PLAYER';
-      }),
-    );
-  } else {
-    // No TURN_STARTED event — fall back to the old (duplicate) logic.
-    return (advanceTurn() as (x: typeof ctx) => Promise<void>)(ctx);
-  }
-
-  showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
-  await new Promise<void>((r) => setTimeout(r, 1200));
-};
-
-/** Mark the match as no-longer-resolving so the END TURN button re-enables. */
-export const finishResolving = (): Step => (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  c.setState('resolving', false);
-  return Promise.resolve();
-};
-
+/** Mark match as resolving. */
 export const startResolving = (): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
-  c.setState('resolving', true);
+  c.setPhase('RESOLVING');
+  return Promise.resolve();
+};
+
+/** Mark match as awaiting intent. */
+export const finishResolving = (): Step => (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  c.setPhase('AWAITING_INTENT');
   return Promise.resolve();
 };
 

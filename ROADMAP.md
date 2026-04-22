@@ -33,10 +33,10 @@
 | 5 | `apply()` reducer for all `MatchEvent` variants; zones split into DECK/HAND/LANE/DISCARD/DESTROYED/BANISHED; `spawnSource` provenance | ✅ done |
 | 6 | Effect evaluator (`evalEffect` + `revealCard` with recursive OR cascade, depth cap 16) | ✅ done |
 | 7 | `resolve()` intent dispatcher + `resolveTurn()` turn cascade (priority-ordered reveals, location reveal, draw, energy refill, match-end) | ✅ done |
-| **8a** | **Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play.** | **✅ done** |
-| **8b** | **Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`)** | **✅ done** |
-| 8c | Collapse dual state — delete old `services/playgame/state.ts` + `types.ts`, `PlayGameContext` wraps engine `MatchState` directly | ⏳ next |
-| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ blocked on 8c |
+| 8a | Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play. | ✅ done |
+| 8b | Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`) | ✅ done |
+| **8c** | **Collapse dual state — deleted old `services/playgame/{state,types,cards,locations}.ts` and `engine/adapter/`. `PlayGameContext` now wraps engine `MatchState` directly; UI reads via `services/playgame/view.ts` selectors.** | **✅ done** |
+| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ next |
 
 #### Step 8b / 8c migration checklist
 
@@ -54,14 +54,20 @@ Step 8b completed items:
 - **`enemyPlayRandom`** ✅ — enemy card staged through `bridge.syncHandCard()` + `bridge.stage('OPP')` before `endTurn()` runs, so engine sees both sides.
 - **`PlayGameContext.bridge`** ✅ — exposed in context value so script ctx can call `bridge.endTurn()` directly.
 
-Remaining for 8c (dual-state collapse):
+Step 8c completed items:
 
-- **`PlayGameContext.stageCardInLane`** — still dual-writes old state + bridge. Cut over: `resolve({STAGE_CARD})` → events → apply to old-state translator.
-- **`PlayGameContext.drawCard`** — UI mints card via `randomCardDef()`. Cut over: pre-populate engine deck; UI reads from `CARD_DRAWN` events. Gated on Tier 1.2 card model.
-- **`PlayGameContext.endTurn`** stub — never called by PlayScreen. Delete when VFX flow fully owns turn resolution.
-- **`services/playgame/script/actions.ts enemyPlayRandom`** — lane still picked via `Math.random()`. Cut over to engine AI hook (Tier 1.3).
-- **`services/playgame/state.ts recalcPriority`** — kept as fallback; delete when bridge is always active.
-- **`services/playgame/state.ts createMatchState`** — replace with engine's initial state builder once old `MatchState` type is gone.
+- **`PlayGameContext`** ✅ — store now holds engine `MatchState`; `dispatch(event)` → `apply()` + `reconcile()` is the single mutation gateway. Old `MatchState` shape, `createMatchState`, `recalcPriority`, `snapshotState`, `pushHistory` all deleted.
+- **`services/playgame/{state,types,cards,locations}.ts`** ✅ — deleted. Card + location data now lives exclusively in `engine/manifest/content/`.
+- **`services/playgame/engine/adapter/`** ✅ — bridge/translate/parity all deleted; no more shadow simulation.
+- **`services/playgame/view.ts`** ✅ — new selector layer: `ResolvedCard` / `ResolvedLocation` + `getPlayerHand` / `getPlayerLaneCards` / `getLocation` / `getLanePower` project engine state into flat render shapes.
+- **`PlayScreen.tsx` + `ZoomInspector.tsx`** ✅ — rewritten to consume `ResolvedCard` / `ResolvedLocation` via view selectors. No more old `CardInstance` / `LocationInstance`.
+- **`script/actions.ts`** ✅ — all ctx fields retyped against engine `MatchState`; mutations go through `dispatch` or `setUi`.
+
+Remaining debt carried forward (not required for 8c, gated on later tiers):
+
+- **`PlayGameContext.drawCard` / `drawFromDeck`** — UI still mints cards with `randomManifestCardDef()`. Replace with engine deck draw once Tier 1.2 (card model redesign) pre-populates the engine deck.
+- **`script/actions.ts enemyPlayRandom`** — enemy lane choice still uses `Math.random()`. Cut over to deterministic engine AI hook in Tier 1.3.
+- **`PlayGameContext.endTurn` stub** — kept for interface symmetry; delete when Step 9 CLI harness owns turn resolution outside the script engine.
 
 ---
 

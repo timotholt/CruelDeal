@@ -1,19 +1,23 @@
 /**
- * PlayGameContext — reactive Solid wrapper around the /play match state.
+ * PlayGameContext — Step 8c.
  *
- * The demo's state (`MatchState`) is held in a `createStore`. All actions
- * that mutate state do so via `setState(produce(draft => ...))` so Solid
- * observes the updates and re-renders dependent components.
+ * The Solid store now holds the engine's `MatchState` directly. There is
+ * no bridge, no shadow copy, no old MatchState type. The engine is the
+ * single source of truth.
  *
- * Actions are grouped on `ctx.actions`:
- *   - drawCard              deal a fresh card into the hand
- *   - stageCardInLane       hand -> lane, face-down (pending)
- *   - endTurn               reveal pending, run enemy play, advance turn
- *   - undoPending           pop last pending card back to hand
- *   - resetMatch            new match
+ * Architecture:
+ *   - `engineState`  : Solid store wrapping engine MatchState. Mutations
+ *                      happen through `dispatch(event)` (which calls apply()
+ *                      and reconciles the store) or via direct path-based
+ *                      Solid setter for UI-only fields (phase).
+ *   - `ui`           : Separate store for purely-visual state that has no
+ *                      engine counterpart: incoming animation buffer, undo
+ *                      history snapshots, isFlipped flag.
+ *   - `manifest`     : BOOTSTRAP_MANIFEST — read-only, injected into every
+ *                      selector call and exposed to VFX script actions.
+ *   - `dispatch`     : apply(unwrap(state), event, manifest) → reconcile.
  *
- * Usage: wrap the `/play` screen tree in <PlayGameProvider>, then
- *   const { state, actions } = usePlayGame();
+ * @migrate:step-8c ✅ complete — bridge deleted, engine MatchState is store.
  */
 
 import {
@@ -22,34 +26,109 @@ import {
   type Accessor,
   type JSX,
 } from 'solid-js';
-import { createStore, produce, type SetStoreFunction } from 'solid-js/store';
-import {
-  createMatchState,
-  newCardInstance,
-  pushHistory,
-  randomCardDef,
-  restoreState,
-} from '@/services/playgame/state';
-import type { CardInstance, MatchState } from '@/services/playgame/types';
-import { mountBridge, type Bridge } from '@/services/playgame/engine/adapter';
+import { createStore, reconcile, unwrap, type SetStoreFunction } from 'solid-js/store';
+import type { MatchState as EngineMatchState, MatchPhase } from '@/services/playgame/engine/types/state';
+import type { MatchEvent } from '@/services/playgame/engine/types/events';
+import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { Manifest } from '@/services/playgame/engine/manifest/types';
+import { apply } from '@/services/playgame/engine/apply';
+import { resolve } from '@/services/playgame/engine/resolve';
+import { createRng, type Rng } from '@/services/playgame/engine/rng';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
+import { mkLocationId } from '@/services/playgame/engine/types/ids';
+import {
+  type ResolvedCard,
+  type UiState,
+  resolveCard,
+  randomManifestCardDef,
+  newEngineCardInstance,
+} from '@/services/playgame/view';
+export type { UiState } from '@/services/playgame/view';
+
+// ── Store type (top-level readonly stripped for Solid mutability) ─────────────
+// Engine MatchState is deeply readonly by design.  Solid's store proxy is
+// mutable at runtime; we just need TypeScript to stop complaining about the
+// top-level fields.
+type EngineStateStore = {
+  -readonly [K in keyof EngineMatchState]: EngineMatchState[K];
+};
+
+// ── Initial state factory ────────────────────────────────────────────────────
+
+function createInitialEngineState(seed: string, manifest: Manifest): EngineMatchState {
+  const locationDefIds = Object.keys(manifest.locations);
+  // Shuffle and pick 3 location defs for this match.
+  const shuffled = [...locationDefIds].sort(() => Math.random() - 0.5);
+  const laneLocDefIds = shuffled.slice(0, 3);
+
+  const lanes: EngineMatchState['lanes'] = [
+    {
+      idx: 0,
+      location: laneLocDefIds[0]
+        ? { id: mkLocationId(laneLocDefIds[0]), defId: laneLocDefIds[0], lane: 0, tags: [] }
+        : null,
+      locationRevealed: false,
+      cards: { PLAYER: [], OPP: [] },
+    },
+    {
+      idx: 1,
+      location: laneLocDefIds[1]
+        ? { id: mkLocationId(laneLocDefIds[1]), defId: laneLocDefIds[1], lane: 1, tags: [] }
+        : null,
+      locationRevealed: false,
+      cards: { PLAYER: [], OPP: [] },
+    },
+    {
+      idx: 2,
+      location: laneLocDefIds[2]
+        ? { id: mkLocationId(laneLocDefIds[2]), defId: laneLocDefIds[2], lane: 2, tags: [] }
+        : null,
+      locationRevealed: false,
+      cards: { PLAYER: [], OPP: [] },
+    },
+  ] as EngineMatchState['lanes'];
+
+  return {
+    turn: 1,
+    maxEnergy: 1,
+    phase: 'AWAITING_INTENT' as MatchPhase,
+    seed,
+    priority: Math.random() < 0.5 ? 'PLAYER' : 'OPP',
+    energy: { PLAYER: 1, OPP: 1 },
+    deck: { PLAYER: [], OPP: [] },
+    hand: { PLAYER: [], OPP: [] },
+    cards: {},
+    lanes,
+    pending: [],
+    stagingOrder: [],
+    pendingEffects: [],
+    log: [],
+    lastPlayedBy: { PLAYER: null, OPP: null },
+    result: null,
+  } as unknown as EngineMatchState;
+}
+
+// ── Context value type ───────────────────────────────────────────────────────
 
 export interface PlayGameContextValue {
-  /** Live reactive state. Read-only from consumers. */
-  state: MatchState;
-  /** Raw setter, exposed for rare cases (most code should use actions). */
-  setState: SetStoreFunction<MatchState>;
-  /** Whether the end-turn resolution animation is currently running. */
+  /** Engine state — single source of truth. */
+  engineState: EngineMatchState;
+  /** Solid setter for path-based engine state updates (use dispatch for game events). */
+  setEngineState: SetStoreFunction<EngineStateStore>;
+  /** Apply a game event to the engine state (apply → reconcile). */
+  dispatch: (event: MatchEvent) => void;
+  /** Game manifest (card/location defs). */
+  manifest: Manifest;
+  /** UI-only sidecar state (incoming buffer, undo, flip flag). */
+  ui: UiState;
+  /** Setter for UI sidecar state. */
+  setUi: SetStoreFunction<UiState>;
+  /** True while end-turn resolution is running (derived from phase). */
   isResolving: Accessor<boolean>;
-  /**
-   * Engine bridge — exposed so the VFX script layer can drive end-turn
-   * resolution from engine events (Step 8b).
-   *
-   * @migrate:step-8c Wrap bridge directly as the store; remove this field.
-   */
-  bridge: Bridge;
+  /** Seeded RNG for engine turn resolution (maintained across turns). */
+  engineRng: Rng;
   actions: {
-    drawCard: () => CardInstance | null;
+    drawCard: () => ResolvedCard | null;
     stageCardInLane: (cardId: string, laneIdx: number) => boolean;
     undoPending: () => void;
     endTurn: () => Promise<void>;
@@ -59,130 +138,142 @@ export interface PlayGameContextValue {
 
 const Ctx = createContext<PlayGameContextValue>();
 
-export const PlayGameProvider = (props: { children: JSX.Element }) => {
-  const [state, setState] = createStore<MatchState>(createMatchState());
-  // Single source of truth: state.resolving (a store field). Components
-  // read it reactively via this accessor so the legacy `isResolving()`
-  // call sites keep working, and the script-engine actions that toggle
-  // state.resolving directly stay in sync automatically.
-  const isResolving: Accessor<boolean> = () => state.resolving;
+// ── Provider ─────────────────────────────────────────────────────────────────
 
-  // ─── Engine bridge (Step 8b, authoritative for turn resolution) ─────
-  // Step 8a: bridge observed (shadow mode).
-  // Step 8b: bridge is authoritative for end-turn events. The VFX script
-  //   flow calls bridge.endTurn() via captureEngineEndTurn(), gets the
-  //   event stream, and drives reveal order + turn advancement from it.
-  //   Enemy cards are staged through bridge.stage() in enemyPlayRandom()
-  //   so the engine sees both sides before producing CARD_FLIPPED events.
-  // @migrate:step-8c — The old `state` store disappears entirely and
-  //   this Provider wraps only the engine's MatchState.
-  let bridge: Bridge = mountBridge(state, BOOTSTRAP_MANIFEST, {
-    seed: `match-${Date.now().toString(36)}`,
+export const PlayGameProvider = (props: { children: JSX.Element }) => {
+  const manifest: Manifest = BOOTSTRAP_MANIFEST;
+  const seed = `match-${Date.now().toString(36)}`;
+
+  const [engineState, setEngineState] = createStore<EngineStateStore>(
+    createInitialEngineState(seed, manifest) as EngineStateStore,
+  );
+
+  const [ui, setUi] = createStore<UiState>({
+    incoming: [],
+    history: [],
+    isFlipped: false,
   });
-  const assertParity = (label: string): void => {
-    if (bridge.active) bridge.assertParity(state, label);
+
+  const isResolving: Accessor<boolean> = () => engineState.phase === 'RESOLVING';
+
+  // RNG maintained across turns for determinism.
+  let engineRng: Rng = createRng(seed);
+
+  /**
+   * Apply one engine event to the store via reconcile.
+   * This is the single mutation gateway for game-logic changes.
+   */
+  const dispatch = (event: MatchEvent): void => {
+    const next = apply(unwrap(engineState) as EngineMatchState, event, manifest);
+    setEngineState(reconcile(next as EngineStateStore));
   };
 
-  /** Deal a card from the pool into the hand (max 7). Returns the new card. */
-  const drawCard = (): CardInstance | null => {
-    if (state.hand.length >= 7) return null;
-    const card = newCardInstance(randomCardDef());
-    setState('hand', (h) => [...h, card]);
-    // @migrate:step-8c — Replace with engine-driven draw (CARD_DRAWN
-    // event from a pre-populated deck). Deck pre-population is gated on
-    // the full card-model redesign (Tier 1.2). For now we sync after the fact.
-    bridge.syncHandCard(card.id, card.name, 'PLAYER');
-    assertParity('drawCard');
-    return card;
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  /**
+   * Draw one card: pick from manifest, add to engine hand, push a
+   * ResolvedCard to `ui.incoming` for animation.
+   *
+   * @migrate:step-1.2 Replace randomManifestCardDef with engine deck draw
+   * once the deck is pre-populated (Tier 1.2 card-model redesign).
+   */
+  const drawCard = (): ResolvedCard | null => {
+    if ((engineState.hand['PLAYER'] as unknown[]).length >= 7) return null;
+
+    const def = randomManifestCardDef(manifest);
+    if (!def) return null;
+
+    const inst = newEngineCardInstance(def, 'PLAYER');
+    const event: MatchEvent = {
+      type: 'CARD_ADDED_TO_HAND',
+      owner: 'PLAYER',
+      cardId: inst.id,
+      defId: def.defId,
+      spawnSource: { kind: 'DECK_CREATION' },
+    };
+    dispatch(event);
+
+    // Build a ResolvedCard from the freshly-added engine card for the animation buffer.
+    const resolved = resolveCard(inst.id, unwrap(engineState) as EngineMatchState, manifest);
+    if (resolved) setUi('incoming', (prev) => [...prev, resolved]);
+    return resolved;
   };
 
   /**
-   * Move a card from hand to a lane. The card lands FACE-UP and is
-   * tracked in `playedThisTurn` so the end-turn flow knows to flip it
-   * face-down before the reveal cadence. Matches Marvel Snap: you see
-   * your own plays commit visibly until END TURN locks them in.
-   *
-   * Returns `true` on success, `false` if blocked (lane full, etc.).
+   * Stage a card from hand to a lane. Validates via engine's resolve(),
+   * applies events via dispatch(), saves a history snapshot for undo.
    */
   const stageCardInLane = (cardId: string, laneIdx: number): boolean => {
-    const card = state.hand.find((c) => c.id === cardId);
-    if (!card) return false;
-    if (state.lanes[laneIdx].length >= 4) return false;
+    const raw = unwrap(engineState) as EngineMatchState;
+    // Quick guard: can't stage while resolving or lane full.
+    if (raw.phase === 'RESOLVING') return false;
+    const lanePair = raw.lanes[laneIdx as LaneIdx]?.cards;
+    if ((lanePair?.['PLAYER']?.length ?? 0) >= 4) return false;
 
-    setState(
-      produce<MatchState>((s) => {
-        pushHistory(s);
-        s.hand = s.hand.filter((c) => c.id !== cardId);
-        s.energy = Math.max(0, s.energy - card.cost);
-        s.lanes[laneIdx].push({ ...card, placements: {} });
-        s.playedThisTurn.push(cardId);
-      }),
+    // Push undo snapshot BEFORE the mutation so we can restore it.
+    setUi('history', (prev) => [...prev, raw]);
+
+    const events = resolve(
+      raw,
+      {
+        type: 'STAGE_CARD',
+        intentId: `stage-${cardId}-${Date.now()}`,
+        owner: 'PLAYER',
+        cardId: cardId as CardId,
+        lane: laneIdx as LaneIdx,
+      },
+      engineRng.fork(`stage:${cardId}`),
+      manifest,
     );
-    // Engine bridge: stage the card so the engine's staging order
-    // matches the UI. The bridge's endTurn() (called by captureEngineEndTurn
-    // in the VFX flow) will then emit CARD_FLIPPED events for it.
-    // @migrate:step-8c — resolve({STAGE_CARD}) becomes fully authoritative;
-    // apply() drives both engine state AND (via translator) the UI.
-    bridge.stage(cardId, laneIdx as 0 | 1 | 2, 'PLAYER');
-    assertParity('stageCardInLane');
+
+    if (!events.length || events[0].type === 'INTENT_REJECTED') {
+      // Undo the snapshot push if rejected.
+      setUi('history', (prev) => prev.slice(0, -1));
+      return false;
+    }
+
+    for (const e of events) dispatch(e);
     return true;
   };
 
-  /** Pop the most recent pending card back to the hand (demo undo). */
+  /** Pop the most recent staged card back to hand (undo). */
   const undoPending = (): void => {
-    setState(
-      produce<MatchState>((s) => {
-        const last = s.history.pop();
-        if (!last) return;
-        restoreState(s, last);
-      }),
-    );
+    const snap = ui.history[ui.history.length - 1];
+    if (!snap) return;
+    setEngineState(reconcile(snap as EngineStateStore));
+    setUi('history', (prev) => prev.slice(0, -1));
+    // If the undone card was shown face-up, isFlipped stays as-is
+    // (it would only be true mid-resolution, so undo won't be available then).
   };
 
   /**
-   * End the current turn. STUB for now — real resolution (reveal cinematic
-   * + enemy play + location reveal + turn advance) comes in the animation
-   * milestone. For now it just clears pending and bumps the turn counter.
+   * End-turn stub. The real resolution flow is owned by the VFX script
+   * (`resolveTurnFlow` in flows.ts). This stub exists only for interface
+   * consistency; PlayScreen never calls it.
+   *
+   * @migrate:step-9 Delete when the VFX flow fully replaces this stub.
    */
   const endTurn = async (): Promise<void> => {
-    if (isResolving()) return;
-    setState('resolving', true);
-    try {
-      setState(
-        produce<MatchState>((s) => {
-          s.pending = [];
-          s.turn += 1;
-          s.energyMax = Math.min(s.turn, 6);
-          s.energy = s.energyMax;
-        }),
-      );
-      // NOTE: This stub is never called by the real game flow in PlayScreen.tsx
-      // (which uses script.run(resolveTurnFlow()) instead). The real bridge.endTurn()
-      // call is in captureEngineEndTurn() in the VFX script flow.
-      // @migrate:step-8c — Delete this stub entirely; the VFX flow owns turn resolution.
-      bridge.endTurn();
-      assertParity('endTurn(stub)');
-      const drawn = drawCard();
-      void drawn;
-    } finally {
-      setState('resolving', false);
-    }
+    // no-op: PlayScreen drives resolution via script.run(resolveTurnFlow()).
   };
 
   const resetMatch = (): void => {
-    const fresh = createMatchState();
-    setState(fresh);
-    // Re-seed the bridge so the shadow matches the freshly-reset UI.
-    bridge = mountBridge(fresh, BOOTSTRAP_MANIFEST, {
-      seed: `match-${Date.now().toString(36)}`,
-    });
+    const newSeed = `match-${Date.now().toString(36)}`;
+    const fresh = createInitialEngineState(newSeed, manifest) as EngineStateStore;
+    setEngineState(reconcile(fresh));
+    setUi({ incoming: [], history: [], isFlipped: false });
+    engineRng = createRng(newSeed);
   };
 
   const value: PlayGameContextValue = {
-    state,
-    setState,
+    engineState: engineState as unknown as EngineMatchState,
+    setEngineState,
+    dispatch,
+    manifest,
+    ui,
+    setUi,
     isResolving,
-    bridge,
+    engineRng,
     actions: {
       drawCard,
       stageCardInLane,

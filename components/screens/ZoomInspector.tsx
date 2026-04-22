@@ -1,17 +1,17 @@
 import { Show, onMount, onCleanup, createSignal } from 'solid-js';
-import { CardInstance, LocationInstance } from '@/services/playgame/types';
+import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
 
 interface ZoomInspectorProps {
   target: {
     kind: 'card';
-    card: CardInstance;
+    card: ResolvedCard;
     zone: 'hand' | 'board';
     side: 'player' | 'enemy';
     laneIdx?: number;
     element: HTMLElement;
   } | {
     kind: 'location';
-    location: LocationInstance;
+    location: ResolvedLocation;
     laneIdx: number;
     playerPower: number;
     enemyPower: number;
@@ -168,7 +168,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
             animation: 'fadeIn 0.4s ease-in 0.1s both',
           }}
         >
-          {(props.target as { kind: 'card'; card: CardInstance; zone: 'hand' | 'board'; side: 'player' | 'enemy'; element: HTMLElement }).card?.text || '\u00a0'}
+          {(props.target as { kind: 'card'; card: ResolvedCard }).card?.text || '\u00a0'}
         </div>
       </Show>
     </div>
