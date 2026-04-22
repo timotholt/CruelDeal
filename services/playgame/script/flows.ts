@@ -55,19 +55,19 @@ export const openingSequence = (): Step =>
     // Location tiles: left -> right with a short gap
     serial(
       fadeInLocationTile(0, 400),
-      wait(180),
+      wait(120),
       fadeInLocationTile(1, 400),
-      wait(180),
+      wait(120),
       fadeInLocationTile(2, 400),
     ),
-    wait(400),
+    wait(150),
 
     // Deal 3 cards, one at a time, with a pause between each
     serial(
       dealPlayerCard(),
-      wait(350),
+      wait(200),
       dealPlayerCard(),
-      wait(350),
+      wait(200),
       dealPlayerCard(),
     ),
     wait(500),

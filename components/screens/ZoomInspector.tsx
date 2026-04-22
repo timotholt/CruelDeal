@@ -52,7 +52,9 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
     const rect = props.target.element.getBoundingClientRect();
     const clone = props.target.element.cloneNode(true) as HTMLElement;
 
-    // Position clone absolutely at original location
+    // Position clone absolutely at original location — always full brightness in inspector
+    clone.style.opacity = '1';
+    clone.style.transition = 'none';
     clone.classList.add('card-clone');
     cloneRef.appendChild(clone);
     Object.assign(clone.style, {

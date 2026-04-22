@@ -24,7 +24,7 @@ interface PlayScreenProps {
 
 export const PlayScreen = (props: PlayScreenProps) => {
   return (
-    <div class="playgame-root" style={{ width: '100%', height: '100%', background: '#000' }}>
+    <div class="playgame-root board-hidden" style={{ width: '100%', height: '100%', background: '#000' }}>
       <VfxHost class="board-wrap" id="boardWrap">
         <PlayGameProvider>
           <BoardSizer />
@@ -86,6 +86,7 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 // Sets --board-w / --board-h on :root (mirrors applyBoardSize() from demo).
+// Also sets --message-center-y so toasts land over the locations strip.
 const BoardSizer = () => {
   const apply = () => {
     const w = Math.min((window.innerHeight * 9) / 16, window.innerWidth, 420);
@@ -93,10 +94,26 @@ const BoardSizer = () => {
     document.documentElement.style.setProperty('--board-w', w + 'px');
     document.documentElement.style.setProperty('--board-h', h + 'px');
   };
+  const applyToastY = () => {
+    const board = document.querySelector('.board') as HTMLElement | null;
+    const locs = board?.querySelector('.locations') as HTMLElement | null;
+    if (!board || !locs) return;
+    const boardRect = board.getBoundingClientRect();
+    const locsRect = locs.getBoundingClientRect();
+    const locsCenterY = locsRect.top + locsRect.height / 2 - boardRect.top;
+    const pct = (locsCenterY / boardRect.height) * 100;
+    board.style.setProperty('--message-center-y', pct.toFixed(1) + '%');
+  };
   onMount(() => {
     apply();
     window.addEventListener('resize', apply);
-    onCleanup(() => window.removeEventListener('resize', apply));
+    // Locations render after mount; wait a frame for layout
+    requestAnimationFrame(applyToastY);
+    window.addEventListener('resize', applyToastY);
+    onCleanup(() => {
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('resize', applyToastY);
+    });
   });
   return null;
 };
