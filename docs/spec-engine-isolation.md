@@ -384,7 +384,16 @@ export type OngoingExpr =
   | { kind: 'ON_REVEAL_MULTIPLIER'; target: Selector; factor: NumExpr; stack: StackingPolicy }  // Wong (stack: MULTIPLICATIVE)
 
   // Generic Ongoing booster — Onslaught (card) and Onslaught's Citadel (location).
-  // Both do the same thing: double (or scale) every Ongoing numeric parameter at this lane.
+  // Both do the same thing: double (or scale) every numeric Ongoing parameter whose
+  // SOURCE IS A CARD at this lane. Scope rules:
+  //   - Only card-sourced Ongoings are boosted. Location-sourced Ongoings (including
+  //     Citadel itself, and any other location Ongoings in the same lane) are NEVER
+  //     boosted. This prevents Citadel from doubling itself or stacking with another
+  //     location ability.
+  //   - BOOST_ONGOINGS never boosts another BOOST_ONGOINGS (prevents the exponential
+  //     stacking Snap removed in the Nov 2022 patch — additive only).
+  //   - excludeSelf: Onslaught-the-card has this true ("your OTHER Ongoings"); Citadel
+  //     doesn't need it since it's not a card source anyway.
   // Applies uniformly to POWER_ADD.delta, COST_ADD.delta, LANE_POWER_MULTIPLIER.factor,
   // ON_REVEAL_MULTIPLIER.factor, and any future numeric Ongoing. Boolean Ongoings
   // (DISABLE_*) are unaffected.
@@ -624,9 +633,13 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
 }
 
 function applyBoostIfAny(entry: SourcedOngoing, allRaw: SourcedOngoing[], state: MatchState): OngoingExpr {
-  // Boosts are themselves Ongoings — they never boost themselves (would recurse), so we
-  // skip BOOST_ONGOINGS when computing the boost factor.
+  // Rule 1: BOOST_ONGOINGS never boosts another BOOST_ONGOINGS. (No compound stacking.)
   if (entry.expr.kind === 'BOOST_ONGOINGS') return entry.expr;
+
+  // Rule 2: BOOST_ONGOINGS only boosts CARD-sourced Ongoings. Location Ongoings —
+  //         including Citadel itself and any other location abilities — are never
+  //         boosted. This makes "Citadel doesn't double itself" fall out naturally.
+  if (entry.sourceCardId === null) return entry.expr;
 
   const boosts = allRaw.filter(b => {
     if (b.expr.kind !== 'BOOST_ONGOINGS') return false;
@@ -1057,12 +1070,16 @@ Add `pnpm engine:cli` script. CI runs 1000 random matches with random seeds; ass
 { defId: 'onslaughts-citadel', /* cost/power irrelevant for locations */
   abilities: { ongoing: [
     { kind: 'BOOST_ONGOINGS',
-      scope: { laneOf: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },  // both players
+      scope: { laneOf: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },  // both players' cards
       factor: { kind: 'LIT', n: 2 },
       stack: 'ADDITIVE' },
   ]}}
-// Same primitive as Onslaught-the-card. Differences: ownerFilter is ANY_OWNER (affects
-// both sides) and excludeSelf doesn't apply (locations aren't Ongoing sources they'd boost).
+// Same primitive as Onslaught-the-card. Differences:
+//   - ownerFilter is ANY_OWNER — boosts both players' card Ongoings at this lane.
+//   - excludeSelf is unused — Citadel isn't a card source anyway.
+//   - Citadel doesn't boost itself (Rule 2: boosts only CARD-sourced Ongoings).
+//   - Citadel doesn't boost Onslaught-the-card if both are at the same lane
+//     (Rule 1: BOOST_ONGOINGS doesn't boost another BOOST_ONGOINGS).
 ```
 
 ### Shuri
@@ -1164,7 +1181,8 @@ All checked against community sources (snap.untapped.gg, marvelsnapzone.com, r/M
 - **Iron Man alone**: `LANE_POWER_MULTIPLIER` factor 2, no boost → lane × 2. ✓
 - **Iron Man + Onslaught (card)**: Onslaught boosts Iron Man: agg = 2; Iron Man factor 2 × agg 2 = **4**. Lane × 4. ✓ (Second Dinner Nov-2022 patch notes, additive stacking)
 - **Iron Man + 2 Onslaughts (via Mystique)**: agg = 1 + 1 + 1 = 3; Iron Man factor 2 × 3 = **6**. Lane × 6. ✓
-- **Iron Man + Onslaught + Citadel**: Two `BOOST_ONGOINGS` auras at same lane, both ADDITIVE stack; agg = 1 + 1 + 1 = 3; Iron Man ×6. ✓
+- **Iron Man + Onslaught + Citadel**: Both `BOOST_ONGOINGS` auras at same lane. Iron Man is card-sourced → eligible. Onslaught boosts Iron Man (+1) AND Citadel boosts Iron Man (+1). agg = 1 + 1 + 1 = 3; Iron Man factor 2 × 3 = **6**. Lane ×6. Crucially Citadel does NOT also boost Onslaught-the-card (Rule 1), so no compound. ✓
+- **Citadel alone (no cards with Ongoings)**: Citadel doesn't boost itself (Rule 2: locations aren't boost targets). Lane is unchanged. ✓
 - **Onslaught boosts Blue Marvel (+1 → +2)**: Blue Marvel's `POWER_ADD.delta` of 1 × agg 2 = 2. ✓
 - **2 Wongs (Wong + Mystique copying Wong at same lane)**: Two `ON_REVEAL_MULTIPLIER` entries, stacking MULTIPLICATIVELY → 2 × 2 = **4×** OR. Panther 5 → 80. ✓
 - **Jubilee pulls Odin, Odin retriggers Jubilee**: emerges from recursive evaluator; bounded by deck exhaustion or depth cap 32. ✓ (Reddit evidence)
