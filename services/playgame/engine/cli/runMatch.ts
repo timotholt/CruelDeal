@@ -19,7 +19,7 @@ import { apply } from '../apply';
 import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
 import { createInitialMatchState } from './initState';
-import { planTurn } from './ai';
+import { planEnemyTurnFromHand } from '../ai';
 
 export interface RunMatchOptions {
   readonly seed: string;
@@ -52,7 +52,9 @@ function runOneTurn(
   const second: Owner = first === 'PLAYER' ? 'OPP' : 'PLAYER';
 
   for (const owner of [first, second] as const) {
-    const plan = planTurn(s, owner, manifest, rng.fork(`plan:${owner}:${s.turn}`));
+    const plan = planEnemyTurnFromHand(s, owner, manifest, rng, {
+      forkTag: `plan:${owner}:${s.turn}`,
+    });
     for (const step of plan) {
       const events = resolve(
         s,

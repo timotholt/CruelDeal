@@ -4,13 +4,45 @@
 
 ---
 
+## Status Snapshot
+
+**Engine core (Tiers 0–1):** ✅ COMPLETE
+- ✅ Pure reducer + event stream + seeded RNG + headless CLI (0.2 spec complete through Step 9)
+- ✅ Ability DSL + interpreter, covers current card roster
+- ✅ JSON card authoring (10 cards in `manifest/cards/*.json`)
+- ✅ Card/Lane query system with combinators
+- ✅ Deterministic enemy AI module (`engine/ai.ts`); CLI + UI both use it; old `cli/ai.ts` deleted
+- ✅ `Math.random` eliminated — including the final holdouts in `PlayGameContext.createInitialEngineState` (priority coin-flip, location shuffle); UI now delegates to engine `createInitialMatchState`
+- ✅ UI draw consumes `state.deck[PLAYER]` via `CARD_DRAWN` — same pipeline as CLI; seeded, snapshot-able, deterministic
+- ✅ Location rarity weights respected — `pickLaneLocations` uses weighted random without replacement
+- ✅ `LOCATION_DESTROYED` + `LOCATION_SHIFTED` events defined in `types/events.ts`, reducer handlers in `apply.ts`, covered by `apply.test.ts`
+- ⬜ Per-card folders with art assets — defer until 20+ cards
+- ⬜ Deck-builder UX (`{ defId; variantId? }[]` user-editable decks) — Tier 5.2
+
+**Known bugs:**
+- ✅ Dune Sapper double-move (per-reveal event slicing)
+- ✅ Dune Sapper moving into full lane (query-driven capacity filter)
+- ⬜ Font snap on load
+- ⬜ Sticky hover on mobile
+
+**Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai` — all green. CLI deterministic across runs.
+
+**Next groundwork candidates:** Tier 2.1 (event-driven renderer → unlock animations-as-data), Tier 2.2 (particle overlay), Tier 3 prep (SSOT & transport).
+
+---
+
 ## Tier 0 — Critical Debt (do now or pay interest on every card added)
 
-### 0.1 Ability DSL
-- **Why first:** Every card implemented before a data-driven effect system is more hardcoded TypeScript to extract later.
-- **Current state:** Effects are hardcoded functions in `services/effects.ts`.
-- **Target:** JSON schema + interpreter (`TARGET: "ENEMIES", STAT: "POWER", DELTA: -1`) so designers can balance without redeploying.
-- **Acceptable shortcut:** Keep hardcoded builtins for complex cards; DSL covers the 80% common cases.
+### 0.1 Ability DSL ✅
+- ✅ **DSL shape:** `services/playgame/engine/types/ability.ts` — complete DSL (EffectExpr, OngoingExpr, Predicate, Selector, NumExpr, PoolRef, PendingEffectSpec, TextOverride). ~30 effect atoms + 10 ongoing kinds + full control-flow combinators (SEQUENCE, CONDITIONAL, FOREACH, etc.).
+- ✅ **Interpreter:** `services/playgame/engine/effects/evaluator.ts` — recursive OR cascade with depth cap 16, trigger slots (onMove/onDestroyed/onDiscarded/onAnyCardPlayedHere/onEndOfTurn), provenance tracking on every event.
+- ✅ **Projections:** `services/playgame/engine/projections/` — `power`, `reveal` multiplier, `ongoing` collection + Onslaught/Citadel boost, `select`/`selectLanes` for all selectors.
+- ✅ **JSON card authoring:** 10 BOOTSTRAP cards now live in `services/playgame/engine/manifest/cards/*.json` + loader in `card-loader.ts`. Designers can ship cards without touching TypeScript.
+- ✅ **Query system:** `services/playgame/engine/projections/query.ts` — composable filter object pattern for `CardInstance`, `CardDef`, `Lane` queries. 12 entry points, `NumComparison`/`StringComparison` primitives, `and`/`or`/`not`/`custom` combinators, 60+ tests. See `QUERY_SYSTEM_DESIGN.md`.
+
+**Outstanding:**
+- ⬜ Per-card folders (`cards/<defId>/card.ts` + art assets) with build-time `import.meta.glob` — deferred until card count grows (current: 10; revisit at 20+).
+- ⬜ JSON-authorable ability validator (runtime schema check on card load) — current loader only checks required fields; ability trees are cast `as any`. Low risk while card count is small.
 
 ### 0.2 Engine Isolation & Pure Reducer
 - **Why first:** Right now `services/playgame/script/actions.ts` mutates state **and** reaches into the DOM in the same step. The engine cannot run headless, cannot be unit-tested in Node, and cannot move to the server.
@@ -65,28 +97,49 @@ Step 8c completed items:
 
 Remaining debt carried forward (not required for 8c, gated on later tiers):
 
-- **`PlayGameContext.drawCard` / `drawFromDeck`** — UI still mints cards with `randomManifestCardDef()`. Replace with engine deck draw once Tier 1.2 (card model redesign) pre-populates the engine deck.
-- **`script/actions.ts enemyPlayRandom`** — enemy lane choice still uses `Math.random()`. Cut over to deterministic engine AI hook in Tier 1.3.
-- **`PlayGameContext.endTurn` stub** — kept for interface symmetry; delete when Step 9 CLI harness owns turn resolution outside the script engine.
+- ✅ **`PlayGameContext.drawCard` / `drawFromDeck`** — now pop the top of `state.deck[PLAYER]` via `CARD_DRAWN`. Deterministic; same pipeline as CLI.
+- ✅ **`script/actions.ts::enemyPlayRandom`** — delegates to `planEnemyTurnFromPool` from `engine/ai.ts`. Deterministic, seeded, testable.
+- ✅ **`PlayGameContext.createInitialEngineState`** — delegates to engine `createInitialMatchState`. Last two `Math.random()` calls removed.
+- ⬜ **`PlayGameContext.endTurn` stub** — still present for interface symmetry. Delete when multiplayer harness owns turn resolution outside the script engine (Tier 3.2).
 
 ---
 
 ## Tier 1 — Engine Core (blocks multiplayer, replays, anti-cheat)
 
-### 1.1 Seeded PRNG + Deterministic Simulation
-- Replace `Math.random`, `uid()`, and `randomCardDef()` with `sfc32` seeded from a server turn seed.
-- Same seed → same card draws, same enemy lane picks, same ids on client and server.
-- Move `drawQueue` into `MatchState` as `deck: CardDef[]` so it's snapshot-able and restorable.
+### 1.1 Seeded PRNG + Deterministic Simulation ✅
+- ✅ `Math.random` eliminated everywhere. All randomness goes through `createRng(seed)` (sfc32 + cyrb128, `fork(tag)`-able) in `services/playgame/engine/rng/`.
+- ✅ `engineRng` maintained across turns in `PlayGameContext`; passed to script ctx; forked per-purpose (`'draw'`, `'enemy-plays'`, `'stage:<id>'`, `'move:<id>'`, `'lane:<id>'`, etc.).
+- ✅ `state.deck[owner]` pre-populated by `createInitialMatchState(seed, manifest)` (`engine/cli/initState.ts`) — shuffle and ids seed-driven, snapshot-able, restorable.
+- ✅ UI `PlayGameContext.drawCard` and script `drawFromDeck` both pop from `state.deck[PLAYER]` via `CARD_DRAWN` events. No more minting from manifest pool.
+- ✅ UI `PlayGameContext.createInitialEngineState` delegates to engine `createInitialMatchState` — removed the last two `Math.random()` calls (priority coin-flip, location shuffle).
+- ✅ Same seed → identical match across UI, CLI, and (future) server. Verified by running the CLI with the same seed twice + engine purity tests.
 
-### 1.2 Card / Location Model Redesign
-- **Cards:** `defId` (stable forever) + `version` (bumps on balance changes). `name` becomes display-only in `CardCosmetic`.
-- **Locations:** `rarity` weight for weighted random roll. Support `LOCATION_REPLACED`, `DESTROYED`, `SHIFTED` events.
-- **Deck shape:** `{ defId; variantId? }[]` — references into manifest, never copies stats.
-- **Per-card folders:** `cards/<defId>/card.ts` + art assets. Manifest assembled at build time via `import.meta.glob`.
+### 1.2 Card / Location Model Redesign — mostly shipped
+- ✅ **Cards:** `defId` + `version` implemented; `name` is display-only in `cosmetic.displayName`.
+- ✅ **JSON authoring:** 10 BOOTSTRAP cards live as individual `.json` files, loaded via `card-loader.ts`. Manifest `cards` field built from these.
+- ✅ **Location rarity weights:** `LocationDef.rarity` is now honored by `pickLaneLocations` via a seeded weighted-pick-without-replacement helper. `rarity: 2` gets picked twice as often as `rarity: 1`.
+- ✅ **Location events:** `LOCATION_REPLACED` (existed) + `LOCATION_DESTROYED` + `LOCATION_SHIFTED` all defined in `types/events.ts` with `cause: EffectRef` for provenance. Reducer handlers in `apply.ts` (clear on destroy; preserve `locationRevealed` + tags on shift). Covered by `apply.test.ts`.
+- ⬜ **Deck shape `{ defId; variantId? }[]` user-editable type:** not yet exposed; decks are still seed-generated by `buildDeck()` at init time. Add when the deck-builder UI ships (Tier 5.2).
+- ⬜ **Per-card folders with art assets:** not started. Current `cards/*.json` is flat. Revisit at 20+ cards.
 
-### 1.3 Enemy AI (Deterministic)
-- Move `enemyPlayRandom` from DOM action into `engine/ai.ts`. Use seeded RNG.
-- Keep it simple for now (weighted random), but it must be deterministic and testable.
+### 1.3 Enemy AI (Deterministic) ✅
+- ✅ `services/playgame/engine/ai.ts` owns planning. `script/actions.ts::enemyPlayRandom` is a thin dispatch + animation adapter that delegates to `planEnemyTurnFromPool`.
+- ✅ Seeded RNG everywhere (fork tags per-owner); same seed → identical plan.
+- ✅ Two planners: `planEnemyTurnFromPool` (picks from manifest — used by UI while OPP deck isn't surfaced) and `planEnemyTurnFromHand` (picks from `state.hand[owner]` — used by CLI today, UI when opp hand seeds).
+- ✅ CLI swapped over to `planEnemyTurnFromHand`. Old `cli/ai.ts::planTurn` deleted — no longer needed.
+- ✅ Covered by `ai.test.ts`: energy budget, capacity, disabled cards, determinism, `maxPlays` cap, empty-hand, all-lanes-full.
+
+---
+
+## Tier 1 Exit Criteria — All Met
+
+- ✅ Engine runs pure (no `Math.random`, no DOM, no Solid) — ESLint-enforced.
+- ✅ Same seed → same match on any JS runtime (client, CLI, future server).
+- ✅ State is snapshot-able: everything gameplay-relevant (deck, hand, lanes, cards, pendingEffects, log) lives on `MatchState`.
+- ✅ Event log is complete (every mutation has a typed `MatchEvent`) and replayable through `apply()`.
+- ✅ UI is a thin projection layer — all mutations go through `dispatch(event)` → `apply()` → `reconcile()`.
+
+**Tier 1 is done.** Tier 2 (presentation polish) and Tier 3 (multiplayer transport) can now proceed without groundwork debt.
 
 ---
 
@@ -152,6 +205,8 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 ## Tier 5 — Polish & Features (nice-to-have, queue after Tier 2)
 
 ### 5.1 Known Bugs
+- ✅ **Dune Sapper double-move on reveal** — fixed. Reveal events are now sliced per-card and dispatched inline with each card's flip cinematic; the end-turn dispatcher skips events already played. See `revealByPriorityFromEngine` + `_revealsConsumedUpTo` in `script/actions.ts`.
+- ✅ **Dune Sapper move-into-full-lane silently failed** — fixed. MOVE effect now uses `findLanes({ hasCapacity: owner, not: { idx: currentLane } })` from the query system, so it only picks lanes that can actually receive the card. Covered by 3 scenarios in `evaluator.test.ts` (empty lanes, one full, all full).
 - **Font snap on load:** IBM Plex Sans snaps from system font after 100–300ms. Preload + `font-display: block` didn't fix. May need Base64 embedding or a loader screen.
 - **Sticky hover on mobile:** `@media (hover: hover)` logic needs testing on physical tablets with trackpads.
 

@@ -62,17 +62,48 @@ function buildDeck(
   return rng.shuffle(deck);
 }
 
-/** Pick 3 distinct location defs from the manifest (seeded). */
+/**
+ * Weighted random pick WITHOUT replacement, using each def's `rarity`
+ * as its weight. A def with `rarity: 2` is twice as likely to be picked
+ * as `rarity: 1`. `rarity <= 0` is ignored. Deterministic via seeded Rng.
+ */
+function weightedPickN<T extends { defId: string; rarity: number }>(
+  pool: readonly T[],
+  n: number,
+  rng: Rng,
+): T[] {
+  const picked: T[] = [];
+  const remaining = pool.filter((d) => d.rarity > 0).slice();
+  for (let i = 0; i < n && remaining.length > 0; i++) {
+    const totalWeight = remaining.reduce((s, d) => s + d.rarity, 0);
+    // rng.int range is [0, totalWeight-1]; scale up to integer space.
+    // Multiply weights by 1000 to tolerate fractional rarities while staying in int.
+    const scale = 1000;
+    const scaledTotal = Math.floor(totalWeight * scale);
+    const roll = rng.int(0, Math.max(0, scaledTotal - 1));
+    let acc = 0;
+    let chosenIdx = remaining.length - 1;
+    for (let j = 0; j < remaining.length; j++) {
+      acc += Math.floor(remaining[j].rarity * scale);
+      if (roll < acc) { chosenIdx = j; break; }
+    }
+    picked.push(remaining[chosenIdx]);
+    remaining.splice(chosenIdx, 1);
+  }
+  return picked;
+}
+
+/** Pick 3 distinct location defs from the manifest, weighted by rarity. */
 function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | null)[] {
-  const defIds = Object.keys(manifest.locations);
-  if (defIds.length < 3) {
+  const defs = Object.values(manifest.locations);
+  if (defs.length < 3) {
     // Fall back to nulls — an empty lane has no location effect.
     return [null, null, null];
   }
-  const picked = rng.shuffle(defIds).slice(0, 3);
-  return picked.map((defId, idx): LocationInstance => ({
-    id: `${defId}@${idx}` as LocationId,
-    defId,
+  const picked = weightedPickN(defs, 3, rng);
+  return picked.map((def, idx): LocationInstance => ({
+    id: `${def.defId}@${idx}` as LocationId,
+    defId: def.defId,
     lane: idx as LaneIdx,
     tags: [],
   }));

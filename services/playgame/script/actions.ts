@@ -24,6 +24,7 @@ import type { CardId, LaneIdx } from '../engine/types/ids';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
+import { planEnemyTurnFromPool } from '../engine/ai';
 import {
   type ResolvedCard,
   type UiState,
@@ -143,37 +144,49 @@ const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
 };
 
 /**
- * Stage 1 of the two-stage draw pipeline: pull cards from the draw queue
- * (or seeded RNG fallback), emit CARD_ADDED_TO_HAND events,
- * and push ResolvedCards into `ui.incoming`.
+ * Stage 1 of the two-stage draw pipeline: pull the top card off
+ * `state.deck[PLAYER]` and emit a CARD_DRAWN event (which the reducer
+ * converts to a DECK→HAND move). Pushes the ResolvedCard into `ui.incoming`.
  *
- * Tier 1.2 will replace the fallback with engine deck draws.
+ * Deck is pre-populated and seed-driven by `createInitialMatchState()`.
+ * The explicit `drawQueue` ctx is kept for test fixtures that pre-seed
+ * specific cards; when empty, we pop from the engine deck.
  */
 export const drawFromDeck = (count = 1): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
   if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return Promise.resolve();
 
-  const drawRng = c.engineRng.fork('draw');
-  const cardDefs = Object.values(c.manifest.cards);
-
   for (let i = 0; i < count; i++) {
-    const def = (c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined)
-      ?? (cardDefs.length > 0 ? drawRng.pick(cardDefs) : null);
-    if (!def) continue;
+    // `drawQueue` override path — for tests / scripted intros. Unchanged.
+    const override = c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined;
+    if (override) {
+      const inst = newEngineCardInstance(override, 'PLAYER');
+      c.dispatch({
+        type: 'CARD_ADDED_TO_HAND',
+        owner: 'PLAYER',
+        cardId: inst.id,
+        defId: override.defId,
+        spawnSource: { kind: 'DECK_CREATION' },
+      });
+      const raw = unwrap(c.state) as EngineMatchState;
+      const resolved = resolveCard(inst.id, raw, c.manifest);
+      if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
+      continue;
+    }
 
-    const inst = newEngineCardInstance(def, 'PLAYER');
-    const event: MatchEvent = {
-      type: 'CARD_ADDED_TO_HAND',
+    // Real-deck path: pop the top card off `state.deck[PLAYER]` via the
+    // reducer-owned CARD_DRAWN event. Deck is already seeded + shuffled.
+    const deck = c.state.deck['PLAYER'] as readonly { id: string }[];
+    if (deck.length === 0) break;
+    const top = deck[0];
+    c.dispatch({
+      type: 'CARD_DRAWN',
       owner: 'PLAYER',
-      cardId: inst.id,
-      defId: def.defId,
-      spawnSource: { kind: 'DECK_CREATION' },
-    };
-    c.dispatch(event);
-
-    // Resolve card from the now-updated engine state.
+      cardId: top.id as CardId,
+      toHand: true,
+    });
     const raw = unwrap(c.state) as EngineMatchState;
-    const resolved = resolveCard(inst.id, raw, c.manifest);
+    const resolved = resolveCard(top.id as CardId, raw, c.manifest);
     if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
   }
   return Promise.resolve();
@@ -562,40 +575,29 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 /**
  * Enemy plays cards until it runs out of energy, hand space, or lane space.
  *
- * Uses the seeded engine RNG for deterministic card and lane selection.
- * Once the engine deck is pre-populated (Tier 1.2), this will read from
- * the OPP hand instead of the manifest pool.
+ * Delegates all planning (card + lane selection) to `planEnemyTurnFromPool`
+ * in the engine's pure AI module. This action is now just a thin adapter:
+ *   1. Ask the engine for a turn plan (seeded, deterministic).
+ *   2. For each play, dispatch the engine events + run the fly-in animation.
  *
- * Rules:
- *   - Only plays cards whose `cost <= current OPP energy`.
- *   - Picks any non-full lane using seeded RNG.
- *   - Dispatches CARD_ADDED_TO_HAND, CARD_STAGED, ENERGY_CHANGED for each
- *     play so `captureEngineEndTurn` sees the staged cards.
- *   - Animates each with a face-down fly-in before continuing.
+ * Once OPP hands are pre-populated (Tier 1.2 finalized across the UI),
+ * switch to `planEnemyTurnFromHand` so plays reference real hand cards
+ * instead of minted-on-the-fly defs.
  */
 export const enemyPlayRandom = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
-  const maxPlaysSafety = 6; // guard against infinite loops
-  const aiRng = c.engineRng.fork('enemy-plays');
+  const plays = planEnemyTurnFromPool(
+    c.state as EngineMatchState,
+    'OPP',
+    c.manifest,
+    c.engineRng,
+    { forkTag: 'enemy-plays' },
+  );
 
-  for (let i = 0; i < maxPlaysSafety; i++) {
-    const energy = c.state.energy['OPP'];
-    if (energy <= 0) break;
-
-    // Affordable cards only. Picking from the manifest pool is a Tier-1.2
-    // stopgap — once the engine deck is pre-populated, read from OPP hand.
-    const pool = Object.values(c.manifest.cards).filter((d) => d.cost <= energy);
-    if (pool.length === 0) break;
-    const def = aiRng.pick(pool);
-
-    // Pick a lane with room using seeded RNG.
-    const laneCandidates = [0, 1, 2].filter(
-      (idx) => (c.state.lanes[idx as LaneIdx].cards['OPP'] as unknown[]).length < 4,
-    );
-    if (laneCandidates.length === 0) break;
-    const lane = aiRng.pick(laneCandidates) as LaneIdx;
-
+  for (const play of plays) {
+    const def = c.manifest.cards[play.defId];
+    if (!def) continue;
     const inst = newEngineCardInstance(def, 'OPP');
 
     c.dispatch({
@@ -610,13 +612,13 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
       intentId: `enemy-${inst.id}`,
       owner: 'OPP',
       cardId: inst.id,
-      lane,
-      cost: def.cost,
+      lane: play.lane,
+      cost: play.cost,
     });
     c.dispatch({
       type: 'ENERGY_CHANGED',
       owner: 'OPP',
-      delta: -def.cost,
+      delta: -play.cost,
       reason: 'CARD_PLAYED',
     });
 

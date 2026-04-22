@@ -27,7 +27,7 @@ import {
   type JSX,
 } from 'solid-js';
 import { createStore, reconcile, unwrap, type SetStoreFunction } from 'solid-js/store';
-import type { MatchState as EngineMatchState, MatchPhase } from '@/services/playgame/engine/types/state';
+import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { MatchEvent } from '@/services/playgame/engine/types/events';
 import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
@@ -35,12 +35,11 @@ import { apply } from '@/services/playgame/engine/apply';
 import { resolve } from '@/services/playgame/engine/resolve';
 import { createRng, type Rng } from '@/services/playgame/engine/rng';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
-import { mkLocationId } from '@/services/playgame/engine/types/ids';
+import { createInitialMatchState } from '@/services/playgame/engine/cli/initState';
 import {
   type ResolvedCard,
   type UiState,
   resolveCard,
-  newEngineCardInstance,
 } from '@/services/playgame/view';
 export type { UiState } from '@/services/playgame/view';
 
@@ -54,63 +53,16 @@ type EngineStateStore = {
 
 // ── Initial state factory ────────────────────────────────────────────────────
 
+/**
+ * Build a fresh MatchState for the UI. Delegates to the engine's pure,
+ * seed-driven `createInitialMatchState` so:
+ *   - Both decks are pre-populated and shuffled deterministically.
+ *   - Lane locations are picked deterministically from the manifest.
+ *   - Priority coin-flip is seeded.
+ * Same seed → identical starting state in UI, CLI, and (future) server.
+ */
 function createInitialEngineState(seed: string, manifest: Manifest): EngineMatchState {
-  const locationDefIds = Object.keys(manifest.locations);
-  // Shuffle and pick 3 location defs for this match.
-  const shuffled = [...locationDefIds].sort(() => Math.random() - 0.5);
-  const laneLocDefIds = shuffled.slice(0, 3);
-
-  const lanes: EngineMatchState['lanes'] = [
-    {
-      idx: 0,
-      location: laneLocDefIds[0]
-        ? { id: mkLocationId(laneLocDefIds[0]), defId: laneLocDefIds[0], lane: 0, tags: [] }
-        : null,
-      locationRevealed: false,
-      cards: { PLAYER: [], OPP: [] },
-    },
-    {
-      idx: 1,
-      location: laneLocDefIds[1]
-        ? { id: mkLocationId(laneLocDefIds[1]), defId: laneLocDefIds[1], lane: 1, tags: [] }
-        : null,
-      locationRevealed: false,
-      cards: { PLAYER: [], OPP: [] },
-    },
-    {
-      idx: 2,
-      location: laneLocDefIds[2]
-        ? { id: mkLocationId(laneLocDefIds[2]), defId: laneLocDefIds[2], lane: 2, tags: [] }
-        : null,
-      locationRevealed: false,
-      cards: { PLAYER: [], OPP: [] },
-    },
-  ] as EngineMatchState['lanes'];
-
-  // Turn 1 state is equivalent to "genesis state (turn 0, maxEnergy 0)"
-  // then the turn-1 start-of-turn bookkeeping applied:
-  //   maxEnergy[P|O] += 1 → 1
-  //   currentEnergy = maxEnergy + bonus(0) → 1
-  // We pre-apply this here rather than running a synthetic event cascade.
-  return {
-    turn: 1,
-    maxEnergy: { PLAYER: 1, OPP: 1 },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
-    phase: 'AWAITING_INTENT' as MatchPhase,
-    seed,
-    priority: Math.random() < 0.5 ? 'PLAYER' : 'OPP',
-    energy: { PLAYER: 1, OPP: 1 },
-    deck: { PLAYER: [], OPP: [] },
-    hand: { PLAYER: [], OPP: [] },
-    cards: {},
-    lanes,
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
-    result: null,
-  } as unknown as EngineMatchState;
+  return createInitialMatchState(seed, manifest);
 }
 
 // ── Context value type ───────────────────────────────────────────────────────
@@ -178,32 +130,28 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /**
-   * Draw one card: pick from manifest using seeded RNG, add to engine hand,
-   * push a ResolvedCard to `ui.incoming` for animation.
+   * Draw one card: pop the top of `state.deck[PLAYER]` via the CARD_DRAWN
+   * event. The deck is pre-populated + seeded by `createInitialMatchState()`,
+   * so the draw order is deterministic and snapshot-able.
    *
-   * Tier 1.2 complete: uses seeded RNG for deterministic draws.
-   * Future: replace with engine deck draw once UI initializes from engine state.
+   * If the deck is empty we simply no-op (callers can handle the null).
    */
   const drawCard = (): ResolvedCard | null => {
     if ((engineState.hand['PLAYER'] as unknown[]).length >= 7) return null;
 
-    const drawRng = engineRng.fork('draw');
-    const defs = Object.values(manifest.cards);
-    const def = defs.length > 0 ? drawRng.pick(defs) : null;
-    if (!def) return null;
+    const deck = engineState.deck['PLAYER'] as readonly { id: string }[];
+    if (deck.length === 0) return null;
+    const top = deck[0];
 
-    const inst = newEngineCardInstance(def, 'PLAYER');
-    const event: MatchEvent = {
-      type: 'CARD_ADDED_TO_HAND',
+    dispatch({
+      type: 'CARD_DRAWN',
       owner: 'PLAYER',
-      cardId: inst.id,
-      defId: def.defId,
-      spawnSource: { kind: 'DECK_CREATION' },
-    };
-    dispatch(event);
+      cardId: top.id as CardId,
+      toHand: true,
+    });
 
-    // Build a ResolvedCard from the freshly-added engine card for the animation buffer.
-    const resolved = resolveCard(inst.id, unwrap(engineState) as EngineMatchState, manifest);
+    // Build a ResolvedCard from the updated engine state for the animation buffer.
+    const resolved = resolveCard(top.id as CardId, unwrap(engineState) as EngineMatchState, manifest);
     if (resolved) setUi('incoming', (prev) => [...prev, resolved]);
     return resolved;
   };

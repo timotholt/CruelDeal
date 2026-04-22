@@ -282,6 +282,33 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
       return patchLane(state, event.lane, { location: newLoc, locationRevealed: false });
     }
 
+    case 'LOCATION_DESTROYED': {
+      // Lane becomes locationless. Card slots stay intact; only the
+      // location (and therefore its ongoing auras / lane tags) is gone.
+      const lane = state.lanes[event.lane];
+      if (!lane.location || lane.location.id !== event.locationId) return state;
+      return patchLane(state, event.lane, { location: null, locationRevealed: false });
+    }
+
+    case 'LOCATION_SHIFTED': {
+      // Move the location instance from `fromLane` to `toLane`. If the
+      // target lane already has a location we overwrite it — callers that
+      // want REPLACED semantics should emit LOCATION_REPLACED + _DESTROYED
+      // instead, this event models a pure move.
+      const fromLane = state.lanes[event.fromLane];
+      if (!fromLane.location || fromLane.location.id !== event.locationId) return state;
+      const loc = fromLane.location;
+      const relocated: LocationInstance = { ...loc, lane: event.toLane };
+      const s1 = patchLane(state, event.fromLane, {
+        location: null,
+        locationRevealed: false,
+      });
+      return patchLane(s1, event.toLane, {
+        location: relocated,
+        locationRevealed: fromLane.locationRevealed,
+      });
+    }
+
     case 'LOCATION_TAG_ADDED': {
       const lane = state.lanes[event.lane];
       if (!lane.location) return state;

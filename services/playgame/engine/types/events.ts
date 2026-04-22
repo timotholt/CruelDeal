@@ -81,6 +81,12 @@ export type MatchEvent =
   // --- Location ---
   | { type: 'LOCATION_REVEALED'; lane: LaneIdx; locationId: LocationId }
   | { type: 'LOCATION_REPLACED'; lane: LaneIdx; oldId: LocationId; newId: LocationId; cause: EffectRef }
+  /** Location is removed from the lane entirely (lane becomes locationless).
+   *  Distinct from REPLACED, which swaps one location for another. */
+  | { type: 'LOCATION_DESTROYED'; lane: LaneIdx; locationId: LocationId; cause: EffectRef }
+  /** Location migrates to a different lane (e.g. Mobius M. Mobius effect).
+   *  Both `fromLane` and `toLane` are always present. */
+  | { type: 'LOCATION_SHIFTED'; fromLane: LaneIdx; toLane: LaneIdx; locationId: LocationId; cause: EffectRef }
   | { type: 'LOCATION_TAG_ADDED'; lane: LaneIdx; tag: LaneTag }
   | { type: 'LOCATION_TAG_REMOVED'; lane: LaneIdx; tag: LaneTag['kind'] }
 

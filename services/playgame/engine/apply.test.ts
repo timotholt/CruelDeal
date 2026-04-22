@@ -399,6 +399,48 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s2.lanes[1].location!.tags.length, 0, 'LOCATION_TAG_REMOVED: removed');
 }
 
+// -- LOCATION_DESTROYED: clears the location from the lane
+
+{
+  const locId = 'boom' as LocationId;
+  const s0: MatchState = {
+    ...emptyState(),
+    lanes: [
+      { idx: 0, location: { id: locId, defId: 'boom', lane: 0, tags: [{ kind: 'FLOODED' }] }, locationRevealed: true, cards: { PLAYER: [], OPP: [] } },
+      blankLane(1),
+      blankLane(2),
+    ],
+  };
+  const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL' as const };
+  const s1 = run(s0, { type: 'LOCATION_DESTROYED', lane: 0, locationId: locId, cause });
+  truthy(s1.lanes[0].location === null, 'LOCATION_DESTROYED: lane 0 is locationless');
+  eq(s1.lanes[0].locationRevealed, false, 'LOCATION_DESTROYED: locationRevealed reset');
+  // Mismatched id is a no-op.
+  const s2 = run(s0, { type: 'LOCATION_DESTROYED', lane: 0, locationId: 'other' as LocationId, cause });
+  truthy(s2.lanes[0].location !== null, 'LOCATION_DESTROYED: id mismatch is a no-op');
+}
+
+// -- LOCATION_SHIFTED: moves the location from one lane to another
+
+{
+  const locId = 'wander' as LocationId;
+  const s0: MatchState = {
+    ...emptyState(),
+    lanes: [
+      { idx: 0, location: { id: locId, defId: 'wander', lane: 0, tags: [] }, locationRevealed: true, cards: { PLAYER: [], OPP: [] } },
+      blankLane(1),
+      blankLane(2),
+    ],
+  };
+  const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL' as const };
+  const s1 = run(s0, { type: 'LOCATION_SHIFTED', fromLane: 0, toLane: 2, locationId: locId, cause });
+  truthy(s1.lanes[0].location === null, 'LOCATION_SHIFTED: source lane cleared');
+  truthy(s1.lanes[2].location !== null, 'LOCATION_SHIFTED: dest lane has location');
+  eq(s1.lanes[2].location!.lane, 2, 'LOCATION_SHIFTED: location.lane updated');
+  eq(s1.lanes[2].location!.id, locId, 'LOCATION_SHIFTED: same location id preserved');
+  eq(s1.lanes[2].locationRevealed, true, 'LOCATION_SHIFTED: revealed state preserved');
+}
+
 // -- TURN_STARTED / TURN_ENDED: housekeeping
 
 {
