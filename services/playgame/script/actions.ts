@@ -23,7 +23,7 @@ import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneIdx } from '../engine/types/ids';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
-import { resolveTurn } from '../engine/resolve';
+import { resolveTurn, computeMatchResult } from '../engine/resolve';
 import { planEnemyTurnFromPool } from '../engine/ai';
 import {
   type ResolvedCard,
@@ -567,6 +567,13 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 
   // Reset the face-up override so next turn's staged cards show face-up.
   c.setUi('isFlipped', false);
+
+  // Lock the official result once after the scoring turn (6) ends.
+  const SCORING_TURN = 6;
+  if (c.state.turn === SCORING_TURN + 1 && !c.ui.lockedResult) {
+    const result = computeMatchResult(c.state as EngineMatchState, c.manifest);
+    c.setUi('lockedResult', result);
+  }
 
   showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
   await new Promise<void>((r) => setTimeout(r, 1200));

@@ -33,7 +33,7 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
   protocolVersion: 1,
   constants: {
     energyCurve: [1, 2, 3, 4, 5, 6],
-    turnLimit: 6,
+    turnLimit: 100,
     handCap: 7,
     laneCapacity: 4,
     deckSize: 12,

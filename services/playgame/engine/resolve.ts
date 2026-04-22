@@ -409,7 +409,7 @@ function drawStep(
   return events;
 }
 
-function computeMatchResult(state: MatchState, manifest: Manifest): MatchResult {
+export function computeMatchResult(state: MatchState, manifest: Manifest): MatchResult {
   let lanesP = 0;
   let lanesO = 0;
   let totP = 0;

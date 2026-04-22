@@ -209,15 +209,17 @@ export const PlayBoard = (props: PlayBoardProps) => {
         </div>
 
         <div class="action-bar">
-          <button 
-            class="retreat-btn" 
+          <button
+            class={`retreat-btn${ui.lockedResult ? ' result-locked' : ''}`}
             disabled={isResolving()}
             onClick={() => {
               if (isResolving()) return;
               props.onExit?.();
             }}
           >
-            RETREAT
+            {ui.lockedResult
+              ? `EXIT (${ui.lockedResult.winner === 'PLAYER' ? 'WIN' : ui.lockedResult.winner === 'OPP' ? 'LOSS' : 'DRAW'})`
+              : 'RETREAT'}
           </button>
           <button
             class="energy-crystal"

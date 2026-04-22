@@ -111,6 +111,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     incoming: [],
     history: [],
     isFlipped: false,
+    lockedResult: null,
   });
 
   const isResolving: Accessor<boolean> = () => engineState.phase === 'RESOLVING';

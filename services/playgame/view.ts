@@ -9,7 +9,7 @@
  * way to project any MatchState snapshot into the UI.
  */
 
-import type { MatchState as EngineMatchState } from './engine/types/state';
+import type { MatchResult, MatchState as EngineMatchState } from './engine/types/state';
 import type { CardId, LaneIdx, Owner } from './engine/types/ids';
 import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
 import { newShortId } from '@/utils/id';
@@ -26,6 +26,7 @@ export interface UiState {
   incoming: ResolvedCard[];
   history: EngineMatchState[];
   isFlipped: boolean;
+  lockedResult: MatchResult | null;
 }
 
 // ── Resolved UI types ────────────────────────────────────────────────────────
