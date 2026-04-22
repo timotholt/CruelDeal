@@ -121,7 +121,7 @@ const BoardSizer = () => {
 
 // PlayBoard — mirrors <div class="board"> from demo index.html.
 const PlayBoard = (props: { onExit?: () => void }) => {
-  const { state, setState, actions, isResolving } = usePlayGame();
+  const { state, setState, actions, isResolving, bridge } = usePlayGame();
   const { cardRefs, boardRef } = useVfx();
 
   const handleUndoPending = () => {
@@ -289,6 +289,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
       cardRefs,
       drawQueue,
       deckEl,
+      bridge,
     };
     script = createScript(ctx);
     void script.run(openingSequence());

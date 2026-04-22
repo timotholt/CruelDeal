@@ -34,9 +34,9 @@
 | 6 | Effect evaluator (`evalEffect` + `revealCard` with recursive OR cascade, depth cap 16) | ✅ done |
 | 7 | `resolve()` intent dispatcher + `resolveTurn()` turn cascade (priority-ordered reveals, location reveal, draw, energy refill, match-end) | ✅ done |
 | **8a** | **Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play.** | **✅ done** |
-| 8b | Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`) | ⏳ next |
-| 8c | Collapse dual state — delete old `services/playgame/state.ts` + `types.ts`, `PlayGameContext` wraps engine `MatchState` directly | ⏳ future |
-| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ blocked on 8b |
+| **8b** | **Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`)** | **✅ done** |
+| 8c | Collapse dual state — delete old `services/playgame/state.ts` + `types.ts`, `PlayGameContext` wraps engine `MatchState` directly | ⏳ next |
+| 9 | Node CLI harness (`pnpm engine:cli`) for headless match replay | ⏳ blocked on 8c |
 
 #### Step 8b / 8c migration checklist
 
@@ -46,16 +46,22 @@ Every integration point still owing a cutover is tagged in the code with `@migra
 rg '@migrate:step-8' services/playgame contexts/ components/
 ```
 
-Current open items (Step 8a left as technical debt):
+Step 8b completed items:
 
-- **`PlayGameContext.stageCardInLane`** — dual-write: still mutates old state AND calls `bridge.stage()`. Cut over: `resolve({STAGE_CARD})` → events → apply to old-state translator.
-- **`PlayGameContext.drawCard`** — UI mints the card via `randomCardDef()`, then calls `bridge.syncHandCard()`. Cut over: pre-populate an engine deck at match start; UI reads drawn cards from the engine's `CARD_DRAWN` events.
-- **`PlayGameContext.endTurn`** — stub; real resolution happens via `script.run(resolveTurnFlow())` in `PlayScreen.tsx`. Cut over: `script` steps consume the bridge's event stream instead of mutating old state.
-- **`services/playgame/script/actions.ts enemyPlayRandom`** — `Math.random()` lane choice; duplicates engine AI. Cut over: emit an `END_TURN` intent and let the engine's AI hook (Tier 1.3) pick the lane.
-- **`services/playgame/script/actions.ts advanceTurn`** — dup of engine's `TURN_STARTED` event. Delete and subscribe to the engine event.
-- **`services/playgame/script/actions.ts revealByPriority`** — dup of engine's reveal cascade. Drive animations from `OR_WINDOW_OPEN` / `CARD_FLIPPED` events instead.
-- **`services/playgame/state.ts recalcPriority`** — dup of engine's `getPriority` projection. Delete.
-- **`services/playgame/state.ts createMatchState`** — replace with engine's initial state builder once the old `MatchState` type is gone.
+- **`captureEngineEndTurn()`** ✅ — calls `bridge.endTurn()` after all cards staged; stores `MatchEvent[]` on script ctx.
+- **`revealByPriorityFromEngine()`** ✅ — reads `CARD_FLIPPED` events in priority order; falls back to old `revealByPriority()` if bridge inactive.
+- **`advanceTurnFromEngine()`** ✅ — reads `TURN_STARTED` event for turn/energy/priority; falls back to old `advanceTurn()` if bridge inactive.
+- **`enemyPlayRandom`** ✅ — enemy card staged through `bridge.syncHandCard()` + `bridge.stage('OPP')` before `endTurn()` runs, so engine sees both sides.
+- **`PlayGameContext.bridge`** ✅ — exposed in context value so script ctx can call `bridge.endTurn()` directly.
+
+Remaining for 8c (dual-state collapse):
+
+- **`PlayGameContext.stageCardInLane`** — still dual-writes old state + bridge. Cut over: `resolve({STAGE_CARD})` → events → apply to old-state translator.
+- **`PlayGameContext.drawCard`** — UI mints card via `randomCardDef()`. Cut over: pre-populate engine deck; UI reads from `CARD_DRAWN` events. Gated on Tier 1.2 card model.
+- **`PlayGameContext.endTurn`** stub — never called by PlayScreen. Delete when VFX flow fully owns turn resolution.
+- **`services/playgame/script/actions.ts enemyPlayRandom`** — lane still picked via `Math.random()`. Cut over to engine AI hook (Tier 1.3).
+- **`services/playgame/state.ts recalcPriority`** — kept as fallback; delete when bridge is always active.
+- **`services/playgame/state.ts createMatchState`** — replace with engine's initial state builder once old `MatchState` type is gone.
 
 ---
 

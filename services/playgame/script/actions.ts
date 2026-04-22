@@ -21,6 +21,9 @@ import type { Step } from './runner';
 import type { CardDef, CardInstance, MatchState } from '../types';
 import { newCardInstance, randomCardDef, recalcPriority } from '../state';
 import { showToast } from '../toast';
+import type { Bridge } from '../engine/adapter/bridge';
+import type { MatchEvent } from '../engine/types/events';
+import type { LaneIdx } from '../engine/types/ids';
 
 /** Ctx fields the actions expect. */
 export interface PlayScriptCtx extends Record<string, unknown> {
@@ -49,6 +52,18 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   sfx?: (name: string) => void;
   /** True once the caller cancels (e.g. on screen unmount). */
   cancelled?: boolean;
+  /**
+   * Engine bridge (Step 8b). When present, end-turn actions consume
+   * engine events instead of duplicating game logic. Absent in
+   * older/test flows that don't wire the bridge.
+   */
+  bridge?: Bridge;
+  /**
+   * Engine events captured by `captureEngineEndTurn()`. Consumed by the
+   * engine-driven reveal and turn-advance actions that follow.
+   * @internal — written by captureEngineEndTurn, read by the *FromEngine actions.
+   */
+  _engineEvents?: readonly MatchEvent[];
 }
 
 // ---- Screen / UI visibility --------------------------------------------
@@ -484,9 +499,19 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
   const candidates = [0, 1, 2].filter((i) => c.state.enemyLanes[i].length < 4);
   if (candidates.length === 0) return;
   const lane = candidates[Math.floor(Math.random() * candidates.length)];
+  // @migrate:step-8b: lane choice still random; engine AI (Tier 1.3) will
+  // replace this with a seeded deterministic pick from the engine's OPP AI.
 
   const def = randomCardDef();
   const card = newCardInstance(def);
+
+  // Register with engine BEFORE staging so bridge.stage() can validate zone.
+  // This makes enemy plays visible to the engine's turn resolution (resolveTurn)
+  // so CARD_FLIPPED events are emitted in the correct priority order for both sides.
+  if (c.bridge?.active) {
+    c.bridge.syncHandCard(card.id, card.name, 'OPP');
+    c.bridge.stage(card.id, lane as LaneIdx, 'OPP');
+  }
 
   // Face-down on arrival; tracked as "played this turn" for reveal.
   c.setState(
@@ -549,6 +574,106 @@ export const drawHandCard = (): Step => async (ctx) => {
   if (c.state.hand.length >= 7) return;
   await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
   await (commitIncomingToHand() as (x: typeof ctx) => Promise<void>)(ctx);
+};
+
+// ---- Step 8b: Engine-event-driven turn resolution -----------------------
+
+/**
+ * Calls `bridge.endTurn()` and stores the resulting event stream on the
+ * script context. Must run AFTER all cards (player + enemy) have been
+ * staged through the bridge so the engine's resolveTurn sees them.
+ *
+ * Subsequent `*FromEngine` actions read `ctx._engineEvents` to drive
+ * reveal order, turn advancement, and priority — removing the duplicate
+ * game logic that previously lived in `advanceTurn` and `revealByPriority`.
+ */
+export const captureEngineEndTurn = (): Step => (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  if (c.bridge?.active) {
+    c._engineEvents = c.bridge.endTurn();
+  }
+  return Promise.resolve();
+};
+
+/**
+ * Reveal all pending cards in the order the engine dictated (priority-first).
+ *
+ * Replaces `revealByPriority()` which independently recalculated priority
+ * using duplicated logic. Falls back to `revealByPriority()` when no engine
+ * events are available (e.g. bridge inactive or bridge didn't cover this turn).
+ */
+export const revealByPriorityFromEngine = (): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const events = c._engineEvents ?? [];
+
+  // CARD_FLIPPED events appear in priority order (high-priority side first).
+  const flippedIds = events
+    .filter((e): e is Extract<MatchEvent, { type: 'CARD_FLIPPED' }> => e.type === 'CARD_FLIPPED')
+    .map((e) => e.cardId as string);
+
+  if (flippedIds.length === 0) {
+    // No engine events — fall back to the old priority-recalc path.
+    return (revealByPriority() as (x: typeof ctx) => Promise<void>)(ctx);
+  }
+
+  // Only reveal cards that are actually face-down in the UI (pending).
+  // This guards against stale engine state including already-revealed cards.
+  const toReveal = flippedIds.filter((id) => c.state.pending.includes(id));
+
+  await revealPendingCinematic({
+    pendingIds: toReveal,
+    cardElMap: c.cardRefs,
+    boardWrap: c.boardWrap,
+    sfx: c.sfx,
+    onRevealed: (id) => {
+      c.setState(
+        produce<MatchState>((s) => {
+          s.pending = s.pending.filter((pid) => pid !== id);
+        }),
+      );
+    },
+  });
+
+  // Clear per-turn play lists so the next turn starts fresh.
+  c.setState(
+    produce<MatchState>((s) => {
+      s.playedThisTurn = [];
+      s.enemyPlayedThisTurn = [];
+    }),
+  );
+};
+
+/**
+ * Advance the turn using the `TURN_STARTED` event emitted by the engine.
+ *
+ * Replaces `advanceTurn()` which recalculated priority inline (`recalcPriority`)
+ * — now the engine owns that logic and broadcasts the result via the event.
+ * Falls back to `advanceTurn()` when engine events are unavailable.
+ */
+export const advanceTurnFromEngine = (): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const events = c._engineEvents ?? [];
+
+  const startEvt = events.find(
+    (e): e is Extract<MatchEvent, { type: 'TURN_STARTED' }> => e.type === 'TURN_STARTED',
+  );
+
+  if (startEvt) {
+    c.setState(
+      produce<MatchState>((s) => {
+        s.turn = startEvt.turn;
+        s.energyMax = Math.min(startEvt.turn, 6); // matches manifest energyCurve [1..6]
+        s.energy = s.energyMax;
+        s.playerHasPriority = startEvt.priority === 'PLAYER';
+      }),
+    );
+  } else {
+    // No TURN_STARTED event — fall back to the old (duplicate) logic.
+    return (advanceTurn() as (x: typeof ctx) => Promise<void>)(ctx);
+  }
+
+  showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
+  await new Promise<void>((r) => setTimeout(r, 1200));
 };
 
 /** Mark the match as no-longer-resolving so the END TURN button re-enables. */

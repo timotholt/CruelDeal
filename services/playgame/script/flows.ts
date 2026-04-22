@@ -9,7 +9,8 @@
 
 import { serial, wait, type Step } from './runner';
 import {
-  advanceTurn,
+  advanceTurnFromEngine,
+  captureEngineEndTurn,
   dealPlayerCard,
   drawHandCard,
   enemyPlayRandom,
@@ -17,7 +18,7 @@ import {
   finishResolving,
   flipPlayerCardsFaceDown,
   hideLocationTiles,
-  revealByPriority,
+  revealByPriorityFromEngine,
   revealNextLocation,
   setBoardVisible,
   startResolving,
@@ -104,11 +105,19 @@ export const resolveTurnFlow = (): Step =>
     startResolving(),
     flipPlayerCardsFaceDown(),
     wait(200),
+    // Enemy commits plays face-down. enemyPlayRandom also stages the enemy
+    // card through the bridge so the engine sees it in staging order.
     enemyPlayRandom(),
+    // Run the engine's turn resolution — returns the authoritative event
+    // stream (CARD_FLIPPED in priority order, TURN_STARTED with new priority).
+    // Must be called AFTER all cards are staged through the bridge.
+    captureEngineEndTurn(),
     wait(250),
-    revealByPriority(),
+    // Reveal cards in the order the engine dictated (priority-first).
+    revealByPriorityFromEngine(),
     wait(200),
-    advanceTurn(),
+    // Advance turn/energy/priority from the engine's TURN_STARTED event.
+    advanceTurnFromEngine(),
     wait(200),
     drawHandCard(),
     wait(200),

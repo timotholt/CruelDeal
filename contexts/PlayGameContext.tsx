@@ -41,6 +41,13 @@ export interface PlayGameContextValue {
   setState: SetStoreFunction<MatchState>;
   /** Whether the end-turn resolution animation is currently running. */
   isResolving: Accessor<boolean>;
+  /**
+   * Engine bridge — exposed so the VFX script layer can drive end-turn
+   * resolution from engine events (Step 8b).
+   *
+   * @migrate:step-8c Wrap bridge directly as the store; remove this field.
+   */
+  bridge: Bridge;
   actions: {
     drawCard: () => CardInstance | null;
     stageCardInLane: (cardId: string, laneIdx: number) => boolean;
@@ -60,13 +67,15 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   // state.resolving directly stay in sync automatically.
   const isResolving: Accessor<boolean> = () => state.resolving;
 
-  // ─── Engine bridge (Step 8a, shadow mode) ────────────────────────────
-  // @migrate:step-8b — The bridge currently OBSERVES. In Step 8b it will
-  // become authoritative: UI actions will wait for engine events before
-  // mutating old state, and the script engine will subscribe to the
-  // event stream instead of mutating state directly.
+  // ─── Engine bridge (Step 8b, authoritative for turn resolution) ─────
+  // Step 8a: bridge observed (shadow mode).
+  // Step 8b: bridge is authoritative for end-turn events. The VFX script
+  //   flow calls bridge.endTurn() via captureEngineEndTurn(), gets the
+  //   event stream, and drives reveal order + turn advancement from it.
+  //   Enemy cards are staged through bridge.stage() in enemyPlayRandom()
+  //   so the engine sees both sides before producing CARD_FLIPPED events.
   // @migrate:step-8c — The old `state` store disappears entirely and
-  // this Provider wraps only the engine's MatchState.
+  //   this Provider wraps only the engine's MatchState.
   let bridge: Bridge = mountBridge(state, BOOTSTRAP_MANIFEST, {
     seed: `match-${Date.now().toString(36)}`,
   });
@@ -79,8 +88,9 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     if (state.hand.length >= 7) return null;
     const card = newCardInstance(randomCardDef());
     setState('hand', (h) => [...h, card]);
-    // @migrate:step-8b — Replace with engine-driven draw (CARD_DRAWN
-    // event from a pre-populated deck). For now we sync after the fact.
+    // @migrate:step-8c — Replace with engine-driven draw (CARD_DRAWN
+    // event from a pre-populated deck). Deck pre-population is gated on
+    // the full card-model redesign (Tier 1.2). For now we sync after the fact.
     bridge.syncHandCard(card.id, card.name, 'PLAYER');
     assertParity('drawCard');
     return card;
@@ -108,9 +118,11 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
         s.playedThisTurn.push(cardId);
       }),
     );
-    // @migrate:step-8b — This is the obvious consolidation point:
-    // resolve({STAGE_CARD}) becomes authoritative, apply() drives both
-    // the engine state AND (via a reducer-to-old translator) the UI.
+    // Engine bridge: stage the card so the engine's staging order
+    // matches the UI. The bridge's endTurn() (called by captureEngineEndTurn
+    // in the VFX flow) will then emit CARD_FLIPPED events for it.
+    // @migrate:step-8c — resolve({STAGE_CARD}) becomes fully authoritative;
+    // apply() drives both engine state AND (via translator) the UI.
     bridge.stage(cardId, laneIdx as 0 | 1 | 2, 'PLAYER');
     assertParity('stageCardInLane');
     return true;
@@ -144,11 +156,10 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
           s.energy = s.energyMax;
         }),
       );
-      // @migrate:step-8b — Replace this entire stub with bridge.endTurn()
-      // once the VFX layer consumes engine events. The stub + shadow
-      // run-ahead is fine for now because the UI's /play flow in
-      // components/screens/PlayScreen.tsx uses the `script` engine's
-      // resolveTurnFlow(), not this context method, for real resolution.
+      // NOTE: This stub is never called by the real game flow in PlayScreen.tsx
+      // (which uses script.run(resolveTurnFlow()) instead). The real bridge.endTurn()
+      // call is in captureEngineEndTurn() in the VFX script flow.
+      // @migrate:step-8c — Delete this stub entirely; the VFX flow owns turn resolution.
       bridge.endTurn();
       assertParity('endTurn(stub)');
       const drawn = drawCard();
@@ -171,6 +182,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     state,
     setState,
     isResolving,
+    bridge,
     actions: {
       drawCard,
       stageCardInLane,
