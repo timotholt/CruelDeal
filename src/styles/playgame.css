@@ -864,6 +864,19 @@
     background: rgba(166,109,255,0.1);
     border-color: var(--accent);
   }
+  .hand.drop-target {
+    background: rgba(166,109,255,0.08);
+    outline: 1px dashed rgba(166,109,255,0.5);
+    outline-offset: -4px;
+    border-radius: 12px;
+  }
+  /* Pending player cards in lane can be dragged back to hand. */
+  .card.undoable {
+    cursor: grab;
+  }
+  .card.undoable:active {
+    cursor: grabbing;
+  }
   .hand .card.dragging { opacity: 0.25; }
   .card.pending {
     outline: none;

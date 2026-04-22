@@ -29,6 +29,8 @@ export interface DragDropOpts {
   cardRefs: Map<string, HTMLElement>;
   /** Returns true on success; false if the engine rejected the stage intent. */
   stageCardInLane: (cardId: string, laneIdx: number) => boolean;
+  /** Undo a pending (just-staged) card by dragging it back to hand. */
+  undoPendingCard: (cardId: string) => boolean;
 }
 
 /**
@@ -38,7 +40,7 @@ export interface DragDropOpts {
  *   onCleanup(setupDragDrop({ ... }));
  */
 export function setupDragDrop(opts: DragDropOpts): () => void {
-  const { boardEl, engineState, isResolving, playerHand, cardRefs, stageCardInLane } = opts;
+  const { boardEl, engineState, isResolving, playerHand, cardRefs, stageCardInLane, undoPendingCard } = opts;
 
   const getPlayerLaneSlots = (target: EventTarget | null): HTMLElement | null => {
     let el = target as HTMLElement | null;
@@ -49,49 +51,102 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     return null;
   };
 
+  const getHandEl = (target: EventTarget | null): HTMLElement | null => {
+    let el = target as HTMLElement | null;
+    while (el && el !== boardEl) {
+      if (el.classList?.contains('hand')) return el;
+      el = el.parentElement;
+    }
+    return null;
+  };
+
+  /** True if the currently-dragged card is a player pending card (can be undone). */
+  const dragIsPending = (): boolean => {
+    if (!dragState.id) return false;
+    return engineState.stagingOrder.includes(dragState.id as never);
+  };
+
   const clearDropState = (): void => {
     boardEl.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
     boardEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
+    boardEl.querySelectorAll('.hand.drop-target').forEach((h) => h.classList.remove('drop-target'));
   };
 
   const onDragOver = (e: DragEvent): void => {
     if (!dragState.id || isResolving()) return;
+
+    // Lane drop (stage from hand → lane). Only valid when the drag is NOT
+    // already a pending card; pending cards are dragged back to hand.
     const slotEl = getPlayerLaneSlots(e.target);
-    if (!slotEl) return;
-    const lane = Number(slotEl.dataset.lane) as LaneIdx;
-    if (engineState.lanes[lane].cards['PLAYER'].length >= 4) return;
-    e.preventDefault();
-    clearDropState();
-    slotEl.classList.add('drop-target');
-    const nextSlot = [...slotEl.querySelectorAll('.slot')].find(
-      (s) => !s.querySelector('.card'),
-    ) as HTMLElement | undefined;
-    nextSlot?.classList.add('next-drop');
+    if (slotEl && !dragIsPending()) {
+      const lane = Number(slotEl.dataset.lane) as LaneIdx;
+      if (engineState.lanes[lane].cards['PLAYER'].length >= 4) return;
+      e.preventDefault();
+      clearDropState();
+      slotEl.classList.add('drop-target');
+      const nextSlot = [...slotEl.querySelectorAll('.slot')].find(
+        (s) => !s.querySelector('.card'),
+      ) as HTMLElement | undefined;
+      nextSlot?.classList.add('next-drop');
+      return;
+    }
+
+    // Hand drop (undo pending card → back to hand). Only valid when the drag
+    // IS a pending card.
+    const handEl = getHandEl(e.target);
+    if (handEl && dragIsPending()) {
+      e.preventDefault();
+      clearDropState();
+      handEl.classList.add('drop-target');
+    }
   };
 
   const onDragLeave = (e: DragEvent): void => {
-    const slotEl = getPlayerLaneSlots(e.target);
     const related = e.relatedTarget as Node | null;
+    const slotEl = getPlayerLaneSlots(e.target);
     if (slotEl && !slotEl.contains(related)) {
       slotEl.classList.remove('drop-target');
       slotEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
+    }
+    const handEl = getHandEl(e.target);
+    if (handEl && !handEl.contains(related)) {
+      handEl.classList.remove('drop-target');
     }
   };
 
   const onDrop = (e: DragEvent): void => {
     e.preventDefault();
     const slotEl = getPlayerLaneSlots(e.target);
+    const handEl = getHandEl(e.target);
     clearDropState();
     boardEl.classList.remove('dragging-card');
-    if (isResolving() || !slotEl || !dragState.id) return;
-    const lane = Number(slotEl.dataset.lane);
-    // Capture all current hand rects BEFORE the store mutation so survivors
-    // can FLIP-slide into their new positions.
-    const handIds = playerHand().map((c) => c.id);
-    const oldRects = captureHandRects(handIds, cardRefs);
-    const ok = stageCardInLane(dragState.id, lane);
-    if (!ok) return;
-    requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+    if (isResolving() || !dragState.id) return;
+
+    // Undo: dropping a pending card back on the hand.
+    if (handEl && dragIsPending()) {
+      // Capture rects for the dragged card (currently in lane) PLUS every
+      // card already in hand, so FLIP slides the lane card into its hand
+      // slot while hand siblings shuffle over to make room. This mirrors
+      // the hex-button undo animation.
+      const pendingIds = [...engineState.stagingOrder];
+      const handIds = playerHand().map((c) => c.id);
+      const allIds = [...pendingIds, ...handIds];
+      const oldRects = captureHandRects(allIds, cardRefs);
+      const ok = undoPendingCard(dragState.id);
+      if (!ok) return;
+      requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+      return;
+    }
+
+    // Stage: dropping a hand card on a player lane slot.
+    if (slotEl && !dragIsPending()) {
+      const lane = Number(slotEl.dataset.lane);
+      const handIds = playerHand().map((c) => c.id);
+      const oldRects = captureHandRects(handIds, cardRefs);
+      const ok = stageCardInLane(dragState.id, lane);
+      if (!ok) return;
+      requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+    }
   };
 
   const onDragStart = (): void => {

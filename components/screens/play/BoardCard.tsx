@@ -10,6 +10,7 @@ import { useVfx } from '../../game/VfxHost';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { openInspect } from './inspector';
+import { dragState } from './useDragDrop';
 
 interface BoardCardProps {
   card: ResolvedCard;
@@ -19,8 +20,33 @@ interface BoardCardProps {
 }
 
 export const BoardCard = (props: BoardCardProps) => {
-  const { ui } = usePlayGame();
+  const { ui, engineState, isResolving } = usePlayGame();
   const { bindCardRef } = useVfx();
+
+  /**
+   * True if this is a player card that was staged THIS turn and can still
+   * be dragged back to hand. We key off `stagingOrder` (the engine's source
+   * of truth) rather than `revealed` to avoid a false positive on the first
+   * frame after TURN_STARTED.
+   */
+  const isDraggablePending = (): boolean => {
+    if (props.enemy || props.side !== 'player') return false;
+    if (isResolving()) return false;
+    return engineState.stagingOrder.includes(props.card.id as never);
+  };
+
+  const onDragStart = (e: DragEvent): void => {
+    if (!isDraggablePending()) {
+      e.preventDefault();
+      return;
+    }
+    dragState.id = props.card.id;
+    e.dataTransfer?.setData('text/plain', props.card.id);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  };
+  const onDragEnd = (): void => {
+    dragState.id = null;
+  };
 
   const isFaceDown = (): boolean => {
     if (props.card.revealed) return false;
@@ -67,11 +93,18 @@ export const BoardCard = (props: BoardCardProps) => {
         'card' +
         (props.enemy ? ' enemy' : '') +
         (isFaceDown() ? ' facedown' : '') +
-        (isPending() ? ' pending' : '')
+        (isPending() ? ' pending' : '') +
+        (isDraggablePending() ? ' undoable' : '')
       }
       data-card-id={props.card.id}
-      style={{ '--card-tilt': tilt(), cursor: isFaceDown() ? 'default' : 'pointer' }}
+      draggable={isDraggablePending()}
+      style={{
+        '--card-tilt': tilt(),
+        cursor: isDraggablePending() ? 'grab' : isFaceDown() ? 'default' : 'pointer',
+      }}
       onClick={onClick}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>

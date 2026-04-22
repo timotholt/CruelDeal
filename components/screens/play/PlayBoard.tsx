@@ -123,6 +123,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       playerHand: visibleHand,
       cardRefs,
       stageCardInLane: actions.stageCardInLane,
+      undoPendingCard: actions.undoPendingCard,
     });
     onCleanup(unbindDnd);
 

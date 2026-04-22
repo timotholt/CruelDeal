@@ -137,6 +137,8 @@ export interface PlayGameContextValue {
     drawCard: () => ResolvedCard | null;
     stageCardInLane: (cardId: string, laneIdx: number) => boolean;
     undoPending: () => void;
+    /** Rewind history until `cardId` is no longer staged. Returns true on success. */
+    undoPendingCard: (cardId: string) => boolean;
     endTurn: () => Promise<void>;
     resetMatch: () => void;
   };
@@ -256,6 +258,27 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   };
 
   /**
+   * Rewind history snapshots until `cardId` is no longer in `stagingOrder`.
+   * This undoes the target card plus any cards staged after it (they may have
+   * depended on energy freed by it, so LIFO rollback is the safe choice).
+   */
+  const undoPendingCard = (cardId: string): boolean => {
+    if (engineState.phase === 'RESOLVING') return false;
+    const hist = ui.history;
+    // Walk from the newest snapshot backward. The first snapshot whose
+    // stagingOrder does NOT contain cardId is the state we want to restore to.
+    for (let i = hist.length - 1; i >= 0; i--) {
+      const snap = hist[i] as EngineMatchState;
+      if (!snap.stagingOrder.includes(cardId as CardId)) {
+        setEngineState(reconcile(snap as EngineStateStore));
+        setUi('history', (prev) => prev.slice(0, i));
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /**
    * End-turn stub. The real resolution flow is owned by the VFX script
    * (`resolveTurnFlow` in flows.ts). This stub exists only for interface
    * consistency; PlayScreen never calls it.
@@ -287,6 +310,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
       drawCard,
       stageCardInLane,
       undoPending,
+      undoPendingCard,
       endTurn,
       resetMatch,
     },
