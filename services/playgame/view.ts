@@ -193,15 +193,6 @@ export function getLanePower(
 
 // ── Card creation helpers ────────────────────────────────────────────────────
 
-/**
- * Pick a random manifest card definition (uniform distribution).
- * Used when the engine deck isn't pre-populated yet (pre–Tier 1.2).
- */
-export function randomManifestCardDef(manifest: Manifest): ManifestCardDef | null {
-  const defs = Object.values(manifest.cards);
-  if (defs.length === 0) return null;
-  return defs[Math.floor(Math.random() * defs.length)];
-}
 
 /**
  * Create a new engine CardInstance from a manifest def.

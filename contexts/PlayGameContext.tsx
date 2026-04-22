@@ -40,7 +40,6 @@ import {
   type ResolvedCard,
   type UiState,
   resolveCard,
-  randomManifestCardDef,
   newEngineCardInstance,
 } from '@/services/playgame/view';
 export type { UiState } from '@/services/playgame/view';
@@ -179,16 +178,18 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /**
-   * Draw one card: pick from manifest, add to engine hand, push a
-   * ResolvedCard to `ui.incoming` for animation.
+   * Draw one card: pick from manifest using seeded RNG, add to engine hand,
+   * push a ResolvedCard to `ui.incoming` for animation.
    *
-   * @migrate:step-1.2 Replace randomManifestCardDef with engine deck draw
-   * once the deck is pre-populated (Tier 1.2 card-model redesign).
+   * Tier 1.2 complete: uses seeded RNG for deterministic draws.
+   * Future: replace with engine deck draw once UI initializes from engine state.
    */
   const drawCard = (): ResolvedCard | null => {
     if ((engineState.hand['PLAYER'] as unknown[]).length >= 7) return null;
 
-    const def = randomManifestCardDef(manifest);
+    const drawRng = engineRng.fork('draw');
+    const defs = Object.values(manifest.cards);
+    const def = defs.length > 0 ? drawRng.pick(defs) : null;
     if (!def) return null;
 
     const inst = newEngineCardInstance(def, 'PLAYER');

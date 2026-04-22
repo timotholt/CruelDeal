@@ -28,7 +28,6 @@ import {
   type ResolvedCard,
   type UiState,
   resolveCard,
-  randomManifestCardDef,
   newEngineCardInstance,
 } from '../view';
 import { showToast } from '../toast';
@@ -145,16 +144,21 @@ const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
 
 /**
  * Stage 1 of the two-stage draw pipeline: pull cards from the draw queue
- * (or randomManifestCardDef() fallback), emit CARD_ADDED_TO_HAND events,
+ * (or seeded RNG fallback), emit CARD_ADDED_TO_HAND events,
  * and push ResolvedCards into `ui.incoming`.
+ *
+ * Tier 1.2 will replace the fallback with engine deck draws.
  */
 export const drawFromDeck = (count = 1): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
   if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return Promise.resolve();
 
+  const drawRng = c.engineRng.fork('draw');
+  const cardDefs = Object.values(c.manifest.cards);
+
   for (let i = 0; i < count; i++) {
     const def = (c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined)
-      ?? randomManifestCardDef(c.manifest);
+      ?? (cardDefs.length > 0 ? drawRng.pick(cardDefs) : null);
     if (!def) continue;
 
     const inst = newEngineCardInstance(def, 'PLAYER');
@@ -558,10 +562,13 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 /**
  * Enemy plays cards until it runs out of energy, hand space, or lane space.
  *
+ * Uses the seeded engine RNG for deterministic card and lane selection.
+ * Once the engine deck is pre-populated (Tier 1.2), this will read from
+ * the OPP hand instead of the manifest pool.
+ *
  * Rules:
  *   - Only plays cards whose `cost <= current OPP energy`.
- *   - Picks any non-full lane (random choice — Tier 1.3 replaces with
- *     deterministic engine AI).
+ *   - Picks any non-full lane using seeded RNG.
  *   - Dispatches CARD_ADDED_TO_HAND, CARD_STAGED, ENERGY_CHANGED for each
  *     play so `captureEngineEndTurn` sees the staged cards.
  *   - Animates each with a face-down fly-in before continuing.
@@ -570,6 +577,7 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
   const maxPlaysSafety = 6; // guard against infinite loops
+  const aiRng = c.engineRng.fork('enemy-plays');
 
   for (let i = 0; i < maxPlaysSafety; i++) {
     const energy = c.state.energy['OPP'];
@@ -579,16 +587,14 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
     // stopgap — once the engine deck is pre-populated, read from OPP hand.
     const pool = Object.values(c.manifest.cards).filter((d) => d.cost <= energy);
     if (pool.length === 0) break;
-    const def = pool[Math.floor(Math.random() * pool.length)];
+    const def = aiRng.pick(pool);
 
-    // Pick a lane with room.
+    // Pick a lane with room using seeded RNG.
     const laneCandidates = [0, 1, 2].filter(
       (idx) => (c.state.lanes[idx as LaneIdx].cards['OPP'] as unknown[]).length < 4,
     );
     if (laneCandidates.length === 0) break;
-    const lane = laneCandidates[Math.floor(Math.random() * laneCandidates.length)] as LaneIdx;
-    // @migrate:step-1.3: lane + card choice still random; engine AI
-    // (Tier 1.3) replaces this with a deterministic seeded planner.
+    const lane = aiRng.pick(laneCandidates) as LaneIdx;
 
     const inst = newEngineCardInstance(def, 'OPP');
 
