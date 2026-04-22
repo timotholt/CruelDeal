@@ -17,6 +17,7 @@ import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flo
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Portal } from '../ui/Portal';
 import { ZoomInspector } from './ZoomInspector';
+import { PlayerHud } from '../game/PlayerHud';
 
 interface PlayScreenProps {
   onExit?: () => void;
@@ -294,6 +295,7 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     onCleanup(() => script?.cancel());
   });
 
+
   const handScale = createMemo(() => {
     const n = state.hand.length;
     if (n <= 4) return 1;
@@ -307,10 +309,11 @@ const PlayBoard = (props: { onExit?: () => void }) => {
     <div class="board" id="board" ref={boardEl}>
       {/* TOP HUD */}
       <div class="hud-top">
-        <div class="hud-player hud-player--self">
-          <div class="hud-avatar" />
-          <span class="hud-name">PLAYER</span>
-        </div>
+        <PlayerHud
+          name="PLAYER"
+          side="left"
+          hasPriority={state.playerHasPriority}
+        />
         <div class="hud-turn">
           TURN <b>{state.turn}</b>
           <span class="hud-energy">
@@ -318,10 +321,11 @@ const PlayBoard = (props: { onExit?: () => void }) => {
             <b>{state.energy}</b>/<b>{state.energyMax}</b> {'\u26a1'}
           </span>
         </div>
-        <div class="hud-player hud-player--opponent">
-          <span class="hud-name">OPPONENT</span>
-          <div class="hud-avatar" />
-        </div>
+        <PlayerHud
+          name="OPPONENT"
+          side="right"
+          hasPriority={!state.playerHasPriority}
+        />
       </div>
 
       {/* GAME AREA: enemy lanes - locations - player lanes */}

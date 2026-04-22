@@ -61,12 +61,49 @@ export function createMatchState(): MatchState {
     incoming: [],
     history: [],
     resolving: false,
+    playerHasPriority: Math.random() < 0.5, // turn 0 tie → random
   };
 
   // NOTE: the hand starts EMPTY. The opening sequence (flows.ts) deals the
   // first 4 cards one at a time with fly-in animations. Pre-seeding here
   // would cause them to appear instantly before the flow can animate them.
   return state;
+}
+
+/**
+ * Recalculate priority per Marvel Snap rules (call at turn start, after reveal).
+ *
+ * 1. Most locations won → priority
+ * 2. Tie in locations  → higher point differential → priority
+ * 3. Full tie          → random
+ *
+ * Mutates `state.playerHasPriority` in place (call inside produce()).
+ */
+export function recalcPriority(state: MatchState): void {
+  const lanePower = (lane: typeof state.lanes[0]) => lane.reduce((s, c) => s + c.power, 0);
+
+  let playerLocs = 0;
+  let enemyLocs = 0;
+  let playerPoints = 0;
+  let enemyPoints = 0;
+
+  for (let i = 0; i < 3; i++) {
+    const p = lanePower(state.lanes[i]);
+    const e = lanePower(state.enemyLanes[i]);
+    playerPoints += p;
+    enemyPoints += e;
+    if (p > e) playerLocs++;
+    else if (e > p) enemyLocs++;
+    // tied lane → neither gets the location
+  }
+
+  if (playerLocs !== enemyLocs) {
+    state.playerHasPriority = playerLocs > enemyLocs;
+  } else if (playerPoints !== enemyPoints) {
+    state.playerHasPriority = playerPoints > enemyPoints;
+  } else {
+    state.playerHasPriority = Math.random() < 0.5;
+  }
 }
 
 /** Deep-clone the mutable slice of state used by undo. */

@@ -109,4 +109,12 @@ export interface MatchState {
   history: MatchSnapshot[];
   /** True while end-turn resolution is running. */
   resolving: boolean;
+  /**
+   * True = local player reveals first this turn.
+   * Recalculated at start of each turn per Snap rules:
+   *   1. Most locations won → priority
+   *   2. Tie in locations → higher point differential → priority
+   *   3. Full tie → random
+   */
+  playerHasPriority: boolean;
 }

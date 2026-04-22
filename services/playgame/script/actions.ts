@@ -19,7 +19,7 @@ import {
 } from '@/services/vfx/animations/layout-flip';
 import type { Step } from './runner';
 import type { CardDef, CardInstance, MatchState } from '../types';
-import { newCardInstance, randomCardDef } from '../state';
+import { newCardInstance, randomCardDef, recalcPriority } from '../state';
 import { showToast } from '../toast';
 
 /** Ctx fields the actions expect. */
@@ -529,6 +529,7 @@ export const advanceTurn = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   c.setState(
     produce<MatchState>((s) => {
+      recalcPriority(s);   // before turn counter increments — uses resolved board state
       s.turn += 1;
       s.energyMax = Math.min(s.turn, 6);
       s.energy = s.energyMax;
