@@ -26,6 +26,7 @@ import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
 import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
+import { findLanes } from '../projections/query';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 
 export const MAX_REVEAL_RECURSION = 16;
@@ -385,11 +386,11 @@ export function evalEffect(
         // Per-target destination: forked off ctx.rng so two simultaneous
         // MOVEs don't collide deterministic-stream-wise.
         const subRng = ctx.rng.fork(`move:${id}`);
-        // Filter to lanes that are (a) different from current and (b) have capacity.
-        const filtered = destLanes.filter(l => {
-          if (l === card.lane) return false; // same lane
-          const count = s.lanes[l].cards[card.owner].length;
-          return count < manifest.constants.laneCapacity; // has capacity
+        // Valid destination = candidate lane, not current lane, has capacity for owner.
+        const filtered = findLanes(s, manifest, {
+          idx: destLanes,
+          hasCapacity: card.owner,
+          not: { idx: card.lane },
         });
         if (filtered.length === 0) continue;
         const toLane = filtered.length === 1 ? filtered[0] : subRng.pick(filtered);
