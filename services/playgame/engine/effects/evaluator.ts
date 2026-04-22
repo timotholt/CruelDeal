@@ -385,12 +385,14 @@ export function evalEffect(
         // Per-target destination: forked off ctx.rng so two simultaneous
         // MOVEs don't collide deterministic-stream-wise.
         const subRng = ctx.rng.fork(`move:${id}`);
-        const filtered = destLanes.filter(l => l !== card.lane);
+        // Filter to lanes that are (a) different from current and (b) have capacity.
+        const filtered = destLanes.filter(l => {
+          if (l === card.lane) return false; // same lane
+          const count = s.lanes[l].cards[card.owner].length;
+          return count < manifest.constants.laneCapacity; // has capacity
+        });
         if (filtered.length === 0) continue;
         const toLane = filtered.length === 1 ? filtered[0] : subRng.pick(filtered);
-        // Lane-capacity guard: real Snap refuses MOVEs into a full lane.
-        const target = s.lanes[toLane].cards[card.owner];
-        if (target.length >= manifest.constants.laneCapacity) continue;
         const e: MatchEvent = {
           type: 'CARD_MOVED',
           cardId: id,

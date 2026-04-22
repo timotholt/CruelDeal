@@ -732,6 +732,117 @@ function buildState(
   eq(getCardPower(res.state, 'c2' as CardId, manifest), 3, 'onAnyCardPlayedHere: grunt unchanged');
 }
 
+// -- MOVE with capacity filtering (Dune Sapper fix) -------------------------
+
+{
+  // Test 1: Sapper in lane 1, lanes 0 and 2 both empty → moves to one of them
+  const sapper = mkCard('sapper', 1, 1, {
+    abilities: {
+      onReveal: [{
+        kind: 'MOVE',
+        target: { kind: 'SELF' },
+        to: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'OTHER_LANES', of: { kind: 'SELF' } },
+        },
+      }],
+    },
+  });
+  const filler = mkCard('filler', 1, 1);
+  const manifest = mkManifest([sapper, filler]);
+  
+  const s0 = buildState([
+    // Lane 0: empty
+    // Lane 1: sapper (will move to lane 0 or 2)
+    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    // Lane 2: empty
+  ]);
+  
+  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('sapper-move-1'));
+  const sappCard = res.state.cards['c1' as CardId];
+  // Sapper should move to lane 0 or 2 (both have capacity, not lane 1)
+  truthy(sappCard.lane === 0 || sappCard.lane === 2, 'MOVE: sapper moved to lane 0 or 2 (not current lane 1)');
+  const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
+  truthy(moveEvent !== undefined, 'MOVE: CARD_MOVED event emitted');
+}
+
+{
+  // Test 2: Sapper in lane 1, lane 0 full, lane 2 empty → moves only to lane 2
+  const sapper = mkCard('sapper', 1, 1, {
+    abilities: {
+      onReveal: [{
+        kind: 'MOVE',
+        target: { kind: 'SELF' },
+        to: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'OTHER_LANES', of: { kind: 'SELF' } },
+        },
+      }],
+    },
+  });
+  const filler = mkCard('filler', 1, 1);
+  const manifest = mkManifest([sapper, filler]);
+  
+  const s0 = buildState([
+    // Lane 0: 4 fillers (full)
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    // Lane 1: sapper (will move to lane 2, only option)
+    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    // Lane 2: empty
+  ]);
+  
+  const res = revealCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-2'));
+  const sappCard = res.state.cards['c5' as CardId];
+  eq(sappCard.lane, 2, 'MOVE: sapper moved to lane 2 (only non-full lane besides current)');
+  const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
+  truthy(moveEvent !== undefined, 'MOVE: CARD_MOVED event emitted');
+}
+
+{
+  // Test 3: Sapper in lane 1, lanes 0 and 2 both full → no move
+  const sapper = mkCard('sapper', 1, 1, {
+    abilities: {
+      onReveal: [{
+        kind: 'MOVE',
+        target: { kind: 'SELF' },
+        to: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'OTHER_LANES', of: { kind: 'SELF' } },
+        },
+      }],
+    },
+  });
+  const filler = mkCard('filler', 1, 1);
+  const manifest = mkManifest([sapper, filler]);
+  
+  const s0 = buildState([
+    // Lane 0: 4 fillers (full)
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    // Lane 1: sapper (no valid moves)
+    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    // Lane 2: 4 fillers (full)
+    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
+    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
+  ]);
+  
+  const res = revealCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-3'));
+  const sappCard = res.state.cards['c5' as CardId];
+  eq(sappCard.lane, 1, 'MOVE: sapper stays in lane 1 (no empty lanes)');
+  const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
+  truthy(moveEvent === undefined, 'MOVE: no CARD_MOVED event (no valid move)');
+}
+
 // -- Exit -------------------------------------------------------------------
 
 if (failures > 0) {
