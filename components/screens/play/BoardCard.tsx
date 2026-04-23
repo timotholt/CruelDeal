@@ -9,6 +9,8 @@
 import { useVfx } from '../../game/VfxHost';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { ResolvedCard } from '@/services/playgame/view';
+import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
+import type { Seat } from '@/services/playgame/engine/types/ids';
 import { openInspect } from './inspector';
 import { dragState } from './useDragDrop';
 
@@ -16,11 +18,19 @@ interface BoardCardProps {
   card: ResolvedCard;
   side: 'top' | 'bottom';
   laneIdx: number;
+  interactive?: boolean;
+  viewerSeat?: Seat;
+  phase?: EngineMatchState['phase'];
+  stagingOrder?: readonly string[];
 }
 
 export const BoardCard = (props: BoardCardProps) => {
   const { ui, engineState, isResolving, localSeat } = usePlayGame();
   const { bindCardRef } = useVfx();
+  const viewerSeat = (): Seat => props.viewerSeat ?? localSeat;
+  const phase = (): EngineMatchState['phase'] => props.phase ?? engineState.phase;
+  const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState.stagingOrder;
+  const interactive = (): boolean => props.interactive ?? true;
 
   /**
    * True if this is a player card that was staged THIS turn and can still
@@ -29,10 +39,11 @@ export const BoardCard = (props: BoardCardProps) => {
    * frame after TURN_STARTED.
    */
   const isDraggablePending = (): boolean => {
+    if (!interactive()) return false;
     if (props.side !== 'bottom') return false;
-    if (props.card.owner !== localSeat) return false;
+    if (props.card.owner !== viewerSeat()) return false;
     if (isResolving()) return false;
-    return engineState.stagingOrder.includes(props.card.id as never);
+    return stagingOrder().includes(props.card.id);
   };
 
   const onDragStart = (e: DragEvent): void => {
@@ -50,7 +61,8 @@ export const BoardCard = (props: BoardCardProps) => {
 
   const isFaceDown = (): boolean => {
     if (props.card.revealed) return false;
-    if (props.card.owner !== localSeat) return true;
+    if (props.card.owner !== viewerSeat()) return true;
+    if (!interactive()) return phase() === 'RESOLVING';
     return ui.isFlipped;
   };
   const isPending = isFaceDown;

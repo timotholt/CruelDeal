@@ -13,7 +13,7 @@
  * can change without touching engine-coupled code.
  */
 
-import { For, Show, createMemo, onCleanup, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { PlayerHud } from '../../game/PlayerHud';
 import { Portal } from '../../ui/Portal';
@@ -29,7 +29,9 @@ import {
 } from '@/services/playgame/view';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { MatchEvent } from '@/services/playgame/engine/types/events';
 import type { CardDef as ManifestCardDef } from '@/services/playgame/engine/manifest/types';
+import { exportReplayBundle, replayMatch } from '@/services/playgame/engine/replay';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
@@ -41,21 +43,49 @@ import { LocationTile } from './LocationTile';
 import { setupDragDrop } from './useDragDrop';
 import { setupLaneMaps, shuffle } from './useLaneMaps';
 import { inspectTarget, closeInspect } from './inspector';
+import { ReplayDrawer } from './ReplayDrawer';
 
 interface PlayBoardProps {
   onExit?: () => void;
 }
 
 export const PlayBoard = (props: PlayBoardProps) => {
+  const isDev = import.meta.env.DEV;
   const pg = usePlayGame();
   const {
     engineState, setEngineState, dispatch, manifest, ui, setUi,
     engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
   } = pg;
   const { cardRefs, boardRef } = useVfx();
+  const [replayOpen, setReplayOpen] = createSignal(false);
+  const [replayEnabled, setReplayEnabled] = createSignal(false);
+  const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
+
+  const replayTimeline = createMemo(() => {
+    if (!isDev) return null;
+    return replayMatch({
+      seed: engineState.seed,
+      manifest,
+      events: engineState.log.map((entry) => entry.event as MatchEvent),
+    });
+  });
+  const replayFrame = createMemo(() => {
+    const timeline = replayTimeline();
+    if (!replayEnabled() || !timeline) return null;
+    return timeline.frames[replayFrameIndex()] ?? null;
+  });
+  const presentedState = createMemo<EngineMatchState>(() => replayFrame()?.state ?? engineState);
+  const boardInteractive = createMemo(() => !replayEnabled());
+
+  createEffect(() => {
+    const timeline = replayTimeline();
+    if (!timeline) return;
+    const maxIndex = Math.max(0, timeline.frames.length - 1);
+    if (replayFrameIndex() > maxIndex) setReplayFrameIndex(maxIndex);
+  });
 
   // ── Derived projections ─────────────────────────────────────────────────
-  const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(engineState, localSeat, manifest));
+  const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(presentedState(), localSeat, manifest));
   /**
    * Visible hand = engine hand MINUS cards still in the incoming buffer.
    * The draw-slide animation needs the new card to appear in the DOM only
@@ -63,18 +93,19 @@ export const PlayBoard = (props: PlayBoardProps) => {
    * card lands in its final hand slot before the slide animation runs.
    */
   const visibleHand = createMemo<ResolvedCard[]>(() => {
+    if (replayEnabled()) return hand();
     const incoming = new Set(ui.incoming.map((c) => c.id));
     return hand().filter((c) => !incoming.has(c.id));
   });
 
-  const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(engineState, i, localSeat, manifest);
-  const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(engineState, i, remoteSeat, manifest);
-  const laneLoc = (i: LaneIdx): ResolvedLocation => getLocation(engineState, i, manifest);
-  const bottomPower = (i: LaneIdx): number => getLanePower(engineState, i, localSeat, manifest);
-  const topPower = (i: LaneIdx): number => getLanePower(engineState, i, remoteSeat, manifest);
-  const bottomBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(engineState, i, localSeat, manifest);
-  const topBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(engineState, i, remoteSeat, manifest);
-  const localHasPriority = createMemo(() => engineState.priority === localSeat);
+  const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
+  const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
+  const laneLoc = (i: LaneIdx): ResolvedLocation => getLocation(presentedState(), i, manifest);
+  const bottomPower = (i: LaneIdx): number => getLanePower(presentedState(), i, localSeat, manifest);
+  const topPower = (i: LaneIdx): number => getLanePower(presentedState(), i, remoteSeat, manifest);
+  const bottomBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);
+  const topBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, remoteSeat, manifest);
+  const localHasPriority = createMemo(() => presentedState().priority === localSeat);
   const handScale = createMemo(() => {
     const n = visibleHand().length;
     if (n <= 4) return 1;
@@ -85,7 +116,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   // ── Undo (one-card) ──────────────────────────────────────────────────────
   const handleUndoPending = (): void => {
-    if (isResolving()) return;
+    if (!boardInteractive() || isResolving()) return;
     const lastStaged = [...engineState.stagingOrder]
       .reverse()
       .find((id) => engineState.cards[id]?.owner === localSeat);
@@ -167,6 +198,25 @@ export const PlayBoard = (props: PlayBoardProps) => {
     onCleanup(() => script?.cancel());
   });
 
+  const toggleReplayMode = (): void => {
+    if (!replayEnabled()) {
+      const timeline = replayTimeline();
+      if (timeline) setReplayFrameIndex(timeline.frames.length - 1);
+    }
+    setReplayEnabled((current) => !current);
+  };
+
+  const copyReplayJson = async (): Promise<void> => {
+    const json = JSON.stringify(
+      exportReplayBundle(engineState as EngineMatchState, manifest, {
+        localSeat,
+      }),
+      null,
+      2,
+    );
+    await navigator.clipboard.writeText(json);
+  };
+
   return (
     <>
       <div class="board" id="board" ref={boardEl}>
@@ -174,10 +224,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
         <div class="hud-top">
           <PlayerHud name={seatMeta[localSeat].name} side="left" hasPriority={localHasPriority()} />
           <div class="hud-turn">
-            TURN <b>{engineState.turn}</b>
+            TURN <b>{presentedState().turn}</b>
             <span class="hud-energy">
               {' \u00b7 '}
-              <b>{engineState.energy[localSeat]}</b>/<b>{engineState.maxEnergy[localSeat]}</b> {'\u26a1'}
+              <b>{presentedState().energy[localSeat]}</b>/<b>{presentedState().maxEnergy[localSeat]}</b> {'\u26a1'}
             </span>
           </div>
           <PlayerHud name={seatMeta[remoteSeat].name} side="right" hasPriority={!localHasPriority()} />
@@ -186,7 +236,17 @@ export const PlayBoard = (props: PlayBoardProps) => {
         <div class="board-game-area">
           <div class="row enemy-row">
             <For each={[0, 1, 2] as const}>
-              {(i) => <LaneSlots side="top" laneIdx={i} cards={topLane(i)} />}
+              {(i) => (
+                <LaneSlots
+                  side="top"
+                  laneIdx={i}
+                  cards={topLane(i)}
+                  interactive={boardInteractive()}
+                  viewerSeat={localSeat}
+                  phase={presentedState().phase}
+                  stagingOrder={presentedState().stagingOrder}
+                />
+              )}
             </For>
           </div>
 
@@ -207,23 +267,39 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
           <div class="row player-row">
             <For each={[0, 1, 2] as const}>
-              {(i) => <LaneSlots side="bottom" laneIdx={i} cards={bottomLane(i)} />}
+              {(i) => (
+                <LaneSlots
+                  side="bottom"
+                  laneIdx={i}
+                  cards={bottomLane(i)}
+                  interactive={boardInteractive()}
+                  viewerSeat={localSeat}
+                  phase={presentedState().phase}
+                  stagingOrder={presentedState().stagingOrder}
+                />
+              )}
             </For>
           </div>
         </div>
 
         <div class="hand" id="hand" style={{ '--hand-scale': handScale().toFixed(3) }}>
           <For each={visibleHand()}>
-            {(card) => <HandCard card={card} playable={card.cost <= engineState.energy[localSeat]} />}
+            {(card) => (
+              <HandCard
+                card={card}
+                playable={card.cost <= presentedState().energy[localSeat]}
+                interactive={boardInteractive()}
+              />
+            )}
           </For>
         </div>
 
         <div class="action-bar">
           <button
             class={`retreat-btn${ui.lockedResult ? ' result-locked' : ''}`}
-            disabled={isResolving()}
+            disabled={!boardInteractive() || isResolving()}
             onClick={() => {
-              if (isResolving()) return;
+              if (!boardInteractive() || isResolving()) return;
               props.onExit?.();
             }}
           >
@@ -234,16 +310,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
           <button
             class="energy-crystal"
             title="Tap to undo last played card"
-            disabled={isResolving()}
+            disabled={!boardInteractive() || isResolving()}
             onClick={handleUndoPending}
           >
-            <div class="crystal">{engineState.energy[localSeat]}</div>
+            <div class="crystal">{presentedState().energy[localSeat]}</div>
           </button>
           <button
             class="end-turn"
-            disabled={isResolving()}
+            disabled={!boardInteractive() || isResolving()}
             onClick={() => {
-              if (isResolving() || !script) return;
+              if (!boardInteractive() || isResolving() || !script) return;
               void script.run(resolveTurnFlow());
             }}
           >
@@ -267,6 +343,23 @@ export const PlayBoard = (props: PlayBoardProps) => {
         />
 
         <div class="toast-area" id="toastArea" ref={toastAreaEl} />
+
+        <Show when={isDev && replayTimeline()}>
+          {(timeline) => (
+            <ReplayDrawer
+              open={replayOpen()}
+              replayEnabled={replayEnabled()}
+              frameIndex={replayFrameIndex()}
+              frameCount={timeline().frames.length}
+              seed={engineState.seed}
+              selectedFrame={replayEnabled() ? replayFrame() : timeline().frames[timeline().frames.length - 1]}
+              onToggleOpen={() => setReplayOpen((open) => !open)}
+              onToggleReplay={toggleReplayMode}
+              onFrameChange={setReplayFrameIndex}
+              onCopyReplayJson={copyReplayJson}
+            />
+          )}
+        </Show>
       </div>
 
       <Portal>

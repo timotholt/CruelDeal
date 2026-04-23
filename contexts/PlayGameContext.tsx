@@ -22,6 +22,7 @@
 
 import {
   createContext,
+  onCleanup,
   useContext,
   type Accessor,
   type JSX,
@@ -36,12 +37,26 @@ import { resolve } from '@/services/playgame/engine/resolve';
 import { createRng, type Rng } from '@/services/playgame/engine/rng';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import { createInitialMatchState } from '@/services/playgame/engine/cli/initState';
+import { exportReplayBundle, replayMatch } from '@/services/playgame/engine/replay';
 import {
   type ResolvedCard,
   type UiState,
   resolveCard,
 } from '@/services/playgame/view';
 export type { UiState } from '@/services/playgame/view';
+
+declare global {
+  interface Window {
+    __snapDebug?: {
+      getLiveState: () => EngineMatchState;
+      getLiveLog: () => readonly import('@/services/playgame/engine/types/state').MatchLogEntry[];
+      getReplayBundle: () => ReturnType<typeof exportReplayBundle>;
+      getReplayTimeline: () => ReturnType<typeof replayMatch>;
+      getFrame: (index: number) => import('@/services/playgame/engine/replay').ReplayFrame | null;
+      copyReplayJson: () => Promise<string>;
+    };
+  }
+}
 
 // ── Store type (top-level readonly stripped for Solid mutability) ─────────────
 // Engine MatchState is deeply readonly by design.  Solid's store proxy is
@@ -286,6 +301,48 @@ export const PlayGameProvider = (props: {
       resetMatch,
     },
   };
+
+  if (typeof window !== 'undefined') {
+    window.__snapDebug = {
+      getLiveState: () => structuredClone(unwrap(engineState) as EngineMatchState),
+      getLiveLog: () => structuredClone((unwrap(engineState) as EngineMatchState).log),
+      getReplayBundle: () =>
+        exportReplayBundle(unwrap(engineState) as EngineMatchState, manifest, {
+          localSeat,
+        }),
+      getReplayTimeline: () => {
+        const live = unwrap(engineState) as EngineMatchState;
+        return replayMatch({
+          seed: live.seed,
+          manifest,
+          events: live.log.map((entry) => entry.event as MatchEvent),
+        });
+      },
+      getFrame: (index: number) => {
+        const live = unwrap(engineState) as EngineMatchState;
+        const replay = replayMatch({
+          seed: live.seed,
+          manifest,
+          events: live.log.map((entry) => entry.event as MatchEvent),
+        });
+        return replay.frames[index] ?? null;
+      },
+      copyReplayJson: async () => {
+        const json = JSON.stringify(
+          exportReplayBundle(unwrap(engineState) as EngineMatchState, manifest, {
+            localSeat,
+          }),
+          null,
+          2,
+        );
+        await navigator.clipboard.writeText(json);
+        return json;
+      },
+    };
+    onCleanup(() => {
+      delete window.__snapDebug;
+    });
+  }
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 };

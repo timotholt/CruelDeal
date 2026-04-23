@@ -37,6 +37,16 @@ export { revealCard, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluato
 // ---- CLI (headless match driver) -----------------------------------------
 export { createInitialMatchState } from './cli/initState';
 export { runMatch, type RunMatchOptions, type RunMatchResult } from './cli/runMatch';
+export {
+  replayMatch,
+  exportReplayBundle,
+  validateReplayBundle,
+  type ReplayBundle,
+  type ReplayFrame,
+  type ReplayResult,
+  type ReplayMatchOptions,
+  type ReplayValidationResult,
+} from './replay';
 
 // ---- Projections -----------------------------------------------------------
 export * as projections from './projections';

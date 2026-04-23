@@ -17,6 +17,7 @@ import { openInspect } from './inspector';
 interface HandCardProps {
   card: ResolvedCard;
   playable: boolean;
+  interactive?: boolean;
 }
 
 export const HandCard = (props: HandCardProps) => {
@@ -30,6 +31,10 @@ export const HandCard = (props: HandCardProps) => {
   };
 
   const onDragStart = (e: DragEvent): void => {
+    if (props.interactive === false) {
+      e.preventDefault();
+      return;
+    }
     dragState.id = props.card.id;
     (e.currentTarget as HTMLElement).classList.add('dragging');
     if (e.dataTransfer) {
@@ -65,7 +70,7 @@ export const HandCard = (props: HandCardProps) => {
         cursor: 'pointer',
         transition: 'opacity 0.5s ease, transform 0.15s, box-shadow 0.15s, border-color 0.15s',
       }}
-      draggable={true}
+      draggable={props.interactive !== false}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}

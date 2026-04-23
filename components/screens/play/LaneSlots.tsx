@@ -9,12 +9,18 @@
 
 import { For, Show } from 'solid-js';
 import type { ResolvedCard } from '@/services/playgame/view';
+import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
+import type { Seat } from '@/services/playgame/engine/types/ids';
 import { BoardCard } from './BoardCard';
 
 interface LaneSlotsProps {
   side: 'top' | 'bottom';
   laneIdx: number;
   cards: ResolvedCard[];
+  interactive?: boolean;
+  viewerSeat?: Seat;
+  phase?: EngineMatchState['phase'];
+  stagingOrder?: readonly string[];
 }
 
 export const LaneSlots = (props: LaneSlotsProps) => {
@@ -39,6 +45,10 @@ export const LaneSlots = (props: LaneSlotsProps) => {
                   card={c}
                   side={props.side}
                   laneIdx={props.laneIdx}
+                  interactive={props.interactive}
+                  viewerSeat={props.viewerSeat}
+                  phase={props.phase}
+                  stagingOrder={props.stagingOrder}
                 />
               )}
             </Show>
