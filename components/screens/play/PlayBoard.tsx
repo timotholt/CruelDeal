@@ -15,11 +15,11 @@
 
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
-import { PlayerHud } from '../../game/PlayerHud';
 import { Portal } from '../../ui/Portal';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import { getLanePowerBreakdown, type LanePowerBreakdown } from '@/services/playgame/engine/projections';
 import {
+  getCardsInZoneForSeat,
   type ResolvedCard,
   type ResolvedLocation,
   getHandForSeat,
@@ -29,6 +29,7 @@ import {
 } from '@/services/playgame/view';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { CardZone } from '@/services/playgame/engine/types/state';
 import type { MatchEvent } from '@/services/playgame/engine/types/events';
 import type { CardDef as ManifestCardDef } from '@/services/playgame/engine/manifest/types';
 import { exportReplayBundle, replayMatch } from '@/services/playgame/engine/replay';
@@ -44,6 +45,11 @@ import { setupDragDrop } from './useDragDrop';
 import { setupLaneMaps, shuffle } from './useLaneMaps';
 import { inspectTarget, closeInspect } from './inspector';
 import { ReplayDrawer } from './ReplayDrawer';
+import { EnergyBadge } from './EnergyBadge';
+import { HiddenHandIndicator } from './HiddenHandIndicator';
+import { PlayerPortraitMenu } from './PlayerPortraitMenu';
+import { PileViewer } from './PileViewer';
+import { TurnOrb } from './TurnOrb';
 
 interface PlayBoardProps {
   onExit?: () => void;
@@ -60,6 +66,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const [replayOpen, setReplayOpen] = createSignal(false);
   const [replayEnabled, setReplayEnabled] = createSignal(false);
   const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
+  const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
+  const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
 
   const replayTimeline = createMemo(() => {
     if (!isDev) return null;
@@ -113,6 +121,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
     if (n <= 6) return 0.82;
     return 0.74;
   });
+  const localDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DISCARD', manifest));
+  const localDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DESTROYED', manifest));
+  const localBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'BANISHED', manifest));
+  const remoteDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'DISCARD', manifest));
+  const remoteDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'DESTROYED', manifest));
+  const remoteBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'BANISHED', manifest));
+  const remoteHandSize = createMemo(() => presentedState().hand[remoteSeat].length);
+  const remoteDeckSize = createMemo(() => presentedState().deck[remoteSeat].length);
 
   // ── Undo (one-card) ──────────────────────────────────────────────────────
   const handleUndoPending = (): void => {
@@ -138,6 +154,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
   let deckEl: HTMLDivElement | undefined;
 
   onMount(() => {
+    const closeMenus = () => setOpenMenuSeat(null);
+    document.addEventListener('click', closeMenus);
+    onCleanup(() => document.removeEventListener('click', closeMenus));
+
     if (!boardEl || !toastAreaEl) return;
     boardEl.classList.add('ready');
 
@@ -206,6 +226,28 @@ export const PlayBoard = (props: PlayBoardProps) => {
     setReplayEnabled((current) => !current);
   };
 
+  const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
+    setOpenMenuSeat((current) => current === seat ? null : seat);
+  };
+
+  const handleOpenPile = (owner: 'P0' | 'P1', zone: CardZone): void => {
+    setOpenMenuSeat(null);
+    setOpenPile({ owner, zone });
+  };
+
+  const selectedPileCards = createMemo<readonly ResolvedCard[]>(() => {
+    const pile = openPile();
+    if (!pile) return [];
+    if (pile.owner === localSeat) {
+      if (pile.zone === 'DISCARD') return localDiscard();
+      if (pile.zone === 'DESTROYED') return localDestroyed();
+      return localBanished();
+    }
+    if (pile.zone === 'DISCARD') return remoteDiscard();
+    if (pile.zone === 'DESTROYED') return remoteDestroyed();
+    return remoteBanished();
+  });
+
   const copyReplayJson = async (): Promise<void> => {
     const json = JSON.stringify(
       exportReplayBundle(engineState as EngineMatchState, manifest, {
@@ -222,15 +264,51 @@ export const PlayBoard = (props: PlayBoardProps) => {
       <div class="board" id="board" ref={boardEl}>
         {/* TOP HUD */}
         <div class="hud-top">
-          <PlayerHud name={seatMeta[localSeat].name} side="left" hasPriority={localHasPriority()} />
-          <div class="hud-turn">
-            TURN <b>{presentedState().turn}</b>
-            <span class="hud-energy">
-              {' \u00b7 '}
-              <b>{presentedState().energy[localSeat]}</b>/<b>{presentedState().maxEnergy[localSeat]}</b> {'\u26a1'}
-            </span>
+          <div class="hud-top__side hud-top__side--left">
+            <PlayerPortraitMenu
+              owner={localSeat}
+              name={seatMeta[localSeat].name}
+              side="left"
+              hasPriority={localHasPriority()}
+              open={openMenuSeat() === localSeat}
+              counts={{
+                discard: localDiscard().length,
+                destroyed: localDestroyed().length,
+                banished: localBanished().length,
+              }}
+              onToggle={() => togglePlayerMenu(localSeat)}
+              onOpenPile={(zone) => handleOpenPile(localSeat, zone)}
+            />
           </div>
-          <PlayerHud name={seatMeta[remoteSeat].name} side="right" hasPriority={!localHasPriority()} />
+
+          <div class="hud-top__center">
+            <TurnOrb turn={presentedState().turn} />
+          </div>
+
+          <div class="hud-top__side hud-top__side--right">
+            <div class="opponent-cluster">
+              <HiddenHandIndicator count={remoteHandSize()} />
+              <div class="opponent-stat" title={`Deck ${remoteDeckSize()}`}>
+                <span class="opponent-stat__label">Deck</span>
+                <span class="opponent-stat__value">{remoteDeckSize()}</span>
+              </div>
+              <EnergyBadge value={presentedState().energy[remoteSeat]} title={`Opponent energy ${presentedState().energy[remoteSeat]}`} />
+              <PlayerPortraitMenu
+                owner={remoteSeat}
+                name={seatMeta[remoteSeat].name}
+                side="right"
+                hasPriority={!localHasPriority()}
+                open={openMenuSeat() === remoteSeat}
+                counts={{
+                  discard: remoteDiscard().length,
+                  destroyed: remoteDestroyed().length,
+                  banished: remoteBanished().length,
+                }}
+                onToggle={() => togglePlayerMenu(remoteSeat)}
+                onOpenPile={(zone) => handleOpenPile(remoteSeat, zone)}
+              />
+            </div>
+          </div>
         </div>
 
         <div class="board-game-area">
@@ -308,12 +386,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
               : 'RETREAT'}
           </button>
           <button
-            class="energy-crystal"
+            class="energy-button"
             title="Tap to undo last played card"
             disabled={!boardInteractive() || isResolving()}
             onClick={handleUndoPending}
           >
-            <div class="crystal">{presentedState().energy[localSeat]}</div>
+            <EnergyBadge value={presentedState().energy[localSeat]} title={`Your energy ${presentedState().energy[localSeat]}`} />
           </button>
           <button
             class="end-turn"
@@ -365,6 +443,19 @@ export const PlayBoard = (props: PlayBoardProps) => {
       <Portal>
         <Show when={inspectTarget()} keyed>
           {(t) => <ZoomInspector target={t} onClose={closeInspect} />}
+        </Show>
+      </Portal>
+
+      <Portal>
+        <Show when={openPile()}>
+          {(pile) => (
+            <PileViewer
+              ownerName={seatMeta[pile().owner].name}
+              zone={pile().zone}
+              cards={selectedPileCards()}
+              onClose={() => setOpenPile(null)}
+            />
+          )}
         </Show>
       </Portal>
     </>

@@ -9,7 +9,7 @@
  * way to project any MatchState snapshot into the UI.
  */
 
-import type { CostLogEntry, MatchResult, MatchState as EngineMatchState, PowerLogEntry } from './engine/types/state';
+import type { CardZone, CostLogEntry, MatchResult, MatchState as EngineMatchState, PowerLogEntry } from './engine/types/state';
 import type { CardId, LaneIdx, Owner, Seat } from './engine/types/ids';
 import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
 import type { CostModifierEntry, PowerModifierEntry } from './engine/projections';
@@ -227,6 +227,20 @@ export function getLanePower(
   manifest: Manifest,
 ): number {
   return getEngineLanePower(state, laneIdx, owner, manifest);
+}
+
+/** Cards in one owner-controlled zone, newest-first by log order fallback to insertion order. */
+export function getCardsInZoneForSeat(
+  state: EngineMatchState,
+  seat: Seat,
+  zone: CardZone,
+  manifest: Manifest,
+): ResolvedCard[] {
+  return Object.values(state.cards)
+    .filter((card) => card.owner === seat && card.zone === zone)
+    .map((card) => resolveCard(card.id, state, manifest))
+    .filter((card): card is ResolvedCard => card !== null)
+    .reverse();
 }
 
 // ── Card creation helpers ────────────────────────────────────────────────────
