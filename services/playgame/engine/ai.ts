@@ -25,6 +25,7 @@ import type { MatchState } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
+import { getCardCost } from './projections/cost';
 import { findCardDefs, findLanes } from './projections/query';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -145,8 +146,8 @@ export function planEnemyTurnFromHand(
 
   // Hand sorted by cost asc, tiebreak on card id.
   const hand = state.hand[owner].slice().sort((a, b) => {
-    const costA = manifest.cards[a.defId]?.cost ?? 0;
-    const costB = manifest.cards[b.defId]?.cost ?? 0;
+    const costA = getCardCost(state, a.id, manifest);
+    const costB = getCardCost(state, b.id, manifest);
     if (costA !== costB) return costA - costB;
     return a.id < b.id ? -1 : 1;
   });
@@ -161,9 +162,8 @@ export function planEnemyTurnFromHand(
   const cap = manifest.constants.laneCapacity;
 
   for (const card of hand) {
-    const def = manifest.cards[card.defId];
-    if (!def) continue;
-    if (def.cost > energy) continue;
+    const cost = getCardCost(state, card.id, manifest);
+    if (cost > energy) continue;
 
     const candidates: LaneIdx[] = [];
     for (let j = 0; j < 3; j++) {
@@ -176,7 +176,7 @@ export function planEnemyTurnFromHand(
     const lane = picker.fork(`lane:${card.id}`).pick(candidates);
 
     plays.push({ cardId: card.id, lane });
-    energy -= def.cost;
+    energy -= cost;
     laneFill[lane]++;
   }
 

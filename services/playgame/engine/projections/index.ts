@@ -6,7 +6,16 @@
  * See spec §5.
  */
 
-export { getCardPower, getLanePower } from './power';
+export { getCardPower, getCardPowerModifiers, getLanePower, getLanePowerBreakdown } from './power';
+export type {
+  PowerModifierEntry,
+  LaneCardContribution,
+  LanePowerAddEntry,
+  LanePowerMultiplierEntry,
+  LanePowerBreakdown,
+} from './power';
+export { getCardCost, getCardCostModifiers } from './cost';
+export type { CostModifierEntry } from './cost';
 export { getOnRevealMultiplier, isOnRevealDisabled } from './reveal';
 export { getPriority } from './priority';
 export type { PriorityResult } from './priority';

@@ -6,16 +6,16 @@
  */
 
 import type { CardDef } from './types';
-import sentinelJson from './cards/sentinel.json';
-import skyMarshalJson from './cards/sky-marshal.json';
-import sunBeaconJson from './cards/sun-beacon.json';
-import hexWitchJson from './cards/hex-witch.json';
-import pyroMonkJson from './cards/pyro-monk.json';
-import bladeRunnerJson from './cards/blade-runner.json';
-import iceLanceJson from './cards/ice-lance.json';
-import duneSapperJson from './cards/dune-sapper.json';
-import thornChoirJson from './cards/thorn-choir.json';
-import voidHoundJson from './cards/void-hound.json';
+import sentinelJson from './cards/sentinel/card.json';
+import skyMarshalJson from './cards/sky-marshal/card.json';
+import sunBeaconJson from './cards/sun-beacon/card.json';
+import hexWitchJson from './cards/hex-witch/card.json';
+import pyroMonkJson from './cards/pyro-monk/card.json';
+import bladeRunnerJson from './cards/blade-runner/card.json';
+import iceLanceJson from './cards/ice-lance/card.json';
+import duneSapperJson from './cards/dune-sapper/card.json';
+import thornChoirJson from './cards/thorn-choir/card.json';
+import voidHoundJson from './cards/void-hound/card.json';
 
 const CARD_JSONS = [
   sentinelJson,

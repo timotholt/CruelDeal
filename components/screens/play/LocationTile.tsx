@@ -6,13 +6,16 @@
  */
 
 import type { ResolvedLocation } from '@/services/playgame/view';
+import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
 import { openInspect } from './inspector';
 
 interface LocationTileProps {
   location: ResolvedLocation;
   laneIdx: number;
-  playerPower: number;
-  enemyPower: number;
+  bottomPower: number;
+  topPower: number;
+  bottomBreakdown: LanePowerBreakdown;
+  topBreakdown: LanePowerBreakdown;
 }
 
 export const LocationTile = (props: LocationTileProps) => {
@@ -22,8 +25,10 @@ export const LocationTile = (props: LocationTileProps) => {
       kind: 'location',
       location: props.location,
       laneIdx: props.laneIdx,
-      playerPower: props.playerPower,
-      enemyPower: props.enemyPower,
+      bottomPower: props.bottomPower,
+      topPower: props.topPower,
+      bottomBreakdown: props.bottomBreakdown,
+      topBreakdown: props.topBreakdown,
       element: e.currentTarget as HTMLElement,
     });
   };
@@ -34,10 +39,10 @@ export const LocationTile = (props: LocationTileProps) => {
       onClick={onClick}
       style={{ cursor: 'pointer' }}
     >
-      <div class="lane-score enemy-score">{props.enemyPower}</div>
+      <div class="lane-score enemy-score">{props.topPower}</div>
       <div class="loc-name">{props.location.revealed ? props.location.name : '???'}</div>
       <div class="loc-desc">{props.location.revealed ? props.location.desc : ''}</div>
-      <div class="lane-score player-score">{props.playerPower}</div>
+      <div class="lane-score player-score">{props.bottomPower}</div>
     </div>
   );
 };

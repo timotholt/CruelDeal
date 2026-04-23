@@ -3,7 +3,7 @@
  *
  * Runs under `npx tsx services/playgame/engine/manifest/manifest.test.ts`.
  * Validates that the manifest assembles correctly, has the expected
- * counts, and that all three locations reference a real map asset.
+ * counts, and that every location references a real map asset.
  */
 
 import { existsSync } from 'node:fs';
@@ -30,11 +30,22 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 // ---- Counts ---------------------------------------------------------------
 
 expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 10, '10 cards in manifest');
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 3, '3 locations in manifest');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 10, '10 locations in manifest');
 
-// ---- Locations are exactly the three launch maps --------------------------
+// ---- Locations are exactly the current map roster -------------------------
 
-const expectedLocIds = ['cathedral', 'jungle-trail', 'science-lab'];
+const expectedLocIds = [
+  'alien-starship',
+  'cathedral',
+  'cathedral-cloister',
+  'food-court',
+  'hackers-lair',
+  'icy-road',
+  'jungle-trail',
+  'lava-flow',
+  'science-lab',
+  'tropical-beach',
+];
 for (const id of expectedLocIds) {
   expectTrue(BOOTSTRAP_MANIFEST.locations[id] !== undefined, `location "${id}" is present`);
 }
@@ -76,6 +87,11 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
   expectTrue(first?.kind === 'ON_REVEAL_MULTIPLIER', 'Cathedral ongoing[0] is ON_REVEAL_MULTIPLIER');
 }
 {
+  const cloister = BOOTSTRAP_MANIFEST.locations['cathedral-cloister']!;
+  const first = cloister.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'BOOST_ONGOINGS', 'Cathedral Cloister ongoing[0] is BOOST_ONGOINGS');
+}
+{
   const sciLab = BOOTSTRAP_MANIFEST.locations['science-lab']!;
   const first = sciLab.abilities.ongoing?.[0];
   expectTrue(first?.kind === 'LANE_POWER_MULTIPLIER', 'Science Lab ongoing[0] is LANE_POWER_MULTIPLIER');
@@ -87,6 +103,11 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
   if (first?.kind === 'POWER_ADD') {
     expectTrue(first.delta.kind === 'COUNT', 'Jungle Trail delta is dynamic COUNT');
   }
+}
+{
+  const foodCourt = BOOTSTRAP_MANIFEST.locations['food-court']!;
+  const first = foodCourt.abilities.onReveal?.[0];
+  expectTrue(first?.kind === 'DRAW', 'Food Court onReveal[0] is DRAW');
 }
 
 // ---- Exit ------------------------------------------------------------------

@@ -52,7 +52,7 @@ const mkManifest = (cards: CardDef[]): Manifest => ({
 });
 
 const blankLane = (i: LaneIdx): LaneState => ({
-  idx: i, location: null, locationRevealed: false, cards: { PLAYER: [], OPP: [] },
+  idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] },
 });
 
 interface CardSpec {
@@ -72,8 +72,8 @@ let idCounter = 0;
 const buildState = (specs: CardSpec[]): MatchState => {
   idCounter = 0;
   const cards: Record<CardId, CardInstance> = {};
-  const hand: Record<Owner, CardInstance[]> = { PLAYER: [], OPP: [] };
-  const deck: Record<Owner, CardInstance[]> = { PLAYER: [], OPP: [] };
+  const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
+  const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
   const lanes: [LaneState, LaneState, LaneState] = [blankLane(0), blankLane(1), blankLane(2)];
   for (const s of specs) {
     const id = (s.id ?? `c${++idCounter}`) as CardId;
@@ -83,6 +83,9 @@ const buildState = (specs: CardSpec[]): MatchState => {
       lane: zone === 'LANE' ? s.lane : null, zone,
       revealed: s.revealed ?? (zone === 'LANE'),
       powerDelta: s.powerDelta ?? 0,
+      costDelta: s.costDelta ?? 0,
+      powerLog: [],
+      costLog: [],
       tags: s.tags ?? [],
       textOverride: null,
       counters: s.counters ?? {},
@@ -94,12 +97,13 @@ const buildState = (specs: CardSpec[]): MatchState => {
     else if (zone === 'DECK') deck[s.owner].push(inst);
   }
   return {
-    turn: 1, maxEnergy: { PLAYER: 1, OPP: 1 }, nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
-    phase: 'AWAITING_INTENT', seed: 'test', priority: 'PLAYER',
-    energy: { PLAYER: 1, OPP: 1 },
+    turn: 1, maxEnergy: { P0: 1, P1: 1 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
+    phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
+    energy: { P0: 1, P1: 1 },
     deck, hand, cards, lanes,
     pending: [], stagingOrder: [], pendingEffects: [], log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null }, result: null,
+    lastPlayedBy: { P0: null, P1: null }, result: null,
+    energyLog: { P0: [], P1: [] },
   };
 };
 
@@ -146,19 +150,19 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1), mkCard('mage', 3, 2)]);
   const state = buildState([
-    { id: 'h1', def: 'grunt', owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'h2', def: 'mage',  owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'l1', def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { id: 'e1', def: 'grunt', owner: 'OPP',    lane: 0 },
-    { id: 'd1', def: 'grunt', owner: 'PLAYER', lane: null, zone: 'DISCARD' },
+    { id: 'h1', def: 'grunt', owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'h2', def: 'mage',  owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'l1', def: 'grunt', owner: 'P0', lane: 0 },
+    { id: 'e1', def: 'grunt', owner: 'P1',    lane: 0 },
+    { id: 'd1', def: 'grunt', owner: 'P0', lane: null, zone: 'DISCARD' },
   ]);
 
   eq(findCards(state, manifest, { zone: 'HAND' }).length, 2, 'zone: HAND count');
   eq(findCards(state, manifest, { zone: 'LANE' }).length, 2, 'zone: LANE count');
   eq(findCards(state, manifest, { zone: ['HAND', 'LANE'] }).length, 4, 'zone: array');
-  eq(findCards(state, manifest, { owner: 'PLAYER' }).length, 4, 'owner: PLAYER');
-  eq(findCards(state, manifest, { owner: 'OPP' }).length, 1, 'owner: OPP');
-  eq(findCards(state, manifest, { zone: 'LANE', owner: 'PLAYER' }).length, 1, 'combined zone+owner');
+  eq(findCards(state, manifest, { owner: 'P0' }).length, 4, 'owner: P0');
+  eq(findCards(state, manifest, { owner: 'P1' }).length, 1, 'owner: P1');
+  eq(findCards(state, manifest, { zone: 'LANE', owner: 'P0' }).length, 1, 'combined zone+owner');
   eq(findCards(state, manifest, { lane: 0 }).length, 2, 'lane: exact');
   eq(findCards(state, manifest, { lane: 'any' }).length, 2, 'lane: any (cards on board)');
   eq(findCards(state, manifest, { lane: 'none' }).length, 3, 'lane: none (off-board)');
@@ -175,9 +179,9 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
     mkCard('big',   8, 5, { tribes: ['beast', 'mage'] }),
   ]);
   const state = buildState([
-    { id: 'c1', def: 'cheap', owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'c2', def: 'mid',   owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'c3', def: 'big',   owner: 'PLAYER', lane: null, zone: 'HAND' },
+    { id: 'c1', def: 'cheap', owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'c2', def: 'mid',   owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'c3', def: 'big',   owner: 'P0', lane: null, zone: 'HAND' },
   ]);
 
   eq(findCards(state, manifest, { cost: 1 }).length, 1, 'cost: eq');
@@ -208,9 +212,9 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
   });
   const manifest = mkManifest([vanilla, revealer, ongoing]);
   const state = buildState([
-    { id: 'v', def: 'vanilla',  owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'r', def: 'revealer', owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'o', def: 'ongoing',  owner: 'PLAYER', lane: null, zone: 'HAND' },
+    { id: 'v', def: 'vanilla',  owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'r', def: 'revealer', owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'o', def: 'ongoing',  owner: 'P0', lane: null, zone: 'HAND' },
   ]);
 
   eq(findCards(state, manifest, { hasOnReveal: true }).length, 1, 'hasOnReveal: true');
@@ -227,9 +231,9 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1)]);
   const state = buildState([
-    { id: 'a', def: 'grunt', owner: 'PLAYER', lane: 0, revealed: true,  tags: [{ kind: 'MOVED_THIS_TURN' }], counters: { charges: 3 } },
-    { id: 'b', def: 'grunt', owner: 'PLAYER', lane: 0, revealed: false, tags: [] },
-    { id: 'c', def: 'grunt', owner: 'PLAYER', lane: 0, revealed: true,  tags: [{ kind: 'SHURI_DOUBLED' }] },
+    { id: 'a', def: 'grunt', owner: 'P0', lane: 0, revealed: true,  tags: [{ kind: 'MOVED_THIS_TURN' }], counters: { charges: 3 } },
+    { id: 'b', def: 'grunt', owner: 'P0', lane: 0, revealed: false, tags: [] },
+    { id: 'c', def: 'grunt', owner: 'P0', lane: 0, revealed: true,  tags: [{ kind: 'SHURI_DOUBLED' }] },
   ]);
 
   eq(findCards(state, manifest, { revealed: true }).length, 2, 'revealed: true');
@@ -249,9 +253,9 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1)]);
   const state = buildState([
-    { id: 'deck1', def: 'grunt', owner: 'PLAYER', lane: null, zone: 'HAND', spawnSource: { kind: 'DECK_CREATION' } },
-    { id: 'made1', def: 'grunt', owner: 'PLAYER', lane: null, zone: 'HAND', spawnSource: { kind: 'CARD_CREATED', sourceCardId: 'src1' as CardId } },
-    { id: 'made2', def: 'grunt', owner: 'PLAYER', lane: null, zone: 'HAND', spawnSource: { kind: 'CARD_CREATED', sourceCardId: 'src2' as CardId } },
+    { id: 'deck1', def: 'grunt', owner: 'P0', lane: null, zone: 'HAND', spawnSource: { kind: 'DECK_CREATION' } },
+    { id: 'made1', def: 'grunt', owner: 'P0', lane: null, zone: 'HAND', spawnSource: { kind: 'CARD_CREATED', sourceCardId: 'src1' as CardId } },
+    { id: 'made2', def: 'grunt', owner: 'P0', lane: null, zone: 'HAND', spawnSource: { kind: 'CARD_CREATED', sourceCardId: 'src2' as CardId } },
   ]);
 
   eq(findCards(state, manifest, { fromDeck: true }).length, 1, 'fromDeck: true');
@@ -271,9 +275,9 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
     mkCard('big',   8, 5, { tribes: ['beast'] }),
   ]);
   const state = buildState([
-    { id: 'c1', def: 'cheap', owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'c2', def: 'mid',   owner: 'PLAYER', lane: null, zone: 'HAND' },
-    { id: 'c3', def: 'big',   owner: 'PLAYER', lane: null, zone: 'HAND' },
+    { id: 'c1', def: 'cheap', owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'c2', def: 'mid',   owner: 'P0', lane: null, zone: 'HAND' },
+    { id: 'c3', def: 'big',   owner: 'P0', lane: null, zone: 'HAND' },
   ]);
 
   // AND: cheap AND beast
@@ -317,30 +321,30 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1)]);
-  // Lane 0: empty. Lane 1: 4 PLAYER cards (full). Lane 2: 2 OPP cards.
+  // Lane 0: empty. Lane 1: 4 P0 cards (full). Lane 2: 2 P1 cards.
   const state = buildState([
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
-    { def: 'grunt', owner: 'OPP',    lane: 2 },
-    { def: 'grunt', owner: 'OPP',    lane: 2 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
+    { def: 'grunt', owner: 'P1',    lane: 2 },
+    { def: 'grunt', owner: 'P1',    lane: 2 },
   ]);
 
   eq(findLanes(state, manifest, {}), [0, 1, 2], 'Lane: empty filter returns all');
   eq(findLanes(state, manifest, { hasCapacity: true }), [0, 1, 2], 'Lane: hasCapacity=true (any side has room)');
-  eq(findLanes(state, manifest, { hasCapacity: 'PLAYER' }), [0, 2], 'Lane: hasCapacity for PLAYER');
-  eq(findLanes(state, manifest, { hasCapacity: 'OPP' }), [0, 1, 2], 'Lane: hasCapacity for OPP');
-  eq(findLanes(state, manifest, { isFull: 'PLAYER' }), [1], 'Lane: isFull for PLAYER');
+  eq(findLanes(state, manifest, { hasCapacity: 'P0' }), [0, 2], 'Lane: hasCapacity for P0');
+  eq(findLanes(state, manifest, { hasCapacity: 'P1' }), [0, 1, 2], 'Lane: hasCapacity for P1');
+  eq(findLanes(state, manifest, { isFull: 'P0' }), [1], 'Lane: isFull for P0');
   eq(findLanes(state, manifest, { isEmpty: true }), [0], 'Lane: isEmpty (globally)');
-  eq(findLanes(state, manifest, { isEmpty: 'PLAYER' }), [0, 2], 'Lane: isEmpty for PLAYER');
+  eq(findLanes(state, manifest, { isEmpty: 'P0' }), [0, 2], 'Lane: isEmpty for P0');
   eq(findLanes(state, manifest, { cardCount: 0 }), [0], 'Lane: cardCount 0');
   eq(findLanes(state, manifest, { cardCount: { gte: 2 } }), [1, 2], 'Lane: cardCount gte');
-  eq(findLanes(state, manifest, { cardCountFor: { owner: 'PLAYER', eq: 4 } }), [1], 'Lane: cardCountFor');
-  eq(findLanes(state, manifest, { containsCard: { owner: 'OPP' } }), [2], 'Lane: containsCard');
+  eq(findLanes(state, manifest, { cardCountFor: { owner: 'P0', eq: 4 } }), [1], 'Lane: cardCountFor');
+  eq(findLanes(state, manifest, { containsCard: { owner: 'P1' } }), [2], 'Lane: containsCard');
   // Combinators
-  eq(findLanes(state, manifest, { and: [{ hasCapacity: 'PLAYER' }, { not: { isEmpty: true } }] }), [2], 'Lane: and+not');
-  eq(findLanes(state, manifest, { or: [{ isEmpty: true }, { isFull: 'PLAYER' }] }), [0, 1], 'Lane: or');
+  eq(findLanes(state, manifest, { and: [{ hasCapacity: 'P0' }, { not: { isEmpty: true } }] }), [2], 'Lane: and+not');
+  eq(findLanes(state, manifest, { or: [{ isEmpty: true }, { isFull: 'P0' }] }), [0, 1], 'Lane: or');
 
   // findLane
   truthy(findLane(state, manifest, { isEmpty: true }) === 0, 'Lane: findLane first match');
@@ -354,15 +358,15 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([mkCard('g', 2, 1)]);
   const state = buildState([
-    { id: 'a', def: 'g', owner: 'PLAYER', lane: 0 },
-    { id: 'b', def: 'g', owner: 'PLAYER', lane: 0 },
-    { id: 'c', def: 'g', owner: 'OPP',    lane: 0 },
+    { id: 'a', def: 'g', owner: 'P0', lane: 0 },
+    { id: 'b', def: 'g', owner: 'P0', lane: 0 },
+    { id: 'c', def: 'g', owner: 'P1',    lane: 0 },
   ]);
 
-  eq(countCards(state, manifest, { owner: 'PLAYER' }), 2, 'countCards');
-  truthy(hasCards(state, manifest, { owner: 'OPP' }), 'hasCards true');
-  truthy(!hasCards(state, manifest, { owner: 'OPP', cost: 5 }), 'hasCards false');
-  truthy(findCard(state, manifest, { owner: 'PLAYER' })?.id === 'a', 'findCard first');
+  eq(countCards(state, manifest, { owner: 'P0' }), 2, 'countCards');
+  truthy(hasCards(state, manifest, { owner: 'P1' }), 'hasCards true');
+  truthy(!hasCards(state, manifest, { owner: 'P1', cost: 5 }), 'hasCards false');
+  truthy(findCard(state, manifest, { owner: 'P0' })?.id === 'a', 'findCard first');
   truthy(findCard(state, manifest, { cost: 99 }) === null, 'findCard null');
 }
 

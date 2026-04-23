@@ -224,7 +224,7 @@ function fireOnAnyCardPlayedHere(
   const events: MatchEvent[] = [];
   let s = state;
   const laneState = s.lanes[lane];
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     for (const id of laneState.cards[owner]) {
       if (id === cardId) continue;
       const other = s.cards[id];
@@ -319,6 +319,33 @@ export function evalEffect(
         if (delta === 0) continue;
         const e: MatchEvent = {
           type: 'CARD_POWER_CHANGED',
+          cardId: id,
+          delta,
+          cause: ctx.source,
+        };
+        events.push(e);
+        s = apply(s, e, manifest);
+      }
+      return { events, state: s };
+    }
+
+    case 'ADJUST_COST': {
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const perTargetCtx: EffectCtx = {
+          ...liveCtx,
+          state: s,
+          self: id,
+          selfKind: 'card',
+          selfLane: s.cards[id]?.lane ?? null,
+          selfOwner: s.cards[id]?.owner ?? null,
+        };
+        const delta = evalNum(effect.delta, perTargetCtx);
+        if (delta === 0) continue;
+        const e: MatchEvent = {
+          type: 'CARD_COST_CHANGED',
           cardId: id,
           delta,
           cause: ctx.source,
@@ -695,7 +722,7 @@ export function evalEffect(
       if (!owner) return { events: [], state };
       const delta = Math.trunc(evalNum(effect.delta, liveCtx));
       if (delta === 0) return { events: [], state };
-      const e: MatchEvent = { type: 'ENERGY_CHANGED', owner, delta, reason: 'EFFECT' };
+      const e: MatchEvent = { type: 'ENERGY_CHANGED', owner, delta, reason: 'EFFECT', cause: ctx.source };
       return { events: [e], state: apply(state, e, manifest) };
     }
 

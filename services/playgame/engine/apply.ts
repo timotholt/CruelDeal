@@ -17,11 +17,14 @@ import type { MatchEvent } from './types/events';
 import type {
   CardInstance,
   CardTag,
+  CostLogEntry,
+  EnergyLogEntry,
   LaneState,
   LocationInstance,
   MatchLogEntry,
   MatchState,
   PendingEffect,
+  PowerLogEntry,
   SpawnSource,
 } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
@@ -71,11 +74,24 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
       };
     }
 
-    case 'ENERGY_CHANGED':
+    case 'ENERGY_CHANGED': {
+      const after = state.energy[event.owner] + event.delta;
+      const eEntry: EnergyLogEntry = {
+        turn: state.turn,
+        delta: event.delta,
+        after,
+        reason: event.reason,
+        ...(event.cause ? { cause: event.cause } : {}),
+      };
       return {
         ...state,
-        energy: { ...state.energy, [event.owner]: state.energy[event.owner] + event.delta },
+        energy: { ...state.energy, [event.owner]: after },
+        energyLog: {
+          ...state.energyLog,
+          [event.owner]: [...state.energyLog[event.owner], eEntry],
+        },
       };
+    }
 
     case 'MAX_ENERGY_CHANGED':
       return {
@@ -107,8 +123,32 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
     case 'CARD_POWER_CHANGED': {
       const card = state.cards[event.cardId];
       if (!card) return state;
+      const newDelta = card.powerDelta + event.delta;
+      const pEntry: PowerLogEntry = {
+        turn: state.turn,
+        delta: event.delta,
+        runningDelta: newDelta,
+        cause: event.cause,
+      };
       return patchCard(state, event.cardId, {
-        powerDelta: card.powerDelta + event.delta,
+        powerDelta: newDelta,
+        powerLog: [...card.powerLog, pEntry],
+      });
+    }
+
+    case 'CARD_COST_CHANGED': {
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      const newDelta = card.costDelta + event.delta;
+      const cEntry: CostLogEntry = {
+        turn: state.turn,
+        delta: event.delta,
+        runningDelta: newDelta,
+        cause: event.cause,
+      };
+      return patchCard(state, event.cardId, {
+        costDelta: newDelta,
+        costLog: [...card.costLog, cEntry],
       });
     }
 
@@ -410,6 +450,9 @@ function mintOrUpdate(
     zone,
     revealed: zone === 'LANE' ? false : false,
     powerDelta: 0,
+    costDelta: 0,
+    powerLog: [],
+    costLog: [],
     tags: [],
     textOverride: null,
     counters: {},

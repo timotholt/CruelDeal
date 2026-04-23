@@ -18,12 +18,12 @@ import { useVfx } from '../../game/VfxHost';
 import { PlayerHud } from '../../game/PlayerHud';
 import { Portal } from '../../ui/Portal';
 import { usePlayGame } from '@/contexts/PlayGameContext';
+import { getLanePowerBreakdown, type LanePowerBreakdown } from '@/services/playgame/engine/projections';
 import {
   type ResolvedCard,
   type ResolvedLocation,
-  getPlayerHand,
-  getPlayerLaneCards,
-  getEnemyLaneCards,
+  getHandForSeat,
+  getLaneCardsForSeat,
   getLocation,
   getLanePower,
 } from '@/services/playgame/view';
@@ -48,11 +48,14 @@ interface PlayBoardProps {
 
 export const PlayBoard = (props: PlayBoardProps) => {
   const pg = usePlayGame();
-  const { engineState, setEngineState, dispatch, manifest, ui, setUi, engineRng, isResolving, actions } = pg;
+  const {
+    engineState, setEngineState, dispatch, manifest, ui, setUi,
+    engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
+  } = pg;
   const { cardRefs, boardRef } = useVfx();
 
   // ── Derived projections ─────────────────────────────────────────────────
-  const hand = createMemo<ResolvedCard[]>(() => getPlayerHand(engineState, manifest));
+  const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(engineState, localSeat, manifest));
   /**
    * Visible hand = engine hand MINUS cards still in the incoming buffer.
    * The draw-slide animation needs the new card to appear in the DOM only
@@ -64,12 +67,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return hand().filter((c) => !incoming.has(c.id));
   });
 
-  const playerLane = (i: LaneIdx): ResolvedCard[] => getPlayerLaneCards(engineState, i, manifest);
-  const enemyLane = (i: LaneIdx): ResolvedCard[] => getEnemyLaneCards(engineState, i, manifest);
+  const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(engineState, i, localSeat, manifest);
+  const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(engineState, i, remoteSeat, manifest);
   const laneLoc = (i: LaneIdx): ResolvedLocation => getLocation(engineState, i, manifest);
-  const playerPower = (i: LaneIdx): number => getLanePower(engineState, i, 'PLAYER', manifest);
-  const enemyPower = (i: LaneIdx): number => getLanePower(engineState, i, 'OPP', manifest);
-  const playerHasPriority = createMemo(() => engineState.priority === 'PLAYER');
+  const bottomPower = (i: LaneIdx): number => getLanePower(engineState, i, localSeat, manifest);
+  const topPower = (i: LaneIdx): number => getLanePower(engineState, i, remoteSeat, manifest);
+  const bottomBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(engineState, i, localSeat, manifest);
+  const topBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(engineState, i, remoteSeat, manifest);
+  const localHasPriority = createMemo(() => engineState.priority === localSeat);
   const handScale = createMemo(() => {
     const n = visibleHand().length;
     if (n <= 4) return 1;
@@ -83,7 +88,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     if (isResolving()) return;
     const lastStaged = [...engineState.stagingOrder]
       .reverse()
-      .find((id) => engineState.cards[id]?.owner === 'PLAYER');
+      .find((id) => engineState.cards[id]?.owner === localSeat);
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
@@ -119,9 +124,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
     const unbindDnd = setupDragDrop({
       boardEl,
+      localSeat,
       engineState,
       isResolving,
-      playerHand: visibleHand,
+      localHand: visibleHand,
       cardRefs,
       stageCardInLane: actions.stageCardInLane,
       undoPendingCard: actions.undoPendingCard,
@@ -146,6 +152,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
       ui,
       setUi,
       manifest,
+      localSeat,
+      remoteSeat,
       engineRng,
       boardEl,
       boardWrap: boardWrapEl,
@@ -164,21 +172,21 @@ export const PlayBoard = (props: PlayBoardProps) => {
       <div class="board" id="board" ref={boardEl}>
         {/* TOP HUD */}
         <div class="hud-top">
-          <PlayerHud name="PLAYER" side="left" hasPriority={playerHasPriority()} />
+          <PlayerHud name={seatMeta[localSeat].name} side="left" hasPriority={localHasPriority()} />
           <div class="hud-turn">
             TURN <b>{engineState.turn}</b>
             <span class="hud-energy">
               {' \u00b7 '}
-              <b>{engineState.energy['PLAYER']}</b>/<b>{engineState.maxEnergy['PLAYER']}</b> {'\u26a1'}
+              <b>{engineState.energy[localSeat]}</b>/<b>{engineState.maxEnergy[localSeat]}</b> {'\u26a1'}
             </span>
           </div>
-          <PlayerHud name="OPPONENT" side="right" hasPriority={!playerHasPriority()} />
+          <PlayerHud name={seatMeta[remoteSeat].name} side="right" hasPriority={!localHasPriority()} />
         </div>
 
         <div class="board-game-area">
           <div class="row enemy-row">
             <For each={[0, 1, 2] as const}>
-              {(i) => <LaneSlots side="enemy" laneIdx={i} cards={enemyLane(i)} />}
+              {(i) => <LaneSlots side="top" laneIdx={i} cards={topLane(i)} />}
             </For>
           </div>
 
@@ -188,8 +196,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
                 <LocationTile
                   location={laneLoc(i)}
                   laneIdx={i}
-                  playerPower={playerPower(i)}
-                  enemyPower={enemyPower(i)}
+                  bottomPower={bottomPower(i)}
+                  topPower={topPower(i)}
+                  bottomBreakdown={bottomBreakdown(i)}
+                  topBreakdown={topBreakdown(i)}
                 />
               )}
             </For>
@@ -197,14 +207,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
           <div class="row player-row">
             <For each={[0, 1, 2] as const}>
-              {(i) => <LaneSlots side="player" laneIdx={i} cards={playerLane(i)} />}
+              {(i) => <LaneSlots side="bottom" laneIdx={i} cards={bottomLane(i)} />}
             </For>
           </div>
         </div>
 
         <div class="hand" id="hand" style={{ '--hand-scale': handScale().toFixed(3) }}>
           <For each={visibleHand()}>
-            {(card) => <HandCard card={card} playable={card.cost <= engineState.energy['PLAYER']} />}
+            {(card) => <HandCard card={card} playable={card.cost <= engineState.energy[localSeat]} />}
           </For>
         </div>
 
@@ -218,7 +228,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
             }}
           >
             {ui.lockedResult
-              ? `EXIT (${ui.lockedResult.winner === 'PLAYER' ? 'WIN' : ui.lockedResult.winner === 'OPP' ? 'LOSS' : 'DRAW'})`
+              ? `EXIT (${ui.lockedResult.winner === localSeat ? 'WIN' : ui.lockedResult.winner === remoteSeat ? 'LOSS' : 'DRAW'})`
               : 'RETREAT'}
           </button>
           <button
@@ -227,7 +237,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
             disabled={isResolving()}
             onClick={handleUndoPending}
           >
-            <div class="crystal">{engineState.energy['PLAYER']}</div>
+            <div class="crystal">{engineState.energy[localSeat]}</div>
           </button>
           <button
             class="end-turn"

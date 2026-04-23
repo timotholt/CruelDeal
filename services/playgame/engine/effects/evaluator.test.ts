@@ -11,7 +11,7 @@
 
 import { createRng } from '../rng';
 import { evalEffect, revealCard, MAX_REVEAL_RECURSION } from './evaluator';
-import type { CardDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
   LaneState,
@@ -44,11 +44,14 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-// mkLoc intentionally omitted — no location-authored OR effects in the
-// Step 6 test surface. Re-introduce when we add location-sourced OR tests.
+const mkLoc = (defId: string, extra: Partial<LocationDef> = {}): LocationDef => ({
+  defId, version: 1, name: defId, rarity: 1, abilities: {},
+  cosmetic: { displayName: defId, description: '', art: { map: { path: '' } } },
+  ...extra,
+});
 
 /** Compile a cards array into a valid Manifest shell. */
-function mkManifest(cards: CardDef[]): Manifest {
+function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -56,7 +59,7 @@ function mkManifest(cards: CardDef[]): Manifest {
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12 },
     cards: byId(cards),
-    locations: {},
+    locations: byId(locations),
     disabled: { cards: [], locations: [] },
   };
 }
@@ -65,7 +68,7 @@ let idCounter = 0;
 const nextCardId = (): CardId => `c${++idCounter}` as CardId;
 
 function blankLane(i: LaneIdx): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { PLAYER: [], OPP: [] } };
+  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
 }
 
 interface CardSpec {
@@ -84,8 +87,8 @@ function buildState(
 ): MatchState {
   idCounter = 0;
   const cards: Record<CardId, CardInstance> = {};
-  const hand: Record<Owner, CardInstance[]> = { PLAYER: [], OPP: [] };
-  const deck: Record<Owner, CardInstance[]> = { PLAYER: [], OPP: [] };
+  const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
+  const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
   const lanes: [LaneState, LaneState, LaneState] = [blankLane(0), blankLane(1), blankLane(2)];
 
   for (const spec of cardSpecs) {
@@ -100,6 +103,9 @@ function buildState(
       zone,
       revealed: spec.revealed ?? (zone === 'LANE'),
       powerDelta: spec.powerDelta ?? 0,
+      costDelta: 0,
+      powerLog: [],
+      costLog: [],
       tags: [],
       textOverride: null,
       counters: {},
@@ -126,12 +132,12 @@ function buildState(
   }
   return {
     turn: opts.turn ?? 3,
-    maxEnergy: { PLAYER: 3, OPP: 3 },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
+    maxEnergy: { P0: 3, P1: 3 },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'test-seed',
-    priority: 'PLAYER',
-    energy: { PLAYER: 0, OPP: 0 },
+    priority: 'P0',
+    energy: { P0: 0, P1: 0 },
     deck,
     hand,
     cards,
@@ -140,8 +146,9 @@ function buildState(
     stagingOrder: [],
     pendingEffects: [],
     log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
+    lastPlayedBy: { P0: null, P1: null },
     result: null,
+    energyLog: { P0: [], P1: [] },
   };
 }
 
@@ -175,9 +182,9 @@ function buildState(
   const manifest = mkManifest([hexWitch, grunt]);
 
   const s0 = buildState([
-    { def: 'hex-witch', owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt',     owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',     owner: 'PLAYER', lane: 0 },
+    { def: 'hex-witch', owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt',     owner: 'P0', lane: 0 },
+    { def: 'grunt',     owner: 'P0', lane: 0 },
   ]);
   const rng = createRng('hex-test');
   const res = revealCard(s0, 'c1' as CardId, manifest, rng);
@@ -225,8 +232,8 @@ function buildState(
   });
   const manifest = mkManifest([pyro, cosmo]);
   const s0 = buildState([
-    { def: 'cosmo', owner: 'OPP',    lane: 0 },
-    { def: 'pyro',  owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'cosmo', owner: 'P1',    lane: 0 },
+    { def: 'pyro',  owner: 'P0', lane: 0, revealed: false },
   ]);
   const rng = createRng('cosmo-test');
   const res = revealCard(s0, 'c2' as CardId, manifest, rng);
@@ -261,8 +268,8 @@ function buildState(
   });
   const manifest = mkManifest([pyro, wong]);
   const s0 = buildState([
-    { def: 'wong', owner: 'PLAYER', lane: 0 },
-    { def: 'pyro', owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'wong', owner: 'P0', lane: 0 },
+    { def: 'pyro', owner: 'P0', lane: 0, revealed: false },
   ]);
   const res = revealCard(s0, 'c2' as CardId, manifest, createRng('wong-test'));
   eq(
@@ -295,14 +302,14 @@ function buildState(
     },
   });
   const manifest = mkManifest([sapper]);
-  const s0 = buildState([{ def: 'sapper', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const s0 = buildState([{ def: 'sapper', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('sapper'));
   const moved = res.events.find(e => e.type === 'CARD_MOVED') as { fromLane: LaneIdx; toLane: LaneIdx };
   truthy(!!moved, 'MOVE: CARD_MOVED emitted');
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
   truthy(moved.toLane !== 0 && (moved.toLane === 1 || moved.toLane === 2), 'MOVE: toLane is another lane');
   eq(res.state.cards['c1' as CardId]?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
-  eq(res.state.lanes[0].cards.PLAYER.length, 0, 'MOVE: card removed from old lane');
+  eq(res.state.lanes[0].cards.P0.length, 0, 'MOVE: card removed from old lane');
 }
 
 // -- DESTROY + DISCARD ------------------------------------------------------
@@ -319,15 +326,15 @@ function buildState(
   const grunt = mkCard('grunt', 2, 1);
   const manifest = mkManifest([gun, grunt]);
   const s0 = buildState([
-    { def: 'gun',   owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt', owner: 'OPP',    lane: 0 },
-    { def: 'grunt', owner: 'OPP',    lane: 0 },
+    { def: 'gun',   owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt', owner: 'P1',    lane: 0 },
+    { def: 'grunt', owner: 'P1',    lane: 0 },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('destroy'));
   const destroyed = res.events.filter(e => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 2, 'DESTROY: both opp grunts destroyed');
   eq(res.state.cards['c2' as CardId]?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
-  eq(res.state.lanes[0].cards.OPP.length, 0, 'opp lane cleared');
+  eq(res.state.lanes[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
 // -- SPAWN_AND_REVEAL: nested cascade with spawnSource propagation ---------
@@ -355,7 +362,7 @@ function buildState(
     },
   });
   const manifest = mkManifest([grunt, tinkerer]);
-  const s0 = buildState([{ def: 'tinkerer', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const s0 = buildState([{ def: 'tinkerer', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('spawn'));
 
   const added = res.events.find(e => e.type === 'CARD_ADDED_TO_LANE') as
@@ -393,7 +400,7 @@ function buildState(
   const manifest = mkManifest([recur]);
   // Use a big lane capacity to let it actually recurse.
   manifest.constants = { ...manifest.constants, laneCapacity: 100 };
-  const s0 = buildState([{ def: 'recur', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const s0 = buildState([{ def: 'recur', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('recur'));
   const limitHits = res.events.filter(e => e.type === 'RECURSION_LIMIT_HIT');
   truthy(limitHits.length >= 1, `Recursion cap: RECURSION_LIMIT_HIT emitted (${limitHits.length} times)`);
@@ -413,16 +420,16 @@ function buildState(
   const grunt = mkCard('grunt', 2, 1);
   const manifest = mkManifest([helper, grunt]);
   const s0 = buildState([
-    { def: 'helper', owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt',  owner: 'PLAYER', lane: null, zone: 'DECK' },
-    { def: 'grunt',  owner: 'PLAYER', lane: null, zone: 'DECK' },
-    { def: 'grunt',  owner: 'PLAYER', lane: null, zone: 'DECK' },
+    { def: 'helper', owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt',  owner: 'P0', lane: null, zone: 'DECK' },
+    { def: 'grunt',  owner: 'P0', lane: null, zone: 'DECK' },
+    { def: 'grunt',  owner: 'P0', lane: null, zone: 'DECK' },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('draw'));
   const draws = res.events.filter(e => e.type === 'CARD_DRAWN');
   eq(draws.length, 2, 'DRAW: two CARD_DRAWN emitted');
-  eq(res.state.hand.PLAYER.length, 2, 'DRAW: 2 cards in hand');
-  eq(res.state.deck.PLAYER.length, 1, 'DRAW: 1 card remaining in deck');
+  eq(res.state.hand.P0.length, 2, 'DRAW: 2 cards in hand');
+  eq(res.state.deck.P0.length, 1, 'DRAW: 1 card remaining in deck');
 }
 
 // -- SEQUENCE: events chain in order, each sees prior state ----------------
@@ -440,7 +447,7 @@ function buildState(
     },
   });
   const manifest = mkManifest([seqCard]);
-  const s0 = buildState([{ def: 'seq', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const s0 = buildState([{ def: 'seq', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('seq'));
   eq(
     res.events.filter(e => e.type === 'CARD_POWER_CHANGED').length,
@@ -475,14 +482,14 @@ function buildState(
   const manifest = mkManifest([condCard, grunt]);
 
   // Case A: alone → else branch, +1.
-  const sAlone = buildState([{ def: 'cond', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const sAlone = buildState([{ def: 'cond', owner: 'P0', lane: 0, revealed: false }]);
   const rA = revealCard(sAlone, 'c1' as CardId, manifest, createRng('cond-a'));
   eq(getCardPower(rA.state, 'c1' as CardId, manifest), 1, 'CONDITIONAL: alone → +1');
 
   // Case B: with friend → then branch, +5.
   const sFriend = buildState([
-    { def: 'cond',  owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
+    { def: 'cond',  owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
   const rB = revealCard(sFriend, 'c1' as CardId, manifest, createRng('cond-b'));
   eq(getCardPower(rB.state, 'c1' as CardId, manifest), 5, 'CONDITIONAL: with friend → +5');
@@ -503,10 +510,10 @@ function buildState(
   const grunt = mkCard('grunt', 2, 1);
   const manifest = mkManifest([fe, grunt]);
   const s0 = buildState([
-    { def: 'fe',    owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
+    { def: 'fe',    owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('fe'));
   // 3 friendlies → 3 ADD_POWERs → +3 on self. (FOREACH's inner ADD_POWER
@@ -538,10 +545,10 @@ function buildState(
   const grunt = mkCard('grunt', 3, 2);
   const manifest = mkManifest([hex, grunt]);
   const build = () => buildState([
-    { def: 'hex',   owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
+    { def: 'hex',   owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
   const rA = revealCard(build(), 'c1' as CardId, manifest, createRng('pure'));
   const rB = revealCard(build(), 'c1' as CardId, manifest, createRng('pure'));
@@ -557,8 +564,8 @@ function buildState(
   const grunt = mkCard('grunt', 3, 2);
   const manifest = mkManifest([grunt]);
   const s0 = buildState([
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
   const rng = createRng('direct');
   const effect: EffectExpr = {
@@ -572,7 +579,7 @@ function buildState(
     self: 'c1' as CardId,
     selfKind: 'card' as const,
     selfLane: 0 as LaneIdx,
-    selfOwner: 'PLAYER' as Owner,
+    selfOwner: 'P0' as Owner,
     rng,
     source: { sourceId: 'c1' as CardId, effectKind: 'ON_REVEAL' as const },
     depth: 0,
@@ -602,18 +609,18 @@ function buildState(
   });
   const manifest = mkManifest([psy]);
   const s0 = buildState([
-    { def: 'psy', owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'psy', owner: 'P0', lane: 0, revealed: false },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('energy-dsl'));
 
-  // Next-turn bonus for PLAYER: +1
-  eq(res.state.nextTurnEnergyBonus['PLAYER'], 1, 'ADJUST_NEXT_TURN_ENERGY_BONUS: PLAYER +1');
-  // Max energy for PLAYER: baseline (3) + 1
-  eq(res.state.maxEnergy['PLAYER'], 4, 'ADJUST_MAX_ENERGY: PLAYER +1');
-  // Current energy for PLAYER: baseline (0) + 2 = 2
-  eq(res.state.energy['PLAYER'], 2, 'ADJUST_ENERGY: PLAYER +2');
-  // OPP energy: baseline (0) - 1 = -1 (engine allows negative; caller may clamp)
-  eq(res.state.energy['OPP'], -1, 'ADJUST_ENERGY OPP_OWNER: OPP -1');
+  // Next-turn bonus for P0: +1
+  eq(res.state.nextTurnEnergyBonus['P0'], 1, 'ADJUST_NEXT_TURN_ENERGY_BONUS: P0 +1');
+  // Max energy for P0: baseline (3) + 1
+  eq(res.state.maxEnergy['P0'], 4, 'ADJUST_MAX_ENERGY: P0 +1');
+  // Current energy for P0: baseline (0) + 2 = 2
+  eq(res.state.energy['P0'], 2, 'ADJUST_ENERGY: P0 +2');
+  // P1 energy: baseline (0) - 1 = -1 (engine allows negative; caller may clamp)
+  eq(res.state.energy['P1'], -1, 'ADJUST_ENERGY OPP_OWNER: P1 -1');
 
   // Verify event shapes
   const energyEvents = res.events.filter(
@@ -636,7 +643,7 @@ function buildState(
   });
   const manifest = mkManifest([noop]);
   const s0 = buildState([
-    { def: 'noop', owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'noop', owner: 'P0', lane: 0, revealed: false },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('noop'));
   eq(
@@ -644,6 +651,50 @@ function buildState(
     0,
     'ADJUST_ENERGY delta=0 emits no event',
   );
+}
+
+// -- Cost primitive: ADJUST_COST persists and logs on the target card ------
+
+{
+  const iceBox = mkLoc('iceBox', {
+    abilities: {
+      onReveal: [{
+        kind: 'ADJUST_COST',
+        target: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'HAND_OF', owner: 'P0' },
+        },
+        delta: { kind: 'LIT', n: 1 },
+      }],
+    },
+  });
+  const grunt = mkCard('grunt', 3, 2);
+  const manifest = mkManifest([grunt], [iceBox]);
+  const s0 = buildState(
+    [
+      { def: 'grunt', owner: 'P0', lane: null, zone: 'HAND', revealed: false },
+      { def: 'grunt', owner: 'P0', lane: null, zone: 'HAND', revealed: false },
+    ],
+    { 0: 'iceBox' },
+  );
+  const effect = manifest.locations.iceBox?.abilities.onReveal?.[0] as EffectExpr;
+  const ctx = {
+    state: s0,
+    manifest,
+    self: 'loc0' as LocationId,
+    selfKind: 'location' as const,
+    selfLane: 0 as LaneIdx,
+    selfOwner: null,
+    rng: createRng('ice-box'),
+    source: { sourceId: 'loc0' as LocationId, effectKind: 'LOCATION' as const },
+    depth: 0,
+  };
+  const res = evalEffect(s0, effect, ctx, manifest);
+  eq(res.events.filter((e) => e.type === 'CARD_COST_CHANGED').length, 1, 'ADJUST_COST emits one CARD_COST_CHANGED');
+  const hitId = (res.events.find((e) => e.type === 'CARD_COST_CHANGED') as { cardId: CardId }).cardId;
+  eq(res.state.cards[hitId]?.costDelta, 1, 'ADJUST_COST persists costDelta on the target');
+  eq(res.state.cards[hitId]?.costLog.length, 1, 'ADJUST_COST appends one cost log entry');
 }
 
 // -- onMove trigger: Void Hound gains +2 when moved -----------------------
@@ -668,7 +719,7 @@ function buildState(
     },
   });
   const manifest = mkManifest([teleport]);
-  const s0 = buildState([{ def: 'teleport', owner: 'PLAYER', lane: 0, revealed: false }]);
+  const s0 = buildState([{ def: 'teleport', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('move-trigger'));
   eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'onMove: base(1) + moveBuff(2) = 3');
   const moves = res.events.filter((e) => e.type === 'CARD_MOVED');
@@ -696,8 +747,8 @@ function buildState(
   const enemy = mkCard('enemy', 6, 1);
   const manifest = mkManifest([bomber, enemy]);
   const s0 = buildState([
-    { def: 'bomber', owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'enemy',  owner: 'OPP',    lane: 0, revealed: true },
+    { def: 'bomber', owner: 'P0', lane: 0, revealed: false },
+    { def: 'enemy',  owner: 'P1',    lane: 0, revealed: true },
   ]);
   const res = revealCard(s0, 'c1' as CardId, manifest, createRng('bomber'));
   eq(getCardPower(res.state, 'c2' as CardId, manifest), 1, 'onDestroyed: enemy 6 - 5 = 1');
@@ -722,8 +773,8 @@ function buildState(
   const grunt = mkCard('grunt', 3, 1);
   const manifest = mkManifest([watcher, grunt]);
   const s0 = buildState([
-    { def: 'watcher', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'grunt',   owner: 'PLAYER', lane: 0, revealed: false },
+    { def: 'watcher', owner: 'P0', lane: 0, revealed: true },
+    { def: 'grunt',   owner: 'P0', lane: 0, revealed: false },
   ]);
   const res = revealCard(s0, 'c2' as CardId, manifest, createRng('on-play'));
   // Watcher starts at 2, grunt reveals, +1 to watcher → 3.
@@ -755,7 +806,7 @@ function buildState(
   const s0 = buildState([
     // Lane 0: empty
     // Lane 1: sapper (will move to lane 0 or 2)
-    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    { def: 'sapper', owner: 'P0', lane: 1, revealed: false },
     // Lane 2: empty
   ]);
   
@@ -787,12 +838,12 @@ function buildState(
   
   const s0 = buildState([
     // Lane 0: 4 fillers (full)
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
     // Lane 1: sapper (will move to lane 2, only option)
-    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    { def: 'sapper', owner: 'P0', lane: 1, revealed: false },
     // Lane 2: empty
   ]);
   
@@ -823,17 +874,17 @@ function buildState(
   
   const s0 = buildState([
     // Lane 0: 4 fillers (full)
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 0, revealed: true },
     // Lane 1: sapper (no valid moves)
-    { def: 'sapper', owner: 'PLAYER', lane: 1, revealed: false },
+    { def: 'sapper', owner: 'P0', lane: 1, revealed: false },
     // Lane 2: 4 fillers (full)
-    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
-    { def: 'filler', owner: 'PLAYER', lane: 2, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 2, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 2, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 2, revealed: true },
+    { def: 'filler', owner: 'P0', lane: 2, revealed: true },
   ]);
   
   const res = revealCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-3'));

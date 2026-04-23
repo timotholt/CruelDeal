@@ -29,8 +29,8 @@ export const SENTINEL: CardDef = {
   abilities: {
     ongoing: [
       {
-        kind: 'POWER_ADD',
-        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+        kind: 'LANE_POWER_ADD',
+        laneScope: { laneOf: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
         delta: { kind: 'LIT', n: 1 },
         stack: 'ADDITIVE',
       },

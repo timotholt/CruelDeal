@@ -10,7 +10,7 @@
  */
 
 import type { CardId, LaneIdx, LocationId, Owner } from './ids';
-import type { CardTag, LaneTag, PendingEffect, SpawnSource } from './state';
+import type { CardTag, EnergyReason, LaneTag, PendingEffect, SpawnSource } from './state';
 import type { EffectRef, TextOverride } from './ability';
 
 /**
@@ -22,11 +22,7 @@ export type DiscardReason =
   | 'HAND_OVERFLOW'   // drew past handCap (rare — engine normally refuses)
   | 'SURRENDER';      // end-of-match cleanup
 
-export type EnergyReason =
-  | 'TURN_START'
-  | 'CARD_PLAYED'
-  | 'CARD_UNSTAGED'
-  | 'EFFECT';
+export type { EnergyReason };
 
 export type PriorityReason =
   | 'MORE_LANES'
@@ -38,7 +34,7 @@ export type MatchEvent =
   // --- Staging / play ---
   | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneIdx; owner: Owner; cost: number }
   | { type: 'CARD_UNSTAGED'; intentId: string; cardId: CardId }
-  | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason }
+  | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause?: EffectRef }
   /** Mutates `state.maxEnergy[owner]` by `delta`. Fired at TURN_STARTED for the
    *  per-turn +1 ramp and by effects that permanently widen the ceiling. */
   | { type: 'MAX_ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason }
@@ -55,6 +51,7 @@ export type MatchEvent =
 
   // --- Card mutations ---
   | { type: 'CARD_POWER_CHANGED'; cardId: CardId; delta: number; cause: EffectRef }
+  | { type: 'CARD_COST_CHANGED'; cardId: CardId; delta: number; cause: EffectRef }
   | { type: 'CARD_DESTROYED'; cardId: CardId; cause: EffectRef }   // board → DESTROYED pile
   | { type: 'CARD_DISCARDED'; cardId: CardId; reason: DiscardReason; cause: EffectRef }  // hand → DISCARD pile
   | { type: 'CARD_BANISHED'; cardId: CardId; cause: EffectRef }    // anywhere → BANISHED (inaccessible)

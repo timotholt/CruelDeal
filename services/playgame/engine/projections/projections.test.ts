@@ -19,7 +19,10 @@ import type {
 } from '../types/state';
 import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import {
+  getCardCost,
   getCardPower,
+  getCardPowerModifiers,
+  getLanePowerBreakdown,
   getLanePower,
   getOnRevealMultiplier,
   isOnRevealDisabled,
@@ -77,13 +80,25 @@ const CARDS: Record<string, CardDef> = {
   // Plain vanilla.
   grunt: mkCard('grunt', 3, 2),
 
-  // Ongoing: POWER_ADD same-lane self-owner +1 (Sentinel-like, includes self).
+  // Ongoing: LANE_POWER_ADD same-lane self-owner +1 (Sentinel-like lane bonus).
   sentinel: mkCard('sentinel', 5, 3, {
     abilities: {
       ongoing: [{
-        kind: 'POWER_ADD',
-        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+        kind: 'LANE_POWER_ADD',
+        laneScope: { laneOf: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
         delta: { kind: 'LIT', n: 1 },
+        stack: 'ADDITIVE',
+      }],
+    },
+  }),
+
+  // Ongoing: COST_ADD same-lane self-owner -1 (cost reducer aura).
+  quartermaster: mkCard('quartermaster', 2, 3, {
+    abilities: {
+      ongoing: [{
+        kind: 'COST_ADD',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+        delta: { kind: 'LIT', n: -1 },
         stack: 'ADDITIVE',
       }],
     },
@@ -258,6 +273,9 @@ function buildState(
       zone: 'LANE',
       revealed: spec.revealed ?? true,
       powerDelta: 0,
+      costDelta: 0,
+      powerLog: [],
+      costLog: [],
       tags: spec.tags ?? [],
       textOverride: null,
       counters: {},
@@ -283,22 +301,23 @@ function buildState(
   }
   return {
     turn: opts.turn ?? 3,
-    maxEnergy: { PLAYER: 3, OPP: 3 },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
+    maxEnergy: { P0: 3, P1: 3 },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'test-seed',
-    priority: 'PLAYER',
-    energy: { PLAYER: 0, OPP: 0 },
-    deck: { PLAYER: [], OPP: [] },
-    hand: { PLAYER: [], OPP: [] },
+    priority: 'P0',
+    energy: { P0: 0, P1: 0 },
+    deck: { P0: [], P1: [] },
+    hand: { P0: [], P1: [] },
     cards,
     lanes: lanesCards,
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
     log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
+    lastPlayedBy: { P0: null, P1: null },
     result: null,
+    energyLog: { P0: [], P1: [] },
   };
 }
 
@@ -307,7 +326,7 @@ function blankLane(i: LaneIdx): LaneState {
     idx: i,
     location: null,
     locationRevealed: false,
-    cards: { PLAYER: [], OPP: [] },
+    cards: { P0: [], P1: [] },
   };
 }
 
@@ -322,69 +341,103 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 // -- getCardPower basic ------------------------------------------------------
 
 {
-  const s = buildState([{ def: 'grunt', owner: 'PLAYER', lane: 0 }]);
-  eq(getCardPower(s, firstCard(s, 'PLAYER', 0), MANIFEST), 3, 'vanilla card reports base power');
+  const s = buildState([{ def: 'grunt', owner: 'P0', lane: 0 }]);
+  eq(getCardPower(s, firstCard(s, 'P0', 0), MANIFEST), 3, 'vanilla card reports base power');
 }
 
-// -- Sentinel buffs its own lane (including self) ---------------------------
+// -- getCardCost applies live COST_ADD ongoings -----------------------------
 
 {
   const s = buildState([
-    { def: 'sentinel', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',    owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',    owner: 'PLAYER', lane: 0 },
+    { def: 'quartermaster', owner: 'P0', lane: 0 },
+    { def: 'grunt',         owner: 'P0', lane: 0 },
+    { def: 'grunt',         owner: 'P1',    lane: 0 },
   ]);
-  const cards = s.lanes[0].cards.PLAYER;
-  eq(getCardPower(s, cards[0], MANIFEST), 6, 'sentinel +1 self (5->6)');
-  eq(getCardPower(s, cards[1], MANIFEST), 4, 'sentinel +1 grunt (3->4)');
-  eq(getCardPower(s, cards[2], MANIFEST), 4, 'sentinel +1 grunt (3->4)');
-  eq(getLanePower(s, 0, 'PLAYER', MANIFEST), 14, 'lane power = 6+4+4 = 14');
+  const mine = s.lanes[0].cards.P0;
+  const opp = s.lanes[0].cards.P1[0];
+  eq(getCardCost(s, mine[0], MANIFEST), 2, 'quartermaster reduces own cost 3->2');
+  eq(getCardCost(s, mine[1], MANIFEST), 1, 'quartermaster reduces friendly grunt cost 2->1');
+  eq(getCardCost(s, opp, MANIFEST), 2, 'quartermaster does not reduce opponent cost');
+}
+
+// -- Sentinel adds +1 to its lane total, not to cards -----------------------
+
+{
+  const s = buildState([
+    { def: 'sentinel', owner: 'P0', lane: 0 },
+    { def: 'grunt',    owner: 'P0', lane: 0 },
+    { def: 'grunt',    owner: 'P0', lane: 0 },
+  ]);
+  const cards = s.lanes[0].cards.P0;
+  eq(getCardPower(s, cards[0], MANIFEST), 5, 'sentinel card power stays 5');
+  eq(getCardPower(s, cards[1], MANIFEST), 3, 'friendly grunt card power stays 3');
+  eq(getCardPower(s, cards[2], MANIFEST), 3, 'second friendly grunt card power stays 3');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), 12, 'lane power = (5+3+3) + 1 = 12');
+  const breakdown = getLanePowerBreakdown(s, 0, 'P0', MANIFEST);
+  eq(breakdown.cardSubtotal, 11, 'breakdown: card subtotal excludes lane-only bonus');
+  eq(breakdown.laneAdditions.length, 1, 'breakdown: sentinel contributes one lane addition');
+  eq(breakdown.laneAdditions[0].delta, 1, 'breakdown: sentinel lane addition is +1');
+  eq(breakdown.total, 12, 'breakdown: total matches lane power');
 }
 
 // -- Sky Marshal excludes self ----------------------------------------------
 
 {
   const s = buildState([
-    { def: 'skyMarshal', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',      owner: 'PLAYER', lane: 0 },
+    { def: 'skyMarshal', owner: 'P0', lane: 0 },
+    { def: 'grunt',      owner: 'P0', lane: 0 },
   ]);
-  const cards = s.lanes[0].cards.PLAYER;
+  const cards = s.lanes[0].cards.P0;
   eq(getCardPower(s, cards[0], MANIFEST), 8, 'sky marshal does NOT buff self');
   eq(getCardPower(s, cards[1], MANIFEST), 4, 'sky marshal buffs friendly (3->4)');
+}
+
+{
+  const s = buildState([
+    { def: 'skyMarshal', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+  ]);
+  const skyMarshal = s.lanes[0].cards.P0[0];
+  const grunt = s.lanes[0].cards.P0[1];
+  const mods = getCardPowerModifiers(s, grunt, MANIFEST);
+  eq(mods.length, 1, 'getCardPowerModifiers: one active modifier on friendly grunt');
+  eq(mods[0].delta, 1, 'getCardPowerModifiers: Sky Marshal contributes +1');
+  eq(mods[0].sourceId, skyMarshal, 'getCardPowerModifiers: sourceId points at Sky Marshal');
 }
 
 // -- Ongoings ignore unrevealed / wrong-zone sources ------------------------
 
 {
   const s = buildState([
-    { def: 'sentinel', owner: 'PLAYER', lane: 0, revealed: false },
-    { def: 'grunt',    owner: 'PLAYER', lane: 0 },
+    { def: 'sentinel', owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt',    owner: 'P0', lane: 0 },
   ]);
-  const grunt = s.lanes[0].cards.PLAYER[1];
+  const grunt = s.lanes[0].cards.P0[1];
   eq(getCardPower(s, grunt, MANIFEST), 3, 'face-down sentinel does NOT emit ongoings');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), 3, 'face-down sentinel does NOT add lane power');
 }
 
 // -- Iron Man doubles lane total (self-owner only) --------------------------
 
 {
   const s = buildState([
-    { def: 'grunt',   owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',   owner: 'PLAYER', lane: 0 },
-    { def: 'ironMan', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',   owner: 'OPP',    lane: 0 },
+    { def: 'grunt',   owner: 'P0', lane: 0 },
+    { def: 'grunt',   owner: 'P0', lane: 0 },
+    { def: 'ironMan', owner: 'P0', lane: 0 },
+    { def: 'grunt',   owner: 'P1',    lane: 0 },
   ]);
-  eq(getLanePower(s, 0, 'PLAYER', MANIFEST), (3 + 3 + 0) * 2, 'Iron Man: (3+3+0)*2 = 12');
-  eq(getLanePower(s, 0, 'OPP',    MANIFEST), 3, 'Iron Man does NOT affect opponent side');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), (3 + 3 + 0) * 2, 'Iron Man: (3+3+0)*2 = 12');
+  eq(getLanePower(s, 0, 'P1',    MANIFEST), 3, 'Iron Man does NOT affect opponent side');
 }
 
 // -- Shang-Chi sanity: getCardPower ignores lane mult -----------------------
 
 {
   const s = buildState([
-    { def: 'grunt',   owner: 'PLAYER', lane: 0 },
-    { def: 'ironMan', owner: 'PLAYER', lane: 0 },
+    { def: 'grunt',   owner: 'P0', lane: 0 },
+    { def: 'ironMan', owner: 'P0', lane: 0 },
   ]);
-  const grunt = s.lanes[0].cards.PLAYER[0];
+  const grunt = s.lanes[0].cards.P0[0];
   eq(getCardPower(s, grunt, MANIFEST), 3, 'per-card power ignores Iron Man lane mult (Shang-Chi check)');
 }
 
@@ -392,12 +445,12 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 
 {
   const s = buildState([
-    { def: 'wong',  owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'OPP',    lane: 0 },
+    { def: 'wong',  owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P1',    lane: 0 },
   ]);
-  const myGrunt  = s.lanes[0].cards.PLAYER[1];
-  const oppGrunt = s.lanes[0].cards.OPP[0];
+  const myGrunt  = s.lanes[0].cards.P0[1];
+  const oppGrunt = s.lanes[0].cards.P1[0];
   eq(getOnRevealMultiplier(s, myGrunt,  MANIFEST), 2, 'Wong gives friendlies ×2 OR');
   eq(getOnRevealMultiplier(s, oppGrunt, MANIFEST), 1, 'Wong does NOT buff opponent OR');
 }
@@ -406,24 +459,29 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 
 {
   const s = buildState(
-    [{ def: 'grunt', owner: 'PLAYER', lane: 1 }, { def: 'grunt', owner: 'OPP', lane: 1 }],
+    [{ def: 'grunt', owner: 'P0', lane: 1 }, { def: 'grunt', owner: 'P1', lane: 1 }],
     { 1: { def: 'cathedral' } },
   );
-  const p = s.lanes[1].cards.PLAYER[0];
-  const o = s.lanes[1].cards.OPP[0];
-  eq(getOnRevealMultiplier(s, p, MANIFEST), 2, 'Cathedral ×2 OR for PLAYER');
-  eq(getOnRevealMultiplier(s, o, MANIFEST), 2, 'Cathedral ×2 OR for OPP');
+  const p = s.lanes[1].cards.P0[0];
+  const o = s.lanes[1].cards.P1[0];
+  eq(getOnRevealMultiplier(s, p, MANIFEST), 2, 'Cathedral ×2 OR for P0');
+  eq(getOnRevealMultiplier(s, o, MANIFEST), 2, 'Cathedral ×2 OR for P1');
 }
 
 // -- Science Lab doubles BOTH sides' lane power -----------------------------
 
 {
   const s = buildState(
-    [{ def: 'grunt', owner: 'PLAYER', lane: 2 }, { def: 'grunt', owner: 'OPP', lane: 2 }],
+    [{ def: 'grunt', owner: 'P0', lane: 2 }, { def: 'grunt', owner: 'P1', lane: 2 }],
     { 2: { def: 'scienceLab' } },
   );
-  eq(getLanePower(s, 2, 'PLAYER', MANIFEST), 6, 'Science Lab ×2 for PLAYER (3*2)');
-  eq(getLanePower(s, 2, 'OPP',    MANIFEST), 6, 'Science Lab ×2 for OPP (3*2)');
+  eq(getLanePower(s, 2, 'P0', MANIFEST), 6, 'Science Lab ×2 for P0 (3*2)');
+  eq(getLanePower(s, 2, 'P1',    MANIFEST), 6, 'Science Lab ×2 for P1 (3*2)');
+  const breakdown = getLanePowerBreakdown(s, 2, 'P0', MANIFEST);
+  eq(breakdown.cardSubtotal, 3, 'breakdown: science lab card subtotal is raw card sum');
+  eq(breakdown.multipliers.length, 1, 'breakdown: science lab contributes one multiplier');
+  eq(breakdown.multipliers[0].factor, 2, 'breakdown: science lab multiplier is x2');
+  eq(breakdown.total, 6, 'breakdown: science lab total matches multiplied lane power');
 }
 
 // -- Jungle Trail: dynamic COUNT delta --------------------------------------
@@ -433,15 +491,15 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // Opp has 1 card → +0.
   const s = buildState(
     [
-      { def: 'grunt', owner: 'PLAYER', lane: 0 },
-      { def: 'grunt', owner: 'PLAYER', lane: 0 },
-      { def: 'grunt', owner: 'PLAYER', lane: 0 },
-      { def: 'grunt', owner: 'OPP',    lane: 0 },
+      { def: 'grunt', owner: 'P0', lane: 0 },
+      { def: 'grunt', owner: 'P0', lane: 0 },
+      { def: 'grunt', owner: 'P0', lane: 0 },
+      { def: 'grunt', owner: 'P1',    lane: 0 },
     ],
     { 0: { def: 'jungleTrail' } },
   );
-  const p0 = s.lanes[0].cards.PLAYER[0];
-  const o0 = s.lanes[0].cards.OPP[0];
+  const p0 = s.lanes[0].cards.P0[0];
+  const o0 = s.lanes[0].cards.P1[0];
   eq(getCardPower(s, p0, MANIFEST), 3 + 2, 'Jungle Trail: player card +2 (3 friendlies, -1 self)');
   eq(getCardPower(s, o0, MANIFEST), 3 + 0, 'Jungle Trail: lone opp card +0');
 }
@@ -450,13 +508,13 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 
 {
   const s = buildState([
-    { def: 'grunt',     owner: 'PLAYER', lane: 0 },
-    { def: 'grunt',     owner: 'PLAYER', lane: 0 },
-    { def: 'ironMan',   owner: 'PLAYER', lane: 0 },
-    { def: 'onslaught', owner: 'PLAYER', lane: 0 },
+    { def: 'grunt',     owner: 'P0', lane: 0 },
+    { def: 'grunt',     owner: 'P0', lane: 0 },
+    { def: 'ironMan',   owner: 'P0', lane: 0 },
+    { def: 'onslaught', owner: 'P0', lane: 0 },
   ]);
   // Base per-card power at lane: 3 + 3 + 0 + 8 = 14. Iron Man factor 2 × agg 2 = 4. Total = 56.
-  eq(getLanePower(s, 0, 'PLAYER', MANIFEST), 14 * 4, 'Iron Man + Onslaught ⇒ lane ×4 (spec §13)');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), 14 * 4, 'Iron Man + Onslaught ⇒ lane ×4 (spec §13)');
 }
 
 // -- Onslaught excludeSelf: Onslaught does NOT boost itself, OR chain -------
@@ -467,12 +525,12 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // (not a boost target) so Rule 1 prevents mutual amplification too.
   // Iron Man with 2 Onslaughts → agg = 1 + 1 + 1 = 3 → ×6.
   const s = buildState([
-    { def: 'grunt',     owner: 'PLAYER', lane: 0 },
-    { def: 'ironMan',   owner: 'PLAYER', lane: 0 },
-    { def: 'onslaught', owner: 'PLAYER', lane: 0 },
-    { def: 'onslaught', owner: 'PLAYER', lane: 0 },
+    { def: 'grunt',     owner: 'P0', lane: 0 },
+    { def: 'ironMan',   owner: 'P0', lane: 0 },
+    { def: 'onslaught', owner: 'P0', lane: 0 },
+    { def: 'onslaught', owner: 'P0', lane: 0 },
   ]);
-  eq(getLanePower(s, 0, 'PLAYER', MANIFEST), (3 + 0 + 8 + 8) * 6, 'Iron Man + 2 Onslaughts ⇒ ×6');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), (3 + 0 + 8 + 8) * 6, 'Iron Man + 2 Onslaughts ⇒ ×6');
 }
 
 // -- Citadel + Wong + Panther math (spec §13 row 3) -------------------------
@@ -482,12 +540,12 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // For a card at Citadel's lane with Wong present, OR mult = 4.
   const s = buildState(
     [
-      { def: 'wong',  owner: 'PLAYER', lane: 0 },
-      { def: 'grunt', owner: 'PLAYER', lane: 0 },
+      { def: 'wong',  owner: 'P0', lane: 0 },
+      { def: 'grunt', owner: 'P0', lane: 0 },
     ],
     { 0: { def: 'citadel' } },
   );
-  const grunt = s.lanes[0].cards.PLAYER[1];
+  const grunt = s.lanes[0].cards.P0[1];
   eq(getOnRevealMultiplier(s, grunt, MANIFEST), 4, 'Citadel × Wong ⇒ OR multiplier = 4');
 }
 
@@ -498,7 +556,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // amplify. And since there are no card ongoings to boost, the world is
   // indistinguishable from an empty lane.
   const s = buildState([], { 1: { def: 'citadel' } });
-  eq(getLanePower(s, 1, 'PLAYER', MANIFEST), 0, 'Citadel alone ⇒ lane power 0 (no self-boost)');
+  eq(getLanePower(s, 1, 'P0', MANIFEST), 0, 'Citadel alone ⇒ lane power 0 (no self-boost)');
 }
 
 // -- Rule 1: Onslaught + Citadel stack additively (NOT multiplicatively) ---
@@ -508,29 +566,29 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // If they compounded, we'd see agg 4 → ×8.
   const s = buildState(
     [
-      { def: 'grunt',     owner: 'PLAYER', lane: 0 },
-      { def: 'ironMan',   owner: 'PLAYER', lane: 0 },
-      { def: 'onslaught', owner: 'PLAYER', lane: 0 },
+      { def: 'grunt',     owner: 'P0', lane: 0 },
+      { def: 'ironMan',   owner: 'P0', lane: 0 },
+      { def: 'onslaught', owner: 'P0', lane: 0 },
     ],
     { 0: { def: 'citadel' } },
   );
-  eq(getLanePower(s, 0, 'PLAYER', MANIFEST), (3 + 0 + 8) * 6, 'Iron Man + Onslaught + Citadel ⇒ ×6 (Rule 1)');
+  eq(getLanePower(s, 0, 'P0', MANIFEST), (3 + 0 + 8) * 6, 'Iron Man + Onslaught + Citadel ⇒ ×6 (Rule 1)');
 }
 
 // -- Cosmo disables ORs on BOTH sides of its lane ---------------------------
 
 {
   const s = buildState([
-    { def: 'cosmo', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'OPP',    lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
+    { def: 'cosmo', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P1',    lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
   ]);
-  const hereP  = s.lanes[0].cards.PLAYER[1];
-  const hereO  = s.lanes[0].cards.OPP[0];
-  const other  = s.lanes[1].cards.PLAYER[0];
-  truthy(isOnRevealDisabled(s, hereP, MANIFEST),  'Cosmo disables PLAYER OR at this lane');
-  truthy(isOnRevealDisabled(s, hereO, MANIFEST),  'Cosmo disables OPP OR at this lane');
+  const hereP  = s.lanes[0].cards.P0[1];
+  const hereO  = s.lanes[0].cards.P1[0];
+  const other  = s.lanes[1].cards.P0[0];
+  truthy(isOnRevealDisabled(s, hereP, MANIFEST),  'Cosmo disables P0 OR at this lane');
+  truthy(isOnRevealDisabled(s, hereO, MANIFEST),  'Cosmo disables P1 OR at this lane');
   truthy(!isOnRevealDisabled(s, other, MANIFEST), 'Cosmo does NOT reach other lanes');
 }
 
@@ -540,14 +598,14 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
   // Player wins lanes 0 and 1 by a hair; loses 2 by a lot. Player should
   // still get priority because they hold 2 > 1 lanes.
   const s = buildState([
-    { def: 'grunt', owner: 'PLAYER', lane: 0 },
-    { def: 'grunt', owner: 'PLAYER', lane: 1 },
-    { def: 'grunt', owner: 'OPP',    lane: 2 },
-    { def: 'grunt', owner: 'OPP',    lane: 2 },
-    { def: 'grunt', owner: 'OPP',    lane: 2 },
+    { def: 'grunt', owner: 'P0', lane: 0 },
+    { def: 'grunt', owner: 'P0', lane: 1 },
+    { def: 'grunt', owner: 'P1',    lane: 2 },
+    { def: 'grunt', owner: 'P1',    lane: 2 },
+    { def: 'grunt', owner: 'P1',    lane: 2 },
   ]);
   const pr = getPriority(s, MANIFEST);
-  eq(pr.owner,  'PLAYER',     'priority: PLAYER wins on lane count');
+  eq(pr.owner,  'P0',     'priority: P0 wins on lane count');
   eq(pr.reason, 'MORE_LANES', 'priority reason: MORE_LANES');
 }
 
@@ -556,11 +614,11 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 {
   // 1 lane each, but player has more total power.
   const s = buildState([
-    { def: 'sentinel', owner: 'PLAYER', lane: 0 },   // +1 self = 6
-    { def: 'grunt',    owner: 'OPP',    lane: 2 },   // 3
+    { def: 'sentinel', owner: 'P0', lane: 0 },   // +1 self = 6
+    { def: 'grunt',    owner: 'P1',    lane: 2 },   // 3
   ]);
   const pr = getPriority(s, MANIFEST);
-  eq(pr.owner,  'PLAYER',     'priority: PLAYER wins on total power');
+  eq(pr.owner,  'P0',     'priority: P0 wins on total power');
   eq(pr.reason, 'MORE_POWER', 'priority reason: MORE_POWER');
 }
 
@@ -594,11 +652,11 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
 {
   const s = buildState([{
     def: 'grunt',
-    owner: 'PLAYER',
+    owner: 'P0',
     lane: 0,
     tags: [{ kind: 'SHURI_DOUBLED' }],
   }]);
-  const id = firstCard(s, 'PLAYER', 0);
+  const id = firstCard(s, 'P0', 0);
   eq(getCardPower(s, id, MANIFEST), 6, 'SHURI_DOUBLED ⇒ base × 2');
 }
 

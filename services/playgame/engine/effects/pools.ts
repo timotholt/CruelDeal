@@ -27,7 +27,7 @@ export function resolveOwnerRef(
   if (ref === 'SELF_OWNER') return selfOwner;
   if (ref === 'OPP_OWNER') {
     if (!selfOwner) return null;
-    return selfOwner === 'PLAYER' ? 'OPP' : 'PLAYER';
+    return selfOwner === 'P0' ? 'P1' : 'P0';
   }
   return ref;
 }

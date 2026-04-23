@@ -33,10 +33,10 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 // ---- Fixture builders ------------------------------------------------------
 
 function blankLane(i: LaneIdx): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { PLAYER: [], OPP: [] } };
+  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
 }
 
-function mkCardInstance(id: string, defId: string, owner: Owner = 'PLAYER'): CardInstance {
+function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardInstance {
   return {
     id: id as CardId,
     defId,
@@ -46,6 +46,9 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'PLAYER'): Car
     zone: 'DECK',
     revealed: false,
     powerDelta: 0,
+    costDelta: 0,
+    powerLog: [],
+    costLog: [],
     tags: [],
     textOverride: null,
     counters: {},
@@ -56,22 +59,23 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'PLAYER'): Car
 function emptyState(): MatchState {
   return {
     turn: 1,
-    maxEnergy: { PLAYER: 1, OPP: 1 },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
+    maxEnergy: { P0: 1, P1: 1 },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
     seed: 'test-seed',
-    priority: 'PLAYER',
-    energy: { PLAYER: 1, OPP: 1 },
-    deck: { PLAYER: [], OPP: [] },
-    hand: { PLAYER: [], OPP: [] },
+    priority: 'P0',
+    energy: { P0: 1, P1: 1 },
+    deck: { P0: [], P1: [] },
+    hand: { P0: [], P1: [] },
     cards: {},
     lanes: [blankLane(0), blankLane(1), blankLane(2)],
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
     log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
+    lastPlayedBy: { P0: null, P1: null },
     result: null,
+    energyLog: { P0: [], P1: [] },
   };
 }
 
@@ -79,14 +83,14 @@ function emptyState(): MatchState {
 function stateWithSentinelInHand(): MatchState {
   const s = emptyState();
   const sentinel: CardInstance = {
-    ...mkCardInstance('s1', 'sentinel', 'PLAYER'),
+    ...mkCardInstance('s1', 'sentinel', 'P0'),
     zone: 'HAND',
   };
   return {
     ...s,
-    energy: { PLAYER: 5, OPP: 0 },
+    energy: { P0: 5, P1: 0 },
     cards: { s1: sentinel } as Record<CardId, CardInstance>,
-    hand: { PLAYER: [sentinel], OPP: [] },
+    hand: { P0: [sentinel], P1: [] },
   };
 }
 
@@ -109,17 +113,17 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     intentId: 'i1',
     cardId: 's1' as CardId,
     lane: 0,
-    owner: 'PLAYER',
+    owner: 'P0',
     cost: 3,
   });
   const c = s1.cards['s1' as CardId]!;
   eq(c.zone, 'LANE', 'CARD_STAGED: zone becomes LANE');
   eq(c.lane, 0, 'CARD_STAGED: lane set');
   eq(c.revealed, false, 'CARD_STAGED: not revealed (face-down pre-reveal)');
-  eq(s1.hand.PLAYER.length, 0, 'CARD_STAGED: hand drained');
-  eq(s1.lanes[0].cards.PLAYER, ['s1'] as CardId[], 'CARD_STAGED: card in lane 0 player');
+  eq(s1.hand.P0.length, 0, 'CARD_STAGED: hand drained');
+  eq(s1.lanes[0].cards.P0, ['s1'] as CardId[], 'CARD_STAGED: card in lane 0 player');
   eq(s1.stagingOrder, ['s1'] as CardId[], 'CARD_STAGED: pushed onto stagingOrder');
-  eq(s1.lastPlayedBy.PLAYER, 's1' as CardId, 'CARD_STAGED: updates lastPlayedBy.PLAYER');
+  eq(s1.lastPlayedBy.P0, 's1' as CardId, 'CARD_STAGED: updates lastPlayedBy.P0');
   eq(s1.log.length, 1, 'CARD_STAGED: appended to log');
 }
 
@@ -129,14 +133,14 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const s2 = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_UNSTAGED', intentId: 'i2', cardId: 's1' as CardId },
   );
   const c = s2.cards['s1' as CardId]!;
   eq(c.zone, 'HAND', 'CARD_UNSTAGED: zone back to HAND');
   eq(c.lane, null, 'CARD_UNSTAGED: lane cleared');
-  eq(s2.hand.PLAYER.length, 1, 'CARD_UNSTAGED: hand restored');
-  eq(s2.lanes[0].cards.PLAYER.length, 0, 'CARD_UNSTAGED: removed from lane');
+  eq(s2.hand.P0.length, 1, 'CARD_UNSTAGED: hand restored');
+  eq(s2.lanes[0].cards.P0.length, 0, 'CARD_UNSTAGED: removed from lane');
   eq(s2.stagingOrder.length, 0, 'CARD_UNSTAGED: removed from stagingOrder');
 }
 
@@ -144,9 +148,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s0 = emptyState();
-  const s1 = run(s0, { type: 'ENERGY_CHANGED', owner: 'PLAYER', delta: -3, reason: 'CARD_PLAYED' });
-  eq(s1.energy.PLAYER, -2, 'ENERGY_CHANGED: delta -3 from 1 = -2');
-  eq(s1.energy.OPP, 1, 'ENERGY_CHANGED: opponent unchanged');
+  const s1 = run(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -3, reason: 'CARD_PLAYED' });
+  eq(s1.energy.P0, -2, 'ENERGY_CHANGED: delta -3 from 1 = -2');
+  eq(s1.energy.P1, 1, 'ENERGY_CHANGED: opponent unchanged');
 }
 
 // -- CARD_FLIPPED: revealed := true
@@ -155,7 +159,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const s2 = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
   );
   eq(s2.cards['s1' as CardId]!.revealed, true, 'CARD_FLIPPED: revealed=true');
@@ -166,19 +170,18 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const staged = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
   );
-  // Sentinel base = 5 (per BOOTSTRAP_MANIFEST). Sentinel's own Ongoing
-  // adds +1 to itself (same-lane self-owner). So baseline projected power = 6.
-  eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 6, 'pre-delta: Sentinel power = 6');
+  // Sentinel now adds +1 to the lane total, not to any card's own power.
+  eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 5, 'pre-delta: Sentinel card power = 5');
   const bumped = run(
     staged,
     { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, delta: 3,
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
   );
   eq(bumped.cards['s1' as CardId]!.powerDelta, 3, 'CARD_POWER_CHANGED: powerDelta = 3');
-  eq(getCardPower(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 9, 'projected power picks up delta: 6+3=9');
+  eq(getCardPower(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 8, 'projected power picks up delta: 5+3=8');
 
   // Stacks additively.
   const bumpedAgain = run(
@@ -195,14 +198,14 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const destroyed = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_DESTROYED', cardId: 's1' as CardId,
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
   );
   const c = destroyed.cards['s1' as CardId]!;
   eq(c.zone, 'DESTROYED', 'CARD_DESTROYED: zone=DESTROYED (separate from DISCARD)');
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
-  eq(destroyed.lanes[0].cards.PLAYER.length, 0, 'CARD_DESTROYED: removed from lane');
+  eq(destroyed.lanes[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
   truthy(c.tags.some(t => t.kind === 'DESTROYED_THIS_TURN'), 'CARD_DESTROYED: tagged DESTROYED_THIS_TURN');
 }
 
@@ -212,12 +215,12 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const moved = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_MOVED', cardId: 's1' as CardId, fromLane: 0, toLane: 2,
       cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL' } },
   );
-  eq(moved.lanes[0].cards.PLAYER.length, 0, 'CARD_MOVED: gone from lane 0');
-  eq(moved.lanes[2].cards.PLAYER, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
+  eq(moved.lanes[0].cards.P0.length, 0, 'CARD_MOVED: gone from lane 0');
+  eq(moved.lanes[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
   eq(moved.cards['s1' as CardId]!.lane, 2, 'CARD_MOVED: card.lane updated');
   truthy(moved.cards['s1' as CardId]!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
 }
@@ -252,15 +255,15 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s = emptyState();
-  const cardInst = mkCardInstance('d1', 'grunt', 'PLAYER');
+  const cardInst = mkCardInstance('d1', 'grunt', 'P0');
   const s0: MatchState = {
     ...s,
     cards: { d1: cardInst } as Record<CardId, CardInstance>,
-    deck: { PLAYER: [cardInst], OPP: [] },
+    deck: { P0: [cardInst], P1: [] },
   };
-  const s1 = run(s0, { type: 'CARD_DRAWN', owner: 'PLAYER', cardId: 'd1' as CardId, toHand: true });
-  eq(s1.deck.PLAYER.length, 0, 'CARD_DRAWN: removed from deck');
-  eq(s1.hand.PLAYER.length, 1, 'CARD_DRAWN: added to hand');
+  const s1 = run(s0, { type: 'CARD_DRAWN', owner: 'P0', cardId: 'd1' as CardId, toHand: true });
+  eq(s1.deck.P0.length, 0, 'CARD_DRAWN: removed from deck');
+  eq(s1.hand.P0.length, 1, 'CARD_DRAWN: added to hand');
   eq(s1.cards['d1' as CardId]!.zone, 'HAND', 'CARD_DRAWN: zone=HAND');
   eq(s1.cards['d1' as CardId]!.spawnSource, { kind: 'DECK_CREATION' }, 'CARD_DRAWN: preserves spawnSource');
 }
@@ -272,7 +275,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM' as const };
   const s1 = run(s0, { type: 'CARD_DISCARDED', cardId: 's1' as CardId, reason: 'FORCED_EFFECT', cause });
   eq(s1.cards['s1' as CardId]!.zone, 'DISCARD', 'CARD_DISCARDED: zone=DISCARD');
-  eq(s1.hand.PLAYER.length, 0, 'CARD_DISCARDED: removed from hand');
+  eq(s1.hand.P0.length, 0, 'CARD_DISCARDED: removed from hand');
 }
 
 // -- CARD_BANISHED: any → BANISHED (permanent exile)
@@ -283,14 +286,14 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   // From hand:
   const s1 = run(s0, { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause });
   eq(s1.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from hand): zone=BANISHED');
-  eq(s1.hand.PLAYER.length, 0, 'CARD_BANISHED: gone from hand');
+  eq(s1.hand.P0.length, 0, 'CARD_BANISHED: gone from hand');
   // From lane:
   const s2 = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
   );
   eq(s2.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
-  eq(s2.lanes[0].cards.PLAYER.length, 0, 'CARD_BANISHED: gone from lane');
+  eq(s2.lanes[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
 }
 
 // -- CARD_ADDED_TO_HAND: mints with spawnSource (Agent 13 / Collector)
@@ -300,14 +303,14 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const spawn = { kind: 'CARD_CREATED' as const, sourceCardId: 'agent13' as CardId };
   const s1 = run(s0, {
     type: 'CARD_ADDED_TO_HAND',
-    owner: 'PLAYER',
+    owner: 'P0',
     cardId: 'spawn1' as CardId,
     defId: 'grunt',
     spawnSource: spawn,
   });
   eq(s1.cards['spawn1' as CardId]?.zone, 'HAND', 'CARD_ADDED_TO_HAND: zone=HAND');
   eq(s1.cards['spawn1' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_HAND: spawnSource recorded');
-  eq(s1.hand.PLAYER.length, 1, 'CARD_ADDED_TO_HAND: in hand list');
+  eq(s1.hand.P0.length, 1, 'CARD_ADDED_TO_HAND: in hand list');
 }
 
 // -- CARD_ADDED_TO_LANE: mints with spawnSource (Brood / Bar Sinister)
@@ -317,7 +320,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const spawn = { kind: 'LOCATION_CREATED' as const, sourceLocationId: 'bar-sinister' as LocationId };
   const s1 = run(s0, {
     type: 'CARD_ADDED_TO_LANE',
-    owner: 'PLAYER',
+    owner: 'P0',
     cardId: 'spawn2' as CardId,
     lane: 1,
     defId: 'grunt',
@@ -325,23 +328,23 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   });
   eq(s1.cards['spawn2' as CardId]?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
   eq(s1.cards['spawn2' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
-  eq(s1.lanes[1].cards.PLAYER, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
+  eq(s1.lanes[1].cards.P0, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
 }
 
 // -- DECK_SHUFFLED: reorders deck per newOrder
 
 {
   const s = emptyState();
-  const a = mkCardInstance('a', 'grunt', 'PLAYER');
-  const b = mkCardInstance('b', 'grunt', 'PLAYER');
-  const c = mkCardInstance('c', 'grunt', 'PLAYER');
+  const a = mkCardInstance('a', 'grunt', 'P0');
+  const b = mkCardInstance('b', 'grunt', 'P0');
+  const c = mkCardInstance('c', 'grunt', 'P0');
   const s0: MatchState = {
     ...s,
     cards: { a, b, c } as Record<CardId, CardInstance>,
-    deck: { PLAYER: [a, b, c], OPP: [] },
+    deck: { P0: [a, b, c], P1: [] },
   };
-  const s1 = run(s0, { type: 'DECK_SHUFFLED', owner: 'PLAYER', newOrder: ['c', 'a', 'b'] as CardId[] });
-  eq(s1.deck.PLAYER.map(x => x.id), ['c', 'a', 'b'] as CardId[], 'DECK_SHUFFLED: order matches newOrder');
+  const s1 = run(s0, { type: 'DECK_SHUFFLED', owner: 'P0', newOrder: ['c', 'a', 'b'] as CardId[] });
+  eq(s1.deck.P0.map(x => x.id), ['c', 'a', 'b'] as CardId[], 'DECK_SHUFFLED: order matches newOrder');
 }
 
 // -- PENDING_EFFECT_ADDED / REMOVED
@@ -406,7 +409,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0: MatchState = {
     ...emptyState(),
     lanes: [
-      { idx: 0, location: { id: locId, defId: 'boom', lane: 0, tags: [{ kind: 'FLOODED' }] }, locationRevealed: true, cards: { PLAYER: [], OPP: [] } },
+      { idx: 0, location: { id: locId, defId: 'boom', lane: 0, tags: [{ kind: 'FLOODED' }] }, locationRevealed: true, cards: { P0: [], P1: [] } },
       blankLane(1),
       blankLane(2),
     ],
@@ -427,7 +430,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0: MatchState = {
     ...emptyState(),
     lanes: [
-      { idx: 0, location: { id: locId, defId: 'wander', lane: 0, tags: [] }, locationRevealed: true, cards: { PLAYER: [], OPP: [] } },
+      { idx: 0, location: { id: locId, defId: 'wander', lane: 0, tags: [] }, locationRevealed: true, cards: { P0: [], P1: [] } },
       blankLane(1),
       blankLane(2),
     ],
@@ -446,7 +449,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const s1 = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'PLAYER', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     // Give the card a transient tag...
     { type: 'CARD_TAG_ADDED', cardId: 's1' as CardId, tag: { kind: 'MOVED_THIS_TURN' } },
     { type: 'TURN_ENDED', turn: 1 },
@@ -456,9 +459,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.stagingOrder.length, 0, 'TURN_ENDED: stagingOrder cleared');
   eq(s1.phase, 'BETWEEN_TURNS', 'TURN_ENDED: phase = BETWEEN_TURNS');
 
-  const s2 = run(s1, { type: 'TURN_STARTED', turn: 2, priority: 'OPP', priorityReason: 'MORE_POWER' });
+  const s2 = run(s1, { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' });
   eq(s2.turn, 2, 'TURN_STARTED: turn incremented');
-  eq(s2.priority, 'OPP', 'TURN_STARTED: priority set');
+  eq(s2.priority, 'P1', 'TURN_STARTED: priority set');
   eq(s2.phase, 'AWAITING_INTENT', 'TURN_STARTED: phase = AWAITING_INTENT');
 }
 
@@ -468,11 +471,11 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = emptyState();
   const s1 = run(s0, {
     type: 'MATCH_ENDED',
-    result: { winner: 'PLAYER', lanesWon: { PLAYER: 2, OPP: 1 }, totalPower: { PLAYER: 20, OPP: 15 } },
+    result: { winner: 'P0', lanesWon: { P0: 2, P1: 1 }, totalPower: { P0: 20, P1: 15 } },
   });
   eq(s1.phase, 'ENDED', 'MATCH_ENDED: phase = ENDED');
-  eq(s1.result?.winner, 'PLAYER', 'MATCH_ENDED: winner recorded');
-  eq(s1.result?.lanesWon.PLAYER, 2, 'MATCH_ENDED: lanesWon recorded');
+  eq(s1.result?.winner, 'P0', 'MATCH_ENDED: winner recorded');
+  eq(s1.result?.lanesWon.P0, 2, 'MATCH_ENDED: lanesWon recorded');
 }
 
 // -- Diagnostic events: log only, no state change
@@ -493,9 +496,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const s1 = run(s0,
-    { type: 'ENERGY_CHANGED', owner: 'PLAYER', delta: -1, reason: 'EFFECT' },
-    { type: 'ENERGY_CHANGED', owner: 'OPP',    delta: -1, reason: 'EFFECT' },
-    { type: 'ENERGY_CHANGED', owner: 'PLAYER', delta: +2, reason: 'TURN_START' },
+    { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT' },
+    { type: 'ENERGY_CHANGED', owner: 'P1',    delta: -1, reason: 'EFFECT' },
+    { type: 'ENERGY_CHANGED', owner: 'P0', delta: +2, reason: 'TURN_START' },
   );
   eq(s1.log.length, 3, 'log length = 3');
   eq(s1.log.map(e => e.seq), [0, 1, 2], 'log seq is monotonic 0..n');
@@ -506,7 +509,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const frozen = JSON.parse(JSON.stringify(s0));
-  const _ = apply(s0, { type: 'ENERGY_CHANGED', owner: 'PLAYER', delta: -1, reason: 'EFFECT' }, BOOTSTRAP_MANIFEST);
+  const _ = apply(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT' }, BOOTSTRAP_MANIFEST);
   void _;
   eq(JSON.stringify(s0), JSON.stringify(frozen), 'apply() does not mutate the input state');
 }

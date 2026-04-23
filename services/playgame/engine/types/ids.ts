@@ -9,8 +9,11 @@
 export type CardId = string & { readonly __brand: 'CardId' };
 export type LocationId = string & { readonly __brand: 'LocationId' };
 
-export type Owner = 'PLAYER' | 'OPP';
+export type Seat = 'P0' | 'P1';
+export type Owner = Seat;
 export type LaneIdx = 0 | 1 | 2;
+
+export const otherSeat = (seat: Seat): Seat => (seat === 'P0' ? 'P1' : 'P0');
 
 export const mkCardId = (s: string): CardId => s as CardId;
 export const mkLocationId = (s: string): LocationId => s as LocationId;

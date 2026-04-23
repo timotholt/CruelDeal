@@ -461,8 +461,8 @@ export function matchesLane(
 ): boolean {
   const lane = state.lanes[idx];
   const cap = manifest.constants.laneCapacity;
-  const playerCount = lane.cards.PLAYER.length;
-  const oppCount = lane.cards.OPP.length;
+  const playerCount = lane.cards.P0.length;
+  const oppCount = lane.cards.P1.length;
   const total = playerCount + oppCount;
 
   if (filter.idx !== undefined) {
@@ -507,7 +507,7 @@ export function matchesLane(
   }
 
   if (filter.containsCard !== undefined) {
-    const ids: CardId[] = [...lane.cards.PLAYER, ...lane.cards.OPP];
+    const ids: CardId[] = [...lane.cards.P0, ...lane.cards.P1];
     const hit = ids.some((id) => {
       const c = state.cards[id];
       return c && matchesCard(c, filter.containsCard!, state, manifest);

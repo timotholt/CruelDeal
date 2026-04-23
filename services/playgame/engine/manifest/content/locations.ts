@@ -1,25 +1,14 @@
 /**
- * Launch location set (3 entries) for Galactic Snap / Spec 0.2.
+ * Current location set for Galactic Snap / Spec 0.2.
  *
- * Each location is pinned 1:1 to one of the three map images under
- * `public/art/maps/`. Ability designs are deliberately varied so the
- * Step 4 projection tests exercise three different Ongoing primitives:
- *
- *   - Cathedral    → ON_REVEAL_MULTIPLIER  (Kamar-Taj / Wong-style)
- *   - Jungle Trail → POWER_ADD w/ dynamic COUNT delta (density reward)
- *   - Science Lab  → LANE_POWER_MULTIPLIER (Iron-Man-as-location)
+ * Each location is pinned 1:1 to a map image under `public/art/maps/`.
+ * The roster mixes passive auras and reveal-time effects so the location
+ * pool feels more varied without depending on unimplemented trigger hooks.
  *
  * Context note for selectors used below:
- *   - Inside a location Ongoing, `{ kind: 'SELF' }` resolves to the
- *     location instance. `{ kind: 'SAME_LANE', of: SELF }` is therefore
- *     "cards in this location's lane", which is exactly what these
- *     effects want. The Step 4 evaluator documents that convention.
- *
- * Note on asset filename: `Cathedrawl.png` is the original (typo'd)
- * filename in `public/art/maps/`. The displayName here is the correct
- * spelling ("Cathedral"). A future content PR can rename the asset
- * and update only the `path` field — everything else in-game already
- * reads "Cathedral".
+ *   - Inside a location ability, `{ kind: 'SELF' }` resolves to the
+ *     location instance. `{ kind: 'SAME_LANE', of: SELF }` therefore
+ *     means "cards in this location's lane".
  */
 
 import type { LocationDef } from '../types';
@@ -44,7 +33,32 @@ export const CATHEDRAL: LocationDef = {
     description: 'On Reveal effects here trigger twice.',
     accent: '#d4b87a',
     art: {
-      map: { path: '/art/maps/Cathedrawl.png', kind: 'image' },
+      map: { path: '/art/maps/Cathedral.png', kind: 'image' },
+    },
+  },
+};
+
+export const CATHEDRAL_CLOISTER: LocationDef = {
+  defId: 'cathedral-cloister',
+  version: 1,
+  name: 'Cathedral Cloister',
+  rarity: 1,
+  abilities: {
+    ongoing: [
+      {
+        kind: 'BOOST_ONGOINGS',
+        scope: { laneOf: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },
+        factor: { kind: 'LIT', n: 2 },
+        stack: 'ADDITIVE',
+      },
+    ],
+  },
+  cosmetic: {
+    displayName: 'CATHEDRAL CLOISTER',
+    description: 'Ongoing cards here have their Ongoing abilities doubled.',
+    accent: '#b88f57',
+    art: {
+      map: { path: '/art/maps/Cathedral2.png', kind: 'image' },
     },
   },
 };
@@ -85,6 +99,89 @@ export const JUNGLE_TRAIL: LocationDef = {
   },
 };
 
+export const FOOD_COURT: LocationDef = {
+  defId: 'food-court',
+  version: 1,
+  name: 'Food Court',
+  rarity: 1,
+  abilities: {
+    onReveal: [
+      { kind: 'DRAW', owner: 'P0', count: { kind: 'LIT', n: 1 } },
+      { kind: 'DRAW', owner: 'P1', count: { kind: 'LIT', n: 1 } },
+    ],
+  },
+  cosmetic: {
+    displayName: 'FOOD COURT',
+    description: 'When revealed, each player draws a card.',
+    accent: '#d96c3c',
+    art: {
+      map: { path: '/art/maps/FoodCourt.png', kind: 'image' },
+    },
+  },
+};
+
+export const HACKERS_LAIR: LocationDef = {
+  defId: 'hackers-lair',
+  version: 1,
+  name: "Hackers' Lair",
+  rarity: 1,
+  abilities: {
+    onReveal: [
+      {
+        kind: 'ADJUST_COST',
+        target: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'HAND_OF', owner: 'P0' },
+        },
+        delta: { kind: 'LIT', n: 1 },
+      },
+      {
+        kind: 'ADJUST_COST',
+        target: {
+          kind: 'RANDOM_N',
+          count: { kind: 'LIT', n: 1 },
+          of: { kind: 'HAND_OF', owner: 'P1' },
+        },
+        delta: { kind: 'LIT', n: 1 },
+      },
+    ],
+  },
+  cosmetic: {
+    displayName: "HACKERS' LAIR",
+    description: 'When revealed, a random card in each player hand costs 1 more.',
+    accent: '#31d28a',
+    art: {
+      map: { path: '/art/maps/HackersLair.png', kind: 'image' },
+    },
+  },
+};
+
+export const ICY_ROAD: LocationDef = {
+  defId: 'icy-road',
+  version: 1,
+  name: 'Icy Road',
+  rarity: 1,
+  abilities: {
+    ongoing: [
+      {
+        kind: 'POWER_ADD',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },
+        delta: { kind: 'LIT', n: -1 },
+        stack: 'ADDITIVE',
+      },
+    ],
+  },
+  cosmetic: {
+    displayName: 'ICY ROAD',
+    description: 'Cards here have -1 Power.',
+    accent: '#8fd5e8',
+    art: {
+      map: { path: '/art/maps/IcyRoad.png', kind: 'image' },
+    },
+  },
+};
+
 export const SCIENCE_LAB: LocationDef = {
   defId: 'science-lab',
   version: 1,
@@ -113,8 +210,86 @@ export const SCIENCE_LAB: LocationDef = {
   },
 };
 
+export const LAVA_FLOW: LocationDef = {
+  defId: 'lava-flow',
+  version: 1,
+  name: 'Lava Flow',
+  rarity: 1,
+  abilities: {
+    ongoing: [
+      {
+        kind: 'POWER_ADD',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },
+        delta: { kind: 'LIT', n: -2 },
+        stack: 'ADDITIVE',
+      },
+    ],
+  },
+  cosmetic: {
+    displayName: 'LAVA FLOW',
+    description: 'Cards here have -2 Power.',
+    accent: '#ef6a2e',
+    art: {
+      map: { path: '/art/maps/LavaFlow.png', kind: 'image' },
+    },
+  },
+};
+
+export const TROPICAL_BEACH: LocationDef = {
+  defId: 'tropical-beach',
+  version: 1,
+  name: 'Tropical Beach',
+  rarity: 1,
+  abilities: {
+    ongoing: [
+      {
+        kind: 'POWER_ADD',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },
+        delta: { kind: 'LIT', n: 1 },
+        stack: 'ADDITIVE',
+      },
+    ],
+  },
+  cosmetic: {
+    displayName: 'TROPICAL BEACH',
+    description: 'Cards here have +1 Power.',
+    accent: '#f0c86a',
+    art: {
+      map: { path: '/art/maps/TropicalBeach.png', kind: 'image' },
+    },
+  },
+};
+
+export const ALIEN_STARSHIP: LocationDef = {
+  defId: 'alien-starship',
+  version: 1,
+  name: 'Alien Starship',
+  rarity: 1,
+  abilities: {
+    onReveal: [
+      { kind: 'ADJUST_ENERGY', owner: 'P0', delta: { kind: 'LIT', n: 1 } },
+      { kind: 'ADJUST_ENERGY', owner: 'P1', delta: { kind: 'LIT', n: 1 } },
+    ],
+  },
+  cosmetic: {
+    displayName: 'ALIEN STARSHIP',
+    description: 'When revealed, each player gains 1 Energy.',
+    accent: '#8d78ff',
+    art: {
+      map: { path: '/art/maps/AlienStarship.png', kind: 'image' },
+    },
+  },
+};
+
 export const LOCATIONS_INDEX: readonly LocationDef[] = [
   CATHEDRAL,
+  CATHEDRAL_CLOISTER,
   JUNGLE_TRAIL,
+  FOOD_COURT,
+  HACKERS_LAIR,
+  ICY_ROAD,
   SCIENCE_LAB,
+  LAVA_FLOW,
+  TROPICAL_BEACH,
+  ALIEN_STARSHIP,
 ];

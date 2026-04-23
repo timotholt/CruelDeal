@@ -12,21 +12,21 @@ import type { ResolvedCard } from '@/services/playgame/view';
 import { BoardCard } from './BoardCard';
 
 interface LaneSlotsProps {
-  side: 'player' | 'enemy';
+  side: 'top' | 'bottom';
   laneIdx: number;
   cards: ResolvedCard[];
 }
 
 export const LaneSlots = (props: LaneSlotsProps) => {
   const slotCardForGrid = (gridIdx: number): ResolvedCard | undefined => {
-    const mapping = props.side === 'enemy' ? [2, 3, 0, 1] : [0, 1, 2, 3];
+    const mapping = props.side === 'top' ? [2, 3, 0, 1] : [0, 1, 2, 3];
     const s = mapping.indexOf(gridIdx);
     return props.cards[s];
   };
 
   return (
     <div
-      class={'lane-slots ' + (props.side === 'enemy' ? 'top' : 'bot')}
+      class={'lane-slots ' + (props.side === 'top' ? 'top' : 'bot')}
       data-lane={props.laneIdx}
       data-side={props.side}
     >
@@ -37,7 +37,6 @@ export const LaneSlots = (props: LaneSlotsProps) => {
               {(c) => (
                 <BoardCard
                   card={c}
-                  enemy={props.side === 'enemy'}
                   side={props.side}
                   laneIdx={props.laneIdx}
                 />

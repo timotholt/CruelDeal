@@ -11,7 +11,61 @@
  */
 
 import type { CardId, LaneIdx, LocationId, Owner } from './ids';
-import type { TextOverride } from './ability';
+import type { TextOverride, EffectRef } from './ability';
+
+// ---- Energy reason (shared with events.ts to avoid circular import) --------
+
+export type EnergyReason =
+  | 'TURN_START'
+  | 'CARD_PLAYED'
+  | 'CARD_UNSTAGED'
+  | 'EFFECT';
+
+// ---- Stat change logs ------------------------------------------------------
+
+/**
+ * One permanent power adjustment on a card. Appended every time
+ * CARD_POWER_CHANGED fires; persists for the card's lifetime.
+ * Ongoing (POWER_ADD) contributions are NOT here — they're computed
+ * live from the projection system and shown separately.
+ */
+export interface PowerLogEntry {
+  /** Turn the change fired on. */
+  readonly turn: number;
+  /** Signed amount of this change. */
+  readonly delta: number;
+  /** card.powerDelta AFTER applying this entry (base not included). */
+  readonly runningDelta: number;
+  /** What caused the change — sourceId is the card or location. */
+  readonly cause: EffectRef;
+}
+
+/**
+ * One permanent cost adjustment on a card. Appended every time
+ * CARD_COST_CHANGED fires; persists for the card's lifetime.
+ * Ongoing COST_ADD contributions are NOT here — they're computed live.
+ */
+export interface CostLogEntry {
+  readonly turn: number;
+  readonly delta: number;
+  /** card.costDelta AFTER applying this entry (base not included). */
+  readonly runningDelta: number;
+  readonly cause: EffectRef;
+}
+
+/**
+ * One energy pool change for an owner. Appended every time
+ * ENERGY_CHANGED fires — covers refills, card costs, and card effects.
+ */
+export interface EnergyLogEntry {
+  readonly turn: number;
+  readonly delta: number;
+  /** energy[owner] AFTER applying this entry. */
+  readonly after: number;
+  readonly reason: EnergyReason;
+  /** Present when reason === 'EFFECT'; identifies the source card/location. */
+  readonly cause?: EffectRef;
+}
 
 // ---- Match phase -----------------------------------------------------------
 
@@ -69,6 +123,16 @@ export interface CardInstance {
    *  effects. Read by `getCardPower` after Ongoing POWER_ADDs and before
    *  Shuri doubling. Deltas survive cross-turn; resets only on destroy. */
   readonly powerDelta: number;
+  /** Accumulated one-shot cost adjustments from ADJUST_COST effects.
+   *  Read by `getCardCost` before live ongoing COST_ADD modifiers. */
+  readonly costDelta: number;
+  /** Ordered history of every permanent power change on this card.
+   *  Ongoing (POWER_ADD) contributions are NOT here — computed live.
+   *  Append-only; never truncated. */
+  readonly powerLog: readonly PowerLogEntry[];
+  /** Ordered history of every permanent cost change on this card.
+   *  Ongoing (COST_ADD) contributions are NOT here — computed live. */
+  readonly costLog: readonly CostLogEntry[];
   readonly tags: readonly CardTag[];
   readonly textOverride: TextOverride | null;
   readonly counters: Readonly<Record<string, number>>;
@@ -180,4 +244,8 @@ export interface MatchState {
   readonly log: readonly MatchLogEntry[];
   readonly lastPlayedBy: Readonly<Record<Owner, CardId | null>>;
   readonly result: MatchResult | null;
+  /** Per-owner ordered history of every energy pool change.
+   *  Covers TURN_START refills, CARD_PLAYED costs, and EFFECT changes.
+   *  Append-only; spans the full match lifetime. */
+  readonly energyLog: Readonly<Record<Owner, readonly EnergyLogEntry[]>>;
 }

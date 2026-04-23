@@ -9,11 +9,11 @@
 
 import { serial, wait, type Step } from './runner';
 import {
+  autoPlayRemoteSeat,
   advanceTurnFromEngine,
   captureEngineEndTurn,
   dealPlayerCard,
   drawHandCard,
-  enemyPlayRandom,
   fadeInLocationTile,
   finishResolving,
   flipPlayerCardsFaceDown,
@@ -105,9 +105,9 @@ export const resolveTurnFlow = (): Step =>
     startResolving(),
     flipPlayerCardsFaceDown(),
     wait(200),
-    // Enemy commits plays face-down. enemyPlayRandom also stages the enemy
+    // Remote seat commits plays face-down. autoPlayRemoteSeat also stages them
     // card through the bridge so the engine sees it in staging order.
-    enemyPlayRandom(),
+    autoPlayRemoteSeat(),
     // Run the engine's turn resolution — returns the authoritative event
     // stream (CARD_FLIPPED in priority order, TURN_STARTED with new priority).
     // Must be called AFTER all cards are staged through the bridge.

@@ -262,7 +262,7 @@ function laneOfFirst(sel: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
   return c?.lane ?? null;
 }
 
-function ownerOfFirst(sel: Selector, ctx: EvalCtx): 'PLAYER' | 'OPP' | null {
+function ownerOfFirst(sel: Selector, ctx: EvalCtx): 'P0' | 'P1' | null {
   const ids = select(sel, ctx);
   if (ids.length === 0) return null;
   const c = ctx.state.cards[ids[0]];
@@ -276,7 +276,7 @@ function collectInLane(
 ): CardId[] {
   const laneState = ctx.state.lanes[lane];
   const out: CardId[] = [];
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     if (!ownerMatches(ownerFilter, ctx.selfOwner, owner)) continue;
     out.push(...laneState.cards[owner]);
   }
@@ -285,8 +285,8 @@ function collectInLane(
 
 export function ownerMatches(
   filter: OwnerFilter,
-  selfOwner: 'PLAYER' | 'OPP' | null,
-  subjectOwner: 'PLAYER' | 'OPP',
+  selfOwner: 'P0' | 'P1' | null,
+  subjectOwner: 'P0' | 'P1',
 ): boolean {
   switch (filter) {
     case 'ANY_OWNER':  return true;
@@ -300,9 +300,9 @@ function zoneMatches(filter: ZoneFilter, zone: CardZone): boolean {
   return filter === zone;
 }
 
-function flipOwner(o: 'PLAYER' | 'OPP' | null): 'PLAYER' | 'OPP' | null {
-  if (o === 'PLAYER') return 'OPP';
-  if (o === 'OPP') return 'PLAYER';
+function flipOwner(o: 'P0' | 'P1' | null): 'P0' | 'P1' | null {
+  if (o === 'P0') return 'P1';
+  if (o === 'P1') return 'P0';
   return null;
 }
 

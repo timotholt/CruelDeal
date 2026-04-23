@@ -128,6 +128,8 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
       return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
     case 'COST_ADD':
       return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
+    case 'LANE_POWER_ADD':
+      return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
     case 'LANE_POWER_MULTIPLIER':
       return { ...expr, factor: { kind: 'MUL', a: expr.factor, b: { kind: 'LIT', n: agg } } };
     case 'ON_REVEAL_MULTIPLIER':
@@ -192,7 +194,7 @@ function targetIncludes(
   if (!ctx) return false;
   const expr = entry.expr;
   // Only Ongoings with a `target: Selector` field participate in per-card
-  // targeting. BOOST_ONGOINGS / LANE_POWER_MULTIPLIER use laneScope and
+  // targeting. BOOST_ONGOINGS / lane-level power effects use laneScope and
   // are queried differently.
   switch (expr.kind) {
     case 'POWER_ADD':
@@ -206,6 +208,7 @@ function targetIncludes(
       if (!target) return false;
       return select(target, ctx).includes(cardId);
     }
+    case 'LANE_POWER_ADD':
     case 'LANE_POWER_MULTIPLIER':
     case 'BOOST_ONGOINGS':
       return false;

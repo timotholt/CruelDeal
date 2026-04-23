@@ -1,20 +1,25 @@
 import { Show, onMount, onCleanup, createSignal } from 'solid-js';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
+import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import { LanePowerPanel } from './LanePowerPanel';
+import { StatLogPanel } from './StatLogPanel';
 
 interface ZoomInspectorProps {
   target: {
     kind: 'card';
     card: ResolvedCard;
     zone: 'hand' | 'board';
-    side: 'player' | 'enemy';
+    side: 'local' | 'remote' | 'top' | 'bottom';
     laneIdx?: number;
     element: HTMLElement;
   } | {
     kind: 'location';
     location: ResolvedLocation;
     laneIdx: number;
-    playerPower: number;
-    enemyPower: number;
+    bottomPower: number;
+    topPower: number;
+    bottomBreakdown: LanePowerBreakdown;
+    topBreakdown: LanePowerBreakdown;
     element: HTMLElement;
   };
   onClose: () => void;
@@ -24,6 +29,8 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
   let containerRef: HTMLDivElement | undefined;
   let cloneRef: HTMLDivElement | undefined;
   const [isClosing, setIsClosing] = createSignal(false);
+  const [logKind, setLogKind] = createSignal<'power' | 'cost' | null>(null);
+  const [laneLogSide, setLaneLogSide] = createSignal<'top' | 'bottom' | null>(null);
 
   const handleClose = () => {
     if (isClosing()) return;
@@ -70,11 +77,42 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       'pointer-events': 'auto',
     });
 
-    // Click on cloned card closes inspector
+    // Click on cloned card/location: score opens logs; anything else closes
     clone.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (props.target.kind === 'location') {
+        const scoreEl = (e.target as HTMLElement).closest('.lane-score') as HTMLElement | null;
+        if (scoreEl?.classList.contains('enemy-score')) {
+          setLaneLogSide((side) => side === 'top' ? null : 'top');
+          return;
+        }
+        if (scoreEl?.classList.contains('player-score')) {
+          setLaneLogSide((side) => side === 'bottom' ? null : 'bottom');
+          return;
+        }
+        handleClose();
+        return;
+      }
+      const el = e.target as HTMLElement;
+      if (el.classList.contains('power')) { setLogKind(k => k === 'power' ? null : 'power'); return; }
+      if (el.classList.contains('cost'))  { setLogKind(k => k === 'cost' ? null : 'cost'); return; }
       handleClose();
     });
+
+    // Style power/cost as tappable when card inspector is open
+    if (props.target.kind === 'card') {
+      const powerEl = clone.querySelector('.power') as HTMLElement | null;
+      const costEl  = clone.querySelector('.cost')  as HTMLElement | null;
+      if (powerEl) { powerEl.style.cursor = 'pointer'; powerEl.title = 'Power log'; }
+      if (costEl)  { costEl.style.cursor  = 'pointer'; costEl.title  = 'Cost log'; }
+    } else {
+      const scores = clone.querySelectorAll('.lane-score');
+      scores.forEach((el) => {
+        const scoreEl = el as HTMLElement;
+        scoreEl.style.cursor = 'pointer';
+        scoreEl.title = 'Score breakdown';
+      });
+    }
 
     // Force layout
     clone.offsetHeight;
@@ -157,7 +195,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         <div
           style={{
             position: 'fixed',
-            bottom: '10%',
+            bottom: '20%',
             left: '50%',
             transform: 'translateX(-50%)',
             'max-width': '80vw',
@@ -170,6 +208,38 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         >
           {(props.target as { kind: 'card'; card: ResolvedCard }).card?.text || '\u00a0'}
         </div>
+      </Show>
+
+      <Show when={props.target.kind === 'location' && laneLogSide()}>
+        <LanePowerPanel
+          breakdown={
+            laneLogSide() === 'top'
+              ? (props.target as {
+                  kind: 'location';
+                  topBreakdown: LanePowerBreakdown;
+                  bottomBreakdown: LanePowerBreakdown;
+                }).topBreakdown
+              : (props.target as {
+                  kind: 'location';
+                  topBreakdown: LanePowerBreakdown;
+                  bottomBreakdown: LanePowerBreakdown;
+                }).bottomBreakdown
+          }
+          onClose={() => setLaneLogSide(null)}
+        />
+      </Show>
+
+      <Show when={props.target.kind === 'card' && logKind()}>
+        <StatLogPanel
+          kind={logKind() as 'power' | 'cost'}
+          basePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.basePower}
+          baseCost={(props.target as { kind: 'card'; card: ResolvedCard }).card.baseCost}
+          powerLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerLog}
+          powerModifiers={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerModifiers}
+          costLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.costLog}
+          costHistory={(props.target as { kind: 'card'; card: ResolvedCard }).card.costHistory}
+          onClose={() => setLogKind(null)}
+        />
       </Show>
     </div>
   );

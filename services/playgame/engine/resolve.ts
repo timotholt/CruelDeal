@@ -23,6 +23,7 @@ import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
 import { revealCard, evalEffect, type EffectCtx } from './effects/evaluator';
+import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
 
 // ============================================================================
@@ -64,7 +65,8 @@ function resolveStage(
   if (lane.cards[intent.owner].length >= manifest.constants.laneCapacity) {
     return reject(intent.intentId, 'lane full');
   }
-  if (state.energy[intent.owner] < def.cost) {
+  const cost = getCardCost(state, intent.cardId, manifest);
+  if (state.energy[intent.owner] < cost) {
     return reject(intent.intentId, 'insufficient energy');
   }
 
@@ -75,12 +77,12 @@ function resolveStage(
       cardId: intent.cardId,
       lane: intent.lane,
       owner: intent.owner,
-      cost: def.cost,
+      cost,
     },
     {
       type: 'ENERGY_CHANGED',
       owner: intent.owner,
-      delta: -def.cost,
+      delta: -cost,
       reason: 'CARD_PLAYED',
     },
   ];
@@ -99,7 +101,7 @@ function resolveUnstage(
     return reject(intent.intentId, 'card not in staging order');
   }
   const def = manifest.cards[card.defId];
-  const refund = def?.cost ?? 0;
+  const refund = getCardCost(state, intent.cardId, manifest);
 
   return [
     { type: 'CARD_UNSTAGED', intentId: intent.intentId, cardId: intent.cardId },
@@ -127,7 +129,7 @@ function resolveUndoTurn(
     events.push({
       type: 'ENERGY_CHANGED',
       owner: intent.owner,
-      delta: def?.cost ?? 0,
+      delta: getCardCost(state, id, manifest),
       reason: 'CARD_UNSTAGED',
     });
   }
@@ -138,14 +140,14 @@ function resolveConcede(
   state: MatchState,
   intent: Extract<MatchIntent, { type: 'CONCEDE' }>,
 ): MatchEvent[] {
-  const winner: Owner = intent.owner === 'PLAYER' ? 'OPP' : 'PLAYER';
+  const winner: Owner = intent.owner === 'P0' ? 'P1' : 'P0';
   return [
     {
       type: 'MATCH_ENDED',
       result: {
         winner,
-        lanesWon: { PLAYER: 0, OPP: 0 } as Record<Owner, number>,
-        totalPower: { PLAYER: 0, OPP: 0 } as Record<Owner, number>,
+        lanesWon: { P0: 0, P1: 0 } as Record<Owner, number>,
+        totalPower: { P0: 0, P1: 0 } as Record<Owner, number>,
       },
     },
   ];
@@ -171,7 +173,7 @@ export function resolveTurn(
   // ─── Phase 1  Reveals (priority-ordered) ─────────────────────────────────
   // Priority holder's cards flip first, in stage order; then the other side.
   const priorityOwner = s.priority;
-  const order: Owner[] = priorityOwner === 'PLAYER' ? ['PLAYER', 'OPP'] : ['OPP', 'PLAYER'];
+  const order: Owner[] = priorityOwner === 'P0' ? ['P0', 'P1'] : ['P1', 'P0'];
   for (const owner of order) {
     const mine = s.stagingOrder.filter(id => s.cards[id]?.owner === owner);
     for (const cardId of mine) {
@@ -189,14 +191,14 @@ export function resolveTurn(
   // effects count toward the final board state.
   //
   // Phase 1.9  `onEndOfTurn` card triggers. Fixed iteration order:
-  //            lane 0 → 1 → 2, within each lane PLAYER cards first (in
-  //            stage order), then OPP cards. Only revealed cards fire;
+  //            lane 0 → 1 → 2, within each lane P0 cards first (in
+  //            stage order), then P1 cards. Only revealed cards fire;
   //            pending (face-down) cards do not. Each trigger runs with
   //            the card as SELF and a forked RNG keyed on cardId + exprIdx.
   {
     const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
     for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
-      for (const owner of ['PLAYER', 'OPP'] as const) {
+      for (const owner of ['P0', 'P1'] as const) {
         const ids = s.lanes[lane].cards[owner];
         for (const id of ids) {
           const card = s.cards[id];
@@ -276,7 +278,7 @@ export function resolveTurn(
   //            2. ENERGY_CHANGED      (refill current to new ceiling + bonus)
   //            3. NEXT_TURN_ENERGY_BONUS_CHANGED (zero the one-shot bonus)
   //          Mirrors: `currentEnergy = maxEnergy + energyEarnedLastTurn`.
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     const ramp: MatchEvent = {
       type: 'MAX_ENERGY_CHANGED',
       owner,
@@ -357,7 +359,7 @@ export function resolveTurn(
   }
 
   // Phase 6  Draws (1 per owner, hand-cap permitting).
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     const draws = drawStep(s, owner, 1, manifest);
     for (const e of draws) {
       events.push(e);
@@ -378,6 +380,25 @@ export function resolveTurn(
       };
       events.push(revealEvt);
       s = apply(s, revealEvt, manifest);
+
+      const locDef = manifest.locations[loc.defId];
+      const locReveal = locDef?.abilities.onReveal ?? [];
+      for (let idx = 0; idx < locReveal.length; idx++) {
+        const ctx: EffectCtx = {
+          state: s,
+          manifest,
+          self: loc.id,
+          selfKind: 'location',
+          selfLane: laneIdx,
+          selfOwner: null,
+          rng: rng.fork(`location-reveal:${loc.id}:${idx}`),
+          source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: idx },
+          depth: 0,
+        };
+        const res = evalEffect(s, locReveal[idx], ctx, manifest);
+        events.push(...res.events);
+        s = res.state;
+      }
     }
   }
 
@@ -416,23 +437,23 @@ export function computeMatchResult(state: MatchState, manifest: Manifest): Match
   let totO = 0;
   for (let i = 0; i < 3; i++) {
     const lane = i as LaneIdx;
-    const p = getLanePower(state, lane, 'PLAYER', manifest);
-    const o = getLanePower(state, lane, 'OPP', manifest);
+    const p = getLanePower(state, lane, 'P0', manifest);
+    const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;
     totO += o;
     if (p > o) lanesP++;
     else if (o > p) lanesO++;
   }
   const winner: Owner | 'DRAW' =
-      lanesP > lanesO ? 'PLAYER'
-    : lanesO > lanesP ? 'OPP'
-    : totP > totO     ? 'PLAYER'
-    : totO > totP     ? 'OPP'
+      lanesP > lanesO ? 'P0'
+    : lanesO > lanesP ? 'P1'
+    : totP > totO     ? 'P0'
+    : totO > totP     ? 'P1'
     :                   'DRAW';
   return {
     winner,
-    lanesWon:   { PLAYER: lanesP, OPP: lanesO } as Record<Owner, number>,
-    totalPower: { PLAYER: totP,   OPP: totO   } as Record<Owner, number>,
+    lanesWon:   { P0: lanesP, P1: lanesO } as Record<Owner, number>,
+    totalPower: { P0: totP,   P1: totO   } as Record<Owner, number>,
   };
 }
 
@@ -447,20 +468,20 @@ function computePriorityForNextTurn(
   let totO = 0;
   for (let i = 0; i < 3; i++) {
     const lane = i as LaneIdx;
-    const p = getLanePower(state, lane, 'PLAYER', manifest);
-    const o = getLanePower(state, lane, 'OPP', manifest);
+    const p = getLanePower(state, lane, 'P0', manifest);
+    const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;
     totO += o;
     if (p > o) lanesP++;
     else if (o > p) lanesO++;
   }
   if (lanesP !== lanesO) {
-    return { owner: lanesP > lanesO ? 'PLAYER' : 'OPP', reason: 'MORE_LANES' };
+    return { owner: lanesP > lanesO ? 'P0' : 'P1', reason: 'MORE_LANES' };
   }
   if (totP !== totO) {
-    return { owner: totP > totO ? 'PLAYER' : 'OPP', reason: 'MORE_POWER' };
+    return { owner: totP > totO ? 'P0' : 'P1', reason: 'MORE_POWER' };
   }
-  return { owner: rng.int(0, 1) === 0 ? 'PLAYER' : 'OPP', reason: 'COIN_FLIP' };
+  return { owner: rng.int(0, 1) === 0 ? 'P0' : 'P1', reason: 'COIN_FLIP' };
 }
 
 // Re-exports for Step 8+ wiring convenience.

@@ -8,10 +8,9 @@
   "abilities": {
     "ongoing": [
       {
-        "kind": "POWER_ADD",
-        "target": {
-          "kind": "SAME_LANE",
-          "of": { "kind": "SELF" },
+        "kind": "LANE_POWER_ADD",
+        "laneScope": {
+          "laneOf": { "kind": "SELF" },
           "ownerFilter": "SELF_OWNER"
         },
         "delta": { "kind": "LIT", "n": 1 },

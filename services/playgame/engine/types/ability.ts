@@ -75,6 +75,7 @@ export type EffectExpr =
   // Atoms
   | { kind: 'ADD_POWER'; target: Selector; delta: NumExpr }
   | { kind: 'SET_POWER'; target: Selector; value: NumExpr }
+  | { kind: 'ADJUST_COST'; target: Selector; delta: NumExpr }
   | { kind: 'DESTROY'; target: Selector }
   | { kind: 'MOVE'; target: Selector; to: Selector }
   | { kind: 'DRAW'; owner: Owner | 'SELF_OWNER'; count: NumExpr }
@@ -119,6 +120,7 @@ export type OngoingExpr =
   | { kind: 'COST_ADD'; target: Selector; delta: NumExpr; stack: StackingPolicy }
 
   // Lane-level effects (apply after summing card powers in the lane)
+  | { kind: 'LANE_POWER_ADD'; laneScope: LaneScope; delta: NumExpr; stack: StackingPolicy }
   | { kind: 'LANE_POWER_MULTIPLIER'; laneScope: LaneScope; factor: NumExpr; stack: StackingPolicy }
 
   // On Reveal multiplier (affects how many times an OR fires)

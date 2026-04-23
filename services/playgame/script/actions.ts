@@ -20,7 +20,7 @@ import {
 import type { Step } from './runner';
 import type { MatchState as EngineMatchState, MatchPhase } from '../engine/types/state';
 import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneIdx } from '../engine/types/ids';
+import { otherSeat, type CardId, type LaneIdx, type Seat } from '../engine/types/ids';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn, computeMatchResult } from '../engine/resolve';
@@ -55,6 +55,10 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   setUi: SetStoreFunction<UiState>;
   /** Game manifest for card/location def lookups and engine calls. */
   manifest: Manifest;
+  /** Absolute seat controlled by this viewer. */
+  localSeat: Seat;
+  /** The other seat in the current match. */
+  remoteSeat: Seat;
   /** Seeded RNG for engine turn resolution (fork per turn). */
   engineRng: Rng;
   /** Board root element (`.board`). */
@@ -145,7 +149,7 @@ const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
 
 /**
  * Stage 1 of the two-stage draw pipeline: pull the top card off
- * `state.deck[PLAYER]` and emit a CARD_DRAWN event (which the reducer
+ * `state.deck[P0]` and emit a CARD_DRAWN event (which the reducer
  * converts to a DECK→HAND move). Pushes the ResolvedCard into `ui.incoming`.
  *
  * Deck is pre-populated and seed-driven by `createInitialMatchState()`.
@@ -154,16 +158,16 @@ const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
  */
 export const drawFromDeck = (count = 1): Step => (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return Promise.resolve();
+  if ((c.state.hand[c.localSeat] as unknown[]).length >= 7) return Promise.resolve();
 
   for (let i = 0; i < count; i++) {
     // `drawQueue` override path — for tests / scripted intros. Unchanged.
     const override = c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined;
     if (override) {
-      const inst = newEngineCardInstance(override, 'PLAYER');
+      const inst = newEngineCardInstance(override, c.localSeat);
       c.dispatch({
         type: 'CARD_ADDED_TO_HAND',
-        owner: 'PLAYER',
+        owner: c.localSeat,
         cardId: inst.id,
         defId: override.defId,
         spawnSource: { kind: 'DECK_CREATION' },
@@ -174,14 +178,14 @@ export const drawFromDeck = (count = 1): Step => (ctx) => {
       continue;
     }
 
-    // Real-deck path: pop the top card off `state.deck[PLAYER]` via the
+    // Real-deck path: pop the top card off `state.deck[P0]` via the
     // reducer-owned CARD_DRAWN event. Deck is already seeded + shuffled.
-    const deck = c.state.deck['PLAYER'] as readonly { id: string }[];
+    const deck = c.state.deck[c.localSeat] as readonly { id: string }[];
     if (deck.length === 0) break;
     const top = deck[0];
     c.dispatch({
       type: 'CARD_DRAWN',
-      owner: 'PLAYER',
+      owner: c.localSeat,
       cardId: top.id as CardId,
       toHand: true,
     });
@@ -220,14 +224,14 @@ export const commitIncomingToHand = (
     const card = batch[i];
 
     // Cap check against current engine hand.
-    if ((c.state.hand['PLAYER'] as unknown[]).length > 7) {
+    if ((c.state.hand[c.localSeat] as unknown[]).length > 7) {
       c.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((x) => x.id !== card.id));
       continue;
     }
 
     // Note: the card is already in engine hand (added in drawFromDeck).
     // Just capture rects for the FLIP animation, remove from incoming.
-    const handCards = c.state.hand['PLAYER'];
+    const handCards = c.state.hand[c.localSeat];
     const oldIds = handCards.map((h) => h.id as string).filter((id) => id !== card.id);
     const oldRects = captureHandRects(oldIds, c.cardRefs);
 
@@ -271,10 +275,10 @@ export const dealPlayerCard = (
   const c = ctx as PlayScriptCtx;
   if (def) {
     // Pre-specified card: add directly to engine hand + incoming.
-    const inst = newEngineCardInstance(def, 'PLAYER');
+    const inst = newEngineCardInstance(def, c.localSeat);
     const event: MatchEvent = {
       type: 'CARD_ADDED_TO_HAND',
-      owner: 'PLAYER',
+      owner: c.localSeat,
       cardId: inst.id,
       defId: def.defId,
       spawnSource: { kind: 'DECK_CREATION' },
@@ -364,10 +368,10 @@ export const revealNextLocation = (): Step => (ctx) => {
  */
 export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const playerStaged = c.state.stagingOrder.filter(
-    (id) => c.state.cards[id]?.owner === 'PLAYER',
+  const localStaged = c.state.stagingOrder.filter(
+    (id) => c.state.cards[id]?.owner === c.localSeat,
   );
-  if (playerStaged.length === 0) return;
+  if (localStaged.length === 0) return;
   c.setUi('isFlipped', true);
   await new Promise<void>((r) => setTimeout(r, 250));
 };
@@ -587,44 +591,44 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
  *   1. Ask the engine for a turn plan (seeded, deterministic).
  *   2. For each play, dispatch the engine events + run the fly-in animation.
  *
- * Once OPP hands are pre-populated (Tier 1.2 finalized across the UI),
+ * Once P1 hands are pre-populated (Tier 1.2 finalized across the UI),
  * switch to `planEnemyTurnFromHand` so plays reference real hand cards
  * instead of minted-on-the-fly defs.
  */
-export const enemyPlayRandom = (): Step => async (ctx) => {
+export const autoPlayRemoteSeat = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
   const plays = planEnemyTurnFromPool(
     c.state as EngineMatchState,
-    'OPP',
+    c.remoteSeat,
     c.manifest,
     c.engineRng,
-    { forkTag: 'enemy-plays' },
+    { forkTag: `seat-plays:${c.remoteSeat}` },
   );
 
   for (const play of plays) {
     const def = c.manifest.cards[play.defId];
     if (!def) continue;
-    const inst = newEngineCardInstance(def, 'OPP');
+    const inst = newEngineCardInstance(def, c.remoteSeat);
 
     c.dispatch({
       type: 'CARD_ADDED_TO_HAND',
-      owner: 'OPP',
+      owner: c.remoteSeat,
       cardId: inst.id,
       defId: def.defId,
       spawnSource: { kind: 'DECK_CREATION' },
     });
     c.dispatch({
       type: 'CARD_STAGED',
-      intentId: `enemy-${inst.id}`,
-      owner: 'OPP',
+      intentId: `seat-${c.remoteSeat}-${inst.id}`,
+      owner: c.remoteSeat,
       cardId: inst.id,
       lane: play.lane,
       cost: play.cost,
     });
     c.dispatch({
       type: 'ENERGY_CHANGED',
-      owner: 'OPP',
+      owner: c.remoteSeat,
       delta: -play.cost,
       reason: 'CARD_PLAYED',
     });
@@ -656,7 +660,7 @@ export const enemyPlayRandom = (): Step => async (ctx) => {
  */
 export const drawHandCard = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if ((c.state.hand['PLAYER'] as unknown[]).length >= 7) return;
+  if ((c.state.hand[c.localSeat] as unknown[]).length >= 7) return;
   await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
   await (commitIncomingToHand() as (x: typeof ctx) => Promise<void>)(ctx);
 };

@@ -26,21 +26,21 @@ export function getPriority(state: MatchState, manifest: Manifest): PriorityResu
   let totO = 0;
   for (let i = 0; i < 3; i++) {
     const lane = i as 0 | 1 | 2;
-    const p = getLanePower(state, lane, 'PLAYER', manifest);
-    const o = getLanePower(state, lane, 'OPP', manifest);
+    const p = getLanePower(state, lane, 'P0', manifest);
+    const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;
     totO += o;
     if (p > o) lanesP++;
     else if (o > p) lanesO++;
   }
   if (lanesP !== lanesO) {
-    return { owner: lanesP > lanesO ? 'PLAYER' : 'OPP', reason: 'MORE_LANES' };
+    return { owner: lanesP > lanesO ? 'P0' : 'P1', reason: 'MORE_LANES' };
   }
   if (totP !== totO) {
-    return { owner: totP > totO ? 'PLAYER' : 'OPP', reason: 'MORE_POWER' };
+    return { owner: totP > totO ? 'P0' : 'P1', reason: 'MORE_POWER' };
   }
   // Deterministic coin flip: a dedicated RNG fork pinned to the turn.
   const rng = createRng(state.seed).fork(`priority:turn${state.turn}`);
-  const pick: Owner = rng.int(0, 1) === 0 ? 'PLAYER' : 'OPP';
+  const pick: Owner = rng.int(0, 1) === 0 ? 'P0' : 'P1';
   return { owner: pick, reason: 'COIN_FLIP' };
 }

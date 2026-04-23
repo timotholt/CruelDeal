@@ -49,7 +49,7 @@ function runOneTurn(
   // Priority owner stages first — purely cosmetic here (resolveTurn decides
   // the reveal order independently) but keeps the event log readable.
   const first: Owner = s.priority;
-  const second: Owner = first === 'PLAYER' ? 'OPP' : 'PLAYER';
+  const second: Owner = first === 'P0' ? 'P1' : 'P0';
 
   for (const owner of [first, second] as const) {
     const plan = planEnemyTurnFromHand(s, owner, manifest, rng, {
@@ -117,7 +117,7 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
   // Pull off each deck's top without going through `resolve` (no intent
   // exists for initial draws).
   const OPENING_DRAW = 3;
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     for (let i = 0; i < OPENING_DRAW; i++) {
       const top = state.deck[owner][0];
       if (!top) break;

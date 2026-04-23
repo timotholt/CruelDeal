@@ -8,13 +8,14 @@
 
 import { createSignal } from 'solid-js';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
+import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
 
 export type InspectTarget =
   | {
       kind: 'card';
       card: ResolvedCard;
       zone: 'hand' | 'board';
-      side: 'player' | 'enemy';
+      side: 'local' | 'remote' | 'top' | 'bottom';
       laneIdx?: number;
       element: HTMLElement;
     }
@@ -22,8 +23,10 @@ export type InspectTarget =
       kind: 'location';
       location: ResolvedLocation;
       laneIdx: number;
-      playerPower: number;
-      enemyPower: number;
+      bottomPower: number;
+      topPower: number;
+      bottomBreakdown: LanePowerBreakdown;
+      topBreakdown: LanePowerBreakdown;
       element: HTMLElement;
     };
 

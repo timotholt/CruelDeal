@@ -9,9 +9,17 @@
  * way to project any MatchState snapshot into the UI.
  */
 
-import type { MatchResult, MatchState as EngineMatchState } from './engine/types/state';
-import type { CardId, LaneIdx, Owner } from './engine/types/ids';
+import type { CostLogEntry, MatchResult, MatchState as EngineMatchState, PowerLogEntry } from './engine/types/state';
+import type { CardId, LaneIdx, Owner, Seat } from './engine/types/ids';
 import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
+import type { CostModifierEntry, PowerModifierEntry } from './engine/projections';
+import {
+  getCardCost,
+  getCardCostModifiers,
+  getCardPower,
+  getCardPowerModifiers,
+  getLanePower as getEngineLanePower,
+} from './engine/projections';
 import { newShortId } from '@/utils/id';
 
 // ── UI-only sidecar state (re-exported here to avoid a circular dep between
@@ -41,19 +49,31 @@ export interface ResolvedCard {
   defId: string;
   /** Display name from manifest cosmetic. */
   name: string;
-  /** Energy cost from manifest. */
+  /** Effective cost after live COST_ADD projections. */
   cost: number;
+  /** Base cost from manifest. */
+  baseCost: number;
   /** Effective power = basePower + powerDelta. */
   power: number;
   basePower: number;
   /** Accent color hex (from manifest cosmetic, or fallback). */
   art: string;
+  /** Portrait image path (e.g. "/art/cards/sentinel/portrait.webp"), or null if no art yet. */
+  portraitPath: string | null;
   /** Primary tribe (used as "type" label in UI). */
   type: string;
   /** Rules text / flavor shown in the inspector. */
   text: string;
+  /** Permanent power change history for this card. Empty until a card effect fires. */
+  powerLog: readonly PowerLogEntry[];
+  /** Live power modifiers affecting this card right now. */
+  powerModifiers: readonly PowerModifierEntry[];
+  /** Live cost modifiers affecting this card right now. */
+  costLog: readonly CostModifierEntry[];
+  /** Permanent per-card cost change history. */
+  costHistory: readonly CostLogEntry[];
   // Engine runtime fields kept for logic (face-down check, zone routing, etc.)
-  owner: Owner;
+  owner: Seat;
   zone: string;
   revealed: boolean;
   powerDelta: number;
@@ -97,16 +117,22 @@ export function resolveCard(
     id: cardId,
     defId: inst.defId,
     name: def.cosmetic.displayName || def.name,
-    cost: def.cost,
-    power: def.basePower + inst.powerDelta,
+    cost: getCardCost(state, cardId as CardId, manifest),
+    baseCost: def.cost,
+    power: getCardPower(state, cardId as CardId, manifest),
     basePower: def.basePower,
     art: def.cosmetic.accent ?? '#4a5568',
+    portraitPath: def.cosmetic.art.portrait.path || null,
     type: def.tribes[0] ?? 'striker',
     text: def.cosmetic.rulesText ?? '',
     owner: inst.owner,
     zone: inst.zone,
     revealed: inst.revealed,
     powerDelta: inst.powerDelta,
+    powerLog: inst.powerLog,
+    powerModifiers: getCardPowerModifiers(state, cardId as CardId, manifest),
+    costLog: getCardCostModifiers(state, cardId as CardId, manifest),
+    costHistory: inst.costLog,
   };
 }
 
@@ -115,7 +141,15 @@ export function getPlayerHand(
   state: EngineMatchState,
   manifest: Manifest,
 ): ResolvedCard[] {
-  return state.hand['PLAYER']
+  return getHandForSeat(state, 'P0', manifest);
+}
+
+export function getHandForSeat(
+  state: EngineMatchState,
+  seat: Seat,
+  manifest: Manifest,
+): ResolvedCard[] {
+  return state.hand[seat]
     .map((c) => resolveCard(c.id, state, manifest))
     .filter((c): c is ResolvedCard => c !== null);
 }
@@ -126,7 +160,16 @@ export function getPlayerLaneCards(
   laneIdx: LaneIdx,
   manifest: Manifest,
 ): ResolvedCard[] {
-  return state.lanes[laneIdx].cards['PLAYER']
+  return getLaneCardsForSeat(state, laneIdx, 'P0', manifest);
+}
+
+export function getLaneCardsForSeat(
+  state: EngineMatchState,
+  laneIdx: LaneIdx,
+  seat: Seat,
+  manifest: Manifest,
+): ResolvedCard[] {
+  return state.lanes[laneIdx].cards[seat]
     .map((id) => resolveCard(id, state, manifest))
     .filter((c): c is ResolvedCard => c !== null);
 }
@@ -137,9 +180,7 @@ export function getEnemyLaneCards(
   laneIdx: LaneIdx,
   manifest: Manifest,
 ): ResolvedCard[] {
-  return state.lanes[laneIdx].cards['OPP']
-    .map((id) => resolveCard(id, state, manifest))
-    .filter((c): c is ResolvedCard => c !== null);
+  return getLaneCardsForSeat(state, laneIdx, 'P1', manifest);
 }
 
 /**
@@ -182,14 +223,10 @@ export function getLocation(
 export function getLanePower(
   state: EngineMatchState,
   laneIdx: LaneIdx,
-  owner: Owner,
+  owner: Seat,
   manifest: Manifest,
 ): number {
-  return state.lanes[laneIdx].cards[owner]
-    .reduce((sum: number, id) => {
-      const card = resolveCard(id, state, manifest);
-      return sum + (card?.power ?? 0);
-    }, 0);
+  return getEngineLanePower(state, laneIdx, owner, manifest);
 }
 
 // ── Card creation helpers ────────────────────────────────────────────────────
@@ -202,7 +239,7 @@ export function getLanePower(
  */
 export function newEngineCardInstance(
   def: ManifestCardDef,
-  owner: Owner,
+  owner: Seat,
 ): import('./engine/types/state').CardInstance {
   return {
     id: newShortId() as CardId,
@@ -213,6 +250,9 @@ export function newEngineCardInstance(
     zone: 'HAND',
     revealed: false,
     powerDelta: 0,
+    costDelta: 0,
+    powerLog: [],
+    costLog: [],
     tags: [],
     textOverride: null,
     counters: {},

@@ -51,6 +51,9 @@ function buildDeck(
       zone: 'DECK',
       revealed: false,
       powerDelta: 0,
+      costDelta: 0,
+      powerLog: [],
+      costLog: [],
       tags: [],
       textOverride: null,
       counters: {},
@@ -117,8 +120,8 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
 export function createInitialMatchState(seed: string, manifest: Manifest): MatchState {
   const rng = createRng(seed);
   const deckRng = rng.fork('deck');
-  const playerDeck = buildDeck('PLAYER', manifest, deckRng.fork('PLAYER'));
-  const oppDeck = buildDeck('OPP', manifest, deckRng.fork('OPP'));
+  const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'));
+  const oppDeck = buildDeck('P1', manifest, deckRng.fork('P1'));
 
   // Index every card by id so `state.cards[id]` lookups work for both decks.
   const cards: Record<string, CardInstance> = {};
@@ -130,32 +133,33 @@ export function createInitialMatchState(seed: string, manifest: Manifest): Match
     idx: i as LaneIdx,
     location: locs[i] ?? null,
     locationRevealed: false,
-    cards: { PLAYER: [], OPP: [] } as Record<Owner, readonly CardId[]>,
+    cards: { P0: [], P1: [] } as Record<Owner, readonly CardId[]>,
   })) as unknown as readonly [LaneState, LaneState, LaneState];
 
   const startEnergy = manifest.constants.energyCurve[0] ?? 1;
-  const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'PLAYER' : 'OPP';
+  const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
 
   return {
     turn: 1,
     // Ramp model: maxEnergy starts at 0 and +1s each turn. Turn 1 is the
     // first playable turn, so the ramp for turn 1 has implicitly fired
     // and both owners sit at 1. Subsequent turns ramp via MAX_ENERGY_CHANGED.
-    maxEnergy: { PLAYER: 1, OPP: 1 },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
+    maxEnergy: { P0: 1, P1: 1 },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
     seed,
     priority,
-    energy: { PLAYER: startEnergy, OPP: startEnergy },
-    deck: { PLAYER: playerDeck, OPP: oppDeck },
-    hand: { PLAYER: [], OPP: [] },
+    energy: { P0: startEnergy, P1: startEnergy },
+    deck: { P0: playerDeck, P1: oppDeck },
+    hand: { P0: [], P1: [] },
     cards,
     lanes,
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
     log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
+    lastPlayedBy: { P0: null, P1: null },
     result: null,
+    energyLog: { P0: [], P1: [] },
   };
 }

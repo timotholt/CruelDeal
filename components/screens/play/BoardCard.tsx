@@ -1,8 +1,8 @@
 /**
  * BoardCard — a card sitting in a lane slot.
  *
- * Face-down logic: unrevealed enemy cards are always face-down; unrevealed
- * player cards are face-down only during resolution (ui.isFlipped = true),
+ * Face-down logic: unrevealed remote cards are always face-down; unrevealed
+ * local cards are face-down only during resolution (ui.isFlipped = true),
  * so the Snap UX (your cards show face-up while staging) stays intact.
  */
 
@@ -14,13 +14,12 @@ import { dragState } from './useDragDrop';
 
 interface BoardCardProps {
   card: ResolvedCard;
-  enemy?: boolean;
-  side: 'player' | 'enemy';
+  side: 'top' | 'bottom';
   laneIdx: number;
 }
 
 export const BoardCard = (props: BoardCardProps) => {
-  const { ui, engineState, isResolving } = usePlayGame();
+  const { ui, engineState, isResolving, localSeat } = usePlayGame();
   const { bindCardRef } = useVfx();
 
   /**
@@ -30,7 +29,8 @@ export const BoardCard = (props: BoardCardProps) => {
    * frame after TURN_STARTED.
    */
   const isDraggablePending = (): boolean => {
-    if (props.enemy || props.side !== 'player') return false;
+    if (props.side !== 'bottom') return false;
+    if (props.card.owner !== localSeat) return false;
     if (isResolving()) return false;
     return engineState.stagingOrder.includes(props.card.id as never);
   };
@@ -50,7 +50,7 @@ export const BoardCard = (props: BoardCardProps) => {
 
   const isFaceDown = (): boolean => {
     if (props.card.revealed) return false;
-    if (props.card.owner === 'OPP') return true;
+    if (props.card.owner !== localSeat) return true;
     return ui.isFlipped;
   };
   const isPending = isFaceDown;
@@ -91,7 +91,7 @@ export const BoardCard = (props: BoardCardProps) => {
       ref={bindCardRef(props.card.id)}
       class={
         'card' +
-        (props.enemy ? ' enemy' : '') +
+        (props.side === 'top' ? ' enemy' : '') +
         (isFaceDown() ? ' facedown' : '') +
         (isPending() ? ' pending' : '') +
         (isDraggablePending() ? ' undoable' : '')
@@ -108,7 +108,10 @@ export const BoardCard = (props: BoardCardProps) => {
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>
-      <div class="bar" style={{ background: props.card.art }} />
+      {props.card.portraitPath
+        ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
+        : <div class="bar" style={{ background: props.card.art }} />
+      }
       <div class="name">{props.card.name}</div>
       <div class="type">{props.card.type}</div>
     </div>

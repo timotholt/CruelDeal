@@ -47,7 +47,7 @@ export const HandCard = (props: HandCardProps) => {
       kind: 'card',
       card: props.card,
       zone: 'hand',
-      side: 'player',
+      side: 'local',
       element: e.currentTarget as HTMLElement,
     });
   };
@@ -72,7 +72,10 @@ export const HandCard = (props: HandCardProps) => {
     >
       <div class="cost">{props.card.cost}</div>
       <div class={'power ' + powerClass()}>{props.card.power}</div>
-      <div class="bar" style={{ background: props.card.art }} />
+      {props.card.portraitPath
+        ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
+        : <div class="bar" style={{ background: props.card.art }} />
+      }
       <div class="name">{props.card.name}</div>
       <div class="type">{props.card.type}</div>
     </div>

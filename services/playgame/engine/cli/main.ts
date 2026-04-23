@@ -60,7 +60,7 @@ function fmtEvent(e: MatchEvent): string {
       return `  ** location revealed in lane ${e.lane} (${e.locationId})`;
     case 'MATCH_ENDED': {
       const r = e.result;
-      return `  == MATCH ENDED: winner=${r.winner} lanes=${r.lanesWon.PLAYER}-${r.lanesWon.OPP} power=${r.totalPower.PLAYER}-${r.totalPower.OPP}`;
+      return `  == MATCH ENDED: winner=${r.winner} lanes=${r.lanesWon.P0}-${r.lanesWon.P1} power=${r.totalPower.P0}-${r.totalPower.P1}`;
     }
     case 'INTENT_REJECTED':
       return `     !! rejected intent ${e.intentId}: ${e.reason}`;
@@ -80,8 +80,8 @@ function printSummary(finalState: MatchState): void {
       '',
       '──────────────────────────────────────────────',
       ` Winner     : ${r.winner}`,
-      ` Lanes won  : PLAYER=${r.lanesWon.PLAYER}  OPP=${r.lanesWon.OPP}`,
-      ` Total power: PLAYER=${r.totalPower.PLAYER}  OPP=${r.totalPower.OPP}`,
+      ` Lanes won  : P0=${r.lanesWon.P0}  P1=${r.lanesWon.P1}`,
+      ` Total power: P0=${r.totalPower.P0}  P1=${r.totalPower.P1}`,
       ` Turns      : ${finalState.turn}`,
       '──────────────────────────────────────────────',
       '',

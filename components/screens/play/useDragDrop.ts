@@ -12,6 +12,7 @@
  */
 
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { Seat } from '@/services/playgame/engine/types/ids';
 import type { MatchState } from '@/services/playgame/engine/types/state';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
@@ -21,11 +22,12 @@ export const dragState: { id: string | null } = { id: null };
 
 export interface DragDropOpts {
   boardEl: HTMLElement;
+  localSeat: Seat;
   /** Fresh getter for the engine state (called per-event). */
   engineState: MatchState;
   isResolving: () => boolean;
-  /** Fresh getter for the visible hand (cards not in the incoming buffer). */
-  playerHand: () => ResolvedCard[];
+  /** Fresh getter for the visible local hand (cards not in the incoming buffer). */
+  localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
   /** Returns true on success; false if the engine rejected the stage intent. */
   stageCardInLane: (cardId: string, laneIdx: number) => boolean;
@@ -40,12 +42,12 @@ export interface DragDropOpts {
  *   onCleanup(setupDragDrop({ ... }));
  */
 export function setupDragDrop(opts: DragDropOpts): () => void {
-  const { boardEl, engineState, isResolving, playerHand, cardRefs, stageCardInLane, undoPendingCard } = opts;
+  const { boardEl, localSeat, engineState, isResolving, localHand, cardRefs, stageCardInLane, undoPendingCard } = opts;
 
-  const getPlayerLaneSlots = (target: EventTarget | null): HTMLElement | null => {
+  const getBottomLaneSlots = (target: EventTarget | null): HTMLElement | null => {
     let el = target as HTMLElement | null;
     while (el && el !== boardEl) {
-      if (el.classList?.contains('lane-slots') && el.dataset.side === 'player') return el;
+      if (el.classList?.contains('lane-slots') && el.dataset.side === 'bottom') return el;
       el = el.parentElement;
     }
     return null;
@@ -60,7 +62,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     return null;
   };
 
-  /** True if the currently-dragged card is a player pending card (can be undone). */
+  /** True if the currently-dragged card is a local pending card (can be undone). */
   const dragIsPending = (): boolean => {
     if (!dragState.id) return false;
     return engineState.stagingOrder.includes(dragState.id as never);
@@ -77,10 +79,10 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
     // Lane drop (stage from hand → lane). Only valid when the drag is NOT
     // already a pending card; pending cards are dragged back to hand.
-    const slotEl = getPlayerLaneSlots(e.target);
+    const slotEl = getBottomLaneSlots(e.target);
     if (slotEl && !dragIsPending()) {
       const lane = Number(slotEl.dataset.lane) as LaneIdx;
-      if (engineState.lanes[lane].cards['PLAYER'].length >= 4) return;
+      if (engineState.lanes[lane].cards[localSeat].length >= 4) return;
       e.preventDefault();
       clearDropState();
       slotEl.classList.add('drop-target');
@@ -103,7 +105,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
   const onDragLeave = (e: DragEvent): void => {
     const related = e.relatedTarget as Node | null;
-    const slotEl = getPlayerLaneSlots(e.target);
+    const slotEl = getBottomLaneSlots(e.target);
     if (slotEl && !slotEl.contains(related)) {
       slotEl.classList.remove('drop-target');
       slotEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
@@ -116,7 +118,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
   const onDrop = (e: DragEvent): void => {
     e.preventDefault();
-    const slotEl = getPlayerLaneSlots(e.target);
+    const slotEl = getBottomLaneSlots(e.target);
     const handEl = getHandEl(e.target);
     clearDropState();
     boardEl.classList.remove('dragging-card');
@@ -129,7 +131,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       // slot while hand siblings shuffle over to make room. This mirrors
       // the hex-button undo animation.
       const pendingIds = [...engineState.stagingOrder];
-      const handIds = playerHand().map((c) => c.id);
+      const handIds = localHand().map((c) => c.id);
       const allIds = [...pendingIds, ...handIds];
       const oldRects = captureHandRects(allIds, cardRefs);
       const ok = undoPendingCard(dragState.id);
@@ -141,7 +143,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     // Stage: dropping a hand card on a player lane slot.
     if (slotEl && !dragIsPending()) {
       const lane = Number(slotEl.dataset.lane);
-      const handIds = playerHand().map((c) => c.id);
+      const handIds = localHand().map((c) => c.id);
       const oldRects = captureHandRects(handIds, cardRefs);
       const ok = stageCardInLane(dragState.id, lane);
       if (!ok) return;

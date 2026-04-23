@@ -9,7 +9,7 @@ import { resolve, resolveTurn } from './resolve';
 import { apply } from './apply';
 import { createRng } from './rng';
 import { getCardPower, getLanePower } from './projections';
-import type { CardDef, Manifest } from './manifest/types';
+import type { CardDef, LocationDef, Manifest } from './manifest/types';
 import type {
   CardInstance,
   LaneState,
@@ -40,7 +40,7 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-function mkManifest(cards: CardDef[]): Manifest {
+function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -48,7 +48,7 @@ function mkManifest(cards: CardDef[]): Manifest {
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12 },
     cards: byId(cards),
-    locations: {},
+    locations: byId(locations),
     disabled: { cards: [], locations: [] },
   };
 }
@@ -57,10 +57,10 @@ let idCounter = 0;
 const nextCardId = (): CardId => `r${++idCounter}` as CardId;
 
 function blankLane(i: LaneIdx): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { PLAYER: [], OPP: [] } };
+  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
 }
 
-function mkCardInstance(defId: string, owner: Owner = 'PLAYER'): CardInstance {
+function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
   return {
     id: nextCardId(),
     defId,
@@ -70,6 +70,9 @@ function mkCardInstance(defId: string, owner: Owner = 'PLAYER'): CardInstance {
     zone: 'DECK',
     revealed: false,
     powerDelta: 0,
+    costDelta: 0,
+    powerLog: [],
+    costLog: [],
     tags: [],
     textOverride: null,
     counters: {},
@@ -82,26 +85,27 @@ function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}
   const t = opts.turn ?? 1;
   return {
     turn: t,
-    maxEnergy: { PLAYER: t, OPP: t },
-    nextTurnEnergyBonus: { PLAYER: 0, OPP: 0 },
+    maxEnergy: { P0: t, P1: t },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'resolve-test',
-    priority: opts.priority ?? 'PLAYER',
-    energy: { PLAYER: t, OPP: t },
-    deck: { PLAYER: [], OPP: [] },
-    hand: { PLAYER: [], OPP: [] },
+    priority: opts.priority ?? 'P0',
+    energy: { P0: t, P1: t },
+    deck: { P0: [], P1: [] },
+    hand: { P0: [], P1: [] },
     cards: {},
     lanes: [blankLane(0), blankLane(1), blankLane(2)],
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
     log: [],
-    lastPlayedBy: { PLAYER: null, OPP: null },
+    lastPlayedBy: { P0: null, P1: null },
     result: null,
+    energyLog: { P0: [], P1: [] },
   };
 }
 
-function withCardInHand(state: MatchState, defId: string, owner: Owner = 'PLAYER'): { state: MatchState; cardId: CardId } {
+function withCardInHand(state: MatchState, defId: string, owner: Owner = 'P0'): { state: MatchState; cardId: CardId } {
   const inst: CardInstance = { ...mkCardInstance(defId, owner), zone: 'HAND' };
   return {
     state: {
@@ -113,7 +117,7 @@ function withCardInHand(state: MatchState, defId: string, owner: Owner = 'PLAYER
   };
 }
 
-function withCardInDeck(state: MatchState, defId: string, owner: Owner = 'PLAYER'): { state: MatchState; cardId: CardId } {
+function withCardInDeck(state: MatchState, defId: string, owner: Owner = 'P0'): { state: MatchState; cardId: CardId } {
   const inst = mkCardInstance(defId, owner);
   return {
     state: {
@@ -150,15 +154,52 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const manifest = mkManifest([mkCard('grunt', 3, 2)]);
   const { state, cardId } = withCardInHand(baseState({ turn: 3 }), 'grunt');
   const events = resolve(state, {
-    type: 'STAGE_CARD', intentId: 'i1', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'i1', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest);
   eq(events.length, 2, 'STAGE_CARD: emits 2 events');
   eq(events[0].type, 'CARD_STAGED', 'STAGE_CARD[0]: CARD_STAGED');
   eq(events[1].type, 'ENERGY_CHANGED', 'STAGE_CARD[1]: ENERGY_CHANGED');
   eq((events[1] as { delta: number }).delta, -2, 'ENERGY_CHANGED: delta = -cost');
   const after = runEvents(state, events, manifest);
-  eq(after.energy.PLAYER, 1, 'energy: 3 - 2 = 1');
-  eq(after.lanes[0].cards.PLAYER.length, 1, 'card staged into lane 0');
+  eq(after.energy.P0, 1, 'energy: 3 - 2 = 1');
+  eq(after.lanes[0].cards.P0.length, 1, 'card staged into lane 0');
+}
+
+// -- STAGE_CARD uses projected current cost, not manifest base cost ---------
+
+{
+  const manifest = mkManifest([
+    mkCard('grunt', 3, 2),
+    mkCard('discountLord', 2, 3, {
+      abilities: {
+        ongoing: [{
+          kind: 'COST_ADD',
+          target: { kind: 'HAND_OF', owner: 'P0' },
+          delta: { kind: 'LIT', n: -1 },
+          stack: 'ADDITIVE',
+        }],
+      },
+    }),
+  ]);
+  let s = baseState({ turn: 1 });
+  const aura = mkCardInstance('discountLord', 'P0');
+  s = {
+    ...s,
+    energy: { P0: 1, P1: 1 },
+    cards: { ...s.cards, [aura.id]: { ...aura, zone: 'LANE', lane: 0, revealed: true } },
+    lanes: [
+      { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, aura.id] } },
+      s.lanes[1], s.lanes[2],
+    ],
+  };
+  const hand = withCardInHand(s, 'grunt');
+  s = hand.state;
+  const events = resolve(s, {
+    type: 'STAGE_CARD', intentId: 'i-cost', owner: 'P0', cardId: hand.cardId, lane: 0,
+  }, createRng('r'), manifest);
+  eq(events.length, 2, 'STAGE_CARD(projected cost): emits 2 events');
+  eq((events[0] as { cost: number }).cost, 1, 'CARD_STAGED carries reduced cost');
+  eq((events[1] as { delta: number }).delta, -1, 'ENERGY_CHANGED uses reduced cost');
 }
 
 // -- STAGE_CARD: insufficient energy → INTENT_REJECTED ---------------------
@@ -167,7 +208,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const manifest = mkManifest([mkCard('expensive', 5, 5)]);
   const { state, cardId } = withCardInHand(baseState({ turn: 2 }), 'expensive');
   const events = resolve(state, {
-    type: 'STAGE_CARD', intentId: 'i-rej', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'i-rej', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest);
   eq(events.length, 1, 'STAGE_CARD(over-cost): single event');
   eq(events[0].type, 'INTENT_REJECTED', 'STAGE_CARD(over-cost): INTENT_REJECTED');
@@ -182,18 +223,18 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = h.state;
   // Pre-fill lane 0 to capacity.
   for (let i = 0; i < manifest.constants.laneCapacity; i++) {
-    const fill = mkCardInstance('grunt', 'PLAYER');
+    const fill = mkCardInstance('grunt', 'P0');
     s = {
       ...s,
       cards: { ...s.cards, [fill.id]: { ...fill, zone: 'LANE', lane: 0, revealed: true } },
       lanes: [
-        { ...s.lanes[0], cards: { ...s.lanes[0].cards, PLAYER: [...s.lanes[0].cards.PLAYER, fill.id] } },
+        { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, fill.id] } },
         s.lanes[1], s.lanes[2],
       ],
     };
   }
   const events = resolve(s, {
-    type: 'STAGE_CARD', intentId: 'i-full', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'i-full', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest);
   eq(events[0].type, 'INTENT_REJECTED', 'STAGE_CARD(lane full): rejected');
   truthy((events[0] as { reason: string }).reason.includes('full'), 'reason mentions "full"');
@@ -205,16 +246,16 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const manifest = mkManifest([mkCard('grunt', 3, 2)]);
   const { state: s0, cardId } = withCardInHand(baseState({ turn: 3 }), 'grunt');
   const staged = runEvents(s0, resolve(s0, {
-    type: 'STAGE_CARD', intentId: 'stage', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stage', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
   const events = resolve(staged, {
-    type: 'UNSTAGE_CARD', intentId: 'unstage', owner: 'PLAYER', cardId,
+    type: 'UNSTAGE_CARD', intentId: 'unstage', owner: 'P0', cardId,
   }, createRng('r'), manifest);
   eq(events.length, 2, 'UNSTAGE_CARD: 2 events (unstage + refund)');
   const after = runEvents(staged, events, manifest);
-  eq(after.energy.PLAYER, 3, 'UNSTAGE_CARD: energy refunded back to 3');
+  eq(after.energy.P0, 3, 'UNSTAGE_CARD: energy refunded back to 3');
   eq(after.stagingOrder.length, 0, 'UNSTAGE_CARD: removed from stagingOrder');
-  eq(after.hand.PLAYER.length, 1, 'UNSTAGE_CARD: back in hand');
+  eq(after.hand.P0.length, 1, 'UNSTAGE_CARD: back in hand');
 }
 
 // -- UNDO_TURN: unstages ALL my staged cards in reverse order ---------------
@@ -226,15 +267,15 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const b = withCardInHand(s, 'grunt'); s = b.state;
   const c = withCardInHand(s, 'grunt'); s = c.state;
   // Stage all three.
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sa', owner: 'PLAYER', cardId: a.cardId, lane: 0 }, createRng('r'), manifest), manifest);
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sb', owner: 'PLAYER', cardId: b.cardId, lane: 1 }, createRng('r'), manifest), manifest);
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sc', owner: 'PLAYER', cardId: c.cardId, lane: 2 }, createRng('r'), manifest), manifest);
-  eq(s.energy.PLAYER, 2, 'after staging 3x cost-1: energy = 5-3 = 2');
-  const events = resolve(s, { type: 'UNDO_TURN', intentId: 'undo', owner: 'PLAYER' }, createRng('r'), manifest);
+  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sa', owner: 'P0', cardId: a.cardId, lane: 0 }, createRng('r'), manifest), manifest);
+  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sb', owner: 'P0', cardId: b.cardId, lane: 1 }, createRng('r'), manifest), manifest);
+  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sc', owner: 'P0', cardId: c.cardId, lane: 2 }, createRng('r'), manifest), manifest);
+  eq(s.energy.P0, 2, 'after staging 3x cost-1: energy = 5-3 = 2');
+  const events = resolve(s, { type: 'UNDO_TURN', intentId: 'undo', owner: 'P0' }, createRng('r'), manifest);
   const after = runEvents(s, events, manifest);
-  eq(after.energy.PLAYER, 5, 'UNDO_TURN: energy fully refunded');
+  eq(after.energy.P0, 5, 'UNDO_TURN: energy fully refunded');
   eq(after.stagingOrder.length, 0, 'UNDO_TURN: stagingOrder empty');
-  eq(after.hand.PLAYER.length, 3, 'UNDO_TURN: all 3 cards back in hand');
+  eq(after.hand.P0.length, 3, 'UNDO_TURN: all 3 cards back in hand');
 }
 
 // -- CONCEDE: emits MATCH_ENDED with opponent winning -----------------------
@@ -242,10 +283,10 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
 {
   const manifest = mkManifest([]);
   const s = baseState();
-  const events = resolve(s, { type: 'CONCEDE', intentId: 'c', owner: 'PLAYER' }, createRng('r'), manifest);
+  const events = resolve(s, { type: 'CONCEDE', intentId: 'c', owner: 'P0' }, createRng('r'), manifest);
   eq(events.length, 1, 'CONCEDE: single event');
   eq(events[0].type, 'MATCH_ENDED', 'CONCEDE: MATCH_ENDED');
-  eq((events[0] as { result: { winner: string } }).result.winner, 'OPP', 'CONCEDE: opponent wins');
+  eq((events[0] as { result: { winner: string } }).result.winner, 'P1', 'CONCEDE: opponent wins');
 }
 
 // ============================================================================
@@ -262,11 +303,11 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     },
   });
   const manifest = mkManifest([pyro]);
-  let s = baseState({ turn: 3, priority: 'PLAYER' });
+  let s = baseState({ turn: 3, priority: 'P0' });
   const { state: s1, cardId } = withCardInHand(s, 'pyro');
   s = s1;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
 
   const { events, state: after } = resolveTurn(s, manifest, createRng('rt'));
@@ -298,21 +339,21 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   });
   const manifest = mkManifest([pyro]);
 
-  for (const prio of ['PLAYER', 'OPP'] as const) {
+  for (const prio of ['P0', 'P1'] as const) {
     let s = baseState({ turn: 3, priority: prio });
-    const a = withCardInHand(s, 'pyro', 'PLAYER'); s = a.state;
-    const b = withCardInHand(s, 'pyro', 'OPP');    s = b.state;
+    const a = withCardInHand(s, 'pyro', 'P0'); s = a.state;
+    const b = withCardInHand(s, 'pyro', 'P1');    s = b.state;
     s = runEvents(s, resolve(s, {
-      type: 'STAGE_CARD', intentId: 'sa', owner: 'PLAYER', cardId: a.cardId, lane: 0,
+      type: 'STAGE_CARD', intentId: 'sa', owner: 'P0', cardId: a.cardId, lane: 0,
     }, createRng('r'), manifest), manifest);
     s = runEvents(s, resolve(s, {
-      type: 'STAGE_CARD', intentId: 'sb', owner: 'OPP', cardId: b.cardId, lane: 0,
+      type: 'STAGE_CARD', intentId: 'sb', owner: 'P1', cardId: b.cardId, lane: 0,
     }, createRng('r'), manifest), manifest);
     const { events } = resolveTurn(s, manifest, createRng('prio'));
     const flipOrder = events
       .filter(e => e.type === 'CARD_FLIPPED')
       .map(e => (e as { cardId: CardId }).cardId);
-    const expected = prio === 'PLAYER' ? [a.cardId, b.cardId] : [b.cardId, a.cardId];
+    const expected = prio === 'P0' ? [a.cardId, b.cardId] : [b.cardId, a.cardId];
     eq(flipOrder, expected, `priority=${prio}: reveal order ${expected.join(' → ')}`);
   }
 }
@@ -321,31 +362,31 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
 
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1)]);
-  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  let s = baseState({ turn: 2, priority: 'P0' });
   // Give each side a 2-card deck so they can draw.
-  for (const owner of ['PLAYER', 'OPP'] as const) {
+  for (const owner of ['P0', 'P1'] as const) {
     const d1 = withCardInDeck(s, 'grunt', owner); s = d1.state;
     const d2 = withCardInDeck(s, 'grunt', owner); s = d2.state;
   }
   // Simulate fully-spent energy to confirm refill.
-  s = { ...s, energy: { PLAYER: 0, OPP: 0 } };
+  s = { ...s, energy: { P0: 0, P1: 0 } };
 
   const { events, state: after } = resolveTurn(s, manifest, createRng('rt-draws'));
   const draws = events.filter(e => e.type === 'CARD_DRAWN');
   eq(draws.length, 2, 'draws: one per owner');
-  eq(after.hand.PLAYER.length, 1, 'PLAYER drew to hand');
-  eq(after.hand.OPP.length, 1, 'OPP drew to hand');
-  eq(after.deck.PLAYER.length, 1, 'PLAYER deck shrinks by 1');
+  eq(after.hand.P0.length, 1, 'P0 drew to hand');
+  eq(after.hand.P1.length, 1, 'P1 drew to hand');
+  eq(after.deck.P0.length, 1, 'P0 deck shrinks by 1');
   // Turn 3 energy curve entry = 3.
-  eq(after.energy.PLAYER, 3, 'energy refilled to curve[2] = 3');
-  eq(after.energy.OPP,    3, 'energy refilled to curve[2] = 3 (OPP)');
+  eq(after.energy.P0, 3, 'energy refilled to curve[2] = 3');
+  eq(after.energy.P1,    3, 'energy refilled to curve[2] = 3 (P1)');
 }
 
 // -- Location reveal at start of turn 2 (for lane 1) ------------------------
 
 {
   const manifest = mkManifest([]);
-  let s = baseState({ turn: 1, priority: 'PLAYER' });
+  let s = baseState({ turn: 1, priority: 'P0' });
   s = withLocation(s, 1, 'some-loc', false);
   const { events, state: after } = resolveTurn(s, manifest, createRng('loc'));
   truthy(
@@ -355,29 +396,69 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   eq(after.lanes[1].locationRevealed, true, 'lane 1 location flipped face-up');
 }
 
+// -- Location reveal fires the location onReveal effects --------------------
+
+{
+  const grunt = mkCard('grunt', 1, 1);
+  const rallyPoint: LocationDef = {
+    defId: 'rally-point',
+    version: 1,
+    name: 'Rally Point',
+    rarity: 1,
+    abilities: {
+      onReveal: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'ANY_OWNER' },
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    },
+    cosmetic: {
+      displayName: 'RALLY POINT',
+      description: 'When revealed, cards here gain +2 Power.',
+      art: { map: { path: '/art/maps/RallyPoint.png' } },
+    },
+  };
+  let s = baseState({ turn: 1, priority: 'P0' });
+  s = withLocation(s, 1, 'rally-point', false);
+  const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 1 as LaneIdx, revealed: true };
+  s = {
+    ...s,
+    cards: { ...s.cards, [inst.id]: inst },
+    lanes: [
+      s.lanes[0],
+      { ...s.lanes[1], cards: { ...s.lanes[1].cards, P0: [inst.id] } },
+      s.lanes[2],
+    ],
+  };
+
+  const { events, state: after } = resolveTurn(s, mkManifest([grunt], [rallyPoint]), createRng('loc-reveal-fires'));
+  truthy(events.some(e => e.type === 'CARD_POWER_CHANGED'), 'location onReveal emits CARD_POWER_CHANGED');
+  eq(getCardPower(after, inst.id, mkManifest([grunt], [rallyPoint])), 3, 'location onReveal buff applied');
+}
+
 // -- Turn 6 → MATCH_ENDED instead of TURN_STARTED --------------------------
 
 {
   const manifest = mkManifest([mkCard('grunt', 3, 1)]);
-  let s = baseState({ turn: 6, priority: 'PLAYER' });
-  // Give PLAYER two grunts on board; OPP one.
+  let s = baseState({ turn: 6, priority: 'P0' });
+  // Give P0 two grunts on board; P1 one.
   for (let i = 0; i < 2; i++) {
-    const inst = { ...mkCardInstance('grunt', 'PLAYER'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
+    const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
     s = {
       ...s,
       cards: { ...s.cards, [inst.id]: inst },
       lanes: [
-        { ...s.lanes[0], cards: { ...s.lanes[0].cards, PLAYER: [...s.lanes[0].cards.PLAYER, inst.id] } },
+        { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, inst.id] } },
         s.lanes[1], s.lanes[2],
       ],
     };
   }
-  const opp = { ...mkCardInstance('grunt', 'OPP'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
+  const opp = { ...mkCardInstance('grunt', 'P1'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
   s = {
     ...s,
     cards: { ...s.cards, [opp.id]: opp },
     lanes: [
-      { ...s.lanes[0], cards: { ...s.lanes[0].cards, OPP: [...s.lanes[0].cards.OPP, opp.id] } },
+      { ...s.lanes[0], cards: { ...s.lanes[0].cards, P1: [...s.lanes[0].cards.P1, opp.id] } },
       s.lanes[1], s.lanes[2],
     ],
   };
@@ -386,27 +467,27 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   truthy(events.some(e => e.type === 'MATCH_ENDED'), 'turn 6: MATCH_ENDED emitted');
   truthy(!events.some(e => e.type === 'TURN_STARTED'), 'turn 6: NO TURN_STARTED');
   eq(after.phase, 'ENDED', 'phase=ENDED');
-  eq(after.result?.winner, 'PLAYER', 'PLAYER wins (more power in lane 0)');
+  eq(after.result?.winner, 'P0', 'P0 wins (more power in lane 0)');
 }
 
 // -- Priority recompute: new priority reflects updated board ---------------
 
 {
-  // PLAYER goes in alone, so after reveal PLAYER has more lanes than OPP.
-  // Next turn's priority should swing to OPP under "loser gets priority"…
+  // P0 goes in alone, so after reveal P0 has more lanes than P1.
+  // Next turn's priority should swing to P1 under "loser gets priority"…
   // wait, my spec uses "more lanes/power → priority", NOT "loser goes first".
-  // So PLAYER keeps priority (they're winning). Verify that.
+  // So P0 keeps priority (they're winning). Verify that.
   const manifest = mkManifest([mkCard('grunt', 5, 1)]);
-  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  let s = baseState({ turn: 2, priority: 'P0' });
   const { state: s1, cardId } = withCardInHand(s, 'grunt');
   s = s1;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
   const { events } = resolveTurn(s, manifest, createRng('prio-recompute'));
   const started = events.find(e => e.type === 'TURN_STARTED') as
     { priority: Owner; priorityReason: string };
-  eq(started.priority, 'PLAYER', 'PLAYER keeps priority (more lanes)');
+  eq(started.priority, 'P0', 'P0 keeps priority (more lanes)');
   eq(started.priorityReason, 'MORE_LANES', 'priorityReason = MORE_LANES');
 }
 
@@ -430,13 +511,13 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const manifest = mkManifest([hex, grunt]);
 
   const build = () => {
-    let s = baseState({ turn: 3, priority: 'PLAYER' });
+    let s = baseState({ turn: 3, priority: 'P0' });
     const h = withCardInHand(s, 'hex');       s = h.state;
     const g1 = withCardInHand(s, 'grunt');    s = g1.state;
     const g2 = withCardInHand(s, 'grunt');    s = g2.state;
-    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'a', owner: 'PLAYER', cardId: g1.cardId, lane: 0 }, createRng('r'), manifest), manifest);
-    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'b', owner: 'PLAYER', cardId: g2.cardId, lane: 0 }, createRng('r'), manifest), manifest);
-    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'c', owner: 'PLAYER', cardId: h.cardId, lane: 0 }, createRng('r'), manifest), manifest);
+    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'a', owner: 'P0', cardId: g1.cardId, lane: 0 }, createRng('r'), manifest), manifest);
+    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'b', owner: 'P0', cardId: g2.cardId, lane: 0 }, createRng('r'), manifest), manifest);
+    s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'c', owner: 'P0', cardId: h.cardId, lane: 0 }, createRng('r'), manifest), manifest);
     return s;
   };
   const rA = resolveTurn(build(), manifest, createRng('det-seed'));
@@ -448,13 +529,13 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
 
 {
   const manifest = mkManifest([mkCard('grunt', 3, 1)]);
-  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  let s = baseState({ turn: 2, priority: 'P0' });
   const { state: s1, cardId } = withCardInHand(s, 'grunt');
   s = s1;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
-  const events = resolve(s, { type: 'END_TURN', intentId: 'end', owner: 'PLAYER' }, createRng('end'), manifest);
+  const events = resolve(s, { type: 'END_TURN', intentId: 'end', owner: 'P0' }, createRng('end'), manifest);
   truthy(events.some(e => e.type === 'TURN_ENDED'), 'END_TURN intent: emits TURN_ENDED');
   truthy(events.some(e => e.type === 'TURN_STARTED'), 'END_TURN intent: emits TURN_STARTED');
 }
@@ -465,23 +546,22 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const sentinel = mkCard('sentinel', 5, 3, {
     abilities: {
       ongoing: [{
-        kind: 'POWER_ADD',
-        target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
+        kind: 'LANE_POWER_ADD',
+        laneScope: { laneOf: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
         delta: { kind: 'LIT', n: 1 },
         stack: 'ADDITIVE',
       }],
     },
   });
   const manifest = mkManifest([sentinel]);
-  let s = baseState({ turn: 3, priority: 'PLAYER' });
+  let s = baseState({ turn: 3, priority: 'P0' });
   const h = withCardInHand(s, 'sentinel'); s = h.state;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
   const { state: after } = resolveTurn(s, manifest, createRng('proj'));
-  // Sentinel's Ongoing kicks in post-reveal: base 5 + self-buff 1 = 6.
-  eq(getCardPower(after, h.cardId, manifest), 6, 'Sentinel post-reveal: 5+1=6');
-  eq(getLanePower(after, 0, 'PLAYER', manifest), 6, 'lane 0 power = 6');
+  eq(getCardPower(after, h.cardId, manifest), 5, 'Sentinel post-reveal: card power stays 5');
+  eq(getLanePower(after, 0, 'P0', manifest), 6, 'lane 0 power = 6');
 }
 
 // -- onEndOfTurn trigger: Kraven-style +2 at end of every turn -------------
@@ -499,10 +579,10 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     },
   });
   const manifest = mkManifest([kraven]);
-  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  let s = baseState({ turn: 2, priority: 'P0' });
   const h = withCardInHand(s, 'kraven'); s = h.state;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
   const { state: after, events } = resolveTurn(s, manifest, createRng('kraven'));
   // Power: base(3) + onEndOfTurn(+2) = 5. Kraven was staged this turn, so
@@ -536,21 +616,21 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     },
   });
   const manifest = mkManifest([psy]);
-  let s = baseState({ turn: 2, priority: 'PLAYER' });
+  let s = baseState({ turn: 2, priority: 'P0' });
   const h = withCardInHand(s, 'psy'); s = h.state;
   s = runEvents(s, resolve(s, {
-    type: 'STAGE_CARD', intentId: 'stg', owner: 'PLAYER', cardId: h.cardId, lane: 0,
+    type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
 
-  // Before resolveTurn, PLAYER energy = turn(2) - 2(cost) = 0.
-  eq(s.energy['PLAYER'], 0, 'pre-resolveTurn: PLAYER energy spent on psy');
+  // Before resolveTurn, P0 energy = turn(2) - 2(cost) = 0.
+  eq(s.energy['P0'], 0, 'pre-resolveTurn: P0 energy spent on psy');
 
   const { state: after, events } = resolveTurn(s, manifest, createRng('sched'));
   // Turn advanced to 3. Vanilla refill would land energy at maxEnergy=3.
   // SCHEDULED effect adds +1 on top → 4.
   eq(after.turn, 3, 'resolveTurn advanced to turn 3');
-  eq(after.maxEnergy['PLAYER'], 3, 'maxEnergy ramped to 3');
-  eq(after.energy['PLAYER'], 4, 'SCHEDULED fired: energy = maxEnergy + 1');
+  eq(after.maxEnergy['P0'], 3, 'maxEnergy ramped to 3');
+  eq(after.energy['P0'], 4, 'SCHEDULED fired: energy = maxEnergy + 1');
 
   // Pending queue must be empty — PENDING_EFFECT_REMOVED fires alongside.
   eq(after.pendingEffects.length, 0, 'SCHEDULED consumed from pending queue');

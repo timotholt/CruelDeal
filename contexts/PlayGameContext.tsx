@@ -29,7 +29,7 @@ import {
 import { createStore, reconcile, unwrap, type SetStoreFunction } from 'solid-js/store';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { MatchEvent } from '@/services/playgame/engine/types/events';
-import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
+import { otherSeat, type CardId, type LaneIdx, type Seat } from '@/services/playgame/engine/types/ids';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import { apply } from '@/services/playgame/engine/apply';
 import { resolve } from '@/services/playgame/engine/resolve';
@@ -76,6 +76,12 @@ export interface PlayGameContextValue {
   dispatch: (event: MatchEvent) => void;
   /** Game manifest (card/location defs). */
   manifest: Manifest;
+  /** Absolute seat controlled by this viewer. */
+  localSeat: Seat;
+  /** The other seat in the current match. */
+  remoteSeat: Seat;
+  /** Viewer-facing metadata for both seats. */
+  seatMeta: Record<Seat, { name: string }>;
   /** UI-only sidecar state (incoming buffer, undo, flip flag). */
   ui: UiState;
   /** Setter for UI sidecar state. */
@@ -99,12 +105,24 @@ const Ctx = createContext<PlayGameContextValue>();
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export const PlayGameProvider = (props: { children: JSX.Element }) => {
-  const manifest: Manifest = BOOTSTRAP_MANIFEST;
+export const PlayGameProvider = (props: {
+  children: JSX.Element;
+  initialState?: EngineMatchState;
+  manifest?: Manifest;
+  localSeat?: Seat;
+  seatMeta?: Partial<Record<Seat, { name: string }>>;
+}) => {
+  const manifest: Manifest = props.manifest ?? BOOTSTRAP_MANIFEST;
   const seed = `match-${Date.now().toString(36)}`;
+  const localSeat: Seat = props.localSeat ?? 'P0';
+  const remoteSeat: Seat = otherSeat(localSeat);
+  const seatMeta: Record<Seat, { name: string }> = {
+    P0: props.seatMeta?.P0 ?? { name: localSeat === 'P0' ? 'YOU' : 'OPPONENT' },
+    P1: props.seatMeta?.P1 ?? { name: localSeat === 'P1' ? 'YOU' : 'OPPONENT' },
+  };
 
   const [engineState, setEngineState] = createStore<EngineStateStore>(
-    createInitialEngineState(seed, manifest) as EngineStateStore,
+    (props.initialState ?? createInitialEngineState(seed, manifest)) as EngineStateStore,
   );
 
   const [ui, setUi] = createStore<UiState>({
@@ -131,22 +149,22 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /**
-   * Draw one card: pop the top of `state.deck[PLAYER]` via the CARD_DRAWN
+   * Draw one card: pop the top of `state.deck[P0]` via the CARD_DRAWN
    * event. The deck is pre-populated + seeded by `createInitialMatchState()`,
    * so the draw order is deterministic and snapshot-able.
    *
    * If the deck is empty we simply no-op (callers can handle the null).
    */
   const drawCard = (): ResolvedCard | null => {
-    if ((engineState.hand['PLAYER'] as unknown[]).length >= 7) return null;
+    if ((engineState.hand[localSeat] as unknown[]).length >= 7) return null;
 
-    const deck = engineState.deck['PLAYER'] as readonly { id: string }[];
+    const deck = engineState.deck[localSeat] as readonly { id: string }[];
     if (deck.length === 0) return null;
     const top = deck[0];
 
     dispatch({
       type: 'CARD_DRAWN',
-      owner: 'PLAYER',
+      owner: localSeat,
       cardId: top.id as CardId,
       toHand: true,
     });
@@ -166,7 +184,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     // Quick guard: can't stage while resolving or lane full.
     if (raw.phase === 'RESOLVING') return false;
     const lanePair = raw.lanes[laneIdx as LaneIdx]?.cards;
-    if ((lanePair?.['PLAYER']?.length ?? 0) >= 4) return false;
+    if ((lanePair?.[localSeat]?.length ?? 0) >= 4) return false;
 
     // Push undo snapshot BEFORE the mutation so we can restore it.
     // IMPORTANT: structuredClone so the snapshot doesn't share refs with the
@@ -179,7 +197,7 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
       {
         type: 'STAGE_CARD',
         intentId: `stage-${cardId}-${Date.now()}`,
-        owner: 'PLAYER',
+        owner: localSeat,
         cardId: cardId as CardId,
         lane: laneIdx as LaneIdx,
       },
@@ -252,6 +270,9 @@ export const PlayGameProvider = (props: { children: JSX.Element }) => {
     setEngineState,
     dispatch,
     manifest,
+    localSeat,
+    remoteSeat,
+    seatMeta,
     ui,
     setUi,
     isResolving,
