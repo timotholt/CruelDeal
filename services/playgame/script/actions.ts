@@ -23,7 +23,7 @@ import type { MatchEvent } from '../engine/types/events';
 import { otherSeat, type CardId, type LaneIdx, type Seat } from '../engine/types/ids';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
-import { resolveTurn, computeMatchResult } from '../engine/resolve';
+import { resolveTurn } from '../engine/resolve';
 import { planEnemyTurnFromPool } from '../engine/ai';
 import {
   type ResolvedCard,
@@ -425,6 +425,16 @@ const nextFrame = (): Promise<void> =>
  * CARD_POWER_CHANGED flash, etc.).
  */
 const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
+  if (event.type === 'CARD_ADDED_TO_HAND' && event.owner === c.localSeat) {
+    c.dispatch(event);
+    const raw = unwrap(c.state) as EngineMatchState;
+    const resolved = resolveCard(event.cardId as CardId, raw, c.manifest);
+    if (!resolved) return;
+    c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
+    await (commitIncomingToHand() as (ctx: PlayScriptCtx) => Promise<void>)(c);
+    return;
+  }
+
   if (event.type === 'CARD_MOVED') {
     const id = event.cardId as string;
     const el = c.cardRefs.get(id);
@@ -572,11 +582,11 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
   // Reset the face-up override so next turn's staged cards show face-up.
   c.setUi('isFlipped', false);
 
-  // Lock the official result once after the scoring turn (6) ends.
-  const SCORING_TURN = 6;
-  if (c.state.turn === SCORING_TURN + 1 && !c.ui.lockedResult) {
-    const result = computeMatchResult(c.state as EngineMatchState, c.manifest);
-    c.setUi('lockedResult', result);
+  // Lock the official result the first time the engine ends the match.
+  // Free play can continue afterward, but the recorded result never changes.
+  if (c.state.phase === 'ENDED' && c.state.result && !c.ui.lockedResult) {
+    c.setUi('lockedResult', c.state.result);
+    c.setUi('showEndGamePrompt', true);
   }
 
   showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });

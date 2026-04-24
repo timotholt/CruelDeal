@@ -35,6 +35,7 @@ export interface UiState {
   history: EngineMatchState[];
   isFlipped: boolean;
   lockedResult: MatchResult | null;
+  showEndGamePrompt: boolean;
 }
 
 // ── Resolved UI types ────────────────────────────────────────────────────────

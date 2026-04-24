@@ -410,6 +410,11 @@
     align-items: flex-end;
     gap: 8px;
   }
+  .hud-replay-toggle {
+    justify-self: center;
+    align-self: center;
+    z-index: 6;
+  }
   .replay-toggle,
   .replay-chip,
   .replay-tick {

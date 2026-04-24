@@ -145,6 +145,7 @@ export const PlayGameProvider = (props: {
     history: [],
     isFlipped: false,
     lockedResult: null,
+    showEndGamePrompt: false,
   });
 
   const isResolving: Accessor<boolean> = () => engineState.phase === 'RESOLVING';
@@ -276,7 +277,7 @@ export const PlayGameProvider = (props: {
     const newSeed = `match-${Date.now().toString(36)}`;
     const fresh = createInitialEngineState(newSeed, manifest) as EngineStateStore;
     setEngineState(reconcile(fresh));
-    setUi({ incoming: [], history: [], isFlipped: false });
+    setUi({ incoming: [], history: [], isFlipped: false, lockedResult: null, showEndGamePrompt: false });
     engineRng = createRng(newSeed);
   };
 

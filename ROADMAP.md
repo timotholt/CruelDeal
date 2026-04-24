@@ -8,24 +8,32 @@
 
 **Engine core (Tiers 0–1):** ✅ COMPLETE
 - ✅ Pure reducer + event stream + seeded RNG + headless CLI (0.2 spec complete through Step 9)
-- ✅ Ability DSL + interpreter, covers current card roster
-- ✅ JSON card authoring (10 cards in `manifest/cards/*.json`)
+- ✅ Ability DSL + interpreter, covers full 106-card roster
+- ✅ 106 cards: 105 cyberpunk cards + junk-card token, authored in `manifest/content/cyberpunk-cards.ts`
+- ✅ 10 locations with weighted rarity picks — Cathedral, Cathedral Cloister, Food Court, Hackers' Lair, Icy Road, Jungle Trail, Lava Flow, Science Lab, Tropical Beach, Alien Starship
 - ✅ Card/Lane query system with combinators
 - ✅ Deterministic enemy AI module (`engine/ai.ts`); CLI + UI both use it; old `cli/ai.ts` deleted
 - ✅ `Math.random` eliminated — including the final holdouts in `PlayGameContext.createInitialEngineState` (priority coin-flip, location shuffle); UI now delegates to engine `createInitialMatchState`
 - ✅ UI draw consumes `state.deck[PLAYER]` via `CARD_DRAWN` — same pipeline as CLI; seeded, snapshot-able, deterministic
 - ✅ Location rarity weights respected — `pickLaneLocations` uses weighted random without replacement
 - ✅ `LOCATION_DESTROYED` + `LOCATION_SHIFTED` events defined in `types/events.ts`, reducer handlers in `apply.ts`, covered by `apply.test.ts`
-- ⬜ Per-card folders with art assets — defer until 20+ cards
+- ✅ `trackedVariables` on `MatchState` — per-owner + global game-history stats maintained incrementally by `applyTrackedVars()` in `apply.ts`; queried via `TRACKED_STAT` / `TRACKED_FLAG` DSL atoms
+- ✅ Extended DSL atom set: `COST_OF`, `HAND_SIZE`, `IF_ELSE`, `MIN_POWER_OF`, `MAX_POWER_OF`, `MIN_COST_OF`, `MAX_COST_OF`, `NUM_CMP`, `WAS_CREATED`, `HAS_COPIED_TEXT`, `POWER_INCREASED`, `POWER_REDUCED`, `COST_REDUCED`, `TEXT_DISABLED`, `HAS_ONGOING`, `IN_FULL_LANE`, `LANE_FULL`, `TRACKED_FLAG`, `HAND_EMPTY`, `HAS_UNSPENT_ENERGY`, `EVER_MOVED`
+- ✅ `ZoneFilter` extended with `'DESTROYED'` and `'BANISHED'` zones
+- ✅ `builtins.ts` registry — 15 implemented + 4 reactive stubs for complex multi-step card effects (`CALL_BUILTIN` DSL node delegates here)
+- ✅ Vitest config (`vitest.config.ts`) + legacy test shim (`__tests__/setup.ts`); all test files run under `npx vitest run`
+- ⬜ Per-card folders with art assets — defer until needed for art pipeline
 - ⬜ Deck-builder UX (`{ defId; variantId? }[]` user-editable decks) — Tier 5.2
+- ⬜ Decks are still randomly generated at match start (`buildDeck()` in `initState.ts`) — prebuilt/user decks not yet wired
 
 **Known bugs:**
 - ✅ Dune Sapper double-move (per-reveal event slicing)
 - ✅ Dune Sapper moving into full lane (query-driven capacity filter)
 - ⬜ Font snap on load
 - ⬜ Sticky hover on mobile
+- ⬜ 4 reactive builtins are stubs: `DRAW_ON_POWER_GAIN`, `DEBUFF_ENEMY_ON_HAND_ENTRY`, `COPY_ONGOING_OF_CHEAPEST_ONGOING`, `FULL_LANES_POWER` — require engine-level reactive hooks not yet built
 
-**Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai` — all green. CLI deterministic across runs.
+**Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai`, `tracked-vars`, `dsl-atoms`, `builtins` — all green (65 tests in `__tests__/`). CLI deterministic across runs.
 
 **Next groundwork candidates:** Tier 2.1 (event-driven renderer → unlock animations-as-data), Tier 2.2 (particle overlay), Tier 3 prep (SSOT & transport).
 
@@ -36,13 +44,16 @@
 ### 0.1 Ability DSL ✅
 - ✅ **DSL shape:** `services/playgame/engine/types/ability.ts` — complete DSL (EffectExpr, OngoingExpr, Predicate, Selector, NumExpr, PoolRef, PendingEffectSpec, TextOverride). ~30 effect atoms + 10 ongoing kinds + full control-flow combinators (SEQUENCE, CONDITIONAL, FOREACH, etc.).
 - ✅ **Interpreter:** `services/playgame/engine/effects/evaluator.ts` — recursive OR cascade with depth cap 16, trigger slots (onMove/onDestroyed/onDiscarded/onAnyCardPlayedHere/onEndOfTurn), provenance tracking on every event.
-- ✅ **Projections:** `services/playgame/engine/projections/` — `power`, `reveal` multiplier, `ongoing` collection + Onslaught/Citadel boost, `select`/`selectLanes` for all selectors.
-- ✅ **JSON card authoring:** 10 BOOTSTRAP cards now live in `services/playgame/engine/manifest/cards/*.json` + loader in `card-loader.ts`. Designers can ship cards without touching TypeScript.
+- ✅ **Projections:** `services/playgame/engine/projections/` — `power`, `reveal` multiplier, `ongoing` collection + Onslaught/Citadel boost, `select`/`selectLanes` for all selectors. Extended with `COST_OF`, `HAND_SIZE`, `IF_ELSE`, `TRACKED_STAT`, `MIN/MAX_POWER/COST_OF`, and 10+ new predicates.
+- ✅ **Card authoring:** 105 cyberpunk cards + junk-card token in `manifest/content/cyberpunk-cards.ts`, loaded via `card-loader.ts`. Full 106-card manifest.
 - ✅ **Query system:** `services/playgame/engine/projections/query.ts` — composable filter object pattern for `CardInstance`, `CardDef`, `Lane` queries. 12 entry points, `NumComparison`/`StringComparison` primitives, `and`/`or`/`not`/`custom` combinators, 60+ tests. See `QUERY_SYSTEM_DESIGN.md`.
+- ✅ **Builtins registry:** `services/playgame/engine/effects/builtins.ts` — `CALL_BUILTIN` DSL node delegates to named handler functions. 15 implemented: `POWER_TO_DESTROYER`, `DRAW_LOWEST_COST_CARD`, `MOVE_SELF_TO_RANDOM_OTHER_LANE`, `MOVE_ENEMY_CARD_TO_OTHER_LANE`, `COPY_TOP_ENEMY_DECK_CARD_TO_HAND`, `ADD_DISCARDED_CARD_TO_HAND`, `DISABLE_ONGOINGS_THIS_LANE_THIS_TURN`, `OVERCLOCK_CHIP`, `REPLACE_HAND_CARD_HIGHER_COST`, `ADD_DISCOUNTED_CARD_TO_HAND`, and others.
+- ✅ **`trackedVariables`:** `MatchState.trackedVariables` — per-owner (`P0`/`P1`) counters + flags (`cardsPlayedThisTurn`, `yourCardsDestroyed`, `enemyCardsDestroyed`, `cardsYouDestroyed`, `cardsYouDiscarded`, `cardsMoved`, `cardsYouCreated`, `energyUnspentNow`, `totalCostReduced`, `reducedAnyCostThisGame`, `playedNoCardsLastTurn`, `hadUnspentEnergyLastTurn`, `spentAllEnergyLastTurn`) + global (`totalCardsDestroyed`). Maintained incrementally by `applyTrackedVars()`.
 
 **Outstanding:**
-- ⬜ Per-card folders (`cards/<defId>/card.ts` + art assets) with build-time `import.meta.glob` — deferred until card count grows (current: 10; revisit at 20+).
-- ⬜ JSON-authorable ability validator (runtime schema check on card load) — current loader only checks required fields; ability trees are cast `as any`. Low risk while card count is small.
+- ⬜ Per-card folders (`cards/<defId>/card.ts` + art assets) with build-time `import.meta.glob` — deferred until art pipeline needs it (current: 106 cards in flat `.ts` file).
+- ⬜ Ability validator (runtime schema check on card load) — current loader only checks required fields; ability trees are cast `as any`. Risk grows with card count (now 106).
+- ⬜ 4 reactive builtins are stubs pending engine-level hooks: `DRAW_ON_POWER_GAIN`, `DEBUFF_ENEMY_ON_HAND_ENTRY`, `COPY_ONGOING_OF_CHEAPEST_ONGOING`, `FULL_LANES_POWER`.
 
 ### 0.2 Engine Isolation & Pure Reducer
 - **Why first:** Right now `services/playgame/script/actions.ts` mutates state **and** reaches into the DOM in the same step. The engine cannot run headless, cannot be unit-tested in Node, and cannot move to the server.
@@ -60,7 +71,7 @@
 |---|---|---|
 | 1 | Skeleton + ESLint purity rules | ✅ done |
 | 2 | Seeded RNG (sfc32 + cyrb128 + `fork(tag)`) | ✅ done |
-| 3 | `BOOTSTRAP_MANIFEST` with 10 launch cards + 3 locations pinned to map images | ✅ done |
+| 3 | `BOOTSTRAP_MANIFEST` with 106 cards (105 cyberpunk + junk-card token) + 10 locations | ✅ done |
 | 4 | Projection library (power / lane / reveal / priority / Ongoing collect + Onslaught/Citadel boost) | ✅ done |
 | 5 | `apply()` reducer for all `MatchEvent` variants; zones split into DECK/HAND/LANE/DISCARD/DESTROYED/BANISHED; `spawnSource` provenance | ✅ done |
 | 6 | Effect evaluator (`evalEffect` + `revealCard` with recursive OR cascade, depth cap 16) | ✅ done |
@@ -116,11 +127,11 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 
 ### 1.2 Card / Location Model Redesign — mostly shipped
 - ✅ **Cards:** `defId` + `version` implemented; `name` is display-only in `cosmetic.displayName`.
-- ✅ **JSON authoring:** 10 BOOTSTRAP cards live as individual `.json` files, loaded via `card-loader.ts`. Manifest `cards` field built from these.
+- ✅ **Card authoring:** 106 cards (105 cyberpunk + junk-card token) in `manifest/content/cyberpunk-cards.ts`, loaded via `card-loader.ts`. Manifest `cards` field built from this.
 - ✅ **Location rarity weights:** `LocationDef.rarity` is now honored by `pickLaneLocations` via a seeded weighted-pick-without-replacement helper. `rarity: 2` gets picked twice as often as `rarity: 1`.
 - ✅ **Location events:** `LOCATION_REPLACED` (existed) + `LOCATION_DESTROYED` + `LOCATION_SHIFTED` all defined in `types/events.ts` with `cause: EffectRef` for provenance. Reducer handlers in `apply.ts` (clear on destroy; preserve `locationRevealed` + tags on shift). Covered by `apply.test.ts`.
-- ⬜ **Deck shape `{ defId; variantId? }[]` user-editable type:** not yet exposed; decks are still seed-generated by `buildDeck()` at init time. Add when the deck-builder UI ships (Tier 5.2).
-- ⬜ **Per-card folders with art assets:** not started. Current `cards/*.json` is flat. Revisit at 20+ cards.
+- ⬜ **Deck shape `{ defId; variantId? }[]` user-editable type:** not yet exposed; decks are still randomly generated by `buildDeck()` at init time (picks 12 cards with replacement from the full 106-card pool). Add when the deck-builder UI ships (Tier 5.2).
+- ⬜ **Per-card folders with art assets:** not started. Current cards are in a flat `.ts` file. Defer until art pipeline requires it.
 
 ### 1.3 Enemy AI (Deterministic) ✅
 - ✅ `services/playgame/engine/ai.ts` owns planning. `script/actions.ts::enemyPlayRandom` is a thin dispatch + animation adapter that delegates to `planEnemyTurnFromPool`.

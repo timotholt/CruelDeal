@@ -27,10 +27,6 @@ const describeEvent = (frame: ReplayFrame | null): string => {
 export const ReplayDrawer = (props: ReplayDrawerProps) => {
   return (
     <div class={'replay-drawer' + (props.open ? ' open' : '')}>
-      <button class="replay-toggle" type="button" onClick={props.onToggleOpen}>
-        {props.open ? 'Hide Replay' : 'Replay'}
-      </button>
-
       <Show when={props.open}>
         <div class="replay-panel">
           <div class="replay-panel__header">
