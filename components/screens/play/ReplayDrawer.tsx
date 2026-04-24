@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import type { ReplayFrame } from '@/services/playgame/engine/replay';
 
 interface ReplayDrawerProps {
@@ -25,11 +25,70 @@ const describeEvent = (frame: ReplayFrame | null): string => {
 };
 
 export const ReplayDrawer = (props: ReplayDrawerProps) => {
+  let drawerEl: HTMLDivElement | undefined;
+  let stopDrag: (() => void) | null = null;
+  const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
+
+  const beginDrag = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+    const drawer = drawerEl;
+    if (!drawer) return;
+
+    const rect = drawer.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    const maxX = () => Math.max(8, window.innerWidth - rect.width - 8);
+    const maxY = () => Math.max(8, window.innerHeight - rect.height - 8);
+
+    setPosition({
+      x: Math.min(Math.max(8, rect.left), maxX()),
+      y: Math.min(Math.max(8, rect.top), maxY()),
+    });
+
+    const move = (moveEvent: PointerEvent): void => {
+      setPosition({
+        x: Math.min(Math.max(8, moveEvent.clientX - offsetX), maxX()),
+        y: Math.min(Math.max(8, moveEvent.clientY - offsetY), maxY()),
+      });
+    };
+
+    const stop = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      stopDrag = null;
+    };
+
+    event.preventDefault();
+    stopDrag?.();
+    stopDrag = stop;
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+  };
+
+  onCleanup(() => stopDrag?.());
+
   return (
-    <div class={'replay-drawer' + (props.open ? ' open' : '')}>
+    <div
+      ref={drawerEl}
+      class={'replay-drawer' + (props.open ? ' open' : '')}
+      style={position()
+        ? {
+            left: `${position()!.x}px`,
+            top: `${position()!.y}px`,
+            right: 'auto',
+          }
+        : undefined}
+    >
       <Show when={props.open}>
         <div class="replay-panel">
           <div class="replay-panel__header">
+            <div class="replay-panel__drag-handle" onPointerDown={beginDrag} title="Drag replay window">
+              <span />
+              <span />
+              <span />
+            </div>
             <div>
               <div class="replay-panel__eyebrow">Dev Replay</div>
               <div class="replay-panel__title">

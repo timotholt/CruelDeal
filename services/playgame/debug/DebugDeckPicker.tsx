@@ -15,9 +15,10 @@
 import { createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DEBUG_DECKS, type DebugDeck } from './debugDecks';
+import type { Deck } from '../engine/manifest/types';
 
 interface Props {
-  onConfirm: (playerCards: readonly string[], oppCards: readonly string[]) => void;
+  onConfirm: (playerCards: Deck, oppCards: Deck) => void;
 }
 
 type Step = 'player' | 'opp';

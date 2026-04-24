@@ -8,7 +8,7 @@
 
 import type { MatchState, CardInstance, LaneState, LocationInstance } from '../engine/types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../engine/types/state';
-import type { Manifest } from '../engine/manifest/types';
+import type { Deck, Manifest } from '../engine/manifest/types';
 import type { CardId, LaneIdx, LocationId, Owner } from '../engine/types/ids';
 import { createRng, type Rng } from '../engine/rng';
 
@@ -22,16 +22,16 @@ function mintId(rng: Rng, tag: string): string {
 
 function buildDeckFromDefIds(
   owner: Owner,
-  defIds: readonly string[],
+  deckList: Deck,
   manifest: Manifest,
   rng: Rng,
 ): CardInstance[] {
   const deck: CardInstance[] = [];
-  for (let i = 0; i < defIds.length; i++) {
-    const defId = defIds[i];
-    const def = manifest.cards[defId];
+  for (let i = 0; i < deckList.length; i++) {
+    const entry = deckList[i];
+    const def = manifest.cards[entry.defId];
     if (!def) {
-      console.warn(`[debug] buildDebugState: defId "${defId}" not in manifest — skipped`);
+      console.warn(`[debug] buildDebugState: defId "${entry.defId}" not in manifest — skipped`);
       continue;
     }
     deck.push({
@@ -92,15 +92,15 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
  * shuffle order, different deck composition.
  */
 export function buildDebugMatchState(
-  playerDefIds: readonly string[],
-  oppDefIds: readonly string[],
+  playerDeckList: Deck,
+  oppDeckList: Deck,
   manifest: Manifest,
   seed: string,
 ): MatchState {
   const rng = createRng(seed);
   const deckRng = rng.fork('deck');
-  const playerDeck = buildDeckFromDefIds('P0', playerDefIds, manifest, deckRng.fork('P0'));
-  const oppDeck = buildDeckFromDefIds('P1', oppDefIds, manifest, deckRng.fork('P1'));
+  const playerDeck = buildDeckFromDefIds('P0', playerDeckList, manifest, deckRng.fork('P0'));
+  const oppDeck = buildDeckFromDefIds('P1', oppDeckList, manifest, deckRng.fork('P1'));
 
   const cards: Record<string, CardInstance> = {};
   for (const c of playerDeck) cards[c.id] = c;

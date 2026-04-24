@@ -68,7 +68,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
         } else if (b.fn === 'COPY_ONGOING_OF_CHEAPEST_ONGOING') {
           copyExpanders.push(card);
         }
-        // other CALL_BUILTIN ongoing stubs: skip (no-op)
+        // Other CALL_BUILTIN entries are not Ongoing projection expanders.
       } else {
         raw.push({
           sourceCardId: card.id,

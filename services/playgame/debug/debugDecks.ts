@@ -7,6 +7,8 @@
  * These are test harnesses for playtesting archetypes, not final balance targets.
  */
 
+import type { Deck } from '../engine/manifest/types';
+
 export interface DebugDeck {
   readonly id: string;
   readonly name: string;
@@ -14,7 +16,7 @@ export interface DebugDeck {
   readonly difficulty: string;
   readonly gamePlan: string;
   readonly color: string;
-  readonly cards: readonly string[]; // defIds, exactly 12
+  readonly cards: Deck; // exactly 12
 }
 
 export const DEBUG_DECKS: readonly DebugDeck[] = [
@@ -26,9 +28,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Sacrifice cheap bodies for value. Close with destroyed-count payoffs.',
     color: '#ff4444',
     cards: [
-      'scrap-rat', 'crash-dummy', 'chop-doc', 'grinder-crew',
-      'redline-bruiser', 'parts-collector', 'rust-revenant', 'bone-market',
-      'meat-grinder', 'scrapyard-king', 'golden-parachute', 'illegal-clone',
+      { defId: 'scrap-rat' }, { defId: 'crash-dummy' }, { defId: 'chop-doc' }, { defId: 'grinder-crew' },
+      { defId: 'redline-bruiser' }, { defId: 'parts-collector' }, { defId: 'rust-revenant' }, { defId: 'bone-market' },
+      { defId: 'meat-grinder' }, { defId: 'scrapyard-king' }, { defId: 'golden-parachute' }, { defId: 'illegal-clone' },
     ],
   },
   {
@@ -39,9 +41,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Sacrifice specific cards to copy their text. Turn copied abilities into board advantage.',
     color: '#4488ff',
     cards: [
-      'scrap-rat', 'chop-doc', 'middle-manager', 'hostile-recruiter',
-      'golden-parachute', 'severance-clone', 'hr-algorithm', 'acquisition-team',
-      'boardroom-proxy', 'executive-override', 'signal-booster', 'ai-overseer',
+      { defId: 'scrap-rat' }, { defId: 'chop-doc' }, { defId: 'middle-manager' }, { defId: 'hostile-recruiter' },
+      { defId: 'golden-parachute' }, { defId: 'severance-clone' }, { defId: 'hr-algorithm' }, { defId: 'acquisition-team' },
+      { defId: 'boardroom-proxy' }, { defId: 'executive-override' }, { defId: 'signal-booster' }, { defId: 'ai-overseer' },
     ],
   },
   {
@@ -52,9 +54,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Draw tagged cards, replace weak options, create extra resources.',
     color: '#ffaa00',
     cards: [
-      'street-fixer', 'tech-fixer', 'military-fixer', 'chrome-broker',
-      'backchannel-contact', 'clean-operator', 'procurement-bot', 'dead-drop',
-      'talent-scout', 'network-queen', 'ai-overseer', 'black-market-dealer',
+      { defId: 'street-fixer' }, { defId: 'tech-fixer' }, { defId: 'military-fixer' }, { defId: 'chrome-broker' },
+      { defId: 'backchannel-contact' }, { defId: 'clean-operator' }, { defId: 'procurement-bot' }, { defId: 'dead-drop' },
+      { defId: 'talent-scout' }, { defId: 'network-queen' }, { defId: 'ai-overseer' }, { defId: 'black-market-dealer' },
     ],
   },
   {
@@ -65,9 +67,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Build Ongoing engines. Let small persistent buffs scale over time.',
     color: '#00ddaa',
     cards: [
-      'street-fixer', 'procurement-bot', 'nano-swarm', 'signal-booster',
-      'adaptive-shell', 'maintenance-cloud', 'ai-overseer', 'replication-node',
-      'smart-matter-armor', 'distributed-mind', 'grey-goo-bloom', 'citywide-mesh',
+      { defId: 'street-fixer' }, { defId: 'procurement-bot' }, { defId: 'nano-swarm' }, { defId: 'signal-booster' },
+      { defId: 'adaptive-shell' }, { defId: 'maintenance-cloud' }, { defId: 'ai-overseer' }, { defId: 'replication-node' },
+      { defId: 'smart-matter-armor' }, { defId: 'distributed-mind' }, { defId: 'grey-goo-bloom' }, { defId: 'citywide-mesh' },
     ],
   },
   {
@@ -78,9 +80,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Deny enemy effects, reset modified cards, win by breaking their engine.',
     color: '#aa44ff',
     cards: [
-      'signal-jammer', 'black-ice', 'trace-hacker', 'system-crash',
-      'rootkit-kid', 'firewall-daemon', 'exploit-artist', 'null-saint',
-      'blackmail-file', 'predictive-cop', 'emp-grenade', 'hard-reset',
+      { defId: 'signal-jammer' }, { defId: 'black-ice' }, { defId: 'trace-hacker' }, { defId: 'system-crash' },
+      { defId: 'rootkit-kid' }, { defId: 'firewall-daemon' }, { defId: 'exploit-artist' }, { defId: 'null-saint' },
+      { defId: 'blackmail-file' }, { defId: 'predictive-cop' }, { defId: 'emp-grenade' }, { defId: 'hard-reset' },
     ],
   },
   {
@@ -91,9 +93,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Create discounted unstable cards, spike tempo, profit before the downside arrives.',
     color: '#ff8800',
     cards: [
-      'bone-market', 'dead-drop', 'black-market-dealer', 'overclock-chip',
-      'borrowed-gun', 'illegal-clone', 'knockoff-cyberarm', 'grey-market-cache',
-      'debt-collector', 'ghost-vendor', 'hot-merchandise', 'kingpin-broker',
+      { defId: 'bone-market' }, { defId: 'dead-drop' }, { defId: 'black-market-dealer' }, { defId: 'overclock-chip' },
+      { defId: 'borrowed-gun' }, { defId: 'illegal-clone' }, { defId: 'knockoff-cyberarm' }, { defId: 'grey-market-cache' },
+      { defId: 'debt-collector' }, { defId: 'ghost-vendor' }, { defId: 'hot-merchandise' }, { defId: 'kingpin-broker' },
     ],
   },
   {
@@ -104,9 +106,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Float Energy, convert restraint into discounts, Power, and late-game burst.',
     color: '#eeee00',
     cards: [
-      'battery-monk', 'capacitor-drone', 'quiet-protocol', 'stored-charge',
-      'ambush-runner', 'silent-engine', 'delayed-payload', 'neon-singularity',
-      'nano-swarm', 'adaptive-shell', 'black-market-dealer', 'grey-market-cache',
+      { defId: 'battery-monk' }, { defId: 'capacitor-drone' }, { defId: 'quiet-protocol' }, { defId: 'stored-charge' },
+      { defId: 'ambush-runner' }, { defId: 'silent-engine' }, { defId: 'delayed-payload' }, { defId: 'neon-singularity' },
+      { defId: 'nano-swarm' }, { defId: 'adaptive-shell' }, { defId: 'black-market-dealer' }, { defId: 'grey-market-cache' },
     ],
   },
   {
@@ -117,9 +119,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Flood lanes with cheap cards and Drones. Turn full locations into Power.',
     color: '#44ff88',
     cards: [
-      'nano-swarm', 'signal-booster', 'replication-node', 'street-kid',
-      'drone-pup', 'gang-lookout', 'drone-printer', 'block-party',
-      'pack-tactics', 'signal-rally', 'gutter-legion', 'hive-riot',
+      { defId: 'nano-swarm' }, { defId: 'signal-booster' }, { defId: 'replication-node' }, { defId: 'street-kid' },
+      { defId: 'drone-pup' }, { defId: 'gang-lookout' }, { defId: 'drone-printer' }, { defId: 'block-party' },
+      { defId: 'pack-tactics' }, { defId: 'signal-rally' }, { defId: 'gutter-legion' }, { defId: 'hive-riot' },
     ],
   },
 ] as const;

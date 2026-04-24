@@ -10,7 +10,7 @@
 - ✅ Pure reducer + event stream + seeded RNG + headless CLI (0.2 spec complete through Step 9)
 - ✅ Ability DSL + interpreter, covers full 106-card roster
 - ✅ 106 cards: 105 cyberpunk cards + junk-card token, authored in `manifest/content/cyberpunk-cards.ts`
-- ✅ 10 locations with weighted rarity picks — Cathedral, Cathedral Cloister, Food Court, Hackers' Lair, Icy Road, Jungle Trail, Lava Flow, Science Lab, Tropical Beach, Alien Starship
+- ✅ 37 Vantaris locations with weighted rarity picks, playable location trigger hooks, counters, prevention auras, delayed reveal, return/banish/transform primitives, and map art paths stored on each playable location definition
 - ✅ Card/Lane query system with combinators
 - ✅ Deterministic enemy AI module (`engine/ai.ts`); CLI + UI both use it; old `cli/ai.ts` deleted
 - ✅ `Math.random` eliminated — including the final holdouts in `PlayGameContext.createInitialEngineState` (priority coin-flip, location shuffle); UI now delegates to engine `createInitialMatchState`
@@ -23,15 +23,16 @@
 - ✅ `builtins.ts` registry — 15 implemented + 4 reactive stubs for complex multi-step card effects (`CALL_BUILTIN` DSL node delegates here)
 - ✅ Vitest config (`vitest.config.ts`) + legacy test shim (`__tests__/setup.ts`); all test files run under `npx vitest run`
 - ⬜ Per-card folders with art assets — defer until needed for art pipeline
-- ⬜ Deck-builder UX (`{ defId; variantId? }[]` user-editable decks) — Tier 5.2
-- ⬜ Decks are still randomly generated at match start (`buildDeck()` in `initState.ts`) — prebuilt/user decks not yet wired
+- ✅ Shared deck-list shape exists as `Deck = readonly { defId; variantId? }[]`; debug/prebuilt decks now use it, and `createInitialMatchState(seed, manifest, decks?)` accepts optional P0/P1 deck lists
+- ⬜ Deck-builder UX and profile persistence still store raw `string[]` card ids; migrate those screens/services to the manifest `Deck` entry shape in Tier 5.2
+- ⬜ Decks still fall back to deterministic random generation when no prebuilt/user deck is supplied
 
 **Known bugs:**
 - ✅ Dune Sapper double-move (per-reveal event slicing)
 - ✅ Dune Sapper moving into full lane (query-driven capacity filter)
 - ⬜ Font snap on load
 - ⬜ Sticky hover on mobile
-- ⬜ 4 reactive builtins are stubs: `DRAW_ON_POWER_GAIN`, `DEBUFF_ENEMY_ON_HAND_ENTRY`, `COPY_ONGOING_OF_CHEAPEST_ONGOING`, `FULL_LANES_POWER` — require engine-level reactive hooks not yet built
+- ✅ Reactive/Ongoing builtins are wired in their owning engine layers: `DRAW_ON_POWER_GAIN` in `resolveTurn`, `DEBUFF_ENEMY_ON_HAND_ENTRY` in hand-entry hooks, `COPY_ONGOING_OF_CHEAPEST_ONGOING` and `FULL_LANES_POWER` in Ongoing projections
 
 **Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai`, `tracked-vars`, `dsl-atoms`, `builtins` — all green (65 tests in `__tests__/`). CLI deterministic across runs.
 
@@ -52,8 +53,8 @@
 
 **Outstanding:**
 - ⬜ Per-card folders (`cards/<defId>/card.ts` + art assets) with build-time `import.meta.glob` — deferred until art pipeline needs it (current: 106 cards in flat `.ts` file).
-- ⬜ Ability validator (runtime schema check on card load) — current loader only checks required fields; ability trees are cast `as any`. Risk grows with card count (now 106).
-- ⬜ 4 reactive builtins are stubs pending engine-level hooks: `DRAW_ON_POWER_GAIN`, `DEBUFF_ENEMY_ON_HAND_ENTRY`, `COPY_ONGOING_OF_CHEAPEST_ONGOING`, `FULL_LANES_POWER`.
+- ⬜ Ability validator (runtime schema check on card/location load) — current loader only checks required fields; ability trees are cast `as any`. Risk grows with card/location count.
+- ⬜ Profile/deck-builder deck persistence still uses `string[]`; migrate to `Deck` entries so selected variants can flow into match creation.
 
 ### 0.2 Engine Isolation & Pure Reducer
 - **Why first:** Right now `services/playgame/script/actions.ts` mutates state **and** reaches into the DOM in the same step. The engine cannot run headless, cannot be unit-tested in Node, and cannot move to the server.
@@ -71,10 +72,10 @@
 |---|---|---|
 | 1 | Skeleton + ESLint purity rules | ✅ done |
 | 2 | Seeded RNG (sfc32 + cyrb128 + `fork(tag)`) | ✅ done |
-| 3 | `BOOTSTRAP_MANIFEST` with 106 cards (105 cyberpunk + junk-card token) + 10 locations | ✅ done |
+| 3 | `BOOTSTRAP_MANIFEST` with 106 cards (105 cyberpunk + junk-card token) + 37 Vantaris locations | ✅ done |
 | 4 | Projection library (power / lane / reveal / priority / Ongoing collect + Onslaught/Citadel boost) | ✅ done |
 | 5 | `apply()` reducer for all `MatchEvent` variants; zones split into DECK/HAND/LANE/DISCARD/DESTROYED/BANISHED; `spawnSource` provenance | ✅ done |
-| 6 | Effect evaluator (`evalEffect` + `revealCard` with recursive OR cascade, depth cap 16) | ✅ done |
+| 6 | Effect evaluator (`evalEffect` + `revealPlayedCard` / `triggerOnReveal` with recursive OR cascade, depth cap 16) | ✅ done |
 | 7 | `resolve()` intent dispatcher + `resolveTurn()` turn cascade (priority-ordered reveals, location reveal, draw, energy refill, match-end) | ✅ done |
 | 8a | Bridge engine into `/play` UI as SHADOW (non-breaking). Parity assertions catch engine bugs in live play. | ✅ done |
 | 8b | Cut the VFX `script` actions over to engine events (remove duplicate game logic in `actions.ts`) | ✅ done |
@@ -91,11 +92,11 @@ rg '@migrate:step-8' services/playgame contexts/ components/
 
 Step 8b completed items:
 
-- **`captureEngineEndTurn()`** ✅ — calls `bridge.endTurn()` after all cards staged; stores `MatchEvent[]` on script ctx.
+- **`captureEngineEndTurn()`** ✅ — captures engine turn-resolution events after all cards are staged; stores `MatchEvent[]` on script ctx.
 - **`revealByPriorityFromEngine()`** ✅ — reads `CARD_FLIPPED` events in priority order; falls back to old `revealByPriority()` if bridge inactive.
 - **`advanceTurnFromEngine()`** ✅ — reads `TURN_STARTED` event for turn/energy/priority; falls back to old `advanceTurn()` if bridge inactive.
-- **`enemyPlayRandom`** ✅ — enemy card staged through `bridge.syncHandCard()` + `bridge.stage('OPP')` before `endTurn()` runs, so engine sees both sides.
-- **`PlayGameContext.bridge`** ✅ — exposed in context value so script ctx can call `bridge.endTurn()` directly.
+- **`enemyPlayRandom`** ✅ — enemy card staged through the engine before turn resolution, so engine sees both sides.
+- **`PlayGameContext.bridge`** ✅ — deleted with the old shadow adapter; engine `MatchState` is now the only gameplay state.
 
 Step 8c completed items:
 
@@ -111,7 +112,7 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - ✅ **`PlayGameContext.drawCard` / `drawFromDeck`** — now pop the top of `state.deck[PLAYER]` via `CARD_DRAWN`. Deterministic; same pipeline as CLI.
 - ✅ **`script/actions.ts::enemyPlayRandom`** — delegates to `planEnemyTurnFromPool` from `engine/ai.ts`. Deterministic, seeded, testable.
 - ✅ **`PlayGameContext.createInitialEngineState`** — delegates to engine `createInitialMatchState`. Last two `Math.random()` calls removed.
-- ⬜ **`PlayGameContext.endTurn` stub** — still present for interface symmetry. Delete when multiplayer harness owns turn resolution outside the script engine (Tier 3.2).
+- ✅ **`PlayGameContext.endTurn` stub** — deleted. Turn resolution is owned by the VFX/script flow over engine events.
 
 ---
 
@@ -120,7 +121,7 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 ### 1.1 Seeded PRNG + Deterministic Simulation ✅
 - ✅ `Math.random` eliminated everywhere. All randomness goes through `createRng(seed)` (sfc32 + cyrb128, `fork(tag)`-able) in `services/playgame/engine/rng/`.
 - ✅ `engineRng` maintained across turns in `PlayGameContext`; passed to script ctx; forked per-purpose (`'draw'`, `'enemy-plays'`, `'stage:<id>'`, `'move:<id>'`, `'lane:<id>'`, etc.).
-- ✅ `state.deck[owner]` pre-populated by `createInitialMatchState(seed, manifest)` (`engine/cli/initState.ts`) — shuffle and ids seed-driven, snapshot-able, restorable.
+- ✅ `state.deck[owner]` pre-populated by `createInitialMatchState(seed, manifest, decks?)` (`engine/cli/initState.ts`) — optional prebuilt/user deck lists use `Deck = readonly { defId; variantId? }[]`; shuffle and ids are seed-driven, snapshot-able, restorable.
 - ✅ UI `PlayGameContext.drawCard` and script `drawFromDeck` both pop from `state.deck[PLAYER]` via `CARD_DRAWN` events. No more minting from manifest pool.
 - ✅ UI `PlayGameContext.createInitialEngineState` delegates to engine `createInitialMatchState` — removed the last two `Math.random()` calls (priority coin-flip, location shuffle).
 - ✅ Same seed → identical match across UI, CLI, and (future) server. Verified by running the CLI with the same seed twice + engine purity tests.
@@ -130,7 +131,9 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - ✅ **Card authoring:** 106 cards (105 cyberpunk + junk-card token) in `manifest/content/cyberpunk-cards.ts`, loaded via `card-loader.ts`. Manifest `cards` field built from this.
 - ✅ **Location rarity weights:** `LocationDef.rarity` is now honored by `pickLaneLocations` via a seeded weighted-pick-without-replacement helper. `rarity: 2` gets picked twice as often as `rarity: 1`.
 - ✅ **Location events:** `LOCATION_REPLACED` (existed) + `LOCATION_DESTROYED` + `LOCATION_SHIFTED` all defined in `types/events.ts` with `cause: EffectRef` for provenance. Reducer handlers in `apply.ts` (clear on destroy; preserve `locationRevealed` + tags on shift). Covered by `apply.test.ts`.
-- ⬜ **Deck shape `{ defId; variantId? }[]` user-editable type:** not yet exposed; decks are still randomly generated by `buildDeck()` at init time (picks 12 cards with replacement from the full 106-card pool). Add when the deck-builder UI ships (Tier 5.2).
+- ✅ **Deck shape `{ defId; variantId? }[]`:** exposed as manifest `Deck`; debug/prebuilt decks and match init accept it.
+- ⬜ **Deck-builder/profile migration:** current profile services and editor screens still persist `string[]`; migrate to `Deck` entries in Tier 5.2.
+- ⬜ **Random fallback:** when no deck list is supplied, `createInitialMatchState` still builds deterministic random decks for CLI/tests.
 - ⬜ **Per-card folders with art assets:** not started. Current cards are in a flat `.ts` file. Defer until art pipeline requires it.
 
 ### 1.3 Enemy AI (Deterministic) ✅

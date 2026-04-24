@@ -9,15 +9,17 @@
  * No `Date.now()`, no `Math.random()`, no DOM. All randomness is drawn
  * from the seeded `Rng` forks.
  *
- * @migrate:step-9 The UI layer should eventually call this builder too,
- * replacing `createInitialEngineState()`. Gated on Tier 1.2 card model.
+ * The UI layer calls this builder too; optional prebuilt decks use the same
+ * manifest Deck shape that the eventual deck builder will save.
  */
 
 import type { MatchState, CardInstance, LaneState, LocationInstance } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { Manifest } from '../manifest/types';
+import type { Deck, Manifest } from '../manifest/types';
 import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import { createRng, type Rng } from '../rng';
+
+export type InitialDecks = Partial<Record<Owner, Deck>>;
 
 /** Short id derived from a seeded RNG. 8 alphanumerics — enough for a match. */
 function mintId(rng: Rng, tag: string): string {
@@ -28,21 +30,27 @@ function mintId(rng: Rng, tag: string): string {
   return out;
 }
 
-/** Build one owner's deck: `deckSize` card instances drawn uniformly from the
- *  manifest (with replacement). Replace once Tier 1.2 pre-defines real decks. */
 function buildDeck(
   owner: Owner,
   manifest: Manifest,
   rng: Rng,
+  deckList?: Deck,
 ): CardInstance[] {
   const defs = Object.values(manifest.cards);
   if (defs.length === 0) {
     throw new Error('initState: manifest has no cards');
   }
-  const size = manifest.constants.deckSize;
-  const deck: CardInstance[] = [];
-  for (let i = 0; i < size; i++) {
+  const entries = deckList ?? Array.from({ length: manifest.constants.deckSize }, () => {
     const def = defs[rng.int(0, defs.length - 1)];
+    return { defId: def.defId };
+  });
+  const deck: CardInstance[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const def = manifest.cards[entry.defId];
+    if (!def) {
+      throw new Error(`initState: deck for ${owner} references unknown defId "${entry.defId}"`);
+    }
     const inst: CardInstance = {
       id: mintId(rng, `${owner}:card:${i}`) as CardId,
       defId: def.defId,
@@ -117,13 +125,14 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
 /**
  * Build a fresh match state. Both decks are pre-populated; both hands
  * start empty; energy is set to the turn-1 curve value; priority is a
- * seeded coin flip.
+ * seeded coin flip. If `decks` is omitted, each owner gets a deterministic
+ * random deck for CLI/test convenience.
  */
-export function createInitialMatchState(seed: string, manifest: Manifest): MatchState {
+export function createInitialMatchState(seed: string, manifest: Manifest, decks: InitialDecks = {}): MatchState {
   const rng = createRng(seed);
   const deckRng = rng.fork('deck');
-  const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'));
-  const oppDeck = buildDeck('P1', manifest, deckRng.fork('P1'));
+  const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'), decks.P0);
+  const oppDeck = buildDeck('P1', manifest, deckRng.fork('P1'), decks.P1);
 
   // Index every card by id so `state.cards[id]` lookups work for both decks.
   const cards: Record<string, CardInstance> = {};

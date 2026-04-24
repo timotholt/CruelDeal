@@ -6,9 +6,13 @@
  * the full effect context, and the manifest. Returns { events, state } exactly
  * like evalEffect.
  *
- * Reactive builtins (DRAW_ON_POWER_GAIN, DEBUFF_ENEMY_ON_HAND_ENTRY,
- * COPY_ONGOING_OF_CHEAPEST_ONGOING, FULL_LANES_POWER) are stubs — their
- * mechanics require engine-level hooks that land in a later pass.
+ * Some reactive/Ongoing builtins are implemented outside this dispatcher,
+ * because they belong to engine phases or projections rather than direct
+ * effect evaluation:
+ *   - DRAW_ON_POWER_GAIN: resolveTurn scans CARD_POWER_CHANGED events.
+ *   - DEBUFF_ENEMY_ON_HAND_ENTRY: evaluator hand-entry hook applies debuffs.
+ *   - COPY_ONGOING_OF_CHEAPEST_ONGOING and FULL_LANES_POWER: ongoing projection
+ *     expands them into normal OngoingExpr entries.
  */
 
 import type { MatchEvent } from '../types/events';
@@ -591,12 +595,11 @@ function disableOngoingsThisLaneThisTurn(
   return { events, state: s };
 }
 
-// ---- Stubs for reactive builtins -------------------------------------------
+// ---- Projection/phase-owned builtins ---------------------------------------
 
 /**
  * DRAW_ON_POWER_GAIN — reactive: fires when this card gains power.
- * Requires engine-level post-CARD_POWER_CHANGED hooks.
- * Stub: no-op. Effect delivered in a later engine pass.
+ * Implemented in resolveTurn's post-reveal/end-of-turn power-gain scan.
  */
 function drawOnPowerGain(state: MatchState): BuiltinResult {
   return noop(state);
@@ -604,8 +607,7 @@ function drawOnPowerGain(state: MatchState): BuiltinResult {
 
 /**
  * DEBUFF_ENEMY_ON_HAND_ENTRY — Ongoing: enemy cards enter hand with -1 power.
- * Requires engine-level CARD_DRAWN / CARD_ADDED_TO_HAND hooks for the opponent.
- * Stub: no-op. Effect delivered in a later engine pass.
+ * Implemented by applyHandEntryDebuffs after draw/add-to-hand events.
  */
 function debuffEnemyOnHandEntry(state: MatchState): BuiltinResult {
   return noop(state);
@@ -613,8 +615,7 @@ function debuffEnemyOnHandEntry(state: MatchState): BuiltinResult {
 
 /**
  * COPY_ONGOING_OF_CHEAPEST_ONGOING — Ongoing: copy ongoing of cheapest Ongoing
- * card here. Requires projection-layer support for dynamic ongoing mirroring.
- * Stub: no-op.
+ * card here. Implemented in collectAllOngoings.
  */
 function copyOngoingOfCheapestOngoing(state: MatchState): BuiltinResult {
   return noop(state);
@@ -622,8 +623,7 @@ function copyOngoingOfCheapestOngoing(state: MatchState): BuiltinResult {
 
 /**
  * FULL_LANES_POWER — Ongoing: your full lanes have +delta Power.
- * Requires projection-layer support (aggregated Ongoing across lane cards).
- * Stub: no-op.
+ * Implemented in collectAllOngoings as a lane POWER_ADD projection.
  */
 function fullLanesPower(state: MatchState): BuiltinResult {
   return noop(state);

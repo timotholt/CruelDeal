@@ -17,6 +17,7 @@ import { PlayBoard } from './play/PlayBoard';
 import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
 import { buildDebugMatchState } from '@/services/playgame/debug/buildDebugState';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
+import type { Deck } from '@/services/playgame/engine/manifest/types';
 import type { MatchState } from '@/services/playgame/engine/types/state';
 
 interface PlayScreenProps {
@@ -26,7 +27,7 @@ interface PlayScreenProps {
 export const PlayScreen = (props: PlayScreenProps) => {
   const [initialState, setInitialState] = createSignal<MatchState | null>(null);
 
-  const handleDeckConfirmed = (playerCards: readonly string[], oppCards: readonly string[]) => {
+  const handleDeckConfirmed = (playerCards: Deck, oppCards: Deck) => {
     const seed = `debug-${Date.now().toString(36)}`;
     setInitialState(buildDebugMatchState(playerCards, oppCards, BOOTSTRAP_MANIFEST, seed));
   };

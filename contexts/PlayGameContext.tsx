@@ -111,7 +111,6 @@ export interface PlayGameContextValue {
     undoPending: () => void;
     /** Rewind history until `cardId` is no longer staged. Returns true on success. */
     undoPendingCard: (cardId: string) => boolean;
-    endTurn: () => Promise<void>;
     resetMatch: () => void;
   };
 }
@@ -262,17 +261,6 @@ export const PlayGameProvider = (props: {
     return false;
   };
 
-  /**
-   * End-turn stub. The real resolution flow is owned by the VFX script
-   * (`resolveTurnFlow` in flows.ts). This stub exists only for interface
-   * consistency; PlayScreen never calls it.
-   *
-   * @migrate:step-9 Delete when the VFX flow fully replaces this stub.
-   */
-  const endTurn = async (): Promise<void> => {
-    // no-op: PlayScreen drives resolution via script.run(resolveTurnFlow()).
-  };
-
   const resetMatch = (): void => {
     const newSeed = `match-${Date.now().toString(36)}`;
     const fresh = createInitialEngineState(newSeed, manifest) as EngineStateStore;
@@ -298,7 +286,6 @@ export const PlayGameProvider = (props: {
       stageCardInLane,
       undoPending,
       undoPendingCard,
-      endTurn,
       resetMatch,
     },
   };
