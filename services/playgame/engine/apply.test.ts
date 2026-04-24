@@ -81,18 +81,18 @@ function emptyState(): MatchState {
   };
 }
 
-/** Seed a state with one Sentinel in hand (already deck-drawn). */
+/** Seed a state with one Armored Van (5/3, no abilities) in hand (already deck-drawn). */
 function stateWithSentinelInHand(): MatchState {
   const s = emptyState();
-  const sentinel: CardInstance = {
-    ...mkCardInstance('s1', 'sentinel', 'P0'),
+  const armoredVan: CardInstance = {
+    ...mkCardInstance('s1', 'armored-van', 'P0'),
     zone: 'HAND',
   };
   return {
     ...s,
     energy: { P0: 5, P1: 0 },
-    cards: { s1: sentinel } as Record<CardId, CardInstance>,
-    hand: { P0: [sentinel], P1: [] },
+    cards: { s1: armoredVan } as Record<CardId, CardInstance>,
+    hand: { P0: [armoredVan], P1: [] },
   };
 }
 
@@ -175,8 +175,8 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
   );
-  // Sentinel now adds +1 to the lane total, not to any card's own power.
-  eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 5, 'pre-delta: Sentinel card power = 5');
+  // Armored Van has no ongoing; just check basePower to the lane total, not to any card's own power.
+  eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 5, 'pre-delta: Armored Van card power = 5');
   const bumped = run(
     staged,
     { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, delta: 3,

@@ -29,7 +29,7 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 
 // ---- Counts ---------------------------------------------------------------
 
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 10, '10 cards in manifest');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 106, '106 cards in manifest (105 cyberpunk + junk-card token)');
 expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 10, '10 locations in manifest');
 
 // ---- Locations are exactly the current map roster -------------------------
@@ -76,7 +76,11 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
   expectTrue(c.basePower >= 0, `${c.defId} basePower >= 0 (got ${c.basePower})`);
   expectTrue(c.version >= 1, `${c.defId} version >= 1`);
   expectTrue(c.cosmetic.displayName.length > 0, `${c.defId} has displayName`);
-  expectTrue(c.cosmetic.rulesText.length > 0, `${c.defId} has rulesText`);
+  // Vanilla cards with no abilities legitimately have empty rulesText.
+  const hasAbilities = Object.values(c.abilities).some(v => Array.isArray(v) && v.length > 0);
+  if (hasAbilities) {
+    expectTrue(c.cosmetic.rulesText.length > 0, `${c.defId} has rulesText`);
+  }
 }
 
 // ---- Ability DSL well-formed-ness (spot-check a few) ----------------------
