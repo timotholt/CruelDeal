@@ -1,0 +1,668 @@
+/**
+ * CALL_BUILTIN registry — bespoke implementations for card effects that
+ * exceed the generic DSL's expressiveness.
+ *
+ * Each handler receives the current state, the effect node (with fn + args),
+ * the full effect context, and the manifest. Returns { events, state } exactly
+ * like evalEffect.
+ *
+ * Reactive builtins (DRAW_ON_POWER_GAIN, DEBUFF_ENEMY_ON_HAND_ENTRY,
+ * COPY_ONGOING_OF_CHEAPEST_ONGOING, FULL_LANES_POWER) are stubs — their
+ * mechanics require engine-level hooks that land in a later pass.
+ */
+
+import type { MatchEvent } from '../types/events';
+import type { MatchState, SpawnSource } from '../types/state';
+import type { CardId, Owner } from '../types/ids';
+import type { Manifest } from '../manifest/types';
+import type { EffectCtx } from './evaluator';
+import { apply } from '../apply';
+import { getCardPower } from '../projections/power';
+import { getCardCost } from '../projections/cost';
+
+type BuiltinArgs = Record<string, unknown>;
+type BuiltinResult = { events: MatchEvent[]; state: MatchState };
+type BuiltinHandler = (
+  state: MatchState,
+  fn: string,
+  args: BuiltinArgs,
+  ctx: EffectCtx,
+  manifest: Manifest,
+) => BuiltinResult;
+
+function noop(state: MatchState): BuiltinResult {
+  return { events: [], state };
+}
+
+function mintCardId(ctx: EffectCtx, salt: string): CardId {
+  const a = ctx.rng.fork(salt).int(0, 2 ** 31 - 1).toString(36);
+  const b = ctx.rng.fork(salt + '2').int(0, 2 ** 31 - 1).toString(36);
+  return `c-${a}${b}` as CardId;
+}
+
+function spawnSource(ctx: EffectCtx, forOwner: Owner): SpawnSource {
+  if (ctx.source.effectKind === 'LOCATION') {
+    return { kind: 'LOCATION_CREATED', sourceLocationId: ctx.source.sourceId as import('../types/ids').LocationId };
+  }
+  const sourceCardId = ctx.source.sourceId as CardId;
+  return forOwner === ctx.selfOwner
+    ? { kind: 'CARD_CREATED', sourceCardId }
+    : { kind: 'ENEMY_CREATED', sourceCardId };
+}
+
+function otherLanes(lane: 0 | 1 | 2): Array<0 | 1 | 2> {
+  return ([0, 1, 2] as Array<0 | 1 | 2>).filter(l => l !== lane);
+}
+
+// ---- Handlers ---------------------------------------------------------------
+
+/** When Destroyed: give the card that caused this +delta Power. */
+function powerToDestroyer(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const delta = (args.delta as number) ?? 0;
+  const sourceId = ctx.source.sourceId as CardId;
+  const srcCard = state.cards[sourceId];
+  if (!srcCard || !delta) return noop(state);
+  const e: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: sourceId, delta, cause: ctx.source };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Destroy your lowest-Cost card here; give its text to your
+ * highest-Power card here.
+ */
+function acquireLowestCostText(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null || ctx.selfLane === null) return noop(state);
+  const laneCards = state.lanes[ctx.selfLane].cards[owner]
+    .map(id => state.cards[id])
+    .filter(Boolean) as import('../types/state').CardInstance[];
+
+  if (laneCards.length < 2) return noop(state);
+
+  const sorted = [...laneCards].sort((a, b) =>
+    getCardCost(state, a.id, manifest) - getCardCost(state, b.id, manifest),
+  );
+  const lowestCostCard = sorted[0];
+  const highestPowerCard = [...laneCards].sort((a, b) =>
+    getCardPower(state, b.id, manifest) - getCardPower(state, a.id, manifest),
+  ).find(c => c.id !== lowestCostCard.id);
+
+  if (!highestPowerCard) return noop(state);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  const destroyEvt: MatchEvent = { type: 'CARD_DESTROYED', cardId: lowestCostCard.id, cause: ctx.source };
+  events.push(destroyEvt);
+  s = apply(s, destroyEvt, manifest);
+
+  const textEvt: MatchEvent = {
+    type: 'CARD_TEXT_OVERRIDDEN',
+    cardId: highestPowerCard.id,
+    override: { kind: 'COPY_OF_CARD', cardId: lowestCostCard.id },
+  };
+  events.push(textEvt);
+  s = apply(s, textEvt, manifest);
+
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Replace a random hand card with one that costs costDelta more.
+ * If costDelta < 0, finds a card that costs |costDelta| less.
+ */
+function replaceHandCardHigherCost(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const costDelta = (args.costDelta as number) ?? 1;
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+  if (state.hand[owner].length === 0) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+
+  const handCard = ctx.rng.fork('pick').pick([...state.hand[owner]]);
+  const handCardDef = manifest.cards[handCard.defId];
+  if (!handCardDef) return noop(state);
+  const targetCost = handCardDef.cost + costDelta;
+
+  const candidates = Object.values(manifest.cards)
+    .filter(def => def.cost === targetCost && def.defId !== handCard.defId)
+    .map(def => def.defId);
+  if (candidates.length === 0) return noop(state);
+
+  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newId = mintCardId(ctx, 'replace');
+  const ss = spawnSource(ctx, owner);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  // Remove old card (banish it — it's being "replaced", not destroyed/discarded)
+  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: handCard.id, cause: ctx.source };
+  events.push(banishEvt);
+  s = apply(s, banishEvt, manifest);
+
+  // Add new card
+  const addEvt: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner,
+    cardId: newId,
+    defId: newDefId,
+    spawnSource: ss,
+  };
+  events.push(addEvt);
+  s = apply(s, addEvt, manifest);
+
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Replace your lowest-Power hand card with a random card of targetCost.
+ */
+function replaceLowestPowerHandWithCost(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const targetCost = (args.targetCost as number) ?? 3;
+  const owner = ctx.selfOwner;
+  if (owner === null || state.hand[owner].length === 0) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+
+  const sorted = [...state.hand[owner]].sort((a, b) =>
+    getCardPower(state, a.id, manifest) - getCardPower(state, b.id, manifest),
+  );
+  const weakest = sorted[0];
+
+  const candidates = Object.values(manifest.cards)
+    .filter(def => def.cost === targetCost && def.defId !== weakest.defId)
+    .map(def => def.defId);
+  if (candidates.length === 0) return noop(state);
+
+  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newId = mintCardId(ctx, 'replace');
+  const ss = spawnSource(ctx, owner);
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: weakest.id, cause: ctx.source };
+  events.push(banishEvt);
+  s = apply(s, banishEvt, manifest);
+
+  const addEvt: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner, cardId: newId, defId: newDefId, spawnSource: ss,
+  };
+  events.push(addEvt);
+  s = apply(s, addEvt, manifest);
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Replace a created card in hand with one that costs costDelta more.
+ */
+function replaceCreatedHandCardHigherCost(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const costDelta = (args.costDelta as number) ?? 1;
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+
+  const createdCards = state.hand[owner].filter(c =>
+    c.spawnSource.kind !== 'DECK_CREATION' && c.spawnSource.kind !== 'SYSTEM',
+  );
+  if (createdCards.length === 0) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+
+  const picked = ctx.rng.fork('pick').pick(createdCards);
+  const pickedDef = manifest.cards[picked.defId];
+  if (!pickedDef) return noop(state);
+  const targetCost = pickedDef.cost + costDelta;
+
+  const candidates = Object.values(manifest.cards)
+    .filter(def => def.cost === targetCost && def.defId !== picked.defId)
+    .map(def => def.defId);
+  if (candidates.length === 0) return noop(state);
+
+  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newId = mintCardId(ctx, 'replace');
+  const ss = spawnSource(ctx, owner);
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: picked.id, cause: ctx.source };
+  events.push(banishEvt);
+  s = apply(s, banishEvt, manifest);
+
+  const addEvt: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner, cardId: newId, defId: newDefId, spawnSource: ss,
+  };
+  events.push(addEvt);
+  s = apply(s, addEvt, manifest);
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Add a random card to hand that costs costDelta less (temporarily).
+ * The cost discount is applied via CARD_COST_CHANGED and scheduled to revert
+ * at the end of the next turn via a SCHEDULED pending effect.
+ */
+function addDiscountedCardToHand(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const costDelta = (args.costDelta as number) ?? -1;
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+
+  const allDefs = Object.values(manifest.cards);
+  const validDefs = allDefs.filter(def => {
+    const discountedCost = def.cost + costDelta;
+    return discountedCost >= 0;
+  });
+  if (validDefs.length === 0) return noop(state);
+
+  const chosenDef = ctx.rng.fork('def').pick(validDefs);
+  const newId = mintCardId(ctx, 'add');
+  const ss = spawnSource(ctx, owner);
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  const addEvt: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner, cardId: newId, defId: chosenDef.defId, spawnSource: ss,
+  };
+  events.push(addEvt);
+  s = apply(s, addEvt, manifest);
+
+  // Apply temporary cost discount
+  if (costDelta !== 0) {
+    const costEvt: MatchEvent = {
+      type: 'CARD_COST_CHANGED',
+      cardId: newId,
+      delta: costDelta,
+      cause: ctx.source,
+    };
+    events.push(costEvt);
+    s = apply(s, costEvt, manifest);
+
+    // Schedule reversal at end of next turn
+    const revertEffect: import('../types/ability').EffectExpr = {
+      kind: 'ADJUST_COST',
+      target: { kind: 'ALL_CARDS', ownerFilter: 'SELF_OWNER', zoneFilter: 'HAND' },
+      delta: { kind: 'LIT', n: -costDelta },
+    };
+    const pendingEvt: MatchEvent = {
+      type: 'PENDING_EFFECT_ADDED',
+      effect: {
+        kind: 'SCHEDULED',
+        when: 'END_OF_NEXT_TURN',
+        sourceId: newId,
+        sourceOwner: owner,
+        sourceLane: null,
+        effect: revertEffect,
+      },
+    };
+    events.push(pendingEvt);
+    s = apply(s, pendingEvt, manifest);
+  }
+
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Draw the lowest-Cost card from your deck.
+ */
+function drawLowestCostCard(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null || state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+  if (state.deck[owner].length === 0) return noop(state);
+
+  const sorted = [...state.deck[owner]].sort((a, b) =>
+    getCardCost(state, a.id, manifest) - getCardCost(state, b.id, manifest),
+  );
+  const target = sorted[0];
+  const e: MatchEvent = { type: 'CARD_DRAWN', owner, cardId: target.id, toHand: true };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Give a random friendly card here +powerDelta Power.
+ * Destroy it at end of next turn (via SCHEDULED pending).
+ */
+function overclockChip(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const powerDelta = (args.powerDelta as number) ?? 5;
+  const owner = ctx.selfOwner;
+  if (owner === null || ctx.selfLane === null) return noop(state);
+
+  const friendliesHere = state.lanes[ctx.selfLane].cards[owner]
+    .filter(id => id !== (ctx.self as CardId));
+  if (friendliesHere.length === 0) return noop(state);
+
+  const targetId = ctx.rng.fork('target').pick(friendliesHere);
+  const events: MatchEvent[] = [];
+  let s = state;
+
+  const powerEvt: MatchEvent = {
+    type: 'CARD_POWER_CHANGED', cardId: targetId, delta: powerDelta, cause: ctx.source,
+  };
+  events.push(powerEvt);
+  s = apply(s, powerEvt, manifest);
+
+  // Schedule destruction at end of next turn
+  const destroyEffect: import('../types/ability').EffectExpr = {
+    kind: 'DESTROY',
+    target: { kind: 'ALL_CARDS', ownerFilter: 'SELF_OWNER', zoneFilter: 'LANE' },
+  };
+  const pendingEvt: MatchEvent = {
+    type: 'PENDING_EFFECT_ADDED',
+    effect: {
+      kind: 'SCHEDULED',
+      when: 'END_OF_NEXT_TURN',
+      sourceId: targetId,
+      sourceOwner: owner,
+      sourceLane: ctx.selfLane,
+      effect: destroyEffect,
+    },
+  };
+  events.push(pendingEvt);
+  s = apply(s, pendingEvt, manifest);
+
+  return { events, state: s };
+}
+
+/**
+ * On Reveal: Move a random enemy card here to another location.
+ */
+function moveEnemyCardToOtherLane(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null || ctx.selfLane === null) return noop(state);
+  const oppOwner: Owner = owner === 'P0' ? 'P1' : 'P0';
+  const enemiesHere = state.lanes[ctx.selfLane].cards[oppOwner];
+  if (enemiesHere.length === 0) return noop(state);
+
+  const targetId = ctx.rng.fork('target').pick([...enemiesHere]);
+  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+    state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
+  );
+  if (toLaneCandidates.length === 0) return noop(state);
+
+  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const e: MatchEvent = {
+    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Move this card to a random other location.
+ */
+function moveSelfToRandomOtherLane(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const self = ctx.self as CardId;
+  const owner = ctx.selfOwner;
+  if (!self || owner === null || ctx.selfLane === null) return noop(state);
+
+  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+    state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
+  );
+  if (toLaneCandidates.length === 0) return noop(state);
+
+  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const e: MatchEvent = {
+    type: 'CARD_MOVED', cardId: self, fromLane: ctx.selfLane, toLane, cause: ctx.source,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Move one of your other cards here to another location.
+ */
+function moveRandomFriendlyToOtherLane(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null || ctx.selfLane === null) return noop(state);
+
+  const others = state.lanes[ctx.selfLane].cards[owner]
+    .filter(id => id !== (ctx.self as CardId));
+  if (others.length === 0) return noop(state);
+
+  const targetId = ctx.rng.fork('target').pick([...others]);
+  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+    state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
+  );
+  if (toLaneCandidates.length === 0) return noop(state);
+
+  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const e: MatchEvent = {
+    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Move the lowest-Power enemy card here to another location.
+ */
+function moveLowestPowerEnemyToOtherLane(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null || ctx.selfLane === null) return noop(state);
+  const oppOwner: Owner = owner === 'P0' ? 'P1' : 'P0';
+
+  const enemies = state.lanes[ctx.selfLane].cards[oppOwner];
+  if (enemies.length === 0) return noop(state);
+
+  const sorted = [...enemies].sort((a, b) =>
+    getCardPower(state, a, manifest) - getCardPower(state, b, manifest),
+  );
+  const targetId = sorted[0];
+
+  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+    state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
+  );
+  if (toLaneCandidates.length === 0) return noop(state);
+
+  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const e: MatchEvent = {
+    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Add a copy of the top card of the opponent's deck to your hand.
+ */
+function copyTopEnemyDeckCardToHand(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+  const oppOwner: Owner = owner === 'P0' ? 'P1' : 'P0';
+
+  const oppDeck = state.deck[oppOwner];
+  if (oppDeck.length === 0) return noop(state);
+
+  const topCard = oppDeck[oppDeck.length - 1]; // top = last in array
+  const newId = mintCardId(ctx, 'copy');
+  const ss: SpawnSource = { kind: 'COPY_OF', sourceCardId: topCard.id };
+
+  const e: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner, cardId: newId, defId: topCard.defId, spawnSource: ss,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Add a card you discarded this game to your hand.
+ */
+function addDiscardedCardToHand(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
+
+  const discarded = Object.values(state.cards)
+    .filter(c => c.owner === owner && c.zone === 'DISCARD');
+  if (discarded.length === 0) return noop(state);
+
+  const picked = ctx.rng.fork('pick').pick(discarded);
+  const e: MatchEvent = {
+    type: 'CARD_ADDED_TO_HAND',
+    owner,
+    cardId: picked.id,
+    defId: picked.defId,
+    spawnSource: picked.spawnSource,
+  };
+  return { events: [e], state: apply(state, e, manifest) };
+}
+
+/**
+ * On Reveal: Disable Ongoing effects in this lane this turn.
+ * Implemented by adding ONGOING_DISABLED tags (sourced to this card) to all
+ * cards currently in the lane. Tags are cleared at TURN_ENDED.
+ *
+ * Note: ONGOING_DISABLED is per-source (the disabling card), so this is
+ * structurally correct — multiple disablers stack correctly.
+ */
+function disableOngoingsThisLaneThisTurn(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  if (ctx.selfLane === null || ctx.self === null) return noop(state);
+  const sourceId = ctx.self as CardId;
+
+  const allInLane: CardId[] = [
+    ...state.lanes[ctx.selfLane].cards.P0,
+    ...state.lanes[ctx.selfLane].cards.P1,
+  ];
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const id of allInLane) {
+    if (id === sourceId) continue; // don't disable yourself
+    const card = s.cards[id];
+    if (!card) continue;
+    // Only disable cards that have an ongoing
+    const def = manifest.cards[card.defId];
+    if ((def?.abilities?.ongoing?.length ?? 0) === 0) continue;
+
+    const alreadyDisabled = card.tags.some(
+      t => t.kind === 'ONGOING_DISABLED' && (t as { kind: 'ONGOING_DISABLED'; sourceId: CardId }).sourceId === sourceId,
+    );
+    if (alreadyDisabled) continue;
+
+    const e: MatchEvent = {
+      type: 'CARD_TAG_ADDED',
+      cardId: id,
+      tag: { kind: 'ONGOING_DISABLED', sourceId },
+    };
+    events.push(e);
+    s = apply(s, e, manifest);
+  }
+  return { events, state: s };
+}
+
+// ---- Stubs for reactive builtins -------------------------------------------
+
+/**
+ * DRAW_ON_POWER_GAIN — reactive: fires when this card gains power.
+ * Requires engine-level post-CARD_POWER_CHANGED hooks.
+ * Stub: no-op. Effect delivered in a later engine pass.
+ */
+function drawOnPowerGain(state: MatchState): BuiltinResult {
+  return noop(state);
+}
+
+/**
+ * DEBUFF_ENEMY_ON_HAND_ENTRY — Ongoing: enemy cards enter hand with -1 power.
+ * Requires engine-level CARD_DRAWN / CARD_ADDED_TO_HAND hooks for the opponent.
+ * Stub: no-op. Effect delivered in a later engine pass.
+ */
+function debuffEnemyOnHandEntry(state: MatchState): BuiltinResult {
+  return noop(state);
+}
+
+/**
+ * COPY_ONGOING_OF_CHEAPEST_ONGOING — Ongoing: copy ongoing of cheapest Ongoing
+ * card here. Requires projection-layer support for dynamic ongoing mirroring.
+ * Stub: no-op.
+ */
+function copyOngoingOfCheapestOngoing(state: MatchState): BuiltinResult {
+  return noop(state);
+}
+
+/**
+ * FULL_LANES_POWER — Ongoing: your full lanes have +delta Power.
+ * Requires projection-layer support (aggregated Ongoing across lane cards).
+ * Stub: no-op.
+ */
+function fullLanesPower(state: MatchState): BuiltinResult {
+  return noop(state);
+}
+
+// ---- Registry ---------------------------------------------------------------
+
+const REGISTRY = new Map<string, BuiltinHandler>([
+  ['POWER_TO_DESTROYER',               powerToDestroyer],
+  ['ACQUIRE_LOWEST_COST_TEXT',         acquireLowestCostText],
+  ['COPY_ONGOING_OF_CHEAPEST_ONGOING', (_s, _fn, _a, _c) => copyOngoingOfCheapestOngoing(_s)],
+  ['REPLACE_HAND_CARD_HIGHER_COST',    replaceHandCardHigherCost],
+  ['REPLACE_LOWEST_POWER_HAND_WITH_COST', replaceLowestPowerHandWithCost],
+  ['ADD_DISCOUNTED_CARD_TO_HAND',      addDiscountedCardToHand],
+  ['DRAW_LOWEST_COST_CARD',            drawLowestCostCard],
+  ['OVERCLOCK_CHIP',                   overclockChip],
+  ['REPLACE_CREATED_HAND_CARD_HIGHER_COST', replaceCreatedHandCardHigherCost],
+  ['MOVE_ENEMY_CARD_TO_OTHER_LANE',    moveEnemyCardToOtherLane],
+  ['MOVE_SELF_TO_RANDOM_OTHER_LANE',   moveSelfToRandomOtherLane],
+  ['MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', moveRandomFriendlyToOtherLane],
+  ['MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', moveLowestPowerEnemyToOtherLane],
+  ['DRAW_ON_POWER_GAIN',               (_s) => drawOnPowerGain(_s)],
+  ['DEBUFF_ENEMY_ON_HAND_ENTRY',       (_s) => debuffEnemyOnHandEntry(_s)],
+  ['COPY_TOP_ENEMY_DECK_CARD_TO_HAND', copyTopEnemyDeckCardToHand],
+  ['ADD_DISCARDED_CARD_TO_HAND',       addDiscardedCardToHand],
+  ['FULL_LANES_POWER',                 (_s) => fullLanesPower(_s)],
+  ['DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', disableOngoingsThisLaneThisTurn],
+]);
+
+export function invokeBuiltin(
+  state: MatchState,
+  fn: string,
+  args: BuiltinArgs,
+  ctx: EffectCtx,
+  manifest: Manifest,
+): BuiltinResult {
+  const handler = REGISTRY.get(fn);
+  if (!handler) {
+    throw new Error(`CALL_BUILTIN: no handler registered for "${fn}"`);
+  }
+  return handler(state, fn, args, ctx, manifest);
+}

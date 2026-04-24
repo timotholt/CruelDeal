@@ -92,5 +92,17 @@ export function listDefIdsFromPool(
       // Every card in the manifest. ownerFilter is informational here;
       // pool membership is identical for both players.
       return Object.values(manifest.cards).map(def => def.defId);
+
+    case 'DECK_BY_TRIBE': {
+      // Cards in the owner's deck that match the specified tribe.
+      const owner = resolveOwnerRef(pool.ownerDeck, selfOwner);
+      if (!owner) return [];
+      return state.deck[owner]
+        .filter(c => {
+          const def = manifest.cards[c.defId];
+          return def?.tribes?.includes(pool.tribe) ?? false;
+        })
+        .map(c => c.defId);
+    }
   }
 }

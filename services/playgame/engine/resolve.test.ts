@@ -16,6 +16,7 @@ import type {
   LocationInstance,
   MatchState,
 } from './types/state';
+import { EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneIdx, LocationId, Owner } from './types/ids';
 
 // ---- Tiny assertion shim ---------------------------------------------------
@@ -102,6 +103,7 @@ function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 }
 

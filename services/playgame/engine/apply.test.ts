@@ -14,6 +14,7 @@ import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import type { MatchEvent } from './types/events';
 import type { CardId, LaneIdx, LocationId, Owner } from './types/ids';
 import type { CardInstance, LaneState, MatchState } from './types/state';
+import { EMPTY_TRACKED_VARIABLES } from './types/state';
 import { getCardPower } from './projections';
 
 // ---- Tiny assertion shim ---------------------------------------------------
@@ -76,6 +77,7 @@ function emptyState(): MatchState {
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 }
 

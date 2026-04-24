@@ -1,0 +1,331 @@
+CYBERPUNK CCG — STARTER DECKS v0.2
+Plain-text playable deck recipes
+Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model
+
+========================================================================
+0. PURPOSE
+========================================================================
+
+This file converts the first 105-card draft into 8 starter decks.
+Each deck uses 12 cards.
+
+These decks are not final balance targets.
+They are test harnesses for discovering missing enablers, overloaded cards,
+weak archetypes, and confusing mechanics.
+
+Assumptions:
+    12-card decks.
+    Cards are persistent entities.
+    Destroy/discard/banish are zone changes.
+    No recovery from banish.
+
+========================================================================
+DECK 01 — STREET DESTROY
+========================================================================
+
+Archetype: Destroy
+Difficulty: Easy / Medium
+Game Plan: Use cheap bodies as fuel, destroy them for value, then close with reduced-cost or destroyed-count payoffs.
+Core Question: What should I sacrifice, and when?
+
+Deck List:
+    001. Scrap Rat (1/1) — When Destroyed: Give a random friendly card +2 Power.
+    002. Crash Dummy (1/2) — When Destroyed: Draw a card.
+    003. Chop Doc (2/2) — On Reveal: Destroy your lowest-Power card here.
+    004. Grinder Crew (2/3) — On Reveal: Destroy another card here and gain +3 Power.
+    005. Redline Bruiser (3/3) — When one of your cards is destroyed, this gains +1 Power.
+    006. Parts Collector (3/4) — On Reveal: Gain +1 Power for each card you destroyed this game.
+    007. Rust Revenant (4/6) — Costs 1 less for each of your cards destroyed this game.
+    008. Bone Market (4/4) — On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+    009. Meat Grinder (5/6) — On Reveal: Destroy all 1-Cost cards here and gain +2 Power for each.
+    010. Scrapyard King (6/8) — On Reveal: Gain +1 Power for each card destroyed this game.
+    013. Golden Parachute (1/1) — When Destroyed: Add a copy of this to your hand.
+    050. Illegal Clone (2/2) — When Destroyed: Add a copy of this to your hand.
+
+Curve:
+    1-Cost: 3
+    2-Cost: 3
+    3-Cost: 2
+    4-Cost: 2
+    5-Cost: 1
+    6-Cost: 1
+
+Play Pattern:
+    - Early: play destroy fodder like Scrap Rat, Crash Dummy, Golden Parachute, and Illegal Clone.
+    - Mid: use Chop Doc, Grinder Crew, and Bone Market to convert bodies into value.
+    - Late: close with Rust Revenant, Meat Grinder, or Scrapyard King.
+
+Weakness: Can run out of fuel or lose tempo if destroy effects hit the wrong target.
+Balance Watch: Crash Dummy drawing on death may be too efficient with repeated destroy effects.
+
+========================================================================
+DECK 02 — CORPORATE COPY
+========================================================================
+
+Archetype: Corporate Copy
+Difficulty: Hard
+Game Plan: Sacrifice specific cards to copy their text, then turn copied text into board advantage.
+Core Question: Whose ability is worth acquiring?
+
+Deck List:
+    001. Scrap Rat (1/1) — When Destroyed: Give a random friendly card +2 Power.
+    003. Chop Doc (2/2) — On Reveal: Destroy your lowest-Power card here.
+    011. Middle Manager (2/2) — On Reveal: Destroy another friendly card here and copy its On Reveal text.
+    012. Hostile Recruiter (3/3) — On Reveal: Copy the Ongoing text of your lowest-Cost card here.
+    013. Golden Parachute (1/1) — When Destroyed: Add a copy of this to your hand.
+    014. Severance Clone (2/1) — When Destroyed: Give the destroyer +2 Power.
+    015. HR Algorithm (3/2) — Ongoing: Your cards with copied text have +2 Power.
+    016. Acquisition Team (4/5) — On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.
+    017. Boardroom Proxy (5/6) — Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card.
+    018. Executive Override (6/5) — On Reveal: Destroy another friendly card here and copy its full text.
+    030. Signal Booster (2/1) — Ongoing: Your other cards here have +1 Power.
+    033. AI Overseer (3/3) — Ongoing: Your other Ongoing cards have +1 Power.
+
+Curve:
+    1-Cost: 2
+    2-Cost: 4
+    3-Cost: 3
+    4-Cost: 1
+    5-Cost: 1
+    6-Cost: 1
+
+Play Pattern:
+    - Early: set up safe copy targets like Golden Parachute, Severance Clone, Signal Booster, or AI Overseer.
+    - Mid: use Middle Manager, Hostile Recruiter, and Acquisition Team to copy useful text.
+    - Late: Executive Override creates the biggest copied-text swing.
+
+Weakness: Needs the right target and the right copy card together; bad sequencing creates weak bodies.
+Balance Watch: Executive Override copying full text may need to become On Reveal-only or Ongoing-only.
+
+========================================================================
+DECK 03 — FIXER NETWORK
+========================================================================
+
+Archetype: Fixer
+Difficulty: Medium
+Game Plan: Use Fixers to draw tagged cards, replace weak options, and create extra tools.
+Core Question: Who do I call to fix this hand?
+
+Deck List:
+    019. Street Fixer (2/2) — On Reveal: Draw a Tech card.
+    020. Tech Fixer (3/3) — On Reveal: Draw an AI card.
+    021. Military Fixer (3/2) — On Reveal: Add a random 4-Cost and 5-Cost Military card to your hand.
+    022. Chrome Broker (2/1) — On Reveal: Add a random Bio card to your hand.
+    023. Backchannel Contact (2/3) — On Reveal: Replace a card in your hand with a card that costs 1 more.
+    024. Clean Operator (3/4) — On Reveal: Replace your lowest-Power card in hand with a 3-Cost card.
+    025. Procurement Bot (1/1) — Ongoing: Your created cards in hand cost 1 less.
+    026. Dead Drop (3/1) — On Reveal: Add a random card to your hand that costs 1 less next turn.
+    027. Talent Scout (4/5) — On Reveal: Draw your lowest-Cost card.
+    028. Network Queen (5/7) — On Reveal: Give your created cards +2 Power.
+    033. AI Overseer (3/3) — Ongoing: Your other Ongoing cards have +1 Power.
+    047. Black Market Dealer (2/2) — On Reveal: Add a random card to your hand that costs 2 less next turn.
+
+Curve:
+    1-Cost: 1
+    2-Cost: 4
+    3-Cost: 5
+    4-Cost: 1
+    5-Cost: 1
+
+Play Pattern:
+    - Early: Street Fixer, Chrome Broker, Backchannel Contact, and Procurement Bot improve options.
+    - Mid: Tech Fixer and Talent Scout pull key cards while Dead Drop and Black Market Dealer create extra resources.
+    - Late: Network Queen turns created cards into real board power.
+
+Weakness: Can generate options without enough board tempo; weak if created-card payoffs are disrupted.
+Balance Watch: Procurement Bot may need 'once per turn' if created-card discounts stack too hard.
+
+========================================================================
+DECK 04 — NANOTECH MESH
+========================================================================
+
+Archetype: Nanotech / AI
+Difficulty: Easy / Medium
+Game Plan: Build Ongoing systems, fill lanes carefully, and let small persistent buffs scale over time.
+Core Question: Can I build an engine before they shut it down?
+
+Deck List:
+    019. Street Fixer (2/2) — On Reveal: Draw a Tech card.
+    025. Procurement Bot (1/1) — Ongoing: Your created cards in hand cost 1 less.
+    029. Nano Swarm (1/1) — Ongoing: This has +1 Power for each other card here.
+    030. Signal Booster (2/1) — Ongoing: Your other cards here have +1 Power.
+    031. Adaptive Shell (2/2) — End of Turn: If this is your only card here, give it +2 Power.
+    032. Maintenance Cloud (3/2) — End of Turn: Give your lowest-Power card here +1 Power.
+    033. AI Overseer (3/3) — Ongoing: Your other Ongoing cards have +1 Power.
+    034. Replication Node (4/3) — On Reveal: Add a 1-Power Drone here.
+    035. Smart Matter Armor (4/5) — Ongoing: Cards here with increased Power have +2 Power.
+    036. Distributed Mind (5/4) — Ongoing: Your cards at full locations have +2 Power.
+    037. Grey Goo Bloom (5/6) — End of Turn: If this location is full, give your cards here +1 Power.
+    038. Citywide Mesh (6/5) — Ongoing: Your other cards have +1 Power.
+
+Curve:
+    1-Cost: 2
+    2-Cost: 3
+    3-Cost: 2
+    4-Cost: 2
+    5-Cost: 2
+    6-Cost: 1
+
+Play Pattern:
+    - Early: Nano Swarm, Signal Booster, and Adaptive Shell establish lane pressure.
+    - Mid: Maintenance Cloud, AI Overseer, Replication Node, and Smart Matter Armor scale the board.
+    - Late: Distributed Mind, Grey Goo Bloom, and Citywide Mesh convert board presence into a finish.
+
+Weakness: Vulnerable to Ongoing hate, text removal, and full-lane disruption.
+Balance Watch: Citywide Mesh may be too strong if global +1 stacks with too many local buffs.
+
+========================================================================
+DECK 05 — HACKER CONTROL
+========================================================================
+
+Archetype: Hacker Control
+Difficulty: Medium / Hard
+Game Plan: Deny the opponent's key effects, reset modified cards, and win by breaking their engine.
+Core Question: Which enemy rule should I shut off?
+
+Deck List:
+    039. Signal Jammer (2/2) — Ongoing: Enemy On Reveal abilities do not trigger here.
+    040. Black ICE (3/3) — On Reveal: Remove Ongoing text from an enemy card here.
+    041. Trace Hacker (3/4) — On Reveal: Move an enemy card here to another location.
+    042. System Crash (4/3) — On Reveal: Reset an enemy card here to its base Power.
+    043. Rootkit Kid (2/1) — On Reveal: Give enemy created cards here -2 Power.
+    044. Firewall Daemon (4/4) — Ongoing: Enemy cards with disabled text have -2 Power.
+    045. Exploit Artist (5/6) — On Reveal: If your opponent played a card here this turn, destroy it.
+    046. Null Saint (6/8) — On Reveal: Remove text from all enemy cards here.
+    086. Blackmail File (2/2) — On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+    087. Predictive Cop (3/3) — On Reveal: If your opponent played here this turn, gain +4 Power.
+    103. EMP Grenade (3/2) — On Reveal: Disable Ongoing effects here this turn.
+    105. Hard Reset (5/5) — On Reveal: Reset all cards here to base Power.
+
+Curve:
+    2-Cost: 3
+    3-Cost: 4
+    4-Cost: 2
+    5-Cost: 2
+    6-Cost: 1
+
+Play Pattern:
+    - Early: Signal Jammer, Rootkit Kid, and Blackmail File interfere with common setups.
+    - Mid: Black ICE, Trace Hacker, System Crash, Predictive Cop, and EMP Grenade punish committed lanes.
+    - Late: Null Saint and Hard Reset produce major control swings.
+
+Weakness: Lower proactive Power; can lose to simple stat decks if it draws the wrong answers.
+Balance Watch: Signal Jammer at 2-Cost may be too oppressive against On Reveal-heavy decks.
+
+========================================================================
+DECK 06 — BLACK MARKET TEMPO
+========================================================================
+
+Archetype: Black Market
+Difficulty: Medium
+Game Plan: Create discounted or unstable cards, spike tempo, and profit before the downside arrives.
+Core Question: Can I win before the bill comes due?
+
+Deck List:
+    008. Bone Market (4/4) — On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+    026. Dead Drop (3/1) — On Reveal: Add a random card to your hand that costs 1 less next turn.
+    047. Black Market Dealer (2/2) — On Reveal: Add a random card to your hand that costs 2 less next turn.
+    048. Overclock Chip (1/0) — On Reveal: Give a friendly card here +5 Power and destroy it next turn.
+    049. Borrowed Gun (1/3) — End of Turn: Destroy this if it was created.
+    050. Illegal Clone (2/2) — When Destroyed: Add a copy of this to your hand.
+    051. Knockoff Cyberarm (3/5) — End of Turn: If this has increased Power, destroy it.
+    052. Grey Market Cache (3/2) — On Reveal: Reduce the Cost of a created card in your hand by 2.
+    053. Debt Collector (4/6) — On Reveal: Gain +1 Power for each card whose Cost you reduced this game.
+    054. Ghost Vendor (4/4) — On Reveal: Replace a created card in your hand with a random card that costs 1 more.
+    055. Hot Merchandise (5/9) — When Played: Destroy this at the end of next turn.
+    056. Kingpin Broker (6/7) — On Reveal: Give your discounted cards +2 Power.
+
+Curve:
+    1-Cost: 2
+    2-Cost: 2
+    3-Cost: 3
+    4-Cost: 3
+    5-Cost: 1
+    6-Cost: 1
+
+Play Pattern:
+    - Early: Dead Drop, Black Market Dealer, Overclock Chip, and Borrowed Gun generate cheap tempo.
+    - Mid: Bone Market, Knockoff Cyberarm, Grey Market Cache, Debt Collector, and Ghost Vendor convert discounts into advantage.
+    - Late: Hot Merchandise and Kingpin Broker create the final swing.
+
+Weakness: Randomness and self-destruction can backfire; bad timing loses value.
+Balance Watch: Black Market Dealer should probably pull from a curated or tagged pool, not the full card pool.
+
+========================================================================
+DECK 07 — OVERCLOCK BATTERY
+========================================================================
+
+Archetype: Overclock
+Difficulty: Medium / Hard
+Game Plan: Float Energy at the right time, then convert restraint into discounts, Power, and late-game burst.
+Core Question: Should I spend now or hold back?
+
+Deck List:
+    057. Battery Monk (1/2) — If you ended last turn with unspent Energy, this has +2 Power.
+    058. Capacitor Drone (2/2) — End of Turn: If you have unspent Energy, this gains +1 Power.
+    059. Quiet Protocol (2/0) — Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.
+    060. Stored Charge (3/3) — Costs 1 less if you had unspent Energy last turn.
+    061. Ambush Runner (3/4) — On Reveal: If you played no cards last turn, gain +4 Power.
+    062. Silent Engine (4/5) — End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.
+    063. Delayed Payload (5/7) — Costs 2 less if you spent no Energy last turn.
+    064. Neon Singularity (6/6) — On Reveal: Gain +2 Power for each unspent Energy you had last turn.
+    029. Nano Swarm (1/1) — Ongoing: This has +1 Power for each other card here.
+    031. Adaptive Shell (2/2) — End of Turn: If this is your only card here, give it +2 Power.
+    047. Black Market Dealer (2/2) — On Reveal: Add a random card to your hand that costs 2 less next turn.
+    052. Grey Market Cache (3/2) — On Reveal: Reduce the Cost of a created card in your hand by 2.
+
+Curve:
+    1-Cost: 2
+    2-Cost: 4
+    3-Cost: 3
+    4-Cost: 1
+    5-Cost: 1
+    6-Cost: 1
+
+Play Pattern:
+    - Early: Battery Monk, Capacitor Drone, Quiet Protocol, Nano Swarm, and Adaptive Shell reward slow starts.
+    - Mid: Stored Charge, Ambush Runner, Silent Engine, Black Market Dealer, and Grey Market Cache convert timing into value.
+    - Late: Delayed Payload and Neon Singularity punish opponents who cannot pressure early.
+
+Weakness: Can fall behind if it floats Energy without drawing payoffs.
+Balance Watch: Neon Singularity may need a cap if unspent Energy can stack beyond one previous turn.
+
+========================================================================
+DECK 08 — SWARM / GANG
+========================================================================
+
+Archetype: Swarm / Gang
+Difficulty: Easy
+Game Plan: Flood lanes with cheap cards and Drones, then turn full locations into Power.
+Core Question: Can I fill the board before they punish me?
+
+Deck List:
+    029. Nano Swarm (1/1) — Ongoing: This has +1 Power for each other card here.
+    030. Signal Booster (2/1) — Ongoing: Your other cards here have +1 Power.
+    034. Replication Node (4/3) — On Reveal: Add a 1-Power Drone here.
+    065. Street Kid (1/2) — No ability.
+    066. Drone Pup (1/1) — When Destroyed: Add a 1-Power Drone to your hand.
+    067. Gang Lookout (1/1) — After you play a card here, this gains +1 Power.
+    068. Drone Printer (2/1) — On Reveal: Add a 1-Power Drone here.
+    069. Block Party (2/2) — Ongoing: If this lane is full, your cards here have +1 Power.
+    070. Pack Tactics (3/2) — On Reveal: Give your other cards here +1 Power.
+    071. Signal Rally (3/3) — Ongoing: Your 1-Cost cards have +1 Power.
+    073. Gutter Legion (5/5) — Ongoing: Your full locations have +3 Power.
+    074. Hive Riot (6/4) — On Reveal: Give your 1-Cost cards +2 Power.
+
+Curve:
+    1-Cost: 4
+    2-Cost: 3
+    3-Cost: 2
+    4-Cost: 1
+    5-Cost: 1
+    6-Cost: 1
+
+Play Pattern:
+    - Early: Street Kid, Drone Pup, Gang Lookout, Drone Printer, and Nano Swarm fill lanes.
+    - Mid: Block Party, Pack Tactics, Signal Rally, Signal Booster, and Replication Node buff the crowd.
+    - Late: Gutter Legion and Hive Riot reward full locations and cheap bodies.
+
+Weakness: Can clog itself, overcommit into lane punish, or lose to mass destroy/reset effects.
+Balance Watch: Gutter Legion and Hive Riot may overlap too much as swarm finishers.

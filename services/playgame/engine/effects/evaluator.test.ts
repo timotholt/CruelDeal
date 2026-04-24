@@ -18,6 +18,7 @@ import type {
   LocationInstance,
   MatchState,
 } from '../types/state';
+import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
 import { getCardPower } from '../projections';
@@ -149,6 +150,7 @@ function buildState(
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 }
 

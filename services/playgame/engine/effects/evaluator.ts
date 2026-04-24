@@ -28,6 +28,7 @@ import { type EvalCtx } from '../projections/context';
 import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
+import { invokeBuiltin } from './builtins';
 
 export const MAX_REVEAL_RECURSION = 16;
 
@@ -643,13 +644,81 @@ export function evalEffect(
       if (source.length === 0) return { events: [], state };
       const srcCard = state.cards[source[0]];
       if (!srcCard) return { events: [], state };
+      const copyKind = effect.copyKind ?? 'FULL';
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of into) {
+        const override = copyKind === 'ON_REVEAL'
+          ? { kind: 'COPY_ON_REVEAL_OF_CARD' as const, cardId: source[0] }
+          : { kind: 'COPY_OF_CARD' as const, cardId: source[0] };
         const e: MatchEvent = {
           type: 'CARD_TEXT_OVERRIDDEN',
           cardId: id,
-          override: { kind: 'COPY_OF_CARD', cardId: source[0] },
+          override,
+        };
+        events.push(e);
+        s = apply(s, e, manifest);
+      }
+      return { events, state: s };
+    }
+
+    case 'RESET_POWER': {
+      // Restore powerDelta to 0 by emitting a negating CARD_POWER_CHANGED.
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const card = s.cards[id];
+        if (!card || card.powerDelta === 0) continue;
+        const e: MatchEvent = {
+          type: 'CARD_POWER_CHANGED',
+          cardId: id,
+          delta: -card.powerDelta,
+          cause: ctx.source,
+        };
+        events.push(e);
+        s = apply(s, e, manifest);
+      }
+      return { events, state: s };
+    }
+
+    case 'REMOVE_TEXT': {
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const card = s.cards[id];
+        if (!card) continue;
+        const textKind = effect.textKind;
+        const override = textKind === 'ONGOING' ? { kind: 'BLANK_ONGOING' as const }
+                       : textKind === 'ALL'     ? { kind: 'BLANK_ALL' as const }
+                       : null; // 'ON_REVEAL' — no TextOverride kind for that yet; skip
+        if (!override) continue;
+        const e: MatchEvent = {
+          type: 'CARD_TEXT_OVERRIDDEN',
+          cardId: id,
+          override,
+        };
+        events.push(e);
+        s = apply(s, e, manifest);
+      }
+      return { events, state: s };
+    }
+
+    case 'REMOVE_COPIED_TEXT': {
+      // Clear any COPY_OF_CARD / COPY_ON_REVEAL_OF_CARD text override.
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const card = s.cards[id];
+        if (!card) continue;
+        const ov = card.textOverride;
+        if (!ov || (ov.kind !== 'COPY_OF_CARD' && ov.kind !== 'COPY_ON_REVEAL_OF_CARD')) continue;
+        const e: MatchEvent = {
+          type: 'CARD_TEXT_OVERRIDDEN',
+          cardId: id,
+          override: null,
         };
         events.push(e);
         s = apply(s, e, manifest);
@@ -747,10 +816,7 @@ export function evalEffect(
     // ---- Escape hatch ----------------------------------------------------
 
     case 'CALL_BUILTIN':
-      // Reserved for card-specific fast paths that don't map cleanly to
-      // the generic DSL. No such cards in the launch set; future cards
-      // register named builtins under a separate registry.
-      throw new Error(`evalEffect: CALL_BUILTIN "${effect.fn}" has no registered handler`);
+      return invokeBuiltin(state, effect.fn, effect.args ?? {}, ctx, manifest);
   }
 }
 

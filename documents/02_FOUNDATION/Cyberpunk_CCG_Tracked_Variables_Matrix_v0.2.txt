@@ -1,6 +1,7 @@
-CYBERPUNK CCG — TRACKED VARIABLES MATRIX v0.1
+CYBERPUNK CCG — TRACKED VARIABLES MATRIX v0.2
 Plain-text design matrix
 Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model, banish rule
 
 ============================================================
 0. PURPOSE
@@ -35,6 +36,56 @@ Legend:
         PACKAGE      Use as a small support package.
         TECH         Use as counter/tech only.
         FUTURE       Track but save for later.
+
+
+============================================================
+0A. PERSISTENT ENTITY / ZONE-CHANGE RULE
+============================================================
+
+Cards are persistent entities.
+
+Destroy, discard, banish, draw, play, return, and move are zone changes.
+
+The engine should not delete card instances when they are destroyed, discarded,
+or banished. It should update current_zone and append a zone-change record.
+
+Core zone meanings:
+
+    Destroy:
+        board/lane -> destroyed_pile
+
+    Discard:
+        hand -> discard_pile
+
+    Banish:
+        any legal source zone -> banish_pile
+
+Hard banish rule:
+
+    Cards in the banish pile may be counted or inspected by history, but no
+    card design should ever move a card out of the banish pile.
+
+Required generic zone-change record:
+
+    card_instance_id
+    base_card_id
+    owner_player_id
+    controller_player_id
+    from_zone
+    to_zone
+    from_lane
+    to_lane
+    caused_by_player_id
+    caused_by_card_id
+    turn_number
+    phase
+    cost_at_change
+    power_at_change
+    text_at_change
+    tags_at_change
+    was_created
+    was_modified
+    zone_change_reason
 
 ============================================================
 1. DESTROYED CARD VARIABLES
@@ -182,7 +233,7 @@ Archetypes:
     Corporate Copy
     Salvage
 
-Required metadata:
+Required zone-change metadata:
     card_id
     original_card_id
     owner_player_id
@@ -203,7 +254,7 @@ Example card text:
     On Reveal: Add the last card you destroyed to your hand.
 
 Notes:
-    The engine should track rich records even if early cards use simple counts.
+    The engine should track rich zone-change records even if early cards use simple counts.
 
 ============================================================
 2. DISCARDED CARD VARIABLES
@@ -318,7 +369,7 @@ Safety:
 Launch Use:
     FUTURE
 
-Required metadata:
+Required zone-change metadata:
     card_id
     owner_player_id
     discarded_by_player_id
@@ -1486,6 +1537,176 @@ Archetypes:
 Notes:
     Useful later, probably too much for early card text.
 
+
+============================================================
+12A. BANISHED CARD VARIABLES
+============================================================
+
+Variable:
+    cards_you_banished_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE / TECH
+
+Archetypes:
+    Control
+    anti-recursion
+    high-stakes removal
+
+Example card text:
+    This has +1 Power for each card you banished this game.
+
+Notes:
+    Counts cards you moved to the banish pile, regardless of ownership.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_banished_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    anti-banish
+    control mirror
+
+Example card text:
+    If your opponent banished a card this game, gain +3 Power.
+
+Notes:
+    Use lightly. Banish should feel serious, not common.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_banished_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    global removal payoff
+    rare control payoff
+
+Example card text:
+    This has +1 Power for each card banished this game.
+
+Notes:
+    Safer than recovering banished cards.
+
+------------------------------------------------------------
+
+Variable:
+    your_cards_banished_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    anti-banish
+    sacrifice protection
+
+Example card text:
+    If one of your cards was banished this game, draw a card.
+
+Notes:
+    This can create compensation for permanent gameplay removal.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_cards_banished_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    control
+    high-stakes removal
+
+Example card text:
+    On Reveal: Gain +1 Power for each enemy card banished this game.
+
+Notes:
+    Good for control payoff, but do not overbuild.
+
+------------------------------------------------------------
+
+Variable:
+    banished_card_records
+
+Visibility:
+    PUBLIC history or inspectable history
+
+Safety:
+    HIGH for engine, RISKY for recovery mechanics
+
+Launch Use:
+    TECH / PACKAGE
+
+Required zone-change metadata:
+    card_instance_id
+    base_card_id
+    owner_player_id
+    controller_player_id
+    banished_by_player_id
+    banished_by_card_id
+    from_zone
+    from_lane
+    turn_number
+    cost_at_banish
+    power_at_banish
+    text_at_banish
+    tags_at_banish
+    was_created
+    was_modified
+
+Allowed card design:
+    Count banished cards.
+    Trigger when banished.
+    Care that a card was banished this game.
+
+Forbidden card design:
+    Move a card out of the banish pile.
+    Return a banished card to hand.
+    Return a banished card to deck.
+    Return a banished card to board.
+    Copy a banished card as a recovery workaround.
+
+Design rule:
+    Banish is persistent in the engine but final in gameplay.
+
 ============================================================
 12. MANIFEST VARIABLES
 ============================================================
@@ -1539,6 +1760,7 @@ Use heavily:
     cards_with_reduced_cost
 
 Use lightly:
+    banished-card counts
     enemy hand size
     enemy deck size
     enemy hand contents
@@ -1548,6 +1770,9 @@ Use lightly:
     total cards created
     total cost reduced
     cards with increased Cost
+
+Never design:
+    recovery from the banish pile
 
 Defer:
     player-facing Manifest

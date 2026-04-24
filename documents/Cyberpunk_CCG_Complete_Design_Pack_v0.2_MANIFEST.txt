@@ -1,0 +1,78 @@
+CYBERPUNK CCG — COMPLETE DESIGN PACK v0.2
+Created: 2026-04-23
+
+This is the clean complete working pack.
+
+Use these v0.2 files as the current source of truth.
+Older v0.1 files are intentionally excluded to avoid confusion.
+
+============================================================
+KEY ENGINE RULE
+============================================================
+
+Cards are persistent entities.
+
+Destroy, discard, and banish are zone changes.
+
+Destroy = move to destroyed pile / death pile.
+Discard = move to discard pile.
+Banish = move to banish pile.
+
+Cards are never deleted from the system.
+
+Banish is persistent in the engine but final in gameplay:
+do not design effects that pull, recover, regenerate, return, or move cards
+out of the banish pile.
+
+============================================================
+FILES INCLUDED
+============================================================
+
+01_README/
+    Cyberpunk_CCG_Design_Docs_README_v0.2.txt
+    Cyberpunk_CCG_Persistent_Entity_Zone_Model_Errata_v0.2.txt
+
+02_FOUNDATION/
+    Cyberpunk_CCG_Domain_Bible_v0.2.txt
+    Cyberpunk_CCG_Tracked_Variables_Matrix_v0.2.txt
+    Cyberpunk_CCG_Launch_Archetype_Packages_v0.2.txt
+
+03_CARDS/
+    Cyberpunk_CCG_First_105_Card_Draft_v0.2.txt
+    Cyberpunk_CCG_Compact_105_Card_List_v0.2.txt
+    Cyberpunk_CCG_First_105_Card_Draft_v0.2.tsv
+
+04_DECKS/
+    Cyberpunk_CCG_Starter_Decks_v0.2.txt
+    Cyberpunk_CCG_Starter_Decks_v0.2.tsv
+
+05_BALANCE/
+    Cyberpunk_CCG_Balance_Pass_Notes_v0.2.txt
+
+============================================================
+RECOMMENDED READING ORDER
+============================================================
+
+1. README
+2. Persistent Entity / Zone Model Errata
+3. Domain Bible
+4. Tracked Variables Matrix
+5. Launch Archetype Packages
+6. First 105 Card Draft
+7. Starter Decks
+8. Balance Pass Notes
+
+============================================================
+NEXT STEP
+============================================================
+
+Build v0.3 by playtesting the 8 starter decks and marking:
+
+- cards that are confusing
+- archetypes that brick
+- archetypes that snowball
+- effects that need engine support
+- random generation that needs curated pools
+- text-copy effects that need stricter caps
+
+End manifest.

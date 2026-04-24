@@ -1,6 +1,7 @@
-CYBERPUNK CCG — LAUNCH ARCHETYPE PACKAGES v0.1
+CYBERPUNK CCG — LAUNCH ARCHETYPE PACKAGES v0.2
 Plain-text design spec
 Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model, banish rule
 
 ============================================================
 0. PURPOSE
@@ -24,6 +25,44 @@ Each archetype should be built as a small package of functional slots:
 
 A 100+ card launch set should not contain 100 isolated ideas.
 It should contain overlapping packages built from tracked game variables.
+
+
+============================================================
+0A. ENGINE MODEL CORRECTION
+============================================================
+
+Cards are persistent entities.
+
+In this game engine, Destroy, Discard, and Banish do not delete cards from the
+system. They move cards to zones:
+
+    Destroy:
+        move card to destroyed pile / death pile
+
+    Discard:
+        move card to discard pile
+
+    Banish:
+        move card to banish pile
+
+The card object remains available to the engine through current_zone,
+zone_history, and zone-change records.
+
+Design rule:
+
+    Destroy pile and discard pile may have recovery mechanics.
+    Banish pile must not have recovery mechanics.
+
+Allowed:
+    Count cards in the banish pile.
+    Trigger when cards are banished.
+    Care that cards were banished this game.
+
+Forbidden:
+    Pull from banish.
+    Recover from banish.
+    Regenerate from banish.
+    Copy from banish as a workaround for recovery.
 
 ============================================================
 1. PACKAGE SLOT DEFINITIONS
@@ -960,6 +999,41 @@ Launch warning:
     Mechanically overlaps with Destroy.
     Save full support for expansion unless needed.
 
+
+============================================================
+15A. SECONDARY PACKAGE: BANISH / PERMANENT REMOVAL
+============================================================
+
+Core domain:
+    banished cards
+
+Launch size:
+    0-3 cards, only if needed
+
+Mechanical identity:
+    Some threats are moved to a final gameplay zone.
+
+Required functions if used:
+    1 narrow banish effect
+    1 card that counts banished cards
+    1 anti-recursion tool
+
+Allowed:
+    Banish a card.
+    Count banished cards.
+    Trigger when banished.
+
+Forbidden:
+    Recover from banish.
+    Return from banish.
+    Move from banish.
+    Regenerate from banish.
+    Copy from banish as a recovery workaround.
+
+Launch warning:
+    Banish is much more severe than destroy or discard because players cannot
+    recover from it. It should be rare, visible, and expensive.
+
 ============================================================
 16. CROSS-ARCHETYPE BRIDGE MAP
 ============================================================
@@ -1129,4 +1203,8 @@ Ask:
     "What package slot does this card fill, what tracked variable does it care
     about, and what other archetype can also use it?"
 
-End of Launch Archetype Packages v0.1.
+Persistent entity correction:
+    Destroy, discard, and banish are zone changes.
+    Banish is final in gameplay and should never have recovery effects.
+
+End of Launch Archetype Packages v0.2.

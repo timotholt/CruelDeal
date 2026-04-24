@@ -1,0 +1,1113 @@
+CYBERPUNK CCG — FIRST 105 CARD DRAFT v0.2
+Plain-text card draft
+Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model
+
+========================================================================
+0. DESIGN NOTE
+========================================================================
+
+This is the first actual card pass after the Domain Bible and Archetype Package spec.
+
+Rules text is intentionally simple and factual.
+Lore appears in names, tags, and archetype grouping.
+
+Balance is provisional.
+Costs and Power are first-pass placeholders for playtesting.
+
+
+Engine correction:
+    Cards are persistent entities.
+    Destroy means move to destroyed pile / death pile.
+    Discard means move to discard pile.
+    Banish means move to banish pile.
+    No card should recover cards from the banish pile.
+
+Assumptions:
+    3 lanes
+    6-turn Energy curve
+    12-card decks
+    small hand size with created-card flags
+    cards can be Characters or Objects
+
+Launch card count:
+    105 cards
+
+========================================================================
+1. CARD COUNT BY ARCHETYPE / PACKAGE
+========================================================================
+
+Destroy: 10
+Corporate Copy: 8
+Fixer: 10
+Nanotech / AI: 10
+Hacker Control: 8
+Black Market: 10
+Overclock: 8
+Swarm / Gang: 10
+Runner / Movement: 5
+Biohack / Cyberware: 5
+Surveillance: 4
+Malware: 4
+Discard / Memory Wipe: 2
+Generic: 6
+Counter / Tech: 5
+
+========================================================================
+2. CARD LIST
+========================================================================
+
+------------------------------------------------------------------------
+DESTROY
+------------------------------------------------------------------------
+
+001. Scrap Rat
+    Cost/Power: 1/1
+    Type: Character
+    Tags: Merc
+    Slot: When Destroyed value
+    Text: When Destroyed: Give a random friendly card +2 Power.
+    Domain: your cards destroyed
+
+002. Crash Dummy
+    Cost/Power: 1/2
+    Type: Character
+    Tags: Drone
+    Slot: Beginner fodder
+    Text: When Destroyed: Draw a card.
+    Domain: your cards destroyed
+
+003. Chop Doc
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Bio
+    Slot: Destroy enabler
+    Text: On Reveal: Destroy your lowest-Power card here.
+    Domain: cards in lane
+
+004. Grinder Crew
+    Cost/Power: 2/3
+    Type: Character
+    Tags: Merc
+    Slot: Destroy enabler
+    Text: On Reveal: Destroy another card here and gain +3 Power.
+    Domain: destroyed cards
+
+005. Redline Bruiser
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Merc Bio
+    Slot: Power payoff
+    Text: When one of your cards is destroyed, this gains +1 Power.
+    Domain: your cards destroyed
+
+006. Parts Collector
+    Cost/Power: 3/4
+    Type: Character
+    Tags: Merc
+    Slot: Destroyed-count payoff
+    Text: On Reveal: Gain +1 Power for each card you destroyed this game.
+    Domain: cards you destroyed
+
+007. Rust Revenant
+    Cost/Power: 4/6
+    Type: Character
+    Tags: Bio
+    Slot: Discount payoff
+    Text: Costs 1 less for each of your cards destroyed this game.
+    Domain: your cards destroyed
+
+008. Bone Market
+    Cost/Power: 4/4
+    Type: Object
+    Tags: Tech
+    Slot: Bridge to Black Market
+    Text: On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+    Domain: created cards + destroyed cards
+
+009. Meat Grinder
+    Cost/Power: 5/6
+    Type: Object
+    Tags: Tech
+    Slot: Finisher
+    Text: On Reveal: Destroy all 1-Cost cards here and gain +2 Power for each.
+    Domain: cards in lane
+
+010. Scrapyard King
+    Cost/Power: 6/8
+    Type: Character
+    Tags: Merc
+    Slot: Big finisher
+    Text: On Reveal: Gain +1 Power for each card destroyed this game.
+    Domain: total destroyed cards
+
+
+------------------------------------------------------------------------
+CORPORATE COPY
+------------------------------------------------------------------------
+
+011. Middle Manager
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Corp
+    Slot: Copy enabler
+    Text: On Reveal: Destroy another friendly card here and copy its On Reveal text.
+    Domain: copied text + destroyed cards
+
+012. Hostile Recruiter
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Corp
+    Slot: Copy enabler
+    Text: On Reveal: Copy the Ongoing text of your lowest-Cost card here.
+    Domain: copied text
+
+013. Golden Parachute
+    Cost/Power: 1/1
+    Type: Object
+    Tags: Corp
+    Slot: Safe copy target
+    Text: When Destroyed: Add a copy of this to your hand.
+    Domain: your cards destroyed + created cards
+
+014. Severance Clone
+    Cost/Power: 2/1
+    Type: Character
+    Tags: Corp Bio
+    Slot: Safe copy target
+    Text: When Destroyed: Give the destroyer +2 Power.
+    Domain: destroyed cards
+
+015. HR Algorithm
+    Cost/Power: 3/2
+    Type: Object
+    Tags: AI Corp
+    Slot: Copied-text payoff
+    Text: Ongoing: Your cards with copied text have +2 Power.
+    Domain: cards with copied text
+
+016. Acquisition Team
+    Cost/Power: 4/5
+    Type: Character
+    Tags: Corp
+    Slot: Bridge to Destroy
+    Text: On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.
+    Domain: copied text + lane
+
+017. Boardroom Proxy
+    Cost/Power: 5/6
+    Type: Character
+    Tags: Corp AI
+    Slot: Bridge to Nanotech
+    Text: Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card.
+    Domain: copied ongoing text
+
+018. Executive Override
+    Cost/Power: 6/5
+    Type: Character
+    Tags: Corp
+    Slot: Finisher
+    Text: On Reveal: Destroy another friendly card here and copy its full text.
+    Domain: copied text + destroyed cards
+
+
+------------------------------------------------------------------------
+FIXER
+------------------------------------------------------------------------
+
+019. Street Fixer
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Merc
+    Slot: Tag draw
+    Text: On Reveal: Draw a Tech card.
+    Domain: deck contents by tag
+
+020. Tech Fixer
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Merc Hacker
+    Slot: Tag draw
+    Text: On Reveal: Draw an AI card.
+    Domain: deck contents by tag
+
+021. Military Fixer
+    Cost/Power: 3/2
+    Type: Character
+    Tags: Military Merc
+    Slot: Random add
+    Text: On Reveal: Add a random 4-Cost and 5-Cost Military card to your hand.
+    Domain: created cards
+
+022. Chrome Broker
+    Cost/Power: 2/1
+    Type: Character
+    Tags: Bio Merc
+    Slot: Random add
+    Text: On Reveal: Add a random Bio card to your hand.
+    Domain: created cards by tag
+
+023. Backchannel Contact
+    Cost/Power: 2/3
+    Type: Character
+    Tags: Merc Hacker
+    Slot: Replacement
+    Text: On Reveal: Replace a card in your hand with a card that costs 1 more.
+    Domain: hand contents
+
+024. Clean Operator
+    Cost/Power: 3/4
+    Type: Character
+    Tags: Merc
+    Slot: Replacement
+    Text: On Reveal: Replace your lowest-Power card in hand with a 3-Cost card.
+    Domain: hand contents
+
+025. Procurement Bot
+    Cost/Power: 1/1
+    Type: Object
+    Tags: Drone Tech
+    Slot: Created-card payoff
+    Text: Ongoing: Your created cards in hand cost 1 less.
+    Domain: created cards in hand
+
+026. Dead Drop
+    Cost/Power: 3/1
+    Type: Object
+    Tags: Tech
+    Slot: Bridge to Black Market
+    Text: On Reveal: Add a random card to your hand that costs 1 less next turn.
+    Domain: created cards + cost reduction
+
+027. Talent Scout
+    Cost/Power: 4/5
+    Type: Character
+    Tags: Corp Merc
+    Slot: Midrange access
+    Text: On Reveal: Draw your lowest-Cost card.
+    Domain: deck contents
+
+028. Network Queen
+    Cost/Power: 5/7
+    Type: Character
+    Tags: Merc Hacker
+    Slot: Finisher
+    Text: On Reveal: Give your created cards +2 Power.
+    Domain: created cards
+
+
+------------------------------------------------------------------------
+NANOTECH / AI
+------------------------------------------------------------------------
+
+029. Nano Swarm
+    Cost/Power: 1/1
+    Type: Object
+    Tags: AI Tech
+    Slot: Scaling body
+    Text: Ongoing: This has +1 Power for each other card here.
+    Domain: cards in lane
+
+030. Signal Booster
+    Cost/Power: 2/1
+    Type: Object
+    Tags: AI Tech
+    Slot: Local buff
+    Text: Ongoing: Your other cards here have +1 Power.
+    Domain: cards in lane
+
+031. Adaptive Shell
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Tech Bio
+    Slot: End-turn growth
+    Text: End of Turn: If this is your only card here, give it +2 Power.
+    Domain: cards in lane
+
+032. Maintenance Cloud
+    Cost/Power: 3/2
+    Type: Object
+    Tags: AI Drone
+    Slot: End-turn growth
+    Text: End of Turn: Give your lowest-Power card here +1 Power.
+    Domain: modified power
+
+033. AI Overseer
+    Cost/Power: 3/3
+    Type: Object
+    Tags: AI
+    Slot: Ongoing payoff
+    Text: Ongoing: Your other Ongoing cards have +1 Power.
+    Domain: ongoing text
+
+034. Replication Node
+    Cost/Power: 4/3
+    Type: Object
+    Tags: AI Tech
+    Slot: Bridge to Swarm
+    Text: On Reveal: Add a 1-Power Drone here.
+    Domain: created cards + lane
+
+035. Smart Matter Armor
+    Cost/Power: 4/5
+    Type: Object
+    Tags: Tech Bio
+    Slot: Bridge to Biohack
+    Text: Ongoing: Cards here with increased Power have +2 Power.
+    Domain: modified power
+
+036. Distributed Mind
+    Cost/Power: 5/4
+    Type: Object
+    Tags: AI
+    Slot: Engine finisher
+    Text: Ongoing: Your cards at full locations have +2 Power.
+    Domain: full lane
+
+037. Grey Goo Bloom
+    Cost/Power: 5/6
+    Type: Object
+    Tags: AI Tech
+    Slot: Big scaler
+    Text: End of Turn: If this location is full, give your cards here +1 Power.
+    Domain: full lane
+
+038. Citywide Mesh
+    Cost/Power: 6/5
+    Type: Object
+    Tags: AI
+    Slot: Finisher
+    Text: Ongoing: Your other cards have +1 Power.
+    Domain: global board
+
+
+------------------------------------------------------------------------
+HACKER CONTROL
+------------------------------------------------------------------------
+
+039. Signal Jammer
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Hacker Tech
+    Slot: On Reveal denial
+    Text: Ongoing: Enemy On Reveal abilities do not trigger here.
+    Domain: enemy text
+
+040. Black ICE
+    Cost/Power: 3/3
+    Type: Object
+    Tags: AI Hacker
+    Slot: Ongoing hate
+    Text: On Reveal: Remove Ongoing text from an enemy card here.
+    Domain: enemy text
+
+041. Trace Hacker
+    Cost/Power: 3/4
+    Type: Character
+    Tags: Hacker
+    Slot: Displacement
+    Text: On Reveal: Move an enemy card here to another location.
+    Domain: enemy board + movement
+
+042. System Crash
+    Cost/Power: 4/3
+    Type: Object
+    Tags: Hacker Tech
+    Slot: Power reset
+    Text: On Reveal: Reset an enemy card here to its base Power.
+    Domain: modified power
+
+043. Rootkit Kid
+    Cost/Power: 2/1
+    Type: Character
+    Tags: Hacker
+    Slot: Created-card hate
+    Text: On Reveal: Give enemy created cards here -2 Power.
+    Domain: enemy created cards
+
+044. Firewall Daemon
+    Cost/Power: 4/4
+    Type: Object
+    Tags: AI Hacker
+    Slot: Control payoff
+    Text: Ongoing: Enemy cards with disabled text have -2 Power.
+    Domain: disabled text
+
+045. Exploit Artist
+    Cost/Power: 5/6
+    Type: Character
+    Tags: Hacker Merc
+    Slot: Advanced prediction
+    Text: On Reveal: If your opponent played a card here this turn, destroy it.
+    Domain: enemy cards played this turn
+
+046. Null Saint
+    Cost/Power: 6/8
+    Type: Character
+    Tags: Hacker AI
+    Slot: Finisher
+    Text: On Reveal: Remove text from all enemy cards here.
+    Domain: enemy text
+
+
+------------------------------------------------------------------------
+BLACK MARKET
+------------------------------------------------------------------------
+
+047. Black Market Dealer
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Merc
+    Slot: Temporary add
+    Text: On Reveal: Add a random card to your hand that costs 2 less next turn.
+    Domain: created cards + cost reduction
+
+048. Overclock Chip
+    Cost/Power: 1/0
+    Type: Object
+    Tags: Tech
+    Slot: Risk buff
+    Text: On Reveal: Give a friendly card here +5 Power and destroy it next turn.
+    Domain: temporary value
+
+049. Borrowed Gun
+    Cost/Power: 1/3
+    Type: Object
+    Tags: Tech Military
+    Slot: Temporary body
+    Text: End of Turn: Destroy this if it was created.
+    Domain: created cards + destroyed cards
+
+050. Illegal Clone
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Bio
+    Slot: Bridge to Destroy
+    Text: When Destroyed: Add a copy of this to your hand.
+    Domain: destroyed + created cards
+
+051. Knockoff Cyberarm
+    Cost/Power: 3/5
+    Type: Object
+    Tags: Bio Tech
+    Slot: Risk payoff
+    Text: End of Turn: If this has increased Power, destroy it.
+    Domain: modified power + self-destroy
+
+052. Grey Market Cache
+    Cost/Power: 3/2
+    Type: Object
+    Tags: Tech
+    Slot: Discount enabler
+    Text: On Reveal: Reduce the Cost of a created card in your hand by 2.
+    Domain: created cards in hand
+
+053. Debt Collector
+    Cost/Power: 4/6
+    Type: Character
+    Tags: Corp Merc
+    Slot: Discount payoff
+    Text: On Reveal: Gain +1 Power for each card whose Cost you reduced this game.
+    Domain: cost reduced
+
+054. Ghost Vendor
+    Cost/Power: 4/4
+    Type: Character
+    Tags: Hacker Merc
+    Slot: Bridge to Fixer
+    Text: On Reveal: Replace a created card in your hand with a random card that costs 1 more.
+    Domain: created cards in hand
+
+055. Hot Merchandise
+    Cost/Power: 5/9
+    Type: Object
+    Tags: Tech
+    Slot: Risk finisher
+    Text: When Played: Destroy this at the end of next turn.
+    Domain: temporary value
+
+056. Kingpin Broker
+    Cost/Power: 6/7
+    Type: Character
+    Tags: Merc Corp
+    Slot: Finisher
+    Text: On Reveal: Give your discounted cards +2 Power.
+    Domain: cards with reduced cost
+
+
+------------------------------------------------------------------------
+OVERCLOCK
+------------------------------------------------------------------------
+
+057. Battery Monk
+    Cost/Power: 1/2
+    Type: Character
+    Tags: Bio
+    Slot: Beginner payoff
+    Text: If you ended last turn with unspent Energy, this has +2 Power.
+    Domain: unspent energy last turn
+
+058. Capacitor Drone
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Drone Tech
+    Slot: End-turn growth
+    Text: End of Turn: If you have unspent Energy, this gains +1 Power.
+    Domain: unspent energy this turn
+
+059. Quiet Protocol
+    Cost/Power: 2/0
+    Type: Object
+    Tags: AI Hacker
+    Slot: Bridge to Control
+    Text: Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.
+    Domain: unspent energy last turn
+
+060. Stored Charge
+    Cost/Power: 3/3
+    Type: Object
+    Tags: Tech
+    Slot: Discount card
+    Text: Costs 1 less if you had unspent Energy last turn.
+    Domain: unspent energy last turn
+
+061. Ambush Runner
+    Cost/Power: 3/4
+    Type: Character
+    Tags: Merc
+    Slot: Low-play reward
+    Text: On Reveal: If you played no cards last turn, gain +4 Power.
+    Domain: played no cards last turn
+
+062. Silent Engine
+    Cost/Power: 4/5
+    Type: Object
+    Tags: AI Tech
+    Slot: Bridge to Nanotech
+    Text: End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.
+    Domain: unspent energy + ongoing
+
+063. Delayed Payload
+    Cost/Power: 5/7
+    Type: Object
+    Tags: Tech Military
+    Slot: Bridge to Black Market
+    Text: Costs 2 less if you spent no Energy last turn.
+    Domain: energy spent last turn
+
+064. Neon Singularity
+    Cost/Power: 6/6
+    Type: Object
+    Tags: AI Tech
+    Slot: Finisher
+    Text: On Reveal: Gain +2 Power for each unspent Energy you had last turn.
+    Domain: unspent energy last turn
+
+
+------------------------------------------------------------------------
+SWARM / GANG
+------------------------------------------------------------------------
+
+065. Street Kid
+    Cost/Power: 1/2
+    Type: Character
+    Tags: Merc
+    Slot: Cheap body
+    Text: No ability.
+    Domain: cheap cards
+
+066. Drone Pup
+    Cost/Power: 1/1
+    Type: Object
+    Tags: Drone
+    Slot: Cheap body
+    Text: When Destroyed: Add a 1-Power Drone to your hand.
+    Domain: destroyed + created
+
+067. Gang Lookout
+    Cost/Power: 1/1
+    Type: Character
+    Tags: Merc
+    Slot: Cards-played payoff
+    Text: After you play a card here, this gains +1 Power.
+    Domain: cards played this turn
+
+068. Drone Printer
+    Cost/Power: 2/1
+    Type: Object
+    Tags: Drone Tech
+    Slot: Token creator
+    Text: On Reveal: Add a 1-Power Drone here.
+    Domain: created cards + lane
+
+069. Block Party
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Merc
+    Slot: Full-lane payoff
+    Text: Ongoing: If this lane is full, your cards here have +1 Power.
+    Domain: full lane
+
+070. Pack Tactics
+    Cost/Power: 3/2
+    Type: Object
+    Tags: Military Merc
+    Slot: Local buff
+    Text: On Reveal: Give your other cards here +1 Power.
+    Domain: cards in lane
+
+071. Signal Rally
+    Cost/Power: 3/3
+    Type: Object
+    Tags: AI
+    Slot: Bridge to Nanotech
+    Text: Ongoing: Your 1-Cost cards have +1 Power.
+    Domain: cheap cards
+
+072. Crowd Surge
+    Cost/Power: 4/4
+    Type: Object
+    Tags: Merc
+    Slot: Cards-played payoff
+    Text: On Reveal: Gain +1 Power for each card you played this turn.
+    Domain: cards played this turn
+
+073. Gutter Legion
+    Cost/Power: 5/5
+    Type: Character
+    Tags: Merc
+    Slot: Finisher
+    Text: Ongoing: Your full locations have +3 Power.
+    Domain: full locations
+
+074. Hive Riot
+    Cost/Power: 6/4
+    Type: Object
+    Tags: Drone AI
+    Slot: Big finisher
+    Text: On Reveal: Give your 1-Cost cards +2 Power.
+    Domain: cheap cards
+
+
+------------------------------------------------------------------------
+RUNNER / MOVEMENT
+------------------------------------------------------------------------
+
+075. Neon Courier
+    Cost/Power: 2/3
+    Type: Character
+    Tags: Merc
+    Slot: Self-mover
+    Text: On Reveal: Move this to another location.
+    Domain: movement
+
+076. Getaway Driver
+    Cost/Power: 3/4
+    Type: Character
+    Tags: Merc
+    Slot: Friendly mover
+    Text: On Reveal: Move one of your other cards here to another location.
+    Domain: movement
+
+077. Rooftop Runner
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Merc Bio
+    Slot: Moved payoff
+    Text: When Moved: Gain +3 Power.
+    Domain: this card moved
+
+078. Traffic Spoofer
+    Cost/Power: 4/5
+    Type: Object
+    Tags: Hacker Tech
+    Slot: Enemy mover
+    Text: On Reveal: Move the lowest-Power enemy card here to another location.
+    Domain: enemy movement
+
+079. Escape Route
+    Cost/Power: 5/6
+    Type: Object
+    Tags: Tech
+    Slot: Movement payoff
+    Text: Ongoing: Your cards that moved this game have +1 Power.
+    Domain: cards moved
+
+
+------------------------------------------------------------------------
+BIOHACK / CYBERWARE
+------------------------------------------------------------------------
+
+080. Chrome Surgeon
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Bio
+    Slot: Hand buff
+    Text: On Reveal: Give the leftmost card in your hand +2 Power.
+    Domain: modified power in hand
+
+081. Reflex Booster
+    Cost/Power: 2/1
+    Type: Object
+    Tags: Bio Tech
+    Slot: Lane buff
+    Text: On Reveal: Give a friendly card here +3 Power.
+    Domain: modified power
+
+082. Adrenal Graft
+    Cost/Power: 3/3
+    Type: Object
+    Tags: Bio
+    Slot: Modified payoff
+    Text: When this gains Power, draw a card.
+    Domain: modified power
+
+083. Wetware Saint
+    Cost/Power: 4/5
+    Type: Character
+    Tags: Bio AI
+    Slot: Bridge to Nanotech
+    Text: Ongoing: Your cards with increased Power have +1 Power.
+    Domain: modified power
+
+084. Illegal Implant
+    Cost/Power: 5/8
+    Type: Object
+    Tags: Bio Tech
+    Slot: Bridge to Black Market
+    Text: Costs 1 less if you reduced a card's Cost this game.
+    Domain: cost reduced
+
+
+------------------------------------------------------------------------
+SURVEILLANCE
+------------------------------------------------------------------------
+
+085. Camera Rat
+    Cost/Power: 1/2
+    Type: Object
+    Tags: Hacker Drone
+    Slot: Enemy hand size payoff
+    Text: On Reveal: If your opponent has 5 or more cards in hand, gain +2 Power.
+    Domain: enemy hand size
+
+086. Blackmail File
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Hacker Corp
+    Slot: Hand disruption
+    Text: On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+    Domain: enemy hand contents
+
+087. Predictive Cop
+    Cost/Power: 3/3
+    Type: Character
+    Tags: AI Military
+    Slot: Prediction payoff
+    Text: On Reveal: If your opponent played here this turn, gain +4 Power.
+    Domain: enemy played here
+
+088. Panopticon AI
+    Cost/Power: 5/5
+    Type: Object
+    Tags: AI Hacker
+    Slot: Surveillance payoff
+    Text: Ongoing: Enemy cards added to hand have -1 Power.
+    Domain: enemy created cards
+
+
+------------------------------------------------------------------------
+MALWARE
+------------------------------------------------------------------------
+
+089. Junk Packet
+    Cost/Power: 1/1
+    Type: Object
+    Tags: Hacker Tech
+    Slot: Junk creator
+    Text: On Reveal: Add a 0-Power Junk card to your opponent's deck.
+    Domain: enemy deck
+
+090. Deck Worm
+    Cost/Power: 2/2
+    Type: Object
+    Tags: Hacker AI
+    Slot: Top-deck modifier
+    Text: On Reveal: Give the top card of your opponent's deck -3 Power.
+    Domain: enemy deck contents
+
+091. Data Leech
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Hacker
+    Slot: Enemy deck copy
+    Text: On Reveal: Add a copy of the top card of your opponent's deck to your hand.
+    Domain: enemy deck contents + created cards
+
+092. Corruption Bloom
+    Cost/Power: 4/4
+    Type: Object
+    Tags: AI Hacker
+    Slot: Malware payoff
+    Text: Ongoing: Enemy cards with reduced Power have -1 Power.
+    Domain: modified power
+
+
+------------------------------------------------------------------------
+DISCARD / MEMORY WIPE
+------------------------------------------------------------------------
+
+093. Memory Burner
+    Cost/Power: 2/4
+    Type: Object
+    Tags: Hacker
+    Slot: Self-discard cost
+    Text: On Reveal: Discard the lowest-Cost card in your hand.
+    Domain: discarded cards
+
+094. Backup Ghost
+    Cost/Power: 3/3
+    Type: Character
+    Tags: AI
+    Slot: Discard recovery
+    Text: On Reveal: Add a card you discarded this game to your hand.
+    Domain: discarded card records
+
+
+------------------------------------------------------------------------
+GENERIC
+------------------------------------------------------------------------
+
+095. Street Samurai
+    Cost/Power: 2/4
+    Type: Character
+    Tags: Merc
+    Slot: Simple rate card
+    Text: No ability.
+    Domain: baseline stats
+
+096. Armored Van
+    Cost/Power: 3/5
+    Type: Object
+    Tags: Military Tech
+    Slot: Simple rate card
+    Text: No ability.
+    Domain: baseline stats
+
+097. Night Market Scout
+    Cost/Power: 1/1
+    Type: Character
+    Tags: Merc
+    Slot: Simple draw
+    Text: On Reveal: Draw a card if your hand is empty.
+    Domain: hand size
+
+098. Metro Enforcer
+    Cost/Power: 4/7
+    Type: Character
+    Tags: Military
+    Slot: Simple condition
+    Text: If this is your only card here, this has +2 Power.
+    Domain: cards in lane
+
+099. Cheap Drone
+    Cost/Power: 1/1
+    Type: Object
+    Tags: Drone
+    Slot: Simple token body
+    Text: No ability.
+    Domain: cheap cards
+
+100. Loaded Suit
+    Cost/Power: 5/8
+    Type: Character
+    Tags: Corp
+    Slot: Simple big card
+    Text: No ability.
+    Domain: baseline stats
+
+
+------------------------------------------------------------------------
+COUNTER / TECH
+------------------------------------------------------------------------
+
+101. Union Rep
+    Cost/Power: 2/2
+    Type: Character
+    Tags: Corp Merc
+    Slot: Anti-destroy
+    Text: Ongoing: Your cards here cannot be destroyed by your own cards.
+    Domain: destroy prevention
+
+102. White-Hat Auditor
+    Cost/Power: 3/3
+    Type: Character
+    Tags: Hacker Corp
+    Slot: Anti-created
+    Text: On Reveal: Enemy created cards here lose their text.
+    Domain: enemy created cards
+
+103. EMP Grenade
+    Cost/Power: 3/2
+    Type: Object
+    Tags: Military Tech
+    Slot: Anti-Ongoing
+    Text: On Reveal: Disable Ongoing effects here this turn.
+    Domain: ongoing text
+
+104. Kill Switch
+    Cost/Power: 4/4
+    Type: Object
+    Tags: Hacker Tech
+    Slot: Anti-copy
+    Text: On Reveal: Remove copied text from cards here.
+    Domain: copied text
+
+105. Hard Reset
+    Cost/Power: 5/5
+    Type: Object
+    Tags: AI Hacker
+    Slot: Anti-modified
+    Text: On Reveal: Reset all cards here to base Power.
+    Domain: modified power
+
+========================================================================
+3. SLOT MAP VIEW
+========================================================================
+
+001 | Destroy | When Destroyed value | 1/1 | Scrap Rat | When Destroyed: Give a random friendly card +2 Power.
+002 | Destroy | Beginner fodder | 1/2 | Crash Dummy | When Destroyed: Draw a card.
+003 | Destroy | Destroy enabler | 2/2 | Chop Doc | On Reveal: Destroy your lowest-Power card here.
+004 | Destroy | Destroy enabler | 2/3 | Grinder Crew | On Reveal: Destroy another card here and gain +3 Power.
+005 | Destroy | Power payoff | 3/3 | Redline Bruiser | When one of your cards is destroyed, this gains +1 Power.
+006 | Destroy | Destroyed-count payoff | 3/4 | Parts Collector | On Reveal: Gain +1 Power for each card you destroyed this game.
+007 | Destroy | Discount payoff | 4/6 | Rust Revenant | Costs 1 less for each of your cards destroyed this game.
+008 | Destroy | Bridge to Black Market | 4/4 | Bone Market | On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+009 | Destroy | Finisher | 5/6 | Meat Grinder | On Reveal: Destroy all 1-Cost cards here and gain +2 Power for each.
+010 | Destroy | Big finisher | 6/8 | Scrapyard King | On Reveal: Gain +1 Power for each card destroyed this game.
+011 | Corporate Copy | Copy enabler | 2/2 | Middle Manager | On Reveal: Destroy another friendly card here and copy its On Reveal text.
+012 | Corporate Copy | Copy enabler | 3/3 | Hostile Recruiter | On Reveal: Copy the Ongoing text of your lowest-Cost card here.
+013 | Corporate Copy | Safe copy target | 1/1 | Golden Parachute | When Destroyed: Add a copy of this to your hand.
+014 | Corporate Copy | Safe copy target | 2/1 | Severance Clone | When Destroyed: Give the destroyer +2 Power.
+015 | Corporate Copy | Copied-text payoff | 3/2 | HR Algorithm | Ongoing: Your cards with copied text have +2 Power.
+016 | Corporate Copy | Bridge to Destroy | 4/5 | Acquisition Team | On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.
+017 | Corporate Copy | Bridge to Nanotech | 5/6 | Boardroom Proxy | Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card.
+018 | Corporate Copy | Finisher | 6/5 | Executive Override | On Reveal: Destroy another friendly card here and copy its full text.
+019 | Fixer | Tag draw | 2/2 | Street Fixer | On Reveal: Draw a Tech card.
+020 | Fixer | Tag draw | 3/3 | Tech Fixer | On Reveal: Draw an AI card.
+021 | Fixer | Random add | 3/2 | Military Fixer | On Reveal: Add a random 4-Cost and 5-Cost Military card to your hand.
+022 | Fixer | Random add | 2/1 | Chrome Broker | On Reveal: Add a random Bio card to your hand.
+023 | Fixer | Replacement | 2/3 | Backchannel Contact | On Reveal: Replace a card in your hand with a card that costs 1 more.
+024 | Fixer | Replacement | 3/4 | Clean Operator | On Reveal: Replace your lowest-Power card in hand with a 3-Cost card.
+025 | Fixer | Created-card payoff | 1/1 | Procurement Bot | Ongoing: Your created cards in hand cost 1 less.
+026 | Fixer | Bridge to Black Market | 3/1 | Dead Drop | On Reveal: Add a random card to your hand that costs 1 less next turn.
+027 | Fixer | Midrange access | 4/5 | Talent Scout | On Reveal: Draw your lowest-Cost card.
+028 | Fixer | Finisher | 5/7 | Network Queen | On Reveal: Give your created cards +2 Power.
+029 | Nanotech / AI | Scaling body | 1/1 | Nano Swarm | Ongoing: This has +1 Power for each other card here.
+030 | Nanotech / AI | Local buff | 2/1 | Signal Booster | Ongoing: Your other cards here have +1 Power.
+031 | Nanotech / AI | End-turn growth | 2/2 | Adaptive Shell | End of Turn: If this is your only card here, give it +2 Power.
+032 | Nanotech / AI | End-turn growth | 3/2 | Maintenance Cloud | End of Turn: Give your lowest-Power card here +1 Power.
+033 | Nanotech / AI | Ongoing payoff | 3/3 | AI Overseer | Ongoing: Your other Ongoing cards have +1 Power.
+034 | Nanotech / AI | Bridge to Swarm | 4/3 | Replication Node | On Reveal: Add a 1-Power Drone here.
+035 | Nanotech / AI | Bridge to Biohack | 4/5 | Smart Matter Armor | Ongoing: Cards here with increased Power have +2 Power.
+036 | Nanotech / AI | Engine finisher | 5/4 | Distributed Mind | Ongoing: Your cards at full locations have +2 Power.
+037 | Nanotech / AI | Big scaler | 5/6 | Grey Goo Bloom | End of Turn: If this location is full, give your cards here +1 Power.
+038 | Nanotech / AI | Finisher | 6/5 | Citywide Mesh | Ongoing: Your other cards have +1 Power.
+039 | Hacker Control | On Reveal denial | 2/2 | Signal Jammer | Ongoing: Enemy On Reveal abilities do not trigger here.
+040 | Hacker Control | Ongoing hate | 3/3 | Black ICE | On Reveal: Remove Ongoing text from an enemy card here.
+041 | Hacker Control | Displacement | 3/4 | Trace Hacker | On Reveal: Move an enemy card here to another location.
+042 | Hacker Control | Power reset | 4/3 | System Crash | On Reveal: Reset an enemy card here to its base Power.
+043 | Hacker Control | Created-card hate | 2/1 | Rootkit Kid | On Reveal: Give enemy created cards here -2 Power.
+044 | Hacker Control | Control payoff | 4/4 | Firewall Daemon | Ongoing: Enemy cards with disabled text have -2 Power.
+045 | Hacker Control | Advanced prediction | 5/6 | Exploit Artist | On Reveal: If your opponent played a card here this turn, destroy it.
+046 | Hacker Control | Finisher | 6/8 | Null Saint | On Reveal: Remove text from all enemy cards here.
+047 | Black Market | Temporary add | 2/2 | Black Market Dealer | On Reveal: Add a random card to your hand that costs 2 less next turn.
+048 | Black Market | Risk buff | 1/0 | Overclock Chip | On Reveal: Give a friendly card here +5 Power and destroy it next turn.
+049 | Black Market | Temporary body | 1/3 | Borrowed Gun | End of Turn: Destroy this if it was created.
+050 | Black Market | Bridge to Destroy | 2/2 | Illegal Clone | When Destroyed: Add a copy of this to your hand.
+051 | Black Market | Risk payoff | 3/5 | Knockoff Cyberarm | End of Turn: If this has increased Power, destroy it.
+052 | Black Market | Discount enabler | 3/2 | Grey Market Cache | On Reveal: Reduce the Cost of a created card in your hand by 2.
+053 | Black Market | Discount payoff | 4/6 | Debt Collector | On Reveal: Gain +1 Power for each card whose Cost you reduced this game.
+054 | Black Market | Bridge to Fixer | 4/4 | Ghost Vendor | On Reveal: Replace a created card in your hand with a random card that costs 1 more.
+055 | Black Market | Risk finisher | 5/9 | Hot Merchandise | When Played: Destroy this at the end of next turn.
+056 | Black Market | Finisher | 6/7 | Kingpin Broker | On Reveal: Give your discounted cards +2 Power.
+057 | Overclock | Beginner payoff | 1/2 | Battery Monk | If you ended last turn with unspent Energy, this has +2 Power.
+058 | Overclock | End-turn growth | 2/2 | Capacitor Drone | End of Turn: If you have unspent Energy, this gains +1 Power.
+059 | Overclock | Bridge to Control | 2/0 | Quiet Protocol | Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.
+060 | Overclock | Discount card | 3/3 | Stored Charge | Costs 1 less if you had unspent Energy last turn.
+061 | Overclock | Low-play reward | 3/4 | Ambush Runner | On Reveal: If you played no cards last turn, gain +4 Power.
+062 | Overclock | Bridge to Nanotech | 4/5 | Silent Engine | End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.
+063 | Overclock | Bridge to Black Market | 5/7 | Delayed Payload | Costs 2 less if you spent no Energy last turn.
+064 | Overclock | Finisher | 6/6 | Neon Singularity | On Reveal: Gain +2 Power for each unspent Energy you had last turn.
+065 | Swarm / Gang | Cheap body | 1/2 | Street Kid | No ability.
+066 | Swarm / Gang | Cheap body | 1/1 | Drone Pup | When Destroyed: Add a 1-Power Drone to your hand.
+067 | Swarm / Gang | Cards-played payoff | 1/1 | Gang Lookout | After you play a card here, this gains +1 Power.
+068 | Swarm / Gang | Token creator | 2/1 | Drone Printer | On Reveal: Add a 1-Power Drone here.
+069 | Swarm / Gang | Full-lane payoff | 2/2 | Block Party | Ongoing: If this lane is full, your cards here have +1 Power.
+070 | Swarm / Gang | Local buff | 3/2 | Pack Tactics | On Reveal: Give your other cards here +1 Power.
+071 | Swarm / Gang | Bridge to Nanotech | 3/3 | Signal Rally | Ongoing: Your 1-Cost cards have +1 Power.
+072 | Swarm / Gang | Cards-played payoff | 4/4 | Crowd Surge | On Reveal: Gain +1 Power for each card you played this turn.
+073 | Swarm / Gang | Finisher | 5/5 | Gutter Legion | Ongoing: Your full locations have +3 Power.
+074 | Swarm / Gang | Big finisher | 6/4 | Hive Riot | On Reveal: Give your 1-Cost cards +2 Power.
+075 | Runner / Movement | Self-mover | 2/3 | Neon Courier | On Reveal: Move this to another location.
+076 | Runner / Movement | Friendly mover | 3/4 | Getaway Driver | On Reveal: Move one of your other cards here to another location.
+077 | Runner / Movement | Moved payoff | 3/3 | Rooftop Runner | When Moved: Gain +3 Power.
+078 | Runner / Movement | Enemy mover | 4/5 | Traffic Spoofer | On Reveal: Move the lowest-Power enemy card here to another location.
+079 | Runner / Movement | Movement payoff | 5/6 | Escape Route | Ongoing: Your cards that moved this game have +1 Power.
+080 | Biohack / Cyberware | Hand buff | 2/2 | Chrome Surgeon | On Reveal: Give the leftmost card in your hand +2 Power.
+081 | Biohack / Cyberware | Lane buff | 2/1 | Reflex Booster | On Reveal: Give a friendly card here +3 Power.
+082 | Biohack / Cyberware | Modified payoff | 3/3 | Adrenal Graft | When this gains Power, draw a card.
+083 | Biohack / Cyberware | Bridge to Nanotech | 4/5 | Wetware Saint | Ongoing: Your cards with increased Power have +1 Power.
+084 | Biohack / Cyberware | Bridge to Black Market | 5/8 | Illegal Implant | Costs 1 less if you reduced a card's Cost this game.
+085 | Surveillance | Enemy hand size payoff | 1/2 | Camera Rat | On Reveal: If your opponent has 5 or more cards in hand, gain +2 Power.
+086 | Surveillance | Hand disruption | 2/2 | Blackmail File | On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+087 | Surveillance | Prediction payoff | 3/3 | Predictive Cop | On Reveal: If your opponent played here this turn, gain +4 Power.
+088 | Surveillance | Surveillance payoff | 5/5 | Panopticon AI | Ongoing: Enemy cards added to hand have -1 Power.
+089 | Malware | Junk creator | 1/1 | Junk Packet | On Reveal: Add a 0-Power Junk card to your opponent's deck.
+090 | Malware | Top-deck modifier | 2/2 | Deck Worm | On Reveal: Give the top card of your opponent's deck -3 Power.
+091 | Malware | Enemy deck copy | 3/3 | Data Leech | On Reveal: Add a copy of the top card of your opponent's deck to your hand.
+092 | Malware | Malware payoff | 4/4 | Corruption Bloom | Ongoing: Enemy cards with reduced Power have -1 Power.
+093 | Discard / Memory Wipe | Self-discard cost | 2/4 | Memory Burner | On Reveal: Discard the lowest-Cost card in your hand.
+094 | Discard / Memory Wipe | Discard recovery | 3/3 | Backup Ghost | On Reveal: Add a card you discarded this game to your hand.
+095 | Generic | Simple rate card | 2/4 | Street Samurai | No ability.
+096 | Generic | Simple rate card | 3/5 | Armored Van | No ability.
+097 | Generic | Simple draw | 1/1 | Night Market Scout | On Reveal: Draw a card if your hand is empty.
+098 | Generic | Simple condition | 4/7 | Metro Enforcer | If this is your only card here, this has +2 Power.
+099 | Generic | Simple token body | 1/1 | Cheap Drone | No ability.
+100 | Generic | Simple big card | 5/8 | Loaded Suit | No ability.
+101 | Counter / Tech | Anti-destroy | 2/2 | Union Rep | Ongoing: Your cards here cannot be destroyed by your own cards.
+102 | Counter / Tech | Anti-created | 3/3 | White-Hat Auditor | On Reveal: Enemy created cards here lose their text.
+103 | Counter / Tech | Anti-Ongoing | 3/2 | EMP Grenade | On Reveal: Disable Ongoing effects here this turn.
+104 | Counter / Tech | Anti-copy | 4/4 | Kill Switch | On Reveal: Remove copied text from cards here.
+105 | Counter / Tech | Anti-modified | 5/5 | Hard Reset | On Reveal: Reset all cards here to base Power.
+
+========================================================================
+4. FIRST-PASS BALANCE FLAGS
+========================================================================
+
+- 018 Executive Override: Full-text copying is dangerous and may need to become On Reveal-only or Ongoing-only.
+- 021 Military Fixer: Adding two cards may be strong, especially if the Military pool has premium 4/5-cost cards.
+- 025 Procurement Bot: Ongoing Cost reduction for all created cards in hand may need a once-per-turn cap.
+- 039 Signal Jammer: Persistent On Reveal denial can hard-counter too much if placed cheaply.
+- 046 Null Saint: Removing all enemy text here is a huge swing and may need lower Power or higher Cost.
+- 047 Black Market Dealer: Full-pool random discount must be controlled by curated pools or tags.
+- 056 Kingpin Broker: Discount payoff can snowball if cost reduction is too common.
+- 062 Silent Engine: Repeated Ongoing buffs may create runaway Nanotech/Overclock hybrids.
+- 073 Gutter Legion: Full-location bonuses may be too easy in Swarm.
+- 088 Panopticon AI: Enemy added-to-hand penalty can feel oppressive if many decks create cards.
+- 089 Junk Packet: Enemy deck junk must have clear visual feedback.
+- 105 Hard Reset: Full lane reset is powerful anti-buff tech and may define the meta.
+
+========================================================================
+5. NEXT DESIGN STEP
+========================================================================
+
+Next step is not more cards.
+
+Next step:
+    Build 8 starter 12-card decks from this pool.
+    Mark which cards appear in multiple starter decks.
+    Identify missing enablers/payoffs after deck construction.
+    Then revise this card file to v0.2.
+
+End of First 105 Card Draft v0.2.

@@ -1,0 +1,97 @@
+deck_name	card_id	card_name	cost	power	type	tags	archetype	text
+Deck 01 — Street Destroy	001	Scrap Rat	1	1	Character	Merc	Destroy	When Destroyed: Give a random friendly card +2 Power.
+Deck 01 — Street Destroy	002	Crash Dummy	1	2	Character	Drone	Destroy	When Destroyed: Draw a card.
+Deck 01 — Street Destroy	003	Chop Doc	2	2	Character	Bio	Destroy	On Reveal: Destroy your lowest-Power card here.
+Deck 01 — Street Destroy	004	Grinder Crew	2	3	Character	Merc	Destroy	On Reveal: Destroy another card here and gain +3 Power.
+Deck 01 — Street Destroy	005	Redline Bruiser	3	3	Character	Merc Bio	Destroy	When one of your cards is destroyed, this gains +1 Power.
+Deck 01 — Street Destroy	006	Parts Collector	3	4	Character	Merc	Destroy	On Reveal: Gain +1 Power for each card you destroyed this game.
+Deck 01 — Street Destroy	007	Rust Revenant	4	6	Character	Bio	Destroy	Costs 1 less for each of your cards destroyed this game.
+Deck 01 — Street Destroy	008	Bone Market	4	4	Object	Tech	Destroy	On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+Deck 01 — Street Destroy	009	Meat Grinder	5	6	Object	Tech	Destroy	On Reveal: Destroy all 1-Cost cards here and gain +2 Power for each.
+Deck 01 — Street Destroy	010	Scrapyard King	6	8	Character	Merc	Destroy	On Reveal: Gain +1 Power for each card destroyed this game.
+Deck 01 — Street Destroy	013	Golden Parachute	1	1	Object	Corp	Corporate Copy	When Destroyed: Add a copy of this to your hand.
+Deck 01 — Street Destroy	050	Illegal Clone	2	2	Character	Bio	Black Market	When Destroyed: Add a copy of this to your hand.
+Deck 02 — Corporate Copy	001	Scrap Rat	1	1	Character	Merc	Destroy	When Destroyed: Give a random friendly card +2 Power.
+Deck 02 — Corporate Copy	003	Chop Doc	2	2	Character	Bio	Destroy	On Reveal: Destroy your lowest-Power card here.
+Deck 02 — Corporate Copy	011	Middle Manager	2	2	Character	Corp	Corporate Copy	On Reveal: Destroy another friendly card here and copy its On Reveal text.
+Deck 02 — Corporate Copy	012	Hostile Recruiter	3	3	Character	Corp	Corporate Copy	On Reveal: Copy the Ongoing text of your lowest-Cost card here.
+Deck 02 — Corporate Copy	013	Golden Parachute	1	1	Object	Corp	Corporate Copy	When Destroyed: Add a copy of this to your hand.
+Deck 02 — Corporate Copy	014	Severance Clone	2	1	Character	Corp Bio	Corporate Copy	When Destroyed: Give the destroyer +2 Power.
+Deck 02 — Corporate Copy	015	HR Algorithm	3	2	Object	AI Corp	Corporate Copy	Ongoing: Your cards with copied text have +2 Power.
+Deck 02 — Corporate Copy	016	Acquisition Team	4	5	Character	Corp	Corporate Copy	On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.
+Deck 02 — Corporate Copy	017	Boardroom Proxy	5	6	Character	Corp AI	Corporate Copy	Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card.
+Deck 02 — Corporate Copy	018	Executive Override	6	5	Character	Corp	Corporate Copy	On Reveal: Destroy another friendly card here and copy its full text.
+Deck 02 — Corporate Copy	030	Signal Booster	2	1	Object	AI Tech	Nanotech / AI	Ongoing: Your other cards here have +1 Power.
+Deck 02 — Corporate Copy	033	AI Overseer	3	3	Object	AI	Nanotech / AI	Ongoing: Your other Ongoing cards have +1 Power.
+Deck 03 — Fixer Network	019	Street Fixer	2	2	Character	Merc	Fixer	On Reveal: Draw a Tech card.
+Deck 03 — Fixer Network	020	Tech Fixer	3	3	Character	Merc Hacker	Fixer	On Reveal: Draw an AI card.
+Deck 03 — Fixer Network	021	Military Fixer	3	2	Character	Military Merc	Fixer	On Reveal: Add a random 4-Cost and 5-Cost Military card to your hand.
+Deck 03 — Fixer Network	022	Chrome Broker	2	1	Character	Bio Merc	Fixer	On Reveal: Add a random Bio card to your hand.
+Deck 03 — Fixer Network	023	Backchannel Contact	2	3	Character	Merc Hacker	Fixer	On Reveal: Replace a card in your hand with a card that costs 1 more.
+Deck 03 — Fixer Network	024	Clean Operator	3	4	Character	Merc	Fixer	On Reveal: Replace your lowest-Power card in hand with a 3-Cost card.
+Deck 03 — Fixer Network	025	Procurement Bot	1	1	Object	Drone Tech	Fixer	Ongoing: Your created cards in hand cost 1 less.
+Deck 03 — Fixer Network	026	Dead Drop	3	1	Object	Tech	Fixer	On Reveal: Add a random card to your hand that costs 1 less next turn.
+Deck 03 — Fixer Network	027	Talent Scout	4	5	Character	Corp Merc	Fixer	On Reveal: Draw your lowest-Cost card.
+Deck 03 — Fixer Network	028	Network Queen	5	7	Character	Merc Hacker	Fixer	On Reveal: Give your created cards +2 Power.
+Deck 03 — Fixer Network	033	AI Overseer	3	3	Object	AI	Nanotech / AI	Ongoing: Your other Ongoing cards have +1 Power.
+Deck 03 — Fixer Network	047	Black Market Dealer	2	2	Character	Merc	Black Market	On Reveal: Add a random card to your hand that costs 2 less next turn.
+Deck 04 — Nanotech Mesh	019	Street Fixer	2	2	Character	Merc	Fixer	On Reveal: Draw a Tech card.
+Deck 04 — Nanotech Mesh	025	Procurement Bot	1	1	Object	Drone Tech	Fixer	Ongoing: Your created cards in hand cost 1 less.
+Deck 04 — Nanotech Mesh	029	Nano Swarm	1	1	Object	AI Tech	Nanotech / AI	Ongoing: This has +1 Power for each other card here.
+Deck 04 — Nanotech Mesh	030	Signal Booster	2	1	Object	AI Tech	Nanotech / AI	Ongoing: Your other cards here have +1 Power.
+Deck 04 — Nanotech Mesh	031	Adaptive Shell	2	2	Object	Tech Bio	Nanotech / AI	End of Turn: If this is your only card here, give it +2 Power.
+Deck 04 — Nanotech Mesh	032	Maintenance Cloud	3	2	Object	AI Drone	Nanotech / AI	End of Turn: Give your lowest-Power card here +1 Power.
+Deck 04 — Nanotech Mesh	033	AI Overseer	3	3	Object	AI	Nanotech / AI	Ongoing: Your other Ongoing cards have +1 Power.
+Deck 04 — Nanotech Mesh	034	Replication Node	4	3	Object	AI Tech	Nanotech / AI	On Reveal: Add a 1-Power Drone here.
+Deck 04 — Nanotech Mesh	035	Smart Matter Armor	4	5	Object	Tech Bio	Nanotech / AI	Ongoing: Cards here with increased Power have +2 Power.
+Deck 04 — Nanotech Mesh	036	Distributed Mind	5	4	Object	AI	Nanotech / AI	Ongoing: Your cards at full locations have +2 Power.
+Deck 04 — Nanotech Mesh	037	Grey Goo Bloom	5	6	Object	AI Tech	Nanotech / AI	End of Turn: If this location is full, give your cards here +1 Power.
+Deck 04 — Nanotech Mesh	038	Citywide Mesh	6	5	Object	AI	Nanotech / AI	Ongoing: Your other cards have +1 Power.
+Deck 05 — Hacker Control	039	Signal Jammer	2	2	Object	Hacker Tech	Hacker Control	Ongoing: Enemy On Reveal abilities do not trigger here.
+Deck 05 — Hacker Control	040	Black ICE	3	3	Object	AI Hacker	Hacker Control	On Reveal: Remove Ongoing text from an enemy card here.
+Deck 05 — Hacker Control	041	Trace Hacker	3	4	Character	Hacker	Hacker Control	On Reveal: Move an enemy card here to another location.
+Deck 05 — Hacker Control	042	System Crash	4	3	Object	Hacker Tech	Hacker Control	On Reveal: Reset an enemy card here to its base Power.
+Deck 05 — Hacker Control	043	Rootkit Kid	2	1	Character	Hacker	Hacker Control	On Reveal: Give enemy created cards here -2 Power.
+Deck 05 — Hacker Control	044	Firewall Daemon	4	4	Object	AI Hacker	Hacker Control	Ongoing: Enemy cards with disabled text have -2 Power.
+Deck 05 — Hacker Control	045	Exploit Artist	5	6	Character	Hacker Merc	Hacker Control	On Reveal: If your opponent played a card here this turn, destroy it.
+Deck 05 — Hacker Control	046	Null Saint	6	8	Character	Hacker AI	Hacker Control	On Reveal: Remove text from all enemy cards here.
+Deck 05 — Hacker Control	086	Blackmail File	2	2	Object	Hacker Corp	Surveillance	On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+Deck 05 — Hacker Control	087	Predictive Cop	3	3	Character	AI Military	Surveillance	On Reveal: If your opponent played here this turn, gain +4 Power.
+Deck 05 — Hacker Control	103	EMP Grenade	3	2	Object	Military Tech	Counter / Tech	On Reveal: Disable Ongoing effects here this turn.
+Deck 05 — Hacker Control	105	Hard Reset	5	5	Object	AI Hacker	Counter / Tech	On Reveal: Reset all cards here to base Power.
+Deck 06 — Black Market Tempo	008	Bone Market	4	4	Object	Tech	Destroy	On Reveal: Add a random card to your hand and destroy your lowest-Power card here.
+Deck 06 — Black Market Tempo	026	Dead Drop	3	1	Object	Tech	Fixer	On Reveal: Add a random card to your hand that costs 1 less next turn.
+Deck 06 — Black Market Tempo	047	Black Market Dealer	2	2	Character	Merc	Black Market	On Reveal: Add a random card to your hand that costs 2 less next turn.
+Deck 06 — Black Market Tempo	048	Overclock Chip	1	0	Object	Tech	Black Market	On Reveal: Give a friendly card here +5 Power and destroy it next turn.
+Deck 06 — Black Market Tempo	049	Borrowed Gun	1	3	Object	Tech Military	Black Market	End of Turn: Destroy this if it was created.
+Deck 06 — Black Market Tempo	050	Illegal Clone	2	2	Character	Bio	Black Market	When Destroyed: Add a copy of this to your hand.
+Deck 06 — Black Market Tempo	051	Knockoff Cyberarm	3	5	Object	Bio Tech	Black Market	End of Turn: If this has increased Power, destroy it.
+Deck 06 — Black Market Tempo	052	Grey Market Cache	3	2	Object	Tech	Black Market	On Reveal: Reduce the Cost of a created card in your hand by 2.
+Deck 06 — Black Market Tempo	053	Debt Collector	4	6	Character	Corp Merc	Black Market	On Reveal: Gain +1 Power for each card whose Cost you reduced this game.
+Deck 06 — Black Market Tempo	054	Ghost Vendor	4	4	Character	Hacker Merc	Black Market	On Reveal: Replace a created card in your hand with a random card that costs 1 more.
+Deck 06 — Black Market Tempo	055	Hot Merchandise	5	9	Object	Tech	Black Market	When Played: Destroy this at the end of next turn.
+Deck 06 — Black Market Tempo	056	Kingpin Broker	6	7	Character	Merc Corp	Black Market	On Reveal: Give your discounted cards +2 Power.
+Deck 07 — Overclock Battery	057	Battery Monk	1	2	Character	Bio	Overclock	If you ended last turn with unspent Energy, this has +2 Power.
+Deck 07 — Overclock Battery	058	Capacitor Drone	2	2	Object	Drone Tech	Overclock	End of Turn: If you have unspent Energy, this gains +1 Power.
+Deck 07 — Overclock Battery	059	Quiet Protocol	2	0	Object	AI Hacker	Overclock	Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.
+Deck 07 — Overclock Battery	060	Stored Charge	3	3	Object	Tech	Overclock	Costs 1 less if you had unspent Energy last turn.
+Deck 07 — Overclock Battery	061	Ambush Runner	3	4	Character	Merc	Overclock	On Reveal: If you played no cards last turn, gain +4 Power.
+Deck 07 — Overclock Battery	062	Silent Engine	4	5	Object	AI Tech	Overclock	End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.
+Deck 07 — Overclock Battery	063	Delayed Payload	5	7	Object	Tech Military	Overclock	Costs 2 less if you spent no Energy last turn.
+Deck 07 — Overclock Battery	064	Neon Singularity	6	6	Object	AI Tech	Overclock	On Reveal: Gain +2 Power for each unspent Energy you had last turn.
+Deck 07 — Overclock Battery	029	Nano Swarm	1	1	Object	AI Tech	Nanotech / AI	Ongoing: This has +1 Power for each other card here.
+Deck 07 — Overclock Battery	031	Adaptive Shell	2	2	Object	Tech Bio	Nanotech / AI	End of Turn: If this is your only card here, give it +2 Power.
+Deck 07 — Overclock Battery	047	Black Market Dealer	2	2	Character	Merc	Black Market	On Reveal: Add a random card to your hand that costs 2 less next turn.
+Deck 07 — Overclock Battery	052	Grey Market Cache	3	2	Object	Tech	Black Market	On Reveal: Reduce the Cost of a created card in your hand by 2.
+Deck 08 — Swarm / Gang	029	Nano Swarm	1	1	Object	AI Tech	Nanotech / AI	Ongoing: This has +1 Power for each other card here.
+Deck 08 — Swarm / Gang	030	Signal Booster	2	1	Object	AI Tech	Nanotech / AI	Ongoing: Your other cards here have +1 Power.
+Deck 08 — Swarm / Gang	034	Replication Node	4	3	Object	AI Tech	Nanotech / AI	On Reveal: Add a 1-Power Drone here.
+Deck 08 — Swarm / Gang	065	Street Kid	1	2	Character	Merc	Swarm / Gang	No ability.
+Deck 08 — Swarm / Gang	066	Drone Pup	1	1	Object	Drone	Swarm / Gang	When Destroyed: Add a 1-Power Drone to your hand.
+Deck 08 — Swarm / Gang	067	Gang Lookout	1	1	Character	Merc	Swarm / Gang	After you play a card here, this gains +1 Power.
+Deck 08 — Swarm / Gang	068	Drone Printer	2	1	Object	Drone Tech	Swarm / Gang	On Reveal: Add a 1-Power Drone here.
+Deck 08 — Swarm / Gang	069	Block Party	2	2	Object	Merc	Swarm / Gang	Ongoing: If this lane is full, your cards here have +1 Power.
+Deck 08 — Swarm / Gang	070	Pack Tactics	3	2	Object	Military Merc	Swarm / Gang	On Reveal: Give your other cards here +1 Power.
+Deck 08 — Swarm / Gang	071	Signal Rally	3	3	Object	AI	Swarm / Gang	Ongoing: Your 1-Cost cards have +1 Power.
+Deck 08 — Swarm / Gang	073	Gutter Legion	5	5	Character	Merc	Swarm / Gang	Ongoing: Your full locations have +3 Power.
+Deck 08 — Swarm / Gang	074	Hive Riot	6	4	Object	Drone AI	Swarm / Gang	On Reveal: Give your 1-Cost cards +2 Power.

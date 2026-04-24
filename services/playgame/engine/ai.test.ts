@@ -8,6 +8,7 @@ import { createRng } from './rng';
 import { planEnemyTurnFromPool, planEnemyTurnFromHand } from './ai';
 import type { CardDef, Manifest } from './manifest/types';
 import type { CardInstance, LaneState, MatchState } from './types/state';
+import { EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 
 // ── Shim ────────────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ const buildState = (
     pending: [], stagingOrder: [], pendingEffects: [], log: [],
     lastPlayedBy: { P0: null, P1: null }, result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 };
 

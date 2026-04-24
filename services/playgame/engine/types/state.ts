@@ -11,7 +11,110 @@
  */
 
 import type { CardId, LaneIdx, LocationId, Owner } from './ids';
-import type { TextOverride, EffectRef } from './ability';
+import type { TextOverride, EffectRef, TrackedStatKey, TrackedFlagKey } from './ability';
+
+// ---- Tracked variables (game-history summary, updated by apply()) ----------
+
+/**
+ * Per-owner snapshot of game-history stats.
+ * Updated incrementally by `apply()` as events fire.
+ * Cards query this via TRACKED_STAT / TRACKED_FLAG DSL atoms.
+ *
+ * Design rule: every field corresponds to exactly one TrackedStatKey or
+ * TrackedFlagKey so the evaluator can do a simple property lookup.
+ */
+export interface PlayerTrackedVars {
+  // --- Destroy ---
+  /** Cards you caused to be destroyed (you were the destroy actor). */
+  readonly cardsYouDestroyed: number;
+  /** Your cards that were destroyed (by you or opponent). */
+  readonly yourCardsDestroyed: number;
+  /** Opponent's cards that were destroyed (by anyone). */
+  readonly enemyCardsDestroyed: number;
+
+  // --- Create ---
+  /** Cards you created that did not start in your deck. */
+  readonly cardsYouCreated: number;
+
+  // --- Discard ---
+  /** Cards you discarded from hand. */
+  readonly cardsYouDiscarded: number;
+
+  // --- Move ---
+  /** Cards you moved this game (any cause: On Reveal, Ongoing, Activate). */
+  readonly cardsMoved: number;
+
+  // --- Cards played ---
+  /** Cards you played this turn. Resets to 0 at each TURN_STARTED. */
+  readonly cardsPlayedThisTurn: number;
+  /** Cards you played last turn. Snapshotted from cardsPlayedThisTurn at TURN_ENDED. */
+  readonly cardsPlayedLastTurn: number;
+
+  // --- Energy ---
+  /** Energy you spent last turn (snapshotted at TURN_ENDED). */
+  readonly energySpentLastTurn: number;
+  /** Energy you had unspent at the end of last turn (snapshotted at TURN_ENDED). */
+  readonly energyUnspentLastTurn: number;
+  /**
+   * Energy currently unspent this turn (live mirror of state.energy[owner]).
+   * Updated on every ENERGY_CHANGED event.
+   * Use in End-of-Turn card effects: "if you have unspent Energy, ...".
+   */
+  readonly energyUnspentNow: number;
+
+  // --- Cost reduction ---
+  /** Cumulative amount of cost reduction you applied this game (sum of negative ADJUST_COST deltas). */
+  readonly totalCostReduced: number;
+
+  // --- Derived boolean flags (TrackedFlagKey) ---
+  /** cardsPlayedLastTurn === 0 */
+  readonly playedNoCardsLastTurn: boolean;
+  /** energyUnspentLastTurn === 0 AND energySpentLastTurn > 0 */
+  readonly spentAllEnergyLastTurn: boolean;
+  /** energyUnspentLastTurn > 0 */
+  readonly hadUnspentEnergyLastTurn: boolean;
+  /** energySpentLastTurn === 0 */
+  readonly spentNoEnergyLastTurn: boolean;
+  /** totalCostReduced > 0 */
+  readonly reducedAnyCostThisGame: boolean;
+}
+
+export interface TrackedVariables {
+  readonly P0: PlayerTrackedVars;
+  readonly P1: PlayerTrackedVars;
+  /** All cards destroyed by either player this game (GLOBAL counter). */
+  readonly totalCardsDestroyed: number;
+}
+
+/** Zero-value used at match genesis. */
+export const EMPTY_PLAYER_TRACKED_VARS: PlayerTrackedVars = {
+  cardsYouDestroyed: 0,
+  yourCardsDestroyed: 0,
+  enemyCardsDestroyed: 0,
+  cardsYouCreated: 0,
+  cardsYouDiscarded: 0,
+  cardsMoved: 0,
+  cardsPlayedThisTurn: 0,
+  cardsPlayedLastTurn: 0,
+  energySpentLastTurn: 0,
+  energyUnspentLastTurn: 0,
+  energyUnspentNow: 0,
+  totalCostReduced: 0,
+  playedNoCardsLastTurn: false,
+  spentAllEnergyLastTurn: false,
+  hadUnspentEnergyLastTurn: false,
+  spentNoEnergyLastTurn: false,
+  reducedAnyCostThisGame: false,
+} as const;
+
+export const EMPTY_TRACKED_VARIABLES: TrackedVariables = {
+  P0: EMPTY_PLAYER_TRACKED_VARS,
+  P1: EMPTY_PLAYER_TRACKED_VARS,
+  totalCardsDestroyed: 0,
+} as const;
+
+// Re-export key types so callers can import from state.ts directly.
+export type { TrackedStatKey, TrackedFlagKey };
 
 // ---- Energy reason (shared with events.ts to avoid circular import) --------
 
@@ -154,7 +257,11 @@ export type CardTag =
   | { kind: 'DESTROYED_THIS_TURN' }
   | { kind: 'SHURI_DOUBLED' }
   | { kind: 'ONGOING_DISABLED'; sourceId: CardId }
-  | { kind: 'FROM_SPAWN'; sourceId: CardId };
+  | { kind: 'FROM_SPAWN'; sourceId: CardId }
+  /** Set by the engine when a card is played; cleared at TURN_ENDED. */
+  | { kind: 'PLAYED_THIS_TURN' }
+  /** Set the first time a card moves; never cleared. Used by Escape Route. */
+  | { kind: 'EVER_MOVED' };
 
 export type LaneTag =
   | { kind: 'FLOODED' }
@@ -248,4 +355,13 @@ export interface MatchState {
    *  Covers TURN_START refills, CARD_PLAYED costs, and EFFECT changes.
    *  Append-only; spans the full match lifetime. */
   readonly energyLog: Readonly<Record<Owner, readonly EnergyLogEntry[]>>;
+  /**
+   * Pre-computed per-owner game-history stats. Updated by `apply()` on
+   * relevant events so the evaluator can do O(1) lookups instead of
+   * scanning the full event log.
+   *
+   * Cards query this via TRACKED_STAT / TRACKED_FLAG DSL atoms.
+   * Initialized to EMPTY_TRACKED_VARIABLES at match genesis.
+   */
+  readonly trackedVariables: TrackedVariables;
 }

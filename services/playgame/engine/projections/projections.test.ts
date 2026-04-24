@@ -17,6 +17,7 @@ import type {
   LocationInstance,
   MatchState,
 } from '../types/state';
+import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import {
   getCardCost,
@@ -318,6 +319,7 @@ function buildState(
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 }
 

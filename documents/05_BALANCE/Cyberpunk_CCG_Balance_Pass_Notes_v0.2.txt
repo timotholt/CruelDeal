@@ -1,0 +1,55 @@
+CYBERPUNK CCG — BALANCE PASS NOTES v0.2
+Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model, banish rule
+
+========================================================================
+0. PURPOSE
+========================================================================
+
+This file records first-pass balance concerns revealed by constructing the 8 starter decks.
+
+========================================================================
+1. IMMEDIATE RULE CLARIFICATIONS NEEDED
+========================================================================
+
+Created Cards: A card is created if it did not start in the player's deck. Copied enemy cards count as created.
+Copied Text: At launch, copied text should probably be limited to On Reveal or Ongoing text unless explicitly stated.
+Cost Reduction: Cost cannot be reduced below 0 or 1; choose one before implementation.
+Temporary Discounts: 'Costs less next turn' must expire even if the card changes zones unless otherwise stated.
+Destroyed Records: Destroyed cards are persistent card entities moved to the destroyed pile; records should store owner, controller, destroyer, cost, power, text, tags, and turn.
+Disabled Text: Disabled text needs a clear visual status icon and card inspection state.
+Enemy Deck Sabotage: Any enemy deck modification must show feedback, even if exact card identity stays hidden.
+Banish Rule: Banished cards remain in the engine, but no card should ever recover, return, regenerate, or pull cards from the banish pile.
+
+========================================================================
+2. CARDS TO WATCH FIRST
+========================================================================
+
+- 018 Executive Override: Full text copy may break rules interactions; test as 'copy its On Reveal text' first.
+- 021 Military Fixer: Two added mid/high-cost cards may be too much card advantage.
+- 025 Procurement Bot: Ongoing created-card discounts could enable runaway hand cheating.
+- 038 Citywide Mesh: Global +1 can be a clean finisher but may invalidate local buffs if too efficient.
+- 039 Signal Jammer: Low-cost persistent On Reveal denial may be too polarizing.
+- 046 Null Saint: Mass text removal is powerful; consider 6/6 or narrower text.
+- 047 Black Market Dealer: Needs curated pool or tag filter.
+- 048 Overclock Chip: +5 Power for 1 Cost is huge even with delayed destruction.
+- 056 Kingpin Broker: Discount payoff may create excessive final turns.
+- 062 Silent Engine: Repeated Ongoing buffs could make Overclock/Nanotech too snowbally.
+- 064 Neon Singularity: Needs clarity on whether it counts last turn only.
+- 073 Gutter Legion: Full-location global payoff may be too strong if Swarm fills too easily.
+- 086 Blackmail File: Random enemy hand cost increase is annoying if repeated too often.
+- 089 Junk Packet: Deck junk is fun but can feel miserable without clear counterplay.
+- 105 Hard Reset: Mass reset is an important safety valve but may punish Biohack too hard.
+
+========================================================================
+3. LIKELY v0.2 CHANGES
+========================================================================
+
+- Change random generation effects to use curated pools by archetype/tag.
+- Reduce or cap created-card Cost reduction.
+- Constrain full-text copying before playtesting.
+- Add 1-2 more simple Overclock enablers if the deck bricks too often.
+- Add one clean anti-Swarm lane-punish card if Swarm is too consistent.
+- Add one more beginner-friendly Hacker card with proactive Power.
+- Replace at least two no-ability generic cards with simple teaching effects if the game needs more texture.
+- Decide whether enemy hand/deck disruption belongs in launch tutorial pools or later unlock pools.

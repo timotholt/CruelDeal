@@ -24,8 +24,10 @@ import type {
   MatchLogEntry,
   MatchState,
   PendingEffect,
+  PlayerTrackedVars,
   PowerLogEntry,
   SpawnSource,
+  TrackedVariables,
 } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
@@ -35,7 +37,8 @@ export function apply(state: MatchState, event: MatchEvent, _manifest: Manifest)
   // Every event is appended to the log, regardless of whether the body
   // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
   // INTENT_REJECTED) only contribute to the log.
-  return appendLog(next, event);
+  const next2 = applyTrackedVars(next, state, event);
+  return appendLog(next2, event);
 }
 
 function applyBody(state: MatchState, event: MatchEvent): MatchState {
@@ -45,10 +48,12 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
     case 'CARD_STAGED': {
       // Move card from HAND -> LANE (face-up to owner, not yet revealed).
       const s1 = removeFromHand(state, event.owner, event.cardId);
+      const card1 = s1.cards[event.cardId];
       const s2 = patchCard(s1, event.cardId, {
         zone: 'LANE',
         lane: event.lane,
         revealed: false,
+        tags: card1 ? addTagUnique(card1.tags, { kind: 'PLAYED_THIS_TURN' }) : [],
       });
       const s3 = addToLane(s2, event.owner, event.lane, event.cardId);
       return {
@@ -201,9 +206,11 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
       if (!card) return state;
       const s1 = removeFromLane(state, card.owner, event.fromLane, event.cardId);
       const s2 = addToLane(s1, card.owner, event.toLane, event.cardId);
+      const tagsWithMove = addTagUnique(card.tags, { kind: 'MOVED_THIS_TURN' });
+      const tagsWithEver = addTagUnique(tagsWithMove, { kind: 'EVER_MOVED' });
       return patchCard(s2, event.cardId, {
         lane: event.toLane,
-        tags: addTagUnique(card.tags, { kind: 'MOVED_THIS_TURN' }),
+        tags: tagsWithEver,
       });
     }
 
@@ -391,7 +398,9 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
         cards[id] = {
           ...c,
           tags: c.tags.filter(t =>
-            t.kind !== 'DESTROYED_THIS_TURN' && t.kind !== 'MOVED_THIS_TURN',
+            t.kind !== 'DESTROYED_THIS_TURN' &&
+            t.kind !== 'MOVED_THIS_TURN' &&
+            t.kind !== 'PLAYED_THIS_TURN',
           ),
         };
       }
@@ -526,4 +535,163 @@ function pendingEffectEq(a: PendingEffect, b: PendingEffect): boolean {
 function appendLog(state: MatchState, event: MatchEvent): MatchState {
   const entry: MatchLogEntry = { seq: state.log.length, event };
   return { ...state, log: [...state.log, entry] };
+}
+
+// ---- trackedVariables maintenance ------------------------------------------
+
+/** Resolve source card owner from an EffectRef (null if source is a location or unknown). */
+function sourceOwnerOf(state: MatchState, cause: { sourceId: CardId | string }): Owner | null {
+  const src = state.cards[cause.sourceId as CardId];
+  return src ? src.owner : null;
+}
+
+function patchOwnerVars(
+  tv: TrackedVariables,
+  owner: Owner,
+  patch: Partial<PlayerTrackedVars>,
+): TrackedVariables {
+  const prev = tv[owner];
+  return { ...tv, [owner]: { ...prev, ...patch } };
+}
+
+function recomputeFlags(vars: PlayerTrackedVars): PlayerTrackedVars {
+  return {
+    ...vars,
+    playedNoCardsLastTurn: vars.cardsPlayedLastTurn === 0,
+    spentAllEnergyLastTurn: vars.energyUnspentLastTurn === 0 && vars.energySpentLastTurn > 0,
+    hadUnspentEnergyLastTurn: vars.energyUnspentLastTurn > 0,
+    spentNoEnergyLastTurn: vars.energySpentLastTurn === 0,
+    reducedAnyCostThisGame: vars.totalCostReduced > 0,
+  };
+}
+
+/**
+ * After applyBody runs, update trackedVariables on the new state.
+ * `prev` is the pre-event state (needed to read energyLog before ENERGY_CHANGED
+ * appended, or to check prior zone for creates, etc.).
+ */
+function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent): MatchState {
+  let tv = next.trackedVariables;
+
+  switch (event.type) {
+
+    case 'CARD_STAGED': {
+      // Card was played; increment cardsPlayedThisTurn for owner.
+      const owner = event.owner;
+      const prev = tv[owner];
+      tv = patchOwnerVars(tv, owner, { cardsPlayedThisTurn: prev.cardsPlayedThisTurn + 1 });
+      break;
+    }
+
+    case 'CARD_DESTROYED': {
+      const card = next.cards[event.cardId];
+      if (!card) break;
+      const victimOwner = card.owner;
+      const actorOwner = sourceOwnerOf(next, event.cause);
+
+      // Victim's side: yourCardsDestroyed++
+      const vPrev = tv[victimOwner];
+      tv = patchOwnerVars(tv, victimOwner, { yourCardsDestroyed: vPrev.yourCardsDestroyed + 1 });
+
+      // Actor's side: cardsYouDestroyed++ (if actor is a different owner or same, both increment)
+      if (actorOwner !== null) {
+        const aPrev = tv[actorOwner];
+        tv = patchOwnerVars(tv, actorOwner, { cardsYouDestroyed: aPrev.cardsYouDestroyed + 1 });
+      }
+
+      // Opponent of victim: enemyCardsDestroyed++
+      const oppOfVictim: Owner = victimOwner === 'P0' ? 'P1' : 'P0';
+      const oPrev = tv[oppOfVictim];
+      tv = patchOwnerVars(tv, oppOfVictim, { enemyCardsDestroyed: oPrev.enemyCardsDestroyed + 1 });
+
+      // Global counter
+      tv = { ...tv, totalCardsDestroyed: tv.totalCardsDestroyed + 1 };
+      break;
+    }
+
+    case 'CARD_DISCARDED': {
+      const card = next.cards[event.cardId];
+      if (!card) break;
+      const owner = card.owner;
+      const prev = tv[owner];
+      tv = patchOwnerVars(tv, owner, { cardsYouDiscarded: prev.cardsYouDiscarded + 1 });
+      break;
+    }
+
+    case 'CARD_MOVED': {
+      const card = next.cards[event.cardId];
+      if (!card) break;
+      const owner = card.owner;
+      const prev = tv[owner];
+      tv = patchOwnerVars(tv, owner, { cardsMoved: prev.cardsMoved + 1 });
+      break;
+    }
+
+    case 'CARD_ADDED_TO_HAND':
+    case 'CARD_ADDED_TO_LANE': {
+      // cardsYouCreated if spawnSource is not DECK_CREATION or SYSTEM.
+      if (
+        event.spawnSource.kind !== 'DECK_CREATION' &&
+        event.spawnSource.kind !== 'SYSTEM'
+      ) {
+        const owner = event.owner;
+        const prev = tv[owner];
+        tv = patchOwnerVars(tv, owner, { cardsYouCreated: prev.cardsYouCreated + 1 });
+      }
+      break;
+    }
+
+    case 'ENERGY_CHANGED': {
+      // Keep energyUnspentNow in sync with live energy pool.
+      const owner = event.owner;
+      const newEnergy = next.energy[owner];
+      tv = patchOwnerVars(tv, owner, { energyUnspentNow: newEnergy });
+      break;
+    }
+
+    case 'CARD_COST_CHANGED': {
+      // Track cumulative cost reduction (negative deltas only).
+      if (event.delta >= 0) break;
+      const card = next.cards[event.cardId];
+      if (!card) break;
+      // The actor reducing cost is the source of the effect (cause.sourceId → owner).
+      const actorOwner = sourceOwnerOf(next, event.cause);
+      if (actorOwner === null) break;
+      const prev = tv[actorOwner];
+      const reduction = Math.abs(event.delta);
+      tv = patchOwnerVars(tv, actorOwner, { totalCostReduced: prev.totalCostReduced + reduction });
+      break;
+    }
+
+    case 'TURN_ENDED': {
+      // Snapshot end-of-turn stats for both owners.
+      const owners: Owner[] = ['P0', 'P1'];
+      for (const owner of owners) {
+        const cur = tv[owner];
+        const unspent = next.energy[owner];
+
+        // Sum negative CARD_PLAYED energy deltas for this turn.
+        const spent = next.energyLog[owner]
+          .filter(e => e.turn === next.turn && e.reason === 'CARD_PLAYED' && e.delta < 0)
+          .reduce((sum, e) => sum - e.delta, 0);
+
+        const updated: PlayerTrackedVars = recomputeFlags({
+          ...cur,
+          cardsPlayedLastTurn: cur.cardsPlayedThisTurn,
+          cardsPlayedThisTurn: 0,
+          energySpentLastTurn: spent,
+          energyUnspentLastTurn: unspent,
+          // energyUnspentNow will be updated when ENERGY_CHANGED fires on next TURN_STARTED refill
+        });
+        tv = { ...tv, [owner]: updated };
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+
+  if (tv === next.trackedVariables) return next;
+  return { ...next, trackedVariables: tv };
 }

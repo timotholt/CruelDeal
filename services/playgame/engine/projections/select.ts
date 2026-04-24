@@ -15,6 +15,8 @@ import type { OwnerFilter, Predicate, Selector, ZoneFilter, CmpOp } from '../typ
 import type { CardZone } from '../types/state';
 import type { EvalCtx } from './context';
 import { evalNum } from './numexpr';
+import { getCardPower } from './power';
+import { getCardCost } from './cost';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -119,6 +121,54 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       const pool = select(sel.of, ctx);
       const n = Math.max(0, Math.floor(evalNum(sel.count, ctx)));
       return pool.slice(0, n);
+    }
+
+    case 'MIN_POWER_OF': {
+      const ids = select(sel.of, ctx);
+      if (ids.length === 0) return [];
+      let minPow = Infinity;
+      let minId: CardId | null = null;
+      for (const id of ids) {
+        const pow = cardPower(id, ctx);
+        if (pow < minPow) { minPow = pow; minId = id; }
+      }
+      return minId ? [minId] : [];
+    }
+
+    case 'MAX_POWER_OF': {
+      const ids = select(sel.of, ctx);
+      if (ids.length === 0) return [];
+      let maxPow = -Infinity;
+      let maxId: CardId | null = null;
+      for (const id of ids) {
+        const pow = cardPower(id, ctx);
+        if (pow > maxPow) { maxPow = pow; maxId = id; }
+      }
+      return maxId ? [maxId] : [];
+    }
+
+    case 'MIN_COST_OF': {
+      const ids = select(sel.of, ctx);
+      if (ids.length === 0) return [];
+      let minCost = Infinity;
+      let minId: CardId | null = null;
+      for (const id of ids) {
+        const cost = cardCost(id, ctx);
+        if (cost < minCost) { minCost = cost; minId = id; }
+      }
+      return minId ? [minId] : [];
+    }
+
+    case 'MAX_COST_OF': {
+      const ids = select(sel.of, ctx);
+      if (ids.length === 0) return [];
+      let maxCost = -Infinity;
+      let maxId: CardId | null = null;
+      for (const id of ids) {
+        const cost = cardCost(id, ctx);
+        if (cost > maxCost) { maxCost = cost; maxId = id; }
+      }
+      return maxId ? [maxId] : [];
     }
   }
 }
@@ -236,6 +286,126 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
         return compareNum(stat, pred.op, value);
       });
     }
+
+    case 'NUM_CMP': {
+      const a = evalNum(pred.a, ctx);
+      const b = evalNum(pred.b, ctx);
+      return compareNum(a, pred.op, b);
+    }
+
+    case 'WAS_CREATED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return c?.spawnSource.kind !== 'DECK_CREATION' && c?.spawnSource.kind !== 'SYSTEM';
+      });
+    }
+
+    case 'HAS_COPIED_TEXT': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return c?.textOverride?.kind === 'COPY_OF_CARD' ||
+               c?.textOverride?.kind === 'COPY_ON_REVEAL_OF_CARD';
+      });
+    }
+
+    case 'POWER_INCREASED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return (c?.powerDelta ?? 0) > 0;
+      });
+    }
+
+    case 'POWER_REDUCED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return (c?.powerDelta ?? 0) < 0;
+      });
+    }
+
+    case 'COST_REDUCED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return (c?.costDelta ?? 0) < 0;
+      });
+    }
+
+    case 'TEXT_DISABLED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        if (!c) return false;
+        return c.tags.some(t => t.kind === 'ONGOING_DISABLED') ||
+               c.textOverride?.kind === 'BLANK_ONGOING' ||
+               c.textOverride?.kind === 'BLANK_ALL';
+      });
+    }
+
+    case 'HAS_ONGOING': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        if (!c) return false;
+        const def = ctx.manifest.cards[c.defId];
+        return (def?.abilities?.ongoing?.length ?? 0) > 0;
+      });
+    }
+
+    case 'IN_FULL_LANE': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        if (!c || c.lane === null) return false;
+        const lane = ctx.state.lanes[c.lane];
+        return lane.cards[c.owner].length >= 4;
+      });
+    }
+
+    case 'LANE_FULL': {
+      // laneOf: Selector resolves which lane to check; evaluates whether
+      // ctx.selfOwner's slots in that lane are full (>= 4 cards).
+      const lane = resolveLaneOf(pred.laneOf, ctx);
+      if (lane === null) return false;
+      const laneState = ctx.state.lanes[lane];
+      if (ctx.selfOwner === null) return false;
+      return laneState.cards[ctx.selfOwner].length >= 4;
+    }
+
+    case 'TRACKED_FLAG': {
+      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
+                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
+                  : null;
+      if (owner === null) return false;
+      return ctx.state.trackedVariables[owner][pred.flag];
+    }
+
+    case 'HAND_EMPTY': {
+      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
+                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
+                  : null;
+      if (owner === null) return false;
+      return ctx.state.hand[owner].length === 0;
+    }
+
+    case 'HAS_UNSPENT_ENERGY': {
+      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
+                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
+                  : null;
+      if (owner === null) return false;
+      return ctx.state.energy[owner] > 0;
+    }
+
+    case 'EVER_MOVED': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const c = ctx.state.cards[id];
+        return c?.tags.some(t => t.kind === 'EVER_MOVED') ?? false;
+      });
+    }
   }
 }
 
@@ -304,6 +474,14 @@ function flipOwner(o: 'P0' | 'P1' | null): 'P0' | 'P1' | null {
   if (o === 'P0') return 'P1';
   if (o === 'P1') return 'P0';
   return null;
+}
+
+function cardPower(id: CardId, ctx: EvalCtx): number {
+  return getCardPower(ctx.state, id, ctx.manifest);
+}
+
+function cardCost(id: CardId, ctx: EvalCtx): number {
+  return getCardCost(ctx.state, id, ctx.manifest);
 }
 
 export function compareNum(a: number, op: CmpOp, b: number): boolean {

@@ -1,0 +1,109 @@
+CYBERPUNK CCG — PERSISTENT ENTITY / ZONE MODEL ERRATA v0.2
+Created: 2026-04-23
+
+This errata corrects the v0.1 design docs.
+
+============================================================
+1. CORE CORRECTION
+============================================================
+
+Cards are never destroyed from the system.
+
+Cards are persistent entities. They always continue to exist as card objects
+with identity, ownership, history, current zone, and metadata.
+
+The game terms Destroy, Discard, and Banish are player-facing words for zone
+changes.
+
+============================================================
+2. CORRECT DEFINITIONS
+============================================================
+
+Destroy:
+    Move a card from board/lane to the destroyed pile / death pile.
+
+Discard:
+    Move a card from hand to the discard pile.
+
+Banish:
+    Move a card to the banish pile.
+
+Draw:
+    Move a card from deck to hand.
+
+Play:
+    Move a card from hand to board/lane.
+
+Return:
+    Move a card from one zone back to another legal zone, usually hand, deck,
+    or board.
+
+============================================================
+3. BANISH DESIGN RULE
+============================================================
+
+Banished cards still exist in the engine.
+
+However:
+
+    No card should ever pull from the banish pile.
+    No card should recover from the banish pile.
+    No card should regenerate from the banish pile.
+    No card should move a card out of the banish pile.
+    No card should copy a banished card as a recovery workaround.
+
+Banish is persistent in the engine but final in gameplay.
+
+Allowed:
+    Count banished cards.
+    Trigger when cards are banished.
+    Record banished-card history.
+    Use banish as permanent gameplay removal.
+
+============================================================
+4. ENGINE FIELDS
+============================================================
+
+Every card entity should support:
+
+    card_instance_id
+    base_card_id
+    owner_player_id
+    controller_player_id
+    current_zone
+    current_lane
+    previous_zone
+    previous_lane
+    zone_history
+    turn_entered_current_zone
+    original_cost
+    current_cost
+    original_power
+    current_power
+    original_text
+    current_text
+    copied_text_records
+    disabled_text_state
+    tags
+    was_created
+    was_destroyed_this_game
+    was_discarded_this_game
+    was_banished_this_game
+    last_zone_change_reason
+
+Every zone change should create a record.
+
+============================================================
+5. DOCS UPDATED
+============================================================
+
+Updated v0.2 files:
+
+    Cyberpunk_CCG_Domain_Bible_v0.2.txt
+    Cyberpunk_CCG_Tracked_Variables_Matrix_v0.2.txt
+    Cyberpunk_CCG_Launch_Archetype_Packages_v0.2.txt
+    Cyberpunk_CCG_First_105_Card_Draft_v0.2.txt
+    Cyberpunk_CCG_Starter_Decks_v0.2.txt
+    Cyberpunk_CCG_Balance_Pass_Notes_v0.2.txt
+
+End of errata.

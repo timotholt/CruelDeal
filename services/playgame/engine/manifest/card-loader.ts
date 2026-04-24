@@ -1,96 +1,23 @@
 /**
- * JSON Card Loader — loads and validates CardDef JSON files.
+ * Card Loader — assembles the CardDef registry for the manifest.
  *
- * Cards are imported manually from ./cards/*.json and validated at load time.
- * This ensures type safety and catches data errors early.
+ * Source of truth is cyberpunk-cards.ts (105-card launch set v0.2).
+ * The old per-card JSON files in ./cards/ are retained but no longer loaded;
+ * they can be deleted once the cyberpunk set is playtested.
  */
 
 import type { CardDef } from './types';
-import sentinelJson from './cards/sentinel/card.json';
-import skyMarshalJson from './cards/sky-marshal/card.json';
-import sunBeaconJson from './cards/sun-beacon/card.json';
-import hexWitchJson from './cards/hex-witch/card.json';
-import pyroMonkJson from './cards/pyro-monk/card.json';
-import bladeRunnerJson from './cards/blade-runner/card.json';
-import iceLanceJson from './cards/ice-lance/card.json';
-import duneSapperJson from './cards/dune-sapper/card.json';
-import thornChoirJson from './cards/thorn-choir/card.json';
-import voidHoundJson from './cards/void-hound/card.json';
-
-const CARD_JSONS = [
-  sentinelJson,
-  skyMarshalJson,
-  sunBeaconJson,
-  hexWitchJson,
-  pyroMonkJson,
-  bladeRunnerJson,
-  iceLanceJson,
-  duneSapperJson,
-  thornChoirJson,
-  voidHoundJson,
-];
+import { CYBERPUNK_CARDS } from './content/cyberpunk-cards';
 
 export function loadCardsFromJson(): Record<string, CardDef> {
   const cards: Record<string, CardDef> = {};
 
-  for (const data of CARD_JSONS) {
-    const card = validateCardDef(data);
+  for (const card of CYBERPUNK_CARDS) {
+    if (cards[card.defId]) {
+      throw new Error(`loadCardsFromJson: duplicate defId "${card.defId}"`);
+    }
     cards[card.defId] = card;
   }
 
   return cards;
-}
-
-function validateCardDef(data: unknown): CardDef {
-  if (!data || typeof data !== 'object') {
-    throw new Error(`Card: Expected object, got ${typeof data}`);
-  }
-
-  const obj = data as Record<string, unknown>;
-
-  const defId = validateString(obj.defId, 'defId');
-  const version = validateNumber(obj.version, 'version');
-  const name = validateString(obj.name, 'name');
-  const basePower = validateNumber(obj.basePower, 'basePower');
-  const cost = validateNumber(obj.cost, 'cost');
-  const tribes = validateStringArray(obj.tribes, 'tribes');
-  const abilities = obj.abilities as Record<string, unknown>;
-  const cosmetic = obj.cosmetic as Record<string, unknown>;
-
-  return {
-    defId,
-    version,
-    name,
-    basePower,
-    cost,
-    tribes,
-    abilities: abilities as any,
-    cosmetic: cosmetic as any,
-  };
-}
-
-function validateString(val: unknown, path: string): string {
-  if (typeof val !== 'string') {
-    throw new Error(`${path}: Expected string, got ${typeof val}`);
-  }
-  return val;
-}
-
-function validateNumber(val: unknown, path: string): number {
-  if (typeof val !== 'number') {
-    throw new Error(`${path}: Expected number, got ${typeof val}`);
-  }
-  return val;
-}
-
-function validateStringArray(val: unknown, path: string): readonly string[] {
-  if (!Array.isArray(val)) {
-    throw new Error(`${path}: Expected array, got ${typeof val}`);
-  }
-  for (let i = 0; i < val.length; i++) {
-    if (typeof val[i] !== 'string') {
-      throw new Error(`${path}[${i}]: Expected string, got ${typeof val[i]}`);
-    }
-  }
-  return val as readonly string[];
 }

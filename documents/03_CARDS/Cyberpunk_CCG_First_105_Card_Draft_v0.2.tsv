@@ -1,0 +1,106 @@
+id	name	cost	power	kind	tags	archetype	slot	text	domain
+001	Scrap Rat	1	1	Character	Merc	Destroy	When Destroyed value	When Destroyed: Give a random friendly card +2 Power.	your cards destroyed
+002	Crash Dummy	1	2	Character	Drone	Destroy	Beginner fodder	When Destroyed: Draw a card.	your cards destroyed
+003	Chop Doc	2	2	Character	Bio	Destroy	Destroy enabler	On Reveal: Destroy your lowest-Power card here.	cards in lane
+004	Grinder Crew	2	3	Character	Merc	Destroy	Destroy enabler	On Reveal: Destroy another card here and gain +3 Power.	destroyed cards
+005	Redline Bruiser	3	3	Character	Merc Bio	Destroy	Power payoff	When one of your cards is destroyed, this gains +1 Power.	your cards destroyed
+006	Parts Collector	3	4	Character	Merc	Destroy	Destroyed-count payoff	On Reveal: Gain +1 Power for each card you destroyed this game.	cards you destroyed
+007	Rust Revenant	4	6	Character	Bio	Destroy	Discount payoff	Costs 1 less for each of your cards destroyed this game.	your cards destroyed
+008	Bone Market	4	4	Object	Tech	Destroy	Bridge to Black Market	On Reveal: Add a random card to your hand and destroy your lowest-Power card here.	created cards + destroyed cards
+009	Meat Grinder	5	6	Object	Tech	Destroy	Finisher	On Reveal: Destroy all 1-Cost cards here and gain +2 Power for each.	cards in lane
+010	Scrapyard King	6	8	Character	Merc	Destroy	Big finisher	On Reveal: Gain +1 Power for each card destroyed this game.	total destroyed cards
+011	Middle Manager	2	2	Character	Corp	Corporate Copy	Copy enabler	On Reveal: Destroy another friendly card here and copy its On Reveal text.	copied text + destroyed cards
+012	Hostile Recruiter	3	3	Character	Corp	Corporate Copy	Copy enabler	On Reveal: Copy the Ongoing text of your lowest-Cost card here.	copied text
+013	Golden Parachute	1	1	Object	Corp	Corporate Copy	Safe copy target	When Destroyed: Add a copy of this to your hand.	your cards destroyed + created cards
+014	Severance Clone	2	1	Character	Corp Bio	Corporate Copy	Safe copy target	When Destroyed: Give the destroyer +2 Power.	destroyed cards
+015	HR Algorithm	3	2	Object	AI Corp	Corporate Copy	Copied-text payoff	Ongoing: Your cards with copied text have +2 Power.	cards with copied text
+016	Acquisition Team	4	5	Character	Corp	Corporate Copy	Bridge to Destroy	On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.	copied text + lane
+017	Boardroom Proxy	5	6	Character	Corp AI	Corporate Copy	Bridge to Nanotech	Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card.	copied ongoing text
+018	Executive Override	6	5	Character	Corp	Corporate Copy	Finisher	On Reveal: Destroy another friendly card here and copy its full text.	copied text + destroyed cards
+019	Street Fixer	2	2	Character	Merc	Fixer	Tag draw	On Reveal: Draw a Tech card.	deck contents by tag
+020	Tech Fixer	3	3	Character	Merc Hacker	Fixer	Tag draw	On Reveal: Draw an AI card.	deck contents by tag
+021	Military Fixer	3	2	Character	Military Merc	Fixer	Random add	On Reveal: Add a random 4-Cost and 5-Cost Military card to your hand.	created cards
+022	Chrome Broker	2	1	Character	Bio Merc	Fixer	Random add	On Reveal: Add a random Bio card to your hand.	created cards by tag
+023	Backchannel Contact	2	3	Character	Merc Hacker	Fixer	Replacement	On Reveal: Replace a card in your hand with a card that costs 1 more.	hand contents
+024	Clean Operator	3	4	Character	Merc	Fixer	Replacement	On Reveal: Replace your lowest-Power card in hand with a 3-Cost card.	hand contents
+025	Procurement Bot	1	1	Object	Drone Tech	Fixer	Created-card payoff	Ongoing: Your created cards in hand cost 1 less.	created cards in hand
+026	Dead Drop	3	1	Object	Tech	Fixer	Bridge to Black Market	On Reveal: Add a random card to your hand that costs 1 less next turn.	created cards + cost reduction
+027	Talent Scout	4	5	Character	Corp Merc	Fixer	Midrange access	On Reveal: Draw your lowest-Cost card.	deck contents
+028	Network Queen	5	7	Character	Merc Hacker	Fixer	Finisher	On Reveal: Give your created cards +2 Power.	created cards
+029	Nano Swarm	1	1	Object	AI Tech	Nanotech / AI	Scaling body	Ongoing: This has +1 Power for each other card here.	cards in lane
+030	Signal Booster	2	1	Object	AI Tech	Nanotech / AI	Local buff	Ongoing: Your other cards here have +1 Power.	cards in lane
+031	Adaptive Shell	2	2	Object	Tech Bio	Nanotech / AI	End-turn growth	End of Turn: If this is your only card here, give it +2 Power.	cards in lane
+032	Maintenance Cloud	3	2	Object	AI Drone	Nanotech / AI	End-turn growth	End of Turn: Give your lowest-Power card here +1 Power.	modified power
+033	AI Overseer	3	3	Object	AI	Nanotech / AI	Ongoing payoff	Ongoing: Your other Ongoing cards have +1 Power.	ongoing text
+034	Replication Node	4	3	Object	AI Tech	Nanotech / AI	Bridge to Swarm	On Reveal: Add a 1-Power Drone here.	created cards + lane
+035	Smart Matter Armor	4	5	Object	Tech Bio	Nanotech / AI	Bridge to Biohack	Ongoing: Cards here with increased Power have +2 Power.	modified power
+036	Distributed Mind	5	4	Object	AI	Nanotech / AI	Engine finisher	Ongoing: Your cards at full locations have +2 Power.	full lane
+037	Grey Goo Bloom	5	6	Object	AI Tech	Nanotech / AI	Big scaler	End of Turn: If this location is full, give your cards here +1 Power.	full lane
+038	Citywide Mesh	6	5	Object	AI	Nanotech / AI	Finisher	Ongoing: Your other cards have +1 Power.	global board
+039	Signal Jammer	2	2	Object	Hacker Tech	Hacker Control	On Reveal denial	Ongoing: Enemy On Reveal abilities do not trigger here.	enemy text
+040	Black ICE	3	3	Object	AI Hacker	Hacker Control	Ongoing hate	On Reveal: Remove Ongoing text from an enemy card here.	enemy text
+041	Trace Hacker	3	4	Character	Hacker	Hacker Control	Displacement	On Reveal: Move an enemy card here to another location.	enemy board + movement
+042	System Crash	4	3	Object	Hacker Tech	Hacker Control	Power reset	On Reveal: Reset an enemy card here to its base Power.	modified power
+043	Rootkit Kid	2	1	Character	Hacker	Hacker Control	Created-card hate	On Reveal: Give enemy created cards here -2 Power.	enemy created cards
+044	Firewall Daemon	4	4	Object	AI Hacker	Hacker Control	Control payoff	Ongoing: Enemy cards with disabled text have -2 Power.	disabled text
+045	Exploit Artist	5	6	Character	Hacker Merc	Hacker Control	Advanced prediction	On Reveal: If your opponent played a card here this turn, destroy it.	enemy cards played this turn
+046	Null Saint	6	8	Character	Hacker AI	Hacker Control	Finisher	On Reveal: Remove text from all enemy cards here.	enemy text
+047	Black Market Dealer	2	2	Character	Merc	Black Market	Temporary add	On Reveal: Add a random card to your hand that costs 2 less next turn.	created cards + cost reduction
+048	Overclock Chip	1	0	Object	Tech	Black Market	Risk buff	On Reveal: Give a friendly card here +5 Power and destroy it next turn.	temporary value
+049	Borrowed Gun	1	3	Object	Tech Military	Black Market	Temporary body	End of Turn: Destroy this if it was created.	created cards + destroyed cards
+050	Illegal Clone	2	2	Character	Bio	Black Market	Bridge to Destroy	When Destroyed: Add a copy of this to your hand.	destroyed + created cards
+051	Knockoff Cyberarm	3	5	Object	Bio Tech	Black Market	Risk payoff	End of Turn: If this has increased Power, destroy it.	modified power + self-destroy
+052	Grey Market Cache	3	2	Object	Tech	Black Market	Discount enabler	On Reveal: Reduce the Cost of a created card in your hand by 2.	created cards in hand
+053	Debt Collector	4	6	Character	Corp Merc	Black Market	Discount payoff	On Reveal: Gain +1 Power for each card whose Cost you reduced this game.	cost reduced
+054	Ghost Vendor	4	4	Character	Hacker Merc	Black Market	Bridge to Fixer	On Reveal: Replace a created card in your hand with a random card that costs 1 more.	created cards in hand
+055	Hot Merchandise	5	9	Object	Tech	Black Market	Risk finisher	When Played: Destroy this at the end of next turn.	temporary value
+056	Kingpin Broker	6	7	Character	Merc Corp	Black Market	Finisher	On Reveal: Give your discounted cards +2 Power.	cards with reduced cost
+057	Battery Monk	1	2	Character	Bio	Overclock	Beginner payoff	If you ended last turn with unspent Energy, this has +2 Power.	unspent energy last turn
+058	Capacitor Drone	2	2	Object	Drone Tech	Overclock	End-turn growth	End of Turn: If you have unspent Energy, this gains +1 Power.	unspent energy this turn
+059	Quiet Protocol	2	0	Object	AI Hacker	Overclock	Bridge to Control	Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.	unspent energy last turn
+060	Stored Charge	3	3	Object	Tech	Overclock	Discount card	Costs 1 less if you had unspent Energy last turn.	unspent energy last turn
+061	Ambush Runner	3	4	Character	Merc	Overclock	Low-play reward	On Reveal: If you played no cards last turn, gain +4 Power.	played no cards last turn
+062	Silent Engine	4	5	Object	AI Tech	Overclock	Bridge to Nanotech	End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.	unspent energy + ongoing
+063	Delayed Payload	5	7	Object	Tech Military	Overclock	Bridge to Black Market	Costs 2 less if you spent no Energy last turn.	energy spent last turn
+064	Neon Singularity	6	6	Object	AI Tech	Overclock	Finisher	On Reveal: Gain +2 Power for each unspent Energy you had last turn.	unspent energy last turn
+065	Street Kid	1	2	Character	Merc	Swarm / Gang	Cheap body	No ability.	cheap cards
+066	Drone Pup	1	1	Object	Drone	Swarm / Gang	Cheap body	When Destroyed: Add a 1-Power Drone to your hand.	destroyed + created
+067	Gang Lookout	1	1	Character	Merc	Swarm / Gang	Cards-played payoff	After you play a card here, this gains +1 Power.	cards played this turn
+068	Drone Printer	2	1	Object	Drone Tech	Swarm / Gang	Token creator	On Reveal: Add a 1-Power Drone here.	created cards + lane
+069	Block Party	2	2	Object	Merc	Swarm / Gang	Full-lane payoff	Ongoing: If this lane is full, your cards here have +1 Power.	full lane
+070	Pack Tactics	3	2	Object	Military Merc	Swarm / Gang	Local buff	On Reveal: Give your other cards here +1 Power.	cards in lane
+071	Signal Rally	3	3	Object	AI	Swarm / Gang	Bridge to Nanotech	Ongoing: Your 1-Cost cards have +1 Power.	cheap cards
+072	Crowd Surge	4	4	Object	Merc	Swarm / Gang	Cards-played payoff	On Reveal: Gain +1 Power for each card you played this turn.	cards played this turn
+073	Gutter Legion	5	5	Character	Merc	Swarm / Gang	Finisher	Ongoing: Your full locations have +3 Power.	full locations
+074	Hive Riot	6	4	Object	Drone AI	Swarm / Gang	Big finisher	On Reveal: Give your 1-Cost cards +2 Power.	cheap cards
+075	Neon Courier	2	3	Character	Merc	Runner / Movement	Self-mover	On Reveal: Move this to another location.	movement
+076	Getaway Driver	3	4	Character	Merc	Runner / Movement	Friendly mover	On Reveal: Move one of your other cards here to another location.	movement
+077	Rooftop Runner	3	3	Character	Merc Bio	Runner / Movement	Moved payoff	When Moved: Gain +3 Power.	this card moved
+078	Traffic Spoofer	4	5	Object	Hacker Tech	Runner / Movement	Enemy mover	On Reveal: Move the lowest-Power enemy card here to another location.	enemy movement
+079	Escape Route	5	6	Object	Tech	Runner / Movement	Movement payoff	Ongoing: Your cards that moved this game have +1 Power.	cards moved
+080	Chrome Surgeon	2	2	Character	Bio	Biohack / Cyberware	Hand buff	On Reveal: Give the leftmost card in your hand +2 Power.	modified power in hand
+081	Reflex Booster	2	1	Object	Bio Tech	Biohack / Cyberware	Lane buff	On Reveal: Give a friendly card here +3 Power.	modified power
+082	Adrenal Graft	3	3	Object	Bio	Biohack / Cyberware	Modified payoff	When this gains Power, draw a card.	modified power
+083	Wetware Saint	4	5	Character	Bio AI	Biohack / Cyberware	Bridge to Nanotech	Ongoing: Your cards with increased Power have +1 Power.	modified power
+084	Illegal Implant	5	8	Object	Bio Tech	Biohack / Cyberware	Bridge to Black Market	Costs 1 less if you reduced a card's Cost this game.	cost reduced
+085	Camera Rat	1	2	Object	Hacker Drone	Surveillance	Enemy hand size payoff	On Reveal: If your opponent has 5 or more cards in hand, gain +2 Power.	enemy hand size
+086	Blackmail File	2	2	Object	Hacker Corp	Surveillance	Hand disruption	On Reveal: Increase the Cost of a random card in your opponent's hand by 1.	enemy hand contents
+087	Predictive Cop	3	3	Character	AI Military	Surveillance	Prediction payoff	On Reveal: If your opponent played here this turn, gain +4 Power.	enemy played here
+088	Panopticon AI	5	5	Object	AI Hacker	Surveillance	Surveillance payoff	Ongoing: Enemy cards added to hand have -1 Power.	enemy created cards
+089	Junk Packet	1	1	Object	Hacker Tech	Malware	Junk creator	On Reveal: Add a 0-Power Junk card to your opponent's deck.	enemy deck
+090	Deck Worm	2	2	Object	Hacker AI	Malware	Top-deck modifier	On Reveal: Give the top card of your opponent's deck -3 Power.	enemy deck contents
+091	Data Leech	3	3	Character	Hacker	Malware	Enemy deck copy	On Reveal: Add a copy of the top card of your opponent's deck to your hand.	enemy deck contents + created cards
+092	Corruption Bloom	4	4	Object	AI Hacker	Malware	Malware payoff	Ongoing: Enemy cards with reduced Power have -1 Power.	modified power
+093	Memory Burner	2	4	Object	Hacker	Discard / Memory Wipe	Self-discard cost	On Reveal: Discard the lowest-Cost card in your hand.	discarded cards
+094	Backup Ghost	3	3	Character	AI	Discard / Memory Wipe	Discard recovery	On Reveal: Add a card you discarded this game to your hand.	discarded card records
+095	Street Samurai	2	4	Character	Merc	Generic	Simple rate card	No ability.	baseline stats
+096	Armored Van	3	5	Object	Military Tech	Generic	Simple rate card	No ability.	baseline stats
+097	Night Market Scout	1	1	Character	Merc	Generic	Simple draw	On Reveal: Draw a card if your hand is empty.	hand size
+098	Metro Enforcer	4	7	Character	Military	Generic	Simple condition	If this is your only card here, this has +2 Power.	cards in lane
+099	Cheap Drone	1	1	Object	Drone	Generic	Simple token body	No ability.	cheap cards
+100	Loaded Suit	5	8	Character	Corp	Generic	Simple big card	No ability.	baseline stats
+101	Union Rep	2	2	Character	Corp Merc	Counter / Tech	Anti-destroy	Ongoing: Your cards here cannot be destroyed by your own cards.	destroy prevention
+102	White-Hat Auditor	3	3	Character	Hacker Corp	Counter / Tech	Anti-created	On Reveal: Enemy created cards here lose their text.	enemy created cards
+103	EMP Grenade	3	2	Object	Military Tech	Counter / Tech	Anti-Ongoing	On Reveal: Disable Ongoing effects here this turn.	ongoing text
+104	Kill Switch	4	4	Object	Hacker Tech	Counter / Tech	Anti-copy	On Reveal: Remove copied text from cards here.	copied text
+105	Hard Reset	5	5	Object	AI Hacker	Counter / Tech	Anti-modified	On Reveal: Reset all cards here to base Power.	modified power

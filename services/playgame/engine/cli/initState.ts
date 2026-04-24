@@ -14,6 +14,7 @@
  */
 
 import type { MatchState, CardInstance, LaneState, LocationInstance } from '../types/state';
+import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
 import { createRng, type Rng } from '../rng';
@@ -161,5 +162,6 @@ export function createInitialMatchState(seed: string, manifest: Manifest): Match
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
 }

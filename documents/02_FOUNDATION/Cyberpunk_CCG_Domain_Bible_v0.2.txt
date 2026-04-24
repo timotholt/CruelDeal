@@ -1,6 +1,7 @@
-CYBERPUNK CCG — DOMAIN BIBLE v0.1
+CYBERPUNK CCG — DOMAIN BIBLE v0.2
 Plain-text design spec
 Created: 2026-04-23
+Updated: 2026-04-23 — persistent card entities, zone-change model, banish rule
 
 ============================================================
 0. PURPOSE
@@ -265,6 +266,232 @@ Launch recommendation:
 Example:
     End of Game: Move to your weakest location.
 
+
+============================================================
+2A. PERSISTENT CARD ENTITY / ZONE MODEL
+============================================================
+
+Core engine rule:
+
+    Cards are persistent entities.
+
+A card is never deleted from the system. Card effects change a card's zone,
+controller, stats, text, or metadata, but the card entity and its history remain
+available to the engine.
+
+Important consequence:
+
+    "Destroy," "discard," "banish," "return," "draw," and "play" are all
+    zone-change operations.
+
+------------------------------------------------------------
+2A.1 Core Zones
+------------------------------------------------------------
+
+The engine should treat these as zones:
+
+    deck
+    hand
+    board
+    lane / location
+    destroyed pile / death pile
+    discard pile
+    banish pile
+    created-card history / generated-card history
+
+Optional future zones:
+
+    revealed queue
+    resolving queue
+    temporary set-aside zone
+    market / manifest zone
+
+Launch decision:
+
+    Do not use a player-facing Manifest zone at launch.
+
+------------------------------------------------------------
+2A.2 Destroy
+------------------------------------------------------------
+
+Player-facing word:
+
+    Destroy
+
+Engine meaning:
+
+    Move a card from the board/lane to the destroyed pile.
+
+Design meaning:
+
+    The card is no longer on the board, but it still exists and can be counted,
+    inspected by history, copied from history, or recovered by card effects if
+    the effect explicitly allows it.
+
+Correct rules interpretation:
+
+    Destroy does not delete a card.
+    Destroy does not erase card history.
+    Destroy changes current_zone to destroyed_pile.
+
+Allowed design examples:
+
+    On Reveal: Move a card from your destroyed pile to your hand.
+    When Destroyed: Move this to a random lane with +2 Power.
+    On Reveal: Copy the text of a card in your destroyed pile.
+
+------------------------------------------------------------
+2A.3 Discard
+------------------------------------------------------------
+
+Player-facing word:
+
+    Discard
+
+Engine meaning:
+
+    Move a card from hand to discard pile.
+
+Design meaning:
+
+    The card leaves hand but remains a persistent card entity.
+
+Allowed design examples:
+
+    On Reveal: Move a card from your discard pile to your hand.
+    Ongoing: Your discarded cards count as discarded.
+    On Reveal: Copy the lowest-Cost card in your discard pile.
+
+Launch decision:
+
+    Discard is tracked, but not a major launch archetype unless testing shows
+    it is needed.
+
+------------------------------------------------------------
+2A.4 Banish
+------------------------------------------------------------
+
+Player-facing word:
+
+    Banish
+
+Engine meaning:
+
+    Move a card to the banish pile.
+
+Design meaning:
+
+    The card still exists in the system, but banish is final for gameplay.
+
+Hard design rule:
+
+    No launch card, expansion card, location, or effect should move a card out
+    of the banish pile.
+
+Allowed:
+
+    Count banished cards.
+    Inspect banished-card history.
+    Trigger when a card is banished.
+    Care that a card was banished this game.
+
+Forbidden:
+
+    Move a card from the banish pile to hand.
+    Move a card from the banish pile to deck.
+    Move a card from the banish pile to board.
+    Copy a card out of the banish pile as a form of recovery.
+    Regenerate from banish.
+
+Safe examples:
+
+    On Reveal: Banish the lowest-Power card here.
+    This has +1 Power for each card banished this game.
+
+Forbidden examples:
+
+    On Reveal: Return a banished card to your hand.
+    End of Turn: Move this from the banish pile to a random lane.
+
+Design shorthand:
+
+    Banish is persistent in the engine, final in gameplay.
+
+------------------------------------------------------------
+2A.5 Required Card Entity Fields
+------------------------------------------------------------
+
+Every card entity should support at least:
+
+    card_instance_id
+    base_card_id
+    owner_player_id
+    controller_player_id
+    current_zone
+    current_lane
+    previous_zone
+    previous_lane
+    zone_history
+    turn_entered_current_zone
+    original_cost
+    current_cost
+    original_power
+    current_power
+    original_text
+    current_text
+    copied_text_records
+    disabled_text_state
+    tags
+    was_created
+    was_destroyed_this_game
+    was_discarded_this_game
+    was_banished_this_game
+    created_by_card_id
+    last_moved_by_card_id
+    last_zone_change_reason
+
+------------------------------------------------------------
+2A.6 Required Zone-Change Record
+------------------------------------------------------------
+
+Every zone change should create a record:
+
+    card_instance_id
+    base_card_id
+    owner_player_id
+    controller_player_id
+    from_zone
+    to_zone
+    from_lane
+    to_lane
+    caused_by_player_id
+    caused_by_card_id
+    turn_number
+    phase
+    cost_at_change
+    power_at_change
+    text_at_change
+    tags_at_change
+    was_created
+    was_modified
+    zone_change_reason
+
+This record is what powers card text like:
+
+    "for each card destroyed this game"
+    "the last card you discarded"
+    "cards that were created"
+    "cards banished this game"
+
+------------------------------------------------------------
+2A.7 Design Rule
+------------------------------------------------------------
+
+Rules text may use familiar words like Destroy and Discard, but design docs
+and engine docs must remember:
+
+    These words mean zone changes, not deletion.
+
 ============================================================
 3. PLAYER-FACING ACTION VOCABULARY
 ============================================================
@@ -338,26 +565,50 @@ Allowed early constraints:
 ------------------------------------------------------------
 
 Meaning:
-    Remove a card from the board and record it in destroyed history.
+    Move a card from the board/lane to the destroyed pile and record the zone change.
 
 Example:
     On Reveal: Destroy your lowest-Power card here.
 
 Design note:
-    Destroy records should preserve metadata at the moment of destruction.
+    Destroyed cards remain persistent card entities in the destroyed pile. The zone-change record should preserve metadata at the moment of destruction.
 
 ------------------------------------------------------------
 3.6 Discard
 ------------------------------------------------------------
 
 Meaning:
-    Remove a card from hand and record it in discard history.
+    Move a card from hand to the discard pile and record the zone change.
 
 Example:
     On Reveal: Discard the lowest-Cost card in your hand.
 
 Launch recommendation:
     Track discard now. Do not overbuild discard as a full launch archetype.
+
+
+------------------------------------------------------------
+3.7A Banish
+------------------------------------------------------------
+
+Meaning:
+    Move a card to the banish pile.
+
+Example:
+    On Reveal: Banish the lowest-Power card here.
+
+Design note:
+    Banished cards still exist in the engine, but no card should pull, recover,
+    regenerate, or move cards out of the banish pile.
+
+Allowed:
+    Count banished cards.
+    Trigger when a card is banished.
+    Care that cards were banished this game.
+
+Forbidden:
+    Return a banished card to hand, deck, board, lane, discard pile, or
+    destroyed pile.
 
 ------------------------------------------------------------
 3.7 Move
@@ -398,7 +649,7 @@ Examples:
     On Reveal: Reset an enemy card here to its base Power.
 
 Design note:
-    Track original Power and current Power separately.
+    Track original Power and current Power separately. Stat changes modify the card entity; they do not create a new card unless an effect explicitly adds or copies one.
 
 ------------------------------------------------------------
 3.10 Remove Text / Disable Text
@@ -707,6 +958,37 @@ Launch status:
 
 Player question:
     Can I poison what they draw next?
+
+
+------------------------------------------------------------
+4.13A Banished Cards
+------------------------------------------------------------
+
+Tracked facts:
+    cards you banished this game
+    cards enemy banished this game
+    total cards banished this game
+    your cards banished this game
+    enemy cards banished this game
+    list of banished cards
+    metadata of banished cards
+
+Design uses:
+    permanent gameplay removal
+    anti-recursion
+    high-stakes control
+    rare scoring/counting payoffs
+
+Launch status:
+    Track if banish exists.
+    Use lightly.
+    Do not print recovery from banish.
+
+Player question:
+    What must be removed from gameplay permanently?
+
+Hard rule:
+    No card or location pulls from the banish pile.
 
 ------------------------------------------------------------
 4.14 Manifest
@@ -1157,7 +1439,7 @@ Rule 6:
     Created cards should be flagged by the engine.
 
 Rule 7:
-    Every event history should store both count and card records.
+    Every zone-change history should store both count and card records.
 
 Rule 8:
     The first 100 cards should support archetype packages, not isolated ideas.
@@ -1167,6 +1449,12 @@ Rule 9:
 
 Rule 10:
     If a mechanic requires too much explanation, it is not a launch mechanic.
+
+Rule 11:
+    Destroy, discard, and banish are zone changes, not deletion.
+
+Rule 12:
+    Banish is final in gameplay: never design effects that recover cards from the banish pile.
 
 ============================================================
 9. NEXT DESIGN STEP
