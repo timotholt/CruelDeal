@@ -135,7 +135,7 @@ describe('trackedVariables: CARD_DISCARDED', () => {
     const s = run(s0, {
       type: 'CARD_DISCARDED',
       cardId: 'h1' as CardId,
-      reason: 'EFFECT',
+      reason: 'FORCED_EFFECT',
       cause: SYSTEM_SOURCE,
     });
     expect(s.trackedVariables.P0.cardsYouDiscarded).toBe(1);

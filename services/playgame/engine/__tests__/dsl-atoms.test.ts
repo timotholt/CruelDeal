@@ -106,7 +106,8 @@ function mkManifest(defs: CardDef[]): Manifest {
     cards: Object.fromEntries(defs.map(d => [d.defId, d])),
     locations: {},
     disabled: { cards: [], locations: [] },
-    constants: { handCap: 7, deckSize: 12, laneCapacity: 4, turnCount: 6 },
+    version: 1, protocolVersion: 1,
+    constants: { handCap: 7, deckSize: 12, laneCapacity: 4, turnLimit: 6, energyCurve: [1,2,3,4,5,6] },
   };
 }
 
