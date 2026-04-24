@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local asset generation workbench state and unpromoted candidates
+asset-workbench/
+public/art/generated/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

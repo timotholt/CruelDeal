@@ -25,6 +25,7 @@ import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
 import { planEnemyTurnFromPool } from '../engine/ai';
+import { animateEvent } from '../presentation/eventAnimator';
 import {
   type ResolvedCard,
   type UiState,
@@ -397,17 +398,6 @@ export const captureEngineEndTurn = (): Step => (ctx) => {
   return Promise.resolve();
 };
 
-/** Duration of the FLIP slide used for CARD_MOVED animations (ms). */
-const MOVE_ANIM_DURATION_MS = 360;
-
-/**
- * Wait for the next animation frame so Solid can re-render the DOM after
- * a `dispatch()` call. Used before measuring the new rect in a FLIP
- * sequence.
- */
-const nextFrame = (): Promise<void> =>
-  new Promise((r) => requestAnimationFrame(() => r()));
-
 /**
  * Dispatch a single per-reveal event to the store, playing its matching
  * animation if any. Per-reveal events are the ones that fire DURING a
@@ -415,14 +405,9 @@ const nextFrame = (): Promise<void> =>
  * etc.) — everything between one CARD_FLIPPED and the next, or up to
  * TURN_ENDED for the final revealed card.
  *
- * Animations currently wired:
- *   - CARD_MOVED: FLIP-slide the card from its old lane slot to its new
- *     one. Applies to Dune Sapper (self-move OR), Nightcrawler (move-to-
- *     other-lane OR), and any future `kind: 'MOVE'` emitter.
- *
- * Other events currently just dispatch synchronously; add per-type
- * branches here as animations are authored (CARD_DESTROYED shatter,
- * CARD_POWER_CHANGED flash, etc.).
+ * Non-local hand additions still use the current draw-to-hand script. All
+ * other events go through the shared presentation adapter so reveal-time and
+ * post-reveal bookkeeping use the same choreography.
  */
 const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
   if (event.type === 'CARD_ADDED_TO_HAND' && event.owner === c.localSeat) {
@@ -435,24 +420,7 @@ const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Prom
     return;
   }
 
-  if (event.type === 'CARD_MOVED') {
-    const id = event.cardId as string;
-    const el = c.cardRefs.get(id);
-    const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
-    
-    // Dispatch synchronously; Solid re-renders the DOM immediately.
-    c.dispatch(event);
-    
-    if (oldRect) {
-      const rects = new Map<string, DOMRect>([[id, oldRect]]);
-      // No nextFrame() — capture the new rect and start the FLIP slide
-      // in the same task to avoid a painted "snap" frame.
-      playLayoutSlide(rects, c.cardRefs, { duration: MOVE_ANIM_DURATION_MS });
-      await new Promise<void>((r) => setTimeout(r, MOVE_ANIM_DURATION_MS));
-    }
-    return;
-  }
-  c.dispatch(event);
+  await animateEvent(c, event);
 };
 
 /**
@@ -563,20 +531,7 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
   for (let i = startIdx; i < events.length; i++) {
     const event = events[i];
     if (SCRIPT_OWNED_EVENT_TYPES.has(event.type)) continue;
-
-    if (event.type === 'CARD_MOVED') {
-      const id = event.cardId as string;
-      const el = c.cardRefs.get(id);
-      const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
-      c.dispatch(event);
-      if (oldRect) {
-        const rects = new Map<string, DOMRect>([[id, oldRect]]);
-        playLayoutSlide(rects, c.cardRefs, { duration: MOVE_ANIM_DURATION_MS });
-        await new Promise<void>((r) => setTimeout(r, MOVE_ANIM_DURATION_MS));
-      }
-    } else {
-      c.dispatch(event);
-    }
+    await animateEvent(c, event);
   }
 
   // Reset the face-up override so next turn's staged cards show face-up.

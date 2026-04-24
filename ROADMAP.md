@@ -160,10 +160,11 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 ## Tier 2 — Presentation (can iterate in parallel with Tier 1, but benefits from event contract)
 
 ### 2.1 Event-Driven Renderer
-- Replace all `el.style.transition = ...` imperative animation with CSS-class choreography driven by `MatchEvent` types.
-- `choreography.ts` maps each event to `{ addClass: [...], particles: [...], sfx: "..." }`.
-- All animation timing lives in CSS (`vfx/transitions/classes.css`), not JS.
-- Migration guardrail: follow `docs/event-driven-renderer-spec.md`. First implementation must preserve existing storyboard/script animations and introduce a dispatch-only adapter shell before replacing any live animation path.
+- ✅ Migration spec exists: `docs/event-driven-renderer-spec.md`.
+- ✅ Adapter shell started: `services/playgame/presentation/choreography.ts` maps `MatchEvent` to structural animation, VFX cues, and SFX cues; `eventAnimator.ts` executes it.
+- ✅ `CARD_MOVED` is centralized through the adapter for reveal slices and post-reveal turn advancement while preserving the existing FLIP slide.
+- ✅ Additive VFX/SFX are mapped for power changes, destruction, and transformation without blocking dispatch.
+- Next: move local draw-to-hand choreography into the adapter only after visual QA confirms the current deck-slide timing is preserved.
 
 ### 2.2 Particle Overlay
 - Single `<canvas>` over `boardWrap`, RAF loop, pointer-events: none.

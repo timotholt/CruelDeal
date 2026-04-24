@@ -10,7 +10,7 @@ The repo is already Solid + TanStack Router/Query. The active game manifest is `
 
 | Asset class | Current state | Build path |
 | --- | --- | --- |
-| Location images | 10 active locations all have existing files. They may still be worth regenerating for style consistency. | `public/art/maps/*.png` today |
+| Location images | 10 active locations have old files, but current source art is deprecated after the cyberpunk pivot. Treat all location art as needing replacement. | `public/art/maps/*.png` today |
 | Card front images | 106 active card portrait paths are empty. | Proposed: `public/art/cards/{defId}/portrait.webp` |
 | Card backs | No shipped image asset; face-down cards are CSS gradients today. | Proposed: `public/art/cards/backs/default.webp` |
 
@@ -28,9 +28,9 @@ All committed bitmap dimensions should be divisible by 8 in both dimensions so o
 
 Provider generation can use the nearest supported native size, then the local pipeline crops/resizes/pads to the committed size above before approval or promotion. Never rely on provider output size being build-ready.
 
-Current Midjourney map files are `576x2016`. That is not a bad technical size: both dimensions are divisible by 8, and the texture is about 1.16 megapixels per lane. The aspect ratio is `2:7`, while the current code's lane overlay is closer to `4:15`.
+Current Midjourney map files are `576x2016`, but they are no longer art-direction relevant after the cyberpunk pivot. Do not treat them as source/master art for the new pipeline.
 
-Keep `576x2016` as a source/master size if it looks good. Normalize build assets to `384x1440` for mobile runtime. That cuts each lane from about 1.16 megapixels to 0.55 megapixels, better matches the current overlay, and avoids relying on runtime cover-cropping. If memory pressure shows up on older Android devices, drop lane runtime assets to `320x1200`.
+Normalize new generated location art to `384x1440` for mobile runtime. That better matches the current overlay and avoids relying on runtime cover-cropping. If memory pressure shows up on older Android devices, drop lane runtime assets to `320x1200`.
 
 Current location assets:
 
@@ -44,6 +44,24 @@ Current location assets:
 - `lava-flow`: `public/art/maps/LavaFlow.png`
 - `tropical-beach`: `public/art/maps/TropicalBeach.png`
 - `alien-starship`: `public/art/maps/AlienStarship.png`
+
+## Game Engine Boundary
+
+The game currently hard-codes asset paths inside TypeScript data that the engine consumes:
+
+- Cards: `services/playgame/engine/manifest/content/cyberpunk-cards.ts`
+- Locations: `services/playgame/engine/manifest/content/locations.ts`
+
+Keep that boundary. The game engine should only know about final build asset paths such as `/art/cards/scrap-rat/portrait.webp` or `/art/maps/HackersLair.webp`. It should not know about prompts, approvals, provider IDs, retries, rejection notes, cost estimates, or raw generated candidates.
+
+External-to-engine workflow state should live in tooling-only files:
+
+- `asset-workbench/state.json`: approval ledger, prompts, provider request metadata, candidate status, reviewer notes.
+- `asset-workbench/presets.json`: reusable style presets and negative prompts.
+- `public/art/generated/...`: local previewable generated candidates.
+- `public/art/cards/...` and `public/art/maps/...`: final promoted runtime files only.
+
+Promotion is the only step allowed to touch game-facing paths. Promotion copies a normalized approved bitmap into its build location and, when needed, updates the relevant hard-coded TS asset path.
 
 Missing card front assets:
 
@@ -233,6 +251,8 @@ If this ever changes from "me only on my hard drive" to a shipped or shared app,
 
 Route: `/assets`
 
+Design goal: feel like a fast solo production board, not an admin CMS. The screen should optimize for quickly seeing what is missing, generating a small batch, comparing candidates, and promoting winners.
+
 Layout:
 
 - Left rail: provider setup, key status, docs links, style preset, batch controls.
@@ -240,11 +260,72 @@ Layout:
 - Right drawer: selected asset metadata, editable prompt, provider settings, generated candidates, approval actions.
 - Bottom bar: queue status, estimated selected count, `Generate selected`, `Add approved to build`, `Run build`.
 
+Primary screens/states:
+
+- `Dashboard`: counts for missing, generated, approved, promoted, rejected, and stale/deprecated source art.
+- `Asset Grid`: contact-sheet cards grouped by asset type, status, and batch.
+- `Prompt Drawer`: exact prompt editor for the selected asset, with style preset and provider controls.
+- `Candidate Compare`: side-by-side generated candidates for one asset, with the active prompt visible below each image.
+- `Promote Review`: list of approved candidates that will write into engine-facing asset paths.
+
+V1 route shape:
+
+- `/assets`: dashboard, grid, selected asset drawer, candidate compare, and promote actions.
+
+Later route shape if deep-linking becomes useful:
+
+- `/assets/$assetId`: selected asset drawer state.
+- `/assets/batch/$batchId`: generated batch review.
+
+Asset tile contents:
+
+- Thumbnail or placeholder.
+- Asset name and defId.
+- Required output spec, e.g. `card-front 640x896`.
+- Engine target path.
+- Status stamp: `missing`, `generated`, `approved`, `promoted`, `rejected`.
+- Last provider/model used.
+- Small prompt hash or timestamp so repeated generations are traceable.
+
+Right drawer actions:
+
+- `Generate`: creates one candidate from the current prompt.
+- `Generate 3`: optional comparison burst when a card matters.
+- `Approve`: marks the selected candidate as the winner for this asset.
+- `Reject`: keeps the candidate and prompt in history with optional notes.
+- `Promote`: writes approved bitmap to the engine-facing path.
+- `Open in Game`: routes to a preview/play screen once promoted.
+
+Keyboard shortcuts:
+
+- `G`: generate selected asset.
+- `A`: approve focused candidate.
+- `R`: reject focused candidate.
+- `P`: promote approved candidate.
+- `N` / `J`: next asset.
+- `K`: previous asset.
+
+Visual system:
+
+- Contact-sheet grid on a dark print-shop table.
+- Big stamped labels for statuses.
+- Provider setup as a compact "Keys & Credits" card in the left rail.
+- Prompt editor uses a plain textarea with monospace text and visible final prompt preview.
+- Generated candidates should show the exact output dimensions and whether normalization passed.
+
 TanStack usage:
 
 - TanStack Router: add `/assets`.
 - TanStack Query: `useQuery` for asset audit and candidate state, `useMutation` for generate/approve/promote/build.
 - Keep helper endpoints local-only, e.g. Vite middleware or scripts exposed only during `npm run dev`.
+
+Implemented local API endpoints:
+
+- `GET /api/assets/state`: read tooling-only approval ledger.
+- `POST /api/assets/generate`: call selected provider and write raw candidate under `public/art/generated/...`.
+- `POST /api/assets/normalize`: save browser-canvas-normalized WebP at the exact runtime dimensions.
+- `POST /api/assets/status`: approve, reject, or otherwise update candidate state.
+- `POST /api/assets/promote`: copy the approved normalized image into its build path and update hard-coded TS manifest paths when needed.
 
 Suggested visual language:
 
@@ -328,6 +409,8 @@ export interface AssetCandidateRecord {
 ```
 
 Store the ledger in `asset-workbench/state.json` because it is tooling state, not game runtime state. Generated candidate files can live under `public/art/generated/` so the Solid approval UI can render them directly.
+
+None of this ledger is imported by the game engine. The engine consumes only promoted file paths.
 
 Approval flow:
 

@@ -35,6 +35,67 @@ engine MatchEvent stream
 
 The new event-driven renderer should formalize that middle layer, not bypass it.
 
+## Animation Layers
+
+The renderer has three layers. They must stay separate.
+
+### Structural Animations
+
+Structural animations explain game-state movement and may control dispatch
+timing.
+
+Examples:
+
+- card flies from hand to lane
+- card flips face-up
+- card moves between lanes with layout FLIP
+- card draws from deck to hand
+- location reveal cinematic
+- destroyed card leaves the board
+
+These are not optional. If a structural animation cannot find its DOM target,
+the event still dispatches, but the animation contract must treat that as a
+fallback, not as success.
+
+### VFX Cues
+
+VFX cues decorate a state change. They should not be required for state timing.
+
+Examples:
+
+- glow
+- flash
+- shake
+- sparks
+- particles
+- glitch burst
+- dissolve
+
+VFX may play before or after dispatch, but game correctness must not depend on
+the VFX completing.
+
+### SFX Cues
+
+SFX cues are audio-only companions to either structural animations or VFX.
+They must never block dispatch or completion.
+
+Examples:
+
+- card flip
+- whoosh
+- power up/down
+- destroy hit
+- location reveal hit
+
+SFX can be scheduled relative to the structural beat:
+
+- `on-start`
+- `on-dispatch`
+- `after-dispatch`
+- `on-complete`
+
+If sound is muted, missing, or fails to play, state and visuals continue.
+
 ## Core Fear To Protect Against
 
 We do not want a "clean" renderer refactor that causes any of these regressions:
@@ -88,28 +149,49 @@ Pure-ish mapping from event type to animation intent. It should not directly
 mutate the DOM.
 
 ```ts
-type AnimationIntent =
+type EventChoreography = {
+  structural: StructuralAnimation;
+  vfx: VfxCue[];
+  sfx: SfxCue[];
+};
+
+type StructuralAnimation =
   | { kind: 'dispatch-only' }
   | { kind: 'card-flip'; cardId: CardId }
   | { kind: 'card-move'; cardId: CardId; durationMs: number }
   | { kind: 'card-draw'; cardId: CardId; owner: Owner }
+  | { kind: 'location-reveal'; lane: LaneIdx };
+
+type VfxCue =
   | { kind: 'power-flash'; cardId: CardId; delta: number }
   | { kind: 'destroy-burst'; cardId: CardId }
-  | { kind: 'location-reveal'; lane: LaneIdx }
-  | { kind: 'toast'; text: string; durationMs: number };
+  | { kind: 'glitch-flash'; cardId: CardId };
+
+type SfxCue = {
+  name: string;
+  timing: 'on-start' | 'on-dispatch' | 'after-dispatch' | 'on-complete';
+};
 ```
 
 The mapping may be simple at first:
 
 ```ts
-function describeEventAnimation(event: MatchEvent): AnimationIntent {
+function describeEventChoreography(event: MatchEvent): EventChoreography {
   switch (event.type) {
     case 'CARD_MOVED':
-      return { kind: 'card-move', cardId: event.cardId, durationMs: 360 };
+      return {
+        structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
+        vfx: [],
+        sfx: [{ name: 'move', timing: 'on-dispatch' }],
+      };
     case 'CARD_POWER_CHANGED':
-      return { kind: 'power-flash', cardId: event.cardId, delta: event.delta };
+      return {
+        structural: { kind: 'dispatch-only' },
+        vfx: [{ kind: 'power-flash', cardId: event.cardId, delta: event.delta }],
+        sfx: [{ name: event.delta > 0 ? 'buff' : 'debuff', timing: 'after-dispatch' }],
+      };
     default:
-      return { kind: 'dispatch-only' };
+      return { structural: { kind: 'dispatch-only' }, vfx: [], sfx: [] };
   }
 }
 ```
@@ -120,7 +202,7 @@ Side-effectful executor that receives:
 
 - `MatchEvent`
 - current `PlayScriptCtx`
-- resolved `AnimationIntent`
+- resolved `EventChoreography`
 
 It may:
 
@@ -135,8 +217,8 @@ This layer replaces scattered branches inside `dispatchPerRevealEvent` and
 
 ```ts
 async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promise<void> {
-  const intent = describeEventAnimation(event);
-  await runAnimationIntent(ctx, event, intent);
+  const choreography = describeEventChoreography(event);
+  await runEventChoreography(ctx, event, choreography);
 }
 ```
 
@@ -182,7 +264,7 @@ These should usually remain dispatch-only.
 
 ### Phase 0: Inventory and Spec
 
-Status: this document.
+Status: complete.
 
 Deliverables:
 
@@ -192,29 +274,36 @@ Deliverables:
 
 ### Phase 1: Adapter Shell, Dispatch-Only Default
 
+Status: complete for the shared adapter and `CARD_MOVED`; additive VFX/SFX
+cues for power, destroy, and transform are also wired through the adapter.
+
 Add:
 
 - `presentation/choreography.ts`
 - `presentation/eventAnimator.ts`
 
-Wire only one call site at first:
+Wire the live event-dispatch call sites:
 
 - replace `dispatchPerRevealEvent(c, ev)` internals with `animateEvent(c, ev)`
-- default behavior dispatches exactly as today
+- replace the post-reveal `advanceTurnFromEngine` event dispatch branch with
+  `animateEvent(c, event)`
+- default behavior dispatches exactly as before for unmapped events
 - `CARD_MOVED` uses existing `playLayoutSlide`
 
 Success criteria:
 
 - `CARD_MOVED` behavior is unchanged.
-- No other event animation changes.
+- Additive VFX/SFX do not control dispatch timing.
 - Existing tests/build pass.
 
 ### Phase 2: Duplicate Existing Branches Into Adapter
 
+Status: partially complete.
+
 Move existing event-specific branches without changing behavior:
 
 - local `CARD_ADDED_TO_HAND`
-- `CARD_MOVED` in `advanceTurnFromEngine`
+- `CARD_MOVED` in `advanceTurnFromEngine` (complete)
 
 Success criteria:
 
@@ -297,4 +386,3 @@ Start with this tiny slice:
 5. Default every other event to dispatch-only.
 
 That creates the new architecture while keeping the old game feel intact.
-
