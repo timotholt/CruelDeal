@@ -22,7 +22,7 @@ import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
-import { revealCard, evalEffect, type EffectCtx } from './effects/evaluator';
+import { revealCard, evalEffect, applyHandEntryDebuffs, type EffectCtx } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
 
@@ -157,6 +157,18 @@ function resolveConcede(
 // resolveTurn — full turn cascade
 // ============================================================================
 
+function hasPowerGainDrawTrigger(def: { abilities: import('./manifest/types').CardAbilities } | null | undefined): boolean {
+  if (!def) return false;
+  const has = (list: readonly import('./types/ability').EffectExpr[] | undefined) =>
+    (list ?? []).some(e => (e as any).kind === 'CALL_BUILTIN' && (e as any).fn === 'DRAW_ON_POWER_GAIN');
+  return has(def.abilities.onReveal)
+    || has(def.abilities.onEndOfTurn)
+    || has(def.abilities.onDestroyed)
+    || has(def.abilities.onMove)
+    || has(def.abilities.onDiscarded)
+    || has(def.abilities.onAnyCardPlayedHere);
+}
+
 export interface ResolveTurnResult {
   readonly events: readonly MatchEvent[];
   readonly state: MatchState;
@@ -229,6 +241,27 @@ export function resolveTurn(
         const res = evalEffect(s, effs[j], subCtx, manifest);
         events.push(...res.events);
         s = res.state;
+      }
+    }
+  }
+
+  // Phase 1.95  DRAW_ON_POWER_GAIN — scan all reveal+EOT events for positive
+  //             power changes on cards that have the reactive draw trigger.
+  {
+    const snapshot = [...events];
+    for (const e of snapshot) {
+      if (e.type !== 'CARD_POWER_CHANGED' || e.delta <= 0) continue;
+      const card = s.cards[e.cardId];
+      if (!card || !card.revealed) continue;
+      const def = manifest.cards[card.defId];
+      if (!hasPowerGainDrawTrigger(def)) continue;
+      const draws = drawStep(s, card.owner, 1, manifest);
+      for (const drawEvt of draws) {
+        events.push(drawEvt);
+        s = apply(s, drawEvt, manifest);
+        const debuff = applyHandEntryDebuffs(s, drawEvt.cardId, drawEvt.owner, rng.fork(`pgdebuff:${drawEvt.cardId}`), manifest);
+        events.push(...debuff.events);
+        s = debuff.state;
       }
     }
   }
@@ -364,6 +397,9 @@ export function resolveTurn(
     for (const e of draws) {
       events.push(e);
       s = apply(s, e, manifest);
+      const debuff = applyHandEntryDebuffs(s, e.cardId, owner, rng.fork(`draw-debuff:${e.cardId}`), manifest);
+      events.push(...debuff.events);
+      s = debuff.state;
     }
   }
 

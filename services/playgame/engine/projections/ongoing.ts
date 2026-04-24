@@ -16,7 +16,7 @@
  */
 
 import type { OngoingExpr } from '../types/ability';
-import type { MatchState } from '../types/state';
+import type { CardInstance, MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import type { EvalCtx, SourcedOngoing } from './context';
 import {
@@ -33,21 +33,51 @@ import { evalNum } from './numexpr';
 export function collectAllOngoings(state: MatchState, manifest: Manifest): SourcedOngoing[] {
   // --- Step 1: raw gather -------------------------------------------------
   const raw: SourcedOngoing[] = [];
+  const copyExpanders: CardInstance[] = [];
 
   for (const card of liveCardSources(state)) {
     const def = manifest.cards[card.defId];
     if (!def) continue;
-    // DISABLE_ONGOING auras (Echo / Enchantress) — implemented below as
-    // a filter over raw Ongoings. Apply AFTER raw is built.
     const ongoings = def.abilities.ongoing ?? [];
     for (const expr of ongoings) {
-      raw.push({
-        sourceCardId: card.id,
-        sourceLocationId: null,
-        sourceLane: card.lane!,      // card.zone === 'LANE' implies lane != null
-        sourceOwner: card.owner,
-        expr,
-      });
+      const b = expr as any;
+      if (b.kind === 'CALL_BUILTIN') {
+        if (b.fn === 'FULL_LANES_POWER') {
+          // Only active when the card's lane is full for its owner.
+          const laneCards = state.lanes[card.lane!].cards[card.owner];
+          if (laneCards.length >= manifest.constants.laneCapacity) {
+            const delta: number = b.args?.delta ?? 0;
+            if (delta !== 0) {
+              raw.push({
+                sourceCardId: card.id,
+                sourceLocationId: null,
+                sourceLane: card.lane!,
+                sourceOwner: card.owner,
+                expr: {
+                  kind: 'LANE_POWER_ADD',
+                  laneScope: {
+                    laneOf: { kind: 'SELF' },
+                    ownerFilter: b.args?.ownerFilter ?? 'SELF_OWNER',
+                  },
+                  delta: { kind: 'LIT', n: delta },
+                  stack: 'ADDITIVE',
+                } as OngoingExpr,
+              });
+            }
+          }
+        } else if (b.fn === 'COPY_ONGOING_OF_CHEAPEST_ONGOING') {
+          copyExpanders.push(card);
+        }
+        // other CALL_BUILTIN ongoing stubs: skip (no-op)
+      } else {
+        raw.push({
+          sourceCardId: card.id,
+          sourceLocationId: null,
+          sourceLane: card.lane!,
+          sourceOwner: card.owner,
+          expr,
+        });
+      }
     }
   }
 
@@ -60,6 +90,37 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
         sourceLocationId: loc.id,
         sourceLane: loc.lane,
         sourceOwner: null,
+        expr,
+      });
+    }
+  }
+
+  // Expand COPY_ONGOING_OF_CHEAPEST_ONGOING — copies the ongoings of the
+  // cheapest friendly Ongoing card in the same lane (excluding self and
+  // other CALL_BUILTIN-only cards), re-attributed to the copier card.
+  for (const copier of copyExpanders) {
+    const candidates = liveCardSources(state).filter(c => {
+      if (c.id === copier.id || c.lane !== copier.lane || c.owner !== copier.owner) return false;
+      const def = manifest.cards[c.defId];
+      return (def?.abilities.ongoing ?? []).some(e => (e as any).kind !== 'CALL_BUILTIN');
+    });
+    if (candidates.length === 0) continue;
+    // Use def.cost + costDelta to avoid importing getCardCost (circular dep via cost.ts → ongoing.ts).
+    candidates.sort((a, b) => {
+      const ca = (manifest.cards[a.defId]?.cost ?? 999) + a.costDelta;
+      const cb = (manifest.cards[b.defId]?.cost ?? 999) + b.costDelta;
+      return ca - cb;
+    });
+    const cheapest = candidates[0];
+    const cheapestDef = manifest.cards[cheapest.defId];
+    if (!cheapestDef) continue;
+    for (const expr of cheapestDef.abilities.ongoing ?? []) {
+      if ((expr as any).kind === 'CALL_BUILTIN') continue;
+      raw.push({
+        sourceCardId: copier.id,
+        sourceLocationId: null,
+        sourceLane: copier.lane!,
+        sourceOwner: copier.owner,
         expr,
       });
     }

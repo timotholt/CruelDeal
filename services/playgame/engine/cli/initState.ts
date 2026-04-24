@@ -99,7 +99,8 @@ function weightedPickN<T extends { defId: string; rarity: number }>(
 
 /** Pick 3 distinct location defs from the manifest, weighted by rarity. */
 function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | null)[] {
-  const defs = Object.values(manifest.locations);
+  const disabled = new Set(manifest.disabled.locations);
+  const defs = Object.values(manifest.locations).filter((d) => !disabled.has(d.defId));
   if (defs.length < 3) {
     // Fall back to nulls — an empty lane has no location effect.
     return [null, null, null];

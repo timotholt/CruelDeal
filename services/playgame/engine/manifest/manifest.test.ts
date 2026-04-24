@@ -30,24 +30,60 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 // ---- Counts ---------------------------------------------------------------
 
 expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 106, '106 cards in manifest (105 cyberpunk + junk-card token)');
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 10, '10 locations in manifest');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 35, '35 Vantaris locations in manifest');
+expectEq(BOOTSTRAP_MANIFEST.disabled.locations.length, 13, '13 design-only locations disabled');
 
 // ---- Locations are exactly the current map roster -------------------------
 
 const expectedLocIds = [
-  'alien-starship',
-  'cathedral',
-  'cathedral-cloister',
-  'food-court',
-  'hackers-lair',
-  'icy-road',
-  'jungle-trail',
-  'lava-flow',
-  'science-lab',
-  'tropical-beach',
+  'backdoor',
+  'black-clinic',
+  'black-halo',
+  'charging-station',
+  'chip-swap',
+  'chrome-beach',
+  'chrome-depot',
+  'cold-vault',
+  'courthouse',
+  'cryo-storage',
+  'data-chapel',
+  'debt-alley',
+  'drone-hive',
+  'fusion-plant',
+  'ghost-market',
+  'grub-hub',
+  'helixdyne-lab',
+  'kurotek-atrium',
+  'market-sprawl',
+  'meridian-tower',
+  'nanobot-factory',
+  'neon-reliquary',
+  'netrunner-shrine',
+  'noodle-bar',
+  'organ-bank',
+  'overclock-room',
+  'patent-office',
+  'power-sink',
+  'red-needle',
+  'scrap-yard',
+  'signal-pit',
+  'skyrail',
+  'stock-exchange',
+  'the-cage',
+  'the-last-terminal',
 ];
 for (const id of expectedLocIds) {
   expectTrue(BOOTSTRAP_MANIFEST.locations[id] !== undefined, `location "${id}" is present`);
+}
+
+for (const id of BOOTSTRAP_MANIFEST.disabled.locations) {
+  const loc = BOOTSTRAP_MANIFEST.locations[id];
+  expectTrue(loc !== undefined, `disabled location "${id}" exists in manifest.locations`);
+  expectEq(loc?.rarity, 0, `disabled location "${id}" has rarity 0`);
+  expectTrue(
+    loc?.cosmetic.description.startsWith('UNIMPLEMENTED - ') ?? false,
+    `disabled location "${id}" description is marked UNIMPLEMENTED`,
+  );
 }
 
 // ---- Each location's map asset exists on disk -----------------------------
@@ -86,32 +122,32 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
 // ---- Ability DSL well-formed-ness (spot-check a few) ----------------------
 
 {
-  const cathedral = BOOTSTRAP_MANIFEST.locations['cathedral']!;
-  const first = cathedral.abilities.ongoing?.[0];
-  expectTrue(first?.kind === 'ON_REVEAL_MULTIPLIER', 'Cathedral ongoing[0] is ON_REVEAL_MULTIPLIER');
+  const neonReliquary = BOOTSTRAP_MANIFEST.locations['neon-reliquary']!;
+  const first = neonReliquary.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'ON_REVEAL_MULTIPLIER', 'Neon Reliquary ongoing[0] is ON_REVEAL_MULTIPLIER');
 }
 {
-  const cloister = BOOTSTRAP_MANIFEST.locations['cathedral-cloister']!;
-  const first = cloister.abilities.ongoing?.[0];
-  expectTrue(first?.kind === 'BOOST_ONGOINGS', 'Cathedral Cloister ongoing[0] is BOOST_ONGOINGS');
+  const kurotek = BOOTSTRAP_MANIFEST.locations['kurotek-atrium']!;
+  const first = kurotek.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'BOOST_ONGOINGS', 'KuroTek Atrium ongoing[0] is BOOST_ONGOINGS');
 }
 {
-  const sciLab = BOOTSTRAP_MANIFEST.locations['science-lab']!;
-  const first = sciLab.abilities.ongoing?.[0];
-  expectTrue(first?.kind === 'LANE_POWER_MULTIPLIER', 'Science Lab ongoing[0] is LANE_POWER_MULTIPLIER');
+  const helixDyne = BOOTSTRAP_MANIFEST.locations['helixdyne-lab']!;
+  const first = helixDyne.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'LANE_POWER_MULTIPLIER', 'HelixDyne Lab ongoing[0] is LANE_POWER_MULTIPLIER');
 }
 {
-  const jungle = BOOTSTRAP_MANIFEST.locations['jungle-trail']!;
-  const first = jungle.abilities.ongoing?.[0];
-  expectTrue(first?.kind === 'POWER_ADD', 'Jungle Trail ongoing[0] is POWER_ADD');
+  const nanobotFactory = BOOTSTRAP_MANIFEST.locations['nanobot-factory']!;
+  const first = nanobotFactory.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'POWER_ADD', 'Nanobot Factory ongoing[0] is POWER_ADD');
   if (first?.kind === 'POWER_ADD') {
-    expectTrue(first.delta.kind === 'COUNT', 'Jungle Trail delta is dynamic COUNT');
+    expectTrue(first.delta.kind === 'COUNT', 'Nanobot Factory delta is dynamic COUNT');
   }
 }
 {
-  const foodCourt = BOOTSTRAP_MANIFEST.locations['food-court']!;
-  const first = foodCourt.abilities.onReveal?.[0];
-  expectTrue(first?.kind === 'DRAW', 'Food Court onReveal[0] is DRAW');
+  const marketSprawl = BOOTSTRAP_MANIFEST.locations['market-sprawl']!;
+  const first = marketSprawl.abilities.onReveal?.[0];
+  expectTrue(first?.kind === 'DRAW', 'Market Sprawl onReveal[0] is DRAW');
 }
 
 // ---- Exit ------------------------------------------------------------------

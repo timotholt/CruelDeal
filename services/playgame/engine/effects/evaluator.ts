@@ -461,6 +461,9 @@ export function evalEffect(
         };
         events.push(e);
         s = apply(s, e, manifest);
+        const debuff = applyHandEntryDebuffs(s, top.id, owner, ctx.rng.fork(`debuff:${top.id}`), manifest);
+        events.push(...debuff.events);
+        s = debuff.state;
       }
       return { events, state: s };
     }
@@ -482,7 +485,10 @@ export function evalEffect(
         defId,
         spawnSource,
       };
-      return { events: [e], state: apply(state, e, manifest) };
+      let s = apply(state, e, manifest);
+      const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.fork('debuff'), manifest);
+      s = debuff.state;
+      return { events: [e, ...debuff.events], state: s };
     }
 
     case 'ADD_CARD_TO_LANE': {
@@ -818,6 +824,40 @@ export function evalEffect(
     case 'CALL_BUILTIN':
       return invokeBuiltin(state, effect.fn, effect.args ?? {}, ctx, manifest);
   }
+}
+
+/** Apply DEBUFF_ENEMY_ON_HAND_ENTRY ongoings to a card that just entered hand.
+ *  Call after every CARD_DRAWN / CARD_ADDED_TO_HAND event is applied. */
+export function applyHandEntryDebuffs(
+  state: MatchState,
+  cardId: CardId,
+  newOwner: Owner,
+  rng: Rng,
+  manifest: Manifest,
+): { events: MatchEvent[]; state: MatchState } {
+  const oppOwner: Owner = newOwner === 'P0' ? 'P1' : 'P0';
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const card of Object.values(s.cards)) {
+    if (!card || card.owner !== oppOwner || card.zone !== 'LANE' || !card.revealed) continue;
+    const def = manifest.cards[card.defId];
+    if (!def) continue;
+    for (const expr of def.abilities.ongoing ?? []) {
+      const b = expr as any;
+      if (b.kind !== 'CALL_BUILTIN' || b.fn !== 'DEBUFF_ENEMY_ON_HAND_ENTRY') continue;
+      const delta: number = b.args?.delta ?? -1;
+      if (delta === 0) continue;
+      const e: MatchEvent = {
+        type: 'CARD_POWER_CHANGED',
+        cardId,
+        delta,
+        cause: { sourceId: card.id, effectKind: 'ONGOING' },
+      };
+      events.push(e);
+      s = apply(s, e, manifest);
+    }
+  }
+  return { events, state: s };
 }
 
 // ============================================================================

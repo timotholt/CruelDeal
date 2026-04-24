@@ -2,10 +2,9 @@
  * BOOTSTRAP_MANIFEST — the hand-assembled manifest consumed during the
  * 0.2 migration. See spec §3.5.
  *
- * Step 3 populates cards and locations by porting the demo's
- * `services/playgame/cards.ts` + `locations.ts` into the spec-compliant
- * shape. Three locations are pinned 1:1 to the three map images in
- * `public/art/maps/` — Cathedral, Jungle Trail, Science Lab.
+ * Step 3 populates cards and locations by porting the demo content into the
+ * spec-compliant shape. The Vantaris location catalog includes playable
+ * locations plus design-only entries marked in `disabled.locations`.
  *
  * Bumping `version` here is REQUIRED whenever ability data or stats
  * change in a way that could desync a mid-flight match. Client
@@ -15,7 +14,7 @@
 
 import type { CardDef, LocationDef, Manifest } from './types';
 import { loadCardsFromJson } from './card-loader';
-import { LOCATIONS_INDEX } from './content/locations';
+import { DISABLED_LOCATION_IDS, LOCATIONS_INDEX } from './content/locations';
 
 const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<string, T> => {
   const out: Record<string, T> = {};
@@ -42,6 +41,6 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
   locations: byDefId<LocationDef>(LOCATIONS_INDEX),
   disabled: {
     cards: [],
-    locations: [],
+    locations: DISABLED_LOCATION_IDS,
   },
 };
