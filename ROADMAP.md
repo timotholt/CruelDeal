@@ -163,6 +163,7 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - Replace all `el.style.transition = ...` imperative animation with CSS-class choreography driven by `MatchEvent` types.
 - `choreography.ts` maps each event to `{ addClass: [...], particles: [...], sfx: "..." }`.
 - All animation timing lives in CSS (`vfx/transitions/classes.css`), not JS.
+- Migration guardrail: follow `docs/event-driven-renderer-spec.md`. First implementation must preserve existing storyboard/script animations and introduce a dispatch-only adapter shell before replacing any live animation path.
 
 ### 2.2 Particle Overlay
 - Single `<canvas>` over `boardWrap`, RAF loop, pointer-events: none.
