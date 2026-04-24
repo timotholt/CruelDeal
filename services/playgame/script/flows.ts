@@ -29,7 +29,7 @@ import {
  * Opening sequence for a new match.
  *
  *   1. black board
- *   2. GALACTIC SNAP banner
+ *   2. CRUEL DEAL banner
  *   3. board UI fades in
  *   4. 3 ??? location tiles fade in left -> right
  *   5. deal 1 card to player x3 (with pauses)
@@ -45,8 +45,8 @@ export const openingSequence = (): Step =>
     hideLocationTiles(),
     wait(200),
 
-    // GALACTIC SNAP banner
-    toast('GALACTIC SNAP', { duration: 2500 }),
+    // CRUEL DEAL banner
+    toast('CRUEL DEAL', { duration: 2500 }),
     wait(200),
 
     // Reveal the UI (location tiles stay hidden until the fade-in loop below)

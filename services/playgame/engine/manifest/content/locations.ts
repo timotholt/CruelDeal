@@ -1,5 +1,5 @@
 /**
- * Current location set for Galactic Snap / Spec 0.2.
+ * Current location set for Cruel Deal / Spec 0.2.
  *
  * Each location is pinned 1:1 to a map image under `public/art/maps/`.
  * The roster mixes passive auras and reveal-time effects so the location

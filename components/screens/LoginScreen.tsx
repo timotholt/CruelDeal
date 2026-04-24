@@ -34,10 +34,10 @@ export const LoginScreen = (props: LoginScreenProps) => {
       {/* Logo Section */}
       <div class="relative z-10 mb-10 flex flex-col items-center animate-pop">
         <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-black text-white text-3xl shadow-[0_0_2.5rem_rgba(79,70,229,0.5)] mb-4 ring-2 ring-white/20">
-            <span class="tracking-tighter drop-shadow-md">GS</span>
+            <span class="tracking-tighter drop-shadow-md">CD</span>
         </div>
         <h1 class="text-3xl font-black text-white tracking-tighter italic drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] text-center mb-2 leading-none">
-            GALACTIC<br/>SNAP
+            CRUEL<br/>DEAL
         </h1>
         <div class="flex items-center gap-2">
             <div class="h-px w-6 bg-indigo-500/50" />

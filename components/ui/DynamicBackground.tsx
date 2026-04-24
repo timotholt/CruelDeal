@@ -8,7 +8,7 @@ interface DynamicBackgroundProps {
 
 /**
  * DYNAMIC BACKGROUND
- * The authoritative source for Galactic Snap's visual void.
+ * The authoritative source for Cruel Deal's visual void.
  * Uses the high-performance .animated-bg CSS class defined in index.html.
  */
 export const DynamicBackground = (props: DynamicBackgroundProps) => {

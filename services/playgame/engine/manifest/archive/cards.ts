@@ -1,5 +1,5 @@
 /**
- * Launch card set (10 entries) for Galactic Snap / Spec 0.2.
+ * Launch card set (10 entries) for Cruel Deal / Spec 0.2.
  *
  * Ported from the demo's `services/playgame/cards.ts`. Stats and rules
  * text preserved verbatim; ability bodies are encoded in the spec DSL

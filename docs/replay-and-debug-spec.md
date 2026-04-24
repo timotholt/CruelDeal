@@ -63,12 +63,12 @@ The engine already has the right foundations:
 
 Relevant files:
 
-- [state.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/types/state.ts)
-- [events.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/types/events.ts)
-- [apply.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/apply.ts)
-- [initState.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/cli/initState.ts)
-- [runMatch.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/cli/runMatch.ts)
-- [main.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/cli/main.ts)
+- [state.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/types/state.ts)
+- [events.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/types/events.ts)
+- [apply.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/apply.ts)
+- [initState.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/cli/initState.ts)
+- [runMatch.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/cli/runMatch.ts)
+- [main.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/cli/main.ts)
 
 ### Important current caveats
 

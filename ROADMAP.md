@@ -1,4 +1,4 @@
-# Galactic Snap — Roadmap
+# Cruel Deal — Roadmap
 
 > One living document. Groundwork-first order: items at the top create foundations; deferring them increases rework on everything below.
 

@@ -1,4 +1,4 @@
-# Galactic Snap - Economy Manifest
+# Cruel Deal - Economy Manifest
 
 This document records the authoritative pricing tiers for the in-game store.
 

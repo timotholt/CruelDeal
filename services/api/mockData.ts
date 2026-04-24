@@ -37,7 +37,7 @@ export const MOCK_INBOX_DATA = {
             id: "msg_002",
             type: "SYSTEM",
             title: "Sector Maintenance Complete",
-            body: "The Galactic Grid is now stable. Spatial UI metrics have been optimized for your device.",
+            body: "Cruel Deal services are now stable. UI performance has been optimized for your device.",
             isRead: true
         }
     ]
@@ -68,7 +68,7 @@ export const MOCK_PREMIUM_MODAL_DATA = {
         subtitle: "Available This Month",
         ctaLabel: "UNLOCK ALL NOW",
         ctaMain: "GO PREMIUM",
-        footer: "Cards added to collection instantly. Authoritative transaction via Galactic Proxy.",
+        footer: "Cards added to collection instantly. Authorized by CruelCompany.com.",
         rewards: [
             { icon: "🎴", title: "Exclusive Season Variant", desc: "A rare Pirate variant for Wolverine." },
             { icon: "💰", title: "2,500 Gold", desc: "Premium currency for variants and emotes." },
@@ -93,7 +93,7 @@ export const MOCK_HISTORY_DATA = [
 
 // --- LEADERBOARD MOCK ---
 export const MOCK_LEADERBOARD_DATA = [
-    { rank: 1, name: 'Xenon_GS', score: 12450, avatar: '🏆' },
+    { rank: 1, name: 'Xenon_CD', score: 12450, avatar: '🏆' },
     { rank: 2, name: 'VoidWalker', score: 11980, avatar: '⚔️' },
     { rank: 3, name: 'NovaCommander', score: 11500, avatar: '💠' },
     { rank: 4, name: 'PlayerOne', score: 10200, avatar: '🎮' },

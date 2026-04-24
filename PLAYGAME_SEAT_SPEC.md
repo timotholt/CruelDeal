@@ -6,11 +6,11 @@ The `/play` stack should move to an absolute-seat engine plus a viewer-relative 
 
 After reviewing:
 
-- [contexts/PlayGameContext.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/contexts/PlayGameContext.tsx)
-- [components/screens/play/PlayBoard.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/PlayBoard.tsx)
-- [services/playgame/view.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/view.ts)
-- [services/playgame/script/actions.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/script/actions.ts)
-- [services/playgame/engine/types/ids.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/types/ids.ts)
+- [contexts/PlayGameContext.tsx](/Users/timotholt/Projects/CruelDeal/contexts/PlayGameContext.tsx)
+- [components/screens/play/PlayBoard.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/play/PlayBoard.tsx)
+- [services/playgame/view.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/view.ts)
+- [services/playgame/script/actions.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/script/actions.ts)
+- [services/playgame/engine/types/ids.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/types/ids.ts)
 
 the current design is still "single local player vs enemy" in the UI and "`PLAYER`/`OPP`" in the engine. That works offline, but it is the wrong abstraction for multiplayer bootstrapping.
 
@@ -33,7 +33,7 @@ The UI should never guess who is local from engine seat names.
 
 ### 1. Engine identity layer
 
-In [services/playgame/engine/types/ids.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/engine/types/ids.ts), rename `Owner` to `Seat` and move to absolute values like `P0/P1`.
+In [services/playgame/engine/types/ids.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/engine/types/ids.ts), rename `Owner` to `Seat` and move to absolute values like `P0/P1`.
 
 Add helpers such as:
 
@@ -44,7 +44,7 @@ All engine state maps like `energy`, `deck`, `hand`, `lastPlayedBy`, lane card b
 
 ### 2. PlayGame bootstrap contract
 
-[contexts/PlayGameContext.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/contexts/PlayGameContext.tsx) should accept a boot payload, not invent the worldview internally.
+[contexts/PlayGameContext.tsx](/Users/timotholt/Projects/CruelDeal/contexts/PlayGameContext.tsx) should accept a boot payload, not invent the worldview internally.
 
 New provider inputs:
 
@@ -57,7 +57,7 @@ New provider inputs:
 
 ### 3. View selectors
 
-[services/playgame/view.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/view.ts) is currently viewpoint-baked with `getPlayerHand`, `getPlayerLaneCards`, `getEnemyLaneCards`.
+[services/playgame/view.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/view.ts) is currently viewpoint-baked with `getPlayerHand`, `getPlayerLaneCards`, `getEnemyLaneCards`.
 
 Replace with seat-based selectors:
 
@@ -72,7 +72,7 @@ Add viewer helpers on top if useful:
 
 ### 4. PlayBoard layout and HUD
 
-[components/screens/play/PlayBoard.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/PlayBoard.tsx) hardcodes:
+[components/screens/play/PlayBoard.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/play/PlayBoard.tsx) hardcodes:
 
 - bottom row = `PLAYER`
 - top row = `OPP`
@@ -90,7 +90,7 @@ Replace with:
 
 ### 5. Local interaction rules
 
-[components/screens/play/useDragDrop.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/useDragDrop.ts) and [components/screens/play/BoardCard.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/BoardCard.tsx) assume only `'player'` side is interactive.
+[components/screens/play/useDragDrop.ts](/Users/timotholt/Projects/CruelDeal/components/screens/play/useDragDrop.ts) and [components/screens/play/BoardCard.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/play/BoardCard.tsx) assume only `'player'` side is interactive.
 
 Change the rule to:
 
@@ -104,7 +104,7 @@ Face-down logic should be relation-based:
 
 ### 6. Script and action layer
 
-[services/playgame/script/actions.ts](/Users/timotholt/Projects/SolidJS-Galactic-Snap/services/playgame/script/actions.ts) is heavily hardcoded to `PLAYER` for draw, hand, and UI and `OPP` for auto-play.
+[services/playgame/script/actions.ts](/Users/timotholt/Projects/CruelDeal/services/playgame/script/actions.ts) is heavily hardcoded to `PLAYER` for draw, hand, and UI and `OPP` for auto-play.
 
 Parameterize all of these by seat:
 
@@ -115,7 +115,7 @@ Rename `enemyPlayRandom()` to something like `autoPlaySeat(seat)`.
 
 ### 7. Inspector and presentation naming
 
-[components/screens/ZoomInspector.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/ZoomInspector.tsx), [components/screens/play/LaneSlots.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/LaneSlots.tsx), and [components/screens/play/LocationTile.tsx](/Users/timotholt/Projects/SolidJS-Galactic-Snap/components/screens/play/LocationTile.tsx) still use `player/enemy`.
+[components/screens/ZoomInspector.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/ZoomInspector.tsx), [components/screens/play/LaneSlots.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/play/LaneSlots.tsx), and [components/screens/play/LocationTile.tsx](/Users/timotholt/Projects/CruelDeal/components/screens/play/LocationTile.tsx) still use `player/enemy`.
 
 Replace with view-relative naming:
 

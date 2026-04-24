@@ -148,15 +148,15 @@ function truthy(cond: boolean, label: string): void {
   // fixture so future refactors of cyrb128/sfc32 don't silently change
   // output. If you change the PRNG, update this fixture AND bump the
   // Manifest.version in bootstrap so mid-flight matches don't desync.
-  const [a, b, c, d] = cyrb128('galactic-snap/v1');
+  const [a, b, c, d] = cyrb128('cruel-deal/v1');
   const next = sfc32(a, b, c, d);
   const first3 = [next(), next(), next()];
   truthy(
     first3.every((v) => v >= 0 && v < 1),
-    'sfc32 outputs are in [0, 1) — and are stable across runtimes for seed "galactic-snap/v1"',
+    'sfc32 outputs are in [0, 1) — and are stable across runtimes for seed "cruel-deal/v1"',
   );
   // Spot-check determinism of the seed → state pipeline.
-  const [a2, b2, c2, d2] = cyrb128('galactic-snap/v1');
+  const [a2, b2, c2, d2] = cyrb128('cruel-deal/v1');
   eq([a, b, c, d], [a2, b2, c2, d2], 'cyrb128 is deterministic');
 }
 

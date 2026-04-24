@@ -30,7 +30,7 @@ export const LoadingScreen = (props: LoadingScreenProps) => {
       <div class="mb-12 relative">
          <div class="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse rounded-full" />
          <div class="relative text-4xl font-black tracking-tighter italic bg-clip-text text-transparent bg-gradient-to-br from-indigo-300 to-indigo-600 pr-4">
-             GALACTIC SNAP
+             CRUEL DEAL
          </div>
       </div>
 

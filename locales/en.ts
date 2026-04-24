@@ -70,7 +70,7 @@ export const en: LocalizationSchema = {
     STORE_CREDITS: "Credits",
     STORE_GOLD: "Gold",
     STORE_TOKENS: "Tokens",
-    STORE_INSTANT_CREDIT_FOOTER: "Cards added to collection instantly.\nAuthoritative transaction via Galactic Proxy.",
+    STORE_INSTANT_CREDIT_FOOTER: "Cards added to collection instantly.\nAuthorized by CruelCompany.com.",
     PROG_COLLECTION_LEVEL: "Collection Level",
     PROG_SYNAPSE_ACTIVE: "Synapse Active",
     INSPECT_UPGRADE_TO: "Upgrade To",
