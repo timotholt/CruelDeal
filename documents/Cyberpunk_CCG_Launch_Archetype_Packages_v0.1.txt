@@ -1,0 +1,1132 @@
+CYBERPUNK CCG — LAUNCH ARCHETYPE PACKAGES v0.1
+Plain-text design spec
+Created: 2026-04-23
+
+============================================================
+0. PURPOSE
+============================================================
+
+This file defines the launch archetype package structure.
+
+This is NOT a card list.
+
+This is the step before card design.
+
+Each archetype should be built as a small package of functional slots:
+
+    Enablers
+    Payoffs
+    Finishers
+    Bridge cards
+    Counters
+    Beginner cards
+    Advanced cards
+
+A 100+ card launch set should not contain 100 isolated ideas.
+It should contain overlapping packages built from tracked game variables.
+
+============================================================
+1. PACKAGE SLOT DEFINITIONS
+============================================================
+
+------------------------------------------------------------
+1.1 Enabler
+------------------------------------------------------------
+
+Purpose:
+    Starts the archetype's core loop.
+
+Example function:
+    Destroy another card.
+    Create a card.
+    Draw a tagged card.
+    Leave Energy unspent.
+
+Card design question:
+    What card lets the deck do its thing?
+
+------------------------------------------------------------
+1.2 Payoff
+------------------------------------------------------------
+
+Purpose:
+    Rewards the archetype for doing its core action.
+
+Example function:
+    Gain Power for destroyed cards.
+    Buff created cards.
+    Reduce Cost after unspent Energy.
+    Buff cards in full lanes.
+
+Card design question:
+    Why does the player care about repeating the loop?
+
+------------------------------------------------------------
+1.3 Finisher
+------------------------------------------------------------
+
+Purpose:
+    Provides a late-game swing or win condition.
+
+Example function:
+    Big Power scaling.
+    Final turn copy.
+    lane-wide buff.
+    large discounted body.
+
+Card design question:
+    How does the deck close the game?
+
+------------------------------------------------------------
+1.4 Bridge Card
+------------------------------------------------------------
+
+Purpose:
+    Connects two archetypes without belonging purely to either.
+
+Example:
+    A created card that destroys itself.
+    A Drone that is good in Swarm and Destroy.
+    An AI card that buffs Ongoing and created cards.
+
+Card design question:
+    What other deck would want this card?
+
+------------------------------------------------------------
+1.5 Counter Card
+------------------------------------------------------------
+
+Purpose:
+    Gives opponents interaction.
+
+Example:
+    Remove Ongoing text.
+    Punish created cards.
+    Stop On Reveal abilities.
+    Reset modified Power.
+
+Card design question:
+    What keeps this archetype from becoming oppressive?
+
+------------------------------------------------------------
+1.6 Beginner Card
+------------------------------------------------------------
+
+Purpose:
+    Teaches the archetype with very simple text.
+
+Example:
+    When Destroyed: Gain +2 Power.
+    Ongoing: Your other cards here have +1 Power.
+
+Card design question:
+    Can a new player understand the archetype from this card?
+
+------------------------------------------------------------
+1.7 Advanced Card
+------------------------------------------------------------
+
+Purpose:
+    Adds skill expression.
+
+Example:
+    Timing-dependent payoff.
+    copied text with constraint.
+    energy restraint payoff.
+    targeted draw.
+
+Card design question:
+    What rewards mastery without requiring long text?
+
+============================================================
+2. LAUNCH ARCHETYPE OVERVIEW
+============================================================
+
+Full launch archetypes:
+
+    1. Destroy
+    2. Corporate Copy
+    3. Fixer
+    4. Nanotech / AI
+    5. Hacker Control
+    6. Black Market
+    7. Overclock
+    8. Swarm / Gang
+
+Secondary packages:
+
+    9. Runner / Movement
+    10. Biohack / Cyberware
+    11. Surveillance
+    12. Malware
+    13. Discard / Memory Wipe
+
+============================================================
+3. ARCHETYPE: DESTROY
+============================================================
+
+Core domain:
+    destroyed cards
+
+Secondary domains:
+    lane targeting
+    cost reduction
+    cards with When Destroyed text
+
+Mechanical identity:
+    Cards become Power.
+
+Player question:
+    What should I sacrifice?
+
+Primary timing/action words:
+    On Reveal
+    When Destroyed
+    Destroy
+    Gain Power
+    Costs less
+
+------------------------------------------------------------
+3.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 basic destroy enablers
+    2 When Destroyed value cards
+    2 destroyed-count payoffs
+    1 big finisher
+    1 bridge to Corporate Copy
+    1 bridge to Black Market
+    1 beginner card
+    1 counter/anti-destroy card
+
+Total:
+    10-11 cards
+
+------------------------------------------------------------
+3.2 Required Design Functions
+------------------------------------------------------------
+
+Enabler A:
+    Low-cost card that destroys another friendly card.
+
+Enabler B:
+    Mid-cost card that destroys based on visible lane condition.
+
+Value Card A:
+    Card that rewards being destroyed with Power.
+
+Value Card B:
+    Card that rewards being destroyed with card advantage or relocation.
+
+Payoff A:
+    Card that grows when your cards are destroyed.
+
+Payoff B:
+    Card that discounts itself based on destroyed count.
+
+Finisher:
+    Large card that cares about total destroyed cards.
+
+Bridge to Corporate:
+    Card with text worth copying or stealing.
+
+Bridge to Black Market:
+    Created or temporary card that destroys itself.
+
+Counter:
+    Card that punishes opponent for destroying too much.
+
+------------------------------------------------------------
+3.3 Avoid
+------------------------------------------------------------
+
+Avoid too many unconditional destroy effects.
+Avoid destroy cards that are also above-rate Power.
+Avoid making all Destroy cards self-contained.
+
+============================================================
+4. ARCHETYPE: CORPORATE COPY
+============================================================
+
+Core domain:
+    copied text
+
+Secondary domains:
+    destroyed card records
+    Corp tag
+    cards with copied text
+
+Mechanical identity:
+    Cards become abilities.
+
+Player question:
+    Whose ability do I steal?
+
+Primary timing/action words:
+    On Reveal
+    Ongoing
+    Destroy
+    Copy
+    Remove text
+
+------------------------------------------------------------
+4.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 copy enablers
+    2 safe copy targets
+    2 payoffs for copied text
+    1 finisher
+    1 bridge to Destroy
+    1 bridge to Nanotech / AI
+    1 beginner card
+    1 counter/anti-copy card
+
+Total:
+    8-10 cards
+
+------------------------------------------------------------
+4.2 Required Design Functions
+------------------------------------------------------------
+
+Enabler A:
+    Destroy another card here and copy limited text.
+
+Enabler B:
+    Copy text from a card destroyed this turn.
+
+Safe Target A:
+    Simple On Reveal text that is valuable but not broken when copied.
+
+Safe Target B:
+    Simple Ongoing text that creates a clear copied-text build.
+
+Payoff A:
+    Buff cards with copied text.
+
+Payoff B:
+    Reduce Cost or gain Power when copying text.
+
+Finisher:
+    One major copy effect with strict limits.
+
+Bridge to Destroy:
+    Card that wants to be destroyed and copied.
+
+Bridge to Nanotech:
+    Ongoing/AI card that works as copy fuel.
+
+Counter:
+    Remove copied text or punish copied-text cards.
+
+------------------------------------------------------------
+4.3 Hard Constraints
+------------------------------------------------------------
+
+Do not allow unlimited text stacking at launch.
+
+Preferred constraints:
+    copy only On Reveal text
+    copy only Ongoing text
+    replace previous copied text
+    copy only from friendly cards
+    copy only from cards destroyed this turn
+    remove copied text after it triggers
+
+============================================================
+5. ARCHETYPE: FIXER
+============================================================
+
+Core domain:
+    hand
+    deck
+    tags
+    created cards
+
+Secondary domains:
+    cost bands
+    created-card flags
+    card replacement
+
+Mechanical identity:
+    Bad options become better options.
+
+Player question:
+    Who do I call?
+
+Primary timing/action words:
+    On Reveal
+    Draw
+    Add
+    Replace
+    Reduce Cost
+
+------------------------------------------------------------
+5.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 tag-draw Fixers
+    2 random-add Fixers
+    2 replace/smooth cards
+    1 created-card payoff
+    1 bridge to Black Market
+    1 bridge to Nanotech / AI
+    1 beginner card
+    1 counter/anti-created card
+
+Total:
+    10-11 cards
+
+------------------------------------------------------------
+5.2 Required Design Functions
+------------------------------------------------------------
+
+Tag Draw A:
+    Draw a Tech card from your deck.
+
+Tag Draw B:
+    Draw a card from another important tag.
+
+Random Add A:
+    Add a random 4-Cost and 5-Cost card from a tag.
+
+Random Add B:
+    Add a random low-cost card with a temporary modifier.
+
+Replace A:
+    Replace a card in your hand with one that costs 1 more.
+
+Replace B:
+    Replace lowest-Power or lowest-Cost card in hand.
+
+Payoff:
+    Created cards have a bonus.
+
+Bridge to Black Market:
+    Created card receives discount or temporary value.
+
+Bridge to Nanotech:
+    Draw or add AI / Tech / Ongoing card.
+
+Counter:
+    Punish opponent's created cards lightly.
+
+------------------------------------------------------------
+5.3 Avoid
+------------------------------------------------------------
+
+Avoid pure "Add 2 random cards" from the full card pool.
+Avoid too much raw card advantage.
+Avoid making Fixers above-rate bodies.
+
+Fixer strength should be consistency, not raw Power.
+
+============================================================
+6. ARCHETYPE: NANOTECH / AI
+============================================================
+
+Core domain:
+    Ongoing effects
+
+Secondary domains:
+    cards in lane
+    modified Power
+    AI tag
+    created cards
+
+Mechanical identity:
+    Board presence becomes scaling Power.
+
+Player question:
+    Can I build an engine before they shut it down?
+
+Primary timing/action words:
+    Ongoing
+    End of Turn
+    Gain Power
+    cards here
+
+------------------------------------------------------------
+6.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 local Ongoing buffs
+    2 scaling bodies
+    2 End of Turn growth cards
+    1 Ongoing payoff
+    1 finisher
+    1 bridge to Fixer
+    1 bridge to Swarm
+    1 counter vulnerability card
+
+Total:
+    10 cards
+
+------------------------------------------------------------
+6.2 Required Design Functions
+------------------------------------------------------------
+
+Local Buff:
+    Ongoing: Your other cards here have +1 Power.
+
+Scaling Body:
+    Ongoing: This has +1 Power for each card here.
+
+Growth Card:
+    End of Turn: Give a card here +1 Power.
+
+Ongoing Payoff:
+    Your Ongoing cards have a bonus.
+
+Finisher:
+    Big late-game card that rewards board-wide systems.
+
+Bridge to Fixer:
+    AI/Tech card that can be drawn or created.
+
+Bridge to Swarm:
+    Buffs multiple small cards.
+
+Counter:
+    Ensure Hacker Control can interact with Ongoing engines.
+
+------------------------------------------------------------
+6.3 Avoid
+------------------------------------------------------------
+
+Avoid too many global Ongoing buffs.
+Avoid making Ongoing decks impossible to interact with.
+Avoid hidden scaling that players cannot track.
+
+============================================================
+7. ARCHETYPE: HACKER CONTROL
+============================================================
+
+Core domain:
+    enemy text
+    enemy board
+    disabled effects
+
+Secondary domains:
+    enemy hand
+    enemy created cards
+    modified Power
+
+Mechanical identity:
+    Opponent's plan becomes unreliable.
+
+Player question:
+    How do I interrupt their engine?
+
+Primary timing/action words:
+    On Reveal
+    Ongoing
+    Remove text
+    Disable
+    Reset Power
+    Move
+
+------------------------------------------------------------
+7.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 Ongoing hate cards
+    2 On Reveal denial cards
+    1 Power reset card
+    1 movement/displacement card
+    1 anti-created card
+    1 finisher/control payoff
+    1 beginner card
+    1 advanced prediction card
+
+Total:
+    8-10 cards
+
+------------------------------------------------------------
+7.2 Required Design Functions
+------------------------------------------------------------
+
+Ongoing Hate:
+    Remove or suppress Ongoing text.
+
+On Reveal Hate:
+    Prevent or punish On Reveal effects at a location.
+
+Power Reset:
+    Reset modified Power.
+
+Displacement:
+    Move an enemy card.
+
+Anti-Created:
+    Punish cards that did not start in the opponent's deck.
+
+Control Payoff:
+    Gain Power if enemy cards are disabled or reduced.
+
+Advanced Card:
+    Reward guessing where the opponent plays.
+
+------------------------------------------------------------
+7.3 Avoid
+------------------------------------------------------------
+
+Avoid hard-locking the opponent.
+Avoid disabling too many cards at once.
+Avoid control cards with high Power.
+Avoid effects that remove agency for multiple turns.
+
+============================================================
+8. ARCHETYPE: BLACK MARKET
+============================================================
+
+Core domain:
+    created cards
+    discounts
+    temporary value
+
+Secondary domains:
+    self-destruction
+    destroyed cards
+    cost modification
+
+Mechanical identity:
+    Future stability becomes immediate tempo.
+
+Player question:
+    Can I win before the bill comes due?
+
+Primary timing/action words:
+    Add
+    Reduce Cost
+    Destroy
+    next turn
+    End of Turn
+
+------------------------------------------------------------
+8.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 discount enablers
+    2 temporary created-card generators
+    2 risk/payoff cards
+    1 self-destruct bridge to Destroy
+    1 bridge to Fixer
+    1 finisher
+    1 counter/anti-discount card
+
+Total:
+    10 cards
+
+------------------------------------------------------------
+8.2 Required Design Functions
+------------------------------------------------------------
+
+Discount Enabler A:
+    Reduce the Cost of a created card.
+
+Discount Enabler B:
+    Add a random card that costs less next turn only.
+
+Temporary Card A:
+    Created card destroys itself later.
+
+Temporary Card B:
+    Created card has a downside if held too long.
+
+Risk Payoff:
+    Gain Power when you play a discounted card.
+
+Self-Destruct Bridge:
+    Temporary card fuels Destroy.
+
+Fixer Bridge:
+    Fixer creates the card; Black Market discounts it.
+
+Finisher:
+    Big tempo swing based on discounts or created cards.
+
+Counter:
+    Punish heavily discounted or created cards.
+
+------------------------------------------------------------
+8.3 Avoid
+------------------------------------------------------------
+
+Avoid permanent large discounts with no downside.
+Avoid adding too many cards from the full pool.
+Avoid making random generation stronger than deckbuilding.
+
+============================================================
+9. ARCHETYPE: OVERCLOCK
+============================================================
+
+Core domain:
+    unspent Energy
+
+Secondary domains:
+    played no cards last turn
+    spent all Energy last turn
+    delayed payoff
+
+Mechanical identity:
+    Restraint becomes power.
+
+Player question:
+    Should I hold back now to hit harder later?
+
+Primary timing/action words:
+    End of Turn
+    unspent Energy
+    last turn
+    costs less
+    gain Power
+
+------------------------------------------------------------
+9.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 unspent Energy payoffs
+    2 delayed discount cards
+    2 cards that reward playing no cards or fewer cards
+    1 finisher
+    1 bridge to Black Market
+    1 bridge to Nanotech / AI
+    1 beginner card
+    1 counter/pressure card
+
+Total:
+    8-10 cards
+
+------------------------------------------------------------
+9.2 Required Design Functions
+------------------------------------------------------------
+
+Payoff A:
+    If you ended last turn with unspent Energy, gain Power.
+
+Payoff B:
+    End of Turn: If you have unspent Energy, grow.
+
+Discount Card A:
+    Costs less if you had unspent Energy last turn.
+
+Low-Play Reward:
+    Reward playing no cards or one card.
+
+Finisher:
+    Converts accumulated restraint into a late swing.
+
+Bridge to Black Market:
+    Discounted card or temporary spike.
+
+Bridge to Nanotech:
+    Ongoing card that grows while Energy is unspent.
+
+Counter:
+    Pressure card that punishes slow starts.
+
+------------------------------------------------------------
+9.3 Avoid
+------------------------------------------------------------
+
+Avoid making skipping turns always correct.
+Avoid huge payoff for doing nothing without risk.
+Avoid too many "played no cards" effects at launch.
+
+============================================================
+10. ARCHETYPE: SWARM / GANG
+============================================================
+
+Core domain:
+    cards played
+    cheap cards
+    full lanes
+
+Secondary domains:
+    Drone tag
+    created cards
+    lane count
+
+Mechanical identity:
+    Bodies become Power.
+
+Player question:
+    Can I flood the board before they punish me?
+
+Primary timing/action words:
+    After You Play
+    Ongoing
+    Add
+    cards here
+    full lane
+
+------------------------------------------------------------
+10.1 Package Slots
+------------------------------------------------------------
+
+Recommended launch slots:
+    2 cheap bodies
+    2 token/Drone creators
+    2 full-lane payoffs
+    2 cards-played payoffs
+    1 finisher
+    1 bridge to Destroy
+    1 bridge to Nanotech
+
+Total:
+    10-11 cards
+
+------------------------------------------------------------
+10.2 Required Design Functions
+------------------------------------------------------------
+
+Cheap Body A:
+    Simple 1-Cost body.
+
+Cheap Body B:
+    1-Cost card with minor upside.
+
+Drone Creator A:
+    Add a Drone here.
+
+Drone Creator B:
+    Add a Drone to another location.
+
+Full-Lane Payoff:
+    If this lane is full, buff cards here.
+
+Cards-Played Payoff:
+    After you play a card, gain Power.
+
+Finisher:
+    Buff all cheap cards or full locations.
+
+Bridge to Destroy:
+    Cheap disposable card with When Destroyed value.
+
+Bridge to Nanotech:
+    Ongoing buff to many bodies.
+
+------------------------------------------------------------
+10.3 Avoid
+------------------------------------------------------------
+
+Avoid too many free bodies.
+Avoid making full-lane payoff too easy.
+Avoid Swarm having both best early tempo and best late scaling.
+
+============================================================
+11. SECONDARY PACKAGE: RUNNER / MOVEMENT
+============================================================
+
+Core domain:
+    moved cards
+
+Launch size:
+    5-6 cards
+
+Mechanical identity:
+    Position becomes Power.
+
+Required functions:
+    1 self-mover
+    1 friendly mover
+    1 enemy mover
+    1 When Moved payoff
+    1 movement finisher or bridge card
+
+Primary bridges:
+    Hacker Control
+    Swarm
+    Overclock
+
+Launch warning:
+    Movement needs UI clarity. Keep simple.
+
+============================================================
+12. SECONDARY PACKAGE: BIOHACK / CYBERWARE
+============================================================
+
+Core domain:
+    modified Power
+    modified Cost
+
+Launch size:
+    5-6 cards
+
+Mechanical identity:
+    Modified bodies become threats.
+
+Required functions:
+    1 hand buff
+    1 lane buff
+    1 payoff for increased Power
+    1 payoff for reduced Cost
+    1 bridge to Nanotech
+    1 bridge to Black Market
+
+Primary bridges:
+    Nanotech
+    Black Market
+    Swarm
+
+Launch warning:
+    Biohack should not duplicate Nanotech.
+    Nanotech = persistent systems.
+    Biohack = individual upgrades.
+
+============================================================
+13. SECONDARY PACKAGE: SURVEILLANCE
+============================================================
+
+Core domain:
+    enemy hand
+    enemy play patterns
+
+Launch size:
+    3-5 cards
+
+Mechanical identity:
+    Prediction becomes Power.
+
+Required functions:
+    1 enemy hand size payoff
+    1 random enemy hand disruption
+    1 "if opponent played here" payoff
+    1 anti-created or anti-Fixer card
+
+Primary bridges:
+    Hacker Control
+    Malware
+
+Launch warning:
+    Enemy hand disruption must be limited.
+
+============================================================
+14. SECONDARY PACKAGE: MALWARE
+============================================================
+
+Core domain:
+    enemy deck
+
+Launch size:
+    3-5 cards
+
+Mechanical identity:
+    Future draws become corrupted.
+
+Required functions:
+    1 add Junk to enemy deck
+    1 modify top enemy deck card
+    1 copy top enemy deck card
+    1 payoff when opponent draws corrupted card
+
+Primary bridges:
+    Hacker Control
+    Surveillance
+
+Launch warning:
+    Must provide visual feedback.
+    Do not make the opponent feel like they never got to play.
+
+============================================================
+15. SECONDARY PACKAGE: DISCARD / MEMORY WIPE
+============================================================
+
+Core domain:
+    discarded cards
+
+Launch size:
+    0-4 cards
+
+Mechanical identity:
+    Burned resources become value.
+
+Required functions if used:
+    1 self-discard cost
+    1 discarded-card recovery
+    1 payoff for cards discarded this game
+    1 bridge to Black Market
+
+Launch warning:
+    Mechanically overlaps with Destroy.
+    Save full support for expansion unless needed.
+
+============================================================
+16. CROSS-ARCHETYPE BRIDGE MAP
+============================================================
+
+Destroy bridges to:
+    Corporate Copy via destroyed text targets.
+    Black Market via self-destruct temporary cards.
+    Swarm via cheap disposable bodies.
+
+Corporate Copy bridges to:
+    Destroy via sacrifice.
+    Nanotech via copied Ongoing text.
+    Hacker Control via text manipulation.
+
+Fixer bridges to:
+    Black Market via created cards and discounts.
+    Nanotech via Tech/AI draw.
+    Swarm via created bodies.
+    Military midrange via 4-Cost and 5-Cost generation.
+
+Nanotech bridges to:
+    Swarm via lane-wide buffs.
+    Biohack via modified Power.
+    Corporate Copy via Ongoing text worth copying.
+
+Hacker Control bridges to:
+    Surveillance via enemy hand/play pattern information.
+    Malware via enemy deck sabotage.
+    Corporate Copy via text removal/copy counterplay.
+
+Black Market bridges to:
+    Fixer via created cards.
+    Destroy via self-destruct cards.
+    Overclock via delayed tempo windows.
+    Biohack via discounted upgrades.
+
+Overclock bridges to:
+    Black Market via timed discounts.
+    Nanotech via End of Turn growth.
+    Control via holding back and reacting.
+
+Swarm bridges to:
+    Destroy via fodder.
+    Nanotech via board-wide buffs.
+    Fixer via created cheap bodies.
+
+Runner bridges to:
+    Hacker Control via enemy displacement.
+    Swarm via filling lanes dynamically.
+    Overclock via delayed repositioning.
+
+Biohack bridges to:
+    Nanotech via Power modification.
+    Black Market via illegal upgrades.
+    Swarm via buffing cheap bodies.
+
+Surveillance bridges to:
+    Hacker Control via enemy information.
+    Malware via future sabotage.
+    Overclock via prediction and restraint.
+
+Malware bridges to:
+    Surveillance via enemy resource knowledge.
+    Hacker Control via disruption.
+    Black Market via illegal corrupted cards.
+
+============================================================
+17. FIRST 100+ CARD ALLOCATION
+============================================================
+
+Recommended starting allocation:
+
+    Destroy                         10 cards
+    Corporate Copy                   8 cards
+    Fixer                           10 cards
+    Nanotech / AI                   10 cards
+    Hacker Control                   8 cards
+    Black Market                    10 cards
+    Overclock                        8 cards
+    Swarm / Gang                    10 cards
+    Runner / Movement                5 cards
+    Biohack / Cyberware              5 cards
+    Surveillance                     4 cards
+    Malware                          4 cards
+    Discard / Memory Wipe            2 cards
+    Generic simple cards             6 cards
+    Counter / tech cards             5 cards
+
+Total:
+    105 cards
+
+This supports a 100+ card launch without needing every archetype to be huge.
+
+============================================================
+18. CARD DESIGN ENTRY TEMPLATE
+============================================================
+
+Use this template when card design begins.
+
+Card Name:
+Cost:
+Power:
+Tags:
+Timing Word:
+Rules Text:
+Primary Domain:
+Secondary Domain:
+Archetype Slot:
+Bridge Archetypes:
+Risk Level:
+Reason This Card Exists:
+What It Teaches:
+Potential Balance Problem:
+
+Example:
+
+Card Name:
+    Street Fixer
+
+Cost:
+    TBD
+
+Power:
+    TBD
+
+Tags:
+    Merc, Fixer-role if roles are tracked informally
+
+Timing Word:
+    On Reveal
+
+Rules Text:
+    On Reveal: Draw a Tech card.
+
+Primary Domain:
+    deck contents by tag
+
+Secondary Domain:
+    hand quality
+
+Archetype Slot:
+    Fixer enabler
+
+Bridge Archetypes:
+    Nanotech / AI, Hacker Control
+
+Risk Level:
+    Medium
+
+Reason This Card Exists:
+    Teaches players that Fixers improve access and consistency.
+
+What It Teaches:
+    Tags matter. Deckbuilding matters.
+
+Potential Balance Problem:
+    Too strong if all best cards are Tech.
+
+============================================================
+19. FINAL DESIGN RULE
+============================================================
+
+Do not ask:
+    "What is a cool cyberpunk card?"
+
+Ask:
+    "What package slot does this card fill, what tracked variable does it care
+    about, and what other archetype can also use it?"
+
+End of Launch Archetype Packages v0.1.

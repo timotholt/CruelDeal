@@ -1,0 +1,1559 @@
+CYBERPUNK CCG — TRACKED VARIABLES MATRIX v0.1
+Plain-text design matrix
+Created: 2026-04-23
+
+============================================================
+0. PURPOSE
+============================================================
+
+This file lists the game-state variables that should be tracked by the engine
+and how those variables may be used for card design.
+
+A variable should not become a mechanic just because it exists. It must be:
+
+    visible enough,
+    actionable enough,
+    distinct enough,
+    and fun enough.
+
+Legend:
+
+    Visibility:
+        PUBLIC       Both players can see it.
+        OWNER        Owner can see it.
+        HIDDEN       Engine knows it, players may not.
+        PARTIAL      Some information is visible.
+
+    Safety:
+        HIGH         Safe to use heavily.
+        MEDIUM       Use with caution.
+        RISKY        Use lightly or save for later.
+        DEFER        Track maybe, but do not build around yet.
+
+    Launch Use:
+        FULL         Supports a full launch archetype.
+        PACKAGE      Use as a small support package.
+        TECH         Use as counter/tech only.
+        FUTURE       Track but save for later.
+
+============================================================
+1. DESTROYED CARD VARIABLES
+============================================================
+
+Variable:
+    cards_you_destroyed_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Destroy
+    Corporate Copy
+    Black Market
+
+Example card text:
+    Costs 1 less for each card you destroyed this game.
+
+Notes:
+    This counts actions performed by the player, regardless of ownership of
+    destroyed cards.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_destroyed_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Anti-Destroy
+    Surveillance
+
+Example card text:
+    On Reveal: If your opponent destroyed a card this game, gain +3 Power.
+
+Notes:
+    Useful as counterplay, not a core launch archetype.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_destroyed_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Destroy
+    Black Market
+    Global death economy
+
+Example card text:
+    This costs 1 less for each card destroyed this game.
+
+Notes:
+    Easy to understand. Can create mirror-match tension.
+
+------------------------------------------------------------
+
+Variable:
+    your_cards_destroyed_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Destroy
+    Corporate Copy
+    Revenge
+
+Example card text:
+    When one of your cards is destroyed, this gains +1 Power.
+
+Notes:
+    Different from cards_you_destroyed_this_game.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_cards_destroyed_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Salvage
+    Corp theft
+    anti-opponent death triggers
+
+Example card text:
+    On Reveal: Gain +1 Power for each enemy card destroyed this game.
+
+Notes:
+    More interactive, but can become win-more.
+
+------------------------------------------------------------
+
+Variable:
+    destroyed_card_records
+
+Visibility:
+    PARTIAL / PUBLIC history
+
+Safety:
+    HIGH for engine, MEDIUM for card text
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Destroy
+    Corporate Copy
+    Salvage
+
+Required metadata:
+    card_id
+    original_card_id
+    owner_player_id
+    controller_player_id
+    destroyed_by_player_id
+    destroyed_by_card_id
+    location_id
+    turn_number
+    cost_at_death
+    power_at_death
+    text_at_death
+    tags_at_death
+    was_created
+    was_copied
+    was_modified
+
+Example card text:
+    On Reveal: Add the last card you destroyed to your hand.
+
+Notes:
+    The engine should track rich records even if early cards use simple counts.
+
+============================================================
+2. DISCARDED CARD VARIABLES
+============================================================
+
+Variable:
+    cards_you_discarded_this_game
+
+Visibility:
+    PUBLIC or OWNER
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE / FUTURE
+
+Archetypes:
+    Memory Wipe
+    Black Market
+    future discard
+
+Example card text:
+    Gain +1 Power for each card you discarded this game.
+
+Notes:
+    Do not build a full launch archetype around discard unless testing demands it.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_discarded_this_game
+
+Visibility:
+    PUBLIC or PARTIAL
+
+Safety:
+    RISKY
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Surveillance
+    anti-discard
+
+Example card text:
+    On Reveal: If your opponent discarded a card this game, draw a card.
+
+Notes:
+    Forced discard can feel bad. Use sparingly.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_discarded_this_game
+
+Visibility:
+    PUBLIC or PARTIAL
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    FUTURE
+
+Archetypes:
+    Chaos
+    Memory Wipe
+
+Example card text:
+    This has +1 Power for each card discarded this game.
+
+Notes:
+    Useful later if discard becomes a supported package.
+
+------------------------------------------------------------
+
+Variable:
+    your_cards_discarded_this_game
+
+Visibility:
+    OWNER / PUBLIC history
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE / FUTURE
+
+Archetypes:
+    recursion
+    memory recovery
+
+Example card text:
+    On Reveal: Add a card you discarded this game to your hand.
+
+Notes:
+    Similar to destroyed history but from hand.
+
+------------------------------------------------------------
+
+Variable:
+    discard_card_records
+
+Visibility:
+    OWNER / PARTIAL
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    FUTURE
+
+Required metadata:
+    card_id
+    owner_player_id
+    discarded_by_player_id
+    discarded_by_card_id
+    turn_number
+    cost_when_discarded
+    power_when_discarded
+    text_when_discarded
+    tags_when_discarded
+    was_created
+    was_modified
+
+Notes:
+    Track fully, but expose lightly.
+
+============================================================
+3. CREATED CARD VARIABLES
+============================================================
+
+Variable:
+    cards_you_created_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    Black Market
+    created-card payoff
+
+Example card text:
+    Ongoing: Your created cards have +1 Power.
+
+Notes:
+    Created means the card did not start in the player's deck.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_created_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    anti-Fixer
+    Surveillance
+
+Example card text:
+    On Reveal: Enemy created cards here have -2 Power.
+
+Notes:
+    Good as counterplay.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_created_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Black Market
+    market-flood effects
+
+Example card text:
+    This costs 1 less for each card created this game.
+
+Notes:
+    Can create interesting mirror matches but may scale too fast.
+
+------------------------------------------------------------
+
+Variable:
+    created_cards_in_your_hand
+
+Visibility:
+    OWNER
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    Black Market
+
+Example card text:
+    On Reveal: Reduce the Cost of a created card in your hand by 1.
+
+Notes:
+    Strong and clear.
+
+------------------------------------------------------------
+
+Variable:
+    created_cards_on_your_board
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    Black Market
+    Swarm
+
+Example card text:
+    Ongoing: Your created cards here have +2 Power.
+
+Notes:
+    Very good for launch.
+
+------------------------------------------------------------
+
+Variable:
+    did_not_start_in_deck
+
+Visibility:
+    PUBLIC if card inspectable
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    Black Market
+    anti-created tech
+
+Example card text:
+    Ongoing: Cards that did not start in your deck have +1 Power.
+
+Notes:
+    This is a more technical form of "created." Prefer "created" in card text.
+
+============================================================
+4. HAND VARIABLES
+============================================================
+
+Variable:
+    your_hand_size
+
+Visibility:
+    PUBLIC or OWNER
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Fixer
+    hand-size midrange
+
+Example card text:
+    Ongoing: This has +1 Power for each card in your hand.
+
+Notes:
+    Safe, familiar, easy.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_hand_size
+
+Visibility:
+    PUBLIC or PARTIAL
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Surveillance
+    hand punish
+
+Example card text:
+    On Reveal: If your opponent has 5 or more cards in hand, gain +4 Power.
+
+Notes:
+    Safer than targeting specific enemy hand cards.
+
+------------------------------------------------------------
+
+Variable:
+    your_hand_contents
+
+Visibility:
+    OWNER
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    Black Market
+
+Example card text:
+    On Reveal: Replace a card in your hand with one that costs 1 more.
+
+Notes:
+    Core Fixer domain.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_hand_contents
+
+Visibility:
+    HIDDEN
+
+Safety:
+    RISKY
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Surveillance
+    Blackmail
+
+Example card text:
+    On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+
+Notes:
+    Use random or limited targeting. Avoid hard-locking multiple hand cards.
+
+------------------------------------------------------------
+
+Variable:
+    modified_cards_in_hand
+
+Visibility:
+    OWNER
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Biohack
+    Black Market
+    Fixer
+
+Example card text:
+    On Reveal: Draw a card. If it has modified Cost, give it +2 Power.
+
+Notes:
+    Good bridge domain.
+
+============================================================
+5. DECK VARIABLES
+============================================================
+
+Variable:
+    your_deck_size
+
+Visibility:
+    PUBLIC or OWNER
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    thin-deck
+    Fixer
+
+Example card text:
+    If your deck has 3 or fewer cards, this has +4 Power.
+
+Notes:
+    Less central in a 12-card deck. Use lightly.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_deck_size
+
+Visibility:
+    PUBLIC or PARTIAL
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Malware
+
+Example card text:
+    On Reveal: If your opponent's deck has 3 or fewer cards, add Junk to it.
+
+Notes:
+    Use carefully.
+
+------------------------------------------------------------
+
+Variable:
+    your_deck_contents_by_tag
+
+Visibility:
+    OWNER / engine
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Fixer
+    tag packages
+
+Example card text:
+    On Reveal: Draw a Tech card.
+
+Notes:
+    Core to Fixer. Strong because it rewards deckbuilding.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_deck_contents
+
+Visibility:
+    HIDDEN
+
+Safety:
+    RISKY
+
+Launch Use:
+    TECH / FUTURE
+
+Archetypes:
+    Malware
+    Surveillance
+
+Example card text:
+    On Reveal: Copy the top card of your opponent's deck into your hand.
+
+Notes:
+    Fun in small amounts. Bad if it becomes constant.
+
+------------------------------------------------------------
+
+Variable:
+    top_card_of_your_deck
+
+Visibility:
+    HIDDEN / OWNER maybe
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Fixer
+    prediction
+
+Example card text:
+    On Reveal: If the top card of your deck costs 3 or less, draw it.
+
+Notes:
+    Could be used later for setup mechanics.
+
+------------------------------------------------------------
+
+Variable:
+    top_card_of_enemy_deck
+
+Visibility:
+    HIDDEN
+
+Safety:
+    RISKY
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Malware
+
+Example card text:
+    On Reveal: Give the top card of your opponent's deck -3 Power.
+
+Notes:
+    Must show feedback when it happens.
+
+============================================================
+6. LANE VARIABLES
+============================================================
+
+Variable:
+    your_cards_in_this_lane
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Swarm
+    Nanotech
+    Destroy targeting
+
+Example card text:
+    Ongoing: This has +1 Power for each of your other cards here.
+
+------------------------------------------------------------
+
+Variable:
+    enemy_cards_in_this_lane
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Control
+    Surveillance
+
+Example card text:
+    On Reveal: If your opponent has more cards here, gain +4 Power.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_in_this_lane
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Nanotech
+    crowding
+    lane pressure
+
+Example card text:
+    Ongoing: This has +1 Power for each card here.
+
+------------------------------------------------------------
+
+Variable:
+    empty_slots_in_this_lane
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Movement
+    Swarm
+    Control
+
+Example card text:
+    On Reveal: If you have an empty slot here, add a Drone.
+
+------------------------------------------------------------
+
+Variable:
+    full_lane
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Swarm
+    lockdown
+    territory control
+
+Example card text:
+    Ongoing: If this lane is full, your cards here have +2 Power.
+
+------------------------------------------------------------
+
+Variable:
+    lowest_power_card_here
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Destroy
+    Control
+
+Example card text:
+    On Reveal: Destroy the lowest-Power card here.
+
+------------------------------------------------------------
+
+Variable:
+    highest_power_card_here
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Control
+    targeted removal
+
+Example card text:
+    On Reveal: Reset the highest-Power enemy card here.
+
+------------------------------------------------------------
+
+Variable:
+    lowest_cost_card_here
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Corporate Copy
+    Destroy
+
+Example card text:
+    On Reveal: Destroy your lowest-Cost card here and copy its text.
+
+------------------------------------------------------------
+
+Variable:
+    highest_cost_card_here
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Military
+    Control
+
+Example card text:
+    Ongoing: Your highest-Cost card here has +3 Power.
+
+============================================================
+7. ENERGY VARIABLES
+============================================================
+
+Variable:
+    energy_spent_this_turn
+
+Visibility:
+    PUBLIC or PARTIAL
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Black Market
+    disciplined ops
+
+Example card text:
+    If you spent all your Energy this turn, this has +2 Power.
+
+------------------------------------------------------------
+
+Variable:
+    energy_unspent_this_turn
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Overclock
+
+Example card text:
+    End of Turn: If you have unspent Energy, give this +2 Power.
+
+------------------------------------------------------------
+
+Variable:
+    energy_spent_last_turn
+
+Visibility:
+    PUBLIC history
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    tempo
+    military
+
+Example card text:
+    If you spent all your Energy last turn, this costs 1 less.
+
+------------------------------------------------------------
+
+Variable:
+    energy_unspent_last_turn
+
+Visibility:
+    PUBLIC history
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Overclock
+
+Example card text:
+    If you ended last turn with unspent Energy, this has +3 Power.
+
+------------------------------------------------------------
+
+Variable:
+    played_no_cards_last_turn
+
+Visibility:
+    PUBLIC history
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Overclock
+    stealth
+    ambush
+
+Example card text:
+    If you played no cards last turn, this costs 2 less.
+
+Notes:
+    Powerful, but can be swingy.
+
+============================================================
+8. CARDS PLAYED VARIABLES
+============================================================
+
+Variable:
+    cards_you_played_this_turn
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Swarm
+    combo
+
+Example card text:
+    After you play a card, this gains +1 Power.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_played_this_turn
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Surveillance
+    prediction
+
+Example card text:
+    On Reveal: If your opponent played a card here this turn, gain +4 Power.
+
+------------------------------------------------------------
+
+Variable:
+    total_cards_played_this_turn
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    crowding
+    combo
+
+Example card text:
+    This has +1 Power for each card played this turn.
+
+------------------------------------------------------------
+
+Variable:
+    cards_you_played_last_turn
+
+Visibility:
+    PUBLIC history
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    rhythm
+    Overclock
+    Swarm
+
+Example card text:
+    If you played 2 or more cards last turn, draw a card.
+
+------------------------------------------------------------
+
+Variable:
+    first_card_you_played_this_turn
+
+Visibility:
+    PUBLIC after play
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    sequencing
+
+Example card text:
+    If this is the first card you played this turn, gain +3 Power.
+
+------------------------------------------------------------
+
+Variable:
+    last_card_you_played_this_turn
+
+Visibility:
+    PUBLIC after turn
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    sequencing
+    combo
+
+Example card text:
+    End of Turn: If this was your last played card, gain +3 Power.
+
+============================================================
+9. TEXT VARIABLES
+============================================================
+
+Variable:
+    cards_with_copied_text
+
+Visibility:
+    PUBLIC via inspect
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Corporate Copy
+
+Example card text:
+    Ongoing: Your cards with copied text have +2 Power.
+
+Notes:
+    Must be visually clear.
+
+------------------------------------------------------------
+
+Variable:
+    card_original_text
+
+Visibility:
+    inspectable
+
+Safety:
+    HIGH for engine
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Corporate Copy
+    Hacker
+
+Notes:
+    Required to restore or compare changed text.
+
+------------------------------------------------------------
+
+Variable:
+    card_current_text
+
+Visibility:
+    PUBLIC via inspect
+
+Safety:
+    HIGH for engine
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Corporate Copy
+    Hacker
+
+Notes:
+    Required for copied/removed/disabled effects.
+
+------------------------------------------------------------
+
+Variable:
+    disabled_text_cards
+
+Visibility:
+    PUBLIC via status icon
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Hacker Control
+
+Example card text:
+    Ongoing: Enemy On Reveal abilities do not trigger here.
+
+Notes:
+    Needs clear visual status.
+
+------------------------------------------------------------
+
+Variable:
+    removed_text_cards
+
+Visibility:
+    PUBLIC via inspect
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Hacker Control
+
+Example card text:
+    On Reveal: Remove Ongoing text from an enemy card here.
+
+Notes:
+    Strong. Use carefully.
+
+============================================================
+10. MODIFIED STAT VARIABLES
+============================================================
+
+Variable:
+    cards_with_increased_power
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Biohack
+    Nanotech
+
+Example card text:
+    Ongoing: Your cards with increased Power have +1 Power.
+
+------------------------------------------------------------
+
+Variable:
+    cards_with_reduced_power
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Hacker
+    poison
+
+Example card text:
+    On Reveal: Destroy an enemy card here with reduced Power.
+
+------------------------------------------------------------
+
+Variable:
+    cards_with_reduced_cost
+
+Visibility:
+    OWNER / inspectable
+
+Safety:
+    HIGH
+
+Launch Use:
+    FULL
+
+Archetypes:
+    Black Market
+    Fixer
+
+Example card text:
+    Ongoing: Your discounted cards have +1 Power.
+
+------------------------------------------------------------
+
+Variable:
+    cards_with_increased_cost
+
+Visibility:
+    OWNER / inspectable
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    Surveillance
+    Malware
+
+Example card text:
+    On Reveal: Increase the Cost of a random enemy card in hand by 1.
+
+------------------------------------------------------------
+
+Variable:
+    total_cost_reduced_this_game
+
+Visibility:
+    PARTIAL
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Black Market
+
+Example card text:
+    This has +1 Power for each Cost you reduced this game.
+
+Notes:
+    Track but expose lightly.
+
+============================================================
+11. MOVEMENT VARIABLES
+============================================================
+
+Variable:
+    cards_you_moved_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Runner
+
+Example card text:
+    This has +1 Power for each card you moved this game.
+
+------------------------------------------------------------
+
+Variable:
+    cards_enemy_moved_this_game
+
+Visibility:
+    PUBLIC
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    TECH
+
+Archetypes:
+    anti-move
+
+Example card text:
+    If your opponent moved a card this game, gain +3 Power.
+
+------------------------------------------------------------
+
+Variable:
+    this_card_moved
+
+Visibility:
+    PUBLIC status/history
+
+Safety:
+    HIGH
+
+Launch Use:
+    PACKAGE
+
+Archetypes:
+    Runner
+
+Example card text:
+    When Moved: Gain +2 Power.
+
+------------------------------------------------------------
+
+Variable:
+    source_lane / destination_lane
+
+Visibility:
+    PUBLIC history maybe
+
+Safety:
+    MEDIUM
+
+Launch Use:
+    FUTURE
+
+Archetypes:
+    advanced Runner
+
+Notes:
+    Useful later, probably too much for early card text.
+
+============================================================
+12. MANIFEST VARIABLES
+============================================================
+
+Variable:
+    cards_in_manifest
+
+Visibility:
+    UNKNOWN
+
+Safety:
+    DEFER
+
+Launch Use:
+    FUTURE
+
+Archetypes:
+    future Fixer
+    Black Market inventory
+    contact queue
+
+Decision:
+    Do not use Manifest as a launch zone.
+
+Reason:
+    It creates UI and rules complexity.
+    It overlaps with created cards in hand.
+
+Replacement:
+    Use created_cards_in_hand for launch.
+
+============================================================
+13. SUMMARY: LAUNCH-SAFE VARIABLES
+============================================================
+
+Use heavily:
+    cards_you_destroyed_this_game
+    your_cards_destroyed_this_game
+    total_cards_destroyed_this_game
+    destroyed_card_records
+    cards_you_created_this_game
+    created_cards_in_your_hand
+    created_cards_on_your_board
+    your_deck_contents_by_tag
+    cards in lane
+    full lane
+    lowest/highest Power and Cost in lane
+    energy_unspent_last_turn
+    cards_you_played_this_turn
+    cards_with_copied_text
+    cards_with_reduced_cost
+
+Use lightly:
+    enemy hand size
+    enemy deck size
+    enemy hand contents
+    enemy deck contents
+    discard records
+    movement records
+    total cards created
+    total cost reduced
+    cards with increased Cost
+
+Defer:
+    player-facing Manifest
+    full discard archetype
+    heavy enemy deck sabotage
+    heavy enemy hand lockdown
+    complex source/destination movement logic
+
+End of Tracked Variables Matrix v0.1.

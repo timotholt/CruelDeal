@@ -1,0 +1,1183 @@
+CYBERPUNK CCG — DOMAIN BIBLE v0.1
+Plain-text design spec
+Created: 2026-04-23
+
+============================================================
+0. PURPOSE
+============================================================
+
+This document defines the mechanical foundation of the Cyberpunk CCG.
+
+The core principle:
+
+    If the game tracks it, cards may be allowed to care about it.
+
+But not every tracked variable should become a major archetype. A tracked
+variable becomes useful for card design only if it is:
+
+    1. Visible enough for players to understand.
+    2. Actionable enough for players to influence.
+    3. Different enough to create a new play pattern.
+    4. Fun enough that losing to it does not feel like nonsense.
+
+The game should use simple, factual, player-facing card text.
+
+Good:
+    On Reveal: Draw a Tech card.
+    Ongoing: Your created cards have +1 Power.
+    When Destroyed: Return this to a random location with +2 Power.
+
+Bad:
+    Fixer: Recruit an asset.
+    Corporate Ladder: Promote through acquisition.
+    Nanite Bloom: Spread adaptive mass.
+
+Lore words belong in card names, art, tags, deck names, and archetype identity.
+Rules text should describe what actually happens.
+
+============================================================
+1. THREE-LAYER DESIGN MODEL
+============================================================
+
+Every card should be understood through three layers.
+
+------------------------------------------------------------
+1.1 Player-Facing Rules Layer
+------------------------------------------------------------
+
+This is what appears on the card.
+
+Examples:
+    On Reveal
+    Ongoing
+    Activate
+    When Destroyed
+    End of Turn
+    Draw
+    Add
+    Copy
+    Destroy
+    Move
+    Reduce Cost
+
+This layer should be as clear and boring as possible.
+
+------------------------------------------------------------
+1.2 Designer-Facing Domain Layer
+------------------------------------------------------------
+
+This is the game state the card cares about.
+
+Examples:
+    destroyed cards
+    created cards
+    cards in hand
+    cards in deck
+    cards in a lane
+    unspent Energy
+    copied text
+    modified Power
+    moved cards
+    enemy hand
+    enemy deck
+
+This layer is where archetypes come from.
+
+------------------------------------------------------------
+1.3 Lore / Archetype Layer
+------------------------------------------------------------
+
+This is how players talk about decks.
+
+Examples:
+    Destroy
+    Corporate Copy
+    Fixer
+    Nanotech / AI
+    Hacker Control
+    Black Market
+    Overclock
+    Swarm / Gang
+
+This layer gives the game personality, but should not overload the rules text.
+
+============================================================
+2. PLAYER-FACING TIMING VOCABULARY
+============================================================
+
+Use these as the primary timing categories.
+
+------------------------------------------------------------
+2.1 On Reveal
+------------------------------------------------------------
+
+Meaning:
+    Happens once when the card is revealed.
+
+Primary uses:
+    Destroy effects
+    Draw effects
+    Add effects
+    Copy effects
+    Move effects
+    Enemy disruption
+
+Example:
+    On Reveal: Destroy another card here and gain its Power.
+
+------------------------------------------------------------
+2.2 Ongoing
+------------------------------------------------------------
+
+Meaning:
+    Persistent effect while the card remains active.
+
+Primary uses:
+    Nanotech / AI systems
+    lane buffs
+    created-card buffs
+    enemy effect denial
+    swarm payoffs
+
+Example:
+    Ongoing: Your other cards here have +1 Power.
+
+------------------------------------------------------------
+2.3 Activate
+------------------------------------------------------------
+
+Meaning:
+    Player may manually trigger the effect at a later legal time.
+
+Launch recommendation:
+    Include only if the UI can support it cleanly.
+    Do not overload launch with Activate cards.
+
+Primary uses:
+    delayed hacks
+    black-market tools
+    defensive shields
+    one-shot tactical effects
+
+Example:
+    Activate: Move this to another location.
+
+------------------------------------------------------------
+2.4 When Destroyed
+------------------------------------------------------------
+
+Meaning:
+    Triggers when this card is destroyed.
+
+Primary uses:
+    Destroy
+    recursion
+    revenge
+    death-value cards
+    Corporate Copy feedstock
+
+Example:
+    When Destroyed: Add a copy of this to your hand.
+
+------------------------------------------------------------
+2.5 When Moved
+------------------------------------------------------------
+
+Meaning:
+    Triggers when this card changes location.
+
+Launch recommendation:
+    Track this now.
+    Use it lightly at launch.
+
+Primary uses:
+    Runner package
+    repositioning
+    escape effects
+
+Example:
+    When Moved: Gain +2 Power.
+
+------------------------------------------------------------
+2.6 After You Play
+------------------------------------------------------------
+
+Meaning:
+    Triggers after the player plays a card that satisfies the condition.
+
+Primary uses:
+    Swarm
+    combo
+    cards-played-this-turn domain
+
+Example:
+    After you play a card here, this gains +1 Power.
+
+------------------------------------------------------------
+2.7 Start of Turn
+------------------------------------------------------------
+
+Meaning:
+    Triggers before normal player actions for a turn.
+
+Launch recommendation:
+    Use sparingly because it can create hidden sequencing issues.
+
+Primary uses:
+    surveillance
+    delayed buffs
+    Energy planning
+
+Example:
+    Start of Turn: If you have fewer cards here, draw a card.
+
+------------------------------------------------------------
+2.8 End of Turn
+------------------------------------------------------------
+
+Meaning:
+    Triggers after all normal actions for a turn.
+
+Primary uses:
+    Nanotech scaling
+    Overclock
+    delayed destruction
+    lane pressure
+
+Example:
+    End of Turn: If you have unspent Energy, give this +2 Power.
+
+------------------------------------------------------------
+2.9 End of Game
+------------------------------------------------------------
+
+Meaning:
+    Triggers after the final turn before winner calculation.
+
+Primary uses:
+    late reveals
+    hidden swings
+    final scoring
+
+Launch recommendation:
+    Use very sparingly. Too many End of Game effects create confusing losses.
+
+Example:
+    End of Game: Move to your weakest location.
+
+============================================================
+3. PLAYER-FACING ACTION VOCABULARY
+============================================================
+
+Use these words consistently.
+
+------------------------------------------------------------
+3.1 Draw
+------------------------------------------------------------
+
+Meaning:
+    Take a card from your deck into your hand.
+
+Example:
+    On Reveal: Draw a Tech card.
+
+Design note:
+    Draw from deck is stronger than adding a random card, because it improves
+    consistency and uses deckbuilding decisions.
+
+------------------------------------------------------------
+3.2 Add
+------------------------------------------------------------
+
+Meaning:
+    Create or place a card into a zone, usually hand or board.
+
+Example:
+    On Reveal: Add a random 4-Cost Military card to your hand.
+
+Design note:
+    Added cards should be flagged as "created" if they did not begin in the
+    player's deck.
+
+------------------------------------------------------------
+3.3 Replace
+------------------------------------------------------------
+
+Meaning:
+    Remove one card and substitute another.
+
+Example:
+    On Reveal: Replace a card in your hand with one that costs 1 more.
+
+Design note:
+    Replacement is safer than pure card advantage.
+
+------------------------------------------------------------
+3.4 Copy
+------------------------------------------------------------
+
+Meaning:
+    Copy Power, Cost, text, or a card.
+
+Example:
+    On Reveal: Copy the text of a destroyed card.
+
+Design note:
+    Copying text is dangerous. It must be constrained.
+
+Allowed early constraints:
+    copy only On Reveal text
+    copy only Ongoing text
+    replace previous copied text
+    remove copied text after it triggers
+    copy only from friendly cards
+    copy only from cards destroyed this turn
+
+------------------------------------------------------------
+3.5 Destroy
+------------------------------------------------------------
+
+Meaning:
+    Remove a card from the board and record it in destroyed history.
+
+Example:
+    On Reveal: Destroy your lowest-Power card here.
+
+Design note:
+    Destroy records should preserve metadata at the moment of destruction.
+
+------------------------------------------------------------
+3.6 Discard
+------------------------------------------------------------
+
+Meaning:
+    Remove a card from hand and record it in discard history.
+
+Example:
+    On Reveal: Discard the lowest-Cost card in your hand.
+
+Launch recommendation:
+    Track discard now. Do not overbuild discard as a full launch archetype.
+
+------------------------------------------------------------
+3.7 Move
+------------------------------------------------------------
+
+Meaning:
+    Change a card's location.
+
+Example:
+    On Reveal: Move an enemy card here to another location.
+
+Launch recommendation:
+    Movement should be a secondary package at launch.
+
+------------------------------------------------------------
+3.8 Reduce Cost / Increase Cost
+------------------------------------------------------------
+
+Meaning:
+    Modify card Energy cost.
+
+Examples:
+    On Reveal: Reduce the Cost of a created card in your hand by 1.
+    On Reveal: Increase the Cost of a random card in your opponent's hand by 1.
+
+Design note:
+    Cost modification must be visible and capped.
+
+------------------------------------------------------------
+3.9 Set Power / Gain Power / Lose Power
+------------------------------------------------------------
+
+Meaning:
+    Modify card Power.
+
+Examples:
+    On Reveal: Give a card here +3 Power.
+    On Reveal: Reset an enemy card here to its base Power.
+
+Design note:
+    Track original Power and current Power separately.
+
+------------------------------------------------------------
+3.10 Remove Text / Disable Text
+------------------------------------------------------------
+
+Meaning:
+    Suppress a card's rules text.
+
+Examples:
+    On Reveal: Remove Ongoing text from an enemy card here.
+    Ongoing: Enemy On Reveal abilities do not trigger here.
+
+Design note:
+    This is the basis of Hacker Control. Use carefully.
+
+============================================================
+4. CORE GAME STATE DOMAINS
+============================================================
+
+A domain is a part of game state that cards can care about.
+
+------------------------------------------------------------
+4.1 Destroyed Cards
+------------------------------------------------------------
+
+Tracked facts:
+    cards you destroyed this game
+    cards enemy destroyed this game
+    total cards destroyed this game
+    your cards destroyed this game
+    enemy cards destroyed this game
+    list of destroyed cards
+    metadata of destroyed cards
+
+Design uses:
+    Destroy
+    Corporate Copy
+    Black Market self-destruct
+    anti-destroy tech
+
+Player question:
+    What should I sacrifice?
+
+------------------------------------------------------------
+4.2 Discarded Cards
+------------------------------------------------------------
+
+Tracked facts:
+    cards you discarded this game
+    cards enemy discarded this game
+    total cards discarded this game
+    your cards discarded this game
+    enemy cards discarded this game
+    list of discarded cards
+    metadata of discarded cards
+
+Design uses:
+    future memory-wipe archetype
+    black-market costs
+    surveillance tech
+    recursion
+
+Launch status:
+    Track now.
+    Keep secondary.
+
+Player question:
+    What information or resource am I willing to burn?
+
+------------------------------------------------------------
+4.3 Created Cards
+------------------------------------------------------------
+
+Tracked facts:
+    cards you created this game
+    cards enemy created this game
+    total cards created this game
+    created cards in hand
+    created cards on board
+    cards that did not start in deck
+
+Design uses:
+    Fixer
+    Black Market
+    anti-Fixer tech
+    clone/proxy cards
+
+Player question:
+    Can I turn outside resources into advantage?
+
+------------------------------------------------------------
+4.4 Cards in Hand
+------------------------------------------------------------
+
+Tracked facts:
+    your hand size
+    enemy hand size
+    your hand contents
+    random enemy hand card
+    created cards in hand
+    discounted cards in hand
+    modified cards in hand
+
+Design uses:
+    Fixer
+    Black Market
+    Surveillance
+    hand-size payoffs
+
+Player question:
+    Do I have the right options?
+
+------------------------------------------------------------
+4.5 Cards in Deck
+------------------------------------------------------------
+
+Tracked facts:
+    your deck size
+    enemy deck size
+    your deck contents
+    enemy deck contents
+    top card of deck
+    cards by tag in deck
+
+Design uses:
+    Fixer
+    Malware
+    tutors
+    deck-thinning
+    sabotage
+
+Player question:
+    Can I control what comes next?
+
+------------------------------------------------------------
+4.6 Cards in Lane
+------------------------------------------------------------
+
+Tracked facts:
+    your cards here
+    enemy cards here
+    total cards here
+    empty slots here
+    full lane
+    lowest-Power card here
+    highest-Power card here
+    lowest-Cost card here
+    highest-Cost card here
+
+Design uses:
+    Swarm
+    Nanotech
+    Control
+    Destroy targeting
+    movement
+
+Player question:
+    How do I manage space?
+
+------------------------------------------------------------
+4.7 Energy
+------------------------------------------------------------
+
+Tracked facts:
+    Energy spent this turn
+    Energy unspent this turn
+    Energy spent last turn
+    Energy unspent last turn
+    spent all Energy last turn
+    played no cards last turn
+
+Design uses:
+    Overclock
+    Black Market
+    disciplined military cards
+    tempo payoffs
+
+Player question:
+    Should I spend now or hold back?
+
+------------------------------------------------------------
+4.8 Cards Played
+------------------------------------------------------------
+
+Tracked facts:
+    cards you played this turn
+    cards enemy played this turn
+    total cards played this turn
+    cards you played last turn
+    cards enemy played last turn
+    first card you played this turn
+    last card you played this turn
+
+Design uses:
+    Swarm
+    Surveillance
+    combo
+    rhythm decks
+
+Player question:
+    How do I sequence this turn?
+
+------------------------------------------------------------
+4.9 Copied / Removed / Disabled Text
+------------------------------------------------------------
+
+Tracked facts:
+    cards with copied text
+    cards that copied text this game
+    original text
+    current text
+    disabled text
+    removed text
+
+Design uses:
+    Corporate Copy
+    Hacker Control
+    anti-copy tech
+
+Player question:
+    Whose rules can I steal or shut off?
+
+------------------------------------------------------------
+4.10 Modified Stats
+------------------------------------------------------------
+
+Tracked facts:
+    cards with increased Power
+    cards with reduced Power
+    cards with increased Cost
+    cards with reduced Cost
+    total Power gained
+    total Cost reduced
+
+Design uses:
+    Nanotech
+    Biohack
+    Black Market
+    Hacker
+
+Player question:
+    Can I upgrade or corrupt card values?
+
+------------------------------------------------------------
+4.11 Movement
+------------------------------------------------------------
+
+Tracked facts:
+    cards you moved this game
+    cards enemy moved this game
+    total cards moved this game
+    whether this card moved
+    source lane
+    destination lane
+
+Design uses:
+    Runner
+    tactical repositioning
+    lane tricks
+
+Launch status:
+    Secondary package.
+
+Player question:
+    Can I win by being somewhere unexpected?
+
+------------------------------------------------------------
+4.12 Enemy Hand
+------------------------------------------------------------
+
+Tracked facts:
+    enemy hand size
+    random enemy card
+    enemy created cards in hand
+    enemy modified cards in hand
+
+Design uses:
+    Surveillance
+    blackmail
+    hand disruption
+
+Launch status:
+    Risky secondary package.
+
+Player question:
+    Can I punish the opponent's options?
+
+------------------------------------------------------------
+4.13 Enemy Deck
+------------------------------------------------------------
+
+Tracked facts:
+    enemy deck size
+    top enemy deck card
+    enemy deck contents
+    junk added to enemy deck
+    enemy cards modified in deck
+
+Design uses:
+    Malware
+    sabotage
+    future draw disruption
+
+Launch status:
+    Risky secondary package.
+
+Player question:
+    Can I poison what they draw next?
+
+------------------------------------------------------------
+4.14 Manifest
+------------------------------------------------------------
+
+Decision:
+    Do not launch with a player-facing Manifest zone.
+
+Reason:
+    It adds UI complexity and overlaps with hand/deck/created cards.
+
+Future use:
+    black-market inventory
+    contact queue
+    visible generated pool
+    shared market
+
+Launch replacement:
+    Use created cards in hand instead.
+
+============================================================
+5. LAUNCH TAG SYSTEM
+============================================================
+
+Tags should support deckbuilding and Fixer-style tutoring.
+
+Launch tags:
+
+    Tech
+    AI
+    Corp
+    Merc
+    Military
+    Drone
+    Bio
+    Hacker
+
+------------------------------------------------------------
+5.1 Tech
+------------------------------------------------------------
+
+Meaning:
+    Devices, hardware, tools, gadgets.
+
+Design uses:
+    Fixer draws
+    Black Market discounts
+    Hacker support
+
+------------------------------------------------------------
+5.2 AI
+------------------------------------------------------------
+
+Meaning:
+    Autonomous systems, algorithms, predictive engines.
+
+Design uses:
+    Ongoing effects
+    Nanotech
+    control systems
+
+------------------------------------------------------------
+5.3 Corp
+------------------------------------------------------------
+
+Meaning:
+    Corporate actors, managers, executives, institutional power.
+
+Design uses:
+    Corporate Copy
+    text theft
+    sacrifice
+    control
+
+------------------------------------------------------------
+5.4 Merc
+------------------------------------------------------------
+
+Meaning:
+    Hired people, flexible fighters, street operators.
+
+Design uses:
+    Fixer generation
+    midrange bodies
+    general-purpose combat
+
+------------------------------------------------------------
+5.5 Military
+------------------------------------------------------------
+
+Meaning:
+    Soldiers, heavy gear, disciplined high-cost power.
+
+Design uses:
+    4-cost and 5-cost generation
+    Energy-spent payoffs
+    high-impact cards
+
+------------------------------------------------------------
+5.6 Drone
+------------------------------------------------------------
+
+Meaning:
+    Cheap bodies, autonomous units, swarm pieces.
+
+Design uses:
+    Swarm
+    Destroy fodder
+    Nanotech scaling
+
+------------------------------------------------------------
+5.7 Bio
+------------------------------------------------------------
+
+Meaning:
+    Cyberware, wetware, implants, body modification.
+
+Design uses:
+    modified Power
+    buff synergies
+    future Biohack package
+
+------------------------------------------------------------
+5.8 Hacker
+------------------------------------------------------------
+
+Meaning:
+    Intrusion, disruption, surveillance, black ICE.
+
+Design uses:
+    enemy text
+    hand/deck interference
+    control
+
+============================================================
+6. LAUNCH ARCHETYPES
+============================================================
+
+The launch set should be 8 full archetypes plus several smaller packages.
+
+------------------------------------------------------------
+6.1 Destroy
+------------------------------------------------------------
+
+Main domains:
+    destroyed cards
+    your cards destroyed
+    cards you destroyed
+    total cards destroyed
+
+Mechanical identity:
+    Cards become Power.
+
+Primary text:
+    On Reveal
+    When Destroyed
+    Costs less based on destroyed count
+
+Strength:
+    explosive tempo and scaling
+
+Weakness:
+    needs fuel and careful sequencing
+
+------------------------------------------------------------
+6.2 Corporate Copy
+------------------------------------------------------------
+
+Main domains:
+    copied text
+    destroyed card records
+    Corp tags
+    cards with copied text
+
+Mechanical identity:
+    Cards become abilities.
+
+Primary text:
+    On Reveal
+    Ongoing
+    Copy
+    Destroy
+
+Strength:
+    high ceiling and unique play patterns
+
+Weakness:
+    setup dependent and rules-risky
+
+Design constraint:
+    Text copying must be capped and explicit.
+
+------------------------------------------------------------
+6.3 Fixer
+------------------------------------------------------------
+
+Main domains:
+    hand
+    deck
+    tags
+    created cards
+
+Mechanical identity:
+    Bad options become better options.
+
+Primary text:
+    On Reveal: Draw...
+    On Reveal: Add...
+    On Reveal: Replace...
+
+Strength:
+    consistency and flexible access
+
+Weakness:
+    lower raw board tempo
+
+Design constraint:
+    Fixer is not a rules keyword. It is a character role/archetype.
+
+------------------------------------------------------------
+6.4 Nanotech / AI
+------------------------------------------------------------
+
+Main domains:
+    Ongoing
+    cards in lane
+    modified Power
+    AI tags
+
+Mechanical identity:
+    Board presence becomes scaling Power.
+
+Primary text:
+    Ongoing
+    End of Turn
+    Power modification
+
+Strength:
+    strong engine if uninterrupted
+
+Weakness:
+    vulnerable to Hacker Control
+
+------------------------------------------------------------
+6.5 Hacker Control
+------------------------------------------------------------
+
+Main domains:
+    enemy text
+    disabled effects
+    enemy board
+    Hacker tags
+
+Mechanical identity:
+    Opponent's plan becomes unreliable.
+
+Primary text:
+    On Reveal
+    Ongoing
+    Remove text
+    Disable text
+    Reset Power
+
+Strength:
+    counters engines and copied text
+
+Weakness:
+    low proactive Power
+
+Design constraint:
+    Too much control makes the game feel bad. Use surgically.
+
+------------------------------------------------------------
+6.6 Black Market
+------------------------------------------------------------
+
+Main domains:
+    created cards
+    discounts
+    temporary value
+    self-destruction
+
+Mechanical identity:
+    Future stability becomes immediate tempo.
+
+Primary text:
+    Add
+    Reduce Cost
+    Destroy later
+    created-card payoff
+
+Strength:
+    explosive turns and flexible tools
+
+Weakness:
+    unstable and risky
+
+------------------------------------------------------------
+6.7 Overclock
+------------------------------------------------------------
+
+Main domains:
+    unspent Energy
+    spent Energy last turn
+    played no cards last turn
+
+Mechanical identity:
+    Restraint becomes power.
+
+Primary text:
+    If you ended last turn with unspent Energy...
+    End of Turn: If you have unspent Energy...
+    Costs less if...
+
+Strength:
+    different rhythm from normal curve play
+
+Weakness:
+    can fall behind if mistimed
+
+------------------------------------------------------------
+6.8 Swarm / Gang
+------------------------------------------------------------
+
+Main domains:
+    cards played
+    cheap cards
+    lane fullness
+    Drone tags
+
+Mechanical identity:
+    Bodies become Power.
+
+Primary text:
+    After You Play
+    Ongoing
+    Add a 1-Cost card
+    Full lane payoff
+
+Strength:
+    beginner-friendly pressure
+
+Weakness:
+    vulnerable to lane punish and destroy effects
+
+============================================================
+7. SECONDARY PACKAGES
+============================================================
+
+These should exist at launch but not require full deck support yet.
+
+------------------------------------------------------------
+7.1 Runner / Movement
+------------------------------------------------------------
+
+Domains:
+    movement
+    source lane
+    destination lane
+
+Use:
+    5-6 cards
+
+Reason:
+    Good gameplay, but requires enough support to be consistent.
+
+------------------------------------------------------------
+7.2 Biohack / Cyberware
+------------------------------------------------------------
+
+Domains:
+    modified Power
+    modified Cost
+    Bio tags
+
+Use:
+    5-6 cards
+
+Reason:
+    Good bridge between Nanotech, Swarm, and Black Market.
+
+------------------------------------------------------------
+7.3 Surveillance
+------------------------------------------------------------
+
+Domains:
+    enemy hand
+    enemy played cards
+    prediction
+
+Use:
+    3-5 cards
+
+Reason:
+    Very cyberpunk, but too much hand disruption is annoying.
+
+------------------------------------------------------------
+7.4 Malware
+------------------------------------------------------------
+
+Domains:
+    enemy deck
+    junk cards
+    future draw corruption
+
+Use:
+    3-5 cards
+
+Reason:
+    Very cyberpunk, but deck sabotage can feel oppressive.
+
+------------------------------------------------------------
+7.5 Discard / Memory Wipe
+------------------------------------------------------------
+
+Domains:
+    discarded cards
+    hand sacrifice
+    erased resources
+
+Use:
+    low support at launch
+
+Reason:
+    Mechanically close to Destroy. Better as expansion material unless testing
+    shows it fills a needed gap.
+
+============================================================
+8. DESIGN RULES
+============================================================
+
+Rule 1:
+    Player-facing card text must describe game facts.
+
+Rule 2:
+    Lore names must not become rules keywords unless absolutely necessary.
+
+Rule 3:
+    Each full archetype must exploit a different tracked domain.
+
+Rule 4:
+    Enemy hand and enemy deck mechanics must be visible, limited, and surgical.
+
+Rule 5:
+    Text copying must be capped.
+
+Rule 6:
+    Created cards should be flagged by the engine.
+
+Rule 7:
+    Every event history should store both count and card records.
+
+Rule 8:
+    The first 100 cards should support archetype packages, not isolated ideas.
+
+Rule 9:
+    A card is best when it touches one main domain and one bridge domain.
+
+Rule 10:
+    If a mechanic requires too much explanation, it is not a launch mechanic.
+
+============================================================
+9. NEXT DESIGN STEP
+============================================================
+
+After this document, create:
+
+    1. Tracked Variables Matrix
+    2. Archetype Package Skeletons
+    3. Cross-Archetype Bridge Map
+    4. First 100-Card Slot Allocation
+    5. Only then: actual card designs
+
+End of Domain Bible v0.1.
