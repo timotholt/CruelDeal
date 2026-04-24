@@ -16,6 +16,8 @@
 
 import type { CardId, LocationId, Owner } from './ids';
 
+export type OwnerRef = Owner | 'SELF_OWNER' | 'OPP_OWNER' | 'EVENT_OWNER' | 'EVENT_OPP_OWNER';
+
 // ---- Tracked-variable keys (read by TRACKED_STAT / TRACKED_FLAG) -----------
 
 /**
@@ -56,7 +58,9 @@ export type NumExpr =
   | { kind: 'COUNT'; of: Selector }
   | { kind: 'POWER_OF'; target: Selector }
   | { kind: 'COST_OF'; target: Selector }
-  | { kind: 'HAND_SIZE'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER' }
+  | { kind: 'HAND_SIZE'; owner: OwnerRef }
+  | { kind: 'CURRENT_TURN' }
+  | { kind: 'LOCATION_COUNTER'; lane?: Selector; name: string; owner?: OwnerRef }
   | { kind: 'MIN'; a: NumExpr; b: NumExpr }
   | { kind: 'MAX'; a: NumExpr; b: NumExpr }
   | { kind: 'ADD'; a: NumExpr; b: NumExpr }
@@ -66,7 +70,7 @@ export type NumExpr =
    * Read a numeric stat from trackedVariables.
    * For 'totalCardsDestroyed', `owner` is ignored (global value used).
    */
-  | { kind: 'TRACKED_STAT'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; stat: TrackedStatKey }
+  | { kind: 'TRACKED_STAT'; owner: OwnerRef; stat: TrackedStatKey }
   /**
    * Inline conditional — returns `then` if predicate passes, `else` otherwise.
    * Lets Ongoing POWER_ADD / COST_ADD express conditional bonuses without a
@@ -103,16 +107,20 @@ export type Predicate =
   | { kind: 'TEXT_DISABLED'; target: Selector }
   /** True if the card has at least one ongoing ability defined in its CardDef (or TextOverride). */
   | { kind: 'HAS_ONGOING'; target: Selector }
+  /** True if the target has effective ability text in the requested slot. */
+  | { kind: 'HAS_ABILITY'; target: Selector; slot: 'ON_REVEAL' | 'ONGOING' | 'ACTIVATE' | 'ANY' }
+  /** True if the target has no effective ability text. */
+  | { kind: 'HAS_NO_ABILITY'; target: Selector }
   /** True if the card is in a lane that is currently at full capacity for its owner. */
   | { kind: 'IN_FULL_LANE'; target: Selector }
   /** True if the lane containing the given selector card is at full capacity for its owner. */
   | { kind: 'LANE_FULL'; laneOf: Selector }
   /** Read a boolean flag from trackedVariables. */
-  | { kind: 'TRACKED_FLAG'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; flag: TrackedFlagKey }
+  | { kind: 'TRACKED_FLAG'; owner: OwnerRef; flag: TrackedFlagKey }
   /** True if the target owner's hand is empty. */
-  | { kind: 'HAND_EMPTY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER' }
+  | { kind: 'HAND_EMPTY'; owner: OwnerRef }
   /** True if the target owner has any unspent energy right now. */
-  | { kind: 'HAS_UNSPENT_ENERGY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER' }
+  | { kind: 'HAS_UNSPENT_ENERGY'; owner: OwnerRef }
   /** True if the card has the EVER_MOVED tag (has been moved at least once this match). */
   | { kind: 'EVER_MOVED'; target: Selector };
 
@@ -122,6 +130,7 @@ export type CmpOp = '<' | '<=' | '==' | '>=' | '>';
 
 export type Selector =
   | { kind: 'SELF' }
+  | { kind: 'EVENT_CARD' }
   | { kind: 'LAST_PLAYED'; by: 'SELF_OWNER' | 'OPP_OWNER' }
   | { kind: 'LANE_OF'; of: Selector }
   | { kind: 'SAME_LANE'; of: Selector; ownerFilter?: OwnerFilter; exclude?: Selector }
@@ -154,21 +163,21 @@ export type Selector =
    */
   | { kind: 'MAX_COST_OF'; of: Selector };
 
-export type OwnerFilter = 'SELF_OWNER' | 'OPP_OWNER' | 'ANY_OWNER';
+export type OwnerFilter = OwnerRef | 'ANY_OWNER';
 export type ZoneFilter = 'LANE' | 'HAND' | 'DECK' | 'DISCARD' | 'DESTROYED' | 'BANISHED' | 'ANY';
 
 // ---- Pools (sources of cards to spawn/draw) ---------------------------------
 
 export type PoolRef =
-  | { kind: 'DECK_OF_OWNER'; owner: Owner | 'SELF_OWNER'; excludeInPlay?: boolean }
+  | { kind: 'DECK_OF_OWNER'; owner: OwnerRef; excludeInPlay?: boolean }
   | { kind: 'DEF_ID_LIST'; ids: string[] }
-  | { kind: 'COST_RANGE'; ownerDeck: Owner | 'SELF_OWNER'; min: number; max: number }
+  | { kind: 'COST_RANGE'; ownerDeck: OwnerRef; min: number; max: number }
   | { kind: 'ANY_RANDOM'; ownerFilter: OwnerFilter }
   /**
    * Draw from the owner's deck filtered by tribe (tag).
    * `excludeInPlay` skips cards already on the board or in hand.
    */
-  | { kind: 'DECK_BY_TRIBE'; ownerDeck: Owner | 'SELF_OWNER'; tribe: string; excludeInPlay?: boolean };
+  | { kind: 'DECK_BY_TRIBE'; ownerDeck: OwnerRef; tribe: string; excludeInPlay?: boolean };
 
 // ---- Effect expressions (On Reveal / Activate / triggered) -----------------
 
@@ -186,11 +195,14 @@ export type EffectExpr =
 
   // --- Card lifecycle atoms ---
   | { kind: 'DESTROY'; target: Selector }
+  | { kind: 'BANISH'; target: Selector }
   | { kind: 'MOVE'; target: Selector; to: Selector }
-  | { kind: 'DRAW'; owner: Owner | 'SELF_OWNER'; count: NumExpr }
+  | { kind: 'DRAW'; owner: OwnerRef; count: NumExpr }
   | { kind: 'DISCARD'; target: Selector }
-  | { kind: 'ADD_CARD_TO_LANE'; pool: PoolRef; owner: Owner | 'SELF_OWNER'; to: Selector }
-  | { kind: 'ADD_CARD_TO_HAND'; pool: PoolRef; owner: Owner | 'SELF_OWNER' }
+  | { kind: 'ADD_CARD_TO_LANE'; pool: PoolRef; owner: OwnerRef; to: Selector }
+  | { kind: 'ADD_CARD_TO_HAND'; pool: PoolRef; owner: OwnerRef }
+  | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
+  | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
 
   // --- Text manipulation ---
   /**
@@ -218,18 +230,19 @@ export type EffectExpr =
   | { kind: 'ADD_LOCATION_TAG'; lane: Selector; tag: LaneTagSpec }
   | { kind: 'REPLACE_LOCATION'; lane: Selector; newDefId: string }
   | { kind: 'MODIFY_COUNTER'; target: Selector; name: string; delta: NumExpr }
+  | { kind: 'MODIFY_LOCATION_COUNTER'; lane: Selector; name: string; owner?: OwnerRef; delta: NumExpr }
 
   // ---- Energy (Snap-style: current, max, next-turn bonus) ----
-  | { kind: 'ADJUST_ENERGY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
-  | { kind: 'ADJUST_MAX_ENERGY'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
-  | { kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS'; owner: Owner | 'SELF_OWNER' | 'OPP_OWNER'; delta: NumExpr }
+  | { kind: 'ADJUST_ENERGY'; owner: OwnerRef; delta: NumExpr }
+  | { kind: 'ADJUST_MAX_ENERGY'; owner: OwnerRef; delta: NumExpr }
+  | { kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS'; owner: OwnerRef; delta: NumExpr }
 
   // --- Escape hatch for effects that need bespoke evaluator logic ---
   | { kind: 'CALL_BUILTIN'; fn: string; args: Record<string, unknown> }
 
-  // Re-entry combinators (cause nested revealCard calls)
+  // Re-entry combinators (cause nested reveal calls)
   | { kind: 'TRIGGER_ON_REVEAL'; target: Selector }
-  | { kind: 'SPAWN_AND_REVEAL'; pool: PoolRef; owner: Owner | 'SELF_OWNER'; to: Selector }
+  | { kind: 'SPAWN_AND_REVEAL'; pool: PoolRef; owner: OwnerRef; to: Selector }
 
   // Control flow
   | { kind: 'SEQUENCE'; items: EffectExpr[] }
@@ -264,7 +277,10 @@ export type OngoingExpr =
   // Boolean auras — not numeric, not affected by BOOST_ONGOINGS
   | { kind: 'DISABLE_ON_REVEAL'; target: Selector; stack: 'SINGLE' }
   | { kind: 'DISABLE_ONGOING'; target: Selector; stack: 'SINGLE' }
-  | { kind: 'BLOCK_PLAY'; target: Selector; pred: Predicate; stack: 'SINGLE' }
+  | { kind: 'BLOCK_PLAY'; target?: Selector; laneOf?: Selector; pred?: Predicate; cardPred?: Predicate; when?: Predicate; ownerFilter?: OwnerFilter; stack: 'SINGLE' }
+  | { kind: 'BLOCK_MOVE'; target: Selector; stack: 'SINGLE' }
+  | { kind: 'BLOCK_POWER_INCREASE'; target: Selector; stack: 'SINGLE' }
+  | { kind: 'DELAY_REVEAL'; target: Selector; until: 'END_OF_GAME'; stack: 'SINGLE' }
   /**
    * Prevents cards in `laneOf` from being destroyed by effects sourced from
    * the same owner (Union Rep: "your cards here can't be destroyed by your own cards").

@@ -84,7 +84,11 @@ export interface CardVariant {
 export interface LocationAbilities {
   ongoing?: OngoingExpr[];
   onReveal?: EffectExpr[];
+  atTurnStart?: EffectExpr[];
   atTurnEnd?: EffectExpr[];
+  onCardPlayedHere?: EffectExpr[];
+  onCardEnteredHere?: EffectExpr[];
+  onCardDestroyedHere?: EffectExpr[];
 }
 
 export interface LocationDef {

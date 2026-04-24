@@ -27,6 +27,9 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       return [];
     }
 
+    case 'EVENT_CARD':
+      return ctx.eventCard ? [ctx.eventCard] : [];
+
     case 'SAME_LANE': {
       const lane = resolveLaneOf(sel.of, ctx);
       if (lane === null) return [];
@@ -51,7 +54,7 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       const zone = sel.zoneFilter ?? 'ANY';
       const out: CardId[] = [];
       for (const card of Object.values(ctx.state.cards)) {
-        if (!ownerMatches(owner, ctx.selfOwner, card.owner)) continue;
+        if (!ownerMatches(owner, ctx.selfOwner, card.owner, ctx.eventOwner ?? null)) continue;
         if (!zoneMatches(zone, card.zone)) continue;
         out.push(card.id);
       }
@@ -347,12 +350,17 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
 
     case 'HAS_ONGOING': {
       const ids = select(pred.target, ctx);
-      return ids.some(id => {
-        const c = ctx.state.cards[id];
-        if (!c) return false;
-        const def = ctx.manifest.cards[c.defId];
-        return (def?.abilities?.ongoing?.length ?? 0) > 0;
-      });
+      return ids.some(id => hasEffectiveAbility(id, ctx, 'ONGOING'));
+    }
+
+    case 'HAS_ABILITY': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => hasEffectiveAbility(id, ctx, pred.slot));
+    }
+
+    case 'HAS_NO_ABILITY': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => !hasEffectiveAbility(id, ctx, 'ANY'));
     }
 
     case 'IN_FULL_LANE': {
@@ -376,25 +384,19 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     }
 
     case 'TRACKED_FLAG': {
-      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
-                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
-                  : null;
+      const owner = resolveOwnerRef(pred.owner, ctx);
       if (owner === null) return false;
       return ctx.state.trackedVariables[owner][pred.flag];
     }
 
     case 'HAND_EMPTY': {
-      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
-                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
-                  : null;
+      const owner = resolveOwnerRef(pred.owner, ctx);
       if (owner === null) return false;
       return ctx.state.hand[owner].length === 0;
     }
 
     case 'HAS_UNSPENT_ENERGY': {
-      const owner = pred.owner === 'SELF_OWNER' ? ctx.selfOwner
-                  : pred.owner === 'OPP_OWNER'  ? flipOwner(ctx.selfOwner)
-                  : null;
+      const owner = resolveOwnerRef(pred.owner, ctx);
       if (owner === null) return false;
       return ctx.state.energy[owner] > 0;
     }
@@ -447,7 +449,7 @@ function collectInLane(
   const laneState = ctx.state.lanes[lane];
   const out: CardId[] = [];
   for (const owner of ['P0', 'P1'] as const) {
-    if (!ownerMatches(ownerFilter, ctx.selfOwner, owner)) continue;
+    if (!ownerMatches(ownerFilter, ctx.selfOwner, owner, ctx.eventOwner ?? null)) continue;
     out.push(...laneState.cards[owner]);
   }
   return out;
@@ -457,11 +459,17 @@ export function ownerMatches(
   filter: OwnerFilter,
   selfOwner: 'P0' | 'P1' | null,
   subjectOwner: 'P0' | 'P1',
+  eventOwner: 'P0' | 'P1' | null = null,
 ): boolean {
   switch (filter) {
     case 'ANY_OWNER':  return true;
+    case 'P0':
+    case 'P1':
+      return subjectOwner === filter;
     case 'SELF_OWNER': return selfOwner !== null && subjectOwner === selfOwner;
     case 'OPP_OWNER':  return selfOwner !== null && subjectOwner !== selfOwner;
+    case 'EVENT_OWNER': return eventOwner !== null && subjectOwner === eventOwner;
+    case 'EVENT_OPP_OWNER': return eventOwner !== null && subjectOwner !== eventOwner;
   }
 }
 
@@ -482,6 +490,71 @@ function cardPower(id: CardId, ctx: EvalCtx): number {
 
 function cardCost(id: CardId, ctx: EvalCtx): number {
   return getCardCost(ctx.state, id, ctx.manifest);
+}
+
+function resolveOwnerRef(ref: OwnerFilter, ctx: EvalCtx): 'P0' | 'P1' | null {
+  if (ref === 'P0' || ref === 'P1') return ref;
+  if (ref === 'SELF_OWNER') return ctx.selfOwner;
+  if (ref === 'OPP_OWNER') return flipOwner(ctx.selfOwner);
+  if (ref === 'EVENT_OWNER') return ctx.eventOwner ?? null;
+  if (ref === 'EVENT_OPP_OWNER') return flipOwner(ctx.eventOwner ?? null);
+  return null;
+}
+
+function hasEffectiveAbility(
+  id: CardId,
+  ctx: EvalCtx,
+  slot: 'ON_REVEAL' | 'ONGOING' | 'ACTIVATE' | 'ANY',
+): boolean {
+  const card = ctx.state.cards[id];
+  if (!card) return false;
+
+  const printed = ctx.manifest.cards[card.defId]?.abilities ?? {};
+  const printedHas = (s: typeof slot): boolean => {
+    if (s === 'ANY') {
+      return (printed.onReveal?.length ?? 0) > 0 ||
+        (printed.ongoing?.length ?? 0) > 0 ||
+        (printed.activate?.length ?? 0) > 0;
+    }
+    if (s === 'ON_REVEAL') return (printed.onReveal?.length ?? 0) > 0;
+    if (s === 'ONGOING') return (printed.ongoing?.length ?? 0) > 0;
+    return (printed.activate?.length ?? 0) > 0;
+  };
+
+  const ov = card.textOverride;
+  if (!ov) return printedHas(slot);
+  if (ov.kind === 'BLANK_ALL') return false;
+  if (ov.kind === 'BLANK_ONGOING') {
+    return slot === 'ONGOING' ? false : printedHas(slot);
+  }
+
+  const sourceDefId = ov.kind === 'COPY_OF_DEF'
+    ? ov.defId
+    : 'cardId' in ov
+      ? ctx.state.cards[ov.cardId]?.defId
+      : undefined;
+  const source = sourceDefId ? ctx.manifest.cards[sourceDefId]?.abilities : undefined;
+  if (!source) return false;
+
+  if (ov.kind === 'COPY_ON_REVEAL_OF_CARD') {
+    return slot === 'ON_REVEAL' || slot === 'ANY'
+      ? (source.onReveal?.length ?? 0) > 0
+      : false;
+  }
+  if (ov.kind === 'COPY_ONGOING_OF_CARD') {
+    return slot === 'ONGOING' || slot === 'ANY'
+      ? (source.ongoing?.length ?? 0) > 0
+      : false;
+  }
+
+  if (slot === 'ANY') {
+    return (source.onReveal?.length ?? 0) > 0 ||
+      (source.ongoing?.length ?? 0) > 0 ||
+      (source.activate?.length ?? 0) > 0;
+  }
+  if (slot === 'ON_REVEAL') return (source.onReveal?.length ?? 0) > 0;
+  if (slot === 'ONGOING') return (source.ongoing?.length ?? 0) > 0;
+  return (source.activate?.length ?? 0) > 0;
 }
 
 export function compareNum(a: number, op: CmpOp, b: number): boolean {

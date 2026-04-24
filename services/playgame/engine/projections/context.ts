@@ -39,6 +39,10 @@ export interface EvalCtx {
   readonly selfOwner: Owner | null;
   /** Optional "it" binding for FOREACH iteration. */
   readonly it?: CardId;
+  /** Optional triggering-event bindings for location/card reactive abilities. */
+  readonly eventCard?: CardId | null;
+  readonly eventLane?: LaneIdx | null;
+  readonly eventOwner?: Owner | null;
   /** Optional RNG. Required for selectors that sample (RANDOM_N,
    *  FIRST_N with random ordering) and for NumExpr.RANDOM_INT. Pure
    *  Ongoing projections do NOT supply one — those paths throw if they

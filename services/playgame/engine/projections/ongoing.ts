@@ -199,6 +199,9 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'DISABLE_ON_REVEAL':
     case 'DISABLE_ONGOING':
     case 'BLOCK_PLAY':
+    case 'BLOCK_MOVE':
+    case 'BLOCK_POWER_INCREASE':
+    case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF':
     case 'BOOST_ONGOINGS':
       return expr;
@@ -264,6 +267,9 @@ function targetIncludes(
     case 'DISABLE_ON_REVEAL':
     case 'DISABLE_ONGOING':
     case 'BLOCK_PLAY':
+    case 'BLOCK_MOVE':
+    case 'BLOCK_POWER_INCREASE':
+    case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF': {
       const target = (expr as { target?: import('../types/ability').Selector }).target;
       if (!target) return false;

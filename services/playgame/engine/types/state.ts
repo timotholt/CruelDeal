@@ -248,6 +248,7 @@ export interface LocationInstance {
   readonly defId: string;
   readonly lane: LaneIdx;
   readonly tags: readonly LaneTag[];
+  readonly counters?: Readonly<Record<string, number>>;
 }
 
 // ---- Tags (concrete runtime shapes, distinct from EffectExpr-authoring specs) --

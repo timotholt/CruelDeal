@@ -32,7 +32,7 @@ engine/
   apply.ts              pure reducer: (state, event) → state
   resolve.ts            intent → events (validator + event generator)
   resolveTurn.ts        full-turn orchestration
-  eval.ts               recursive OR evaluator (revealCard, evalEffect)
+  eval.ts               recursive OR evaluator (revealPlayedCard, triggerOnReveal, evalEffect)
   rng/                  seeded PRNG (sfc32) + Rng interface
   manifest/             versioned game-data contract + bootstrap
     types.ts            Manifest, CardDef, LocationDef, ...
@@ -53,7 +53,7 @@ engine/
 - [ ] **Step 3** — BOOTSTRAP_MANIFEST populated from current demo cards.
 - [ ] **Step 4** — projections (power, lane power, priority, OR multiplier).
 - [ ] **Step 5** — `apply` reducer, every variant.
-- [ ] **Step 6** — selectors, predicates, numexpr, `evalEffect`, `revealCard`.
+- [ ] **Step 6** — selectors, predicates, numexpr, `evalEffect`, `revealPlayedCard`, `triggerOnReveal`.
 - [ ] **Step 7** — `resolve` for STAGE_CARD / UNSTAGE_CARD intents.
 - [ ] **Step 8** — `resolveTurn` full orchestration + enemy AI.
 - [ ] **Step 9** — event → animation adapter.

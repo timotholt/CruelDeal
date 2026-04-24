@@ -30,47 +30,49 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 // ---- Counts ---------------------------------------------------------------
 
 expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 106, '106 cards in manifest (105 cyberpunk + junk-card token)');
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 35, '35 Vantaris locations in manifest');
-expectEq(BOOTSTRAP_MANIFEST.disabled.locations.length, 13, '13 design-only locations disabled');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 37, '37 Vantaris locations in manifest');
+expectEq(BOOTSTRAP_MANIFEST.disabled.locations.length, 0, '0 design-only locations disabled');
 
 // ---- Locations are exactly the current map roster -------------------------
 
 const expectedLocIds = [
   'backdoor',
+  'ammo-club',
   'black-clinic',
   'black-halo',
   'charging-station',
-  'chip-swap',
+  'chip-tune',
   'chrome-beach',
   'chrome-depot',
-  'cold-vault',
+  'civil-court',
   'courthouse',
+  'cryobank',
   'cryo-storage',
   'data-chapel',
   'debt-alley',
   'drone-hive',
-  'fusion-plant',
-  'ghost-market',
-  'grub-hub',
+  'federal-courthouse',
+  'gun-store',
   'helixdyne-lab',
   'kurotek-atrium',
-  'market-sprawl',
   'meridian-tower',
-  'nanobot-factory',
+  'dark-alley',
   'neon-reliquary',
   'netrunner-shrine',
-  'noodle-bar',
   'organ-bank',
   'overclock-room',
-  'patent-office',
+  'pawn-shop',
   'power-sink',
+  'public-pool',
   'red-needle',
+  'rent-a-wreck',
   'scrap-yard',
   'signal-pit',
   'skyrail',
-  'stock-exchange',
+  'supercharging-station',
   'the-cage',
-  'the-last-terminal',
+  'the-meat-market',
+  'the-pineapple-club',
 ];
 for (const id of expectedLocIds) {
   expectTrue(BOOTSTRAP_MANIFEST.locations[id] !== undefined, `location "${id}" is present`);
@@ -137,17 +139,28 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
   expectTrue(first?.kind === 'LANE_POWER_MULTIPLIER', 'HelixDyne Lab ongoing[0] is LANE_POWER_MULTIPLIER');
 }
 {
-  const nanobotFactory = BOOTSTRAP_MANIFEST.locations['nanobot-factory']!;
-  const first = nanobotFactory.abilities.ongoing?.[0];
-  expectTrue(first?.kind === 'POWER_ADD', 'Nanobot Factory ongoing[0] is POWER_ADD');
+  const darkAlley = BOOTSTRAP_MANIFEST.locations['dark-alley']!;
+  const first = darkAlley.abilities.ongoing?.[0];
+  expectTrue(first?.kind === 'POWER_ADD', 'Dark Alley ongoing[0] is POWER_ADD');
   if (first?.kind === 'POWER_ADD') {
-    expectTrue(first.delta.kind === 'COUNT', 'Nanobot Factory delta is dynamic COUNT');
+    expectTrue(first.delta.kind === 'COUNT', 'Dark Alley delta is dynamic COUNT');
   }
 }
 {
-  const marketSprawl = BOOTSTRAP_MANIFEST.locations['market-sprawl']!;
-  const first = marketSprawl.abilities.onReveal?.[0];
-  expectTrue(first?.kind === 'DRAW', 'Market Sprawl onReveal[0] is DRAW');
+  const chromeDepot = BOOTSTRAP_MANIFEST.locations['chrome-depot']!;
+  const first = chromeDepot.abilities.onReveal?.[0];
+  expectTrue(first?.kind === 'ADD_CARD_TO_HAND', 'Chrome Depot onReveal[0] is ADD_CARD_TO_HAND');
+  if (first?.kind === 'ADD_CARD_TO_HAND') {
+    expectTrue(first.pool.kind === 'COST_RANGE' && first.pool.min === 1 && first.pool.max === 1, 'Chrome Depot adds random 1-Cost cards');
+  }
+}
+{
+  const rentAWreck = BOOTSTRAP_MANIFEST.locations['rent-a-wreck']!;
+  const first = rentAWreck.abilities.onReveal?.[0];
+  expectTrue(first?.kind === 'ADD_CARD_TO_HAND', 'Rent-A-Wreck onReveal[0] is ADD_CARD_TO_HAND');
+  if (first?.kind === 'ADD_CARD_TO_HAND') {
+    expectTrue(first.pool.kind === 'DEF_ID_LIST', 'Rent-A-Wreck uses a curated move-card pool');
+  }
 }
 
 // ---- Exit ------------------------------------------------------------------

@@ -22,9 +22,12 @@ import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
-import { revealCard, evalEffect, applyHandEntryDebuffs, type EffectCtx } from './effects/evaluator';
+import { revealPlayedCard, forceRevealPlayedCard, evalEffect, fireLocationTrigger, applyHandEntryDebuffs, type EffectCtx } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
+import { isRevealDelayed } from './projections/reveal';
+import { collectAllOngoings, sourceCtx } from './projections/ongoing';
+import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 
 // ============================================================================
 // resolve — intent → events
@@ -37,7 +40,7 @@ export function resolve(
   manifest: Manifest,
 ): MatchEvent[] {
   switch (intent.type) {
-    case 'STAGE_CARD':   return resolveStage(state, intent, manifest);
+    case 'STAGE_CARD':   return resolveStage(state, intent, rng, manifest);
     case 'UNSTAGE_CARD': return resolveUnstage(state, intent, manifest);
     case 'UNDO_TURN':    return resolveUndoTurn(state, intent, manifest);
     case 'END_TURN':     return resolveTurn(state, manifest, rng.fork(`turn:${state.turn}`)).events as MatchEvent[];
@@ -52,6 +55,7 @@ function reject(intentId: string, reason: string): MatchEvent[] {
 function resolveStage(
   state: MatchState,
   intent: Extract<MatchIntent, { type: 'STAGE_CARD' }>,
+  rng: Rng,
   manifest: Manifest,
 ): MatchEvent[] {
   const card = state.cards[intent.cardId];
@@ -69,23 +73,42 @@ function resolveStage(
   if (state.energy[intent.owner] < cost) {
     return reject(intent.intentId, 'insufficient energy');
   }
+  if (isPlayBlocked(state, intent.cardId, intent.lane, intent.owner, manifest)) {
+    return reject(intent.intentId, 'location blocks play');
+  }
 
-  return [
-    {
+  const events: MatchEvent[] = [];
+  let s = state;
+  const staged: MatchEvent = {
       type: 'CARD_STAGED',
       intentId: intent.intentId,
       cardId: intent.cardId,
       lane: intent.lane,
       owner: intent.owner,
       cost,
-    },
-    {
-      type: 'ENERGY_CHANGED',
-      owner: intent.owner,
-      delta: -cost,
-      reason: 'CARD_PLAYED',
-    },
-  ];
+  };
+  events.push(staged);
+  s = apply(s, staged, manifest);
+  const spent: MatchEvent = {
+    type: 'ENERGY_CHANGED',
+    owner: intent.owner,
+    delta: -cost,
+    reason: 'CARD_PLAYED',
+  };
+  events.push(spent);
+  s = apply(s, spent, manifest);
+
+  const locTrig = fireLocationTrigger(
+    s,
+    intent.lane,
+    'onCardEnteredHere',
+    rng.fork(`stage-enter:${intent.cardId}`),
+    manifest,
+    intent.cardId,
+    intent.owner,
+  );
+  events.push(...locTrig.events);
+  return events;
 }
 
 function resolveUnstage(
@@ -190,7 +213,7 @@ export function resolveTurn(
     const mine = s.stagingOrder.filter(id => s.cards[id]?.owner === owner);
     for (const cardId of mine) {
       const subRng = rng.fork(`reveal:${owner}:${cardId}`);
-      const res = revealCard(s, cardId, manifest, subRng);
+      const res = revealPlayedCard(s, cardId, manifest, subRng);
       events.push(...res.events);
       s = res.state;
     }
@@ -245,6 +268,22 @@ export function resolveTurn(
     }
   }
 
+  // Phase 1.92  Location end-of-turn triggers. These run after card EOT
+  // triggers and before TURN_ENDED cleanup clears transient play/move tags.
+  {
+    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+      const trig = fireLocationTrigger(
+        s,
+        lane,
+        'atTurnEnd',
+        rng.fork(`loc-eot:${lane}`),
+        manifest,
+      );
+      events.push(...trig.events);
+      s = trig.state;
+    }
+  }
+
   // Phase 1.95  DRAW_ON_POWER_GAIN — scan all reveal+EOT events for positive
   //             power changes on cards that have the reactive draw trigger.
   {
@@ -278,6 +317,9 @@ export function resolveTurn(
   //          settled. If the last turn just finished, the match ends here
   //          and NO start-of-turn bookkeeping runs.
   if (s.turn >= manifest.constants.turnLimit) {
+    const delayed = revealDelayedCardsAtEndOfGame(s, manifest, rng.fork('endgame-reveal'));
+    events.push(...delayed.events);
+    s = delayed.state;
     const result = computeMatchResult(s, manifest);
     const endEvt: MatchEvent = { type: 'MATCH_ENDED', result };
     events.push(endEvt);
@@ -391,6 +433,22 @@ export function resolveTurn(
     }
   }
 
+  // Phase 5.6  Location start-of-turn triggers, after TURN_STARTED and
+  // scheduled start effects, before normal draws.
+  {
+    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+      const trig = fireLocationTrigger(
+        s,
+        lane,
+        'atTurnStart',
+        rng.fork(`loc-start:${lane}`),
+        manifest,
+      );
+      events.push(...trig.events);
+      s = trig.state;
+    }
+  }
+
   // Phase 6  Draws (1 per owner, hand-cap permitting).
   for (const owner of ['P0', 'P1'] as const) {
     const draws = drawStep(s, owner, 1, manifest);
@@ -445,13 +503,62 @@ export function resolveTurn(
 // Helpers
 // ============================================================================
 
+function isPlayBlocked(
+  state: MatchState,
+  cardId: CardId,
+  lane: LaneIdx,
+  owner: Owner,
+  manifest: Manifest,
+): boolean {
+  for (const entry of collectAllOngoings(state, manifest)) {
+    if (entry.expr.kind !== 'BLOCK_PLAY') continue;
+    if (!ownerMatches(entry.expr.ownerFilter ?? 'ANY_OWNER', entry.sourceOwner, owner, owner)) continue;
+    const baseCtx = sourceCtx(entry, state, manifest);
+    if (!baseCtx) continue;
+    const ctx = {
+      ...baseCtx,
+      eventCard: cardId,
+      eventLane: lane,
+      eventOwner: owner,
+    };
+    if (entry.expr.when && !evalPredicate(entry.expr.when, ctx)) continue;
+    if (entry.expr.cardPred && !evalPredicate(entry.expr.cardPred, { ...ctx, self: cardId, selfKind: 'card' })) continue;
+    if (entry.expr.laneOf) {
+      if (selectLanes(entry.expr.laneOf, ctx).includes(lane)) return true;
+    } else if (entry.expr.target) {
+      if (select(entry.expr.target, ctx).includes(cardId)) return true;
+    }
+  }
+  return false;
+}
+
+function revealDelayedCardsAtEndOfGame(
+  state: MatchState,
+  manifest: Manifest,
+  rng: Rng,
+): ResolveTurnResult {
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const owner of ['P0', 'P1'] as const) {
+    for (const id of Object.keys(s.cards) as CardId[]) {
+      const card = s.cards[id];
+      if (!card || card.owner !== owner || card.zone !== 'LANE' || card.revealed) continue;
+      if (!isRevealDelayed(s, id, manifest)) continue;
+      const res = forceRevealPlayedCard(s, id, manifest, rng.fork(`delayed:${id}`));
+      events.push(...res.events);
+      s = res.state;
+    }
+  }
+  return { events, state: s };
+}
+
 function drawStep(
   state: MatchState,
   owner: Owner,
   count: number,
   manifest: Manifest,
-): MatchEvent[] {
-  const events: MatchEvent[] = [];
+): Extract<MatchEvent, { type: 'CARD_DRAWN' }>[] {
+  const events: Extract<MatchEvent, { type: 'CARD_DRAWN' }>[] = [];
   let deckLen = state.deck[owner].length;
   let handLen = state.hand[owner].length;
   let idx = 0;

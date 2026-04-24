@@ -94,9 +94,11 @@ export function getCardPowerModifiers(
     if (entry.expr.kind !== 'POWER_ADD') continue;
     const sourceId = entry.sourceCardId ?? entry.sourceLocationId;
     if (!sourceId) continue;
+    const delta = evalNum(entry.expr.delta, targetCtx);
+    if (delta > 0 && isPowerIncreaseBlocked(state, cardId, manifest)) continue;
     out.push({
       sourceId,
-      delta: evalNum(entry.expr.delta, targetCtx),
+      delta,
     });
   }
 
@@ -197,6 +199,11 @@ function laneOngoingMatchesOwner(entry: SourcedOngoing, owner: Owner): boolean {
     return false;
   }
   return ownerMatches(entry.expr.laneScope.ownerFilter, entry.sourceOwner, owner);
+}
+
+function isPowerIncreaseBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
+  return ongoingsTargeting(state, manifest, cardId)
+    .some(entry => entry.expr.kind === 'BLOCK_POWER_INCREASE');
 }
 
 function getOngoingEvalCtx(

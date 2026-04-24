@@ -10,7 +10,7 @@
  *   - Step 3: populated manifest
  *   - Step 4: projections
  *   - Step 5: apply reducer
- *   - Step 6: revealCard + evalEffect
+ *   - Step 6: revealPlayedCard / triggerOnReveal + evalEffect
  *   - Step 7: resolve (staging intents)
  *   - Step 8: resolveTurn
  */
@@ -32,7 +32,7 @@ export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
 
 // ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
-export { revealCard, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
+export { revealPlayedCard, forceRevealPlayedCard, triggerOnReveal, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
 
 // ---- CLI (headless match driver) -----------------------------------------
 export { createInitialMatchState } from './cli/initState';

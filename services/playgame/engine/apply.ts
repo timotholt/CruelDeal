@@ -33,7 +33,7 @@ import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 
 export function apply(state: MatchState, event: MatchEvent, _manifest: Manifest): MatchState {
-  const next = applyBody(state, event);
+  const next = applyBody(state, event, _manifest);
   // Every event is appended to the log, regardless of whether the body
   // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
   // INTENT_REJECTED) only contribute to the log.
@@ -41,7 +41,7 @@ export function apply(state: MatchState, event: MatchEvent, _manifest: Manifest)
   return appendLog(next2, event);
 }
 
-function applyBody(state: MatchState, event: MatchEvent): MatchState {
+function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): MatchState {
   switch (event.type) {
     // ---- Staging / play ---------------------------------------------------
 
@@ -214,6 +214,44 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
       });
     }
 
+    case 'CARD_RETURNED_TO_LANE': {
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      if (state.lanes[event.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
+      let s: MatchState = state;
+      if (card.lane !== null) {
+        s = removeFromLane(s, card.owner, card.lane, event.cardId);
+      }
+      s = removeFromHand(s, card.owner, event.cardId);
+      s = {
+        ...s,
+        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(c => c.id !== event.cardId) },
+      };
+      const s2 = patchCard(s, event.cardId, {
+        zone: 'LANE',
+        lane: event.lane,
+        revealed: event.revealed,
+      });
+      return addToLane(s2, card.owner, event.lane, event.cardId);
+    }
+
+    case 'CARD_TRANSFORMED': {
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      return patchCard(state, event.cardId, {
+        defId: event.newDefId,
+        ...(event.resetStats ? {
+          powerDelta: 0,
+          costDelta: 0,
+          powerLog: [],
+          costLog: [],
+          counters: {},
+          tags: [],
+          textOverride: null,
+        } : {}),
+      });
+    }
+
     case 'CARD_TAG_ADDED': {
       const card = state.cards[event.cardId];
       if (!card) return state;
@@ -373,6 +411,22 @@ function applyBody(state: MatchState, event: MatchEvent): MatchState {
         location: {
           ...lane.location,
           tags: lane.location.tags.filter(t => t.kind !== event.tag),
+        },
+      });
+    }
+
+    case 'LOCATION_COUNTER_CHANGED': {
+      const lane = state.lanes[event.lane];
+      if (!lane.location) return state;
+      const key = event.owner ? `${event.owner}:${event.name}` : event.name;
+      const prev = lane.location.counters?.[key] ?? 0;
+      return patchLane(state, event.lane, {
+        location: {
+          ...lane.location,
+          counters: {
+            ...(lane.location.counters ?? {}),
+            [key]: prev + event.delta,
+          },
         },
       });
     }

@@ -56,6 +56,8 @@ export type MatchEvent =
   | { type: 'CARD_DISCARDED'; cardId: CardId; reason: DiscardReason; cause: EffectRef }  // hand → DISCARD pile
   | { type: 'CARD_BANISHED'; cardId: CardId; cause: EffectRef }    // anywhere → BANISHED (inaccessible)
   | { type: 'CARD_MOVED'; cardId: CardId; fromLane: LaneIdx; toLane: LaneIdx; cause: EffectRef }
+  | { type: 'CARD_RETURNED_TO_LANE'; cardId: CardId; lane: LaneIdx; revealed: boolean; cause: EffectRef }
+  | { type: 'CARD_TRANSFORMED'; cardId: CardId; oldDefId: string; newDefId: string; cause: EffectRef; resetStats?: boolean }
   | { type: 'CARD_TAG_ADDED'; cardId: CardId; tag: CardTag }
   | { type: 'CARD_TAG_REMOVED'; cardId: CardId; tag: CardTag['kind'] }
   | { type: 'CARD_TEXT_OVERRIDDEN'; cardId: CardId; override: TextOverride }
@@ -86,6 +88,7 @@ export type MatchEvent =
   | { type: 'LOCATION_SHIFTED'; fromLane: LaneIdx; toLane: LaneIdx; locationId: LocationId; cause: EffectRef }
   | { type: 'LOCATION_TAG_ADDED'; lane: LaneIdx; tag: LaneTag }
   | { type: 'LOCATION_TAG_REMOVED'; lane: LaneIdx; tag: LaneTag['kind'] }
+  | { type: 'LOCATION_COUNTER_CHANGED'; lane: LaneIdx; name: string; owner?: Owner; delta: number }
 
   // --- Turn flow ---
   | { type: 'TURN_STARTED'; turn: number; priority: Owner; priorityReason: PriorityReason }

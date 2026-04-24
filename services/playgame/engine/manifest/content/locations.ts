@@ -1,18 +1,17 @@
 /**
  * Vantaris location set for Cruel Deal.
  *
- * Playable locations use ability primitives the current engine already
- * supports. Design-only locations are still exported into the manifest with
- * rarity 0 and are listed in `disabled.locations`; their desired rules are
- * preserved in cosmetic.description so the design work does not live only in
- * chat history.
+ * `LOCATION_SPECS` is the source of truth: one compact row per location, with
+ * the map path next to the playable/design data. The manifest adapter below
+ * derives `defId`, `displayName`, rarity, and disabled status so authors do
+ * not have to repeat the same location name in multiple fields.
  *
  * Context note for selectors used below:
  *   - Inside a location ability, `{ kind: 'SELF' }` resolves to the location
  *     instance. `{ kind: 'SAME_LANE', of: SELF }` means "cards in this lane".
  */
 
-import type { EffectExpr, OngoingExpr, Predicate, Selector } from '../../types/ability';
+import type { EffectExpr, OngoingExpr, OwnerFilter, OwnerRef, Predicate, Selector } from '../../types/ability';
 import type { LocationDef } from '../types';
 
 export const CRUEL_DEAL_CITY = {
@@ -23,6 +22,7 @@ export const CRUEL_DEAL_CITY = {
 } as const;
 
 type LocationStatus = 'playable' | 'unimplemented';
+type LocationAbilities = LocationDef['abilities'];
 
 export interface LocationDesignEntry {
   status: LocationStatus;
@@ -31,22 +31,21 @@ export interface LocationDesignEntry {
   def: LocationDef;
 }
 
-const MAPS = {
-  cathedral: '/art/maps/Cathedral.png',
-  cathedral2: '/art/maps/Cathedral2.png',
-  jungle: '/art/maps/Jungle.png',
-  foodCourt: '/art/maps/FoodCourt.png',
-  hackersLair: '/art/maps/HackersLair.png',
-  icyRoad: '/art/maps/IcyRoad.png',
-  laboratory: '/art/maps/Laboratory.png',
-  lavaFlow: '/art/maps/LavaFlow.png',
-  beach: '/art/maps/TropicalBeach.png',
-  starship: '/art/maps/AlienStarship.png',
-} as const;
+interface LocationSpec {
+  status: LocationStatus;
+  name: string;
+  text: string;
+  map: string;
+  accent: string;
+  abilities?: LocationAbilities;
+  note: string;
+}
 
 const self: Selector = { kind: 'SELF' };
 
-const sameLane = (ownerFilter: 'ANY_OWNER' | 'SELF_OWNER' | 'OPP_OWNER' = 'ANY_OWNER'): Selector => ({
+const eventCard: Selector = { kind: 'EVENT_CARD' };
+
+const sameLane = (ownerFilter: OwnerFilter = 'ANY_OWNER'): Selector => ({
   kind: 'SAME_LANE',
   of: self,
   ownerFilter,
@@ -58,15 +57,31 @@ const cardsHereWhere = (pred: Predicate): Selector => ({
   pred,
 });
 
-const drawBoth = (count: number): EffectExpr[] => [
-  { kind: 'DRAW', owner: 'P0', count: { kind: 'LIT', n: count } },
-  { kind: 'DRAW', owner: 'P1', count: { kind: 'LIT', n: count } },
-];
-
 const randomHandCard = (owner: 'P0' | 'P1'): Selector => ({
   kind: 'RANDOM_N',
   count: { kind: 'LIT', n: 1 },
   of: { kind: 'HAND_OF', owner },
+});
+
+const randomCardToHand = (owner: 'P0' | 'P1'): EffectExpr => ({
+  kind: 'ADD_CARD_TO_HAND',
+  pool: { kind: 'ANY_RANDOM', ownerFilter: 'ANY_OWNER' },
+  owner,
+});
+
+const randomCostCardToHand = (owner: 'P0' | 'P1', cost: number): EffectExpr => ({
+  kind: 'ADD_CARD_TO_HAND',
+  pool: { kind: 'COST_RANGE', ownerDeck: owner, min: cost, max: cost },
+  owner,
+});
+
+const moveCardToHand = (owner: 'P0' | 'P1'): EffectExpr => ({
+  kind: 'ADD_CARD_TO_HAND',
+  pool: {
+    kind: 'DEF_ID_LIST',
+    ids: ['neon-courier', 'getaway-driver', 'rooftop-runner', 'traffic-spoofer', 'escape-route'],
+  },
+  owner,
 });
 
 const powerHere = (delta: number): OngoingExpr[] => [{
@@ -76,65 +91,67 @@ const powerHere = (delta: number): OngoingExpr[] => [{
   stack: 'ADDITIVE',
 }];
 
-const playable = (
-  defId: string,
-  name: string,
-  description: string,
-  accent: string,
-  mapPath: string,
-  abilities: LocationDef['abilities'],
-  implementationNote: string,
-): LocationDesignEntry => ({
+const currentTurn = (op: '<' | '<=' | '==' | '>=' | '>', n: number): Predicate => ({
+  kind: 'NUM_CMP',
+  a: { kind: 'CURRENT_TURN' },
+  op,
+  b: { kind: 'LIT', n },
+});
+
+const locationCounterIs = (name: string, op: '<' | '<=' | '==' | '>=' | '>', n: number, owner?: OwnerRef): Predicate => ({
+  kind: 'NUM_CMP',
+  a: { kind: 'LOCATION_COUNTER', name, owner },
+  op,
+  b: { kind: 'LIT', n },
+});
+
+const bumpLocationCounter = (name: string, owner?: OwnerRef): EffectExpr => ({
+  kind: 'MODIFY_LOCATION_COUNTER',
+  lane: self,
+  name,
+  owner,
+  delta: { kind: 'LIT', n: 1 },
+});
+
+const p = (spec: Omit<LocationSpec, 'status'>): LocationSpec => ({
   status: 'playable',
-  implementationNote,
-  def: {
-    defId,
-    version: 1,
-    name,
-    rarity: 1,
-    abilities,
-    cosmetic: {
-      displayName: name.toUpperCase(),
-      description,
-      accent,
-      art: { map: { path: mapPath, kind: 'image' } },
-    },
-  },
+  ...spec,
 });
 
-const unimplemented = (
-  defId: string,
-  name: string,
-  desiredEffect: string,
-  accent: string,
-  mapPath: string,
-  implementationNote: string,
-): LocationDesignEntry => ({
+const u = (spec: Omit<LocationSpec, 'status' | 'abilities'>): LocationSpec => ({
   status: 'unimplemented',
-  implementationNote,
+  abilities: {},
+  ...spec,
+});
+
+const slug = (name: string): string =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+const toCatalogEntry = (spec: LocationSpec): LocationDesignEntry => ({
+  status: spec.status,
+  implementationNote: spec.note,
   def: {
-    defId,
+    defId: slug(spec.name),
     version: 1,
-    name,
-    rarity: 0,
-    abilities: {},
+    name: spec.name,
+    rarity: spec.status === 'playable' ? 1 : 0,
+    abilities: spec.abilities ?? {},
     cosmetic: {
-      displayName: name.toUpperCase(),
-      description: `UNIMPLEMENTED - ${desiredEffect}`,
-      accent,
-      art: { map: { path: mapPath, kind: 'image' } },
+      displayName: spec.name.toUpperCase(),
+      description: spec.status === 'playable' ? spec.text : `UNIMPLEMENTED - ${spec.text}`,
+      accent: spec.accent,
+      art: { map: { path: spec.map, kind: 'image' } },
     },
   },
 });
 
-export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
-  playable(
-    'neon-reliquary',
-    'Neon Reliquary',
-    'On Reveal effects here trigger twice.',
-    '#d4b87a',
-    MAPS.cathedral,
-    {
+export const LOCATION_SPECS: readonly LocationSpec[] = [
+  p({
+    name: 'Neon Reliquary',
+    text: 'On Reveal effects here trigger twice.',
+    map: '/art/maps/Cathedral.png',
+    accent: '#d4b87a',
+    abilities: {
       ongoing: [{
         kind: 'ON_REVEAL_MULTIPLIER',
         target: sameLane(),
@@ -142,16 +159,15 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'MULTIPLICATIVE',
       }],
     },
-    'Implemented with ON_REVEAL_MULTIPLIER.',
-  ),
+    note: 'Implemented with ON_REVEAL_MULTIPLIER.',
+  }),
 
-  playable(
-    'nanobot-factory',
-    'Nanobot Factory',
-    'Cards here get +1 Power for each other friendly card here.',
-    '#31d28a',
-    MAPS.jungle,
-    {
+  p({
+    name: 'Dark Alley',
+    text: 'Cards here get +1 Power for each other friendly card here.',
+    map: '/art/maps/Jungle.png',
+    accent: '#31d28a',
+    abilities: {
       ongoing: [{
         kind: 'POWER_ADD',
         target: sameLane(),
@@ -167,61 +183,61 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with per-target friendly COUNT.',
-  ),
+    note: 'Implemented with per-target friendly COUNT.',
+  }),
 
-  playable(
-    'market-sprawl',
-    'Market Sprawl',
-    'When revealed, each player draws a card.',
-    '#d96c3c',
-    MAPS.foodCourt,
-    { onReveal: drawBoth(1) },
-    'Implemented with DRAW for both players.',
-  ),
+  p({
+    name: 'Chrome Depot',
+    text: 'When revealed, each player adds a random 1-Cost card to their hand.',
+    map: '/art/maps/FoodCourt.png',
+    accent: '#d96c3c',
+    abilities: {
+      onReveal: [
+        randomCostCardToHand('P0', 1),
+        randomCostCardToHand('P1', 1),
+      ],
+    },
+    note: 'Implemented with ADD_CARD_TO_HAND and COST_RANGE 1.',
+  }),
 
-  playable(
-    'noodle-bar',
-    'Noodle Bar',
-    'Cards here have +1 Power.',
-    '#f0c86a',
-    MAPS.foodCourt,
-    { ongoing: powerHere(1) },
-    'Implemented with POWER_ADD.',
-  ),
+  p({
+    name: 'Ammo Club',
+    text: 'Cards here have +1 Power.',
+    map: '/art/maps/FoodCourt.png',
+    accent: '#f0c86a',
+    abilities: { ongoing: powerHere(1) },
+    note: 'Implemented with POWER_ADD.',
+  }),
 
-  playable(
-    'the-last-terminal',
-    'The Last Terminal',
-    'When revealed, a random card in each player hand costs 1 more.',
-    '#31d28a',
-    MAPS.hackersLair,
-    {
+  p({
+    name: 'Cryo-Storage',
+    text: 'When revealed, a random card in each player hand costs 1 more.',
+    map: '/art/maps/HackersLair.png',
+    accent: '#31d28a',
+    abilities: {
       onReveal: [
         { kind: 'ADJUST_COST', target: randomHandCard('P0'), delta: { kind: 'LIT', n: 1 } },
         { kind: 'ADJUST_COST', target: randomHandCard('P1'), delta: { kind: 'LIT', n: 1 } },
       ],
     },
-    'Implemented with ADJUST_COST against each hand.',
-  ),
+    note: 'Implemented with ADJUST_COST against each hand.',
+  }),
 
-  playable(
-    'cryo-storage',
-    'Cryo-Storage',
-    'Cards here have -1 Power.',
-    '#8fd5e8',
-    MAPS.icyRoad,
-    { ongoing: powerHere(-1) },
-    'Implemented with POWER_ADD -1.',
-  ),
+  p({
+    name: 'Public Pool',
+    text: 'Cards here have -1 Power.',
+    map: '/art/maps/IcyRoad.png',
+    accent: '#8fd5e8',
+    abilities: { ongoing: powerHere(-1) },
+    note: 'Implemented with POWER_ADD -1.',
+  }),
 
-  playable(
-    'helixdyne-lab',
-    'HelixDyne Lab',
-    'Both players total Power is doubled here.',
-    '#6aa9d6',
-    MAPS.laboratory,
-    {
+  p({
+    name: 'HelixDyne Lab',
+    text: 'Both players total Power is doubled here.',
+    map: '/art/maps/Laboratory.png',
+    accent: '#6aa9d6',
+    abilities: {
       ongoing: [{
         kind: 'LANE_POWER_MULTIPLIER',
         laneScope: { laneOf: self, ownerFilter: 'ANY_OWNER' },
@@ -229,41 +245,45 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with LANE_POWER_MULTIPLIER.',
-  ),
+    note: 'Implemented with LANE_POWER_MULTIPLIER.',
+  }),
 
-  playable(
-    'fusion-plant',
-    'Fusion Plant',
-    'When revealed, each player gains 1 Energy.',
-    '#8d78ff',
-    MAPS.starship,
-    {
+  p({
+    name: 'Supercharging Station',
+    text: 'When revealed, each player gains 1 Energy.',
+    map: '/art/maps/AlienStarship.png',
+    accent: '#8d78ff',
+    abilities: {
       onReveal: [
         { kind: 'ADJUST_ENERGY', owner: 'P0', delta: { kind: 'LIT', n: 1 } },
         { kind: 'ADJUST_ENERGY', owner: 'P1', delta: { kind: 'LIT', n: 1 } },
       ],
     },
-    'Implemented with ADJUST_ENERGY for both players.',
-  ),
+    note: 'Implemented with ADJUST_ENERGY for both players.',
+  }),
 
-  playable(
-    'chrome-beach',
-    'Chrome Beach',
-    'Cards here have +1 Power.',
-    '#f0c86a',
-    MAPS.beach,
-    { ongoing: powerHere(1) },
-    'Implemented with POWER_ADD.',
-  ),
+  p({
+    name: 'Chrome Beach',
+    text: 'No cards can be played here after turn 5.',
+    map: '/art/maps/TropicalBeach.png',
+    accent: '#f0c86a',
+    abilities: {
+      ongoing: [{
+        kind: 'BLOCK_PLAY',
+        laneOf: self,
+        when: currentTurn('>', 5),
+        stack: 'SINGLE',
+      }],
+    },
+    note: 'Implemented with turn-aware BLOCK_PLAY.',
+  }),
 
-  playable(
-    'charging-station',
-    'Charging Station',
-    'Ongoing cards here have +1 Power.',
-    '#44c6ff',
-    MAPS.starship,
-    {
+  p({
+    name: 'Charging Station',
+    text: 'Ongoing cards here have +1 Power.',
+    map: '/art/maps/AlienStarship.png',
+    accent: '#44c6ff',
+    abilities: {
       ongoing: [{
         kind: 'POWER_ADD',
         target: cardsHereWhere({ kind: 'HAS_ONGOING', target: self }),
@@ -271,16 +291,15 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with HAS_ONGOING predicate plus POWER_ADD.',
-  ),
+    note: 'Implemented with HAS_ONGOING predicate plus POWER_ADD.',
+  }),
 
-  playable(
-    'meridian-tower',
-    'Meridian Tower',
-    'Cards that cost 4, 5, or 6 have +2 Power here.',
-    '#f7d06b',
-    MAPS.cathedral2,
-    {
+  p({
+    name: 'Meridian Tower',
+    text: 'Cards that cost 4, 5, or 6 have +2 Power here.',
+    map: '/art/maps/Cathedral2.png',
+    accent: '#f7d06b',
+    abilities: {
       ongoing: [{
         kind: 'POWER_ADD',
         target: cardsHereWhere({
@@ -294,16 +313,15 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with COST_CMP predicates.',
-  ),
+    note: 'Implemented with COST_CMP predicates.',
+  }),
 
-  playable(
-    'kurotek-atrium',
-    'KuroTek Atrium',
-    'Ongoing cards here have their Ongoing abilities doubled.',
-    '#b88f57',
-    MAPS.cathedral2,
-    {
+  p({
+    name: 'KuroTek Atrium',
+    text: 'Ongoing cards here have their Ongoing abilities doubled.',
+    map: '/art/maps/Cathedral2.png',
+    accent: '#b88f57',
+    abilities: {
       ongoing: [{
         kind: 'BOOST_ONGOINGS',
         scope: { laneOf: self, ownerFilter: 'ANY_OWNER' },
@@ -311,109 +329,136 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with BOOST_ONGOINGS.',
-  ),
+    note: 'Implemented with BOOST_ONGOINGS.',
+  }),
 
-  unimplemented(
-    'organ-bank',
-    'Organ Bank',
-    'When revealed, give each player lowest-Power card here +3 Power.',
-    '#ff6f91',
-    MAPS.laboratory,
-    'Needs per-owner location targeting from a neutral location source.',
-  ),
+  p({
+    name: 'Organ Bank',
+    text: 'After turn 4, give each player lowest-Power card here +3 Power.',
+    map: '/art/maps/Laboratory.png',
+    accent: '#ff6f91',
+    abilities: {
+      atTurnEnd: [{
+        kind: 'CONDITIONAL',
+        if: currentTurn('==', 4),
+        then: [
+          { kind: 'ADD_POWER', target: { kind: 'MIN_POWER_OF', of: sameLane('P0') }, delta: { kind: 'LIT', n: 3 } },
+          { kind: 'ADD_POWER', target: { kind: 'MIN_POWER_OF', of: sameLane('P1') }, delta: { kind: 'LIT', n: 3 } },
+        ],
+      }],
+    },
+    note: 'Implemented with location atTurnEnd and concrete owner lane selectors.',
+  }),
 
-  unimplemented(
-    'chrome-depot',
-    'Chrome Depot',
-    'Cards added to this location have +2 Power.',
-    '#c0c7d4',
-    MAPS.starship,
-    'Needs a location-level card-entered-lane trigger.',
-  ),
+  p({
+    name: 'Gun Store',
+    text: 'Cards added to this location have +2 Power.',
+    map: '/art/maps/AlienStarship.png',
+    accent: '#c0c7d4',
+    abilities: {
+      onCardEnteredHere: [{ kind: 'ADD_POWER', target: eventCard, delta: { kind: 'LIT', n: 2 } }],
+    },
+    note: 'Implemented with location onCardEnteredHere and EVENT_CARD.',
+  }),
 
-  unimplemented(
-    'red-needle',
-    'Red Needle',
-    'When a card is destroyed here, give a random friendly card here +2 Power.',
-    '#ff365f',
-    MAPS.lavaFlow,
-    'Needs a location-level on-card-destroyed-here trigger.',
-  ),
+  p({
+    name: 'Red Needle',
+    text: 'When a card is destroyed here, give a random friendly card here +2 Power.',
+    map: '/art/maps/LavaFlow.png',
+    accent: '#ff365f',
+    abilities: {
+      onCardDestroyedHere: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'RANDOM_N', count: { kind: 'LIT', n: 1 }, of: sameLane('EVENT_OWNER') },
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    },
+    note: 'Implemented with location onCardDestroyedHere and EVENT_OWNER.',
+  }),
 
-  playable(
-    'grub-hub',
-    'Grub Hub',
-    'When revealed, each player draws a card, then discards a random card.',
-    '#ff9f43',
-    MAPS.foodCourt,
-    {
+  p({
+    name: 'The Pineapple Club',
+    text: 'When revealed, each player discards a card, then adds a random card to their hand.',
+    map: '/art/maps/FoodCourt.png',
+    accent: '#ff9f43',
+    abilities: {
       onReveal: [
-        ...drawBoth(1),
         { kind: 'DISCARD', target: randomHandCard('P0') },
         { kind: 'DISCARD', target: randomHandCard('P1') },
+        randomCardToHand('P0'),
+        randomCardToHand('P1'),
       ],
     },
-    'Implemented with DRAW plus DISCARD.',
-  ),
+    note: 'Implemented with DISCARD plus ADD_CARD_TO_HAND.',
+  }),
 
-  unimplemented(
-    'black-halo',
-    'Black Halo',
-    'Cards with On Reveal have +2 Power here.',
-    '#7b2ff7',
-    MAPS.hackersLair,
-    'Needs a HAS_ON_REVEAL predicate.',
-  ),
+  p({
+    name: 'Black Halo',
+    text: 'Cards with On Reveal have +2 Power here.',
+    map: '/art/maps/HackersLair.png',
+    accent: '#7b2ff7',
+    abilities: {
+      ongoing: [{
+        kind: 'POWER_ADD',
+        target: cardsHereWhere({ kind: 'HAS_ABILITY', target: self, slot: 'ON_REVEAL' }),
+        delta: { kind: 'LIT', n: 2 },
+        stack: 'ADDITIVE',
+      }],
+    },
+    note: 'Implemented with HAS_ABILITY ON_REVEAL predicate.',
+  }),
 
-  unimplemented(
-    'the-cage',
-    'The Cage',
-    'Cards cannot move from this location.',
-    '#d4af37',
-    MAPS.icyRoad,
-    'Needs a movement-blocking lane aura.',
-  ),
+  p({
+    name: 'The Cage',
+    text: 'Cards cannot move from this location.',
+    map: '/art/maps/IcyRoad.png',
+    accent: '#d4af37',
+    abilities: {
+      ongoing: [{
+        kind: 'BLOCK_MOVE',
+        target: sameLane(),
+        stack: 'SINGLE',
+      }],
+    },
+    note: 'Implemented with BLOCK_MOVE aura.',
+  }),
 
-  playable(
-    'chip-swap',
-    'Chip Swap',
-    'When revealed, reduce a random card in each player hand by 1 Cost.',
-    '#59ffa8',
-    MAPS.hackersLair,
-    {
+  p({
+    name: 'Chip Tune',
+    text: 'When revealed, reduce a random card in each player hand by 1 Cost.',
+    map: '/art/maps/HackersLair.png',
+    accent: '#59ffa8',
+    abilities: {
       onReveal: [
         { kind: 'ADJUST_COST', target: randomHandCard('P0'), delta: { kind: 'LIT', n: -1 } },
         { kind: 'ADJUST_COST', target: randomHandCard('P1'), delta: { kind: 'LIT', n: -1 } },
       ],
     },
-    'Implemented with ADJUST_COST -1.',
-  ),
+    note: 'Implemented with ADJUST_COST -1.',
+  }),
 
-  playable(
-    'netrunner-shrine',
-    'Netrunner Shrine',
-    'On Reveal effects here trigger twice.',
-    '#b779ff',
-    MAPS.cathedral,
-    {
+  p({
+    name: 'Netrunner Shrine',
+    text: 'Cards with copied text have +4 Power here.',
+    map: '/art/maps/Cathedral.png',
+    accent: '#b779ff',
+    abilities: {
       ongoing: [{
-        kind: 'ON_REVEAL_MULTIPLIER',
-        target: sameLane(),
-        factor: { kind: 'LIT', n: 2 },
-        stack: 'MULTIPLICATIVE',
+        kind: 'POWER_ADD',
+        target: cardsHereWhere({ kind: 'HAS_COPIED_TEXT', target: self }),
+        delta: { kind: 'LIT', n: 4 },
+        stack: 'ADDITIVE',
       }],
     },
-    'Implemented with ON_REVEAL_MULTIPLIER.',
-  ),
+    note: 'Implemented with HAS_COPIED_TEXT predicate.',
+  }),
 
-  playable(
-    'stock-exchange',
-    'Stock Exchange',
-    'Cards that had their Cost reduced have +3 Power here.',
-    '#ffd166',
-    MAPS.cathedral2,
-    {
+  p({
+    name: 'Federal Courthouse',
+    text: 'Cards that had their Cost reduced have +3 Power here.',
+    map: '/art/maps/Cathedral2.png',
+    accent: '#ffd166',
+    abilities: {
       ongoing: [{
         kind: 'POWER_ADD',
         target: cardsHereWhere({ kind: 'COST_REDUCED', target: self }),
@@ -421,25 +466,30 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with COST_REDUCED predicate.',
-  ),
+    note: 'Implemented with COST_REDUCED predicate.',
+  }),
 
-  unimplemented(
-    'courthouse',
-    'Courthouse',
-    'Cards here cannot have their Power increased.',
-    '#aab2bd',
-    MAPS.cathedral2,
-    'Needs a power-increase prevention aura.',
-  ),
+  p({
+    name: 'Courthouse',
+    text: 'Cards here cannot have their Power increased.',
+    map: '/art/maps/Cathedral2.png',
+    accent: '#aab2bd',
+    abilities: {
+      ongoing: [{
+        kind: 'BLOCK_POWER_INCREASE',
+        target: sameLane(),
+        stack: 'SINGLE',
+      }],
+    },
+    note: 'Implemented with BLOCK_POWER_INCREASE aura.',
+  }),
 
-  playable(
-    'data-chapel',
-    'Data Chapel',
-    'Cards with copied or disabled text have +3 Power here.',
-    '#9cffcb',
-    MAPS.cathedral,
-    {
+  p({
+    name: 'Data Chapel',
+    text: 'Cards with copied or disabled text have +3 Power here.',
+    map: '/art/maps/Cathedral.png',
+    accent: '#9cffcb',
+    abilities: {
       ongoing: [{
         kind: 'POWER_ADD',
         target: cardsHereWhere({
@@ -453,144 +503,241 @@ export const LOCATION_CATALOG: readonly LocationDesignEntry[] = [
         stack: 'ADDITIVE',
       }],
     },
-    'Implemented with HAS_COPIED_TEXT/TEXT_DISABLED predicates.',
-  ),
+    note: 'Implemented with HAS_COPIED_TEXT/TEXT_DISABLED predicates.',
+  }),
 
-  playable(
-    'ghost-market',
-    'Ghost Market',
-    'When revealed, add a random 1-Cost card to each player hand.',
-    '#70e1f5',
-    MAPS.foodCourt,
-    {
-      onReveal: [
-        { kind: 'ADD_CARD_TO_HAND', pool: { kind: 'COST_RANGE', ownerDeck: 'P0', min: 1, max: 1 }, owner: 'P0' },
-        { kind: 'ADD_CARD_TO_HAND', pool: { kind: 'COST_RANGE', ownerDeck: 'P1', min: 1, max: 1 }, owner: 'P1' },
-      ],
+  p({
+    name: 'The Meat Market',
+    text: 'Destroy the first card played here.',
+    map: '/art/maps/FoodCourt.png',
+    accent: '#70e1f5',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'CONDITIONAL',
+        if: locationCounterIs('first-card-played', '==', 0),
+        then: [
+          { kind: 'DESTROY', target: eventCard },
+          bumpLocationCounter('first-card-played'),
+        ],
+      }],
     },
-    'Implemented with ADD_CARD_TO_HAND and COST_RANGE.',
-  ),
+    note: 'Implemented with onCardPlayedHere, EVENT_CARD, and a location counter.',
+  }),
 
-  unimplemented(
-    'debt-alley',
-    'Debt Alley',
-    'The first card each player plays here gets -2 Power.',
-    '#7f5af0',
-    MAPS.icyRoad,
-    'Needs per-owner first-card-played-here memory.',
-  ),
+  p({
+    name: 'Debt Alley',
+    text: 'The first card each player plays here gets -2 Power.',
+    map: '/art/maps/IcyRoad.png',
+    accent: '#7f5af0',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'CONDITIONAL',
+        if: locationCounterIs('played-here', '==', 0, 'EVENT_OWNER'),
+        then: [
+          { kind: 'ADD_POWER', target: eventCard, delta: { kind: 'LIT', n: -2 } },
+          bumpLocationCounter('played-here', 'EVENT_OWNER'),
+        ],
+      }],
+    },
+    note: 'Implemented with owner-scoped location counters.',
+  }),
 
-  unimplemented(
-    'skyrail',
-    'Skyrail',
-    'After you play a card here, move it to another location if possible.',
-    '#58c7ff',
-    MAPS.starship,
-    'Needs a location-level after-card-played trigger.',
-  ),
+  p({
+    name: 'Skyrail',
+    text: 'After you play a card here, move it to another location if possible.',
+    map: '/art/maps/AlienStarship.png',
+    accent: '#58c7ff',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'MOVE',
+        target: eventCard,
+        to: { kind: 'RANDOM_N', count: { kind: 'LIT', n: 1 }, of: { kind: 'OTHER_LANES', of: eventCard } },
+      }],
+    },
+    note: 'Implemented with onCardPlayedHere, EVENT_CARD, and MOVE.',
+  }),
 
-  unimplemented(
-    'cold-vault',
-    'Cold Vault',
-    'Cards here cannot be destroyed.',
-    '#8fd5e8',
-    MAPS.icyRoad,
-    'Needs a destroy-prevention lane aura for all destroy sources.',
-  ),
+  p({
+    name: 'Cryobank',
+    text: 'Cards played here are not revealed until the end of the game.',
+    map: '/art/maps/IcyRoad.png',
+    accent: '#8fd5e8',
+    abilities: {
+      ongoing: [{
+        kind: 'DELAY_REVEAL',
+        target: sameLane(),
+        until: 'END_OF_GAME',
+        stack: 'SINGLE',
+      }],
+    },
+    note: 'Implemented with DELAY_REVEAL and end-game force reveal.',
+  }),
 
-  playable(
-    'signal-pit',
-    'Signal Pit',
-    'Disable Ongoing effects here.',
-    '#00f5d4',
-    MAPS.hackersLair,
-    {
+  p({
+    name: 'Signal Pit',
+    text: 'Disable Ongoing effects here.',
+    map: '/art/maps/HackersLair.png',
+    accent: '#00f5d4',
+    abilities: {
       ongoing: [{
         kind: 'DISABLE_ONGOING',
         target: sameLane(),
         stack: 'SINGLE',
       }],
     },
-    'Implemented with DISABLE_ONGOING aura.',
-  ),
+    note: 'Implemented with DISABLE_ONGOING aura.',
+  }),
 
-  playable(
-    'drone-hive',
-    'Drone Hive',
-    'When revealed, add a 1-Power Drone here for each player.',
-    '#adb5bd',
-    MAPS.jungle,
-    {
+  p({
+    name: 'Drone Hive',
+    text: 'When revealed, add a 1-Power Drone here for each player.',
+    map: '/art/maps/Jungle.png',
+    accent: '#adb5bd',
+    abilities: {
       onReveal: [
         { kind: 'ADD_CARD_TO_LANE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P0', to: self },
         { kind: 'ADD_CARD_TO_LANE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P1', to: self },
       ],
     },
-    'Implemented with ADD_CARD_TO_LANE and cheap-drone token.',
-  ),
+    note: 'Implemented with ADD_CARD_TO_LANE and cheap-drone token.',
+  }),
 
-  unimplemented(
-    'patent-office',
-    'Patent Office',
-    'Cards with no ability text have +3 Power here.',
-    '#d8dbe2',
-    MAPS.cathedral2,
-    'Needs a HAS_NO_ABILITY_TEXT predicate.',
-  ),
-
-  unimplemented(
-    'backdoor',
-    'Backdoor',
-    'The next card each player plays here triggers its On Reveal twice.',
-    '#5efc8d',
-    MAPS.hackersLair,
-    'Needs one-shot per-player lane memory.',
-  ),
-
-  unimplemented(
-    'scrap-yard',
-    'Scrap Yard',
-    'Destroyed cards have +1 Power if they return to play.',
-    '#a47148',
-    MAPS.lavaFlow,
-    'Needs returned-from-destroyed tracking.',
-  ),
-
-  playable(
-    'power-sink',
-    'Power Sink',
-    'Cards here have -2 Power.',
-    '#ef6a2e',
-    MAPS.lavaFlow,
-    { ongoing: powerHere(-2) },
-    'Implemented with POWER_ADD -2.',
-  ),
-
-  unimplemented(
-    'overclock-room',
-    'Overclock Room',
-    'The first card each player plays here gets +4 Power.',
-    '#ffbe0b',
-    MAPS.laboratory,
-    'Needs per-owner first-card-played-here memory.',
-  ),
-
-  playable(
-    'black-clinic',
-    'Black Clinic',
-    'When revealed, set the lowest-Power card here to 5 Power.',
-    '#ff5d8f',
-    MAPS.laboratory,
-    {
-      onReveal: [{
-        kind: 'SET_POWER',
-        target: { kind: 'MIN_POWER_OF', of: sameLane() },
-        value: { kind: 'LIT', n: 5 },
+  p({
+    name: 'Civil Court',
+    text: 'Cards with no ability have +3 Power here.',
+    map: '/art/maps/Cathedral2.png',
+    accent: '#d8dbe2',
+    abilities: {
+      ongoing: [{
+        kind: 'POWER_ADD',
+        target: cardsHereWhere({ kind: 'HAS_NO_ABILITY', target: self }),
+        delta: { kind: 'LIT', n: 3 },
+        stack: 'ADDITIVE',
       }],
     },
-    'Implemented with SET_POWER and MIN_POWER_OF. Current version targets one lowest card overall.',
-  ),
+    note: 'Implemented with HAS_NO_ABILITY predicate.',
+  }),
+
+  p({
+    name: 'Backdoor',
+    text: 'The next card each player plays here triggers its On Reveal twice.',
+    map: '/art/maps/HackersLair.png',
+    accent: '#5efc8d',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'CONDITIONAL',
+        if: locationCounterIs('played-here', '==', 0, 'EVENT_OWNER'),
+        then: [
+          { kind: 'TRIGGER_ON_REVEAL', target: eventCard },
+          bumpLocationCounter('played-here', 'EVENT_OWNER'),
+        ],
+      }],
+    },
+    note: 'Implemented with owner-scoped location counters plus TRIGGER_ON_REVEAL.',
+  }),
+
+  p({
+    name: 'Scrap Yard',
+    text: 'Destroyed cards are returned here on turn 5.',
+    map: '/art/maps/LavaFlow.png',
+    accent: '#a47148',
+    abilities: {
+      atTurnStart: [{
+        kind: 'CONDITIONAL',
+        if: currentTurn('==', 5),
+        then: [{
+          kind: 'RETURN_TO_LANE',
+          target: { kind: 'ALL_CARDS', ownerFilter: 'ANY_OWNER', zoneFilter: 'DESTROYED' },
+          to: self,
+          revealed: true,
+        }],
+      }],
+    },
+    note: 'Implemented with atTurnStart, CURRENT_TURN, and RETURN_TO_LANE.',
+  }),
+
+  p({
+    name: 'Pawn Shop',
+    text: 'Banish each card you play here to earn +1 Energy next turn.',
+    map: '/art/maps/FoodCourt.png',
+    accent: '#b7a57a',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'SEQUENCE',
+        items: [
+          { kind: 'BANISH', target: eventCard },
+          { kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS', owner: 'EVENT_OWNER', delta: { kind: 'LIT', n: 1 } },
+        ],
+      }],
+    },
+    note: 'Implemented with onCardPlayedHere, BANISH, and EVENT_OWNER energy bonus.',
+  }),
+
+  p({
+    name: 'Rent-A-Wreck',
+    text: 'When revealed, each player adds a move card to their hand.',
+    map: '/art/maps/AlienStarship.png',
+    accent: '#ff7a59',
+    abilities: {
+      onReveal: [
+        moveCardToHand('P0'),
+        moveCardToHand('P1'),
+      ],
+    },
+    note: 'Implemented with ADD_CARD_TO_HAND and a curated move-card pool.',
+  }),
+
+  p({
+    name: 'Power Sink',
+    text: 'Cards here have -2 Power.',
+    map: '/art/maps/LavaFlow.png',
+    accent: '#ef6a2e',
+    abilities: { ongoing: powerHere(-2) },
+    note: 'Implemented with POWER_ADD -2.',
+  }),
+
+  p({
+    name: 'Overclock Room',
+    text: 'The first card each player plays here gets +4 Power.',
+    map: '/art/maps/Laboratory.png',
+    accent: '#ffbe0b',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'CONDITIONAL',
+        if: locationCounterIs('played-here', '==', 0, 'EVENT_OWNER'),
+        then: [
+          { kind: 'ADD_POWER', target: eventCard, delta: { kind: 'LIT', n: 4 } },
+          bumpLocationCounter('played-here', 'EVENT_OWNER'),
+        ],
+      }],
+    },
+    note: 'Implemented with owner-scoped location counters.',
+  }),
+
+  p({
+    name: 'Black Clinic',
+    text: 'Transform the next card you play here into a random 5-Cost card.',
+    map: '/art/maps/Laboratory.png',
+    accent: '#ff5d8f',
+    abilities: {
+      onCardPlayedHere: [{
+        kind: 'CONDITIONAL',
+        if: locationCounterIs('played-here', '==', 0, 'EVENT_OWNER'),
+        then: [
+          {
+            kind: 'TRANSFORM_CARD',
+            target: eventCard,
+            pool: { kind: 'COST_RANGE', ownerDeck: 'EVENT_OWNER', min: 5, max: 5 },
+          },
+          bumpLocationCounter('played-here', 'EVENT_OWNER'),
+        ],
+      }],
+    },
+    note: 'Implemented with owner-scoped location counters and TRANSFORM_CARD.',
+  }),
 ];
+
+export const LOCATION_CATALOG: readonly LocationDesignEntry[] = LOCATION_SPECS.map(toCatalogEntry);
 
 export const PLAYABLE_LOCATION_DEFS: readonly LocationDef[] = LOCATION_CATALOG
   .filter((entry) => entry.status === 'playable')

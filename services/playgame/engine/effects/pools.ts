@@ -8,7 +8,7 @@
  * by sampling through the caller-supplied RNG.
  */
 
-import type { PoolRef } from '../types/ability';
+import type { OwnerRef, PoolRef } from '../types/ability';
 import type { MatchState } from '../types/state';
 import type { Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
@@ -21,13 +21,19 @@ import type { Rng } from '../rng';
  * don't have an owner).
  */
 export function resolveOwnerRef(
-  ref: Owner | 'SELF_OWNER' | 'OPP_OWNER',
+  ref: OwnerRef,
   selfOwner: Owner | null,
+  eventOwner: Owner | null = null,
 ): Owner | null {
   if (ref === 'SELF_OWNER') return selfOwner;
   if (ref === 'OPP_OWNER') {
     if (!selfOwner) return null;
     return selfOwner === 'P0' ? 'P1' : 'P0';
+  }
+  if (ref === 'EVENT_OWNER') return eventOwner;
+  if (ref === 'EVENT_OPP_OWNER') {
+    if (!eventOwner) return null;
+    return eventOwner === 'P0' ? 'P1' : 'P0';
   }
   return ref;
 }
@@ -42,8 +48,9 @@ export function pickDefIdFromPool(
   manifest: Manifest,
   selfOwner: Owner | null,
   rng: Rng,
+  eventOwner: Owner | null = null,
 ): string | null {
-  const candidates = listDefIdsFromPool(pool, state, manifest, selfOwner);
+  const candidates = listDefIdsFromPool(pool, state, manifest, selfOwner, eventOwner);
   if (candidates.length === 0) return null;
   return rng.pick(candidates);
 }
@@ -54,10 +61,11 @@ export function listDefIdsFromPool(
   state: MatchState,
   manifest: Manifest,
   selfOwner: Owner | null,
+  eventOwner: Owner | null = null,
 ): string[] {
   switch (pool.kind) {
     case 'DECK_OF_OWNER': {
-      const owner = resolveOwnerRef(pool.owner, selfOwner);
+      const owner = resolveOwnerRef(pool.owner, selfOwner, eventOwner);
       if (!owner) return [];
       const deckCards = state.deck[owner];
       const defIds = deckCards.map(c => c.defId);
@@ -95,7 +103,7 @@ export function listDefIdsFromPool(
 
     case 'DECK_BY_TRIBE': {
       // Cards in the owner's deck that match the specified tribe.
-      const owner = resolveOwnerRef(pool.ownerDeck, selfOwner);
+      const owner = resolveOwnerRef(pool.ownerDeck, selfOwner, eventOwner);
       if (!owner) return [];
       return state.deck[owner]
         .filter(c => {

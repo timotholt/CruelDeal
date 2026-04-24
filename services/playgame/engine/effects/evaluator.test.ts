@@ -1,16 +1,16 @@
 /**
- * Effect evaluator + revealCard tests.
+ * Effect evaluator + revealPlayedCard tests.
  *
  * Run:
  *   npx tsx services/playgame/engine/effects/evaluator.test.ts
  *
  * Each test builds a MatchState fixture + a small synthetic manifest,
- * fires revealCard (or evalEffect directly), and verifies the resulting
+ * fires revealPlayedCard (or evalEffect directly), and verifies the resulting
  * event stream and end-state.
  */
 
 import { createRng } from '../rng';
-import { evalEffect, revealCard, MAX_REVEAL_RECURSION } from './evaluator';
+import { evalEffect, revealPlayedCard, MAX_REVEAL_RECURSION } from './evaluator';
 import type { CardDef, LocationDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
@@ -189,7 +189,7 @@ function buildState(
     { def: 'grunt',     owner: 'P0', lane: 0 },
   ]);
   const rng = createRng('hex-test');
-  const res = revealCard(s0, 'c1' as CardId, manifest, rng);
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, rng);
 
   const flips = res.events.filter(e => e.type === 'CARD_FLIPPED');
   eq(flips.length, 1, 'Hex Witch: CARD_FLIPPED emitted once');
@@ -203,7 +203,7 @@ function buildState(
   eq(getCardPower(res.state, buffed, manifest), 4, 'target card power = 3 + 1 = 4');
 
   // Determinism check: same seed → same target.
-  const res2 = revealCard(s0, 'c1' as CardId, manifest, createRng('hex-test'));
+  const res2 = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('hex-test'));
   eq(
     (res.events.find(e => e.type === 'CARD_POWER_CHANGED') as { cardId: CardId }).cardId,
     (res2.events.find(e => e.type === 'CARD_POWER_CHANGED') as { cardId: CardId }).cardId,
@@ -238,7 +238,7 @@ function buildState(
     { def: 'pyro',  owner: 'P0', lane: 0, revealed: false },
   ]);
   const rng = createRng('cosmo-test');
-  const res = revealCard(s0, 'c2' as CardId, manifest, rng);
+  const res = revealPlayedCard(s0, 'c2' as CardId, manifest, rng);
 
   // The card still flips face-up but no OR window opens and no effects fire.
   eq(res.events.filter(e => e.type === 'CARD_FLIPPED').length, 1, 'Cosmo: CARD_FLIPPED still emitted');
@@ -273,7 +273,7 @@ function buildState(
     { def: 'wong', owner: 'P0', lane: 0 },
     { def: 'pyro', owner: 'P0', lane: 0, revealed: false },
   ]);
-  const res = revealCard(s0, 'c2' as CardId, manifest, createRng('wong-test'));
+  const res = revealPlayedCard(s0, 'c2' as CardId, manifest, createRng('wong-test'));
   eq(
     (res.events.find(e => e.type === 'OR_WINDOW_OPEN') as { multiplier: number }).multiplier,
     2,
@@ -305,7 +305,7 @@ function buildState(
   });
   const manifest = mkManifest([sapper]);
   const s0 = buildState([{ def: 'sapper', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('sapper'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('sapper'));
   const moved = res.events.find(e => e.type === 'CARD_MOVED') as { fromLane: LaneIdx; toLane: LaneIdx };
   truthy(!!moved, 'MOVE: CARD_MOVED emitted');
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
@@ -332,7 +332,7 @@ function buildState(
     { def: 'grunt', owner: 'P1',    lane: 0 },
     { def: 'grunt', owner: 'P1',    lane: 0 },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('destroy'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('destroy'));
   const destroyed = res.events.filter(e => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 2, 'DESTROY: both opp grunts destroyed');
   eq(res.state.cards['c2' as CardId]?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
@@ -365,7 +365,7 @@ function buildState(
   });
   const manifest = mkManifest([grunt, tinkerer]);
   const s0 = buildState([{ def: 'tinkerer', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('spawn'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('spawn'));
 
   const added = res.events.find(e => e.type === 'CARD_ADDED_TO_LANE') as
     | { cardId: CardId; defId: string; spawnSource: { kind: string } } | undefined;
@@ -403,7 +403,7 @@ function buildState(
   // Use a big lane capacity to let it actually recurse.
   manifest.constants = { ...manifest.constants, laneCapacity: 100 };
   const s0 = buildState([{ def: 'recur', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('recur'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('recur'));
   const limitHits = res.events.filter(e => e.type === 'RECURSION_LIMIT_HIT');
   truthy(limitHits.length >= 1, `Recursion cap: RECURSION_LIMIT_HIT emitted (${limitHits.length} times)`);
   // Total spawns should be bounded by MAX_REVEAL_RECURSION.
@@ -427,7 +427,7 @@ function buildState(
     { def: 'grunt',  owner: 'P0', lane: null, zone: 'DECK' },
     { def: 'grunt',  owner: 'P0', lane: null, zone: 'DECK' },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('draw'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('draw'));
   const draws = res.events.filter(e => e.type === 'CARD_DRAWN');
   eq(draws.length, 2, 'DRAW: two CARD_DRAWN emitted');
   eq(res.state.hand.P0.length, 2, 'DRAW: 2 cards in hand');
@@ -450,7 +450,7 @@ function buildState(
   });
   const manifest = mkManifest([seqCard]);
   const s0 = buildState([{ def: 'seq', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('seq'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('seq'));
   eq(
     res.events.filter(e => e.type === 'CARD_POWER_CHANGED').length,
     2,
@@ -485,7 +485,7 @@ function buildState(
 
   // Case A: alone → else branch, +1.
   const sAlone = buildState([{ def: 'cond', owner: 'P0', lane: 0, revealed: false }]);
-  const rA = revealCard(sAlone, 'c1' as CardId, manifest, createRng('cond-a'));
+  const rA = revealPlayedCard(sAlone, 'c1' as CardId, manifest, createRng('cond-a'));
   eq(getCardPower(rA.state, 'c1' as CardId, manifest), 1, 'CONDITIONAL: alone → +1');
 
   // Case B: with friend → then branch, +5.
@@ -493,7 +493,7 @@ function buildState(
     { def: 'cond',  owner: 'P0', lane: 0, revealed: false },
     { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
-  const rB = revealCard(sFriend, 'c1' as CardId, manifest, createRng('cond-b'));
+  const rB = revealPlayedCard(sFriend, 'c1' as CardId, manifest, createRng('cond-b'));
   eq(getCardPower(rB.state, 'c1' as CardId, manifest), 5, 'CONDITIONAL: with friend → +5');
 }
 
@@ -517,7 +517,7 @@ function buildState(
     { def: 'grunt', owner: 'P0', lane: 0 },
     { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('fe'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('fe'));
   // 3 friendlies → 3 ADD_POWERs → +3 on self. (FOREACH's inner ADD_POWER
   // targets SELF, which still refers to the OUTER self — the `fe` card.)
   eq(
@@ -552,15 +552,15 @@ function buildState(
     { def: 'grunt', owner: 'P0', lane: 0 },
     { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
-  const rA = revealCard(build(), 'c1' as CardId, manifest, createRng('pure'));
-  const rB = revealCard(build(), 'c1' as CardId, manifest, createRng('pure'));
+  const rA = revealPlayedCard(build(), 'c1' as CardId, manifest, createRng('pure'));
+  const rB = revealPlayedCard(build(), 'c1' as CardId, manifest, createRng('pure'));
   eq(JSON.stringify(rA.events), JSON.stringify(rB.events), 'Purity: same seed ⇒ identical event stream');
 }
 
 // -- evalEffect directly: ADD_POWER with targetCtx re-anchoring ------------
 
 {
-  // Calling evalEffect directly (not through revealCard) for a POWER_ADD
+  // Calling evalEffect directly (not through revealPlayedCard) for a POWER_ADD
   // targeting SAME_LANE SELF_OWNER: the per-target delta evaluation must
   // anchor SELF to the target, not the outer SELF.
   const grunt = mkCard('grunt', 3, 2);
@@ -613,7 +613,7 @@ function buildState(
   const s0 = buildState([
     { def: 'psy', owner: 'P0', lane: 0, revealed: false },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('energy-dsl'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('energy-dsl'));
 
   // Next-turn bonus for P0: +1
   eq(res.state.nextTurnEnergyBonus['P0'], 1, 'ADJUST_NEXT_TURN_ENERGY_BONUS: P0 +1');
@@ -647,7 +647,7 @@ function buildState(
   const s0 = buildState([
     { def: 'noop', owner: 'P0', lane: 0, revealed: false },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('noop'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('noop'));
   eq(
     res.events.filter((e) => e.type === 'ENERGY_CHANGED').length,
     0,
@@ -722,7 +722,7 @@ function buildState(
   });
   const manifest = mkManifest([teleport]);
   const s0 = buildState([{ def: 'teleport', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('move-trigger'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-trigger'));
   eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'onMove: base(1) + moveBuff(2) = 3');
   const moves = res.events.filter((e) => e.type === 'CARD_MOVED');
   eq(moves.length, 1, 'onMove: exactly 1 CARD_MOVED');
@@ -752,7 +752,7 @@ function buildState(
     { def: 'bomber', owner: 'P0', lane: 0, revealed: false },
     { def: 'enemy',  owner: 'P1',    lane: 0, revealed: true },
   ]);
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('bomber'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('bomber'));
   eq(getCardPower(res.state, 'c2' as CardId, manifest), 1, 'onDestroyed: enemy 6 - 5 = 1');
   const destroyed = res.events.filter((e) => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 1, 'onDestroyed: exactly 1 CARD_DESTROYED');
@@ -778,7 +778,7 @@ function buildState(
     { def: 'watcher', owner: 'P0', lane: 0, revealed: true },
     { def: 'grunt',   owner: 'P0', lane: 0, revealed: false },
   ]);
-  const res = revealCard(s0, 'c2' as CardId, manifest, createRng('on-play'));
+  const res = revealPlayedCard(s0, 'c2' as CardId, manifest, createRng('on-play'));
   // Watcher starts at 2, grunt reveals, +1 to watcher → 3.
   eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'onAnyCardPlayedHere: watcher 2 + 1 = 3');
   // Grunt itself shouldn't trigger for self.
@@ -812,7 +812,7 @@ function buildState(
     // Lane 2: empty
   ]);
   
-  const res = revealCard(s0, 'c1' as CardId, manifest, createRng('sapper-move-1'));
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('sapper-move-1'));
   const sappCard = res.state.cards['c1' as CardId];
   // Sapper should move to lane 0 or 2 (both have capacity, not lane 1)
   truthy(sappCard.lane === 0 || sappCard.lane === 2, 'MOVE: sapper moved to lane 0 or 2 (not current lane 1)');
@@ -849,7 +849,7 @@ function buildState(
     // Lane 2: empty
   ]);
   
-  const res = revealCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-2'));
+  const res = revealPlayedCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-2'));
   const sappCard = res.state.cards['c5' as CardId];
   eq(sappCard.lane, 2, 'MOVE: sapper moved to lane 2 (only non-full lane besides current)');
   const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
@@ -889,7 +889,7 @@ function buildState(
     { def: 'filler', owner: 'P0', lane: 2, revealed: true },
   ]);
   
-  const res = revealCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-3'));
+  const res = revealPlayedCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-3'));
   const sappCard = res.state.cards['c5' as CardId];
   eq(sappCard.lane, 1, 'MOVE: sapper stays in lane 1 (no empty lanes)');
   const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
