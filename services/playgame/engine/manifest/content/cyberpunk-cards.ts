@@ -149,8 +149,9 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Merc'],
     abilities: {
       onReveal: [{
-        kind: 'SEQUENCE',
-        items: [
+        kind: 'CONDITIONAL',
+        if: { kind: 'EXISTS', target: SELF_LANE_FRIENDLY_EXCL_SELF },
+        then: [
           {
             kind: 'DESTROY',
             target: { kind: 'RANDOM_N', count: { kind: 'LIT', n: 1 }, of: SELF_LANE_FRIENDLY_EXCL_SELF },
@@ -261,9 +262,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
         kind: 'SEQUENCE',
         items: [
           {
-            kind: 'ADD_CARD_TO_HAND',
+            kind: 'CREATE_CARD_IN_ZONE',
             pool: { kind: 'COST_RANGE', ownerDeck: 'SELF_OWNER', min: 1, max: 4 },
             owner: 'SELF_OWNER',
+            destination: { kind: 'HAND' },
           },
           {
             kind: 'DESTROY',
@@ -430,9 +432,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Corp'],
     abilities: {
       onDestroyed: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['golden-parachute'] },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -501,8 +504,6 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
   },
 
   {
-    // Destroys cheapest card here and transfers its full text to the highest-
-    // power card here. Complex cross-card text transfer; uses builtin.
     defId: 'acquisition-team',
     version: 1,
     name: 'Acquisition Team',
@@ -511,9 +512,26 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Corp'],
     abilities: {
       onReveal: [{
-        kind: 'CALL_BUILTIN',
-        fn: 'ACQUIRE_LOWEST_COST_TEXT',
-        args: {},
+        kind: 'SEQUENCE',
+        items: [
+          {
+            kind: 'COPY_TEXT_OF',
+            into: {
+              kind: 'MAX_POWER_OF',
+              of: {
+                kind: 'SAME_LANE',
+                of: { kind: 'SELF' },
+                ownerFilter: 'SELF_OWNER',
+                exclude: { kind: 'MIN_COST_OF', of: SELF_LANE_FRIENDLY_EXCL_SELF },
+              },
+            },
+            source: { kind: 'MIN_COST_OF', of: SELF_LANE_FRIENDLY_EXCL_SELF },
+          },
+          {
+            kind: 'DESTROY',
+            target: { kind: 'MIN_COST_OF', of: SELF_LANE_FRIENDLY_EXCL_SELF },
+          },
+        ],
       }],
     },
     cosmetic: {
@@ -600,9 +618,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Merc'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DECK_BY_TRIBE', ownerDeck: 'SELF_OWNER', tribe: 'Tech', excludeInPlay: true },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -624,9 +643,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Merc', 'Hacker'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DECK_BY_TRIBE', ownerDeck: 'SELF_OWNER', tribe: 'AI', excludeInPlay: true },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -651,14 +671,16 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
         kind: 'SEQUENCE',
         items: [
           {
-            kind: 'ADD_CARD_TO_HAND',
+            kind: 'CREATE_CARD_IN_ZONE',
             pool: { kind: 'COST_RANGE', ownerDeck: 'SELF_OWNER', min: 4, max: 5 },
             owner: 'SELF_OWNER',
+            destination: { kind: 'HAND' },
           },
           {
-            kind: 'ADD_CARD_TO_HAND',
+            kind: 'CREATE_CARD_IN_ZONE',
             pool: { kind: 'COST_RANGE', ownerDeck: 'SELF_OWNER', min: 4, max: 5 },
             owner: 'SELF_OWNER',
+            destination: { kind: 'HAND' },
           },
         ],
       }],
@@ -682,9 +704,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Bio', 'Merc'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DECK_BY_TRIBE', ownerDeck: 'SELF_OWNER', tribe: 'Bio', excludeInPlay: true },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -999,10 +1022,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['AI', 'Tech'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_LANE',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] },
         owner: 'SELF_OWNER',
-        to: { kind: 'LANE_OF', of: { kind: 'SELF' } },
+        destination: { kind: 'LANE', lane: { kind: 'LANE_OF', of: { kind: 'SELF' } } },
       }],
     },
     cosmetic: {
@@ -1435,9 +1458,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Bio'],
     abilities: {
       onDestroyed: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['illegal-clone'] },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -1872,9 +1896,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Drone'],
     abilities: {
       onDestroyed: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] },
         owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
       }],
     },
     cosmetic: {
@@ -1920,10 +1945,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Drone', 'Tech'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_LANE',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] },
         owner: 'SELF_OWNER',
-        to: { kind: 'LANE_OF', of: { kind: 'SELF' } },
+        destination: { kind: 'LANE', lane: { kind: 'LANE_OF', of: { kind: 'SELF' } } },
       }],
     },
     cosmetic: {
@@ -2499,9 +2524,10 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
     tribes: ['Hacker', 'Tech'],
     abilities: {
       onReveal: [{
-        kind: 'ADD_CARD_TO_HAND',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['junk-card'] },
         owner: 'OPP_OWNER' as any,
+        destination: { kind: 'DECK', position: 'BOTTOM' },
       }],
     },
     cosmetic: {

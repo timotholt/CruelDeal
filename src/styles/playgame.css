@@ -660,6 +660,20 @@
     letter-spacing: 0.1em; text-transform: uppercase;
     align-self: end; overflow: hidden;
   }
+  .card.text-disabled {
+    border-color: rgba(255, 96, 128, 0.55);
+  }
+  .card .text-disabled-mark {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: 18%;
+    height: 2px;
+    background: rgba(255, 96, 128, 0.95);
+    box-shadow: 0 0 8px rgba(255, 96, 128, 0.55);
+    transform: rotate(-7deg);
+    pointer-events: none;
+  }
 
   /* Facedown cards */
   .card.facedown {
@@ -884,6 +898,8 @@
     position: relative;
     display: flex;
     align-items: center;
+    z-index: 220;
+    pointer-events: auto;
   }
   .portrait-trigger {
     width: 34px;
@@ -934,7 +950,8 @@
     border: 1px solid rgba(255,255,255,0.12);
     background: rgba(9, 13, 18, 0.96);
     box-shadow: 0 16px 36px rgba(0,0,0,0.4);
-    z-index: 35;
+    z-index: 260;
+    pointer-events: auto;
   }
   .portrait-menu--left {
     left: 0;

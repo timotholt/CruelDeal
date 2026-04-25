@@ -106,7 +106,8 @@ export const BoardCard = (props: BoardCardProps) => {
         (props.side === 'top' ? ' enemy' : '') +
         (isFaceDown() ? ' facedown' : '') +
         (isPending() ? ' pending' : '') +
-        (isDraggablePending() ? ' undoable' : '')
+        (isDraggablePending() ? ' undoable' : '') +
+        (props.card.textDisabled ? ' text-disabled' : '')
       }
       data-card-id={props.card.id}
       draggable={isDraggablePending()}
@@ -126,6 +127,7 @@ export const BoardCard = (props: BoardCardProps) => {
       }
       <div class="name">{props.card.name}</div>
       <div class="type">{props.card.type}</div>
+      {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
     </div>
   );
 };

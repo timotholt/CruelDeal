@@ -160,7 +160,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
   let deckEl: HTMLDivElement | undefined;
 
   onMount(() => {
-    const closeMenus = () => setOpenMenuSeat(null);
+    const closeMenus = (e: MouseEvent) => {
+      if ((e.target as Element).closest?.('.portrait-menu-anchor')) return;
+      setOpenMenuSeat(null);
+    };
     document.addEventListener('click', closeMenus);
     onCleanup(() => document.removeEventListener('click', closeMenus));
 

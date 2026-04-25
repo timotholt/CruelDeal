@@ -68,9 +68,18 @@ export type MatchEvent =
   // on first insertion. CARD_DRAWN does NOT — a draw only moves an existing
   // card from DECK to HAND, preserving its original spawnSource.
   | { type: 'CARD_DRAWN'; owner: Owner; cardId: CardId; toHand: true }
-  | { type: 'CARD_ADDED_TO_DECK'; owner: Owner; cardId: CardId; spawnSource: SpawnSource }
+  | { type: 'CARD_ADDED_TO_DECK'; owner: Owner; cardId: CardId; spawnSource: SpawnSource; defId?: string; position?: 'TOP' | 'BOTTOM' }
   | { type: 'CARD_ADDED_TO_HAND'; owner: Owner; cardId: CardId; defId: string; spawnSource: SpawnSource }
   | { type: 'CARD_ADDED_TO_LANE'; owner: Owner; cardId: CardId; lane: LaneIdx; defId: string; spawnSource: SpawnSource }
+  | {
+      type: 'CARD_MOVED_TO_ZONE';
+      cardId: CardId;
+      destination:
+        | { kind: 'HAND' }
+        | { kind: 'DECK'; position?: 'TOP' | 'BOTTOM' }
+        | { kind: 'LANE'; lane: LaneIdx; revealed?: boolean };
+      cause: EffectRef;
+    }
   | { type: 'DECK_SHUFFLED'; owner: Owner; newOrder: readonly CardId[] }
 
   // --- Pending effects ---

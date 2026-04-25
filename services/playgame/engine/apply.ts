@@ -303,12 +303,19 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
             lane: null,
             spawnSource: event.spawnSource,
           })
-        : state;
+        : event.defId
+          ? mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'DECK')
+          : state;
       const instance = s1.cards[event.cardId];
       if (!instance) return state; // caller must have minted the instance first
       return {
         ...s1,
-        deck: { ...s1.deck, [event.owner]: [...s1.deck[event.owner], instance] },
+        deck: {
+          ...s1.deck,
+          [event.owner]: event.position === 'TOP'
+            ? [instance, ...s1.deck[event.owner].filter(c => c.id !== event.cardId)]
+            : [...s1.deck[event.owner].filter(c => c.id !== event.cardId), instance],
+        },
       };
     }
 
@@ -328,6 +335,38 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
       const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'LANE', event.lane);
       const revealed = patchCard(minted, event.cardId, { revealed: true });
       return addToLane(revealed, event.owner, event.lane, event.cardId);
+    }
+
+    case 'CARD_MOVED_TO_ZONE': {
+      const card = state.cards[event.cardId];
+      if (!card) return state;
+      let s = removeFromAllCardZones(state, card.owner, event.cardId);
+
+      switch (event.destination.kind) {
+        case 'HAND':
+          if (s.hand[card.owner].length >= manifest.constants.handCap) return state;
+          s = patchCard(s, event.cardId, { zone: 'HAND', lane: null });
+          return addToHand(s, card.owner, event.cardId);
+        case 'DECK':
+          s = patchCard(s, event.cardId, { zone: 'DECK', lane: null });
+          return {
+            ...s,
+            deck: {
+              ...s.deck,
+              [card.owner]: event.destination.position === 'TOP'
+                ? [s.cards[event.cardId], ...s.deck[card.owner]]
+                : [...s.deck[card.owner], s.cards[event.cardId]],
+            },
+          };
+        case 'LANE':
+          if (s.lanes[event.destination.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
+          s = patchCard(s, event.cardId, {
+            zone: 'LANE',
+            lane: event.destination.lane,
+            revealed: event.destination.revealed ?? card.revealed,
+          });
+          return addToLane(s, card.owner, event.destination.lane, event.cardId);
+      }
     }
 
     case 'DECK_SHUFFLED': {
@@ -500,7 +539,7 @@ function mintOrUpdate(
   defId: string,
   owner: Owner,
   spawnSource: SpawnSource,
-  zone: 'HAND' | 'LANE',
+  zone: 'HAND' | 'LANE' | 'DECK',
   lane: LaneIdx | null = null,
 ): MatchState {
   const existing = state.cards[id];
@@ -576,6 +615,19 @@ function removeFromHand(state: MatchState, owner: Owner, cardId: CardId): MatchS
   return {
     ...state,
     hand: { ...state.hand, [owner]: state.hand[owner].filter(c => c.id !== cardId) },
+  };
+}
+
+function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId): MatchState {
+  let s = state;
+  for (let lane = 0; lane < s.lanes.length; lane++) {
+    s = removeFromLane(s, owner, lane as LaneIdx, cardId);
+  }
+  s = removeFromHand(s, owner, cardId);
+  return {
+    ...s,
+    deck: { ...s.deck, [owner]: s.deck[owner].filter(c => c.id !== cardId) },
+    stagingOrder: s.stagingOrder.filter(id => id !== cardId),
   };
 }
 
@@ -684,6 +736,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
       break;
     }
 
+    case 'CARD_ADDED_TO_DECK':
     case 'CARD_ADDED_TO_HAND':
     case 'CARD_ADDED_TO_LANE': {
       // cardsYouCreated if spawnSource is not DECK_CREATION or SYSTEM.

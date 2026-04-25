@@ -65,6 +65,8 @@ export interface ResolvedCard {
   type: string;
   /** Rules text / flavor shown in the inspector. */
   text: string;
+  /** True when one or more ability text boxes are currently disabled/blanked. */
+  textDisabled: boolean;
   /** Permanent power change history for this card. Empty until a card effect fires. */
   powerLog: readonly PowerLogEntry[];
   /** Live power modifiers affecting this card right now. */
@@ -126,6 +128,9 @@ export function resolveCard(
     portraitPath: def.cosmetic.art.portrait.path || null,
     type: def.tribes[0] ?? 'striker',
     text: def.cosmetic.rulesText ?? '',
+    textDisabled: inst.textOverride?.kind === 'BLANK_ONGOING' ||
+      inst.textOverride?.kind === 'BLANK_ALL' ||
+      inst.tags.some((tag) => tag.kind === 'ONGOING_DISABLED'),
     owner: inst.owner,
     zone: inst.zone,
     revealed: inst.revealed,

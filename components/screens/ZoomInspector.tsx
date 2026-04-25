@@ -204,6 +204,9 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
             'font-size': '0.9rem',
             'z-index': '1001',
             animation: 'fadeIn 0.4s ease-in 0.1s both',
+            'text-decoration': (props.target as { kind: 'card'; card: ResolvedCard }).card?.textDisabled ? 'line-through' : 'none',
+            'text-decoration-thickness': '2px',
+            'text-decoration-color': 'rgba(255, 96, 128, 0.9)',
           }}
         >
           {(props.target as { kind: 'card'; card: ResolvedCard }).card?.text || '\u00a0'}

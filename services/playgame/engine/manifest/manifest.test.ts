@@ -149,17 +149,19 @@ for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
 {
   const chromeDepot = BOOTSTRAP_MANIFEST.locations['chrome-depot']!;
   const first = chromeDepot.abilities.onReveal?.[0];
-  expectTrue(first?.kind === 'ADD_CARD_TO_HAND', 'Chrome Depot onReveal[0] is ADD_CARD_TO_HAND');
-  if (first?.kind === 'ADD_CARD_TO_HAND') {
+  expectTrue(first?.kind === 'CREATE_CARD_IN_ZONE', 'Chrome Depot onReveal[0] is CREATE_CARD_IN_ZONE');
+  if (first?.kind === 'CREATE_CARD_IN_ZONE') {
     expectTrue(first.pool.kind === 'COST_RANGE' && first.pool.min === 1 && first.pool.max === 1, 'Chrome Depot adds random 1-Cost cards');
+    expectTrue(first.destination.kind === 'HAND', 'Chrome Depot creates cards in hand');
   }
 }
 {
   const rentAWreck = BOOTSTRAP_MANIFEST.locations['rent-a-wreck']!;
   const first = rentAWreck.abilities.onReveal?.[0];
-  expectTrue(first?.kind === 'ADD_CARD_TO_HAND', 'Rent-A-Wreck onReveal[0] is ADD_CARD_TO_HAND');
-  if (first?.kind === 'ADD_CARD_TO_HAND') {
+  expectTrue(first?.kind === 'CREATE_CARD_IN_ZONE', 'Rent-A-Wreck onReveal[0] is CREATE_CARD_IN_ZONE');
+  if (first?.kind === 'CREATE_CARD_IN_ZONE') {
     expectTrue(first.pool.kind === 'DEF_ID_LIST', 'Rent-A-Wreck uses a curated move-card pool');
+    expectTrue(first.destination.kind === 'HAND', 'Rent-A-Wreck creates cards in hand');
   }
 }
 

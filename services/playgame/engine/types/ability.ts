@@ -166,6 +166,11 @@ export type Selector =
 export type OwnerFilter = OwnerRef | 'ANY_OWNER';
 export type ZoneFilter = 'LANE' | 'HAND' | 'DECK' | 'DISCARD' | 'DESTROYED' | 'BANISHED' | 'ANY';
 
+export type CardDestination =
+  | { kind: 'HAND' }
+  | { kind: 'DECK'; position?: 'TOP' | 'BOTTOM' }
+  | { kind: 'LANE'; lane: Selector; revealed?: boolean };
+
 // ---- Pools (sources of cards to spawn/draw) ---------------------------------
 
 export type PoolRef =
@@ -199,8 +204,8 @@ export type EffectExpr =
   | { kind: 'MOVE'; target: Selector; to: Selector }
   | { kind: 'DRAW'; owner: OwnerRef; count: NumExpr }
   | { kind: 'DISCARD'; target: Selector }
-  | { kind: 'ADD_CARD_TO_LANE'; pool: PoolRef; owner: OwnerRef; to: Selector }
-  | { kind: 'ADD_CARD_TO_HAND'; pool: PoolRef; owner: OwnerRef }
+  | { kind: 'CREATE_CARD_IN_ZONE'; pool: PoolRef; owner: OwnerRef; destination: CardDestination }
+  | { kind: 'MOVE_CARD_TO_ZONE'; target: Selector; destination: CardDestination }
   | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
   | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
 

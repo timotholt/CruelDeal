@@ -629,65 +629,125 @@ export function evalEffect(
       return { events, state: s };
     }
 
-    case 'ADD_CARD_TO_HAND': {
+    case 'CREATE_CARD_IN_ZONE': {
       const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
       if (!owner) return { events: [], state };
-      if (state.hand[owner].length >= manifest.constants.handCap) {
-        return { events: [], state };
-      }
       const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.fork('pool'), ctx.eventOwner ?? null);
       if (!defId) return { events: [], state };
       const newId = mintCardId(ctx.rng.fork('id'));
       const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
-      const e: MatchEvent = {
-        type: 'CARD_ADDED_TO_HAND',
-        owner,
-        cardId: newId,
-        defId,
-        spawnSource,
-      };
-      let s = apply(state, e, manifest);
-      const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.fork('debuff'), manifest);
-      s = debuff.state;
-      return { events: [e, ...debuff.events], state: s };
+
+      switch (effect.destination.kind) {
+        case 'HAND': {
+          if (state.hand[owner].length >= manifest.constants.handCap) return { events: [], state };
+          const e: MatchEvent = {
+            type: 'CARD_ADDED_TO_HAND',
+            owner,
+            cardId: newId,
+            defId,
+            spawnSource,
+          };
+          let s = apply(state, e, manifest);
+          const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.fork('debuff'), manifest);
+          s = debuff.state;
+          return { events: [e, ...debuff.events], state: s };
+        }
+
+        case 'DECK': {
+          const e: MatchEvent = {
+            type: 'CARD_ADDED_TO_DECK',
+            owner,
+            cardId: newId,
+            defId,
+            spawnSource,
+            position: effect.destination.position,
+          };
+          return { events: [e], state: apply(state, e, manifest) };
+        }
+
+        case 'LANE': {
+          const lanes = selectLanes(effect.destination.lane, liveCtx);
+          if (lanes.length === 0) return { events: [], state };
+          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
+          if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return { events: [], state };
+          const e: MatchEvent = {
+            type: 'CARD_ADDED_TO_LANE',
+            owner,
+            cardId: newId,
+            lane,
+            defId,
+            spawnSource,
+          };
+          let s = apply(state, e, manifest);
+          const locTrig = fireLocationTrigger(
+            s,
+            lane,
+            'onCardEnteredHere',
+            ctx.rng.fork(`locEnteredCreate:${newId}`),
+            manifest,
+            newId,
+            owner,
+          );
+          return { events: [e, ...locTrig.events], state: locTrig.state };
+        }
+      }
     }
 
-    case 'ADD_CARD_TO_LANE': {
-      const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
-      if (!owner) return { events: [], state };
-      const lanes = selectLanes(effect.to, liveCtx);
-      if (lanes.length === 0) return { events: [], state };
-      const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
-      if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) {
-        return { events: [], state };
+    case 'MOVE_CARD_TO_ZONE': {
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const card = s.cards[id];
+        if (!card) continue;
+
+        if (effect.destination.kind === 'LANE') {
+          const lanes = selectLanes(effect.destination.lane, { ...liveCtx, state: s });
+          if (lanes.length === 0) continue;
+          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork(`moveZone:${id}`).pick(lanes);
+          if (s.lanes[lane].cards[card.owner].length >= manifest.constants.laneCapacity) continue;
+          const e: MatchEvent = {
+            type: 'CARD_MOVED_TO_ZONE',
+            cardId: id,
+            destination: { kind: 'LANE', lane, revealed: effect.destination.revealed },
+            cause: ctx.source,
+          };
+          events.push(e);
+          s = apply(s, e, manifest);
+          const locTrig = fireLocationTrigger(
+            s,
+            lane,
+            'onCardEnteredHere',
+            ctx.rng.fork(`locEnteredMoveZone:${id}`),
+            manifest,
+            id,
+            card.owner,
+          );
+          events.push(...locTrig.events);
+          s = locTrig.state;
+          continue;
+        }
+
+        if (effect.destination.kind === 'HAND' && s.hand[card.owner].length >= manifest.constants.handCap) continue;
+        const e: MatchEvent = {
+          type: 'CARD_MOVED_TO_ZONE',
+          cardId: id,
+          destination: effect.destination,
+          cause: ctx.source,
+        };
+        events.push(e);
+        s = apply(s, e, manifest);
+        if (effect.destination.kind === 'HAND') {
+          const debuff = applyHandEntryDebuffs(s, id, card.owner, ctx.rng.fork(`debuffMoveZone:${id}`), manifest);
+          events.push(...debuff.events);
+          s = debuff.state;
+        }
       }
-      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.fork('pool'), ctx.eventOwner ?? null);
-      if (!defId) return { events: [], state };
-      const newId = mintCardId(ctx.rng.fork('id'));
-      const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
-      const e: MatchEvent = {
-        type: 'CARD_ADDED_TO_LANE',
-        owner,
-        cardId: newId,
-        lane,
-        defId,
-        spawnSource,
-      };
-      let s = apply(state, e, manifest);
-      const locTrig = fireLocationTrigger(
-        s,
-        lane,
-        'onCardEnteredHere',
-        ctx.rng.fork(`locEnteredAdd:${newId}`),
-        manifest,
-        newId,
-        owner,
-      );
-      return { events: [e, ...locTrig.events], state: locTrig.state };
+      return { events, state: s };
     }
 
     case 'SPAWN_AND_REVEAL': {
-      // ADD_CARD_TO_LANE + immediate recursive reveal. Classic Jubilee
+      // CREATE_CARD_IN_ZONE(LANE) + immediate recursive reveal. Classic Jubilee
       // /Bar-Sinister-spawned-card flow.
       const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
       if (!owner) return { events: [], state };

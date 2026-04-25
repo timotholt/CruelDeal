@@ -899,6 +899,27 @@ function buildState(
   truthy(moveEvent === undefined, 'MOVE: no CARD_MOVED event (no valid move)');
 }
 
+// -- MOVE_CARD_TO_ZONE: existing card can be relocated non-semantically ------
+
+{
+  const bouncer = mkCard('bouncer', 0, 0, {
+    abilities: {
+      onReveal: [{
+        kind: 'MOVE_CARD_TO_ZONE',
+        target: { kind: 'SELF' },
+        destination: { kind: 'HAND' },
+      }],
+    },
+  });
+  const manifest = mkManifest([bouncer]);
+  const s0 = buildState([{ def: 'bouncer', owner: 'P0', lane: 0, revealed: false }]);
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-zone'));
+  truthy(res.events.some((e) => e.type === 'CARD_MOVED_TO_ZONE'), 'MOVE_CARD_TO_ZONE: emits CARD_MOVED_TO_ZONE');
+  eq(res.state.cards['c1' as CardId]?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
+  eq(res.state.lanes[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
+  eq(res.state.hand.P0.map(c => c.id), ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
+}
+
 // -- Exit -------------------------------------------------------------------
 
 if (failures > 0) {

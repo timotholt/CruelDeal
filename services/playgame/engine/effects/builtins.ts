@@ -74,50 +74,6 @@ function powerToDestroyer(
 }
 
 /**
- * On Reveal: Destroy your lowest-Cost card here; give its text to your
- * highest-Power card here.
- */
-function acquireLowestCostText(
-  state: MatchState, _fn: string, _args: BuiltinArgs,
-  ctx: EffectCtx, manifest: Manifest,
-): BuiltinResult {
-  const owner = ctx.selfOwner;
-  if (owner === null || ctx.selfLane === null) return noop(state);
-  const laneCards = state.lanes[ctx.selfLane].cards[owner]
-    .map(id => state.cards[id])
-    .filter(Boolean) as import('../types/state').CardInstance[];
-
-  if (laneCards.length < 2) return noop(state);
-
-  const sorted = [...laneCards].sort((a, b) =>
-    getCardCost(state, a.id, manifest) - getCardCost(state, b.id, manifest),
-  );
-  const lowestCostCard = sorted[0];
-  const highestPowerCard = [...laneCards].sort((a, b) =>
-    getCardPower(state, b.id, manifest) - getCardPower(state, a.id, manifest),
-  ).find(c => c.id !== lowestCostCard.id);
-
-  if (!highestPowerCard) return noop(state);
-
-  const events: MatchEvent[] = [];
-  let s = state;
-
-  const destroyEvt: MatchEvent = { type: 'CARD_DESTROYED', cardId: lowestCostCard.id, cause: ctx.source };
-  events.push(destroyEvt);
-  s = apply(s, destroyEvt, manifest);
-
-  const textEvt: MatchEvent = {
-    type: 'CARD_TEXT_OVERRIDDEN',
-    cardId: highestPowerCard.id,
-    override: { kind: 'COPY_OF_CARD', cardId: lowestCostCard.id },
-  };
-  events.push(textEvt);
-  s = apply(s, textEvt, manifest);
-
-  return { events, state: s };
-}
-
-/**
  * On Reveal: Replace a random hand card with one that costs costDelta more.
  * If costDelta < 0, finds a card that costs |costDelta| less.
  */
@@ -633,7 +589,6 @@ function fullLanesPower(state: MatchState): BuiltinResult {
 
 const REGISTRY = new Map<string, BuiltinHandler>([
   ['POWER_TO_DESTROYER',               powerToDestroyer],
-  ['ACQUIRE_LOWEST_COST_TEXT',         acquireLowestCostText],
   ['COPY_ONGOING_OF_CHEAPEST_ONGOING', (_s, _fn, _a, _c) => copyOngoingOfCheapestOngoing(_s)],
   ['REPLACE_HAND_CARD_HIGHER_COST',    replaceHandCardHigherCost],
   ['REPLACE_LOWEST_POWER_HAND_WITH_COST', replaceLowestPowerHandWithCost],

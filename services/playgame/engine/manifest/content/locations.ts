@@ -64,24 +64,27 @@ const randomHandCard = (owner: 'P0' | 'P1'): Selector => ({
 });
 
 const randomCardToHand = (owner: 'P0' | 'P1'): EffectExpr => ({
-  kind: 'ADD_CARD_TO_HAND',
+  kind: 'CREATE_CARD_IN_ZONE',
   pool: { kind: 'ANY_RANDOM', ownerFilter: 'ANY_OWNER' },
   owner,
+  destination: { kind: 'HAND' },
 });
 
 const randomCostCardToHand = (owner: 'P0' | 'P1', cost: number): EffectExpr => ({
-  kind: 'ADD_CARD_TO_HAND',
+  kind: 'CREATE_CARD_IN_ZONE',
   pool: { kind: 'COST_RANGE', ownerDeck: owner, min: cost, max: cost },
   owner,
+  destination: { kind: 'HAND' },
 });
 
 const moveCardToHand = (owner: 'P0' | 'P1'): EffectExpr => ({
-  kind: 'ADD_CARD_TO_HAND',
+  kind: 'CREATE_CARD_IN_ZONE',
   pool: {
     kind: 'DEF_ID_LIST',
     ids: ['neon-courier', 'getaway-driver', 'rooftop-runner', 'traffic-spoofer', 'escape-route'],
   },
   owner,
+  destination: { kind: 'HAND' },
 });
 
 const powerHere = (delta: number): OngoingExpr[] => [{
@@ -197,7 +200,7 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
         randomCostCardToHand('P1', 1),
       ],
     },
-    note: 'Implemented with ADD_CARD_TO_HAND and COST_RANGE 1.',
+    note: 'Implemented with CREATE_CARD_IN_ZONE and COST_RANGE 1.',
   }),
 
   p({
@@ -389,7 +392,7 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
         randomCardToHand('P1'),
       ],
     },
-    note: 'Implemented with DISCARD plus ADD_CARD_TO_HAND.',
+    note: 'Implemented with DISCARD plus CREATE_CARD_IN_ZONE.',
   }),
 
   p({
@@ -595,11 +598,11 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
     accent: '#adb5bd',
     abilities: {
       onReveal: [
-        { kind: 'ADD_CARD_TO_LANE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P0', to: self },
-        { kind: 'ADD_CARD_TO_LANE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P1', to: self },
+        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P0', destination: { kind: 'LANE', lane: self } },
+        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P1', destination: { kind: 'LANE', lane: self } },
       ],
     },
-    note: 'Implemented with ADD_CARD_TO_LANE and cheap-drone token.',
+    note: 'Implemented with CREATE_CARD_IN_ZONE and cheap-drone token.',
   }),
 
   p({
@@ -684,7 +687,7 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
         moveCardToHand('P1'),
       ],
     },
-    note: 'Implemented with ADD_CARD_TO_HAND and a curated move-card pool.',
+    note: 'Implemented with CREATE_CARD_IN_ZONE and a curated move-card pool.',
   }),
 
   p({

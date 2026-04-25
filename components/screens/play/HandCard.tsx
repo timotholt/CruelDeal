@@ -60,7 +60,7 @@ export const HandCard = (props: HandCardProps) => {
   return (
     <div
       ref={bindCardRef(props.card.id)}
-      class="card"
+      class={'card' + (props.card.textDisabled ? ' text-disabled' : '')}
       data-card-id={props.card.id}
       // NOTE: the `transition` list MUST include the CSS hover properties
       // (transform, box-shadow, border-color) or the inline `transition`
@@ -83,6 +83,7 @@ export const HandCard = (props: HandCardProps) => {
       }
       <div class="name">{props.card.name}</div>
       <div class="type">{props.card.type}</div>
+      {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
     </div>
   );
 };
