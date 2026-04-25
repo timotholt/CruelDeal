@@ -30,6 +30,7 @@ interface GenerateRequest {
 
 const STATE_PATH = 'asset-workbench/state.json';
 const PRESETS_PATH = 'asset-workbench/presets.json';
+const KEY_DIR = 'documents/keys';
 
 const defaultState = (): WorkbenchState => ({
   version: 1,
@@ -103,6 +104,28 @@ const writeDefaultPresets = async (root: string): Promise<void> => {
   }
 };
 
+const normalizeSecret = (raw: string): string => {
+  const trimmed = raw.trim();
+  const envStyle = trimmed.match(/^[A-Z0-9_]+\s*=\s*(.+)$/);
+  return (envStyle?.[1] ?? trimmed).trim().replace(/^['"]|['"]$/g, '');
+};
+
+const readSecretFile = async (root: string, filename: string): Promise<string> => {
+  try {
+    return normalizeSecret(await readFile(safeJoin(root, path.join(KEY_DIR, filename)), 'utf8'));
+  } catch {
+    return '';
+  }
+};
+
+const providerKeys = async (root: string, env: Record<string, string>): Promise<{
+  openai: string;
+  leonardo: string;
+}> => ({
+  openai: env.OPENAI_API_KEY || await readSecretFile(root, 'open.ai'),
+  leonardo: env.LEONARDO_API_KEY || await readSecretFile(root, 'leonardo.ai'),
+});
+
 const providerSizeFor = (assetKind: AssetKind): string => {
   if (assetKind === 'location-lane') return '1024x1536';
   return '1024x1536';
@@ -119,11 +142,12 @@ const saveBytes = async (
 };
 
 const generateWithOpenAI = async (
+  root: string,
   env: Record<string, string>,
   req: GenerateRequest,
 ): Promise<{ bytes: Buffer; model: string; requestId?: string; requestedSize: { w: number; h: number } }> => {
-  const apiKey = env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('Missing OPENAI_API_KEY in .env.local');
+  const apiKey = (await providerKeys(root, env)).openai;
+  if (!apiKey) throw new Error('Missing OpenAI key. Expected OPENAI_API_KEY or documents/keys/open.ai');
 
   const model = env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const size = providerSizeFor(req.assetKind);
@@ -176,11 +200,12 @@ const generateWithOpenAI = async (
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const generateWithLeonardo = async (
+  root: string,
   env: Record<string, string>,
   req: GenerateRequest,
 ): Promise<{ bytes: Buffer; model: string; requestId?: string; requestedSize: { w: number; h: number } }> => {
-  const apiKey = env.LEONARDO_API_KEY;
-  if (!apiKey) throw new Error('Missing LEONARDO_API_KEY in .env.local');
+  const apiKey = (await providerKeys(root, env)).leonardo;
+  if (!apiKey) throw new Error('Missing Leonardo key. Expected LEONARDO_API_KEY or documents/keys/leonardo.ai');
 
   const modelId = env.LEONARDO_MODEL_ID;
   const width = req.assetKind === 'location-lane' ? 1024 : 1024;
@@ -321,13 +346,25 @@ export const assetWorkbenchPlugin = ({ root, env }: AssetWorkbenchPluginOptions)
           return;
         }
 
+        if (req.method === 'GET' && url.pathname === '/provider-status') {
+          const keys = await providerKeys(root, env);
+          sendJson(res, 200, {
+            openai: Boolean(keys.openai),
+            leonardo: Boolean(keys.leonardo),
+            openaiSource: keys.openai ? 'documents/keys/open.ai or .env.local' : 'missing or empty',
+            leonardoSource: keys.leonardo ? 'documents/keys/leonardo.ai or .env.local' : 'missing or empty',
+            source: 'documents/keys or .env.local',
+          });
+          return;
+        }
+
         if (req.method === 'POST' && url.pathname === '/generate') {
           const body = await readJsonBody<GenerateRequest>(req);
           const id = randomUUID();
           const batchId = randomUUID();
           const providerResult = body.provider === 'openai'
-            ? await generateWithOpenAI(env, body)
-            : await generateWithLeonardo(env, body);
+            ? await generateWithOpenAI(root, env, body)
+            : await generateWithLeonardo(root, env, body);
           const rawPath = `/art/generated/${body.provider}/${body.assetId}/${id}.png`;
           const normalizedPath = `/art/generated/${body.provider}/${body.assetId}/${id}.webp`;
           await saveBytes(root, rawPath, providerResult.bytes);

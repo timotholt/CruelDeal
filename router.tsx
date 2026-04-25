@@ -11,7 +11,6 @@ import { HistoryScreen } from "./components/screens/HistoryScreen";
 import { SettingsScreen } from "./components/screens/SettingsScreen";
 import { LadderRankingScreen } from "./components/screens/LadderRankingScreen";
 import { ProgressionScreen } from "./components/screens/ProgressionScreen";
-import { AssetWorkbenchScreen } from "./components/screens/AssetWorkbenchScreen";
 import { NavigationBar } from "./components/ui/NavigationBar";
 import { InspectorOverlay } from "./components/InspectorOverlay";
 import { audio } from "./services/audio";
@@ -38,7 +37,6 @@ const RootComponent = () => {
         if (path.includes("/inbox")) return "INBOX";
         if (path.includes("/history")) return "HISTORY";
         if (path.includes("/settings")) return "SETTINGS";
-        if (path.includes("/assets")) return "SETTINGS";
         if (path.includes("/rank")) return "RANK";
         if (path.includes("/progression")) return "PROGRESSION";
         
@@ -160,12 +158,6 @@ const progressionRoute = createRoute({
     component: ProgressionScreen,
 });
 
-const assetsRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/assets",
-    component: AssetWorkbenchScreen,
-});
-
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -178,7 +170,6 @@ const routeTree = rootRoute.addChildren([
     inboxRoute,
     historyRoute,
     settingsRoute,
-    assetsRoute,
     rankRoute,
     progressionRoute,
 ]);

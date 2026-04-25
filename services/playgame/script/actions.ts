@@ -24,6 +24,7 @@ import { otherSeat, type CardId, type LaneIdx, type Seat } from '../engine/types
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
+import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
 import { planEnemyTurnFromPool } from '../engine/ai';
 import { animateEvent } from '../presentation/eventAnimator';
 import {
@@ -95,6 +96,20 @@ export interface PlayScriptCtx extends Record<string, unknown> {
    */
   _revealsConsumedUpTo?: number;
 }
+
+const dispatchEventWithPresentation = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
+  if (event.type === 'CARD_ADDED_TO_HAND' && event.owner === c.localSeat) {
+    c.dispatch(event);
+    const raw = unwrap(c.state) as EngineMatchState;
+    const resolved = resolveCard(event.cardId as CardId, raw, c.manifest);
+    if (!resolved) return;
+    c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
+    await (commitIncomingToHand() as (ctx: PlayScriptCtx) => Promise<void>)(c);
+    return;
+  }
+
+  await animateEvent(c, event);
+};
 
 // ── Screen / UI visibility ───────────────────────────────────────────────────
 
@@ -295,6 +310,72 @@ export const dealPlayerCard = (
 
 // ── Location reveal ───────────────────────────────────────────────────────────
 
+const engineLocationRevealSlice = (
+  c: PlayScriptCtx,
+  lane: LaneIdx,
+  locationId: string,
+): readonly MatchEvent[] | null => {
+  const events = c._engineEvents ?? [];
+  const revealIdx = events.findIndex((event) =>
+    event.type === 'LOCATION_REVEALED' &&
+    event.lane === lane &&
+    event.locationId === locationId,
+  );
+  if (revealIdx < 0) return null;
+
+  // Location reveal is the final phase of resolveTurn; everything after the
+  // LOCATION_REVEALED event belongs to that reveal's location ability slice.
+  return events.slice(revealIdx + 1);
+};
+
+const dispatchLocalLocationRevealEffects = async (
+  c: PlayScriptCtx,
+  lane: LaneIdx,
+  locationId: string,
+): Promise<void> => {
+  const raw = unwrap(c.state) as EngineMatchState;
+  const loc = raw.lanes[lane].location;
+  if (!loc || loc.id !== locationId) return;
+
+  const locDef = c.manifest.locations[loc.defId];
+  const effects = locDef?.abilities.onReveal ?? [];
+  let s = raw;
+  for (let idx = 0; idx < effects.length; idx++) {
+    const effectCtx: EffectCtx = {
+      state: s,
+      manifest: c.manifest,
+      self: loc.id,
+      selfKind: 'location',
+      selfLane: lane,
+      selfOwner: null,
+      rng: c.engineRng.fork(`location-reveal:${loc.id}:${idx}`),
+      source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: idx },
+      depth: 0,
+    };
+    const result = evalEffect(s, effects[idx], effectCtx, c.manifest);
+    for (const event of result.events) {
+      await dispatchEventWithPresentation(c, event);
+    }
+    s = result.state;
+  }
+};
+
+const dispatchLocationRevealEffects = async (
+  c: PlayScriptCtx,
+  lane: LaneIdx,
+  locationId: string,
+): Promise<void> => {
+  const engineSlice = engineLocationRevealSlice(c, lane, locationId);
+  if (engineSlice) {
+    for (const event of engineSlice) {
+      await dispatchEventWithPresentation(c, event);
+    }
+    return;
+  }
+
+  await dispatchLocalLocationRevealEffects(c, lane, locationId);
+};
+
 /**
  * Reveal one location with a 6-stage cinematic. The engine's
  * LOCATION_REVEALED event sets `locationRevealed = true` at stage 5.
@@ -330,6 +411,7 @@ export const revealLocation = (laneIndex: number): Step => async (ctx) => {
   const loc = c.state.lanes[laneIndex as LaneIdx].location;
   if (loc) {
     c.dispatch({ type: 'LOCATION_REVEALED', lane: laneIndex as LaneIdx, locationId: loc.id });
+    await dispatchLocationRevealEffects(c, laneIndex as LaneIdx, loc.id);
   }
 
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -410,17 +492,7 @@ export const captureEngineEndTurn = (): Step => (ctx) => {
  * post-reveal bookkeeping use the same choreography.
  */
 const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
-  if (event.type === 'CARD_ADDED_TO_HAND' && event.owner === c.localSeat) {
-    c.dispatch(event);
-    const raw = unwrap(c.state) as EngineMatchState;
-    const resolved = resolveCard(event.cardId as CardId, raw, c.manifest);
-    if (!resolved) return;
-    c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
-    await (commitIncomingToHand() as (ctx: PlayScriptCtx) => Promise<void>)(c);
-    return;
-  }
-
-  await animateEvent(c, event);
+  await dispatchEventWithPresentation(c, event);
 };
 
 /**
@@ -530,8 +602,9 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 
   for (let i = startIdx; i < events.length; i++) {
     const event = events[i];
+    if (event.type === 'LOCATION_REVEALED') break;
     if (SCRIPT_OWNED_EVENT_TYPES.has(event.type)) continue;
-    await animateEvent(c, event);
+    await dispatchEventWithPresentation(c, event);
   }
 
   // Reset the face-up override so next turn's staged cards show face-up.

@@ -518,14 +518,17 @@ function buildState(
     { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('fe'));
-  // 3 friendlies → 3 ADD_POWERs → +3 on self. (FOREACH's inner ADD_POWER
-  // targets SELF, which still refers to the OUTER self — the `fe` card.)
+  // 3 friendlies -> 3 ADD_POWERs. FOREACH's inner SELF resolves to the
+  // current iteration card, not the source card.
   eq(
     res.events.filter(e => e.type === 'CARD_POWER_CHANGED').length,
     3,
     'FOREACH: 3 iterations for 3 friendlies',
   );
-  eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'FOREACH: self gained +3 total');
+  eq(getCardPower(res.state, 'c1' as CardId, manifest), 0, 'FOREACH: source card unchanged');
+  eq(getCardPower(res.state, 'c2' as CardId, manifest), 3, 'FOREACH: first iteration card gained +1');
+  eq(getCardPower(res.state, 'c3' as CardId, manifest), 3, 'FOREACH: second iteration card gained +1');
+  eq(getCardPower(res.state, 'c4' as CardId, manifest), 3, 'FOREACH: third iteration card gained +1');
 }
 
 // -- Pure purity: running twice with same seed → identical results --------

@@ -8,8 +8,8 @@
  * Card numbering matches the design doc (001–105).
  * defId uses kebab-case of the card name.
  *
- * FOREACH semantics: within `do`, SELF resolves to the CURRENT ITERATION
- * CARD, not the source card. Pre-compute aggregates in a preceding
+ * FOREACH semantics: within `do`, SELF resolves to the current iteration
+ * card, not the source card. Pre-compute aggregates in a preceding
  * SEQUENCE step when you need to reference the source.
  */
 
@@ -27,6 +27,13 @@ const SELF_LANE_FRIENDLY_EXCL_SELF = {
   kind: 'SAME_LANE' as const,
   of: { kind: 'SELF' as const },
   ownerFilter: 'SELF_OWNER' as const,
+  exclude: { kind: 'SELF' as const },
+};
+
+const SELF_LANE_ANY_EXCL_SELF = {
+  kind: 'SAME_LANE' as const,
+  of: { kind: 'SELF' as const },
+  ownerFilter: 'ANY_OWNER' as const,
   exclude: { kind: 'SELF' as const },
 };
 
@@ -297,7 +304,7 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
                 kind: 'COUNT',
                 of: {
                   kind: 'WHERE',
-                  of: SELF_LANE_FRIENDLY_EXCL_SELF,
+                  of: SELF_LANE_ANY_EXCL_SELF,
                   pred: { kind: 'COST_CMP', target: { kind: 'SELF' }, op: '==', value: { kind: 'LIT', n: 1 } },
                 },
               },
@@ -308,7 +315,7 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
             kind: 'FOREACH',
             over: {
               kind: 'WHERE',
-              of: SELF_LANE_FRIENDLY_EXCL_SELF,
+              of: SELF_LANE_ANY_EXCL_SELF,
               pred: { kind: 'COST_CMP', target: { kind: 'SELF' }, op: '==', value: { kind: 'LIT', n: 1 } },
             },
             do: [{ kind: 'DESTROY', target: { kind: 'SELF' } }],

@@ -9,12 +9,14 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-asset-foundry
 dist-ssr
 *.local
 
 # Local asset generation workbench state and unpromoted candidates
 asset-workbench/
 public/art/generated/
+documents/keys/
 
 # Editor directories and files
 .vscode/*
@@ -28,3 +30,7 @@ public/art/generated/
 *.sw?
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+
+# Secrets and Keys
+documents/keys/leonardo.ai
+documents/keys/open.ai

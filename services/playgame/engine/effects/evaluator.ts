@@ -26,7 +26,7 @@ import { select, selectLanes } from '../projections/select';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
-import { ongoingsTargeting } from '../projections/ongoing';
+import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
@@ -490,6 +490,7 @@ export function evalEffect(
         const preCard = s.cards[id];
         const preLane = preCard?.lane ?? null;
         const preOwner = preCard?.owner ?? null;
+        if (isFriendlyDestroyBlocked(s, id, ctx, manifest)) continue;
         const e: MatchEvent = { type: 'CARD_DESTROYED', cardId: id, cause: ctx.source };
         events.push(e);
         s = apply(s, e, manifest);
@@ -1041,9 +1042,14 @@ export function evalEffect(
         const it = iter[i];
         for (let j = 0; j < effect.do.length; j++) {
           const sub = effect.do[j];
+          const iterCard = s.cards[it];
           const subCtx: EffectCtx = {
             ...ctx,
             state: s,
+            self: it,
+            selfKind: 'card',
+            selfLane: iterCard?.lane ?? null,
+            selfOwner: iterCard?.owner ?? null,
             it,
             rng: ctx.rng.fork(`fe:${it}:${j}`),
           };
@@ -1137,6 +1143,39 @@ function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): b
 function isPowerIncreaseBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
   return ongoingsTargeting(state, manifest, cardId)
     .some(entry => entry.expr.kind === 'BLOCK_POWER_INCREASE');
+}
+
+function effectSourceOwner(state: MatchState, source: EffectRef): Owner | null {
+  const sourceCard = state.cards[source.sourceId as CardId];
+  return sourceCard?.owner ?? null;
+}
+
+function isFriendlyDestroyBlocked(
+  state: MatchState,
+  victimId: CardId,
+  ctx: EffectCtx,
+  manifest: Manifest,
+): boolean {
+  const victim = state.cards[victimId];
+  if (!victim || victim.lane === null) return false;
+
+  const destroySourceOwner = effectSourceOwner(state, ctx.source);
+  if (destroySourceOwner === null) return false;
+
+  for (const entry of collectAllOngoings(state, manifest)) {
+    if (entry.expr.kind !== 'BLOCK_FRIENDLY_DESTROY') continue;
+    if (entry.sourceOwner === null) continue;
+    if (entry.sourceOwner !== victim.owner) continue;
+    if (entry.sourceOwner !== destroySourceOwner) continue;
+
+    const ongoingCtx = sourceCtx(entry, state, manifest);
+    if (!ongoingCtx) continue;
+    if (selectLanes(entry.expr.laneOf, ongoingCtx).includes(victim.lane)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

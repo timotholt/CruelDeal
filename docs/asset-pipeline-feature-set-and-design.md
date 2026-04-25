@@ -185,12 +185,12 @@ Both providers treat API keys as secrets. OpenAI docs say not to expose API keys
 
 ## Solo Local Reality Check
 
-This tool is for one local user only and will not ship. That changes the implementation bar: a key in `.env.local` is acceptable for this workflow as long as it never becomes a public/client-shipped feature.
+This tool is for one local user only and will not ship. That changes the implementation bar: local key files are acceptable for this workflow as long as it never becomes a public/client-shipped feature.
 
 Recommended default:
 
 - Run it only during local development.
-- Keep keys in `.env.local`.
+- Keep keys in `documents/keys/open.ai` and `documents/keys/leonardo.ai`, or fallback `.env.local` entries.
 - Do not prefix keys with `VITE_` unless intentionally calling providers directly from the browser.
 - Prefer a local script/helper for provider calls and file writes because it avoids CORS issues and can write into `public/` cleanly.
 
@@ -202,9 +202,11 @@ Pure browser-only is possible for the review UI, but still awkward for the whole
 
 Cheapest useful solo compromise:
 
-- Solid/TanStack UI at `/assets` for browsing prompts, reviewing candidates, approving, and promoting.
+- Standalone Solid/TanStack UI via `npm run asset-foundry` on `http://localhost:3010` for browsing prompts, reviewing candidates, approving, and promoting.
 - Local-only Node/Vite helper endpoints or CLI scripts for generation, file writes, and manifest updates.
-- Environment keys in `.env.local`, never `VITE_*`:
+- Provider keys are read from local files first-class, with `.env.local` fallback:
+  - `documents/keys/open.ai`
+  - `documents/keys/leonardo.ai`
   - `OPENAI_API_KEY=...`
   - `LEONARDO_API_KEY=...`
 
@@ -249,7 +251,7 @@ If this ever changes from "me only on my hard drive" to a shipped or shared app,
 
 ## UI Design
 
-Route: `/assets`
+App: standalone Asset Foundry on `http://localhost:3010`
 
 Design goal: feel like a fast solo production board, not an admin CMS. The screen should optimize for quickly seeing what is missing, generating a small batch, comparing candidates, and promoting winners.
 
@@ -268,14 +270,14 @@ Primary screens/states:
 - `Candidate Compare`: side-by-side generated candidates for one asset, with the active prompt visible below each image.
 - `Promote Review`: list of approved candidates that will write into engine-facing asset paths.
 
-V1 route shape:
+V1 app shape:
 
-- `/assets`: dashboard, grid, selected asset drawer, candidate compare, and promote actions.
+- `/`: dashboard, grid, selected asset drawer, candidate compare, and promote actions.
 
 Later route shape if deep-linking becomes useful:
 
-- `/assets/$assetId`: selected asset drawer state.
-- `/assets/batch/$batchId`: generated batch review.
+- `/$assetId`: selected asset drawer state.
+- `/batch/$batchId`: generated batch review.
 
 Asset tile contents:
 
@@ -315,9 +317,10 @@ Visual system:
 
 TanStack usage:
 
-- TanStack Router: add `/assets`.
+- The game app does not import or route to the asset builder.
+- Standalone entry lives under `tools/asset-foundry`.
 - TanStack Query: `useQuery` for asset audit and candidate state, `useMutation` for generate/approve/promote/build.
-- Keep helper endpoints local-only, e.g. Vite middleware or scripts exposed only during `npm run dev`.
+- Keep helper endpoints local-only through the Asset Foundry Vite config, exposed only during `npm run asset-foundry`.
 
 Implemented local API endpoints:
 
@@ -441,7 +444,7 @@ This gives coverage across gritty character, abstract hacker/AI, high-rarity spe
    - `npm run assets:generate -- --ids scrap-rat black-ice --provider openai`
 5. Add promotion CLI:
    - `npm run assets:promote -- --approved`
-6. Add Solid `/assets` UI on top of the same audit/state/promote commands.
+6. Add standalone Solid Asset Foundry UI on top of the same audit/state/promote commands.
 7. Wire card portrait paths into `cyberpunk-cards.ts` during promotion.
 8. Add optional CSS usage for `public/art/cards/backs/default.webp` in face-down card styles.
 

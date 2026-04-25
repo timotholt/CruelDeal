@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "asset-foundry": "vite --config vite.asset-foundry.config.ts",
+    "asset-foundry:build": "vite build --config vite.asset-foundry.config.ts",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",

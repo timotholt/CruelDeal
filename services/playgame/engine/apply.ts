@@ -322,9 +322,12 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
 
     case 'CARD_ADDED_TO_LANE': {
       // Mint-to-lane: Brood, Jubilee spawn, Bar Sinister. Creates a fresh
-      // CardInstance directly in a lane.
+      // CardInstance directly in a lane. Effect-spawned cards are face-up
+      // immediately (revealed: true); On Reveal effects do NOT fire —
+      // use SPAWN_AND_REVEAL for that.
       const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'LANE', event.lane);
-      return addToLane(minted, event.owner, event.lane, event.cardId);
+      const revealed = patchCard(minted, event.cardId, { revealed: true });
+      return addToLane(revealed, event.owner, event.lane, event.cardId);
     }
 
     case 'DECK_SHUFFLED': {

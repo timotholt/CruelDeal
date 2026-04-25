@@ -309,6 +309,9 @@ export function resolveTurn(
   //          MOVED_THIS_TURN) + stagingOrder. `@migrate:atTurnEnd` is where
   //          location `atTurnEnd` abilities will be dispatched in a later
   //          tier; they must run BEFORE this cleanup event.
+  // Capture stagingOrder BEFORE TURN_ENDED clears it — needed for end-game
+  // ordered reveal of face-down cards.
+  const preCleanupStagingOrder = [...s.stagingOrder];
   const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
   events.push(turnEnded);
   s = apply(s, turnEnded, manifest);
@@ -317,7 +320,7 @@ export function resolveTurn(
   //          settled. If the last turn just finished, the match ends here
   //          and NO start-of-turn bookkeeping runs.
   if (s.turn >= manifest.constants.turnLimit) {
-    const delayed = revealDelayedCardsAtEndOfGame(s, manifest, rng.fork('endgame-reveal'));
+    const delayed = revealDelayedCardsAtEndOfGame(s, manifest, rng.fork('endgame-reveal'), preCleanupStagingOrder);
     events.push(...delayed.events);
     s = delayed.state;
     const result = computeMatchResult(s, manifest);
@@ -536,18 +539,47 @@ function revealDelayedCardsAtEndOfGame(
   state: MatchState,
   manifest: Manifest,
   rng: Rng,
+  stagingOrder: readonly CardId[],
 ): ResolveTurnResult {
   const events: MatchEvent[] = [];
   let s = state;
+
+  // Reveal in the order cards were staged (play order), per owner interleaved
+  // as in the reveal phase: priority owner first, then opponent. Fall back to
+  // lane-array order for any face-down cards not in stagingOrder (edge cases).
+  const seenInOrder = new Set<CardId>();
+  const ordered: CardId[] = [];
+
+  // Staged cards in play order
+  for (const id of stagingOrder) {
+    const card = s.cards[id];
+    if (!card || card.zone !== 'LANE' || card.revealed) continue;
+    if (!isRevealDelayed(s, id, manifest)) continue;
+    ordered.push(id);
+    seenInOrder.add(id);
+  }
+
+  // Any remaining face-down lane cards not captured by stagingOrder (e.g.
+  // effect-spawned with DELAY_REVEAL), in lane-array order.
   for (const owner of ['P0', 'P1'] as const) {
-    for (const id of Object.keys(s.cards) as CardId[]) {
-      const card = s.cards[id];
-      if (!card || card.owner !== owner || card.zone !== 'LANE' || card.revealed) continue;
-      if (!isRevealDelayed(s, id, manifest)) continue;
-      const res = forceRevealPlayedCard(s, id, manifest, rng.fork(`delayed:${id}`));
-      events.push(...res.events);
-      s = res.state;
+    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+      for (const id of s.lanes[lane].cards[owner]) {
+        if (seenInOrder.has(id)) continue;
+        const card = s.cards[id];
+        if (!card || card.zone !== 'LANE' || card.revealed) continue;
+        if (!isRevealDelayed(s, id, manifest)) continue;
+        ordered.push(id);
+        seenInOrder.add(id);
+      }
     }
+  }
+
+  for (const id of ordered) {
+    const card = s.cards[id];
+    if (!card) continue; // may have been destroyed by a prior reveal
+    const res = forceRevealPlayedCard(s, id, manifest, rng.fork(`delayed:${id}`));
+    events.push(...res.events);
+    s = res.state;
   }
   return { events, state: s };
 }

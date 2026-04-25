@@ -201,6 +201,7 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'BLOCK_PLAY':
     case 'BLOCK_MOVE':
     case 'BLOCK_POWER_INCREASE':
+    case 'BLOCK_FRIENDLY_DESTROY':
     case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF':
     case 'BOOST_ONGOINGS':
@@ -278,6 +279,7 @@ function targetIncludes(
     case 'LANE_POWER_ADD':
     case 'LANE_POWER_MULTIPLIER':
     case 'BOOST_ONGOINGS':
+    case 'BLOCK_FRIENDLY_DESTROY':
       return false;
   }
 }
