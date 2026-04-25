@@ -50,6 +50,49 @@ const event = <T extends MatchEvent>(e: T): T => e;
 
 {
   const choreography = describeEventChoreography(event({
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId: 'c1' as CardId,
+    toHand: true,
+  }));
+
+  eq(choreography, {
+    structural: {
+      kind: 'card-enter-hand',
+      cardId: 'c1',
+      owner: 'P0',
+      origin: 'deck',
+      popDurationMs: 320,
+    },
+    vfx: [],
+    sfx: [],
+  }, 'CARD_DRAWN enters hand through the presentation adapter');
+}
+
+{
+  const choreography = describeEventChoreography(event({
+    type: 'CARD_ADDED_TO_HAND',
+    owner: 'P0',
+    cardId: 'c1' as CardId,
+    defId: 'generated-card',
+    spawnSource: { kind: 'DECK_CREATION' },
+  }));
+
+  eq(choreography, {
+    structural: {
+      kind: 'card-enter-hand',
+      cardId: 'c1',
+      owner: 'P0',
+      origin: 'generated',
+      popDurationMs: 320,
+    },
+    vfx: [],
+    sfx: [],
+  }, 'CARD_ADDED_TO_HAND shares hand-entry presentation');
+}
+
+{
+  const choreography = describeEventChoreography(event({
     type: 'CARD_POWER_CHANGED',
     cardId: 'c1' as CardId,
     delta: 2,

@@ -5,7 +5,13 @@ export type StructuralAnimation =
   | { kind: 'dispatch-only' }
   | { kind: 'card-flip'; cardId: CardId }
   | { kind: 'card-move'; cardId: CardId; durationMs: number }
-  | { kind: 'card-draw'; cardId: CardId; owner: Owner }
+  | {
+      kind: 'card-enter-hand';
+      cardId: CardId;
+      owner: Owner;
+      origin: 'deck' | 'generated';
+      popDurationMs: number;
+    }
   | { kind: 'location-reveal'; lane: LaneIdx };
 
 export type VfxCue =
@@ -38,6 +44,32 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
         structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
         vfx: [],
         sfx: [{ name: 'move', timing: 'on-dispatch' }],
+      };
+
+    case 'CARD_DRAWN':
+      return {
+        structural: {
+          kind: 'card-enter-hand',
+          cardId: event.cardId,
+          owner: event.owner,
+          origin: 'deck',
+          popDurationMs: 320,
+        },
+        vfx: [],
+        sfx: [],
+      };
+
+    case 'CARD_ADDED_TO_HAND':
+      return {
+        structural: {
+          kind: 'card-enter-hand',
+          cardId: event.cardId,
+          owner: event.owner,
+          origin: 'generated',
+          popDurationMs: 320,
+        },
+        vfx: [],
+        sfx: [],
       };
 
     case 'CARD_POWER_CHANGED':

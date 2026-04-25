@@ -159,7 +159,13 @@ type StructuralAnimation =
   | { kind: 'dispatch-only' }
   | { kind: 'card-flip'; cardId: CardId }
   | { kind: 'card-move'; cardId: CardId; durationMs: number }
-  | { kind: 'card-draw'; cardId: CardId; owner: Owner }
+  | {
+      kind: 'card-enter-hand';
+      cardId: CardId;
+      owner: Owner;
+      origin: 'deck' | 'generated';
+      popDurationMs: number;
+    }
   | { kind: 'location-reveal'; lane: LaneIdx };
 
 type VfxCue =
@@ -234,7 +240,10 @@ These already have authored storyboard timing. Do not convert them first.
 | --- | --- | --- |
 | `CARD_FLIPPED` | `revealByPriorityFromEngine` + `revealPendingCinematic` | Keep cinematic callback dispatch. |
 | `LOCATION_REVEALED` | `revealLocation` / `revealNextLocation` | Keep 6-stage location cinematic. |
-| `CARD_DRAWN` | `drawHandCard` / `commitIncomingToHand` | Keep deck-slide and hand layout FLIP. |
+
+`CARD_DRAWN` is no longer script-owned. It maps to `card-enter-hand` in
+`choreography.ts`; `eventAnimator.ts` owns the incoming buffer, deck-slide, and
+hand layout FLIP.
 
 ### Safe First Adapter Events
 

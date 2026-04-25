@@ -32,7 +32,6 @@ import type { MatchState as EngineMatchState } from '@/services/playgame/engine/
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
 import type { CardZone } from '@/services/playgame/engine/types/state';
 import type { MatchEvent } from '@/services/playgame/engine/types/events';
-import type { CardDef as ManifestCardDef } from '@/services/playgame/engine/manifest/types';
 import { exportReplayBundle, replayMatch } from '@/services/playgame/engine/replay';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
@@ -43,7 +42,7 @@ import { HandCard } from './HandCard';
 import { LaneSlots } from './LaneSlots';
 import { LocationTile } from './LocationTile';
 import { setupDragDrop } from './useDragDrop';
-import { setupLaneMaps, shuffle } from './useLaneMaps';
+import { setupLaneMaps } from './useLaneMaps';
 import { inspectTarget, closeInspect } from './inspector';
 import { ReplayDrawer } from './ReplayDrawer';
 import { EnergyBadge } from './EnergyBadge';
@@ -98,8 +97,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   /**
    * Visible hand = engine hand MINUS cards still in the incoming buffer.
    * The draw-slide animation needs the new card to appear in the DOM only
-   * after `commitIncomingToHand` pops it from `ui.incoming`, otherwise the
-   * card lands in its final hand slot before the slide animation runs.
+   * after the event animator releases it from `ui.incoming`, otherwise the
+   * card lands in its final hand slot before the deck-slide runs.
    */
   const visibleHand = createMemo<ResolvedCard[]>(() => {
     if (replayEnabled()) return hand();
@@ -194,9 +193,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
     });
     onCleanup(unbindDnd);
 
-    // Opening sequence — seed the draw queue from the manifest and hand the
-    // script runner a ctx bound to the engine store + UI sidecar.
-    const drawQueue: ManifestCardDef[] = shuffle(Object.values(manifest.cards)).slice(0, 8);
+    // Opening sequence — hand the script runner a ctx bound to the engine
+    // store + UI sidecar. `drawQueue` stays empty in live play so opening
+    // deals come from the seeded engine deck through CARD_DRAWN.
+    const drawQueue: PlayScriptCtx['drawQueue'] = [];
     const boardWrapEl = boardRef();
     if (!boardWrapEl) return;
 

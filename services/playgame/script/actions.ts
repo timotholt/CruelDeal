@@ -9,18 +9,12 @@
 
 import { type SetStoreFunction } from 'solid-js/store';
 import { unwrap } from 'solid-js/store';
-import { Timeline } from '@/services/vfx/timeline';
 import { flyFaceDownToSlot } from '@/services/vfx/animations/fly-face-down';
 import { revealPendingCinematic } from '@/services/vfx/animations/reveal-cinematic';
-import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
-import {
-  captureHandRects,
-  playLayoutSlide,
-} from '@/services/vfx/animations/layout-flip';
 import type { Step } from './runner';
 import type { MatchState as EngineMatchState, MatchPhase } from '../engine/types/state';
 import type { MatchEvent } from '../engine/types/events';
-import { otherSeat, type CardId, type LaneIdx, type Seat } from '../engine/types/ids';
+import { type CardId, type LaneIdx, type Seat } from '../engine/types/ids';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
@@ -28,9 +22,7 @@ import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
 import { planEnemyTurnFromPool } from '../engine/ai';
 import { animateEvent } from '../presentation/eventAnimator';
 import {
-  type ResolvedCard,
   type UiState,
-  resolveCard,
   newEngineCardInstance,
 } from '../view';
 import { showToast } from '../toast';
@@ -98,16 +90,6 @@ export interface PlayScriptCtx extends Record<string, unknown> {
 }
 
 const dispatchEventWithPresentation = async (c: PlayScriptCtx, event: MatchEvent): Promise<void> => {
-  if (event.type === 'CARD_ADDED_TO_HAND' && event.owner === c.localSeat) {
-    c.dispatch(event);
-    const raw = unwrap(c.state) as EngineMatchState;
-    const resolved = resolveCard(event.cardId as CardId, raw, c.manifest);
-    if (!resolved) return;
-    c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
-    await (commitIncomingToHand() as (ctx: PlayScriptCtx) => Promise<void>)(c);
-    return;
-  }
-
   await animateEvent(c, event);
 };
 
@@ -155,42 +137,32 @@ export const fadeInLocationTile = (laneIndex: number, ms = 400): Step => (ctx) =
 
 // ── Card draw pipeline ────────────────────────────────────────────────────────
 
-const deckSourceRect = (c: PlayScriptCtx): DOMRect => {
-  if (c.deckEl && c.deckEl.isConnected) return c.deckEl.getBoundingClientRect();
-  const b = c.boardEl.getBoundingClientRect();
-  const w = 70;
-  const h = 100;
-  return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
-};
-
 /**
- * Stage 1 of the two-stage draw pipeline: pull the top card off
- * `state.deck[P0]` and emit a CARD_DRAWN event (which the reducer
- * converts to a DECK→HAND move). Pushes the ResolvedCard into `ui.incoming`.
+ * Pull cards from the local engine deck and route each CARD_DRAWN event
+ * through the presentation adapter. The reducer still owns the DECK→HAND
+ * mutation; the adapter owns the incoming-hand buffer and deck-slide timing.
  *
  * Deck is pre-populated and seed-driven by `createInitialMatchState()`.
  * The explicit `drawQueue` ctx is kept for test fixtures that pre-seed
  * specific cards; when empty, we pop from the engine deck.
  */
-export const drawFromDeck = (count = 1): Step => (ctx) => {
+export const drawFromDeck = (count = 1): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if ((c.state.hand[c.localSeat] as unknown[]).length >= 7) return Promise.resolve();
 
   for (let i = 0; i < count; i++) {
-    // `drawQueue` override path — for tests / scripted intros. Unchanged.
+    if ((c.state.hand[c.localSeat] as unknown[]).length >= c.manifest.constants.handCap) return;
+
+    // `drawQueue` override path — for tests / scripted intros.
     const override = c.drawQueue.shift() as import('../engine/manifest/types').CardDef | undefined;
     if (override) {
       const inst = newEngineCardInstance(override, c.localSeat);
-      c.dispatch({
+      await animateEvent(c, {
         type: 'CARD_ADDED_TO_HAND',
         owner: c.localSeat,
         cardId: inst.id,
         defId: override.defId,
         spawnSource: { kind: 'DECK_CREATION' },
       });
-      const raw = unwrap(c.state) as EngineMatchState;
-      const resolved = resolveCard(inst.id, raw, c.manifest);
-      if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
       continue;
     }
 
@@ -199,84 +171,12 @@ export const drawFromDeck = (count = 1): Step => (ctx) => {
     const deck = c.state.deck[c.localSeat] as readonly { id: string }[];
     if (deck.length === 0) break;
     const top = deck[0];
-    c.dispatch({
+    await animateEvent(c, {
       type: 'CARD_DRAWN',
       owner: c.localSeat,
       cardId: top.id as CardId,
       toHand: true,
     });
-    const raw = unwrap(c.state) as EngineMatchState;
-    const resolved = resolveCard(top.id as CardId, raw, c.manifest);
-    if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
-  }
-  return Promise.resolve();
-};
-
-/**
- * Push an already-resolved card directly into `ui.incoming`.
- * Used by non-deck sources (conjure, steal) so they share the commit animation.
- */
-export const queueIncoming = (resolved: ResolvedCard): Step => (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
-  return Promise.resolve();
-};
-
-/**
- * Stage 2 of the two-stage draw pipeline: drain `ui.incoming` into the
- * player hand one card at a time, animating each with a deck-slide + FLIP.
- */
-export const commitIncomingToHand = (
-  opts: { stagger?: number; popDuration?: number } = {},
-): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const stagger = opts.stagger ?? 120;
-  const popDuration = opts.popDuration ?? 320;
-
-  const batch = [...c.ui.incoming];
-  if (batch.length === 0) return;
-
-  for (let i = 0; i < batch.length; i++) {
-    const card = batch[i];
-
-    // Cap check against current engine hand.
-    if ((c.state.hand[c.localSeat] as unknown[]).length > 7) {
-      c.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((x) => x.id !== card.id));
-      continue;
-    }
-
-    // Note: the card is already in engine hand (added in drawFromDeck).
-    // Just capture rects for the FLIP animation, remove from incoming.
-    const handCards = c.state.hand[c.localSeat];
-    const oldIds = handCards.map((h) => h.id as string).filter((id) => id !== card.id);
-    const oldRects = captureHandRects(oldIds, c.cardRefs);
-
-    c.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((x) => x.id !== card.id));
-
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-
-    playLayoutSlide(oldRects, c.cardRefs);
-    const startRect = deckSourceRect(c);
-    const slidePromise = slideFromDeckToHand({
-      cardId: card.id,
-      startRect,
-      cardElMap: c.cardRefs,
-      boardWrap: c.boardWrap,
-      sfx: c.sfx,
-    });
-
-    await slidePromise;
-    const el = c.cardRefs.get(card.id);
-    if (el) {
-      const tl = new Timeline();
-      tl.add(el, 'vfx-pop', { 'scale-start': '0.8' }, popDuration, 0);
-      tl.play();
-      await new Promise<void>((r) => setTimeout(r, popDuration + 40));
-    }
-
-    if (i < batch.length - 1) {
-      await new Promise<void>((r) => setTimeout(r, stagger));
-    }
   }
 };
 
@@ -286,11 +186,10 @@ export const commitIncomingToHand = (
  */
 export const dealPlayerCard = (
   def?: import('../engine/manifest/types').CardDef,
-  { popDuration = 320 }: { popDuration?: number } = {},
 ): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   if (def) {
-    // Pre-specified card: add directly to engine hand + incoming.
+    // Pre-specified card: add through the same event-driven hand-entry path.
     const inst = newEngineCardInstance(def, c.localSeat);
     const event: MatchEvent = {
       type: 'CARD_ADDED_TO_HAND',
@@ -299,13 +198,10 @@ export const dealPlayerCard = (
       defId: def.defId,
       spawnSource: { kind: 'DECK_CREATION' },
     };
-    c.dispatch(event);
-    const resolved = resolveCard(inst.id, unwrap(c.state) as EngineMatchState, c.manifest);
-    if (resolved) c.setUi('incoming', (prev: ResolvedCard[]) => [...prev, resolved]);
+    await animateEvent(c, event);
   } else {
     await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
   }
-  await (commitIncomingToHand({ popDuration }) as (x: typeof ctx) => Promise<void>)(ctx);
 };
 
 // ── Location reveal ───────────────────────────────────────────────────────────
@@ -587,7 +483,6 @@ export const revealByPriorityFromEngine = (): Step => async (ctx) => {
 const SCRIPT_OWNED_EVENT_TYPES: ReadonlySet<MatchEvent['type']> = new Set<MatchEvent['type']>([
   'CARD_FLIPPED',        // played out per-card by revealByPriorityFromEngine
   'LOCATION_REVEALED',   // played out by revealNextLocation cinematic
-  'CARD_DRAWN',          // played out by drawHandCard (Tier 1.1 will unify)
 ]);
 
 export const advanceTurnFromEngine = (): Step => async (ctx) => {
@@ -698,9 +593,8 @@ export const autoPlayRemoteSeat = (): Step => async (ctx) => {
  */
 export const drawHandCard = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  if ((c.state.hand[c.localSeat] as unknown[]).length >= 7) return;
+  if ((c.state.hand[c.localSeat] as unknown[]).length >= c.manifest.constants.handCap) return;
   await (drawFromDeck(1) as (x: typeof ctx) => Promise<void>)(ctx);
-  await (commitIncomingToHand() as (x: typeof ctx) => Promise<void>)(ctx);
 };
 
 /** Mark match as resolving. */

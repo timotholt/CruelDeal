@@ -36,7 +36,7 @@
 
 **Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai`, `tracked-vars`, `dsl-atoms`, `builtins` — all green (65 tests in `__tests__/`). CLI deterministic across runs.
 
-**Next groundwork candidates:** Tier 2.1 (event-driven renderer → unlock animations-as-data), Tier 2.2 (particle overlay), Tier 3 prep (SSOT & transport).
+**Next groundwork candidates:** Tier 2.2 (particle overlay), Tier 3 prep (SSOT & transport).
 
 ---
 
@@ -164,7 +164,8 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - ✅ Adapter shell started: `services/playgame/presentation/choreography.ts` maps `MatchEvent` to structural animation, VFX cues, and SFX cues; `eventAnimator.ts` executes it.
 - ✅ `CARD_MOVED` is centralized through the adapter for reveal slices and post-reveal turn advancement while preserving the existing FLIP slide.
 - ✅ Additive VFX/SFX are mapped for power changes, destruction, and transformation without blocking dispatch.
-- Next: move local draw-to-hand choreography into the adapter only after visual QA confirms the current deck-slide timing is preserved.
+- ✅ `CARD_DRAWN` / local hand-entry choreography is routed through the adapter; the engine turn stream now owns turn-start draws, and opening deals use the seeded engine deck.
+- Next: Tier 2.2 particle overlay.
 
 ### 2.2 Particle Overlay
 - Single `<canvas>` over `boardWrap`, RAF loop, pointer-events: none.

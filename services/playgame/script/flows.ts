@@ -13,7 +13,6 @@ import {
   advanceTurnFromEngine,
   captureEngineEndTurn,
   dealPlayerCard,
-  drawHandCard,
   fadeInLocationTile,
   finishResolving,
   flipPlayerCardsFaceDown,
@@ -96,7 +95,7 @@ export const openingSequence = (): Step =>
  *   4. Priority-ordered reveal: whichever side has higher total power
  *      flips its cards face-up first, then the other side follows.
  *   5. Turn bookkeeping (counter + energy + TURN N banner).
- *   6. Draw one into hand.
+ *   6. Apply event-driven turn bookkeeping, including CARD_DRAWN.
  *   7. Reveal next location on turns 2 / 3.
  *   8. Unlock the UI.
  */
@@ -118,8 +117,6 @@ export const resolveTurnFlow = (): Step =>
     wait(200),
     // Advance turn/energy/priority from the engine's TURN_STARTED event.
     advanceTurnFromEngine(),
-    wait(200),
-    drawHandCard(),
     wait(200),
     revealNextLocation(),
     finishResolving(),

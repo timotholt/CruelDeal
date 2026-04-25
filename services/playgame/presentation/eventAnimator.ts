@@ -1,8 +1,32 @@
 import type { MatchEvent } from '../engine/types/events';
+import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { PlayScriptCtx } from '../script/actions';
-import { playLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import { resolveCard, type ResolvedCard } from '../view';
+import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
+import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Timeline } from '@/services/vfx/timeline';
+import { unwrap } from 'solid-js/store';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
+
+const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
+  if (ctx.deckEl && ctx.deckEl.isConnected) return ctx.deckEl.getBoundingClientRect();
+  const b = ctx.boardEl.getBoundingClientRect();
+  const w = 70;
+  const h = 100;
+  return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
+};
+
+const setIncoming = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
+  ctx.setUi('incoming', (prev: ResolvedCard[]) => (
+    prev.some((item) => item.id === card.id) ? prev : [...prev, card]
+  ));
+};
+
+const clearIncoming = (ctx: PlayScriptCtx, cardId: string): void => {
+  ctx.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((item) => item.id !== cardId));
+};
 
 const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['timing']): void => {
   if (!ctx.sfx) return;
@@ -49,6 +73,66 @@ const playVfx = (ctx: PlayScriptCtx, choreography: EventChoreography): void => {
   for (const cue of choreography.vfx) playVfxCue(ctx, cue);
 };
 
+const animateCardEnterHand = async (
+  ctx: PlayScriptCtx,
+  event: MatchEvent,
+  choreography: EventChoreography,
+): Promise<void> => {
+  const structural = choreography.structural;
+  if (structural.kind !== 'card-enter-hand') return;
+
+  if (structural.owner !== ctx.localSeat) {
+    playSfx(ctx, choreography.sfx, 'on-dispatch');
+    ctx.dispatch(event);
+    playVfx(ctx, choreography);
+    playSfx(ctx, choreography.sfx, 'after-dispatch');
+    playSfx(ctx, choreography.sfx, 'on-complete');
+    return;
+  }
+
+  const oldIds = ctx.state.hand[ctx.localSeat].map((card) => card.id as string);
+  const oldRects = captureHandRects(oldIds, ctx.cardRefs);
+
+  playSfx(ctx, choreography.sfx, 'on-dispatch');
+  ctx.dispatch(event);
+
+  const raw = unwrap(ctx.state) as EngineMatchState;
+  const resolved = resolveCard(structural.cardId, raw, ctx.manifest);
+  if (!resolved) {
+    playVfx(ctx, choreography);
+    playSfx(ctx, choreography.sfx, 'after-dispatch');
+    playSfx(ctx, choreography.sfx, 'on-complete');
+    return;
+  }
+
+  setIncoming(ctx, resolved);
+  playVfx(ctx, choreography);
+  playSfx(ctx, choreography.sfx, 'after-dispatch');
+
+  await nextFrame();
+  clearIncoming(ctx, resolved.id);
+  await nextFrame();
+
+  playLayoutSlide(oldRects, ctx.cardRefs);
+  await slideFromDeckToHand({
+    cardId: resolved.id,
+    startRect: deckSourceRect(ctx),
+    cardElMap: ctx.cardRefs,
+    boardWrap: ctx.boardWrap,
+    sfx: ctx.sfx,
+  });
+
+  const el = ctx.cardRefs.get(resolved.id);
+  if (el) {
+    const tl = new Timeline();
+    tl.add(el, 'vfx-pop', { 'scale-start': '0.8' }, structural.popDurationMs, 0);
+    tl.play();
+    await new Promise<void>((resolve) => setTimeout(resolve, structural.popDurationMs + 40));
+  }
+
+  playSfx(ctx, choreography.sfx, 'on-complete');
+};
+
 export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promise<void> {
   const choreography = describeEventChoreography(event);
   playSfx(ctx, choreography.sfx, 'on-start');
@@ -73,9 +157,12 @@ export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promi
       return;
     }
 
+    case 'card-enter-hand':
+      await animateCardEnterHand(ctx, event, choreography);
+      return;
+
     case 'dispatch-only':
     case 'card-flip':
-    case 'card-draw':
     case 'location-reveal':
       playSfx(ctx, choreography.sfx, 'on-dispatch');
       ctx.dispatch(event);
@@ -85,4 +172,3 @@ export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promi
       return;
   }
 }
-
