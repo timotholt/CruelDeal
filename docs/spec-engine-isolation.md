@@ -23,7 +23,7 @@ Dependencies absorbed: Tier 1.1 (Seeded PRNG), Tier 1.2 (Card model redesign). T
 
 ### Out of scope (deliberate)
 - Full JSON Ability DSL (that is Tier 0.1; ships after 0.2, same wire shape).
-- Particle system (Tier 2.2).
+- CSS card VFX wrapper stack / particle system (Tier 2.2 / 2.3).
 - Server transport / TanStack Start (Tier 3).
 - Per-card-folder manifest assembly with `import.meta.glob` (Tier 1.2 refinement; bootstrap manifest is a flat file).
 - Render-layer event choreography (Tier 2.1).

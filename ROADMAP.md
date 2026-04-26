@@ -36,7 +36,7 @@
 
 **Test coverage:** `apply`, `resolve`, `evaluator`, `manifest`, `projections`, `query`, `rng`, `ai`, `tracked-vars`, `dsl-atoms`, `builtins` — all green (65 tests in `__tests__/`). CLI deterministic across runs.
 
-**Next groundwork candidates:** Tier 2.2 (particle overlay), Tier 3 prep (SSOT & transport).
+**Next groundwork candidates:** Tier 2.2 (CSS card VFX wrapper stack), Tier 2.3 (particle overlay), Tier 3 prep (SSOT & transport).
 
 ---
 
@@ -165,14 +165,23 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - ✅ `CARD_MOVED` is centralized through the adapter for reveal slices and post-reveal turn advancement while preserving the existing FLIP slide.
 - ✅ Additive VFX/SFX are mapped for power changes, destruction, and transformation without blocking dispatch.
 - ✅ `CARD_DRAWN` / local hand-entry choreography is routed through the adapter; the engine turn stream now owns turn-start draws, and opening deals use the seeded engine deck.
-- Next: Tier 2.2 particle overlay.
+- Next: Tier 2.2 CSS card VFX wrapper stack.
 
-### 2.2 Particle Overlay
+### 2.2 CSS Card VFX Wrapper Stack
+- ✅ Spec exists: `docs/css-card-vfx-wrapper-stack-spec.md`.
+- ✅ Persistent effect catalog exists: `docs/css-card-vfx-effect-catalog.md` (fire, ice, acid, electric, poison, barrier, glitch, void, overclock, stealth, holy, bleed; one effect module/file per visual kind).
+- ✅ Lifecycle spec exists: `docs/css-card-vfx-lifecycle-spec.md` (creation, registry ownership, persistent reconciliation, exits, timeout cleanup, replay/match reset cleanup).
+- Purpose: use nested DOM wrappers so simultaneous card-local CSS keyframe effects compose through the browser's native compositor instead of clobbering one element's `animation` / `transform`.
+- Initial layer order: `world-motion → impact-shake → interaction-pose → power-pulse → face-transform → surface-fx → persistent-fx → card-face`.
+- Persistent groups (for N ongoing/status effects) own their own stacking strategy: single, stacked, aggregated, or prioritized.
+- Next implementation slice: add a `CardVfxStack` render wrapper around card faces and route one low-risk cue through it before moving existing Timeline effects.
+
+### 2.3 Particle Overlay
 - Single `<canvas>` over `boardWrap`, RAF loop, pointer-events: none.
 - `particles.burst({ at, palette, count })` API. ~150 lines.
 - Budget: 500 live particles max. Palette driven by card `art` color or event type.
 
-### 2.3 Inspector Overlay (Zoom)
+### 2.4 Inspector Overlay (Zoom)
 - Already partially implemented (`ZoomInspector.tsx`).
 - Wire click-to-zoom on cards and locations. 150ms interaction lockout to prevent double-tap closures.
 

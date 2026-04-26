@@ -332,14 +332,25 @@ Only after Phase 2 is stable:
 
 These must be additive and small. They should not change event dispatch order.
 
-### Phase 4: Optional Particle Overlay
+### Phase 4: CSS Card VFX Wrapper Stack
+
+Introduce the card-local wrapper stack after the event adapter is stable.
+
+Card-local VFX should prefer nested DOM wrappers that let the browser compose
+CSS keyframe animations on separate elements. See
+`docs/css-card-vfx-wrapper-stack-spec.md`.
+
+This phase should establish how transient layers and persistent N-source groups
+compose before particle effects become the default answer for local card VFX.
+
+### Phase 5: Optional Particle Overlay
 
 Introduce the canvas particle overlay after the event adapter is stable.
 
 Do not make particles required for the core event animation system. They are
 ornamentation, not state synchronization.
 
-### Phase 5: Delete Old Branches
+### Phase 6: Delete Old Branches
 
 Only delete old animation paths when:
 
