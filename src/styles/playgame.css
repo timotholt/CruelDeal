@@ -1402,6 +1402,123 @@
     100% { transform: rotateY(0deg); }
   }
 
+  /* ── Card VFX Overlay Stack ─────────────────────────────────────────────
+     Absolute-positioned overlays rendered by CardVfxStack.
+     CardVfxStack renders as a transparent Fragment; overlay divs are
+     direct children of the position:relative .card container.
+     CSS vars (--card-fx-*) are set inline per record by the component.
+  */
+
+  .card-vfx-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    /* Shared CSS variable defaults */
+    --card-fx-intensity: 1;
+    --card-fx-count: 1;
+    --card-fx-primary: #ffffff;
+    --card-fx-secondary: transparent;
+    --card-fx-accent: transparent;
+    --card-fx-speed: 1;
+    --card-fx-opacity: 1;
+    --card-fx-seed: 0;
+    --card-fx-color: #ffffff;
+  }
+
+  /* power-pulse channel: one-shot power-changed flash */
+  @keyframes card-vfx-power-flash-anim {
+    0%   { opacity: 0; box-shadow: none; }
+    30%  { opacity: 1; }
+    60%  { opacity: 0.8; }
+    100% { opacity: 0; box-shadow: none; }
+  }
+
+  .card-vfx-power-flash--buff {
+    --card-fx-color: #6dff9d;
+    animation: card-vfx-power-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #6dff9d, 0 0 12px #6dff9d80;
+  }
+
+  .card-vfx-power-flash--debuff {
+    --card-fx-color: #ff5d8f;
+    animation: card-vfx-power-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #ff5d8f, 0 0 12px #ff5d8f80;
+  }
+
+  /* impact-shake channel: shake animation */
+  @keyframes card-vfx-shake-anim {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 2px); }
+    40% { transform: translate(3px, -2px); }
+    60% { transform: translate(-2px, 3px); }
+    80% { transform: translate(2px, -3px); }
+  }
+
+  /* surface-fx flash: generic overlay flash */
+  @keyframes card-vfx-flash-anim {
+    0%, 100% { opacity: 0; }
+    30% { opacity: 1; }
+    70% { opacity: 0.7; }
+  }
+
+  /* destroy-burst: shake + crimson flash */
+  .card-vfx-destroy-shake {
+    animation: card-vfx-shake-anim 260ms ease-out both;
+    /* shake applies to the overlay but also bleeds through filter on parent via stacking context — acceptable for first slice */
+  }
+
+  .card-vfx-destroy-flash {
+    animation: card-vfx-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #ff5d8f, 0 0 16px #ff5d8fa0;
+    background: rgba(255, 93, 143, 0.15);
+  }
+
+  /* glitch-flash: shake + cyan flash */
+  .card-vfx-glitch-shake {
+    animation: card-vfx-shake-anim 240ms ease-out both;
+  }
+
+  .card-vfx-glitch-flash {
+    animation: card-vfx-flash-anim 240ms ease-out both;
+    box-shadow: inset 0 0 0 2px #70e1f5, 0 0 14px #70e1f580;
+    background: rgba(112, 225, 245, 0.12);
+  }
+
+  /* persistent glitch overlay (textDisabled) */
+  @keyframes card-vfx-glitch-persistent-anim {
+    0%, 90%, 100% { opacity: 0.5; transform: translate(0, 0); }
+    92%  { opacity: 0.8; transform: translate(-2px, 0); }
+    94%  { opacity: 0.6; transform: translate(2px, 0); }
+    96%  { opacity: 0.9; transform: translate(-1px, 1px); }
+    98%  { opacity: 0.5; transform: translate(0, 0); }
+  }
+
+  .card-fx-glitch {
+    animation: card-vfx-glitch-persistent-anim 3s ease-in-out infinite;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 34, 85, 0.4),
+      inset 2px 0 0 rgba(0, 255, 204, 0.3),
+      inset -2px 0 0 rgba(34, 0, 255, 0.3);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 34, 85, 0.04) 2px,
+      rgba(255, 34, 85, 0.04) 4px
+    );
+  }
+
+  /* persistent overlay exit */
+  .card-vfx-overlay--exiting {
+    animation: card-vfx-persistent-exit-anim 400ms ease-out forwards;
+  }
+
+  @keyframes card-vfx-persistent-exit-anim {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
   /* Script Engine: game-UI fade used by setBoardVisible().
      The toast area stays visible so banners (e.g. GALACTIC SNAP) can appear
      while the board itself is still hidden. */

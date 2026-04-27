@@ -7,6 +7,8 @@ import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/lay
 import { Timeline } from '@/services/vfx/timeline';
 import { unwrap } from 'solid-js/store';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
+import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { CardId } from '../engine/types/ids';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -38,29 +40,74 @@ const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['ti
 const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
   switch (cue.kind) {
     case 'power-flash': {
-      const el = ctx.cardRefs.get(cue.cardId);
-      if (!el) return;
-      const tl = new Timeline();
-      tl.add(el, 'vfx-flash', { color: cue.delta > 0 ? '#6dff9d' : '#ff5d8f' }, 260, 0);
-      tl.play();
+      const cardId = cue.cardId as CardId;
+      const isBuff = cue.delta > 0;
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_POWER_CHANGED',
+        channel: 'power-pulse',
+        effectKind: 'power-flash',
+        className: isBuff ? 'card-vfx-power-flash card-vfx-power-flash--buff' : 'card-vfx-power-flash card-vfx-power-flash--debuff',
+        vars: { '--card-fx-color': isBuff ? '#6dff9d' : '#ff5d8f' },
+        durationMs: 260,
+        exitDurationMs: 0,
+        priority: 10,
+        dedupeKey: `power-flash:${cue.cardId}`,
+      });
       return;
     }
 
     case 'destroy-burst': {
-      const el = ctx.cardRefs.get(cue.cardId);
-      if (!el) return;
-      const tl = new Timeline();
-      tl.compound(el, ['vfx-flash', 'vfx-shake'], { color: '#ff5d8f' }, 260);
-      tl.play();
+      const cardId = cue.cardId as CardId;
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_DESTROYED',
+        channel: 'impact-shake',
+        effectKind: 'destroy-shake',
+        className: 'card-vfx-destroy-shake',
+        vars: {},
+        durationMs: 260,
+        priority: 20,
+        dedupeKey: `destroy-shake:${cue.cardId}`,
+      });
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_DESTROYED',
+        channel: 'surface-fx',
+        effectKind: 'destroy-flash',
+        className: 'card-vfx-destroy-flash',
+        vars: { '--card-fx-color': '#ff5d8f' },
+        durationMs: 260,
+        priority: 20,
+        dedupeKey: `destroy-flash:${cue.cardId}`,
+      });
       return;
     }
 
     case 'glitch-flash': {
-      const el = ctx.cardRefs.get(cue.cardId);
-      if (!el) return;
-      const tl = new Timeline();
-      tl.compound(el, ['vfx-flash', 'vfx-shake'], { color: '#70e1f5' }, 240);
-      tl.play();
+      const cardId = cue.cardId as CardId;
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_TRANSFORMED',
+        channel: 'impact-shake',
+        effectKind: 'glitch-shake',
+        className: 'card-vfx-glitch-shake',
+        vars: {},
+        durationMs: 240,
+        priority: 15,
+        dedupeKey: `glitch-shake:${cue.cardId}`,
+      });
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_TRANSFORMED',
+        channel: 'surface-fx',
+        effectKind: 'glitch-flash',
+        className: 'card-vfx-glitch-flash',
+        vars: { '--card-fx-color': '#70e1f5' },
+        durationMs: 240,
+        priority: 15,
+        dedupeKey: `glitch-flash:${cue.cardId}`,
+      });
       return;
     }
 

@@ -6,13 +6,16 @@
  * so the Snap UX (your cards show face-up while staging) stays intact.
  */
 
+import { createEffect } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
-import type { Seat } from '@/services/playgame/engine/types/ids';
+import type { CardId, Seat } from '@/services/playgame/engine/types/ids';
 import { openInspect } from './inspector';
 import { dragState } from './useDragDrop';
+import { CardVfxStack } from '../../card/CardVfxStack';
+import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
 interface BoardCardProps {
   card: ResolvedCard;
@@ -28,6 +31,15 @@ export const BoardCard = (props: BoardCardProps) => {
   const { ui, engineState, isResolving, localSeat } = usePlayGame();
   const { bindCardRef } = useVfx();
   const viewerSeat = (): Seat => props.viewerSeat ?? localSeat;
+
+  const cardId = () => props.card.id as CardId;
+
+  createEffect(() => {
+    const sources = props.card.textDisabled
+      ? [{ id: `${props.card.id}-glitch`, sourceId: props.card.id, kind: 'glitch' as const, intensity: 1, priority: 5 }]
+      : [];
+    cardVfxRegistry.reconcilePersistent(cardId(), sources);
+  });
   const phase = (): EngineMatchState['phase'] => props.phase ?? engineState.phase;
   const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState.stagingOrder;
   const interactive = (): boolean => props.interactive ?? true;
@@ -119,15 +131,17 @@ export const BoardCard = (props: BoardCardProps) => {
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      <div class="cost">{props.card.cost}</div>
-      <div class={'power ' + powerClass()}>{props.card.power}</div>
-      {props.card.portraitPath
-        ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
-        : <div class="bar" style={{ background: props.card.art }} />
-      }
-      <div class="name">{props.card.name}</div>
-      <div class="type">{props.card.type}</div>
-      {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
+      <CardVfxStack cardId={cardId()}>
+        <div class="cost">{props.card.cost}</div>
+        <div class={'power ' + powerClass()}>{props.card.power}</div>
+        {props.card.portraitPath
+          ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
+          : <div class="bar" style={{ background: props.card.art }} />
+        }
+        <div class="name">{props.card.name}</div>
+        <div class="type">{props.card.type}</div>
+        {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
+      </CardVfxStack>
     </div>
   );
 };

@@ -29,6 +29,7 @@ import {
   type Accessor,
 } from 'solid-js';
 import { VFXEngine, vfxSfx } from '@/services/vfx';
+import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
 export interface VfxContextValue {
   /** The live engine once mounted (null until then). */
@@ -66,7 +67,12 @@ export const VfxHost = (props: VfxHostProps) => {
     setBoard(boardEl);
     const eng = new VFXEngine(boardEl, { sfx: vfxSfx });
     setEngine(eng);
+
+    const tickInterval = setInterval(() => cardVfxRegistry.tick(Date.now()), 1000);
+
     onCleanup(() => {
+      clearInterval(tickInterval);
+      cardVfxRegistry.clearAll('screen-unmounted');
       eng.destroy();
       setEngine(null);
       setBoard(null);

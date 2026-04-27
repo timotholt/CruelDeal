@@ -171,10 +171,13 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 - ✅ Spec exists: `docs/css-card-vfx-wrapper-stack-spec.md`.
 - ✅ Persistent effect catalog exists: `docs/css-card-vfx-effect-catalog.md` (fire, ice, acid, electric, poison, barrier, glitch, void, overclock, stealth, holy, bleed; one effect module/file per visual kind).
 - ✅ Lifecycle spec exists: `docs/css-card-vfx-lifecycle-spec.md` (creation, registry ownership, persistent reconciliation, exits, timeout cleanup, replay/match reset cleanup).
-- Purpose: use nested DOM wrappers so simultaneous card-local CSS keyframe effects compose through the browser's native compositor instead of clobbering one element's `animation` / `transform`.
-- Initial layer order: `world-motion → impact-shake → interaction-pose → power-pulse → face-transform → surface-fx → persistent-fx → card-face`.
+- ✅ **Slice 1 done:** `services/vfx/card-effects/` — types, 12 one-effect-per-file modules, imperative registry with transient + persistent lifecycle, timeout safety cleanup.
+- ✅ **Slice 1 done:** `components/card/CardVfxStack.tsx` — subscribes to registry, renders absolute overlay layers per card, calls `complete()` on animationend, clears card on unmount.
+- ✅ **Slice 1 done:** `HandCard` wired to `CardVfxStack`; `CARD_POWER_CHANGED` / `power-flash` cue routed through registry (`power-pulse` channel) instead of direct Timeline; CSS keyframes added.
+- Purpose: use absolute-positioned overlay layers (first slice) so simultaneous card-local CSS keyframe effects compose without clobbering one element's `animation` / `transform`. Full nested-wrapper mode targets `UnifiedCardView` in a later slice.
+- Initial channel order (in overlay z-index): `world-motion(0) → impact-shake(1) → interaction-pose(2) → power-pulse(3) → face-transform(4) → surface-fx(5) → persistent-fx(6)`.
 - Persistent groups (for N ongoing/status effects) own their own stacking strategy: single, stacked, aggregated, or prioritized.
-- Next implementation slice: add a `CardVfxStack` render wrapper around card faces and route one low-risk cue through it before moving existing Timeline effects.
+- **Next slices:** wire `destroy-burst` and `glitch-flash` through registry; add `CardVfxStack` to `BoardCard`; add persistent projection for one visual kind; move existing Timeline card effects behind registry.
 
 ### 2.3 Particle Overlay
 - Single `<canvas>` over `boardWrap`, RAF loop, pointer-events: none.
