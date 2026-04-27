@@ -1,0 +1,105 @@
+/* Floating Debug Dock */
+.debug-dock {
+  position: fixed;
+  z-index: 9999;
+  background: rgba(8, 12, 20, 0.95);
+  border: 1px solid rgba(100, 200, 255, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(100, 200, 255, 0.1);
+  backdrop-filter: blur(12px);
+  font-family: "JetBrains Mono", monospace;
+  color: #b0d4ff;
+  user-select: none;
+  min-width: 180px;
+  touch-action: none;
+}
+
+.dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(100, 200, 255, 0.2);
+  background: linear-gradient(180deg, rgba(100, 200, 255, 0.08), rgba(0, 0, 0, 0.1));
+  border-radius: 7px 7px 0 0;
+  cursor: grab;
+}
+
+.dock-header:active {
+  cursor: grabbing;
+}
+
+.dock-title {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  font-weight: 700;
+  color: #64c8ff;
+}
+
+.dock-collapse {
+  background: none;
+  border: none;
+  color: #7a9fb8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  font-family: inherit;
+  transition: color 150ms ease;
+}
+
+.dock-collapse:hover {
+  color: #b0d4ff;
+}
+
+.dock-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.dock-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #7a9fb8;
+  flex: 1;
+}
+
+.dock-toggle {
+  background: rgba(100, 200, 255, 0.08);
+  border: 1px solid rgba(100, 200, 255, 0.2);
+  color: #7a9fb8;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 50px;
+  transition: all 150ms ease;
+}
+
+.dock-toggle:hover {
+  background: rgba(100, 200, 255, 0.15);
+  border-color: rgba(100, 200, 255, 0.4);
+  color: #b0d4ff;
+}
+
+.dock-toggle--on {
+  background: rgba(100, 200, 255, 0.25);
+  border-color: #64c8ff;
+  color: #64c8ff;
+}
+
+.dock-toggle--on:hover {
+  background: rgba(100, 200, 255, 0.35);
+}
