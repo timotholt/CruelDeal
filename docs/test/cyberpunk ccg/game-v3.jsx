@@ -141,7 +141,7 @@ function Header({ accent, you, them, turn, deckCount }) {
 }
 
 // ---------- City Board (replaces Lane components) ----------
-function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels }) {
+function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, playerScore, enemyScore }) {
   const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
   return (
     <div className="city-board" style={{ width: CITY_V3_W, height: CITY_V3_H, position: "relative", overflow: "hidden" }}>
@@ -152,6 +152,8 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         height={CITY_V3_H}
         opacity={mapOpacity ?? 1}
         showLabels={showLabels !== false}
+        playerScore={playerScore}
+        enemyScore={enemyScore}
       />
 
       {/* Detection overlay (drag preview) */}
@@ -710,6 +712,8 @@ function Game() {
             sessionSeed={sessionSeed}
             mapOpacity={tweaks.showMap ? (tweaks.mapOpacity ?? 1) : 0}
             showLabels={showUI}
+            playerScore={scores.you}
+            enemyScore={scores.them}
           />
 
           {/* Math chip floats just above hand */}

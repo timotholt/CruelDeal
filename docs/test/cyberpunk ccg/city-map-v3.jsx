@@ -32,21 +32,49 @@ const DISTRICT_COLORS = [
   "#ff6ea0", "#5dffe6", "#ffd05d", "#a98dff", "#7dff9b", "#ff945d"
 ];
 
+// Tetromino-style polygon shapes used for micro-landmarks (small parks/plazas/
+// mini-malls placed inside leaf blocks). All shapes are CCW-oriented in a
+// `unitSize × unitSize` grid; the placement code centers and scales them.
+// New shapes can be added freely — each is a closed polygon as a list of
+// {x, y} points (the closing edge to the first point is implicit).
+const _MICRO_LANDMARK_SHAPES = [
+  // Square (1x1 of the unit grid)
+  { unitSize: 3, points: [{x:0,y:0},{x:3,y:0},{x:3,y:3},{x:0,y:3}] },
+  // Wide rectangle
+  { unitSize: 4, points: [{x:0,y:1},{x:4,y:1},{x:4,y:3},{x:0,y:3}] },
+  // Tall rectangle
+  { unitSize: 4, points: [{x:1,y:0},{x:3,y:0},{x:3,y:4},{x:1,y:4}] },
+  // L-shape
+  { unitSize: 4, points: [{x:0,y:0},{x:2,y:0},{x:2,y:2},{x:4,y:2},{x:4,y:4},{x:0,y:4}] },
+  // L-shape rotated 180°
+  { unitSize: 4, points: [{x:2,y:0},{x:4,y:0},{x:4,y:4},{x:0,y:4},{x:0,y:2},{x:2,y:2}] },
+  // T-shape
+  { unitSize: 4, points: [{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:3,y:2},{x:3,y:4},{x:1,y:4},{x:1,y:2},{x:0,y:2}] },
+  // Plus / cross
+  { unitSize: 4, points: [{x:1,y:0},{x:3,y:0},{x:3,y:1},{x:4,y:1},{x:4,y:3},{x:3,y:3},{x:3,y:4},{x:1,y:4},{x:1,y:3},{x:0,y:3},{x:0,y:1},{x:1,y:1}] },
+  // Z-shape (horizontal)
+  { unitSize: 5, points: [{x:0,y:0},{x:3,y:0},{x:3,y:1},{x:5,y:1},{x:5,y:3},{x:2,y:3},{x:2,y:2},{x:0,y:2}] },
+  // Step / staircase
+  { unitSize: 4, points: [{x:0,y:2},{x:2,y:2},{x:2,y:1},{x:4,y:1},{x:4,y:4},{x:0,y:4}] },
+];
+
 const PAL = {
-  waterDeep:    "#0d2c4d",
-  waterMid:     "#11365d",
-  land:         "#4f87b8",
+  waterDeep:    "#06192e",   // darker than before (was #0d2c4d)
+  waterMid:     "#0a2342",   // darker (was #11365d)
+  land:         "#3a6a90",   // darker (was #4f87b8)
   // Streets at different depths
   hwyOuter:     "rgba(255,255,255,0.45)",
   hwyInner:     "rgba(230,250,255,0.95)",
   avenue:       "rgba(245,250,255,0.85)",
-  streetMain:   "rgba(255,255,255,0.55)",
-  streetLocal:  "rgba(255,255,255,0.30)",
+  streetMain:   "rgba(255,255,255,0.85)",
+  streetLocal:  "rgba(255,255,255,0.62)",
   // Landmarks (parks/stadiums green; malls/plazas stay in the blue palette)
   park:         "#5fa97a",
   plaza:        "#7da3c6",
   stadium:      "#6dba8a",
   stadiumField: "#9ad7a8",
+  fieldLine:    "rgba(255,255,255,0.55)", // pitch markings on sports fields
+  diamond:      "#c08a55",                 // baseball infield (clay)
   mall:         "#3c5878",
   mallAccent:   "rgba(20, 35, 55, 0.55)",
   mallHighlight:"rgba(180, 210, 235, 0.18)",
@@ -128,41 +156,132 @@ function _pointToSegmentDist(px, py, a, b) {
   return Math.hypot(px - cx, py - cy);
 }
 
-// Pole of inaccessibility (approx): grid-search the polygon for the point
-// farthest from any polygon edge, viewport edge, AND landmark edge. Skips
-// candidates that fall inside any landmark polygon.
+// Sutherland-Hodgman polygon clipping against an axis-aligned rectangle.
+// Returns the clipped polygon (may be empty if no overlap). Used to compute
+// the district's *visible shape* — the part actually on screen.
+function _clipPolygonToRect(polygon, rect) {
+  // rect = { minX, minY, maxX, maxY }
+  const clipEdge = (poly, isInside, intersect) => {
+    if (!poly.length) return poly;
+    const result = [];
+    for (let i = 0; i < poly.length; i++) {
+      const curr = poly[i];
+      const prev = poly[(i - 1 + poly.length) % poly.length];
+      const cIn = isInside(curr);
+      const pIn = isInside(prev);
+      if (cIn) {
+        if (!pIn) result.push(intersect(prev, curr));
+        result.push(curr);
+      } else if (pIn) {
+        result.push(intersect(prev, curr));
+      }
+    }
+    return result;
+  };
+  let r = polygon;
+  // Left
+  r = clipEdge(r,
+    p => p.x >= rect.minX,
+    (a, b) => {
+      const t = (rect.minX - a.x) / (b.x - a.x || 1e-9);
+      return { x: rect.minX, y: a.y + t * (b.y - a.y) };
+    });
+  // Right
+  r = clipEdge(r,
+    p => p.x <= rect.maxX,
+    (a, b) => {
+      const t = (rect.maxX - a.x) / (b.x - a.x || 1e-9);
+      return { x: rect.maxX, y: a.y + t * (b.y - a.y) };
+    });
+  // Top
+  r = clipEdge(r,
+    p => p.y >= rect.minY,
+    (a, b) => {
+      const t = (rect.minY - a.y) / (b.y - a.y || 1e-9);
+      return { x: a.x + t * (b.x - a.x), y: rect.minY };
+    });
+  // Bottom
+  r = clipEdge(r,
+    p => p.y <= rect.maxY,
+    (a, b) => {
+      const t = (rect.maxY - a.y) / (b.y - a.y || 1e-9);
+      return { x: a.x + t * (b.x - a.x), y: rect.maxY };
+    });
+  return r;
+}
+
+// Label placement: scored grid search over the visible district polygon.
+// Each candidate point gets a score that combines:
+//   - distance from polygon edges + landmark edges (clear-space term)
+//   - distance from the visible centroid (centering term, penalty)
+//   - exclusion: skip candidates inside landmarks
+// The candidate with the highest score wins. This is more robust than a
+// naive PIA + centroid blend because it considers BOTH terms simultaneously
+// at every candidate, rather than picking two separate winners and averaging
+// them (which can land in a non-optimal middle).
 function _labelPosition(polygon, landmarks) {
-  const xs = polygon.map(p => p.x);
-  const ys = polygon.map(p => p.y);
   const margin = 14;
-  const minX = Math.max(margin, Math.min.apply(null, xs));
-  const maxX = Math.min(VIEW_W - margin, Math.max.apply(null, xs));
-  const minY = Math.max(margin, Math.min.apply(null, ys));
-  const maxY = Math.min(VIEW_H - margin, Math.max.apply(null, ys));
-  if (maxX <= minX || maxY <= minY) {
-    return { x: VIEW_W / 2, y: VIEW_H / 2 };
-  }
-  let bestX = (minX + maxX) / 2, bestY = (minY + maxY) / 2, bestDist = -1;
-  const step = 3;
+  const visible = _clipPolygonToRect(polygon, {
+    minX: margin, minY: margin,
+    maxX: VIEW_W - margin, maxY: VIEW_H - margin
+  });
+  if (visible.length < 3) return { x: VIEW_W / 2, y: VIEW_H / 2 };
+
+  const xs = visible.map(p => p.x);
+  const ys = visible.map(p => p.y);
+  const minX = Math.min.apply(null, xs);
+  const maxX = Math.max.apply(null, xs);
+  const minY = Math.min.apply(null, ys);
+  const maxY = Math.max.apply(null, ys);
+
   const lms = landmarks || [];
-  for (let x = minX; x <= maxX; x += step) {
-    for (let y = minY; y <= maxY; y += step) {
-      if (!_pointInPolygon({ x, y }, polygon)) continue;
-      // Skip candidates inside a landmark (so labels don't sit on stadiums/malls)
+
+  // Visible mass centroid — the "where you'd expect the label" target.
+  let cnt = 0, cSumX = 0, cSumY = 0;
+  for (let x = minX; x <= maxX; x += 4) {
+    for (let y = minY; y <= maxY; y += 4) {
+      if (!_pointInPolygon({ x, y }, visible)) continue;
       let inLm = false;
       for (const lm of lms) {
         if (_pointInPolygon({ x, y }, lm.polygon)) { inLm = true; break; }
       }
       if (inLm) continue;
+      cSumX += x; cSumY += y; cnt++;
+    }
+  }
+  const centroidX = cnt > 0 ? cSumX / cnt : (minX + maxX) / 2;
+  const centroidY = cnt > 0 ? cSumY / cnt : (minY + maxY) / 2;
+
+  // Diagonal of the visible bbox — used to normalize the centroid penalty so
+  // its magnitude is comparable to edgeDist (in pixels) regardless of size.
+  const bboxDiag = Math.max(1, Math.hypot(maxX - minX, maxY - minY));
+  // Centroid penalty weight: tuned so that centroid distance and edge distance
+  // contribute roughly equally for a typical district. Higher weight = label
+  // sticks closer to centroid; lower = label drifts toward "fattest" interior.
+  const CENTROID_WEIGHT = 0.55;
+
+  let bestX = centroidX, bestY = centroidY, bestScore = -Infinity;
+  const step = 3;
+  for (let x = minX; x <= maxX; x += step) {
+    for (let y = minY; y <= maxY; y += step) {
+      if (!_pointInPolygon({ x, y }, visible)) continue;
+      let inLm = false;
+      for (const lm of lms) {
+        if (_pointInPolygon({ x, y }, lm.polygon)) { inLm = true; break; }
+      }
+      if (inLm) continue;
+
+      // Min distance to any visible polygon edge (district boundary or
+      // viewport-clip edge — both treated equally because both feel like
+      // "edges" to the user).
       let edgeDist = Infinity;
-      // Distance to nearest polygon edge
-      for (let i = 0; i < polygon.length; i++) {
-        const a = polygon[i];
-        const b = polygon[(i + 1) % polygon.length];
+      for (let i = 0; i < visible.length; i++) {
+        const a = visible[i];
+        const b = visible[(i + 1) % visible.length];
         const d = _pointToSegmentDist(x, y, a, b);
         if (d < edgeDist) edgeDist = d;
       }
-      // Distance to nearest landmark edge (push label away)
+      // Min distance to landmark edge.
       for (const lm of lms) {
         for (let i = 0; i < lm.polygon.length; i++) {
           const a = lm.polygon[i];
@@ -171,9 +290,13 @@ function _labelPosition(polygon, landmarks) {
           if (d < edgeDist) edgeDist = d;
         }
       }
-      // Distance to viewport edges
-      edgeDist = Math.min(edgeDist, x - 4, VIEW_W - 4 - x, y - 4, VIEW_H - 4 - y);
-      if (edgeDist > bestDist) { bestDist = edgeDist; bestX = x; bestY = y; }
+      // Distance from the visible centroid (for centering).
+      const centroidDist = Math.hypot(x - centroidX, y - centroidY);
+
+      // Score: prefer LARGE edgeDist (interior), prefer SMALL centroidDist
+      // (visually centered). Both terms in pixel space, second one weighted.
+      const score = edgeDist - CENTROID_WEIGHT * centroidDist;
+      if (score > bestScore) { bestScore = score; bestX = x; bestY = y; }
     }
   }
   return { x: bestX, y: bestY };
@@ -200,17 +323,112 @@ function _dotCountForArea(area) {
   return 10;
 }
 
+// Polygon-to-path with curve awareness:
+// Runs of consecutive road-edged vertices that include at least one "roadMid"
+// (true curve mid-point) are Q-smoothed to match the street rendering exactly.
+// Pure straight-cut runs (only "road" endpoints, no mids) use straight L —
+// otherwise BSP blocks bounded by 3-4 adjacent cuts would render as pillows.
+// Non-road edges (coast, untagged) always use straight L.
 function _polygonToPath(polygon) {
-  if (polygon.length === 0) return "";
+  const n = polygon.length;
+  if (n === 0) return "";
+  const isRoadEdge = (i) => (polygon[i].edgeKind === "road" || polygon[i].edgeKind === "roadMid");
+  const isCurveMid = (i) => (polygon[i].edgeKind === "roadMid");
+
   let d = `M ${polygon[0].x.toFixed(2)} ${polygon[0].y.toFixed(2)}`;
-  for (let i = 1; i < polygon.length; i++) {
-    d += ` L ${polygon[i].x.toFixed(2)} ${polygon[i].y.toFixed(2)}`;
+  let i = 0;
+  while (i < n) {
+    if (isRoadEdge(i)) {
+      // Find the road run [i .. j-1] (j = first non-road index after i, or n).
+      let j = i + 1;
+      let runHasMid = isCurveMid(i);
+      while (j < n && isRoadEdge(j)) {
+        if (isCurveMid(j)) runHasMid = true;
+        j++;
+      }
+      // CRITICAL: the run's geometric terminator is polygon[j] (or polygon[0]
+      // if j wraps), NOT polygon[j-1]. polygon[j] is the cut's other endpoint
+      // — it has edgeKind="coast" (its OUTGOING edge is coast) but its INCOMING
+      // edge is the curve. Including polygon[j] as the L target ensures the
+      // smoothed path lands EXACTLY on the cut endpoint, matching the rendered
+      // street geometry. Without this, the outline cut its corner at the
+      // last interior mid, producing a visible offset along curved cuts.
+      const term = polygon[j % n];
+      if (runHasMid) {
+        // Build the exact same point sequence the street uses:
+        //   [polygon[i], polygon[i+1], ..., polygon[j-1], term]
+        // and call _smoothPolylinePath — the SAME function that renders the
+        // road. This guarantees the district outline is byte-identical to the
+        // street geometry. No duplicated curve math, no risk of divergence.
+        // We strip the leading "M x y" because the pen is already at polygon[i].
+        const roadPoints = [];
+        for (let k = i; k < j; k++) roadPoints.push(polygon[k]);
+        roadPoints.push(term);
+        const sub = _smoothPolylinePath(roadPoints);
+        const stripped = sub.replace(/^M\s+[\d.\-]+\s+[\d.\-]+\s*/, "");
+        d += " " + stripped;
+      } else {
+        // Plain straight cut: L through each interior road vertex, then L term.
+        for (let k = i + 1; k < j; k++) {
+          d += ` L ${polygon[k].x.toFixed(2)} ${polygon[k].y.toFixed(2)}`;
+        }
+        d += ` L ${term.x.toFixed(2)} ${term.y.toFixed(2)}`;
+      }
+      // Resume the outer loop AT the terminator vertex; its outgoing edge is
+      // handled normally by the non-road branch.
+      i = j;
+    } else {
+      const next = (i + 1) % n;
+      d += ` L ${polygon[next].x.toFixed(2)} ${polygon[next].y.toFixed(2)}`;
+      i++;
+    }
   }
   d += " Z";
   return d;
 }
 
-function _splitPolygonByLine(polygon, L1, L2) {
+// Build an OUTLINE-only path that skips edges marked `edgeKind === "road"`.
+// Road edges are already drawn by the street rendering pipeline (highway,
+// avenue, etc.), so re-stroking them with a district color produces an
+// undesirable double-line "seam." This helper emits a path with M/L commands
+// over only the non-road edges, leaving gaps on shared road boundaries.
+//
+// Smart smoothing is preserved for any non-road curved runs (rare today, but
+// future-proof for curves on coast etc.).
+function _polygonOutlinePathSkipRoads(polygon) {
+  const n = polygon.length;
+  if (n === 0) return "";
+  const isRoad = (i) => (polygon[i].edgeKind === "road" || polygon[i].edgeKind === "roadMid");
+
+  let d = "";
+  let penDown = false; // true if the SVG pen is currently at polygon[i]
+  for (let i = 0; i < n; i++) {
+    if (isRoad(i)) {
+      // Skip this edge — break the path here.
+      penDown = false;
+      continue;
+    }
+    if (!penDown) {
+      d += `M ${polygon[i].x.toFixed(2)} ${polygon[i].y.toFixed(2)}`;
+      penDown = true;
+    }
+    const next = (i + 1) % n;
+    d += ` L ${polygon[next].x.toFixed(2)} ${polygon[next].y.toFixed(2)}`;
+  }
+  return d;
+}
+
+// Split a polygon by a line L1-L2. Optionally curve the cut by providing
+// `polylineMids`: an array of mid-points that replace the straight segment
+// between the two polygon-edge intersection points.
+//
+// With polylineMids=null: classic straight cut.
+// With polylineMids=[M1,M2,...]: the boundary between halves becomes
+//   I1 → M1 → M2 → ... → I2 (in half1) and the reverse in half2.
+//
+// Interior mids MUST lie inside the polygon for the resulting halves to be
+// simple. Caller is expected to validate this.
+function _splitPolygonByLine(polygon, L1, L2, polylineMids = null) {
   const n = polygon.length;
   const ints = [];
   for (let i = 0; i < n; i++) {
@@ -233,20 +451,167 @@ function _splitPolygonByLine(polygon, L1, L2) {
   const aKind = polygon[a].edgeKind || "coast";
   const bKind = polygon[b].edgeKind || "coast";
 
+  const mids = polylineMids || [];
+
+  // edgeKind convention:
+  //   "road"    = endpoint of a cut (I1 or I2). The OUTGOING edge from this
+  //               vertex lies on a road. A run of just I1+I2 means a STRAIGHT
+  //               cut (no curve mids); the path is a plain line.
+  //   "roadMid" = curve interior mid-point. Indicates a CURVED cut. A run that
+  //               contains one or more "roadMid" vertices is a real curve and
+  //               should be Q-smoothed at render time.
+  // This distinction prevents straight-BSP-cut blocks (where 3-4 consecutive
+  // vertices are all I1/I2 endpoints from adjacent cuts) from being mistakenly
+  // smoothed into pillow shapes.
+
+  // half1 = V0..Va + I1 + mids(forward) + I2 + V(b+1)..Vn-1
   const half1 = [];
   for (let i = 0; i <= a; i++) half1.push({ x: polygon[i].x, y: polygon[i].y, edgeKind: polygon[i].edgeKind });
   half1.push({ x: I1.x, y: I1.y, edgeKind: "road" });
+  for (const m of mids) half1.push({ x: m.x, y: m.y, edgeKind: "roadMid" });
   half1.push({ x: I2.x, y: I2.y, edgeKind: bKind });
   for (let i = b + 1; i < n; i++) half1.push({ x: polygon[i].x, y: polygon[i].y, edgeKind: polygon[i].edgeKind });
 
+  // half2 = I1 + V(a+1)..Vb + I2 + mids(reverse)
   const half2 = [];
   half2.push({ x: I1.x, y: I1.y, edgeKind: aKind });
   for (let i = a + 1; i <= b; i++) half2.push({ x: polygon[i].x, y: polygon[i].y, edgeKind: polygon[i].edgeKind });
   half2.push({ x: I2.x, y: I2.y, edgeKind: "road" });
+  for (let i = mids.length - 1; i >= 0; i--) {
+    half2.push({ x: mids[i].x, y: mids[i].y, edgeKind: "roadMid" });
+  }
 
   if (_polygonArea(half1) < 50 || _polygonArea(half2) < 50) return null;
 
-  return [half1, half2, { p1: { x: I1.x, y: I1.y }, p2: { x: I2.x, y: I2.y } }];
+  const polyline = mids.length
+    ? [{ x: I1.x, y: I1.y }, ...mids.map(m => ({ x: m.x, y: m.y })), { x: I2.x, y: I2.y }]
+    : null;
+
+  return [half1, half2, {
+    p1: { x: I1.x, y: I1.y },
+    p2: { x: I2.x, y: I2.y },
+    polyline
+  }];
+}
+
+// Generate a gentle curve polyline from P1 to P2 as [P1, M1, M2, P2].
+// 80% "C-curve" (consistent side), 20% "S-curve" (inflects once).
+// Amplitude is kept modest (6-14% of length) to minimize polygon-escape.
+// Returns null if the segment is too short to bother curving.
+function _curveLine(P1, P2, rng) {
+  const dx = P2.x - P1.x, dy = P2.y - P1.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 55) return null;
+  const perpX = -dy / len, perpY = dx / len;
+
+  const amp = 0.06 + rng() * 0.08;      // 0.06..0.14
+  const isS = rng() < 0.2;
+  const side = rng() < 0.5 ? 1 : -1;
+  const a1 = (0.55 + rng() * 0.45) * amp * len * side;
+  const a2 = (0.55 + rng() * 0.45) * amp * len * (isS ? -side : side);
+
+  const M1 = { x: P1.x + dx * 0.33 + perpX * a1, y: P1.y + dy * 0.33 + perpY * a1 };
+  const M2 = { x: P1.x + dx * 0.66 + perpX * a2, y: P1.y + dy * 0.66 + perpY * a2 };
+  return [P1, M1, M2, P2];
+}
+
+// Try curving an existing straight-cut result. Returns a new split result with
+// the polyline embedded if the curve stays inside the polygon; otherwise returns
+// null (caller keeps the straight result).
+function _tryCurveCut(polygon, straightResult, p1, p2, rng) {
+  const I1 = straightResult[2].p1;
+  const I2 = straightResult[2].p2;
+  const poly = _curveLine(I1, I2, rng);
+  if (!poly) return null;
+  const mids = poly.slice(1, -1);
+  // Reject if any mid escapes the polygon.
+  for (const m of mids) {
+    if (!_pointInPolygon(m, polygon)) return null;
+  }
+  const curved = _splitPolygonByLine(polygon, p1, p2, mids);
+  if (!curved) return null;
+  return curved;
+}
+
+// Return the cut as a list of straight segments matching the SVG rendering.
+// - Straight cuts: 1 segment (p1, p2).
+// - Curved cuts: many small segments sampled along the smoothed Q-bezier path,
+//   so bridge detection / road-buffer hit-tests align with the *visible* curve.
+function _cutSegments(cut) {
+  if (!cut.polyline || cut.polyline.length < 2) return [{ a: cut.p1, b: cut.p2 }];
+  return _sampleSmoothPolyline(cut.polyline, 8);
+}
+
+// Sample the EXACT smoothed-polyline curve into straight segments. Uses the
+// same Q-bezier-through-midpoints formulation as `_smoothPolylinePath`, so the
+// returned segments precisely overlay the rendered SVG path.
+//
+// SVG path for `pts` (length k+1, k>=2):
+//   M pts[0]
+//   Q via pts[1] to mid(1,2)        ← starts at pts[0]
+//   Q via pts[i] to mid(i,i+1)      ← starts at mid(i-1,i), for i=2..k-1
+//   L pts[k]                        ← from mid(k-1,k) to pts[k]
+//
+// We mirror that exactly so the sampled polyline is geometrically identical
+// (within sub-pixel resolution given the per-segment step count).
+function _sampleSmoothPolyline(pts, stepsPerSeg) {
+  const samples = [];
+  const k = pts.length - 1;
+  if (k < 1) {
+    if (pts.length === 1) samples.push({ x: pts[0].x, y: pts[0].y });
+    return _samplesToSegments(samples);
+  }
+  if (k === 1) {
+    samples.push({ x: pts[0].x, y: pts[0].y });
+    samples.push({ x: pts[1].x, y: pts[1].y });
+    return _samplesToSegments(samples);
+  }
+
+  const steps = stepsPerSeg | 0 || 8;
+  samples.push({ x: pts[0].x, y: pts[0].y });
+  for (let i = 1; i < k; i++) {
+    const c = pts[i];
+    const start = (i === 1)
+      ? { x: pts[0].x, y: pts[0].y }
+      : { x: (pts[i - 1].x + pts[i].x) / 2, y: (pts[i - 1].y + pts[i].y) / 2 };
+    const end = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const mt = 1 - t;
+      samples.push({
+        x: mt * mt * start.x + 2 * mt * t * c.x + t * t * end.x,
+        y: mt * mt * start.y + 2 * mt * t * c.y + t * t * end.y
+      });
+    }
+  }
+  samples.push({ x: pts[k].x, y: pts[k].y });
+  return _samplesToSegments(samples);
+}
+
+function _samplesToSegments(samples) {
+  const segs = [];
+  for (let i = 0; i < samples.length - 1; i++) {
+    segs.push({ a: samples[i], b: samples[i + 1] });
+  }
+  return segs;
+}
+
+// SVG path for a polyline, smoothed via quadratic beziers through midpoints
+// (produces C1-continuous smooth curves for 3+ points).
+function _smoothPolylinePath(points) {
+  if (!points || points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)} L ${points[1].x.toFixed(2)} ${points[1].y.toFixed(2)}`;
+  }
+  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const mx = (points[i].x + points[i + 1].x) / 2;
+    const my = (points[i].y + points[i + 1].y) / 2;
+    d += ` Q ${points[i].x.toFixed(2)} ${points[i].y.toFixed(2)} ${mx.toFixed(2)} ${my.toFixed(2)}`;
+  }
+  d += ` L ${points[points.length - 1].x.toFixed(2)} ${points[points.length - 1].y.toFixed(2)}`;
+  return d;
 }
 
 // ============================================================
@@ -254,16 +619,49 @@ function _splitPolygonByLine(polygon, L1, L2) {
 // ============================================================
 
 function _generateLandPolygon(rng) {
-  // Random center offset so polygon sits asymmetrically: 1-2 sides extend past
-  // viewport, 1-2 show coast clearly.
-  const cx = VIEW_W / 2 + (rng() - 0.5) * 60;
-  const cy = VIEW_H / 2 + (rng() - 0.5) * 60;
+  // Two modes:
+  //   PENINSULA (75%): standard wide-variation polygon, often extends past
+  //     several viewport edges, may show coast on 0-2 sides.
+  //   EXPOSED   (25%): center heavily offset toward one corner; the polygon
+  //     extends past the FAR sides, but pulls back from the NEAR sides to
+  //     reveal coast on 1-3 sides. Land still fills most of the viewport so
+  //     ocean isn't excessive.
+  const exposedMode = rng() < 0.25;
   const N = 20;
   const phaseA = rng() * Math.PI * 2;
   const phaseB = rng() * Math.PI * 2;
   const phaseC = rng() * Math.PI * 2;
-  // Wide variation: directions with k < ~0.85 show clear coast inside the
-  // viewport; directions with k > ~1.15 clearly extend past.
+
+  if (exposedMode) {
+    // Pick a random "exposure direction" — the side we want to most clearly
+    // show coast on. Center is shifted AWAY from that side.
+    const exposeAngle = rng() * Math.PI * 2;
+    const exposeMag = 70 + rng() * 30; // 70-100 px shift
+    const cx = VIEW_W / 2 - Math.cos(exposeAngle) * exposeMag;
+    const cy = VIEW_H / 2 - Math.sin(exposeAngle) * exposeMag;
+    // Radius slightly smaller than peninsula so the coast on the exposed side
+    // is clearly visible (not "almost there"). Other sides still reach past.
+    const baseR = LAND_RX * 0.85;
+    const verts = [];
+    for (let i = 0; i < N; i++) {
+      const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
+      const r1 = 0.18 * Math.cos(angle * 1 + phaseA);
+      const r2 = 0.11 * Math.cos(angle * 3 + phaseB);
+      const r3 = 0.06 * Math.cos(angle * 5 + phaseC);
+      const jitter = (rng() - 0.5) * 0.06;
+      const k = 1.0 + r1 + r2 + r3 + jitter;
+      verts.push({
+        x: cx + Math.cos(angle) * baseR * k,
+        y: cy + Math.sin(angle) * baseR * k,
+        edgeKind: "coast"
+      });
+    }
+    return verts;
+  }
+
+  // PENINSULA mode (existing behavior).
+  const cx = VIEW_W / 2 + (rng() - 0.5) * 60;
+  const cy = VIEW_H / 2 + (rng() - 0.5) * 60;
   const verts = [];
   for (let i = 0; i < N; i++) {
     const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
@@ -404,37 +802,101 @@ function _tryGridCut(polygon, gridAngle, useSecondaryAxis, offsetMagnitude, rng)
   const p2 = { x: px + dx * HUGE, y: py + dy * HUGE };
   const result = _splitPolygonByLine(polygon, p1, p2);
   if (!result) return null;
-  return { halfA: result[0], halfB: result[1], cutSeg: result[2], angle: cutAngle };
+  return {
+    halfA: result[0], halfB: result[1], cutSeg: result[2], angle: cutAngle,
+    cutLineP1: p1, cutLineP2: p2  // retained for later curve-attempt re-split
+  };
 }
 
 // Split land into 3 macro regions via 2 sequential cuts.
 // First cut: split into 2 halves. Second cut: split the LARGER half into 2.
 // Result: 3 regions of roughly comparable size.
+//
+// Highways (depth 0) and avenues (depth 1) are the "curvable" street tiers:
+// after finding each best straight cut, we attempt to curve it. If the curve
+// escapes the polygon, we silently fall back to the straight cut.
 function _macroDivide3(landPolygon, gridAngle, rng) {
   const totalArea = _polygonArea(landPolygon);
   const target1 = totalArea / 3; // smaller half should be ~1/3 of total
 
-  // Try first cut along both grid axes; pick the one whose smaller half is closest to 1/3.
-  let best1 = null, best1Score = Infinity;
-  for (let attempt = 0; attempt < 18; attempt++) {
-    const useSecondary = attempt % 2 === 0;
-    const offMag = 90 + rng() * 40; // wide range so we get 1/3-2/3 splits
-    const r = _tryGridCut(landPolygon, gridAngle, useSecondary, offMag, rng);
-    if (!r) continue;
-    const aArea = _polygonArea(r.halfA);
-    const bArea = _polygonArea(r.halfB);
-    if (aArea < 1500 || bArea < 1500) continue;
-    const visA = _viewportVisibleArea(r.halfA);
-    const visB = _viewportVisibleArea(r.halfB);
-    if (visA < 2500 || visB < 2500) continue;
-    const smallerArea = Math.min(aArea, bArea);
-    const score = Math.abs(smallerArea - target1);
-    if (score < best1Score) {
-      best1 = { ...r, useSecondary };
-      best1Score = score;
+  // Probability of curving at each macro tier.
+  // TEMPORARILY DISABLED — curved cuts are being debugged for district-outline
+  // alignment. Set both to 0 so all macro cuts are guaranteed straight; this
+  // isolates whether remaining outline issues are curve-specific or general.
+  const CURVE_P_HIGHWAY = 0.0;
+  const CURVE_P_AVENUE  = 0.0;
+
+  // Visible bbox dimensions of a polygon clipped to the viewport. Used to
+  // reject cuts that produce a thin "sliver" district — even if the area is
+  // OK, the visible width can be very small if the polygon extends mostly
+  // off-screen. A minimum visible width prevents Akihabara-style ribbons.
+  const visibleBBox = (poly) => {
+    const clipped = _clipPolygonToRect(poly, { minX: 0, minY: 0, maxX: VIEW_W, maxY: VIEW_H });
+    if (clipped.length < 3) return { w: 0, h: 0 };
+    let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
+    for (const p of clipped) {
+      if (p.x < mnX) mnX = p.x;
+      if (p.x > mxX) mxX = p.x;
+      if (p.y < mnY) mnY = p.y;
+      if (p.y > mxY) mxY = p.y;
+    }
+    return { w: mxX - mnX, h: mxY - mnY };
+  };
+
+  // First cut: try multiple candidates, prefer balanced 1/3-2/3 splits.
+  // We progressively relax constraints if no candidate meets the strict bar,
+  // so we always find SOME cut even on awkward land polygons.
+  const findFirstCut = (minRatio, minVisibleSmaller, minMinDim) => {
+    let best = null, bestScore = Infinity;
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const useSecondary = attempt % 2 === 0;
+      const offMag = 80 + rng() * 50;
+      const r = _tryGridCut(landPolygon, gridAngle, useSecondary, offMag, rng);
+      if (!r) continue;
+      const aArea = _polygonArea(r.halfA);
+      const bArea = _polygonArea(r.halfB);
+      if (aArea < 1500 || bArea < 1500) continue;
+      const visA = _viewportVisibleArea(r.halfA);
+      const visB = _viewportVisibleArea(r.halfB);
+      if (visA < 2500 || visB < 2500) continue;
+      const smallerArea = Math.min(aArea, bArea);
+      // Prevent one district from being a thin sliver.
+      if (smallerArea < totalArea * minRatio) continue;
+      if (Math.min(visA, visB) < minVisibleSmaller) continue;
+      // Reject if either half's visible bbox has a dimension below threshold —
+      // this is what stops "thin Akihabara ribbon" districts.
+      const bbA = visibleBBox(r.halfA);
+      const bbB = visibleBBox(r.halfB);
+      const minDimA = Math.min(bbA.w, bbA.h);
+      const minDimB = Math.min(bbB.w, bbB.h);
+      if (Math.min(minDimA, minDimB) < minMinDim) continue;
+      const score = Math.abs(smallerArea - target1);
+      if (score < bestScore) {
+        best = { ...r, useSecondary };
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  // Strict → relaxed → minimal: ensures we always get a cut.
+  // The third arg is the min-min-dimension (px) of the visible bbox.
+  let best1 = findFirstCut(0.22, 4500, 55);
+  if (!best1) best1 = findFirstCut(0.15, 3500, 45);
+  if (!best1) best1 = findFirstCut(0.0, 2500, 30);
+  if (!best1) best1 = findFirstCut(0.0, 2500, 0); // last resort
+  if (!best1) return { regions: [landPolygon], macroCuts: [] };
+
+  // HIGHWAY curve attempt
+  if (rng() < CURVE_P_HIGHWAY) {
+    const straightResult = [best1.halfA, best1.halfB, best1.cutSeg];
+    const curved = _tryCurveCut(landPolygon, straightResult, best1.cutLineP1, best1.cutLineP2, rng);
+    if (curved) {
+      best1.halfA = curved[0];
+      best1.halfB = curved[1];
+      best1.cutSeg = curved[2];
     }
   }
-  if (!best1) return { regions: [landPolygon], macroCuts: [] };
 
   const aArea = _polygonArea(best1.halfA);
   const bArea = _polygonArea(best1.halfB);
@@ -442,34 +904,72 @@ function _macroDivide3(landPolygon, gridAngle, rng) {
   const larger  = aArea <= bArea ? best1.halfB : best1.halfA;
 
   // Second cut: split LARGER half. Use perpendicular axis to first cut for visual contrast.
-  let best2 = null, best2Score = Infinity;
-  const secondAxis = !best1.useSecondary;
-  for (let attempt = 0; attempt < 18; attempt++) {
-    const offMag = 50 + rng() * 30;
-    const r = _tryGridCut(larger, gridAngle, secondAxis, offMag, rng);
-    if (!r) continue;
-    const xA = _polygonArea(r.halfA);
-    const xB = _polygonArea(r.halfB);
-    if (xA < 1200 || xB < 1200) continue;
-    if (_viewportVisibleArea(r.halfA) < 2500) continue;
-    if (_viewportVisibleArea(r.halfB) < 2500) continue;
-    // Prefer balanced halves
-    const ratio = Math.max(xA, xB) / Math.max(1, Math.min(xA, xB));
-    const score = ratio;
-    if (score < best2Score) { best2 = r; best2Score = score; }
-  }
+  // Same min-visible-dimension check as the first cut to avoid thin slivers.
+  const findSecondCut = (minMinDim) => {
+    let bst = null, bstScore = Infinity;
+    const secondAxis = !best1.useSecondary;
+    for (let attempt = 0; attempt < 18; attempt++) {
+      const offMag = 50 + rng() * 30;
+      const r = _tryGridCut(larger, gridAngle, secondAxis, offMag, rng);
+      if (!r) continue;
+      const xA = _polygonArea(r.halfA);
+      const xB = _polygonArea(r.halfB);
+      if (xA < 1200 || xB < 1200) continue;
+      if (_viewportVisibleArea(r.halfA) < 2500) continue;
+      if (_viewportVisibleArea(r.halfB) < 2500) continue;
+      const bbA = visibleBBox(r.halfA);
+      const bbB = visibleBBox(r.halfB);
+      if (Math.min(bbA.w, bbA.h) < minMinDim) continue;
+      if (Math.min(bbB.w, bbB.h) < minMinDim) continue;
+      // Prefer balanced halves
+      const ratio = Math.max(xA, xB) / Math.max(1, Math.min(xA, xB));
+      if (ratio < bstScore) { bst = r; bstScore = ratio; }
+    }
+    return bst;
+  };
+  let best2 = findSecondCut(55);
+  if (!best2) best2 = findSecondCut(45);
+  if (!best2) best2 = findSecondCut(30);
+  if (!best2) best2 = findSecondCut(0);
   if (!best2) {
     return {
       regions: [smaller, larger],
-      macroCuts: [{ p1: best1.cutSeg.p1, p2: best1.cutSeg.p2, depth: 0, angle: best1.angle }]
+      macroCuts: [{
+        p1: best1.cutSeg.p1, p2: best1.cutSeg.p2,
+        polyline: best1.cutSeg.polyline || null,
+        depth: 0, angle: best1.angle
+      }]
     };
+  }
+
+  // AVENUE curve attempt — but if the highway already curved, drastically
+  // reduce the probability of curving the avenue too. Two curves stacked tend
+  // to look chaotic; one feature curve per map reads cleaner.
+  const highwayCurved = !!(best1.cutSeg && best1.cutSeg.polyline);
+  const effAvenueP = highwayCurved ? CURVE_P_AVENUE * 0.4 : CURVE_P_AVENUE;
+  if (rng() < effAvenueP) {
+    const straightResult = [best2.halfA, best2.halfB, best2.cutSeg];
+    const curved = _tryCurveCut(larger, straightResult, best2.cutLineP1, best2.cutLineP2, rng);
+    if (curved) {
+      best2.halfA = curved[0];
+      best2.halfB = curved[1];
+      best2.cutSeg = curved[2];
+    }
   }
 
   return {
     regions: [smaller, best2.halfA, best2.halfB],
     macroCuts: [
-      { p1: best1.cutSeg.p1, p2: best1.cutSeg.p2, depth: 0, angle: best1.angle },
-      { p1: best2.cutSeg.p1, p2: best2.cutSeg.p2, depth: 1, angle: best2.angle }
+      {
+        p1: best1.cutSeg.p1, p2: best1.cutSeg.p2,
+        polyline: best1.cutSeg.polyline || null,
+        depth: 0, angle: best1.angle
+      },
+      {
+        p1: best2.cutSeg.p1, p2: best2.cutSeg.p2,
+        polyline: best2.cutSeg.polyline || null,
+        depth: 1, angle: best2.angle
+      }
     ]
   };
 }
@@ -559,13 +1059,19 @@ function _leavesUnder(node, out = []) {
 // BUILDINGS (subdivide each block into footprints)
 // ============================================================
 
-function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments) {
+// roadHazards: optional [{ a, b, buffer }, ...] list. Each hazard is a line
+// segment with a per-segment buffer (typically half the visible street width
+// plus a small setback). Building footprints whose corners fall within the
+// segment's buffer are rejected, producing a natural "setback" gap along
+// highways/avenues that prevents the wide street stroke from clipping buildings.
+function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, roadHazards, riverBuffer) {
   const blockArea = _polygonArea(blockPolygon);
 
-  // Buffer (in px) to keep building footprints clear of the river.
-  const RIVER_BUFFER = 5.5;
+  // Buffer (in px) to keep building footprints clear of the river. Defaults to
+  // 7 (matches a "normal-width" river stroke). When the river is wider/narrower
+  // the caller passes the matching buffer.
+  const RIVER_BUFFER = (typeof riverBuffer === "number" ? riverBuffer : 7.0);
 
-  // Check whether any of the corners is too close to the river.
   const cornerNearRiver = (corners) => {
     if (!riverSegments) return false;
     for (const c of corners) {
@@ -574,9 +1080,38 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments) {
     return false;
   };
 
+  // Per-segment buffer because each road hazard carries its own buffer (highway
+  // wider than avenue wider than main street, etc.).
+  const cornerNearRoad = (corners) => {
+    if (!roadHazards || !roadHazards.length) return false;
+    for (const c of corners) {
+      for (const hz of roadHazards) {
+        const d = _pointToSegmentDist(c.x, c.y, hz.a, hz.b);
+        if (d < hz.buffer) return true;
+      }
+    }
+    return false;
+  };
+
+  // Detect "irregular" blocks — those whose boundary genuinely deviates from
+  // axis-aligned rectangles:
+  //   (a) curved-road boundary: ANY vertex tagged "roadMid" (true polyline
+  //       mid-point from a curved cut). Straight BSP cuts only produce "road"
+  //       endpoints, never "roadMid", so this signal is precise.
+  //   (b) coast boundary: ANY "coast" vertex (block touches the irregular land
+  //       polygon and likely has multiple coast vertices forming a curve).
+  let hasCurvedBoundary = false;
+  let hasCoastBoundary = false;
+  for (const v of blockPolygon) {
+    if (v.edgeKind === "roadMid") hasCurvedBoundary = true;
+    if (v.edgeKind === "coast")   hasCoastBoundary  = true;
+  }
+  const isIrregular = hasCurvedBoundary || hasCoastBoundary;
+
   // Rare: render the whole block as a single circular landmark building (rotunda / arena).
   // Roads go around it naturally because they're the BSP cuts at the block boundary.
-  if (rng() < 0.04 && blockArea > 700) {
+  // Skip on irregular blocks — a perfect circle inside an irregular polygon looks awkward.
+  if (!isIrregular && rng() < 0.04 && blockArea > 700) {
     const c = _polygonCentroid(blockPolygon);
     let r = Infinity;
     for (let i = 0; i < blockPolygon.length; i++) {
@@ -623,48 +1158,214 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments) {
   const wV = maxV - minV;
   if (wU < 7 || wV < 7) return [];
 
-  const targetSize = 8 + rng() * 4; // ~8-12 px per building
+  // Irregular blocks get smaller, denser grids so little buildings can fill
+  // the awkward shape. Regular rectangular blocks have a baseline grid sized
+  // for normal city footprints, but per-cell variety modes mean some cells get
+  // a CLUSTER of micros, others get a single LARGER footprint, the rest are
+  // normal. This creates the "dense city with size variety" look.
+  // Bigger baseline footprints. Irregular blocks (real curves / coast) still
+  // get smaller buildings to fit awkward shapes; regular blocks get noticeably
+  // larger so the city reads as solid built-up area.
+  const targetSize = isIrregular
+    ? (5.5 + rng() * 2.5)    // ~5.5-8 px (small, fits curves/coast)
+    : (13.0 + rng() * 6.0);  // ~13-19 px (normal — bigger)
+  const skipRate = isIrregular ? 0.18 : 0.03;  // dense regular blocks (real cities have very few empty lots)
+  const inset    = isIrregular ? 0.4  : 0.7;
+
   const nU = Math.max(1, Math.round(wU / targetSize));
   const nV = Math.max(1, Math.round(wV / targetSize));
-  if (nU === 1 && nV === 1) {
-    // tiny block — at most 1 building, tested for fit
-  }
   const cellU = wU / nU;
   const cellV = wV / nV;
-  const insetU = 0.7;
-  const insetV = 0.7;
+  const insetU = inset;
+  const insetV = inset;
 
   const buildings = [];
+
+  // Helper: validate then push a quad footprint defined in (u,v) space.
+  const tryPushFootprint = (u1, u2, v1, v2) => {
+    if (u2 - u1 < 1.0 || v2 - v1 < 1.0) return false;
+    const corners = [
+      { u: u1, v: v1 }, { u: u2, v: v1 },
+      { u: u2, v: v2 }, { u: u1, v: v2 }
+    ].map(p => ({
+      x: p.u * cosI - p.v * sinI,
+      y: p.u * sinI + p.v * cosI
+    }));
+    if (!corners.every(c => _pointInPolygon(c, blockPolygon))) return false;
+    if (cornerNearRiver(corners)) return false;
+    if (cornerNearRoad(corners)) return false;
+    buildings.push({
+      path: `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
+            `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
+            `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
+            `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
+      shade: rng()
+    });
+    return true;
+  };
+
+  // Track cells consumed by MEGA mode (a 1x2 or 2x1 footprint covers two cells
+  // — we mark the second one so the next iteration skips it).
+  const consumed = new Array(nU * nV).fill(false);
+  const cellIdx = (i, j) => i * nV + j;
+
   for (let i = 0; i < nU; i++) {
     for (let j = 0; j < nV; j++) {
+      if (consumed[cellIdx(i, j)]) continue;
       // Skip some cells for visual variety
-      if (rng() < 0.18) continue;
-      const u1 = minU + i * cellU + insetU + rng() * 0.4;
-      const u2 = minU + (i + 1) * cellU - insetU - rng() * 0.4;
-      const v1 = minV + j * cellV + insetV + rng() * 0.4;
-      const v2 = minV + (j + 1) * cellV - insetV - rng() * 0.4;
-      if (u2 - u1 < 1.5 || v2 - v1 < 1.5) continue;
-      const corners = [
-        { u: u1, v: v1 }, { u: u2, v: v1 },
-        { u: u2, v: v2 }, { u: u1, v: v2 }
-      ].map(p => ({
-        x: p.u * cosI - p.v * sinI,
-        y: p.u * sinI + p.v * cosI
-      }));
-      // Skip if any corner is outside the block (avoids overhang into streets)
-      if (!corners.every(c => _pointInPolygon(c, blockPolygon))) continue;
-      // Skip if any corner is too close to the river — leaves a riverfront gap
-      // that naturally reads as a promenade or irregular waterfront block.
-      if (cornerNearRiver(corners)) continue;
-      buildings.push({
-        path: `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
-              `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
-              `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
-              `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
-        shade: rng() // deterministic per building, used to pick a tone
-      });
+      if (rng() < skipRate) continue;
+
+      // Edge/corner cells (touching the block perimeter) get more cluster /
+      // large variety — real cities have varied shops, corner stores, and
+      // mixed-use buildings on their street frontage. Interior cells stay
+      // more uniform (apartment / office blocks).
+      const onEdge = (i === 0 || i === nU - 1 || j === 0 || j === nV - 1);
+      const isCorner = (i === 0 || i === nU - 1) && (j === 0 || j === nV - 1);
+
+      // Per-cell mode probabilities (NORMAL / CLUSTER / LARGE / MEGA).
+      // MEGA spans 2 cells (1x2 or 2x1) → roughly 2x normal building size.
+      let pNormal, pCluster, pLarge;
+      if (isCorner)    { pNormal = 0.40; pCluster = 0.40; pLarge = 0.13; } // corners: variety
+      else if (onEdge) { pNormal = 0.50; pCluster = 0.30; pLarge = 0.13; }
+      else             { pNormal = 0.65; pCluster = 0.07; pLarge = 0.18; } // interior: more big
+      // Remaining is MEGA.
+
+      const mode = rng();
+      const baseU0 = minU + i * cellU;
+      const baseV0 = minV + j * cellV;
+
+      if (mode < pNormal) {
+        // NORMAL — one building. Aspect ratio varies via per-axis inset.
+        const aspectExtra = (rng() - 0.5) * 0.4 * cellU; // ±20% of cell width on insetU
+        const u1 = baseU0 + insetU + Math.max(0, aspectExtra) + rng() * 0.3;
+        const u2 = baseU0 + cellU - insetU - Math.max(0, -aspectExtra) - rng() * 0.3;
+        const v1 = baseV0 + insetV + rng() * 0.3;
+        const v2 = baseV0 + cellV - insetV - rng() * 0.3;
+        tryPushFootprint(u1, u2, v1, v2);
+      } else if (mode < pNormal + pCluster) {
+        // CLUSTER — 2 to 4 micro-buildings inside this cell.
+        const layouts = [[2, 1], [1, 2], [2, 2], [3, 1], [1, 3]];
+        const [su, sv] = layouts[Math.floor(rng() * layouts.length)];
+        const innerInsetU = Math.max(0.25, insetU * 0.55);
+        const innerInsetV = Math.max(0.25, insetV * 0.55);
+        const subU = (cellU - 2 * innerInsetU) / su;
+        const subV = (cellV - 2 * innerInsetV) / sv;
+        const subInset = 0.30;
+        for (let si = 0; si < su; si++) {
+          for (let sj = 0; sj < sv; sj++) {
+            if (rng() < 0.22) continue;
+            const u1 = baseU0 + innerInsetU + si * subU + subInset + rng() * 0.25;
+            const u2 = baseU0 + innerInsetU + (si + 1) * subU - subInset - rng() * 0.25;
+            const v1 = baseV0 + innerInsetV + sj * subV + subInset + rng() * 0.25;
+            const v2 = baseV0 + innerInsetV + (sj + 1) * subV - subInset - rng() * 0.25;
+            tryPushFootprint(u1, u2, v1, v2);
+          }
+        }
+      } else if (mode < pNormal + pCluster + pLarge) {
+        // LARGE — single bigger building, more rectangular than NORMAL.
+        const tightU = Math.max(0.15, insetU * 0.35);
+        const tightV = Math.max(0.15, insetV * 0.35);
+        // Bias aspect ratio strongly one way for variety
+        const stretchU = rng() < 0.5;
+        const u1 = baseU0 + tightU + (stretchU ? 0 : 0.4) + rng() * 0.2;
+        const u2 = baseU0 + cellU - tightU - (stretchU ? 0 : 0.4) - rng() * 0.2;
+        const v1 = baseV0 + tightV + (stretchU ? 0.4 : 0) + rng() * 0.2;
+        const v2 = baseV0 + cellV - tightV - (stretchU ? 0.4 : 0) - rng() * 0.2;
+        tryPushFootprint(u1, u2, v1, v2);
+      } else {
+        // MEGA — span this cell + an adjacent cell (horizontally or vertically).
+        // Falls back to LARGE if no neighbor is available/free.
+        const canRight = (i + 1 < nU) && !consumed[cellIdx(i + 1, j)];
+        const canDown  = (j + 1 < nV) && !consumed[cellIdx(i, j + 1)];
+        let placed = false;
+        if (canRight && (!canDown || rng() < 0.5)) {
+          // 1x2 horizontal mega
+          const tightU = Math.max(0.15, insetU * 0.40);
+          const tightV = Math.max(0.15, insetV * 0.40);
+          const u1 = baseU0 + tightU + rng() * 0.2;
+          const u2 = baseU0 + 2 * cellU - tightU - rng() * 0.2;
+          const v1 = baseV0 + tightV + rng() * 0.2;
+          const v2 = baseV0 + cellV - tightV - rng() * 0.2;
+          if (tryPushFootprint(u1, u2, v1, v2)) {
+            consumed[cellIdx(i + 1, j)] = true;
+            placed = true;
+          }
+        } else if (canDown) {
+          // 2x1 vertical mega
+          const tightU = Math.max(0.15, insetU * 0.40);
+          const tightV = Math.max(0.15, insetV * 0.40);
+          const u1 = baseU0 + tightU + rng() * 0.2;
+          const u2 = baseU0 + cellU - tightU - rng() * 0.2;
+          const v1 = baseV0 + tightV + rng() * 0.2;
+          const v2 = baseV0 + 2 * cellV - tightV - rng() * 0.2;
+          if (tryPushFootprint(u1, u2, v1, v2)) {
+            consumed[cellIdx(i, j + 1)] = true;
+            placed = true;
+          }
+        }
+        if (!placed) {
+          // No neighbor available — fall back to a regular LARGE single cell.
+          const tightU = Math.max(0.15, insetU * 0.35);
+          const tightV = Math.max(0.15, insetV * 0.35);
+          const u1 = baseU0 + tightU + rng() * 0.2;
+          const u2 = baseU0 + cellU - tightU - rng() * 0.2;
+          const v1 = baseV0 + tightV + rng() * 0.2;
+          const v2 = baseV0 + cellV - tightV - rng() * 0.2;
+          tryPushFootprint(u1, u2, v1, v2);
+        }
+      }
     }
   }
+
+  // ----- INFILL PASS -----
+  // Cities don't leave large vacant lots between buildings. After the main
+  // grid pass, scan each cell that produced few buildings and try to insert
+  // micro-fillers in any sub-quadrant that's empty enough. This packs in
+  // little corner-shop / row-house style structures around the main buildings
+  // and dramatically reduces visible empty space.
+  if (!isIrregular) {
+    // Build a quick proximity test: a candidate point is "empty" if no
+    // existing building's bbox is within MIN_FILL_GAP px of it.
+    const buildingCenters = [];
+    for (const b of buildings) {
+      // crude center extraction from path: parse "M x y "
+      const m = b.path.match(/^M\s+([0-9.\-]+)\s+([0-9.\-]+)/);
+      if (m) buildingCenters.push({ x: parseFloat(m[1]), y: parseFloat(m[2]) });
+    }
+    const isOpenSpot = (x, y, gap) => {
+      for (const c of buildingCenters) {
+        if (Math.hypot(c.x - x, c.y - y) < gap) return false;
+      }
+      return true;
+    };
+    // Try ~3-4 fillers per main cell — most will fail (overlap / off-polygon)
+    // but the survivors fill in gaps.
+    for (let i = 0; i < nU; i++) {
+      for (let j = 0; j < nV; j++) {
+        if (consumed[cellIdx(i, j)]) continue;
+        const tries = 3;
+        for (let t = 0; t < tries; t++) {
+          // Random sub-cell point
+          const fu = minU + (i + 0.15 + rng() * 0.7) * cellU;
+          const fv = minV + (j + 0.15 + rng() * 0.7) * cellV;
+          const fx = fu * cosI - fv * sinI;
+          const fy = fu * sinI + fv * cosI;
+          // Already covered by main building?
+          if (!isOpenSpot(fx, fy, cellU * 0.45)) continue;
+          // Tiny micro footprint (~3-5 px)
+          const mw = 2.5 + rng() * 2.5;
+          const mh = 2.5 + rng() * 2.5;
+          const u1 = fu - mw / 2, u2 = fu + mw / 2;
+          const v1 = fv - mh / 2, v2 = fv + mh / 2;
+          if (tryPushFootprint(u1, u2, v1, v2)) {
+            buildingCenters.push({ x: fx, y: fy });
+            break; // one filler per cell at most
+          }
+        }
+      }
+    }
+  }
+
   return buildings;
 }
 
@@ -715,9 +1416,16 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
   // If we couldn't even seed enough dots, return what we have.
   if (placed.length < 2) return placed;
 
-  // ----- Phase 2: spring relaxation for even spread -----
-  const ITERATIONS = 14;
+  // The minimum distance from any polygon edge (= a road or coast). Dots
+  // closer than this to ANY edge would feel like they're sitting on the road
+  // boundary — bad for gameplay readability. Tuned so even small districts
+  // keep dots clearly inside.
+  const HARD_MIN_EDGE = Math.min(idealSpacing * 0.40, 9);
+
+  // ----- Phase 2: spring relaxation for even spread + edge avoidance -----
+  const ITERATIONS = 22;          // more iterations → better convergence
   const stepScale = 0.45;
+  const EDGE_BUFFER = Math.max(idealSpacing * 0.55, HARD_MIN_EDGE + 2);
   for (let iter = 0; iter < ITERATIONS; iter++) {
     for (let i = 0; i < placed.length; i++) {
       let fx = 0, fy = 0;
@@ -734,11 +1442,9 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
         }
       }
       // Repulsion from polygon edges (push toward interior)
-      const EDGE_BUFFER = idealSpacing * 0.45;
       for (let k = 0; k < polygon.length; k++) {
         const a = polygon[k];
         const b = polygon[(k + 1) % polygon.length];
-        // Closest point on segment
         const ex = b.x - a.x, ey = b.y - a.y;
         const len2 = ex * ex + ey * ey || 1e-9;
         const t = Math.max(0, Math.min(1, ((placed[i].x - a.x) * ex + (placed[i].y - a.y) * ey) / len2));
@@ -746,7 +1452,8 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
         const dx = placed[i].x - cx, dy = placed[i].y - cy;
         const d = Math.hypot(dx, dy);
         if (d < EDGE_BUFFER && d > 0.01) {
-          const f = (EDGE_BUFFER - d) / EDGE_BUFFER * 1.2;
+          // Stronger force closer to the edge
+          const f = (EDGE_BUFFER - d) / EDGE_BUFFER * 1.8;
           fx += (dx / d) * f;
           fy += (dy / d) * f;
         }
@@ -755,7 +1462,6 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
       const newX = placed[i].x + fx * stepScale;
       const newY = placed[i].y + fy * stepScale;
       if (_pointInPolygon({ x: newX, y: newY }, polygon)) {
-        // Avoid landmark blocks
         let inLandmark = false;
         for (const lb of leafBlocksToAvoid) {
           if (_pointInPolygon({ x: newX, y: newY }, lb.polygon)) { inLandmark = true; break; }
@@ -766,6 +1472,51 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
         }
       }
     }
+  }
+
+  // ----- Phase 2b: HARD-CONSTRAINT edge fixup -----
+  // Any dot still within HARD_MIN_EDGE of a polygon edge gets pushed inward
+  // along the inward normal until it clears. Guarantees no dot ends up on
+  // a road / district boundary, which is the user-facing requirement.
+  const FIXUP_PASSES = 4;
+  for (let pass = 0; pass < FIXUP_PASSES; pass++) {
+    let allClear = true;
+    for (let i = 0; i < placed.length; i++) {
+      let nearestD = Infinity;
+      let nearestNX = 0, nearestNY = 0; // inward normal
+      for (let k = 0; k < polygon.length; k++) {
+        const a = polygon[k];
+        const b = polygon[(k + 1) % polygon.length];
+        const ex = b.x - a.x, ey = b.y - a.y;
+        const len2 = ex * ex + ey * ey || 1e-9;
+        const t = Math.max(0, Math.min(1, ((placed[i].x - a.x) * ex + (placed[i].y - a.y) * ey) / len2));
+        const cx = a.x + t * ex, cy = a.y + t * ey;
+        const dx = placed[i].x - cx, dy = placed[i].y - cy;
+        const d = Math.hypot(dx, dy);
+        if (d < nearestD) {
+          nearestD = d;
+          if (d > 0.01) { nearestNX = dx / d; nearestNY = dy / d; }
+          else { nearestNX = 0; nearestNY = 0; }
+        }
+      }
+      if (nearestD < HARD_MIN_EDGE && nearestD > 0.01) {
+        const push = HARD_MIN_EDGE - nearestD + 0.5;
+        const nx = placed[i].x + nearestNX * push;
+        const ny = placed[i].y + nearestNY * push;
+        if (_pointInPolygon({ x: nx, y: ny }, polygon)) {
+          let inLm = false;
+          for (const lb of leafBlocksToAvoid) {
+            if (_pointInPolygon({ x: nx, y: ny }, lb.polygon)) { inLm = true; break; }
+          }
+          if (!inLm) {
+            placed[i].x = nx;
+            placed[i].y = ny;
+            allClear = false;
+          }
+        }
+      }
+    }
+    if (allClear) break;
   }
 
   // ----- Phase 3: occasional "flavor pair" so distribution isn't too perfect -----
@@ -782,7 +1533,14 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
       for (const lb of leafBlocksToAvoid) {
         if (_pointInPolygon({ x: newX, y: newY }, lb.polygon)) { inLandmark = true; break; }
       }
-      if (!inLandmark) { placed[j].x = newX; placed[j].y = newY; }
+      // Also keep the moved dot off the boundary
+      let onEdge = false;
+      for (let k = 0; k < polygon.length; k++) {
+        const a = polygon[k];
+        const b = polygon[(k + 1) % polygon.length];
+        if (_pointToSegmentDist(newX, newY, a, b) < HARD_MIN_EDGE) { onEdge = true; break; }
+      }
+      if (!inLandmark && !onEdge) { placed[j].x = newX; placed[j].y = newY; }
     }
   }
 
@@ -836,33 +1594,18 @@ function _generateRiver(landPolygon, rng) {
   }
   d += ` L ${pts[pts.length - 1].x.toFixed(2)} ${pts[pts.length - 1].y.toFixed(2)}`;
 
-  // Densely sample the curve into straight segments for hit-testing
-  // (used to push buildings away from riverfront and detect bridge crossings).
-  const samples = [];
-  const STEPS_PER_SEG = 8;
-  for (let i = 0; i < pts.length - 1; i++) {
-    if (i === pts.length - 2) {
-      samples.push(pts[i + 1]);
-      continue;
-    }
-    const c = pts[i];
-    const m1 = i === 0 ? pts[0] : { x: (pts[i - 1].x + pts[i].x) / 2, y: (pts[i - 1].y + pts[i].y) / 2 };
-    const m2 = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
-    for (let s = 0; s <= STEPS_PER_SEG; s++) {
-      const t = s / STEPS_PER_SEG;
-      const mt = 1 - t;
-      const x = mt * mt * m1.x + 2 * mt * t * c.x + t * t * m2.x;
-      const y = mt * mt * m1.y + 2 * mt * t * c.y + t * t * m2.y;
-      samples.push({ x, y });
-    }
-  }
-  // Build segment list for fast hit-tests
-  const segments = [];
-  for (let i = 0; i < samples.length - 1; i++) {
-    segments.push({ a: samples[i], b: samples[i + 1] });
-  }
+  // Sample the EXACT same Q-bezier curve the SVG path renders, so building
+  // buffers and bridge intersections line up visually.
+  const segments = _sampleSmoothPolyline(pts, 10);
 
-  return { path: d, segments, pts };
+  // Width variety: rivers vary from intimate creek (0.55) to broad waterway (1.6).
+  // Both base stroke widths AND building/bridge buffers scale with this.
+  const widthScale = 0.55 + rng() * 1.05;          // 0.55..1.60
+  const outerWidth = 7 * widthScale;
+  const innerWidth = 3.5 * widthScale;
+  const buildingBuffer = 7 * widthScale;            // matches outer width
+
+  return { path: d, segments, pts, widthScale, outerWidth, innerWidth, buildingBuffer };
 }
 
 // Distance from point to nearest river segment.
@@ -922,6 +1665,9 @@ function buildCityV3(seed) {
       color: colorsShuf[idx % colorsShuf.length],
       polygon,
       polygonPath: _polygonToPath(polygon),
+      // Outline excludes shared-road edges so adjacent districts don't double-stroke
+      // along the highway/avenue, eliminating the "seam" effect.
+      outlinePath: _polygonOutlinePathSkipRoads(polygon),
       centroid,
       bspRoot,
       leafBlocks,
@@ -958,14 +1704,19 @@ function buildCityV3(seed) {
         .sort((a, b) => b.area - a.area + (rng() - 0.5) * 200);
       if (sortedSmall.length > 0) picks.push({ lb: sortedSmall[0].lb, big: false });
     }
-    // Possibly add a small extra park/plaza for variety (independent of big).
-    if (rng() < 0.4) {
+    // Always seed 2-4 additional small parks/plazas/strip-malls per district.
+    // Real cities have many small green & civic spaces — not just one.
+    const numSmallExtra = 2 + Math.floor(rng() * 3); // 2..4
+    {
       const sortedSmall = small
         .map(lb => ({ lb, area: _polygonArea(lb.polygon) }))
-        .filter(x => x.area > 300 && x.area < 1800)
+        .filter(x => x.area > 200 && x.area < 1800)
         .filter(x => !picks.some(p => p.lb === x.lb))
-        .sort((a, b) => b.area - a.area);
-      if (sortedSmall.length > 0) picks.push({ lb: sortedSmall[0].lb, big: false });
+        // Mostly biggest-first, with mild jitter so it isn't deterministic.
+        .sort((a, b) => (b.area + (rng() - 0.5) * 400) - (a.area + (rng() - 0.5) * 400));
+      for (let k = 0; k < numSmallExtra && k < sortedSmall.length; k++) {
+        picks.push({ lb: sortedSmall[k].lb, big: false });
+      }
     }
 
     let stadiumUsed = false;
@@ -974,17 +1725,90 @@ function buildCityV3(seed) {
       let type;
       if (p.big) {
         const r = rng();
-        if (!stadiumUsed && r < 0.30) { type = "stadium"; stadiumUsed = true; }
+        if (!stadiumUsed && r < 0.30) {
+          // Pick a sport for the stadium. Each sport has a different field
+          // aspect ratio that's drawn at the correct relative size inside
+          // the block (see _renderLandmark for the exact field geometry).
+          const sportR = rng();
+          if (sportR < 0.34)      type = "stadium_soccer";   // most common
+          else if (sportR < 0.67) type = "stadium_football"; // long, narrow
+          else                    type = "stadium_baseball"; // diamond + outfield
+          stadiumUsed = true;
+        }
         else if (r < 0.30 + 0.40)     type = "mall";
         else                          type = "park";
       } else {
-        // Small landmarks are parks/plazas only (no stadiums on small blocks).
-        type = rng() < 0.65 ? "park" : "plaza";
+        // Small landmarks: mostly parks/plazas, occasional strip-mall.
+        const r = rng();
+        if (r < 0.50)      type = "park";
+        else if (r < 0.82) type = "plaza";
+        else               type = "mall"; // small "strip mall"
       }
       d.landmarks.push({
         polygon: lb.polygon,
         path: _polygonToPath(lb.polygon),
         type
+      });
+    }
+
+    // ----- MICRO-LANDMARK PASS -----
+    // Real cities have a *variety* of small parks, plazas, and mini-malls
+    // tucked between buildings — and not all of them are square. Some are
+    // L-shaped, T-shaped, plus-shaped, etc. (tetromino-style outlines).
+    // For each leaf block NOT already a full landmark, with some chance we
+    // place a SUB-BLOCK polygon in one of those shapes.
+    const usedBlocks = new Set(picks.map(p => p.lb));
+    const microShapes = _MICRO_LANDMARK_SHAPES;
+    for (const lb of d.leafBlocks) {
+      if (usedBlocks.has(lb)) continue;
+      // ~30% of blocks get a micro-landmark
+      if (rng() > 0.30) continue;
+      const blockArea = _polygonArea(lb.polygon);
+      // Skip awkwardly small or huge blocks (large ones look weird with a
+      // tiny tetris park floating in them; tiny ones can't fit a shape).
+      if (blockArea < 220 || blockArea > 2200) continue;
+
+      // Block centroid + min-radius for sizing.
+      const c = _polygonCentroid(lb.polygon);
+      let minR = Infinity;
+      for (let i = 0; i < lb.polygon.length; i++) {
+        const a = lb.polygon[i];
+        const b = lb.polygon[(i + 1) % lb.polygon.length];
+        const d2 = _pointToSegmentDist(c.x, c.y, a, b);
+        if (d2 < minR) minR = d2;
+      }
+      // Pick a shape and scale it to fit inside the block.
+      const shape = microShapes[Math.floor(rng() * microShapes.length)];
+      // Target footprint diameter — 35-65% of the block's inscribed circle.
+      const fillFrac = 0.35 + rng() * 0.30;
+      const scale = (minR * 2 * fillFrac) / shape.unitSize;
+      // Random rotation aligned with grid (so it looks like part of the city).
+      const rot = cityGridAngle + (rng() < 0.5 ? 0 : Math.PI / 2);
+      const cosR = Math.cos(rot), sinR = Math.sin(rot);
+      const microPoly = shape.points.map(p => {
+        // Center the unit shape, scale, rotate, translate.
+        const ux = (p.x - shape.unitSize / 2) * scale;
+        const uy = (p.y - shape.unitSize / 2) * scale;
+        return {
+          x: c.x + ux * cosR - uy * sinR,
+          y: c.y + ux * sinR + uy * cosR,
+          edgeKind: "coast"  // micro landmark edges are not roads
+        };
+      });
+      // Validate: every vertex must be inside the block.
+      let inside = true;
+      for (const p of microPoly) {
+        if (!_pointInPolygon(p, lb.polygon)) { inside = false; break; }
+      }
+      if (!inside) continue;
+      // Pick type — micro-landmarks lean park-heavy with occasional plaza/mini-mall.
+      const r = rng();
+      const microType = (r < 0.55) ? "park" : (r < 0.85) ? "plaza" : "mall";
+      d.landmarks.push({
+        polygon: microPoly,
+        path: _polygonToPath(microPoly),
+        type: microType,
+        micro: true  // marker flag (could be used for distinct rendering later)
       });
     }
   }
@@ -1012,36 +1836,76 @@ function buildCityV3(seed) {
   const river = rng() < 0.6 ? _generateRiver(landPolygon, rng) : null;
   const riverSegments = river ? river.segments : null;
 
+  // 9b. Road hazards — every cut becomes one or more line segments with a
+  // per-tier buffer. This stops the wide-stroke streets from clipping buildings.
+  // Buffers are tuned to the visible street widths in `_streetStyle` + an extra
+  // ~1px setback so the building's edge doesn't sit flush against the asphalt.
+  const _roadBuffer = (depth) => {
+    if (depth === 0) return 4.0;   // highway (glow ~4.5 wide → buffer past glow)
+    if (depth === 1) return 3.0;   // avenue
+    if (depth === 2) return 2.0;   // main street
+    return 0;                       // local streets handled by polygon clipping alone
+  };
+  const roadHazards = [];
+  for (const cut of allCuts) {
+    const buf = _roadBuffer(cut.depth);
+    if (buf <= 0) continue;
+    const segs = _cutSegments(cut);
+    for (const s of segs) {
+      roadHazards.push({ a: s.a, b: s.b, buffer: buf });
+    }
+  }
+
   // 10. Buildings for every leaf block (across all 3 districts) that isn't a
-  // landmark. Building generator receives river segments so it skips footprints
-  // near water — creating natural riverfront gaps / irregular blocks.
+  // landmark. Building generator receives river segments + road hazards so it
+  // skips footprints near water and tiered roads — creating natural riverfront
+  // gaps / road setbacks / irregular blocks.
   const landmarkPolySet = new Set();
   for (const d of districts) for (const lm of d.landmarks) landmarkPolySet.add(lm.polygon);
   const buildings = [];
   for (const d of districts) {
     for (const leaf of d.leafBlocks) {
       if (landmarkPolySet.has(leaf.polygon)) continue;
-      const blockBldgs = _generateBlockBuildings(leaf.polygon, cityGridAngle, rng, riverSegments);
+      const blockBldgs = _generateBlockBuildings(leaf.polygon, cityGridAngle, rng, riverSegments, roadHazards, river ? river.buildingBuffer : undefined);
       for (const b of blockBldgs) buildings.push(b);
     }
   }
 
-  // 11. Bridges — every street that crosses the river gets a small bridge marker.
+  // 11. Bridges — placed where streets cross the river. Two rules:
+  //   - Sort cuts by depth (highways first) so bigger streets get priority for
+  //     bridge placement. If a small street crosses near a big one, the small
+  //     one is dropped — the highway bridge "wins."
+  //   - Enforce a MIN_BRIDGE_DIST so bridges aren't piled on top of each other.
+  //     Real cities space bridges out — multiple bridges within ~25px would
+  //     read as one weird wide bridge.
   const bridges = [];
+  const MIN_BRIDGE_DIST = 28; // px between bridge centers
   if (riverSegments) {
-    for (const cut of allCuts) {
-      // Find first intersection between this street and any river segment
-      for (const rs of riverSegments) {
-        const hit = _segIntersect(cut.p1, cut.p2, rs.a, rs.b);
-        if (hit) {
+    const cutsByPriority = [...allCuts].sort((a, b) => a.depth - b.depth);
+    for (const cut of cutsByPriority) {
+      const cutSegs = _cutSegments(cut);
+      let placed = false;
+      for (const cs of cutSegs) {
+        for (const rs of riverSegments) {
+          const hit = _segIntersect(cs.a, cs.b, rs.a, rs.b);
+          if (!hit) continue;
+          // Reject if too close to an already-placed bridge.
+          let tooClose = false;
+          for (const b of bridges) {
+            if (Math.hypot(b.x - hit.x, b.y - hit.y) < MIN_BRIDGE_DIST) { tooClose = true; break; }
+          }
+          if (tooClose) { placed = true; break; } // mark "tried this cut" — don't try its other segments
+          const segAngle = Math.atan2(cs.b.y - cs.a.y, cs.b.x - cs.a.x);
           bridges.push({
             x: hit.x,
             y: hit.y,
-            angle: cut.angle,
-            depth: cut.depth   // bigger streets → bigger bridges
+            angle: segAngle,
+            depth: cut.depth
           });
+          placed = true;
           break;
         }
+        if (placed) break;
       }
     }
   }
@@ -1049,6 +1913,71 @@ function buildCityV3(seed) {
   // 12. Coast road = land polygon inset by ~5px so land extends past the road.
   const coastRoadPolygon = _insetPolygon(landPolygon, 5);
   const coastRoadPath = _polygonToPath(coastRoadPolygon);
+
+  // 13. Coast-strip micro-buildings — small buildings on the SEAWARD side of
+  // the coast road (between the road and the water). Real cities often have
+  // beach houses, marinas, or shacks here. Probabilistic per coast segment so
+  // the strip isn't continuously built up; some segments stay empty.
+  {
+    const stripCentroid = _polygonCentroid(coastRoadPolygon);
+    const N = coastRoadPolygon.length;
+    for (let i = 0; i < N; i++) {
+      const a = coastRoadPolygon[i];
+      const b = coastRoadPolygon[(i + 1) % N];
+      const segDx = b.x - a.x, segDy = b.y - a.y;
+      const segLen = Math.hypot(segDx, segDy);
+      if (segLen < 5) continue;
+      const tx = segDx / segLen, ty = segDy / segLen;
+      // Outward perpendicular: pick whichever points away from the centroid.
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const cmx = mx - stripCentroid.x, cmy = my - stripCentroid.y;
+      const p1x = -ty, p1y = tx;
+      const outward = (p1x * cmx + p1y * cmy) > 0
+        ? { x: p1x,  y: p1y  }
+        : { x: -p1x, y: -p1y };
+
+      // 60% of segments stay empty so the strip looks intermittent
+      if (rng() < 0.60) continue;
+
+      const numHere = 1 + Math.floor(rng() * 3); // 1..3 small buildings on this segment
+      for (let k = 0; k < numHere; k++) {
+        const t = (k + 0.5 + (rng() - 0.5) * 0.7) / numHere;
+        const along = t * segLen;
+        const offset = 1.4 + rng() * 2.6; // 1.4-4.0 px outward into the strip
+        const cx = a.x + tx * along + outward.x * offset;
+        const cy = a.y + ty * along + outward.y * offset;
+
+        // Must still be inside the land polygon (i.e., not in the ocean)
+        if (!_pointInPolygon({ x: cx, y: cy }, landPolygon)) continue;
+
+        // Tiny rectangular footprint, slightly off-axis from the road.
+        const w = 1.8 + rng() * 2.4;     // 1.8-4.2 px
+        const h = 1.4 + rng() * 1.6;     // 1.4-3.0 px
+        const segAng = Math.atan2(ty, tx);
+        const ang = segAng + (rng() - 0.5) * 0.5;  // ±~14° wobble
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        const corners = [
+          { x: -w / 2, y: -h / 2 },
+          { x:  w / 2, y: -h / 2 },
+          { x:  w / 2, y:  h / 2 },
+          { x: -w / 2, y:  h / 2 }
+        ].map(p => ({
+          x: cx + p.x * ca - p.y * sa,
+          y: cy + p.x * sa + p.y * ca
+        }));
+        if (!corners.every(c => _pointInPolygon(c, landPolygon))) continue;
+
+        buildings.push({
+          path:
+            `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
+            `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
+            `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
+            `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
+          shade: rng()
+        });
+      }
+    }
+  }
 
   return {
     landPolygon,
@@ -1123,24 +2052,111 @@ function _streetStyle(depth) {
 // Each returns a React fragment.
 function _renderLandmark(key, l, opacity) {
   const t = l.type;
-  if (t === "stadium") {
-    // Block tinted as stadium grounds + an inscribed oval "field"
-    let cx = 0, cy = 0, n = l.polygon.length || 1;
-    let minR = Infinity;
+  if (t === "stadium_soccer" || t === "stadium_football" || t === "stadium_baseball") {
+    // Compute the block's centroid and inscribed-circle-ish min radius, then
+    // render a sport-correct field inside. Real-world relative sizes:
+    //   soccer pitch    105m x 68m  → 1.55:1 ratio   (medium length)
+    //   football field  109m x 49m  → 2.22:1 ratio   (longest, narrowest)
+    //   baseball field  120m x 120m → square        (largest area, square)
+    // Field is drawn at a size proportional to these ratios so an adjacent
+    // baseball field reads as bigger overall than a football field, and a
+    // football field reads as longer/narrower than a soccer field.
+    let cx = 0, cy = 0;
+    const n = l.polygon.length || 1;
     for (const p of l.polygon) { cx += p.x; cy += p.y; }
     cx /= n; cy /= n;
+    let minR = Infinity;
     for (let i = 0; i < l.polygon.length; i++) {
       const a = l.polygon[i];
       const b = l.polygon[(i + 1) % l.polygon.length];
       const d = _pointToSegmentDist(cx, cy, a, b);
       if (d < minR) minR = d;
     }
-    const rField = Math.max(2, minR * 0.6);
+    // Real-world reference: 1 unit = 60 meters. Field is sized to fit inside
+    // the block but keeps real-world aspect ratio.
+    const REF_M = 60;
+    let fwM, fhM; // field width, height in meters
+    if (t === "stadium_soccer")        { fwM = 105; fhM = 68; }
+    else if (t === "stadium_football") { fwM = 109; fhM = 49; }
+    else                                { fwM = 120; fhM = 120; }
+    // Scale: pick the largest size that fits with margin
+    const maxSizePx = minR * 1.6; // visual cap
+    const scale = Math.min(maxSizePx / fwM, (minR * 1.4) / fhM);
+    const fw = fwM * scale;
+    const fh = fhM * scale;
+    // Random orientation per stadium (not all aligned same way)
+    const rotDeg = (l.polygon[0].x + l.polygon[0].y) % 90 - 45; // deterministic-ish
+    const fillBlock = <path d={l.path} fill={PAL.stadium} />;
+    if (fw < 6 || fh < 4) {
+      // Block too small — just paint solid green, no field markings
+      return <g key={key} opacity={opacity}>{fillBlock}</g>;
+    }
+    if (t === "stadium_baseball") {
+      // Baseball: diamond infield + outer arc. Diamond is a 90° rotated square,
+      // outer outfield is a quarter circle bound to the home plate corner.
+      const half = fw / 2;
+      const diamondSize = fh * 0.42;
+      return (
+        <g key={key} opacity={opacity} transform={`rotate(${rotDeg} ${cx} ${cy})`}>
+          {fillBlock}
+          {/* Outfield arc (quarter pie centered on home plate) */}
+          <path
+            d={`M ${cx - half} ${cy + half * 0.3}
+                A ${fw} ${fw} 0 0 1 ${cx + half} ${cy + half * 0.3}
+                L ${cx} ${cy + half * 0.3} Z`}
+            fill={PAL.stadiumField}
+          />
+          {/* Infield diamond (rotated square) */}
+          <path
+            d={`M ${cx} ${cy + half * 0.3}
+                L ${cx + diamondSize} ${cy + half * 0.3 - diamondSize}
+                L ${cx} ${cy + half * 0.3 - 2 * diamondSize}
+                L ${cx - diamondSize} ${cy + half * 0.3 - diamondSize} Z`}
+            fill={PAL.diamond}
+            stroke={PAL.fieldLine}
+            strokeWidth={0.4}
+          />
+        </g>
+      );
+    }
+    if (t === "stadium_football") {
+      // American football: long rectangle with end zones (slight color shift)
+      // and yard-line markings.
+      const x0 = cx - fw / 2, y0 = cy - fh / 2;
+      const ezW = fw * 0.10; // end zone width
+      return (
+        <g key={key} opacity={opacity} transform={`rotate(${rotDeg} ${cx} ${cy})`}>
+          {fillBlock}
+          <rect x={x0} y={y0} width={fw} height={fh} fill={PAL.stadiumField} />
+          {/* End zones — slightly darker green */}
+          <rect x={x0} y={y0} width={ezW} height={fh} fill={PAL.stadium} opacity={0.55} />
+          <rect x={x0 + fw - ezW} y={y0} width={ezW} height={fh} fill={PAL.stadium} opacity={0.55} />
+          {/* Yard lines */}
+          {[0.25, 0.5, 0.75].map((t, i) => (
+            <line key={i}
+              x1={x0 + ezW + (fw - 2 * ezW) * t} y1={y0 + 0.5}
+              x2={x0 + ezW + (fw - 2 * ezW) * t} y2={y0 + fh - 0.5}
+              stroke={PAL.fieldLine} strokeWidth={0.35}
+            />
+          ))}
+        </g>
+      );
+    }
+    // Soccer: rectangle, center circle, halfway line, two penalty boxes.
+    const x0 = cx - fw / 2, y0 = cy - fh / 2;
+    const pbW = fw * 0.12, pbH = fh * 0.55;
+    const ccR = Math.min(fw, fh) * 0.13;
     return (
-      <g key={key} opacity={opacity}>
-        <path d={l.path} fill={PAL.stadium} />
-        <ellipse cx={cx} cy={cy} rx={rField * 1.15} ry={rField * 0.78} fill={PAL.stadiumField} />
-        <ellipse cx={cx} cy={cy} rx={rField * 1.15} ry={rField * 0.78} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={0.4} />
+      <g key={key} opacity={opacity} transform={`rotate(${rotDeg} ${cx} ${cy})`}>
+        {fillBlock}
+        <rect x={x0} y={y0} width={fw} height={fh} fill={PAL.stadiumField} />
+        {/* Halfway line */}
+        <line x1={cx} y1={y0 + 0.5} x2={cx} y2={y0 + fh - 0.5} stroke={PAL.fieldLine} strokeWidth={0.4} />
+        {/* Center circle */}
+        <circle cx={cx} cy={cy} r={ccR} fill="none" stroke={PAL.fieldLine} strokeWidth={0.4} />
+        {/* Penalty boxes */}
+        <rect x={x0} y={cy - pbH / 2} width={pbW} height={pbH} fill="none" stroke={PAL.fieldLine} strokeWidth={0.4} />
+        <rect x={x0 + fw - pbW} y={cy - pbH / 2} width={pbW} height={pbH} fill="none" stroke={PAL.fieldLine} strokeWidth={0.4} />
       </g>
     );
   }
@@ -1163,15 +2179,40 @@ function _renderLandmark(key, l, opacity) {
   );
 }
 
-function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showStreets = true, showDots = false }) {
+function CityMapV3({
+  seed, width, height,
+  opacity = 1, showLabels = true, showStreets = true, showDots = false,
+  // Optional Marvel-Snap-style score tint:
+  //   playerScore  — current player's score
+  //   enemyScore   — opponent's score
+  // The land base is tinted GREEN if winning, RED if losing, YELLOW if tied.
+  // Tint strength scales with score gap (capped). When either prop is null
+  // or both are zero, no tint is applied.
+  playerScore = null,
+  enemyScore = null
+}) {
   const W = width || VIEW_W;
   const H = height || VIEW_H;
   const data = _useMemoCM(() => buildCityV3(seed || 1), [seed]);
   const idBase = `cv3-${seed || 1}`;
 
+  // Track which district (if any) the mouse is hovering over, for outline glow.
+  const [hoveredDistrict, setHoveredDistrict] = React.useState(null);
+
   // Sort non-highway cuts by depth (deepest=thinnest first); highways drawn separately on top
   const sortedCuts = data.cuts.filter(c => c.depth > 0).sort((a, b) => b.depth - a.depth);
   const hwyCuts = data.cuts.filter(c => c.depth === 0);
+
+  // Compute score-tint color and opacity.
+  let scoreTint = null;
+  if (playerScore != null && enemyScore != null && (playerScore !== 0 || enemyScore !== 0)) {
+    const diff = playerScore - enemyScore;
+    // Tint opacity scales with abs(diff), capped at ~6-point gap.
+    const strength = Math.min(0.45, 0.10 + Math.abs(diff) * 0.06);
+    if (diff > 0)      scoreTint = { color: "#3eb56b", opacity: strength };  // winning: green
+    else if (diff < 0) scoreTint = { color: "#d04848", opacity: strength };  // losing: red
+    else               scoreTint = { color: "#e5c14a", opacity: strength * 0.7 }; // tied: yellow
+  }
 
   return (
     <svg
@@ -1194,28 +2235,10 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
 
       {/* LAND base */}
       <path d={data.landPath} fill={PAL.land} />
-
-      {/* RIVER — meandering water feature crossing land. Drawn over land, beneath
-          tints, buildings and streets so streets/bridges visually cross over it. */}
-      {data.river && (
-        <g clipPath={`url(#${idBase}-land)`}>
-          <path
-            d={data.river.path}
-            fill="none"
-            stroke={PAL.waterMid}
-            strokeWidth={7}
-            strokeLinecap="round"
-            opacity={0.95}
-          />
-          <path
-            d={data.river.path}
-            fill="none"
-            stroke={PAL.waterDeep}
-            strokeWidth={3.5}
-            strokeLinecap="round"
-            opacity={0.9}
-          />
-        </g>
+      {/* Score-driven win/lose tint over land (no-op if scores not provided) */}
+      {scoreTint && (
+        <path d={data.landPath} fill={scoreTint.color} opacity={scoreTint.opacity}
+          style={{ pointerEvents: "none", mixBlendMode: "multiply" }} />
       )}
 
       {/* District tints (subtle wash within district polygons) */}
@@ -1252,11 +2275,83 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
         )}
       </g>
 
-      {/* STREETS — render in order: deepest (local) first, then thicker */}
+      {/* RIVER — drawn AFTER landmarks so it visibly splits any park / mall /
+          stadium / plaza it crosses. Still rendered before streets so streets
+          and bridges visually cross over the water. Stroke widths come from the
+          river data (varied per seed: thin creek → broad waterway). */}
+      {data.river && (
+        <g clipPath={`url(#${idBase}-land)`}>
+          <path
+            d={data.river.path}
+            fill="none"
+            stroke={PAL.waterMid}
+            strokeWidth={data.river.outerWidth}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+          <path
+            d={data.river.path}
+            fill="none"
+            stroke={PAL.waterDeep}
+            strokeWidth={data.river.innerWidth}
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+        </g>
+      )}
+
+      {/* DISTRICT OUTLINES — drawn BEFORE streets so streets render crisp on
+          top of outlines. On road-shared boundaries this means the user sees
+          the road, not the colored outline (which would otherwise hide it).
+          On coast/external edges (where there is no street) the outline is
+          fully visible. Hover state uses the FULL polygon path so the glow
+          halo (drop-shadow filter) extends past the streets and remains
+          visible — even though the colored stroke itself is mostly hidden. */}
+      <g>
+        {data.districts.map(d => {
+          const isHovered = hoveredDistrict === d.idx;
+          return (
+            <path
+              key={`outline-${d.idx}`}
+              d={isHovered ? d.polygonPath : d.outlinePath}
+              fill="none"
+              stroke={d.color}
+              strokeWidth={isHovered ? 2.4 : 1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={isHovered ? 1.0 : 0.95}
+              vectorEffect="non-scaling-stroke"
+              style={{
+                filter: isHovered ? `drop-shadow(0 0 4px ${d.color}) drop-shadow(0 0 8px ${d.color})` : "none",
+                transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
+                pointerEvents: "none"
+              }}
+            />
+          );
+        })}
+      </g>
+
+      {/* STREETS — render in order: deepest (local) first, then thicker.
+          Curved cuts (highways/avenues) render as smoothed paths; straight cuts
+          stay as <line> for crisp rendering. */}
       {showStreets && (
         <g>
           {sortedCuts.map((cut, i) => {
             const style = _streetStyle(cut.depth);
+            if (cut.polyline) {
+              return (
+                <path
+                  key={`s-${i}`}
+                  d={_smoothPolylinePath(cut.polyline)}
+                  fill="none"
+                  stroke={style.stroke}
+                  strokeWidth={style.width}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            }
             return (
               <line
                 key={`s-${i}`}
@@ -1274,7 +2369,19 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
       {/* HIGHWAY OUTER GLOW (over depth-0 cuts, beneath their inner stroke) */}
       {showStreets && (
         <g>
-          {hwyCuts.map((cut, i) => (
+          {hwyCuts.map((cut, i) => cut.polyline ? (
+            <path
+              key={`hwy-glow-${i}`}
+              d={_smoothPolylinePath(cut.polyline)}
+              fill="none"
+              stroke={PAL.hwyOuter}
+              strokeWidth={4.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.55}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : (
             <line
               key={`hwy-glow-${i}`}
               x1={cut.p1.x} y1={cut.p1.y} x2={cut.p2.x} y2={cut.p2.y}
@@ -1285,7 +2392,18 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {hwyCuts.map((cut, i) => (
+          {hwyCuts.map((cut, i) => cut.polyline ? (
+            <path
+              key={`hwy-inner-${i}`}
+              d={_smoothPolylinePath(cut.polyline)}
+              fill="none"
+              stroke={PAL.hwyInner}
+              strokeWidth={2.0}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : (
             <line
               key={`hwy-inner-${i}`}
               x1={cut.p1.x} y1={cut.p1.y} x2={cut.p2.x} y2={cut.p2.y}
@@ -1298,9 +2416,14 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
         </g>
       )}
 
-      {/* BRIDGES — render where streets cross the river. Width scales with street depth. */}
+      {/* BRIDGES — render where streets cross the river. Width-along-road
+          spans the river (with overhang); thickness-across-road is sized by
+          street depth. So a wide river crossed by a local street still has a
+          bridge long enough to span the water. */}
       {showStreets && data.bridges && data.bridges.map((b, i) => {
-        const w = b.depth === 0 ? 11 : (b.depth === 1 ? 9 : (b.depth === 2 ? 7 : 5.5));
+        const baseW = b.depth === 0 ? 11 : (b.depth === 1 ? 9 : (b.depth === 2 ? 7 : 5.5));
+        const riverW = data.river ? data.river.outerWidth : 0;
+        const w = Math.max(baseW, riverW + 3); // ensure bridge spans river
         const h = b.depth === 0 ? 4.5 : (b.depth === 1 ? 3.6 : 3);
         return (
           <g key={`br-${i}`} transform={`translate(${b.x},${b.y}) rotate(${(b.angle || 0) * 180 / Math.PI})`}>
@@ -1349,22 +2472,6 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
         />
       )}
 
-      {/* DISTRICT BRIGHT OUTLINES — full polygon stroke (highlights each picked district) */}
-      <g>
-        {data.districts.map(d => (
-          <path
-            key={`outline-${d.idx}`}
-            d={d.polygonPath}
-            fill="none"
-            stroke={d.color}
-            strokeWidth={1.6}
-            strokeLinejoin="round"
-            opacity={0.95}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-      </g>
-
       {/* Optional dot debug */}
       {showDots && (
         <g>
@@ -1398,6 +2505,24 @@ function CityMapV3({ seed, width, height, opacity = 1, showLabels = true, showSt
           ))}
         </g>
       )}
+
+      {/* HOVER CAPTURE — transparent full-polygon paths for each district,
+          rendered last so they sit on top in the SVG event-handling order.
+          They emit no visible pixels (fill="transparent") but capture mouse
+          events and update the hover state, which drives the outline glow. */}
+      <g>
+        {data.districts.map(d => (
+          <path
+            key={`hover-${d.idx}`}
+            d={d.polygonPath}
+            fill="transparent"
+            stroke="none"
+            style={{ cursor: "pointer" }}
+            onMouseEnter={() => setHoveredDistrict(d.idx)}
+            onMouseLeave={() => setHoveredDistrict(prev => prev === d.idx ? null : prev)}
+          />
+        ))}
+      </g>
     </svg>
   );
 }
