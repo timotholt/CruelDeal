@@ -12,6 +12,9 @@ const { useMemo: _useMemoCM } = React;
 
 const VIEW_W = STAGE_W;       // 360
 const VIEW_H = BOARD_H;       // 384
+const MAP_SLOT_HALF_W = 13.5;
+const MAP_SLOT_HALF_H = 19;
+const MAP_SLOT_EDGE_PAD = 30;
 
 // Land polygon — base radius. Combined with a randomly offset center and a wide
 // radius variation, the polygon will clearly extend past viewport on some sides
@@ -195,6 +198,57 @@ function _pointToSegmentDist(px, py, a, b) {
   return Math.hypot(px - cx, py - cy);
 }
 
+function _pointToPolygonSignedDist(point, polygon) {
+  const edgeDist = polygon.reduce((best, p, i) => {
+    const q = polygon[(i + 1) % polygon.length];
+    return Math.min(best, _pointToSegmentDist(point.x, point.y, p, q));
+  }, Infinity);
+  return _pointInPolygon(point, polygon) ? edgeDist : -edgeDist;
+}
+
+function _polylabel(polygon, precision = 1.5) {
+  if (!polygon || polygon.length < 3) return { x: VIEW_W / 2, y: VIEW_H / 2, d: 0 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of polygon) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const cellSize = Math.min(width, height);
+  if (cellSize <= 0) return { x: minX, y: minY, d: 0 };
+  const makeCell = (x, y, h) => {
+    const d = _pointToPolygonSignedDist({ x, y }, polygon);
+    return { x, y, h, d, max: d + h * Math.SQRT2 };
+  };
+  let best = makeCell((minX + maxX) / 2, (minY + maxY) / 2, 0);
+  const centroid = _polygonCentroid(polygon);
+  const centroidCell = makeCell(centroid.x, centroid.y, 0);
+  if (centroidCell.d > best.d) best = centroidCell;
+  const cells = [];
+  for (let x = minX; x < maxX; x += cellSize) {
+    for (let y = minY; y < maxY; y += cellSize) {
+      cells.push(makeCell(x + cellSize / 2, y + cellSize / 2, cellSize / 2));
+    }
+  }
+  while (cells.length) {
+    cells.sort((a, b) => b.max - a.max);
+    const cell = cells.shift();
+    if (cell.d > best.d) best = cell;
+    if (cell.max - best.d <= precision) continue;
+    const h = cell.h / 2;
+    cells.push(
+      makeCell(cell.x - h, cell.y - h, h),
+      makeCell(cell.x + h, cell.y - h, h),
+      makeCell(cell.x - h, cell.y + h, h),
+      makeCell(cell.x + h, cell.y + h, h)
+    );
+  }
+  return best;
+}
+
 function _segmentToSegmentDist(a, b, c, d) {
   if (_segIntersect(a, b, c, d)) return 0;
   return Math.min(
@@ -203,6 +257,24 @@ function _segmentToSegmentDist(a, b, c, d) {
     _pointToSegmentDist(c.x, c.y, a, b),
     _pointToSegmentDist(d.x, d.y, a, b)
   );
+}
+
+function _polygonToPolygonDist(polyA, polyB) {
+  if (!polyA || !polyB || polyA.length < 3 || polyB.length < 3) return Infinity;
+  for (const p of polyA) if (_pointInPolygon(p, polyB)) return 0;
+  for (const p of polyB) if (_pointInPolygon(p, polyA)) return 0;
+  let best = Infinity;
+  for (let i = 0; i < polyA.length; i++) {
+    const a1 = polyA[i];
+    const a2 = polyA[(i + 1) % polyA.length];
+    for (let j = 0; j < polyB.length; j++) {
+      const b1 = polyB[j];
+      const b2 = polyB[(j + 1) % polyB.length];
+      best = Math.min(best, _segmentToSegmentDist(a1, a2, b1, b2));
+      if (best <= 0) return 0;
+    }
+  }
+  return best;
 }
 
 // Sutherland-Hodgman polygon clipping against an axis-aligned rectangle.
@@ -311,7 +383,9 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
 
   const lms = landmarks || [];
 
-  // Visible mass centroid — the "where you'd expect the label" target.
+  // Visual center — Mapbox/polylabel-style target: the interior point with
+  // maximum clearance from district edges. This behaves much better for
+  // L-shaped and C-shaped districts than a geometric centroid.
   let cnt = 0, cSumX = 0, cSumY = 0;
   for (let x = minX; x <= maxX; x += 4) {
     for (let y = minY; y <= maxY; y += 4) {
@@ -326,6 +400,9 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
   }
   const centroidX = cnt > 0 ? cSumX / cnt : (minX + maxX) / 2;
   const centroidY = cnt > 0 ? cSumY / cnt : (minY + maxY) / 2;
+  const visualCenter = _polylabel(visible, 1.2);
+  const targetX = Number.isFinite(visualCenter.x) ? visualCenter.x : centroidX;
+  const targetY = Number.isFinite(visualCenter.y) ? visualCenter.y : centroidY;
 
   const bboxCenterX = (minX + maxX) / 2;
   const bboxCenterY = (minY + maxY) / 2;
@@ -401,7 +478,7 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
         }
         const dotsClear = dotDist > 24;
         // Distance from the visible centroid (for centering).
-        const centroidDist = Math.hypot(x - centroidX, y - centroidY);
+        const centroidDist = Math.hypot(x - targetX, y - targetY);
         const bboxCenterDist = Math.hypot(x - bboxCenterX, y - bboxCenterY);
 
         let boxPenalty = boxFits ? 0 : 48;
@@ -425,7 +502,7 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
     if (best && best.hardFit) return best;
     if (best && (!globalBest || best.score > globalBest.score)) globalBest = best;
   }
-  return globalBest || { x: centroidX, y: centroidY, text: labelText, ..._labelMetrics(labelText || "") };
+  return globalBest || { x: targetX, y: targetY, text: labelText, ..._labelMetrics(labelText || "") };
 }
 
 // Approximate the polygon's viewport-visible area via grid sampling.
@@ -440,18 +517,18 @@ function _viewportVisibleArea(polygon) {
   return count * step * step;
 }
 
-// Number of play locations based on district VISIBLE area. Continuous (not
-// bucketed) so a 12000 px² district gets fewer dots than a 24000 px² one
-// instead of both falling into the same coarse bucket. Always returns an
-// even number (game requires symmetric pair placement).
-//
-// AREA_PER_DOT_PAIR controls density: each "pair" of dots takes ~ this much
-// visible area. Lower = denser map; higher = sparser. Tune to taste.
-const _AREA_PER_DOT_PAIR = 4500;
-function _dotCountForArea(area) {
-  // Each "pair" of dots = 2 dots. Round to nearest pair count, min 1 pair.
-  const pairs = Math.max(1, Math.round(area / (_AREA_PER_DOT_PAIR * 2)));
-  return pairs * 2;
+// Rank-based slot assignment: given sorted visible areas for all 3 districts,
+// return [totalSlots0, totalSlots1, totalSlots2] in the same order.
+// Smallest district → 2 pairs (4 slots), largest → 5 pairs (10 slots),
+// middle → 3 or 4 pairs randomly. Guarantees every map has clear size contrast.
+function _slotCountsByRank(visAreas, rng) {
+  const indexed = visAreas.map((a, i) => ({ a, i }));
+  indexed.sort((x, y) => x.a - y.a); // ascending: [smallest, middle, largest]
+  const midPairs = rng() < 0.5 ? 3 : 4;
+  const pairsByRank = [2, midPairs, 5];
+  const result = new Array(visAreas.length);
+  indexed.forEach((item, rank) => { result[item.i] = pairsByRank[rank] * 2; });
+  return result;
 }
 
 // Polygon-to-path with curve awareness:
@@ -711,7 +788,7 @@ function _jogLine(P1, P2, rng) {
   const mostlyVertical = Math.abs(dy) >= Math.abs(dx);
   const side = rng() < 0.5 ? 1 : -1;
   const amp = Math.min(54, Math.max(20, len * (0.14 + rng() * 0.12))) * side;
-  const makeL = rng() < 0.62;
+  const makeL = rng() < 0.76;
   const t1 = 0.24 + rng() * 0.18;
   const t2 = makeL
     ? (rng() < 0.5 ? 0.86 + rng() * 0.06 : 0.10 + rng() * 0.06)
@@ -727,6 +804,7 @@ function _jogLine(P1, P2, rng) {
         { x: P1.x + dx * tA, y: y1 },
         { x: P1.x + dx * tA + amp, y: y1 },
         { x: P1.x + dx * tB + amp, y: y2 },
+        { x: P2.x, y: y2 },
         P2
       ];
     }
@@ -747,6 +825,7 @@ function _jogLine(P1, P2, rng) {
       { x: x1, y: P1.y + dy * tA },
       { x: x1, y: P1.y + dy * tA + amp },
       { x: x2, y: P1.y + dy * tB + amp },
+      { x: P2.x, y: P1.y + dy * tB + amp },
       P2
     ];
   }
@@ -1007,86 +1086,94 @@ function _offsetPolyline(points, dist) {
 // ============================================================
 
 function _generateLandPolygon(rng) {
-  // Two modes:
-  //   PENINSULA (75%): standard wide-variation polygon, often extends past
-  //     several viewport edges, may show coast on 0-2 sides.
-  //   EXPOSED   (25%): center heavily offset toward one corner; the polygon
-  //     extends past the FAR sides, but pulls back from the NEAR sides to
-  //     reveal coast on 1-3 sides. Land still fills most of the viewport so
-  //     ocean isn't excessive.
-  const exposedMode = rng() < 0.42;
-  const N = 28;
+  // Three modes (chosen randomly each seed):
+  //   PENINSULA (40%): organic blob, extends past several viewport edges,
+  //     0-2 coastal sides visible. Standard city-on-a-headland feel.
+  //   EXPOSED   (35%): center offset toward one corner; deep coast on 1-3
+  //     sides. Creates harbor / bay-front cities.
+  //   FJORD     (25%): one wide bay drives a deep notch into the land.
+  //     Creates inlets, peninsulas, and spit-like shapes.
+  const modeRoll = rng();
+  const exposedMode = modeRoll < 0.35;
+  const fjordMode   = !exposedMode && modeRoll < 0.60;
+
+  // More vertices = more angular jaggedness along the coast.
+  const N = 40;
   const phaseA = rng() * Math.PI * 2;
   const phaseB = rng() * Math.PI * 2;
   const phaseC = rng() * Math.PI * 2;
-  const biteA = rng() * Math.PI * 2;
-  const biteB = biteA + Math.PI * (0.45 + rng() * 0.35);
+  const phaseD = rng() * Math.PI * 2;
 
-  // Both modes use VIEWPORT-EDGE-RELATIVE radii: each vertex is placed at
-  // (factor * distance-to-viewport-edge along that direction). This guarantees
-  // the polygon hugs the viewport tightly on most sides — water only appears
-  // where the factor dips below 1.0 (a "coastal bite"). No more 80px-wide
-  // ocean strips on sides we never intended to expose.
+  // Up to 4 independent harbor bites at random angles. Each bite is a
+  // smooth cosine dip so they produce recognisable bays rather than noise.
+  const biteCount = 2 + Math.floor(rng() * 3); // 2, 3, or 4 bites
+  const biteAngles = [];
+  for (let b = 0; b < biteCount; b++) biteAngles.push(rng() * Math.PI * 2);
+  const biteDepths = biteAngles.map(() => 0.08 + rng() * 0.12); // 0.08–0.20
+  const biteWidths = biteAngles.map(() => 0.9 + rng() * 0.8);   // cosine sharpness
+
+  // Fjord: one very deep, narrow bay at a specific angle.
+  const fjordAngle = rng() * Math.PI * 2;
+  const fjordDepth = 0.28 + rng() * 0.18; // 0.28–0.46 — punches way in
+  const fjordWidth = 0.55 + rng() * 0.30; // narrower than a harbor bite
+
   const distToViewportEdge = (cx, cy, dx, dy) => {
     const tx = dx > 0 ? (VIEW_W - cx) / dx : (dx < 0 ? -cx / dx : 1e9);
     const ty = dy > 0 ? (VIEW_H - cy) / dy : (dy < 0 ? -cy / dy : 1e9);
     return Math.min(Math.abs(tx), Math.abs(ty));
   };
 
+  const harborBiteTotal = (angle) => {
+    let sum = 0;
+    for (let b = 0; b < biteCount; b++) {
+      const c = Math.cos(angle - biteAngles[b]);
+      sum -= biteDepths[b] * Math.max(0, Math.pow(Math.max(0, c), biteWidths[b]));
+    }
+    if (fjordMode) {
+      const fc = Math.cos(angle - fjordAngle);
+      sum -= fjordDepth * Math.max(0, Math.pow(Math.max(0, fc), fjordWidth * 2.5));
+    }
+    return sum;
+  };
+
   if (exposedMode) {
-    // EXPOSED: one chosen direction shows coast clearly; vertices facing that
-    // direction pull inward (factor < 1), vertices on the opposite side push
-    // past the viewport (factor > 1). Coast is visible on a wide arc.
     const exposeAngle = rng() * Math.PI * 2;
-    const cx = VIEW_W / 2 + (rng() - 0.5) * 25;
-    const cy = VIEW_H / 2 + (rng() - 0.5) * 25;
+    const cx = VIEW_W / 2 + (rng() - 0.5) * 30;
+    const cy = VIEW_H / 2 + (rng() - 0.5) * 30;
     const verts = [];
     for (let i = 0; i < N; i++) {
-      const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
+      const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.22;
       const dx = Math.cos(angle), dy = Math.sin(angle);
       const dEdge = distToViewportEdge(cx, cy, dx, dy);
-      // Directional bias: +1 (full expose) → deeper visible-water edge,
-      // -1 (opposite) → pushes past the viewport. The harmonic bite terms
-      // keep the coastline organic, closer to Brooklyn's irregular shoreline
-      // than a stretched rounded rectangle.
       const cosToExpose = Math.cos(angle - exposeAngle);
-      const directional = 1.0 - 0.25 * cosToExpose;
-      const harborBites =
-        -0.08 * Math.max(0, Math.cos(angle - biteA)) -
-        0.06 * Math.max(0, Math.cos(angle - biteB));
+      const directional = 1.0 - 0.28 * cosToExpose;
+      const bites = harborBiteTotal(angle);
       const r1 = 0.10 * Math.cos(angle * 1 + phaseA);
-      const r2 = 0.065 * Math.cos(angle * 3 + phaseB);
-      const r3 = 0.035 * Math.cos(angle * 6 + phaseC);
-      const jitter = (rng() - 0.5) * 0.07;
-      const k = Math.max(0.48, directional + harborBites + r1 + r2 + r3 + jitter);
-      verts.push({
-        x: cx + dx * dEdge * k,
-        y: cy + dy * dEdge * k,
-        edgeKind: "coast"
-      });
+      const r2 = 0.07 * Math.cos(angle * 3 + phaseB);
+      const r3 = 0.04 * Math.cos(angle * 6 + phaseC);
+      const r4 = 0.022 * Math.cos(angle * 11 + phaseD);
+      const jitter = (rng() - 0.5) * 0.10;
+      const k = Math.max(0.42, directional + bites + r1 + r2 + r3 + r4 + jitter);
+      verts.push({ x: cx + dx * dEdge * k, y: cy + dy * dEdge * k, edgeKind: "coast" });
     }
     return verts;
   }
 
-  // PENINSULA mode: organic wobble around a base factor just past the viewport
-  // edge. Random sectors dip below 1.0 — those are the coastal bites that show
-  // water. The dip is intentionally stronger than before: if water appears,
-  // it should read as a real coastline, not a one-pixel accident.
-  const cx = VIEW_W / 2 + (rng() - 0.5) * 30;
-  const cy = VIEW_H / 2 + (rng() - 0.5) * 30;
+  // PENINSULA / FJORD mode: base factor slightly past viewport edge; bites pull back.
+  const cx = VIEW_W / 2 + (rng() - 0.5) * 35;
+  const cy = VIEW_H / 2 + (rng() - 0.5) * 35;
   const verts = [];
   for (let i = 0; i < N; i++) {
-    const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
+    const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.22;
     const dx = Math.cos(angle), dy = Math.sin(angle);
     const dEdge = distToViewportEdge(cx, cy, dx, dy);
-    const harborBites =
-      -0.07 * Math.max(0, Math.cos(angle - biteA)) -
-      0.05 * Math.max(0, Math.cos(angle - biteB));
+    const bites = harborBiteTotal(angle);
     const r1 = 0.12 * Math.cos(angle * 1 + phaseA);
-    const r2 = 0.075 * Math.cos(angle * 3 + phaseB);
-    const r3 = 0.04 * Math.cos(angle * 6 + phaseC);
-    const jitter = (rng() - 0.5) * 0.07;
-    const k = Math.max(0.48, 1.02 + harborBites + r1 + r2 + r3 + jitter); // ~0.72..1.30
+    const r2 = 0.08 * Math.cos(angle * 3 + phaseB);
+    const r3 = 0.045 * Math.cos(angle * 6 + phaseC);
+    const r4 = 0.024 * Math.cos(angle * 11 + phaseD);
+    const jitter = (rng() - 0.5) * 0.10;
+    const k = Math.max(0.42, 1.02 + bites + r1 + r2 + r3 + r4 + jitter);
     verts.push({
       x: cx + dx * dEdge * k,
       y: cy + dy * dEdge * k,
@@ -1386,7 +1473,11 @@ function _tryAngleCut(polygon, baseAngle, offsetMagnitude, rng) {
 // escapes the polygon, we silently fall back to the straight cut.
 function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
   const totalArea = _polygonArea(landPolygon);
-  const target1 = totalArea / 3; // smaller half should be ~1/3 of total
+  // Random target: 15–45% of total for the first (smaller) district.
+  // This drives visible size contrast — maps range from near-equal thirds
+  // to a clear small/medium/large layout, which makes the rank-based slot
+  // assignment (2/3or4/5 cards) feel earned rather than cosmetic.
+  const target1 = totalArea * (0.15 + rng() * 0.30);
 
   // Curved roads are intentionally disabled for now. Keep the spline code above
   // in place so we can re-enable it later. Roads keep their original straight
@@ -1394,7 +1485,7 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
   // those cuts so civic boundaries can differ from transport lines.
   const CURVE_P_HIGHWAY = 0.0;
   const CURVE_P_AVENUE  = 0.0;
-  const DISTRICT_JOG_P_HIGHWAY = 0.42;
+  const DISTRICT_JOG_P_HIGHWAY = 0.78;
   const DISTRICT_JOG_P_AVENUE = 1.0;
 
   // Visible bbox dimensions of a polygon clipped to the viewport. Used to
@@ -1451,11 +1542,12 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
   };
 
   // Strict → relaxed → minimal: ensures we always get a cut.
-  // The third arg is the min-min-dimension (px) of the visible bbox.
-  let best1 = findFirstCut(0.22, 4500, 55);
-  if (!best1) best1 = findFirstCut(0.15, 3500, 45);
-  if (!best1) best1 = findFirstCut(0.0, 2500, 30);
-  if (!best1) best1 = findFirstCut(0.0, 2500, 0); // last resort
+  // minRatio lowered (0.12) to allow visibly smaller districts (feeds the
+  // 2-card vs 5-card size contrast driven by _slotCountsByRank).
+  let best1 = findFirstCut(0.12, 3500, 48);
+  if (!best1) best1 = findFirstCut(0.08, 2800, 38);
+  if (!best1) best1 = findFirstCut(0.0, 2000, 28);
+  if (!best1) best1 = findFirstCut(0.0, 2000, 0); // last resort
   if (!best1) return { regions: [landPolygon], macroCuts: [] };
   const roadCut1 = {
     p1: best1.cutSeg.p1,
@@ -1636,8 +1728,8 @@ function _bspSubdivide(polygon, depth, gridAngle, rng) {
   const area = _polygonArea(polygon);
   // Variable termination so blocks have varied sizes. Tuned for a Brooklyn-
   // style fine grid: many tiny blocks, each holding 2-4 buildings.
-  const minArea = 90 + rng() * 140;            // ~90..230 px²  (was 320..800)
-  const maxDepth = 9 + Math.floor(rng() * 3);  // 9..11         (was 6..8)
+  const minArea = 160 + rng() * 200;           // ~160..360 px²
+  const maxDepth = 8 + Math.floor(rng() * 3);  // 8..10
 
   // Rare: stop early at mid-depth to leave a BIG block (stadium / mall / park).
   // Probability scaled so we get ~1-2 of these per district on average.
@@ -1843,8 +1935,8 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   // buildings rather than a single oversized box. CLUSTER / LARGE / MEGA modes
   // still inject per-cell size variety.
   const targetSize = isIrregular
-    ? (4.5 + rng() * 2.0)    // ~4.5-6.5 px (small, fits curves/coast)
-    : (5.5 + rng() * 2.5);   // ~5.5-8 px (dense regular blocks)
+    ? (6.0 + rng() * 2.0)    // ~6-8 px (small, fits curves/coast)
+    : (7.0 + rng() * 3.2);   // ~7-10.2 px (dense regular blocks)
   const skipRate = isIrregular ? 0.15 : 0.01;  // almost no empty lots in regular blocks
   const inset    = isIrregular ? 0.30 : 0.30;  // tight inset → buildings nearly touch
 
@@ -2093,7 +2185,7 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
 function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleArea, labelAvoid = null) {
   const xs = polygon.map(p => p.x);
   const ys = polygon.map(p => p.y);
-  const PLACEMENT_RING_SAFE_EDGE = 25;
+  const PLACEMENT_RING_SAFE_EDGE = MAP_SLOT_EDGE_PAD;
   const VIEW_EDGE_PAD = PLACEMENT_RING_SAFE_EDGE;
   const minX = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, xs));
   const maxX = Math.min(VIEW_W - VIEW_EDGE_PAD, Math.max.apply(null, xs));
@@ -2104,12 +2196,12 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
 
   // Target spacing derived from area & count → reasonable density regardless of district size.
   const area = Math.max(1, visibleArea || ((maxX - minX) * (maxY - minY)));
-  const idealSpacing = Math.sqrt(area / Math.max(1, target)) * 0.95;
+  const idealSpacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
 
   const insideBlocked = (x, y) => {
     if (!_pointInPolygon({ x, y }, polygon)) return true;
     if (labelAvoid) {
-      const pad = 18;
+      const pad = Math.max(MAP_SLOT_HALF_W, MAP_SLOT_HALF_H) + 7;
       if (
         Math.abs(x - labelAvoid.x) < labelAvoid.halfW + pad &&
         Math.abs(y - labelAvoid.y) < labelAvoid.halfH + pad
@@ -2279,6 +2371,178 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
   }
 
   return placed;
+}
+
+// ============================================================
+// ISLANDS — small land masses in the water, with buildings and a bridge
+// ============================================================
+
+function _closestPointOnPolygon(px, py, polygon) {
+  let best = Infinity, bx = px, by = py;
+  const n = polygon.length;
+  for (let i = 0; i < n; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % n];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy || 1e-9;
+    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+    const cx = a.x + t * dx, cy = a.y + t * dy;
+    const d = Math.hypot(px - cx, py - cy);
+    if (d < best) { best = d; bx = cx; by = cy; }
+  }
+  return { x: bx, y: by, dist: best };
+}
+
+function _islandBlob(cx, cy, r, rng) {
+  const N = 12 + Math.floor(rng() * 6);
+  const pA = rng() * Math.PI * 2, pB = rng() * Math.PI * 2, pC = rng() * Math.PI * 2;
+  const poly = [];
+  for (let i = 0; i < N; i++) {
+    const ang = (i / N) * Math.PI * 2;
+    const rad = r * Math.max(0.38,
+      0.78 + 0.15 * Math.cos(ang * 2 + pA) + 0.09 * Math.cos(ang * 3 + pB)
+           + 0.05 * Math.cos(ang * 5 + pC) + (rng() - 0.5) * 0.16
+    );
+    poly.push({ x: cx + Math.cos(ang) * rad, y: cy + Math.sin(ang) * rad, edgeKind: "coast" });
+  }
+  return poly;
+}
+
+function _islandShorePt(cx, cy, poly, ux, uy, maxR) {
+  let shore = { x: cx, y: cy };
+  for (let t = 1; t <= maxR + 12; t++) {
+    const pt = { x: cx + ux * t, y: cy + uy * t };
+    if (!_pointInPolygon(pt, poly)) { shore = { x: cx + ux * (t - 1), y: cy + uy * (t - 1) }; break; }
+  }
+  return shore;
+}
+
+function _generateIslands(landPolygon, coastRoadPolygon, gridAngle, rng, riverSegments) {
+  const viewArea = VIEW_W * VIEW_H;
+  const landVisArea = _viewportVisibleArea(landPolygon);
+  const waterFraction = 1 - landVisArea / viewArea;
+  const MIN_ISLAND_CHANNEL = 14;
+  const islandClearsMainland = (poly) => _polygonToPolygonDist(poly, landPolygon) >= MIN_ISLAND_CHANNEL;
+
+  // Only spawn when there's meaningful water
+  if (waterFraction < 0.22) return [];
+  // Near-guaranteed once threshold is met; probability climbs with water area
+  const spawnProb = Math.min(0.94, 0.60 + (waterFraction - 0.22) * 2.8);
+  if (rng() > spawnProb) return [];
+
+  // Always just 1 island per map
+  for (let tries = 0; tries < 140; tries++) {
+    // Allow center slightly off-screen so huge islands can peek in from an edge
+    const over = 70;
+    const cx = -over + rng() * (VIEW_W + over * 2);
+    const cy = -over + rng() * (VIEW_H + over * 2);
+
+    if (_pointInPolygon({ x: cx, y: cy }, landPolygon)) continue;
+
+    const coastClearance = _closestPointOnPolygon(cx, cy, landPolygon).dist;
+    if (coastClearance < 10) continue;
+
+    // River clearance
+    if (riverSegments) {
+      let skip = false;
+      for (const seg of riverSegments) {
+        if (_pointToSegmentDist(cx, cy, seg.a, seg.b) < 18) { skip = true; break; }
+      }
+      if (skip) continue;
+    }
+
+    // Island must have some part visible
+    const maxR = 32 + rng() * 100; // 32–132 px
+    if (cx + maxR < 0 || cx - maxR > VIEW_W || cy + maxR < 0 || cy - maxR > VIEW_H) continue;
+
+    // Decide shape: single blob (75%) or forked twin-lobe (25%)
+    const isFork = rng() < 0.25 && maxR > 50;
+
+    let polygons, paths, allBuildings, islandRoadPath = null;
+    let primaryPoly, primaryCx, primaryCy; // for bridge anchor
+
+    if (!isFork) {
+      const poly = _islandBlob(cx, cy, maxR, rng);
+      if (!islandClearsMainland(poly)) continue;
+      const visVerts = poly.filter(v => v.x > 0 && v.x < VIEW_W && v.y > 0 && v.y < VIEW_H);
+      if (visVerts.length < 2) continue;
+
+      polygons = [poly];
+      paths = [_smoothClosedPath(poly)];
+      allBuildings = _generateBlockBuildings(poly, gridAngle, rng, null, [], undefined);
+      primaryPoly = poly; primaryCx = cx; primaryCy = cy;
+
+      const area = Math.abs(_polygonArea(poly));
+      if (area > 1800 && rng() < 0.75) {
+        for (const useSecondary of [false, true]) {
+          const res = _tryGridCut(poly, gridAngle, useSecondary, 0, rng);
+          if (res && _polygonArea(res.halfA) > 200 && _polygonArea(res.halfB) > 200) {
+            islandRoadPath = `M ${res.cutSeg.p1.x.toFixed(2)} ${res.cutSeg.p1.y.toFixed(2)} L ${res.cutSeg.p2.x.toFixed(2)} ${res.cutSeg.p2.y.toFixed(2)}`;
+            break;
+          }
+        }
+      }
+    } else {
+      // Fork: two overlapping blobs along a random axis, renders as one merged landmass
+      const forkAxis = rng() * Math.PI * 2;
+      const sep = maxR * (0.65 + rng() * 0.30); // center-to-center
+      const r1 = maxR * (0.58 + rng() * 0.14);
+      const r2 = maxR * (0.50 + rng() * 0.18);
+      const cx1 = cx + Math.cos(forkAxis) * sep * 0.5;
+      const cy1 = cy + Math.sin(forkAxis) * sep * 0.5;
+      const cx2 = cx - Math.cos(forkAxis) * sep * 0.5;
+      const cy2 = cy - Math.sin(forkAxis) * sep * 0.5;
+      const poly1 = _islandBlob(cx1, cy1, r1, rng);
+      const poly2 = _islandBlob(cx2, cy2, r2, rng);
+      if (!islandClearsMainland(poly1) || !islandClearsMainland(poly2)) continue;
+
+      const vis1 = poly1.filter(v => v.x > 0 && v.x < VIEW_W && v.y > 0 && v.y < VIEW_H).length;
+      const vis2 = poly2.filter(v => v.x > 0 && v.x < VIEW_W && v.y > 0 && v.y < VIEW_H).length;
+      if (vis1 + vis2 < 3) continue;
+
+      polygons = [poly1, poly2];
+      paths = [_smoothClosedPath(poly1), _smoothClosedPath(poly2)];
+      const b1 = _generateBlockBuildings(poly1, gridAngle, rng, null, [], undefined);
+      const b2 = _generateBlockBuildings(poly2, gridAngle, rng, null, [], undefined);
+      allBuildings = [...b1, ...b2];
+      // Bridge anchors to whichever lobe is closer to the coast road
+      const d1 = _closestPointOnPolygon(cx1, cy1, coastRoadPolygon).dist;
+      const d2 = _closestPointOnPolygon(cx2, cy2, coastRoadPolygon).dist;
+      if (d1 <= d2) { primaryPoly = poly1; primaryCx = cx1; primaryCy = cy1; }
+      else          { primaryPoly = poly2; primaryCx = cx2; primaryCy = cy2; }
+    }
+
+    // Bridge: micro islands (maxR < 36 and fully in viewport) skip the bridge
+    const isMicro = maxR < 36 &&
+      cx > 0 && cx < VIEW_W && cy > 0 && cy < VIEW_H;
+    let bridge = null;
+    if (!isMicro) {
+      const coastPt = _closestPointOnPolygon(primaryCx, primaryCy, coastRoadPolygon);
+      const bdx = coastPt.x - primaryCx, bdy = coastPt.y - primaryCy;
+      const blen = Math.hypot(bdx, bdy) || 1;
+      const ux = bdx / blen, uy = bdy / blen;
+      const shore = _islandShorePt(primaryCx, primaryCy, primaryPoly, ux, uy, maxR);
+      const bridgeLen = Math.hypot(coastPt.x - shore.x, coastPt.y - shore.y);
+      if (bridgeLen > 4) {
+        bridge = {
+          x: (coastPt.x + shore.x) / 2,
+          y: (coastPt.y + shore.y) / 2,
+          angle: Math.atan2(uy, ux),
+          len: bridgeLen
+        };
+      }
+    }
+
+    return [{
+      cx, cy, maxR,
+      paths,
+      polygons,
+      buildings: allBuildings,
+      islandRoadPath,
+      bridge
+    }];
+  }
+
+  return [];
 }
 
 // ============================================================
@@ -2656,19 +2920,14 @@ function buildCityV3(seed) {
     */
   }
 
-  // 7. Dot placement — every district gets exactly 4, 6, or 8 spots.
-  // Counts are assigned by RANK of visible area: smallest district = 4,
-  // middle = 6, largest = 8. Placement uses spring relaxation as before.
-  const districtsByArea = districts
-    .map(d => ({ d, vis: _viewportVisibleArea(d.polygon) }))
-    .sort((a, b) => a.vis - b.vis);
-  const dotCounts = [4, 6, 8];
-  for (let r = 0; r < districtsByArea.length; r++) {
-    districtsByArea[r].d._dotTarget = dotCounts[Math.min(r, dotCounts.length - 1)];
-  }
+  // 7. Slot placement — rank-driven so maps always have a clearly small and
+  // clearly large district. Compute all visible areas first, rank them, then
+  // assign: smallest=2 pairs, largest=5 pairs, middle=3 or 4 pairs.
+  const districtVisAreas = districts.map(d => _viewportVisibleArea(d.polygon));
+  const districtSlotCounts = _slotCountsByRank(districtVisAreas, rng);
   for (const d of districts) {
-    const visArea = _viewportVisibleArea(d.polygon);
-    const target = d._dotTarget != null ? d._dotTarget : 6;
+    const visArea = districtVisAreas[d.idx];
+    const target = districtSlotCounts[d.idx];
     const label = _labelPosition(d.polygon, d.landmarks, d.name);
     d.labelPos = { x: label.x, y: label.y };
     d.labelText = label.text || d.name;
@@ -2679,6 +2938,7 @@ function buildCityV3(seed) {
       halfH: label.halfH || _labelMetrics(d.labelText).halfH
     };
     const placed = _placeDotsInPolygon(d.polygon, rng, d.landmarks, target, visArea, d.labelBox);
+    if (placed.length % 2 === 1) placed.pop();
     const ownerByPoint = new Map();
     const sortedByBoardSide = [...placed].sort((a, b) => a.y - b.y || a.x - b.x);
     const split = Math.floor(sortedByBoardSide.length / 2);
@@ -2712,6 +2972,7 @@ function buildCityV3(seed) {
   };
   const roadHazards = [];
   for (const cut of allCuts) {
+    if (cut.diagonalOverlay) continue;
     const buf = _roadBuffer(cut.depth);
     if (buf <= 0) continue;
     const segs = _cutSegments(cut);
@@ -2892,10 +3153,12 @@ function buildCityV3(seed) {
     }
   }
 
-  // 12c. Offshore bridges — only where a highway exits the city into ocean.
-  // These are no longer random coast decorations; they line up with depth-0
-  // roads so they read as major out-of-town crossings.
+  // 12c. Offshore bridges — highways that exit into ocean get long causeways
+  // extending well off-screen, like real inter-island or mainland crossings.
+  // Bridge center is placed far outside the viewport so the span goes from
+  // the coastline to beyond the visible area.
   {
+    const OFFSHORE_REACH = 160; // px past coast to bridge center
     const offshoreCandidates = [];
     for (const cut of allCuts.filter(c => c.depth === 0)) {
       const pts = cut.polyline && cut.polyline.length >= 2
@@ -2914,9 +3177,11 @@ function buildCityV3(seed) {
         if (_pointInPolygon({ x: end.edge.x + ox * 3, y: end.edge.y + oy * 3 }, landPolygon)) {
           ox = -ox; oy = -oy;
         }
-        const bx = end.edge.x + ox * 9;
-        const by = end.edge.y + oy * 9;
-        if (bx < 4 || bx > VIEW_W - 4 || by < 4 || by > VIEW_H - 4) continue;
+        // Center bridge far off-screen; inward half is hidden under land fill.
+        const bx = end.edge.x + ox * OFFSHORE_REACH;
+        const by = end.edge.y + oy * OFFSHORE_REACH;
+        // Skip if somehow still inside viewport (highway endpoint is deep inland).
+        if (bx > 4 && bx < VIEW_W - 4 && by > 4 && by < VIEW_H - 4) continue;
         if (riverSegments && _distToRiver(end.edge.x, end.edge.y, riverSegments) < 24) continue;
         offshoreCandidates.push({
           x: bx,
@@ -3038,6 +3303,9 @@ function buildCityV3(seed) {
     }
   }
 
+  // 14. Islands — small land masses in visible water areas.
+  const islands = _generateIslands(landPolygon, coastRoadPolygon, cityGridAngle, rng, riverSegments);
+
   return {
     landPolygon,
     landPath: _smoothClosedPath(landPolygon),
@@ -3049,6 +3317,7 @@ function buildCityV3(seed) {
     buildings,
     river,
     bridges,
+    islands,
     width: VIEW_W,
     height: VIEW_H
   };
@@ -3384,6 +3653,36 @@ function CityMapV3({
         <path key={`dock-${i}`} d={dock.path} fill={PAL.bldgA} />
       ))}
 
+      {/* ISLANDS — small land masses in visible water. Land fill + buildings +
+          optional road rendered as a self-contained mini-city block.
+          Forked islands have 2 paths rendered with same fill so they merge visually. */}
+      {data.islands && data.islands.map((isl, i) => (
+        <g key={`isl-${i}`}>
+          {isl.paths.map((p, k) => <path key={`isl-land-${k}`} d={p} fill={PAL.land} />)}
+          {isl.paths.map((p, k) => <path key={`isl-dim-${k}`} d={p} fill="black" opacity={BASE_MAP_DIM_OPACITY} style={{ pointerEvents: "none" }} />)}
+          {isl.buildings.map((b, j) => (
+            b.round
+              ? <path key={`ib-${j}`} d={b.path} fill={PAL.roundBldg} />
+              : <path key={`ib-${j}`} d={b.path} fill={b.shade > 0.5 ? PAL.bldgA : PAL.bldgB} />
+          ))}
+          {isl.islandRoadPath && showStreets && (
+            <path
+              d={isl.islandRoadPath}
+              fill="none"
+              stroke={PAL.streetMain}
+              strokeWidth={0.55}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          {isl.paths.map((p, k) => (
+            <path key={`isl-outline-${k}`} d={p} fill="none" stroke={PAL.coastRoad}
+              strokeWidth={0.9} strokeLinejoin="round" opacity={0.80}
+              vectorEffect="non-scaling-stroke" />
+          ))}
+        </g>
+      ))}
+
       <g mask={data.river ? `url(#${idBase}-city-water-cutout)` : undefined}>
       {/* LAND base */}
       <path d={data.landPath} fill={PAL.land} />
@@ -3648,9 +3947,11 @@ function CityMapV3({
           cleanly over the shared water layer. Width-along-road spans the river;
           thickness-across-road is sized by street depth. */}
       {showStreets && data.bridges && data.bridges.map((b, i) => {
-        const baseW = b.depth === 0 ? 11 : (b.depth === 1 ? 9 : (b.depth === 2 ? 7 : 5.5));
+        // Offshore bridge: center is 160px off coast, so 320px total span goes
+        // from deep under land to well off-screen — looks like a long causeway.
+        const baseW = b.offshore ? 320 : (b.depth === 0 ? 11 : (b.depth === 1 ? 9 : (b.depth === 2 ? 7 : 5.5)));
         const riverW = data.river ? data.river.outerWidth : 0;
-        const w = Math.max(baseW, riverW + 3); // ensure bridge spans river
+        const w = b.offshore ? baseW : Math.max(baseW, riverW + 3);
         const h = b.depth === 0 ? 4.5 : (b.depth === 1 ? 3.6 : 3);
         return (
           <g key={`br-${i}`} transform={`translate(${b.x},${b.y}) rotate(${(b.angle || 0) * 180 / Math.PI})`}>
@@ -3660,6 +3961,24 @@ function CityMapV3({
                   fill={PAL.avenue} />
             <rect x={-w / 2} y={-h / 2 - 0.5} width={1.5} height={h + 1} fill="rgba(20,40,65,0.92)" />
             <rect x={ w / 2 - 1.5} y={-h / 2 - 0.5} width={1.5} height={h + 1} fill="rgba(20,40,65,0.92)" />
+          </g>
+        );
+      })}
+
+      {/* ISLAND BRIDGES — connect coast road to each island shore.
+          Skipped for micro islands (bridge === null). */}
+      {showStreets && data.islands && data.islands.map((isl, i) => {
+        if (!isl.bridge) return null;
+        const { bridge } = isl;
+        const w = bridge.len;
+        const h = 3.0;
+        return (
+          <g key={`isl-br-${i}`} transform={`translate(${bridge.x},${bridge.y}) rotate(${bridge.angle * 180 / Math.PI})`}>
+            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={0.8} fill="rgba(20,40,65,0.92)" />
+            <rect x={-w / 2 + 0.5} y={-h / 2 + 0.5} width={w - 1} height={h - 1} rx={0.4}
+                  fill={PAL.avenue} opacity={0.85} />
+            <rect x={-w / 2} y={-h / 2 - 0.4} width={1.2} height={h + 0.8} fill="rgba(20,40,65,0.90)" />
+            <rect x={ w / 2 - 1.2} y={-h / 2 - 0.4} width={1.2} height={h + 0.8} fill="rgba(20,40,65,0.90)" />
           </g>
         );
       })}

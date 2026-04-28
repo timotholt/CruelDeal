@@ -259,15 +259,15 @@ html, body {
 
 .dot {
   position: absolute;
-  width: 28px; height: 34px;
+  width: 38px; height: 48px;
   transform: translate(-50%, -50%);
   display: grid; place-items: center;
   pointer-events: none;
 }
 .dot-slot {
   position: absolute;
-  width: 15px;
-  height: 21px;
+  width: 19px;
+  height: 27px;
   border-radius: 2px;
   border: 1px solid color-mix(in oklch, var(--slot-color) 82%, white);
   background:

@@ -210,7 +210,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
 
       {/* Placed cards (absolute board coords) */}
       {placedCards.map((c) => {
-        const boardScale = 0.20;
+        const boardScale = 0.24;
         const w = window.CARD_W * boardScale;
         const h = window.CARD_H * boardScale;
         return (
