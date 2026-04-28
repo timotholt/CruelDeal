@@ -381,8 +381,69 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   return buildings;
 }
 
+function _generateCoastStripBuildings(coastRoadPolygon, landPolygon, rng) {
+  const buildings = [];
+  const stripCentroid = _polygonCentroid(coastRoadPolygon);
+  const N = coastRoadPolygon.length;
+  for (let i = 0; i < N; i++) {
+    const a = coastRoadPolygon[i];
+    const b = coastRoadPolygon[(i + 1) % N];
+    const segDx = b.x - a.x, segDy = b.y - a.y;
+    const segLen = Math.hypot(segDx, segDy);
+    if (segLen < 5) continue;
+    const tx = segDx / segLen, ty = segDy / segLen;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const cmx = mx - stripCentroid.x, cmy = my - stripCentroid.y;
+    const p1x = -ty, p1y = tx;
+    const outward = (p1x * cmx + p1y * cmy) > 0
+      ? { x: p1x,  y: p1y  }
+      : { x: -p1x, y: -p1y };
+
+    // 60% of segments stay empty so the strip looks intermittent.
+    if (rng() < 0.60) continue;
+
+    const numHere = 1 + Math.floor(rng() * 3);
+    for (let k = 0; k < numHere; k++) {
+      const t = (k + 0.5 + (rng() - 0.5) * 0.7) / numHere;
+      const along = t * segLen;
+      const offset = 1.4 + rng() * 2.6;
+      const cx = a.x + tx * along + outward.x * offset;
+      const cy = a.y + ty * along + outward.y * offset;
+
+      if (!_pointInPolygon({ x: cx, y: cy }, landPolygon)) continue;
+
+      const w = 1.8 + rng() * 2.4;
+      const h = 1.4 + rng() * 1.6;
+      const segAng = Math.atan2(ty, tx);
+      const ang = segAng + (rng() - 0.5) * 0.5;
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const corners = [
+        { x: -w / 2, y: -h / 2 },
+        { x:  w / 2, y: -h / 2 },
+        { x:  w / 2, y:  h / 2 },
+        { x: -w / 2, y:  h / 2 }
+      ].map(p => ({
+        x: cx + p.x * ca - p.y * sa,
+        y: cy + p.x * sa + p.y * ca
+      }));
+      if (!corners.every(c => _pointInPolygon(c, landPolygon))) continue;
+
+      buildings.push({
+        path:
+          `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
+          `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
+          `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
+          `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
+        shade: rng()
+      });
+    }
+  }
+  return buildings;
+}
+
 
   window.CityMapBuildingsV3 = {
-    generateBlockBuildings: _generateBlockBuildings
+    generateBlockBuildings: _generateBlockBuildings,
+    generateCoastStripBuildings: _generateCoastStripBuildings
   };
 })();
