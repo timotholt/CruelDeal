@@ -10,344 +10,47 @@ const { useMemo: _useMemoCM } = React;
 // CONSTANTS
 // ============================================================
 
-const VIEW_W = STAGE_W;       // 360
-const VIEW_H = BOARD_H;       // 384
-const MAP_SLOT_HALF_W = 13.5;
-const MAP_SLOT_HALF_H = 19;
-const MAP_SLOT_EDGE_PAD = 30;
-
-// Land polygon — base radius. Combined with a randomly offset center and a wide
-// radius variation, the polygon will clearly extend past viewport on some sides
-// and clearly retreat (showing ocean) on others, avoiding the "almost-there" tip.
-const LAND_RX = VIEW_W * 0.68;  // ~245
-const LAND_RY = VIEW_H * 0.68;  // ~261
-
-// Detection unit (one "block")
-const CELL_UNIT = 26;
-
-const DISTRICT_NAMES = [
-  "DOWNTOWN", "ROPPONGI", "SHIBUYA", "ASAKUSA", "SHINJUKU",
-  "AKIHABARA", "GINZA", "UENO", "HARAJUKU", "EBISU",
-  "MEGURO", "SETAGAYA", "KOTO", "OTSUKA", "NAKANO"
-];
-
-const DISTRICT_SHORT_NAMES = {
-  DOWNTOWN: "DWN",
-  ROPPONGI: "RPN",
-  SHIBUYA: "SHB",
-  ASAKUSA: "ASA",
-  SHINJUKU: "SNJ",
-  AKIHABARA: "AKB",
-  HARAJUKU: "HRJ",
-  SETAGAYA: "STG",
-  MEGURO: "MGR",
-  OTSUKA: "OTS",
-  NAKANO: "NKN"
-};
-
-const DISTRICT_COLORS = [
-  "#ff6ea0", "#5dffe6", "#ffd05d", "#a98dff", "#7dff9b", "#ff945d"
-];
-
-// Tetromino-style polygon shapes used for micro-landmarks (small parks/plazas/
-// mini-malls placed inside leaf blocks). All shapes are CCW-oriented in a
-// `unitSize × unitSize` grid; the placement code centers and scales them.
-// New shapes can be added freely — each is a closed polygon as a list of
-// {x, y} points (the closing edge to the first point is implicit).
-const _MICRO_LANDMARK_SHAPES = [
-  // Square (1x1 of the unit grid)
-  { unitSize: 3, points: [{x:0,y:0},{x:3,y:0},{x:3,y:3},{x:0,y:3}] },
-  // Wide rectangle
-  { unitSize: 4, points: [{x:0,y:1},{x:4,y:1},{x:4,y:3},{x:0,y:3}] },
-  // Tall rectangle
-  { unitSize: 4, points: [{x:1,y:0},{x:3,y:0},{x:3,y:4},{x:1,y:4}] },
-  // L-shape
-  { unitSize: 4, points: [{x:0,y:0},{x:2,y:0},{x:2,y:2},{x:4,y:2},{x:4,y:4},{x:0,y:4}] },
-  // L-shape rotated 180°
-  { unitSize: 4, points: [{x:2,y:0},{x:4,y:0},{x:4,y:4},{x:0,y:4},{x:0,y:2},{x:2,y:2}] },
-  // T-shape
-  { unitSize: 4, points: [{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:3,y:2},{x:3,y:4},{x:1,y:4},{x:1,y:2},{x:0,y:2}] },
-  // Plus / cross
-  { unitSize: 4, points: [{x:1,y:0},{x:3,y:0},{x:3,y:1},{x:4,y:1},{x:4,y:3},{x:3,y:3},{x:3,y:4},{x:1,y:4},{x:1,y:3},{x:0,y:3},{x:0,y:1},{x:1,y:1}] },
-  // Z-shape (horizontal)
-  { unitSize: 5, points: [{x:0,y:0},{x:3,y:0},{x:3,y:1},{x:5,y:1},{x:5,y:3},{x:2,y:3},{x:2,y:2},{x:0,y:2}] },
-  // Step / staircase
-  { unitSize: 4, points: [{x:0,y:2},{x:2,y:2},{x:2,y:1},{x:4,y:1},{x:4,y:4},{x:0,y:4}] },
-];
-
-// PAL — HSL/HSLA color palette mirrored from `city-map-v3.css`.
-//
-// Design rule: every map element sits on a TONAL HIERARCHY of L values in a
-// shared blue family (MAP_HUE). Brightness encodes scale / importance:
-//   water  L=9    (background — darkest)
-//   land   L=18   (canvas)
-//   bldgA  L=34   ┐ buildings — exactly two shades, no in-between greys.
-//   bldgB  L=42   ┘
-//   roads  L=64…88 (network — brightest, biggest road = brightest L)
-// This produces a readable depth order: any element above another is brighter.
-//
-// Keep these values in sync with the CSS file. Both files exist so:
-//   - The CSS file is the human-friendly source of truth (CSS custom props).
-//   - The JS uses literal HSL strings so SVG fills don't depend on
-//     getComputedStyle.
-const MAP_HUE = 223;  // navy-blue map reference hue
-const MAP_SAT = 100;  // shared base saturation for the blue family
-const PAL = {
-  // Water — single flat color shared by ocean and river. High saturation +
-  // very low L = a deep saturated blue, no cyan cast.
-  water:        `hsl(${MAP_HUE}, 58%, 9%)`,
-  // Land — saturated dark-blue canvas.
-  land:         `hsl(${MAP_HUE}, 58%, 18%)`,
-  // Buildings — exactly two shades (L=38, L=47), painted transparently so
-  // the land color shows through.
-  bldgA:        `hsla(${MAP_HUE}, 54%, 38%, 0.43)`,
-  bldgB:        `hsla(${MAP_HUE}, 50%, 47%, 0.40)`,
-  roundBldg:    `hsla(${MAP_HUE}, 62%, 46%, 0.58)`,
-  // Roads/region lines: same hue + saturation; only lightness, alpha, and
-  // stroke width change by tier.
-  streetLocal:  "hsla(215, 88%, 58%, 0.72)",   // depth 4+
-  streetMain:   "hsla(215, 88%, 64%, 0.78)",   // depth 2/3
-  coastRoad:    "hsla(215, 88%, 66%, 0.78)",   // perimeter avenue
-  avenue:       "hsla(215, 88%, 70%, 0.82)",   // depth 1
-  hwyOuter:     "hsla(215, 88%, 54%, 0.42)",   // glow halo
-  hwyInner:     "hsla(215, 88%, 76%, 0.88)",   // depth 0
-  regionLine:   "hsla(215, 88%, 68%, 0.78)",
-  regionGlow:   "hsla(215, 88%, 60%, 0.38)",
-  // Landmarks. Parks and shopping malls are translucent so the land + building
-  // grid shows through.
-  park:         "hsla(145, 44%, 42%, 0.38)",
-  plaza:        `hsla(${MAP_HUE}, 48%, 40%, 0.58)`,
-  stadium:      `hsla(${MAP_HUE}, 54%, 36%, 0.62)`,
-  stadiumField: `hsla(${MAP_HUE}, 56%, 44%, 0.66)`,
-  fieldLine:    "hsla(215, 88%, 66%, 0.55)",
-  diamond:      `hsla(${MAP_HUE}, 50%, 48%, 0.72)`,
-  mall:         "hsla(215, 82%, 42%, 0.28)",
-  mallAccent:   "hsla(215, 96%, 70%, 0.48)",
-  mallHighlight:"hsla(215, 100%, 74%, 0.12)",
-  // Labels
-  label:        `hsl(${MAP_HUE}, 82%, 68%)`,
-  labelGlow:    `hsla(${MAP_HUE}, 88%, 60%, 0.58)`,
-  labelStroke:  `hsla(${MAP_HUE}, 70%, 18%, 0.24)`
-};
+const {
+  VIEW_W,
+  VIEW_H,
+  MAP_SLOT_HALF_W,
+  MAP_SLOT_HALF_H,
+  MAP_SLOT_EDGE_PAD,
+  LAND_RX,
+  LAND_RY,
+  CELL_UNIT,
+  DISTRICT_NAMES,
+  DISTRICT_SHORT_NAMES,
+  DISTRICT_COLORS,
+  MICRO_LANDMARK_SHAPES: _MICRO_LANDMARK_SHAPES,
+  MAP_HUE,
+  MAP_SAT,
+  PAL
+} = window.CityMapConfigV3;
 
 // ============================================================
 // GEOMETRY UTILITIES
 // ============================================================
 
-const EPS = 1e-9;
-
-function _segIntersect(a, b, c, d) {
-  const dx1 = b.x - a.x, dy1 = b.y - a.y;
-  const dx2 = d.x - c.x, dy2 = d.y - c.y;
-  const denom = dx1 * dy2 - dy1 * dx2;
-  if (Math.abs(denom) < EPS) return null;
-  const t = ((c.x - a.x) * dy2 - (c.y - a.y) * dx2) / denom;
-  const u = ((c.x - a.x) * dy1 - (c.y - a.y) * dx1) / denom;
-  if (t < -EPS || t > 1 + EPS || u < -EPS || u > 1 + EPS) return null;
-  return { x: a.x + t * dx1, y: a.y + t * dy1, t, u };
-}
-
-function _pointInPolygon(p, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x, yi = polygon[i].y;
-    const xj = polygon[j].x, yj = polygon[j].y;
-    const intersect = ((yi > p.y) !== (yj > p.y)) &&
-      (p.x < (xj - xi) * (p.y - yi) / ((yj - yi) || EPS) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
-function _polygonArea(polygon) {
-  let a = 0;
-  const n = polygon.length;
-  for (let i = 0; i < n; i++) {
-    const p = polygon[i];
-    const q = polygon[(i + 1) % n];
-    a += p.x * q.y - q.x * p.y;
-  }
-  return Math.abs(a) / 2;
-}
-
-function _polygonCentroid(polygon) {
-  let cx = 0, cy = 0, a = 0;
-  const n = polygon.length;
-  for (let i = 0; i < n; i++) {
-    const p = polygon[i];
-    const q = polygon[(i + 1) % n];
-    const cross = p.x * q.y - q.x * p.y;
-    a += cross;
-    cx += (p.x + q.x) * cross;
-    cy += (p.y + q.y) * cross;
-  }
-  a /= 2;
-  if (Math.abs(a) < EPS) {
-    const xs = polygon.reduce((s, p) => s + p.x, 0) / n;
-    const ys = polygon.reduce((s, p) => s + p.y, 0) / n;
-    return { x: xs, y: ys };
-  }
-  return { x: cx / (6 * a), y: cy / (6 * a) };
-}
-
-function _pointToSegmentDist(px, py, a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy || 1e-9;
-  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
-  const cx = a.x + t * dx, cy = a.y + t * dy;
-  return Math.hypot(px - cx, py - cy);
-}
-
-function _pointToPolygonSignedDist(point, polygon) {
-  const edgeDist = polygon.reduce((best, p, i) => {
-    const q = polygon[(i + 1) % polygon.length];
-    return Math.min(best, _pointToSegmentDist(point.x, point.y, p, q));
-  }, Infinity);
-  return _pointInPolygon(point, polygon) ? edgeDist : -edgeDist;
-}
+const {
+  EPS,
+  segIntersect: _segIntersect,
+  pointInPolygon: _pointInPolygon,
+  polygonArea: _polygonArea,
+  polygonCentroid: _polygonCentroid,
+  pointToSegmentDist: _pointToSegmentDist,
+  pointToPolygonSignedDist: _pointToPolygonSignedDist,
+  segmentToSegmentDist: _segmentToSegmentDist,
+  polygonToPolygonDist: _polygonToPolygonDist,
+  clipPolygonToRect: _clipPolygonToRect
+} = window.CityMapGeometryV3;
 
 function _polylabel(polygon, precision = 1.5) {
-  if (!polygon || polygon.length < 3) return { x: VIEW_W / 2, y: VIEW_H / 2, d: 0 };
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of polygon) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const cellSize = Math.min(width, height);
-  if (cellSize <= 0) return { x: minX, y: minY, d: 0 };
-  const makeCell = (x, y, h) => {
-    const d = _pointToPolygonSignedDist({ x, y }, polygon);
-    return { x, y, h, d, max: d + h * Math.SQRT2 };
-  };
-  let best = makeCell((minX + maxX) / 2, (minY + maxY) / 2, 0);
-  const centroid = _polygonCentroid(polygon);
-  const centroidCell = makeCell(centroid.x, centroid.y, 0);
-  if (centroidCell.d > best.d) best = centroidCell;
-  const cells = [];
-  for (let x = minX; x < maxX; x += cellSize) {
-    for (let y = minY; y < maxY; y += cellSize) {
-      cells.push(makeCell(x + cellSize / 2, y + cellSize / 2, cellSize / 2));
-    }
-  }
-  while (cells.length) {
-    cells.sort((a, b) => b.max - a.max);
-    const cell = cells.shift();
-    if (cell.d > best.d) best = cell;
-    if (cell.max - best.d <= precision) continue;
-    const h = cell.h / 2;
-    cells.push(
-      makeCell(cell.x - h, cell.y - h, h),
-      makeCell(cell.x + h, cell.y - h, h),
-      makeCell(cell.x - h, cell.y + h, h),
-      makeCell(cell.x + h, cell.y + h, h)
-    );
-  }
-  return best;
-}
-
-function _segmentToSegmentDist(a, b, c, d) {
-  if (_segIntersect(a, b, c, d)) return 0;
-  return Math.min(
-    _pointToSegmentDist(a.x, a.y, c, d),
-    _pointToSegmentDist(b.x, b.y, c, d),
-    _pointToSegmentDist(c.x, c.y, a, b),
-    _pointToSegmentDist(d.x, d.y, a, b)
+  return window.CityMapGeometryV3.polylabel(
+    polygon,
+    precision,
+    { x: VIEW_W / 2, y: VIEW_H / 2 }
   );
-}
-
-function _polygonToPolygonDist(polyA, polyB) {
-  if (!polyA || !polyB || polyA.length < 3 || polyB.length < 3) return Infinity;
-  for (const p of polyA) if (_pointInPolygon(p, polyB)) return 0;
-  for (const p of polyB) if (_pointInPolygon(p, polyA)) return 0;
-  let best = Infinity;
-  for (let i = 0; i < polyA.length; i++) {
-    const a1 = polyA[i];
-    const a2 = polyA[(i + 1) % polyA.length];
-    for (let j = 0; j < polyB.length; j++) {
-      const b1 = polyB[j];
-      const b2 = polyB[(j + 1) % polyB.length];
-      best = Math.min(best, _segmentToSegmentDist(a1, a2, b1, b2));
-      if (best <= 0) return 0;
-    }
-  }
-  return best;
-}
-
-// Sutherland-Hodgman polygon clipping against an axis-aligned rectangle.
-// Returns the clipped polygon (may be empty if no overlap). Used to compute
-// the district's *visible shape* — the part actually on screen.
-//
-// edgeKind preservation:
-//   - Surviving original vertices keep their edgeKind.
-//   - Newly-inserted intersection vertices inherit the edgeKind of the edge
-//     being clipped (so a coast edge clipped at the viewport still produces
-//     a coast-tagged endpoint, etc.).
-//   - Edges that run ALONG a viewport boundary (between two consecutive
-//     clip-introduced vertices) are tagged "viewport" so the outline renderer
-//     can decide whether to draw them.
-// To carry this info, each vertex in the result has a `_clipNew` flag set
-// to true when it was inserted by clipping. Callers can detect "edge along
-// viewport boundary" by checking whether BOTH endpoints have `_clipNew` true.
-function _clipPolygonToRect(polygon, rect) {
-  // rect = { minX, minY, maxX, maxY }
-  const clipEdge = (poly, isInside, intersectFn) => {
-    if (!poly.length) return poly;
-    const result = [];
-    for (let i = 0; i < poly.length; i++) {
-      const curr = poly[i];
-      const prev = poly[(i - 1 + poly.length) % poly.length];
-      const cIn = isInside(curr);
-      const pIn = isInside(prev);
-      if (cIn) {
-        if (!pIn) result.push(intersectFn(prev, curr));
-        result.push(curr);
-      } else if (pIn) {
-        result.push(intersectFn(prev, curr));
-      }
-    }
-    return result;
-  };
-  // The edgeKind on the OUTGOING edge from `a` is the kind we want for the
-  // intersection vertex (which sits on that same edge between a and b).
-  const inheritKind = (a) => a.edgeKind || "coast";
-  let r = polygon;
-  // Left
-  r = clipEdge(r,
-    p => p.x >= rect.minX,
-    (a, b) => {
-      const t = (rect.minX - a.x) / (b.x - a.x || 1e-9);
-      return { x: rect.minX, y: a.y + t * (b.y - a.y),
-               edgeKind: inheritKind(a), _clipNew: true };
-    });
-  // Right
-  r = clipEdge(r,
-    p => p.x <= rect.maxX,
-    (a, b) => {
-      const t = (rect.maxX - a.x) / (b.x - a.x || 1e-9);
-      return { x: rect.maxX, y: a.y + t * (b.y - a.y),
-               edgeKind: inheritKind(a), _clipNew: true };
-    });
-  // Top
-  r = clipEdge(r,
-    p => p.y >= rect.minY,
-    (a, b) => {
-      const t = (rect.minY - a.y) / (b.y - a.y || 1e-9);
-      return { x: a.x + t * (b.x - a.x), y: rect.minY,
-               edgeKind: inheritKind(a), _clipNew: true };
-    });
-  // Bottom
-  r = clipEdge(r,
-    p => p.y <= rect.maxY,
-    (a, b) => {
-      const t = (rect.maxY - a.y) / (b.y - a.y || 1e-9);
-      return { x: a.x + t * (b.x - a.x), y: rect.maxY,
-               edgeKind: inheritKind(a), _clipNew: true };
-    });
-  return r;
 }
 
 // Label placement: scored grid search over the visible district polygon.
@@ -440,6 +143,9 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
     // Text needs a usable box, not just point clearance. Include letter spacing
     // so long names don't get accepted inside narrow district necks.
     const { halfW: labelHalfW, halfH: labelHalfH } = _labelMetrics(text);
+    if (labelBoxFits(targetX, targetY, labelHalfW, labelHalfH)) {
+      return { x: targetX, y: targetY, text, score: Infinity, hardFit: true, halfW: labelHalfW, halfH: labelHalfH };
+    }
     let best = null;
     const step = 3;
     for (let x = minX; x <= maxX; x += step) {
@@ -486,12 +192,12 @@ function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
         const clearanceScore = Math.min(edgeDist, 30);
 
         // Score: require a readable label box, then prefer broad interior space.
-        // Centering still matters, but less than avoiding skinny corridors or
-        // colliding with the animated placement rings.
+        // The polylabel target is already the visual-center / clearance answer,
+        // so stay close to it unless the text box genuinely cannot fit there.
         const score =
-          clearanceScore * 1.35 -
-          centroidDist * 0.42 -
-          bboxCenterDist * 0.08 -
+          clearanceScore * 0.72 -
+          centroidDist * 1.12 -
+          bboxCenterDist * 0.04 -
           boxPenalty -
           dotPenalty;
         if (!best || score > best.score) {
@@ -1555,7 +1261,8 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
     polyline: best1.cutSeg.polyline || null,
     polylineMode: best1.cutSeg.polylineMode || null,
     depth: 0,
-    angle: best1.angle
+    angle: best1.angle,
+    dividedHighway: rng() < 0.5
   };
 
   // HIGHWAY curve attempt — disabled, kept here for later tuning.
@@ -1687,7 +1394,7 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
     }
     return best;
   };
-  const diagonalAvenue = findDiagonalAvenue();
+  const diagonalAvenue = rng() < 0.5 ? findDiagonalAvenue() : null;
 
   // AVENUE curve attempt — but if the highway already curved, drastically
   // reduce the probability of curving the avenue too. Two curves stacked tend
@@ -3327,34 +3034,12 @@ function buildCityV3(seed) {
 // DOT HELPERS & DETECTION
 // ============================================================
 
-function cityV3DotPos(dot) { return { x: dot.x, y: dot.y }; }
-
-function cityV3DotDistance(a, b) {
-  if (a.districtIdx !== b.districtIdx) return Infinity;
-  return Math.hypot(a.x - b.x, a.y - b.y) / CELL_UNIT;
-}
-
-function whoCanThisCardSeeV3(dot, vis, placedCards, algo) {
-  const seen = [];
-  for (const other of placedCards) {
-    if (other.dot.id === dot.id) continue;
-    const d = cityV3DotDistance(dot, other.dot);
-    const r = algo.range(vis, other.stealth);
-    if (d <= r) seen.push(other);
-  }
-  return seen;
-}
-
-function whoCanSeeMeV3(dot, myStealth, placedCards, algo) {
-  const seers = [];
-  for (const other of placedCards) {
-    if (other.dot.id === dot.id) continue;
-    const d = cityV3DotDistance(dot, other.dot);
-    const r = algo.range(other.vis, myStealth);
-    if (d <= r) seers.push(other);
-  }
-  return seers;
-}
+const {
+  cityV3DotPos,
+  cityV3DotDistance,
+  whoCanThisCardSeeV3,
+  whoCanSeeMeV3
+} = window.CityMapRulesV3;
 
 // ============================================================
 // COMPONENT
@@ -3806,12 +3491,39 @@ function CityMapV3({
         <g>
           {hwyCuts.map((cut, i) => {
             const pts = _cutPoints(cut);
+            const basePath = _straightPolylinePath(pts);
+            if (!cut.dividedHighway) {
+              return (
+                <g key={`hwy-${i}`}>
+                  <path
+                    d={basePath}
+                    fill="none"
+                    stroke={PAL.hwyOuter}
+                    strokeWidth={3.3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.30}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path
+                    d={basePath}
+                    fill="none"
+                    stroke={PAL.hwyInner}
+                    strokeWidth={1.15}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.92}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              );
+            }
             const left = _straightPolylinePath(_offsetPolyline(pts, -0.72));
             const right = _straightPolylinePath(_offsetPolyline(pts, 0.72));
             return (
               <g key={`hwy-${i}`}>
                 <path
-                  d={_straightPolylinePath(pts)}
+                  d={basePath}
                   fill="none"
                   stroke={PAL.hwyOuter}
                   strokeWidth={4.2}
@@ -3821,7 +3533,7 @@ function CityMapV3({
                   vectorEffect="non-scaling-stroke"
                 />
                 <path
-                  d={_straightPolylinePath(pts)}
+                  d={basePath}
                   fill="none"
                   stroke={PAL.hwyOuter}
                   strokeWidth={2.7}
@@ -3831,7 +3543,7 @@ function CityMapV3({
                   vectorEffect="non-scaling-stroke"
                 />
                 <path
-                  d={_straightPolylinePath(pts)}
+                  d={basePath}
                   fill="none"
                   stroke={PAL.land}
                   strokeWidth={0.82}
