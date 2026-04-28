@@ -60,12 +60,12 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Grid</span>
+            <span className="dock-label">Round Edge</span>
             <button
-              className={`dock-toggle ${tweaks.showGrid ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('showGrid', !tweaks.showGrid)}
+              className={`dock-toggle ${tweaks.roundMapEdge !== false ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('roundMapEdge', !(tweaks.roundMapEdge !== false))}
             >
-              {tweaks.showGrid ? 'ON' : 'OFF'}
+              {tweaks.roundMapEdge !== false ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
@@ -141,10 +141,19 @@ function Header({ accent, you, them, turn, deckCount }) {
 }
 
 // ---------- City Board (replaces Lane components) ----------
-function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, playerScore, enemyScore }) {
+function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, playerScore, enemyScore, roundedMapEdge }) {
   const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
   return (
-    <div className="city-board" style={{ width: CITY_V3_W, height: CITY_V3_H, position: "relative", overflow: "hidden" }}>
+    <div
+      className="city-board"
+      style={{
+        width: CITY_V3_W,
+        height: CITY_V3_H,
+        position: "relative",
+        overflow: "hidden",
+        borderRadius: roundedMapEdge ? 10 : 0
+      }}
+    >
       {/* City map base */}
       <CityMapV3
         seed={sessionSeed}
@@ -168,7 +177,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
 
       {/* Detection overlay (tap-to-place preview) */}
       {!dragCard && selectedCard && (() => {
-        const previewDot = allDots.find((d) => !placedCards.some((c) => c.dot.id === d.id));
+        const previewDot = allDots.find((d) => d.owner === "you" && !placedCards.some((c) => c.dot.id === d.id));
         if (!previewDot) return null;
         return (
           <DetectionOverlay
@@ -184,17 +193,17 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
       {allDots.map((d) => {
         const occupied = placedCards.find((c) => c.dot.id === d.id);
         const isHover = hoverDot && hoverDot.id === d.id;
-        const isPlayable = selectedCard && !occupied;
+        const isOwnSlot = d.owner === "you";
+        const isPlayable = selectedCard && !occupied && isOwnSlot;
         return (
           <div
             key={d.id}
             data-dot-id={d.id}
-            className={`dot ${occupied ? "dot--occupied" : ""} ${isHover ? "dot--hover" : ""} ${isPlayable ? "dot--playable" : ""}`}
+            className={`dot dot--${d.owner || "you"} ${occupied ? "dot--occupied" : ""} ${isHover ? "dot--hover" : ""} ${isPlayable ? "dot--playable" : ""}`}
             style={{ left: d.x, top: d.y }}
-            onClick={(e) => { if (!occupied && onDotClick) { e.stopPropagation(); onDotClick(d); } }}
+            onClick={(e) => { if (!occupied && isOwnSlot && onDotClick) { e.stopPropagation(); onDotClick(d); } }}
           >
-            <div className="dot-ring" />
-            <div className="dot-core" />
+            <div className="dot-slot" />
           </div>
         );
       })}
@@ -390,8 +399,8 @@ function Game() {
     "accentHue": 188,
     "dotDensity": 7,
     "algo": "subtract",
-    "showGrid": false,
     "showMap": true,
+    "roundMapEdge": true,
     "mapOpacity": 0.85
   }/*EDITMODE-END*/);
 
@@ -568,6 +577,7 @@ function Game() {
   const tryPlace = useCallback((card, dot) => {
     const occupied = placed.some((c) => c.dot.id === dot.id);
     if (occupied) { showToast("DOT OCCUPIED"); return; }
+    if (dot.owner !== "you") { showToast("OPPONENT SLOT"); return; }
     setHistory((h) => [...h, {
       placed: placed.map((c) => ({ ...c })),
       yourHand: yourHand.map((c) => ({ ...c })),
@@ -609,6 +619,8 @@ function Game() {
 
     let best = null, bestD = Infinity;
     for (const d of allDots) {
+      if (d.owner !== "you") continue;
+      if (placed.some((c) => c.dot.id === d.id)) continue;
       const dx = d.x - localX;
       const dy = d.y - localY;
       const dd = dx * dx + dy * dy;
@@ -630,7 +642,7 @@ function Game() {
         return;
       }
       // collect open dots
-      const open = allDots.filter((d) => !placed.some((c) => c.dot.id === d.id));
+      const open = allDots.filter((d) => d.owner === "them" && !placed.some((c) => c.dot.id === d.id));
       if (open.length === 0) {
         setTurn("you");
         return;
@@ -714,6 +726,7 @@ function Game() {
             showLabels={showUI}
             playerScore={scores.you}
             enemyScore={scores.them}
+            roundedMapEdge={tweaks.roundMapEdge !== false}
           />
 
           {/* Math chip floats just above hand */}
@@ -808,14 +821,14 @@ function Game() {
             onChange={(v) => setTweak("accentHue", v)}
           />
           <TweakToggle
-            label="Show grid"
-            checked={tweaks.showGrid}
-            onChange={(v) => setTweak("showGrid", v)}
-          />
-          <TweakToggle
             label="City map"
             checked={tweaks.showMap}
             onChange={(v) => setTweak("showMap", v)}
+          />
+          <TweakToggle
+            label="Rounded map edge"
+            checked={tweaks.roundMapEdge !== false}
+            onChange={(v) => setTweak("roundMapEdge", v)}
           />
           <TweakSlider
             label="Map opacity"

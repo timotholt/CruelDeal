@@ -259,55 +259,56 @@ html, body {
 
 .dot {
   position: absolute;
-  width: 26px; height: 26px;
+  width: 28px; height: 34px;
   transform: translate(-50%, -50%);
   display: grid; place-items: center;
   pointer-events: none;
 }
-.dot-ring {
+.dot-slot {
   position: absolute;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  border: 1px dashed rgba(180, 220, 255, 0.3);
-  animation: ring-spin 6s linear infinite;
+  width: 15px;
+  height: 21px;
+  border-radius: 2px;
+  border: 1px solid color-mix(in oklch, var(--slot-color) 82%, white);
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--slot-color) 26%, transparent),
+      color-mix(in oklch, var(--slot-color) 10%, rgba(0,0,0,0.15)));
+  box-shadow:
+    0 0 9px color-mix(in oklch, var(--slot-color) 55%, transparent),
+    inset 0 0 0 1px color-mix(in oklch, var(--slot-color) 28%, transparent);
 }
-.dot-core {
+.dot-slot::before {
+  content: "";
   position: absolute;
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: rgba(180, 220, 255, 0.8);
-  box-shadow: 0 0 6px rgba(180, 220, 255, 0.6);
+  inset: 3px;
+  border-radius: 1px;
+  border: 1px dashed color-mix(in oklch, var(--slot-color) 70%, rgba(255,255,255,0.25));
+  opacity: 0.85;
 }
-.dot--occupied .dot-core { display: none; }
-.dot--occupied .dot-ring { display: none; }
-.dot--hover .dot-ring {
-  border-color: var(--accent);
-  border-style: solid;
-  box-shadow: 0 0 8px var(--accent);
-  width: 22px; height: 22px;
+.dot--you { --slot-color: var(--safe); }
+.dot--them { --slot-color: var(--them); }
+.dot--occupied .dot-slot {
+  display: none;
 }
-.dot--hover .dot-core {
-  background: var(--accent);
-  width: 6px; height: 6px;
+.dot--hover .dot-slot {
+  transform: scale(1.18);
+  border-color: #fff;
+  box-shadow:
+    0 0 12px color-mix(in oklch, var(--slot-color) 78%, white),
+    0 0 4px rgba(255,255,255,0.9),
+    inset 0 0 0 1px rgba(255,255,255,0.35);
 }
 .dot--playable {
   cursor: pointer;
   pointer-events: auto;
 }
-.dot--playable .dot-ring {
-  border-color: color-mix(in oklch, var(--accent) 80%, transparent);
-  border-style: solid;
-  width: 18px; height: 18px;
-  animation: ring-pulse-playable 1.4s ease-in-out infinite;
+.dot--playable .dot-slot {
+  animation: slot-pulse-playable 1.4s ease-in-out infinite;
 }
-@keyframes ring-pulse-playable {
-  0%, 100% { opacity: 0.5; transform: scale(1) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1.15) rotate(0deg); }
-}
-.dot--playable .dot-core {
-  background: var(--accent);
-  width: 5px; height: 5px;
-  box-shadow: 0 0 8px var(--accent);
+@keyframes slot-pulse-playable {
+  0%, 100% { opacity: 0.68; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
 }
 
 @keyframes ring-spin {
