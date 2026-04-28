@@ -1,0 +1,850 @@
+/* global React, GameCard, buildDeck, makeRng,
+   STAGE_W, STAGE_H, HEADER_H, FOOTER_H, BOARD_H, SIDE_PAD,
+   DETECTION_ALGOS,
+   CityMapV3, buildCityV3, cityV3DotPos, cityV3DotDistance,
+   whoCanThisCardSeeV3, whoCanSeeMeV3,
+   CITY_V3_W, CITY_V3_H, C_CELL_W, C_CELL_H,
+   useTweaks, TweaksPanel, TweakSection, TweakSlider, TweakToggle, TweakSelect */
+
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ---------- Floating Debug Dock ----------
+function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
+  const [pos, setPos] = useState({ x: 16, y: 16 });
+  const [collapsed, setCollapsed] = useState(false);
+  const dragRef = useRef(null);
+  const dragStartRef = useRef(null);
+
+  const onHeaderPointerDown = (e) => {
+    if (e.target.closest('.dock-toggle, .dock-collapse')) return;
+    dragStartRef.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    
+    const onMove = (ev) => {
+      if (dragStartRef.current) {
+        setPos({ x: ev.clientX - dragStartRef.current.x, y: ev.clientY - dragStartRef.current.y });
+      }
+    };
+    const onUp = () => {
+      dragStartRef.current = null;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  };
+
+  return (
+    <div
+      ref={dragRef}
+      className="debug-dock"
+      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+    >
+      <div className="dock-header" onPointerDown={onHeaderPointerDown}>
+        <span className="dock-title">DEBUG</span>
+        <button
+          className="dock-collapse"
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>
+      </div>
+      {!collapsed && (
+        <div className="dock-body">
+          <label className="dock-row">
+            <span className="dock-label">City Map</span>
+            <button
+              className={`dock-toggle ${tweaks.showMap ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('showMap', !tweaks.showMap)}
+            >
+              {tweaks.showMap ? 'ON' : 'OFF'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Grid</span>
+            <button
+              className={`dock-toggle ${tweaks.showGrid ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('showGrid', !tweaks.showGrid)}
+            >
+              {tweaks.showGrid ? 'ON' : 'OFF'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Game UI</span>
+            <button
+              className={`dock-toggle ${showUI ? 'dock-toggle--on' : ''}`}
+              onClick={() => setShowUI(!showUI)}
+            >
+              {showUI ? 'ON' : 'OFF'}
+            </button>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Stage scaling ----------
+function useStageScale() {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    function recompute() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const s = Math.min(vw / STAGE_W, vh / STAGE_H);
+      setScale(s);
+    }
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, []);
+  return scale;
+}
+
+// ---------- Header ----------
+function Header({ accent, you, them, turn, deckCount }) {
+  return (
+    <div className="header">
+      <div className="hud-corner hud-tl" />
+      <div className="hud-corner hud-tr" />
+      <div className="hud-corner hud-bl" />
+      <div className="hud-corner hud-br" />
+
+      <div className={`player-side ${turn === "you" ? "player--active" : ""}`}>
+        <div className="player-icon">
+          <div className="player-icon-inner" style={{ background: accent }}>Y</div>
+        </div>
+        <div className="player-meta">
+          <div className="player-name">{you.name}</div>
+          <div className="player-tag">◉ {you.score}</div>
+        </div>
+      </div>
+
+      <div className="header-center">
+        <div className="round-label">ROUND {turn === "you" ? "—" : "·"}</div>
+        <div className="turn-label">
+          {turn === "you" ? "YOUR TURN" : "OPP THINKING"}
+        </div>
+        <div className="deck-ticker">DECK · {deckCount}</div>
+      </div>
+
+      <div className={`player-side player-side--right ${turn === "them" ? "player--active" : ""}`}>
+        <div className="player-meta player-meta--right">
+          <div className="player-name">{them.name}</div>
+          <div className="player-tag">◉ {them.score}</div>
+        </div>
+        <div className="player-icon">
+          <div className="player-icon-inner player-icon-inner--enemy">Z</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- City Board (replaces Lane components) ----------
+function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels }) {
+  const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
+  return (
+    <div className="city-board" style={{ width: CITY_V3_W, height: CITY_V3_H, position: "relative", overflow: "hidden" }}>
+      {/* City map base */}
+      <CityMapV3
+        seed={sessionSeed}
+        width={CITY_V3_W}
+        height={CITY_V3_H}
+        opacity={mapOpacity ?? 1}
+        showLabels={showLabels !== false}
+      />
+
+      {/* Detection overlay (drag preview) */}
+      {dragCard && hoverDot && (
+        <DetectionOverlay
+          dot={hoverDot}
+          card={dragCard}
+          algo={algo}
+          placedCards={placedCards}
+        />
+      )}
+
+      {/* Detection overlay (tap-to-place preview) */}
+      {!dragCard && selectedCard && (() => {
+        const previewDot = allDots.find((d) => !placedCards.some((c) => c.dot.id === d.id));
+        if (!previewDot) return null;
+        return (
+          <DetectionOverlay
+            dot={previewDot}
+            card={selectedCard}
+            algo={algo}
+            placedCards={placedCards}
+          />
+        );
+      })()}
+
+      {/* Dots */}
+      {allDots.map((d) => {
+        const occupied = placedCards.find((c) => c.dot.id === d.id);
+        const isHover = hoverDot && hoverDot.id === d.id;
+        const isPlayable = selectedCard && !occupied;
+        return (
+          <div
+            key={d.id}
+            data-dot-id={d.id}
+            className={`dot ${occupied ? "dot--occupied" : ""} ${isHover ? "dot--hover" : ""} ${isPlayable ? "dot--playable" : ""}`}
+            style={{ left: d.x, top: d.y }}
+            onClick={(e) => { if (!occupied && onDotClick) { e.stopPropagation(); onDotClick(d); } }}
+          >
+            <div className="dot-ring" />
+            <div className="dot-core" />
+          </div>
+        );
+      })}
+
+      {/* Placed cards (absolute board coords) */}
+      {placedCards.map((c) => {
+        const boardScale = 0.20;
+        const w = window.CARD_W * boardScale;
+        const h = window.CARD_H * boardScale;
+        return (
+          <div
+            key={c.uid}
+            className={`placed ${c.owner === "you" ? "placed--you" : "placed--them"} ${c.revealed ? "placed--revealed" : ""} ${c.justRevealed ? "placed--flip" : ""}`}
+            style={{ left: c.dot.x, top: c.dot.y, width: w, height: h }}
+            onClick={(e) => { e.stopPropagation(); onInspect && onInspect(c); }}
+          >
+            <div className="card-scaler" style={{ transform: `scale(${boardScale})` }}>
+              <GameCard
+                card={c}
+                faceDown={!c.revealed}
+                owner={c.owner}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DetectionOverlay({ dot, card, algo, placedCards }) {
+  const myRange = algo.range(card.vis, 0);
+  let maxEnemyReach = 0;
+  for (const o of placedCards) {
+    if (o.dot.districtIdx !== dot.districtIdx) continue;
+    if (o.owner === "you") continue;
+    const r = algo.range(o.vis, card.stealth);
+    if (r > maxEnemyReach) maxEnemyReach = r;
+  }
+  // Use cell size from city for radius scale
+  const cell = Math.min(C_CELL_W, C_CELL_H);
+  const blueR = (myRange + 0.5) * cell;
+  const redR = (maxEnemyReach + 0.5) * cell;
+
+  return (
+    <svg className="detect-svg" width={CITY_V3_W} height={CITY_V3_H} style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}>
+      <defs>
+        <radialGradient id="blueGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#6ff7ff" stopOpacity="0.0" />
+          <stop offset="60%" stopColor="#6ff7ff" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#6ff7ff" stopOpacity="0.22" />
+        </radialGradient>
+        <radialGradient id="redGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ff5d8f" stopOpacity="0.0" />
+          <stop offset="70%" stopColor="#ff5d8f" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#ff5d8f" stopOpacity="0.28" />
+        </radialGradient>
+      </defs>
+      {myRange > 0 && (
+        <g className="ring-pulse">
+          <circle cx={dot.x} cy={dot.y} r={blueR} fill="url(#blueGrad)" stroke="#6ff7ff" strokeWidth="1" strokeDasharray="3 3" opacity="0.9" />
+        </g>
+      )}
+      {maxEnemyReach > 0 && (
+        <g className="ring-pulse-2">
+          <circle cx={dot.x} cy={dot.y} r={redR} fill="url(#redGrad)" stroke="#ff5d8f" strokeWidth="1" strokeDasharray="2 4" opacity="0.9" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
+// ---------- Hand ----------
+function Hand({ cards, draggingUid, selectedUid, onPointerDown, onInspect, deckCount }) {
+  const N = cards.length;
+  return (
+    <div className="hand-wrap">
+      <div className="deck-stack" title={`${deckCount} cards in deck`}>
+        <div className="deck-card deck-card--3" />
+        <div className="deck-card deck-card--2" />
+        <div className="deck-card deck-card--1" />
+        <div className="deck-count">{deckCount}</div>
+      </div>
+      <div className="hand">
+        {cards.map((c, i) => {
+          const center = (N - 1) / 2;
+          const off = i - center;
+          const rot = off * 5;
+          const ty = Math.abs(off) * Math.abs(off) * 1.4;
+          const tx = off * 30;
+          const handScale = 0.55;
+          // Hand cards: a stable hit-zone div sized to the SCALED card,
+          // and inside it a card-scaler that holds the canonical card.
+          // Hover state lives on the hit-zone, so the visual lift never
+          // moves the hit-zone — no flicker.
+          return (
+            <div
+              key={c.uid}
+              className={`hand-slot ${draggingUid === c.uid ? "hand-slot--dragging" : ""} ${selectedUid === c.uid ? "hand-slot--selected" : ""}`}
+              style={{
+                "--tx": `${tx}px`,
+                "--ty": `${ty}px`,
+                "--rot": `${rot}deg`,
+                "--scale": handScale,
+                width: window.CARD_W * handScale,
+                height: window.CARD_H * handScale,
+                zIndex: 10 - Math.abs(off),
+              }}
+              onPointerDown={(e) => onPointerDown(e, c, "hand")}
+              onClick={(e) => {
+                // Only treat as click if pointerdown didn't initiate drag.
+                if (e.detail === 0) return; // synthetic
+                if (e._wasDrag) return;
+                onInspect && onInspect(c);
+              }}
+            >
+              <div className="card-scaler hand-scaler">
+                <GameCard card={c} owner="you" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Drag layer ----------
+function DragLayer({ card, x, y }) {
+  if (!card) return null;
+  // Shrink while dragging so player can see the destination dot
+  const dragScale = 0.32;
+  return (
+    <div
+      className="drag-layer"
+      style={{
+        left: x,
+        top: y,
+        width: window.CARD_W * dragScale,
+        height: window.CARD_H * dragScale,
+      }}
+    >
+      <div className="card-scaler" style={{ transform: `scale(${dragScale})` }}>
+        <GameCard card={card} dragging glow owner="you" />
+      </div>
+    </div>
+  );
+}
+
+// ---------- Math chip ----------
+function MathChip({ card, hoverDot, placedCards, algo }) {
+  if (!card || !hoverDot) return null;
+  // find biggest enemy threat
+  let worst = null;
+  for (const o of placedCards) {
+    if (o.dot.districtIdx !== hoverDot.districtIdx) continue;
+    if (o.owner === "you") continue;
+    const r = algo.range(o.vis, card.stealth);
+    if (!worst || r > worst.r) worst = { r, o };
+  }
+  return (
+    <div className="math-chip">
+      <span className="chip-line">
+        <span className="chip-key">YOU SEE</span>
+        <span className="chip-eq">{card.vis} − S</span>
+        <span className="chip-tag chip-tag--blue">range {algo.range(card.vis, 0)}</span>
+      </span>
+      <span className="chip-line">
+        <span className="chip-key">SEEN BY</span>
+        <span className="chip-eq">
+          {worst ? `${worst.o.name} ${worst.o.vis} − ${card.stealth}` : "none"}
+        </span>
+        <span className="chip-tag chip-tag--red">
+          {worst ? `range ${worst.r}` : "safe"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// ---------- Toast ----------
+function Toast({ msg }) {
+  if (!msg) return null;
+  return <div className="toast">{msg}</div>;
+}
+
+// ---------- Game ----------
+function Game() {
+  const scale = useStageScale();
+  const [showUI, setShowUI] = useState(true);
+
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
+    "accentHue": 188,
+    "dotDensity": 7,
+    "algo": "subtract",
+    "showGrid": false,
+    "showMap": true,
+    "mapOpacity": 0.85
+  }/*EDITMODE-END*/);
+
+  const accent = `oklch(0.78 0.16 ${tweaks.accentHue})`;
+  const accent2 = `oklch(0.72 0.18 ${(tweaks.accentHue + 140) % 360})`;
+
+  // Seeded session
+  const sessionSeed = useMemo(() => Math.floor(Math.random() * 1e9), []);
+  const rng = useMemo(() => makeRng(sessionSeed), [sessionSeed]);
+
+  // Build the city (3 procedural districts replace lanes)
+  const city = useMemo(() => buildCityV3(sessionSeed), [sessionSeed]);
+  const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
+
+  const [yourDeck, setYourDeck] = useState(() => buildDeck(makeRng(sessionSeed + 7)));
+  const [theirDeck, setTheirDeck] = useState(() => buildDeck(makeRng(sessionSeed + 99)));
+  const [yourHand, setYourHand] = useState([]);
+  const [theirHand, setTheirHand] = useState([]);
+  const [placed, setPlaced] = useState([]); // {uid, ...card, dot, owner, revealed}
+  const [turn, setTurn] = useState("you");
+  const [scores, setScores] = useState({ you: 0, them: 0 });
+  const [toast, setToast] = useState(null);
+  const [dragState, setDragState] = useState(null); // {card, x, y, hoverDot}
+  const [selected, setSelected] = useState(null); // tap-to-place card
+  const [inspect, setInspect] = useState(null); // card being inspected
+  const [history, setHistory] = useState([]); // snapshots for undo: { placed, yourHand, turn }
+
+  const algo = DETECTION_ALGOS[tweaks.algo] || DETECTION_ALGOS.subtract;
+
+  // Initial draw
+  useEffect(() => {
+    const yh = yourDeck.slice(0, 4);
+    const th = theirDeck.slice(0, 4);
+    setYourHand(yh);
+    setTheirHand(th);
+    setYourDeck(yourDeck.slice(4));
+    setTheirDeck(theirDeck.slice(4));
+  }, [sessionSeed]);
+
+  // Toast helper
+  const showToast = useCallback((msg, ms = 1800) => {
+    setToast(msg);
+    setTimeout(() => setToast((t) => (t === msg ? null : t)), ms);
+  }, []);
+
+  // ---------- Placement ----------
+  const placeCard = useCallback((card, dot, owner) => {
+    const placement = {
+      ...card,
+      dot,
+      owner,
+      revealed: owner === "you" ? false : false, // both face-down to opponent — but show your own face up
+      faceVisibleToYou: owner === "you",
+      uid: card.uid,
+    };
+    setPlaced((prev) => {
+      const next = [...prev, placement];
+      // run detection chain on the next array
+      setTimeout(() => runDetectionChain(next, placement), 280);
+      return next;
+    });
+  }, []);
+
+  const runDetectionChain = useCallback((currentPlaced, justPlaced) => {
+    // BFS chain: starting from justPlaced, reveal anyone in its sight (and anyone seeing it).
+    // Then for each newly-revealed card, repeat.
+    let snapshot = currentPlaced.map((c) => ({ ...c }));
+    const queue = [justPlaced.uid];
+    const revealedNow = new Set();
+
+    function step() {
+      if (queue.length === 0) {
+        // commit final states + clear flip flags
+        setPlaced((prev) => prev.map((c) => {
+          const f = snapshot.find((s) => s.uid === c.uid);
+          return f ? { ...c, revealed: f.revealed, justRevealed: false } : c;
+        }));
+        return;
+      }
+      const uid = queue.shift();
+      const trigger = snapshot.find((c) => c.uid === uid);
+      if (!trigger) { step(); return; }
+
+      // Trigger sees others
+      const seenByTrigger = whoCanThisCardSeeV3(trigger.dot, trigger.vis, snapshot, algo);
+      // Others can see trigger
+      const seerOfTrigger = whoCanSeeMeV3(trigger.dot, trigger.stealth, snapshot, algo);
+
+      const newlyRevealed = [];
+      function revealIt(card) {
+        if (!card.revealed && !revealedNow.has(card.uid)) {
+          card.revealed = true;
+          card.justRevealed = true;
+          revealedNow.add(card.uid);
+          newlyRevealed.push(card);
+        }
+      }
+      // reveal trigger itself if it was hidden and someone saw it (or first placement)
+      if (seerOfTrigger.length > 0 || trigger === justPlaced) revealIt(trigger);
+      seenByTrigger.forEach((c) => {
+        // Only enemy cards can be detected (allies are known)
+        if (c.owner !== trigger.owner) revealIt(c);
+      });
+      seerOfTrigger.forEach((c) => {
+        // any opposing seer — they're already on board, but we visualize their probe
+        // (we don't reveal allied cards via detection)
+      });
+
+      // commit progress visually so it "pops" in sequence
+      setPlaced((prev) => prev.map((c) => {
+        const f = snapshot.find((s) => s.uid === c.uid);
+        return f ? { ...c, revealed: f.revealed, justRevealed: f.justRevealed } : c;
+      }));
+
+      // Push newly-revealed into queue for chain
+      newlyRevealed.forEach((c) => queue.push(c.uid));
+
+      setTimeout(step, 380);
+    }
+    step();
+  }, [algo]);
+
+  // ---------- Drag / Click ----------
+  const stageRef = useRef(null);
+  const onPointerDownCard = useCallback((e, card, source) => {
+    if (turn !== "you") return;
+    if (source === "hand" && e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const rect = stageRef.current.getBoundingClientRect();
+    const startX = (e.clientX - rect.left) / scale;
+    const startY = (e.clientY - rect.top) / scale;
+    let isDrag = false;
+    // Acceleration: amplify pointer delta by 1.6× from the start point so a
+    // small tablet/mouse motion translates to a big card movement.
+    const ACCEL = 1.7;
+
+    const onMove = (ev) => {
+      const r = stageRef.current.getBoundingClientRect();
+      const rawX = (ev.clientX - r.left) / scale;
+      const rawY = (ev.clientY - r.top) / scale;
+      // amplified position relative to start
+      const xx = startX + (rawX - startX) * ACCEL;
+      const yy = startY + (rawY - startY) * ACCEL;
+      if (!isDrag) {
+        const dx = rawX - startX, dy = rawY - startY;
+        if (dx * dx + dy * dy > 25) {
+          isDrag = true;
+          setDragState({ card, x: xx, y: yy, hoverDot: null });
+        }
+      } else {
+        const hover = findNearestDot(xx, yy);
+        setDragState((s) => s ? { ...s, x: xx, y: yy, hoverDot: hover } : s);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (!isDrag) {
+        // click — toggle selection (tap-to-place mode)
+        setSelected((cur) => (cur && cur.uid === card.uid ? null : card));
+        return;
+      }
+      setDragState((s) => {
+        if (s && s.hoverDot) {
+          tryPlace(card, s.hoverDot);
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [turn, scale, placed, yourHand]);
+
+  const tryPlace = useCallback((card, dot) => {
+    const occupied = placed.some((c) => c.dot.id === dot.id);
+    if (occupied) { showToast("DOT OCCUPIED"); return; }
+    setHistory((h) => [...h, {
+      placed: placed.map((c) => ({ ...c })),
+      yourHand: yourHand.map((c) => ({ ...c })),
+      turn,
+    }]);
+    setYourHand((h) => h.filter((c) => c.uid !== card.uid));
+    setSelected(null);
+    placeCard(card, dot, "you");
+    setTimeout(() => setTurn("them"), 60);
+  }, [placed, yourHand, turn, placeCard, showToast]);
+
+  // tap-to-place: click on an open dot when a card is selected
+  const onDotClick = useCallback((dot) => {
+    if (!selected) return;
+    if (turn !== "you") return;
+    tryPlace(selected, dot);
+  }, [selected, turn, tryPlace]);
+
+  const undo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) { showToast("NOTHING TO UNDO"); return h; }
+      const last = h[h.length - 1];
+      setPlaced(last.placed);
+      setYourHand(last.yourHand);
+      setTurn(last.turn);
+      setSelected(null);
+      return h.slice(0, -1);
+    });
+  }, [showToast]);
+
+  function findNearestDot(stageX, stageY) {
+    // City board occupies (0..STAGE_W) x (HEADER_H..HEADER_H+BOARD_H) in stage coords
+    const boardLeft = 0;
+    const boardTop = HEADER_H;
+    const localX = stageX - boardLeft;
+    const localY = stageY - boardTop;
+    if (localX < 0 || localX > CITY_V3_W) return null;
+    if (localY < 0 || localY > CITY_V3_H) return null;
+
+    let best = null, bestD = Infinity;
+    for (const d of allDots) {
+      const dx = d.x - localX;
+      const dy = d.y - localY;
+      const dd = dx * dx + dy * dy;
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    // snap distance: only if within some threshold (~ one cell)
+    const THRESH = (Math.max(C_CELL_W, C_CELL_H) * 1.1) ** 2;
+    return bestD < THRESH ? best : null;
+  }
+
+  // ---------- AI opponent ----------
+  useEffect(() => {
+    if (turn !== "them") return;
+    const t = setTimeout(() => {
+      // pick a card from their hand and a random open dot
+      const card = theirHand[0];
+      if (!card) {
+        setTurn("you");
+        return;
+      }
+      // collect open dots
+      const open = allDots.filter((d) => !placed.some((c) => c.dot.id === d.id));
+      if (open.length === 0) {
+        setTurn("you");
+        return;
+      }
+      // simple AI: pick dot that maximizes their cards visible while minimizing exposure
+      let best = open[0], bestScore = -Infinity;
+      for (const d of open) {
+        const seeing = whoCanThisCardSeeV3(d, card.vis, placed, algo).filter((c) => c.owner === "you").length;
+        const seers = whoCanSeeMeV3(d, card.stealth, placed, algo).filter((c) => c.owner === "you").length;
+        const score = seeing * 2 - seers;
+        if (score > bestScore) { bestScore = score; best = d; }
+      }
+      setTheirHand((h) => h.filter((c) => c.uid !== card.uid));
+      placeCard(card, best, "them");
+      setTimeout(() => setTurn("you"), 60);
+    }, 1100);
+    return () => clearTimeout(t);
+  }, [turn, theirHand, placed, allDots, algo, placeCard]);
+
+  // ---------- Draw replenish ----------
+  useEffect(() => {
+    if (yourHand.length < 4 && yourDeck.length > 0 && turn === "them") {
+      setYourHand((h) => [...h, yourDeck[0]]);
+      setYourDeck((d) => d.slice(1));
+    }
+    if (theirHand.length < 4 && theirDeck.length > 0 && turn === "you") {
+      setTheirHand((h) => [...h, theirDeck[0]]);
+      setTheirDeck((d) => d.slice(1));
+    }
+  }, [turn]);
+
+  // ---------- Render ----------
+  return (
+    <div
+      className="game-root"
+      style={{
+        "--accent": accent,
+        "--accent2": accent2,
+        "--accent-hue": tweaks.accentHue,
+      }}
+    >
+      <div
+        className="stage"
+        ref={stageRef}
+        style={{
+          width: STAGE_W,
+          height: STAGE_H,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+        }}
+      >
+        <div className="bg-noise" />
+        <div className="bg-glow" />
+
+        {/* Header */}
+        {showUI && (
+          <div className="zone zone--header" style={{ height: HEADER_H }}>
+            <Header
+              accent={accent}
+              you={{ name: "V_KOJIMA", score: scores.you }}
+              them={{ name: "ZAIBATSU", score: scores.them }}
+              turn={turn}
+              deckCount={yourDeck.length}
+            />
+          </div>
+        )}
+
+        {/* Board: city map + districts replace lanes */}
+        <div className="zone zone--board" style={{ top: HEADER_H, height: BOARD_H, left: 0, right: 0 }}>
+          <CityBoard
+            city={city}
+            placedCards={placed}
+            hoverDot={dragState?.hoverDot}
+            dragCard={dragState?.card}
+            algo={algo}
+            accent={accent}
+            onInspect={(c) => setInspect(c)}
+            onDotClick={onDotClick}
+            selectedCard={selected}
+            sessionSeed={sessionSeed}
+            mapOpacity={tweaks.showMap ? (tweaks.mapOpacity ?? 1) : 0}
+            showLabels={showUI}
+          />
+
+          {/* Math chip floats just above hand */}
+          {dragState && dragState.hoverDot && (
+            <MathChip
+              card={dragState.card}
+              hoverDot={dragState.hoverDot}
+              placedCards={placed}
+              algo={algo}
+            />
+          )}
+        </div>
+
+        {/* Footer / hand */}
+        {showUI && (
+          <div className="zone zone--footer" style={{ top: HEADER_H + BOARD_H, height: FOOTER_H }}>
+            <Hand
+              cards={yourHand}
+              draggingUid={dragState?.card?.uid}
+              selectedUid={selected?.uid}
+              onPointerDown={onPointerDownCard}
+              onInspect={(c) => setInspect(c)}
+              deckCount={yourDeck.length}
+            />
+          </div>
+        )}
+
+        {/* Drag layer */}
+        {dragState && <DragLayer card={dragState.card} x={dragState.x} y={dragState.y} />}
+
+        {/* Undo button */}
+        {showUI && (
+          <button
+            className="undo-btn"
+            onClick={undo}
+            disabled={history.length === 0}
+            title="Undo last placement"
+          >
+            <span className="undo-icon">↶</span>
+            <span className="undo-label">UNDO</span>
+            <span className="undo-count">{history.length}</span>
+          </button>
+        )}
+
+        {/* Inspector overlay */}
+        {inspect && (
+          <div className="inspector-backdrop" onClick={() => setInspect(null)}>
+            <div
+              className="inspector-stage"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="card-scaler inspector-scaler">
+                <GameCard card={inspect} owner={inspect.owner || "you"} />
+              </div>
+              <div className="inspector-meta">
+                <div className="inspector-row">
+                  <span className="inspector-key">STEALTH</span>
+                  <span className="inspector-val">{inspect.stealth}</span>
+                </div>
+                <div className="inspector-row">
+                  <span className="inspector-key">POWER</span>
+                  <span className="inspector-val">{inspect.power}</span>
+                </div>
+                <div className="inspector-row">
+                  <span className="inspector-key">EYE</span>
+                  <span className="inspector-val">{inspect.vis}</span>
+                </div>
+                <div className="inspector-row">
+                  <span className="inspector-key">SEES</span>
+                  <span className="inspector-val">{algo.range(inspect.vis, 0)} cells (vs S=0)</span>
+                </div>
+              </div>
+              <div className="inspector-hint">tap outside to close</div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast */}
+        <Toast msg={toast} />
+      </div>
+
+      {/* Floating debug dock */}
+      <DebugDock tweaks={tweaks} setTweak={setTweak} showUI={showUI} setShowUI={setShowUI} />
+
+      {/* Tweaks */}
+      {showUI && <TweaksPanel title="Tweaks">
+        <TweakSection title="Visuals">
+          <TweakSlider
+            label="Accent hue"
+            value={tweaks.accentHue}
+            min={0} max={360} step={1}
+            onChange={(v) => setTweak("accentHue", v)}
+          />
+          <TweakToggle
+            label="Show grid"
+            checked={tweaks.showGrid}
+            onChange={(v) => setTweak("showGrid", v)}
+          />
+          <TweakToggle
+            label="City map"
+            checked={tweaks.showMap}
+            onChange={(v) => setTweak("showMap", v)}
+          />
+          <TweakSlider
+            label="Map opacity"
+            value={tweaks.mapOpacity}
+            min={0.1} max={1} step={0.05}
+            onChange={(v) => setTweak("mapOpacity", v)}
+          />
+        </TweakSection>
+        <TweakSection title="Game">
+          <TweakSlider
+            label="Dots per lane"
+            value={tweaks.dotDensity}
+            min={5} max={8} step={1}
+            onChange={(v) => setTweak("dotDensity", v)}
+          />
+          <TweakSelect
+            label="Detection algorithm"
+            value={tweaks.algo}
+            options={[
+              { value: "subtract", label: "V − S (subtract)" },
+              { value: "binary", label: "Binary (S ≥ V hides)" },
+              { value: "half", label: "V − ⌈S/2⌉ (halved)" },
+            ]}
+            onChange={(v) => setTweak("algo", v)}
+          />
+          <div className="tweak-note">
+            {DETECTION_ALGOS[tweaks.algo].desc}
+          </div>
+        </TweakSection>
+      </TweaksPanel>
+      }
+    </div>
+  );
+}
+
+window.Game = Game;
