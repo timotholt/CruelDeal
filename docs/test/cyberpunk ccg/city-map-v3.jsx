@@ -13,14 +13,10 @@ const { useMemo: _useMemoCM } = React;
 const {
   VIEW_W,
   VIEW_H,
-  MAP_SLOT_HALF_W,
-  MAP_SLOT_HALF_H,
-  MAP_SLOT_EDGE_PAD,
   LAND_RX,
   LAND_RY,
   CELL_UNIT,
   DISTRICT_NAMES,
-  DISTRICT_SHORT_NAMES,
   DISTRICT_COLORS,
   MICRO_LANDMARK_SHAPES: _MICRO_LANDMARK_SHAPES,
   MAP_HUE,
@@ -46,24 +42,14 @@ const {
   insetPolygon: _insetPolygon,
   polygonBBox: _polygonBBox,
   closestPointOnPolygon: _closestPointOnPolygon,
-  distToRiver: _distToRiver,
-  riverToRiverDistance: _riverToRiverDistance
+  distToRiver: _distToRiver
 } = window.CityMapGeometryV3;
-
-function _polylabel(polygon, precision = 1.5) {
-  return window.CityMapGeometryV3.polylabel(
-    polygon,
-    precision,
-    { x: VIEW_W / 2, y: VIEW_H / 2 }
-  );
-}
 
 const {
   polygonToPath: _polygonToPath,
   polygonOutlinePathSkipRoads: _polygonOutlinePathSkipRoads,
   polygonOutlinePathClippedToViewport: _polygonOutlinePathClippedToViewport,
   cutSegments: _cutSegments,
-  sampleSmoothPolyline: _sampleSmoothPolyline,
   samplesToSegments: _samplesToSegments,
   smoothPolylinePath: _smoothPolylinePath,
   smoothClosedPath: _smoothClosedPath,
@@ -80,189 +66,18 @@ const {
   generateCoastDocks: _generateCoastDocks
 } = window.CityMapLandV3;
 
-// Label placement: scored grid search over the visible district polygon.
-// Each candidate point gets a score that combines:
-//   - distance from polygon edges + landmark edges (clear-space term)
-//   - distance from the visible centroid (centering term, penalty)
-//   - exclusion: skip candidates inside landmarks
-// The candidate with the highest score wins. This is more robust than a
-// naive PIA + centroid blend because it considers BOTH terms simultaneously
-// at every candidate, rather than picking two separate winners and averaging
-// them (which can land in a non-optimal middle).
-function _labelMetrics(text) {
-  return {
-    halfW: Math.min(62, Math.max(24, text.length * 4.9)),
-    halfH: 8
-  };
-}
+const {
+  makeRiverBankRoads: _makeRiverBankRoads,
+  generateRivers: _generateRivers
+} = window.CityMapWaterV3;
 
-function _labelPosition(polygon, landmarks, labelText = "", dots = []) {
-  const margin = 24;
-  const visible = _clipPolygonToRect(polygon, {
-    minX: margin, minY: margin,
-    maxX: VIEW_W - margin, maxY: VIEW_H - margin
-  });
-  if (visible.length < 3) return { x: VIEW_W / 2, y: VIEW_H / 2 };
-
-  const xs = visible.map(p => p.x);
-  const ys = visible.map(p => p.y);
-  const minX = Math.min.apply(null, xs);
-  const maxX = Math.max.apply(null, xs);
-  const minY = Math.min.apply(null, ys);
-  const maxY = Math.max.apply(null, ys);
-
-  const lms = landmarks || [];
-
-  // Visual center — Mapbox/polylabel-style target: the interior point with
-  // maximum clearance from district edges. This behaves much better for
-  // L-shaped and C-shaped districts than a geometric centroid.
-  let cnt = 0, cSumX = 0, cSumY = 0;
-  for (let x = minX; x <= maxX; x += 4) {
-    for (let y = minY; y <= maxY; y += 4) {
-      if (!_pointInPolygon({ x, y }, visible)) continue;
-      let inLm = false;
-      for (const lm of lms) {
-        if (_pointInPolygon({ x, y }, lm.polygon)) { inLm = true; break; }
-      }
-      if (inLm) continue;
-      cSumX += x; cSumY += y; cnt++;
-    }
-  }
-  const centroidX = cnt > 0 ? cSumX / cnt : (minX + maxX) / 2;
-  const centroidY = cnt > 0 ? cSumY / cnt : (minY + maxY) / 2;
-  const visualCenter = _polylabel(visible, 1.2);
-  const targetX = Number.isFinite(visualCenter.x) ? visualCenter.x : centroidX;
-  const targetY = Number.isFinite(visualCenter.y) ? visualCenter.y : centroidY;
-
-  const bboxCenterX = (minX + maxX) / 2;
-  const bboxCenterY = (minY + maxY) / 2;
-  const rectDotDistance = (x, y, halfW, halfH, dot) => {
-    const dx = Math.max(Math.abs(dot.x - x) - halfW, 0);
-    const dy = Math.max(Math.abs(dot.y - y) - halfH, 0);
-    return Math.hypot(dx, dy);
-  };
-
-  const labelBoxFits = (x, y, halfW, halfH) => {
-    const pts = [
-      { x: x - halfW, y: y - halfH },
-      { x, y: y - halfH },
-      { x: x + halfW, y: y - halfH },
-      { x: x - halfW, y },
-      { x: x + halfW, y },
-      { x: x - halfW, y: y + halfH },
-      { x, y: y + halfH },
-      { x: x + halfW, y: y + halfH }
-    ];
-    for (const p of pts) {
-      if (!_pointInPolygon(p, visible)) return false;
-      for (const lm of lms) {
-        if (_pointInPolygon(p, lm.polygon)) return false;
-      }
-    }
-    return true;
-  };
-
-  const shortText = DISTRICT_SHORT_NAMES[labelText] || labelText.slice(0, Math.min(4, labelText.length));
-  const textOptions = [labelText, shortText].filter((t, i, a) => t && a.indexOf(t) === i);
-  let globalBest = null;
-
-  for (const text of textOptions) {
-    // Text needs a usable box, not just point clearance. Include letter spacing
-    // so long names don't get accepted inside narrow district necks.
-    const { halfW: labelHalfW, halfH: labelHalfH } = _labelMetrics(text);
-    if (labelBoxFits(targetX, targetY, labelHalfW, labelHalfH)) {
-      return { x: targetX, y: targetY, text, score: Infinity, hardFit: true, halfW: labelHalfW, halfH: labelHalfH };
-    }
-    let best = null;
-    const step = 3;
-    for (let x = minX; x <= maxX; x += step) {
-      for (let y = minY; y <= maxY; y += step) {
-        if (!_pointInPolygon({ x, y }, visible)) continue;
-        let inLm = false;
-        for (const lm of lms) {
-          if (_pointInPolygon({ x, y }, lm.polygon)) { inLm = true; break; }
-        }
-        if (inLm) continue;
-        const boxFits = labelBoxFits(x, y, labelHalfW, labelHalfH);
-
-        // Min distance to any visible polygon edge (district boundary or
-        // viewport-clip edge — both treated equally because both feel like
-        // "edges" to the user).
-        let edgeDist = Infinity;
-        for (let i = 0; i < visible.length; i++) {
-          const a = visible[i];
-          const b = visible[(i + 1) % visible.length];
-          const d = _pointToSegmentDist(x, y, a, b);
-          if (d < edgeDist) edgeDist = d;
-        }
-        // Min distance to landmark edge.
-        for (const lm of lms) {
-          for (let i = 0; i < lm.polygon.length; i++) {
-            const a = lm.polygon[i];
-            const b = lm.polygon[(i + 1) % lm.polygon.length];
-            const d = _pointToSegmentDist(x, y, a, b);
-            if (d < edgeDist) edgeDist = d;
-          }
-        }
-
-        let dotDist = Infinity;
-        for (const dot of dots || []) {
-          dotDist = Math.min(dotDist, rectDotDistance(x, y, labelHalfW + 10, labelHalfH + 10, dot));
-        }
-        const dotsClear = dotDist > 24;
-        // Distance from the visible centroid (for centering).
-        const centroidDist = Math.hypot(x - targetX, y - targetY);
-        const bboxCenterDist = Math.hypot(x - bboxCenterX, y - bboxCenterY);
-
-        let boxPenalty = boxFits ? 0 : 48;
-        let dotPenalty = dotsClear ? 0 : (24 - dotDist) * 2.6 + 32;
-        const clearanceScore = Math.min(edgeDist, 30);
-
-        // Score: require a readable label box, then prefer broad interior space.
-        // The polylabel target is already the visual-center / clearance answer,
-        // so stay close to it unless the text box genuinely cannot fit there.
-        const score =
-          clearanceScore * 0.72 -
-          centroidDist * 1.12 -
-          bboxCenterDist * 0.04 -
-          boxPenalty -
-          dotPenalty;
-        if (!best || score > best.score) {
-          best = { x, y, text, score, hardFit: boxFits && dotsClear, halfW: labelHalfW, halfH: labelHalfH };
-        }
-      }
-    }
-    if (best && best.hardFit) return best;
-    if (best && (!globalBest || best.score > globalBest.score)) globalBest = best;
-  }
-  return globalBest || { x: targetX, y: targetY, text: labelText, ..._labelMetrics(labelText || "") };
-}
-
-// Approximate the polygon's viewport-visible area via grid sampling.
-function _viewportVisibleArea(polygon) {
-  const step = 6;
-  let count = 0;
-  for (let x = step / 2; x < VIEW_W; x += step) {
-    for (let y = step / 2; y < VIEW_H; y += step) {
-      if (_pointInPolygon({ x, y }, polygon)) count++;
-    }
-  }
-  return count * step * step;
-}
-
-// Rank-based slot assignment: given sorted visible areas for all 3 districts,
-// return [totalSlots0, totalSlots1, totalSlots2] in the same order.
-// Smallest district → 2 pairs (4 slots), largest → 5 pairs (10 slots),
-// middle → 3 or 4 pairs randomly. Guarantees every map has clear size contrast.
-function _slotCountsByRank(visAreas, rng) {
-  const indexed = visAreas.map((a, i) => ({ a, i }));
-  indexed.sort((x, y) => x.a - y.a); // ascending: [smallest, middle, largest]
-  const midPairs = rng() < 0.5 ? 3 : 4;
-  const pairsByRank = [2, midPairs, 5];
-  const result = new Array(visAreas.length);
-  indexed.forEach((item, rank) => { result[item.i] = pairsByRank[rank] * 2; });
-  return result;
-}
+const {
+  labelMetrics: _labelMetrics,
+  labelPosition: _labelPosition,
+  viewportVisibleArea: _viewportVisibleArea,
+  slotCountsByRank: _slotCountsByRank,
+  placeDotsInPolygon: _placeDotsInPolygon
+} = window.CityMapPlacementV3;
 
 // Split a polygon by a line L1-L2. Optionally curve the cut by providing
 // `polylineMids`: an array of mid-points that replace the straight segment
@@ -1390,205 +1205,6 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
 }
 
 // ============================================================
-// PLACEMENT
-// ============================================================
-
-// Place dots across the polygon by:
-//   1. Best-candidate seeding: favor edge clearance first, spacing second.
-//   2. Spring relaxation: strong repulsion from district/map edges, softer
-//      repulsion between dots so clusters can still happen.
-function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleArea, labelAvoid = null) {
-  const xs = polygon.map(p => p.x);
-  const ys = polygon.map(p => p.y);
-  const PLACEMENT_RING_SAFE_EDGE = MAP_SLOT_EDGE_PAD;
-  const VIEW_EDGE_PAD = PLACEMENT_RING_SAFE_EDGE;
-  const minX = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, xs));
-  const maxX = Math.min(VIEW_W - VIEW_EDGE_PAD, Math.max.apply(null, xs));
-  const minY = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, ys));
-  const maxY = Math.min(VIEW_H - VIEW_EDGE_PAD, Math.max.apply(null, ys));
-  const placed = [];
-  if (maxX - minX < 16 || maxY - minY < 16) return placed;
-
-  // Target spacing derived from area & count → reasonable density regardless of district size.
-  const area = Math.max(1, visibleArea || ((maxX - minX) * (maxY - minY)));
-  const idealSpacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
-
-  const insideBlocked = (x, y) => {
-    if (!_pointInPolygon({ x, y }, polygon)) return true;
-    if (labelAvoid) {
-      const pad = Math.max(MAP_SLOT_HALF_W, MAP_SLOT_HALF_H) + 7;
-      if (
-        Math.abs(x - labelAvoid.x) < labelAvoid.halfW + pad &&
-        Math.abs(y - labelAvoid.y) < labelAvoid.halfH + pad
-      ) {
-        return true;
-      }
-    }
-    for (const lb of leafBlocksToAvoid) {
-      if (_pointInPolygon({ x, y }, lb.polygon)) return true;
-    }
-    return false;
-  };
-  const edgeDistance = (x, y) => {
-    let best = Math.min(x, y, VIEW_W - x, VIEW_H - y);
-    for (let k = 0; k < polygon.length; k++) {
-      const a = polygon[k];
-      const b = polygon[(k + 1) % polygon.length];
-      best = Math.min(best, _pointToSegmentDist(x, y, a, b));
-    }
-    return best;
-  };
-
-  // ----- Phase 1: candidate pool + coverage selection -----
-  // Build a legal pool first, then choose points by coverage rather than
-  // sequential random luck. This avoids straight-line accidents and gives
-  // labels like Ginza/Nakano/Ninjuku dots that intentionally occupy the shape.
-  const centroid = _polygonCentroid(polygon);
-  const candidates = [];
-  const candidateTarget = Math.max(700, target * 180);
-  let attempts = 0;
-  while (candidates.length < candidateTarget && attempts < candidateTarget * 8) {
-    attempts++;
-    const x = minX + rng() * (maxX - minX);
-    const y = minY + rng() * (maxY - minY);
-    if (insideBlocked(x, y)) continue;
-    const edgeD = edgeDistance(x, y);
-    if (edgeD < PLACEMENT_RING_SAFE_EDGE) continue;
-    candidates.push({
-      x, y, edgeD,
-      angle: Math.atan2(y - centroid.y, x - centroid.x),
-      radial: Math.hypot(x - centroid.x, y - centroid.y)
-    });
-  }
-  const angleSep = (a, b) => {
-    const d = Math.abs(a - b) % (Math.PI * 2);
-    return Math.min(d, Math.PI * 2 - d);
-  };
-  while (placed.length < target && candidates.length) {
-    let bestIdx = -1, bestScore = -Infinity;
-    for (let i = 0; i < candidates.length; i++) {
-      const c = candidates[i];
-      let nearestDot = placed.length ? Infinity : idealSpacing * 0.75;
-      let nearestAngle = placed.length ? Infinity : Math.PI;
-      for (const p of placed) {
-        nearestDot = Math.min(nearestDot, Math.hypot(p.x - c.x, p.y - c.y));
-        nearestAngle = Math.min(nearestAngle, angleSep(p.angle, c.angle));
-      }
-      const spacingScore = Math.min(nearestDot, idealSpacing * 1.15);
-      const edgeBand = Math.min(c.edgeD - PLACEMENT_RING_SAFE_EDGE, idealSpacing * 0.45);
-      const radialScore = Math.min(c.radial, idealSpacing * 1.35);
-      const angleScore = Math.min(nearestAngle, Math.PI / 2) * 12;
-      const score =
-        spacingScore * 1.20 +
-        edgeBand * 0.50 +
-        radialScore * 0.34 +
-        angleScore +
-        rng() * 0.01;
-      if (score > bestScore) { bestScore = score; bestIdx = i; }
-    }
-    if (bestIdx < 0) break;
-    placed.push(candidates.splice(bestIdx, 1)[0]);
-  }
-
-  // If we couldn't even seed enough dots, return what we have.
-  if (placed.length < 2) return placed;
-
-  // The minimum distance from any polygon edge (= a road or coast). Dots
-  // closer than this to ANY edge would feel like they're sitting on the road
-  // boundary — bad for gameplay readability. Tuned so even small districts
-  // keep dots clearly inside.
-  const HARD_MIN_EDGE = PLACEMENT_RING_SAFE_EDGE;
-
-  // ----- Phase 2: spring relaxation for even spread + edge avoidance -----
-  const ITERATIONS = 10;          // light polish; selection already handles spread
-  const stepScale = 0.28;
-  const EDGE_BUFFER = HARD_MIN_EDGE + 8;
-  const DOT_REPEL_SPACING = idealSpacing * 0.58;
-  for (let iter = 0; iter < ITERATIONS; iter++) {
-    for (let i = 0; i < placed.length; i++) {
-      let fx = 0, fy = 0;
-      // Repulsion between dots
-      for (let j = 0; j < placed.length; j++) {
-        if (i === j) continue;
-        const dx = placed[i].x - placed[j].x;
-        const dy = placed[i].y - placed[j].y;
-        const d = Math.hypot(dx, dy);
-        if (d > 0.01 && d < DOT_REPEL_SPACING) {
-          const f = (DOT_REPEL_SPACING - d) / DOT_REPEL_SPACING * 0.72;
-          fx += (dx / d) * f;
-          fy += (dy / d) * f;
-        }
-      }
-      // Repulsion from polygon edges (push toward interior)
-      for (let k = 0; k < polygon.length; k++) {
-        const a = polygon[k];
-        const b = polygon[(k + 1) % polygon.length];
-        const ex = b.x - a.x, ey = b.y - a.y;
-        const len2 = ex * ex + ey * ey || 1e-9;
-        const t = Math.max(0, Math.min(1, ((placed[i].x - a.x) * ex + (placed[i].y - a.y) * ey) / len2));
-        const cx = a.x + t * ex, cy = a.y + t * ey;
-        const dx = placed[i].x - cx, dy = placed[i].y - cy;
-        const d = Math.hypot(dx, dy);
-        if (d < EDGE_BUFFER && d > 0.01) {
-          // Stronger force closer to the edge
-          const f = (EDGE_BUFFER - d) / EDGE_BUFFER * 1.75;
-          fx += (dx / d) * f;
-          fy += (dy / d) * f;
-        }
-      }
-      // Apply force, clamp to polygon
-      const newX = placed[i].x + fx * stepScale;
-      const newY = placed[i].y + fy * stepScale;
-      if (!insideBlocked(newX, newY) && edgeDistance(newX, newY) >= HARD_MIN_EDGE) {
-        placed[i].x = Math.max(minX, Math.min(maxX, newX));
-        placed[i].y = Math.max(minY, Math.min(maxY, newY));
-      }
-    }
-  }
-
-  // ----- Phase 2b: HARD-CONSTRAINT edge fixup -----
-  // Any dot still within HARD_MIN_EDGE of a polygon edge gets pushed inward
-  // along the inward normal until it clears. Guarantees no dot ends up on
-  // a road / district boundary, which is the user-facing requirement.
-  const FIXUP_PASSES = 4;
-  for (let pass = 0; pass < FIXUP_PASSES; pass++) {
-    let allClear = true;
-    for (let i = 0; i < placed.length; i++) {
-      let nearestD = Infinity;
-      let nearestNX = 0, nearestNY = 0; // inward normal
-      for (let k = 0; k < polygon.length; k++) {
-        const a = polygon[k];
-        const b = polygon[(k + 1) % polygon.length];
-        const ex = b.x - a.x, ey = b.y - a.y;
-        const len2 = ex * ex + ey * ey || 1e-9;
-        const t = Math.max(0, Math.min(1, ((placed[i].x - a.x) * ex + (placed[i].y - a.y) * ey) / len2));
-        const cx = a.x + t * ex, cy = a.y + t * ey;
-        const dx = placed[i].x - cx, dy = placed[i].y - cy;
-        const d = Math.hypot(dx, dy);
-        if (d < nearestD) {
-          nearestD = d;
-          if (d > 0.01) { nearestNX = dx / d; nearestNY = dy / d; }
-          else { nearestNX = 0; nearestNY = 0; }
-        }
-      }
-      if (nearestD < HARD_MIN_EDGE && nearestD > 0.01) {
-        const push = HARD_MIN_EDGE - nearestD + 0.5;
-        const nx = placed[i].x + nearestNX * push;
-        const ny = placed[i].y + nearestNY * push;
-        if (!insideBlocked(nx, ny)) {
-          placed[i].x = nx;
-          placed[i].y = ny;
-          allClear = false;
-        }
-      }
-    }
-    if (allClear) break;
-  }
-
-  return placed;
-}
-
-// ============================================================
 // ISLANDS — small land masses in the water, with buildings and a bridge
 // ============================================================
 
@@ -1746,106 +1362,6 @@ function _generateIslands(landPolygon, coastRoadPolygon, gridAngle, rng, riverSe
 }
 
 // ============================================================
-// RIVER (meandering line between two coast points)
-// ============================================================
-
-function _generateRiver(landPolygon, rng) {
-  const n = landPolygon.length;
-  // Pick two random coastal points roughly opposite each other.
-  const i1 = Math.floor(rng() * n);
-  const offset = Math.floor(n * 0.4 + rng() * n * 0.2); // ~40-60% around the perimeter
-  const i2 = (i1 + offset) % n;
-
-  const segIdx = (idx) => {
-    const a = landPolygon[idx];
-    const b = landPolygon[(idx + 1) % n];
-    const t = 0.2 + rng() * 0.6;
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-  };
-  const start = segIdx(i1);
-  const end = segIdx(i2);
-
-  // 5 meandering control points between start and end
-  const numCtrlSegs = 6;
-  const dx = end.x - start.x, dy = end.y - start.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const perpX = -dy / len, perpY = dx / len;
-
-  const pts = [start];
-  for (let i = 1; i < numCtrlSegs; i++) {
-    const t = i / numCtrlSegs;
-    const baseX = start.x + dx * t;
-    const baseY = start.y + dy * t;
-    // Stronger meander in the middle, less near the endpoints
-    const taper = Math.sin(t * Math.PI);
-    const meander = (rng() - 0.5) * len * 0.22 * taper;
-    pts.push({ x: baseX + perpX * meander, y: baseY + perpY * meander });
-  }
-  pts.push(end);
-
-  // Smooth path via quadratic curves through midpoints (Catmull-Rom-like)
-  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const mx = (pts[i].x + pts[i + 1].x) / 2;
-    const my = (pts[i].y + pts[i + 1].y) / 2;
-    d += ` Q ${pts[i].x.toFixed(2)} ${pts[i].y.toFixed(2)} ${mx.toFixed(2)} ${my.toFixed(2)}`;
-  }
-  d += ` L ${pts[pts.length - 1].x.toFixed(2)} ${pts[pts.length - 1].y.toFixed(2)}`;
-
-  // Sample the EXACT same Q-bezier curve the SVG path renders, so building
-  // buffers and bridge intersections line up visually.
-  const segments = _sampleSmoothPolyline(pts, 10);
-
-  // Width variety: rivers vary from intimate creek (0.55) to broad waterway (1.6).
-  // Both base stroke widths AND building/bridge buffers scale with this.
-  const widthScale = 0.55 + rng() * 1.05;          // 0.55..1.60
-  const outerWidth = 7 * widthScale;
-  const innerWidth = 3.5 * widthScale;
-  const buildingBuffer = 7 * widthScale;            // matches outer width
-
-  return { path: d, segments, pts, widthScale, outerWidth, innerWidth, buildingBuffer };
-}
-
-function _makeRiverBankRoads(river, landPolygon) {
-  if (!river || !river.segments || river.segments.length < 1) return [];
-  const offset = Math.max(4, river.outerWidth / 2 + 1.35);
-  const cuts = [];
-  const basePts = [river.segments[0].a, ...river.segments.map(s => s.b)];
-  const runLength = (pts) => pts.slice(1).reduce((sum, p, i) => {
-    const prev = pts[i];
-    return sum + Math.hypot(p.x - prev.x, p.y - prev.y);
-  }, 0);
-  const pushRun = (pts) => {
-    if (pts.length < 2) return;
-    const len = runLength(pts);
-    if (len < 26) return;
-    cuts.push({
-      p1: pts[0],
-      p2: pts[pts.length - 1],
-      polyline: pts,
-      polylineMode: null,
-      depth: 3,
-      angle: Math.atan2(pts[pts.length - 1].y - pts[0].y, pts[pts.length - 1].x - pts[0].x),
-      riverBank: true
-    });
-  };
-  for (const side of [-1, 1]) {
-    const pts = _offsetPolyline(basePts, side * offset);
-    let run = [];
-    for (const p of pts) {
-      if (_pointInPolygon(p, landPolygon)) {
-        run.push(p);
-      } else {
-        pushRun(run);
-        run = [];
-      }
-    }
-    pushRun(run);
-  }
-  return cuts;
-}
-
-// ============================================================
 // MAIN BUILDER
 // ============================================================
 
@@ -1858,33 +1374,7 @@ function buildCityV3(seed) {
 
   // 1b. River before macro roads so avenue selection can avoid running
   // alongside the water. It still renders later as a mask cutout.
-  const river1 = rng() < 0.6 ? _generateRiver(landPolygon, rng) : null;
-  let river2 = null;
-  if (river1 && rng() < 0.5) {
-    let bestRiver = null;
-    let bestDist = -Infinity;
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const candidate = _generateRiver(landPolygon, rng);
-      const d = _riverToRiverDistance(river1, candidate);
-      if (d > bestDist) { bestDist = d; bestRiver = candidate; }
-      if (d > 46) break;
-    }
-    river2 = bestDist > 28 ? bestRiver : null;
-  }
-  let river = null;
-  if (river1 && river2) {
-    river = {
-      path: river1.path + " " + river2.path,
-      segments: [...river1.segments, ...river2.segments],
-      pts: river1.pts,
-      widthScale: river1.widthScale,
-      outerWidth: river1.outerWidth,
-      innerWidth: river1.innerWidth,
-      buildingBuffer: Math.max(river1.buildingBuffer, river2.buildingBuffer)
-    };
-  } else if (river1) {
-    river = river1;
-  }
+  const river = _generateRivers(landPolygon, rng);
   const riverSegments = river ? river.segments : null;
 
   // 2. City-wide grid skew. Keep the base grid orthogonal; diagonal roads are
