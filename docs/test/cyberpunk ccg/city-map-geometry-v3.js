@@ -196,6 +196,87 @@
     return r;
   }
 
+  function insetPolygon(polygon, dist) {
+    const n = polygon.length;
+    if (n < 3) return polygon;
+    const cx = polygon.reduce((s, p) => s + p.x, 0) / n;
+    const cy = polygon.reduce((s, p) => s + p.y, 0) / n;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const prev = polygon[(i - 1 + n) % n];
+      const cur = polygon[i];
+      const next = polygon[(i + 1) % n];
+      const e1x = cur.x - prev.x, e1y = cur.y - prev.y;
+      const e2x = next.x - cur.x, e2y = next.y - cur.y;
+      const e1Len = Math.hypot(e1x, e1y) || 1e-9;
+      const e2Len = Math.hypot(e2x, e2y) || 1e-9;
+      let n1x = -e1y / e1Len, n1y = e1x / e1Len;
+      if (n1x * (cx - (prev.x + cur.x) / 2) + n1y * (cy - (prev.y + cur.y) / 2) < 0) {
+        n1x = -n1x; n1y = -n1y;
+      }
+      let n2x = -e2y / e2Len, n2y = e2x / e2Len;
+      if (n2x * (cx - (cur.x + next.x) / 2) + n2y * (cy - (cur.y + next.y) / 2) < 0) {
+        n2x = -n2x; n2y = -n2y;
+      }
+      const bx = n1x + n2x, by = n1y + n2y;
+      const bLen = Math.hypot(bx, by);
+      if (bLen < 1e-6) {
+        out.push({ x: cur.x + n1x * dist, y: cur.y + n1y * dist });
+        continue;
+      }
+      const moveDist = dist / (bLen / 2);
+      out.push({ x: cur.x + (bx / bLen) * moveDist, y: cur.y + (by / bLen) * moveDist });
+    }
+    return out;
+  }
+
+  function polygonBBox(polygon) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of polygon) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
+  }
+
+  function closestPointOnPolygon(px, py, polygon) {
+    let best = Infinity, bx = px, by = py;
+    const n = polygon.length;
+    for (let i = 0; i < n; i++) {
+      const a = polygon[i], b = polygon[(i + 1) % n];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy || 1e-9;
+      const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+      const cx = a.x + dx * t, cy = a.y + dy * t;
+      const d = Math.hypot(px - cx, py - cy);
+      if (d < best) { best = d; bx = cx; by = cy; }
+    }
+    return { x: bx, y: by, dist: best };
+  }
+
+  function distToRiver(x, y, riverSegments) {
+    if (!riverSegments || !riverSegments.length) return Infinity;
+    let best = Infinity;
+    for (const s of riverSegments) {
+      const d = pointToSegmentDist(x, y, s.a, s.b);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function riverToRiverDistance(a, b) {
+    if (!a || !b || !a.segments || !b.segments) return Infinity;
+    let best = Infinity;
+    for (const sa of a.segments) {
+      for (const sb of b.segments) {
+        best = Math.min(best, segmentToSegmentDist(sa.a, sa.b, sb.a, sb.b));
+      }
+    }
+    return best;
+  }
+
   window.CityMapGeometryV3 = {
     EPS,
     segIntersect,
@@ -207,6 +288,11 @@
     polylabel,
     segmentToSegmentDist,
     polygonToPolygonDist,
-    clipPolygonToRect
+    clipPolygonToRect,
+    insetPolygon,
+    polygonBBox,
+    closestPointOnPolygon,
+    distToRiver,
+    riverToRiverDistance
   };
 })();

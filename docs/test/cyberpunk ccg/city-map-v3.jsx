@@ -42,7 +42,12 @@ const {
   pointToPolygonSignedDist: _pointToPolygonSignedDist,
   segmentToSegmentDist: _segmentToSegmentDist,
   polygonToPolygonDist: _polygonToPolygonDist,
-  clipPolygonToRect: _clipPolygonToRect
+  clipPolygonToRect: _clipPolygonToRect,
+  insetPolygon: _insetPolygon,
+  polygonBBox: _polygonBBox,
+  closestPointOnPolygon: _closestPointOnPolygon,
+  distToRiver: _distToRiver,
+  riverToRiverDistance: _riverToRiverDistance
 } = window.CityMapGeometryV3;
 
 function _polylabel(polygon, precision = 1.5) {
@@ -52,6 +57,28 @@ function _polylabel(polygon, precision = 1.5) {
     { x: VIEW_W / 2, y: VIEW_H / 2 }
   );
 }
+
+const {
+  polygonToPath: _polygonToPath,
+  polygonOutlinePathSkipRoads: _polygonOutlinePathSkipRoads,
+  polygonOutlinePathClippedToViewport: _polygonOutlinePathClippedToViewport,
+  cutSegments: _cutSegments,
+  sampleSmoothPolyline: _sampleSmoothPolyline,
+  samplesToSegments: _samplesToSegments,
+  smoothPolylinePath: _smoothPolylinePath,
+  smoothClosedPath: _smoothClosedPath,
+  straightPolylinePath: _straightPolylinePath,
+  cutPath: _cutPath,
+  cutPoints: _cutPoints,
+  offsetPolyline: _offsetPolyline,
+  rectPolygon: _rectPolygon,
+  rectPath: _rectPath
+} = window.CityMapPathsV3;
+
+const {
+  generateLandPolygon: _generateLandPolygon,
+  generateCoastDocks: _generateCoastDocks
+} = window.CityMapLandV3;
 
 // Label placement: scored grid search over the visible district polygon.
 // Each candidate point gets a score that combines:
@@ -235,137 +262,6 @@ function _slotCountsByRank(visAreas, rng) {
   const result = new Array(visAreas.length);
   indexed.forEach((item, rank) => { result[item.i] = pairsByRank[rank] * 2; });
   return result;
-}
-
-// Polygon-to-path with curve awareness:
-// Runs of consecutive road-edged vertices that include at least one "roadMid"
-// (true curve mid-point) are Q-smoothed to match the street rendering exactly.
-// Pure straight-cut runs (only "road" endpoints, no mids) use straight L —
-// otherwise BSP blocks bounded by 3-4 adjacent cuts would render as pillows.
-// Non-road edges (coast, untagged) always use straight L.
-function _polygonToPath(polygon) {
-  const n = polygon.length;
-  if (n === 0) return "";
-  const isRoadEdge = (i) => (
-    polygon[i].edgeKind === "road" ||
-    polygon[i].edgeKind === "roadMid" ||
-    polygon[i].edgeKind === "roadBend"
-  );
-  const isCurveMid = (i) => (polygon[i].edgeKind === "roadMid");
-
-  let d = `M ${polygon[0].x.toFixed(2)} ${polygon[0].y.toFixed(2)}`;
-  let i = 0;
-  while (i < n) {
-    if (isRoadEdge(i)) {
-      // Find the road run [i .. j-1] (j = first non-road index after i, or n).
-      let j = i + 1;
-      let runHasMid = isCurveMid(i);
-      while (j < n && isRoadEdge(j)) {
-        if (isCurveMid(j)) runHasMid = true;
-        j++;
-      }
-      // CRITICAL: the run's geometric terminator is polygon[j] (or polygon[0]
-      // if j wraps), NOT polygon[j-1]. polygon[j] is the cut's other endpoint
-      // — it has edgeKind="coast" (its OUTGOING edge is coast) but its INCOMING
-      // edge is the curve. Including polygon[j] as the L target ensures the
-      // smoothed path lands EXACTLY on the cut endpoint, matching the rendered
-      // street geometry. Without this, the outline cut its corner at the
-      // last interior mid, producing a visible offset along curved cuts.
-      const term = polygon[j % n];
-      if (runHasMid) {
-        // Build the exact same point sequence the street uses:
-        //   [polygon[i], polygon[i+1], ..., polygon[j-1], term]
-        // and call _smoothPolylinePath — the SAME function that renders the
-        // road. This guarantees the district outline is byte-identical to the
-        // street geometry. No duplicated curve math, no risk of divergence.
-        // We strip the leading "M x y" because the pen is already at polygon[i].
-        const roadPoints = [];
-        for (let k = i; k < j; k++) roadPoints.push(polygon[k]);
-        roadPoints.push(term);
-        const sub = _smoothPolylinePath(roadPoints);
-        const stripped = sub.replace(/^M\s+[\d.\-]+\s+[\d.\-]+\s*/, "");
-        d += " " + stripped;
-      } else {
-        // Plain straight cut: L through each interior road vertex, then L term.
-        for (let k = i + 1; k < j; k++) {
-          d += ` L ${polygon[k].x.toFixed(2)} ${polygon[k].y.toFixed(2)}`;
-        }
-        d += ` L ${term.x.toFixed(2)} ${term.y.toFixed(2)}`;
-      }
-      // Resume the outer loop AT the terminator vertex; its outgoing edge is
-      // handled normally by the non-road branch.
-      i = j;
-    } else {
-      const next = (i + 1) % n;
-      d += ` L ${polygon[next].x.toFixed(2)} ${polygon[next].y.toFixed(2)}`;
-      i++;
-    }
-  }
-  d += " Z";
-  return d;
-}
-
-// Build an OUTLINE-only path that skips edges marked `edgeKind === "road"`.
-// Road edges are already drawn by the street rendering pipeline (highway,
-// avenue, etc.), so re-stroking them with a district color produces an
-// undesirable double-line "seam." This helper emits a path with M/L commands
-// over only the non-road edges, leaving gaps on shared road boundaries.
-//
-// Smart smoothing is preserved for any non-road curved runs (rare today, but
-// future-proof for curves on coast etc.).
-function _polygonOutlinePathSkipRoads(polygon) {
-  const n = polygon.length;
-  if (n === 0) return "";
-  const isRoad = (i) => (
-    polygon[i].edgeKind === "road" ||
-    polygon[i].edgeKind === "roadMid" ||
-    polygon[i].edgeKind === "roadBend"
-  );
-
-  let d = "";
-  let penDown = false; // true if the SVG pen is currently at polygon[i]
-  for (let i = 0; i < n; i++) {
-    if (isRoad(i)) {
-      // Skip this edge — break the path here.
-      penDown = false;
-      continue;
-    }
-    if (!penDown) {
-      d += `M ${polygon[i].x.toFixed(2)} ${polygon[i].y.toFixed(2)}`;
-      penDown = true;
-    }
-    const next = (i + 1) % n;
-    d += ` L ${polygon[next].x.toFixed(2)} ${polygon[next].y.toFixed(2)}`;
-  }
-  return d;
-}
-
-// Build a CLOSED district outline that includes EVERY edge of the visible
-// shape: road edges, coast edges, and viewport-boundary edges. Used as the
-// canonical district outline (same path for hover and non-hover; hover only
-// adds a glow filter so the shape doesn't change between states).
-//
-// Steps:
-//   1. Clip polygon to a slightly-inset viewport rect (so strokes sit
-//      comfortably inside the visible canvas, not flush with the edge).
-//   2. Emit a closed polygon path with straight L's between consecutive
-//      vertices — no road-skipping, no smoothing. Streets render ABOVE the
-//      outline so road-shared portions are visually covered by the street
-//      stroke; coast and viewport portions remain visible.
-function _polygonOutlinePathClippedToViewport(polygon, viewportInset = 1) {
-  const rect = {
-    minX: viewportInset, minY: viewportInset,
-    maxX: VIEW_W - viewportInset, maxY: VIEW_H - viewportInset
-  };
-  const clipped = _clipPolygonToRect(polygon, rect);
-  const n = clipped.length;
-  if (n < 2) return "";
-  let d = `M ${clipped[0].x.toFixed(2)} ${clipped[0].y.toFixed(2)}`;
-  for (let i = 1; i < n; i++) {
-    d += ` L ${clipped[i].x.toFixed(2)} ${clipped[i].y.toFixed(2)}`;
-  }
-  d += " Z";
-  return d;
 }
 
 // Split a polygon by a line L1-L2. Optionally curve the cut by providing
@@ -574,16 +470,6 @@ function _tryJogCut(polygon, straightResult, p1, p2, rng) {
   return null;
 }
 
-// Return the cut as a list of straight segments matching the SVG rendering.
-// - Straight cuts: 1 segment (p1, p2).
-// - Curved cuts: many small segments sampled along the smoothed Q-bezier path,
-//   so bridge detection / road-buffer hit-tests align with the *visible* curve.
-function _cutSegments(cut) {
-  if (!cut.polyline || cut.polyline.length < 2) return [{ a: cut.p1, b: cut.p2 }];
-  if (cut.polylineMode === "jog") return _samplesToSegments(cut.polyline);
-  return _sampleSmoothPolyline(cut.polyline, 8);
-}
-
 // Truncate a cut wherever it crosses a river segment, producing dead-end
 // halves on each side of the river. Used for streets that don't get a bridge:
 // instead of "swimming" across the water, they retreat from each bank by
@@ -659,387 +545,9 @@ function _truncateCutAtRiver(cut, riverSegs, gap) {
   return out;
 }
 
-// Sample the EXACT smoothed-polyline curve into straight segments. Uses the
-// same Q-bezier-through-midpoints formulation as `_smoothPolylinePath`, so the
-// returned segments precisely overlay the rendered SVG path.
-//
-// SVG path for `pts` (length k+1, k>=2):
-//   M pts[0]
-//   Q via pts[1] to mid(1,2)        ← starts at pts[0]
-//   Q via pts[i] to mid(i,i+1)      ← starts at mid(i-1,i), for i=2..k-1
-//   L pts[k]                        ← from mid(k-1,k) to pts[k]
-//
-// We mirror that exactly so the sampled polyline is geometrically identical
-// (within sub-pixel resolution given the per-segment step count).
-function _sampleSmoothPolyline(pts, stepsPerSeg) {
-  const samples = [];
-  const k = pts.length - 1;
-  if (k < 1) {
-    if (pts.length === 1) samples.push({ x: pts[0].x, y: pts[0].y });
-    return _samplesToSegments(samples);
-  }
-  if (k === 1) {
-    samples.push({ x: pts[0].x, y: pts[0].y });
-    samples.push({ x: pts[1].x, y: pts[1].y });
-    return _samplesToSegments(samples);
-  }
-
-  const steps = stepsPerSeg | 0 || 8;
-  samples.push({ x: pts[0].x, y: pts[0].y });
-  for (let i = 1; i < k; i++) {
-    const c = pts[i];
-    const start = (i === 1)
-      ? { x: pts[0].x, y: pts[0].y }
-      : { x: (pts[i - 1].x + pts[i].x) / 2, y: (pts[i - 1].y + pts[i].y) / 2 };
-    const end = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
-    for (let s = 1; s <= steps; s++) {
-      const t = s / steps;
-      const mt = 1 - t;
-      samples.push({
-        x: mt * mt * start.x + 2 * mt * t * c.x + t * t * end.x,
-        y: mt * mt * start.y + 2 * mt * t * c.y + t * t * end.y
-      });
-    }
-  }
-  samples.push({ x: pts[k].x, y: pts[k].y });
-  return _samplesToSegments(samples);
-}
-
-function _samplesToSegments(samples) {
-  const segs = [];
-  for (let i = 0; i < samples.length - 1; i++) {
-    segs.push({ a: samples[i], b: samples[i + 1] });
-  }
-  return segs;
-}
-
-// SVG path for a polyline, smoothed via quadratic beziers through midpoints
-// (produces C1-continuous smooth curves for 3+ points).
-function _smoothPolylinePath(points) {
-  if (!points || points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-  if (points.length === 2) {
-    return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)} L ${points[1].x.toFixed(2)} ${points[1].y.toFixed(2)}`;
-  }
-  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const mx = (points[i].x + points[i + 1].x) / 2;
-    const my = (points[i].y + points[i + 1].y) / 2;
-    d += ` Q ${points[i].x.toFixed(2)} ${points[i].y.toFixed(2)} ${mx.toFixed(2)} ${my.toFixed(2)}`;
-  }
-  d += ` L ${points[points.length - 1].x.toFixed(2)} ${points[points.length - 1].y.toFixed(2)}`;
-  return d;
-}
-
-function _smoothClosedPath(points) {
-  if (!points || points.length === 0) return "";
-  if (points.length < 3) return _straightPolylinePath(points);
-  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-  const n = points.length;
-  const start = mid(points[n - 1], points[0]);
-  let d = `M ${start.x.toFixed(2)} ${start.y.toFixed(2)}`;
-  for (let i = 0; i < n; i++) {
-    const p = points[i];
-    const next = points[(i + 1) % n];
-    const m = mid(p, next);
-    d += ` Q ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${m.x.toFixed(2)} ${m.y.toFixed(2)}`;
-  }
-  return d + " Z";
-}
-
-function _straightPolylinePath(points) {
-  if (!points || points.length === 0) return "";
-  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-  for (let i = 1; i < points.length; i++) {
-    d += ` L ${points[i].x.toFixed(2)} ${points[i].y.toFixed(2)}`;
-  }
-  return d;
-}
-
-function _cutPath(cut) {
-  if (!cut.polyline) return "";
-  return cut.polylineMode === "jog"
-    ? _straightPolylinePath(cut.polyline)
-    : _smoothPolylinePath(cut.polyline);
-}
-
-function _cutPoints(cut) {
-  return cut.polyline && cut.polyline.length >= 2
-    ? cut.polyline
-    : [cut.p1, cut.p2];
-}
-
-function _offsetPolyline(points, dist) {
-  if (!points || points.length < 2) return points || [];
-  const normals = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i], b = points[i + 1];
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    normals.push({ x: -dy / len, y: dx / len });
-  }
-  return points.map((p, i) => {
-    const n1 = normals[Math.max(0, i - 1)];
-    const n2 = normals[Math.min(normals.length - 1, i)];
-    const nx = n1.x + n2.x, ny = n1.y + n2.y;
-    const nLen = Math.hypot(nx, ny) || 1;
-    return { x: p.x + (nx / nLen) * dist, y: p.y + (ny / nLen) * dist };
-  });
-}
-
-// ============================================================
-// LAND POLYGON
-// ============================================================
-
-function _generateLandPolygon(rng) {
-  // Three modes (chosen randomly each seed):
-  //   PENINSULA (40%): organic blob, extends past several viewport edges,
-  //     0-2 coastal sides visible. Standard city-on-a-headland feel.
-  //   EXPOSED   (35%): center offset toward one corner; deep coast on 1-3
-  //     sides. Creates harbor / bay-front cities.
-  //   FJORD     (25%): one wide bay drives a deep notch into the land.
-  //     Creates inlets, peninsulas, and spit-like shapes.
-  const modeRoll = rng();
-  const exposedMode = modeRoll < 0.35;
-  const fjordMode   = !exposedMode && modeRoll < 0.60;
-
-  // More vertices = more angular jaggedness along the coast.
-  const N = 40;
-  const phaseA = rng() * Math.PI * 2;
-  const phaseB = rng() * Math.PI * 2;
-  const phaseC = rng() * Math.PI * 2;
-  const phaseD = rng() * Math.PI * 2;
-
-  // Up to 4 independent harbor bites at random angles. Each bite is a
-  // smooth cosine dip so they produce recognisable bays rather than noise.
-  const biteCount = 2 + Math.floor(rng() * 3); // 2, 3, or 4 bites
-  const biteAngles = [];
-  for (let b = 0; b < biteCount; b++) biteAngles.push(rng() * Math.PI * 2);
-  const biteDepths = biteAngles.map(() => 0.08 + rng() * 0.12); // 0.08–0.20
-  const biteWidths = biteAngles.map(() => 0.9 + rng() * 0.8);   // cosine sharpness
-
-  // Fjord: one very deep, narrow bay at a specific angle.
-  const fjordAngle = rng() * Math.PI * 2;
-  const fjordDepth = 0.28 + rng() * 0.18; // 0.28–0.46 — punches way in
-  const fjordWidth = 0.55 + rng() * 0.30; // narrower than a harbor bite
-
-  const distToViewportEdge = (cx, cy, dx, dy) => {
-    const tx = dx > 0 ? (VIEW_W - cx) / dx : (dx < 0 ? -cx / dx : 1e9);
-    const ty = dy > 0 ? (VIEW_H - cy) / dy : (dy < 0 ? -cy / dy : 1e9);
-    return Math.min(Math.abs(tx), Math.abs(ty));
-  };
-
-  const harborBiteTotal = (angle) => {
-    let sum = 0;
-    for (let b = 0; b < biteCount; b++) {
-      const c = Math.cos(angle - biteAngles[b]);
-      sum -= biteDepths[b] * Math.max(0, Math.pow(Math.max(0, c), biteWidths[b]));
-    }
-    if (fjordMode) {
-      const fc = Math.cos(angle - fjordAngle);
-      sum -= fjordDepth * Math.max(0, Math.pow(Math.max(0, fc), fjordWidth * 2.5));
-    }
-    return sum;
-  };
-
-  if (exposedMode) {
-    const exposeAngle = rng() * Math.PI * 2;
-    const cx = VIEW_W / 2 + (rng() - 0.5) * 30;
-    const cy = VIEW_H / 2 + (rng() - 0.5) * 30;
-    const verts = [];
-    for (let i = 0; i < N; i++) {
-      const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.22;
-      const dx = Math.cos(angle), dy = Math.sin(angle);
-      const dEdge = distToViewportEdge(cx, cy, dx, dy);
-      const cosToExpose = Math.cos(angle - exposeAngle);
-      const directional = 1.0 - 0.28 * cosToExpose;
-      const bites = harborBiteTotal(angle);
-      const r1 = 0.10 * Math.cos(angle * 1 + phaseA);
-      const r2 = 0.07 * Math.cos(angle * 3 + phaseB);
-      const r3 = 0.04 * Math.cos(angle * 6 + phaseC);
-      const r4 = 0.022 * Math.cos(angle * 11 + phaseD);
-      const jitter = (rng() - 0.5) * 0.10;
-      const k = Math.max(0.42, directional + bites + r1 + r2 + r3 + r4 + jitter);
-      verts.push({ x: cx + dx * dEdge * k, y: cy + dy * dEdge * k, edgeKind: "coast" });
-    }
-    return verts;
-  }
-
-  // PENINSULA / FJORD mode: base factor slightly past viewport edge; bites pull back.
-  const cx = VIEW_W / 2 + (rng() - 0.5) * 35;
-  const cy = VIEW_H / 2 + (rng() - 0.5) * 35;
-  const verts = [];
-  for (let i = 0; i < N; i++) {
-    const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.22;
-    const dx = Math.cos(angle), dy = Math.sin(angle);
-    const dEdge = distToViewportEdge(cx, cy, dx, dy);
-    const bites = harborBiteTotal(angle);
-    const r1 = 0.12 * Math.cos(angle * 1 + phaseA);
-    const r2 = 0.08 * Math.cos(angle * 3 + phaseB);
-    const r3 = 0.045 * Math.cos(angle * 6 + phaseC);
-    const r4 = 0.024 * Math.cos(angle * 11 + phaseD);
-    const jitter = (rng() - 0.5) * 0.10;
-    const k = Math.max(0.42, 1.02 + bites + r1 + r2 + r3 + r4 + jitter);
-    verts.push({
-      x: cx + dx * dEdge * k,
-      y: cy + dy * dEdge * k,
-      edgeKind: "coast"
-    });
-  }
-  return verts;
-}
-
-function _rectPolygon(cx, cy, w, h, angle) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  return [
-    { x: -w / 2, y: -h / 2 },
-    { x:  w / 2, y: -h / 2 },
-    { x:  w / 2, y:  h / 2 },
-    { x: -w / 2, y:  h / 2 }
-  ].map(p => ({
-    x: cx + p.x * ca - p.y * sa,
-    y: cy + p.x * sa + p.y * ca
-  }));
-}
-
-function _rectPath(cx, cy, w, h, angle) {
-  const corners = _rectPolygon(cx, cy, w, h, angle);
-  return (
-    `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
-    `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
-    `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
-    `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`
-  );
-}
-
-function _generateCoastDocks(landPolygon, rng) {
-  const docks = [];
-  const dockBBoxes = [];
-  const centroid = _polygonCentroid(landPolygon);
-  const n = landPolygon.length;
-  const bboxFor = (poly) => {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of poly) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    return { minX, maxX, minY, maxY };
-  };
-  const overlapsDock = (box) => dockBBoxes.some(b =>
-    box.maxX + 1.2 > b.minX && box.minX - 1.2 < b.maxX &&
-    box.maxY + 1.2 > b.minY && box.minY - 1.2 < b.maxY
-  );
-  for (let i = 0; i < n; i++) {
-    const a = landPolygon[i];
-    const b = landPolygon[(i + 1) % n];
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const segLen = Math.hypot(dx, dy);
-    if (segLen < 28) continue;
-    const tx = dx / segLen, ty = dy / segLen;
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    if (mx < -8 || mx > VIEW_W + 8 || my < -8 || my > VIEW_H + 8) continue;
-
-    // Outward perpendicular: choose the side away from the land centroid.
-    const p1x = -ty, p1y = tx;
-    const awayX = mx - centroid.x, awayY = my - centroid.y;
-    const outward = (p1x * awayX + p1y * awayY) > 0
-      ? { x: p1x, y: p1y }
-      : { x: -p1x, y: -p1y };
-
-    // Only add docks where there is visible ocean outside the coast.
-    const oceanProbe = {
-      x: mx + outward.x * 8,
-      y: my + outward.y * 8
-    };
-    if (_pointInPolygon(oceanProbe, landPolygon)) continue;
-
-    // Docks cluster in working waterfront pockets instead of spacing evenly.
-    const clusterCount = rng() < 0.58 ? 1 : 2;
-    for (let cluster = 0; cluster < clusterCount; cluster++) {
-      if (rng() < 0.30) continue;
-      const clusterT = 0.18 + rng() * 0.64;
-      const dockCount = 3 + Math.floor(rng() * 3);
-      const pierW = 3.4;
-      const pierLen = 9.5;
-      const spacing = 5.4;
-      const clusterWidth = spacing * (dockCount - 1);
-      const angle = Math.atan2(outward.y, outward.x) + Math.PI / 2;
-      const candidate = [];
-      for (let k = 0; k < dockCount; k++) {
-        const along = (k - (dockCount - 1) / 2) * spacing;
-        const t = clusterT + along / segLen;
-        if (t < 0.08 || t > 0.92) continue;
-        const baseX = a.x + dx * t;
-        const baseY = a.y + dy * t;
-        if (clusterWidth > segLen * 0.55) continue;
-        const cx = baseX + outward.x * (pierLen / 2 - 2.4);
-        const cy = baseY + outward.y * (pierLen / 2 - 2.4);
-        if (cx < -4 || cx > VIEW_W + 4 || cy < -4 || cy > VIEW_H + 4) continue;
-        const poly = _rectPolygon(cx, cy, pierW, pierLen, angle);
-        const box = bboxFor(poly);
-        if (overlapsDock(box)) continue;
-        candidate.push({ path: _polygonToPath(poly), box });
-      }
-      if (candidate.length < 2) continue;
-      for (const dock of candidate) {
-        docks.push({ path: dock.path });
-        dockBBoxes.push(dock.box);
-      }
-    }
-  }
-  return docks;
-}
-
 // ============================================================
 // BSP SUBDIVISION
 // ============================================================
-
-// Inset (shrink) a polygon inward by `dist` pixels. Uses angle bisectors with
-// inward direction validated against centroid (handles either winding order).
-function _insetPolygon(polygon, dist) {
-  const n = polygon.length;
-  if (n < 3) return polygon;
-  const cx = polygon.reduce((s, p) => s + p.x, 0) / n;
-  const cy = polygon.reduce((s, p) => s + p.y, 0) / n;
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const prev = polygon[(i - 1 + n) % n];
-    const cur = polygon[i];
-    const next = polygon[(i + 1) % n];
-    const e1x = cur.x - prev.x, e1y = cur.y - prev.y;
-    const e2x = next.x - cur.x, e2y = next.y - cur.y;
-    const e1Len = Math.hypot(e1x, e1y) || 1e-9;
-    const e2Len = Math.hypot(e2x, e2y) || 1e-9;
-    // Perpendicular candidates for each edge; pick the one pointing toward centroid
-    let n1x = -e1y / e1Len, n1y = e1x / e1Len;
-    if (n1x * (cx - (prev.x + cur.x) / 2) + n1y * (cy - (prev.y + cur.y) / 2) < 0) {
-      n1x = -n1x; n1y = -n1y;
-    }
-    let n2x = -e2y / e2Len, n2y = e2x / e2Len;
-    if (n2x * (cx - (cur.x + next.x) / 2) + n2y * (cy - (cur.y + next.y) / 2) < 0) {
-      n2x = -n2x; n2y = -n2y;
-    }
-    const bx = n1x + n2x, by = n1y + n2y;
-    const bLen = Math.hypot(bx, by);
-    if (bLen < 1e-6) { out.push({ x: cur.x + n1x * dist, y: cur.y + n1y * dist }); continue; }
-    const moveDist = dist / (bLen / 2);
-    out.push({ x: cur.x + (bx / bLen) * moveDist, y: cur.y + (by / bLen) * moveDist });
-  }
-  return out;
-}
-
-function _polygonBBox(polygon) {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const p of polygon) {
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
-}
 
 function _landmarkCenter(landmarkOrLeaf) {
   return _polygonCentroid(landmarkOrLeaf.polygon);
@@ -2084,21 +1592,6 @@ function _placeDotsInPolygon(polygon, rng, leafBlocksToAvoid, target, visibleAre
 // ISLANDS — small land masses in the water, with buildings and a bridge
 // ============================================================
 
-function _closestPointOnPolygon(px, py, polygon) {
-  let best = Infinity, bx = px, by = py;
-  const n = polygon.length;
-  for (let i = 0; i < n; i++) {
-    const a = polygon[i], b = polygon[(i + 1) % n];
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy || 1e-9;
-    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
-    const cx = a.x + t * dx, cy = a.y + t * dy;
-    const d = Math.hypot(px - cx, py - cy);
-    if (d < best) { best = d; bx = cx; by = cy; }
-  }
-  return { x: bx, y: by, dist: best };
-}
-
 function _islandBlob(cx, cy, r, rng) {
   const N = 12 + Math.floor(rng() * 6);
   const pA = rng() * Math.PI * 2, pB = rng() * Math.PI * 2, pC = rng() * Math.PI * 2;
@@ -2350,28 +1843,6 @@ function _makeRiverBankRoads(river, landPolygon) {
     pushRun(run);
   }
   return cuts;
-}
-
-// Distance from point to nearest river segment.
-function _distToRiver(x, y, riverSegments) {
-  if (!riverSegments || !riverSegments.length) return Infinity;
-  let best = Infinity;
-  for (const s of riverSegments) {
-    const d = _pointToSegmentDist(x, y, s.a, s.b);
-    if (d < best) best = d;
-  }
-  return best;
-}
-
-function _riverToRiverDistance(a, b) {
-  if (!a || !b || !a.segments || !b.segments) return Infinity;
-  let best = Infinity;
-  for (const sa of a.segments) {
-    for (const sb of b.segments) {
-      best = Math.min(best, _segmentToSegmentDist(sa.a, sa.b, sb.a, sb.b));
-    }
-  }
-  return best;
 }
 
 // ============================================================
