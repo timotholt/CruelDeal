@@ -1,54 +1,55 @@
 /* ============================================================
    CITY-MAP-V3 — color palette
    ============================================================
-   All colors are HSL/HSLA expressed as CSS custom properties so they
-   can be tuned without touching the SVG generator. The JS renderer
-   (`city-map-v3.jsx`) mirrors these values in its `PAL` object — keep
-   the two in sync, OR migrate the renderer to read from these vars
-   via getComputedStyle (TODO).
+   Every map element sits on a TONAL HIERARCHY of HSL L values inside a
+   shared blue family. Brightness encodes scale / importance:
 
-   Design rule: LAND and WATER share the same hue. Land is a brighter
-   luminosity of the water hue, so the map reads as a continuous color
-   family rather than two contrasting palettes.
+     water    L=10    (background — darkest)
+     land     L=30    (canvas)
+     bldgA    L=50    ┐ buildings — exactly two shades, no in-between greys.
+     bldgB    L=60    ┘
+     roads    L=70…92 (network — brightest, biggest road = brightest L)
+
+   The JS renderer (`city-map-v3.jsx`) mirrors these values in its `PAL`
+   object — keep the two in sync.
    ============================================================ */
 
 :root {
-  /* --- Base hue (water/land family) --- */
-  --map-hue: 212;          /* 0-360, sky-blue-cyan */
-  --map-sat: 55%;          /* shared saturation for water + land */
+  /* --- Base hue --- */
+  --map-hue: 220;          /* true blue (was 212 = sky-blue-cyan) */
+  --map-sat: 100%;         /* shared base saturation for the blue family */
 
-  /* --- Water (deep → mid) --- */
-  --map-water-deep: hsl(var(--map-hue), 70%, 7%);
-  --map-water-mid:  hsl(var(--map-hue), 65%, 11%);
+  /* --- Water — single flat color, ocean + river share this. --- */
+  --map-water: hsl(var(--map-hue), 100%, 10%);
 
-  /* --- Land — same hue/sat as water, brighter L --- */
-  --map-land:       hsl(var(--map-hue), 45%, 30%);
+  /* --- Land (L=30) --- */
+  --map-land:       hsl(var(--map-hue), 65%, 30%);
 
-  /* --- Streets (white-tinted overlays) --- */
-  --map-hwy-outer:   hsla(0, 0%, 100%, 0.45);
-  --map-hwy-inner:   hsla(195, 80%, 95%, 0.95);
-  --map-avenue:      hsla(210, 80%, 97%, 0.85);
-  --map-street-main: hsla(0, 0%, 100%, 0.85);
-  --map-street-local:hsla(0, 0%, 100%, 0.62);
-  --map-coast-road:  hsla(0, 0%, 100%, 0.55);
+  /* --- Buildings — only two shades, painted at 30% opacity (70% transparent)
+         so the land color reads through the footprint. --- */
+  --map-bldg-a: hsla(var(--map-hue), 40%, 50%, 0.30);
+  --map-bldg-b: hsla(var(--map-hue), 35%, 60%, 0.30);
 
-  /* --- Landmarks --- */
-  --map-park:           hsl(140, 32%, 52%);   /* park / stadium grass */
+  /* --- Streets — L hierarchy by tier (bigger road = brighter L) --- */
+  --map-street-local: hsla(var(--map-hue), 20%, 70%, 0.85);   /* L=70  */
+  --map-street-main:  hsla(var(--map-hue), 20%, 80%, 0.90);   /* L=80  */
+  --map-coast-road:   hsla(var(--map-hue), 20%, 78%, 0.85);   /* L=78  */
+  --map-avenue:       hsla(var(--map-hue), 25%, 86%, 0.92);   /* L=86  */
+  --map-hwy-outer:    hsla(var(--map-hue), 30%, 95%, 0.45);   /* glow  */
+  --map-hwy-inner:    hsl(var(--map-hue), 30%, 92%);          /* L=92  */
+
+  /* --- Landmarks. Parks and shopping malls render at 30% opacity. --- */
+  --map-park:           hsla(140, 38%, 52%, 0.30);
   --map-stadium:        hsl(140, 35%, 58%);
   --map-stadium-field:  hsl(135, 50%, 70%);
   --map-field-line:     hsla(0, 0%, 100%, 0.55);
-  --map-diamond:        hsl(28, 45%, 55%);    /* baseball clay */
-  --map-plaza:          hsl(210, 30%, 63%);
-  --map-mall:           hsl(212, 38%, 35%);
-  --map-mall-accent:    hsla(214, 50%, 13%, 0.55);
-  --map-mall-highlight: hsla(210, 60%, 81%, 0.18);
-
-  /* --- Buildings (subtle footprints on land) --- */
-  --map-bldg-a: hsla(208, 45%, 25%, 0.32);
-  --map-bldg-b: hsla(210, 40%, 31%, 0.30);
-  --map-bldg-c: hsla(208, 50%, 21%, 0.36);
+  --map-diamond:        hsl(28, 45%, 55%);
+  --map-plaza:          hsl(var(--map-hue), 30%, 63%);
+  --map-mall:           hsla(var(--map-hue), 45%, 35%, 0.30);
+  --map-mall-accent:    hsla(var(--map-hue), 50%, 13%, 0.55);
+  --map-mall-highlight: hsla(var(--map-hue), 60%, 81%, 0.18);
 
   /* --- Labels --- */
-  --map-label:        hsl(195, 90%, 96%);
-  --map-label-stroke: hsla(212, 70%, 8%, 0.85);
+  --map-label:        hsl(200, 90%, 96%);
+  --map-label-stroke: hsla(var(--map-hue), 70%, 8%, 0.85);
 }

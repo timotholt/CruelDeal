@@ -64,12 +64,15 @@ function makeRng(seed) {
 // ----------------------------- LAYOUT -----------------------------
 
 // Logical stage 360x640 (9:16). Multiples of 8.
-// header 64 + board 384 + footer 192 = 640. 
+// header 64 + board 448 + footer 128 = 640.
+// Footer is just tall enough to fit hand cards (CARD_H * 0.55 = 84.7 px) plus
+// the hover/selected lift (~34 px) plus a small bottom inset, freeing the rest
+// of the vertical space for the map.
 const STAGE_W = 360;
 const STAGE_H = 640;
 const HEADER_H = 64;
-const FOOTER_H = 192;
-const BOARD_H = STAGE_H - HEADER_H - FOOTER_H; // 384
+const FOOTER_H = 128;
+const BOARD_H = STAGE_H - HEADER_H - FOOTER_H; // 448
 const SIDE_PAD = 16;
 const LANE_GAP = 8;
 const LANE_W = (STAGE_W - SIDE_PAD * 2 - LANE_GAP * 2) / 3; // (360-32-16)/3 = 104

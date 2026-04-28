@@ -60,49 +60,52 @@ const _MICRO_LANDMARK_SHAPES = [
 
 // PAL — HSL/HSLA color palette mirrored from `city-map-v3.css`.
 //
-// Design rule: water and land share the SAME hue (MAP_HUE); land is just a
-// brighter L. So the whole map reads as a single color family.
+// Design rule: every map element sits on a TONAL HIERARCHY of L values in a
+// shared blue family (MAP_HUE). Brightness encodes scale / importance:
+//   water  L=10   (background — darkest)
+//   land   L=30   (canvas)
+//   bldgA  L=50   ┐ buildings — exactly two shades, no in-between greys.
+//   bldgB  L=60   ┘
+//   roads  L=70…92 (network — brightest, biggest road = brightest L)
+// This produces a readable depth order: any element above another is brighter.
 //
 // Keep these values in sync with the CSS file. Both files exist so:
 //   - The CSS file is the human-friendly source of truth (CSS custom props).
 //   - The JS uses literal HSL strings so SVG fills don't depend on
-//     getComputedStyle (avoids a runtime read on first render and SSR
-//     friendliness).
-//
-// To change a color, edit BOTH this object and the CSS file. (A future
-// refactor could read CSS vars at module load — TODO.)
-const MAP_HUE = 212;  // sky-blue-cyan — base hue for the water/land family
-const MAP_SAT = 55;
+//     getComputedStyle.
+const MAP_HUE = 220;  // true blue (was 212 = sky-blue-cyan)
+const MAP_SAT = 100;  // shared base saturation for the blue family
 const PAL = {
-  // Water (deep → mid)
-  waterDeep:    `hsl(${MAP_HUE}, 70%, 7%)`,
-  waterMid:     `hsl(${MAP_HUE}, 65%, 11%)`,
-  // Land — same hue/sat as water, brighter L
-  land:         `hsl(${MAP_HUE}, 45%, 30%)`,
-  // Streets (white-tinted overlays)
-  hwyOuter:     "hsla(0, 0%, 100%, 0.45)",
-  hwyInner:     "hsla(195, 80%, 95%, 0.95)",
-  avenue:       "hsla(210, 80%, 97%, 0.85)",
-  streetMain:   "hsla(0, 0%, 100%, 0.85)",
-  streetLocal:  "hsla(0, 0%, 100%, 0.62)",
-  coastRoad:    "hsla(0, 0%, 100%, 0.55)",
-  // Landmarks
-  park:         "hsl(140, 32%, 52%)",
-  plaza:        "hsl(210, 30%, 63%)",
+  // Water — single flat color shared by ocean and river. High saturation +
+  // very low L = a deep saturated blue, no cyan cast.
+  water:        `hsl(${MAP_HUE}, 100%, 10%)`,
+  // Land — saturated mid-blue canvas.
+  land:         `hsl(${MAP_HUE}, 65%, 30%)`,
+  // Buildings — exactly two shades (L=50, L=60), painted at 30% opacity so
+  // the land color shows through.
+  bldgA:        `hsla(${MAP_HUE}, 40%, 50%, 0.30)`,
+  bldgB:        `hsla(${MAP_HUE}, 35%, 60%, 0.30)`,
+  // Streets — L hierarchy by tier. Bigger road = brighter L.
+  streetLocal:  `hsla(${MAP_HUE}, 20%, 70%, 0.85)`,   // L=70  — depth 4+
+  streetMain:   `hsla(${MAP_HUE}, 20%, 80%, 0.90)`,   // L=80  — depth 2/3
+  coastRoad:    `hsla(${MAP_HUE}, 20%, 78%, 0.85)`,   // L=78  — perimeter avenue
+  avenue:       `hsla(${MAP_HUE}, 25%, 86%, 0.92)`,   // L=86  — depth 1
+  hwyOuter:     `hsla(${MAP_HUE}, 30%, 95%, 0.45)`,   // glow halo
+  hwyInner:     `hsl(${MAP_HUE}, 30%, 92%)`,          // L=92  — depth 0
+  // Landmarks. Parks and shopping malls are rendered at 30% opacity (per
+  // the design rule) so the land + building grid shows through.
+  park:         "hsla(140, 38%, 52%, 0.30)",
+  plaza:        `hsl(${MAP_HUE}, 30%, 63%)`,
   stadium:      "hsl(140, 35%, 58%)",
   stadiumField: "hsl(135, 50%, 70%)",
   fieldLine:    "hsla(0, 0%, 100%, 0.55)",
   diamond:      "hsl(28, 45%, 55%)",
-  mall:         "hsl(212, 38%, 35%)",
-  mallAccent:   "hsla(214, 50%, 13%, 0.55)",
-  mallHighlight:"hsla(210, 60%, 81%, 0.18)",
-  // Buildings (subtle footprints on land — same hue family, low alpha)
-  bldgA:        "hsla(208, 45%, 25%, 0.32)",
-  bldgB:        "hsla(210, 40%, 31%, 0.30)",
-  bldgC:        "hsla(208, 50%, 21%, 0.36)",
+  mall:         `hsla(${MAP_HUE}, 45%, 35%, 0.30)`,
+  mallAccent:   `hsla(${MAP_HUE}, 50%, 13%, 0.55)`,
+  mallHighlight:`hsla(${MAP_HUE}, 60%, 81%, 0.18)`,
   // Labels
-  label:        "hsl(195, 90%, 96%)",
-  labelStroke:  "hsla(212, 70%, 8%, 0.85)"
+  label:        "hsl(200, 90%, 96%)",
+  labelStroke:  `hsla(${MAP_HUE}, 70%, 8%, 0.85)`
 };
 
 // ============================================================
@@ -611,6 +614,80 @@ function _cutSegments(cut) {
   return _sampleSmoothPolyline(cut.polyline, 8);
 }
 
+// Truncate a cut wherever it crosses a river segment, producing dead-end
+// halves on each side of the river. Used for streets that don't get a bridge:
+// instead of "swimming" across the water, they retreat from each bank by
+// `gap` px and stop. Returns an array of cut-like objects.
+//
+// For a STRAIGHT cut with N crossings, returns N+1 straight stubs.
+// For a CURVED cut, the rendered-polyline is sampled and split at crossings;
+// each resulting sub-run becomes a polyline cut (preserving the curve).
+// If the cut never crosses the river, returns [cut] unchanged (same reference).
+// Stubs shorter than `MIN_STUB_LEN` px are discarded so we don't render slivers.
+function _truncateCutAtRiver(cut, riverSegs, gap) {
+  const MIN_STUB_LEN = 4;
+  const segs = _cutSegments(cut);
+  if (!segs.length || !riverSegs || !riverSegs.length) return [cut];
+
+  // Build a list of "runs" — each run is a polyline that doesn't cross the river.
+  const runs = [];
+  let curRun = [{ x: segs[0].a.x, y: segs[0].a.y }];
+  let anyHit = false;
+
+  for (const s of segs) {
+    const sx = s.b.x - s.a.x, sy = s.b.y - s.a.y;
+    const segLen = Math.hypot(sx, sy) || 1;
+    const ux = sx / segLen, uy = sy / segLen;
+
+    // Collect every crossing of this rendered segment with any river segment,
+    // sorted by distance along the segment so multi-crossings split correctly.
+    const hits = [];
+    for (const rs of riverSegs) {
+      const hit = _segIntersect(s.a, s.b, rs.a, rs.b);
+      if (hit) hits.push({ x: hit.x, y: hit.y, t: hit.t });
+    }
+    if (hits.length === 0) {
+      curRun.push({ x: s.b.x, y: s.b.y });
+      continue;
+    }
+    anyHit = true;
+    hits.sort((p, q) => p.t - q.t);
+    for (const h of hits) {
+      // End the current run at `gap` px BEFORE the crossing (back along ray).
+      curRun.push({ x: h.x - ux * gap, y: h.y - uy * gap });
+      runs.push(curRun);
+      // Start a new run at `gap` px AFTER the crossing (continuing along ray).
+      curRun = [{ x: h.x + ux * gap, y: h.y + uy * gap }];
+    }
+    curRun.push({ x: s.b.x, y: s.b.y });
+  }
+  if (curRun.length) runs.push(curRun);
+
+  if (!anyHit) return [cut];
+
+  // Filter ultra-short stubs and emit cut-like objects matching the original tier.
+  const out = [];
+  for (const run of runs) {
+    if (run.length < 2) continue;
+    let len = 0;
+    for (let i = 1; i < run.length; i++) {
+      len += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+    }
+    if (len < MIN_STUB_LEN) continue;
+    if (run.length === 2) {
+      out.push({ p1: run[0], p2: run[1], depth: cut.depth });
+    } else {
+      out.push({
+        p1: run[0],
+        p2: run[run.length - 1],
+        polyline: run,
+        depth: cut.depth
+      });
+    }
+  }
+  return out;
+}
+
 // Sample the EXACT smoothed-polyline curve into straight segments. Uses the
 // same Q-bezier-through-midpoints formulation as `_smoothPolylinePath`, so the
 // returned segments precisely overlay the rendered SVG path.
@@ -701,47 +778,65 @@ function _generateLandPolygon(rng) {
   const phaseB = rng() * Math.PI * 2;
   const phaseC = rng() * Math.PI * 2;
 
+  // Both modes use VIEWPORT-EDGE-RELATIVE radii: each vertex is placed at
+  // (factor * distance-to-viewport-edge along that direction). This guarantees
+  // the polygon hugs the viewport tightly on most sides — water only appears
+  // where the factor dips below 1.0 (a "coastal bite"). No more 80px-wide
+  // ocean strips on sides we never intended to expose.
+  const distToViewportEdge = (cx, cy, dx, dy) => {
+    const tx = dx > 0 ? (VIEW_W - cx) / dx : (dx < 0 ? -cx / dx : 1e9);
+    const ty = dy > 0 ? (VIEW_H - cy) / dy : (dy < 0 ? -cy / dy : 1e9);
+    return Math.min(Math.abs(tx), Math.abs(ty));
+  };
+
   if (exposedMode) {
-    // Pick a random "exposure direction" — the side we want to most clearly
-    // show coast on. Center is shifted AWAY from that side.
+    // EXPOSED: one chosen direction shows coast clearly; vertices facing that
+    // direction pull inward (factor < 1), vertices on the opposite side push
+    // past the viewport (factor > 1). Coast is visible on a wide arc.
     const exposeAngle = rng() * Math.PI * 2;
-    const exposeMag = 70 + rng() * 30; // 70-100 px shift
-    const cx = VIEW_W / 2 - Math.cos(exposeAngle) * exposeMag;
-    const cy = VIEW_H / 2 - Math.sin(exposeAngle) * exposeMag;
-    // Radius slightly smaller than peninsula so the coast on the exposed side
-    // is clearly visible (not "almost there"). Other sides still reach past.
-    const baseR = LAND_RX * 0.85;
+    const cx = VIEW_W / 2 + (rng() - 0.5) * 25;
+    const cy = VIEW_H / 2 + (rng() - 0.5) * 25;
     const verts = [];
     for (let i = 0; i < N; i++) {
       const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
-      const r1 = 0.18 * Math.cos(angle * 1 + phaseA);
-      const r2 = 0.11 * Math.cos(angle * 3 + phaseB);
-      const r3 = 0.06 * Math.cos(angle * 5 + phaseC);
-      const jitter = (rng() - 0.5) * 0.06;
-      const k = 1.0 + r1 + r2 + r3 + jitter;
+      const dx = Math.cos(angle), dy = Math.sin(angle);
+      const dEdge = distToViewportEdge(cx, cy, dx, dy);
+      // Directional bias: +1 (full expose) → 0.82, -1 (opposite) → 1.18.
+      const cosToExpose = Math.cos(angle - exposeAngle);
+      const directional = 1.0 - 0.18 * cosToExpose;
+      const r1 = 0.08 * Math.cos(angle * 1 + phaseA);
+      const r2 = 0.05 * Math.cos(angle * 3 + phaseB);
+      const r3 = 0.025 * Math.cos(angle * 5 + phaseC);
+      const jitter = (rng() - 0.5) * 0.04;
+      const k = Math.max(0.55, directional + r1 + r2 + r3 + jitter);
       verts.push({
-        x: cx + Math.cos(angle) * baseR * k,
-        y: cy + Math.sin(angle) * baseR * k,
+        x: cx + dx * dEdge * k,
+        y: cy + dy * dEdge * k,
         edgeKind: "coast"
       });
     }
     return verts;
   }
 
-  // PENINSULA mode (existing behavior).
-  const cx = VIEW_W / 2 + (rng() - 0.5) * 60;
-  const cy = VIEW_H / 2 + (rng() - 0.5) * 60;
+  // PENINSULA mode: organic wobble around a base factor of 1.05 (mostly past
+  // the viewport edge). Random sectors dip below 1.0 — those are the coastal
+  // bites that show water. Variation amplitude tuned so water is always
+  // visible somewhere but never wastes more than ~30 px.
+  const cx = VIEW_W / 2 + (rng() - 0.5) * 30;
+  const cy = VIEW_H / 2 + (rng() - 0.5) * 30;
   const verts = [];
   for (let i = 0; i < N; i++) {
     const angle = (i / N) * Math.PI * 2 + (rng() - 0.5) * 0.18;
-    const r1 = 0.22 * Math.cos(angle * 1 + phaseA);
-    const r2 = 0.13 * Math.cos(angle * 3 + phaseB);
-    const r3 = 0.07 * Math.cos(angle * 5 + phaseC);
-    const jitter = (rng() - 0.5) * 0.06;
-    const k = 1.05 + r1 + r2 + r3 + jitter; // ~0.55..1.55
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const dEdge = distToViewportEdge(cx, cy, dx, dy);
+    const r1 = 0.10 * Math.cos(angle * 1 + phaseA);
+    const r2 = 0.06 * Math.cos(angle * 3 + phaseB);
+    const r3 = 0.03 * Math.cos(angle * 5 + phaseC);
+    const jitter = (rng() - 0.5) * 0.04;
+    const k = Math.max(0.55, 1.05 + r1 + r2 + r3 + jitter); // ~0.82..1.28
     verts.push({
-      x: cx + Math.cos(angle) * LAND_RX * k,
-      y: cy + Math.sin(angle) * LAND_RY * k,
+      x: cx + dx * dEdge * k,
+      y: cy + dy * dEdge * k,
       edgeKind: "coast"
     });
   }
@@ -1049,9 +1144,10 @@ function _macroDivide3(landPolygon, gridAngle, rng) {
 // every cut at every depth aligns to one of two perpendicular directions.
 function _bspSubdivide(polygon, depth, gridAngle, rng) {
   const area = _polygonArea(polygon);
-  // Variable termination so blocks have varied sizes
-  const minArea = 320 + rng() * 480;   // 320..800
-  const maxDepth = 6 + Math.floor(rng() * 3); // 6..8
+  // Variable termination so blocks have varied sizes. Tuned for a Brooklyn-
+  // style fine grid: many tiny blocks, each holding 2-4 buildings.
+  const minArea = 90 + rng() * 140;            // ~90..230 px²  (was 320..800)
+  const maxDepth = 9 + Math.floor(rng() * 3);  // 9..11         (was 6..8)
 
   // Rare: stop early at mid-depth to leave a BIG block (stadium / mall / park).
   // Probability scaled so we get ~1-2 of these per district on average.
@@ -1063,14 +1159,16 @@ function _bspSubdivide(polygon, depth, gridAngle, rng) {
     return { polygon, depth, isLeaf: true };
   }
 
-  // Try a few cut candidates; accept the first that splits cleanly
+  // Try a few cut candidates; accept the first that splits cleanly. Min child
+  // area lowered so the BSP can produce the small blocks we need for a fine
+  // street grid. Buildings inside still have their own size floors.
   let result = null, cutInfo = null;
   for (let attempt = 0; attempt < 6; attempt++) {
     cutInfo = _pickBspCut(polygon, rng, gridAngle, depth);
     result = _splitPolygonByLine(polygon, cutInfo.p1, cutInfo.p2);
     if (result) {
       const [a, b] = result;
-      if (_polygonArea(a) > 80 && _polygonArea(b) > 80) break;
+      if (_polygonArea(a) > 30 && _polygonArea(b) > 30) break;
       result = null;
     }
   }
@@ -1182,14 +1280,17 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   // Skip on irregular blocks — a perfect circle inside an irregular polygon looks awkward.
   if (!isIrregular && rng() < 0.04 && blockArea > 700) {
     const c = _polygonCentroid(blockPolygon);
-    let r = Infinity;
+    let inscribed = Infinity;
     for (let i = 0; i < blockPolygon.length; i++) {
       const a = blockPolygon[i];
       const b = blockPolygon[(i + 1) % blockPolygon.length];
       const d = _pointToSegmentDist(c.x, c.y, a, b);
-      if (d < r) r = d;
+      if (d < inscribed) inscribed = d;
     }
-    r *= 0.85;
+    // Building radius: 0.70 of inscribed circle. Roundabout ring sits at
+    // 0.85 of inscribed (between building and block edge) so there is clear
+    // padding between the ring and the surrounding roads.
+    const r = inscribed * 0.70;
     // Skip round building if the block centroid is on the river — riverfront
     // areas read better as open promenade than as a giant stadium in water.
     const centerNearRiver = riverSegments && _distToRiver(c.x, c.y, riverSegments) < r + RIVER_BUFFER;
@@ -1200,13 +1301,24 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
         const ang = (i / sides) * Math.PI * 2;
         pts.push({ x: c.x + Math.cos(ang) * r, y: c.y + Math.sin(ang) * r });
       }
+      // Edge midpoints — used to draw short access-road spurs from the
+      // roundabout out to each surrounding street, so the stadium reads as
+      // connected to the city grid rather than floating in a gap.
+      const edgeMidpoints = [];
+      for (let i = 0; i < blockPolygon.length; i++) {
+        const va = blockPolygon[i];
+        const vb = blockPolygon[(i + 1) % blockPolygon.length];
+        edgeMidpoints.push({ x: (va.x + vb.x) / 2, y: (va.y + vb.y) / 2 });
+      }
       return [{
         path: _polygonToPath(pts),
         shade: rng(),
         round: true,
         cx: c.x,
         cy: c.y,
-        radius: r
+        radius: r,
+        ringRadius: inscribed * 0.85,  // roundabout ring (clear of roads)
+        edgeMidpoints
       }];
     }
   }
@@ -1227,19 +1339,15 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   const wV = maxV - minV;
   if (wU < 7 || wV < 7) return [];
 
-  // Irregular blocks get smaller, denser grids so little buildings can fill
-  // the awkward shape. Regular rectangular blocks have a baseline grid sized
-  // for normal city footprints, but per-cell variety modes mean some cells get
-  // a CLUSTER of micros, others get a single LARGER footprint, the rest are
-  // normal. This creates the "dense city with size variety" look.
-  // Bigger baseline footprints. Irregular blocks (real curves / coast) still
-  // get smaller buildings to fit awkward shapes; regular blocks get noticeably
-  // larger so the city reads as solid built-up area.
+  // Tuned for a Brooklyn-grade fine grid: blocks are tiny (deep BSP), so we
+  // also want footprints small enough that even a 100 px² block packs 2-4
+  // buildings rather than a single oversized box. CLUSTER / LARGE / MEGA modes
+  // still inject per-cell size variety.
   const targetSize = isIrregular
-    ? (5.5 + rng() * 2.5)    // ~5.5-8 px (small, fits curves/coast)
-    : (13.0 + rng() * 6.0);  // ~13-19 px (normal — bigger)
-  const skipRate = isIrregular ? 0.18 : 0.03;  // dense regular blocks (real cities have very few empty lots)
-  const inset    = isIrregular ? 0.4  : 0.7;
+    ? (4.5 + rng() * 2.0)    // ~4.5-6.5 px (small, fits curves/coast)
+    : (5.5 + rng() * 2.5);   // ~5.5-8 px (dense regular blocks)
+  const skipRate = isIrregular ? 0.15 : 0.01;  // almost no empty lots in regular blocks
+  const inset    = isIrregular ? 0.30 : 0.30;  // tight inset → buildings nearly touch
 
   const nU = Math.max(1, Math.round(wU / targetSize));
   const nV = Math.max(1, Math.round(wV / targetSize));
@@ -1798,18 +1906,21 @@ function buildCityV3(seed) {
         .sort((a, b) => b.area - a.area + (rng() - 0.5) * 200);
       if (sortedSmall.length > 0) picks.push({ lb: sortedSmall[0].lb, big: false });
     }
-    // Always seed 2-4 additional small parks/plazas/strip-malls per district.
-    // Real cities have many small green & civic spaces — not just one.
-    const numSmallExtra = 2 + Math.floor(rng() * 3); // 2..4
+    // Always seed 4-7 additional small parks/plazas/strip-malls per district.
+    // Real cities have *many* small green & civic spaces. Smaller blocks
+    // dramatically prefer "park", since tiny green pocket parks are extremely
+    // common in dense urban grids.
+    const numSmallExtra = 4 + Math.floor(rng() * 4); // 4..7
     {
       const sortedSmall = small
         .map(lb => ({ lb, area: _polygonArea(lb.polygon) }))
-        .filter(x => x.area > 200 && x.area < 1800)
+        // Allow tinier candidates so pocket parks slot into the dense grid.
+        .filter(x => x.area > 90 && x.area < 1800)
         .filter(x => !picks.some(p => p.lb === x.lb))
         // Mostly biggest-first, with mild jitter so it isn't deterministic.
         .sort((a, b) => (b.area + (rng() - 0.5) * 400) - (a.area + (rng() - 0.5) * 400));
       for (let k = 0; k < numSmallExtra && k < sortedSmall.length; k++) {
-        picks.push({ lb: sortedSmall[k].lb, big: false });
+        picks.push({ lb: sortedSmall[k].lb, big: false, area: sortedSmall[k].area });
       }
     }
 
@@ -1832,11 +1943,20 @@ function buildCityV3(seed) {
         else if (r < 0.30 + 0.40)     type = "mall";
         else                          type = "park";
       } else {
-        // Small landmarks: mostly parks/plazas, occasional strip-mall.
+        // Small landmark type weighted by block area:
+        //   tiny block (≤300 px²): 90% park, 8% plaza, 2% mall
+        //   small      (≤700)   :  70% park, 22% plaza, 8% mall
+        //   medium    (≤1800)   :  50% park, 32% plaza, 18% mall
+        // Smaller block ⇒ much more likely to be a pocket park.
+        const area = p.area != null ? p.area : _polygonArea(lb.polygon);
+        let parkP, plazaP;
+        if      (area <= 300)  { parkP = 0.90; plazaP = 0.08; }
+        else if (area <= 700)  { parkP = 0.70; plazaP = 0.22; }
+        else                    { parkP = 0.50; plazaP = 0.32; }
         const r = rng();
-        if (r < 0.50)      type = "park";
-        else if (r < 0.82) type = "plaza";
-        else               type = "mall"; // small "strip mall"
+        if (r < parkP)              type = "park";
+        else if (r < parkP + plazaP) type = "plaza";
+        else                         type = "mall"; // small "strip mall"
       }
       d.landmarks.push({
         polygon: lb.polygon,
@@ -1845,24 +1965,19 @@ function buildCityV3(seed) {
       });
     }
 
-    // ----- MICRO-LANDMARK PASS -----
-    // Real cities have a *variety* of small parks, plazas, and mini-malls
-    // tucked between buildings — and not all of them are square. Some are
-    // L-shaped, T-shaped, plus-shaped, etc. (tetromino-style outlines).
-    // For each leaf block NOT already a full landmark, with some chance we
-    // place a SUB-BLOCK polygon in one of those shapes.
+    // ----- MICRO-LANDMARK PASS — DISABLED -----
+    // The tetromino-shaped sub-block landmarks didn't read well at this scale
+    // (small parks ended up looking like floating debris on the block). Left
+    // in as commented code for now in case we want to revisit a different
+    // approach (e.g. only on bigger blocks, or as building-aligned cutouts).
+    /*
     const usedBlocks = new Set(picks.map(p => p.lb));
     const microShapes = _MICRO_LANDMARK_SHAPES;
     for (const lb of d.leafBlocks) {
       if (usedBlocks.has(lb)) continue;
-      // ~30% of blocks get a micro-landmark
       if (rng() > 0.30) continue;
       const blockArea = _polygonArea(lb.polygon);
-      // Skip awkwardly small or huge blocks (large ones look weird with a
-      // tiny tetris park floating in them; tiny ones can't fit a shape).
       if (blockArea < 220 || blockArea > 2200) continue;
-
-      // Block centroid + min-radius for sizing.
       const c = _polygonCentroid(lb.polygon);
       let minR = Infinity;
       for (let i = 0; i < lb.polygon.length; i++) {
@@ -1871,47 +1986,50 @@ function buildCityV3(seed) {
         const d2 = _pointToSegmentDist(c.x, c.y, a, b);
         if (d2 < minR) minR = d2;
       }
-      // Pick a shape and scale it to fit inside the block.
       const shape = microShapes[Math.floor(rng() * microShapes.length)];
-      // Target footprint diameter — 35-65% of the block's inscribed circle.
       const fillFrac = 0.35 + rng() * 0.30;
       const scale = (minR * 2 * fillFrac) / shape.unitSize;
-      // Random rotation aligned with grid (so it looks like part of the city).
       const rot = cityGridAngle + (rng() < 0.5 ? 0 : Math.PI / 2);
       const cosR = Math.cos(rot), sinR = Math.sin(rot);
       const microPoly = shape.points.map(p => {
-        // Center the unit shape, scale, rotate, translate.
         const ux = (p.x - shape.unitSize / 2) * scale;
         const uy = (p.y - shape.unitSize / 2) * scale;
         return {
           x: c.x + ux * cosR - uy * sinR,
           y: c.y + ux * sinR + uy * cosR,
-          edgeKind: "coast"  // micro landmark edges are not roads
+          edgeKind: "coast"
         };
       });
-      // Validate: every vertex must be inside the block.
       let inside = true;
       for (const p of microPoly) {
         if (!_pointInPolygon(p, lb.polygon)) { inside = false; break; }
       }
       if (!inside) continue;
-      // Pick type — micro-landmarks lean park-heavy with occasional plaza/mini-mall.
       const r = rng();
       const microType = (r < 0.55) ? "park" : (r < 0.85) ? "plaza" : "mall";
       d.landmarks.push({
         polygon: microPoly,
         path: _polygonToPath(microPoly),
         type: microType,
-        micro: true  // marker flag (could be used for distinct rendering later)
+        micro: true
       });
     }
+    */
   }
 
-  // 7. Dot placement — variable count by land mass (visible area), evenly
-  // distributed via spring relaxation, with one optional "flavor" pair.
+  // 7. Dot placement — every district gets exactly 4, 6, or 8 spots.
+  // Counts are assigned by RANK of visible area: smallest district = 4,
+  // middle = 6, largest = 8. Placement uses spring relaxation as before.
+  const districtsByArea = districts
+    .map(d => ({ d, vis: _viewportVisibleArea(d.polygon) }))
+    .sort((a, b) => a.vis - b.vis);
+  const dotCounts = [4, 6, 8];
+  for (let r = 0; r < districtsByArea.length; r++) {
+    districtsByArea[r].d._dotTarget = dotCounts[Math.min(r, dotCounts.length - 1)];
+  }
   for (const d of districts) {
     const visArea = _viewportVisibleArea(d.polygon);
-    const target = _dotCountForArea(visArea);
+    const target = d._dotTarget != null ? d._dotTarget : 6;
     const placed = _placeDotsInPolygon(d.polygon, rng, d.landmarks, target, visArea);
     d.dots = placed.map((p, i) => ({
       id: `D${d.idx}-${i}`,
@@ -1927,7 +2045,29 @@ function buildCityV3(seed) {
   for (const d of districts) _collectAllCuts(d.bspRoot, allCuts);
 
   // 9. River FIRST — buildings need to know about it so they can leave riverfront gaps.
-  const river = rng() < 0.6 ? _generateRiver(landPolygon, rng) : null;
+  // 60% chance of a primary river. If we get one, 50% chance of a secondary
+  // river too (so ~30% of maps have two). Both get merged into a single
+  // `river` object (paths concatenated, segments arrays concatenated). The
+  // SVG renderer treats multi-subpath `d` strings normally.
+  const river1 = rng() < 0.6 ? _generateRiver(landPolygon, rng) : null;
+  const river2 = (river1 && rng() < 0.5) ? _generateRiver(landPolygon, rng) : null;
+  let river = null;
+  if (river1 && river2) {
+    river = {
+      path: river1.path + " " + river2.path,
+      segments: [...river1.segments, ...river2.segments],
+      pts: river1.pts,
+      widthScale: river1.widthScale,
+      // Use the first river's stroke widths so both render at a single,
+      // consistent thickness. (Per-river widths would require splitting the
+      // render into two paths — keeping things simple for now.)
+      outerWidth: river1.outerWidth,
+      innerWidth: river1.innerWidth,
+      buildingBuffer: Math.max(river1.buildingBuffer, river2.buildingBuffer)
+    };
+  } else if (river1) {
+    river = river1;
+  }
   const riverSegments = river ? river.segments : null;
 
   // 9b. Road hazards — every cut becomes one or more line segments with a
@@ -1965,17 +2105,28 @@ function buildCityV3(seed) {
     }
   }
 
-  // 11. Bridges — placed where streets cross the river. Two rules:
-  //   - Sort cuts by depth (highways first) so bigger streets get priority for
-  //     bridge placement. If a small street crosses near a big one, the small
-  //     one is dropped — the highway bridge "wins."
+  // 11. Coast road = land polygon inset by ~5px so land extends past the road.
+  // Computed before bridges so the bridge step can also handle coast-road
+  // crossings of the river.
+  const coastRoadPolygon = _insetPolygon(landPolygon, 5);
+  const coastRoadPath = _polygonToPath(coastRoadPolygon);
+
+  // 12. Bridges — placed where BIG and MID streets (highway / avenue / main
+  // street) and the coast road cross the river. Rules:
+  //   - Cuts with depth <= 2 are eligible (highways, avenues, main streets).
+  //     Local streets (depth >= 3) still dead-end at the bank in step 12b.
+  //   - Sort cuts by depth (highways first) so bigger streets get priority.
+  //     If two streets cross the river too close together, only the bigger
+  //     one (or earliest in iteration) gets a bridge.
   //   - Enforce a MIN_BRIDGE_DIST so bridges aren't piled on top of each other.
-  //     Real cities space bridges out — multiple bridges within ~25px would
-  //     read as one weird wide bridge.
+  //   - The coast road also gets bridges where the river meets the coast.
   const bridges = [];
-  const MIN_BRIDGE_DIST = 28; // px between bridge centers
+  const MIN_BRIDGE_DIST = 18; // px between bridge centers
   if (riverSegments) {
-    const cutsByPriority = [...allCuts].sort((a, b) => a.depth - b.depth);
+    // (a) Street bridges — every depth-0/1/2 cut crossing the river.
+    const cutsByPriority = [...allCuts]
+      .filter(c => c.depth <= 2)
+      .sort((a, b) => a.depth - b.depth);
     for (const cut of cutsByPriority) {
       const cutSegs = _cutSegments(cut);
       let placed = false;
@@ -1983,30 +2134,120 @@ function buildCityV3(seed) {
         for (const rs of riverSegments) {
           const hit = _segIntersect(cs.a, cs.b, rs.a, rs.b);
           if (!hit) continue;
-          // Reject if too close to an already-placed bridge.
           let tooClose = false;
           for (const b of bridges) {
             if (Math.hypot(b.x - hit.x, b.y - hit.y) < MIN_BRIDGE_DIST) { tooClose = true; break; }
           }
-          if (tooClose) { placed = true; break; } // mark "tried this cut" — don't try its other segments
+          if (tooClose) { placed = true; break; }
           const segAngle = Math.atan2(cs.b.y - cs.a.y, cs.b.x - cs.a.x);
-          bridges.push({
-            x: hit.x,
-            y: hit.y,
-            angle: segAngle,
-            depth: cut.depth
-          });
+          bridges.push({ x: hit.x, y: hit.y, angle: segAngle, depth: cut.depth });
           placed = true;
           break;
         }
         if (placed) break;
       }
     }
+
+    // (b) Coast-road bridges — at every river-mouth (where the river crosses
+    // the inset coast-road polygon). Treated as avenue-tier (depth=1).
+    const NCR = coastRoadPolygon.length;
+    for (let i = 0; i < NCR; i++) {
+      const a = coastRoadPolygon[i];
+      const b = coastRoadPolygon[(i + 1) % NCR];
+      let crHit = null;
+      for (const rs of riverSegments) {
+        const hit = _segIntersect(a, b, rs.a, rs.b);
+        if (hit) { crHit = hit; break; }
+      }
+      if (!crHit) continue;
+      let tooClose = false;
+      for (const br of bridges) {
+        if (Math.hypot(br.x - crHit.x, br.y - crHit.y) < MIN_BRIDGE_DIST) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      const segAngle = Math.atan2(b.y - a.y, b.x - a.x);
+      bridges.push({ x: crHit.x, y: crHit.y, angle: segAngle, depth: 1 });
+    }
   }
 
-  // 12. Coast road = land polygon inset by ~5px so land extends past the road.
-  const coastRoadPolygon = _insetPolygon(landPolygon, 5);
-  const coastRoadPath = _polygonToPath(coastRoadPolygon);
+  // 12c. Offshore bridges — decorative bridge sprites floating just off the
+  // coast, suggesting connections to off-map territory (à la NY/SF/Tokyo
+  // bay bridges). 70% of maps get 1-3 of them. Each is placed at a random
+  // coast edge midpoint, oriented along the outward normal so the bridge's
+  // long axis points "out to sea". Skips river-mouth zones to keep the
+  // existing river bridges visually distinct.
+  if (rng() < 0.7) {
+    const numOffshore = 1 + Math.floor(rng() * 3);   // 1..3
+    const Nlp = landPolygon.length;
+    let placedCount = 0;
+    for (let attempt = 0; attempt < numOffshore * 8 && placedCount < numOffshore; attempt++) {
+      const i = Math.floor(rng() * Nlp);
+      const a = landPolygon[i];
+      const b = landPolygon[(i + 1) % Nlp];
+      const ex = b.x - a.x, ey = b.y - a.y;
+      const elen = Math.hypot(ex, ey) || 1;
+      const t = 0.3 + rng() * 0.4;
+      const px = a.x + ex * t, py = a.y + ey * t;
+      // Skip points near a river mouth.
+      if (riverSegments && _distToRiver(px, py, riverSegments) < 25) continue;
+      // Outward normal: perpendicular to coast edge, pointing OUT of land.
+      let nx = -ey / elen, ny = ex / elen;
+      if (!_pointInPolygon({ x: px - nx * 1.2, y: py - ny * 1.2 }, landPolygon)) {
+        nx = -nx; ny = -ny;
+      }
+      const offset = 7 + rng() * 6;                  // 7..13 px offshore
+      const bx = px + nx * offset;
+      const by = py + ny * offset;
+      // Keep within viewport with a small margin.
+      if (bx < 4 || bx > VIEW_W - 4 || by < 4 || by > VIEW_H - 4) continue;
+      // Avoid stacking onto an existing bridge.
+      let tooClose = false;
+      for (const br of bridges) {
+        if (Math.hypot(br.x - bx, br.y - by) < MIN_BRIDGE_DIST) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      // Bridge angle = outward normal so the bridge's long edge points to sea.
+      const angle = Math.atan2(ny, nx);
+      bridges.push({ x: bx, y: by, angle, depth: 1, offshore: true });
+      placedCount++;
+    }
+  }
+
+  // 12b. Truncate small streets that cross the river without a bridge.
+  // For depth >= 2 cuts (main streets + locals), any river crossing splits
+  // the cut into dead-end halves that retreat from each bank by `riverGap`.
+  // For depth 0/1 cuts that DID get a bridge, leave them intact (the bridge
+  // sprite covers the river crossing visually).
+  // For depth 0/1 cuts that DIDN'T get a bridge (e.g. close to another big
+  // bridge), also truncate so they don't appear to swim across the water.
+  let renderedCuts = allCuts;
+  if (riverSegments) {
+    const riverGap = (river.outerWidth / 2) + 1; // dead-end just past the bank
+    // Build a quick lookup of bridge positions keyed by approximate location.
+    const hasBridgeNear = (cut) => {
+      const segs = _cutSegments(cut);
+      for (const cs of segs) {
+        for (const rs of riverSegments) {
+          const hit = _segIntersect(cs.a, cs.b, rs.a, rs.b);
+          if (!hit) continue;
+          for (const br of bridges) {
+            if (Math.hypot(br.x - hit.x, br.y - hit.y) < 4) return true;
+          }
+        }
+      }
+      return false;
+    };
+    const out = [];
+    for (const cut of allCuts) {
+      if (cut.depth <= 2 && hasBridgeNear(cut)) {
+        out.push(cut);                         // keep big/mid streets that bridge the river
+        continue;
+      }
+      const truncated = _truncateCutAtRiver(cut, riverSegments, riverGap);
+      for (const t of truncated) out.push(t);
+    }
+    renderedCuts = out;
+  }
 
   // 13. Coast-strip micro-buildings — small buildings on the SEAWARD side of
   // the coast road (between the road and the water). Real cities often have
@@ -2078,7 +2319,7 @@ function buildCityV3(seed) {
     landPath: _polygonToPath(landPolygon),
     coastRoadPath,
     districts,
-    cuts: allCuts,
+    cuts: renderedCuts,
     ambientLandmarks: [],   // no leftovers in 3-region division
     buildings,
     river,
@@ -2323,9 +2564,8 @@ function CityMapV3({
         </clipPath>
       </defs>
 
-      {/* WATER — plain dark blue */}
-      <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill={PAL.waterDeep} />
-      <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill={PAL.waterMid} opacity={0.32} />
+      {/* WATER — single flat-color ocean. */}
+      <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill={PAL.water} />
 
       {/* LAND base */}
       <path d={data.landPath} fill={PAL.land} />
@@ -2352,7 +2592,8 @@ function CityMapV3({
               </g>
             );
           }
-          const fill = b.shade < 0.33 ? PAL.bldgA : (b.shade < 0.66 ? PAL.bldgB : PAL.bldgC);
+          // Exactly TWO building shades — no in-between greys. ~50/50 split.
+          const fill = b.shade < 0.5 ? PAL.bldgA : PAL.bldgB;
           return <path key={`b-${i}`} d={b.path} fill={fill} />;
         })}
       </g>
@@ -2367,68 +2608,6 @@ function CityMapV3({
         {data.districts.flatMap((d, di) =>
           d.landmarks.map((l, li) => _renderLandmark(`lm-${di}-${li}`, l, 0.9))
         )}
-      </g>
-
-      {/* RIVER — drawn AFTER landmarks so it visibly splits any park / mall /
-          stadium / plaza it crosses. Still rendered before streets so streets
-          and bridges visually cross over the water. Stroke widths come from the
-          river data (varied per seed: thin creek → broad waterway). */}
-      {data.river && (
-        <g clipPath={`url(#${idBase}-land)`}>
-          <path
-            d={data.river.path}
-            fill="none"
-            stroke={PAL.waterMid}
-            strokeWidth={data.river.outerWidth}
-            strokeLinecap="round"
-            opacity={0.95}
-          />
-          <path
-            d={data.river.path}
-            fill="none"
-            stroke={PAL.waterDeep}
-            strokeWidth={data.river.innerWidth}
-            strokeLinecap="round"
-            opacity={0.9}
-          />
-        </g>
-      )}
-
-      {/* DISTRICT OUTLINES — full closed outline of every district's visible
-          shape (clipped to the viewport). Drawn BEFORE streets so streets
-          render crisp on top of outlines on road-shared boundaries (the user
-          sees the road there, not the colored outline). On coast and
-          viewport-edge boundaries the outline is fully visible.
-          Hover state uses the EXACT SAME path; only stroke width, opacity,
-          and a drop-shadow glow filter change. The shape itself never
-          changes between states. */}
-      <g>
-        {data.districts.map(d => {
-          const isHovered = hoveredDistrict === d.idx;
-          // The path is IDENTICAL in both states — only the glow filter and
-          // brightness change. This guarantees hover never reshapes anything,
-          // it just lights up the same outline.
-          return (
-            <path
-              key={`outline-${d.idx}`}
-              d={d.outlinePath}
-              fill="none"
-              stroke={d.color}
-              strokeWidth={isHovered ? 2.2 : 1.6}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={isHovered ? 1.0 : 0.85}
-              vectorEffect="non-scaling-stroke"
-              style={{
-                filter: isHovered
-                  ? `drop-shadow(0 0 3px ${d.color}) drop-shadow(0 0 7px ${d.color}) drop-shadow(0 0 14px ${d.color})`
-                  : "none",
-                transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
-                pointerEvents: "none"
-              }}
-            />
-          );
-        })}
       </g>
 
       {/* STREETS — render in order: deepest (local) first, then thicker.
@@ -2516,10 +2695,89 @@ function CityMapV3({
         </g>
       )}
 
-      {/* BRIDGES — render where streets cross the river. Width-along-road
-          spans the river (with overhang); thickness-across-road is sized by
-          street depth. So a wide river crossed by a local street still has a
-          bridge long enough to span the water. */}
+      {/* ROUNDABOUTS — short access spurs from each block-edge midpoint into
+          the ring, then the ring road itself encircling the round building.
+          Spurs are drawn first so the ring sits cleanly on top of their inner
+          ends, making them read as small streets feeding into the rotary. */}
+      {showStreets && (
+        <g>
+          {data.buildings.filter(b => b.round).flatMap((b, i) => {
+            const ring = b.ringRadius != null ? b.ringRadius : b.radius * 1.20;
+            const mids = b.edgeMidpoints || [];
+            const spurs = mids.map((m, j) => {
+              const dx = m.x - b.cx;
+              const dy = m.y - b.cy;
+              const dist = Math.hypot(dx, dy);
+              if (dist < ring + 0.5) return null; // edge inside ring (shouldn't happen)
+              const ux = dx / dist, uy = dy / dist;
+              // Spur runs from the ring outward to the edge midpoint, where it
+              // meets the BSP-cut road that bounds the block.
+              const x1 = b.cx + ux * ring;
+              const y1 = b.cy + uy * ring;
+              return (
+                <line
+                  key={`spur-${i}-${j}`}
+                  x1={x1} y1={y1} x2={m.x} y2={m.y}
+                  stroke="rgba(255,255,255,0.65)"
+                  strokeWidth={0.8}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            });
+            return [
+              <g key={`spurs-${i}`}>{spurs}</g>,
+              <g key={`rb-${i}`}>
+                <circle
+                  cx={b.cx} cy={b.cy} r={ring}
+                  fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={2.4}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <circle
+                  cx={b.cx} cy={b.cy} r={ring}
+                  fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={1.0}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            ];
+          })}
+        </g>
+      )}
+
+      {/* COAST ROAD — inset land polygon stroked as a perimeter avenue */}
+      {showStreets && (
+        <path
+          d={data.coastRoadPath}
+          fill="none"
+          stroke={PAL.coastRoad}
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+          opacity={0.85}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+
+      {/* RIVER — drawn AFTER all roads (streets + highway + roundabouts +
+          coast road) so the water visibly covers any small-street stub that
+          would otherwise poke into the river. Bridges render right after
+          the river so they sit on top and read as crossings. Single flat
+          stroke uses the same `water` color as the ocean. */}
+      {data.river && (
+        <g clipPath={`url(#${idBase}-land)`}>
+          <path
+            d={data.river.path}
+            fill="none"
+            stroke={PAL.water}
+            strokeWidth={data.river.outerWidth}
+            strokeLinecap="round"
+          />
+        </g>
+      )}
+
+      {/* BRIDGES — render where big streets and the coast road cross the
+          river. Drawn AFTER the river so the bridge deck sits cleanly over
+          the water. Width-along-road spans the river (with overhang);
+          thickness-across-road is sized by street depth. */}
       {showStreets && data.bridges && data.bridges.map((b, i) => {
         const baseW = b.depth === 0 ? 11 : (b.depth === 1 ? 9 : (b.depth === 2 ? 7 : 5.5));
         const riverW = data.river ? data.river.outerWidth : 0;
@@ -2539,38 +2797,41 @@ function CityMapV3({
         );
       })}
 
-      {/* ROUNDABOUTS — ring road encircling each round (circular) building */}
-      {showStreets && (
-        <g>
-          {data.buildings.filter(b => b.round).map((b, i) => (
-            <g key={`rb-${i}`}>
-              <circle
-                cx={b.cx} cy={b.cy} r={b.radius * 1.20}
-                fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={1.0}
-                vectorEffect="non-scaling-stroke"
-              />
-              <circle
-                cx={b.cx} cy={b.cy} r={b.radius * 1.20}
-                fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={2.4}
-                vectorEffect="non-scaling-stroke"
-              />
-            </g>
-          ))}
-        </g>
-      )}
-
-      {/* COAST ROAD — inset land polygon stroked as a perimeter avenue */}
-      {showStreets && (
-        <path
-          d={data.coastRoadPath}
-          fill="none"
-          stroke={PAL.coastRoad}
-          strokeWidth={1.3}
-          strokeLinejoin="round"
-          opacity={0.85}
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
+      {/* DISTRICT OUTLINES — full closed outline of every district's visible
+          shape (clipped to the viewport). Rendered AFTER streets so they appear
+          on top of interior streets, making them clearly visible. On coast and
+          viewport-edge boundaries the outline is fully visible.
+          Hover state uses the EXACT SAME path; only stroke width, opacity,
+          and a drop-shadow glow filter change. The shape itself never
+          changes between states. */}
+      <g>
+        {data.districts.map(d => {
+          const isHovered = hoveredDistrict === d.idx;
+          // The path is IDENTICAL in both states — only the glow filter and
+          // brightness change. This guarantees hover never reshapes anything,
+          // it just lights up the same outline.
+          return (
+            <path
+              key={`outline-${d.idx}`}
+              d={d.outlinePath}
+              fill="none"
+              stroke={d.color}
+              strokeWidth={isHovered ? 2.2 : 1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={isHovered ? 1.0 : 0.85}
+              vectorEffect="non-scaling-stroke"
+              style={{
+                filter: isHovered
+                  ? `drop-shadow(0 0 3px ${d.color}) drop-shadow(0 0 7px ${d.color}) drop-shadow(0 0 14px ${d.color})`
+                  : "none",
+                transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
+                pointerEvents: "none"
+              }}
+            />
+          );
+        })}
+      </g>
 
       {/* Optional dot debug */}
       {showDots && (
