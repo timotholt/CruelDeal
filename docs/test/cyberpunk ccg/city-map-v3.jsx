@@ -58,34 +58,51 @@ const _MICRO_LANDMARK_SHAPES = [
   { unitSize: 4, points: [{x:0,y:2},{x:2,y:2},{x:2,y:1},{x:4,y:1},{x:4,y:4},{x:0,y:4}] },
 ];
 
+// PAL — HSL/HSLA color palette mirrored from `city-map-v3.css`.
+//
+// Design rule: water and land share the SAME hue (MAP_HUE); land is just a
+// brighter L. So the whole map reads as a single color family.
+//
+// Keep these values in sync with the CSS file. Both files exist so:
+//   - The CSS file is the human-friendly source of truth (CSS custom props).
+//   - The JS uses literal HSL strings so SVG fills don't depend on
+//     getComputedStyle (avoids a runtime read on first render and SSR
+//     friendliness).
+//
+// To change a color, edit BOTH this object and the CSS file. (A future
+// refactor could read CSS vars at module load — TODO.)
+const MAP_HUE = 212;  // sky-blue-cyan — base hue for the water/land family
+const MAP_SAT = 55;
 const PAL = {
-  waterDeep:    "#06192e",   // darker than before (was #0d2c4d)
-  waterMid:     "#0a2342",   // darker (was #11365d)
-  land:         "#3a6a90",   // darker (was #4f87b8)
-  // Streets at different depths
-  hwyOuter:     "rgba(255,255,255,0.45)",
-  hwyInner:     "rgba(230,250,255,0.95)",
-  avenue:       "rgba(245,250,255,0.85)",
-  streetMain:   "rgba(255,255,255,0.85)",
-  streetLocal:  "rgba(255,255,255,0.62)",
-  // Landmarks (parks/stadiums green; malls/plazas stay in the blue palette)
-  park:         "#5fa97a",
-  plaza:        "#7da3c6",
-  stadium:      "#6dba8a",
-  stadiumField: "#9ad7a8",
-  fieldLine:    "rgba(255,255,255,0.55)", // pitch markings on sports fields
-  diamond:      "#c08a55",                 // baseball infield (clay)
-  mall:         "#3c5878",
-  mallAccent:   "rgba(20, 35, 55, 0.55)",
-  mallHighlight:"rgba(180, 210, 235, 0.18)",
-  // Buildings (subtle on the land color)
-  bldgA:        "rgba(36, 66, 92, 0.32)",
-  bldgB:        "rgba(48, 80, 108, 0.30)",
-  bldgC:        "rgba(28, 56, 80, 0.36)",
-  // Coast road
-  coastRoad:    "rgba(255,255,255,0.55)",
-  label:        "#f0fbff",
-  labelStroke:  "rgba(8,20,36,0.85)"
+  // Water (deep → mid)
+  waterDeep:    `hsl(${MAP_HUE}, 70%, 7%)`,
+  waterMid:     `hsl(${MAP_HUE}, 65%, 11%)`,
+  // Land — same hue/sat as water, brighter L
+  land:         `hsl(${MAP_HUE}, 45%, 30%)`,
+  // Streets (white-tinted overlays)
+  hwyOuter:     "hsla(0, 0%, 100%, 0.45)",
+  hwyInner:     "hsla(195, 80%, 95%, 0.95)",
+  avenue:       "hsla(210, 80%, 97%, 0.85)",
+  streetMain:   "hsla(0, 0%, 100%, 0.85)",
+  streetLocal:  "hsla(0, 0%, 100%, 0.62)",
+  coastRoad:    "hsla(0, 0%, 100%, 0.55)",
+  // Landmarks
+  park:         "hsl(140, 32%, 52%)",
+  plaza:        "hsl(210, 30%, 63%)",
+  stadium:      "hsl(140, 35%, 58%)",
+  stadiumField: "hsl(135, 50%, 70%)",
+  fieldLine:    "hsla(0, 0%, 100%, 0.55)",
+  diamond:      "hsl(28, 45%, 55%)",
+  mall:         "hsl(212, 38%, 35%)",
+  mallAccent:   "hsla(214, 50%, 13%, 0.55)",
+  mallHighlight:"hsla(210, 60%, 81%, 0.18)",
+  // Buildings (subtle footprints on land — same hue family, low alpha)
+  bldgA:        "hsla(208, 45%, 25%, 0.32)",
+  bldgB:        "hsla(210, 40%, 31%, 0.30)",
+  bldgC:        "hsla(208, 50%, 21%, 0.36)",
+  // Labels
+  label:        "hsl(195, 90%, 96%)",
+  labelStroke:  "hsla(212, 70%, 8%, 0.85)"
 };
 
 // ============================================================
@@ -159,9 +176,21 @@ function _pointToSegmentDist(px, py, a, b) {
 // Sutherland-Hodgman polygon clipping against an axis-aligned rectangle.
 // Returns the clipped polygon (may be empty if no overlap). Used to compute
 // the district's *visible shape* — the part actually on screen.
+//
+// edgeKind preservation:
+//   - Surviving original vertices keep their edgeKind.
+//   - Newly-inserted intersection vertices inherit the edgeKind of the edge
+//     being clipped (so a coast edge clipped at the viewport still produces
+//     a coast-tagged endpoint, etc.).
+//   - Edges that run ALONG a viewport boundary (between two consecutive
+//     clip-introduced vertices) are tagged "viewport" so the outline renderer
+//     can decide whether to draw them.
+// To carry this info, each vertex in the result has a `_clipNew` flag set
+// to true when it was inserted by clipping. Callers can detect "edge along
+// viewport boundary" by checking whether BOTH endpoints have `_clipNew` true.
 function _clipPolygonToRect(polygon, rect) {
   // rect = { minX, minY, maxX, maxY }
-  const clipEdge = (poly, isInside, intersect) => {
+  const clipEdge = (poly, isInside, intersectFn) => {
     if (!poly.length) return poly;
     const result = [];
     for (let i = 0; i < poly.length; i++) {
@@ -170,42 +199,49 @@ function _clipPolygonToRect(polygon, rect) {
       const cIn = isInside(curr);
       const pIn = isInside(prev);
       if (cIn) {
-        if (!pIn) result.push(intersect(prev, curr));
+        if (!pIn) result.push(intersectFn(prev, curr));
         result.push(curr);
       } else if (pIn) {
-        result.push(intersect(prev, curr));
+        result.push(intersectFn(prev, curr));
       }
     }
     return result;
   };
+  // The edgeKind on the OUTGOING edge from `a` is the kind we want for the
+  // intersection vertex (which sits on that same edge between a and b).
+  const inheritKind = (a) => a.edgeKind || "coast";
   let r = polygon;
   // Left
   r = clipEdge(r,
     p => p.x >= rect.minX,
     (a, b) => {
       const t = (rect.minX - a.x) / (b.x - a.x || 1e-9);
-      return { x: rect.minX, y: a.y + t * (b.y - a.y) };
+      return { x: rect.minX, y: a.y + t * (b.y - a.y),
+               edgeKind: inheritKind(a), _clipNew: true };
     });
   // Right
   r = clipEdge(r,
     p => p.x <= rect.maxX,
     (a, b) => {
       const t = (rect.maxX - a.x) / (b.x - a.x || 1e-9);
-      return { x: rect.maxX, y: a.y + t * (b.y - a.y) };
+      return { x: rect.maxX, y: a.y + t * (b.y - a.y),
+               edgeKind: inheritKind(a), _clipNew: true };
     });
   // Top
   r = clipEdge(r,
     p => p.y >= rect.minY,
     (a, b) => {
       const t = (rect.minY - a.y) / (b.y - a.y || 1e-9);
-      return { x: a.x + t * (b.x - a.x), y: rect.minY };
+      return { x: a.x + t * (b.x - a.x), y: rect.minY,
+               edgeKind: inheritKind(a), _clipNew: true };
     });
   // Bottom
   r = clipEdge(r,
     p => p.y <= rect.maxY,
     (a, b) => {
       const t = (rect.maxY - a.y) / (b.y - a.y || 1e-9);
-      return { x: a.x + t * (b.x - a.x), y: rect.maxY };
+      return { x: a.x + t * (b.x - a.x), y: rect.maxY,
+               edgeKind: inheritKind(a), _clipNew: true };
     });
   return r;
 }
@@ -314,13 +350,18 @@ function _viewportVisibleArea(polygon) {
   return count * step * step;
 }
 
-// Number of play locations based on district size.
+// Number of play locations based on district VISIBLE area. Continuous (not
+// bucketed) so a 12000 px² district gets fewer dots than a 24000 px² one
+// instead of both falling into the same coarse bucket. Always returns an
+// even number (game requires symmetric pair placement).
+//
+// AREA_PER_DOT_PAIR controls density: each "pair" of dots takes ~ this much
+// visible area. Lower = denser map; higher = sparser. Tune to taste.
+const _AREA_PER_DOT_PAIR = 4500;
 function _dotCountForArea(area) {
-  if (area < 6500)  return 2;
-  if (area < 13000) return 4;
-  if (area < 20000) return 6;
-  if (area < 28000) return 8;
-  return 10;
+  // Each "pair" of dots = 2 dots. Round to nearest pair count, min 1 pair.
+  const pairs = Math.max(1, Math.round(area / (_AREA_PER_DOT_PAIR * 2)));
+  return pairs * 2;
 }
 
 // Polygon-to-path with curve awareness:
@@ -415,6 +456,34 @@ function _polygonOutlinePathSkipRoads(polygon) {
     const next = (i + 1) % n;
     d += ` L ${polygon[next].x.toFixed(2)} ${polygon[next].y.toFixed(2)}`;
   }
+  return d;
+}
+
+// Build a CLOSED district outline that includes EVERY edge of the visible
+// shape: road edges, coast edges, and viewport-boundary edges. Used as the
+// canonical district outline (same path for hover and non-hover; hover only
+// adds a glow filter so the shape doesn't change between states).
+//
+// Steps:
+//   1. Clip polygon to a slightly-inset viewport rect (so strokes sit
+//      comfortably inside the visible canvas, not flush with the edge).
+//   2. Emit a closed polygon path with straight L's between consecutive
+//      vertices — no road-skipping, no smoothing. Streets render ABOVE the
+//      outline so road-shared portions are visually covered by the street
+//      stroke; coast and viewport portions remain visible.
+function _polygonOutlinePathClippedToViewport(polygon, viewportInset = 1) {
+  const rect = {
+    minX: viewportInset, minY: viewportInset,
+    maxX: VIEW_W - viewportInset, maxY: VIEW_H - viewportInset
+  };
+  const clipped = _clipPolygonToRect(polygon, rect);
+  const n = clipped.length;
+  if (n < 2) return "";
+  let d = `M ${clipped[0].x.toFixed(2)} ${clipped[0].y.toFixed(2)}`;
+  for (let i = 1; i < n; i++) {
+    d += ` L ${clipped[i].x.toFixed(2)} ${clipped[i].y.toFixed(2)}`;
+  }
+  d += " Z";
   return d;
 }
 
@@ -1180,10 +1249,27 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   const insetV = inset;
 
   const buildings = [];
+  // Parallel array of world-space bboxes for previously placed buildings,
+  // used by tryPushFootprint to reject overlapping placements. Stored in
+  // ROTATED grid space (u, v) — overlaps in this space exactly correspond
+  // to overlaps in world space because the rotation is uniform. Comparing
+  // in (u, v) avoids reconstructing rotated bboxes per check.
+  const placedUVBoxes = [];
+  // Small slack (in u,v units) so neighboring buildings have a hair of gap
+  // and tiny rounding differences don't trigger false positives.
+  const OVERLAP_PAD = 0.25;
 
   // Helper: validate then push a quad footprint defined in (u,v) space.
   const tryPushFootprint = (u1, u2, v1, v2) => {
     if (u2 - u1 < 1.0 || v2 - v1 < 1.0) return false;
+    // Reject if this footprint overlaps any previously placed footprint.
+    // Two axis-aligned (in u,v) boxes overlap iff they overlap on both axes.
+    for (const b of placedUVBoxes) {
+      if (u2 + OVERLAP_PAD > b.u1 && u1 - OVERLAP_PAD < b.u2 &&
+          v2 + OVERLAP_PAD > b.v1 && v1 - OVERLAP_PAD < b.v2) {
+        return false;
+      }
+    }
     const corners = [
       { u: u1, v: v1 }, { u: u2, v: v1 },
       { u: u2, v: v2 }, { u: u1, v: v2 }
@@ -1201,6 +1287,7 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
             `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
       shade: rng()
     });
+    placedUVBoxes.push({ u1, u2, v1, v2 });
     return true;
   };
 
@@ -1630,7 +1717,11 @@ function buildCityV3(seed) {
   const landPolygon = _generateLandPolygon(rng);
 
   // 2. City-wide grid angle (drives all street alignment).
-  const cityGridAngle = (rng() - 0.5) * 0.5; // ±~14°
+  // TEMPORARILY LOCKED to 0 (grid axis-aligned to viewport) so big anchor
+  // streets read horizontal/vertical and we can debug district geometry
+  // without the visual confusion of a tilted grid. Original was
+  // `(rng() - 0.5) * 0.5` (±~14°). Restore that for natural tilt later.
+  const cityGridAngle = 0;
 
   // 3. MACRO DIVISION → 3 districts up front (no leftovers).
   const macro = _macroDivide3(landPolygon, cityGridAngle, rng);
@@ -1665,9 +1756,12 @@ function buildCityV3(seed) {
       color: colorsShuf[idx % colorsShuf.length],
       polygon,
       polygonPath: _polygonToPath(polygon),
-      // Outline excludes shared-road edges so adjacent districts don't double-stroke
-      // along the highway/avenue, eliminating the "seam" effect.
-      outlinePath: _polygonOutlinePathSkipRoads(polygon),
+      // Outline excludes shared-road edges (so adjacent districts don't double-stroke
+      // along the highway/avenue, eliminating the "seam" effect) AND includes
+      // viewport-boundary edges where the district extends past the screen — so
+      // the district visually closes against the viewport border instead of
+      // appearing to "fall off" into the background.
+      outlinePath: _polygonOutlinePathClippedToViewport(polygon),
       centroid,
       bspRoot,
       leafBlocks,
@@ -2300,29 +2394,35 @@ function CityMapV3({
         </g>
       )}
 
-      {/* DISTRICT OUTLINES — drawn BEFORE streets so streets render crisp on
-          top of outlines. On road-shared boundaries this means the user sees
-          the road, not the colored outline (which would otherwise hide it).
-          On coast/external edges (where there is no street) the outline is
-          fully visible. Hover state uses the FULL polygon path so the glow
-          halo (drop-shadow filter) extends past the streets and remains
-          visible — even though the colored stroke itself is mostly hidden. */}
+      {/* DISTRICT OUTLINES — full closed outline of every district's visible
+          shape (clipped to the viewport). Drawn BEFORE streets so streets
+          render crisp on top of outlines on road-shared boundaries (the user
+          sees the road there, not the colored outline). On coast and
+          viewport-edge boundaries the outline is fully visible.
+          Hover state uses the EXACT SAME path; only stroke width, opacity,
+          and a drop-shadow glow filter change. The shape itself never
+          changes between states. */}
       <g>
         {data.districts.map(d => {
           const isHovered = hoveredDistrict === d.idx;
+          // The path is IDENTICAL in both states — only the glow filter and
+          // brightness change. This guarantees hover never reshapes anything,
+          // it just lights up the same outline.
           return (
             <path
               key={`outline-${d.idx}`}
-              d={isHovered ? d.polygonPath : d.outlinePath}
+              d={d.outlinePath}
               fill="none"
               stroke={d.color}
-              strokeWidth={isHovered ? 2.4 : 1.6}
+              strokeWidth={isHovered ? 2.2 : 1.6}
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={isHovered ? 1.0 : 0.95}
+              opacity={isHovered ? 1.0 : 0.85}
               vectorEffect="non-scaling-stroke"
               style={{
-                filter: isHovered ? `drop-shadow(0 0 4px ${d.color}) drop-shadow(0 0 8px ${d.color})` : "none",
+                filter: isHovered
+                  ? `drop-shadow(0 0 3px ${d.color}) drop-shadow(0 0 7px ${d.color}) drop-shadow(0 0 14px ${d.color})`
+                  : "none",
                 transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
                 pointerEvents: "none"
               }}
