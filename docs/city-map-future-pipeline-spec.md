@@ -7,48 +7,192 @@ Define the next-generation city map pipeline for the final visual direction: a s
 This spec covers the recommended implementation order:
 
 1. Terrain First
-2. Cell City Backbone
+2. City Field Planner
 3. Graph Roads
-4. Cell Districts
-5. Bridge Planner
-6. 3D-Ready Buildings
+4. Parcel/Cell Backbone
+5. Cell Districts
+6. Bridge Planner
+7. 3D-Ready Buildings
 
-This order is intentional. Terrain must come before cells, cells before roads, roads before districts, bridges after both terrain and roads, and 3D buildings after parcels exist.
+This order is intentional. Terrain must come first, then a field system defines the city's directional logic, then roads are traced from that field, then parcels/cells are generated around roads and terrain. Districts group cells, bridges connect roads across water, and 3D buildings come after parcels exist.
 
 ## Design Principles
 
 - The city is generated from physical geography first, not from rectangular road cuts.
-- Cells/parcels are the backbone of the map.
+- A city field/tensor layer defines local street direction, grid families, radial zones, waterfront influence, and diagonal corridors.
+- Roads are traced from the field and terrain constraints, not routed through random cell centroids.
+- Cells/parcels are the hidden backbone of the map, not the final visual style.
 - Roads are graph infrastructure, not the thing that creates districts.
 - Districts are unions of cells.
 - Bridges are planned infrastructure with terrain and road context.
 - Rendering consumes stable geometry/data and should not own generation logic.
 - The static city layer may be expensive to build because it can be cached per seed.
 - Live VFX is optional and should be layered on top, not required for the city layout to work.
+- Debug geometry must never be confused with final art. Cell outlines, raw district seams, and construction polygons are opt-in debug overlays.
+- Most buildings should read as disciplined urban forms. Irregular parcels are useful for placement, setbacks, and coast/road hugging, but they should not automatically create irregular building footprints.
 
 ## Current Problems To Solve
 
 - Roads feel too stiff and parallel.
+- The current v4 road graph routes over cell centroids, so roads inherit jagged construction geometry instead of feeling planned.
 - Districts are still influenced too much by road-cut geometry.
 - Water is mostly an afterthought rather than a terrain system.
 - Islands, channels, rivers, lakes, and bays are handled as special cases.
 - Bridges are reactive decorations instead of planned infrastructure.
 - Buildings are placed on BSP leaves rather than meaningful parcels.
 - Future 3D rendering needs height, shadow, and extrusion metadata that the current pipeline does not model cleanly.
+- The first v4 preview exposes construction geometry too literally: raw cell outlines, random neighborhood angles, cell-shaped buildings, and hard district seams produce a cartoon/stained-glass look instead of the intended cinematic map.
+
+## Visual Correction Plan
+
+The current v4 data backbone is directionally useful, but the preview renderer is showing the wrong layer of abstraction. The fix is not to abandon cells; it is to make cells serve a stricter visual model.
+
+### 1. Hide Construction Geometry By Default
+
+Cell outlines, raw neighborhood Voronoi boundaries, district cell seams, and parcel debugging must be disabled in the default preview. They should be controlled by explicit debug toggles:
+
+- `Show Cells`
+- `Show Parcel Debug`
+- `Show District Cell Seams`
+- `Show Road Graph Nodes`
+
+Default map rendering should show only:
+
+- land/water
+- roads
+- major district outline
+- buildings/open spaces
+- bridges
+- labels
+
+### 2. Add A City Field Before Roads And Cells
+
+Neighborhoods should not use fully random orientations. A city can have multiple grids, but they should feel like coherent planning eras rather than every district inventing a new compass. Use a tensor/vector-style city field, similar in spirit to ProbableTrain-style field-based city generation, to answer "which way should roads/parcels want to go here?"
+
+Replace arbitrary `rng() * Math.PI` orientation with field elements:
+
+- 1 primary city grid angle per landmass
+- 1 optional secondary grid angle for older/waterfront neighborhoods
+- optional radial fields around civic centers, ports, stations, or circular landmarks
+- water/coast-following fields near shoreline and rivers
+- rare diagonal avenue corridors independent from parcel orientation
+- small local jitter only after sampling the dominant local field
+
+Target behavior:
+
+- 70-80% of cells align to the primary grid
+- 15-25% align to a secondary grid
+- 0-10% are intentionally odd: coast, hill, bridgehead, or landmark parcels
+
+### 3. Roads Become Visual Order, Cells Become Substrate
+
+Roads should be planned as the visible organizing layer. Cells should adapt to roads and terrain, not visually compete with them.
+
+Required changes:
+
+- Generate major roads before final parcel subdivision.
+- Trace major roads through the city field instead of through existing cell centroids.
+- Use road corridors as clipping constraints for parcels.
+- Keep highways and avenues long, legible, and sparse.
+- Use roads as stable visual hierarchy:
+  - highways: rare, long, glowing
+  - avenues: district connectors
+  - locals: faint parcel texture
+  - alleys: mostly omitted unless zoomed/debug
+
+The final renderer should not draw every cell edge as a road.
+
+### 4. Buildings Should Mostly Be Rectangular
+
+Irregular parcels are allowed; irregular buildings should be rare. The current preview uses shrunken cell polygons for too many buildings, causing hard cartoon shapes.
+
+New rule:
+
+- 80-90% rectangular or simple orthogonal footprints
+- 5-15% trapezoids/wedges near angled roads, coast, rivers, or bridges
+- 0-5% expressive irregular footprints for landmarks only
+
+Building footprints should be generated from a parcel-local frame:
+
+- choose a parcel orientation from its neighborhood or nearest road
+- place a rectangle or compound rectangle inside the parcel
+- shrink/inset from parcel edges
+- only use the full cell shape for parks, plazas, waterfront lots, or landmark blocks
+
+### 5. Districts Should Render As Generalized Shapes
+
+Districts can still be unions of cells, including L and C shapes, but the visible district outline should be simplified/generalized.
+
+Required changes:
+
+- Keep cell union for gameplay and adjacency.
+- Generate a simplified display boundary from the cell union.
+- Remove tiny jagged stair-steps and short segments.
+- Do not render every internal cell boundary.
+- Labels use the generalized district footprint or a weighted cell center, not raw construction seams.
+
+### 6. Preview Renderer Must Separate Modes
+
+`city-map-v4-preview.jsx` should have two modes:
+
+- `final`: default visual target
+- `debug`: construction overlays
+
+The current preview is effectively a debug mode. It should be renamed or altered so it does not imply that raw v4 data is the intended final look.
+
+### Acceptance Criteria For The Correction
+
+- With `Game UI` off and `V4 Preview` on, the map should read closer to the reference: sparse, cinematic, blue, and map-like.
+- Turning off debug overlays should remove the stained-glass/cartoony polygon look.
+- Most buildings should read as small extruded blocks, not random shards.
+- Roads should provide the main visual structure.
+- Districts should still support L/C/square shapes internally, but their display outlines should not look like raw cell debris.
+- The system should still expose full cell/parcel data for future gameplay and 3D rendering.
 
 ## Target Pipeline
 
 ```text
 seed
   -> terrain
-  -> cells/parcels
+  -> city field / tensor planner
   -> road graph
+  -> cells/parcels
   -> district graph
   -> bridge planner
   -> buildings/landmarks
   -> static renderer data
   -> live overlay data
 ```
+
+## Current Implementation Status
+
+The first executable v4 backbone exists as a sidecar pipeline beside the live v3 map. It is loaded by `Nightrun CCG v3.html`, but the gameplay layer still uses v3 districts and slots unless the `V4 Preview` debug toggle is enabled.
+
+Implemented modules:
+
+- `city-map-terrain-v4.js`
+- `city-map-cells-v4.js`
+- `city-map-road-graph-v4.js`
+- `city-map-districts-v4.js`
+- `city-map-bridge-planner-v4.js`
+- `city-map-buildings-v4.js`
+- `city-map-v4.js`
+- `city-map-v4-preview.jsx`
+
+Missing planned module:
+
+- `city-map-field-v4.js`
+
+Important: the current executable v4 backbone still generates cells before roads and routes roads over cell centroids. The next refactor should insert `city-map-field-v4.js`, then regenerate roads from field samples, then generate parcels around those road corridors.
+
+Public entry point:
+
+```js
+const city = CityMapV4.buildCityV4(seed);
+const summary = CityMapV4.summarizeCityV4(city);
+```
+
+The v4 preview is intentionally visual/debug-only for now. Card placement, scoring, and detection still run against v3 data so the prototype remains playable while the new city architecture matures.
 
 ## 1. Terrain First
 
@@ -128,74 +272,78 @@ Generate the physical world before generating the city: land, water, coastlines,
 - Lakes do not accidentally become district holes unless intended.
 - Terrain output is independent from district and road generation.
 
-## 2. Cell City Backbone
+## 2. City Field Planner
 
 ### Goal
 
-Replace BSP leaf blocks as the primary city skeleton with a cell/parcel graph that can produce non-parallel layouts, sparse clusters, irregular plots, and better building placement.
+Generate a terrain-aware direction field that controls road and parcel logic. This is the missing layer between organic geography and believable planned city structure.
 
 ### New Module
 
-`city-map-cells-v4.js`
+`city-map-field-v4.js`
 
 ### Outputs
 
 ```js
 {
-  cells: [
+  fieldElements: [
     {
       id,
-      polygon,
-      centroid,
-      area,
-      neighbors: [cellId],
+      kind: "grid" | "radial" | "coastFollow" | "riverFollow" | "diagonalCorridor" | "hillAvoidance",
+      origin,
+      angle,
+      strength,
+      radius,
+      falloff,
       landmassId,
-      tags: ["buildable", "coast", "parkCandidate"],
-      density,
-      neighborhoodId
+      priority
     }
   ],
-  neighborhoods: [
+  samples: [
     {
-      id,
-      seedPoint,
-      orientation,
+      point,
+      primaryAngle,
+      secondaryAngle,
+      strength,
       density,
-      cells: [cellId]
+      tags
     }
   ],
-  adjacency: Map<cellId, cellId[]>
+  sample(point): {
+    primaryAngle,
+    secondaryAngle,
+    strength,
+    density,
+    avoidWater,
+    avoidSteepTerrain
+  }
 }
 ```
 
 ### Required Features
 
-- Seed neighborhood centers across buildable land.
-- Generate cells clipped to landmasses and excluding water.
-- Relax cells enough to avoid noisy randomness while preserving organic shape.
-- Support different neighborhood orientations and densities.
-- Tag cells by terrain relationship:
-  - interior
-  - coast
-  - riverfront
-  - lakefront
-  - steep/hill
-  - bridgehead candidate
-- Keep enough large cells for parks, landmarks, plazas, and sparse empty space.
+- Generate one dominant grid field per major landmass.
+- Optionally add one secondary grid field for older/waterfront neighborhoods.
+- Add radial fields around civic centers, stations, ports, or circular landmarks when useful.
+- Add coast-following and river-following fields near water.
+- Add rare diagonal corridor fields for long diagonal avenues.
+- Blend fields deterministically by strength, radius, priority, and terrain relationship.
+- Expose a `sample(point)` API so roads and parcels can ask for local direction.
+- Keep density metadata with the field so roads/buildings know where sparse and dense areas should happen.
 
 ### Acceptance Criteria
 
-- Cell outlines are not dominated by one parallel grid.
-- Sparse and dense neighborhoods can coexist.
-- Cells near angled coast/roads can become trapezoids or irregular parcels.
-- Every buildable cell has adjacency data.
-- Cells can be rendered for debugging independently of roads/districts.
+- Road directions sampled from nearby points are coherent, not noisy.
+- The map can contain multiple planning grids without looking randomly shattered.
+- Diagonal avenues come from explicit corridor fields, not accidental cell geometry.
+- Coast/river areas can bend roads/parcels locally without changing the whole city grid.
+- Field debug can render streamlines or sample arrows, but final rendering hides them.
 
 ## 3. Graph Roads
 
 ### Goal
 
-Generate roads as a connected graph over terrain/cells instead of using recursive polygon cuts. Roads should be believable infrastructure: long highways, useful avenues, local streets, and organic connectors.
+Trace roads through terrain and the city field instead of using recursive polygon cuts or existing cell centroids. Roads should be believable infrastructure: long highways, useful avenues, local streets, and organic connectors.
 
 ### New Module
 
@@ -219,13 +367,14 @@ Generate roads as a connected graph over terrain/cells instead of using recursiv
       to,
       kind: "highway" | "avenue" | "local" | "alley",
       path,
-      cellsAlongside: [cellId],
+      corridorPolygon,
+      fieldSamples,
       bridgeCandidateId,
       visualSmoothing
     }
   ],
-  roadCells: [cellId],
-  blockedCells: [cellId]
+  roadCorridors,
+  blockedAreas
 }
 ```
 
@@ -233,11 +382,18 @@ Generate roads as a connected graph over terrain/cells instead of using recursiv
 
 - Highways are few, long, and usually cross much of a landmass.
 - Avenues connect neighborhoods, district hubs, bridgeheads, and coast gates.
-- Local roads fill cells/neighborhoods without needing every line to be parallel.
+- Local roads fill later parcels/neighborhoods by sampling the field; they do not need every line to be parallel.
+- Major roads are generated before final parcel subdivision so they can influence parcels and building orientation.
 - Roads avoid water except at bridge candidates.
 - Roads avoid steep terrain unless explicitly marked as scenic/mountain roads.
 - Visual paths may be smoothed even if topology remains graph-based.
 - Diagonal roads are allowed visually, but they should not automatically become district borders.
+- Roads are the visible structure of the map; cell edges are not automatically roads.
+- Road generation order:
+  - trace highways/primary routes from coast gates, bridgeheads, and city anchors
+  - trace avenues from neighborhood anchors through field streamlines
+  - generate locals only after major road corridors exist
+  - emit road corridors that parcel generation must respect
 
 ### Acceptance Criteria
 
@@ -246,8 +402,80 @@ Generate roads as a connected graph over terrain/cells instead of using recursiv
 - Roads connect to bridgeheads cleanly.
 - Roads do not clip circular/landmark buildings.
 - Local roads can remain dim/structural while major roads carry visual hierarchy.
+- The final renderer can draw a sparse road set without exposing every parcel boundary.
+- Roads look planned even when parcels/cells are hidden.
 
-## 4. Cell Districts
+## 4. Parcel/Cell Backbone
+
+### Goal
+
+Replace BSP leaf blocks with parcels/cells generated around terrain and road corridors. Cells remain the gameplay/placement backbone, but they are downstream from the city field and major roads.
+
+### New Module
+
+`city-map-cells-v4.js`
+
+### Outputs
+
+```js
+{
+  cells: [
+    {
+      id,
+      polygon,
+      centroid,
+      area,
+      neighbors: [cellId],
+      landmassId,
+      nearestRoadEdgeId,
+      fieldAngle,
+      tags: ["buildable", "coast", "parkCandidate"],
+      density,
+      neighborhoodId
+    }
+  ],
+  neighborhoods: [
+    {
+      id,
+      seedPoint,
+      fieldElementIds,
+      orientation,
+      density,
+      cells: [cellId]
+    }
+  ],
+  adjacency: Map<cellId, cellId[]>
+}
+```
+
+### Required Features
+
+- Seed neighborhood centers across buildable land.
+- Generate cells clipped to landmasses, excluding water and road corridors.
+- Use the city field to determine local parcel orientation.
+- Use major roads as hard boundaries where appropriate.
+- Relax cells enough to avoid noisy randomness while preserving organic shape.
+- Preserve construction cells for placement, adjacency, and gameplay, but do not require final renderers to show cell outlines.
+- Tag cells by terrain relationship:
+  - interior
+  - coast
+  - riverfront
+  - lakefront
+  - steep/hill
+  - bridgehead candidate
+- Keep enough large cells for parks, landmarks, plazas, and sparse empty space.
+
+### Acceptance Criteria
+
+- Cell outlines are coherent enough to support parcels, but they are hidden in final rendering by default.
+- Neighborhoods follow the field planner rather than fully random orientations.
+- Sparse and dense neighborhoods can coexist.
+- Cells near angled coast/roads can become trapezoids or irregular parcels.
+- Every buildable cell has adjacency data.
+- Cells can be rendered for debugging independently of roads/districts.
+- Final map art remains legible when all cell debug overlays are disabled.
+
+## 5. Cell Districts
 
 ### Goal
 
@@ -306,7 +534,7 @@ Build districts by grouping cells, not by road cuts. Districts should be compact
 - Slots feel intentionally spread and do not collide with labels.
 - Districts can be debug-rendered as cell unions.
 
-## 5. Bridge Planner
+## 6. Bridge Planner
 
 ### Goal
 
@@ -314,7 +542,7 @@ Treat bridges as planned infrastructure that connects terrain and road graph, in
 
 ### New Module
 
-`city-map-bridges-v4.js`
+`city-map-bridge-planner-v4.js`
 
 ### Outputs
 
@@ -372,7 +600,7 @@ Treat bridges as planned infrastructure that connects terrain and road graph, in
 - Bridges do not appear without road continuation.
 - Bridge decks visually sit above water and below/with road hierarchy cleanly.
 
-## 6. 3D-Ready Buildings
+## 7. 3D-Ready Buildings
 
 ### Goal
 
@@ -413,12 +641,18 @@ Generate sparse, height-aware, render-ready building data from cells/parcels so 
 
 - Fill only some cells with buildings for a sparse cinematic look.
 - Building density depends on neighborhood density, terrain, district role, and proximity to roads.
-- Footprints come from parcel/cell inset, not from fixed rectangular stamps.
+- Footprints are placed inside parcels, but most are generated from rectangular or compound-rectangular forms.
+- Parcel/cell insets are used for setbacks, parks, plazas, and landmarks; they should not be the default building shape.
 - Support odd footprints:
   - trapezoids
   - wedges
   - small irregular polygons
   - docks/piers as building-like structures
+- Limit odd footprints to places where they explain something visually:
+  - angled avenue frontage
+  - waterfront/coast parcels
+  - bridgeheads
+  - landmark/civic blocks
 - Assign heights for future 2.5D/3D rendering.
 - Generate roof and shadow metadata.
 - Preserve open spaces intentionally.
@@ -426,6 +660,7 @@ Generate sparse, height-aware, render-ready building data from cells/parcels so 
 ### Acceptance Criteria
 
 - Buildings look placed on parcels, not stamped on a uniform grid.
+- Most buildings still read as disciplined urban blocks, not random shards.
 - Sparse clusters can exist without the city feeling empty by accident.
 - Tall buildings can cast longer shadows.
 - Short buildings do not visually shadow taller roofs in fake lighting.
@@ -437,17 +672,19 @@ Do not replace the current v3 map all at once.
 
 1. Keep `buildCityV3(seed)` working.
 2. Introduce v4 terrain behind a debug toggle or separate prototype entry point.
-3. Add v4 cells and render debug cell outlines.
-4. Add v4 road graph while still optionally drawing v3 roads for comparison.
-5. Add v4 districts as cell unions.
-6. Add v4 bridge planner.
-7. Add 2.5D/static renderer once cells/buildings are stable.
+3. Add v4 field planner and render debug field streamlines/arrows.
+4. Regenerate v4 road graph from terrain + field samples.
+5. Generate v4 parcels/cells around terrain and road corridors.
+6. Add v4 districts as cell unions.
+7. Add v4 bridge planner.
+8. Add 2.5D/static renderer once roads/parcels/buildings are stable.
 
 ## Debug Requirements
 
 Each stage needs its own debug overlay:
 
 - Terrain polygons and water types
+- Field elements, streamlines, and sampled direction arrows
 - Cell IDs and adjacency
 - Road graph nodes/edges by hierarchy
 - District cell membership
