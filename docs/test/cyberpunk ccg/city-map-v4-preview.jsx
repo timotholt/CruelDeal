@@ -283,10 +283,10 @@
               <path
                 key={`coast-dock-${index}`}
                 d={dock.path}
-                fill={PAL.avenue}
-                stroke={PAL.hwyInner}
-                strokeWidth={0.16}
-                opacity={0.86}
+                fill={PAL.bldgB}
+                stroke={PAL.avenue}
+                strokeWidth={0.14}
+                opacity={0.78}
                 vectorEffect="non-scaling-stroke"
               />
             ))}

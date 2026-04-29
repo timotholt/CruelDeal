@@ -8,6 +8,7 @@
     polygonBBox,
     pointInPolygon,
     pointToSegmentDist,
+    closestPointOnPolygon,
     distToRiver,
     segIntersect
   } = window.CityMapGeometryV3;
@@ -488,26 +489,47 @@
       .map(b => {
         const c = b.centroid;
         return {
-          x: c.x, y: c.y, block: b,
-          score: Math.abs(c.x - district.centroid.x) * 0.35 +
-                 Math.abs(c.y - district.centroid.y) * 0.18 + rng() * 16
+          x: c.x, y: c.y, block: b, jitter: rng() * 10
         };
-      })
-      .sort((a, b) => a.score - b.score);
-    const them = [], you = [];
-    for (const p of points) {
-      const bucket = p.y < district.centroid.y ? them : you;
-      if (bucket.length >= targetPairs) continue;
-      const tooClose = [...them, ...you].some(e => Math.hypot(e.x - p.x, e.y - p.y) < 21);
-      if (!tooClose) bucket.push(p);
-      if (them.length >= targetPairs && you.length >= targetPairs) break;
-    }
-    for (const p of points) {
-      if (them.length >= targetPairs && you.length >= targetPairs) break;
-      const bucket = them.length < targetPairs ? them : you;
-      const tooClose = [...them, ...you].some(e => Math.hypot(e.x - p.x, e.y - p.y) < 18);
-      if (!tooClose) bucket.push(p);
-    }
+      });
+
+    const minDistTo = (p, others) => others.length
+      ? Math.min(...others.map(e => Math.hypot(e.x - p.x, e.y - p.y)))
+      : Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y);
+
+    const pickSpread = (candidates, count, existing) => {
+      const selected = [];
+      const used = new Set();
+      for (const minSep of [42, 34, 26, 18, 0]) {
+        while (selected.length < count) {
+          let best = null, bestScore = -Infinity;
+          for (const p of candidates) {
+            if (used.has(p.block.id)) continue;
+            const clearance = minDistTo(p, [...existing, ...selected]);
+            if (clearance < minSep) continue;
+            const edgePull = Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y) * 0.08;
+            const score = clearance + edgePull + p.jitter;
+            if (score > bestScore) {
+              best = p;
+              bestScore = score;
+            }
+          }
+          if (!best) break;
+          used.add(best.block.id);
+          selected.push(best);
+        }
+        if (selected.length >= count) break;
+      }
+      return selected;
+    };
+
+    let themCandidates = points.filter(p => p.y < district.centroid.y);
+    let youCandidates = points.filter(p => p.y >= district.centroid.y);
+    if (themCandidates.length < targetPairs) themCandidates = points;
+    if (youCandidates.length < targetPairs) youCandidates = points;
+
+    const them = pickSpread(themCandidates, targetPairs, []);
+    const you = pickSpread(youCandidates, targetPairs, them);
     return [
       ...them.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "them", index: i })),
       ...you.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "you", index: i }))
@@ -825,11 +847,15 @@
     return districts;
   }
 
-  function makeBridgePlan(terrain) {
+  function makeBridgePlan(terrain, mainlandCoastRoadPolygon = null) {
     const bridges = (terrain.channels || [])
       .filter(ch => ch.bridgeAllowed && ch.centerline && ch.centerline.length >= 2)
       .map((ch, i) => {
-        const a = ch.centerline[0], b = ch.centerline[ch.centerline.length - 1];
+        const islandPoint = ch.centerline[ch.centerline.length - 1];
+        const a = mainlandCoastRoadPolygon
+          ? closestPointOnPolygon(islandPoint.x, islandPoint.y, mainlandCoastRoadPolygon)
+          : ch.centerline[0];
+        const b = islandPoint;
         return {
           id: `v35-bridge-${i + 1}`,
           channelId: ch.id,
@@ -994,13 +1020,18 @@
     const truncatedMacroCuts = waterSegs.length
       ? enforced.spineCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
       : enforced.spineCuts;
+    const riverBankCuts = waterBodiesOfKind(terrain, "river")
+      .flatMap(river => window.CityMapWaterV3 && window.CityMapWaterV3.makeRiverBankRoads
+        ? window.CityMapWaterV3.makeRiverBankRoads(river, terrain.mainland.polygon)
+        : []);
 
     const roadEdges = [
       ...truncatedMacroCuts.map((cut, i) => cutToRoad(cut, i, "v35-macro")),
+      ...riverBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-river-bank")),
       ...districts.flatMap(d => d.roads)
     ];
 
-    const bridgePlan = makeBridgePlan(terrain);
+    const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null);
     const buildingPlan = buildStaticBuildings(cells, rng);
     const coastDocks = window.CityMapLandV3 && window.CityMapLandV3.generateCoastDocks
       ? window.CityMapLandV3.generateCoastDocks(terrain.mainland.polygon, window.makeRng(normalizedSeed ^ 0xd0c5))

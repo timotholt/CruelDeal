@@ -126,10 +126,11 @@
       for (let cluster = 0; cluster < clusterCount; cluster++) {
         if (rng() < 0.30) continue;
         const clusterT = 0.18 + rng() * 0.64;
-        const dockCount = 3 + Math.floor(rng() * 3);
-        const pierW = 3.4;
-        const pierLen = 11.4;
-        const spacing = 5.4;
+        const longTwin = rng() < 0.18 && segLen > 36;
+        const dockCount = longTwin ? 2 : 3 + Math.floor(rng() * 3);
+        const pierW = longTwin ? 2.4 : 3.4;
+        const pierLen = longTwin ? 17.5 : 11.4;
+        const spacing = longTwin ? 4.7 : 5.4;
         const clusterWidth = spacing * (dockCount - 1);
         const angle = Math.atan2(outward.y, outward.x) + Math.PI / 2;
         const candidate = [];
