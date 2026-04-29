@@ -575,8 +575,48 @@
     return angle;
   }
 
-  function makeBlock(leaf, district, index, terrain, gridAngle = 0) {
-    const polygon = leaf.polygon;
+  // Sutherland-Hodgman polygon clip. clip polygon should be convex (or locally
+  // convex at the clipped edges — good enough for coast-road clipping).
+  function clipPolygonSH(subject, clip) {
+    if (!subject || subject.length < 3) return [];
+    // Determine winding via signed area (shoelace). In screen coords (y-down):
+    // positive signed area = CW winding → inside is cross >= 0.
+    let area2 = 0;
+    for (let i = 0; i < clip.length; i++) {
+      const a = clip[i], b = clip[(i + 1) % clip.length];
+      area2 += (a.x * b.y - b.x * a.y);
+    }
+    const sign = area2 >= 0 ? 1 : -1;
+    const inside = (p, a, b) =>
+      sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) >= 0;
+    const intersect = (a, b, c, d) => {
+      const A1 = b.y - a.y, B1 = a.x - b.x, C1 = A1 * a.x + B1 * a.y;
+      const A2 = d.y - c.y, B2 = c.x - d.x, C2 = A2 * c.x + B2 * c.y;
+      const det = A1 * B2 - A2 * B1;
+      if (Math.abs(det) < 1e-9) return { x: a.x, y: a.y };
+      return { x: (C1 * B2 - C2 * B1) / det, y: (A1 * C2 - A2 * C1) / det };
+    };
+    let output = subject.map(p => ({ x: p.x, y: p.y }));
+    for (let i = 0; i < clip.length; i++) {
+      if (!output.length) return [];
+      const ca = clip[i], cb = clip[(i + 1) % clip.length];
+      const input = output; output = [];
+      for (let j = 0; j < input.length; j++) {
+        const curr = input[j], prev = input[(j + input.length - 1) % input.length];
+        const ci = inside(curr, ca, cb), pi = inside(prev, ca, cb);
+        if (ci) { if (!pi) output.push(intersect(prev, curr, ca, cb)); output.push(curr); }
+        else if (pi) output.push(intersect(prev, curr, ca, cb));
+      }
+    }
+    return output;
+  }
+
+  function makeBlock(leaf, district, index, terrain, gridAngle = 0, coastClip = null) {
+    let polygon = leaf.polygon;
+    if (coastClip) {
+      const clipped = clipPolygonSH(polygon, coastClip);
+      if (clipped.length >= 3) polygon = clipped;
+    }
     const centroid = interiorPoint(polygon);
     const area = polygonArea(polygon);
     const inWater = pointInWater(centroid, terrain);
@@ -631,11 +671,8 @@
   // extraPolygons: secondary polygons added to this district during a merge-down.
   // They are BSP-subdivided at the same gridAngle so their streets are coherent
   // with the primary polygon's grid — the merged district has one unified feel.
-  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = [], bspRegion = null) {
-    // bspRegion is the inset polygon for block/building placement (keeps buildings
-    // off the coastline). region is the full ownership polygon for hover/game logic.
-    const effectiveBsp = bspRegion || region;
-    const bspRoot = bspSubdivide(effectiveBsp, 2, gridAngle, rng);
+  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = [], coastClip = null) {
+    const bspRoot = bspSubdivide(region, 2, gridAngle, rng);
     const leaves = leavesUnder(bspRoot);
     // Merged districts: BSP each secondary polygon at the same angle so
     // their internal streets feel like one coherent neighbourhood.
@@ -667,7 +704,7 @@
       labelText: names[idx % names.length],
       metadata: { architecture: "v35", blockGrammar: "v3-bsp", merged: extraPolygons.length > 0 }
     };
-    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain, gridAngle));
+    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain, gridAngle, coastClip));
     base.buildablePolygons = base.blocks.filter(b => b.buildable).map(b => b.polygon);
     base.polygons = base.buildablePolygons;
     // Collect BSP cuts from primary + all secondary polygons
@@ -845,11 +882,9 @@
     ];
 
     const mainlandDistricts = enforced.regions.map((region, idx) => {
-      const inset = window.CityMapGeometryV3.insetPolygon(region, 6);
-      const bspRegion = (inset && inset.length >= 3 && polygonArea(inset) > 400) ? inset : region;
       return makeDistrict(region, idx, names, colors, terrain, rng, "mainland",
         districtAngles[idx] ?? 0, waterSegs,
-        enforced.regionSubPolygons[idx] || [], bspRegion);
+        enforced.regionSubPolygons[idx] || [], workingPolygon);
     });
 
     if (validInset && mainlandDistricts.length > 0) {
