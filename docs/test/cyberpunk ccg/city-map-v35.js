@@ -13,6 +13,7 @@
   const {
     polygonToPath,
     polygonOutlinePathClippedToViewport,
+    smoothClosedPath,
     cutPath,
     rectPolygon
   } = window.CityMapPathsV3;
@@ -597,11 +598,44 @@
     };
   }
 
+  // Build ownership path: smooth coast edges, straight cut edges.
+  // Cut endpoints are the only vertices NOT in the original land polygon —
+  // they're new points inserted by splitPolygonByLine. Densify only edges
+  // incident to cut endpoints so smoothClosedPath stays straight along them.
+  // Coast edges (original land polygon vertices) are left untouched so the
+  // bezier curves match landmass.path.
+  function buildOwnershipPath(region, landPolygon) {
+    const snap = p => `${Math.round(p.x * 10)},${Math.round(p.y * 10)}`;
+    const landSet = new Set(landPolygon.map(snap));
+    const isCut = p => !landSet.has(snap(p));
+
+    const densified = [];
+    for (let i = 0; i < region.length; i++) {
+      const a = region[i];
+      const b = region[(i + 1) % region.length];
+      densified.push(a);
+      if (isCut(a) || isCut(b)) {
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        if (dist > 8) {
+          const steps = Math.ceil(dist / 8);
+          for (let j = 1; j < steps; j++) {
+            const t = j / steps;
+            densified.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+          }
+        }
+      }
+    }
+    return smoothClosedPath(densified);
+  }
+
   // extraPolygons: secondary polygons added to this district during a merge-down.
   // They are BSP-subdivided at the same gridAngle so their streets are coherent
   // with the primary polygon's grid — the merged district has one unified feel.
-  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = []) {
-    const bspRoot = bspSubdivide(region, 2, gridAngle, rng);
+  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = [], bspRegion = null) {
+    // bspRegion is the inset polygon for block/building placement (keeps buildings
+    // off the coastline). region is the full ownership polygon for hover/game logic.
+    const effectiveBsp = bspRegion || region;
+    const bspRoot = bspSubdivide(effectiveBsp, 2, gridAngle, rng);
     const leaves = leavesUnder(bspRoot);
     // Merged districts: BSP each secondary polygon at the same angle so
     // their internal streets feel like one coherent neighbourhood.
@@ -617,6 +651,7 @@
       landmassId,
       ownershipPolygon: region,
       ownershipPolygons: allOwnershipPolygons,
+      ownershipPath: buildOwnershipPath(region, terrain.mainland.polygon),
       polygon: region,
       polygonPath: polygonToPath(region),
       outlinePath: polygonOutlinePathClippedToViewport(region),
@@ -782,7 +817,9 @@
     const validInset = mainlandInset && mainlandInset.length >= 3 && polygonArea(mainlandInset) > 400;
     const workingPolygon = validInset ? mainlandInset : terrain.mainland.polygon;
     
-    const divided = macroDivide3(workingPolygon, 0, rng, riverSegs);
+    // Split the FULL land polygon so ownership polygons reach the actual coastline.
+    // workingPolygon (inset) is kept only for the coast road and per-district BSP inset.
+    const divided = macroDivide3(terrain.mainland.polygon, 0, rng, riverSegs);
 
     // Apply the two golden rules on top:
     //   1. Exactly 3 districts (merge-down if macroDivide3 returned 2)
@@ -807,11 +844,13 @@
       -Math.PI / 5 + (rng() - 0.5) * 0.14         // smallest: ~-36° counter-diagonal
     ];
 
-    const mainlandDistricts = enforced.regions.map((region, idx) =>
-      makeDistrict(region, idx, names, colors, terrain, rng, "mainland",
+    const mainlandDistricts = enforced.regions.map((region, idx) => {
+      const inset = window.CityMapGeometryV3.insetPolygon(region, 6);
+      const bspRegion = (inset && inset.length >= 3 && polygonArea(inset) > 400) ? inset : region;
+      return makeDistrict(region, idx, names, colors, terrain, rng, "mainland",
         districtAngles[idx] ?? 0, waterSegs,
-        enforced.regionSubPolygons[idx] || [])
-    );
+        enforced.regionSubPolygons[idx] || [], bspRegion);
+    });
 
     if (validInset && mainlandDistricts.length > 0) {
       const coastCut = {

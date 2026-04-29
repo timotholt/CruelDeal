@@ -376,45 +376,17 @@
               const floodColor = DEBUG_COLORS[idx % DEBUG_COLORS.length];
               return (
                 <g key={`${district.id}-hover`}>
-                  {(() => {
-                    const clipId = `hover-clip-${district.id}`;
-                    const polygons = districtHoverPolygons(district);
-                    const landmass = data.terrain.landmasses.find(l => l.id === district.landmassId)
-                      || data.terrain.mainland;
-                    // ownershipPolygon is cut from an inset polygon (6px inside coast).
-                    // Expand each polygon ~10px from centroid so the clip reaches the coast,
-                    // then landmass.path clips it back to the actual land boundary.
-                    const expandPoly = (poly, amt) => {
-                      const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
-                      const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
-                      return poly.map(p => {
-                        const dx = p.x - cx, dy = p.y - cy;
-                        const len = Math.hypot(dx, dy) || 1;
-                        return { x: p.x + dx / len * amt, y: p.y + dy / len * amt };
-                      });
-                    };
-                    const expandedPolygons = polygons.map(p => expandPoly(p, 10));
-                    return (
-                      <>
-                        <defs>
-                          <clipPath id={clipId}>
-                            {expandedPolygons.map((poly, i) => (
-                              <path key={i} d={polygonToPath(poly)} />
-                            ))}
-                          </clipPath>
-                        </defs>
-                        <path
-                          d={landmass.path}
-                          fill={floodColor}
-                          stroke="none"
-                          opacity={0.38}
-                          style={{ mixBlendMode: "screen" }}
-                          clipPath={`url(#${clipId})`}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      </>
-                    );
-                  })()}
+                  {districtHoverPolygons(district).map((polygon, index) => (
+                    <path
+                      key={`${district.id}-hover-cell-${index}`}
+                      d={index === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
+                      fill={floodColor}
+                      stroke="none"
+                      opacity={0.38}
+                      style={{ mixBlendMode: "screen" }}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
                 </g>
               );
             })}
