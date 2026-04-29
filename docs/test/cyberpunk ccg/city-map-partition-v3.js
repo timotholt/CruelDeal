@@ -660,7 +660,10 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
     }
     return best;
   };
-  const diagonalAvenue = rng() < 0.5 ? findDiagonalAvenue() : null;
+  // Diagonal avenue disabled — creates awkward cuts through districts.
+  // A proper diagonal should emerge from the macro division itself, not be overlaid after.
+  // For now, stick with orthogonal cuts (highway + avenue) which create cleaner districts.
+  const diagonalAvenue = null;
 
   // AVENUE curve attempt — but if the highway already curved, drastically
   // reduce the probability of curving the avenue too. Two curves stacked tend
@@ -691,9 +694,29 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
     }
   }
 
+  // Validate diagonal avenue: only keep it if it actually divides districts meaningfully.
+  // If the diagonal cuts through a single district without creating a natural boundary,
+  // discard it. A valid diagonal should either:
+  // 1. Pass through the boundary between two of the three districts, OR
+  // 2. Create a visually coherent sub-division that aligns with the district's grid
+  let validDiagonal = diagonalAvenue;
+  if (validDiagonal) {
+    // Check if diagonal passes through or near the existing macro cuts.
+    // If it's far from both cuts, it's likely cutting through a single district awkwardly.
+    const distToCut1 = _segmentToSegmentDist(validDiagonal.p1, validDiagonal.p2, roadCut1.p1, roadCut1.p2);
+    const distToCut2 = _segmentToSegmentDist(validDiagonal.p1, validDiagonal.p2, roadCut2.p1, roadCut2.p2);
+    const minDistToCuts = Math.min(distToCut1, distToCut2);
+    
+    // If diagonal is far from both existing cuts (>80px), it's likely cutting through
+    // a single district. Discard it to keep district coherence.
+    if (minDistToCuts > 80) {
+      validDiagonal = null;
+    }
+  }
+
   return {
     regions: [smaller, best2.halfA, best2.halfB],
-    macroCuts: diagonalAvenue ? [roadCut1, roadCut2, diagonalAvenue] : [roadCut1, roadCut2]
+    macroCuts: validDiagonal ? [roadCut1, roadCut2, validDiagonal] : [roadCut1, roadCut2]
   };
 }
 
