@@ -17,6 +17,7 @@
     rectPolygon
   } = window.CityMapPathsV3;
   const {
+    macroDivide3,
     splitPolygonByLine,
     tryGridCut,
     bspSubdivide,
@@ -301,10 +302,9 @@
       spineCuts.push(split.cutSeg);
     }
 
-    // Drop slivers; cap at 3 regions for game balance
+    // Drop slivers; allow all regions through (enforceThreeDistricts will merge/split)
     pool = pool.filter(r => polygonArea(r.polygon) > 1800);
     pool.sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon));
-    if (pool.length > 3) pool = pool.slice(0, 3);
     if (!pool.length) return { regions: [landPolygon], regionAngles: [0], spineCuts: [] };
 
     return {
@@ -314,55 +314,121 @@
     };
   }
 
-  // Guarantee exactly 3 regions. If spineBasedDivide produced fewer, split the
-  // largest region again until we have 3. Falls back to a plain cardinal cut if
-  // no highway spine can be generated for the sub-region.
-  function forceSplitToThree(divided, rng, lakes = []) {
+  // ── Enforce exactly 3 districts ─────────────────────────────
+  // Golden Rule 1: always exactly 3 districts.
+  //   • N > 3 → iteratively merge smallest into its nearest neighbor.
+  //     Produces concave, irregular shapes (like real borough boundaries).
+  //   • N < 3 → split the largest region until we reach 3.
+  // Golden Rule 2: after settling at 3, sort by area and force the LARGEST
+  //   district to an axis-aligned (0°) street grid — the Manhattan Rule.
+  //   Players orient the map by the big rectilinear anchor; the smaller
+  //   districts' diagonal/organic grids feel weird-and-interesting by contrast.
+
+  // True if any vertex of polyA is within epsilon of any vertex of polyB.
+  // Planar-subdivision regions that share a cut edge will always pass this.
+  function regionsShareBoundary(polyA, polyB) {
+    const EPS = 3;
+    for (const a of polyA)
+      for (const b of polyB)
+        if (Math.hypot(a.x - b.x, a.y - b.y) < EPS) return true;
+    return false;
+  }
+
+  // Merge two region entries. The larger polygon stays primary (drives the BSP
+  // grid angle). The smaller polygon is stored in subPolygons so its area and
+  // blocks are still generated — giving the merged district an L-shape or notch.
+  function mergeTwo(rA, rB) {
+    const aA = polygonArea(rA.polygon), aB = polygonArea(rB.polygon);
+    const primary = aA >= aB ? rA : rB;
+    const secondary = aA >= aB ? rB : rA;
+    return {
+      polygon:     primary.polygon,
+      angle:       primary.angle,
+      subPolygons: [
+        ...(primary.subPolygons   || []),
+        ...(secondary.subPolygons || [secondary.polygon])
+      ]
+    };
+  }
+
+  function enforceThreeDistricts(divided, rng, lakes = []) {
     const pool = divided.regions.map((polygon, i) => ({
       polygon,
-      angle: divided.regionAngles[i] ?? 0
+      angle: divided.regionAngles[i] ?? 0,
+      subPolygons: []
     }));
     const cuts = [...divided.spineCuts];
 
+    // Total area of a pool entry (primary + any merged secondaries)
+    const totalArea = r => polygonArea(r.polygon) +
+      r.subPolygons.reduce((s, p) => s + polygonArea(p), 0);
+
+    // ── Phase 1: merge-down ───────────────────────────────────
+    while (pool.length > 3) {
+      pool.sort((a, b) => totalArea(a) - totalArea(b));
+      const smallest = pool[0];
+      const sc = polygonCentroid(smallest.polygon);
+
+      // Prefer a neighbor that actually shares a cut boundary, then nearest centroid
+      let bestIdx = -1, bestScore = Infinity;
+      for (let i = 1; i < pool.length; i++) {
+        const c = polygonCentroid(pool[i].polygon);
+        const dist = Math.hypot(c.x - sc.x, c.y - sc.y);
+        const adj  = regionsShareBoundary(smallest.polygon, pool[i].polygon);
+        const score = adj ? dist * 0.4 : dist;
+        if (score < bestScore) { bestScore = score; bestIdx = i; }
+      }
+      if (bestIdx === -1) bestIdx = 1;
+
+      const merged = mergeTwo(smallest, pool[bestIdx]);
+      pool.splice(bestIdx, 1);
+      pool.splice(0, 1);
+      pool.push(merged);
+    }
+
+    // ── Phase 2: split-up ─────────────────────────────────────
     let safety = 0;
     while (pool.length < 3 && safety++ < 8) {
       pool.sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon));
       const target = pool[0];
 
-      // Try a new highway spine against just this sub-region
       const spine = generateHighwaySpine(target.polygon, [], rng, lakes);
       if (spine) {
         const split = splitBySpine(target.polygon, spine, rng);
         if (split) {
           pool.splice(0, 1,
-            { polygon: split.half1, angle: split.angle1 },
-            { polygon: split.half2, angle: split.angle2 }
+            { polygon: split.half1, angle: split.angle1, subPolygons: [] },
+            { polygon: split.half2, angle: split.angle2, subPolygons: [] }
           );
           cuts.push(split.cutSeg);
           continue;
         }
       }
-
-      // Fallback: plain grid cut (no spine, no bend) on the largest region
       const fallback =
         tryGridCut(target.polygon, 0, false, 70, rng) ||
         tryGridCut(target.polygon, 0, true,  70, rng);
       if (fallback) {
         pool.splice(0, 1,
-          { polygon: fallback.halfA, angle: (rng() - 0.5) * 0.08 },
-          { polygon: fallback.halfB, angle: Math.PI / 4 + (rng() - 0.5) * 0.08 }
+          { polygon: fallback.halfA, angle: (rng() - 0.5) * 0.08, subPolygons: [] },
+          { polygon: fallback.halfB, angle: Math.PI / 4 + (rng() - 0.5) * 0.08, subPolygons: [] }
         );
         cuts.push({ ...fallback.cutSeg, depth: 1 });
         continue;
       }
-
-      break; // nothing worked — accept fewer than 3
+      break;
     }
 
+    // ── Phase 3: Manhattan Rule ───────────────────────────────
+    // Sort largest-first, then snap the biggest district to axis-aligned.
+    // A ±2° wobble keeps it from looking digitally perfect.
+    pool.sort((a, b) => totalArea(b) - totalArea(a));
+    pool[0].angle = 0; // perfectly horizontal/vertical — the civic anchor
+
     return {
-      regions: pool.map(r => r.polygon),
-      regionAngles: pool.map(r => r.angle),
-      spineCuts: cuts
+      regions:           pool.map(r => r.polygon),
+      regionAngles:      pool.map(r => r.angle),
+      regionSubPolygons: pool.map(r => r.subPolygons),
+      spineCuts:         cuts
     };
   }
 
@@ -515,9 +581,18 @@
     };
   }
 
-  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = []) {
+  // extraPolygons: secondary polygons added to this district during a merge-down.
+  // They are BSP-subdivided at the same gridAngle so their streets are coherent
+  // with the primary polygon's grid — the merged district has one unified feel.
+  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = []) {
     const bspRoot = bspSubdivide(region, 2, gridAngle, rng);
     const leaves = leavesUnder(bspRoot);
+    // Merged districts: BSP each secondary polygon at the same angle so
+    // their internal streets feel like one coherent neighbourhood.
+    const extraLeaves = extraPolygons.flatMap(ep => leavesUnder(bspSubdivide(ep, 2, gridAngle, rng)));
+    const allLeaves = [...leaves, ...extraLeaves];
+    const allOwnershipPolygons = [region, ...extraPolygons];
+    const mergedArea = allOwnershipPolygons.reduce((s, p) => s + polygonArea(p), 0);
     const base = {
       idx,
       id: `district-${idx + 1}`,
@@ -525,26 +600,28 @@
       color: colors[idx % colors.length],
       landmassId,
       ownershipPolygon: region,
-      ownershipPolygons: [region],
+      ownershipPolygons: allOwnershipPolygons,
       polygon: region,
       polygonPath: polygonToPath(region),
       outlinePath: polygonOutlinePathClippedToViewport(region),
-      area: polygonArea(region),
+      area: mergedArea,
       centroid: interiorPoint(region),
       bbox: polygonBBox(region),
       bspRoot, blockTree: bspRoot,
-      waterPolygons: ownedWaterPolygons(region, terrain),
+      waterPolygons: allOwnershipPolygons.flatMap(p => ownedWaterPolygons(p, terrain)),
       blocks: [], buildablePolygons: [], polygons: [],
       roads: [], slots: [], dots: [],
       labelAnchor: interiorPoint(region),
       labelPos: interiorPoint(region),
       labelText: names[idx % names.length],
-      metadata: { architecture: "v35", blockGrammar: "v3-bsp" }
+      metadata: { architecture: "v35", blockGrammar: "v3-bsp", merged: extraPolygons.length > 0 }
     };
-    base.blocks = leaves.map((leaf, i) => makeBlock(leaf, base, i, terrain));
+    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain));
     base.buildablePolygons = base.blocks.filter(b => b.buildable).map(b => b.polygon);
     base.polygons = base.buildablePolygons;
-    const rawCuts = collectAllCuts(bspRoot);
+    // Collect BSP cuts from primary + all secondary polygons
+    const allBspRoots = [bspRoot, ...extraPolygons.map(ep => bspSubdivide(ep, 2, gridAngle, rng))];
+    const rawCuts = allBspRoots.flatMap(r => collectAllCuts(r));
     const truncatedCuts = waterSegs.length
       ? rawCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
       : rawCuts;
@@ -632,19 +709,46 @@
     const colors = shuffle(DISTRICT_COLORS, rng);
     const waterSegs = allWaterSegments(terrain);
 
-    // Generate spines: river (terrain) + highway (infrastructure), or just highway.
-    // Spines divide land into regions AND define each region's street grid angle.
-    // Different angles between adjacent regions produce SF-style triangular blocks
-    // at district boundaries where the two grids meet.
-    const spines = generateSpines(terrain, terrain.mainland.polygon, rng);
-    const divided = spineBasedDivide(terrain.mainland.polygon, spines, rng);
+    // ── Macro division: district boundaries ARE the roads ────────────────
+    // macroDivide3 makes 2 sequential grid-aligned cuts through the land polygon.
+    // The cut line is simultaneously the district boundary AND the rendered highway/
+    // avenue — so hovering a district always shows a boundary that sits exactly on
+    // a road. This is how v3 works; v35 now uses the same contract.
+    //
+    // gridAngle = 0 → largest district gets perfectly horizontal/vertical streets
+    // (Manhattan Rule). macroDivide3 uses the same angle for both the macro cuts
+    // AND the BSP inside each region, so everything is consistent.
+    const riverSegs = waterBodiesOfKind(terrain, "river")
+      .flatMap(r => (r.segments || []).map(s => ({ a: s.a, b: s.b })));
+    const divided = macroDivide3(terrain.mainland.polygon, 0, rng, riverSegs);
 
-    const regions = divided.regions;
-    while (regions.length < 3) regions.push(regions[regions.length - 1]);
+    // Apply the two golden rules on top:
+    //   1. Exactly 3 districts (merge-down if macroDivide3 returned 2)
+    //   2. Largest district angle already 0 from macroDivide3; enforceThreeDistricts
+    //      keeps that contract even when a split-up is needed.
+    const lakes     = waterBodiesOfKind(terrain, "lake");
+    const asDivided = {
+      regions:      divided.regions,
+      regionAngles: divided.regions.map(() => 0), // all regions share gridAngle=0
+      spineCuts:    divided.macroCuts
+    };
+    const enforced = enforceThreeDistricts(asDivided, rng, lakes);
 
-    const mainlandDistricts = regions.map((region, idx) =>
+    // enforceThreeDistricts already sorted regions largest-first.
+    // Largest district (idx 0) = 0° grid = perfectly horizontal civic anchor.
+    // The smaller two get distinct angles so their internal blocks look different
+    // and grids "collide" visually at the shared road boundary (SF-style triangular
+    // corner blocks where two orientations meet).
+    const districtAngles = [
+      0,                                            // largest: horizontal anchor
+      Math.PI / 4 + (rng() - 0.5) * 0.14,         // medium:  ~45° diagonal
+      -Math.PI / 5 + (rng() - 0.5) * 0.14         // smallest: ~-36° counter-diagonal
+    ];
+
+    const mainlandDistricts = enforced.regions.map((region, idx) =>
       makeDistrict(region, idx, names, colors, terrain, rng, "mainland",
-        divided.regionAngles[idx] ?? 0, waterSegs)
+        districtAngles[idx] ?? 0, waterSegs,
+        enforced.regionSubPolygons[idx] || [])
     );
 
     const islandDistricts = makeIslandDistricts(
@@ -653,13 +757,13 @@
     const districts = [...mainlandDistricts, ...islandDistricts];
     const cells = districts.flatMap(d => d.blocks);
 
-    // Spine cuts become the highway roads; also truncate at water crossings
-    const truncatedSpineCuts = waterSegs.length
-      ? divided.spineCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
-      : divided.spineCuts;
+    // Macro cuts become the highway/avenue roads; truncate at water
+    const truncatedMacroCuts = waterSegs.length
+      ? enforced.spineCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
+      : enforced.spineCuts;
 
     const roadEdges = [
-      ...truncatedSpineCuts.map((cut, i) => cutToRoad(cut, i, "v35-spine")),
+      ...truncatedMacroCuts.map((cut, i) => cutToRoad(cut, i, "v35-macro")),
       ...districts.flatMap(d => d.roads)
     ];
 

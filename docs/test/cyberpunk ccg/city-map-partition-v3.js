@@ -546,6 +546,10 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
       best1.halfA = jogged[0];
       best1.halfB = jogged[1];
       best1.cutSeg = jogged[2];
+      roadCut1.p1 = jogged[2].p1;
+      roadCut1.p2 = jogged[2].p2;
+      roadCut1.polyline = jogged[2].polyline || null;
+      roadCut1.polylineMode = jogged[2].polylineMode || null;
     }
   }
 
@@ -680,6 +684,10 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
       best2.halfA = jogged[0];
       best2.halfB = jogged[1];
       best2.cutSeg = jogged[2];
+      roadCut2.p1 = jogged[2].p1;
+      roadCut2.p2 = jogged[2].p2;
+      roadCut2.polyline = jogged[2].polyline || null;
+      roadCut2.polylineMode = jogged[2].polylineMode || null;
     }
   }
 

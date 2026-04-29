@@ -280,9 +280,16 @@
         )}
 
         <g opacity={0.22}>
-          {data.cells.map((cell) => (
-            renderBlockRect(cell, `${cell.id}-texture`, cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal)
-          ))}
+          {data.districts.map((district) => {
+            const clipId = districtClipId(idBase, district);
+            return (
+              <g key={`${district.id}-block-textures`} clipPath={`url(#${clipId})`}>
+                {district.blocks.map((cell) =>
+                  renderBlockRect(cell, `${cell.id}-texture`, cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal)
+                )}
+              </g>
+            );
+          })}
         </g>
 
         {data.architecture !== "v35" && (
@@ -376,9 +383,32 @@
           </g>
         )}
 
-        <g>
-          {data.architecture === "v35"
-            ? data.roadGraph.edges.map((edge) => (
+        {/* DISTRICT HOVER FLOOD — rendered early so roads/buildings show on top of it */}
+        {hoveredDistrictId && (
+          <g>
+            {data.districts.filter(district => district.id === hoveredDistrictId).map((district) => {
+              const DEBUG_COLORS = ["#ffee00", "#ff2222", "#22ff88"];
+              const idx = districtIndex(district);
+              const floodColor = DEBUG_COLORS[idx % DEBUG_COLORS.length];
+              return (
+                <g key={`${district.id}-hover`}>
+                  {districtHoverPolygons(district).map((polygon, index) => (
+                    <path
+                      key={`${district.id}-hover-cell-${index}`}
+                      d={polygonToPath(polygon)}
+                      fill={floodColor}
+                      stroke="none"
+                      opacity={0.38}
+                      style={{ mixBlendMode: "screen" }}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </g>
+              );
+            })}
+          </g>
+        )}        <g>
+          {data.roadGraph.edges.map((edge) => (
                 <g key={edge.id}>
                   <path
                     d={edge.path}
@@ -401,41 +431,7 @@
                     vectorEffect="non-scaling-stroke"
                   />
                 </g>
-              ))
-            : data.districts.map((district, index) => {
-                const neighbors = (data.districtAdjacency && data.districtAdjacency[district.id]) || [];
-                const from = districtRoadCenter(district);
-                return neighbors.map((neighborId, nIndex) => {
-                  if (String(district.id) > String(neighborId)) return null;
-                  const neighbor = data.districts.find(d => d.id === neighborId);
-                  if (!neighbor) return null;
-                  const path = structuredRoadPath(from, districtRoadCenter(neighbor), index + nIndex);
-                  return (
-                    <g key={`${district.id}-${neighborId}-connector`}>
-                      <path
-                        d={path}
-                        fill="none"
-                        stroke={V4_PAL.roadUnderlay}
-                        strokeWidth={3.0}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity={0.78}
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <path
-                        d={path}
-                        fill="none"
-                        stroke={PAL.avenue}
-                        strokeWidth={1.05}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity={0.95}
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </g>
-                  );
-                });
-              })}
+              ))}
         </g>
 
         <g>
@@ -482,24 +478,7 @@
           })}
         </g>
 
-        {hoveredDistrictId && (
-          <g>
-            {data.districts.filter(district => district.id === hoveredDistrictId).map((district) => (
-              <g key={`${district.id}-hover`}>
-                {districtHoverPolygons(district).map((polygon, index) => (
-                  <path
-                    key={`${district.id}-hover-cell-${index}`}
-                    d={polygonToPath(polygon)}
-                    fill={V4_PAL.hoverFill}
-                    stroke="none"
-                    opacity={0.28}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-              </g>
-            ))}
-          </g>
-        )}
+
 
         {showLabels && (
           <g>

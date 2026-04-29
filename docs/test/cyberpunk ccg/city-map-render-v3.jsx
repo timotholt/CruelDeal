@@ -297,30 +297,44 @@
     );
   }
 
+  // Debug flood colours — cycle cyan / magenta / yellow per district index
+  const DEBUG_FLOOD_COLORS = ["#ffee00", "#ff2222", "#22ff88"];
+
   function renderDistrictOutlinesLayer({ districts, hoveredDistrict }) {
     return (
       <g>
         {districts.map(d => {
           const isHovered = hoveredDistrict === d.idx;
+          const floodColor = DEBUG_FLOOD_COLORS[d.idx % DEBUG_FLOOD_COLORS.length];
           return (
-            <path
-              key={`outline-${d.idx}`}
-              d={d.outlinePath}
-              fill="none"
-              stroke={PAL.regionLine}
-              strokeWidth={isHovered ? 1.45 : 0.75}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={isHovered ? 0.95 : 0.52}
-              vectorEffect="non-scaling-stroke"
-              style={{
-                filter: isHovered
-                  ? `drop-shadow(0 0 2px ${PAL.regionGlow}) drop-shadow(0 0 5px ${PAL.regionGlow}) drop-shadow(0 0 10px ${PAL.regionGlow})`
-                  : "none",
-                transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
-                pointerEvents: "none"
-              }}
-            />
+            <g key={`district-vis-${d.idx}`}>
+              {/* Bright fill flood — makes district shape instantly obvious on hover */}
+              {isHovered && (
+                <path
+                  d={d.polygonPath}
+                  fill={floodColor}
+                  opacity={0.55}
+                  style={{ pointerEvents: "none", mixBlendMode: "screen" }}
+                />
+              )}
+              <path
+                d={d.outlinePath}
+                fill="none"
+                stroke={isHovered ? floodColor : PAL.regionLine}
+                strokeWidth={isHovered ? 2.2 : 0.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={isHovered ? 1.0 : 0.52}
+                vectorEffect="non-scaling-stroke"
+                style={{
+                  filter: isHovered
+                    ? `drop-shadow(0 0 3px ${floodColor}) drop-shadow(0 0 8px ${floodColor}) drop-shadow(0 0 16px ${floodColor})`
+                    : "none",
+                  transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
+                  pointerEvents: "none"
+                }}
+              />
+            </g>
           );
         })}
       </g>
