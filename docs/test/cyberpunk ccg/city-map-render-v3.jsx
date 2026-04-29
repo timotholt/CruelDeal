@@ -305,35 +305,38 @@
       <g>
         {districts.map(d => {
           const isHovered = hoveredDistrict === d.idx;
-          const floodColor = DEBUG_FLOOD_COLORS[d.idx % DEBUG_FLOOD_COLORS.length];
+          // Use district color as background tint (very subtle by default, brighter on hover)
+          const bgColor = d.color || PAL.regionLine;
+          const bgOpacity = isHovered ? 0.28 : 0.08;
+          
           return (
             <g key={`district-vis-${d.idx}`}>
-              {/* Bright fill flood — makes district shape instantly obvious on hover */}
+              {/* District background fill — encodes territory/control information */}
+              <path
+                d={d.polygonPath}
+                fill={bgColor}
+                opacity={bgOpacity}
+                style={{ pointerEvents: "none" }}
+              />
+              
+              {/* District boundary outline — only visible on hover */}
               {isHovered && (
                 <path
-                  d={d.polygonPath}
-                  fill={floodColor}
-                  opacity={0.55}
-                  style={{ pointerEvents: "none", mixBlendMode: "screen" }}
+                  d={d.outlinePath}
+                  fill="none"
+                  stroke={bgColor}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={0.85}
+                  vectorEffect="non-scaling-stroke"
+                  style={{
+                    filter: `drop-shadow(0 0 2px ${bgColor}) drop-shadow(0 0 6px ${bgColor})`,
+                    transition: "opacity 0.15s ease, filter 0.15s ease",
+                    pointerEvents: "none"
+                  }}
                 />
               )}
-              <path
-                d={d.outlinePath}
-                fill="none"
-                stroke={isHovered ? floodColor : PAL.regionLine}
-                strokeWidth={isHovered ? 2.2 : 1.1}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={isHovered ? 1.0 : 0.68}
-                vectorEffect="non-scaling-stroke"
-                style={{
-                  filter: isHovered
-                    ? `drop-shadow(0 0 3px ${floodColor}) drop-shadow(0 0 8px ${floodColor}) drop-shadow(0 0 16px ${floodColor})`
-                    : "none",
-                  transition: "stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease",
-                  pointerEvents: "none"
-                }}
-              />
             </g>
           );
         })}
