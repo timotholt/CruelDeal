@@ -7,6 +7,7 @@
     polygonCentroid,
     polygonBBox,
     pointInPolygon,
+    pointToSegmentDist,
     distToRiver,
     segIntersect
   } = window.CityMapGeometryV3;
@@ -611,12 +612,8 @@
     return output;
   }
 
-  function makeBlock(leaf, district, index, terrain, gridAngle = 0, coastClip = null) {
+  function makeBlock(leaf, district, index, terrain, gridAngle = 0) {
     let polygon = leaf.polygon;
-    if (coastClip) {
-      const clipped = clipPolygonSH(polygon, coastClip);
-      if (clipped.length >= 3) polygon = clipped;
-    }
     const centroid = interiorPoint(polygon);
     const area = polygonArea(polygon);
     const inWater = pointInWater(centroid, terrain);
@@ -668,17 +665,92 @@
     return smoothClosedPath(densified);
   }
 
+  function signedLineSide(point, a, b) {
+    return (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+  }
+
+  function cutBoundarySegments(cut) {
+    const points = cut.polyline && cut.polyline.length >= 2
+      ? cut.polyline
+      : [cut.p1, cut.p2];
+    const segments = [];
+    for (let i = 0; i + 1 < points.length; i++) {
+      segments.push({ a: points[i], b: points[i + 1] });
+    }
+    return segments;
+  }
+
+  function polygonUsesCutBoundary(polygon, cut) {
+    const segments = cutBoundarySegments(cut);
+    if (!segments.length) return false;
+    let matchedSpan = 0;
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      const edgeLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (edgeLen < 4) continue;
+      for (const segment of segments) {
+        const da = pointToSegmentDist(a.x, a.y, segment.a, segment.b);
+        const db = pointToSegmentDist(b.x, b.y, segment.a, segment.b);
+        if (da < 2.25 && db < 2.25) {
+          matchedSpan += edgeLen;
+          break;
+        }
+      }
+    }
+    return matchedSpan >= 5;
+  }
+
+  function clipPolygonToCutSide(subject, cut, keepPoint) {
+    if (!subject || subject.length < 3) return [];
+    const points = cut.polyline && cut.polyline.length >= 2
+      ? [cut.polyline[0], cut.polyline[cut.polyline.length - 1]]
+      : [cut.p1, cut.p2];
+    const a = points[0], b = points[1];
+    const keepSide = signedLineSide(keepPoint, a, b);
+    if (Math.abs(keepSide) < 1e-6) return subject;
+
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return subject;
+    const ux = dx / len, uy = dy / len;
+    const huge = 4000;
+    const result = splitPolygonByLine(
+      subject,
+      { x: a.x - ux * huge, y: a.y - uy * huge },
+      { x: b.x + ux * huge, y: b.y + uy * huge }
+    );
+    if (!result) return subject;
+
+    const halves = [result[0], result[1]].filter(poly => poly && poly.length >= 3 && polygonArea(poly) > 20);
+    const selected = halves.find(poly => signedLineSide(interiorPoint(poly), a, b) * keepSide >= -1e-6);
+    return selected || subject;
+  }
+
+  function buildMainlandBuildablePolygons(ownershipPolygons, buildableLandPolygon, boundaryCuts) {
+    if (!buildableLandPolygon || buildableLandPolygon.length < 3) return ownershipPolygons;
+    return ownershipPolygons.map(ownershipPolygon => {
+      const keepPoint = interiorPoint(ownershipPolygon);
+      let buildable = buildableLandPolygon;
+      for (const cut of boundaryCuts) {
+        if (!polygonUsesCutBoundary(ownershipPolygon, cut)) continue;
+        const clipped = clipPolygonToCutSide(buildable, cut, keepPoint);
+        if (clipped.length >= 3) buildable = clipped;
+      }
+      return buildable;
+    }).filter(poly => poly && poly.length >= 3 && polygonArea(poly) > 50);
+  }
+
   // extraPolygons: secondary polygons added to this district during a merge-down.
   // They are BSP-subdivided at the same gridAngle so their streets are coherent
   // with the primary polygon's grid — the merged district has one unified feel.
-  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = [], coastClip = null) {
-    const bspRoot = bspSubdivide(region, 2, gridAngle, rng);
-    const leaves = leavesUnder(bspRoot);
-    // Merged districts: BSP each secondary polygon at the same angle so
-    // their internal streets feel like one coherent neighbourhood.
-    const extraLeaves = extraPolygons.flatMap(ep => leavesUnder(bspSubdivide(ep, 2, gridAngle, rng)));
-    const allLeaves = [...leaves, ...extraLeaves];
+  function makeDistrict(region, idx, names, colors, terrain, rng, landmassId = "mainland", gridAngle = 0, waterSegs = [], extraPolygons = [], buildablePolygons = null) {
     const allOwnershipPolygons = [region, ...extraPolygons];
+    const buildablePieces = (buildablePolygons && buildablePolygons.length ? buildablePolygons : allOwnershipPolygons)
+      .filter(poly => poly && poly.length >= 3 && polygonArea(poly) > 50);
+    const bspRoots = buildablePieces.map(poly => bspSubdivide(poly, 2, gridAngle, rng));
+    const bspRoot = bspRoots[0] || null;
+    const allLeaves = bspRoots.flatMap(root => leavesUnder(root));
     const mergedArea = allOwnershipPolygons.reduce((s, p) => s + polygonArea(p), 0);
     const base = {
       idx,
@@ -704,12 +776,11 @@
       labelText: names[idx % names.length],
       metadata: { architecture: "v35", blockGrammar: "v3-bsp", merged: extraPolygons.length > 0 }
     };
-    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain, gridAngle, coastClip));
+    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain, gridAngle));
     base.buildablePolygons = base.blocks.filter(b => b.buildable).map(b => b.polygon);
     base.polygons = base.buildablePolygons;
-    // Collect BSP cuts from primary + all secondary polygons
-    const allBspRoots = [bspRoot, ...extraPolygons.map(ep => bspSubdivide(ep, 2, gridAngle, rng))];
-    const rawCuts = allBspRoots.flatMap(r => collectAllCuts(r));
+    // Collect BSP cuts from the same buildable roots that generated blocks.
+    const rawCuts = bspRoots.flatMap(r => collectAllCuts(r));
     const truncatedCuts = waterSegs.length
       ? rawCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
       : rawCuts;
@@ -881,10 +952,19 @@
       -Math.PI / 5 + (rng() - 0.5) * 0.14         // smallest: ~-36° counter-diagonal
     ];
 
+    const mainlandBuildableByDistrict = enforced.regions.map((region, idx) =>
+      buildMainlandBuildablePolygons(
+        [region, ...(enforced.regionSubPolygons[idx] || [])],
+        workingPolygon,
+        enforced.spineCuts
+      )
+    );
+
     const mainlandDistricts = enforced.regions.map((region, idx) => {
       return makeDistrict(region, idx, names, colors, terrain, rng, "mainland",
         districtAngles[idx] ?? 0, waterSegs,
-        enforced.regionSubPolygons[idx] || [], workingPolygon);
+        enforced.regionSubPolygons[idx] || [],
+        mainlandBuildableByDistrict[idx]);
     });
 
     if (validInset && mainlandDistricts.length > 0) {

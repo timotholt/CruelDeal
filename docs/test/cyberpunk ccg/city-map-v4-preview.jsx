@@ -198,6 +198,37 @@
       [seed]
     );
     const idBase = `cv4-${seed || 1}`;
+    const mainlandCoastRoad = data.roadGraph && data.roadGraph.edges
+      ? data.roadGraph.edges.find((edge) => edge.id === "mainland-coast-road")
+      : null;
+    const mainlandBuildableClipId = `${idBase}-mainland-buildable`;
+    const renderBuilding = (building) => {
+      const dx = Math.cos(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
+      const dy = Math.sin(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
+      return (
+        <g key={building.id}>
+          <path
+            d={building.path}
+            fill="black"
+            opacity={Math.min(0.1, building.shadow.opacity * 0.38)}
+            transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
+          />
+          <path
+            d={building.path}
+            fill={buildingFill(building)}
+            stroke={buildingStroke(building)}
+            strokeWidth={0.08}
+            vectorEffect="non-scaling-stroke"
+          />
+        </g>
+      );
+    };
+    const renderPark = (space) => {
+      const cell = data.cells.find(c => c.id === space.cellId);
+      if (!cell) return null;
+      const isHuge = cell.area > 2200;
+      return renderBlockRect(cell, space.id, PAL.park, isHuge ? 0.2 : 0.34, PAL.park);
+    };
 
     return (
       <svg
@@ -212,6 +243,11 @@
           <clipPath id={`${idBase}-mainland`}>
             <path d={data.terrain.mainland.path} />
           </clipPath>
+          {mainlandCoastRoad && (
+            <clipPath id={mainlandBuildableClipId}>
+              <path d={mainlandCoastRoad.path} />
+            </clipPath>
+          )}
           {data.districts.map((district) => (
             <clipPath key={`${district.id}-clip`} id={districtClipId(idBase, district)}>
               {districtClipPolygons(district).map((polygon, index) => (
@@ -254,27 +290,26 @@
 
         {showBuildings && (
           <g>
-            {data.buildingPlan.openSpaces.filter(s => s.kind === "park").map((space) => {
-              const cell = data.cells.find(c => c.id === space.cellId);
-              if (!cell) return null;
-              const isHuge = cell.area > 2200;
-              return renderBlockRect(cell, space.id, PAL.park, isHuge ? 0.2 : 0.34, PAL.park);
-            })}
+            {mainlandCoastRoad && (
+              <g clipPath={`url(#${mainlandBuildableClipId})`}>
+                {data.buildingPlan.openSpaces
+                  .filter((space) => {
+                    if (space.kind !== "park") return false;
+                    const cell = data.cells.find(c => c.id === space.cellId);
+                    return cell && cell.landmassId === "mainland";
+                  })
+                  .map(renderPark)}
+              </g>
+            )}
+            {data.buildingPlan.openSpaces
+              .filter((space) => {
+                if (space.kind !== "park") return false;
+                const cell = data.cells.find(c => c.id === space.cellId);
+                return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
+              })
+              .map(renderPark)}
           </g>
         )}
-
-        <g opacity={0.22}>
-          {data.districts.map((district) => {
-            const clipId = districtClipId(idBase, district);
-            return (
-              <g key={`${district.id}-block-textures`} clipPath={`url(#${clipId})`}>
-                {district.blocks.map((cell) =>
-                  renderBlockRect(cell, `${cell.id}-texture`, cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal)
-                )}
-              </g>
-            );
-          })}
-        </g>
 
         {data.architecture !== "v35" && (
           <g>
@@ -328,7 +363,21 @@
 
         {showCells && (
           <g opacity={0.54}>
-            {data.cells.map((cell) => (
+            {mainlandCoastRoad && (
+              <g clipPath={`url(#${mainlandBuildableClipId})`}>
+                {data.cells.filter((cell) => cell.landmassId === "mainland").map((cell) => (
+                  <path
+                    key={cell.id}
+                    d={cell.path}
+                    fill="none"
+                    stroke={cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal}
+                    strokeWidth={0.18}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </g>
+            )}
+            {data.cells.filter((cell) => !mainlandCoastRoad || cell.landmassId !== "mainland").map((cell) => (
               <path
                 key={cell.id}
                 d={cell.path}
@@ -343,27 +392,16 @@
 
         {showBuildings && (
           <g>
-            {data.buildingPlan.buildings.map((building) => {
-              const dx = Math.cos(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
-              const dy = Math.sin(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
-              return (
-                <g key={building.id}>
-                  <path
-                    d={building.path}
-                    fill="black"
-                    opacity={Math.min(0.1, building.shadow.opacity * 0.38)}
-                    transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
-                  />
-                  <path
-                    d={building.path}
-                    fill={buildingFill(building)}
-                    stroke={buildingStroke(building)}
-                    strokeWidth={0.08}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </g>
-              );
-            })}
+            {mainlandCoastRoad && (
+              <g clipPath={`url(#${mainlandBuildableClipId})`}>
+                {data.buildingPlan.buildings
+                  .filter((building) => building.landmassId === "mainland")
+                  .map(renderBuilding)}
+              </g>
+            )}
+            {data.buildingPlan.buildings
+              .filter((building) => !mainlandCoastRoad || building.landmassId !== "mainland")
+              .map(renderBuilding)}
           </g>
         )}
 
