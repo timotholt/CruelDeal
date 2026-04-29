@@ -58,8 +58,8 @@
     bldgA:        `hsla(${MAP_HUE}, 54%, 38%, 0.43)`,
     bldgB:        `hsla(${MAP_HUE}, 50%, 47%, 0.40)`,
     roundBldg:    `hsla(${MAP_HUE}, 62%, 46%, 0.58)`,
-    streetLocal:  `hsla(${MAP_HUE}, 88%, 58%, 0.72)`,
-    streetMain:   `hsla(${MAP_HUE}, 88%, 64%, 0.78)`,
+    streetLocal:  `hsla(${MAP_HUE}, 88%, 68%, 0.88)`,  // brightened from L=58% to L=68%, opacity 0.72→0.88
+    streetMain:   `hsla(${MAP_HUE}, 88%, 74%, 0.90)`,  // brightened from L=64% to L=74%, opacity 0.78→0.90
     coastRoad:    `hsla(${MAP_HUE}, 88%, 45%, 0.78)`,  // darkened from L=66% to L=45%
     riverOutline: `hsla(${MAP_HUE}, 88%, 52%, 0.65)`,  // smallest/lightest river stroke
     avenue:       `hsla(${MAP_HUE}, 88%, 70%, 0.82)`,

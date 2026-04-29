@@ -453,8 +453,9 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
   // those cuts so civic boundaries can differ from transport lines.
   const CURVE_P_HIGHWAY = 0.0;
   const CURVE_P_AVENUE  = 0.0;
-  const DISTRICT_JOG_P_HIGHWAY = 0.78;
-  const DISTRICT_JOG_P_AVENUE = 1.0;
+  const ENABLE_DISTRICT_JOGS = false;  // Set to true to enable jog cuts on district boundaries
+  const DISTRICT_JOG_P_HIGHWAY = ENABLE_DISTRICT_JOGS ? 0.78 : 0.0;
+  const DISTRICT_JOG_P_AVENUE = ENABLE_DISTRICT_JOGS ? 1.0 : 0.0;
 
   // Visible bbox dimensions of a polygon clipped to the viewport. Used to
   // reject cuts that produce a thin "sliver" district — even if the area is
