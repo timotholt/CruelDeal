@@ -540,7 +540,7 @@
     const box = block.bbox;
     const w = Math.max(4, Math.min(18, box.w * (0.22 + rng() * 0.22)));
     const h = Math.max(4, Math.min(20, box.h * (0.22 + rng() * 0.22)));
-    const footprint = rectPolygon(block.centroid.x, block.centroid.y, w, h, 0);
+    const footprint = rectPolygon(block.centroid.x, block.centroid.y, w, h, block.fieldAngle);
     const height = block.density === "dense" ? 12 + rng() * 18
       : block.density === "medium" ? 7 + rng() * 10 : 4 + rng() * 7;
     return {
@@ -559,11 +559,27 @@
     };
   }
 
-  function makeBlock(leaf, district, index, terrain) {
+  function polygonLongestEdgeAngle(polygon) {
+    let longest = 0, angle = 0;
+    for (let i = 0; i < polygon.length; i++) {
+      const p1 = polygon[i];
+      const p2 = polygon[(i + 1) % polygon.length];
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = dx * dx + dy * dy;
+      if (len > longest) {
+        longest = len;
+        angle = Math.atan2(dy, dx);
+      }
+    }
+    return angle;
+  }
+
+  function makeBlock(leaf, district, index, terrain, gridAngle = 0) {
     const polygon = leaf.polygon;
     const centroid = interiorPoint(polygon);
     const area = polygonArea(polygon);
     const inWater = pointInWater(centroid, terrain);
+    const longestAngle = polygonLongestEdgeAngle(polygon);
     return {
       id: `${district.id}:block:${index + 1}`,
       districtId: district.id,
@@ -576,7 +592,7 @@
       density: area < 460 ? "dense" : area < 1100 ? "medium" : "sparse",
       buildable: !inWater && area > 80,
       tags: inWater ? ["waterReserve"] : ["buildable"],
-      fieldAngle: 0, orientation: 0,
+      fieldAngle: longestAngle, orientation: longestAngle,
       leaf
     };
   }
@@ -616,7 +632,7 @@
       labelText: names[idx % names.length],
       metadata: { architecture: "v35", blockGrammar: "v3-bsp", merged: extraPolygons.length > 0 }
     };
-    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain));
+    base.blocks = allLeaves.map((leaf, i) => makeBlock(leaf, base, i, terrain, gridAngle));
     base.buildablePolygons = base.blocks.filter(b => b.buildable).map(b => b.polygon);
     base.polygons = base.buildablePolygons;
     // Collect BSP cuts from primary + all secondary polygons

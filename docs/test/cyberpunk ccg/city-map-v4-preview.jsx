@@ -247,26 +247,7 @@
           </g>
         ))}
 
-        {data.terrain.waterBodies.map((body) => {
-          if (body.kind === "ocean") return null;
-          if (body.kind === "river") {
-            return (
-              <path
-                key={body.id}
-                d={body.path}
-                fill="none"
-                stroke={V4_PAL.water}
-                strokeWidth={(body.outerWidth || 7) + 2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            );
-          }
-          if (body.polygon) {
-            return <path key={body.id} d={body.path || polygonToPath(body.polygon)} fill={V4_PAL.water} />;
-          }
-          return null;
-        })}
+
 
         {showBuildings && (
           <g>
@@ -433,6 +414,27 @@
                 </g>
               ))}
         </g>
+
+        {data.terrain.waterBodies.map((body) => {
+          if (body.kind === "ocean") return null;
+          if (body.kind === "river") {
+            return (
+              <path
+                key={body.id}
+                d={body.path}
+                fill="none"
+                stroke={V4_PAL.water}
+                strokeWidth={(body.outerWidth || 7) + 2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            );
+          }
+          if (body.polygon) {
+            return <path key={body.id} d={body.path || polygonToPath(body.polygon)} fill={V4_PAL.water} />;
+          }
+          return null;
+        })}
 
         <g>
           {data.bridgePlan.bridges.map((bridge) => (
