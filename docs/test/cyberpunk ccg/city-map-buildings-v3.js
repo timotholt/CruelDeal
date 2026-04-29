@@ -110,6 +110,8 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
       }
       return [{
         path: _polygonToPath(pts),
+        polygon: pts,
+        area: Math.PI * r * r,
         shade: rng(),
         round: true,
         cx: c.x,
@@ -210,6 +212,8 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
             `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
             `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
             `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
+      polygon: corners,
+      area: _polygonArea(corners),
       shade: rng()
     });
     placedUVBoxes.push({ u1, u2, v1, v2 });

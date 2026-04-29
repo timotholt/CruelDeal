@@ -703,8 +703,27 @@
         openSpaces.push({ id: `${block.id}:park`, kind: "park", cellId: block.id });
         continue;
       }
-      const count = block.density === "dense" && block.area > 260 ? 2 : 1;
-      for (let i = 0; i < count; i++) buildings.push(makeBuildingForBlock(block, i, rng));
+      const generated = window.CityMapBuildingsV3.generateBlockBuildings(
+        block.polygon, block.fieldAngle, rng, null, null, 7.0
+      );
+      generated.forEach((gen, i) => {
+        const height = block.density === "dense" ? 12 + rng() * 18
+          : block.density === "medium" ? 7 + rng() * 10 : 4 + rng() * 7;
+        buildings.push({
+          id: `${block.id}:building:${i}`,
+          cellId: block.id,
+          landmassId: block.landmassId,
+          footprint: gen.polygon,
+          path: gen.path,
+          area: gen.area,
+          height,
+          shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
+          render: {
+            extrudable: true, staticMesh: true,
+            lodGroup: height > 18 ? "tower" : height > 9 ? "midrise" : "lowrise"
+          }
+        });
+      });
     }
     return {
       buildings, openSpaces, landmarks: [],
