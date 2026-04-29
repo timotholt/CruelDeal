@@ -92,6 +92,19 @@
     ];
   }
 
+  function makeDistrictNamePicker(rng) {
+    const names = [...DISTRICT_NAMES];
+    for (let i = names.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [names[i], names[j]] = [names[j], names[i]];
+    }
+    let index = 0;
+    return function pickDistrictName() {
+      if (index >= names.length) index = 0;
+      return names[index++];
+    };
+  }
+
   function lShapeScore(p, variant) {
     const west = variant.endsWith("w");
     const north = variant.includes("n");
@@ -133,6 +146,46 @@
       assignments[cell.id] = best ? best.district : 0;
     }
     seeds.forEach((seed, i) => { assignments[seed.id] = i; });
+    return assignments;
+  }
+
+  function assignmentCounts(cells, assignments) {
+    const counts = new Array(DISTRICT_COUNT).fill(0);
+    for (const cell of cells) {
+      if (assignments[cell.id] !== undefined) counts[assignments[cell.id]]++;
+    }
+    return counts;
+  }
+
+  function rebalanceAssignments(cells, seeds, patterns, assignments, adjacency, rng) {
+    const bbox = unionBBox(cells);
+    const minCells = Math.max(18, Math.floor(cells.length * 0.18));
+    const seedIds = new Set(seeds.map(seed => seed && seed.id).filter(Boolean));
+    for (let pass = 0; pass < cells.length; pass++) {
+      const counts = assignmentCounts(cells, assignments);
+      let targetDistrict = 0;
+      let donorDistrict = 0;
+      for (let i = 1; i < DISTRICT_COUNT; i++) {
+        if (counts[i] < counts[targetDistrict]) targetDistrict = i;
+        if (counts[i] > counts[donorDistrict]) donorDistrict = i;
+      }
+      if (counts[targetDistrict] >= minCells) break;
+      if (counts[donorDistrict] <= minCells + 3) break;
+      if (!seeds[targetDistrict] || !seeds[donorDistrict]) break;
+
+      let best = null;
+      for (const cell of cells) {
+        if (assignments[cell.id] !== donorDistrict || seedIds.has(cell.id)) continue;
+        const touchesTarget = (adjacency[cell.id] || []).some(id => assignments[id] === targetDistrict);
+        const targetScore = patternScore(cell, seeds[targetDistrict], bbox, patterns[targetDistrict]);
+        const donorScore = patternScore(cell, seeds[donorDistrict], bbox, patterns[donorDistrict]);
+        const seedPull = dist(cell.centroid, seeds[targetDistrict].centroid) / Math.max(bbox.w, bbox.h, 1);
+        const score = targetScore - donorScore + seedPull * 0.24 + (touchesTarget ? -0.32 : 0.18) + rng() * 0.01;
+        if (!best || score < best.score) best = { cell, score };
+      }
+      if (!best) break;
+      assignments[best.cell.id] = targetDistrict;
+    }
     return assignments;
   }
 
@@ -216,7 +269,7 @@
     return components;
   }
 
-  function labelAnchor(cellIds, byId) {
+  function labelAnchor(cellIds, byId, displayPolygon) {
     let totalArea = 0;
     let x = 0, y = 0;
     for (const id of cellIds) {
@@ -229,10 +282,21 @@
     let best = null;
     for (const id of cellIds) {
       const cell = byId[id];
+      if (displayPolygon && !pointInPolygon(cell.centroid, displayPolygon)) continue;
+      const edge = displayPolygon ? pointEdgeDistance(cell.centroid, displayPolygon) : 0;
       const d = dist(target, cell.centroid);
-      if (!best || d < best.d) best = { cell, d };
+      const score = d * 0.45 - edge * 1.6 + (cell.area < 520 ? 16 : 0);
+      if (!best || score < best.score) best = { cell, d, score };
     }
-    return best ? best.cell.centroid : target;
+    if (best) return best.cell.centroid;
+    if (!displayPolygon || pointInPolygon(target, displayPolygon)) return target;
+    let fallback = null;
+    for (const id of cellIds) {
+      const cell = byId[id];
+      const d = dist(target, cell.centroid);
+      if (!fallback || d < fallback.d) fallback = { cell, d };
+    }
+    return fallback ? fallback.cell.centroid : target;
   }
 
   function boundarySegments(cellIds, byId, adjacency) {
@@ -245,20 +309,22 @@
         const b = cell.polygon[(i + 1) % cell.polygon.length];
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         let touchesSameDistrict = false;
+        let touchesOtherDistrict = false;
         for (const nid of adjacency[id] || []) {
-          if (!idSet.has(nid)) continue;
           const neighbor = byId[nid];
+          if (!neighbor) continue;
           for (let j = 0; j < neighbor.polygon.length; j++) {
             const c = neighbor.polygon[j];
             const d = neighbor.polygon[(j + 1) % neighbor.polygon.length];
             if (pointToSegmentDist(mid.x, mid.y, c, d) < 0.9) {
-              touchesSameDistrict = true;
+              if (idSet.has(nid)) touchesSameDistrict = true;
+              else touchesOtherDistrict = true;
               break;
             }
           }
           if (touchesSameDistrict) break;
         }
-        if (!touchesSameDistrict) segments.push({ a, b });
+        if (!touchesSameDistrict && touchesOtherDistrict) segments.push({ a, b });
       }
     }
     return segments;
@@ -413,7 +479,7 @@
     return slots;
   }
 
-  function buildDistrictObjects(cells, assignments, adjacency, patterns, rng) {
+  function buildDistrictObjects(cells, assignments, adjacency, patterns, rng, pickDistrictName) {
     const byId = cellMap(cells);
     const districts = [];
     for (let i = 0; i < DISTRICT_COUNT; i++) {
@@ -422,20 +488,22 @@
       const area = cellIds.reduce((sum, id) => sum + byId[id].area, 0);
       const bbox = unionBBox(cellIds.map(id => byId[id]));
       const displayPolygon = displayPolygonForPattern(bbox, patterns[i]);
+      const label = labelAnchor(cellIds, byId, displayPolygon);
       const district = {
         id: `district-${i + 1}`,
-        name: DISTRICT_NAMES[Math.floor(rng() * DISTRICT_NAMES.length)],
+        name: pickDistrictName(),
         color: DISTRICT_COLORS[i % DISTRICT_COLORS.length],
         pattern: patterns[i],
         cellIds,
         polygons,
         area,
         bbox,
-        centroid: labelAnchor(cellIds, byId),
-        labelAnchor: labelAnchor(cellIds, byId),
+        centroid: label,
+        labelAnchor: label,
         boundarySegments: boundarySegments(cellIds, byId, adjacency),
         displayPolygon,
-        displayOutlinePath: polygonToPath(displayPolygon),
+        // displayOutlinePath is intentionally not exported; displayPolygon is a slot/label envelope, not a drawable district border.
+        // displayOutlinePath: polygonToPath(displayPolygon),
         slots: [],
         dots: [],
         components: []
@@ -446,6 +514,59 @@
       district.shape = {
         componentCount: district.components.length,
         boundarySegmentCount: district.boundarySegments.length,
+        cellCount: cellIds.length
+      };
+      districts.push(district);
+    }
+    return districts;
+  }
+
+  function buildLandmassDistrictObjects(allCells, adjacency, terrain, rng, startIndex, pickDistrictName) {
+    const byId = cellMap(allCells);
+    const byLandmass = {};
+    for (const cell of allCells) {
+      if (cell.landmassId === "mainland") continue;
+      if (!byLandmass[cell.landmassId]) byLandmass[cell.landmassId] = [];
+      byLandmass[cell.landmassId].push(cell);
+    }
+    const landmassById = {};
+    for (const landmass of terrain.landmasses || []) landmassById[landmass.id] = landmass;
+    const districts = [];
+    for (const [landmassId, landmassCells] of Object.entries(byLandmass)) {
+      if (landmassCells.length < 2) continue;
+      const districtIdx = startIndex + districts.length;
+      const cellIds = landmassCells.map(cell => cell.id);
+      const area = cellIds.reduce((sum, id) => sum + byId[id].area, 0);
+      if (area < 1500) continue;
+      const bbox = unionBBox(landmassCells);
+      const landmass = landmassById[landmassId];
+      const displayPolygon = landmass && landmass.polygon ? landmass.polygon : displayPolygonForPattern(bbox, "box");
+      const label = labelAnchor(cellIds, byId, displayPolygon);
+      const district = {
+        id: `district-${districtIdx + 1}`,
+        name: pickDistrictName(),
+        color: DISTRICT_COLORS[districtIdx % DISTRICT_COLORS.length],
+        pattern: "landmass",
+        landmassId,
+        cellIds,
+        polygons: cellIds.map(id => byId[id].polygon),
+        area,
+        bbox,
+        centroid: label,
+        labelAnchor: label,
+        boundarySegments: [],
+        displayPolygon,
+        // displayOutlinePath is intentionally not exported; displayPolygon is a slot/label envelope, not a drawable district border.
+        // displayOutlinePath: polygonToPath(displayPolygon),
+        slots: [],
+        dots: [],
+        components: districtComponents({ cellIds }, byId, adjacency)
+      };
+      district.slots = generateSlotsForDistrict(district, districtIdx, rng);
+      district.dots = district.slots;
+      district.shape = {
+        componentCount: district.components.length,
+        boundarySegmentCount: 0,
         cellCount: cellIds.length
       };
       districts.push(district);
@@ -475,23 +596,19 @@
 
   function generateDistricts(roadResult, rng) {
     const cells = roadResult.cells.filter(c => c.landmassId === "mainland");
-    const allCells = roadResult.cells;
     const seeds = pickSeedCells(cells, rng);
     const patterns = shapeTemplates(rng);
     const assignments = initialAssignments(cells, seeds, patterns, rng);
+    const pickDistrictName = makeDistrictNamePicker(rng);
 
-    for (const cell of allCells) {
-      if (cell.landmassId === "mainland") continue;
-      let best = null;
-      for (const seed of seeds) {
-        const d = dist(cell.centroid, seed.centroid);
-        if (!best || d < best.d) best = { d, district: seeds.indexOf(seed) };
-      }
-      assignments[cell.id] = best ? best.district : 0;
-    }
-
-    repairConnectivity(allCells, assignments, roadResult.adjacency, DISTRICT_COUNT);
-    const districts = buildDistrictObjects(allCells, assignments, roadResult.adjacency, patterns, rng);
+    rebalanceAssignments(cells, seeds, patterns, assignments, roadResult.adjacency, rng);
+    repairConnectivity(cells, assignments, roadResult.adjacency, DISTRICT_COUNT);
+    rebalanceAssignments(cells, seeds, patterns, assignments, roadResult.adjacency, rng);
+    repairConnectivity(cells, assignments, roadResult.adjacency, DISTRICT_COUNT);
+    const districts = [
+      ...buildDistrictObjects(cells, assignments, roadResult.adjacency, patterns, rng, pickDistrictName),
+      ...buildLandmassDistrictObjects(roadResult.cells, roadResult.adjacency, roadResult.terrain, rng, DISTRICT_COUNT, pickDistrictName)
+    ];
     return {
       version: 1,
       districts,

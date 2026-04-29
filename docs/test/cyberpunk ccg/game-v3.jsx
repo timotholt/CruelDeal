@@ -69,7 +69,7 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">V4 Preview</span>
+            <span className="dock-label">V3.5 Map</span>
             <button
               className={`dock-toggle ${tweaks.showV4Preview ? 'dock-toggle--on' : ''}`}
               onClick={() => setTweak('showV4Preview', !tweaks.showV4Preview)}
@@ -151,15 +151,22 @@ function Header({ accent, you, them, turn, deckCount }) {
 
 // ---------- City Board (replaces Lane components) ----------
 function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, playerScore, enemyScore, roundedMapEdge, showV4Preview }) {
+  const [hoveredDistrictId, setHoveredDistrictId] = useState(null);
   const v4City = useMemo(
-    () => showV4Preview && window.CityMapV4 ? window.CityMapV4.buildCityV4(sessionSeed || 1) : null,
+    () => showV4Preview
+      ? (window.CityMapV35 ? window.CityMapV35.buildCityV35(sessionSeed || 1) : window.CityMapV4.buildCityV4(sessionSeed || 1))
+      : null,
     [showV4Preview, sessionSeed]
   );
   const boardCity = v4City || city;
   const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
+  const hoveredDistrict = useMemo(
+    () => boardCity.districts.find((district) => district.id === hoveredDistrictId),
+    [boardCity, hoveredDistrictId]
+  );
   return (
     <div
-      className="city-board"
+      className={`city-board ${showV4Preview ? "city-board--v4" : ""}`}
       style={{
         width: CITY_V3_W,
         height: CITY_V3_H,
@@ -176,6 +183,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
           height={CITY_V3_H}
           opacity={mapOpacity ?? 1}
           showLabels={showLabels !== false}
+          hoveredDistrictId={hoveredDistrictId}
         />
       ) : (
         <CityMapV3
@@ -187,6 +195,44 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
           playerScore={playerScore}
           enemyScore={enemyScore}
         />
+      )}
+
+      {showV4Preview && v4City && (
+        <svg
+          className="district-hover-surface"
+          width={CITY_V3_W}
+          height={CITY_V3_H}
+          viewBox={`0 0 ${CITY_V3_W} ${CITY_V3_H}`}
+          preserveAspectRatio="none"
+          onMouseLeave={() => setHoveredDistrictId(null)}
+        >
+          {v4City.districts.map((district) => (
+            <g key={`${district.id}-hit`}>
+              {((district.ownershipPolygons || district.polygons) || []).map((polygon, index) => (
+                <path
+                  key={`${district.id}-hit-cell-${index}`}
+                  d={window.CityMapPathsV3.polygonToPath(polygon)}
+                  fill="black"
+                  opacity="0.001"
+                  stroke="transparent"
+                  strokeWidth="8"
+                  data-district-id={district.id}
+                  data-district-name={district.name}
+                  onMouseEnter={() => setHoveredDistrictId(district.id)}
+                  onMouseLeave={() => setHoveredDistrictId(null)}
+                />
+              ))}
+            </g>
+          ))}
+        </svg>
+      )}
+
+      {showV4Preview && hoveredDistrict && (
+        <div className="district-hover-readout">
+          <span>{hoveredDistrict.name}</span>
+          <b>{hoveredDistrict.id}</b>
+          <i>{hoveredDistrict.slots.length} slots</i>
+        </div>
       )}
 
       {/* Detection overlay (drag preview) */}
@@ -858,7 +904,7 @@ function Game() {
             onChange={(v) => setTweak("roundMapEdge", v)}
           />
           <TweakToggle
-            label="V4 preview"
+            label="V3.5 map"
             checked={!!tweaks.showV4Preview}
             onChange={(v) => setTweak("showV4Preview", v)}
           />

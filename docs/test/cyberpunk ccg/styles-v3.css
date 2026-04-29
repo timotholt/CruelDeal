@@ -311,6 +311,69 @@ html, body {
   50% { opacity: 1; transform: scale(1.12); }
 }
 
+.city-board--v4 .dot {
+  width: 30px;
+  height: 42px;
+  z-index: 2;
+}
+.city-board--v4 .dot-slot {
+  width: 14px;
+  height: 20px;
+  border-color: color-mix(in oklch, var(--slot-color) 70%, rgba(190, 230, 255, 0.35));
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--slot-color) 20%, transparent),
+      color-mix(in oklch, var(--slot-color) 7%, rgba(0,0,0,0.18)));
+  box-shadow:
+    0 0 6px color-mix(in oklch, var(--slot-color) 36%, transparent),
+    inset 0 0 0 1px color-mix(in oklch, var(--slot-color) 20%, transparent);
+  opacity: 0.82;
+}
+.city-board--v4 .dot-slot::before {
+  inset: 3px;
+  opacity: 0.62;
+}
+.city-board--v4 .dot--hover .dot-slot,
+.city-board--v4 .dot--playable .dot-slot {
+  opacity: 1;
+  border-color: color-mix(in oklch, var(--slot-color) 82%, white);
+}
+.district-hover-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+}
+.district-hover-surface path {
+  pointer-events: auto;
+}
+.district-hover-readout {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in oklch, var(--accent) 48%, transparent);
+  border-radius: 3px;
+  background: rgba(4, 8, 14, 0.78);
+  box-shadow: 0 0 12px color-mix(in oklch, var(--accent) 22%, transparent);
+  color: var(--ink);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.district-hover-readout b,
+.district-hover-readout i {
+  color: var(--ink-dim);
+  font-style: normal;
+  font-weight: 600;
+}
+
 @keyframes ring-spin {
   to { transform: rotate(360deg); }
 }

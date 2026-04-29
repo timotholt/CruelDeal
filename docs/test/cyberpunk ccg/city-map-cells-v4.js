@@ -28,6 +28,44 @@
     return Math.max(lo, Math.min(hi, v));
   }
 
+  function snapGridAngle(angle) {
+    return Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
+  }
+
+  function signedTriArea(a, b, c) {
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  }
+
+  function strictSegmentIntersect(a, b, c, d) {
+    const ab1 = signedTriArea(a, b, c);
+    const ab2 = signedTriArea(a, b, d);
+    const cd1 = signedTriArea(c, d, a);
+    const cd2 = signedTriArea(c, d, b);
+    if (Math.abs(ab1) < 1e-7 || Math.abs(ab2) < 1e-7 || Math.abs(cd1) < 1e-7 || Math.abs(cd2) < 1e-7) return false;
+    return ((ab1 > 0) !== (ab2 > 0)) && ((cd1 > 0) !== (cd2 > 0));
+  }
+
+  function isSimplePolygon(poly) {
+    if (!poly || poly.length < 3) return false;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) return false;
+      for (let j = i + 1; j < poly.length; j++) {
+        const adjacent = Math.abs(i - j) <= 1 || (i === 0 && j === poly.length - 1);
+        if (adjacent) continue;
+        const c = poly[j];
+        const d = poly[(j + 1) % poly.length];
+        if (strictSegmentIntersect(a, b, c, d)) return false;
+      }
+    }
+    return true;
+  }
+
+  function isUsablePolygon(poly) {
+    return isSimplePolygon(poly) && polygonArea(poly) >= MIN_CELL_AREA;
+  }
+
   function polygonEdges(polygon) {
     const edges = [];
     for (let i = 0; i < polygon.length; i++) {
@@ -83,8 +121,10 @@
     };
     const a = clipPolygonHalfPlane(poly, point, normal, true);
     const b = clipPolygonHalfPlane(poly, point, normal, false);
-    if (a.length < 3 || b.length < 3) return null;
-    if (polygonArea(a) < MIN_CELL_AREA || polygonArea(b) < MIN_CELL_AREA) return null;
+    if (!isUsablePolygon(a) || !isUsablePolygon(b)) return null;
+    const sourceArea = polygonArea(poly);
+    const splitArea = polygonArea(a) + polygonArea(b);
+    if (sourceArea > 0 && Math.abs(splitArea - sourceArea) / sourceArea > 0.025) return null;
     return [a, b];
   }
 
@@ -171,7 +211,7 @@
         secondaryOrientation: sample ? sample.secondaryAngle : null,
         fieldElementIds: sample ? sample.fieldElementIds : [],
         density,
-        targetArea: density === "dense" ? 620 + rng() * 300 : density === "medium" ? 950 + rng() * 460 : 1550 + rng() * 900,
+        targetArea: density === "dense" ? 500 + rng() * 260 : density === "medium" ? 760 + rng() * 360 : 1180 + rng() * 620,
         cells: []
       });
     }
@@ -214,19 +254,19 @@
     const sample = field && field.sample ? field.sample(centroid) : null;
     const primary = sample ? sample.primaryAngle : hood.orientation;
     const secondary = sample ? sample.secondaryAngle : (hood.secondaryOrientation || primary + Math.PI / 2);
-    const axis = item.depth % 2 === 0 ? primary : secondary;
-    const jitter = sample && sample.strength > 0.62 ? 0.12 : 0.22;
+    const axis = snapGridAngle(item.depth % 2 === 0 ? primary : secondary);
+    const jitter = sample && sample.strength > 0.62 ? 0.025 : 0.045;
     return axis + (rng() - 0.5) * jitter;
   }
 
   function subdivideNeighborhood(poly, hood, field, rng) {
     const stack = [{ polygon: poly, depth: 0 }];
     const cells = [];
-    const maxDepth = hood.density === "dense" ? 8 : hood.density === "medium" ? 7 : 6;
+    const maxDepth = hood.density === "dense" ? 9 : hood.density === "medium" ? 8 : 7;
     while (stack.length) {
       const item = stack.pop();
       const area = polygonArea(item.polygon);
-      const shouldSplit = area > hood.targetArea * (0.82 + rng() * 0.58) && item.depth < maxDepth;
+      const shouldSplit = area > hood.targetArea * (0.78 + rng() * 0.46) && item.depth < maxDepth;
       if (!shouldSplit) {
         cells.push(item.polygon);
         continue;
@@ -234,7 +274,7 @@
       const jitteredAngle = chooseSplitAngle(item, hood, field, rng);
       const bbox = polygonBBox(item.polygon);
       const span = Math.max(bbox.w, bbox.h);
-      const offset = (rng() - 0.5) * span * 0.18;
+      const offset = (rng() - 0.5) * span * 0.11;
       const split = splitPolygon(item.polygon, jitteredAngle, offset);
       if (!split) {
         cells.push(item.polygon);
@@ -258,8 +298,8 @@
   }
 
   function makeCell(rawId, polygon, landmass, hood, terrain, field) {
+    if (!isUsablePolygon(polygon)) return null;
     const area = polygonArea(polygon);
-    if (area < MIN_CELL_AREA) return null;
     const centroid = polygonCentroid(polygon);
     if (!pointInPolygon(centroid, landmass.polygon)) return null;
     if (waterConflict(centroid, terrain)) return null;

@@ -24,6 +24,10 @@
     return a;
   }
 
+  function snapGridAngle(angle) {
+    return normAngle(Math.round(normAngle(angle) / (Math.PI / 2)) * (Math.PI / 2));
+  }
+
   function angleDelta(a, b) {
     let d = Math.abs(normAngle(a) - normAngle(b));
     return d > Math.PI / 2 ? Math.PI - d : d;
@@ -182,9 +186,9 @@
   function fieldElementsForLandmass(landmass, terrain, rng) {
     const elements = [];
     const centroid = landmass.centroid || polygonCentroid(landmass.polygon);
-    const base = longestEdgeAngle(landmass.polygon);
-    const primaryAngle = normAngle(base + (rng() - 0.5) * 0.28);
-    const secondaryAngle = normAngle(primaryAngle + Math.PI / 2 + (rng() - 0.5) * 0.2);
+    const base = landmass.kind === "island" ? snapGridAngle(longestEdgeAngle(landmass.polygon)) : 0;
+    const primaryAngle = normAngle(base + (rng() - 0.5) * 0.045);
+    const secondaryAngle = normAngle(primaryAngle + Math.PI / 2 + (rng() - 0.5) * 0.035);
     const prefix = landmass.id;
 
     elements.push({
@@ -205,7 +209,7 @@
         kind: "grid",
         origin: centroid,
         angle: secondaryAngle,
-        strength: landmass.kind === "island" ? 0.26 : 0.38 + rng() * 0.2,
+        strength: landmass.kind === "island" ? 0.2 : 0.28 + rng() * 0.12,
         radius: Math.max(VIEW_W, VIEW_H),
         falloff: "none",
         landmassId: landmass.id,
@@ -225,7 +229,7 @@
       priority: 8
     });
 
-    if (landmass.kind !== "island" && rng() < 0.5) {
+    if (landmass.kind !== "island" && rng() < 0.28) {
       const diag = rng() < 0.5 ? Math.PI / 4 : -Math.PI / 4;
       elements.push({
         id: `${prefix}:diagonal-corridor`,
@@ -235,15 +239,15 @@
           y: centroid.y + (rng() - 0.5) * 80
         },
         angle: normAngle(primaryAngle + diag + (rng() - 0.5) * 0.18),
-        strength: 0.72,
-        radius: 28 + rng() * 18,
+        strength: 0.46,
+        radius: 24 + rng() * 14,
         falloff: "linear",
         landmassId: landmass.id,
         priority: 7
       });
     }
 
-    if (landmass.kind !== "island" && rng() < 0.46) {
+    if (landmass.kind !== "island" && rng() < 0.28) {
       elements.push({
         id: `${prefix}:radial-anchor`,
         kind: "radial",
@@ -252,8 +256,8 @@
           y: centroid.y + (rng() - 0.5) * 90
         },
         angle: primaryAngle,
-        strength: 0.42,
-        radius: 86 + rng() * 70,
+        strength: 0.28,
+        radius: 72 + rng() * 48,
         falloff: "linear",
         landmassId: landmass.id,
         priority: 4

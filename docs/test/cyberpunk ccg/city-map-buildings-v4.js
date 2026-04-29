@@ -35,6 +35,10 @@
     ];
   }
 
+  function snapBlockAngle(angle) {
+    return Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
+  }
+
   function insetLikeFootprint(cell, scale, angleJitter) {
     const c = cell.centroid;
     const footprint = cell.polygon.map(p => ({
@@ -61,11 +65,11 @@
   }
 
   function buildingCountForCell(cell, rng) {
-    if (cell.tags.includes("parkCandidate") && cell.area > 1450 && rng() < 0.68) return 0;
-    if (cell.tags.includes("hill") && rng() < 0.28) return 0;
+    if (cell.tags.includes("parkCandidate") && cell.area > 1450 && rng() < 0.28) return 0;
+    if (cell.tags.includes("hill") && rng() < 0.18) return 0;
     if (cell.density === "dense") return cell.area > 960 ? 2 + (rng() < 0.38 ? 1 : 0) : 1;
     if (cell.density === "medium") return cell.area > 1300 && rng() < 0.42 ? 2 : 1;
-    return rng() < 0.54 ? 1 : 0;
+    return rng() < 0.7 ? 1 : 0;
   }
 
   function heightForCell(cell, rng) {
@@ -89,7 +93,7 @@
     }
 
     let footprint;
-    const angle = (cell.fieldAngle || cell.orientation || 0) + (rng() - 0.5) * 0.18;
+    const angle = snapBlockAngle(cell.fieldAngle || cell.orientation || 0);
     if (specialFootprintAllowed(cell, rng)) {
       footprint = insetLikeFootprint(cell, 0.34 + rng() * 0.14, (rng() - 0.5) * 0.14);
     } else {
@@ -139,9 +143,24 @@
     return best;
   }
 
+  function spacePace(openSpaces, cellsById) {
+    const keptParks = [];
+    for (const space of openSpaces) {
+      if (space.kind !== "park") continue;
+      const cell = cellsById[space.cellId];
+      if (!cell) continue;
+      const minGap = cell.area > 2100 ? 58 : 42;
+      const crowded = keptParks.some((park) => dist(cell.centroid, park.centroid) < Math.max(minGap, park.minGap * 0.78));
+      if (crowded) space.kind = "setback";
+      else keptParks.push({ centroid: cell.centroid, minGap });
+    }
+  }
+
   function generateBuildings(bridgeResult, rng) {
     const roadCellIds = new Set(bridgeResult.roadGraph.roadCells);
     const blockedCellIds = new Set(bridgeResult.roadGraph.blockedCells);
+    const cellsById = {};
+    for (const cell of bridgeResult.cells) cellsById[cell.id] = cell;
     const buildings = [];
     const openSpaces = [];
     const landmarks = [];
@@ -179,6 +198,8 @@
         });
       }
     }
+
+    spacePace(openSpaces, cellsById);
 
     return {
       version: 1,

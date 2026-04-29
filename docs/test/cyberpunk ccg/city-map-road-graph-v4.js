@@ -150,63 +150,40 @@
     const total = dist(start, end);
     if (!field || !field.sample || total < 2) return [start, end];
     const direct = normalizeVector({ x: end.x - start.x, y: end.y - start.y });
-    const steps = kind === "highway"
-      ? Math.max(3, Math.min(7, Math.round(total / 72)))
-      : kind === "avenue"
-        ? Math.max(4, Math.min(9, Math.round(total / 48)))
-        : 1;
-    if (steps <= 1) return [start, end];
-
-    const pts = [start];
-    let cursor = { ...start };
-    const stepLen = total / steps;
-    for (let i = 1; i < steps; i++) {
-      const remaining = normalizeVector({ x: end.x - cursor.x, y: end.y - cursor.y }, direct);
-      const sample = field.sample(cursor);
-      const fieldDir = vectorFromAngleToward(sample.primaryAngle, cursor, end);
-      const secondaryDir = vectorFromAngleToward(sample.secondaryAngle, cursor, end);
-      const fieldBlend = blendedVector(fieldDir, 0.78, secondaryDir, kind === "avenue" ? 0.22 : 0.08, direct);
-      const direction = kind === "highway"
-        ? blendedVector(direct, 0.78, fieldBlend, 0.22, direct)
-        : blendedVector(remaining, 0.52, fieldBlend, 0.48, direct);
-      const targetT = i / steps;
-      const ideal = {
-        x: start.x + (end.x - start.x) * targetT,
-        y: start.y + (end.y - start.y) * targetT
-      };
-      const next = clampPoint({
-        x: cursor.x + direction.x * stepLen,
-        y: cursor.y + direction.y * stepLen
-      });
-      cursor = kind === "highway"
-        ? {
-          x: next.x * 0.45 + ideal.x * 0.55,
-          y: next.y * 0.45 + ideal.y * 0.55
-        }
-        : {
-          x: next.x * 0.68 + ideal.x * 0.32,
-          y: next.y * 0.68 + ideal.y * 0.32
-        };
-      pts.push(clampPoint(cursor));
+    const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const sample = field.sample(mid);
+    const fieldDir = vectorFromAngleToward(sample.primaryAngle, mid, end);
+    const perp = { x: -direct.y, y: direct.x };
+    const bendSign = fieldDir.x * perp.x + fieldDir.y * perp.y;
+    const maxBend = kind === "highway" ? Math.min(10, total * 0.055) : Math.min(18, total * 0.09);
+    const bend = Math.max(-maxBend, Math.min(maxBend, bendSign * maxBend * (0.35 + sample.strength * 0.65)));
+    if (Math.abs(bend) < 3 || kind === "highway") {
+      if (kind === "highway" && Math.abs(bend) >= 5) {
+        return [
+          start,
+          clampPoint({ x: mid.x + perp.x * bend * 0.55, y: mid.y + perp.y * bend * 0.55 }),
+          end
+        ];
+      }
+      return [start, end];
     }
-    pts.push(end);
-    return simplifyPoints(pts, kind === "highway" ? 36 : 24);
+    return [
+      start,
+      clampPoint({ x: mid.x + perp.x * bend, y: mid.y + perp.y * bend }),
+      end
+    ];
   }
 
   function routeToPoints(cellIds, byId, kind, field) {
     const raw = cellIds.map(id => byId[id].centroid);
-    if (kind === "highway" || kind === "avenue") {
-      return traceFieldPath(raw[0], raw[raw.length - 1], kind, field);
+    if (kind === "highway") {
+      return simplifyPoints(raw, 44);
     }
-    const simplified = simplifyPoints(raw, kind === "highway" ? 42 : 30);
-    if (kind === "highway" && simplified.length > 3) {
-      return [
-        simplified[0],
-        simplified[Math.floor((simplified.length - 1) / 2)],
-        simplified[simplified.length - 1]
-      ];
+    if (kind === "avenue") {
+      return simplifyPoints(raw, 30);
     }
-    return simplified;
+    if (kind === "street") return simplifyPoints(raw, 18);
+    return simplifyPoints(raw, 14);
   }
 
   function averagePoint(cells) {
@@ -285,6 +262,7 @@
 
   function generateHighways(nodes, edges, byId, landmassCells, adjacency, field, rng) {
     for (const [landmassId, cells] of Object.entries(landmassCells)) {
+      if (landmassId !== "mainland") continue;
       if (cells.length < 18) continue;
       for (let n = 0; n < HIGHWAY_TARGETS_PER_LANDMASS; n++) {
         const center = averagePoint(cells);
@@ -306,6 +284,7 @@
   function generateAvenues(nodes, edges, byId, neighborhoods, cells, adjacency, field, rng) {
     const hoodsByLandmass = {};
     for (const hood of neighborhoods) {
+      if (hood.landmassId !== "mainland") continue;
       if (!hood.cells.length) continue;
       if (!hoodsByLandmass[hood.landmassId]) hoodsByLandmass[hood.landmassId] = [];
       hoodsByLandmass[hood.landmassId].push(hood);
@@ -337,10 +316,11 @@
   function generateLocalRoads(nodes, edges, byId, cells, adjacency, field, rng) {
     const used = new Set();
     for (const cell of cells) {
-      if (rng() > 0.24) continue;
+      if (rng() > (cell.landmassId === "mainland" ? 0.56 : 0.68)) continue;
       const neighbors = (adjacency[cell.id] || [])
         .map(id => byId[id])
         .filter(Boolean)
+        .filter(neighbor => neighbor.landmassId === cell.landmassId)
         .sort((a, b) => dist(cell.centroid, a.centroid) - dist(cell.centroid, b.centroid));
       const target = neighbors[0];
       if (!target) continue;
