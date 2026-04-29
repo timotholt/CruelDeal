@@ -321,10 +321,10 @@
                 d={d.outlinePath}
                 fill="none"
                 stroke={isHovered ? floodColor : PAL.regionLine}
-                strokeWidth={isHovered ? 2.2 : 0.75}
+                strokeWidth={isHovered ? 2.2 : 1.1}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                opacity={isHovered ? 1.0 : 0.52}
+                opacity={isHovered ? 1.0 : 0.68}
                 vectorEffect="non-scaling-stroke"
                 style={{
                   filter: isHovered

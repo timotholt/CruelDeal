@@ -396,9 +396,6 @@ function CityMapV3({
       {/* BUILDINGS (subtle footprints — drawn before streets so street network is on top) */}
       {_renderBuildingsLayer({ buildings: data.buildings })}
 
-      {/* LANDMARKS (ambient + district civic/commercial/park blocks) */}
-      {_renderLandmarksLayer({ data, idBase })}
-
       {/* DISTRICT OUTLINES — under the road layers, so streets/highways cover border glow. */}
       {_renderDistrictOutlinesLayer({ districts: data.districts, hoveredDistrict })}
 
@@ -414,9 +411,24 @@ function CityMapV3({
       {/* COAST ROAD — inset land polygon stroked as a perimeter avenue */}
       {_renderCoastRoadLayer({ showStreets, coastRoadPath: data.coastRoadPath })}
 
+      {/* RIVER OUTLINE — smallest/lightest stroke to define river edges cleanly */}
+      {data.river && (
+        <path
+          d={data.river.path}
+          fill="none"
+          stroke={PAL.riverOutline}
+          strokeWidth={data.river.outerWidth * 0.35}
+          strokeLinecap="round"
+          opacity={0.72}
+        />
+      )}
+
       {/* BASE MAP DIMMER — default darkness applies to the city/land layer only. */}
       {_renderDimmerLayer({ landPath: data.landPath, baseMapDimOpacity: BASE_MAP_DIM_OPACITY, hoveredDistrict, idBase })}
       </g>
+
+      {/* LANDMARKS — drawn LAST so they sit on top of streets and don't get cut through */}
+      {_renderLandmarksLayer({ data, idBase })}
 
       {/* BRIDGES — road and island crossings drawn over the shared water layer. */}
       {_renderBridgeLayer({ showStreets, data })}

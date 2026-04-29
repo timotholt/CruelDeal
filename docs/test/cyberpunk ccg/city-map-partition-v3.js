@@ -597,10 +597,10 @@ function _macroDivide3(landPolygon, gridAngle, rng, riverSegments = null) {
     }
     return bst;
   };
-  let best2 = findSecondCut(55);
-  if (!best2) best2 = findSecondCut(45);
-  if (!best2) best2 = findSecondCut(30);
-  if (!best2) best2 = findSecondCut(0);
+  let best2 = findSecondCut(65);
+  if (!best2) best2 = findSecondCut(55);
+  if (!best2) best2 = findSecondCut(42);
+  if (!best2) best2 = findSecondCut(32);
   if (!best2) {
     return {
       regions: [smaller, larger],

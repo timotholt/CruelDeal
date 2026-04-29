@@ -16,14 +16,16 @@
 
 :root {
   /* --- Base hue --- */
-  --map-hue: 223;          /* navy-blue map reference hue */
-  --map-sat: 100%;         /* shared base saturation for the blue family */
+  --map-hue: 223;
+  /* navy-blue map reference hue */
+  --map-sat: 100%;
+  /* shared base saturation for the blue family */
 
   /* --- Water — single flat color, ocean + river share this. --- */
   --map-water: hsl(var(--map-hue), 58%, 9%);
 
   /* --- Land (L=18) --- */
-  --map-land:       hsl(var(--map-hue), 58%, 18%);
+  --map-land: hsl(var(--map-hue), 58%, 18%);
 
   /* --- Buildings — only two shades, painted transparently
          so the land color reads through the footprint. --- */
@@ -35,27 +37,26 @@
   --map-road-hue: 215;
   --map-road-sat: 88%;
   --map-street-local: hsla(var(--map-road-hue), var(--map-road-sat), 58%, 0.72);
-  --map-street-main:  hsla(var(--map-road-hue), var(--map-road-sat), 64%, 0.78);
-  --map-coast-road:   hsla(var(--map-road-hue), var(--map-road-sat), 66%, 0.78);
-  --map-avenue:       hsla(var(--map-road-hue), var(--map-road-sat), 70%, 0.82);
-  --map-hwy-outer:    hsla(var(--map-road-hue), var(--map-road-sat), 54%, 0.42);
-  --map-hwy-inner:    hsla(var(--map-road-hue), var(--map-road-sat), 76%, 0.88);
-  --map-region-line:  hsla(var(--map-road-hue), var(--map-road-sat), 68%, 0.78);
-  --map-region-glow:  hsla(var(--map-road-hue), var(--map-road-sat), 60%, 0.38);
+  --map-street-main: hsla(var(--map-road-hue  ,), var(--map-road-sat), 66%, 0.78);
+  --map-avenue: hsla(var(--map-road-hue), var(--map-road-sat), 70%, 0.82);
+  --map-hwy-outer: hsla(var(--map-road-hue), var(--map-road-sat), 54%, 0.42);
+  --map-hwy-inner: hsla(var(--map-road-hue), var(--map-road-sat), 76%, 0.88);
+  --map-region-line: hsla(var(--map-road-hue), var(--map-road-sat), 68%, 0.78);
+  --map-region-glow: hsla(var(--map-road-hue), var(--map-road-sat), 60%, 0.38);
 
   /* --- Landmarks. Parks and shopping malls render translucently. --- */
-  --map-park:           hsla(145, 44%, 42%, 0.38);
-  --map-stadium:        hsla(var(--map-hue), 54%, 36%, 0.62);
-  --map-stadium-field:  hsla(var(--map-hue), 56%, 44%, 0.66);
-  --map-field-line:     hsla(var(--map-road-hue), var(--map-road-sat), 66%, 0.55);
-  --map-diamond:        hsla(var(--map-hue), 50%, 48%, 0.72);
-  --map-plaza:          hsla(var(--map-hue), 48%, 40%, 0.58);
-  --map-mall:           hsla(215, 82%, 42%, 0.28);
-  --map-mall-accent:    hsla(215, 96%, 70%, 0.48);
+  --map-park: hsla(145, 44%, 42%, 0.38);
+  --map-stadium: hsla(var(--map-hue), 54%, 36%, 0.62);
+  --map-stadium-field: hsla(var(--map-hue), 56%, 44%, 0.66);
+  --map-field-line: hsla(var(--map-road-hue), var(--map-road-sat), 66%, 0.55);
+  --map-diamond: hsla(var(--map-hue), 50%, 48%, 0.72);
+  --map-plaza: hsla(var(--map-hue), 48%, 40%, 0.58);
+  --map-mall: hsla(215, 82%, 42%, 0.28);
+  --map-mall-accent: hsla(215, 96%, 70%, 0.48);
   --map-mall-highlight: hsla(var(--map-road-hue), var(--map-road-sat), 74%, 0.12);
 
   /* --- Labels --- */
-  --map-label:        hsl(200, 90%, 96%);
+  --map-label: hsl(200, 90%, 96%);
   --map-label-stroke: hsla(var(--map-hue), 70%, 8%, 0.85);
 
   /* Display compensation: small phone panels often crush dark navy detail.
@@ -67,12 +68,11 @@
 
 .city-map-v3-svg {
   filter:
-    brightness(var(--map-display-brightness))
-    contrast(var(--map-display-contrast))
-    saturate(var(--map-display-saturation));
+    brightness(var(--map-display-brightness)) contrast(var(--map-display-contrast)) saturate(var(--map-display-saturation));
 }
 
-@media (max-width: 480px), (max-height: 720px) {
+@media (max-width: 480px),
+(max-height: 720px) {
   :root {
     --map-display-brightness: 1.16;
     --map-display-contrast: 1.08;
@@ -80,7 +80,8 @@
   }
 }
 
-@media (max-width: 380px), (max-height: 620px) {
+@media (max-width: 380px),
+(max-height: 620px) {
   :root {
     --map-display-brightness: 1.22;
     --map-display-contrast: 1.10;
