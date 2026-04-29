@@ -18,6 +18,7 @@
   } = window.CityMapPathsV3;
   const {
     splitPolygonByLine,
+    tryGridCut,
     bspSubdivide,
     collectAllCuts,
     leavesUnder,
@@ -124,27 +125,42 @@
     };
   }
 
+  // True segment-segment intersection check (not infinite-line).
+  // Returns true if segment a→b crosses any edge of any lake polygon,
+  // or if either endpoint is inside a lake.
+  function segHitsLake(a, b, lakes) {
+    for (const lake of lakes) {
+      if (!lake.polygon) continue;
+      if (pointInPolygon(a, lake.polygon) || pointInPolygon(b, lake.polygon)) return true;
+      const poly = lake.polygon;
+      for (let i = 0; i < poly.length; i++) {
+        if (segIntersect(a, b, poly[i], poly[(i + 1) % poly.length])) return true;
+      }
+    }
+    return false;
+  }
+
   // Generate a highway spine — a major road crossing land at a distinctive angle,
   // optionally with one bend (like Market Street through SF).
-  // Always generated at least once per map so every city has a structural axis.
-  function generateHighwaySpine(landPolygon, existingSpines, rng) {
+  // Primary spine (no existing spines) is biased near-horizontal so the map feels
+  // oriented. Secondary spines are noticeably diagonal for visual contrast.
+  function generateHighwaySpine(landPolygon, existingSpines, rng, lakes = []) {
     const bbox = polygonBBox(landPolygon);
     const HUGE = 4000;
 
-    for (let attempt = 0; attempt < 55; attempt++) {
-      // Angle: meaningfully different from any existing spine
+    for (let attempt = 0; attempt < 60; attempt++) {
       let angle;
       if (existingSpines.length > 0) {
+        // Secondary spine: meaningfully diagonal vs the first (25–65° offset)
         const base = existingSpines[0].dominantAngle;
-        const minOff = Math.PI / 8; // 22.5° minimum separation
-        const off = minOff + rng() * (Math.PI / 2.4 - minOff);
+        const off = Math.PI / 7.2 + rng() * (Math.PI / 2.8 - Math.PI / 7.2);
         angle = base + (rng() < 0.5 ? off : -off);
       } else {
-        // Diagonal feel: 14–76° from horizontal
-        angle = Math.PI * (0.08 + rng() * 0.35);
+        // Primary spine: biased near-horizontal (±25°) so humans can orient the map.
+        // A slight tilt reads as a "civic diagonal" rather than a boring grid line.
+        angle = (rng() - 0.5) * (Math.PI / 3.6); // ±25° centered on 0°
       }
 
-      // Center point inside polygon
       const ox = bbox.minX + bbox.w * (0.2 + rng() * 0.6);
       const oy = bbox.minY + bbox.h * (0.2 + rng() * 0.6);
       if (!pointInPolygon({ x: ox, y: oy }, landPolygon)) continue;
@@ -152,7 +168,6 @@
       const dx = Math.cos(angle), dy = Math.sin(angle);
       const p1 = { x: ox - dx * HUGE, y: oy - dy * HUGE };
       const p2 = { x: ox + dx * HUGE, y: oy + dy * HUGE };
-      // Filter out vertex-snapping hits (u near 0 or 1) to avoid polygon-corner issues
       const hits = linePolygonHits(p1, p2, landPolygon).filter(h => h.u > 0.02 && h.u < 0.98);
       if (hits.length < 2) continue;
 
@@ -160,7 +175,10 @@
       const spineLen = Math.hypot(exit.x - entry.x, exit.y - entry.y);
       if (spineLen < Math.min(bbox.w, bbox.h) * 0.38) continue;
 
-      // Optional bend (~72% of maps): gives the highway an organic character
+      // Reject if the straight entry→exit line passes through a lake
+      if (segHitsLake(entry, exit, lakes)) continue;
+
+      // Optional bend (~72% of maps)
       let interiorMids = [];
       if (rng() < 0.72 && spineLen > 90) {
         const t = 0.28 + rng() * 0.44;
@@ -169,7 +187,12 @@
         const amp = Math.min(58, spineLen * (0.09 + rng() * 0.16));
         const side = rng() < 0.5 ? 1 : -1;
         const bend = { x: bx + (-dy) * amp * side, y: by + dx * amp * side };
-        if (pointInPolygon(bend, landPolygon)) interiorMids = [bend];
+        // Bend must be in land AND not in a lake
+        if (pointInPolygon(bend, landPolygon) &&
+            !segHitsLake(entry, bend, lakes) &&
+            !segHitsLake(bend, exit, lakes)) {
+          interiorMids = [bend];
+        }
       }
 
       const polyline = [entry, ...interiorMids, exit];
@@ -186,18 +209,18 @@
   // Build all spines for a map: river (if present) + at least one highway.
   function generateSpines(terrain, landPolygon, rng) {
     const spines = [];
+    const lakes = waterBodiesOfKind(terrain, "lake");
 
     const rs = riverSpineFromTerrain(terrain, landPolygon);
     if (rs) spines.push(rs);
 
-    // Always generate at least one highway spine
-    const hw1 = generateHighwaySpine(landPolygon, spines, rng);
+    const hw1 = generateHighwaySpine(landPolygon, spines, rng, lakes);
     if (hw1) spines.push(hw1);
 
-    // More spines for maps without rivers; occasional multi-highway cities
+    // Extra spine: likely on no-river maps, occasional on river maps
     const wantMore = (!rs && rng() < 0.55) || (rs && rng() < 0.22);
     if (wantMore && spines.length < 3) {
-      const hw2 = generateHighwaySpine(landPolygon, spines, rng);
+      const hw2 = generateHighwaySpine(landPolygon, spines, rng, lakes);
       if (hw2) spines.push(hw2);
     }
 
@@ -288,6 +311,58 @@
       regions: pool.map(r => r.polygon),
       regionAngles: pool.map(r => r.angle ?? 0),
       spineCuts
+    };
+  }
+
+  // Guarantee exactly 3 regions. If spineBasedDivide produced fewer, split the
+  // largest region again until we have 3. Falls back to a plain cardinal cut if
+  // no highway spine can be generated for the sub-region.
+  function forceSplitToThree(divided, rng, lakes = []) {
+    const pool = divided.regions.map((polygon, i) => ({
+      polygon,
+      angle: divided.regionAngles[i] ?? 0
+    }));
+    const cuts = [...divided.spineCuts];
+
+    let safety = 0;
+    while (pool.length < 3 && safety++ < 8) {
+      pool.sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon));
+      const target = pool[0];
+
+      // Try a new highway spine against just this sub-region
+      const spine = generateHighwaySpine(target.polygon, [], rng, lakes);
+      if (spine) {
+        const split = splitBySpine(target.polygon, spine, rng);
+        if (split) {
+          pool.splice(0, 1,
+            { polygon: split.half1, angle: split.angle1 },
+            { polygon: split.half2, angle: split.angle2 }
+          );
+          cuts.push(split.cutSeg);
+          continue;
+        }
+      }
+
+      // Fallback: plain grid cut (no spine, no bend) on the largest region
+      const fallback =
+        tryGridCut(target.polygon, 0, false, 70, rng) ||
+        tryGridCut(target.polygon, 0, true,  70, rng);
+      if (fallback) {
+        pool.splice(0, 1,
+          { polygon: fallback.halfA, angle: (rng() - 0.5) * 0.08 },
+          { polygon: fallback.halfB, angle: Math.PI / 4 + (rng() - 0.5) * 0.08 }
+        );
+        cuts.push({ ...fallback.cutSeg, depth: 1 });
+        continue;
+      }
+
+      break; // nothing worked — accept fewer than 3
+    }
+
+    return {
+      regions: pool.map(r => r.polygon),
+      regionAngles: pool.map(r => r.angle),
+      spineCuts: cuts
     };
   }
 
