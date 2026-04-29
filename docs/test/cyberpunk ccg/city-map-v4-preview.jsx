@@ -269,24 +269,29 @@
             <path
               d={landmass.path}
               fill="none"
-              stroke={V4_PAL.coast}
-              strokeWidth={1.45}
-              opacity={0.58}
-              strokeDasharray="12 6"
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              d={landmass.path}
-              fill="none"
-              stroke={PAL.regionLine}
-              strokeWidth={0.48}
-              opacity={0.76}
+              stroke={PAL.streetLocal}
+              strokeWidth={0.34}
+              opacity={0.46}
               vectorEffect="non-scaling-stroke"
             />
           </g>
         ))}
 
-
+        {data.coastDocks && data.coastDocks.length > 0 && (
+          <g opacity={0.72}>
+            {data.coastDocks.map((dock, index) => (
+              <path
+                key={`coast-dock-${index}`}
+                d={dock.path}
+                fill={PAL.avenue}
+                stroke={PAL.hwyInner}
+                strokeWidth={0.16}
+                opacity={0.86}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </g>
+        )}
 
         {showBuildings && (
           <g>

@@ -204,11 +204,11 @@
   function generateTerrainIslands(landPolygon, rng, riverSegments) {
     const visibleLand = visibleSampleArea(landPolygon);
     const waterFraction = Math.max(0, 1 - visibleLand / (VIEW_W * VIEW_H));
-    if (waterFraction < 0.18) return [];
+    if (waterFraction < 0.12) return [];
 
-    const target = waterFraction > 0.42 ? 2 : (rng() < 0.58 ? 1 : 0);
+    const target = waterFraction > 0.34 ? 2 : (rng() < 0.88 ? 1 : 0);
     const islands = [];
-    for (let attempt = 0; attempt < 90 && islands.length < target; attempt++) {
+    for (let attempt = 0; attempt < 140 && islands.length < target; attempt++) {
       const poly = makeIslandCandidate(landPolygon, rng);
       if (!poly) continue;
       if (riverSegments && riverSegments.length) {

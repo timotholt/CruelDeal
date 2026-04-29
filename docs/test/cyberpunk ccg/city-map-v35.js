@@ -793,11 +793,11 @@
   function makeIslandDistricts(terrain, startIdx, names, colors, rng, waterSegs) {
     const districts = [];
     for (const landmass of terrain.landmasses || []) {
-      if (landmass.kind !== "island" || landmass.visibleArea < 1200) continue;
+      if (landmass.kind !== "island" || landmass.visibleArea < 520) continue;
       const angle = (rng() - 0.5) * (Math.PI / 4); // islands get their own tilt
       
       const innerPolygon = window.CityMapGeometryV3.insetPolygon(landmass.polygon, 6);
-      if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 400) continue;
+      if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 260) continue;
       
       const district = makeDistrict(
         innerPolygon, startIdx + districts.length,
@@ -1002,6 +1002,9 @@
 
     const bridgePlan = makeBridgePlan(terrain);
     const buildingPlan = buildStaticBuildings(cells, rng);
+    const coastDocks = window.CityMapLandV3 && window.CityMapLandV3.generateCoastDocks
+      ? window.CityMapLandV3.generateCoastDocks(terrain.mainland.polygon, window.makeRng(normalizedSeed ^ 0xd0c5))
+      : [];
 
     return remember(key, {
       version: 3.5,
@@ -1023,6 +1026,7 @@
       districtAdjacency: districtAdjacency(districts),
       cellDistrict: Object.fromEntries(cells.map(c => [c.id, c.districtId])),
       bridgePlan,
+      coastDocks,
       buildingPlan
     });
   }

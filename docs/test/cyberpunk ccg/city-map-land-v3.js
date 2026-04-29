@@ -128,7 +128,7 @@
         const clusterT = 0.18 + rng() * 0.64;
         const dockCount = 3 + Math.floor(rng() * 3);
         const pierW = 3.4;
-        const pierLen = 9.5;
+        const pierLen = 11.4;
         const spacing = 5.4;
         const clusterWidth = spacing * (dockCount - 1);
         const angle = Math.atan2(outward.y, outward.x) + Math.PI / 2;
