@@ -21,9 +21,8 @@
   };
 
   function buildingFill(building) {
-    if (building.render.lodGroup === "tower") return PAL.bldgB;
-    if (building.render.lodGroup === "midrise") return PAL.bldgA;
-    return "hsla(215, 54%, 34%, 0.46)";
+    if (building.shade < 0.5) return PAL.bldgB;
+    return PAL.bldgA;
   }
 
   function buildingStroke(building) {
@@ -222,11 +221,15 @@
           ))}
         </defs>
 
-        <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill={V4_PAL.water} />
+        <g>
+          <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill={V4_PAL.water} />
+          <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill="black" opacity={0.18} />
+        </g>
 
         {data.terrain.landmasses.map((landmass) => (
           <g key={landmass.id}>
             <path d={landmass.path} fill={V4_PAL.land} />
+            <path d={landmass.path} fill="black" opacity={0.18} />
             <path
               d={landmass.path}
               fill="none"
@@ -398,7 +401,7 @@
                     strokeWidth={roadUnderlayWidth(edge.kind)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={edge.kind === "local" ? 0.48 : 0.72}
+                    opacity={edge.kind === "local" ? 0.76 : 0.72}
                     vectorEffect="non-scaling-stroke"
                   />
                   <path
@@ -408,7 +411,7 @@
                     strokeWidth={roadWidth(edge.kind)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={edge.kind === "local" ? 0.58 : 0.95}
+                    opacity={edge.kind === "local" ? 0.88 : 0.95}
                     vectorEffect="non-scaling-stroke"
                   />
                 </g>

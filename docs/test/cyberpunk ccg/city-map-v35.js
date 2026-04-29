@@ -652,10 +652,31 @@
     for (const landmass of terrain.landmasses || []) {
       if (landmass.kind !== "island" || landmass.visibleArea < 1200) continue;
       const angle = (rng() - 0.5) * (Math.PI / 4); // islands get their own tilt
+      
+      const innerPolygon = window.CityMapGeometryV3.insetPolygon(landmass.polygon, 6);
+      if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 400) continue;
+      
       const district = makeDistrict(
-        landmass.polygon, startIdx + districts.length,
+        innerPolygon, startIdx + districts.length,
         names, colors, terrain, rng, landmass.id, angle, waterSegs
       );
+      
+      const coastCut = {
+        p1: innerPolygon[0], p2: innerPolygon[0], // dummy endpoints
+        polyline: [...innerPolygon, innerPolygon[0]],
+        polylineMode: "coast", depth: 1, angle: 0
+      };
+      
+      district.roads.push({
+        id: `${district.id}-coast-road`,
+        kind: "avenue",
+        source: "coast-road",
+        path: window.CityMapPathsV3.smoothClosedPath(innerPolygon),
+        points: [...innerPolygon, innerPolygon[0]],
+        depth: 1,
+        cut: coastCut
+      });
+      
       districts.push(district);
     }
     return districts;
@@ -717,6 +738,7 @@
           path: gen.path,
           area: gen.area,
           height,
+          shade: gen.shade,
           shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
           render: {
             extrudable: true, staticMesh: true,
@@ -755,7 +777,12 @@
     // AND the BSP inside each region, so everything is consistent.
     const riverSegs = waterBodiesOfKind(terrain, "river")
       .flatMap(r => (r.segments || []).map(s => ({ a: s.a, b: s.b })));
-    const divided = macroDivide3(terrain.mainland.polygon, 0, rng, riverSegs);
+      
+    const mainlandInset = window.CityMapGeometryV3.insetPolygon(terrain.mainland.polygon, 6);
+    const validInset = mainlandInset && mainlandInset.length >= 3 && polygonArea(mainlandInset) > 400;
+    const workingPolygon = validInset ? mainlandInset : terrain.mainland.polygon;
+    
+    const divided = macroDivide3(workingPolygon, 0, rng, riverSegs);
 
     // Apply the two golden rules on top:
     //   1. Exactly 3 districts (merge-down if macroDivide3 returned 2)
@@ -785,6 +812,23 @@
         districtAngles[idx] ?? 0, waterSegs,
         enforced.regionSubPolygons[idx] || [])
     );
+
+    if (validInset && mainlandDistricts.length > 0) {
+      const coastCut = {
+        p1: mainlandInset[0], p2: mainlandInset[0],
+        polyline: [...mainlandInset, mainlandInset[0]],
+        polylineMode: "coast", depth: 1, angle: 0
+      };
+      mainlandDistricts[0].roads.push({
+        id: "mainland-coast-road",
+        kind: "avenue",
+        source: "coast-road",
+        path: window.CityMapPathsV3.smoothClosedPath(mainlandInset),
+        points: [...mainlandInset, mainlandInset[0]],
+        depth: 1,
+        cut: coastCut
+      });
+    }
 
     const islandDistricts = makeIslandDistricts(
       terrain, mainlandDistricts.length, names, colors, rng, waterSegs
