@@ -151,7 +151,12 @@ function Header({ accent, you, them, turn, deckCount }) {
 
 // ---------- City Board (replaces Lane components) ----------
 function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, playerScore, enemyScore, roundedMapEdge, showV4Preview }) {
-  const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
+  const v4City = useMemo(
+    () => showV4Preview && window.CityMapV4 ? window.CityMapV4.buildCityV4(sessionSeed || 1) : null,
+    [showV4Preview, sessionSeed]
+  );
+  const boardCity = v4City || city;
+  const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
   return (
     <div
       className="city-board"

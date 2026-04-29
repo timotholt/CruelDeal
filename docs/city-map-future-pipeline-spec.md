@@ -180,7 +180,9 @@ Implemented modules:
 - `city-map-v4.js`
 - `city-map-v4-preview.jsx`
 
-Important: the current executable v4 backbone now generates a city field before cells, stores field metadata on neighborhoods/cells, and attaches field samples plus corridor polygons to road edges. Highways also choose endpoints from the field direction. Roads still route over cell centroids internally, so the next refactor should trace road paths directly from field samples, then generate parcels around those road corridors.
+Important: the current executable v4 backbone now generates a city field before cells, stores field metadata on neighborhoods/cells, and attaches field samples plus corridor polygons to road edges. Highway and avenue visuals trace through the field between endpoint cells while retaining `routeCellPoints` for the older adjacency route. The remaining road refactor is to make the topology itself field-traced, then generate parcels around those road corridors.
+
+V4 also now emits balanced player/opponent district slots and generalized district display outlines. The live board can consume v4 dots when the `V4 Preview` debug toggle is active, though the non-preview gameplay path still defaults to v3 data.
 
 Public entry point:
 

@@ -49,6 +49,17 @@
     return footprint.every(p => pointInPolygon(p, cell.polygon));
   }
 
+  function specialFootprintAllowed(cell, rng) {
+    const special =
+      cell.tags.includes("coast") ||
+      cell.tags.includes("riverfront") ||
+      cell.tags.includes("lakefront") ||
+      cell.tags.includes("bridgeheadCandidate");
+    if (special && cell.area > 880) return rng() < 0.14;
+    if (cell.area > 2400) return rng() < 0.05;
+    return false;
+  }
+
   function buildingCountForCell(cell, rng) {
     if (cell.tags.includes("parkCandidate") && cell.area > 1450 && rng() < 0.68) return 0;
     if (cell.tags.includes("hill") && rng() < 0.28) return 0;
@@ -78,15 +89,21 @@
     }
 
     let footprint;
-    if (cell.area > 520 && rng() < 0.28) {
+    const angle = (cell.fieldAngle || cell.orientation || 0) + (rng() - 0.5) * 0.18;
+    if (specialFootprintAllowed(cell, rng)) {
       footprint = insetLikeFootprint(cell, 0.34 + rng() * 0.14, (rng() - 0.5) * 0.14);
     } else {
       const w = Math.max(5, Math.min(bbox.w * (0.24 + rng() * 0.18), 20));
       const h = Math.max(5, Math.min(bbox.h * (0.24 + rng() * 0.18), 24));
-      footprint = rectFootprint(center.x, center.y, w, h, (cell.orientation || 0) + (rng() - 0.5) * 0.28);
+      footprint = rectFootprint(center.x, center.y, w, h, angle);
     }
     if (!footprintInsideCell(footprint, cell)) {
-      footprint = insetLikeFootprint(cell, 0.24, 0);
+      const w = Math.max(4, Math.min(bbox.w * 0.22, 14));
+      const h = Math.max(4, Math.min(bbox.h * 0.22, 16));
+      footprint = rectFootprint(cell.centroid.x, cell.centroid.y, w, h, angle);
+    }
+    if (!footprintInsideCell(footprint, cell)) {
+      footprint = insetLikeFootprint(cell, 0.18, 0);
     }
     const height = heightForCell(cell, rng);
     return {

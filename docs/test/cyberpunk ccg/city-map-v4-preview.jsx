@@ -37,7 +37,7 @@
     width,
     height,
     opacity = 1,
-    showCells = true,
+    showCells = false,
     showLabels = true,
     showBuildings = true
   }) {
@@ -172,19 +172,14 @@
         <g opacity={0.86}>
           {data.districts.map((district) => (
             <g key={district.id}>
-              {district.boundarySegments.map((segment, i) => (
-                <line
-                  key={`${district.id}-b-${i}`}
-                  x1={segment.a.x}
-                  y1={segment.a.y}
-                  x2={segment.b.x}
-                  y2={segment.b.y}
-                  stroke={district.color}
-                  strokeWidth={0.55}
-                  opacity={0.7}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
+              <path
+                d={district.displayOutlinePath}
+                fill="none"
+                stroke={district.color}
+                strokeWidth={0.55}
+                opacity={0.58}
+                vectorEffect="non-scaling-stroke"
+              />
             </g>
           ))}
         </g>

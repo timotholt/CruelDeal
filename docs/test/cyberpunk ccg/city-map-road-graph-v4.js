@@ -117,8 +117,87 @@
     return out;
   }
 
-  function routeToPoints(cellIds, byId, kind) {
+  function vectorFromAngleToward(angle, from, to) {
+    const vx = Math.cos(angle);
+    const vy = Math.sin(angle);
+    const tx = to.x - from.x;
+    const ty = to.y - from.y;
+    const sign = vx * tx + vy * ty < 0 ? -1 : 1;
+    return { x: vx * sign, y: vy * sign };
+  }
+
+  function normalizeVector(v, fallback = { x: 1, y: 0 }) {
+    const len = Math.hypot(v.x, v.y);
+    if (!Number.isFinite(len) || len < 1e-6) return fallback;
+    return { x: v.x / len, y: v.y / len };
+  }
+
+  function blendedVector(a, aw, b, bw, fallback) {
+    return normalizeVector({
+      x: a.x * aw + b.x * bw,
+      y: a.y * aw + b.y * bw
+    }, fallback);
+  }
+
+  function clampPoint(point) {
+    return {
+      x: Math.max(-12, Math.min(VIEW_W + 12, point.x)),
+      y: Math.max(-12, Math.min(VIEW_H + 12, point.y))
+    };
+  }
+
+  function traceFieldPath(start, end, kind, field) {
+    const total = dist(start, end);
+    if (!field || !field.sample || total < 2) return [start, end];
+    const direct = normalizeVector({ x: end.x - start.x, y: end.y - start.y });
+    const steps = kind === "highway"
+      ? Math.max(3, Math.min(7, Math.round(total / 72)))
+      : kind === "avenue"
+        ? Math.max(4, Math.min(9, Math.round(total / 48)))
+        : 1;
+    if (steps <= 1) return [start, end];
+
+    const pts = [start];
+    let cursor = { ...start };
+    const stepLen = total / steps;
+    for (let i = 1; i < steps; i++) {
+      const remaining = normalizeVector({ x: end.x - cursor.x, y: end.y - cursor.y }, direct);
+      const sample = field.sample(cursor);
+      const fieldDir = vectorFromAngleToward(sample.primaryAngle, cursor, end);
+      const secondaryDir = vectorFromAngleToward(sample.secondaryAngle, cursor, end);
+      const fieldBlend = blendedVector(fieldDir, 0.78, secondaryDir, kind === "avenue" ? 0.22 : 0.08, direct);
+      const direction = kind === "highway"
+        ? blendedVector(direct, 0.78, fieldBlend, 0.22, direct)
+        : blendedVector(remaining, 0.52, fieldBlend, 0.48, direct);
+      const targetT = i / steps;
+      const ideal = {
+        x: start.x + (end.x - start.x) * targetT,
+        y: start.y + (end.y - start.y) * targetT
+      };
+      const next = clampPoint({
+        x: cursor.x + direction.x * stepLen,
+        y: cursor.y + direction.y * stepLen
+      });
+      cursor = kind === "highway"
+        ? {
+          x: next.x * 0.45 + ideal.x * 0.55,
+          y: next.y * 0.45 + ideal.y * 0.55
+        }
+        : {
+          x: next.x * 0.68 + ideal.x * 0.32,
+          y: next.y * 0.68 + ideal.y * 0.32
+        };
+      pts.push(clampPoint(cursor));
+    }
+    pts.push(end);
+    return simplifyPoints(pts, kind === "highway" ? 36 : 24);
+  }
+
+  function routeToPoints(cellIds, byId, kind, field) {
     const raw = cellIds.map(id => byId[id].centroid);
+    if (kind === "highway" || kind === "avenue") {
+      return traceFieldPath(raw[0], raw[raw.length - 1], kind, field);
+    }
     const simplified = simplifyPoints(raw, kind === "highway" ? 42 : 30);
     if (kind === "highway" && simplified.length > 3) {
       return [
@@ -176,7 +255,7 @@
 
   function addRoadEdge(edges, nodes, byId, cellIds, kind, fromNode, toNode, field, extra = {}) {
     if (!cellIds || cellIds.length < 2) return null;
-    const pts = routeToPoints(cellIds, byId, kind);
+    const pts = routeToPoints(cellIds, byId, kind, field);
     const corridorPolygon = makeRoadCorridor(pts, kind);
     const id = `road-${edges.length + 1}`;
     edges.push({
@@ -186,6 +265,7 @@
       kind,
       path: kind === "local" ? straightPolylinePath(pts) : smoothPolylinePath(pts),
       points: pts,
+      routeCellPoints: cellIds.map(id => byId[id].centroid),
       cellsAlongside: cellIds,
       corridorPolygon,
       corridorPath: corridorPolygon.length ? straightPolylinePath(corridorPolygon) + " Z" : "",

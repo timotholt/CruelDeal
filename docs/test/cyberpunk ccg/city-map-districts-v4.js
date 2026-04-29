@@ -10,6 +10,7 @@
     polygonArea,
     polygonCentroid,
     polygonBBox,
+    pointInPolygon,
     pointToSegmentDist
   } = window.CityMapGeometryV3;
 
@@ -263,6 +264,155 @@
     return segments;
   }
 
+  function polygonToPath(points) {
+    if (!points || !points.length) return "";
+    let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+    for (let i = 1; i < points.length; i++) d += ` L ${points[i].x.toFixed(2)} ${points[i].y.toFixed(2)}`;
+    return d + " Z";
+  }
+
+  function displayPolygonForPattern(bbox, pattern) {
+    const x0 = bbox.minX;
+    const y0 = bbox.minY;
+    const x1 = bbox.maxX;
+    const y1 = bbox.maxY;
+    const xm = x0 + bbox.w * 0.52;
+    const ym = y0 + bbox.h * 0.52;
+    const xa = x0 + bbox.w * 0.38;
+    const xb = x0 + bbox.w * 0.62;
+    const ya = y0 + bbox.h * 0.38;
+    const yb = y0 + bbox.h * 0.62;
+
+    if (pattern === "l-nw") return [
+      { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: ya },
+      { x: xm, y: ya }, { x: xm, y: y1 }, { x: x0, y: y1 }
+    ];
+    if (pattern === "l-ne") return [
+      { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 },
+      { x: xm, y: y1 }, { x: xm, y: ya }, { x: x0, y: ya }
+    ];
+    if (pattern === "l-sw") return [
+      { x: x0, y: y0 }, { x: xm, y: y0 }, { x: xm, y: yb },
+      { x: x1, y: yb }, { x: x1, y: y1 }, { x: x0, y: y1 }
+    ];
+    if (pattern === "l-se") return [
+      { x: xm, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 },
+      { x: x0, y: y1 }, { x: x0, y: yb }, { x: xm, y: yb }
+    ];
+    if (pattern === "c-north") return [
+      { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 },
+      { x: xb, y: y1 }, { x: xb, y: yb }, { x: xa, y: yb },
+      { x: xa, y: y1 }, { x: x0, y: y1 }
+    ];
+    if (pattern === "c-south") return [
+      { x: x0, y: y0 }, { x: xa, y: y0 }, { x: xa, y: ya },
+      { x: xb, y: ya }, { x: xb, y: y0 }, { x: x1, y: y0 },
+      { x: x1, y: y1 }, { x: x0, y: y1 }
+    ];
+    if (pattern === "c-east") return [
+      { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: ya },
+      { x: xb, y: ya }, { x: xb, y: yb }, { x: x1, y: yb },
+      { x: x1, y: y1 }, { x: x0, y: y1 }
+    ];
+    if (pattern === "c-west") return [
+      { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 },
+      { x: x0, y: y1 }, { x: x0, y: yb }, { x: xa, y: yb },
+      { x: xa, y: ya }, { x: x0, y: ya }
+    ];
+    return [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 }
+    ];
+  }
+
+  function pointEdgeDistance(point, polygon) {
+    let best = Infinity;
+    for (let i = 0; i < polygon.length; i++) {
+      best = Math.min(best, pointToSegmentDist(point.x, point.y, polygon[i], polygon[(i + 1) % polygon.length]));
+    }
+    return best;
+  }
+
+  function slotPairsForArea(area) {
+    if (area > 56000) return 5;
+    if (area > 36000) return 4;
+    if (area > 21000) return 3;
+    return 2;
+  }
+
+  function makeSlotCandidates(displayPolygon, bbox, labelPoint, owner, rng, relaxed = false) {
+    const candidates = [];
+    const targetY = owner === "them" ? bbox.minY + bbox.h * 0.27 : bbox.minY + bbox.h * 0.73;
+    const targetX = bbox.minX + bbox.w * (0.32 + rng() * 0.36);
+    const step = 12;
+    for (let x = bbox.minX + 16; x <= bbox.maxX - 16; x += step) {
+      for (let y = bbox.minY + 18; y <= bbox.maxY - 18; y += step) {
+        const point = {
+          x: x + (rng() - 0.5) * 4,
+          y: y + (rng() - 0.5) * 4
+        };
+        if (!pointInPolygon(point, displayPolygon)) continue;
+        const edge = pointEdgeDistance(point, displayPolygon);
+        if (edge < (relaxed ? 7 : 16)) continue;
+        const labelDist = dist(point, labelPoint);
+        if (labelDist < (relaxed ? 18 : 30)) continue;
+        candidates.push({
+          point,
+          score: Math.abs(point.y - targetY) * 1.25 + Math.abs(point.x - targetX) * 0.42 - edge * 0.12 + rng() * 8
+        });
+      }
+    }
+    return candidates.sort((a, b) => a.score - b.score);
+  }
+
+  function generateSlotsForDistrict(district, districtIdx, rng) {
+    const pairs = slotPairsForArea(district.area);
+    const slots = [];
+    for (const owner of ["them", "you"]) {
+      const candidates = [
+        ...makeSlotCandidates(district.displayPolygon, district.bbox, district.labelAnchor, owner, rng),
+        ...makeSlotCandidates(district.displayPolygon, district.bbox, district.labelAnchor, owner, rng, true)
+      ];
+      for (const candidate of candidates) {
+        if (slots.filter(slot => slot.owner === owner).length >= pairs) break;
+        const tooClose = slots.some(slot => dist(slot, candidate.point) < 20);
+        if (tooClose) continue;
+        slots.push({
+          id: `V4D${districtIdx}-${owner}-${slots.filter(slot => slot.owner === owner).length}`,
+          districtIdx,
+          districtId: district.id,
+          owner,
+          x: candidate.point.x,
+          y: candidate.point.y
+        });
+      }
+      while (slots.filter(slot => slot.owner === owner).length < pairs) {
+        const count = slots.filter(slot => slot.owner === owner).length;
+        const y = owner === "them"
+          ? district.bbox.minY + district.bbox.h * (0.22 + count * 0.08)
+          : district.bbox.minY + district.bbox.h * (0.78 - count * 0.08);
+        const x = district.bbox.minX + district.bbox.w * (0.28 + (count % 3) * 0.22);
+        const fallback = pointInPolygon({ x, y }, district.displayPolygon)
+          ? { x, y }
+          : {
+            x: district.labelAnchor.x + (count - 0.5) * 18,
+            y: district.labelAnchor.y + (owner === "them" ? -26 - count * 6 : 26 + count * 6)
+          };
+        slots.push({
+          id: `V4D${districtIdx}-${owner}-${count}`,
+          districtIdx,
+          districtId: district.id,
+          owner,
+          x: fallback.x,
+          y: fallback.y
+        });
+      }
+    }
+    return slots;
+  }
+
   function buildDistrictObjects(cells, assignments, adjacency, patterns, rng) {
     const byId = cellMap(cells);
     const districts = [];
@@ -271,6 +421,7 @@
       const polygons = cellIds.map(id => byId[id].polygon);
       const area = cellIds.reduce((sum, id) => sum + byId[id].area, 0);
       const bbox = unionBBox(cellIds.map(id => byId[id]));
+      const displayPolygon = displayPolygonForPattern(bbox, patterns[i]);
       const district = {
         id: `district-${i + 1}`,
         name: DISTRICT_NAMES[Math.floor(rng() * DISTRICT_NAMES.length)],
@@ -283,8 +434,14 @@
         centroid: labelAnchor(cellIds, byId),
         labelAnchor: labelAnchor(cellIds, byId),
         boundarySegments: boundarySegments(cellIds, byId, adjacency),
+        displayPolygon,
+        displayOutlinePath: polygonToPath(displayPolygon),
+        slots: [],
+        dots: [],
         components: []
       };
+      district.slots = generateSlotsForDistrict(district, i, rng);
+      district.dots = district.slots;
       district.components = districtComponents(district, byId, adjacency);
       district.shape = {
         componentCount: district.components.length,
