@@ -137,7 +137,18 @@
     return polygonCentroid(polygon);
   }
 
-  function seedNeighborhoodsForLandmass(landmass, terrain, rng) {
+  function densityFromField(sample, rng) {
+    if (!sample) {
+      const densityRoll = rng();
+      return densityRoll < 0.28 ? "sparse" : densityRoll < 0.78 ? "medium" : "dense";
+    }
+    if (sample.avoidSteepTerrain || sample.density === "sparse") return rng() < 0.78 ? "sparse" : "medium";
+    if (sample.density === "dense") return rng() < 0.68 ? "dense" : "medium";
+    const densityRoll = rng();
+    return densityRoll < 0.2 ? "sparse" : densityRoll < 0.82 ? "medium" : "dense";
+  }
+
+  function seedNeighborhoodsForLandmass(landmass, terrain, field, rng) {
     const baseCount = clamp(Math.round(landmass.visibleArea / 26000), landmass.kind === "island" ? 1 : 4, landmass.kind === "island" ? 3 : 8);
     const seeds = [];
     for (let attempt = 0; attempt < baseCount * 80 && seeds.length < baseCount; attempt++) {
@@ -150,25 +161,31 @@
         }
       }
       if (!separated) continue;
-      const densityRoll = rng();
-      const density = densityRoll < 0.28 ? "sparse" : densityRoll < 0.78 ? "medium" : "dense";
+      const sample = field && field.sample ? field.sample(p) : null;
+      const density = densityFromField(sample, rng);
       seeds.push({
         id: `${landmass.id}:hood:${seeds.length + 1}`,
         landmassId: landmass.id,
         seedPoint: p,
-        orientation: rng() * Math.PI,
+        orientation: sample ? sample.primaryAngle : rng() * Math.PI,
+        secondaryOrientation: sample ? sample.secondaryAngle : null,
+        fieldElementIds: sample ? sample.fieldElementIds : [],
         density,
         targetArea: density === "dense" ? 620 + rng() * 300 : density === "medium" ? 950 + rng() * 460 : 1550 + rng() * 900,
         cells: []
       });
     }
     if (!seeds.length) {
+      const seedPoint = polygonCentroid(landmass.polygon);
+      const sample = field && field.sample ? field.sample(seedPoint) : null;
       seeds.push({
         id: `${landmass.id}:hood:1`,
         landmassId: landmass.id,
-        seedPoint: polygonCentroid(landmass.polygon),
-        orientation: rng() * Math.PI,
-        density: "medium",
+        seedPoint,
+        orientation: sample ? sample.primaryAngle : rng() * Math.PI,
+        secondaryOrientation: sample ? sample.secondaryAngle : null,
+        fieldElementIds: sample ? sample.fieldElementIds : [],
+        density: densityFromField(sample, rng),
         targetArea: 1100,
         cells: []
       });
@@ -192,7 +209,17 @@
     }).filter(item => item.polygon.length >= 3 && polygonArea(item.polygon) > MIN_CELL_AREA * 2);
   }
 
-  function subdivideNeighborhood(poly, hood, rng) {
+  function chooseSplitAngle(item, hood, field, rng) {
+    const centroid = polygonCentroid(item.polygon);
+    const sample = field && field.sample ? field.sample(centroid) : null;
+    const primary = sample ? sample.primaryAngle : hood.orientation;
+    const secondary = sample ? sample.secondaryAngle : (hood.secondaryOrientation || primary + Math.PI / 2);
+    const axis = item.depth % 2 === 0 ? primary : secondary;
+    const jitter = sample && sample.strength > 0.62 ? 0.12 : 0.22;
+    return axis + (rng() - 0.5) * jitter;
+  }
+
+  function subdivideNeighborhood(poly, hood, field, rng) {
     const stack = [{ polygon: poly, depth: 0 }];
     const cells = [];
     const maxDepth = hood.density === "dense" ? 8 : hood.density === "medium" ? 7 : 6;
@@ -204,8 +231,7 @@
         cells.push(item.polygon);
         continue;
       }
-      const axis = item.depth % 2 === 0 ? hood.orientation : hood.orientation + Math.PI / 2;
-      const jitteredAngle = axis + (rng() - 0.5) * 0.32;
+      const jitteredAngle = chooseSplitAngle(item, hood, field, rng);
       const bbox = polygonBBox(item.polygon);
       const span = Math.max(bbox.w, bbox.h);
       const offset = (rng() - 0.5) * span * 0.18;
@@ -231,13 +257,14 @@
     return best;
   }
 
-  function makeCell(rawId, polygon, landmass, hood, terrain) {
+  function makeCell(rawId, polygon, landmass, hood, terrain, field) {
     const area = polygonArea(polygon);
     if (area < MIN_CELL_AREA) return null;
     const centroid = polygonCentroid(polygon);
     if (!pointInPolygon(centroid, landmass.polygon)) return null;
     if (waterConflict(centroid, terrain)) return null;
     const tags = ["buildable", ...waterTags(centroid, polygon, terrain)];
+    const sample = field && field.sample ? field.sample(centroid) : null;
     if (landmass.kind === "island") tags.push("island");
     const channel = findNearestChannel(centroid, terrain);
     if (channel && channel.d < 34) tags.push("bridgeheadCandidate");
@@ -250,7 +277,11 @@
       landmassId: landmass.id,
       neighborhoodId: hood.id,
       density: hood.density,
-      orientation: hood.orientation,
+      orientation: sample ? sample.primaryAngle : hood.orientation,
+      fieldAngle: sample ? sample.primaryAngle : hood.orientation,
+      secondaryFieldAngle: sample ? sample.secondaryAngle : (hood.secondaryOrientation || hood.orientation + Math.PI / 2),
+      fieldStrength: sample ? sample.strength : 0,
+      fieldElementIds: sample ? sample.fieldElementIds : hood.fieldElementIds || [],
       tags: Array.from(new Set(tags)),
       neighbors: []
     };
@@ -288,17 +319,19 @@
     return adjacency;
   }
 
-  function generateCells(terrain, rng) {
+  function generateCells(terrain, fieldOrRng, maybeRng) {
+    const field = maybeRng ? fieldOrRng : null;
+    const rng = maybeRng || fieldOrRng;
     const cells = [];
     const neighborhoods = [];
     for (const landmass of terrain.landmasses) {
-      const hoods = seedNeighborhoodsForLandmass(landmass, terrain, rng);
+      const hoods = seedNeighborhoodsForLandmass(landmass, terrain, field, rng);
       neighborhoods.push(...hoods);
       const hoodPolys = buildNeighborhoodPolygons(landmass, hoods);
       for (const { hood, polygon } of hoodPolys) {
-        const polys = subdivideNeighborhood(polygon, hood, rng);
+        const polys = subdivideNeighborhood(polygon, hood, field, rng);
         for (const poly of polys) {
-          const cell = makeCell(`${landmass.id}:cell:${cells.length + 1}`, poly, landmass, hood, terrain);
+          const cell = makeCell(`${landmass.id}:cell:${cells.length + 1}`, poly, landmass, hood, terrain, field);
           if (!cell) continue;
           cells.push(cell);
           hood.cells.push(cell.id);
@@ -317,8 +350,9 @@
   function buildCells(seed = 1) {
     const normalizedSeed = Number.isFinite(seed) ? (seed >>> 0) || 1 : 1;
     const terrain = window.CityMapTerrainV4.buildTerrain(normalizedSeed);
-    const cells = generateCells(terrain, window.makeRng(normalizedSeed ^ 0x51c0115));
-    return { terrain, ...cells };
+    const field = window.CityMapFieldV4.buildField(normalizedSeed, terrain);
+    const cells = generateCells(terrain, field, window.makeRng(normalizedSeed ^ 0x51c0115));
+    return { terrain, field, ...cells };
   }
 
   function cellSummary(result) {

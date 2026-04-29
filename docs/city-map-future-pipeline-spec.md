@@ -171,6 +171,7 @@ The first executable v4 backbone exists as a sidecar pipeline beside the live v3
 Implemented modules:
 
 - `city-map-terrain-v4.js`
+- `city-map-field-v4.js`
 - `city-map-cells-v4.js`
 - `city-map-road-graph-v4.js`
 - `city-map-districts-v4.js`
@@ -179,11 +180,7 @@ Implemented modules:
 - `city-map-v4.js`
 - `city-map-v4-preview.jsx`
 
-Missing planned module:
-
-- `city-map-field-v4.js`
-
-Important: the current executable v4 backbone still generates cells before roads and routes roads over cell centroids. The next refactor should insert `city-map-field-v4.js`, then regenerate roads from field samples, then generate parcels around those road corridors.
+Important: the current executable v4 backbone now generates a city field before cells, stores field metadata on neighborhoods/cells, and attaches field samples plus corridor polygons to road edges. Highways also choose endpoints from the field direction. Roads still route over cell centroids internally, so the next refactor should trace road paths directly from field samples, then generate parcels around those road corridors.
 
 Public entry point:
 

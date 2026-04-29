@@ -13,7 +13,8 @@
 
   const {
     smoothPolylinePath,
-    straightPolylinePath
+    straightPolylinePath,
+    offsetPolyline
   } = window.CityMapPathsV3;
 
   const HIGHWAY_TARGETS_PER_LANDMASS = 1;
@@ -129,15 +130,54 @@
     return simplified;
   }
 
+  function averagePoint(cells) {
+    if (!cells.length) return { x: VIEW_W / 2, y: VIEW_H / 2 };
+    return {
+      x: cells.reduce((sum, cell) => sum + cell.centroid.x, 0) / cells.length,
+      y: cells.reduce((sum, cell) => sum + cell.centroid.y, 0) / cells.length
+    };
+  }
+
+  function roadWidth(kind) {
+    if (kind === "highway") return 14;
+    if (kind === "avenue") return 7;
+    if (kind === "local") return 3.5;
+    return 4.5;
+  }
+
+  function makeRoadCorridor(points, kind) {
+    if (!points || points.length < 2) return [];
+    const half = roadWidth(kind) / 2;
+    const left = offsetPolyline(points, half);
+    const right = offsetPolyline(points, -half).reverse();
+    return [...left, ...right];
+  }
+
+  function sampleRoadField(points, field) {
+    if (!field || !field.sample || !points || !points.length) return [];
+    return points.map(point => {
+      const sample = field.sample(point);
+      return {
+        point,
+        primaryAngle: sample.primaryAngle,
+        secondaryAngle: sample.secondaryAngle,
+        strength: sample.strength,
+        density: sample.density,
+        fieldElementIds: sample.fieldElementIds
+      };
+    });
+  }
+
   function addNode(nodes, point, kind, refId) {
     const id = `node-${nodes.length + 1}`;
     nodes.push({ id, point, kind, refId });
     return id;
   }
 
-  function addRoadEdge(edges, nodes, byId, cellIds, kind, fromNode, toNode, extra = {}) {
+  function addRoadEdge(edges, nodes, byId, cellIds, kind, fromNode, toNode, field, extra = {}) {
     if (!cellIds || cellIds.length < 2) return null;
     const pts = routeToPoints(cellIds, byId, kind);
+    const corridorPolygon = makeRoadCorridor(pts, kind);
     const id = `road-${edges.length + 1}`;
     edges.push({
       id,
@@ -147,6 +187,9 @@
       path: kind === "local" ? straightPolylinePath(pts) : smoothPolylinePath(pts),
       points: pts,
       cellsAlongside: cellIds,
+      corridorPolygon,
+      corridorPath: corridorPolygon.length ? straightPolylinePath(corridorPolygon) + " Z" : "",
+      fieldSamples: sampleRoadField(pts, field),
       visualSmoothing: kind === "local" ? "straight" : "soft",
       ...extra
     });
@@ -160,24 +203,27 @@
     return { low, high };
   }
 
-  function generateHighways(nodes, edges, byId, landmassCells, adjacency, rng) {
+  function generateHighways(nodes, edges, byId, landmassCells, adjacency, field, rng) {
     for (const [landmassId, cells] of Object.entries(landmassCells)) {
       if (cells.length < 18) continue;
       for (let n = 0; n < HIGHWAY_TARGETS_PER_LANDMASS; n++) {
-        const useHorizontal = rng() < 0.55;
-        const candidates = endpointCandidates(cells, p => useHorizontal ? p.x : p.y);
+        const center = averagePoint(cells);
+        const fieldSample = field && field.sample ? field.sample(center) : null;
+        const angle = fieldSample ? fieldSample.primaryAngle : (rng() < 0.55 ? 0 : Math.PI / 2);
+        const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+        const candidates = endpointCandidates(cells, p => p.x * dir.x + p.y * dir.y);
         const start = candidates.low[Math.floor(rng() * candidates.low.length)];
         const end = farthestCell(start, candidates.high) || candidates.high[candidates.high.length - 1];
         const path = shortestCellPath(start.id, end.id, cells, adjacency, "highway");
         if (path.length < 5) continue;
         const fromNode = addNode(nodes, byId[path[0]].centroid, "coastGate", path[0]);
         const toNode = addNode(nodes, byId[path[path.length - 1]].centroid, "coastGate", path[path.length - 1]);
-        addRoadEdge(edges, nodes, byId, path, "highway", fromNode, toNode, { landmassId });
+        addRoadEdge(edges, nodes, byId, path, "highway", fromNode, toNode, field, { landmassId });
       }
     }
   }
 
-  function generateAvenues(nodes, edges, byId, neighborhoods, cells, adjacency, rng) {
+  function generateAvenues(nodes, edges, byId, neighborhoods, cells, adjacency, field, rng) {
     const hoodsByLandmass = {};
     for (const hood of neighborhoods) {
       if (!hood.cells.length) continue;
@@ -200,7 +246,7 @@
           const path = shortestCellPath(fromCell.id, targetCell.id, cells.filter(c => c.landmassId === hood.landmassId), adjacency, "avenue");
           if (path.length < 2) continue;
           const toNode = addNode(nodes, targetCell.centroid, "districtHub", targetHood.id);
-          addRoadEdge(edges, nodes, byId, path, "avenue", fromNode, toNode, {
+          addRoadEdge(edges, nodes, byId, path, "avenue", fromNode, toNode, field, {
             landmassId: hood.landmassId
           });
         }
@@ -208,7 +254,7 @@
     }
   }
 
-  function generateLocalRoads(nodes, edges, byId, cells, adjacency, rng) {
+  function generateLocalRoads(nodes, edges, byId, cells, adjacency, field, rng) {
     const used = new Set();
     for (const cell of cells) {
       if (rng() > 0.24) continue;
@@ -223,7 +269,7 @@
       used.add(key);
       const fromNode = addNode(nodes, cell.centroid, "intersection", cell.id);
       const toNode = addNode(nodes, target.centroid, "intersection", target.id);
-      addRoadEdge(edges, nodes, byId, [cell.id, target.id], "local", fromNode, toNode, {
+      addRoadEdge(edges, nodes, byId, [cell.id, target.id], "local", fromNode, toNode, field, {
         landmassId: cell.landmassId
       });
     }
@@ -288,9 +334,9 @@
     const edges = [];
     const landmassCells = cellsByLandmass(cells);
 
-    generateHighways(nodes, edges, byId, landmassCells, cellResult.adjacency, rng);
-    generateAvenues(nodes, edges, byId, cellResult.neighborhoods, cells, cellResult.adjacency, rng);
-    generateLocalRoads(nodes, edges, byId, cells, cellResult.adjacency, rng);
+    generateHighways(nodes, edges, byId, landmassCells, cellResult.adjacency, cellResult.field, rng);
+    generateAvenues(nodes, edges, byId, cellResult.neighborhoods, cells, cellResult.adjacency, cellResult.field, rng);
+    generateLocalRoads(nodes, edges, byId, cells, cellResult.adjacency, cellResult.field, rng);
 
     const bridgeCandidates = generateBridgeCandidates(nodes, edges, byId, terrain, cells, cellResult.adjacency);
     const { roadCellIds, blockedCellIds } = roadCells(cells, edges);
@@ -301,7 +347,15 @@
       edges,
       bridgeCandidates,
       roadCells: roadCellIds,
-      blockedCells: blockedCellIds
+      blockedCells: blockedCellIds,
+      roadCorridors: edges.map(edge => ({
+        id: `${edge.id}:corridor`,
+        roadId: edge.id,
+        kind: edge.kind,
+        polygon: edge.corridorPolygon,
+        path: edge.corridorPath
+      })).filter(corridor => corridor.polygon.length),
+      blockedAreas: blockedCellIds
     };
   }
 
