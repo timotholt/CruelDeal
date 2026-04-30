@@ -132,11 +132,6 @@
     return points;
   }
 
-  function buildingFill(building) {
-    if (building.shade < 0.5) return PAL.bldgB;
-    return PAL.bldgA;
-  }
-
   function buildingStroke(building) {
     if (building.render.lodGroup === "lowrise") return "hsla(215, 82%, 54%, 0.16)";
     return "hsla(215, 84%, 58%, 0.22)";
@@ -346,6 +341,10 @@
     showBuildings = true,
     showCells = false,
     transparentParks = false,
+    brightBuildings = false,
+    buildingBorders = false,
+    shadowBorders = false,
+    hideShadows = false,
     hoveredDistrictId = null
   }) {
     const [debugTransparentParks, setDebugTransparentParks] = React.useState(transparentParks);
@@ -361,17 +360,42 @@
       ? data.roadGraph.edges.find((edge) => edge.id === "mainland-coast-road")
       : null;
     const mainlandBuildableClipId = `${idBase}-mainland-buildable`;
+    const buildingFill = (building) => {
+      let color = building.shade < 0.5 ? PAL.bldgB : PAL.bldgA;
+      if (brightBuildings) {
+        // Brighten by increasing lightness: replace "XX%" with higher value
+        // PAL.bldgA/B are like "hsla(215, 45%, 38%, 0.78)" - increase the 38% to ~55%
+        color = color.replace(/(\d+)%,\s*(\d+)%/, (match, sat, light) => {
+          const newLight = Math.min(100, parseInt(light) + 17);
+          return `${sat}%, ${newLight}%`;
+        });
+      }
+      return color;
+    };
     const renderBuilding = (building) => {
       const dx = Math.cos(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
       const dy = Math.sin(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
       return (
         <g key={building.id}>
-          <path
-            d={building.path}
-            fill="black"
-            opacity={Math.min(0.1, building.shadow.opacity * 0.38)}
-            transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
-          />
+          {!hideShadows && (
+            <path
+              d={building.path}
+              fill="black"
+              opacity={Math.min(0.1, building.shadow.opacity * 0.38)}
+              transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
+            />
+          )}
+          {shadowBorders && (
+            <path
+              d={building.path}
+              fill="none"
+              stroke="#00ffff"
+              strokeWidth={0.4}
+              vectorEffect="non-scaling-stroke"
+              opacity={0.8}
+              transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
+            />
+          )}
           <path
             d={building.path}
             fill={buildingFill(building)}
@@ -379,6 +403,16 @@
             strokeWidth={0.08}
             vectorEffect="non-scaling-stroke"
           />
+          {buildingBorders && (
+            <path
+              d={building.path}
+              fill="none"
+              stroke="#ff00ff"
+              strokeWidth={0.4}
+              vectorEffect="non-scaling-stroke"
+              opacity={0.8}
+            />
+          )}
         </g>
       );
     };

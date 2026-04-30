@@ -83,21 +83,39 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Debug 2</span>
+            <span className="dock-label">Bright Buildings</span>
             <button
-              className="dock-toggle"
-              onClick={() => {}}
+              className={`dock-toggle ${tweaks.brightBuildings === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('brightBuildings', !tweaks.brightBuildings)}
             >
-              OFF
+              {tweaks.brightBuildings === true ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Debug 3</span>
+            <span className="dock-label">Building Borders</span>
             <button
-              className="dock-toggle"
-              onClick={() => {}}
+              className={`dock-toggle ${tweaks.buildingBorders === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('buildingBorders', !tweaks.buildingBorders)}
             >
-              OFF
+              {tweaks.buildingBorders === true ? 'ON' : 'OFF'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Shadow Borders</span>
+            <button
+              className={`dock-toggle ${tweaks.shadowBorders === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('shadowBorders', !tweaks.shadowBorders)}
+            >
+              {tweaks.shadowBorders === true ? 'ON' : 'OFF'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Hide Shadows</span>
+            <button
+              className={`dock-toggle ${tweaks.hideShadows === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('hideShadows', !tweaks.hideShadows)}
+            >
+              {tweaks.hideShadows === true ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
@@ -208,6 +226,10 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         showDebug={true}
         showBuildings={tweaks.showBuildingsDebug !== true}
         transparentParks={tweaks.transparentParks === true}
+        brightBuildings={tweaks.brightBuildings === true}
+        buildingBorders={tweaks.buildingBorders === true}
+        shadowBorders={tweaks.shadowBorders === true}
+        hideShadows={tweaks.hideShadows === true}
         hoveredDistrictId={hoveredDistrictId}
       />
 

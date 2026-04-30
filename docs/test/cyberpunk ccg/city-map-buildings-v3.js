@@ -157,7 +157,7 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
     ? (6.0 + rng() * 2.0)    // ~6-8 px (small, fits curves/coast)
     : (7.0 + rng() * 3.2);   // ~7-10.2 px (dense regular blocks)
   const skipRate = isIrregular ? 0.15 : 0.01;  // almost no empty lots in regular blocks
-  const inset    = isIrregular ? 0.30 : 0.30;  // tight inset → buildings nearly touch
+  const inset    = isIrregular ? 0.50 : 0.45;  // increased inset to prevent buildings leaking into adjacent blocks
 
   const nU = Math.max(1, Math.round(wU / targetSize));
   const nV = Math.max(1, Math.round(wV / targetSize));
@@ -196,8 +196,8 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
       { u: u2, v: v2 }, { u: u1, v: v2 }
     ];
     if (isIrregular && rng() < 0.36) {
-      const maxSkew = Math.min(u2 - u1, v2 - v1) * 0.22;
-      const skew = (rng() < 0.5 ? -1 : 1) * maxSkew * (0.45 + rng() * 0.55);
+      const maxSkew = Math.min(u2 - u1, v2 - v1) * 0.12;
+      const skew = (rng() < 0.5 ? -1 : 1) * maxSkew * (0.35 + rng() * 0.35);
       if (rng() < 0.5) {
         uvCorners = [
           { u: u1 + skew, v: v1 }, { u: u2 + skew, v: v1 },
@@ -214,6 +214,8 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
       x: p.u * cosI - p.v * sinI,
       y: p.u * sinI + p.v * cosI
     }));
+    // Strict boundary check: ALL corners must be inside the block polygon
+    // This prevents buildings from leaking into adjacent blocks or parks
     if (!corners.every(c => _pointInPolygon(c, blockPolygon))) return false;
     if (footprintNearRiver(corners)) return false;
     if (cornerNearRoad(corners)) return false;
