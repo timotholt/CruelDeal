@@ -1,13 +1,20 @@
 (function () {
   "use strict";
 
-  const { VIEW_W, VIEW_H, DISTRICT_NAMES, DISTRICT_COLORS } = window.CityMapConfigV3;
+  const {
+    VIEW_W,
+    VIEW_H,
+    DISTRICT_NAMES,
+    DISTRICT_COLORS,
+    MAP_SLOT_HALF_H
+  } = window.CityMapConfigV3;
   const {
     polygonArea,
     polygonCentroid,
     polygonBBox,
     pointInPolygon,
     pointToSegmentDist,
+    polylabel,
     closestPointOnPolygon,
     distToRiver,
     segIntersect
@@ -482,14 +489,35 @@
     return 2;
   }
 
+  function slotPairsForDistrict(district) {
+    if (district.landmassId !== "mainland") return 1;
+    return slotPairsForArea(district.area);
+  }
+
+  function polygonEdgeDistance(point, polygon) {
+    let best = Infinity;
+    for (let i = 0; i < polygon.length; i++) {
+      best = Math.min(best, pointToSegmentDist(
+        point.x, point.y,
+        polygon[i], polygon[(i + 1) % polygon.length]
+      ));
+    }
+    return best;
+  }
+
   function candidatePointsForBlocks(blocks, district, rng) {
-    const targetPairs = slotPairsForArea(district.area);
+    const targetPairs = slotPairsForDistrict(district);
     const points = blocks
-      .filter(b => b.buildable && b.area > 140)
+      .filter(b => b.buildable && b.area > 220)
       .map(b => {
-        const c = b.centroid;
+        const label = polylabel(b.polygon, 1.2, b.centroid);
+        const c = { x: label.x, y: label.y };
         return {
-          x: c.x, y: c.y, block: b, jitter: rng() * 10
+          x: c.x,
+          y: c.y,
+          block: b,
+          edgeClearance: polygonEdgeDistance(c, b.polygon),
+          jitter: rng() * 10
         };
       });
 
@@ -500,15 +528,18 @@
     const pickSpread = (candidates, count, existing) => {
       const selected = [];
       const used = new Set();
-      for (const minSep of [42, 34, 26, 18, 0]) {
+      const slotEdgeClearance = Math.max(12, MAP_SLOT_HALF_H + 4);
+      for (const minEdgeClearance of [slotEdgeClearance, 18, 14, 10, 0]) {
+        for (const minSep of [42, 34, 26, 18, 0]) {
         while (selected.length < count) {
           let best = null, bestScore = -Infinity;
           for (const p of candidates) {
             if (used.has(p.block.id)) continue;
+            if (p.edgeClearance < minEdgeClearance) continue;
             const clearance = minDistTo(p, [...existing, ...selected]);
             if (clearance < minSep) continue;
             const edgePull = Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y) * 0.08;
-            const score = clearance + edgePull + p.jitter;
+            const score = clearance + edgePull + p.edgeClearance * 1.6 + p.jitter;
             if (score > bestScore) {
               best = p;
               bestScore = score;
@@ -517,6 +548,8 @@
           if (!best) break;
           used.add(best.block.id);
           selected.push(best);
+        }
+        if (selected.length >= count) break;
         }
         if (selected.length >= count) break;
       }
@@ -556,7 +589,8 @@
       id: `${sourcePrefix}-road-${index + 1}`,
       kind,
       source: cut.depth <= 1 ? "macro-cut" : "bsp-cut",
-      path: d, points, depth: cut.depth, cut
+      path: d, points, depth: cut.depth, cut,
+      riverBank: !!cut.riverBank
     };
   }
 
@@ -793,6 +827,7 @@
       waterPolygons: allOwnershipPolygons.flatMap(p => ownedWaterPolygons(p, terrain)),
       blocks: [], buildablePolygons: [], polygons: [],
       roads: [], slots: [], dots: [],
+      rawCuts: [],
       labelAnchor: interiorPoint(region),
       labelPos: interiorPoint(region),
       labelText: names[idx % names.length],
@@ -803,6 +838,7 @@
     base.polygons = base.buildablePolygons;
     // Collect BSP cuts from the same buildable roots that generated blocks.
     const rawCuts = bspRoots.flatMap(r => collectAllCuts(r));
+    base.rawCuts = rawCuts;
     const truncatedCuts = waterSegs.length
       ? rawCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
       : rawCuts;
@@ -847,8 +883,26 @@
     return districts;
   }
 
-  function makeBridgePlan(terrain, mainlandCoastRoadPolygon = null) {
-    const bridges = (terrain.channels || [])
+  function riverBodyForBridges(terrain) {
+    const rivers = waterBodiesOfKind(terrain, "river");
+    if (!rivers.length) return null;
+    return {
+      path: rivers.map(r => r.path).join(" "),
+      segments: rivers.flatMap(r => r.segments || []),
+      outerWidth: Math.max(...rivers.map(r => r.outerWidth || 7)),
+      innerWidth: Math.max(...rivers.map(r => r.innerWidth || 3.5)),
+      buildingBuffer: Math.max(...rivers.map(r => r.buildingBuffer || 7))
+    };
+  }
+
+  function bridgeLinePath(cx, cy, angle, length) {
+    const dx = Math.cos(angle) * length * 0.5;
+    const dy = Math.sin(angle) * length * 0.5;
+    return `M ${(cx - dx).toFixed(2)} ${(cy - dy).toFixed(2)} L ${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}`;
+  }
+
+  function makeBridgePlan(terrain, mainlandCoastRoadPolygon = null, roadCuts = []) {
+    const islandBridges = (terrain.channels || [])
       .filter(ch => ch.bridgeAllowed && ch.centerline && ch.centerline.length >= 2)
       .map((ch, i) => {
         const islandPoint = ch.centerline[ch.centerline.length - 1];
@@ -861,10 +915,33 @@
           channelId: ch.id,
           path: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} L ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
           center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-          deckWidth: 4.8
+          deckWidth: 4.8,
+          type: "island"
         };
       });
-    return { bridges };
+    const river = riverBodyForBridges(terrain);
+    const riverBridges = river && mainlandCoastRoadPolygon && window.CityMapBridgesV3
+      ? window.CityMapBridgesV3.generateBridges({
+          allCuts: roadCuts,
+          river,
+          riverSegments: river.segments,
+          coastRoadPolygon: mainlandCoastRoadPolygon,
+          landPolygon: terrain.mainland.polygon
+        }).bridges.filter(bridge => !bridge.offshore).map((bridge, i) => {
+          const depth = bridge.depth ?? 2;
+          const length = Math.max((river.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
+          const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : 3.5;
+          return {
+            id: `v35-river-bridge-${i + 1}`,
+            path: bridgeLinePath(bridge.x, bridge.y, bridge.angle || 0, length),
+            center: { x: bridge.x, y: bridge.y },
+            deckWidth,
+            depth,
+            type: "river"
+          };
+        })
+      : [];
+    return { bridges: [...islandBridges, ...riverBridges] };
   }
 
   function districtAdjacency(districts) {
@@ -882,8 +959,12 @@
     return graph;
   }
 
-  function buildStaticBuildings(blocks, rng) {
+  function buildStaticBuildings(blocks, rng, terrain) {
     const buildings = [], openSpaces = [];
+    const riverSegments = terrain ? waterBodiesOfKind(terrain, "river").flatMap(r => r.segments || []) : null;
+    const riverBuffer = terrain
+      ? Math.max(7, ...waterBodiesOfKind(terrain, "river").map(r => r.buildingBuffer || 7))
+      : 7;
     for (const block of blocks) {
       if (!block.buildable) {
         openSpaces.push({ id: `${block.id}:reserve`, kind: "setback", cellId: block.id });
@@ -894,7 +975,7 @@
         continue;
       }
       const generated = window.CityMapBuildingsV3.generateBlockBuildings(
-        block.polygon, block.fieldAngle, rng, null, null, 7.0
+        block.polygon, block.fieldAngle, rng, riverSegments, null, riverBuffer
       );
       generated.forEach((gen, i) => {
         const height = block.density === "dense" ? 12 + rng() * 18
@@ -1031,10 +1112,16 @@
       ...districts.flatMap(d => d.roads)
     ];
 
-    const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null);
-    const buildingPlan = buildStaticBuildings(cells, rng);
+    const rawRoadCuts = [
+      ...enforced.spineCuts,
+      ...districts.flatMap(d => d.rawCuts || []),
+      ...districts.flatMap(d => d.roads || []).filter(r => r.source === "coast-road").map(r => r.cut)
+    ].filter(Boolean);
+
+    const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null, rawRoadCuts);
+    const buildingPlan = buildStaticBuildings(cells, rng, terrain);
     const coastDocks = window.CityMapLandV3 && window.CityMapLandV3.generateCoastDocks
-      ? window.CityMapLandV3.generateCoastDocks(terrain.mainland.polygon, window.makeRng(normalizedSeed ^ 0xd0c5))
+      ? window.CityMapLandV3.generateCoastDocks(terrain.mainland.polygon, window.makeRng(normalizedSeed ^ 0xd0c5), riverSegs)
       : [];
 
     return remember(key, {

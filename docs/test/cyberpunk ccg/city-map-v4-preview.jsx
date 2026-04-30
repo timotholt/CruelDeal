@@ -437,24 +437,26 @@
         )}        <g>
           {data.roadGraph.edges.map((edge) => (
                 <g key={edge.id}>
+                  {!edge.riverBank && (
+                    <path
+                      d={edge.path}
+                      fill="none"
+                      stroke={V4_PAL.roadUnderlay}
+                      strokeWidth={roadUnderlayWidth(edge.kind)}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={edge.kind === "local" ? 0.76 : 0.72}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
                   <path
                     d={edge.path}
                     fill="none"
-                    stroke={V4_PAL.roadUnderlay}
-                    strokeWidth={roadUnderlayWidth(edge.kind)}
+                    stroke={edge.riverBank ? V4_PAL.roadLocal : roadColor(edge.kind)}
+                    strokeWidth={edge.riverBank ? 0.32 : roadWidth(edge.kind)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={edge.kind === "local" ? 0.76 : 0.72}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <path
-                    d={edge.path}
-                    fill="none"
-                    stroke={roadColor(edge.kind)}
-                    strokeWidth={roadWidth(edge.kind)}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={edge.kind === "local" ? 0.88 : 0.95}
+                    opacity={edge.riverBank ? 0.78 : edge.kind === "local" ? 0.88 : 0.95}
                     vectorEffect="non-scaling-stroke"
                   />
                 </g>

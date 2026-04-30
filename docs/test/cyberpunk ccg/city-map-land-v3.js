@@ -2,7 +2,7 @@
   "use strict";
 
   const { VIEW_W, VIEW_H } = window.CityMapConfigV3;
-  const { pointInPolygon, polygonCentroid, polygonBBox } = window.CityMapGeometryV3;
+  const { pointInPolygon, polygonCentroid, polygonBBox, pointToSegmentDist } = window.CityMapGeometryV3;
   const { rectPolygon, polygonToPath } = window.CityMapPathsV3;
 
   function generateLandPolygon(rng) {
@@ -91,7 +91,7 @@
     return verts;
   }
 
-  function generateCoastDocks(landPolygon, rng) {
+  function generateCoastDocks(landPolygon, rng, riverSegments = []) {
     const docks = [];
     const dockBBoxes = [];
     const centroid = polygonCentroid(landPolygon);
@@ -134,6 +134,9 @@
         const clusterWidth = spacing * (dockCount - 1);
         const angle = Math.atan2(outward.y, outward.x) + Math.PI / 2;
         const candidate = [];
+        const pierHitsRiver = (poly) => riverSegments.some(seg =>
+          poly.some(p => pointToSegmentDist(p.x, p.y, seg.a, seg.b) < 13)
+        );
         for (let k = 0; k < dockCount; k++) {
           const along = (k - (dockCount - 1) / 2) * spacing;
           const t = clusterT + along / segLen;
@@ -145,13 +148,14 @@
           const cy = baseY + outward.y * (pierLen / 2 - 2.4);
           if (cx < -4 || cx > VIEW_W + 4 || cy < -4 || cy > VIEW_H + 4) continue;
           const poly = rectPolygon(cx, cy, pierW, pierLen, angle);
+          if (pierHitsRiver(poly)) continue;
           const box = polygonBBox(poly);
           if (overlapsDock(box)) continue;
-          candidate.push({ path: polygonToPath(poly), box });
+          candidate.push({ path: polygonToPath(poly), polygon: poly, box });
         }
         if (candidate.length < 2) continue;
         for (const dock of candidate) {
-          docks.push({ path: dock.path });
+          docks.push({ path: dock.path, polygon: dock.polygon });
           dockBBoxes.push(dock.box);
         }
       }
