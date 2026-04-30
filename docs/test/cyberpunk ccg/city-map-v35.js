@@ -1173,10 +1173,103 @@
     });
   }
 
+  function footprintTouchesWaterSetback(corners, riverSegments, roadHazards, riverBuffer) {
+    for (const c of corners) {
+      if (riverSegments && riverSegments.length && distToRiver(c.x, c.y, riverSegments) < riverBuffer) {
+        return true;
+      }
+      for (const hz of roadHazards || []) {
+        if (pointToSegmentDist(c.x, c.y, hz.a, hz.b) < hz.buffer) return true;
+      }
+    }
+    return false;
+  }
+
+  function fallbackTinyBlockBuildings(block, rng, riverSegments, roadHazards, riverBuffer) {
+    const blockPolygon = block.polygon;
+    const gridAngle = block.fieldAngle || 0;
+    const cosG = Math.cos(-gridAngle), sinG = Math.sin(-gridAngle);
+    const cosI = Math.cos(gridAngle), sinI = Math.sin(gridAngle);
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    for (const p of blockPolygon) {
+      const u = p.x * cosG - p.y * sinG;
+      const v = p.x * sinG + p.y * cosG;
+      minU = Math.min(minU, u);
+      maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v);
+      maxV = Math.max(maxV, v);
+    }
+
+    const wU = maxU - minU;
+    const wV = maxV - minV;
+    if (wU < 3.4 || wV < 3.4) return [];
+
+    const placed = [];
+    const buildings = [];
+    const maxBuildings = Math.min(12, Math.max(2, Math.floor(block.area / 170)));
+    const sizes = [5.2, 4.4, 3.6, 2.8];
+    const candidates = [];
+    const step = 2.8;
+    for (let u = minU + 1.9; u <= maxU - 1.9; u += step) {
+      for (let v = minV + 1.9; v <= maxV - 1.9; v += step) {
+        candidates.push({
+          u: u + (rng() - 0.5) * 0.8,
+          v: v + (rng() - 0.5) * 0.8
+        });
+      }
+    }
+    const shuffled = shuffle(candidates, rng);
+
+    const tryPlace = (u, v, w, h) => {
+      const u1 = u - w / 2, u2 = u + w / 2;
+      const v1 = v - h / 2, v2 = v + h / 2;
+      if (u1 < minU || u2 > maxU || v1 < minV || v2 > maxV) return false;
+      for (const b of placed) {
+        if (u2 + 0.45 > b.u1 && u1 - 0.45 < b.u2 &&
+            v2 + 0.45 > b.v1 && v1 - 0.45 < b.v2) {
+          return false;
+        }
+      }
+      const corners = [
+        { u: u1, v: v1 }, { u: u2, v: v1 },
+        { u: u2, v: v2 }, { u: u1, v: v2 }
+      ].map(p => ({
+        x: p.u * cosI - p.v * sinI,
+        y: p.u * sinI + p.v * cosI
+      }));
+      if (!corners.every(c => pointInPolygon(c, blockPolygon))) return false;
+      if (footprintTouchesWaterSetback(corners, riverSegments, roadHazards, riverBuffer)) return false;
+      placed.push({ u1, u2, v1, v2 });
+      buildings.push({
+        path: `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
+              `L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} ` +
+              `L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} ` +
+              `L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
+        polygon: corners,
+        area: polygonArea(corners),
+        shade: rng(),
+        fallback: true
+      });
+      return true;
+    };
+
+    for (const candidate of shuffled) {
+      if (buildings.length >= maxBuildings) break;
+      for (const size of sizes) {
+        const aspect = 0.78 + rng() * 0.52;
+        const w = size * aspect;
+        const h = size / aspect;
+        if (tryPlace(candidate.u, candidate.v, w, h)) break;
+      }
+    }
+    return buildings;
+  }
+
   function buildStaticBuildings(blocks, rng, terrain) {
     const buildings = [], openSpaces = [];
     const cellsById = new Map(blocks.map(block => [block.id, block]));
     const riverSegments = terrain ? waterBodiesOfKind(terrain, "river").flatMap(r => r.segments || []) : null;
+    const roadHazards = terrain ? lakeRoadHazards(terrain) : [];
     const riverBuffer = terrain
       ? Math.max(7, ...waterBodiesOfKind(terrain, "river").map(r => r.buildingBuffer || 7))
       : 7;
@@ -1192,9 +1285,12 @@
           : { id: `${block.id}:park`, kind: "park", cellId: block.id });
         continue;
       }
-      const generated = window.CityMapBuildingsV3.generateBlockBuildings(
-        block.polygon, block.fieldAngle, rng, riverSegments, lakeRoadHazards(terrain), riverBuffer
+      let generated = window.CityMapBuildingsV3.generateBlockBuildings(
+        block.polygon, block.fieldAngle, rng, riverSegments, roadHazards, riverBuffer
       );
+      if (!generated.length && block.area > 110) {
+        generated = fallbackTinyBlockBuildings(block, rng, riverSegments, roadHazards, riverBuffer);
+      }
       generated.forEach((gen, i) => {
         const height = block.density === "dense" ? 12 + rng() * 18
           : block.density === "medium" ? 7 + rng() * 10 : 4 + rng() * 7;
