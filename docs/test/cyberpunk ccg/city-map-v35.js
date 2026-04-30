@@ -1124,10 +1124,7 @@
   }
 
   function bridgeCrossesRiver(bridge, riverSegments) {
-    if (bridge.riverMouth) return true;
-    const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
-    if (riverAngle == null) return true;
-    return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle) > Math.PI / 14;
+    return true;
   }
 
   function bridgeRiverDelta(bridge, riverSegments) {

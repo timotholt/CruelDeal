@@ -303,6 +303,32 @@ if (riverSegments) {
   renderedCuts = out;
 }
 
+// Final rendered-road repair: inspect the actual cuts that will be drawn.
+// If a river crossing survived truncation without a bridge, add a bridge at
+// that exact crossing so the road layer and bridge layer cannot disagree.
+if (riverSegments) {
+  for (const cut of renderedCuts) {
+    if (cut.riverBank || cut.depth > 4) continue;
+    const cutSegs = _cutSegments(cut);
+    for (const cs of cutSegs) {
+      for (const rs of riverSegments) {
+        const hit = _segIntersect(cs.a, cs.b, rs.a, rs.b);
+        if (!hit) continue;
+        const already = bridges.some(b => Math.hypot(b.x - hit.x, b.y - hit.y) < 5);
+        if (already) continue;
+        const roadAngle = Math.atan2(cs.b.y - cs.a.y, cs.b.x - cs.a.x);
+        bridges.push({
+          x: hit.x,
+          y: hit.y,
+          angle: roadAngle,
+          roadAngle,
+          depth: cut.depth,
+          renderedCutBackstop: true
+        });
+      }
+    }
+  }
+}
 
     return { bridges, renderedCuts };
   }
