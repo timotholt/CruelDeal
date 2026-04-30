@@ -333,7 +333,7 @@ function DetectionOverlay({ dot, card, algo, placedCards }) {
   const redR = (maxEnemyReach + 0.5) * cell;
 
   return (
-    <svg className="detect-svg" width={CITY_V3_W} height={CITY_V3_H} style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}>
+    <svg className="detect-svg" width={CITY_V3_W} height={CITY_V3_H}>
       <defs>
         <radialGradient id="blueGrad" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#6ff7ff" stopOpacity="0.0" />

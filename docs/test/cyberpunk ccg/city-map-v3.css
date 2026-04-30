@@ -71,6 +71,22 @@
     brightness(var(--map-display-brightness)) contrast(var(--map-display-contrast)) saturate(var(--map-display-saturation));
 }
 
+.city-map-v4-preview {
+  position: relative;
+}
+
+.city-map-v4-preview-svg {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.city-map-v4-preview__hover-flood {
+  mix-blend-mode: screen;
+}
+
 @media (max-width: 480px),
 (max-height: 720px) {
   :root {

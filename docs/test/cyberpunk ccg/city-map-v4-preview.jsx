@@ -412,14 +412,14 @@
     };
 
     return (
-      <div style={{ position: "relative" }}>
+      <div className="city-map-v4-preview">
         <svg
           className="city-map-v4-preview-svg"
           width={width || VIEW_W}
           height={height || VIEW_H}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="none"
-          style={{ opacity, display: "block", position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
+          style={{ opacity }}
         >
         <defs>
           <clipPath id={`${idBase}-mainland`}>
@@ -591,11 +591,11 @@
                   {districtHoverPolygons(district).map((polygon, index) => (
                     <path
                       key={`${district.id}-hover-cell-${index}`}
+                      className="city-map-v4-preview__hover-flood"
                       d={index === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
                       fill={floodColor}
                       stroke="none"
                       opacity={0.34}
-                      style={{ mixBlendMode: "screen" }}
                       vectorEffect="non-scaling-stroke"
                     />
                   ))}
