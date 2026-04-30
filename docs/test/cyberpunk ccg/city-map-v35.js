@@ -1127,7 +1127,7 @@
     if (bridge.riverMouth) return true;
     const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
     if (riverAngle == null) return true;
-    return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle) > Math.PI / 4;
+    return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle) > Math.PI / 14;
   }
 
   function bridgeRiverDelta(bridge, riverSegments) {
@@ -1160,21 +1160,28 @@
         };
       });
     const river = riverBodyForBridges(terrain);
-    const riverBridges = river && mainlandCoastRoadPolygon && window.CityMapBridgesV3
+    const riverBridgeResult = river && mainlandCoastRoadPolygon && window.CityMapBridgesV3
       ? window.CityMapBridgesV3.generateBridges({
           allCuts: roadCuts,
           river,
           riverSegments: river.segments,
           coastRoadPolygon: mainlandCoastRoadPolygon,
           landPolygon: terrain.mainland.polygon
-        }).bridges.filter(bridge => !bridge.offshore).map((bridge, i) => {
+        })
+      : null;
+    const renderedCuts = riverBridgeResult && riverBridgeResult.renderedCuts
+      ? riverBridgeResult.renderedCuts
+      : roadCuts;
+    const riverBridges = riverBridgeResult
+      ? riverBridgeResult.bridges.filter(bridge => !bridge.offshore).map((bridge, i) => {
           if (!bridgeCrossesRiver(bridge, river.segments)) return null;
           const depth = bridge.depth ?? 2;
           const delta = bridgeRiverDelta(bridge, river.segments);
           const baseLength = Math.max((river.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
-          const shallowFactor = bridge.riverMouth ? 1 / Math.max(0.28, Math.sin(Math.max(delta, 0.18))) : 1;
-          const length = Math.min(38, baseLength * shallowFactor);
-          const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : 3.5;
+          const shallowFactor = 1 / Math.max(0.34, Math.sin(Math.max(delta, 0.22)));
+          const maxLength = depth <= 1 ? 64 : depth >= 4 ? 36 : 52;
+          const length = Math.min(maxLength, baseLength * shallowFactor);
+          const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : depth >= 4 ? 2.6 : 3.5;
           return {
             id: `v35-river-bridge-${i + 1}`,
             path: bridgeLinePath(bridge.x, bridge.y, bridge.angle || 0, length),
@@ -1187,7 +1194,7 @@
           };
         }).filter(Boolean)
       : [];
-    return { bridges: [...islandBridges, ...riverBridges] };
+    return { bridges: [...islandBridges, ...riverBridges], renderedCuts };
   }
 
   function districtAdjacency(districts) {
@@ -1556,10 +1563,15 @@
     const districts = [...mainlandDistricts, ...islandDistricts];
     const cells = districts.flatMap(d => d.blocks);
 
-    // Macro cuts become the highway/avenue roads; truncate at water
-    const truncatedMacroCuts = waterSegs.length
-      ? enforced.spineCuts.flatMap(cut => truncateCutAtRiver(cut, waterSegs, 5))
-      : enforced.spineCuts;
+    const rawRoadCuts = [
+      ...enforced.spineCuts,
+      ...districts.flatMap(d => d.rawCuts || []),
+      ...districts.flatMap(d => d.roads || []).filter(r => r.source === "coast-road").map(r => r.cut)
+    ].filter(Boolean);
+
+    const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null, rawRoadCuts);
+    const bridgeAwareRoadCuts = bridgePlan.renderedCuts || rawRoadCuts;
+
     const riverBankCuts = waterBodiesOfKind(terrain, "river")
       .flatMap(river => window.CityMapWaterV3 && window.CityMapWaterV3.makeRiverBankRoads
         ? window.CityMapWaterV3.makeRiverBankRoads(river, terrain.mainland.polygon)
@@ -1570,19 +1582,10 @@
         : []);
 
     const roadEdges = [
-      ...truncatedMacroCuts.map((cut, i) => cutToRoad(cut, i, "v35-macro")),
+      ...bridgeAwareRoadCuts.map((cut, i) => cutToRoad(cut, i, "v35-road")),
       ...riverBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-river-bank")),
-      ...lakeBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-lake-bank")),
-      ...districts.flatMap(d => d.roads)
+      ...lakeBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-lake-bank"))
     ];
-
-    const rawRoadCuts = [
-      ...enforced.spineCuts,
-      ...districts.flatMap(d => d.rawCuts || []),
-      ...districts.flatMap(d => d.roads || []).filter(r => r.source === "coast-road").map(r => r.cut)
-    ].filter(Boolean);
-
-    const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null, rawRoadCuts);
     const buildingPlan = buildStaticBuildings(cells, rng, terrain);
     const coastDocks = window.CityMapLandV3 && window.CityMapLandV3.generateCoastDocks
       ? window.CityMapLandV3.generateCoastDocks(terrain.mainland.polygon, window.makeRng(normalizedSeed ^ 0xd0c5), riverSegs)

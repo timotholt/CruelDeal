@@ -17,9 +17,9 @@
   function generateBridges({ allCuts, river, riverSegments, coastRoadPolygon, landPolygon }) {
 // 12. Bridges — placed where BIG and MID streets (highway / avenue / main
 // street / collector-local) and the coast road cross the river. Rules:
-//   - Cuts with depth <= 3 are eligible (highways, avenues, main streets,
-//     and the next road level down). Smaller local streets still dead-end at
-//     the bank in step 12b.
+//   - Cuts with depth <= 3 are primary bridge candidates (highways, avenues,
+//     main streets, and collector-locals). A few depth-4 local streets can
+//     bridge later as gap-fill candidates when a river stretch is underserved.
 //   - Sort cuts by depth (highways first) so bigger streets get priority.
 //     If two streets cross the river too close together, only the bigger
 //     one (or earliest in iteration) gets a bridge.
@@ -30,7 +30,8 @@ const MIN_BRIDGE_DIST = 20; // px between major bridge centers
 const _bridgeMinDist = (depth) => {
   if (depth <= 1) return 20;
   if (depth === 2) return 17;
-  return 14;
+  if (depth === 3) return 14;
+  return 12;
 };
 const _bridgeTooClose = (x, y, depth, list = bridges) => {
   const candidateMinDist = _bridgeMinDist(depth);
@@ -139,13 +140,13 @@ if (riverSegments) {
     });
   }
 
-  // (c) Gap-fill river bridges. After the priority pass, add a few depth-2/3
+  // (c) Gap-fill river bridges. After the priority pass, add a few depth-2/3/4
   // crossings only when they sit in an under-served river stretch. This avoids
   // both giant empty spans and local bridge clusters.
   const fillCandidates = [];
   for (const cut of allCuts) {
     if (cut.riverBank) continue;
-    if (cut.depth < 2 || cut.depth > 3) continue;
+    if (cut.depth < 2 || cut.depth > 4) continue;
     const cutSegs = _cutSegments(cut);
     for (const cs of cutSegs) {
       for (let ri = 0; ri < riverSegments.length; ri++) {
@@ -153,23 +154,67 @@ if (riverSegments) {
         const hit = _segIntersect(cs.a, cs.b, rs.a, rs.b);
         if (!hit) continue;
         const nearest = bridges.reduce((best, b) => Math.min(best, Math.hypot(b.x - hit.x, b.y - hit.y)), Infinity);
-        if (nearest < 34 || nearest > 88) continue;
+        const minNearest = cut.depth >= 4 ? 42 : 34;
+        const maxNearest = cut.depth >= 4 ? 104 : 88;
+        if (nearest < minNearest || nearest > maxNearest) continue;
         fillCandidates.push({
           x: hit.x,
           y: hit.y,
           angle: Math.atan2(cs.b.y - cs.a.y, cs.b.x - cs.a.x),
           roadAngle: Math.atan2(cs.b.y - cs.a.y, cs.b.x - cs.a.x),
           depth: cut.depth,
-          score: nearest
+          score: nearest - Math.max(0, cut.depth - 3) * 14
         });
       }
     }
   }
   fillCandidates.sort((a, b) => b.score - a.score || a.depth - b.depth);
   for (const c of fillCandidates) {
-    if (bridges.length > 14) break;
+    if (bridges.length > 18) break;
     if (_bridgeTooClose(c.x, c.y, c.depth)) continue;
     bridges.push({ x: c.x, y: c.y, angle: c.angle, roadAngle: c.roadAngle, depth: c.depth });
+  }
+
+  // Same-road backstop: if one crossing on a road earns a bridge, keep every
+  // other river crossing on that same rendered road bridged too. Otherwise a
+  // meandering river can create "road continues, second crossing has no deck".
+  for (const cut of allCuts.filter(c => c.depth <= 4 && !c.riverBank)) {
+    const hits = _cutRiverHits(cut);
+    if (hits.length < 2) continue;
+    const roadIsPreserved = hits.some(hit =>
+      bridges.some(b => Math.hypot(b.x - hit.x, b.y - hit.y) < 5)
+    );
+    if (!roadIsPreserved) continue;
+    for (const hit of hits) {
+      const already = bridges.some(b => Math.hypot(b.x - hit.x, b.y - hit.y) < 5);
+      if (already) continue;
+      bridges.push({
+        x: hit.x,
+        y: hit.y,
+        angle: hit.roadAngle,
+        roadAngle: hit.roadAngle,
+        depth: cut.depth,
+        sameRoadBackstop: true
+      });
+    }
+  }
+
+  // Major-road guarantee: highways, avenues, streets, and collector-locals
+  // should never visibly fall into the river. If truncation misses an odd
+  // polyline/river-segment intersection, render a bridge instead of a dead end.
+  for (const cut of allCuts.filter(c => c.depth <= 3 && !c.riverBank)) {
+    for (const hit of _cutRiverHits(cut)) {
+      const already = bridges.some(b => Math.hypot(b.x - hit.x, b.y - hit.y) < 5);
+      if (already) continue;
+      bridges.push({
+        x: hit.x,
+        y: hit.y,
+        angle: hit.roadAngle,
+        roadAngle: hit.roadAngle,
+        depth: cut.depth,
+        majorRoadBackstop: true
+      });
+    }
   }
 }
 
@@ -225,7 +270,7 @@ if (riverSegments) {
 // 12b. Truncate small streets that cross the river without a bridge.
 // For cuts that did not get a bridge, any river crossing splits the cut into
 // dead-end halves that retreat from each bank by `riverGap`.
-// For depth 0/1/2/3 cuts that DID get a bridge, leave them intact (the bridge
+// For depth 0/1/2/3/4 cuts that DID get a bridge, leave them intact (the bridge
 // sprite covers the river crossing visually).
 // For eligible cuts that DIDN'T get a bridge (e.g. close to another bigger
 // bridge), truncate so they don't appear to swim across the water.
@@ -248,7 +293,7 @@ if (riverSegments) {
   };
   const out = [];
   for (const cut of allCuts) {
-    if (cut.depth <= 3 && hasBridgeNear(cut)) {
+    if (cut.depth <= 4 && hasBridgeNear(cut)) {
       out.push(cut);                         // keep big/mid streets that bridge the river
       continue;
     }
