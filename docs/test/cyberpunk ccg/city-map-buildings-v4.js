@@ -57,7 +57,7 @@
     const special =
       cell.tags.includes("coast") ||
       cell.tags.includes("riverfront") ||
-      cell.tags.includes("lakefront") ||
+
       cell.tags.includes("bridgeheadCandidate");
     if (special && cell.area > 880) return rng() < 0.14;
     if (cell.area > 2400) return rng() < 0.05;

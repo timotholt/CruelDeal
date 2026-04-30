@@ -61,7 +61,7 @@
   function edgeCost(a, b, kind) {
     const base = dist(a.centroid, b.centroid);
     let cost = base;
-    if (a.tags.includes("lakefront") || b.tags.includes("lakefront")) cost *= 1.12;
+
     if (a.tags.includes("riverfront") || b.tags.includes("riverfront")) cost *= kind === "highway" ? 1.26 : 1.08;
     if (a.tags.includes("hill") || b.tags.includes("hill")) cost *= kind === "highway" ? 1.32 : 1.14;
     if (a.tags.includes("parkCandidate") || b.tags.includes("parkCandidate")) cost *= 1.06;

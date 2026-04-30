@@ -20,6 +20,118 @@
     hoverStroke: PAL.hwyInner
   };
 
+  function shrinkPolygon(polygon, amount) {
+    const cx = polygon.reduce((s, p) => s + p.x, 0) / polygon.length;
+    const cy = polygon.reduce((s, p) => s + p.y, 0) / polygon.length;
+    return polygon.map(p => {
+      const dx = p.x - cx, dy = p.y - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      return { x: p.x - (dx / len) * amount, y: p.y - (dy / len) * amount };
+    });
+  }
+
+  // Fractal lake shape generator using multi-octave radial noise.
+  // Creates organic, irregular shapes: ovals, peanuts, multiple puddles, etc.
+  function generateFractalLakePolygon(cellPolygon, rng, numPoints = 32) {
+    // Compute centroid and average radius from cell polygon
+    const cx = cellPolygon.reduce((s, p) => s + p.x, 0) / cellPolygon.length;
+    const cy = cellPolygon.reduce((s, p) => s + p.y, 0) / cellPolygon.length;
+    let minR = Infinity;
+    for (const p of cellPolygon) {
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      if (d < minR) minR = d;
+    }
+    // Lake fits inside cell with padding for park borders
+    const baseR = minR * 0.55;
+
+    // Decide lake type: simple, peanut, or multi-puddle
+    const lakeType = rng();
+    const isMultiPuddle = lakeType < 0.25;
+    const isPeanut = lakeType < 0.55;
+
+    if (isMultiPuddle) {
+      // Multiple overlapping puddles
+      const puddles = [];
+      const pudgleCount = 2 + Math.floor(rng() * 2);
+      for (let p = 0; p < pudgleCount; p++) {
+        const angle = (p / pudgleCount) * Math.PI * 2 + rng() * 0.4;
+        const dist = baseR * (0.3 + rng() * 0.3);
+        const px = cx + Math.cos(angle) * dist;
+        const py = cy + Math.sin(angle) * dist;
+        const pr = baseR * (0.35 + rng() * 0.25);
+        puddles.push({ x: px, y: py, r: pr });
+      }
+      // Render puddles
+      const allPoints = [];
+      for (const puddle of puddles) {
+        for (let i = 0; i < numPoints / puddles.length; i++) {
+          const angle = (i / (numPoints / puddles.length)) * Math.PI * 2;
+          const noise = Math.sin(angle * 3 + rng() * Math.PI) * 0.2;
+          const r = puddle.r * (0.9 + noise);
+          allPoints.push({
+            x: puddle.x + Math.cos(angle) * r,
+            y: puddle.y + Math.sin(angle) * r
+          });
+        }
+      }
+      return allPoints;
+    }
+
+    // Pre-generate octave amplitudes and phase offsets for multi-octave noise
+    const octaves = 5;
+    const octaveData = [];
+    for (let o = 0; o < octaves; o++) {
+      octaveData.push({
+        freq: Math.pow(2, o) * (1 + rng() * 0.4),
+        phase: rng() * Math.PI * 2,
+        amp: Math.pow(0.55, o)
+      });
+    }
+
+    // Random aspect ratio for ellipse-like base
+    let aspectX = 0.85 + rng() * 0.4;
+    let aspectY = 0.85 + rng() * 0.4;
+    
+    // Peanut shape: extreme aspect ratio with pinch in middle
+    if (isPeanut) {
+      aspectX = 0.6 + rng() * 0.3;
+      aspectY = 1.2 + rng() * 0.4;
+    }
+
+    const tilt = rng() * Math.PI;
+    const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+
+    const points = [];
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * Math.PI * 2;
+      // Sum sinusoids at different frequencies for fractal noise
+      let noise = 0;
+      let totalAmp = 0;
+      for (const o of octaveData) {
+        noise += Math.sin(angle * o.freq + o.phase) * o.amp;
+        totalAmp += o.amp;
+      }
+      noise /= totalAmp; // normalize to roughly [-1, 1]
+
+      // For peanut shapes, add pinch effect at poles
+      let radiusModulation = 0.85 + noise * 0.35;
+      if (isPeanut) {
+        const pinch = Math.cos(angle * 2) * 0.3; // pinch at top/bottom
+        radiusModulation *= (0.7 + pinch * 0.5);
+      }
+
+      const r = baseR * radiusModulation;
+      // Apply aspect ratio + rotation for organic non-circular base
+      const ux = Math.cos(angle) * r * aspectX;
+      const uy = Math.sin(angle) * r * aspectY;
+      points.push({
+        x: cx + ux * cosT - uy * sinT,
+        y: cy + ux * sinT + uy * cosT
+      });
+    }
+    return points;
+  }
+
   function buildingFill(building) {
     if (building.shade < 0.5) return PAL.bldgB;
     return PAL.bldgA;
@@ -214,16 +326,32 @@
     );
   }
 
+  function seededRng(seed) {
+    let t = seed >>> 0;
+    return function () {
+      t = (t + 0x6D2B79F5) >>> 0;
+      let r = Math.imul(t ^ (t >>> 15), 1 | t);
+      r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
   function CityMapV4Preview({
     seed,
     width,
     height,
     opacity = 1,
-    showCells = false,
     showLabels = true,
+    showDebug = false,
     showBuildings = true,
+    showCells = false,
+    transparentParks = false,
     hoveredDistrictId = null
   }) {
+    const [debugTransparentParks, setDebugTransparentParks] = React.useState(transparentParks);
+    React.useEffect(() => {
+      setDebugTransparentParks(transparentParks);
+    }, [transparentParks]);
     const data = useMemo(
       () => window.CityMapV35 ? window.CityMapV35.buildCityV35(seed || 1) : window.CityMapV4.buildCityV4(seed || 1),
       [seed]
@@ -257,8 +385,28 @@
     const renderOpenSpace = (space) => {
       const cell = data.cells.find(c => c.id === space.cellId);
       if (!cell) return null;
-      const parkFill = "hsla(145, 54%, 58%, 0.22)";
-      const parkStroke = "hsla(145, 62%, 66%, 0.42)";
+      const parkFill = "hsla(145, 54%, 58%, 0.45)";
+      const parkStroke = "hsla(145, 62%, 66%, 0.62)";
+      if (space.kind === "park") {
+        const area = cell.area || cell.polygon.reduce((a, _, i, p) => {
+          const j = (i + 1) % p.length;
+          return a + p[i].x * p[j].y - p[j].x * p[i].y;
+        }, 0) / 2;
+        const isLargePark = Math.abs(area) > 2500;
+        const cellHash = cell.id.split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
+        const rng = seededRng((seed || 1) ^ cellHash);
+        const hasLake = isLargePark && rng() < 0.4;
+        if (hasLake) {
+          const lakePoly = generateFractalLakePolygon(cell.polygon, rng);
+          const waterPath = window.CityMapPathsV3.smoothClosedPath(lakePoly);
+          return (
+            <g key={space.id}>
+              <path d={cell.path} fill={debugTransparentParks ? "transparent" : parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
+              <path d={waterPath} fill={V4_PAL.water} />
+            </g>
+          );
+        }
+      }
       if (space.kind === "compound") {
         return (
           <g key={space.id}>
@@ -289,11 +437,24 @@
         );
       }
       if (space.kind === "park" && space.role === "landmark") {
+        if (space.parkRoad) {
+          const { p1, p2, bend } = space.parkRoad;
+          const roadPath = bend
+            ? `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Q ${bend.x.toFixed(2)} ${bend.y.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`
+            : `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} L ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+          return (
+            <g key={space.id}>
+              <path d={cell.path} fill={debugTransparentParks ? "transparent" : parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
+              <path d={roadPath} fill="none" stroke={V4_PAL.roadUnderlay} strokeWidth={2.2} opacity={0.7} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+              <path d={roadPath} fill="none" stroke={V4_PAL.roadLocal} strokeWidth={0.32} opacity={0.78} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+            </g>
+          );
+        }
         return (
           <path
             key={space.id}
             d={cell.path}
-            fill={parkFill}
+            fill={debugTransparentParks ? "transparent" : parkFill}
             stroke={parkStroke}
             strokeWidth={0.18}
             opacity={0.78}
@@ -301,19 +462,40 @@
           />
         );
       }
-      const opacity = space.kind === "micropark" ? 0.5 : 0.36;
-      return renderBlockRect(cell, space.id, parkStroke, opacity, parkFill);
+      return renderBlockRect(cell, space.id, parkStroke, 0.36, debugTransparentParks ? "transparent" : parkFill);
     };
 
     return (
-      <svg
-        className="city-map-v4-preview-svg"
-        width={width || VIEW_W}
-        height={height || VIEW_H}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        preserveAspectRatio="none"
-        style={{ opacity, display: "block", position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
-      >
+      <div style={{ position: "relative" }}>
+        {showDebug && (
+          <button
+            onClick={() => setDebugTransparentParks(!debugTransparentParks)}
+            style={{
+              position: "absolute",
+              top: "8px",
+              left: "8px",
+              zIndex: 10,
+              padding: "6px 12px",
+              backgroundColor: debugTransparentParks ? "#4a9eff" : "#666",
+              color: "white",
+              border: "1px solid #aaa",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontFamily: "monospace"
+            }}
+          >
+            {debugTransparentParks ? "Parks: Transparent" : "Parks: Opaque"}
+          </button>
+        )}
+        <svg
+          className="city-map-v4-preview-svg"
+          width={width || VIEW_W}
+          height={height || VIEW_H}
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="none"
+          style={{ opacity, display: "block", position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
+        >
         <defs>
           <clipPath id={`${idBase}-mainland`}>
             <path d={data.terrain.mainland.path} />
@@ -365,29 +547,6 @@
                 vectorEffect="non-scaling-stroke"
               />
             ))}
-          </g>
-        )}
-
-        {showBuildings && (
-          <g>
-            {mainlandCoastRoad && (
-              <g clipPath={`url(#${mainlandBuildableClipId})`}>
-                {data.buildingPlan.openSpaces
-                  .filter((space) => {
-                    if (space.kind !== "park" && space.kind !== "micropark" && space.kind !== "compound") return false;
-                    const cell = data.cells.find(c => c.id === space.cellId);
-                    return cell && cell.landmassId === "mainland";
-                  })
-                  .map(renderOpenSpace)}
-              </g>
-            )}
-            {data.buildingPlan.openSpaces
-              .filter((space) => {
-                if (space.kind !== "park" && space.kind !== "micropark" && space.kind !== "compound") return false;
-                const cell = data.cells.find(c => c.id === space.cellId);
-                return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
-              })
-              .map(renderOpenSpace)}
           </g>
         )}
 
@@ -470,18 +629,60 @@
           </g>
         )}
 
+        {showBuildings && (() => {
+          // Pre-compute park cell polygons for spatial filtering
+          const parkCells = data.buildingPlan.openSpaces
+            .filter(s => s.kind === "park")
+            .map(s => data.cells.find(c => c.id === s.cellId))
+            .filter(Boolean);
+          const buildingInPark = (building) => {
+            // First check by cellId (fast)
+            if (parkCells.some(c => c.id === building.cellId)) return true;
+            // Then check spatially using footprint center
+            if (!building.footprint || !building.footprint.length) return false;
+            const cx = building.footprint.reduce((s, p) => s + p.x, 0) / building.footprint.length;
+            const cy = building.footprint.reduce((s, p) => s + p.y, 0) / building.footprint.length;
+            return parkCells.some(c => window.CityMapGeometryV3.pointInPolygon({ x: cx, y: cy }, c.polygon));
+          };
+          return (
+            <g>
+              {mainlandCoastRoad && (
+                <g clipPath={`url(#${mainlandBuildableClipId})`}>
+                  {data.buildingPlan.buildings
+                    .filter((building) => building.landmassId === "mainland" && !buildingInPark(building))
+                    .map(renderBuilding)}
+                </g>
+              )}
+              {data.buildingPlan.buildings
+                .filter((building) => {
+                  if (mainlandCoastRoad && building.landmassId === "mainland") return false;
+                  return !buildingInPark(building);
+                })
+                .map(renderBuilding)}
+            </g>
+          );
+        })()}
+
         {showBuildings && (
           <g>
             {mainlandCoastRoad && (
               <g clipPath={`url(#${mainlandBuildableClipId})`}>
-                {data.buildingPlan.buildings
-                  .filter((building) => building.landmassId === "mainland")
-                  .map(renderBuilding)}
+                {data.buildingPlan.openSpaces
+                  .filter((space) => {
+                    if (space.kind !== "park" && space.kind !== "compound") return false;
+                    const cell = data.cells.find(c => c.id === space.cellId);
+                    return cell && cell.landmassId === "mainland";
+                  })
+                  .map(renderOpenSpace)}
               </g>
             )}
-            {data.buildingPlan.buildings
-              .filter((building) => !mainlandCoastRoad || building.landmassId !== "mainland")
-              .map(renderBuilding)}
+            {data.buildingPlan.openSpaces
+              .filter((space) => {
+                if (space.kind !== "park" && space.kind !== "compound") return false;
+                const cell = data.cells.find(c => c.id === space.cellId);
+                return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
+              })
+              .map(renderOpenSpace)}
           </g>
         )}
 
@@ -529,9 +730,7 @@
               />
             );
           }
-          if (body.polygon) {
-            return <path key={body.id} d={body.path || polygonToPath(body.polygon)} fill={V4_PAL.water} />;
-          }
+
           return null;
         })}
 
@@ -634,6 +833,7 @@
           </g>
         )}
       </svg>
+      </div>
     );
   }
 

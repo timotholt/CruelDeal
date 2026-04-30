@@ -99,32 +99,6 @@
     return cuts;
   }
 
-  function makeLakeBankRoads(lake, landPolygon) {
-    if (!lake || !lake.polygon || lake.polygon.length < 3) return [];
-    const centroid = lake.centroid || lake.polygon.reduce((sum, p) => ({
-      x: sum.x + p.x / lake.polygon.length,
-      y: sum.y + p.y / lake.polygon.length
-    }), { x: 0, y: 0 });
-    const offset = 4.2;
-    const pts = lake.polygon.map(p => {
-      const dx = p.x - centroid.x;
-      const dy = p.y - centroid.y;
-      const len = Math.hypot(dx, dy) || 1;
-      return { x: p.x + (dx / len) * offset, y: p.y + (dy / len) * offset };
-    });
-    if (pts.some(p => !pointInPolygon(p, landPolygon))) return [];
-    return [{
-      p1: pts[0],
-      p2: pts[0],
-      polyline: [...pts, pts[0]],
-      polylineMode: "lake-bank",
-      depth: 3,
-      angle: 0,
-      riverBank: true,
-      lakeBank: true
-    }];
-  }
-
   function generateRivers(landPolygon, rng) {
     const river1 = rng() < 0.6 ? generateRiver(landPolygon, rng) : null;
     let river2 = null;
@@ -156,7 +130,6 @@
   window.CityMapWaterV3 = {
     generateRiver,
     makeRiverBankRoads,
-    makeLakeBankRoads,
     generateRivers
   };
 })();

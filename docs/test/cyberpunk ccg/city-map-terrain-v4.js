@@ -32,7 +32,6 @@
   } = window.CityMapWaterV3;
 
   const MIN_ISLAND_CHANNEL = 14;
-  const MIN_LAKE_COAST_CLEARANCE = 18;
 
   function viewportPolygon() {
     return [
@@ -230,33 +229,6 @@
     return islands;
   }
 
-  function generateLake(landPolygon, rng, riverSegments) {
-    if (rng() > 0.38) return null;
-    const bbox = polygonBBox(landPolygon);
-    for (let attempt = 0; attempt < 70; attempt++) {
-      const cx = Math.max(30, Math.min(VIEW_W - 30, bbox.minX + rng() * bbox.w));
-      const cy = Math.max(30, Math.min(VIEW_H - 30, bbox.minY + rng() * bbox.h));
-      if (!pointInPolygon({ x: cx, y: cy }, landPolygon)) continue;
-      if (pointToPolygonSignedDist({ x: cx, y: cy }, landPolygon) < MIN_LAKE_COAST_CLEARANCE + 8) continue;
-      if (riverSegments && distToRiver(cx, cy, riverSegments) < 26) continue;
-
-      const radius = 12 + rng() * 24;
-      const poly = makeBlob(cx, cy, radius, rng, 13 + Math.floor(rng() * 5), 0.28);
-      if (!allPointsInside(poly, landPolygon, MIN_LAKE_COAST_CLEARANCE)) continue;
-      if (riverSegments && poly.some(p => distToRiver(p.x, p.y, riverSegments) < 18)) continue;
-      return {
-        id: "lake-1",
-        kind: "lake",
-        polygon: poly,
-        path: smoothClosedPath(poly),
-        area: polygonArea(poly),
-        centroid: polygonCentroid(poly),
-        bbox: polygonBBox(poly)
-      };
-    }
-    return null;
-  }
-
   function riverWaterBodies(rivers) {
     if (!rivers) return [];
     const bodies = [];
@@ -342,7 +314,6 @@
     const riverSegments = river ? river.segments : [];
     const mainland = makeLandmass("mainland", "mainland", mainlandPolygon);
     const islands = generateTerrainIslands(mainlandPolygon, rng, riverSegments);
-    const lake = generateLake(mainlandPolygon, rng, riverSegments);
     const landmasses = [mainland, ...islands];
     const waterBodies = [
       {
@@ -352,8 +323,7 @@
         path: polygonToPath(viewportPolygon()),
         area: VIEW_W * VIEW_H
       },
-      ...riverWaterBodies(river),
-      ...(lake ? [lake] : [])
+      ...riverWaterBodies(river)
     ];
 
     return {
@@ -379,7 +349,7 @@
       islands: terrain.landmasses.filter(l => l.kind === "island").length,
       waterBodies: terrain.waterBodies.length,
       rivers: terrain.waterBodies.filter(w => w.kind === "river").length,
-      lakes: terrain.waterBodies.filter(w => w.kind === "lake").length,
+
       coastlineEdges: terrain.coastline.edges.length,
       channels: terrain.channels.length
     };

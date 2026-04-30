@@ -65,12 +65,12 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Round Edge</span>
+            <span className="dock-label">Toggle Grass</span>
             <button
-              className={`dock-toggle ${tweaks.roundMapEdge !== false ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('roundMapEdge', !(tweaks.roundMapEdge !== false))}
+              className={`dock-toggle ${tweaks.transparentParks !== false ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('transparentParks', !(tweaks.transparentParks !== false))}
             >
-              {tweaks.roundMapEdge !== false ? 'ON' : 'OFF'}
+              {tweaks.transparentParks !== false ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
@@ -146,7 +146,7 @@ function Header({ accent, you, them, turn, deckCount }) {
 }
 
 // ---------- City Board (replaces Lane components) ----------
-function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, roundedMapEdge }) {
+function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, roundedMapEdge, tweaks }) {
   const [hoveredDistrictId, setHoveredDistrictId] = useState(null);
   const boardCity = city;
   const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
@@ -178,6 +178,8 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         height={CITY_V3_H}
         opacity={mapOpacity ?? 1}
         showLabels={showLabels !== false}
+        showDebug={true}
+        transparentParks={tweaks.transparentParks !== false}
         hoveredDistrictId={hoveredDistrictId}
       />
 
@@ -779,6 +781,7 @@ function Game() {
             showLabels={showUI}
             showGamePieces={showUI}
             roundedMapEdge={tweaks.roundMapEdge !== false}
+            tweaks={tweaks}
           />
 
           {/* Math chip floats just above hand */}

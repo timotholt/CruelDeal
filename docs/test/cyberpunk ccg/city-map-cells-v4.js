@@ -130,7 +130,6 @@
 
   function waterConflict(point, terrain) {
     for (const body of terrain.waterBodies) {
-      if (body.kind === "lake" && body.polygon && pointInPolygon(point, body.polygon)) return true;
       if (body.kind === "river" && body.segments && distToRiver(point.x, point.y, body.segments) < (body.outerWidth || 8) * 0.5 + 3) {
         return true;
       }
@@ -145,10 +144,7 @@
         const d = distToRiver(point.x, point.y, body.segments);
         if (d < (body.outerWidth || 8) * 0.5 + 18) tags.push("riverfront");
       }
-      if (body.kind === "lake" && body.polygon) {
-        const d = Math.max(0, pointToPolygonSignedDist(point, body.polygon) * -1);
-        if (!pointInPolygon(point, body.polygon) && d < 18) tags.push("lakefront");
-      }
+
     }
     if (terrain.coastline && terrain.coastline.edges) {
       let coastDist = Infinity;

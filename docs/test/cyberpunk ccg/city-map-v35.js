@@ -1397,6 +1397,7 @@
 
   function buildStaticBuildings(blocks, rng, terrain) {
     const buildings = [], openSpaces = [];
+    const parkBlockIds = new Set();
     const cellsById = new Map(blocks.map(block => [block.id, block]));
     const riverSegments = terrain ? waterBodiesOfKind(terrain, "river").flatMap(r => r.segments || []) : null;
     const roadHazards = terrain ? lakeRoadHazards(terrain) : [];
@@ -1413,16 +1414,41 @@
       const parkEligible = !lakefront && !nearOpenSpace && block.area > 620;
       const parkRoll = block.area > 2300 ? 0.42 : block.area > 1500 ? 0.30 : 0.12;
       if (parkEligible && rng() < parkRoll) {
+        parkBlockIds.add(block.id);
         if (block.area > 2100 && rng() < 0.42) {
           openSpaces.push(makeCompoundOpenSpace(block, rng));
         } else {
-          openSpaces.push({
+          const parkObj = {
             id: `${block.id}:park`,
-            kind: block.area > 1450 ? "park" : "micropark",
-            role: block.area > 1450 ? "landmark" : "eyeCandy",
+            kind: "park",
+            role: "landmark",
             cellId: block.id
-          });
+          };
+          if (rng() < 0.35) {
+            const box = polygonBBox(block.polygon);
+            const angle = block.fieldAngle || 0;
+            const dx = Math.cos(angle), dy = Math.sin(angle);
+            const cx = block.centroid.x, cy = block.centroid.y;
+            const t = 0.25 + rng() * 0.5;
+            const bend = rng() < 0.6;
+            if (bend) {
+              const p1 = { x: cx - dx * box.w * 0.45, y: cy - dy * box.w * 0.45 };
+              const p2 = { x: cx + dx * box.w * 0.45, y: cy + dy * box.w * 0.45 };
+              const bendAmp = (rng() - 0.5) * box.w * 0.15;
+              const bendX = p1.x + (p2.x - p1.x) * t + (-dy) * bendAmp;
+              const bendY = p1.y + (p2.y - p1.y) * t + dx * bendAmp;
+              parkObj.parkRoad = { p1, p2, bend: { x: bendX, y: bendY } };
+            } else {
+              const p1 = { x: cx - dx * box.w * 0.45, y: cy - dy * box.w * 0.45 };
+              const p2 = { x: cx + dx * box.w * 0.45, y: cy + dy * box.w * 0.45 };
+              parkObj.parkRoad = { p1, p2 };
+            }
+          }
+          openSpaces.push(parkObj);
         }
+        continue;
+      }
+      if (parkBlockIds.has(block.id)) {
         continue;
       }
       let generated = window.CityMapBuildingsV3.generateBlockBuildings(
@@ -1451,17 +1477,34 @@
           }
         });
       });
-      if (parkEligible && block.area <= 1450 && rng() < 0.18) {
-        openSpaces.push({
-          id: `${block.id}:micropark`,
-          kind: "micropark",
-          role: "eyeCandy",
-          cellId: block.id
-        });
+    }
+    // Deduplication: remove buildings that significantly overlap with others
+    const deduplicatedBuildings = [];
+    for (const building of buildings) {
+      let isOverlapping = false;
+      if (building.footprint && building.footprint.length > 0) {
+        const cx = building.footprint.reduce((s, p) => s + p.x, 0) / building.footprint.length;
+        const cy = building.footprint.reduce((s, p) => s + p.y, 0) / building.footprint.length;
+        // Check against already-kept buildings
+        for (const kept of deduplicatedBuildings) {
+          if (kept.footprint && kept.footprint.length > 0) {
+            const kcx = kept.footprint.reduce((s, p) => s + p.x, 0) / kept.footprint.length;
+            const kcy = kept.footprint.reduce((s, p) => s + p.y, 0) / kept.footprint.length;
+            const dist = Math.hypot(cx - kcx, cy - kcy);
+            // If centers are very close (< 2 px apart), likely a duplicate
+            if (dist < 2.0) {
+              isOverlapping = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!isOverlapping) {
+        deduplicatedBuildings.push(building);
       }
     }
     return {
-      buildings, openSpaces, landmarks: [],
+      buildings: deduplicatedBuildings, openSpaces, landmarks: [],
       staticScene: { shadowAzimuth: -0.72, shadowElevation: 0.55, cacheable: true }
     };
   }
