@@ -1411,8 +1411,21 @@
       }
       const lakefront = blockNearLake(block, terrain);
       const nearOpenSpace = blockNearOpenSpace(block, openSpaces, cellsById);
-      const parkEligible = !lakefront && !nearOpenSpace && block.area > 620;
-      const parkRoll = block.area > 2300 ? 0.42 : block.area > 1500 ? 0.30 : 0.12;
+      const parkEligible = !lakefront && !nearOpenSpace && block.area > 100;
+      // Inverse probability: smaller blocks have higher chance of being parks
+      // Very small blocks (100-400): 25%, small (400-800): 17.5%, medium (800-1500): 12.5%, large (1500+): 1.5-4%
+      let parkRoll;
+      if (block.area < 400) {
+        parkRoll = 0.25;
+      } else if (block.area < 800) {
+        parkRoll = 0.175;
+      } else if (block.area < 1500) {
+        parkRoll = 0.125;
+      } else if (block.area < 2300) {
+        parkRoll = 0.04;
+      } else {
+        parkRoll = 0.015;
+      }
       if (parkEligible && rng() < parkRoll) {
         parkBlockIds.add(block.id);
         if (block.area > 2100 && rng() < 0.42) {

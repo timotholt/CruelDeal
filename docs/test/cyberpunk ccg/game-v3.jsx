@@ -65,15 +65,6 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Toggle Grass</span>
-            <button
-              className={`dock-toggle ${tweaks.transparentParks === true ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('transparentParks', !tweaks.transparentParks)}
-            >
-              {tweaks.transparentParks === true ? 'TRANSPARENT' : 'VISIBLE'}
-            </button>
-          </label>
-          <label className="dock-row">
             <span className="dock-label">Toggle Buildings</span>
             <button
               className={`dock-toggle ${tweaks.showBuildingsDebug === true ? 'dock-toggle--on' : ''}`}
@@ -216,7 +207,6 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         showLabels={showLabels !== false}
         showDebug={true}
         showBuildings={tweaks.showBuildingsDebug !== true}
-        transparentParks={tweaks.transparentParks === true}
         brightBuildings={tweaks.brightBuildings === true}
         buildingBorders={tweaks.buildingBorders === true}
         hoveredDistrictId={hoveredDistrictId}

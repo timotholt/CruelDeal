@@ -340,15 +340,10 @@
     showDebug = false,
     showBuildings = true,
     showCells = false,
-    transparentParks = false,
     brightBuildings = false,
     buildingBorders = false,
     hoveredDistrictId = null
   }) {
-    const [debugTransparentParks, setDebugTransparentParks] = React.useState(transparentParks);
-    React.useEffect(() => {
-      setDebugTransparentParks(transparentParks);
-    }, [transparentParks]);
     const data = useMemo(
       () => window.CityMapV35 ? window.CityMapV35.buildCityV35(seed || 1) : window.CityMapV4.buildCityV4(seed || 1),
       [seed]
@@ -396,8 +391,8 @@
     const renderOpenSpace = (space) => {
       const cell = data.cells.find(c => c.id === space.cellId);
       if (!cell) return null;
-      const parkFill = "hsla(145, 54%, 58%, 0.45)";
-      const parkStroke = "hsla(145, 62%, 66%, 0.62)";
+      const parkFill = "hsla(145, 54%, 58%, 0.25)";
+      const parkStroke = "hsla(145, 62%, 66%, 0.35)";
       if (space.kind === "park") {
         const area = cell.area || cell.polygon.reduce((a, _, i, p) => {
           const j = (i + 1) % p.length;
@@ -412,7 +407,7 @@
           const waterPath = window.CityMapPathsV3.smoothClosedPath(lakePoly);
           return (
             <g key={space.id}>
-              <path d={cell.path} fill={debugTransparentParks ? "transparent" : parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
+              <path d={cell.path} fill={parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
               <path d={waterPath} fill={V4_PAL.water} />
             </g>
           );
@@ -455,7 +450,7 @@
             : `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} L ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
           return (
             <g key={space.id}>
-              <path d={cell.path} fill={debugTransparentParks ? "transparent" : parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
+              <path d={cell.path} fill={parkFill} stroke={parkStroke} strokeWidth={0.18} opacity={0.78} vectorEffect="non-scaling-stroke" />
               <path d={roadPath} fill="none" stroke={V4_PAL.roadUnderlay} strokeWidth={2.2} opacity={0.7} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
               <path d={roadPath} fill="none" stroke={V4_PAL.roadLocal} strokeWidth={0.32} opacity={0.78} vectorEffect="non-scaling-stroke" strokeLinecap="round" />
             </g>
@@ -465,7 +460,7 @@
           <path
             key={space.id}
             d={cell.path}
-            fill={debugTransparentParks ? "transparent" : parkFill}
+            fill={parkFill}
             stroke={parkStroke}
             strokeWidth={0.18}
             opacity={0.78}
@@ -473,32 +468,11 @@
           />
         );
       }
-      return renderBlockRect(cell, space.id, parkStroke, 0.36, debugTransparentParks ? "transparent" : parkFill);
+      return renderBlockRect(cell, space.id, parkStroke, 0.36, parkFill);
     };
 
     return (
       <div style={{ position: "relative" }}>
-        {showDebug && (
-          <button
-            onClick={() => setDebugTransparentParks(!debugTransparentParks)}
-            style={{
-              position: "absolute",
-              top: "8px",
-              left: "8px",
-              zIndex: 10,
-              padding: "6px 12px",
-              backgroundColor: debugTransparentParks ? "#4a9eff" : "#666",
-              color: "white",
-              border: "1px solid #aaa",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontFamily: "monospace"
-            }}
-          >
-            {debugTransparentParks ? "Parks: Transparent" : "Parks: Opaque"}
-          </button>
-        )}
         <svg
           className="city-map-v4-preview-svg"
           width={width || VIEW_W}
