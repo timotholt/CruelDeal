@@ -663,28 +663,27 @@
           );
         })()}
 
-        {showBuildings && (
-          <g>
-            {mainlandCoastRoad && (
-              <g clipPath={`url(#${mainlandBuildableClipId})`}>
-                {data.buildingPlan.openSpaces
-                  .filter((space) => {
-                    if (space.kind !== "park" && space.kind !== "compound") return false;
-                    const cell = data.cells.find(c => c.id === space.cellId);
-                    return cell && cell.landmassId === "mainland";
-                  })
-                  .map(renderOpenSpace)}
-              </g>
-            )}
-            {data.buildingPlan.openSpaces
-              .filter((space) => {
-                if (space.kind !== "park" && space.kind !== "compound") return false;
-                const cell = data.cells.find(c => c.id === space.cellId);
-                return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
-              })
-              .map(renderOpenSpace)}
-          </g>
-        )}
+        {/* Parks and open spaces - rendered independently of buildings toggle */}
+        <g>
+          {mainlandCoastRoad && (
+            <g clipPath={`url(#${mainlandBuildableClipId})`}>
+              {data.buildingPlan.openSpaces
+                .filter((space) => {
+                  if (space.kind !== "park" && space.kind !== "compound") return false;
+                  const cell = data.cells.find(c => c.id === space.cellId);
+                  return cell && cell.landmassId === "mainland";
+                })
+                .map(renderOpenSpace)}
+            </g>
+          )}
+          {data.buildingPlan.openSpaces
+            .filter((space) => {
+              if (space.kind !== "park" && space.kind !== "compound") return false;
+              const cell = data.cells.find(c => c.id === space.cellId);
+              return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
+            })
+            .map(renderOpenSpace)}
+        </g>
 
         <g>
           {data.roadGraph.edges.map((edge) => (

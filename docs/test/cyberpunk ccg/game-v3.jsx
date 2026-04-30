@@ -67,10 +67,37 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
           <label className="dock-row">
             <span className="dock-label">Toggle Grass</span>
             <button
-              className={`dock-toggle ${tweaks.transparentParks !== false ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('transparentParks', !(tweaks.transparentParks !== false))}
+              className={`dock-toggle ${tweaks.transparentParks === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('transparentParks', !tweaks.transparentParks)}
             >
-              {tweaks.transparentParks !== false ? 'ON' : 'OFF'}
+              {tweaks.transparentParks === true ? 'TRANSPARENT' : 'VISIBLE'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Toggle Buildings</span>
+            <button
+              className={`dock-toggle ${tweaks.showBuildingsDebug === true ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('showBuildingsDebug', !tweaks.showBuildingsDebug)}
+            >
+              {tweaks.showBuildingsDebug === true ? 'ON' : 'OFF'}
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Debug 2</span>
+            <button
+              className="dock-toggle"
+              onClick={() => {}}
+            >
+              OFF
+            </button>
+          </label>
+          <label className="dock-row">
+            <span className="dock-label">Debug 3</span>
+            <button
+              className="dock-toggle"
+              onClick={() => {}}
+            >
+              OFF
             </button>
           </label>
           <label className="dock-row">
@@ -179,7 +206,8 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         opacity={mapOpacity ?? 1}
         showLabels={showLabels !== false}
         showDebug={true}
-        transparentParks={tweaks.transparentParks !== false}
+        showBuildings={tweaks.showBuildingsDebug !== true}
+        transparentParks={tweaks.transparentParks === true}
         hoveredDistrictId={hoveredDistrictId}
       />
 
