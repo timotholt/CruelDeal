@@ -6,6 +6,7 @@
     VIEW_H,
     DISTRICT_NAMES,
     DISTRICT_COLORS,
+    MAP_SLOT_HALF_W,
     MAP_SLOT_HALF_H
   } = window.CityMapConfigV3;
   const {
@@ -453,6 +454,46 @@
     return false;
   }
 
+  function pointToPolygonEdgeDistance(point, polygon) {
+    let best = Infinity;
+    for (let i = 0; i < polygon.length; i++) {
+      best = Math.min(best, pointToSegmentDist(
+        point.x, point.y,
+        polygon[i], polygon[(i + 1) % polygon.length]
+      ));
+    }
+    return best;
+  }
+
+  function polygonIntersectsPolygonEdges(aPoly, bPoly) {
+    for (let i = 0; i < aPoly.length; i++) {
+      const a1 = aPoly[i], a2 = aPoly[(i + 1) % aPoly.length];
+      for (let j = 0; j < bPoly.length; j++) {
+        if (segIntersect(a1, a2, bPoly[j], bPoly[(j + 1) % bPoly.length])) return true;
+      }
+    }
+    return false;
+  }
+
+  function polygonTouchesWaterReserve(polygon, terrain) {
+    const centroid = polygonCentroid(polygon);
+    for (const body of terrain.waterBodies || []) {
+      if (body.kind === "river" && body.segments) {
+        const riverPad = (body.outerWidth || 8) * 0.5 + 3;
+        if (distToRiver(centroid.x, centroid.y, body.segments) < riverPad) return true;
+        if (polygon.some(p => distToRiver(p.x, p.y, body.segments) < riverPad)) return true;
+      }
+      if (body.kind !== "lake" || !body.polygon) continue;
+      const lakeRoadPad = 7.2;
+      if (pointInPolygon(centroid, body.polygon)) return true;
+      if (polygon.some(p => pointInPolygon(p, body.polygon))) return true;
+      if (polygonIntersectsPolygonEdges(polygon, body.polygon)) return true;
+      if (pointToPolygonEdgeDistance(centroid, body.polygon) < lakeRoadPad) return true;
+      if (polygon.some(p => pointToPolygonEdgeDistance(p, body.polygon) < lakeRoadPad)) return true;
+    }
+    return false;
+  }
+
   function ownedWaterPolygons(ownershipPolygon, terrain) {
     return waterBodiesOfKind(terrain, "lake")
       .filter(body => body.polygon && pointInPolygon(
@@ -505,18 +546,53 @@
     return best;
   }
 
+  function viewportEdgeDistance(point) {
+    return Math.min(point.x, VIEW_W - point.x, point.y, VIEW_H - point.y);
+  }
+
+  function labelFootprint(district) {
+    const text = (district.name || district.id || "").slice(0, district.bbox && district.bbox.w < 70 ? 4 : 9);
+    return {
+      x: district.labelAnchor.x,
+      y: district.labelAnchor.y,
+      halfW: Math.max(18, text.length * 5.1 + 9),
+      halfH: 12
+    };
+  }
+
+  function labelDistance(point, footprint) {
+    const dx = Math.max(0, Math.abs(point.x - footprint.x) - footprint.halfW);
+    const dy = Math.max(0, Math.abs(point.y - footprint.y) - footprint.halfH);
+    return Math.hypot(dx, dy);
+  }
+
+  function districtEdgeDistance(point, district) {
+    const polygons = district.ownershipPolygons && district.ownershipPolygons.length
+      ? district.ownershipPolygons
+      : [district.ownershipPolygon || district.polygon].filter(Boolean);
+    let best = Infinity;
+    for (const polygon of polygons) {
+      if (!pointInPolygon(point, polygon)) continue;
+      best = Math.min(best, polygonEdgeDistance(point, polygon));
+    }
+    return Number.isFinite(best) ? best : -Infinity;
+  }
+
   function candidatePointsForBlocks(blocks, district, rng) {
     const targetPairs = slotPairsForDistrict(district);
+    const labelBounds = labelFootprint(district);
     const points = blocks
       .filter(b => b.buildable && b.area > 220)
       .map(b => {
-        const label = polylabel(b.polygon, 1.2, b.centroid);
-        const c = { x: label.x, y: label.y };
+        const labelPoint = polylabel(b.polygon, 1.2, b.centroid);
+        const c = { x: labelPoint.x, y: labelPoint.y };
         return {
           x: c.x,
           y: c.y,
           block: b,
-          edgeClearance: polygonEdgeDistance(c, b.polygon),
+          edgeClearance: districtEdgeDistance(c, district),
+          viewportClearance: viewportEdgeDistance(c),
+          labelClearance: labelDistance(c, labelBounds),
           jitter: rng() * 10
         };
       });
@@ -525,31 +601,60 @@
       ? Math.min(...others.map(e => Math.hypot(e.x - p.x, e.y - p.y)))
       : Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y);
 
-    const pickSpread = (candidates, count, existing) => {
+    const targetAnchors = (count, owner) => {
+      const box = district.bbox;
+      const inset = 0.18;
+      const lowX = box.minX + box.w * inset;
+      const highX = box.maxX - box.w * inset;
+      const ownerTop = owner === "them";
+      if (count <= 1) {
+        return [{ x: district.centroid.x, y: ownerTop ? box.minY + box.h * 0.28 : box.maxY - box.h * 0.28 }];
+      }
+      return Array.from({ length: count }, (_, i) => ({
+        x: lowX + (highX - lowX) * (i / Math.max(1, count - 1)),
+        y: ownerTop ? box.minY + box.h * (0.20 + 0.08 * (i % 2)) : box.maxY - box.h * (0.20 + 0.08 * (i % 2))
+      }));
+    };
+
+    const pickSpread = (candidates, count, existing, owner) => {
       const selected = [];
       const used = new Set();
-      const slotEdgeClearance = Math.max(12, MAP_SLOT_HALF_H + 4);
-      for (const minEdgeClearance of [slotEdgeClearance, 18, 14, 10, 0]) {
-        for (const minSep of [42, 34, 26, 18, 0]) {
-        while (selected.length < count) {
-          let best = null, bestScore = -Infinity;
-          for (const p of candidates) {
-            if (used.has(p.block.id)) continue;
-            if (p.edgeClearance < minEdgeClearance) continue;
-            const clearance = minDistTo(p, [...existing, ...selected]);
-            if (clearance < minSep) continue;
-            const edgePull = Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y) * 0.08;
-            const score = clearance + edgePull + p.edgeClearance * 1.6 + p.jitter;
-            if (score > bestScore) {
-              best = p;
-              bestScore = score;
+      const slotEdgeClearance = Math.max(24, Math.hypot(MAP_SLOT_HALF_W, MAP_SLOT_HALF_H) + 3);
+      const slotLabelClearance = Math.max(6, MAP_SLOT_HALF_H * 0.65);
+      const edgeClearanceSteps = district.landmassId === "mainland"
+        ? [slotEdgeClearance + 8, slotEdgeClearance + 4, slotEdgeClearance]
+        : [slotEdgeClearance];
+      const relaxedSpacing = rng() < 0.2;
+      const separationSteps = relaxedSpacing
+        ? [38, 34, 30]
+        : [58, 52, 46, 40, 34, 30];
+      const anchors = targetAnchors(count, owner);
+      for (const minEdgeClearance of edgeClearanceSteps) {
+        for (const minSep of separationSteps) {
+          while (selected.length < count) {
+            let best = null, bestScore = -Infinity;
+            const anchor = anchors[selected.length] || district.centroid;
+            for (const p of candidates) {
+              if (used.has(p.block.id)) continue;
+              if (p.edgeClearance < minEdgeClearance) continue;
+              if (p.viewportClearance < slotEdgeClearance) continue;
+              if (p.labelClearance < slotLabelClearance) continue;
+              const clearance = minDistTo(p, [...existing, ...selected]);
+              if (clearance < minSep) continue;
+              const anchorDist = Math.hypot(p.x - anchor.x, p.y - anchor.y);
+              const edgePull = Math.hypot(p.x - district.centroid.x, p.y - district.centroid.y) * 0.08;
+              const score = clearance * 2.8 - anchorDist * 1.85 + edgePull +
+                p.edgeClearance * 1.3 + p.viewportClearance * 0.45 + p.labelClearance * 1.0 + p.jitter;
+              if (score > bestScore) {
+                best = p;
+                bestScore = score;
+              }
             }
+            if (!best) break;
+            used.add(best.block.id);
+            selected.push(best);
           }
-          if (!best) break;
-          used.add(best.block.id);
-          selected.push(best);
-        }
-        if (selected.length >= count) break;
+          if (selected.length >= count) break;
         }
         if (selected.length >= count) break;
       }
@@ -561,8 +666,8 @@
     if (themCandidates.length < targetPairs) themCandidates = points;
     if (youCandidates.length < targetPairs) youCandidates = points;
 
-    const them = pickSpread(themCandidates, targetPairs, []);
-    const you = pickSpread(youCandidates, targetPairs, them);
+    const them = pickSpread(themCandidates, targetPairs, [], "them");
+    const you = pickSpread(youCandidates, targetPairs, them, "you");
     return [
       ...them.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "them", index: i })),
       ...you.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "you", index: i }))
@@ -575,6 +680,7 @@
       districtIdx: district.idx,
       districtId: district.id,
       owner: p.owner,
+      blockId: p.block.id,
       x: p.x, y: p.y
     }));
   }
@@ -672,7 +778,7 @@
     let polygon = leaf.polygon;
     const centroid = interiorPoint(polygon);
     const area = polygonArea(polygon);
-    const inWater = pointInWater(centroid, terrain);
+    const inWater = pointInWater(centroid, terrain) || polygonTouchesWaterReserve(polygon, terrain);
     const longestAngle = polygonLongestEdgeAngle(polygon);
     return {
       id: `${district.id}:block:${index + 1}`,
@@ -901,15 +1007,42 @@
     return `M ${(cx - dx).toFixed(2)} ${(cy - dy).toFixed(2)} L ${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}`;
   }
 
+  function angleDelta(a, b) {
+    let d = Math.abs(a - b) % Math.PI;
+    return d > Math.PI / 2 ? Math.PI - d : d;
+  }
+
+  function nearestSegmentAngle(point, segments) {
+    let best = null;
+    for (const seg of segments || []) {
+      const d = pointToSegmentDist(point.x, point.y, seg.a, seg.b);
+      if (!best || d < best.d) {
+        best = { d, angle: Math.atan2(seg.b.y - seg.a.y, seg.b.x - seg.a.x) };
+      }
+    }
+    return best ? best.angle : null;
+  }
+
+  function bridgeCrossesRiver(bridge, riverSegments) {
+    const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
+    if (riverAngle == null) return true;
+    return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle) > Math.PI / 4;
+  }
+
   function makeBridgePlan(terrain, mainlandCoastRoadPolygon = null, roadCuts = []) {
     const islandBridges = (terrain.channels || [])
       .filter(ch => ch.bridgeAllowed && ch.centerline && ch.centerline.length >= 2)
       .map((ch, i) => {
-        const islandPoint = ch.centerline[ch.centerline.length - 1];
+        const mainlandOuter = ch.centerline[0];
+        const islandOuter = ch.centerline[ch.centerline.length - 1];
+        const island = (terrain.landmasses || []).find(l => l.id === ch.landmassIds[1]);
+        const islandCoastRoad = island && window.CityMapGeometryV3.insetPolygon(island.polygon, 6);
+        const b = islandCoastRoad && islandCoastRoad.length >= 3
+          ? closestPointOnPolygon(mainlandOuter.x, mainlandOuter.y, islandCoastRoad)
+          : islandOuter;
         const a = mainlandCoastRoadPolygon
-          ? closestPointOnPolygon(islandPoint.x, islandPoint.y, mainlandCoastRoadPolygon)
+          ? closestPointOnPolygon(b.x, b.y, mainlandCoastRoadPolygon)
           : ch.centerline[0];
-        const b = islandPoint;
         return {
           id: `v35-bridge-${i + 1}`,
           channelId: ch.id,
@@ -928,6 +1061,7 @@
           coastRoadPolygon: mainlandCoastRoadPolygon,
           landPolygon: terrain.mainland.polygon
         }).bridges.filter(bridge => !bridge.offshore).map((bridge, i) => {
+          if (!bridgeCrossesRiver(bridge, river.segments)) return null;
           const depth = bridge.depth ?? 2;
           const length = Math.max((river.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
           const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : 3.5;
@@ -935,11 +1069,12 @@
             id: `v35-river-bridge-${i + 1}`,
             path: bridgeLinePath(bridge.x, bridge.y, bridge.angle || 0, length),
             center: { x: bridge.x, y: bridge.y },
+            angle: bridge.angle || 0,
             deckWidth,
             depth,
             type: "river"
           };
-        })
+        }).filter(Boolean)
       : [];
     return { bridges: [...islandBridges, ...riverBridges] };
   }
@@ -959,8 +1094,93 @@
     return graph;
   }
 
+  function makeCompoundOpenSpace(block, rng) {
+    const box = block.bbox;
+    const featureCount = Math.max(2, Math.min(6, Math.floor(block.area / 620) + (rng() < 0.45 ? 1 : 0)));
+    const angle = block.fieldAngle || 0;
+    const axisX = Math.cos(angle), axisY = Math.sin(angle);
+    const crossX = -axisY, crossY = axisX;
+    const rowCount = featureCount > 4 ? 2 : 1;
+    const colCount = Math.ceil(featureCount / rowCount);
+    const spreadX = Math.min(box.w * 0.44, colCount * 11);
+    const spreadY = Math.min(box.h * 0.30, rowCount * 9);
+    const features = [];
+    for (let i = 0; i < featureCount; i++) {
+      const col = i % colCount;
+      const row = Math.floor(i / colCount);
+      const u = colCount <= 1 ? 0 : (col / (colCount - 1) - 0.5) * spreadX;
+      const v = rowCount <= 1 ? 0 : (row / (rowCount - 1) - 0.5) * spreadY;
+      const cx = block.centroid.x + axisX * u + crossX * v;
+      const cy = block.centroid.y + axisY * u + crossY * v;
+      const w = Math.max(4.5, Math.min(13, box.w * (0.12 + rng() * 0.06)));
+      const h = Math.max(4, Math.min(11, box.h * (0.12 + rng() * 0.07)));
+      features.push({
+        path: polygonToPath(rectPolygon(cx, cy, w, h, angle + (rng() - 0.5) * 0.08)),
+        opacity: 0.34 + rng() * 0.18
+      });
+    }
+    const entry = {
+      x: block.centroid.x - axisX * Math.min(box.w * 0.36, 24),
+      y: block.centroid.y - axisY * Math.min(box.w * 0.36, 24)
+    };
+    const exit = {
+      x: block.centroid.x + axisX * Math.min(box.w * 0.36, 24),
+      y: block.centroid.y + axisY * Math.min(box.w * 0.36, 24)
+    };
+    return {
+      id: `${block.id}:compound`,
+      kind: "compound",
+      cellId: block.id,
+      angle,
+      features,
+      accessPath: `M ${entry.x.toFixed(2)} ${entry.y.toFixed(2)} L ${exit.x.toFixed(2)} ${exit.y.toFixed(2)}`
+    };
+  }
+
+  function blockSpacingDistance(a, b) {
+    const ac = a.centroid || polygonCentroid(a.polygon);
+    const bc = b.centroid || polygonCentroid(b.polygon);
+    return Math.hypot(ac.x - bc.x, ac.y - bc.y);
+  }
+
+  function blockNearOpenSpace(block, openSpaces, cellsById, minDist = 34) {
+    for (const space of openSpaces) {
+      if (space.kind !== "park" && space.kind !== "compound") continue;
+      const other = cellsById.get(space.cellId);
+      if (!other) continue;
+      if (blockSpacingDistance(block, other) < minDist) return true;
+    }
+    return false;
+  }
+
+  function blockNearLake(block, terrain, minDist = 24) {
+    if (!terrain) return false;
+    for (const lake of waterBodiesOfKind(terrain, "lake")) {
+      if (!lake.polygon) continue;
+      if (pointToPolygonEdgeDistance(block.centroid, lake.polygon) < minDist) return true;
+      if (block.polygon.some(p => pointToPolygonEdgeDistance(p, lake.polygon) < minDist)) return true;
+    }
+    return false;
+  }
+
+  function lakeRoadHazards(terrain, buffer = 9) {
+    return waterBodiesOfKind(terrain, "lake").flatMap(lake => {
+      if (!lake.polygon) return [];
+      const hazards = [];
+      for (let i = 0; i < lake.polygon.length; i++) {
+        hazards.push({
+          a: lake.polygon[i],
+          b: lake.polygon[(i + 1) % lake.polygon.length],
+          buffer
+        });
+      }
+      return hazards;
+    });
+  }
+
   function buildStaticBuildings(blocks, rng, terrain) {
     const buildings = [], openSpaces = [];
+    const cellsById = new Map(blocks.map(block => [block.id, block]));
     const riverSegments = terrain ? waterBodiesOfKind(terrain, "river").flatMap(r => r.segments || []) : null;
     const riverBuffer = terrain
       ? Math.max(7, ...waterBodiesOfKind(terrain, "river").map(r => r.buildingBuffer || 7))
@@ -970,12 +1190,15 @@
         openSpaces.push({ id: `${block.id}:reserve`, kind: "setback", cellId: block.id });
         continue;
       }
-      if (block.area > 1600 && rng() < 0.2) {
-        openSpaces.push({ id: `${block.id}:park`, kind: "park", cellId: block.id });
+      const lakefront = blockNearLake(block, terrain);
+      if (block.area > 1600 && rng() < 0.2 && !lakefront && !blockNearOpenSpace(block, openSpaces, cellsById)) {
+        openSpaces.push(block.area > 2100 && rng() < 0.62
+          ? makeCompoundOpenSpace(block, rng)
+          : { id: `${block.id}:park`, kind: "park", cellId: block.id });
         continue;
       }
       const generated = window.CityMapBuildingsV3.generateBlockBuildings(
-        block.polygon, block.fieldAngle, rng, riverSegments, null, riverBuffer
+        block.polygon, block.fieldAngle, rng, riverSegments, lakeRoadHazards(terrain), riverBuffer
       );
       generated.forEach((gen, i) => {
         const height = block.density === "dense" ? 12 + rng() * 18
@@ -1105,10 +1328,15 @@
       .flatMap(river => window.CityMapWaterV3 && window.CityMapWaterV3.makeRiverBankRoads
         ? window.CityMapWaterV3.makeRiverBankRoads(river, terrain.mainland.polygon)
         : []);
+    const lakeBankCuts = waterBodiesOfKind(terrain, "lake")
+      .flatMap(lake => window.CityMapWaterV3 && window.CityMapWaterV3.makeLakeBankRoads
+        ? window.CityMapWaterV3.makeLakeBankRoads(lake, terrain.mainland.polygon)
+        : []);
 
     const roadEdges = [
       ...truncatedMacroCuts.map((cut, i) => cutToRoad(cut, i, "v35-macro")),
       ...riverBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-river-bank")),
+      ...lakeBankCuts.map((cut, i) => cutToRoad(cut, i, "v35-lake-bank")),
       ...districts.flatMap(d => d.roads)
     ];
 

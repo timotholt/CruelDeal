@@ -223,9 +223,38 @@
         </g>
       );
     };
-    const renderPark = (space) => {
+    const renderOpenSpace = (space) => {
       const cell = data.cells.find(c => c.id === space.cellId);
       if (!cell) return null;
+      if (space.kind === "compound") {
+        return (
+          <g key={space.id}>
+            {renderBlockRect(cell, `${space.id}-plot`, PAL.plaza, 0.22, PAL.plaza)}
+            {space.accessPath && (
+              <path
+                d={space.accessPath}
+                fill="none"
+                stroke={PAL.streetLocal}
+                strokeWidth={0.32}
+                opacity={0.62}
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {(space.features || []).map((feature, index) => (
+              <path
+                key={`${space.id}-feature-${index}`}
+                d={feature.path}
+                fill={PAL.stadium}
+                stroke={PAL.mallAccent}
+                strokeWidth={0.1}
+                opacity={feature.opacity || 0.42}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </g>
+        );
+      }
       const isHuge = cell.area > 2200;
       return renderBlockRect(cell, space.id, PAL.park, isHuge ? 0.2 : 0.34, PAL.park);
     };
@@ -299,20 +328,20 @@
               <g clipPath={`url(#${mainlandBuildableClipId})`}>
                 {data.buildingPlan.openSpaces
                   .filter((space) => {
-                    if (space.kind !== "park") return false;
+                    if (space.kind !== "park" && space.kind !== "compound") return false;
                     const cell = data.cells.find(c => c.id === space.cellId);
                     return cell && cell.landmassId === "mainland";
                   })
-                  .map(renderPark)}
+                  .map(renderOpenSpace)}
               </g>
             )}
             {data.buildingPlan.openSpaces
               .filter((space) => {
-                if (space.kind !== "park") return false;
+                if (space.kind !== "park" && space.kind !== "compound") return false;
                 const cell = data.cells.find(c => c.id === space.cellId);
                 return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
               })
-              .map(renderPark)}
+              .map(renderOpenSpace)}
           </g>
         )}
 
@@ -370,7 +399,7 @@
           <g opacity={0.54}>
             {mainlandCoastRoad && (
               <g clipPath={`url(#${mainlandBuildableClipId})`}>
-                {data.cells.filter((cell) => cell.landmassId === "mainland").map((cell) => (
+                {data.cells.filter((cell) => cell.landmassId === "mainland" && cell.buildable).map((cell) => (
                   <path
                     key={cell.id}
                     d={cell.path}
@@ -382,7 +411,7 @@
                 ))}
               </g>
             )}
-            {data.cells.filter((cell) => !mainlandCoastRoad || cell.landmassId !== "mainland").map((cell) => (
+            {data.cells.filter((cell) => cell.buildable && (!mainlandCoastRoad || cell.landmassId !== "mainland")).map((cell) => (
               <path
                 key={cell.id}
                 d={cell.path}
@@ -410,31 +439,7 @@
           </g>
         )}
 
-        {/* DISTRICT HOVER FLOOD — rendered early so roads/buildings show on top of it */}
-        {hoveredDistrictId && (
-          <g>
-            {data.districts.filter(district => district.id === hoveredDistrictId).map((district) => {
-              const DEBUG_COLORS = ["#ffee00", "#ff2222", "#22ff88"];
-              const idx = districtIndex(district);
-              const floodColor = DEBUG_COLORS[idx % DEBUG_COLORS.length];
-              return (
-                <g key={`${district.id}-hover`}>
-                  {districtHoverPolygons(district).map((polygon, index) => (
-                    <path
-                      key={`${district.id}-hover-cell-${index}`}
-                      d={index === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
-                      fill={floodColor}
-                      stroke="none"
-                      opacity={0.38}
-                      style={{ mixBlendMode: "screen" }}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ))}
-                </g>
-              );
-            })}
-          </g>
-        )}        <g>
+        <g>
           {data.roadGraph.edges.map((edge) => (
                 <g key={edge.id}>
                   {!edge.riverBank && (
@@ -483,6 +488,32 @@
           }
           return null;
         })}
+
+        {/* DISTRICT HOVER FLOOD — after water so rivers/lakes tint with the owned district. */}
+        {hoveredDistrictId && (
+          <g>
+            {data.districts.filter(district => district.id === hoveredDistrictId).map((district) => {
+              const DEBUG_COLORS = ["#ffee00", "#ff2222", "#22ff88"];
+              const idx = districtIndex(district);
+              const floodColor = DEBUG_COLORS[idx % DEBUG_COLORS.length];
+              return (
+                <g key={`${district.id}-hover`}>
+                  {districtHoverPolygons(district).map((polygon, index) => (
+                    <path
+                      key={`${district.id}-hover-cell-${index}`}
+                      d={index === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
+                      fill={floodColor}
+                      stroke="none"
+                      opacity={0.34}
+                      style={{ mixBlendMode: "screen" }}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </g>
+              );
+            })}
+          </g>
+        )}
 
         <g>
           {data.bridgePlan.bridges.map((bridge) => (

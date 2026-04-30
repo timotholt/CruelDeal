@@ -1,12 +1,17 @@
 /* global React, GameCard, buildDeck, makeRng,
    STAGE_W, STAGE_H, HEADER_H, FOOTER_H, BOARD_H, SIDE_PAD,
    DETECTION_ALGOS,
-   CityMapV3, buildCityV3, cityV3DotPos, cityV3DotDistance,
-   whoCanThisCardSeeV3, whoCanSeeMeV3,
-   CITY_V3_W, CITY_V3_H, C_CELL_W, C_CELL_H,
    useTweaks, TweaksPanel, TweakSection, TweakSlider, TweakToggle, TweakSelect */
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
+const CITY_V3_W = STAGE_W;
+const CITY_V3_H = BOARD_H;
+const C_CELL_W = window.CityMapConfigV3.CELL_UNIT;
+const C_CELL_H = window.CityMapConfigV3.CELL_UNIT;
+const {
+  whoCanThisCardSeeV3,
+  whoCanSeeMeV3
+} = window.CityMapRulesV3;
 
 // ---------- Floating Debug Dock ----------
 function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
@@ -66,15 +71,6 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
               onClick={() => setTweak('roundMapEdge', !(tweaks.roundMapEdge !== false))}
             >
               {tweaks.roundMapEdge !== false ? 'ON' : 'OFF'}
-            </button>
-          </label>
-          <label className="dock-row">
-            <span className="dock-label">V3.5 Map</span>
-            <button
-              className={`dock-toggle ${tweaks.showV4Preview ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('showV4Preview', !tweaks.showV4Preview)}
-            >
-              {tweaks.showV4Preview ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
@@ -150,15 +146,9 @@ function Header({ accent, you, them, turn, deckCount }) {
 }
 
 // ---------- City Board (replaces Lane components) ----------
-function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, playerScore, enemyScore, roundedMapEdge, showV4Preview }) {
+function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, roundedMapEdge }) {
   const [hoveredDistrictId, setHoveredDistrictId] = useState(null);
-  const v4City = useMemo(
-    () => showV4Preview
-      ? (window.CityMapV35 ? window.CityMapV35.buildCityV35(sessionSeed || 1) : window.CityMapV4.buildCityV4(sessionSeed || 1))
-      : null,
-    [showV4Preview, sessionSeed]
-  );
-  const boardCity = v4City || city;
+  const boardCity = city;
   const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
   const hoveredDistrict = useMemo(
     () => boardCity.districts.find((district) => district.id === hoveredDistrictId),
@@ -166,7 +156,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
   );
   return (
     <div
-      className={`city-board ${showV4Preview ? "city-board--v4" : ""}`}
+      className="city-board city-board--v4"
       style={{
         width: CITY_V3_W,
         height: CITY_V3_H,
@@ -176,28 +166,16 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
       }}
     >
       {/* City map base */}
-      {showV4Preview ? (
-        <CityMapV4Preview
-          seed={sessionSeed}
-          width={CITY_V3_W}
-          height={CITY_V3_H}
-          opacity={mapOpacity ?? 1}
-          showLabels={showLabels !== false}
-          hoveredDistrictId={hoveredDistrictId}
-        />
-      ) : (
-        <CityMapV3
-          seed={sessionSeed}
-          width={CITY_V3_W}
-          height={CITY_V3_H}
-          opacity={mapOpacity ?? 1}
-          showLabels={showLabels !== false}
-          playerScore={playerScore}
-          enemyScore={enemyScore}
-        />
-      )}
+      <CityMapV4Preview
+        seed={sessionSeed}
+        width={CITY_V3_W}
+        height={CITY_V3_H}
+        opacity={mapOpacity ?? 1}
+        showLabels={showLabels !== false}
+        hoveredDistrictId={hoveredDistrictId}
+      />
 
-      {showV4Preview && v4City && (
+      {boardCity && (
         <svg
           className="district-hover-surface"
           width={CITY_V3_W}
@@ -206,7 +184,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
           preserveAspectRatio="none"
           onMouseLeave={() => setHoveredDistrictId(null)}
         >
-          {v4City.districts.map((district) => (
+          {boardCity.districts.map((district) => (
             <g key={`${district.id}-hit`}>
               {((district.ownershipPolygons || district.polygons) || []).map((polygon, index) => (
                 <path
@@ -227,7 +205,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         </svg>
       )}
 
-      {showV4Preview && hoveredDistrict && (
+      {hoveredDistrict && (
         <div className="district-hover-readout">
           <span>{hoveredDistrict.name}</span>
           <b>{hoveredDistrict.id}</b>
@@ -467,11 +445,9 @@ function Game() {
 
   const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
     "accentHue": 188,
-    "dotDensity": 7,
     "algo": "subtract",
     "showMap": true,
     "roundMapEdge": true,
-    "showV4Preview": false,
     "mapOpacity": 0.85
   }/*EDITMODE-END*/);
 
@@ -482,8 +458,8 @@ function Game() {
   const sessionSeed = useMemo(() => Math.floor(Math.random() * 1e9), []);
   const rng = useMemo(() => makeRng(sessionSeed), [sessionSeed]);
 
-  // Build the city (3 procedural districts replace lanes)
-  const city = useMemo(() => buildCityV3(sessionSeed), [sessionSeed]);
+  // Build the city. V3.5 is now the production map generator.
+  const city = useMemo(() => window.CityMapV35.buildCityV35(sessionSeed), [sessionSeed]);
   const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
 
   const [yourDeck, setYourDeck] = useState(() => buildDeck(makeRng(sessionSeed + 7)));
@@ -796,10 +772,7 @@ function Game() {
             mapOpacity={tweaks.showMap ? (tweaks.mapOpacity ?? 1) : 0}
             showLabels={showUI}
             showGamePieces={showUI}
-            playerScore={scores.you}
-            enemyScore={scores.them}
             roundedMapEdge={tweaks.roundMapEdge !== false}
-            showV4Preview={tweaks.showV4Preview}
           />
 
           {/* Math chip floats just above hand */}
@@ -903,11 +876,6 @@ function Game() {
             checked={tweaks.roundMapEdge !== false}
             onChange={(v) => setTweak("roundMapEdge", v)}
           />
-          <TweakToggle
-            label="V3.5 map"
-            checked={!!tweaks.showV4Preview}
-            onChange={(v) => setTweak("showV4Preview", v)}
-          />
           <TweakSlider
             label="Map opacity"
             value={tweaks.mapOpacity}
@@ -916,12 +884,6 @@ function Game() {
           />
         </TweakSection>
         <TweakSection title="Game">
-          <TweakSlider
-            label="Dots per lane"
-            value={tweaks.dotDensity}
-            min={5} max={8} step={1}
-            onChange={(v) => setTweak("dotDensity", v)}
-          />
           <TweakSelect
             label="Detection algorithm"
             value={tweaks.algo}
