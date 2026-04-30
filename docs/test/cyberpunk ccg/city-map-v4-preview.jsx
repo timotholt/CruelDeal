@@ -343,8 +343,6 @@
     transparentParks = false,
     brightBuildings = false,
     buildingBorders = false,
-    shadowBorders = false,
-    hideShadows = false,
     hoveredDistrictId = null
   }) {
     const [debugTransparentParks, setDebugTransparentParks] = React.useState(transparentParks);
@@ -373,29 +371,8 @@
       return color;
     };
     const renderBuilding = (building) => {
-      const dx = Math.cos(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
-      const dy = Math.sin(data.buildingPlan.staticScene.shadowAzimuth) * building.shadow.length;
       return (
         <g key={building.id}>
-          {!hideShadows && (
-            <path
-              d={building.path}
-              fill="black"
-              opacity={Math.min(0.1, building.shadow.opacity * 0.38)}
-              transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
-            />
-          )}
-          {shadowBorders && (
-            <path
-              d={building.path}
-              fill="none"
-              stroke="#00ffff"
-              strokeWidth={0.4}
-              vectorEffect="non-scaling-stroke"
-              opacity={0.8}
-              transform={`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`}
-            />
-          )}
           <path
             d={building.path}
             fill={buildingFill(building)}

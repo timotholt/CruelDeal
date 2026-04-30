@@ -101,21 +101,12 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Shadow Borders</span>
+            <span className="dock-label">Not used yet</span>
             <button
-              className={`dock-toggle ${tweaks.shadowBorders === true ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('shadowBorders', !tweaks.shadowBorders)}
+              className="dock-toggle"
+              onClick={() => {}}
             >
-              {tweaks.shadowBorders === true ? 'ON' : 'OFF'}
-            </button>
-          </label>
-          <label className="dock-row">
-            <span className="dock-label">Hide Shadows</span>
-            <button
-              className={`dock-toggle ${tweaks.hideShadows === true ? 'dock-toggle--on' : ''}`}
-              onClick={() => setTweak('hideShadows', !tweaks.hideShadows)}
-            >
-              {tweaks.hideShadows === true ? 'ON' : 'OFF'}
+              OFF
             </button>
           </label>
           <label className="dock-row">
@@ -228,8 +219,6 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         transparentParks={tweaks.transparentParks === true}
         brightBuildings={tweaks.brightBuildings === true}
         buildingBorders={tweaks.buildingBorders === true}
-        shadowBorders={tweaks.shadowBorders === true}
-        hideShadows={tweaks.hideShadows === true}
         hoveredDistrictId={hoveredDistrictId}
       />
 
