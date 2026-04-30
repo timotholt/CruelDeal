@@ -20,16 +20,6 @@
     hoverStroke: PAL.hwyInner
   };
 
-  function shrinkPolygon(polygon, amount) {
-    const cx = polygon.reduce((s, p) => s + p.x, 0) / polygon.length;
-    const cy = polygon.reduce((s, p) => s + p.y, 0) / polygon.length;
-    return polygon.map(p => {
-      const dx = p.x - cx, dy = p.y - cy;
-      const len = Math.hypot(dx, dy) || 1;
-      return { x: p.x - (dx / len) * amount, y: p.y - (dy / len) * amount };
-    });
-  }
-
   // Fractal lake shape generator using multi-octave radial noise.
   // Creates organic, irregular shapes: ovals, peanuts, multiple puddles, etc.
   function generateFractalLakePolygon(cellPolygon, rng, numPoints = 32) {
@@ -234,54 +224,6 @@
     return match ? Number(match[1]) - 1 : 0;
   }
 
-  function districtGrid(district) {
-    const idx = districtIndex(district);
-    const spacing = district.bbox && Math.max(district.bbox.w, district.bbox.h) > 170 ? 18 : 15;
-    const phaseX = (idx * 7) % spacing;
-    const phaseY = (idx * 11) % spacing;
-    const lines = [];
-    const box = district.bbox;
-    if (!box) return lines;
-    for (let x = box.minX - spacing + phaseX; x <= box.maxX + spacing; x += spacing) {
-      lines.push({ kind: "v", x });
-    }
-    for (let y = box.minY - spacing + phaseY; y <= box.maxY + spacing; y += spacing) {
-      lines.push({ kind: "h", y });
-    }
-    return lines;
-  }
-
-  function structuredRoadPath(a, b, index) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1) return "";
-    if (index % 3 === 0 || len < 96) {
-      return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} L ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
-    }
-    const mostlyVertical = Math.abs(dy) > Math.abs(dx);
-    const bend = Math.min(34, len * 0.18) * (index % 2 ? 1 : -1);
-    const c1 = mostlyVertical
-      ? { x: a.x + bend, y: a.y + dy * 0.32 }
-      : { x: a.x + dx * 0.32, y: a.y + bend };
-    const c2 = mostlyVertical
-      ? { x: b.x + bend, y: b.y - dy * 0.32 }
-      : { x: b.x - dx * 0.32, y: b.y + bend };
-    return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)} ${c2.x.toFixed(2)} ${c2.y.toFixed(2)} ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
-  }
-
-  function districtRoadCenter(district) {
-    const box = district.bbox;
-    const anchor = district.labelAnchor || district.centroid || {
-      x: box ? box.minX + box.w / 2 : VIEW_W / 2,
-      y: box ? box.minY + box.h / 2 : VIEW_H / 2
-    };
-    return {
-      x: Math.round(anchor.x / 8) * 8,
-      y: Math.round(anchor.y / 8) * 8
-    };
-  }
-
   function blockRect(cell) {
     const box = polygonBBox(cell.polygon);
     const angle = cell.fieldAngle || cell.orientation || 0;
@@ -337,15 +279,13 @@
     height,
     opacity = 1,
     showLabels = true,
-    showDebug = false,
     showBuildings = true,
-    showCells = false,
     brightBuildings = false,
     buildingBorders = false,
     hoveredDistrictId = null
   }) {
     const data = useMemo(
-      () => window.CityMapV35 ? window.CityMapV35.buildCityV35(seed || 1) : window.CityMapV4.buildCityV4(seed || 1),
+      () => window.CityMapV35.buildCityV35(seed || 1),
       [seed]
     );
     const idBase = `cv4-${seed || 1}`;
@@ -529,85 +469,6 @@
                 stroke={PAL.avenue}
                 strokeWidth={0.14}
                 opacity={0.78}
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-          </g>
-        )}
-
-        {data.architecture !== "v35" && (
-          <g>
-            {data.districts.map((district) => {
-              const clipId = districtClipId(idBase, district);
-              const center = districtRoadCenter(district);
-              const box = district.bbox;
-              if (!box) return null;
-              return (
-                <g key={`${district.id}-blocks`} clipPath={`url(#${clipId})`}>
-                  {districtGrid(district).map((line, index) => (
-                    line.kind === "v"
-                      ? <line
-                          key={`gv-${index}`}
-                          x1={line.x} y1={box.minY - 8} x2={line.x} y2={box.maxY + 8}
-                          stroke={PAL.streetLocal} strokeWidth={0.26} opacity={0.44}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      : <line
-                          key={`gh-${index}`}
-                          x1={box.minX - 8} y1={line.y} x2={box.maxX + 8} y2={line.y}
-                          stroke={PAL.streetLocal} strokeWidth={0.26} opacity={0.44}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                  ))}
-                  <line
-                    x1={center.x} y1={box.minY - 12} x2={center.x} y2={box.maxY + 12}
-                    stroke={V4_PAL.roadUnderlay} strokeWidth={2.1} opacity={0.7}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <line
-                    x1={box.minX - 12} y1={center.y} x2={box.maxX + 12} y2={center.y}
-                    stroke={V4_PAL.roadUnderlay} strokeWidth={1.85} opacity={0.62}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <line
-                    x1={center.x} y1={box.minY - 12} x2={center.x} y2={box.maxY + 12}
-                    stroke={PAL.streetMain} strokeWidth={0.9} opacity={0.92}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <line
-                    x1={box.minX - 12} y1={center.y} x2={box.maxX + 12} y2={center.y}
-                    stroke={PAL.streetMain} strokeWidth={0.74} opacity={0.82}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </g>
-              );
-            })}
-          </g>
-        )}
-
-        {showCells && (
-          <g opacity={0.54}>
-            {mainlandCoastRoad && (
-              <g clipPath={`url(#${mainlandBuildableClipId})`}>
-                {data.cells.filter((cell) => cell.landmassId === "mainland" && cell.buildable).map((cell) => (
-                  <path
-                    key={cell.id}
-                    d={cell.path}
-                    fill="none"
-                    stroke={cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal}
-                    strokeWidth={0.18}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-              </g>
-            )}
-            {data.cells.filter((cell) => cell.buildable && (!mainlandCoastRoad || cell.landmassId !== "mainland")).map((cell) => (
-              <path
-                key={cell.id}
-                d={cell.path}
-                fill="none"
-                stroke={cell.tags.includes("parkCandidate") ? PAL.park : PAL.streetLocal}
-                strokeWidth={0.18}
                 vectorEffect="non-scaling-stroke"
               />
             ))}

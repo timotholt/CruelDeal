@@ -205,7 +205,6 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         height={CITY_V3_H}
         opacity={mapOpacity ?? 1}
         showLabels={showLabels !== false}
-        showDebug={true}
         showBuildings={tweaks.showBuildingsDebug !== true}
         brightBuildings={tweaks.brightBuildings === true}
         buildingBorders={tweaks.buildingBorders === true}
