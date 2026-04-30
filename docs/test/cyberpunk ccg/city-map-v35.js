@@ -478,11 +478,6 @@
   function polygonTouchesWaterReserve(polygon, terrain) {
     const centroid = polygonCentroid(polygon);
     for (const body of terrain.waterBodies || []) {
-      if (body.kind === "river" && body.segments) {
-        const riverPad = (body.outerWidth || 8) * 0.5 + 3;
-        if (distToRiver(centroid.x, centroid.y, body.segments) < riverPad) return true;
-        if (polygon.some(p => distToRiver(p.x, p.y, body.segments) < riverPad)) return true;
-      }
       if (body.kind !== "lake" || !body.polygon) continue;
       const lakeRoadPad = 7.2;
       if (pointInPolygon(centroid, body.polygon)) return true;
