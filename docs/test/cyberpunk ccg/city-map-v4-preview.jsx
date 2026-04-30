@@ -3,7 +3,7 @@
   "use strict";
 
   const { useMemo } = React;
-  const { VIEW_W, VIEW_H, PAL } = window.CityMapConfigV3;
+  const { VIEW_W, VIEW_H, PAL, DISTRICT_SHORT_NAMES } = window.CityMapConfigV3;
   const { polygonToPath } = window.CityMapPathsV3;
   const { polygonBBox } = window.CityMapGeometryV3;
 
@@ -34,6 +34,37 @@
     const text = district.name || district.id;
     const maxLen = district.bbox && district.bbox.w < 70 ? 4 : 9;
     return text.length > maxLen ? text.slice(0, maxLen) : text;
+  }
+
+  function labelMetrics(text) {
+    return {
+      halfW: text.length * 4.8 + Math.max(0, text.length - 1) * 1.05,
+      halfH: 6
+    };
+  }
+
+  function labelFitsBounds(text, anchor, bounds, pad = 3) {
+    if (!text || !anchor || !bounds) return false;
+    const m = labelMetrics(text);
+    return anchor.x - m.halfW >= bounds.minX + pad &&
+      anchor.x + m.halfW <= bounds.maxX - pad &&
+      anchor.y - m.halfH >= bounds.minY + pad &&
+      anchor.y + m.halfH <= bounds.maxY - pad;
+  }
+
+  function labelFitsViewport(text, anchor, pad = 3) {
+    return labelFitsBounds(text, anchor, { minX: 0, minY: 0, maxX: VIEW_W, maxY: VIEW_H }, pad);
+  }
+
+  function visibleDistrictLabel(district) {
+    if (district.landmassId === "mainland") return districtLabel(district);
+    const anchor = district.labelAnchor;
+    const full = district.name || district.id;
+    const short = DISTRICT_SHORT_NAMES[full] || full.slice(0, 3);
+    const bounds = district.bbox;
+    if (labelFitsViewport(full, anchor) && labelFitsBounds(full, anchor, bounds, 2)) return full;
+    if (labelFitsViewport(short, anchor) && labelFitsBounds(short, anchor, bounds, 1)) return short;
+    return null;
   }
 
   function districtClipPolygons(district) {
@@ -563,24 +594,28 @@
 
         {showLabels && (
           <g>
-            {data.districts.map((district) => (
-              <text
-                key={`${district.id}-label`}
-                x={district.labelAnchor.x}
-                y={district.labelAnchor.y}
-                fill={PAL.label}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontFamily="'Roboto Mono', 'SFMono-Regular', monospace"
-                fontSize="10"
-                fontWeight="700"
-                letterSpacing="2"
-                opacity={0.88}
-                style={{ textShadow: `0 0 6px ${PAL.labelGlow}` }}
-              >
-                {districtLabel(district)}
-              </text>
-            ))}
+            {data.districts.map((district) => {
+              const text = visibleDistrictLabel(district);
+              if (!text) return null;
+              return (
+                <text
+                  key={`${district.id}-label`}
+                  x={district.labelAnchor.x}
+                  y={district.labelAnchor.y}
+                  fill={PAL.label}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontFamily="'Roboto Mono', 'SFMono-Regular', monospace"
+                  fontSize="10"
+                  fontWeight="700"
+                  letterSpacing="2"
+                  opacity={0.88}
+                  style={{ textShadow: `0 0 6px ${PAL.labelGlow}` }}
+                >
+                  {text}
+                </text>
+              );
+            })}
           </g>
         )}
       </svg>
