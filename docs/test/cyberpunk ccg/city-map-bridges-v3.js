@@ -129,7 +129,14 @@ if (riverSegments) {
     }
     if (tooClose) continue;
     const segAngle = Math.atan2(b.y - a.y, b.x - a.x);
-    bridges.push({ x: crHit.x, y: crHit.y, angle: segAngle, roadAngle: segAngle, depth: 1 });
+    bridges.push({
+      x: crHit.x,
+      y: crHit.y,
+      angle: segAngle,
+      roadAngle: segAngle,
+      depth: 1,
+      riverMouth: true
+    });
   }
 
   // (c) Gap-fill river bridges. After the priority pass, add a few depth-2/3

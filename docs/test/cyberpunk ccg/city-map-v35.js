@@ -454,6 +454,34 @@
     return false;
   }
 
+  function dryInteriorAnchor(polygon, terrain) {
+    const centroid = polygonCentroid(polygon);
+    const box = polygonBBox(polygon);
+    const label = polylabel(polygon, 1.0, centroid);
+    const candidates = [
+      label,
+      centroid,
+      { x: box.minX + box.w * 0.24, y: box.minY + box.h * 0.24 },
+      { x: box.minX + box.w * 0.76, y: box.minY + box.h * 0.24 },
+      { x: box.minX + box.w * 0.24, y: box.minY + box.h * 0.76 },
+      { x: box.minX + box.w * 0.76, y: box.minY + box.h * 0.76 },
+      ...polygon.map(p => ({
+        x: p.x + (centroid.x - p.x) * 0.22,
+        y: p.y + (centroid.y - p.y) * 0.22
+      }))
+    ];
+    let best = null;
+    for (const point of candidates) {
+      if (!pointInPolygon(point, polygon)) continue;
+      if (pointInWater(point, terrain)) continue;
+      const edge = polygonEdgeDistance(point, polygon);
+      if (edge < 2.4) continue;
+      const score = edge - Math.hypot(point.x - label.x, point.y - label.y) * 0.08;
+      if (!best || score > best.score) best = { point, score };
+    }
+    return best ? best.point : null;
+  }
+
   function pointToPolygonEdgeDistance(point, polygon) {
     let best = Infinity;
     for (let i = 0; i < polygon.length; i++) {
@@ -578,10 +606,22 @@
     const labelBounds = labelFootprint(district);
     const points = blocks
       .filter(b => b.buildable && b.area > 220)
-      .map(b => {
-        const labelPoint = polylabel(b.polygon, 1.2, b.centroid);
-        const c = { x: labelPoint.x, y: labelPoint.y };
-        return {
+      .flatMap(b => {
+        const labelPoint = b.slotAnchor || polylabel(b.polygon, 1.2, b.centroid);
+        const box = b.bbox;
+        const spread = Math.max(7, Math.min(18, Math.min(box.w, box.h) * 0.32));
+        const variants = [
+          { x: labelPoint.x, y: labelPoint.y },
+          { x: labelPoint.x - spread, y: labelPoint.y },
+          { x: labelPoint.x + spread, y: labelPoint.y },
+          { x: labelPoint.x, y: labelPoint.y - spread },
+          { x: labelPoint.x, y: labelPoint.y + spread }
+        ].filter((point, index, arr) =>
+          pointInPolygon(point, b.polygon) &&
+          polygonEdgeDistance(point, b.polygon) > 2.2 &&
+          arr.findIndex(other => Math.hypot(other.x - point.x, other.y - point.y) < 2) === index
+        );
+        return variants.map(c => ({
           x: c.x,
           y: c.y,
           block: b,
@@ -589,7 +629,7 @@
           viewportClearance: viewportEdgeDistance(c),
           labelClearance: labelDistance(c, labelBounds),
           jitter: rng() * 10
-        };
+        }));
       });
 
     const minDistTo = (p, others) => others.length
@@ -656,13 +696,74 @@
       return selected;
     };
 
+    const fillShortfall = (ownerSlots, owner, existing) => {
+      if (ownerSlots.length >= targetPairs) return ownerSlots;
+      const selected = [...ownerSlots];
+      const anchors = targetAnchors(targetPairs, owner);
+      const usedIds = new Set([...ownerSlots, ...existing].map(p => p.block && p.block.id).filter(Boolean));
+      const slotEdgeClearance = Math.max(18, Math.hypot(MAP_SLOT_HALF_W, MAP_SLOT_HALF_H));
+      const companionPoint = () => {
+        const base = existing[0] || selected[0] || points[0];
+        if (!base || !base.block) return null;
+        const direction = owner === "them" ? -1 : 1;
+        const tries = [];
+        for (const r of [18, 14, 10, 6, 3]) {
+          tries.push(
+            { x: base.x, y: base.y + direction * r },
+            { x: base.x - r, y: base.y + direction * r * 0.55 },
+            { x: base.x + r, y: base.y + direction * r * 0.55 },
+            { x: base.x - r, y: base.y },
+            { x: base.x + r, y: base.y }
+          );
+        }
+        const point = tries.find(p =>
+          pointInPolygon(p, base.block.polygon) &&
+          polygonEdgeDistance(p, base.block.polygon) > 1.1 &&
+          minDistTo(p, [...existing, ...selected]) > 2
+        ) || { x: base.x, y: base.y };
+        return {
+          x: point.x,
+          y: point.y,
+          block: base.block,
+          edgeClearance: districtEdgeDistance(point, district),
+          viewportClearance: viewportEdgeDistance(point),
+          labelClearance: labelDistance(point, labelBounds),
+          jitter: rng() * 10,
+          synthetic: true
+        };
+      };
+      while (selected.length < targetPairs) {
+        let best = null;
+        const anchor = anchors[selected.length] || district.centroid;
+        for (const p of points) {
+          const alreadySameBlock = usedIds.has(p.block.id);
+          const clearance = minDistTo(p, [...existing, ...selected]);
+          if (clearance < (alreadySameBlock ? 16 : 22)) continue;
+          if (p.viewportClearance < slotEdgeClearance) continue;
+          const anchorDist = Math.hypot(p.x - anchor.x, p.y - anchor.y);
+          const ownerBias = owner === "them"
+            ? Math.max(0, district.centroid.y - p.y) * 0.36
+            : Math.max(0, p.y - district.centroid.y) * 0.36;
+          const score = ownerBias + p.edgeClearance * 1.1 + clearance * 1.25 - anchorDist * 0.9 + p.jitter;
+          if (!best || score > best.score) best = { ...p, score };
+        }
+        if (!best) best = companionPoint();
+        if (!best) break;
+        usedIds.add(best.block.id);
+        selected.push(best);
+      }
+      return selected;
+    };
+
     let themCandidates = points.filter(p => p.y < district.centroid.y);
     let youCandidates = points.filter(p => p.y >= district.centroid.y);
     if (themCandidates.length < targetPairs) themCandidates = points;
     if (youCandidates.length < targetPairs) youCandidates = points;
 
-    const them = pickSpread(themCandidates, targetPairs, [], "them");
-    const you = pickSpread(youCandidates, targetPairs, them, "you");
+    let them = pickSpread(themCandidates, targetPairs, [], "them");
+    let you = pickSpread(youCandidates, targetPairs, them, "you");
+    them = fillShortfall(them, "them", you);
+    you = fillShortfall(you, "you", them);
     return [
       ...them.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "them", index: i })),
       ...you.slice(0, targetPairs).map((p, i) => ({ ...p, owner: "you", index: i }))
@@ -773,7 +874,10 @@
     let polygon = leaf.polygon;
     const centroid = interiorPoint(polygon);
     const area = polygonArea(polygon);
-    const inWater = pointInWater(centroid, terrain) || polygonTouchesWaterReserve(polygon, terrain);
+    const lakeReserve = polygonTouchesWaterReserve(polygon, terrain);
+    const centroidInWater = pointInWater(centroid, terrain);
+    const slotAnchor = lakeReserve ? null : dryInteriorAnchor(polygon, terrain);
+    const inWater = lakeReserve || (centroidInWater && !slotAnchor);
     const longestAngle = polygonLongestEdgeAngle(polygon);
     return {
       id: `${district.id}:block:${index + 1}`,
@@ -783,10 +887,11 @@
       polygon,
       path: polygonToPath(polygon),
       centroid, area,
+      slotAnchor,
       bbox: polygonBBox(polygon),
       density: area < 460 ? "dense" : area < 1100 ? "medium" : "sparse",
       buildable: !inWater && area > 80,
-      tags: inWater ? ["waterReserve"] : ["buildable"],
+      tags: inWater ? ["waterReserve"] : ["buildable", ...(centroidInWater ? ["riverSplit"] : [])],
       fieldAngle: longestAngle, orientation: longestAngle,
       leaf
     };
@@ -1019,9 +1124,16 @@
   }
 
   function bridgeCrossesRiver(bridge, riverSegments) {
+    if (bridge.riverMouth) return true;
     const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
     if (riverAngle == null) return true;
     return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle) > Math.PI / 4;
+  }
+
+  function bridgeRiverDelta(bridge, riverSegments) {
+    const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
+    if (riverAngle == null) return Math.PI / 2;
+    return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle);
   }
 
   function makeBridgePlan(terrain, mainlandCoastRoadPolygon = null, roadCuts = []) {
@@ -1058,7 +1170,10 @@
         }).bridges.filter(bridge => !bridge.offshore).map((bridge, i) => {
           if (!bridgeCrossesRiver(bridge, river.segments)) return null;
           const depth = bridge.depth ?? 2;
-          const length = Math.max((river.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
+          const delta = bridgeRiverDelta(bridge, river.segments);
+          const baseLength = Math.max((river.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
+          const shallowFactor = bridge.riverMouth ? 1 / Math.max(0.28, Math.sin(Math.max(delta, 0.18))) : 1;
+          const length = Math.min(38, baseLength * shallowFactor);
           const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : 3.5;
           return {
             id: `v35-river-bridge-${i + 1}`,
@@ -1067,6 +1182,7 @@
             angle: bridge.angle || 0,
             deckWidth,
             depth,
+            riverMouth: !!bridge.riverMouth,
             type: "river"
           };
         }).filter(Boolean)
@@ -1174,12 +1290,22 @@
   }
 
   function footprintTouchesWaterSetback(corners, riverSegments, roadHazards, riverBuffer) {
-    for (const c of corners) {
-      if (riverSegments && riverSegments.length && distToRiver(c.x, c.y, riverSegments) < riverBuffer) {
+    const probes = [...corners];
+    let cx = 0, cy = 0;
+    for (let i = 0; i < corners.length; i++) {
+      const a = corners[i];
+      const b = corners[(i + 1) % corners.length];
+      cx += a.x / corners.length;
+      cy += a.y / corners.length;
+      probes.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    }
+    probes.push({ x: cx, y: cy });
+    for (const p of probes) {
+      if (riverSegments && riverSegments.length && distToRiver(p.x, p.y, riverSegments) < riverBuffer) {
         return true;
       }
       for (const hz of roadHazards || []) {
-        if (pointToSegmentDist(c.x, c.y, hz.a, hz.b) < hz.buffer) return true;
+        if (pointToSegmentDist(p.x, p.y, hz.a, hz.b) < hz.buffer) return true;
       }
     }
     return false;
@@ -1279,10 +1405,20 @@
         continue;
       }
       const lakefront = blockNearLake(block, terrain);
-      if (block.area > 1600 && rng() < 0.2 && !lakefront && !blockNearOpenSpace(block, openSpaces, cellsById)) {
-        openSpaces.push(block.area > 2100 && rng() < 0.62
-          ? makeCompoundOpenSpace(block, rng)
-          : { id: `${block.id}:park`, kind: "park", cellId: block.id });
+      const nearOpenSpace = blockNearOpenSpace(block, openSpaces, cellsById);
+      const parkEligible = !lakefront && !nearOpenSpace && block.area > 620;
+      const parkRoll = block.area > 2300 ? 0.42 : block.area > 1500 ? 0.30 : 0.12;
+      if (parkEligible && rng() < parkRoll) {
+        if (block.area > 2100 && rng() < 0.42) {
+          openSpaces.push(makeCompoundOpenSpace(block, rng));
+        } else {
+          openSpaces.push({
+            id: `${block.id}:park`,
+            kind: block.area > 1450 ? "park" : "micropark",
+            role: block.area > 1450 ? "landmark" : "eyeCandy",
+            cellId: block.id
+          });
+        }
         continue;
       }
       let generated = window.CityMapBuildingsV3.generateBlockBuildings(
@@ -1303,6 +1439,7 @@
           area: gen.area,
           height,
           shade: gen.shade,
+          fallback: !!gen.fallback,
           shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
           render: {
             extrudable: true, staticMesh: true,
@@ -1310,6 +1447,14 @@
           }
         });
       });
+      if (parkEligible && block.area <= 1450 && rng() < 0.18) {
+        openSpaces.push({
+          id: `${block.id}:micropark`,
+          kind: "micropark",
+          role: "eyeCandy",
+          cellId: block.id
+        });
+      }
     }
     return {
       buildings, openSpaces, landmarks: [],

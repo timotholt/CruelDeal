@@ -257,6 +257,8 @@
     const renderOpenSpace = (space) => {
       const cell = data.cells.find(c => c.id === space.cellId);
       if (!cell) return null;
+      const parkFill = "hsla(145, 54%, 58%, 0.22)";
+      const parkStroke = "hsla(145, 62%, 66%, 0.42)";
       if (space.kind === "compound") {
         return (
           <g key={space.id}>
@@ -286,8 +288,21 @@
           </g>
         );
       }
-      const isHuge = cell.area > 2200;
-      return renderBlockRect(cell, space.id, PAL.park, isHuge ? 0.2 : 0.34, PAL.park);
+      if (space.kind === "park" && space.role === "landmark") {
+        return (
+          <path
+            key={space.id}
+            d={cell.path}
+            fill={parkFill}
+            stroke={parkStroke}
+            strokeWidth={0.18}
+            opacity={0.78}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      }
+      const opacity = space.kind === "micropark" ? 0.5 : 0.36;
+      return renderBlockRect(cell, space.id, parkStroke, opacity, parkFill);
     };
 
     return (
@@ -359,7 +374,7 @@
               <g clipPath={`url(#${mainlandBuildableClipId})`}>
                 {data.buildingPlan.openSpaces
                   .filter((space) => {
-                    if (space.kind !== "park" && space.kind !== "compound") return false;
+                    if (space.kind !== "park" && space.kind !== "micropark" && space.kind !== "compound") return false;
                     const cell = data.cells.find(c => c.id === space.cellId);
                     return cell && cell.landmassId === "mainland";
                   })
@@ -368,7 +383,7 @@
             )}
             {data.buildingPlan.openSpaces
               .filter((space) => {
-                if (space.kind !== "park" && space.kind !== "compound") return false;
+                if (space.kind !== "park" && space.kind !== "micropark" && space.kind !== "compound") return false;
                 const cell = data.cells.find(c => c.id === space.cellId);
                 return !mainlandCoastRoad || !cell || cell.landmassId !== "mainland";
               })

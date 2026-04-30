@@ -154,6 +154,12 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
     () => boardCity.districts.find((district) => district.id === hoveredDistrictId),
     [boardCity, hoveredDistrictId]
   );
+  const hoveredSlotCount = hoveredDistrict
+    ? Math.min(
+        hoveredDistrict.slots.filter(slot => slot.owner === "them").length,
+        hoveredDistrict.slots.filter(slot => slot.owner === "you").length
+      ) * 2
+    : 0;
   return (
     <div
       className="city-board city-board--v4"
@@ -209,7 +215,7 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         <div className="district-hover-readout">
           <span>{hoveredDistrict.name}</span>
           <b>{hoveredDistrict.id}</b>
-          <i>{hoveredDistrict.slots.length} slots</i>
+          <i>{hoveredSlotCount} slots</i>
         </div>
       )}
 

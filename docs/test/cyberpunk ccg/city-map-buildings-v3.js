@@ -28,10 +28,20 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
   // the caller passes the matching buffer.
   const RIVER_BUFFER = (typeof riverBuffer === "number" ? riverBuffer : 7.0);
 
-  const cornerNearRiver = (corners) => {
+  const footprintNearRiver = (corners) => {
     if (!riverSegments) return false;
-    for (const c of corners) {
-      if (_distToRiver(c.x, c.y, riverSegments) < RIVER_BUFFER) return true;
+    const probes = [...corners];
+    let cx = 0, cy = 0;
+    for (let i = 0; i < corners.length; i++) {
+      const a = corners[i];
+      const b = corners[(i + 1) % corners.length];
+      cx += a.x / corners.length;
+      cy += a.y / corners.length;
+      probes.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    }
+    probes.push({ x: cx, y: cy });
+    for (const p of probes) {
+      if (_distToRiver(p.x, p.y, riverSegments) < RIVER_BUFFER) return true;
     }
     return false;
   };
@@ -205,7 +215,7 @@ function _generateBlockBuildings(blockPolygon, gridAngle, rng, riverSegments, ro
       y: p.u * sinI + p.v * cosI
     }));
     if (!corners.every(c => _pointInPolygon(c, blockPolygon))) return false;
-    if (cornerNearRiver(corners)) return false;
+    if (footprintNearRiver(corners)) return false;
     if (cornerNearRoad(corners)) return false;
     buildings.push({
       path: `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} ` +
