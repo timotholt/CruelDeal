@@ -496,30 +496,31 @@
     for (const candA of bldA.snapCandidates) {
       const edgeA = r.edges.find(e => e.id === candA.edgeId);
       if (!edgeA) continue;
-      const nodesA = _snapNodes(candA.edgeId, candA.snapT, r);
-      if (!nodesA.length) continue;
 
       for (const candB of bldB.snapCandidates) {
         const edgeB = r.edges.find(e => e.id === candB.edgeId);
         if (!edgeB) continue;
-        const nodesB = _snapNodes(candB.edgeId, candB.snapT, r);
-        if (!nodesB.length) continue;
 
         // Build temporary building-like objects with the current candidate's snap data.
         const bA = { ...bldA, snapEdgeId: candA.edgeId, snapPoint: candA.snapPoint, snapT: candA.snapT };
         const bB = { ...bldB, snapEdgeId: candB.edgeId, snapPoint: candB.snapPoint, snapT: candB.snapT };
 
-        // Same edge: trace directly.
+        // Same edge: trace directly. This does not need graph nodes; a quiet
+        // street with no intersections is still a valid street-level route.
         if (candA.edgeId === candB.edgeId) {
-          const sub = _simplifyNearlyCollinear(_subPolyline(edgeA.points, candA.snapT, candB.snapT));
-          const d = _polylineLen(sub);
+          const sub = _subPolyline(edgeA.points, candA.snapT, candB.snapT);
           const waypoints = sub.length >= 2 ? sub : [candA.snapPoint, candB.snapPoint];
+          const d = _polylineLen(waypoints);
           if (d < bestDist && _routeSupportedByRoads(waypoints, r)) {
             bestDist = d;
             bestWaypoints = waypoints;
           }
           continue;
         }
+
+        const nodesA = _snapNodes(candA.edgeId, candA.snapT, r);
+        const nodesB = _snapNodes(candB.edgeId, candB.snapT, r);
+        if (!nodesA.length || !nodesB.length) continue;
 
         for (const nA of nodesA) {
           for (const nB of nodesB) {
@@ -529,10 +530,13 @@
               const segA = _subPolyline(edgeA.points, candA.snapT, tA);
               const segB = _subPolyline(edgeB.points, tB, candB.snapT);
               const d = _polylineLen(segA) + _polylineLen(segB);
-              const waypoints = _simplifyNearlyCollinear([...segA, ...segB]);
+              const waypoints = [];
+              for (const p of segA) _pushPoint(waypoints, p);
+              for (const p of segB) _pushPoint(waypoints, p);
               if (d < bestDist && _routeSupportedByRoads(waypoints, r)) {
                 bestDist = d;
-                bestWaypoints = waypoints;
+                const simplified = _simplifyNearlyCollinear(waypoints);
+                bestWaypoints = _routeSupportedByRoads(simplified, r) ? simplified : waypoints;
               }
               continue;
             }
