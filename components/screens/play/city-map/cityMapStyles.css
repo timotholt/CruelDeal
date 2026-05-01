@@ -5,17 +5,136 @@
   overflow: hidden;
 }
 
-.city-play-root__exit {
+.city-game-board {
+  padding-top: 8px;
+}
+
+.city-map-game-area {
+  justify-content: stretch;
+  padding: 6px 0;
+}
+
+.city-map-game-area .city-map-board {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.city-map-game-area .city-map-board__surface {
+  overflow: hidden;
+  border: 1px solid rgba(146, 164, 190, 0.16);
+  border-radius: 10px;
+  background: #05070c;
+}
+
+.city-player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.city-player-chip__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(124, 224, 255, 0.32);
+  background: linear-gradient(160deg, rgba(66, 214, 177, 0.24), rgba(18, 24, 34, 0.94));
+  color: #dffcff;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.city-player-chip__avatar--remote {
+  border-color: rgba(255, 111, 97, 0.34);
+  background: linear-gradient(160deg, rgba(255, 111, 97, 0.22), rgba(18, 24, 34, 0.94));
+}
+
+.city-player-chip__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.city-player-chip__meta--right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.city-player-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.city-player-chip__sub {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.city-hand-row {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: calc(var(--hand-card-h) * 0.72 + 18px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.city-hand {
+  width: calc(100% - 76px);
+  margin-left: 52px;
+  padding-top: 0;
+}
+
+.city-deck-stack {
   position: absolute;
-  z-index: 5;
-  top: max(14px, env(safe-area-inset-top));
-  left: max(14px, env(safe-area-inset-left));
-  border: 1px solid rgba(93, 255, 230, 0.32);
-  background: rgba(4, 10, 24, 0.72);
-  color: rgba(226, 252, 255, 0.92);
-  font: 700 11px/1 "Roboto Mono", "SFMono-Regular", monospace;
-  letter-spacing: 1.5px;
-  padding: 9px 12px;
+  left: 8px;
+  bottom: 16px;
+  width: 36px;
+  height: 50px;
+}
+
+.city-deck-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(210, 225, 255, 0.18);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 207, 91, 0.13), transparent 38%),
+    repeating-linear-gradient(45deg, #1a1f3a 0 6px, #12172a 6px 12px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34);
+}
+
+.city-deck-card--3 { transform: translate(4px, -4px); opacity: 0.42; }
+.city-deck-card--2 { transform: translate(2px, -2px); opacity: 0.7; }
+.city-deck-card--1 { transform: translate(0, 0); }
+
+.city-deck-count {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -17px;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.city-action-bar {
+  margin-top: 0;
 }
 
 .city-map-board {
@@ -278,7 +397,7 @@
 }
 
 .city-map-svg__road-underlay--coast {
-  stroke: hsla(223, 88%, 8%, 0.92);
+  stroke: var(--city-map-road-underlay);
   stroke-width: 3.35;
   opacity: 0.82;
 }
@@ -313,8 +432,8 @@
 }
 
 .city-map-svg__road--coast {
-  stroke: var(--city-map-coast-road, hsla(223, 88%, 45%, 0.9));
-  stroke-width: 1.22;
+  stroke: var(--city-map-avenue);
+  stroke-width: 1.05;
   opacity: 0.94;
 }
 

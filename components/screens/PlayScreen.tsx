@@ -1,23 +1,144 @@
 /**
- * PlayScreen — city-map shell for the /play route.
+ * PlayScreen — city-map game shell for the /play route.
  *
- * The old engine-backed lane board lives at /play/legacy while the new
- * district/venue surface becomes the NEW GAME destination.
+ * The old lane board lives at /play/legacy while the new district/venue
+ * surface uses the same 9:16 phone board chrome as the actual game.
  */
 
+import { For, createMemo, createSignal } from 'solid-js';
+import { VfxHost } from '../game/VfxHost';
+import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
+import { apply } from '@/services/playgame/engine/apply';
+import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
+import { createInitialMatchState } from '@/services/playgame/engine/cli/initState';
+import type { MatchState } from '@/services/playgame/engine/types/state';
+import type { CardId, Owner } from '@/services/playgame/engine/types/ids';
+import { getHandForSeat } from '@/services/playgame/view';
+import { BoardSizer } from './play/BoardSizer';
+import { EnergyBadge } from './play/EnergyBadge';
+import { HandCard } from './play/HandCard';
+import { HiddenHandIndicator } from './play/HiddenHandIndicator';
+import { TurnOrb } from './play/TurnOrb';
 import { CityMapBoard } from './play/city-map/CityMapBoard';
 
 interface PlayScreenProps {
   onExit?: () => void;
 }
 
+function makeMatchSeed() {
+  return `match-${Date.now().toString(36)}`;
+}
+
+function drawOpeningHands(seed: string): MatchState {
+  let state = createInitialMatchState(seed, BOOTSTRAP_MANIFEST);
+  for (const owner of ['P0', 'P1'] as Owner[]) {
+    for (let i = 0; i < 4; i++) {
+      const top = state.deck[owner][0];
+      if (!top) break;
+      state = apply(state, { type: 'CARD_DRAWN', owner, cardId: top.id as CardId, toHand: true }, BOOTSTRAP_MANIFEST);
+    }
+  }
+  return state;
+}
+
+const CityGameBoard = (props: PlayScreenProps) => {
+  const pg = usePlayGame();
+  const { engineState, manifest, localSeat, remoteSeat, seatMeta } = pg;
+  const localHand = createMemo(() => getHandForSeat(engineState, localSeat, manifest));
+  const remoteHandSize = createMemo(() => engineState.hand[remoteSeat].length);
+  const localDeckSize = createMemo(() => engineState.deck[localSeat].length);
+  const remoteDeckSize = createMemo(() => engineState.deck[remoteSeat].length);
+
+  return (
+    <div class="board city-game-board ready" id="board">
+      <div class="hud-top city-game-board__hud">
+        <div class="hud-top__side hud-top__side--left">
+          <div class="city-player-chip city-player-chip--local">
+            <span class="city-player-chip__avatar">{seatMeta[localSeat].name.slice(0, 1)}</span>
+            <span class="city-player-chip__meta">
+              <span class="city-player-chip__name">{seatMeta[localSeat].name}</span>
+              <span class="city-player-chip__sub">Deck {localDeckSize()}</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="hud-top__center">
+          <TurnOrb turn={engineState.turn} />
+        </div>
+
+        <div class="hud-top__side hud-top__side--right">
+          <div class="opponent-cluster">
+            <HiddenHandIndicator count={remoteHandSize()} />
+            <div class="opponent-stat" title={`Deck ${remoteDeckSize()}`}>
+              <span class="opponent-stat__label">Deck</span>
+              <span class="opponent-stat__value">{remoteDeckSize()}</span>
+            </div>
+            <EnergyBadge value={engineState.energy[remoteSeat]} title={`Opponent energy ${engineState.energy[remoteSeat]}`} />
+            <div class="city-player-chip city-player-chip--remote">
+              <span class="city-player-chip__meta city-player-chip__meta--right">
+                <span class="city-player-chip__name">{seatMeta[remoteSeat].name}</span>
+                <span class="city-player-chip__sub">Rival</span>
+              </span>
+              <span class="city-player-chip__avatar city-player-chip__avatar--remote">{seatMeta[remoteSeat].name.slice(0, 1)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="board-game-area city-map-game-area">
+        <CityMapBoard seed={engineState.seed} interactive showVenueTooltips />
+      </div>
+
+      <div class="city-hand-row">
+        <div class="city-deck-stack" aria-label={`Deck ${localDeckSize()}`}>
+          <div class="city-deck-card city-deck-card--3" />
+          <div class="city-deck-card city-deck-card--2" />
+          <div class="city-deck-card city-deck-card--1" />
+          <div class="city-deck-count">{localDeckSize()}</div>
+        </div>
+        <div class="hand city-hand" id="hand" style={{ '--hand-scale': '0.72' }}>
+          <For each={localHand()}>
+            {(card) => (
+              <HandCard
+                card={card}
+                playable={card.cost <= engineState.energy[localSeat]}
+                interactive={false}
+              />
+            )}
+          </For>
+        </div>
+      </div>
+
+      <div class="action-bar city-action-bar">
+        <button class="retreat-btn" type="button" onClick={props.onExit}>
+          RETREAT
+        </button>
+        <button class="energy-button" type="button" title={`Your energy ${engineState.energy[localSeat]}`}>
+          <EnergyBadge value={engineState.energy[localSeat]} />
+        </button>
+        <button class="end-turn" type="button">
+          END TURN
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const PlayScreen = (props: PlayScreenProps) => {
+  const [seed] = createSignal(makeMatchSeed());
+  const [initialState] = createSignal(drawOpeningHands(seed()));
+
   return (
     <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
-      <button class="city-play-root__exit" type="button" onClick={props.onExit} aria-label="Exit city map">
-        EXIT
-      </button>
-      <CityMapBoard seed="new-game-city" interactive showVenueTooltips />
+      <VfxHost class="board-wrap" id="boardWrap">
+        <PlayGameProvider
+          initialState={initialState()}
+          seatMeta={{ P0: { name: 'V_KOJIMA' }, P1: { name: 'ZAIBATSU' } }}
+        >
+          <BoardSizer />
+          <CityGameBoard onExit={props.onExit} />
+        </PlayGameProvider>
+      </VfxHost>
     </div>
   );
 };
