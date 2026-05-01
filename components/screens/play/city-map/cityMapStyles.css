@@ -1,0 +1,573 @@
+.city-play-root {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.city-play-root__exit {
+  position: absolute;
+  z-index: 5;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  border: 1px solid rgba(93, 255, 230, 0.32);
+  background: rgba(4, 10, 24, 0.72);
+  color: rgba(226, 252, 255, 0.92);
+  font: 700 11px/1 "Roboto Mono", "SFMono-Regular", monospace;
+  letter-spacing: 1.5px;
+  padding: 9px 12px;
+}
+
+.city-map-board {
+  width: min(100vw, calc(100vh * 0.804));
+  height: min(100vh, calc(100vw * 1.244));
+  max-width: 920px;
+  max-height: min(100vh, 1120px);
+  aspect-ratio: 360 / 448;
+  display: grid;
+  place-items: stretch;
+}
+
+.city-map-board__surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.city-map-board__surface .city-map-svg,
+.city-map-board__slot-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.city-map-board__slot-layer {
+  z-index: 4;
+  overflow: visible;
+}
+
+.city-map-route-demo {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.city-map-route-demo__glow,
+.city-map-route-demo__path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-route-demo__glow {
+  stroke: hsla(190, 96%, 68%, 0.28);
+  stroke-width: 7;
+  filter: drop-shadow(0 0 8px hsla(190, 96%, 62%, 0.62));
+}
+
+.city-map-route-demo__path {
+  stroke: hsla(48, 96%, 70%, 0.94);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+}
+
+.city-map-route-demo__endpoint {
+  fill: hsl(48, 96%, 72%);
+  stroke: hsla(222, 58%, 8%, 0.86);
+  stroke-width: 1.1;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-debug-dock {
+  position: absolute;
+  z-index: 8;
+  top: 10px;
+  right: 10px;
+  width: 148px;
+  border: 1px solid rgba(93, 255, 230, 0.32);
+  background: rgba(4, 10, 24, 0.82);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  color: rgba(226, 252, 255, 0.94);
+  font-family: "Roboto Mono", "SFMono-Regular", monospace;
+  pointer-events: auto;
+}
+
+.city-map-debug-dock__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(93, 255, 230, 0.18);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+
+.city-map-debug-dock__header button,
+.city-map-debug-dock__toggle {
+  border: 1px solid rgba(93, 255, 230, 0.28);
+  background: rgba(93, 255, 230, 0.08);
+  color: rgba(226, 252, 255, 0.94);
+  font: inherit;
+}
+
+.city-map-debug-dock__header button {
+  width: 22px;
+  height: 20px;
+  line-height: 1;
+}
+
+.city-map-debug-dock__body {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.city-map-debug-dock__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.city-map-debug-dock__toggle {
+  min-width: 38px;
+  padding: 3px 5px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+}
+
+.city-map-debug-dock__toggle--on {
+  border-color: rgba(255, 208, 93, 0.68);
+  background: rgba(255, 208, 93, 0.18);
+  color: rgba(255, 238, 178, 0.96);
+}
+
+.city-map-svg {
+  --city-map-hue: 223;
+  --city-map-water: hsl(var(--city-map-hue), 58%, 9%);
+  --city-map-land: hsl(var(--city-map-hue), 58%, 18%);
+  --city-map-building-a: hsla(var(--city-map-hue), 54%, 38%, 0.43);
+  --city-map-building-b: hsla(var(--city-map-hue), 50%, 47%, 0.4);
+  --city-map-building-tower: hsla(215, 62%, 52%, 0.48);
+  --city-map-road-underlay: hsla(var(--city-map-hue), 70%, 8%, 0.82);
+  --city-map-road-local: hsla(215, 88%, 58%, 0.72);
+  --city-map-road-main: hsla(215, 88%, 66%, 0.78);
+  --city-map-avenue: hsla(215, 88%, 70%, 0.82);
+  --city-map-highway: hsla(215, 88%, 76%, 0.88);
+  --city-map-region-line: hsla(215, 88%, 68%, 0.78);
+  --city-map-region-glow: hsla(215, 88%, 60%, 0.38);
+  --city-map-park: hsla(145, 54%, 58%, 0.25);
+  --city-map-park-stroke: hsla(145, 62%, 66%, 0.35);
+  --city-map-plaza: hsla(var(--city-map-hue), 48%, 40%, 0.58);
+  --city-map-label: hsl(200, 90%, 96%);
+  --city-map-label-stroke: hsla(var(--city-map-hue), 70%, 8%, 0.85);
+
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  filter: brightness(var(--city-map-display-brightness, 1)) contrast(var(--city-map-display-contrast, 1)) saturate(var(--city-map-display-saturation, 1));
+}
+
+.city-map-svg__water {
+  fill: var(--city-map-water);
+}
+
+.city-map-svg__shade,
+.city-map-svg__land-shade {
+  fill: #000;
+  opacity: 0.18;
+}
+
+.city-map-svg__land {
+  fill: var(--city-map-land);
+}
+
+.city-map-svg__coastline {
+  fill: none;
+  stroke: var(--city-map-road-local);
+  stroke-width: 0.34;
+  opacity: 0.46;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__open-space {
+  fill: var(--city-map-park);
+  stroke: var(--city-map-park-stroke);
+  stroke-width: 0.18;
+  opacity: 0.78;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__open-space--compound {
+  fill: var(--city-map-plaza);
+  stroke: hsla(215, 96%, 70%, 0.48);
+  opacity: 0.36;
+}
+
+.city-map-svg__coast-dock {
+  fill: var(--city-map-building-b);
+  stroke: var(--city-map-avenue);
+  stroke-width: 0.14;
+  opacity: 0.78;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__building {
+  stroke: hsla(215, 84%, 58%, 0.22);
+  stroke-width: 0.08;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__building--a {
+  fill: var(--city-map-building-a);
+}
+
+.city-map-svg__building--b {
+  fill: var(--city-map-building-b);
+}
+
+.city-map-svg__building--tower,
+.city-map-svg__building--landmark {
+  fill: var(--city-map-building-tower);
+  stroke: hsla(215, 96%, 70%, 0.34);
+}
+
+.city-map-svg__road-underlay,
+.city-map-svg__road,
+.city-map-svg__bridge-underlay,
+.city-map-svg__bridge,
+.city-map-svg__river {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__road-underlay {
+  stroke: var(--city-map-road-underlay);
+  opacity: 0.72;
+}
+
+.city-map-svg__road-underlay--local {
+  stroke-width: 0.9;
+  opacity: 0.76;
+}
+
+.city-map-svg__road-underlay--street {
+  stroke-width: 1.75;
+}
+
+.city-map-svg__road-underlay--main {
+  stroke-width: 1.75;
+}
+
+.city-map-svg__road-underlay--avenue {
+  stroke-width: 2.8;
+}
+
+.city-map-svg__road-underlay--coast {
+  stroke: hsla(223, 88%, 8%, 0.92);
+  stroke-width: 3.35;
+  opacity: 0.82;
+}
+
+.city-map-svg__road-underlay--highway {
+  stroke-width: 4.4;
+}
+
+.city-map-svg__road {
+  opacity: 0.95;
+}
+
+.city-map-svg__road--local {
+  stroke: var(--city-map-road-local);
+  stroke-width: 0.38;
+  opacity: 0.88;
+}
+
+.city-map-svg__road--street {
+  stroke: var(--city-map-road-main);
+  stroke-width: 0.72;
+}
+
+.city-map-svg__road--main {
+  stroke: var(--city-map-road-main);
+  stroke-width: 0.72;
+}
+
+.city-map-svg__road--avenue {
+  stroke: var(--city-map-avenue);
+  stroke-width: 1.05;
+}
+
+.city-map-svg__road--coast {
+  stroke: var(--city-map-coast-road, hsla(223, 88%, 45%, 0.9));
+  stroke-width: 1.22;
+  opacity: 0.94;
+}
+
+.city-map-svg__road--highway {
+  stroke: var(--city-map-highway);
+  stroke-width: 1.42;
+}
+
+.city-map-svg__road--river-bank {
+  stroke: var(--city-map-road-local);
+  stroke-width: 0.32;
+  opacity: 0.78;
+}
+
+.city-map-svg__river {
+  stroke: var(--city-map-water);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.city-map-svg__district-hover {
+  fill: var(--city-map-region-glow);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+}
+
+.city-map-svg__bridge-underlay {
+  stroke: var(--city-map-road-underlay);
+  stroke-linecap: butt;
+  opacity: 0.78;
+}
+
+.city-map-svg__bridge {
+  stroke: var(--city-map-highway);
+  stroke-linecap: butt;
+  opacity: 0.94;
+}
+
+.city-map-svg__district-boundary {
+  fill: none;
+  stroke: var(--city-map-region-line);
+  stroke-linecap: square;
+  stroke-width: 0.42;
+  opacity: 0.34;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__slot {
+  fill: hsla(200, 90%, 96%, 0.72);
+  stroke: var(--city-map-label-stroke);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-svg__slot--P0 {
+  fill: hsla(190, 95%, 62%, 0.78);
+}
+
+.city-map-svg__slot--P1 {
+  fill: hsla(345, 92%, 66%, 0.78);
+}
+
+.city-map-svg__slot--both {
+  fill: hsla(48, 95%, 66%, 0.78);
+}
+
+.city-map-svg__district-label {
+  fill: var(--city-map-label);
+  stroke: var(--city-map-label-stroke);
+  stroke-width: 2.8;
+  paint-order: stroke fill;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-family: "Roboto Mono", "SFMono-Regular", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  opacity: 0.88;
+}
+
+@media (max-width: 480px), (max-height: 720px) {
+  .city-map-svg {
+    --city-map-display-brightness: 1.16;
+    --city-map-display-contrast: 1.08;
+    --city-map-display-saturation: 1.06;
+  }
+}
+
+@media (max-width: 380px), (max-height: 620px) {
+  .city-map-svg {
+    --city-map-display-brightness: 1.22;
+    --city-map-display-contrast: 1.1;
+    --city-map-display-saturation: 1.08;
+  }
+}
+
+.city-map-slots {
+  pointer-events: auto;
+}
+
+.city-map-slot {
+  --city-map-slot-fill: hsl(190, 94%, 70%);
+  --city-map-slot-stroke: hsl(202, 94%, 94%);
+  cursor: pointer;
+  outline: none;
+}
+
+.city-map-slot--P1 {
+  --city-map-slot-fill: hsl(345, 92%, 68%);
+}
+
+.city-map-slot--both {
+  --city-map-slot-fill: hsl(48, 96%, 66%);
+}
+
+.city-map-slot--neutral {
+  --city-map-slot-fill: hsl(202, 90%, 88%);
+}
+
+.city-map-slot__halo,
+.city-map-slot__ring,
+.city-map-slot__core {
+  transform-box: fill-box;
+  transform-origin: center;
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-slot__halo {
+  fill: var(--city-map-slot-fill);
+  opacity: 0.16;
+  stroke: none;
+}
+
+.city-map-slot__ring {
+  fill: hsla(222, 58%, 8%, 0.74);
+  stroke: var(--city-map-slot-fill);
+  stroke-width: 1.05;
+  filter: drop-shadow(0 0 4px hsla(190, 94%, 62%, 0.38));
+}
+
+.city-map-slot__core {
+  fill: var(--city-map-slot-stroke);
+  stroke: hsla(222, 58%, 8%, 0.68);
+  stroke-width: 0.55;
+}
+
+.city-map-slot__icon {
+  fill: hsl(202, 90%, 96%);
+  stroke: hsla(222, 58%, 8%, 0.78);
+  stroke-width: 1.8;
+  paint-order: stroke fill;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-family: "Roboto Mono", "SFMono-Regular", monospace;
+  font-size: 5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.city-map-slot--hover .city-map-slot__halo,
+.city-map-slot:focus-visible .city-map-slot__halo {
+  opacity: 0.32;
+  transform: scale(1.28);
+}
+
+.city-map-slot--hover .city-map-slot__ring,
+.city-map-slot:focus-visible .city-map-slot__ring {
+  stroke: hsl(202, 96%, 96%);
+  stroke-width: 1.35;
+}
+
+.city-map-slot--hover .city-map-slot__icon,
+.city-map-slot:focus-visible .city-map-slot__icon {
+  opacity: 0.92;
+}
+
+.city-map-slot--selected .city-map-slot__ring {
+  fill: hsla(202, 96%, 14%, 0.92);
+  stroke: hsl(48, 96%, 68%);
+}
+
+.venue-tooltip-link,
+.venue-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.venue-tooltip-link {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.venue-tooltip-link line {
+  stroke: hsla(190, 96%, 72%, 0.72);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px hsla(190, 96%, 62%, 0.46));
+}
+
+.venue-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid hsla(190, 90%, 72%, 0.54);
+  background: hsla(224, 52%, 9%, 0.92);
+  box-shadow: 0 10px 22px hsla(224, 70%, 4%, 0.32), 0 0 18px hsla(190, 96%, 58%, 0.16);
+  color: hsl(202, 92%, 96%);
+  font-family: "Roboto Mono", "SFMono-Regular", monospace;
+}
+
+.venue-tooltip__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid hsla(190, 94%, 74%, 0.48);
+  background: hsla(190, 92%, 36%, 0.2);
+  color: hsl(190, 96%, 80%);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.venue-tooltip__body {
+  min-width: 0;
+}
+
+.venue-tooltip__name,
+.venue-tooltip__bonus {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.venue-tooltip__name {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.venue-tooltip__bonus {
+  margin-top: 3px;
+  color: hsl(48, 96%, 75%);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+}

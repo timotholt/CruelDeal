@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, Outlet, useNavigate, useRou
 import { MainMenuScreen } from "./components/screens/MainMenuScreen";
 import { GameScreen } from "./components/screens/GameScreen";
 import { PlayScreen } from "./components/screens/PlayScreen";
+import { LegacyPlayScreen } from "./components/screens/LegacyPlayScreen";
 import { DeckScreen } from "./components/screens/DeckScreen";
 import { SeasonScreen } from "./components/screens/SeasonScreen";
 import { StoreScreen } from "./components/screens/StoreScreen";
@@ -104,6 +105,12 @@ const playRoute = createRoute({
     component: () => <PlayScreen onExit={() => router.history.back()} />,
 });
 
+const legacyPlayRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/play/legacy",
+    component: () => <LegacyPlayScreen onExit={() => router.history.back()} />,
+});
+
 const deckRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/deck",
@@ -163,6 +170,7 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     gameRoute,
     playRoute,
+    legacyPlayRoute,
     deckRoute,
     seasonRoute,
     storeRoute,
