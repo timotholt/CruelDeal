@@ -227,6 +227,114 @@ function RouteDemoLayer({ city, active }) {
   );
 }
 
+const VENUE_TOOLTIP_W = 152;
+const VENUE_TOOLTIP_H = 48;
+const VENUE_TOOLTIP_GAP = 30;
+const VENUE_TOOLTIP_MARGIN = 8;
+
+const VENUE_ICON_GLYPHS = {
+  park: "P",
+  stadium: "◉",
+  lake: "~",
+  bridge: "╱╲",
+  tower: "▥",
+  store: "▤",
+  hospital: "+",
+  hotel: "H",
+  dojo: "拳",
+  hideout: "⌂",
+  precinct: "★",
+  ripperdoc: "✚",
+  hack: "</>",
+  gun: "••",
+  ammo: "•••",
+  club: "♪",
+  bar: "B",
+  ramen: "≋",
+  liquor: "L",
+  pawn: "$",
+  mart: "24"
+};
+
+function _clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function _tooltipLayout(anchorX, anchorY) {
+  const maxLeft = CITY_V3_W - VENUE_TOOLTIP_W - VENUE_TOOLTIP_MARGIN;
+  const maxTop = CITY_V3_H - VENUE_TOOLTIP_H - VENUE_TOOLTIP_MARGIN;
+  const candidates = [
+    { side: "right", left: anchorX + VENUE_TOOLTIP_GAP, top: anchorY - VENUE_TOOLTIP_H / 2 },
+    { side: "left", left: anchorX - VENUE_TOOLTIP_GAP - VENUE_TOOLTIP_W, top: anchorY - VENUE_TOOLTIP_H / 2 },
+    { side: "bottom", left: anchorX - VENUE_TOOLTIP_W / 2, top: anchorY + VENUE_TOOLTIP_GAP },
+    { side: "top", left: anchorX - VENUE_TOOLTIP_W / 2, top: anchorY - VENUE_TOOLTIP_GAP - VENUE_TOOLTIP_H }
+  ].map((candidate) => {
+    const left = _clamp(candidate.left, VENUE_TOOLTIP_MARGIN, maxLeft);
+    const top = _clamp(candidate.top, VENUE_TOOLTIP_MARGIN, maxTop);
+    const shift = Math.hypot(left - candidate.left, top - candidate.top);
+    const roomPenalty = shift * 9;
+    const sideBias = candidate.side === "right" || candidate.side === "left" ? 0 : 6;
+    const centerBias = Math.abs((left + VENUE_TOOLTIP_W / 2) - anchorX) * 0.025;
+    return { ...candidate, left, top, score: roomPenalty + sideBias + centerBias };
+  });
+
+  const best = candidates.sort((a, b) => a.score - b.score)[0];
+  const edgeX = _clamp(anchorX, best.left, best.left + VENUE_TOOLTIP_W);
+  const edgeY = _clamp(anchorY, best.top, best.top + VENUE_TOOLTIP_H);
+  const dx = edgeX - anchorX;
+  const dy = edgeY - anchorY;
+  const d = Math.hypot(dx, dy) || 1;
+  const startPad = 10;
+  return {
+    ...best,
+    line: {
+      x1: anchorX + dx / d * startPad,
+      y1: anchorY + dy / d * startPad,
+      x2: edgeX,
+      y2: edgeY
+    }
+  };
+}
+
+function VenueTooltip({ venue, anchorX, anchorY }) {
+  if (!venue) return null;
+  const layout = _tooltipLayout(anchorX, anchorY);
+  const icon = VENUE_ICON_GLYPHS[venue.iconKey] || "◇";
+  return (
+    <>
+      <svg
+        className="venue-tooltip-link"
+        width={CITY_V3_W}
+        height={CITY_V3_H}
+        style={{ "--venue-accent": venue.accentColor || "#00f5ff" }}
+      >
+        <line
+          x1={layout.line.x1}
+          y1={layout.line.y1}
+          x2={layout.line.x2}
+          y2={layout.line.y2}
+        />
+      </svg>
+      <div
+        className="venue-tooltip"
+        style={{
+          left: `${layout.left}px`,
+          top: `${layout.top}px`,
+          "--venue-accent": venue.accentColor || "#00f5ff"
+        }}
+      >
+        <div className="venue-tooltip__header">
+          <span className="venue-tooltip__icon">{icon}</span>
+          <span className="venue-tooltip__name">{venue.name || "Unnamed Venue"}</span>
+        </div>
+        <div className="venue-tooltip__bonus">
+          {(venue.bonus && venue.bonus.text) || "Venue bonus TBD"}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---------- Stage scaling ----------
 function useStageScale() {
   const [scale, setScale] = useState(1);
@@ -287,8 +395,13 @@ function Header({ accent, you, them, turn, deckCount }) {
 // ---------- City Board (replaces Lane components) ----------
 function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, roundedMapEdge, tweaks }) {
   const [hoveredDistrictId, setHoveredDistrictId] = useState(null);
+  const [tooltip, setTooltip] = useState({ venue: null, anchorX: 0, anchorY: 0 });
   const boardCity = city;
   const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
+  const venueById = useMemo(
+    () => boardCity.venueById || Object.fromEntries((boardCity.venues || []).map((venue) => [venue.id, venue])),
+    [boardCity]
+  );
   const hoveredDistrict = useMemo(
     () => boardCity.districts.find((district) => district.id === hoveredDistrictId),
     [boardCity, hoveredDistrictId]
@@ -299,6 +412,13 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         hoveredDistrict.slots.filter(slot => slot.owner === "you").length
       ) * 2
     : 0;
+  const showVenueTooltip = (dot) => {
+    const venue = dot && (dot.venue || venueById[dot.venueId]);
+    if (!venue) return;
+    setTooltip({ venue, anchorX: dot.x, anchorY: dot.y });
+  };
+  const hideVenueTooltip = () => setTooltip({ venue: null, anchorX: 0, anchorY: 0 });
+
   return (
     <div
       className="city-board city-board--v4"
@@ -400,6 +520,10 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
             data-dot-id={d.id}
             className={`dot dot--${d.owner || "you"} ${occupied ? "dot--occupied" : ""} ${isHover ? "dot--hover" : ""} ${isPlayable ? "dot--playable" : ""}`}
             style={{ left: d.x, top: d.y }}
+            onMouseEnter={() => showVenueTooltip(d)}
+            onMouseLeave={hideVenueTooltip}
+            onPointerEnter={() => showVenueTooltip(d)}
+            onPointerLeave={hideVenueTooltip}
             onClick={(e) => { if (!occupied && isOwnSlot && onDotClick) { e.stopPropagation(); onDotClick(d); } }}
           >
             <div className="dot-slot" />
@@ -417,6 +541,10 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
             key={c.uid}
             className={`placed ${c.owner === "you" ? "placed--you" : "placed--them"} ${c.revealed ? "placed--revealed" : ""} ${c.justRevealed ? "placed--flip" : ""}`}
             style={{ left: c.dot.x, top: c.dot.y, width: w, height: h }}
+            onMouseEnter={() => showVenueTooltip(c.dot)}
+            onMouseLeave={hideVenueTooltip}
+            onPointerEnter={() => showVenueTooltip(c.dot)}
+            onPointerLeave={hideVenueTooltip}
             onClick={(e) => { e.stopPropagation(); onInspect && onInspect(c); }}
           >
             <div className="card-scaler" style={{ transform: `scale(${boardScale})` }}>
@@ -429,6 +557,8 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
           </div>
         );
       })}
+
+      <VenueTooltip venue={tooltip.venue} anchorX={tooltip.anchorX} anchorY={tooltip.anchorY} />
     </div>
   );
 }
@@ -480,7 +610,7 @@ function Hand({ cards, draggingUid, selectedUid, onPointerDown, onInspect, deckC
   const N = cards.length;
   return (
     <div className="hand-wrap">
-      <div className="deck-stack" title={`${deckCount} cards in deck`}>
+      <div className="deck-stack">
         <div className="deck-card deck-card--3" />
         <div className="deck-card deck-card--2" />
         <div className="deck-card deck-card--1" />
@@ -615,6 +745,7 @@ function Game() {
   const city = useMemo(() => {
     const c = window.CityMapV35.buildCityV35(sessionSeed);
     if (window.CityMapRoutingV1) window.CityMapRoutingV1.enrichCity(c);
+    if (window.CityMapVenuesV1) window.CityMapVenuesV1.enrichCity(c);
     return c;
   }, [sessionSeed]);
   const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
@@ -967,7 +1098,6 @@ function Game() {
             className="undo-btn"
             onClick={undo}
             disabled={history.length === 0}
-            title="Undo last placement"
           >
             <span className="undo-icon">↶</span>
             <span className="undo-label">UNDO</span>

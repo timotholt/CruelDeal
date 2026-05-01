@@ -796,6 +796,18 @@
     };
   }
 
+  function roadWidthForDepth(depth) {
+    if (depth === 0) return 1.42;
+    if (depth === 1) return 1.05;
+    if (depth === 2) return 0.72;
+    return 0.38;
+  }
+
+  function bridgeDeckWidthForDepth(depth) {
+    const width = roadWidthForDepth(depth) * 3;
+    return depth >= 3 ? width + 0.35 : width;
+  }
+
   function makeBuildingForBlock(block, index, rng) {
     const box = block.bbox;
     const w = Math.max(4, Math.min(18, box.w * (0.22 + rng() * 0.22)));
@@ -1152,7 +1164,7 @@
           channelId: ch.id,
           path: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} L ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
           center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-          deckWidth: 4.8,
+          deckWidth: bridgeDeckWidthForDepth(1),
           type: "island"
         };
       });
@@ -1178,7 +1190,7 @@
           const shallowFactor = 1 / Math.max(0.34, Math.sin(Math.max(delta, 0.22)));
           const maxLength = depth <= 1 ? 64 : depth >= 4 ? 36 : 52;
           const length = Math.min(maxLength, baseLength * shallowFactor);
-          const deckWidth = depth === 0 ? 5.2 : depth === 1 ? 4.4 : depth >= 4 ? 2.6 : 3.5;
+          const deckWidth = bridgeDeckWidthForDepth(depth);
           return {
             id: `v35-river-bridge-${i + 1}`,
             path: bridgeLinePath(bridge.x, bridge.y, bridge.angle || 0, length),
