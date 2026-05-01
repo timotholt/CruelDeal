@@ -92,12 +92,12 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
             </button>
           </label>
           <label className="dock-row">
-            <span className="dock-label">Not used yet</span>
+            <span className="dock-label">Route Demo</span>
             <button
-              className="dock-toggle"
-              onClick={() => {}}
+              className={`dock-toggle ${tweaks.showRouteDemo ? 'dock-toggle--on' : ''}`}
+              onClick={() => setTweak('showRouteDemo', !tweaks.showRouteDemo)}
             >
-              OFF
+              {tweaks.showRouteDemo ? 'ON' : 'OFF'}
             </button>
           </label>
           <label className="dock-row">
@@ -112,6 +112,118 @@ function DebugDock({ tweaks, setTweak, showUI, setShowUI }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------- Route Demo Layer ----------
+function RouteDemoLayer({ city, active }) {
+  const [routeState, setRouteState] = useState(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!active) {
+      setRouteState(null);
+      setVisible(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timerId = null;
+
+    // A point is "on-map" if it's within the visible canvas with margin.
+    // 20px keeps paths away from the irregular coastline edges.
+    const margin = 20;
+    function onMap(pt) {
+      return pt && pt.x >= margin && pt.x <= CITY_V3_W - margin &&
+                   pt.y >= margin && pt.y <= CITY_V3_H - margin;
+    }
+
+    function step() {
+      if (cancelled || !window.CityMapRoutingV1 || !city._routing) return;
+
+      // Only use buildings whose centroid AND snap point are fully within the viewport.
+      const buildings = city.buildingPlan.buildings.filter(b =>
+        b.snapEdgeId && b.centroid && b.snapPoint &&
+        onMap(b.centroid) && onMap(b.snapPoint)
+      );
+      const byDistrict = {};
+      for (const b of buildings) {
+        const did = city.cellDistrict[b.cellId];
+        if (did) { if (!byDistrict[did]) byDistrict[did] = []; byDistrict[did].push(b); }
+      }
+      const dids = Object.keys(byDistrict).filter(d => byDistrict[d].length > 0);
+      if (dids.length < 2) return;
+
+      const shuffled = [...dids].sort(() => Math.random() - 0.5);
+      const poolA = byDistrict[shuffled[0]], poolB = byDistrict[shuffled[1]];
+      const bA = poolA[Math.floor(Math.random() * poolA.length)];
+      const bB = poolB[Math.floor(Math.random() * poolB.length)];
+
+      const result = window.CityMapRoutingV1.findPath(city, bA.id, bB.id);
+      // Reject if no path. Only the two endpoint snap points need to be on-map —
+      // intermediate road nodes near the boundary are fine (real intersections).
+      if (!result || result.waypoints.length < 2) {
+        timerId = setTimeout(step, 150);
+        return;
+      }
+
+      // smooth=false: Chaikin would cut corners through building footprints.
+      // Road polylines already carry their own curve geometry.
+      // smooth=false: Chaikin would cut corners through building footprints.
+      const pathD = window.CityMapRoutingV1.routeToSvgPath(result.waypoints, false);
+      // Dots must match the actual path endpoints (findPath picks best of N
+      // snap candidates — primary may not be the chosen one).
+      const ptA = result.waypoints[0];
+      const ptB = result.waypoints[result.waypoints.length - 1];
+      if (!cancelled) {
+        setRouteState({ pathD, ptA, ptB });
+        setVisible(true);
+      }
+
+      // After 2s show, fade out over 0.5s, then pick next after 0.5s gap
+      timerId = setTimeout(() => {
+        if (!cancelled) setVisible(false);
+        timerId = setTimeout(() => { if (!cancelled) step(); }, 500);
+      }, 2000);
+    }
+
+    step();
+    return () => { cancelled = true; if (timerId) clearTimeout(timerId); };
+  }, [active, city]);
+
+  if (!active || !routeState) return null;
+
+  return (
+    <svg
+      style={{
+        position: 'absolute', top: 0, left: 0, pointerEvents: 'none',
+        opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease-out',
+        zIndex: 10
+      }}
+      width={CITY_V3_W} height={CITY_V3_H}
+      viewBox={`0 0 ${CITY_V3_W} ${CITY_V3_H}`}
+    >
+      <defs>
+        <filter id="route-glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      {/* Wide glow underlay */}
+      <path d={routeState.pathD} fill="none" stroke="#00f5ff" strokeWidth="5"
+            strokeLinecap="round" strokeLinejoin="round" opacity="0.12"/>
+      {/* Main neon line */}
+      <path d={routeState.pathD} fill="none" stroke="#00f5ff" strokeWidth="1.2"
+            strokeLinecap="round" strokeLinejoin="round"
+            filter="url(#route-glow)" opacity="0.92"/>
+      {/* Node markers at snap points */}
+      {[routeState.ptA, routeState.ptB].filter(Boolean).map((pt, i) => (
+        <g key={i}>
+          <circle cx={pt.x} cy={pt.y} r="6" fill="none" stroke="#00f5ff" strokeWidth="0.7" opacity="0.6"/>
+          <circle cx={pt.x} cy={pt.y} r="2.5" fill="#00f5ff" opacity="0.95"/>
+        </g>
+      ))}
+    </svg>
   );
 }
 
@@ -210,6 +322,9 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
         buildingBorders={tweaks.buildingBorders === true}
         hoveredDistrictId={hoveredDistrictId}
       />
+
+      {/* Route demo overlay — rendered above map, below game pieces */}
+      <RouteDemoLayer city={boardCity} active={tweaks.showRouteDemo === true} />
 
       {boardCity && (
         <svg
@@ -484,7 +599,8 @@ function Game() {
     "algo": "subtract",
     "showMap": true,
     "roundMapEdge": true,
-    "mapOpacity": 0.85
+    "mapOpacity": 0.85,
+    "showRouteDemo": false
   }/*EDITMODE-END*/);
 
   const accent = `oklch(0.78 0.16 ${tweaks.accentHue})`;
@@ -495,7 +611,12 @@ function Game() {
   const rng = useMemo(() => makeRng(sessionSeed), [sessionSeed]);
 
   // Build the city. V3.5 is now the production map generator.
-  const city = useMemo(() => window.CityMapV35.buildCityV35(sessionSeed), [sessionSeed]);
+  // enrichCity adds building centroids + snap-to-road data for routing.
+  const city = useMemo(() => {
+    const c = window.CityMapV35.buildCityV35(sessionSeed);
+    if (window.CityMapRoutingV1) window.CityMapRoutingV1.enrichCity(c);
+    return c;
+  }, [sessionSeed]);
   const allDots = useMemo(() => city.districts.flatMap(d => d.dots), [city]);
 
   const [yourDeck, setYourDeck] = useState(() => buildDeck(makeRng(sessionSeed + 7)));
