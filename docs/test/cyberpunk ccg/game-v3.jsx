@@ -263,24 +263,30 @@ function _clamp(value, min, max) {
 function _tooltipLayout(anchorX, anchorY) {
   const maxLeft = CITY_V3_W - VENUE_TOOLTIP_W - VENUE_TOOLTIP_MARGIN;
   const maxTop = CITY_V3_H - VENUE_TOOLTIP_H - VENUE_TOOLTIP_MARGIN;
+  const preferredTop = anchorY - VENUE_TOOLTIP_GAP - VENUE_TOOLTIP_H;
   const candidates = [
-    { side: "right", left: anchorX + VENUE_TOOLTIP_GAP, top: anchorY - VENUE_TOOLTIP_H / 2 },
-    { side: "left", left: anchorX - VENUE_TOOLTIP_GAP - VENUE_TOOLTIP_W, top: anchorY - VENUE_TOOLTIP_H / 2 },
-    { side: "bottom", left: anchorX - VENUE_TOOLTIP_W / 2, top: anchorY + VENUE_TOOLTIP_GAP },
-    { side: "top", left: anchorX - VENUE_TOOLTIP_W / 2, top: anchorY - VENUE_TOOLTIP_GAP - VENUE_TOOLTIP_H }
+    { left: anchorX + VENUE_TOOLTIP_GAP * 0.7, top: preferredTop },
+    { left: anchorX - VENUE_TOOLTIP_W - VENUE_TOOLTIP_GAP * 0.7, top: preferredTop },
+    { left: anchorX - VENUE_TOOLTIP_W * 0.72, top: preferredTop },
+    { left: anchorX - VENUE_TOOLTIP_W * 0.28, top: preferredTop }
   ].map((candidate) => {
     const left = _clamp(candidate.left, VENUE_TOOLTIP_MARGIN, maxLeft);
     const top = _clamp(candidate.top, VENUE_TOOLTIP_MARGIN, maxTop);
     const shift = Math.hypot(left - candidate.left, top - candidate.top);
-    const roomPenalty = shift * 9;
-    const sideBias = candidate.side === "right" || candidate.side === "left" ? 0 : 6;
-    const centerBias = Math.abs((left + VENUE_TOOLTIP_W / 2) - anchorX) * 0.025;
-    return { ...candidate, left, top, score: roomPenalty + sideBias + centerBias };
+    const diagonalBonus = Math.abs((left + VENUE_TOOLTIP_W / 2) - anchorX) * -0.018;
+    return { ...candidate, left, top, score: shift * 9 + diagonalBonus };
   });
 
   const best = candidates.sort((a, b) => a.score - b.score)[0];
-  const edgeX = _clamp(anchorX, best.left, best.left + VENUE_TOOLTIP_W);
-  const edgeY = _clamp(anchorY, best.top, best.top + VENUE_TOOLTIP_H);
+  const centerX = best.left + VENUE_TOOLTIP_W / 2;
+  const exitOffset = anchorX < centerX ? -24 : 24;
+  let edgeX = _clamp(anchorX + exitOffset, best.left + 10, best.left + VENUE_TOOLTIP_W - 10);
+  if (Math.abs(edgeX - anchorX) < 12) {
+    const leftExit = best.left + VENUE_TOOLTIP_W * 0.25;
+    const rightExit = best.left + VENUE_TOOLTIP_W * 0.75;
+    edgeX = Math.abs(leftExit - anchorX) > Math.abs(rightExit - anchorX) ? leftExit : rightExit;
+  }
+  const edgeY = best.top + VENUE_TOOLTIP_H;
   const dx = edgeX - anchorX;
   const dy = edgeY - anchorY;
   const d = Math.hypot(dx, dy) || 1;
@@ -396,6 +402,7 @@ function Header({ accent, you, them, turn, deckCount }) {
 function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInspect, onDotClick, selectedCard, sessionSeed, mapOpacity, showLabels, showGamePieces = true, roundedMapEdge, tweaks }) {
   const [hoveredDistrictId, setHoveredDistrictId] = useState(null);
   const [tooltip, setTooltip] = useState({ venue: null, anchorX: 0, anchorY: 0 });
+  const boardRef = useRef(null);
   const boardCity = city;
   const allDots = useMemo(() => boardCity.districts.flatMap(d => d.dots || d.slots || []), [boardCity]);
   const venueById = useMemo(
@@ -418,10 +425,41 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
     setTooltip({ venue, anchorX: dot.x, anchorY: dot.y });
   };
   const hideVenueTooltip = () => setTooltip({ venue: null, anchorX: 0, anchorY: 0 });
+  const updateVenueTooltipFromBoardPointer = (event) => {
+    if (!showGamePieces || dragCard) return;
+    const boardEl = boardRef.current || event.currentTarget;
+    const boardRect = boardEl.getBoundingClientRect();
+    const localX = (event.clientX - boardRect.left) * (CITY_V3_W / boardRect.width);
+    const localY = (event.clientY - boardRect.top) * (CITY_V3_H / boardRect.height);
+    if (localX < 0 || localX > CITY_V3_W || localY < 0 || localY > CITY_V3_H) {
+      hideVenueTooltip();
+      return;
+    }
+
+    let best = null;
+    let bestD = Infinity;
+    for (const dot of allDots) {
+      const dx = dot.x - localX;
+      const dy = dot.y - localY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < bestD) {
+        bestD = distSq;
+        best = dot;
+      }
+    }
+    const hoverRadius = 18;
+    if (best && bestD <= hoverRadius * hoverRadius) showVenueTooltip(best);
+    else hideVenueTooltip();
+  };
 
   return (
     <div
+      ref={boardRef}
       className="city-board city-board--v4"
+      onMouseMove={updateVenueTooltipFromBoardPointer}
+      onPointerMove={updateVenueTooltipFromBoardPointer}
+      onMouseLeave={() => { setHoveredDistrictId(null); hideVenueTooltip(); }}
+      onPointerLeave={hideVenueTooltip}
       style={{
         width: CITY_V3_W,
         height: CITY_V3_H,
@@ -453,7 +491,6 @@ function CityBoard({ city, placedCards, hoverDot, dragCard, algo, accent, onInsp
           height={CITY_V3_H}
           viewBox={`0 0 ${CITY_V3_W} ${CITY_V3_H}`}
           preserveAspectRatio="none"
-          onMouseLeave={() => setHoveredDistrictId(null)}
         >
           {boardCity.districts.map((district) => (
             <g key={`${district.id}-hit`}>
