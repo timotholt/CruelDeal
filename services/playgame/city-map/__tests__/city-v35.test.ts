@@ -84,6 +84,15 @@ const assertNoDanglingSnapEdges = (city: CityMap, label: string) => {
   expectEq(danglingCandidateEdgeIds(venues), [], `${label}: venue snapCandidates edgeIds resolve to road edges`);
 };
 
+const assertRenderableBridges = (city: CityMap, label: string) => {
+  const bridges = city.bridgePlan?.bridges || [];
+  expectTrue(bridges.length > 0, `${label}: generated bridge plan`, { bridges: bridges.length });
+  const invisible = bridges
+    .filter((bridge) => !bridge.path || !bridge.center || typeof bridge.deckWidth !== 'number')
+    .map((bridge) => ({ id: bridge.id, path: bridge.path, center: bridge.center, deckWidth: bridge.deckWidth }));
+  expectEq(invisible, [], `${label}: every bridge has render geometry`);
+};
+
 {
   const seed = seeds[0];
   const a = buildCityV35(seed, { cache: false });
@@ -101,6 +110,7 @@ for (const seed of seeds) {
   assertVenueIndex(city, label);
   assertActiveSlots(city, label);
   assertNoDanglingSnapEdges(city, label);
+  assertRenderableBridges(city, label);
 }
 
 console.log('\nAll city v35 map tests passed.');

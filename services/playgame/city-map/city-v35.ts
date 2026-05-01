@@ -375,12 +375,93 @@ function makeIslandBridges(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[
         id: `v35-island-bridge-${index + 1}`,
         channelId: channel.id,
         path: `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} L ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
+        x: center.x,
+        y: center.y,
         center,
         centroid: center,
-        deckWidth: 3.15,
+        deckWidth: bridgeDeckWidthForDepth(1),
         type: 'island',
       };
     });
+}
+
+function roadWidthForDepth(depth = 2) {
+  if (depth === 0) return 1.42;
+  if (depth === 1) return 1.05;
+  if (depth === 2) return 0.72;
+  return 0.38;
+}
+
+function bridgeDeckWidthForDepth(depth = 2) {
+  const width = roadWidthForDepth(depth) * 3;
+  return depth >= 3 ? width + 0.35 : width;
+}
+
+function bridgeLinePath(cx: number, cy: number, angle: number, length: number) {
+  const dx = Math.cos(angle) * length * 0.5;
+  const dy = Math.sin(angle) * length * 0.5;
+  return `M ${(cx - dx).toFixed(2)} ${(cy - dy).toFixed(2)} L ${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}`;
+}
+
+function angleDelta(a: number, b: number) {
+  let d = Math.abs(a - b) % Math.PI;
+  return d > Math.PI / 2 ? Math.PI - d : d;
+}
+
+function nearestSegmentAngle(point: Point, segments: Array<{ a: Point; b: Point }>) {
+  let best: { distance: number; angle: number } | null = null;
+  for (const segment of segments || []) {
+    const distance = pointToSegmentDist(point.x, point.y, segment.a, segment.b);
+    if (!best || distance < best.distance) {
+      best = { distance, angle: Math.atan2(segment.b.y - segment.a.y, segment.b.x - segment.a.x) };
+    }
+  }
+  return best?.angle ?? null;
+}
+
+function bridgeRiverDelta(bridge: { x: number; y: number; angle?: number; roadAngle?: number }, riverSegments: Array<{ a: Point; b: Point }>) {
+  const riverAngle = nearestSegmentAngle({ x: bridge.x, y: bridge.y }, riverSegments);
+  if (riverAngle == null) return Math.PI / 2;
+  return angleDelta(bridge.roadAngle ?? bridge.angle ?? 0, riverAngle);
+}
+
+function makeBridgePlan(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] | null, roadCuts: Cut[]) {
+  const islandBridges = makeIslandBridges(terrain, mainlandCoastRoadPolygon);
+  const river = terrainWaterBodiesOfKind(terrain, 'river')[0] || null;
+  const riverSegments = ((river?.segments || []) as Array<{ a: Point; b: Point }>);
+  const riverBridgeResult = river && mainlandCoastRoadPolygon
+    ? generateBridges({
+        allCuts: roadCuts,
+        river: river as { outerWidth: number },
+        riverSegments,
+        coastRoadPolygon: mainlandCoastRoadPolygon,
+        landPolygon: terrain.mainland.polygon,
+      })
+    : null;
+  const renderedCuts = riverBridgeResult?.renderedCuts || roadCuts;
+  const riverBridges = (riverBridgeResult?.bridges || [])
+    .filter((bridge) => !bridge.offshore)
+    .map((bridge, index) => {
+      const depth = bridge.depth ?? 2;
+      const delta = bridgeRiverDelta(bridge, riverSegments);
+      const baseLength = Math.max((river?.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
+      const shallowFactor = 1 / Math.max(0.34, Math.sin(Math.max(delta, 0.22)));
+      const maxLength = depth <= 1 ? 64 : depth >= 4 ? 36 : 52;
+      const length = Math.min(maxLength, baseLength * shallowFactor);
+      const center = { x: bridge.x, y: bridge.y };
+      return {
+        ...bridge,
+        id: `v35-river-bridge-${index + 1}`,
+        path: bridgeLinePath(bridge.x, bridge.y, bridge.angle || 0, length),
+        center,
+        centroid: center,
+        deckWidth: bridgeDeckWidthForDepth(depth),
+        depth,
+        riverMouth: !!bridge.riverMouth,
+        type: 'river',
+      };
+    });
+  return { bridges: [...islandBridges, ...riverBridges], renderedCuts };
 }
 
 function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng: Rng, terrain: TerrainV35) {
@@ -456,14 +537,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...districts.flatMap((district) => district.rawCuts || []),
     ...districts.flatMap((district) => district.roads || []).filter((road) => road.source === 'coast-road').map((road) => road.cut),
   ].filter(Boolean) as Cut[];
-  const river = terrainWaterBodiesOfKind(terrain, 'river')[0] || { outerWidth: 16, segments: [] };
-  const bridgePlan = generateBridges({
-    allCuts: rawRoadCuts,
-    river: river as { outerWidth: number },
-    riverSegments: ((river.segments || []) as Array<{ a: Point; b: Point }>),
-    coastRoadPolygon: validInset ? mainlandInset : terrain.mainland.polygon,
-    landPolygon: terrain.mainland.polygon,
-  });
+  const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null, rawRoadCuts);
   const bridgeAwareRoadCuts = bridgePlan.renderedCuts || rawRoadCuts;
   const riverBankCuts = terrainWaterBodiesOfKind(terrain, 'river')
     .flatMap((riverBody) => makeRiverBankRoads(riverBody as any, terrain.mainland.polygon) as Cut[]);
@@ -477,17 +551,6 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     makeRng(normalizedSeed ^ 0xd0c5),
     terrainWaterBodiesOfKind(terrain, 'river').flatMap((riverBody) => (riverBody.segments || []) as Array<{ a: Point; b: Point }>),
   );
-  const islandBridges = makeIslandBridges(terrain, validInset ? mainlandInset : null);
-  const bridges = [
-    ...islandBridges,
-    ...bridgePlan.bridges.map((bridge, index) => ({
-      ...bridge,
-      id: `bridge:${index}`,
-      center: { x: bridge.x, y: bridge.y },
-      centroid: { x: bridge.x, y: bridge.y },
-    })),
-  ];
-
   return {
     version: 'v35',
     seed,
@@ -509,7 +572,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     districts,
     districtAdjacency: {},
     cellDistrict: Object.fromEntries(cells.map((cell) => [cell.id, cell.districtId])),
-    bridgePlan: { bridges, renderedCuts: bridgePlan.renderedCuts },
+    bridgePlan,
     coastDocks,
     buildingPlan,
     venues: [],
