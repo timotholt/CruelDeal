@@ -279,10 +279,17 @@ function makeDistrict(
     y: point.y,
   }));
 
+  const finalName = names[idx] || `DISTRICT ${idx + 1}`;
+  const regionArea = polygonArea(region);
+  console.log(
+    `[district] id=${districtId} name=${finalName} landmassId=${landmassId} flavor=${flavor} ` +
+    `regionArea=${regionArea.toFixed(0)} visibleArea=${visibleArea.toFixed(0)} ` +
+    `labelAt=(${label.x.toFixed(1)},${label.y.toFixed(1)})`,
+  );
   return {
     id: districtId,
     idx,
-    name: names[idx] || `DISTRICT ${idx + 1}`,
+    name: finalName,
     color: colors[idx % colors.length],
     landmassId,
     playable: !flavor,

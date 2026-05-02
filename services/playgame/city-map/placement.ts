@@ -26,7 +26,15 @@ export function labelMetrics(text: string) {
 export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Point[] }> = [], labelText = "", dots: Point[] = []): LabelPosition {
   const margin = 24;
   const visible = clipPolygonToRect(polygon, { minX: margin, minY: margin, maxX: VIEW_W - margin, maxY: VIEW_H - margin });
-  if (visible.length < 3) return { x: VIEW_W / 2, y: VIEW_H / 2, ...labelMetrics(labelText) };
+  if (visible.length < 3) {
+    // Polygon is off-viewport (or too clipped). Return its own centroid so the
+    // label stays on the polygon — never the viewport center, which would
+    // create a ghost label dead-center on the visible area.
+    let sx = 0, sy = 0;
+    for (const p of polygon) { sx += p.x; sy += p.y; }
+    const n = Math.max(1, polygon.length);
+    return { x: sx / n, y: sy / n, ...labelMetrics(labelText) };
+  }
 
   const xs = visible.map((p) => p.x);
   const ys = visible.map((p) => p.y);

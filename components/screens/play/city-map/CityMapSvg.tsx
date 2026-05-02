@@ -336,23 +336,6 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
         </For>
       </g>
 
-      <Show when={props.hoveredDistrictId}>
-        <g class="city-map-svg__hover-layer">
-          <For each={(props.city.districts as RenderDistrict[]).filter((district) => district.id === props.hoveredDistrictId)}>
-            {(district) => (
-              <For each={districtHoverPolygons(district)}>
-                {(polygon, index) => (
-                  <path
-                    class="city-map-svg__district-hover"
-                    d={index() === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
-                  />
-                )}
-              </For>
-            )}
-          </For>
-        </g>
-      </Show>
-
       <g class="city-map-svg__bridges">
         <For each={(props.city.bridgePlan.bridges || []) as RenderBridge[]}>
           {(bridge) => (
@@ -405,6 +388,11 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
             {(district) => {
               const anchor = districtAnchor(district);
               const labelText = (district as any).label?.text || districtLabel(district);
+              console.log(
+                `[label-render] id=${district.id} name=${district.name} ` +
+                `landmassId=${(district as any).landmassId} playable=${(district as any).playable} ` +
+                `text=${labelText} at=(${anchor.x.toFixed(1)},${anchor.y.toFixed(1)})`,
+              );
               return (
                 <text class="city-map-svg__district-label" x={anchor.x} y={anchor.y} text-anchor="middle" dominant-baseline="middle">
                   {labelText}
@@ -415,14 +403,39 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
         </g>
       </Show>
 
+      <Show when={props.hoveredDistrictId}>
+        {(() => {
+          console.log(`[hover-layer] rendering glow for id=${props.hoveredDistrictId}`);
+          return null;
+        })()}
+        <g class="city-map-svg__hover-layer">
+          <For each={(props.city.districts as RenderDistrict[]).filter((district) => district.id === props.hoveredDistrictId)}>
+            {(district) => (
+              <For each={districtHoverPolygons(district)}>
+                {(polygon, index) => (
+                  <path
+                    class="city-map-svg__district-hover"
+                    d={index() === 0 && district.ownershipPath ? district.ownershipPath : polygonToPath(polygon)}
+                  />
+                )}
+              </For>
+            )}
+          </For>
+        </g>
+      </Show>
+
       <Show when={props.onDistrictHover}>
         <g
           class="city-map-svg__hit-layer"
           onMouseOver={(e) => {
             const id = (e.target as SVGElement).dataset.districtId ?? null;
+            console.log(`[hover] mouseover id=${id} target=${(e.target as Element).tagName}.${(e.target as Element).getAttribute('class')}`);
             props.onDistrictHover!(id);
           }}
-          onMouseLeave={() => props.onDistrictHover!(null)}
+          onMouseLeave={() => {
+            console.log('[hover] mouseleave');
+            props.onDistrictHover!(null);
+          }}
         >
           <For each={(props.city.districts as RenderDistrict[]).filter((d) => d.playable !== false)}>
             {(district) => (

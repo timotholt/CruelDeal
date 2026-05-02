@@ -213,10 +213,11 @@ function generateTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: S
     if (!poly) continue;
     if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 12)) continue;
     if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 16)) continue;
-    // Reject islands too close to mainland — they overlap visually and produce
-    // ghost labels on the mainland (issue: 4th label appearing on main island).
-    if (polygonToPolygonDist(poly, landPolygon) < 16) continue;
-    islands.push(makeLandmass(`island-${islands.length + 1}`, "island", poly, { minimumChannel: polygonToPolygonDist(poly, landPolygon) }));
+    // Reject islands too close to mainland — they overlap visually with mainland
+    // and produce confusing ghost districts on top of the main land mass.
+    const distToMainland = polygonToPolygonDist(poly, landPolygon);
+    if (distToMainland < 16) continue;
+    islands.push(makeLandmass(`island-${islands.length + 1}`, "island", poly, { minimumChannel: distToMainland }));
   }
   return islands;
 }

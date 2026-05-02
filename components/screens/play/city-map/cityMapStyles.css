@@ -460,6 +460,10 @@
   opacity: 0.72;
 }
 
+.city-map-svg__hit-layer {
+  pointer-events: auto;
+}
+
 .city-map-svg__district-hit {
   fill: transparent;
   stroke: none;
