@@ -250,20 +250,12 @@ function makeDistrict(
     : 6;
   const numLandmarks = flavor ? 0 : 3;
 
-  // Grid scan + maximin gives well-spread points; shuffle before assignment so landmark
-  // vs slot roles are random among the spread set, not positionally biased.
-  const rawPoints = flavor ? [] : placeDotsInPolygon(
-    region, rng, bigLandmarkBlocks, numLandmarks + slotCount, visibleArea, label, bigLandmarkCentroids
+  const landmarkPoints = flavor ? [] : placeDotsInPolygon(
+    region, rng, bigLandmarkBlocks, numLandmarks, visibleArea, label, bigLandmarkCentroids
+  ).map((point) => ({ x: point.x, y: point.y }));
+  const slotPoints = flavor ? [] : placeDotsInPolygon(
+    region, rng, bigLandmarkBlocks, slotCount, visibleArea, label, [...bigLandmarkCentroids, ...landmarkPoints]
   );
-  const allPoints = rawPoints.slice().sort(() => rng() - 0.5);
-  const landmarkIndices = new Set(
-    Array.from({ length: Math.min(numLandmarks, allPoints.length) }, (_, i) => i)
-  );
-  const landmarkPoints = allPoints.filter((_, i) => landmarkIndices.has(i)).map((p) => ({ x: p.x, y: p.y }));
-  // Exclude slot positions too close to any landmark position to prevent visual overlap
-  const slotPoints = allPoints
-    .filter((_, i) => !landmarkIndices.has(i))
-    .filter((p) => landmarkPoints.every((lp) => Math.hypot(p.x - lp.x, p.y - lp.y) >= 22));
 
   const slots: CitySlot[] = slotPoints.map((point, slotIndex) => ({
     id: `${districtId}:slot:${slotIndex}`,
@@ -280,12 +272,6 @@ function makeDistrict(
   }));
 
   const finalName = names[idx] || `DISTRICT ${idx + 1}`;
-  const regionArea = polygonArea(region);
-  console.log(
-    `[district] id=${districtId} name=${finalName} landmassId=${landmassId} flavor=${flavor} ` +
-    `regionArea=${regionArea.toFixed(0)} visibleArea=${visibleArea.toFixed(0)} ` +
-    `labelAt=(${label.x.toFixed(1)},${label.y.toFixed(1)})`,
-  );
   return {
     id: districtId,
     idx,
@@ -304,6 +290,7 @@ function makeDistrict(
     labelAnchor: { x: label.x, y: label.y },
     landmarkPoints,
     maxLandmarks: numLandmarks,
+    targetSlotCount: slotCount,
     visibleArea,
     waterPolygons: [],
   };

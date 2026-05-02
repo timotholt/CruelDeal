@@ -1,5 +1,6 @@
 import { Show, createMemo, createSignal, untrack } from 'solid-js';
-import { buildCityMap, type CityMap } from '@/services/playgame/city-map';
+import { buildCityMap, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
+import { pointInPolygon } from '@/services/playgame/city-map/geometry';
 import { CityMapSvg } from './CityMapSvg';
 import { CityMapLandmarks } from './CityMapLandmarks';
 import { CityMapSlots } from './CityMapSlots';
@@ -50,20 +51,47 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     board: () => ({ width: width(), height: height() }),
     enabled: () => interactive() && debugState().showLandmarks && (props.showVenueTooltips ?? true),
   });
+  const districtAtPoint = (point: Point) => {
+    for (const district of city().districts as Array<CityDistrict & { playable?: boolean }>) {
+      if (district.playable === false) continue;
+      const polygons = district.ownershipPolygons?.length ? district.ownershipPolygons : district.polygons;
+      if (polygons.some((polygon) => pointInPolygon(point, polygon))) return district.id;
+    }
+    return null;
+  };
+  const boardPointFromPointer = (event: PointerEvent & { currentTarget: Element }) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * width() : 0,
+      y: rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * height() : 0,
+    };
+  };
+  const onPointerMove = (event: PointerEvent & { currentTarget: Element }) => {
+    hover.bind.onPointerMove(event);
+    highlight.onDistrictHover(interactive() ? districtAtPoint(boardPointFromPointer(event)) : null);
+  };
+  const clearHover = () => {
+    hover.clearHover();
+    highlight.onDistrictHover(null);
+  };
   const toggleDebug = (key: keyof CityMapDebugState) => {
     setDebugState((state) => ({ ...state, [key]: !state[key] }));
   };
 
   return (
     <section class="city-map-board" aria-label="City map board">
-      <div class="city-map-board__surface" {...hover.bind}>
+      <div
+        class="city-map-board__surface"
+        onPointerMove={onPointerMove}
+        onPointerLeave={clearHover}
+        onPointerCancel={clearHover}
+      >
         <Show when={debugState().showMap}>
           <CityMapSvg
             city={city()}
             width={width()}
             height={height()}
             hoveredDistrictId={highlight.hoveredDistrictId()}
-            onDistrictHover={highlight.onDistrictHover}
             debug={{
               showLabels: debugState().showLabels,
               showBuildings: debugState().showBuildings,

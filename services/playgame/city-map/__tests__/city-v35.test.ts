@@ -43,6 +43,16 @@ const assertActiveSlots = (city: CityMap, label: string) => {
   const slots = activeSlots(city);
   expectTrue(slots.length > 0, `${label}: generated active slots`, { slots: slots.length });
 
+  const badSlotCounts = city.districts
+    .filter((district) => district.playable !== false)
+    .map((district) => ({
+      id: district.id,
+      actual: (district.slots || []).length,
+      expected: (district as typeof district & { targetSlotCount?: number }).targetSlotCount,
+    }))
+    .filter((entry) => entry.expected != null && entry.actual !== entry.expected);
+  expectEq(badSlotCounts, [], `${label}: every playable district renders its target slot count`);
+
   const slottedLandmarks = slots.filter((slot) => slot.venueId || slot.slotRole !== 'card-slot');
   expectEq(
     slottedLandmarks.map((slot) => ({ id: slot.id, venueId: slot.venueId ?? null, slotRole: slot.slotRole ?? null })),
@@ -70,11 +80,12 @@ const assertDistrictLandmarks = (city: CityMap, label: string) => {
     byDistrict.set(landmark.districtId, bucket);
   }
   const badCounts = city.districts
+    .filter((district) => district.playable !== false)
     .map((district) => ({ id: district.id, count: (district.landmarks || []).length }))
     .filter((entry) => entry.count < 1 || entry.count > 3);
   expectEq(badCounts, [], `${label}: every district has 1 to 3 landmarks`);
 
-  const badTimings = city.districts.flatMap((district) => {
+  const badTimings = city.districts.filter((district) => district.playable !== false).flatMap((district) => {
     const expected = ['on-reveal', 'ongoing', 'end-of-turn'].slice(0, (district.landmarks || []).length);
     const actual = (district.landmarks || []).map((landmark) => landmark.timing);
     return JSON.stringify(expected) === JSON.stringify(actual) ? [] : [{ id: district.id, expected, actual }];

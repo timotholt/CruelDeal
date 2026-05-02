@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { pointInPolygon, polygonCentroid } from './geometry';
+import { placeDotsInPolygon } from './placement';
+import { VIEW_H } from './config';
 import type { Building, CityMap, CitySlot, DistrictLandmark, DistrictLandmarkTiming, Venue, VenueTypeMeta } from './types';
 
 export const TYPE_META = {
@@ -60,6 +62,61 @@ function districtForPoint(city: CityMap, point?: { x: number; y: number } | null
 
 function blockForId(city: CityMap, blockId?: string | null) {
   return (city.cells || []).find((cell) => cell.id === blockId) || null;
+}
+
+function nearestDistrictBlockId(district: CityMap['districts'][number], point: { x: number; y: number }) {
+  let best: { id: string; distance: number } | null = null;
+  for (const block of district.blocks || []) {
+    if (block.polygon && pointInPolygon(point, block.polygon)) return block.id;
+    const centroid = block.centroid || (block.polygon ? polygonCentroid(block.polygon) : null);
+    if (!centroid) continue;
+    const distance = Math.hypot(centroid.x - point.x, centroid.y - point.y);
+    if (!best || distance < best.distance) best = { id: block.id, distance };
+  }
+  return best?.id || null;
+}
+
+function makeReplacementSlot(district: CityMap['districts'][number], point: { x: number; y: number }, slotIndex: number): CitySlot {
+  return {
+    id: `${district.id}:slot:${slotIndex}`,
+    districtId: district.id,
+    slotIndex,
+    playableBy: 'both',
+    slotRole: 'street',
+    ownerSeat: point.y < VIEW_H / 2 ? 'P1' : 'P0',
+    blockId: nearestDistrictBlockId(district, point),
+    venueId: null,
+    buildingId: null,
+    x: point.x,
+    y: point.y,
+  };
+}
+
+function refillDistrictSlots(district: CityMap['districts'][number], avoidPoints: Array<{ x: number; y: number }>) {
+  const target = (district as CityMap['districts'][number] & { targetSlotCount?: number }).targetSlotCount;
+  if (!target || (district.slots || []).length >= target) return;
+
+  const polygon = district.ownershipPolygons?.[0] || district.polygons?.[0];
+  if (!polygon || polygon.length < 3) return;
+
+  const existing = district.slots || [];
+  const missing = target - existing.length;
+  const label = (district as CityMap['districts'][number] & { label?: unknown }).label as Parameters<typeof placeDotsInPolygon>[5];
+  const visibleArea = (district as CityMap['districts'][number] & { visibleArea?: number }).visibleArea;
+  const seedPoints = [
+    ...avoidPoints,
+    ...existing.map((slot) => ({ x: slot.x, y: slot.y })),
+  ];
+  const points = placeDotsInPolygon(polygon, () => 0.5, [], missing, visibleArea, label, seedPoints);
+  const additions = points.slice(0, missing).map((point, index) =>
+    makeReplacementSlot(district, point, existing.length + index),
+  );
+  district.slots = [...existing, ...additions].map((slot, index) => ({
+    ...slot,
+    id: `${district.id}:slot:${index}`,
+    slotIndex: index,
+  }));
+  district.dots = district.slots;
 }
 
 function metaFor(type: string, sourceId: string) {
@@ -249,6 +306,7 @@ export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
         landmarkCentroids.every((lc) => Math.hypot(slot.x - lc.x, slot.y - lc.y) >= 28)
       );
       district.dots = district.slots;
+      refillDistrictSlots(district, landmarkCentroids);
     }
   }
 
