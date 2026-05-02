@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 
 export function addCityLights(scene: THREE.Scene) {
-  const ambient = new THREE.AmbientLight(0x6f8fbc, 1.25);
-  const key = new THREE.DirectionalLight(0xcfeaff, 1.8);
-  key.position.set(-140, 260, -180);
+  const ambient = new THREE.HemisphereLight(0x9edcff, 0x06101f, 1.35);
+  const key = new THREE.DirectionalLight(0xd8f7ff, 2.6);
+  key.position.set(-180, 420, -260);
+  const rim = new THREE.DirectionalLight(0x3edcff, 0.9);
+  rim.position.set(260, 180, 320);
 
-  scene.add(ambient, key);
+  scene.add(ambient, key, rim);
 }

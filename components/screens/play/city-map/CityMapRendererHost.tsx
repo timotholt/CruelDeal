@@ -34,6 +34,7 @@ export const CityMapRendererHost = (props: CityMapRendererHostProps) => {
               model={props.model}
               viewport={props.viewport}
               surfaceSize={props.surfaceSize}
+              debugState={props.debugState}
             />
           </Suspense>
         )
