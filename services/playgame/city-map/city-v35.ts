@@ -240,25 +240,29 @@ function makeDistrict(
     .filter((block) => block.area > 36);
   const visibleArea = viewportVisibleArea(region);
   const label = labelPosition(region, [], names[idx] || `DISTRICT ${idx + 1}`);
-  const bigLandmarkBlocks = blocks.filter((b) => b.bigLandmark).map((b) => ({ polygon: b.polygon }));
+  const bigLandmarkBlockData = blocks.filter((b) => b.bigLandmark);
+  const bigLandmarkBlocks = bigLandmarkBlockData.map((b) => ({ polygon: b.polygon }));
+  const bigLandmarkCentroids = bigLandmarkBlockData.map((b) => b.centroid);
 
   const slotCount = flavor ? 0
     : visibleArea > 52000 ? 10
     : visibleArea > 40000 ? 8
-    : visibleArea > 26000 ? 6
-    : 4;
-  const numLandmarks = flavor ? 0
-    : visibleArea > 40000 ? 3
-    : visibleArea > 26000 ? 2
-    : 1;
+    : 6;
+  const numLandmarks = flavor ? 0 : 3;
 
   // Single Bridson pass: landmarks + slots together → guaranteed even spacing between all
   const allPoints = flavor ? [] : placeDotsInPolygon(
-    region, rng, bigLandmarkBlocks, numLandmarks + slotCount, visibleArea, label
+    region, rng, bigLandmarkBlocks, numLandmarks + slotCount, visibleArea, label, bigLandmarkCentroids
   );
-  // First numLandmarks points → landmark positions; remainder → card slots
-  const landmarkPoints = allPoints.slice(0, numLandmarks).map((p) => ({ x: p.x, y: p.y }));
-  const slotPoints = allPoints.slice(numLandmarks);
+  // Pick landmark positions by striding across the full Bridson list — Bridson grows outward
+  // from seed so first N points cluster near center; striding gives even spatial coverage.
+  const landmarkIndices = new Set(
+    Array.from({ length: Math.min(numLandmarks, allPoints.length) }, (_, i) =>
+      Math.round(i * (allPoints.length - 1) / Math.max(1, numLandmarks - 1))
+    )
+  );
+  const landmarkPoints = allPoints.filter((_, i) => landmarkIndices.has(i)).map((p) => ({ x: p.x, y: p.y }));
+  const slotPoints = allPoints.filter((_, i) => !landmarkIndices.has(i));
 
   const slots: CitySlot[] = slotPoints.map((point, slotIndex) => ({
     id: `${districtId}:slot:${slotIndex}`,
@@ -291,6 +295,7 @@ function makeDistrict(
     label,
     labelAnchor: { x: label.x, y: label.y },
     landmarkPoints,
+    maxLandmarks: numLandmarks,
     visibleArea,
     waterPolygons: [],
   };

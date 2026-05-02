@@ -204,6 +204,7 @@ export interface CityDistrict {
   idx: number;
   name: string;
   color: string;
+  playable?: boolean;
   ownershipPolygons: Point[][];
   polygons: Point[][];
   blocks: CityBlock[];
@@ -211,6 +212,9 @@ export interface CityDistrict {
   slots: CitySlot[];
   dots: CitySlot[];
   landmarks?: DistrictLandmark[];
+  landmarkPoints?: Array<{ x: number; y: number }>;
+  maxLandmarks?: number;
+  labelAnchor?: { x: number; y: number };
 }
 
 export interface CityMap {

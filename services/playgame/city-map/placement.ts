@@ -143,7 +143,8 @@ export function placeDotsInPolygon(
   leafBlocksToAvoid: Array<{ polygon: Point[] }>,
   target: number,
   visibleArea?: number,
-  labelAvoid: LabelPosition | null = null
+  labelAvoid: LabelPosition | null = null,
+  preSeeds: Point[] = []
 ) {
   const xs = polygon.map((p) => p.x);
   const ys = polygon.map((p) => p.y);
@@ -151,16 +152,11 @@ export function placeDotsInPolygon(
   const maxX = Math.min(VIEW_W - MAP_SLOT_EDGE_PAD, Math.max.apply(null, xs));
   const minY = Math.max(MAP_SLOT_EDGE_PAD, Math.min.apply(null, ys));
   const maxY = Math.min(VIEW_H - MAP_SLOT_EDGE_PAD, Math.max.apply(null, ys));
-  const placed: Array<Point & { edgeD: number; angle: number; radial: number }> = [];
-  if (maxX - minX < 16 || maxY - minY < 16) return placed;
+  if (maxX - minX < 16 || maxY - minY < 16) return [];
 
   const area = Math.max(1, visibleArea || (maxX - minX) * (maxY - minY));
-  // spacing = minimum distance between slot centers (standard Bridson r)
-  const spacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
-  // label exclusion: slot center must stay >= this far from label center
-  const labelExcl = labelAvoid ? labelAvoid.halfW + spacing * 0.55 + 8 : 0;
-
   const centroid = polygonCentroid(polygon);
+  const initialSpacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
 
   const edgeDistance = (x: number, y: number) => {
     let best = Math.min(x, y, VIEW_W - x, VIEW_H - y);
@@ -172,69 +168,88 @@ export function placeDotsInPolygon(
   const insidePolygon = (x: number, y: number) =>
     pointInPolygon({ x, y }, polygon) && !leafBlocksToAvoid.some((lb) => pointInPolygon({ x, y }, lb.polygon));
 
-  const tooClose = (x: number, y: number) => {
-    if (labelAvoid && Math.hypot(x - labelAvoid.x, y - labelAvoid.y) < labelExcl) return true;
-    return placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
-  };
+  // Retry with smaller spacing if Bridson can't fill target — each pass reduces by 25%
+  const placed: Array<Point & { edgeD: number; angle: number; radial: number }> = [];
+  for (let pass = 0; pass < 4 && placed.length < target; pass++) {
+    const spacing = initialSpacing * Math.pow(0.75, pass);
+    const labelExcl = labelAvoid ? labelAvoid.halfW + spacing * 0.55 + 8 : 0;
+    placed.length = 0;
 
-  const validPlacement = (x: number, y: number) =>
-    insidePolygon(x, y) && edgeDistance(x, y) >= MAP_SLOT_EDGE_PAD && !tooClose(x, y);
-
-  // Bridson active list — slots grow outward from here
-  const active: Array<{ x: number; y: number }> = [];
-
-  const addPoint = (x: number, y: number) => {
-    const edgeD = edgeDistance(x, y);
-    placed.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
-    active.push({ x, y });
-  };
-
-  // Plant a random seed anywhere valid in the polygon
-  const plantSeed = (): boolean => {
-    // Try label annulus first (first seed grows outward from the label)
-    if (labelAvoid && placed.length === 0) {
-      for (let k = 0; k < 80; k++) {
-        const r = labelExcl + rng() * spacing;
-        const theta = rng() * Math.PI * 2;
-        const x = labelAvoid.x + r * Math.cos(theta);
-        const y = labelAvoid.y + r * Math.sin(theta);
+    // Pre-seeds act as occupied space — new points stay spacing-away from them.
+    // Also seed active list so Bridson grows outward from large landmark positions.
+    const occupied: Array<{ x: number; y: number }> = [...preSeeds];
+    const tooClose = (x: number, y: number) => {
+      if (labelAvoid && Math.hypot(x - labelAvoid.x, y - labelAvoid.y) < labelExcl) return true;
+      return occupied.some((p) => Math.hypot(x - p.x, y - p.y) < spacing)
+          || placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
+    };
+    const validPlacement = (x: number, y: number) =>
+      insidePolygon(x, y) && edgeDistance(x, y) >= MAP_SLOT_EDGE_PAD && !tooClose(x, y);
+    // Start active list from pre-seeds that are inside the polygon
+    const active: Array<{ x: number; y: number }> = preSeeds.filter((p) => pointInPolygon(p, polygon));
+    const addPoint = (x: number, y: number) => {
+      const edgeD = edgeDistance(x, y);
+      placed.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
+      active.push({ x, y });
+    };
+    const plantSeed = (): boolean => {
+      if (labelAvoid && placed.length === 0) {
+        for (let k = 0; k < 80; k++) {
+          const r = labelExcl + rng() * spacing;
+          const theta = rng() * Math.PI * 2;
+          const x = labelAvoid.x + r * Math.cos(theta);
+          const y = labelAvoid.y + r * Math.sin(theta);
+          if (validPlacement(x, y)) { addPoint(x, y); return true; }
+        }
+      }
+      for (let k = 0; k < 400; k++) {
+        const x = minX + rng() * (maxX - minX);
+        const y = minY + rng() * (maxY - minY);
         if (validPlacement(x, y)) { addPoint(x, y); return true; }
       }
-    }
-    for (let k = 0; k < 400; k++) {
-      const x = minX + rng() * (maxX - minX);
-      const y = minY + rng() * (maxY - minY);
-      if (validPlacement(x, y)) { addPoint(x, y); return true; }
-    }
-    return false;
-  };
+      return false;
+    };
 
-  if (!plantSeed()) return placed;
+    if (!plantSeed()) continue;
 
-  // Bridson: annulus is [spacing, 2*spacing] — standard correct range
-  // When active list empties before target, re-seed in an unfilled region
-  const K = 30;
-  let reseeds = 0;
-  while (placed.length < target) {
-    if (active.length === 0) {
-      if (reseeds++ > target || !plantSeed()) break;
-      continue;
+    // Multi-source BFS: plant stratified seeds spread across polygon so Bridson
+    // grows from multiple distributed roots rather than radiating from one point.
+    const seedGrid = Math.ceil(Math.sqrt(target * 2));
+    const cellW = (maxX - minX) / seedGrid;
+    const cellH = (maxY - minY) / seedGrid;
+    for (let col = 0; col < seedGrid && placed.length < target; col++) {
+      for (let row = 0; row < seedGrid && placed.length < target; row++) {
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const x = minX + (col + 0.2 + rng() * 0.6) * cellW;
+          const y = minY + (row + 0.2 + rng() * 0.6) * cellH;
+          if (validPlacement(x, y)) { addPoint(x, y); break; }
+        }
+      }
     }
-    const idx = Math.floor(rng() * active.length);
-    const ap = active[idx];
-    let found = false;
-    for (let k = 0; k < K; k++) {
-      const r = spacing * (1 + rng());          // uniform in [spacing, 2*spacing]
-      const theta = rng() * Math.PI * 2;
-      const x = ap.x + r * Math.cos(theta);
-      const y = ap.y + r * Math.sin(theta);
-      if (x < minX - spacing || x > maxX + spacing || y < minY - spacing || y > maxY + spacing) continue;
-      if (!validPlacement(x, y)) continue;
-      addPoint(x, y);
-      found = true;
-      break;
+
+    const K = 30;
+    let reseeds = 0;
+    while (placed.length < target) {
+      if (active.length === 0) {
+        if (reseeds++ > target || !plantSeed()) break;
+        continue;
+      }
+      const idx = Math.floor(rng() * active.length);
+      const ap = active[idx];
+      let found = false;
+      for (let k = 0; k < K; k++) {
+        const r = spacing * (1 + rng());
+        const theta = rng() * Math.PI * 2;
+        const x = ap.x + r * Math.cos(theta);
+        const y = ap.y + r * Math.sin(theta);
+        if (x < minX - spacing || x > maxX + spacing || y < minY - spacing || y > maxY + spacing) continue;
+        if (!validPlacement(x, y)) continue;
+        addPoint(x, y);
+        found = true;
+        break;
+      }
+      if (!found) active.splice(idx, 1);
     }
-    if (!found) active.splice(idx, 1);
   }
 
   return placed;

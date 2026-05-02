@@ -233,7 +233,8 @@ export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
         if (best) used.add(best.id);
         return best;
       }).filter((v): v is Venue => v !== null);
-      selected = [...iconic, ...buildingSnapped];
+      const cap = (district as any).maxLandmarks ?? 3;
+      selected = [...iconic, ...buildingSnapped].slice(0, cap);
     } else {
       selected = chooseLandmarkVenues(district.id, districtVenues);
     }
