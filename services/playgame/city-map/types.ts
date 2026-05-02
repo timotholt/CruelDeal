@@ -3,6 +3,39 @@ export interface Point {
   y: number;
 }
 
+export type BuildingLodGroup = 'micro' | 'lowrise' | 'midrise' | 'tower' | 'landmark';
+export type BuildingMaterialKey = 'lowrise' | 'midrise' | 'tower' | 'landmark' | 'industrial';
+export type BuildingRoofStyle = 'flat' | 'antenna' | 'tiered' | 'mechanical';
+export type RoadRenderMaterialKey = 'local' | 'street' | 'avenue' | 'highway' | 'bridge' | 'route';
+export type RoadRenderLodGroup = 'major' | 'minor' | 'micro';
+export type TerrainMaterialKey = 'land' | 'water' | 'park' | 'plaza' | 'industrial';
+
+export interface BuildingRenderMeta {
+  extrudable: boolean;
+  staticMesh: boolean;
+  height: number;
+  baseElevation: number;
+  roofStyle: BuildingRoofStyle;
+  materialKey: BuildingMaterialKey;
+  emissiveStrength: number;
+  windowDensity: number;
+  shadowImportance: number;
+  lodGroup: BuildingLodGroup;
+}
+
+export interface RoadRenderMeta {
+  width: number;
+  elevation: number;
+  glowStrength: number;
+  materialKey: RoadRenderMaterialKey;
+  lodGroup: RoadRenderLodGroup;
+}
+
+export interface TerrainRenderMeta {
+  elevation: number;
+  materialKey: TerrainMaterialKey;
+}
+
 export type PolygonPoint = Point & {
   edgeKind?: string;
   _clipNew?: boolean;
@@ -53,6 +86,7 @@ export interface RoadEdge {
   source?: string;
   kind?: string;
   districtId?: string | null;
+  render?: RoadRenderMeta;
   [key: string]: unknown;
 }
 
@@ -76,6 +110,7 @@ export interface TerrainPlan {
   waterBodies?: WaterBody[];
   rivers?: RiverPath[];
   openSpaces?: OpenSpace[];
+  render?: TerrainRenderMeta;
   [key: string]: unknown;
 }
 
@@ -90,6 +125,7 @@ export interface WaterBody {
   id: string;
   polygon?: Point[];
   centroid?: Point;
+  render?: TerrainRenderMeta;
   [key: string]: unknown;
 }
 
@@ -98,6 +134,7 @@ export interface OpenSpace {
   polygon: Point[];
   centroid?: Point;
   type?: string;
+  render?: TerrainRenderMeta;
   [key: string]: unknown;
 }
 
@@ -113,6 +150,7 @@ export interface Building {
   districtId?: string | null;
   polygon?: Point[];
   centroid?: Point;
+  render?: BuildingRenderMeta;
   [key: string]: unknown;
 }
 
@@ -125,6 +163,7 @@ export interface Bridge {
   id: string;
   districtId?: string | null;
   centroid?: Point;
+  render?: RoadRenderMeta;
   [key: string]: unknown;
 }
 

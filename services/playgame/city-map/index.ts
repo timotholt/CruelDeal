@@ -31,6 +31,7 @@ export type {
 export type {
   BridgePlan,
   Building,
+  BuildingRenderMeta,
   BuildingPlan,
   CityBlock,
   CityDistrict,
@@ -40,7 +41,9 @@ export type {
   DockPlan,
   Point,
   RoadEdge,
+  RoadRenderMeta,
   RoadGraph,
+  TerrainRenderMeta,
   TerrainPlan,
   Venue,
 } from './types';

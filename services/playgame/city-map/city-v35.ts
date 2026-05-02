@@ -18,7 +18,25 @@ import { generateCoastDocks } from './land';
 import { makeRiverBankRoads } from './water';
 import { enrichCityRouting, findPath } from './routing';
 import { enrichCityVenues } from './venues';
-import type { Building, CityBlock, CityDistrict, CityMap, CitySlot, Point, RoadEdge, Venue } from './types';
+import type {
+  Building,
+  BuildingLodGroup,
+  BuildingMaterialKey,
+  BuildingRenderMeta,
+  BuildingRoofStyle,
+  CityBlock,
+  CityDistrict,
+  CityMap,
+  CitySlot,
+  Point,
+  RoadEdge,
+  RoadRenderLodGroup,
+  RoadRenderMaterialKey,
+  RoadRenderMeta,
+  TerrainMaterialKey,
+  TerrainRenderMeta,
+  Venue,
+} from './types';
 
 type Rng = () => number;
 
@@ -76,20 +94,59 @@ function terrainWaterBodiesOfKind(terrain: TerrainV35, kind: string) {
   return (terrain.waterBodies || []).filter((body) => body.kind === kind);
 }
 
+function roadRenderForKind(kind?: string, source?: string): RoadRenderMeta {
+  const materialKey: RoadRenderMaterialKey = source === 'route'
+    ? 'route'
+    : source === 'coast-road'
+      ? 'avenue'
+      : kind === 'highway'
+        ? 'highway'
+        : kind === 'avenue'
+          ? 'avenue'
+          : kind === 'local'
+            ? 'local'
+            : 'street';
+  const width = materialKey === 'highway' ? 4.4
+    : materialKey === 'avenue' ? 2.8
+      : materialKey === 'local' ? 0.9
+        : materialKey === 'route' ? 1.8
+          : 1.75;
+  const glowStrength = materialKey === 'highway' ? 0.58
+    : materialKey === 'avenue' ? 0.42
+      : materialKey === 'route' ? 0.72
+        : materialKey === 'local' ? 0.18
+          : 0.28;
+  const lodGroup: RoadRenderLodGroup = materialKey === 'highway' || materialKey === 'avenue' || materialKey === 'route'
+    ? 'major'
+    : materialKey === 'local'
+      ? 'micro'
+      : 'minor';
+
+  return {
+    width,
+    elevation: materialKey === 'bridge' ? 0.45 : 0.03,
+    glowStrength,
+    materialKey,
+    lodGroup,
+  };
+}
+
 function cutToRoad(cut: Cut, index: number, source: string): RoadEdge {
   const points = cutPoints(cut);
   const kind = cut.depth <= 0 ? 'highway' : cut.depth <= 1 ? 'avenue' : 'street';
   const isCoastRoad = cut.polylineMode === 'coast';
   const cutId = (cut as Cut & { id?: string }).id;
+  const roadSource = isCoastRoad ? 'coast-road' : source;
   return {
     id: cutId || (isCoastRoad ? `${source}:${index}:coast-road` : `${source}:${index}`),
     kind,
-    source: isCoastRoad ? 'coast-road' : source,
+    source: roadSource,
     a: points[0] || cut.p1,
     b: points[points.length - 1] || cut.p2,
     points,
     path: cutPath(cut) || straightPolylinePath(points),
     depth: cut.depth,
+    render: roadRenderForKind(kind, roadSource),
     cut,
   };
 }
@@ -118,6 +175,45 @@ function fallbackTinyBlockBuilding(block: CityBlock & { area?: number; fieldAngl
     }
   }
   return [];
+}
+
+function buildingLodGroup(height: number, landmark = false): BuildingLodGroup {
+  if (landmark) return 'landmark';
+  if (height > 22) return 'tower';
+  if (height > 10) return 'midrise';
+  if (height < 4) return 'micro';
+  return 'lowrise';
+}
+
+function buildingMaterialKey(lodGroup: BuildingLodGroup, block?: CityBlock & Record<string, any>): BuildingMaterialKey {
+  if (lodGroup === 'landmark') return 'landmark';
+  if (lodGroup === 'tower') return 'tower';
+  if (lodGroup === 'midrise') return 'midrise';
+  if (block?.density === 'dense') return 'industrial';
+  return 'lowrise';
+}
+
+function buildingRoofStyle(height: number, shade = 0): BuildingRoofStyle {
+  if (height > 24 && shade > 0.68) return 'antenna';
+  if (height > 16 && shade < 0.34) return 'tiered';
+  if (height > 8 && shade > 0.82) return 'mechanical';
+  return 'flat';
+}
+
+function buildingRenderMeta(height: number, shade = 0, block?: CityBlock & Record<string, any>, landmark = false): BuildingRenderMeta {
+  const lodGroup = buildingLodGroup(height, landmark);
+  return {
+    extrudable: true,
+    staticMesh: true,
+    height,
+    baseElevation: 0,
+    roofStyle: buildingRoofStyle(height, shade),
+    materialKey: buildingMaterialKey(lodGroup, block),
+    emissiveStrength: landmark ? 0.44 : lodGroup === 'tower' ? 0.28 : lodGroup === 'midrise' ? 0.18 : 0.1,
+    windowDensity: Math.max(0.12, Math.min(0.9, 0.14 + height / 52)),
+    shadowImportance: Math.max(0.1, Math.min(1, height / 36)),
+    lodGroup,
+  };
 }
 
 function signedLineSide(point: Point, a: Point, b: Point) {
@@ -592,7 +688,7 @@ function bridgeLinePath(cx: number, cy: number, angle: number, length: number) {
 }
 
 function angleDelta(a: number, b: number) {
-  let d = Math.abs(a - b) % Math.PI;
+  const d = Math.abs(a - b) % Math.PI;
   return d > Math.PI / 2 ? Math.PI - d : d;
 }
 
@@ -702,7 +798,8 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
       path: polygonToPath(markerPolygon),
       centroid: harbor.centroid || landmass.centroid,
       area: polygonArea(markerPolygon),
-      render: { lodGroup: 'landmark' },
+      height: 18,
+      render: buildingRenderMeta(18, 0.86, harbor, true),
       compositionRole: (landmass as any).compositionRole,
     } as Building);
   }
@@ -733,11 +830,7 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
         fallback: !!gen.fallback,
         centroid: polygonCentroid(gen.polygon),
         shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
-        render: {
-          extrudable: true,
-          staticMesh: true,
-          lodGroup: height > 18 ? 'tower' : height > 9 ? 'midrise' : 'lowrise',
-        },
+        render: buildingRenderMeta(height, gen.shade, block),
       } as Building);
     });
   }
@@ -808,6 +901,55 @@ function buildCoastDocks(terrain: TerrainV35, normalizedSeed: number) {
       compositionRole: (landmass as any).compositionRole,
     }));
   });
+}
+
+function terrainRenderMeta(materialKey: TerrainMaterialKey, elevation = 0): TerrainRenderMeta {
+  return { elevation, materialKey };
+}
+
+function attachTerrainRenderMetadata(terrain: CityMap['terrain']) {
+  terrain.render = terrain.render || terrainRenderMeta('land', 0);
+  for (const body of terrain.waterBodies || []) {
+    body.render = body.render || terrainRenderMeta('water', -0.08);
+  }
+  for (const space of terrain.openSpaces || []) {
+    const kind = String(space.type || space.kind || '');
+    space.render = space.render || terrainRenderMeta(kind === 'compound' || kind === 'plaza' ? 'plaza' : 'park', 0.015);
+  }
+}
+
+function ensureBuildingRenderMetadata(building: Building) {
+  const loose = building as Building & { height?: number; shade?: number };
+  const height = Number.isFinite(loose.height) ? Math.max(0, loose.height!) : 4;
+  loose.height = height;
+  building.render = building.render || buildingRenderMeta(height, loose.shade || 0, undefined, loose.render?.lodGroup === 'landmark');
+}
+
+function ensureRoadRenderMetadata(edge: RoadEdge) {
+  edge.render = edge.render || roadRenderForKind(edge.kind, edge.source);
+}
+
+function ensureBridgeRenderMetadata(bridge: NonNullable<CityMap['bridgePlan']['bridges']>[number]) {
+  bridge.render = bridge.render || {
+    ...roadRenderForKind('highway', 'bridge'),
+    width: typeof (bridge as any).deckWidth === 'number' ? (bridge as any).deckWidth : 2.4,
+    elevation: 0.45,
+    materialKey: 'bridge',
+    lodGroup: 'major',
+  };
+}
+
+function attachRenderMetadata(city: CityMap) {
+  attachTerrainRenderMetadata(city.terrain);
+  for (const edge of city.roadGraph?.edges || []) ensureRoadRenderMetadata(edge);
+  for (const bridge of city.bridgePlan?.bridges || []) ensureBridgeRenderMetadata(bridge);
+  for (const building of city.buildingPlan?.buildings || []) ensureBuildingRenderMetadata(building);
+  for (const building of city.buildingPlan?.landmarks || []) ensureBuildingRenderMetadata(building);
+  const openSpaces = (city.buildingPlan as CityMap['buildingPlan'] & { openSpaces?: Array<Record<string, any>> }).openSpaces || [];
+  for (const space of openSpaces) {
+    const kind = String(space.kind || space.type || '');
+    space.render = space.render || terrainRenderMeta(kind === 'compound' || kind === 'plaza' ? 'plaza' : 'park', 0.015);
+  }
 }
 
 function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35): CityMap {
@@ -957,6 +1099,7 @@ export function buildCityV35(seed: string | number = 1, opts: CityMapOptions = {
   const city = normalizeCityShape(baseCity, seed);
   enrichCityRouting(city);
   enrichCityVenues(city);
+  attachRenderMetadata(city);
   return opts.cache === false ? city : remember(key, city);
 }
 
