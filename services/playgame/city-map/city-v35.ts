@@ -12,7 +12,7 @@ import {
 } from './partition';
 import { cutPath, cutPoints, cutSegments, polygonToPath, rectPolygon, smoothClosedPath, straightPolylinePath } from './paths';
 import { labelPosition, placeDotsInPolygon, viewportVisibleArea } from './placement';
-import { generateBlockBuildings } from './buildings';
+import { generateBlockBuildings, type BuildingBlockProfile } from './buildings';
 import { generateBridges } from './bridges';
 import { generateCoastDocks } from './land';
 import { makeRiverBankRoads } from './water';
@@ -80,7 +80,7 @@ const CACHE_LIMIT = 12;
 const cache = new Map<string, CityMap>();
 
 type TerrainV35 = ReturnType<typeof buildTerrain>;
-type RoadHazard = { a: Point; b: Point; buffer: number };
+type RoadHazard = { a: Point; b: Point; buffer: number; priority?: number; width?: number };
 
 function shuffle<T>(list: readonly T[], rng: Rng): T[] {
   const out = list.slice();
@@ -696,6 +696,14 @@ function roadHazardBuffer(edge: RoadEdge) {
   return Math.max(0.45, width / 2 + margin);
 }
 
+function roadHazardPriority(edge: RoadEdge) {
+  const kind = edge.kind || edge.render?.materialKey;
+  if (kind === 'highway') return 4;
+  if (kind === 'avenue' || edge.source === 'coast-road') return 3;
+  if (kind === 'street') return 2;
+  return 1;
+}
+
 function roadHazardPoints(edge: RoadEdge) {
   const points = (edge as RoadEdge & { points?: Point[] }).points;
   if (Array.isArray(points) && points.length >= 2) return points;
@@ -707,11 +715,15 @@ function makeRoadHazards(edges: RoadEdge[]): RoadHazard[] {
   for (const edge of edges) {
     const points = roadHazardPoints(edge);
     const buffer = roadHazardBuffer(edge);
+    const priority = roadHazardPriority(edge);
+    const width = typeof edge.render?.width === 'number'
+      ? edge.render.width
+      : roadWidthForDepth(typeof edge.depth === 'number' ? edge.depth : 2);
     for (let i = 0; i + 1 < points.length; i++) {
       const a = points[i];
       const b = points[i + 1];
       if (Math.hypot(b.x - a.x, b.y - a.y) < 0.001) continue;
-      hazards.push({ a, b, buffer });
+      hazards.push({ a, b, buffer, priority, width });
     }
   }
   return hazards;
@@ -733,6 +745,44 @@ function footprintNearRoad(polygon: Point[], roadHazards: RoadHazard[]) {
   return probes.some((point) =>
     roadHazards.some((hazard) => pointToSegmentDist(point.x, point.y, hazard.a, hazard.b) < hazard.buffer),
   );
+}
+
+function blockRoadModernity(block: CityBlock & Record<string, any>, roadHazards: RoadHazard[]) {
+  const centroid = block.centroid || polygonCentroid(block.polygon);
+  let score = 0;
+  let priority = 0;
+  for (const hazard of roadHazards) {
+    const hazardPriority = hazard.priority || 1;
+    if (hazardPriority < 2) continue;
+    const distance = pointToSegmentDist(centroid.x, centroid.y, hazard.a, hazard.b);
+    const influence = hazardPriority / (1 + distance / 26);
+    score = Math.max(score, influence);
+    if (distance < 34) priority = Math.max(priority, hazardPriority);
+  }
+  return { score, priority };
+}
+
+function chooseBlockProfile(block: CityBlock & Record<string, any>, roadHazards: RoadHazard[], rng: Rng): BuildingBlockProfile {
+  const { score, priority } = blockRoadModernity(block, roadHazards);
+  const roll = rng();
+  const age: BuildingBlockProfile['age'] = score > 2.4
+    ? roll < 0.72 ? 'new' : roll < 0.94 ? 'average' : 'old'
+    : score > 1.15
+      ? roll < 0.22 ? 'new' : roll < 0.78 ? 'average' : 'old'
+      : roll < 0.12 ? 'average' : 'old';
+
+  const publicChance = priority >= 3 ? 0.055 : 0.075;
+  const commercialChance = Math.max(0.12, Math.min(0.72, 0.16 + score * 0.16 + (priority >= 3 ? 0.12 : 0) + (block.area > 900 ? 0.06 : 0)));
+  const useRoll = rng();
+  const use: BuildingBlockProfile['use'] = useRoll < publicChance
+    ? 'public'
+    : useRoll < publicChance + commercialChance
+      ? 'commercial'
+      : 'residential';
+
+  const profile = { age, use, modernityScore: score, roadPriority: priority };
+  block.planning = profile;
+  return profile;
 }
 
 function bridgeLinePath(cx: number, cy: number, angle: number, length: number) {
@@ -871,7 +921,8 @@ function buildStaticBuildings(
       }
       continue;
     }
-    let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, roadHazards, 7);
+    const profile = chooseBlockProfile(block, roadHazards, rng);
+    let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, roadHazards, 7, profile);
     if (!generated.length && block.area > 110) {
       generated = fallbackTinyBlockBuilding(block, rng)
         .filter((gen) => !footprintNearRoad(gen.polygon, roadHazards));

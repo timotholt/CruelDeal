@@ -34,7 +34,7 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showLandmarks', label: 'Landmarks' },
   { key: 'showSlots', label: 'Slots' },
   { key: 'showRouteDemo', label: 'Route Demo' },
-  { key: 'showComposition', label: 'Composition' },
+  { key: 'showComposition', label: 'Planning' },
   { key: 'showTerrainDebug', label: 'Terrain' },
   { key: 'showDistrictDebug', label: 'Districts' },
   { key: 'showArterialsDebug', label: 'Arterials' },

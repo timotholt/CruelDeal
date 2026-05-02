@@ -1,5 +1,5 @@
-import { createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
-import { buildCityMap, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
+import { createMemo, createSignal, Show, onCleanup, onMount, untrack } from 'solid-js';
+import { buildCityMap, type CityBlock, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
 import { pointInPolygon } from '@/services/playgame/city-map/geometry';
 import {
   cameraToViewport,
@@ -39,6 +39,11 @@ export interface CityMapBoardProps {
 
 export const CityMapBoard = (props: CityMapBoardProps) => {
   const [selectedSlotId, setSelectedSlotId] = createSignal<string | null>(null);
+  const [planningHover, setPlanningHover] = createSignal<{
+    block: CityBlock & Record<string, any>;
+    x: number;
+    y: number;
+  } | null>(null);
   const initialDebug = untrack(() => props.debug);
   const initialRendererMode = untrack(() => props.rendererMode);
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
@@ -82,6 +87,13 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       if (district.playable === false) continue;
       const polygons = district.ownershipPolygons?.length ? district.ownershipPolygons : district.polygons;
       if (polygons.some((polygon) => pointInPolygon(point, polygon))) return district.id;
+    }
+    return null;
+  };
+  const blockAtPoint = (point: Point) => {
+    for (const block of city().cells as Array<CityBlock & Record<string, any>>) {
+      if (!block.buildable) continue;
+      if (pointInPolygon(point, block.polygon)) return block;
     }
     return null;
   };
@@ -190,7 +202,15 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       }
     }
     hover.bind.onPointerMove(event);
-    highlight.onDistrictHover(interactive() ? districtAtPoint(boardPointFromPointer(event)) : null);
+    const point = boardPointFromPointer(event);
+    highlight.onDistrictHover(interactive() ? districtAtPoint(point) : null);
+    if (interactive() && debugState().showComposition) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const block = blockAtPoint(point);
+      setPlanningHover(block ? { block, x: event.clientX - rect.left, y: event.clientY - rect.top } : null);
+    } else {
+      setPlanningHover(null);
+    }
   };
   const onPointerUp = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (panDrag?.pointerId !== event.pointerId) return;
@@ -207,6 +227,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     panDrag = null;
     hover.clearHover();
     highlight.onDistrictHover(null);
+    setPlanningHover(null);
   };
   const onClickCapture = (event: MouseEvent) => {
     if (!suppressNextClick) return;
@@ -252,6 +273,28 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           screenSize={surfaceSize()}
           viewport={viewport()}
         />
+        <Show when={debugState().showComposition && planningHover()}>
+          {(hovered) => {
+            const planning = () => hovered().block.planning || {};
+            const label = () => `${String(planning().use || 'unknown').toUpperCase()} / ${String(planning().age || 'unknown').toUpperCase()}`;
+            return (
+              <div
+                class="city-map-planning-tooltip"
+                style={{
+                  left: `${Math.min(surfaceSize().width - 176, hovered().x + 12)}px`,
+                  top: `${Math.min(surfaceSize().height - 86, hovered().y + 12)}px`,
+                }}
+              >
+                <div class="city-map-planning-tooltip__title">{label()}</div>
+                <div class="city-map-planning-tooltip__row">block {hovered().block.id}</div>
+                <div class="city-map-planning-tooltip__row">area {Math.round(Number(hovered().block.area || 0))}</div>
+                <div class="city-map-planning-tooltip__row">
+                  road {Number(planning().roadPriority || 0)} / mod {Number(planning().modernityScore || 0).toFixed(2)}
+                </div>
+              </div>
+            );
+          }}
+        </Show>
         <CityMapDebugDock state={debugState()} onToggle={toggleDebug} />
       </div>
     </section>
