@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Building, Point, RoadEdge } from '@/services/playgame/city-map';
 
+const THREE_BUILDING_FOOTPRINT_SCALE = 0.91;
+
 export function mapPointToThree(point: Point) {
   return new THREE.Vector3(point.x, 0, point.y);
 }
@@ -70,19 +72,32 @@ export function createSmoothPolygonGeometry(points: readonly Point[] | undefined
   return createPolygonGeometry(polygon.length ? smoothClosedPolygon(polygon, iterations) : polygon, elevation);
 }
 
-function createMapShape(points: readonly Point[] | undefined) {
+function scalePolygonAboutCentroid(points: readonly Point[], scale: number) {
+  if (scale === 1) return points.slice();
+  const center = {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+  return points.map((point) => ({
+    x: center.x + (point.x - center.x) * scale,
+    y: center.y + (point.y - center.y) * scale,
+  }));
+}
+
+function createMapShape(points: readonly Point[] | undefined, scale = 1) {
   const polygon = cleanPolygon(points);
   if (!polygon.length) return null;
+  const renderPolygon = scalePolygonAboutCentroid(polygon, scale);
 
   const shape = new THREE.Shape();
-  shape.moveTo(polygon[0].x, -polygon[0].y);
-  for (const point of polygon.slice(1)) shape.lineTo(point.x, -point.y);
+  shape.moveTo(renderPolygon[0].x, -renderPolygon[0].y);
+  for (const point of renderPolygon.slice(1)) shape.lineTo(point.x, -point.y);
   shape.closePath();
   return shape;
 }
 
 export function createBuildingGeometry(building: Building) {
-  const shape = createMapShape(building.polygon);
+  const shape = createMapShape(building.polygon, THREE_BUILDING_FOOTPRINT_SCALE);
   if (!shape) return null;
 
   const height = Math.max(0.6, (building.render?.height ?? 2.4) * 0.72);
