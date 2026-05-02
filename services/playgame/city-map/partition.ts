@@ -44,6 +44,8 @@ interface MacroTemplateConfig {
   firstOffsetJitter: number;
   secondOffsetBase: number;
   secondOffsetJitter: number;
+  firstAngleJitter?: number;
+  secondAngleJitter?: number;
   firstAxis: "alternate" | "primary" | "secondary" | "mostly-primary";
   secondAxis: "opposite" | "same" | "primary" | "secondary";
   branchOn: "larger" | "smaller";
@@ -263,9 +265,16 @@ function pickBspCut(polygon: Point[], rng: Rng, gridAngle: number, depth: number
   return { angle: cutAngle, p1: { x: px - dx * huge, y: py - dy * huge }, p2: { x: px + dx * huge, y: py + dy * huge }, depth };
 }
 
-export function tryGridCut(polygon: Point[], gridAngle: number, useSecondaryAxis: boolean, offsetMagnitude: number, rng: Rng) {
+export function tryGridCut(
+  polygon: Point[],
+  gridAngle: number,
+  useSecondaryAxis: boolean,
+  offsetMagnitude: number,
+  rng: Rng,
+  angleOffset = 0,
+) {
   const c = polygonCentroid(polygon);
-  const cutAngle = useSecondaryAxis ? gridAngle + Math.PI / 2 : gridAngle;
+  const cutAngle = (useSecondaryAxis ? gridAngle + Math.PI / 2 : gridAngle) + angleOffset;
   const dx = Math.cos(cutAngle);
   const dy = Math.sin(cutAngle);
   const offset = (rng() - 0.5) * offsetMagnitude;
@@ -303,6 +312,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 50,
     secondOffsetBase: 50,
     secondOffsetJitter: 30,
+    firstAngleJitter: 0.06,
+    secondAngleJitter: 0.22,
     firstAxis: "alternate",
     secondAxis: "opposite",
     branchOn: "larger",
@@ -314,6 +325,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 74,
     secondOffsetBase: 44,
     secondOffsetJitter: 46,
+    firstAngleJitter: 0.18,
+    secondAngleJitter: 0.28,
     firstAxis: "mostly-primary",
     secondAxis: "opposite",
     branchOn: "larger",
@@ -325,6 +338,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 78,
     secondOffsetBase: 74,
     secondOffsetJitter: 54,
+    firstAngleJitter: 0.08,
+    secondAngleJitter: 0.24,
     firstAxis: "alternate",
     secondAxis: "opposite",
     branchOn: "larger",
@@ -336,6 +351,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 86,
     secondOffsetBase: 46,
     secondOffsetJitter: 44,
+    firstAngleJitter: 0.18,
+    secondAngleJitter: 0.3,
     firstAxis: "primary",
     secondAxis: "opposite",
     branchOn: "smaller",
@@ -349,6 +366,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 64,
     secondOffsetBase: 62,
     secondOffsetJitter: 44,
+    firstAngleJitter: 0.2,
+    secondAngleJitter: 0.16,
     firstAxis: "primary",
     secondAxis: "same",
     branchOn: "larger",
@@ -360,6 +379,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 62,
     secondOffsetBase: 72,
     secondOffsetJitter: 46,
+    firstAngleJitter: 0.18,
+    secondAngleJitter: 0.24,
     firstAxis: "secondary",
     secondAxis: "same",
     branchOn: "larger",
@@ -371,6 +392,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 58,
     secondOffsetBase: 64,
     secondOffsetJitter: 42,
+    firstAngleJitter: 0.18,
+    secondAngleJitter: 0.24,
     firstAxis: "primary",
     secondAxis: "same",
     branchOn: "larger",
@@ -382,6 +405,8 @@ const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = 
     firstOffsetJitter: 58,
     secondOffsetBase: 58,
     secondOffsetJitter: 42,
+    firstAngleJitter: 0.16,
+    secondAngleJitter: 0.22,
     firstAxis: "primary",
     secondAxis: "same",
     branchOn: "larger",
@@ -420,13 +445,21 @@ export function macroDivide3(
     if (config.secondAxis === "same") return firstUseSecondary;
     return !firstUseSecondary;
   };
+  const angleOffset = (jitter = 0) => (rng() - 0.5) * jitter;
 
   const findFirstCut = (minRatio: number, minVisibleSmaller: number, minMinDim: number) => {
     let best: (NonNullable<ReturnType<typeof tryGridCut>> & { useSecondary: boolean }) | null = null;
     let bestScore = Infinity;
     for (let attempt = 0; attempt < 24; attempt++) {
       const useSecondary = firstAxisForAttempt(attempt);
-      const r = tryGridCut(landPolygon, gridAngle, useSecondary, config.firstOffsetBase + rng() * config.firstOffsetJitter, rng);
+      const r = tryGridCut(
+        landPolygon,
+        gridAngle,
+        useSecondary,
+        config.firstOffsetBase + rng() * config.firstOffsetJitter,
+        rng,
+        angleOffset(config.firstAngleJitter),
+      );
       if (!r) continue;
       const aArea = polygonArea(r.halfA);
       const bArea = polygonArea(r.halfB);
@@ -470,7 +503,14 @@ export function macroDivide3(
     let bestScore = Infinity;
     const secondAxis = secondAxisFor(best1.useSecondary);
     for (let attempt = 0; attempt < 24; attempt++) {
-      const r = tryGridCut(branchRegion, gridAngle, secondAxis, config.secondOffsetBase + rng() * config.secondOffsetJitter, rng);
+      const r = tryGridCut(
+        branchRegion,
+        gridAngle,
+        secondAxis,
+        config.secondOffsetBase + rng() * config.secondOffsetJitter,
+        rng,
+        angleOffset(config.secondAngleJitter),
+      );
       if (!r) continue;
       const xA = polygonArea(r.halfA);
       const xB = polygonArea(r.halfB);
