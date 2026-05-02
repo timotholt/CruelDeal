@@ -141,40 +141,42 @@ function RouteDemoLayer({ city, active }) {
     function step() {
       if (cancelled || !window.CityMapRoutingV1 || !city._routing) return;
 
-      // Only use buildings whose centroid AND snap point are fully within the viewport.
-      const buildings = city.buildingPlan.buildings.filter(b =>
-        b.snapEdgeId && b.centroid && b.snapPoint &&
-        onMap(b.centroid) && onMap(b.snapPoint)
+      // Gather all playable slots
+      const allSlots = city.districts.flatMap(d => d.slots || d.dots || []).map(s => ({
+        x: s.x, y: s.y, type: 'slot', id: s.id
+      }));
+
+      // Gather named landmarks (venues)
+      const allVenues = (city.venues || []).map(v => ({
+        x: v.centroid.x, y: v.centroid.y, type: 'landmark', id: v.id
+      }));
+
+      // Combine them into a single pool
+      const routePoints = [...allSlots, ...allVenues];
+      if (routePoints.length < 2) return;
+
+      // Pick two random points
+      const shuffled = [...routePoints].sort(() => Math.random() - 0.5);
+      const pt1 = shuffled[0];
+      const pt2 = shuffled[1];
+
+      // Route directly between their raw coordinates
+      const result = window.CityMapRoutingV1.findPathBetweenCoords(
+        city, 
+        pt1.x, pt1.y, 
+        pt2.x, pt2.y
       );
-      const byDistrict = {};
-      for (const b of buildings) {
-        const did = city.cellDistrict[b.cellId];
-        if (did) { if (!byDistrict[did]) byDistrict[did] = []; byDistrict[did].push(b); }
-      }
-      const dids = Object.keys(byDistrict).filter(d => byDistrict[d].length > 0);
-      if (dids.length < 2) return;
 
-      const shuffled = [...dids].sort(() => Math.random() - 0.5);
-      const poolA = byDistrict[shuffled[0]], poolB = byDistrict[shuffled[1]];
-      const bA = poolA[Math.floor(Math.random() * poolA.length)];
-      const bB = poolB[Math.floor(Math.random() * poolB.length)];
-
-      const result = window.CityMapRoutingV1.findPath(city, bA.id, bB.id);
-      // Reject if no path. Only the two endpoint snap points need to be on-map —
-      // intermediate road nodes near the boundary are fine (real intersections).
+      // Reject if no path found
       if (!result || result.waypoints.length < 2) {
         timerId = setTimeout(step, 150);
         return;
       }
 
-      // smooth=false: Chaikin would cut corners through building footprints.
-      // Road polylines already carry their own curve geometry.
-      // smooth=false: Chaikin would cut corners through building footprints.
       const pathD = window.CityMapRoutingV1.routeToSvgPath(result.waypoints, false);
-      // Dots must match the actual path endpoints (findPath picks best of N
-      // snap candidates — primary may not be the chosen one).
       const ptA = result.waypoints[0];
       const ptB = result.waypoints[result.waypoints.length - 1];
+      
       if (!cancelled) {
         setRouteState({ pathD, ptA, ptB });
         setVisible(true);

@@ -431,6 +431,19 @@ export function nearestBuildingToSlot(city: CityMap, slot: { blockId?: string | 
   return best;
 }
 
+export function findPathBetweenCoords(city: CityMap, x1: number, y1: number, x2: number, y2: number): CityRoute | null {
+  const bA = nearestBuilding(city, x1, y1);
+  const bB = nearestBuilding(city, x2, y2);
+  if (!bA || !bB) return null;
+
+  const result = findPath(city, bA.id, bB.id);
+  if (!result || !result.waypoints) return null;
+
+  // Prepend and append the actual coords so the route visually connects to them
+  const waypoints = [{ x: x1, y: y1 }, ...result.waypoints, { x: x2, y: y2 }];
+  return { ...result, waypoints };
+}
+
 export function attachRoadGraph(city: CityMap, graph: RoadGraph) {
   city.roadGraph = graph;
   return city;

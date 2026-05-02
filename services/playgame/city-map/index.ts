@@ -4,6 +4,7 @@ export {
   attachRoadGraph,
   enrichCityRouting,
   findPath,
+  findPathBetweenCoords,
   nearestBuilding,
   nearestBuildingToSlot,
   routeToSvgPath,

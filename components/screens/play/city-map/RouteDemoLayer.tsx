@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
-import { findPath, routeToSvgPath, type Building, type CityMap, type Point } from '@/services/playgame/city-map';
+import { findPathBetweenCoords, routeToSvgPath, type CityMap, type Point } from '@/services/playgame/city-map';
 
 interface RouteDemoLayerProps {
   city: CityMap;
@@ -14,48 +14,35 @@ interface RouteDemo {
   to: Point;
 }
 
-function onMap(point: Point | null | undefined, width: number, height: number) {
-  const margin = 20;
-  return !!point && point.x >= margin && point.x <= width - margin && point.y >= margin && point.y <= height - margin;
-}
+function pickRoute(city: CityMap, step: number): RouteDemo | null {
+  // 1. Gather all playable slots
+  const allSlots = city.districts.flatMap(d => d.slots || []).map(s => ({
+    x: s.x, y: s.y, type: 'slot'
+  }));
 
-function districtForBuilding(city: CityMap, building: Building) {
-  const looseCity = city as CityMap & { cellDistrict?: Record<string, string> };
-  return building.districtId || (building.cellId ? looseCity.cellDistrict?.[building.cellId] : null) || null;
-}
+  // 2. Gather actual named landmarks (stadiums, parks, major buildings)
+  const allLandmarks = (city.landmarks || []).map(v => ({
+    x: v.centroid.x, y: v.centroid.y, type: 'landmark'
+  }));
 
-function routeCandidates(city: CityMap, width: number, height: number) {
-  const byDistrict = new Map<string, Building[]>();
-  for (const building of city.buildingPlan.buildings || []) {
-    if (!building.snapEdgeId || !building.snapPoint || !building.centroid) continue;
-    if (!onMap(building.centroid, width, height) || !onMap(building.snapPoint, width, height)) continue;
-    const districtId = districtForBuilding(city, building);
-    if (!districtId) continue;
-    const bucket = byDistrict.get(districtId) || [];
-    bucket.push(building);
-    byDistrict.set(districtId, bucket);
-  }
-  return [...byDistrict.values()].filter((bucket) => bucket.length > 0);
-}
+  // 3. Combine them
+  const pool = [...allSlots, ...allLandmarks];
+  if (pool.length < 2) return null;
 
-function pickRoute(city: CityMap, width: number, height: number, step: number): RouteDemo | null {
-  const buckets = routeCandidates(city, width, height);
-  if (buckets.length < 2) return null;
-  for (let attempt = 0; attempt < 18; attempt++) {
-    const aBucket = buckets[(step + attempt) % buckets.length];
-    const bBucket = buckets[(step + attempt + 1 + (attempt % Math.max(1, buckets.length - 1))) % buckets.length];
-    if (aBucket === bBucket) continue;
-    const a = aBucket[(step * 3 + attempt) % aBucket.length];
-    const b = bBucket[(step * 5 + attempt) % bBucket.length];
-    const route = findPath(city, a.id, b.id);
-    if (!route || route.waypoints.length < 2) continue;
-    return {
-      pathD: routeToSvgPath(route.waypoints),
-      from: route.waypoints[0],
-      to: route.waypoints[route.waypoints.length - 1],
-    };
-  }
-  return null;
+  // 4. Pick two random points
+  const pt1 = pool[(step * 7) % pool.length];
+  const pt2 = pool[(step * 13 + 1) % pool.length];
+
+  if (pt1 === pt2) return null;
+
+  const route = findPathBetweenCoords(city, pt1.x, pt1.y, pt2.x, pt2.y);
+  if (!route || route.waypoints.length < 2) return null;
+
+  return {
+    pathD: routeToSvgPath(route.waypoints),
+    from: route.waypoints[0],
+    to: route.waypoints[route.waypoints.length - 1],
+  };
 }
 
 export const RouteDemoLayer = (props: RouteDemoLayerProps) => {
@@ -69,7 +56,7 @@ export const RouteDemoLayer = (props: RouteDemoLayerProps) => {
 
     let step = 0;
     const update = () => {
-      setRoute(pickRoute(props.city, props.width, props.height, step));
+      setRoute(pickRoute(props.city, step));
       step += 1;
     };
     update();

@@ -601,7 +601,24 @@
     return best;
   }
 
+  /** 
+   * High-level wrapper that accepts arbitrary coordinates, maps them to the nearest
+   * map features, and guarantees the output route connects exactly to the given points.
+   */
+  function findPathBetweenCoords(city, x1, y1, x2, y2) {
+    const bA = nearestBuilding(city, x1, y1);
+    const bB = nearestBuilding(city, x2, y2);
+    if (!bA || !bB) return null;
+    
+    const result = findPath(city, bA.id, bB.id);
+    if (!result || !result.waypoints) return null;
+    
+    // Inject the exact start/end coordinates so the SVG connects perfectly to the target
+    const waypoints = [{x: x1, y: y1}, ...result.waypoints, {x: x2, y: y2}];
+    return { ...result, waypoints };
+  }
+
   window.CityMapRoutingV1 = {
-    enrichCity, findPath, routeToSvgPath, nearestBuilding, nearestBuildingToSlot
+    enrichCity, findPath, routeToSvgPath, nearestBuilding, nearestBuildingToSlot, findPathBetweenCoords
   };
 })();
