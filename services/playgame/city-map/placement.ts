@@ -112,7 +112,12 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
     if (best && (!globalBest || (best.score ?? -Infinity) > (globalBest.score ?? -Infinity))) globalBest = best;
   }
 
-  return clamp(globalBest || { x: targetX, y: targetY, text: labelText, ...labelMetrics(labelText) });
+  const result = clamp(globalBest || { x: targetX, y: targetY, text: labelText, ...labelMetrics(labelText) });
+  // Final safety: bbox clamp can land outside irregular polygons — snap back to grid centroid
+  if (!pointInPolygon({ x: result.x, y: result.y }, visible)) {
+    return { ...result, x: targetX, y: targetY };
+  }
+  return result;
 }
 
 export function viewportVisibleArea(polygon: Point[]) {
