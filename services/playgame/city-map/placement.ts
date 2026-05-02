@@ -194,8 +194,59 @@ export function placeDotsInPolygon(
   const nearSeed = (x: number, y: number, minDist: number) =>
     preSeeds.some((p) => Math.hypot(x - p.x, y - p.y) < minDist);
 
+  const bucketAwareMaximin = (candidates: Placed[], count: number) => {
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+    const aspect = width / height;
+    const cols = aspect > 1.35 ? 4 : aspect < 0.74 ? 2 : 3;
+    const rows = aspect < 0.74 ? 4 : aspect > 1.35 ? 2 : 3;
+    const bucketCount = cols * rows;
+    const bucketFor = (point: Point) => {
+      const col = Math.max(0, Math.min(cols - 1, Math.floor(((point.x - minX) / width) * cols)));
+      const row = Math.max(0, Math.min(rows - 1, Math.floor(((point.y - minY) / height) * rows)));
+      return row * cols + col;
+    };
+    const candidateBuckets = candidates.map(bucketFor);
+    const availableByBucket = new Array(bucketCount).fill(0);
+    candidateBuckets.forEach((bucket) => { availableByBucket[bucket] += 1; });
+    const selected = new Set<number>();
+    const selectedByBucket = new Array(bucketCount).fill(0);
+    const minD = candidates.map(() => Infinity);
+
+    while (selected.size < count) {
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let i = 0; i < candidates.length; i++) {
+        if (selected.has(i)) continue;
+        const bucket = candidateBuckets[i];
+        const bucketPressure = selectedByBucket[bucket] / Math.max(1, availableByBucket[bucket]);
+        const coverageBonus = selectedByBucket[bucket] === 0 ? 620 : 0;
+        const spread = selected.size === 0
+          ? Math.min(candidates[i].radial, initialSpacing)
+          : minD[i];
+        const edgeBonus = Math.min(candidates[i].edgeD, 34) * 0.55;
+        const centerPenalty = selected.size === 0 ? candidates[i].radial * 0.12 : 0;
+        const score = coverageBonus + spread * 1.4 + edgeBonus - bucketPressure * 220 - centerPenalty;
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      }
+      if (best === -1) break;
+      selected.add(best);
+      selectedByBucket[candidateBuckets[best]] += 1;
+      for (let i = 0; i < candidates.length; i++) {
+        const d = Math.hypot(candidates[i].x - candidates[best].x, candidates[i].y - candidates[best].y);
+        if (d < minD[i]) minD[i] = d;
+      }
+    }
+
+    return candidates.filter((_, i) => selected.has(i));
+  };
+
   // Replace Bridson BFS (directionally biased) with: uniform grid scan → candidate pool
-  // → furthest-point (maximin) sampling. No BFS → no left/right bias.
+  // → bucket-aware maximin sampling. No BFS → no left/right bias, and
+  // irregular districts get coverage across lobes instead of centroid-heavy clumps.
   // Reduce step each pass to grow the candidate pool until we have enough to fill target.
   type Placed = Point & { edgeD: number; angle: number; radial: number };
   for (let pass = 0; pass < 5; pass++) {
@@ -217,32 +268,7 @@ export function placeDotsInPolygon(
     }
     if (candidates.length < target) continue;
 
-    // Furthest-point (maximin) sampling: greedily pick the point farthest from all
-    // already-selected points, starting from the one closest to the polygon centroid.
-    const minD = candidates.map(() => Infinity);
-    const selected = new Set<number>();
-    let first = 0, bestStart = Infinity;
-    for (let i = 0; i < candidates.length; i++) {
-      const d = Math.hypot(candidates[i].x - centroid.x, candidates[i].y - centroid.y);
-      if (d < bestStart) { bestStart = d; first = i; }
-    }
-    selected.add(first);
-    for (let i = 0; i < candidates.length; i++)
-      minD[i] = Math.hypot(candidates[i].x - candidates[first].x, candidates[i].y - candidates[first].y);
-    while (selected.size < target) {
-      let best = -1, bestMin = -1;
-      for (let i = 0; i < candidates.length; i++) {
-        if (selected.has(i)) continue;
-        if (minD[i] > bestMin) { bestMin = minD[i]; best = i; }
-      }
-      if (best === -1) break;
-      selected.add(best);
-      for (let i = 0; i < candidates.length; i++) {
-        const d = Math.hypot(candidates[i].x - candidates[best].x, candidates[i].y - candidates[best].y);
-        if (d < minD[i]) minD[i] = d;
-      }
-    }
-    return candidates.filter((_, i) => selected.has(i));
+    return bucketAwareMaximin(candidates, target);
   }
 
   return [];

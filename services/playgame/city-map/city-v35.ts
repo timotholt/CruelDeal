@@ -1,5 +1,5 @@
 import { DISTRICT_COLORS, DISTRICT_NAMES, VIEW_H, VIEW_W } from './config';
-import { closestPointOnPolygon, insetPolygon, pointInPolygon, pointToSegmentDist, polygonArea, polygonCentroid } from './geometry';
+import { closestPointOnPolygon, insetPolygon, pointInPolygon, pointToSegmentDist, polygonArea, polygonBBox, polygonCentroid } from './geometry';
 import { buildTerrain } from './terrain';
 import {
   bspSubdivide,
@@ -244,10 +244,15 @@ function makeDistrict(
   const bigLandmarkBlocks = bigLandmarkBlockData.map((b) => ({ polygon: b.polygon }));
   const bigLandmarkCentroids = bigLandmarkBlockData.map((b) => b.centroid);
 
-  const slotCount = flavor ? 0
-    : visibleArea > 52000 ? 10
+  const bbox = polygonBBox(region);
+  const aspect = Math.max(bbox.w, bbox.h) / Math.max(1, Math.min(bbox.w, bbox.h));
+  const areaSlotCount = visibleArea > 52000 ? 10
     : visibleArea > 40000 ? 8
     : 6;
+  const slotCount = flavor ? 0
+    : aspect > 3.2 ? Math.min(areaSlotCount, 6)
+    : aspect > 2.25 ? Math.min(areaSlotCount, 8)
+    : areaSlotCount;
   const numLandmarks = flavor ? 0 : 3;
 
   const landmarkPoints = flavor ? [] : placeDotsInPolygon(

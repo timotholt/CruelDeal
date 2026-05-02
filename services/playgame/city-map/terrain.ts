@@ -27,6 +27,7 @@ export interface LandmassPlan {
   id: string;
   kind: "mainland" | "island";
   isPrimary: boolean;
+  compositionRole?: "satellite-balance" | string;
   polygon: Point[];
   path: string;
   hardPath: string;
@@ -202,10 +203,10 @@ function makeIslandCandidate(landPolygon: Point[], rng: Rng) {
   return poly;
 }
 
-function generateTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: Segment[]) {
+function planTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: Segment[]) {
   const visibleLand = visibleSampleArea(landPolygon);
   const waterFraction = Math.max(0, 1 - visibleLand / (VIEW_W * VIEW_H));
-  if (waterFraction < 0.12) return [];
+  if (waterFraction < 0.12) return addCompositionSatelliteIslandIfNeeded(landPolygon, [], rng, riverSegments);
   const target = waterFraction > 0.34 ? 2 : rng() < 0.88 ? 1 : 0;
   const islands: LandmassPlan[] = [];
   for (let attempt = 0; attempt < 140 && islands.length < target; attempt++) {
@@ -219,6 +220,97 @@ function generateTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: S
     if (distToMainland < 16) continue;
     islands.push(makeLandmass(`island-${islands.length + 1}`, "island", poly, { minimumChannel: distToMainland }));
   }
+  return addCompositionSatelliteIslandIfNeeded(landPolygon, islands, rng, riverSegments);
+}
+
+type CompositionQuadrantId = "nw" | "ne" | "sw" | "se";
+
+function quadrantVisibleSampleArea(polygon: Point[], bounds: { minX: number; minY: number; maxX: number; maxY: number }, step = 8) {
+  let count = 0;
+  for (let x = bounds.minX + step / 2; x < bounds.maxX; x += step) {
+    for (let y = bounds.minY + step / 2; y < bounds.maxY; y += step) {
+      if (pointInPolygon({ x, y }, polygon)) count++;
+    }
+  }
+  return count * step * step;
+}
+
+function compositionQuadrantBounds(id: CompositionQuadrantId) {
+  const west = { minX: 8, maxX: VIEW_W * 0.42 };
+  const east = { minX: VIEW_W * 0.58, maxX: VIEW_W - 8 };
+  const north = { minY: 8, maxY: VIEW_H * 0.38 };
+  const south = { minY: VIEW_H * 0.62, maxY: VIEW_H - 8 };
+  return {
+    ...(id === "nw" || id === "sw" ? west : east),
+    ...(id === "nw" || id === "ne" ? north : south),
+  };
+}
+
+function satelliteCentersForQuadrant(id: CompositionQuadrantId) {
+  const bounds = compositionQuadrantBounds(id);
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const sx = bounds.maxX - bounds.minX;
+  const sy = bounds.maxY - bounds.minY;
+  return [
+    { x: cx, y: cy, r: 24 },
+    { x: cx + sx * 0.18, y: cy - sy * 0.12, r: 22 },
+    { x: cx - sx * 0.16, y: cy + sy * 0.14, r: 21 },
+    { x: cx + sx * 0.08, y: cy + sy * 0.2, r: 19 },
+    { x: cx - sx * 0.2, y: cy - sy * 0.18, r: 18 },
+  ];
+}
+
+function makeSatelliteCandidate(quadrantId: CompositionQuadrantId, index: number, rng: Rng) {
+  const centers = satelliteCentersForQuadrant(quadrantId);
+  const base = centers[index % centers.length];
+  const cx = base.x + (rng() - 0.5) * 18;
+  const cy = base.y + (rng() - 0.5) * 18;
+  const radius = base.r + (rng() - 0.5) * 6;
+  return makeBlob(cx, cy, radius, rng, 14 + Math.floor(rng() * 5), 0.28);
+}
+
+function emptiestCompositionQuadrant(landPolygon: Point[], islands: LandmassPlan[]) {
+  const quadrants: CompositionQuadrantId[] = ["nw", "ne", "sw", "se"];
+  return quadrants
+    .map((id) => {
+      const bounds = compositionQuadrantBounds(id);
+      const area = (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY);
+      const mainlandMass = quadrantVisibleSampleArea(landPolygon, bounds);
+      const islandMass = islands.reduce((sum, island) => sum + quadrantVisibleSampleArea(island.polygon, bounds), 0);
+      return { id, share: (mainlandMass + islandMass) / Math.max(1, area) };
+    })
+    .sort((a, b) => a.share - b.share)[0];
+}
+
+function addCompositionSatelliteIslandIfNeeded(
+  landPolygon: Point[],
+  islands: LandmassPlan[],
+  rng: Rng,
+  riverSegments: Segment[],
+) {
+  const target = emptiestCompositionQuadrant(landPolygon, islands);
+  if (!target || target.share >= 0.38) return islands;
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const poly = makeSatelliteCandidate(target.id, attempt, rng);
+    const visibleVerts = poly.filter((p) => p.x > 8 && p.x < VIEW_W - 8 && p.y > 8 && p.y < VIEW_H - 8).length;
+    if (visibleVerts < 4) continue;
+    if (poly.some((p) => pointInPolygon(p, landPolygon))) continue;
+    if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 12)) continue;
+    if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 16)) continue;
+
+    const distToMainland = polygonToPolygonDist(poly, landPolygon);
+    if (distToMainland < MIN_ISLAND_CHANNEL) continue;
+
+    const satellite = makeLandmass(`island-${islands.length + 1}`, "island", poly, {
+      compositionRole: `satellite-balance:${target.id}`,
+      minimumChannel: distToMainland,
+    });
+    if (satellite.visibleArea < 360) continue;
+    return [...islands, satellite];
+  }
+
   return islands;
 }
 
@@ -292,7 +384,7 @@ export function generateTerrain(rng: Rng): TerrainPlan {
   const river = generateRivers(mainlandPolygon, rng);
   const riverSegments = river ? river.segments : [];
   const mainland = makeLandmass("mainland", "mainland", mainlandPolygon);
-  const islands = generateTerrainIslands(mainlandPolygon, rng, riverSegments);
+  const islands = planTerrainIslands(mainlandPolygon, rng, riverSegments);
   const landmasses = [mainland, ...islands];
   const ocean = viewportPolygon();
   return {

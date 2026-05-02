@@ -72,28 +72,30 @@ Add a debug overlay toggle that lightly marks underfilled quadrants. This does n
 - No new console spam.
 - Existing tests pass.
 
-## Step 2: Upper-Right Satellite Island Fallback
+## Step 2: Empty-Quadrant Satellite Island Fallback
 
 ### Goal
 
-If the upper-right is visually empty, generate a small island or peninsula there.
+If any corner quadrant is visually empty, generate a small island or peninsula there.
 
 ### Implementation
 
 - Add a terrain post-pass that runs after base landmass generation.
-- If upper-right visual mass is below threshold, propose a compact island inside the upper-right safe zone.
+- Score the four corner quadrants for visible landmass.
+- If the lowest-mass quadrant is below threshold, propose a compact island inside that quadrant's safe zone.
+- Keep this inside the single terrain island planner so natural/random islands and composition satellites do not become competing systems.
 - Validate it against existing water, mainland coast, viewport margin, and bridge clearance.
 - If the island cannot fit cleanly, skip it.
-- Mark it as `compositionRole: "satellite-balance"`.
+- Mark it as `compositionRole: "satellite-balance:<quadrant>"`.
 - Start with flavor-only islands: land, coast road, buildings/docks if valid, no playable slots.
 
 ### Visual Improvement
 
-Screens like the provided example should gain a small upper-right landform instead of a dead void.
+Screens like the provided example should gain a small landform in the emptiest corner instead of a dead void.
 
 ### Acceptance
 
-- At least the known bad screenshot seed family can produce a visible upper-right island or fallback peninsula.
+- At least the known bad screenshot seed family can produce a visible island or fallback peninsula in the underfilled quadrant.
 - The island does not overlap mainland, debug dock, board edge, or water features.
 - Existing mainland districts, slots, landmarks, and routes remain unchanged unless terrain validation requires a safe fallback.
 - Existing tests pass.

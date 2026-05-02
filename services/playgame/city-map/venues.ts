@@ -107,7 +107,7 @@ function refillDistrictSlots(district: CityMap['districts'][number], avoidPoints
     ...avoidPoints,
     ...existing.map((slot) => ({ x: slot.x, y: slot.y })),
   ];
-  const points = placeDotsInPolygon(polygon, () => 0.5, [], missing, visibleArea, label, seedPoints);
+  const points = placeDotsInPolygon(polygon, () => 0.5, [], target, visibleArea, label, seedPoints);
   const additions = points.slice(0, missing).map((point, index) =>
     makeReplacementSlot(district, point, existing.length + index),
   );
