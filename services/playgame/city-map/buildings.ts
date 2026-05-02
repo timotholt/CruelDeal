@@ -424,18 +424,27 @@ export function generateBlockBuildings(
         y: orig.y + ax.y * u + nm.y * v,
       });
 
+      // origLp = original block polygon in road-local coords.
+      // Using it (not `remaining`) for strip extraction and setback reference ensures
+      // the front-face distance from the road is identical on every side, regardless
+      // of how prior strip carving altered the `remaining` polygon's nearest edge.
+      const origLp = blockPolygon.map(toLoc);
+      const origMinV = Math.min(...origLp.map((p) => p.v));
+      const origMaxV = Math.max(...origLp.map((p) => p.v));
+      const frontV = origMinV + SETBACK;
+
       const lp = remaining.map(toLoc);
       const lMinV = Math.min(...lp.map((p) => p.v));
       const lMaxV = Math.max(...lp.map((p) => p.v));
       const lMinU = Math.min(...lp.map((p) => p.u));
       const lMaxU = Math.max(...lp.map((p) => p.u));
 
-      const depth = Math.min((lMaxV - lMinV) * 0.48, gridCell * 1.6);
+      const depth = Math.min((origMaxV - origMinV) * 0.48, gridCell * 1.6);
       if (depth < MIN_DIM || lMaxU - lMinU < MIN_DIM) continue;
 
-      // Extract the front strip polygon (near this road).
-      const stripPts = clipPolygonToRect(lp.map((p) => ({ x: p.u, y: p.v })), {
-        minX: lMinU - 1, minY: lMinV, maxX: lMaxU + 1, maxY: lMinV + depth,
+      // Extract front strip from original block polygon so it always starts at the road edge.
+      const stripPts = clipPolygonToRect(origLp.map((p) => ({ x: p.u, y: p.v })), {
+        minX: lMinU - 1, minY: origMinV, maxX: lMaxU + 1, maxY: origMinV + depth,
       });
 
       if (stripPts.length >= 3) {
@@ -449,18 +458,18 @@ export function generateBlockBuildings(
           for (let k = 0; k < nB; k++) {
             const bu1 = sMinU + GAP + k * (bW + GAP);
             const bu2 = bu1 + bW;
-            // Front face sits at SETBACK from road edge; back leaves a half-GAP alley.
+            // frontV = origMinV + SETBACK: consistent setback from road on every side.
             const cell = clipPolygonToRect(stripPts, {
-              minX: bu1, minY: lMinV + SETBACK, maxX: bu2, maxY: lMinV + depth - GAP * 0.5,
+              minX: bu1, minY: frontV, maxX: bu2, maxY: origMinV + depth - GAP * 0.5,
             });
             if (cell.length >= 3) pushWorldPoly(cell.map((p) => frLoc(p.x, p.y)));
           }
         }
       }
 
-      // Carve this strip from `remaining` so subsequent roads fill the interior.
+      // Carve this strip from `remaining` so the interior fill pass avoids overlap.
       const carved = clipPolygonToRect(lp.map((p) => ({ x: p.u, y: p.v })), {
-        minX: lMinU - 1, minY: lMinV + depth + GAP, maxX: lMaxU + 1, maxY: lMaxV + 1,
+        minX: lMinU - 1, minY: origMinV + depth + GAP, maxX: lMaxU + 1, maxY: lMaxV + 1,
       });
       remaining = carved.length >= 3 ? carved.map((p) => frLoc(p.x, p.y)) : [];
     }
