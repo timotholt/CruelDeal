@@ -17,6 +17,7 @@ export interface RiverPlan {
   path: string;
   segments: Segment[];
   pts: Point[];
+  rivers?: RiverPlan[];
   widthScale: number;
   outerWidth: number;
   innerWidth: number;
@@ -56,10 +57,17 @@ export function generateRiver(landPolygon: Point[], rng: Rng): RiverPlan {
   const perpY = dx / len;
   const pts = [start];
 
+  const bendSign = rng() < 0.5 ? -1 : 1;
+  const bendBias = (0.16 + rng() * 0.18) * len * bendSign;
+  const wavePhase = rng() * Math.PI * 2;
+
   for (let i = 1; i < 6; i++) {
     const t = i / 6;
     const taper = Math.sin(t * Math.PI);
-    const meander = (rng() - 0.5) * len * 0.22 * taper;
+    const bend = bendBias * taper;
+    const wave = Math.sin(t * Math.PI * 2 + wavePhase) * len * 0.12 * taper;
+    const jitter = (rng() - 0.5) * len * 0.1 * taper;
+    const meander = bend + wave + jitter;
     pts.push({
       x: start.x + dx * t + perpX * meander,
       y: start.y + dy * t + perpY * meander
@@ -141,6 +149,7 @@ export function generateRivers(landPolygon: Point[], rng: Rng): RiverPlan | null
       path: `${river1.path} ${river2.path}`,
       segments: [...river1.segments, ...river2.segments],
       pts: river1.pts,
+      rivers: [river1, river2],
       widthScale: river1.widthScale,
       outerWidth: river1.outerWidth,
       innerWidth: river1.innerWidth,

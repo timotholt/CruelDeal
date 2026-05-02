@@ -13,7 +13,6 @@ export function updateCityCamera(camera: THREE.OrthographicCamera, viewport: Cit
   const halfWidth = halfHeight * aspect;
   const centerX = viewport.x + viewport.width / 2;
   const centerZ = viewport.y + viewport.height / 2;
-  const pitchOffset = viewport.height * 0.42;
 
   camera.left = -halfWidth;
   camera.right = halfWidth;
@@ -21,7 +20,7 @@ export function updateCityCamera(camera: THREE.OrthographicCamera, viewport: Cit
   camera.bottom = -halfHeight;
   camera.near = 0.1;
   camera.far = 5000;
-  camera.position.set(centerX, 900, centerZ - pitchOffset);
+  camera.position.set(centerX, 900, centerZ);
   camera.lookAt(centerX, 0, centerZ);
   camera.updateProjectionMatrix();
 }
