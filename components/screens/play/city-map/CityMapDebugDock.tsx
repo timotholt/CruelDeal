@@ -9,6 +9,13 @@ export interface CityMapDebugState {
   showLandmarks: boolean;
   showSlots: boolean;
   showRouteDemo: boolean;
+  showComposition: boolean;
+  showTerrainDebug: boolean;
+  showDistrictDebug: boolean;
+  showArterialsDebug: boolean;
+  showIslandDebug: boolean;
+  showMassDebug: boolean;
+  showSeedDebug: boolean;
 }
 
 export interface CityMapDebugDockProps {
@@ -24,6 +31,13 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showLandmarks', label: 'Landmarks' },
   { key: 'showSlots', label: 'Slots' },
   { key: 'showRouteDemo', label: 'Route Demo' },
+  { key: 'showComposition', label: 'Composition' },
+  { key: 'showTerrainDebug', label: 'Terrain' },
+  { key: 'showDistrictDebug', label: 'Districts' },
+  { key: 'showArterialsDebug', label: 'Arterials' },
+  { key: 'showIslandDebug', label: 'Islands' },
+  { key: 'showMassDebug', label: 'Mass' },
+  { key: 'showSeedDebug', label: 'Seed Info' },
 ];
 
 export const CityMapDebugDock = (props: CityMapDebugDockProps) => {

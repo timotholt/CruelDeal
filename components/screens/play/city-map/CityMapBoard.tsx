@@ -9,6 +9,7 @@ import { useCityMapLandmarkHover } from './useCityMapHover';
 import { useCityMapHighlight } from './useCityMapHighlight';
 import { CityMapDebugDock, type CityMapDebugState } from './CityMapDebugDock';
 import { RouteDemoLayer } from './RouteDemoLayer';
+import { CompositionDebugOverlay } from './CompositionDebugOverlay';
 import './cityMapStyles.css';
 
 export interface CityMapBoardProps {
@@ -38,6 +39,13 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     showLandmarks: initialDebug?.showLandmarks ?? true,
     showSlots: initialDebug?.showSlots ?? true,
     showRouteDemo: false,
+    showComposition: false,
+    showTerrainDebug: false,
+    showDistrictDebug: false,
+    showArterialsDebug: false,
+    showIslandDebug: false,
+    showMassDebug: false,
+    showSeedDebug: false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city'));
   const width = () => props.width || city().width;
@@ -101,6 +109,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           />
         </Show>
         <RouteDemoLayer city={city()} active={debugState().showRouteDemo} width={width()} height={height()} />
+        <Show when={debugState().showComposition}>
+          <CompositionDebugOverlay city={city()} width={width()} height={height()} />
+        </Show>
         <svg
           class="city-map-board__slot-layer"
           viewBox={`0 0 ${width()} ${height()}`}
