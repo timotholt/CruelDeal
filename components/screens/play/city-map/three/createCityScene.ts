@@ -63,16 +63,19 @@ function addMesh(
   material: THREE.Material,
   name: string,
   debugWireframe?: THREE.Material,
+  renderOrder = 0,
 ) {
   if (!geometry) return;
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = name;
+  mesh.renderOrder = renderOrder;
   group.add(mesh);
 
   if (!debugWireframe) return;
   const wire = new THREE.Mesh(geometry.clone(), debugWireframe);
   wire.name = `${name}:wireframe`;
   wire.position.y += 0.08;
+  wire.renderOrder = renderOrder + 0.5;
   group.add(wire);
 }
 
@@ -82,6 +85,7 @@ function addBatchedMesh(
   material: THREE.Material,
   name: string,
   debugWireframe?: THREE.Material,
+  renderOrder = 0,
 ) {
   if (!geometries.length) return;
   const merged = geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false);
@@ -90,12 +94,14 @@ function addBatchedMesh(
 
   const mesh = new THREE.Mesh(merged, material);
   mesh.name = name;
+  mesh.renderOrder = renderOrder;
   group.add(mesh);
 
   if (debugWireframe) {
     const wire = new THREE.Mesh(merged.clone(), debugWireframe);
     wire.name = `${name}:wireframe`;
     wire.position.y += 0.08;
+    wire.renderOrder = renderOrder + 0.5;
     group.add(wire);
   }
 
@@ -104,13 +110,26 @@ function addBatchedMesh(
   }
 }
 
-function pushGeometry(batches: Map<THREE.Material, THREE.BufferGeometry[]>, material: THREE.Material, geometry: THREE.BufferGeometry | null) {
+interface GeometryBatch {
+  material: THREE.Material;
+  geometries: THREE.BufferGeometry[];
+  renderOrder: number;
+  name: string;
+}
+
+function pushGeometry(
+  batches: Map<THREE.Material, GeometryBatch>,
+  material: THREE.Material,
+  geometry: THREE.BufferGeometry | null,
+  renderOrder: number,
+  name: string,
+) {
   if (!geometry) return;
-  const geometries = batches.get(material);
-  if (geometries) {
-    geometries.push(geometry);
+  const batch = batches.get(material);
+  if (batch) {
+    batch.geometries.push(geometry);
   } else {
-    batches.set(material, [geometry]);
+    batches.set(material, { material, geometries: [geometry], renderOrder, name });
   }
 }
 
@@ -136,11 +155,13 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
 
   const waterPlane = new THREE.Mesh(createMapPlane(model.world.width, model.world.height), materials.water);
   waterPlane.name = 'city-map-water-plane';
+  waterPlane.renderOrder = 0;
   terrainGroup.add(waterPlane);
   if (debugWireframe) {
     const waterWire = new THREE.Mesh(createMapPlane(model.world.width, model.world.height), debugWireframe);
     waterWire.name = 'city-map-water-plane:wireframe';
     waterWire.position.y += 0.08;
+    waterWire.renderOrder = 0.5;
     terrainGroup.add(waterWire);
   }
 
@@ -150,6 +171,7 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
     materials.terrain,
     'city-map-land',
     debugWireframe,
+    1,
   );
 
   for (const body of model.terrain.waterBodies || []) {
@@ -159,6 +181,7 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
       materials.water,
       `city-map-water-body:${body.id}`,
       debugWireframe,
+      2,
     );
   }
 
@@ -169,6 +192,7 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
       materialForOpenSpace(materials, space.render?.materialKey || space.type),
       `city-map-open-space:${space.id}`,
       debugWireframe,
+      3,
     );
   }
 
@@ -176,14 +200,16 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
     const roadsGroup = new THREE.Group();
     roadsGroup.name = 'city-map-roads';
     scene.add(roadsGroup);
-    const roadBatches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    const roadBatches = new Map<THREE.Material, GeometryBatch>();
 
     for (const edge of model.roads) {
       if (edge.riverBank) continue;
       pushGeometry(
         roadBatches,
         materials.roadUnderlay,
-        createRoadStripGeometry(edge, roadWidth(edge, true), edge.render?.elevation ?? 0.15),
+        createRoadStripGeometry(edge, roadWidth(edge, true), 1.0),
+        10,
+        'city-map-road-underlay',
       );
     }
 
@@ -191,7 +217,9 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
       pushGeometry(
         roadBatches,
         edge.riverBank ? materials.roadLocal : materialForRoad(materials, edge),
-        createRoadStripGeometry(edge, edge.riverBank ? 0.34 : roadWidth(edge), edge.render?.elevation ?? 0.2),
+        createRoadStripGeometry(edge, edge.riverBank ? 0.34 : roadWidth(edge), 1.3),
+        edge.riverBank ? 11 : 12,
+        `city-map-road-${roadKind(edge)}`,
       );
     }
 
@@ -201,17 +229,22 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
       pushGeometry(
         roadBatches,
         materials.roadUnderlay,
-        createSegmentStripGeometry(endpoints.a, endpoints.b, (bridge.render?.width ?? 2.4) + 1.2, (bridge.render?.elevation ?? 0.45) - 0.04),
+        createSegmentStripGeometry(endpoints.a, endpoints.b, (bridge.render?.width ?? 2.4) + 1.2, 1.6),
+        14,
+        'city-map-bridge-underlay',
       );
       pushGeometry(
         roadBatches,
         materials.bridge,
-        createSegmentStripGeometry(endpoints.a, endpoints.b, bridge.render?.width ?? 2.4, bridge.render?.elevation ?? 0.45),
+        createSegmentStripGeometry(endpoints.a, endpoints.b, bridge.render?.width ?? 2.4, 1.9),
+        15,
+        'city-map-bridge',
       );
     }
 
-    for (const [material, geometries] of roadBatches) {
-      addBatchedMesh(roadsGroup, geometries, material, `city-map-roads:${material.uuid}`, debugWireframe);
+    const orderedRoadBatches = [...roadBatches.values()].sort((a, b) => a.renderOrder - b.renderOrder);
+    for (const batch of orderedRoadBatches) {
+      addBatchedMesh(roadsGroup, batch.geometries, batch.material, batch.name, debugWireframe, batch.renderOrder);
     }
   }
 
@@ -219,18 +252,20 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
     const buildingsGroup = new THREE.Group();
     buildingsGroup.name = 'city-map-buildings';
     scene.add(buildingsGroup);
-    const buildingBatches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    const buildingBatches = new Map<THREE.Material, GeometryBatch>();
 
     for (const building of model.buildings) {
       pushGeometry(
         buildingBatches,
         materialForBuilding(materials, building),
         createBuildingGeometry(building),
+        30,
+        'city-map-buildings',
       );
     }
 
-    for (const [material, geometries] of buildingBatches) {
-      addBatchedMesh(buildingsGroup, geometries, material, `city-map-buildings:${material.uuid}`, debugWireframe);
+    for (const batch of buildingBatches.values()) {
+      addBatchedMesh(buildingsGroup, batch.geometries, batch.material, `${batch.name}:${batch.material.uuid}`, debugWireframe, batch.renderOrder);
     }
   }
 
@@ -239,6 +274,7 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
   grid.material = materials.debugGrid;
   grid.name = 'city-map-debug-grid';
   grid.visible = debugState.showTerrainDebug;
+  grid.renderOrder = 40;
   scene.add(grid);
 
   addCityLights(scene);
