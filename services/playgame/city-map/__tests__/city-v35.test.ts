@@ -150,4 +150,17 @@ for (const seed of seeds) {
   assertRenderableBridges(city, label);
 }
 
+{
+  const templates = new Set<string>();
+  const nonBranchTemplates = new Set(['vertical-strips', 'horizontal-bands', 'diagonal-bands']);
+  for (let i = 0; i < 20; i++) {
+    const city = buildCityV35(`macro-layout-sample-${i}`, { cache: false });
+    templates.add(city.composition?.macroLayoutTemplate || 'missing');
+    assertActiveSlots(city, `macro-layout-sample-${i}`);
+  }
+  const nonBranchHits = Array.from(templates).filter((template) => nonBranchTemplates.has(template));
+  expectTrue(templates.size >= 5, '20 seed sample uses at least five macro layout templates', Array.from(templates));
+  expectTrue(nonBranchHits.length >= 2, '20 seed sample includes non-T strip/band macro layouts', nonBranchHits);
+}
+
 console.log('\nAll city v35 map tests passed.');

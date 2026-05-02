@@ -228,6 +228,9 @@ export interface CityMap {
   buildingPlan: BuildingPlan;
   bridgePlan: BridgePlan;
   coastDocks: DockPlan[];
+  composition?: {
+    macroLayoutTemplate?: string;
+  };
   landmarks?: DistrictLandmark[];
   landmarkById?: Readonly<Record<string, DistrictLandmark>>;
   venues: Venue[];

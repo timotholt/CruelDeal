@@ -205,6 +205,7 @@ export const CompositionDebugOverlay = (props: CompositionDebugOverlayProps) => 
     const angle = metrics().dominantDistrictAngle;
     return angle == null ? 'n/a' : `${Math.round((angle * 180) / Math.PI)}deg`;
   };
+  const templateLabel = () => props.city.composition?.macroLayoutTemplate || 'classic-t';
 
   return (
     <svg
@@ -224,10 +225,10 @@ export const CompositionDebugOverlay = (props: CompositionDebugOverlayProps) => 
         )}
       </For>
       <text class="city-map-composition-debug__summary" x="10" y={props.height - 34}>
-        LOW {metrics().lowestQuadrantId.toUpperCase()} | DIAG ROADS {percent(metrics().diagonalRoadShare)}
+        LAYOUT {templateLabel().toUpperCase()} | LOW {metrics().lowestQuadrantId.toUpperCase()}
       </text>
       <text class="city-map-composition-debug__summary" x="10" y={props.height - 18}>
-        DIST ANGLE {angleLabel()} | T {percent(metrics().tConfidence)}
+        DIST ANGLE {angleLabel()} | DIAG ROADS {percent(metrics().diagonalRoadShare)} | T {percent(metrics().tConfidence)}
       </text>
     </svg>
   );

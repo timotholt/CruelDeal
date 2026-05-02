@@ -1,5 +1,5 @@
 import { DISTRICT_COLORS, DISTRICT_NAMES, VIEW_H, VIEW_W } from './config';
-import { closestPointOnPolygon, insetPolygon, pointInPolygon, pointToSegmentDist, polygonArea, polygonBBox, polygonCentroid } from './geometry';
+import { closestPointOnPolygon, insetPolygon, pointInPolygon, pointToSegmentDist, polygonArea, polygonBBox, polygonCentroid, segIntersect } from './geometry';
 import { buildTerrain } from './terrain';
 import {
   bspSubdivide,
@@ -8,8 +8,9 @@ import {
   macroDivide3,
   splitPolygonByLine,
   type Cut,
+  type MacroLayoutTemplate,
 } from './partition';
-import { cutPath, cutPoints, polygonToPath, rectPolygon, smoothClosedPath, straightPolylinePath } from './paths';
+import { cutPath, cutPoints, cutSegments, polygonToPath, rectPolygon, smoothClosedPath, straightPolylinePath } from './paths';
 import { labelPosition, placeDotsInPolygon, viewportVisibleArea } from './placement';
 import { generateBlockBuildings } from './buildings';
 import { generateBridges } from './bridges';
@@ -301,26 +302,107 @@ function makeDistrict(
   };
 }
 
-function makeMainlandDistricts(terrain: TerrainV35, rng: Rng, names: string[], colors: string[], buildableMask?: readonly Point[] | null) {
+const MACRO_LAYOUT_TEMPLATES: MacroLayoutTemplate[] = [
+  'vertical-strips',
+  'horizontal-bands',
+  'diagonal-bands',
+  'vertical-strips',
+  'horizontal-bands',
+  'diagonal-bands',
+  'vertical-strips',
+  'horizontal-bands',
+  'diagonal-bands',
+  'coast-split',
+  'corner-bite',
+  'diagonal-spine',
+  'offset-t',
+  'classic-t',
+];
+
+function chooseMacroLayoutTemplate(normalizedSeed: number): MacroLayoutTemplate {
+  const mixed = (normalizedSeed ^ (normalizedSeed >>> 7) ^ (normalizedSeed >>> 17)) >>> 0;
+  return MACRO_LAYOUT_TEMPLATES[mixed % MACRO_LAYOUT_TEMPLATES.length];
+}
+
+function longestEdgeAngle(polygon: readonly Point[]) {
+  let bestLength = 0;
+  let bestAngle = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length > bestLength) {
+      bestLength = length;
+      bestAngle = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+  }
+  return bestAngle;
+}
+
+function macroGridAngleForTemplate(template: MacroLayoutTemplate, terrain: TerrainV35, rng: Rng) {
+  if (template === 'diagonal-spine') return (rng() < 0.5 ? -1 : 1) * (Math.PI / 4 + (rng() - 0.5) * 0.28);
+  if (template === 'diagonal-bands') return (rng() < 0.5 ? -1 : 1) * (Math.PI / 4 + (rng() - 0.5) * 0.16);
+  if (template === 'corner-bite') return (rng() < 0.5 ? -1 : 1) * (Math.PI / 6 + rng() * 0.28);
+  if (template === 'coast-split') return longestEdgeAngle(terrain.mainland.polygon) + Math.PI / 2 + (rng() - 0.5) * 0.24;
+  if (template === 'offset-t') return (rng() - 0.5) * 0.18;
+  return 0;
+}
+
+function districtAnglesForTemplate(template: MacroLayoutTemplate, gridAngle: number, rng: Rng) {
+  if (template === 'classic-t') {
+    return [
+      0,
+      Math.PI / 4 + (rng() - 0.5) * 0.14,
+      -Math.PI / 5 + (rng() - 0.5) * 0.14,
+    ];
+  }
+  if (template === 'offset-t') {
+    return [
+      (rng() - 0.5) * 0.12,
+      Math.PI / 2 + (rng() - 0.5) * 0.18,
+      -Math.PI / 7 + (rng() - 0.5) * 0.18,
+    ];
+  }
+  if (template === 'vertical-strips' || template === 'horizontal-bands' || template === 'diagonal-bands') {
+    return [
+      gridAngle + (rng() - 0.5) * 0.1,
+      gridAngle + (rng() - 0.5) * 0.1,
+      gridAngle + (rng() - 0.5) * 0.1,
+    ];
+  }
+  return [
+    gridAngle + (rng() - 0.5) * 0.12,
+    gridAngle + Math.PI / 2 + (rng() - 0.5) * 0.16,
+    gridAngle - Math.PI / 5 + (rng() - 0.5) * 0.16,
+  ];
+}
+
+function makeMainlandDistricts(terrain: TerrainV35, normalizedSeed: number, rng: Rng, names: string[], colors: string[], buildableMask?: readonly Point[] | null) {
   const riverSegments = terrainWaterBodiesOfKind(terrain, 'river')
     .flatMap((river) => ((river.segments || []) as Array<{ a: Point; b: Point }>));
-  const divided = macroDivide3(terrain.mainland.polygon, 0, rng, riverSegments);
+  const requestedTemplate = chooseMacroLayoutTemplate(normalizedSeed);
+  let macroLayoutTemplate = requestedTemplate;
+  let gridAngle = macroGridAngleForTemplate(requestedTemplate, terrain, rng);
+  let divided = macroDivide3(terrain.mainland.polygon, gridAngle, rng, riverSegments, { template: requestedTemplate });
+  if (divided.regions.length < 3 && requestedTemplate !== 'classic-t') {
+    macroLayoutTemplate = 'classic-t';
+    gridAngle = 0;
+    divided = macroDivide3(terrain.mainland.polygon, gridAngle, rng, riverSegments, { template: 'classic-t' });
+  }
   const regions = divided.regions
     .slice()
     .sort((a, b) => viewportVisibleArea(b) - viewportVisibleArea(a))
     .slice(0, 3);
-  const districtAngles = [
-    0,
-    Math.PI / 4 + (rng() - 0.5) * 0.14,
-    -Math.PI / 5 + (rng() - 0.5) * 0.14,
-  ];
+  const districtAngles = districtAnglesForTemplate(macroLayoutTemplate, gridAngle, rng);
   const districts = regions.map((region, idx) => {
     const buildablePieces = buildableMask
       ? buildMainlandBuildablePolygons([region], buildableMask, divided.macroCuts)
       : null;
-    return makeDistrict(region, idx, names, colors, rng, districtAngles[idx] || 0, buildablePieces);
+    const district = makeDistrict(region, idx, names, colors, rng, districtAngles[idx] || 0, buildablePieces);
+    (district as CityDistrict & { macroLayoutTemplate?: MacroLayoutTemplate }).macroLayoutTemplate = macroLayoutTemplate;
+    return district;
   });
-  if (districts.length === 3) return { districts, macroCuts: divided.macroCuts };
+  if (districts.length === 3) return { districts, macroCuts: divided.macroCuts, macroLayoutTemplate };
 
   const fallbackDistrict = makeDistrict(
     terrain.mainland.polygon,
@@ -331,7 +413,72 @@ function makeMainlandDistricts(terrain: TerrainV35, rng: Rng, names: string[], c
     0,
     buildableMask ? [buildableMask.map((point) => ({ ...point }))] : null,
   );
-  return { districts: [fallbackDistrict], macroCuts: [] as Cut[] };
+  (fallbackDistrict as CityDistrict & { macroLayoutTemplate?: MacroLayoutTemplate }).macroLayoutTemplate = 'classic-t';
+  return { districts: [fallbackDistrict], macroCuts: [] as Cut[], macroLayoutTemplate: 'classic-t' as MacroLayoutTemplate };
+}
+
+function clipSegmentToPolygon(a: Point, b: Point, polygon: readonly Point[]) {
+  const splitPoints = [
+    { t: 0, point: a },
+    { t: 1, point: b },
+  ];
+  for (let i = 0; i < polygon.length; i++) {
+    const hit = segIntersect(a, b, polygon[i], polygon[(i + 1) % polygon.length]);
+    if (!hit) continue;
+    splitPoints.push({ t: Math.max(0, Math.min(1, hit.t)), point: { x: hit.x, y: hit.y } });
+  }
+  splitPoints.sort((p, q) => p.t - q.t);
+
+  const unique = splitPoints.filter((entry, index) => {
+    if (index === 0) return true;
+    const prev = splitPoints[index - 1];
+    return Math.abs(entry.t - prev.t) > 1e-4 || Math.hypot(entry.point.x - prev.point.x, entry.point.y - prev.point.y) > 0.2;
+  });
+
+  const runs: Array<[Point, Point]> = [];
+  for (let i = 0; i + 1 < unique.length; i++) {
+    const left = unique[i];
+    const right = unique[i + 1];
+    if (right.t - left.t < 1e-4) continue;
+    const midT = (left.t + right.t) / 2;
+    const mid = { x: a.x + (b.x - a.x) * midT, y: a.y + (b.y - a.y) * midT };
+    if (!pointInPolygon(mid, polygon)) continue;
+    if (Math.hypot(right.point.x - left.point.x, right.point.y - left.point.y) < 4) continue;
+    runs.push([left.point, right.point]);
+  }
+  return runs;
+}
+
+function clipCutToPolygon(cut: Cut, polygon: readonly Point[], index: number) {
+  const runs: Point[][] = [];
+  for (const segment of cutSegments(cut)) {
+    for (const [a, b] of clipSegmentToPolygon(segment.a, segment.b, polygon)) {
+      const current = runs[runs.length - 1];
+      if (current && Math.hypot(current[current.length - 1].x - a.x, current[current.length - 1].y - a.y) < 1.5) {
+        current.push(b);
+      } else {
+        runs.push([a, b]);
+      }
+    }
+  }
+  return runs
+    .filter((run) => {
+      let length = 0;
+      for (let i = 1; i < run.length; i++) length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+      return length >= 8;
+    })
+    .map((run, runIndex) => ({
+      ...cut,
+      id: `${(cut as Cut & { id?: string }).id || `macro-cut-${index}`}:clipped:${runIndex}`,
+      p1: run[0],
+      p2: run[run.length - 1],
+      polyline: run.length > 2 ? run : undefined,
+      polylineMode: run.length > 2 ? 'jog' : undefined,
+    } as Cut & { id: string }));
+}
+
+function clipCutsToPolygon(cuts: readonly Cut[], polygon: readonly Point[]) {
+  return cuts.flatMap((cut, index) => clipCutToPolygon(cut, polygon, index));
 }
 
 function makeCoastCut(id: string, polygon: Point[]): Cut {
@@ -668,7 +815,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   const colors = shuffle(DISTRICT_COLORS, rng);
   const mainlandInset = insetPolygon(terrain.mainland.polygon, 6);
   const validInset = mainlandInset.length >= 3 && polygonArea(mainlandInset) > 400;
-  const { districts: mainlandDistricts, macroCuts } = makeMainlandDistricts(terrain, rng, names, colors, validInset ? mainlandInset : null);
+  const { districts: mainlandDistricts, macroCuts, macroLayoutTemplate } = makeMainlandDistricts(terrain, normalizedSeed, rng, names, colors, validInset ? mainlandInset : null);
 
   if (validInset && mainlandDistricts.length > 0) pushCoastRoad(mainlandDistricts[0], 'mainland-coast-road', mainlandInset);
 
@@ -676,9 +823,10 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng);
   const districts = [...mainlandDistricts, ...islandDistricts];
   const cells = districts.flatMap((district) => district.blocks);
+  const clippedMacroCuts = validInset ? clipCutsToPolygon(macroCuts, mainlandInset) : macroCuts;
 
   const rawRoadCuts = [
-    ...macroCuts,
+    ...clippedMacroCuts,
     ...districts.flatMap((district) => district.rawCuts || []),
     ...districts.flatMap((district) => district.roads || []).filter((road) => road.source === 'coast-road').map((road) => road.cut),
   ].filter(Boolean) as Cut[];
@@ -716,6 +864,9 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     bridgePlan,
     coastDocks,
     buildingPlan,
+    composition: {
+      macroLayoutTemplate,
+    },
     venues: [],
     venueById: {},
   } as CityMap;

@@ -23,6 +23,34 @@ export interface Cut {
   diagonalOverlay?: boolean;
 }
 
+export type MacroLayoutTemplate =
+  | "classic-t"
+  | "diagonal-spine"
+  | "offset-t"
+  | "corner-bite"
+  | "coast-split"
+  | "vertical-strips"
+  | "horizontal-bands"
+  | "diagonal-bands";
+
+interface MacroDivideOptions {
+  template?: MacroLayoutTemplate;
+}
+
+interface MacroTemplateConfig {
+  targetMin: number;
+  targetSpan: number;
+  firstOffsetBase: number;
+  firstOffsetJitter: number;
+  secondOffsetBase: number;
+  secondOffsetJitter: number;
+  firstAxis: "alternate" | "primary" | "secondary" | "mostly-primary";
+  secondAxis: "opposite" | "same" | "primary" | "secondary";
+  branchOn: "larger" | "smaller";
+  secondMinArea?: number;
+  secondMinVisible?: number;
+}
+
 export interface BspNode {
   polygon: Point[];
   depth: number;
@@ -267,9 +295,110 @@ function tryAngleCut(polygon: Point[], baseAngle: number, offsetMagnitude: numbe
   return { halfA: result[0], halfB: result[1], cutSeg: result[2], angle: cutAngle, cutLineP1: p1, cutLineP2: p2 };
 }
 
-export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, riverSegments: Array<{ a: Point; b: Point }> | null = null) {
+const MACRO_TEMPLATE_CONFIG: Record<MacroLayoutTemplate, MacroTemplateConfig> = {
+  "classic-t": {
+    targetMin: 0.15,
+    targetSpan: 0.3,
+    firstOffsetBase: 80,
+    firstOffsetJitter: 50,
+    secondOffsetBase: 50,
+    secondOffsetJitter: 30,
+    firstAxis: "alternate",
+    secondAxis: "opposite",
+    branchOn: "larger",
+  },
+  "diagonal-spine": {
+    targetMin: 0.22,
+    targetSpan: 0.24,
+    firstOffsetBase: 56,
+    firstOffsetJitter: 74,
+    secondOffsetBase: 44,
+    secondOffsetJitter: 46,
+    firstAxis: "mostly-primary",
+    secondAxis: "opposite",
+    branchOn: "larger",
+  },
+  "offset-t": {
+    targetMin: 0.16,
+    targetSpan: 0.26,
+    firstOffsetBase: 122,
+    firstOffsetJitter: 78,
+    secondOffsetBase: 74,
+    secondOffsetJitter: 54,
+    firstAxis: "alternate",
+    secondAxis: "opposite",
+    branchOn: "larger",
+  },
+  "corner-bite": {
+    targetMin: 0.1,
+    targetSpan: 0.2,
+    firstOffsetBase: 104,
+    firstOffsetJitter: 86,
+    secondOffsetBase: 46,
+    secondOffsetJitter: 44,
+    firstAxis: "primary",
+    secondAxis: "opposite",
+    branchOn: "smaller",
+    secondMinArea: 760,
+    secondMinVisible: 1700,
+  },
+  "coast-split": {
+    targetMin: 0.2,
+    targetSpan: 0.24,
+    firstOffsetBase: 72,
+    firstOffsetJitter: 64,
+    secondOffsetBase: 62,
+    secondOffsetJitter: 44,
+    firstAxis: "primary",
+    secondAxis: "same",
+    branchOn: "larger",
+  },
+  "vertical-strips": {
+    targetMin: 0.24,
+    targetSpan: 0.14,
+    firstOffsetBase: 106,
+    firstOffsetJitter: 62,
+    secondOffsetBase: 72,
+    secondOffsetJitter: 46,
+    firstAxis: "secondary",
+    secondAxis: "same",
+    branchOn: "larger",
+  },
+  "horizontal-bands": {
+    targetMin: 0.24,
+    targetSpan: 0.14,
+    firstOffsetBase: 92,
+    firstOffsetJitter: 58,
+    secondOffsetBase: 64,
+    secondOffsetJitter: 42,
+    firstAxis: "primary",
+    secondAxis: "same",
+    branchOn: "larger",
+  },
+  "diagonal-bands": {
+    targetMin: 0.22,
+    targetSpan: 0.16,
+    firstOffsetBase: 82,
+    firstOffsetJitter: 58,
+    secondOffsetBase: 58,
+    secondOffsetJitter: 42,
+    firstAxis: "primary",
+    secondAxis: "same",
+    branchOn: "larger",
+  },
+};
+
+export function macroDivide3(
+  landPolygon: Point[],
+  gridAngle: number,
+  rng: Rng,
+  riverSegments: Array<{ a: Point; b: Point }> | null = null,
+  options: MacroDivideOptions = {},
+) {
+  const template = options.template || "classic-t";
+  const config = MACRO_TEMPLATE_CONFIG[template] || MACRO_TEMPLATE_CONFIG["classic-t"];
   const totalArea = polygonArea(landPolygon);
-  const target1 = totalArea * (0.15 + rng() * 0.3);
+  const target1 = totalArea * (config.targetMin + rng() * config.targetSpan);
   const visibleBBox = (poly: Point[]) => {
     const clipped = clipPolygonToRect(poly, { minX: 0, minY: 0, maxX: VIEW_W, maxY: VIEW_H });
     if (clipped.length < 3) return { w: 0, h: 0 };
@@ -278,12 +407,26 @@ export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, 
     return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   };
 
+  const firstAxisForAttempt = (attempt: number) => {
+    if (config.firstAxis === "primary") return false;
+    if (config.firstAxis === "secondary") return true;
+    if (config.firstAxis === "mostly-primary") return attempt % 4 === 3;
+    return attempt % 2 === 0;
+  };
+
+  const secondAxisFor = (firstUseSecondary: boolean) => {
+    if (config.secondAxis === "primary") return false;
+    if (config.secondAxis === "secondary") return true;
+    if (config.secondAxis === "same") return firstUseSecondary;
+    return !firstUseSecondary;
+  };
+
   const findFirstCut = (minRatio: number, minVisibleSmaller: number, minMinDim: number) => {
     let best: (NonNullable<ReturnType<typeof tryGridCut>> & { useSecondary: boolean }) | null = null;
     let bestScore = Infinity;
     for (let attempt = 0; attempt < 24; attempt++) {
-      const useSecondary = attempt % 2 === 0;
-      const r = tryGridCut(landPolygon, gridAngle, useSecondary, 80 + rng() * 50, rng);
+      const useSecondary = firstAxisForAttempt(attempt);
+      const r = tryGridCut(landPolygon, gridAngle, useSecondary, config.firstOffsetBase + rng() * config.firstOffsetJitter, rng);
       if (!r) continue;
       const aArea = polygonArea(r.halfA);
       const bArea = polygonArea(r.halfB);
@@ -305,7 +448,7 @@ export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, 
   };
 
   let best1 = findFirstCut(0.12, 3500, 48) || findFirstCut(0.08, 2800, 38) || findFirstCut(0, 2000, 28) || findFirstCut(0, 2000, 0);
-  if (!best1) return { regions: [landPolygon], macroCuts: [] as Cut[] };
+  if (!best1) return { regions: [landPolygon], macroCuts: [] as Cut[], template };
   const roadCut1: Cut = {
     p1: best1.cutSeg.p1,
     p2: best1.cutSeg.p2,
@@ -319,17 +462,21 @@ export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, 
   const bArea = polygonArea(best1.halfB);
   const smaller = aArea <= bArea ? best1.halfA : best1.halfB;
   const larger = aArea <= bArea ? best1.halfB : best1.halfA;
+  const branchRegion = config.branchOn === "smaller" ? smaller : larger;
+  const carriedRegion = config.branchOn === "smaller" ? larger : smaller;
 
   const findSecondCut = (minMinDim: number) => {
     let best = null as (NonNullable<ReturnType<typeof tryGridCut>> & { isDiagonalAvenue: boolean }) | null;
     let bestScore = Infinity;
-    const secondAxis = !best1.useSecondary;
+    const secondAxis = secondAxisFor(best1.useSecondary);
     for (let attempt = 0; attempt < 24; attempt++) {
-      const r = tryGridCut(larger, gridAngle, secondAxis, 50 + rng() * 30, rng);
+      const r = tryGridCut(branchRegion, gridAngle, secondAxis, config.secondOffsetBase + rng() * config.secondOffsetJitter, rng);
       if (!r) continue;
       const xA = polygonArea(r.halfA);
       const xB = polygonArea(r.halfB);
-      if (xA < 1200 || xB < 1200 || viewportVisibleArea(r.halfA) < 2500 || viewportVisibleArea(r.halfB) < 2500) continue;
+      const minArea = config.secondMinArea ?? 1200;
+      const minVisible = config.secondMinVisible ?? 2500;
+      if (xA < minArea || xB < minArea || viewportVisibleArea(r.halfA) < minVisible || viewportVisibleArea(r.halfB) < minVisible) continue;
       const bbA = visibleBBox(r.halfA);
       const bbB = visibleBBox(r.halfB);
       if (Math.min(bbA.w, bbA.h) < minMinDim || Math.min(bbB.w, bbB.h) < minMinDim) continue;
@@ -349,7 +496,7 @@ export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, 
   };
 
   const best2 = findSecondCut(65) || findSecondCut(55) || findSecondCut(42) || findSecondCut(32);
-  if (!best2) return { regions: [smaller, larger], macroCuts: [roadCut1] };
+  if (!best2) return { regions: [smaller, larger], macroCuts: [roadCut1], template };
   const roadCut2: Cut = {
     p1: best2.cutSeg.p1,
     p2: best2.cutSeg.p2,
@@ -359,7 +506,7 @@ export function macroDivide3(landPolygon: Point[], gridAngle: number, rng: Rng, 
     angle: best2.angle
   };
   void tryAngleCut;
-  return { regions: [smaller, best2.halfA, best2.halfB], macroCuts: [roadCut1, roadCut2] };
+  return { regions: [carriedRegion, best2.halfA, best2.halfB], macroCuts: [roadCut1, roadCut2], template };
 }
 
 export function bspSubdivide(polygon: Point[], depth: number, gridAngle: number, rng: Rng): BspNode {
