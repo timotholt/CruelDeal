@@ -14,7 +14,7 @@ export interface CityMapSvgRendererProps {
   viewport: CityMapViewport;
   surfaceSize: Size;
   debugState: CityMapDebugState;
-  cameraMoving: boolean;
+  cameraMotion: 'idle' | 'pan' | 'zoom';
   interactive: boolean;
   hoveredDistrictId?: string | null;
   hoveredLandmarkId?: string | null;
@@ -31,13 +31,15 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
     const ty = (-props.viewport.y / Math.max(0.001, props.viewport.height)) * props.surfaceSize.height;
     return `matrix(${scaleX}, 0, 0, ${scaleY}, ${tx}, ${ty})`;
   };
-  const simplifyForCameraMove = () => props.debugState.simplifyDuringCameraMove && props.cameraMoving;
+  const simplifyForCameraMove = () => props.debugState.simplifyDuringCameraMove && props.cameraMotion !== 'idle';
+  const simplifyForZoom = () => props.debugState.simplifyDuringCameraMove && props.cameraMotion === 'zoom';
 
   return (
     <div
       classList={{
         'city-map-world-layer': true,
         'city-map-world-layer--camera-simplified': simplifyForCameraMove(),
+        'city-map-world-layer--zoom-simplified': simplifyForZoom(),
       }}
       style={{ transform: worldTransform() }}
     >
@@ -50,18 +52,18 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
           debug={{
             showLabels: props.debugState.showLabels && !simplifyForCameraMove(),
             showBuildings: props.debugState.showBuildings && !simplifyForCameraMove(),
-            showRoads: props.debugState.showRoads,
+            showRoads: props.debugState.showRoads && !simplifyForZoom(),
             showSlots: false,
           }}
         />
       </Show>
       <RouteDemoLayer
         city={props.model.city}
-        active={props.debugState.showRouteDemo}
+        active={props.debugState.showRouteDemo && !simplifyForZoom()}
         width={props.model.world.width}
         height={props.model.world.height}
       />
-      <Show when={props.debugState.showComposition}>
+      <Show when={props.debugState.showComposition && !simplifyForZoom()}>
         <CompositionDebugOverlay
           city={props.model.city}
           width={props.model.world.width}
@@ -74,10 +76,10 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
         preserveAspectRatio="none"
         aria-hidden={!props.interactive}
       >
-        <Show when={props.debugState.showLandmarks}>
+        <Show when={props.debugState.showLandmarks && !simplifyForZoom()}>
           <CityMapLandmarks landmarks={props.model.landmarks} hoveredLandmarkId={props.hoveredLandmarkId} />
         </Show>
-        <Show when={props.debugState.showSlots}>
+        <Show when={props.debugState.showSlots && !simplifyForZoom()}>
           <CityMapSlots
             slots={props.model.slots}
             selectedSlotId={props.selectedSlotId}

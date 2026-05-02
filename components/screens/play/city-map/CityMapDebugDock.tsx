@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 
 export interface CityMapDebugState {
   showMap: boolean;
+  useThreeRenderer: boolean;
   showBuildings: boolean;
   showRoads: boolean;
   showLabels: boolean;
@@ -26,6 +27,7 @@ export interface CityMapDebugDockProps {
 
 const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showMap', label: 'City Map' },
+  { key: 'useThreeRenderer', label: 'Three' },
   { key: 'showBuildings', label: 'Buildings' },
   { key: 'showRoads', label: 'Roads' },
   { key: 'showLabels', label: 'Labels' },

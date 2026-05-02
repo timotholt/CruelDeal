@@ -40,8 +40,10 @@ export interface CityMapBoardProps {
 export const CityMapBoard = (props: CityMapBoardProps) => {
   const [selectedSlotId, setSelectedSlotId] = createSignal<string | null>(null);
   const initialDebug = untrack(() => props.debug);
+  const initialRendererMode = untrack(() => props.rendererMode);
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
+    useThreeRenderer: initialRendererMode === 'three',
     showBuildings: initialDebug?.showBuildings ?? true,
     showRoads: initialDebug?.showRoads ?? true,
     showLabels: initialDebug?.showLabels ?? true,
@@ -93,19 +95,20 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   let queuedCamera: CityMapCameraState | null = null;
   let cameraFrameId: number | null = null;
   let cameraMovingTimeoutId: number | null = null;
-  const [cameraMoving, setCameraMoving] = createSignal(false);
+  type CameraMotion = 'idle' | 'pan' | 'zoom';
+  const [cameraMotion, setCameraMotion] = createSignal<CameraMotion>('idle');
 
-  const markCameraMoving = () => {
-    setCameraMoving(true);
+  const markCameraMoving = (motion: Exclude<CameraMotion, 'idle'>) => {
+    setCameraMotion(motion);
     if (cameraMovingTimeoutId != null) window.clearTimeout(cameraMovingTimeoutId);
     cameraMovingTimeoutId = window.setTimeout(() => {
       cameraMovingTimeoutId = null;
-      setCameraMoving(false);
+      setCameraMotion('idle');
     }, 140);
   };
 
-  const scheduleCamera = (next: CityMapCameraState) => {
-    markCameraMoving();
+  const scheduleCamera = (next: CityMapCameraState, motion: Exclude<CameraMotion, 'idle'>) => {
+    markCameraMoving(motion);
     queuedCamera = next;
     if (cameraFrameId != null) return;
     cameraFrameId = window.requestAnimationFrame(() => {
@@ -115,8 +118,11 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       queuedCamera = null;
     });
   };
-  const updateCamera = (project: (current: CityMapCameraState) => CityMapCameraState) => {
-    scheduleCamera(project(queuedCamera ?? camera()));
+  const updateCamera = (
+    project: (current: CityMapCameraState) => CityMapCameraState,
+    motion: Exclude<CameraMotion, 'idle'>,
+  ) => {
+    scheduleCamera(project(queuedCamera ?? camera()), motion);
   };
 
   onCleanup(() => {
@@ -151,7 +157,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     const zoomFactor = Math.exp(-event.deltaY * 0.0018);
     const size = worldSize();
     const aspect = surfaceAspect();
-    updateCamera((current) => zoomCameraAt(current, anchorWorld, anchorScreen, current.zoom * zoomFactor, size, aspect));
+    updateCamera((current) => zoomCameraAt(current, anchorWorld, anchorScreen, current.zoom * zoomFactor, size, aspect), 'zoom');
   };
   const onPointerDown = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!interactive() || isControlTarget(event.target) || event.button !== 0) return;
@@ -166,14 +172,17 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         const rect = event.currentTarget.getBoundingClientRect();
         const size = worldSize();
         const aspect = surfaceAspect();
-        updateCamera((current) => panCameraByScreenDelta(
-          current,
-          { x: dx, y: dy },
-          rect,
-          cameraToViewport(current, size, aspect),
-          size,
-          aspect,
-        ));
+        updateCamera(
+          (current) => panCameraByScreenDelta(
+            current,
+            { x: dx, y: dy },
+            rect,
+            cameraToViewport(current, size, aspect),
+            size,
+            aspect,
+          ),
+          'pan',
+        );
         panDrag.lastX = event.clientX;
         panDrag.lastY = event.clientY;
         panDrag.moved = panDrag.moved || Math.hypot(dx, dy) > 3;
@@ -225,12 +234,12 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         onClickCapture={onClickCapture}
       >
         <CityMapRendererHost
-          mode={props.rendererMode ?? 'svg'}
+          mode={debugState().useThreeRenderer ? 'three' : 'svg'}
           model={renderModel()}
           viewport={viewport()}
           surfaceSize={surfaceSize()}
           debugState={debugState()}
-          cameraMoving={cameraMoving()}
+          cameraMotion={cameraMotion()}
           interactive={interactive()}
           hoveredDistrictId={highlight.hoveredDistrictId()}
           hoveredLandmarkId={hover.hoveredLandmarkId()}

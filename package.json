@@ -21,11 +21,13 @@
     "@tanstack/solid-virtual": "^3.13.24",
     "howler": "2.2.4",
     "solid-js": "^1.9.12",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.14.0",
+    "@types/three": "^0.184.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
     "eslint": "^9.39.4",

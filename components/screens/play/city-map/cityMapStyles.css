@@ -188,6 +188,27 @@
   filter: none;
 }
 
+.city-map-world-layer--zoom-simplified .city-map-board__slot-layer {
+  pointer-events: none;
+}
+
+.city-map-three-renderer,
+.city-map-three-renderer__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.city-map-three-renderer {
+  z-index: 1;
+  overflow: hidden;
+}
+
+.city-map-three-renderer__canvas {
+  display: block;
+}
+
 .city-map-board__slot-layer {
   z-index: 4;
   overflow: visible;
