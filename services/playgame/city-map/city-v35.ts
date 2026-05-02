@@ -620,6 +620,8 @@ function normalizeCityShape(city: CityMap, seed: string | number): CityMap {
   mutableCity.height = mutableCity.height ?? mutableCity.bounds?.height ?? mutableCity.bounds?.h ?? VIEW_H;
   mutableCity.venues = mutableCity.venues || [];
   mutableCity.venueById = mutableCity.venueById || {};
+  mutableCity.landmarks = mutableCity.landmarks || [];
+  mutableCity.landmarkById = mutableCity.landmarkById || {};
   mutableCity.districts = mutableCity.districts || [];
   mutableCity.buildingPlan = mutableCity.buildingPlan || { buildings: [], openSpaces: [], landmarks: [] };
   mutableCity.bridgePlan = mutableCity.bridgePlan || { bridges: [], renderedCuts: [] };

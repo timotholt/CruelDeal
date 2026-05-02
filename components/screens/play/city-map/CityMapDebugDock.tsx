@@ -5,6 +5,7 @@ export interface CityMapDebugState {
   showBuildings: boolean;
   showRoads: boolean;
   showLabels: boolean;
+  showLandmarks: boolean;
   showSlots: boolean;
   showRouteDemo: boolean;
 }
@@ -19,6 +20,7 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showBuildings', label: 'Buildings' },
   { key: 'showRoads', label: 'Roads' },
   { key: 'showLabels', label: 'Labels' },
+  { key: 'showLandmarks', label: 'Landmarks' },
   { key: 'showSlots', label: 'Slots' },
   { key: 'showRouteDemo', label: 'Route Demo' },
 ];

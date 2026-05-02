@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { pointInPolygon, polygonCentroid } from './geometry';
-import type { Building, CityMap, CitySlot, Venue, VenueTypeMeta } from './types';
+import type { Building, CityMap, CitySlot, DistrictLandmark, DistrictLandmarkTiming, Venue, VenueTypeMeta } from './types';
 
 export const TYPE_META = {
   park: { tier: 'iconic', label: 'Park', icon: 'park', accent: '#69ffb8', names: ['Memorial Garden', 'Chromeleaf Park', 'Battery Grove', 'Neon Commons'], bonus: 'Cover cards gain +1 stealth here' },
@@ -154,28 +154,53 @@ export function extractVenues(city: CityMap): Venue[] {
   return venues;
 }
 
-function chooseVenueForSlot(slot: CitySlot & { owner?: string }, districtVenues: Venue[], used: Set<string>) {
-  let best: { venue: Venue; score: number } | null = null;
-  const ownerIsTop = slot.owner === 'them' || slot.ownerSeat === 'P1';
-  for (const venue of districtVenues) {
-    if (used.has(venue.id)) continue;
-    const sameBlock = !!venue.blockId && venue.blockId === slot.blockId;
-    const dist = Math.hypot(venue.centroid.x - slot.x, venue.centroid.y - slot.y);
-    const sidePenalty = ownerIsTop
-      ? Math.max(0, venue.centroid.y - slot.y) * 0.18
-      : Math.max(0, slot.y - venue.centroid.y) * 0.18;
-    const tierBonus = venue.tier === 'iconic' ? -7 : venue.tier === 'major' ? -3 : 0;
-    const score = dist + sidePenalty + tierBonus + (sameBlock ? -80 : 0) + (venue.source === 'openSpace' ? -10 : 0);
-    if (!best || score < best.score) best = { venue, score };
-  }
-  if (best) return best.venue;
-  return districtVenues.reduce<{ venue: Venue; score: number } | null>((acc, venue) => {
-    const score = Math.hypot(venue.centroid.x - slot.x, venue.centroid.y - slot.y);
-    return !acc || score < acc.score ? { venue, score } : acc;
-  }, null)?.venue || null;
+const LANDMARK_TIMINGS: DistrictLandmarkTiming[] = ['on-reveal', 'ongoing', 'end-of-turn'];
+
+function landmarkEffectPlaceholder(timing: DistrictLandmarkTiming) {
+  if (timing === 'on-reveal') return 'Placeholder On Reveal effect for cards in this district.';
+  if (timing === 'ongoing') return 'Placeholder Ongoing effect for cards in this district.';
+  return 'Placeholder End of Turn effect for cards in this district.';
 }
 
-export function assignSlots(city: CityMap, venues: Venue[]) {
+function chooseLandmarkVenues(districtId: string, districtVenues: Venue[]) {
+  if (!districtVenues.length) return [];
+  const count = 1 + (hashString(districtId) % Math.min(3, districtVenues.length));
+  return districtVenues
+    .slice()
+    .sort((a, b) => {
+      const tierA = a.tier === 'iconic' ? 0 : a.tier === 'major' ? 1 : 2;
+      const tierB = b.tier === 'iconic' ? 0 : b.tier === 'major' ? 1 : 2;
+      return tierA - tierB || hashString(a.id) - hashString(b.id);
+    })
+    .slice(0, count);
+}
+
+function makeLandmark(venue: Venue, index: number): DistrictLandmark {
+  const timing = LANDMARK_TIMINGS[index] || LANDMARK_TIMINGS[LANDMARK_TIMINGS.length - 1];
+  return {
+    id: `landmark:${venue.districtId}:${index + 1}`,
+    districtId: venue.districtId!,
+    districtIdx: venue.districtIdx ?? null,
+    sourceVenueId: venue.id,
+    source: venue.source,
+    sourceId: venue.sourceId,
+    type: venue.type,
+    typeLabel: venue.typeLabel,
+    iconKey: venue.iconKey,
+    name: venue.name,
+    accentColor: venue.accentColor,
+    timing,
+    effectPlaceholder: landmarkEffectPlaceholder(timing),
+    centroid: venue.centroid,
+    blockId: venue.blockId,
+    buildingId: venue.buildingId,
+    openSpaceId: venue.openSpaceId,
+    waterBodyId: venue.waterBodyId,
+    bridgeId: venue.bridgeId,
+  };
+}
+
+export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
   const byDistrict = new Map<string, Venue[]>();
   for (const venue of venues) {
     if (!venue.districtId) continue;
@@ -183,24 +208,28 @@ export function assignSlots(city: CityMap, venues: Venue[]) {
     districtVenues.push(venue);
     byDistrict.set(venue.districtId, districtVenues);
   }
+
+  const landmarks: DistrictLandmark[] = [];
   for (const district of city.districts || []) {
-    const pool = byDistrict.get(district.id) || [];
-    const used = new Set<string>();
-    for (const slot of district.slots || []) {
-      const venue = chooseVenueForSlot(slot, pool, used);
-      if (!venue) continue;
-      used.add(venue.id);
-      slot.venueId = venue.id;
-      slot.venue = venue;
-      slot.x = venue.centroid.x;
-      slot.y = venue.centroid.y;
-      slot.blockId = venue.blockId || slot.blockId;
-      slot.buildingId = venue.buildingId || null;
-      slot.snapEdgeId = venue.snapEdgeId || null;
-      slot.snapPoint = venue.snapPoint || null;
-      slot.snapT = venue.snapT ?? null;
-      slot.snapCandidates = venue.snapCandidates || [];
-    }
+    const selected = chooseLandmarkVenues(district.id, byDistrict.get(district.id) || []);
+    district.landmarks = selected.map((venue, index) => makeLandmark(venue, index));
+    landmarks.push(...district.landmarks);
+  }
+
+  city.landmarks = landmarks;
+  city.landmarkById = Object.fromEntries(landmarks.map((landmark) => [landmark.id, landmark]));
+}
+
+function clearSlotLandmarkBindings(slot: CitySlot) {
+  slot.slotRole = 'card-slot';
+  slot.venueId = null;
+  (slot as CitySlot & { venue?: Venue | null }).venue = null;
+  slot.buildingId = null;
+}
+
+export function assignSlots(city: CityMap) {
+  for (const district of city.districts || []) {
+    for (const slot of district.slots || []) clearSlotLandmarkBindings(slot);
     district.dots = district.slots;
   }
 }
@@ -209,6 +238,7 @@ export function enrichCityVenues(city: CityMap): CityMap {
   const venues = extractVenues(city);
   city.venues = venues;
   city.venueById = Object.fromEntries(venues.map((venue) => [venue.id, venue]));
-  assignSlots(city, venues);
+  assignDistrictLandmarks(city, venues);
+  assignSlots(city);
   return city;
 }

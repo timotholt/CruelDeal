@@ -596,18 +596,21 @@
 }
 
 .city-map-slot--hover .city-map-slot__halo,
+.city-map-slot:hover .city-map-slot__halo,
 .city-map-slot:focus-visible .city-map-slot__halo {
   opacity: 0.32;
   transform: scale(1.28);
 }
 
 .city-map-slot--hover .city-map-slot__ring,
+.city-map-slot:hover .city-map-slot__ring,
 .city-map-slot:focus-visible .city-map-slot__ring {
   stroke: hsl(202, 96%, 96%);
   stroke-width: 1.35;
 }
 
 .city-map-slot--hover .city-map-slot__icon,
+.city-map-slot:hover .city-map-slot__icon,
 .city-map-slot:focus-visible .city-map-slot__icon {
   opacity: 0.92;
 }
@@ -615,6 +618,57 @@
 .city-map-slot--selected .city-map-slot__ring {
   fill: hsla(202, 96%, 14%, 0.92);
   stroke: hsl(48, 96%, 68%);
+}
+
+.city-map-landmark {
+  pointer-events: none;
+}
+
+.city-map-landmark__marker {
+  fill: rgba(255, 207, 91, 0.24);
+  stroke: rgba(255, 228, 142, 0.9);
+  stroke-width: 0.82;
+  filter: drop-shadow(0 0 4px rgba(255, 207, 91, 0.42));
+  vector-effect: non-scaling-stroke;
+}
+
+.city-map-landmark--hover .city-map-landmark__marker {
+  fill: rgba(255, 238, 178, 0.42);
+  stroke: rgba(255, 252, 224, 0.98);
+  stroke-width: 1.18;
+  filter: drop-shadow(0 0 7px rgba(255, 207, 91, 0.7));
+}
+
+.city-map-landmark--ongoing .city-map-landmark__marker {
+  fill: rgba(124, 224, 255, 0.2);
+  stroke: rgba(170, 241, 255, 0.88);
+}
+
+.city-map-landmark--ongoing.city-map-landmark--hover .city-map-landmark__marker {
+  fill: rgba(170, 241, 255, 0.34);
+  stroke: rgba(231, 252, 255, 0.98);
+}
+
+.city-map-landmark--end-of-turn .city-map-landmark__marker {
+  fill: rgba(255, 111, 97, 0.2);
+  stroke: rgba(255, 164, 154, 0.88);
+}
+
+.city-map-landmark--end-of-turn.city-map-landmark--hover .city-map-landmark__marker {
+  fill: rgba(255, 164, 154, 0.34);
+  stroke: rgba(255, 228, 224, 0.98);
+}
+
+.city-map-landmark__timing {
+  fill: rgba(246, 252, 255, 0.96);
+  stroke: rgba(5, 8, 14, 0.88);
+  stroke-width: 0.7;
+  paint-order: stroke;
+  font-family: "Roboto Mono", "SFMono-Regular", monospace;
+  font-size: 3.5px;
+  font-weight: 900;
+  text-anchor: middle;
+  dominant-baseline: middle;
 }
 
 .venue-tooltip-link,

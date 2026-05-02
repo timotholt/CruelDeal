@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
-import type { CitySlot } from '@/services/playgame/city-map';
-import { nearestHoverSlot, placeVenueTooltip } from '../useCityMapHover';
+import type { CitySlot, DistrictLandmark } from '@/services/playgame/city-map';
+import { nearestHoverLandmark, nearestHoverSlot, placeVenueTooltip } from '../useCityMapHover';
 
 const slots: CitySlot[] = [
   { id: 'a', districtId: 'd', slotIndex: 0, x: 10, y: 10, venueId: 'va' },
@@ -10,6 +10,41 @@ const slots: CitySlot[] = [
 assert.equal(nearestHoverSlot({ x: 12, y: 11 }, slots)?.id, 'a');
 assert.equal(nearestHoverSlot({ x: 30, y: 10 }, slots, 18)?.id, 'b');
 assert.equal(nearestHoverSlot({ x: 200, y: 200 }, slots), null);
+
+const landmarks: DistrictLandmark[] = [
+  {
+    id: 'lm-a',
+    districtId: 'd',
+    source: 'building',
+    sourceId: 'b-a',
+    type: 'market',
+    typeLabel: 'Market',
+    iconKey: 'market',
+    name: 'Night Market',
+    accentColor: '#7ce0ff',
+    timing: 'on-reveal',
+    effectPlaceholder: 'Placeholder On Reveal effect.',
+    centroid: { x: 80, y: 80 },
+  },
+  {
+    id: 'lm-b',
+    districtId: 'd',
+    source: 'openSpace',
+    sourceId: 'p-b',
+    type: 'plaza',
+    typeLabel: 'Plaza',
+    iconKey: 'plaza',
+    name: 'Static Plaza',
+    accentColor: '#ffd05d',
+    timing: 'ongoing',
+    effectPlaceholder: 'Placeholder Ongoing effect.',
+    centroid: { x: 120, y: 80 },
+  },
+];
+
+assert.equal(nearestHoverLandmark({ x: 82, y: 81 }, landmarks)?.id, 'lm-a');
+assert.equal(nearestHoverLandmark({ x: 104, y: 80 }, landmarks, 18)?.id, 'lm-b');
+assert.equal(nearestHoverLandmark({ x: 10, y: 10 }, landmarks), null);
 
 const board = { width: 320, height: 180 };
 const top = placeVenueTooltip({ x: 12, y: 8 }, board);

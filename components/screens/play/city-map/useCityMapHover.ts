@@ -1,5 +1,5 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type { CitySlot, Point } from '@/services/playgame/city-map';
+import type { CitySlot, DistrictLandmark, Point } from '@/services/playgame/city-map';
 
 export interface Size {
   width: number;
@@ -26,6 +26,13 @@ export interface VenueTooltipPlacementOptions {
 
 export interface CityMapHoverOptions {
   slots: Accessor<readonly CitySlot[]>;
+  board: Accessor<Size>;
+  enabled?: Accessor<boolean>;
+  radius?: Accessor<number>;
+}
+
+export interface CityMapLandmarkHoverOptions {
+  landmarks: Accessor<readonly DistrictLandmark[]>;
   board: Accessor<Size>;
   enabled?: Accessor<boolean>;
   radius?: Accessor<number>;
@@ -68,6 +75,28 @@ export function nearestHoverSlot(
     const d = squaredDistance(point, slot);
     if (d < bestD) {
       best = slot;
+      bestD = d;
+    }
+  }
+
+  return best && bestD <= radius * radius ? best : null;
+}
+
+export function nearestHoverLandmark(
+  point: Point,
+  landmarks: readonly DistrictLandmark[],
+  radius = DEFAULT_HOVER_RADIUS,
+): DistrictLandmark | null {
+  if (!finitePoint(point) || !Number.isFinite(radius) || radius < 0) return null;
+
+  let best: DistrictLandmark | null = null;
+  let bestD = Infinity;
+
+  for (const landmark of landmarks) {
+    if (!finitePoint(landmark.centroid)) continue;
+    const d = squaredDistance(point, landmark.centroid);
+    if (d < bestD) {
+      best = landmark;
       bestD = d;
     }
   }
@@ -144,6 +173,41 @@ export function useCityMapHover(options: CityMapHoverOptions) {
   return {
     hoveredSlot,
     hoveredSlotId: () => hoveredSlot()?.id ?? null,
+    pointerPoint,
+    setPointerPoint,
+    clearHover,
+    bind: {
+      onPointerMove,
+      onPointerLeave: clearHover,
+      onPointerCancel: clearHover,
+    },
+  };
+}
+
+export function useCityMapLandmarkHover(options: CityMapLandmarkHoverOptions) {
+  const [pointerPoint, setPointerPoint] = createSignal<Point | null>(null);
+
+  const enabled = () => options.enabled?.() ?? true;
+  const radius = () => options.radius?.() ?? DEFAULT_HOVER_RADIUS;
+  const hoveredLandmark = createMemo(() => {
+    const point = pointerPoint();
+    return point && enabled() ? nearestHoverLandmark(point, options.landmarks(), radius()) : null;
+  });
+
+  const onPointerMove = (event: PointerEvent & { currentTarget: Element }) => {
+    if (!enabled()) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const board = options.board();
+    const x = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * board.width : 0;
+    const y = rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * board.height : 0;
+    setPointerPoint({ x, y });
+  };
+
+  const clearHover = () => setPointerPoint(null);
+
+  return {
+    hoveredLandmark,
+    hoveredLandmarkId: () => hoveredLandmark()?.id ?? null,
     pointerPoint,
     setPointerPoint,
     clearHover,

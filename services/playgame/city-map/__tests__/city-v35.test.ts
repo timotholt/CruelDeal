@@ -28,11 +28,11 @@ const activeSlots = (city: CityMap): CitySlot[] =>
 const slotSnapshot = (city: CityMap) =>
   activeSlots(city).map((slot) => ({
     id: slot.id,
-    venueId: slot.venueId,
+    venueId: slot.venueId ?? null,
   }));
 
-const venueSnapshot = (city: CityMap) =>
-  city.venues.map((venue) => venue.id);
+const landmarkSnapshot = (city: CityMap) =>
+  (city.landmarks || []).map((landmark) => `${landmark.id}:${landmark.timing}`);
 
 const assertVenueIndex = (city: CityMap, label: string) => {
   const missingFromIndex = city.venues.filter((venue) => city.venueById[venue.id] !== venue);
@@ -43,11 +43,11 @@ const assertActiveSlots = (city: CityMap, label: string) => {
   const slots = activeSlots(city);
   expectTrue(slots.length > 0, `${label}: generated active slots`, { slots: slots.length });
 
-  const unbackedSlots = slots.filter((slot) => !slot.venueId || !city.venueById[slot.venueId]);
+  const slottedLandmarks = slots.filter((slot) => slot.venueId || slot.slotRole !== 'card-slot');
   expectEq(
-    unbackedSlots.map((slot) => ({ id: slot.id, venueId: slot.venueId ?? null })),
+    slottedLandmarks.map((slot) => ({ id: slot.id, venueId: slot.venueId ?? null, slotRole: slot.slotRole ?? null })),
     [],
-    `${label}: every active slot has a valid venueId after venue enrichment`,
+    `${label}: active slots are plain card slots without landmark effects`,
   );
 
   const outOfBounds = slots.filter((slot) =>
@@ -58,6 +58,31 @@ const assertActiveSlots = (city: CityMap, label: string) => {
     [],
     `${label}: no active slot is outside board bounds`,
   );
+};
+
+const assertDistrictLandmarks = (city: CityMap, label: string) => {
+  const landmarks = city.landmarks || [];
+  expectTrue(landmarks.length > 0, `${label}: generated district landmarks`, { landmarks: landmarks.length });
+  const byDistrict = new Map<string, typeof landmarks>();
+  for (const landmark of landmarks) {
+    const bucket = byDistrict.get(landmark.districtId) || [];
+    bucket.push(landmark);
+    byDistrict.set(landmark.districtId, bucket);
+  }
+  const badCounts = city.districts
+    .map((district) => ({ id: district.id, count: (district.landmarks || []).length }))
+    .filter((entry) => entry.count < 1 || entry.count > 3);
+  expectEq(badCounts, [], `${label}: every district has 1 to 3 landmarks`);
+
+  const badTimings = city.districts.flatMap((district) => {
+    const expected = ['on-reveal', 'ongoing', 'end-of-turn'].slice(0, (district.landmarks || []).length);
+    const actual = (district.landmarks || []).map((landmark) => landmark.timing);
+    return JSON.stringify(expected) === JSON.stringify(actual) ? [] : [{ id: district.id, expected, actual }];
+  });
+  expectEq(badTimings, [], `${label}: district landmark timings are ordered placeholders`);
+
+  const missingFromIndex = landmarks.filter((landmark) => city.landmarkById?.[landmark.id] !== landmark);
+  expectEq(missingFromIndex.map((landmark) => landmark.id), [], `${label}: every landmark id resolves in landmarkById`);
 };
 
 const assertNoDanglingSnapEdges = (city: CityMap, label: string) => {
@@ -100,8 +125,8 @@ const assertRenderableBridges = (city: CityMap, label: string) => {
 
   expectTrue(a !== b, 'cache:false returns distinct city objects for determinism smoke test');
   expectEq(summarizeCityV35(a), summarizeCityV35(b), 'same seed returns same summary');
-  expectEq(slotSnapshot(a), slotSnapshot(b), 'same seed returns same slot ids and venue ids');
-  expectEq(venueSnapshot(a), venueSnapshot(b), 'same seed returns same venue ids');
+  expectEq(slotSnapshot(a), slotSnapshot(b), 'same seed returns same plain slot ids');
+  expectEq(landmarkSnapshot(a), landmarkSnapshot(b), 'same seed returns same landmark ids and timings');
 }
 
 for (const seed of seeds) {
@@ -109,6 +134,7 @@ for (const seed of seeds) {
   const label = `seed ${seed}`;
   assertVenueIndex(city, label);
   assertActiveSlots(city, label);
+  assertDistrictLandmarks(city, label);
   assertNoDanglingSnapEdges(city, label);
   assertRenderableBridges(city, label);
 }

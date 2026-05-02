@@ -17,13 +17,12 @@ function venueForSlot(slot: CitySlot, venueById?: Readonly<Record<string, Venue>
 }
 
 function slotLabel(slot: CitySlot, venue: Venue | null) {
-  const name = venue?.name ?? `Slot ${slot.slotIndex + 1}`;
-  const bonus = venue?.bonus?.text;
-  return bonus ? `${name}: ${bonus}` : name;
+  if (venue) return venue.name;
+  return `Card slot ${slot.slotIndex + 1}`;
 }
 
 function slotKind(slot: CitySlot, venue: Venue | null) {
-  return venue?.type || slot.slotRole || 'street';
+  return venue?.type || slot.slotRole || 'card-slot';
 }
 
 export const CityMapSlots = (props: CityMapSlotsProps) => {
@@ -38,7 +37,7 @@ export const CityMapSlots = (props: CityMapSlotsProps) => {
   };
 
   return (
-    <g class="city-map-slots" aria-label="City venue slots">
+    <g class="city-map-slots" aria-label="City card slots">
       <For each={props.slots}>
         {(slot) => {
           const venue = () => venueForSlot(slot, props.venueById);
@@ -55,7 +54,7 @@ export const CityMapSlots = (props: CityMapSlotsProps) => {
                 [`city-map-slot--${slot.playableBy || 'neutral'}`]: true,
               }}
               data-slot-id={slot.id}
-              data-venue-id={slot.venueId ?? undefined}
+              data-venue-id={undefined}
               data-slot-kind={slotKind(slot, venue())}
               role={interactive() ? 'button' : 'img'}
               tabIndex={interactive() ? 0 : undefined}

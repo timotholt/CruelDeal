@@ -35,6 +35,7 @@ export type {
   CityDistrict,
   CityMap,
   CitySlot,
+  DistrictLandmark,
   DockPlan,
   Point,
   RoadEdge,

@@ -1,9 +1,10 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal, untrack } from 'solid-js';
 import { buildCityMap, type CityMap } from '@/services/playgame/city-map';
 import { CityMapSvg } from './CityMapSvg';
+import { CityMapLandmarks } from './CityMapLandmarks';
 import { CityMapSlots } from './CityMapSlots';
-import { VenueTooltip } from './VenueTooltip';
-import { useCityMapHover } from './useCityMapHover';
+import { LandmarkTooltip } from './LandmarkTooltip';
+import { useCityMapLandmarkHover } from './useCityMapHover';
 import { CityMapDebugDock, type CityMapDebugState } from './CityMapDebugDock';
 import { RouteDemoLayer } from './RouteDemoLayer';
 import './cityMapStyles.css';
@@ -19,29 +20,33 @@ export interface CityMapBoardProps {
     showLabels?: boolean;
     showBuildings?: boolean;
     showRoads?: boolean;
+    showLandmarks?: boolean;
     showSlots?: boolean;
   };
 }
 
 export const CityMapBoard = (props: CityMapBoardProps) => {
   const [selectedSlotId, setSelectedSlotId] = createSignal<string | null>(null);
+  const initialDebug = untrack(() => props.debug);
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
-    showBuildings: props.debug?.showBuildings ?? true,
-    showRoads: props.debug?.showRoads ?? true,
-    showLabels: props.debug?.showLabels ?? true,
-    showSlots: props.debug?.showSlots ?? true,
+    showBuildings: initialDebug?.showBuildings ?? true,
+    showRoads: initialDebug?.showRoads ?? true,
+    showLabels: initialDebug?.showLabels ?? true,
+    showLandmarks: initialDebug?.showLandmarks ?? true,
+    showSlots: initialDebug?.showSlots ?? true,
     showRouteDemo: false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city'));
   const width = () => props.width || city().width;
   const height = () => props.height || city().height;
   const slots = createMemo(() => city().districts.flatMap((district) => district.slots || []));
+  const landmarks = createMemo(() => city().landmarks || city().districts.flatMap((district) => district.landmarks || []));
   const interactive = () => props.interactive ?? true;
-  const hover = useCityMapHover({
-    slots,
+  const hover = useCityMapLandmarkHover({
+    landmarks,
     board: () => ({ width: width(), height: height() }),
-    enabled: interactive,
+    enabled: () => interactive() && debugState().showLandmarks && (props.showVenueTooltips ?? true),
   });
   const toggleDebug = (key: keyof CityMapDebugState) => {
     setDebugState((state) => ({ ...state, [key]: !state[key] }));
@@ -70,22 +75,20 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           preserveAspectRatio="none"
           aria-hidden={!interactive()}
         >
+          <Show when={debugState().showLandmarks}>
+            <CityMapLandmarks landmarks={landmarks()} hoveredLandmarkId={hover.hoveredLandmarkId()} />
+          </Show>
           <Show when={debugState().showSlots}>
             <CityMapSlots
               slots={slots()}
-              venueById={city().venueById}
-              hoveredSlotId={hover.hoveredSlotId()}
               selectedSlotId={selectedSlotId()}
               interactive={interactive()}
-              onSlotFocus={(slot) => hover.setPointerPoint(slot)}
-              onSlotBlur={hover.clearHover}
               onSlotClick={(slot) => setSelectedSlotId(slot.id)}
             />
           </Show>
         </svg>
-        <VenueTooltip
-          slot={hover.hoveredSlot()}
-          venue={hover.hoveredSlot()?.venueId ? city().venueById[hover.hoveredSlot()!.venueId!] : null}
+        <LandmarkTooltip
+          landmark={hover.hoveredLandmark()}
           board={{ width: width(), height: height() }}
         />
         <CityMapDebugDock state={debugState()} onToggle={toggleDebug} />

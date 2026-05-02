@@ -169,6 +169,17 @@ function roadKind(edge: RenderRoadEdge) {
   return 'main';
 }
 
+const roadLayerOrder: ReturnType<typeof roadKind>[] = ['river-bank', 'local', 'street', 'main', 'coast', 'avenue', 'highway'];
+
+function orderedRoadEdges(edges: readonly RenderRoadEdge[]) {
+  const rank = (edge: RenderRoadEdge) => {
+    const kind = edge.riverBank ? 'river-bank' : roadKind(edge);
+    const index = roadLayerOrder.indexOf(kind);
+    return index >= 0 ? index : roadLayerOrder.indexOf('main');
+  };
+  return edges.slice().sort((a, b) => rank(a) - rank(b));
+}
+
 function buildingTone(building: RenderBuilding, index: number) {
   if (building.render?.lodGroup === 'tower') return 'tower';
   if ((building.shade ?? index % 2) < 0.5) return 'a';
@@ -291,20 +302,22 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
 
       <Show when={showRoads()}>
         <g class="city-map-svg__roads">
-          <For each={props.city.roadGraph.edges as RenderRoadEdge[]}>
+          <For each={orderedRoadEdges(props.city.roadGraph.edges as RenderRoadEdge[])}>
             {(edge) => (
-              <g>
-                <Show when={!edge.riverBank}>
-                  <path
-                    class={`city-map-svg__road-underlay city-map-svg__road-underlay--${roadKind(edge)}`}
-                    d={edgeToPath(edge)}
-                  />
-                </Show>
+              <Show when={!edge.riverBank}>
                 <path
-                  class={`city-map-svg__road city-map-svg__road--${edge.riverBank ? 'river-bank' : roadKind(edge)}`}
+                  class={`city-map-svg__road-underlay city-map-svg__road-underlay--${roadKind(edge)}`}
                   d={edgeToPath(edge)}
                 />
-              </g>
+              </Show>
+            )}
+          </For>
+          <For each={orderedRoadEdges(props.city.roadGraph.edges as RenderRoadEdge[])}>
+            {(edge) => (
+              <path
+                class={`city-map-svg__road city-map-svg__road--${edge.riverBank ? 'river-bank' : roadKind(edge)}`}
+                d={edgeToPath(edge)}
+              />
             )}
           </For>
         </g>

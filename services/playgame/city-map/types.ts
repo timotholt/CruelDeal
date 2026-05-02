@@ -140,7 +140,7 @@ export interface CitySlot {
   districtId: string;
   slotIndex: number;
   playableBy?: 'P0' | 'P1' | 'both' | null;
-  slotRole?: 'shop' | 'hideout' | 'landmark' | 'bridge' | 'street' | 'utility' | string;
+  slotRole?: 'card-slot' | 'street' | string;
   ownerSeat?: 'P0' | 'P1';
   blockId?: string | null;
   venueId?: string | null;
@@ -150,6 +150,30 @@ export interface CitySlot {
   snapEdgeId?: string | null;
   snapPoint?: Point | null;
   snapT?: number | null;
+}
+
+export type DistrictLandmarkTiming = 'on-reveal' | 'ongoing' | 'end-of-turn';
+
+export interface DistrictLandmark {
+  id: string;
+  districtId: string;
+  districtIdx?: number | null;
+  sourceVenueId?: string | null;
+  source: 'building' | 'openSpace' | 'waterBody' | 'bridge' | 'manifest';
+  sourceId: string;
+  type: string;
+  typeLabel: string;
+  iconKey: string;
+  name: string;
+  accentColor: string;
+  timing: DistrictLandmarkTiming;
+  effectPlaceholder: string;
+  centroid: Point;
+  blockId?: string | null;
+  buildingId?: string | null;
+  openSpaceId?: string | null;
+  waterBodyId?: string | null;
+  bridgeId?: string | null;
 }
 
 export interface Venue {
@@ -186,6 +210,7 @@ export interface CityDistrict {
   roads: RoadEdge[];
   slots: CitySlot[];
   dots: CitySlot[];
+  landmarks?: DistrictLandmark[];
 }
 
 export interface CityMap {
@@ -199,6 +224,8 @@ export interface CityMap {
   buildingPlan: BuildingPlan;
   bridgePlan: BridgePlan;
   coastDocks: DockPlan[];
+  landmarks?: DistrictLandmark[];
+  landmarkById?: Readonly<Record<string, DistrictLandmark>>;
   venues: Venue[];
   venueById: Readonly<Record<string, Venue>>;
 }

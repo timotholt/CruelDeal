@@ -1,31 +1,23 @@
 import { Show } from 'solid-js';
-import type { CitySlot, Venue } from '@/services/playgame/city-map';
+import type { DistrictLandmark } from '@/services/playgame/city-map';
 import { placeVenueTooltip, type Size, type VenueTooltipLayout } from './useCityMapHover';
 
-export interface VenueTooltipProps {
-  slot: CitySlot | null;
-  venue: Venue | null;
+export interface LandmarkTooltipProps {
+  landmark: DistrictLandmark | null;
   board: Size;
   layout?: VenueTooltipLayout;
 }
 
-function fallbackVenueName(slot: CitySlot) {
-  return `Card slot ${slot.slotIndex + 1}`;
-}
-
-export const VenueTooltip = (props: VenueTooltipProps) => {
-  const layout = () => props.slot
-    ? props.layout ?? placeVenueTooltip(props.slot, props.board)
+export const LandmarkTooltip = (props: LandmarkTooltipProps) => {
+  const layout = () => props.landmark
+    ? props.layout ?? placeVenueTooltip(props.landmark.centroid, props.board)
     : null;
 
   return (
-    <Show when={props.slot && layout()}>
+    <Show when={props.landmark && layout()}>
       {(placed) => {
-        const slot = () => props.slot as CitySlot;
-        const venue = () => props.venue;
-        const icon = () => (venue()?.iconKey || slot().slotRole || 'V').slice(0, 2).toUpperCase();
-        const name = () => venue()?.name || fallbackVenueName(slot());
-        const bonus = () => venue()?.bonus?.text || venue()?.typeLabel || 'Place a card here';
+        const landmark = () => props.landmark as DistrictLandmark;
+        const icon = () => landmark().iconKey.slice(0, 2).toUpperCase();
 
         return (
           <>
@@ -43,7 +35,7 @@ export const VenueTooltip = (props: VenueTooltipProps) => {
               />
             </svg>
             <div
-              class="venue-tooltip"
+              class="venue-tooltip venue-tooltip--landmark"
               style={{
                 left: `${(placed().x / props.board.width) * 100}%`,
                 top: `${(placed().y / props.board.height) * 100}%`,
@@ -55,8 +47,8 @@ export const VenueTooltip = (props: VenueTooltipProps) => {
             >
               <div class="venue-tooltip__icon" aria-hidden="true">{icon()}</div>
               <div class="venue-tooltip__body">
-                <div class="venue-tooltip__name">{name()}</div>
-                <div class="venue-tooltip__bonus">{bonus()}</div>
+                <div class="venue-tooltip__name">{landmark().name}</div>
+                <div class="venue-tooltip__bonus">{landmark().effectPlaceholder}</div>
               </div>
             </div>
           </>
