@@ -194,82 +194,185 @@ export function placeDotsInPolygon(
   const nearSeed = (x: number, y: number, minDist: number) =>
     preSeeds.some((p) => Math.hypot(x - p.x, y - p.y) < minDist);
 
-  const bucketAwareMaximin = (candidates: Placed[], count: number) => {
-    const width = Math.max(1, maxX - minX);
-    const height = Math.max(1, maxY - minY);
-    const aspect = width / height;
-    const cols = aspect > 1.35 ? 4 : aspect < 0.74 ? 2 : 3;
-    const rows = aspect < 0.74 ? 4 : aspect > 1.35 ? 2 : 3;
-    const bucketCount = cols * rows;
-    const bucketFor = (point: Point) => {
-      const col = Math.max(0, Math.min(cols - 1, Math.floor(((point.x - minX) / width) * cols)));
-      const row = Math.max(0, Math.min(rows - 1, Math.floor(((point.y - minY) / height) * rows)));
-      return row * cols + col;
-    };
-    const candidateBuckets = candidates.map(bucketFor);
-    const availableByBucket = new Array(bucketCount).fill(0);
-    candidateBuckets.forEach((bucket) => { availableByBucket[bucket] += 1; });
-    const selected = new Set<number>();
-    const selectedByBucket = new Array(bucketCount).fill(0);
-    const minD = candidates.map(() => Infinity);
+  type Placed = Point & { edgeD: number; angle: number; radial: number };
 
+  const trimMaximin = (points: Placed[], count: number) => {
+    if (points.length <= count) return points;
+    const minD = points.map(() => Infinity);
+    const selected = new Set<number>();
+    let first = 0;
+    let bestStart = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.hypot(points[i].x - centroid.x, points[i].y - centroid.y);
+      if (d < bestStart) { bestStart = d; first = i; }
+    }
+    selected.add(first);
+    for (let i = 0; i < points.length; i++)
+      minD[i] = Math.hypot(points[i].x - points[first].x, points[i].y - points[first].y);
     while (selected.size < count) {
       let best = -1;
-      let bestScore = -Infinity;
-      for (let i = 0; i < candidates.length; i++) {
+      let bestMin = -1;
+      for (let i = 0; i < points.length; i++) {
         if (selected.has(i)) continue;
-        const bucket = candidateBuckets[i];
-        const bucketPressure = selectedByBucket[bucket] / Math.max(1, availableByBucket[bucket]);
-        const coverageBonus = selectedByBucket[bucket] === 0 ? 620 : 0;
-        const spread = selected.size === 0
-          ? Math.min(candidates[i].radial, initialSpacing)
-          : minD[i];
-        const edgeBonus = Math.min(candidates[i].edgeD, 34) * 0.55;
-        const centerPenalty = selected.size === 0 ? candidates[i].radial * 0.12 : 0;
-        const score = coverageBonus + spread * 1.4 + edgeBonus - bucketPressure * 220 - centerPenalty;
-        if (score > bestScore) {
-          bestScore = score;
-          best = i;
-        }
+        if (minD[i] > bestMin) { bestMin = minD[i]; best = i; }
       }
       if (best === -1) break;
       selected.add(best);
-      selectedByBucket[candidateBuckets[best]] += 1;
-      for (let i = 0; i < candidates.length; i++) {
-        const d = Math.hypot(candidates[i].x - candidates[best].x, candidates[i].y - candidates[best].y);
+      for (let i = 0; i < points.length; i++) {
+        const d = Math.hypot(points[i].x - points[best].x, points[i].y - points[best].y);
         if (d < minD[i]) minD[i] = d;
       }
     }
-
-    return candidates.filter((_, i) => selected.has(i));
+    return points.filter((_, i) => selected.has(i));
   };
 
-  // Replace Bridson BFS (directionally biased) with: uniform grid scan → candidate pool
-  // → bucket-aware maximin sampling. No BFS → no left/right bias, and
-  // irregular districts get coverage across lobes instead of centroid-heavy clumps.
-  // Reduce step each pass to grow the candidate pool until we have enough to fill target.
-  type Placed = Point & { edgeD: number; angle: number; radial: number };
-  for (let pass = 0; pass < 5; pass++) {
-    const minSep = initialSpacing * Math.pow(0.75, pass);
-    const step = minSep * 0.45; // ~5x more candidates than target per pass
+  const pointKey = (p: Point) => `${Math.round(p.x * 10)}:${Math.round(p.y * 10)}`;
+
+  const completeFromCandidateGrid = (basePoints: Placed[], count: number) => {
+    const selected = trimMaximin(basePoints, Math.min(count, basePoints.length)).slice();
+    if (selected.length >= count) return selected;
+
+    const selectedKeys = new Set(selected.map(pointKey));
+    const relaxedEdgePad = Math.max(7, POLY_EDGE_PAD * 0.62);
+    const seedClearance = Math.max(12, initialSpacing * 0.32);
+    const duplicateClearance = 8;
+    const step = Math.max(5, Math.min(14, initialSpacing * 0.22));
     const candidates: Placed[] = [];
-    for (let gx = minX + step * 0.5; gx <= maxX; gx += step) {
-      for (let gy = minY + step * 0.5; gy <= maxY; gy += step) {
-        // Small jitter so points aren't on a perfect grid
-        const x = gx + (rng() - 0.5) * step * 0.5;
-        const y = gy + (rng() - 0.5) * step * 0.5;
-        if (!insidePolygon(x, y)) continue;
-        const ed = edgeDistance(x, y);
-        if (ed < POLY_EDGE_PAD) continue;
-        if (nearLabel(x, y)) continue;
-        if (nearSeed(x, y, minSep)) continue;
-        candidates.push({ x, y, edgeD: ed, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
+
+    for (let x = minX; x <= maxX; x += step) {
+      for (let y = minY; y <= maxY; y += step) {
+        const jitterX = (rng() - 0.5) * step * 0.54;
+        const jitterY = (rng() - 0.5) * step * 0.54;
+        const cx = Math.max(minX, Math.min(maxX, x + jitterX));
+        const cy = Math.max(minY, Math.min(maxY, y + jitterY));
+        if (!insidePolygon(cx, cy) || nearLabel(cx, cy)) continue;
+        const edgeD = edgeDistance(cx, cy);
+        if (edgeD < relaxedEdgePad) continue;
+        if (nearSeed(cx, cy, seedClearance)) continue;
+        if (selected.some((p) => Math.hypot(cx - p.x, cy - p.y) < duplicateClearance)) continue;
+        const candidate = {
+          x: cx,
+          y: cy,
+          edgeD,
+          angle: Math.atan2(cy - centroid.y, cx - centroid.x),
+          radial: Math.hypot(cx - centroid.x, cy - centroid.y)
+        };
+        candidates.push(candidate);
       }
     }
-    if (candidates.length < target) continue;
 
-    return bucketAwareMaximin(candidates, target);
+    while (selected.length < count && candidates.length > 0) {
+      let bestIndex = -1;
+      let bestScore = -Infinity;
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        const key = pointKey(candidate);
+        if (selectedKeys.has(key)) continue;
+        const minToSelected = selected.length
+          ? Math.min(...selected.map((p) => Math.hypot(candidate.x - p.x, candidate.y - p.y)))
+          : initialSpacing;
+        const minToSeed = preSeeds.length
+          ? Math.min(...preSeeds.map((p) => Math.hypot(candidate.x - p.x, candidate.y - p.y)))
+          : initialSpacing;
+        const edgeScore = Math.min(candidate.edgeD, 28) * 0.38;
+        const score = minToSelected * 1.28 + minToSeed * 0.34 + edgeScore - candidate.radial * 0.015;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      if (bestIndex < 0) break;
+      const [best] = candidates.splice(bestIndex, 1);
+      selected.push(best);
+      selectedKeys.add(pointKey(best));
+    }
+
+    return selected;
+  };
+
+  // Multi-source Bridson growth gives better coverage for concave and skinny
+  // districts than a pure grid candidate scan, while maximin trim keeps the
+  // final count spread out and deterministic enough for regression tests.
+  const placed: Placed[] = [];
+  for (let pass = 0; pass < 4 && placed.length < target; pass++) {
+    const spacing = initialSpacing * Math.pow(0.75, pass);
+    placed.length = 0;
+    const occupied: Point[] = [...preSeeds];
+    const tooClose = (x: number, y: number) =>
+      nearLabel(x, y)
+      || nearSeed(x, y, spacing)
+      || occupied.some((p) => Math.hypot(x - p.x, y - p.y) < spacing)
+      || placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
+
+    const validPlacement = (x: number, y: number) =>
+      insidePolygon(x, y) && edgeDistance(x, y) >= POLY_EDGE_PAD && !tooClose(x, y);
+
+    const active: Point[] = preSeeds.filter((p) => pointInPolygon(p, polygon));
+    const addPoint = (x: number, y: number) => {
+      const edgeD = edgeDistance(x, y);
+      placed.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
+      active.push({ x, y });
+    };
+
+    const plantSeed = () => {
+      if (labelAvoid && placed.length === 0) {
+        for (let k = 0; k < 80; k++) {
+          const offX = (rng() < 0.5 ? -1 : 1) * ((labelAvoid.halfW + 6) + rng() * spacing);
+          const offY = (rng() - 0.5) * ((labelAvoid.halfH + 6) + spacing) * 2;
+          const x = labelAvoid.x + offX;
+          const y = labelAvoid.y + offY;
+          if (validPlacement(x, y)) { addPoint(x, y); return true; }
+        }
+      }
+      for (let k = 0; k < 400; k++) {
+        const x = minX + rng() * (maxX - minX);
+        const y = minY + rng() * (maxY - minY);
+        if (validPlacement(x, y)) { addPoint(x, y); return true; }
+      }
+      return false;
+    };
+
+    if (!plantSeed()) continue;
+
+    const seedGrid = Math.ceil(Math.sqrt(target * 2));
+    const cellW = (maxX - minX) / seedGrid;
+    const cellH = (maxY - minY) / seedGrid;
+    for (let col = 0; col < seedGrid; col++) {
+      for (let row = 0; row < seedGrid; row++) {
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const x = minX + (col + 0.2 + rng() * 0.6) * cellW;
+          const y = minY + (row + 0.2 + rng() * 0.6) * cellH;
+          if (validPlacement(x, y)) { addPoint(x, y); break; }
+        }
+      }
+    }
+
+    const K = 30;
+    let reseeds = 0;
+    while (placed.length < target) {
+      if (active.length === 0) {
+        if (reseeds++ > target || !plantSeed()) break;
+        continue;
+      }
+      const idx = Math.floor(rng() * active.length);
+      const ap = active[idx];
+      let found = false;
+      for (let k = 0; k < K; k++) {
+        const r = spacing * (1 + rng());
+        const theta = rng() * Math.PI * 2;
+        const x = ap.x + r * Math.cos(theta);
+        const y = ap.y + r * Math.sin(theta);
+        if (x < minX - spacing || x > maxX + spacing || y < minY - spacing || y > maxY + spacing) continue;
+        if (!validPlacement(x, y)) continue;
+        addPoint(x, y);
+        found = true;
+        break;
+      }
+      if (!found) active.splice(idx, 1);
+    }
+
+    if (placed.length >= target) return trimMaximin(placed, target);
   }
 
-  return [];
+  return completeFromCandidateGrid(placed, target);
 }

@@ -389,6 +389,15 @@ function landmassById(terrain: TerrainV35) {
   return Object.fromEntries((terrain.landmasses || []).map((landmass) => [landmass.id, landmass]));
 }
 
+function diamondPolygon(center: Point, radius: number): Point[] {
+  return [
+    { x: center.x, y: center.y - radius },
+    { x: center.x + radius, y: center.y },
+    { x: center.x, y: center.y + radius },
+    { x: center.x - radius, y: center.y },
+  ];
+}
+
 function makeIslandBridges(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] | null) {
   if (!mainlandCoastRoadPolygon) return [];
   return (terrain.channels || [])
@@ -501,6 +510,7 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
     .flatMap((river) => ((river.segments || []) as Array<{ a: Point; b: Point }>));
   const openSpaces: Array<Record<string, any>> = [];
   const buildings: Building[] = [];
+  const landmarkBuildings: Building[] = [];
   const districtParkCells = new Set<string>();
   const landmasses = landmassById(terrain);
   const satelliteLandmassIds = new Set(
@@ -524,14 +534,30 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
     const harbor = islandCells[0];
     if (!landmass || !harbor) continue;
     districtParkCells.add(harbor.id);
+    const harborPolygon = harbor.polygon || diamondPolygon(harbor.centroid || landmass.centroid, 7);
+    const markerPolygon = diamondPolygon(harbor.centroid || landmass.centroid, 5.2);
     openSpaces.push({
       id: `${harbor.id}:harbor-light`,
       kind: 'compound',
       role: 'satellite-harbor',
       cellId: harbor.id,
+      polygon: harborPolygon,
+      path: polygonToPath(harborPolygon),
       centroid: harbor.centroid || landmass.centroid,
       compositionRole: (landmass as any).compositionRole,
     });
+    landmarkBuildings.push({
+      id: `${harbor.id}:harbor-beacon`,
+      blockId: harbor.id,
+      districtId: harbor.districtId,
+      polygon: markerPolygon,
+      footprint: markerPolygon,
+      path: polygonToPath(markerPolygon),
+      centroid: harbor.centroid || landmass.centroid,
+      area: polygonArea(markerPolygon),
+      render: { lodGroup: 'landmark' },
+      compositionRole: (landmass as any).compositionRole,
+    } as Building);
   }
 
   for (const block of cells) {
@@ -572,25 +598,69 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
   return {
     buildings,
     openSpaces,
-    landmarks: [],
+    landmarks: landmarkBuildings,
     staticScene: { shadowAzimuth: -0.72, shadowElevation: 0.55, cacheable: true },
   };
+}
+
+function makeFallbackSatelliteDock(landmass: TerrainV35['landmasses'][number]) {
+  let best: { a: Point; b: Point; length: number } | null = null;
+  for (let i = 0; i < landmass.polygon.length; i++) {
+    const a = landmass.polygon[i];
+    const b = landmass.polygon[(i + 1) % landmass.polygon.length];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!best || length > best.length) best = { a, b, length };
+  }
+  if (!best || best.length < 4) return [];
+
+  const mx = (best.a.x + best.b.x) / 2;
+  const my = (best.a.y + best.b.y) / 2;
+  const dx = best.b.x - best.a.x;
+  const dy = best.b.y - best.a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let ox = -dy / len;
+  let oy = dx / len;
+  if ((landmass.centroid.x - mx) * ox + (landmass.centroid.y - my) * oy > 0) {
+    ox = -ox;
+    oy = -oy;
+  }
+
+  const dockCount = best.length > 14 ? 2 : 1;
+  const angle = Math.atan2(oy, ox) + Math.PI / 2;
+  return Array.from({ length: dockCount }, (_, index) => {
+    const along = (index - (dockCount - 1) / 2) * Math.min(5, best.length * 0.24);
+    const tx = -oy;
+    const ty = ox;
+    const cx = mx + tx * along + ox * 4.4;
+    const cy = my + ty * along + oy * 4.4;
+    const polygon = rectPolygon(cx, cy, 2.2, Math.max(7.5, Math.min(11.5, best.length + 2)), angle);
+    return {
+      path: polygonToPath(polygon),
+      polygon,
+      role: 'satellite-dock',
+    };
+  });
 }
 
 function buildCoastDocks(terrain: TerrainV35, normalizedSeed: number) {
   const riverSegments = terrainWaterBodiesOfKind(terrain, 'river')
     .flatMap((riverBody) => (riverBody.segments || []) as Array<{ a: Point; b: Point }>);
-  return (terrain.landmasses || []).flatMap((landmass, index) =>
-    generateCoastDocks(
+  return (terrain.landmasses || []).flatMap((landmass, index) => {
+    const generated = generateCoastDocks(
       landmass.polygon,
       makeRng(normalizedSeed ^ 0xd0c5 ^ ((index + 1) * 0x45d9f3b)),
       riverSegments,
-    ).map((dock, dockIndex) => ({
+    );
+    const docks = generated.length || !(landmass as any).compositionRole
+      ? generated
+      : makeFallbackSatelliteDock(landmass);
+    return docks.map((dock, dockIndex) => ({
       ...dock,
       id: `${landmass.id}:dock:${dockIndex + 1}`,
       landmassId: landmass.id,
-    })),
-  );
+      compositionRole: (landmass as any).compositionRole,
+    }));
+  });
 }
 
 function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35): CityMap {
