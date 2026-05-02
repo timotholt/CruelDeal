@@ -1,11 +1,13 @@
 import { For } from 'solid-js';
 import type { CityMap, Point, RoadEdge } from '@/services/playgame/city-map';
 import { pointInPolygon } from '@/services/playgame/city-map/geometry';
+import type { CityMapViewport } from './camera';
 
 export interface CompositionDebugOverlayProps {
   city: CityMap;
   width: number;
   height: number;
+  viewport?: CityMapViewport;
 }
 
 type QuadrantId = 'nw' | 'ne' | 'sw' | 'se';
@@ -200,6 +202,7 @@ export function analyzeComposition(city: CityMap): CompositionMetrics {
 
 export const CompositionDebugOverlay = (props: CompositionDebugOverlayProps) => {
   const metrics = () => analyzeComposition(props.city);
+  const viewport = () => props.viewport || { x: 0, y: 0, width: props.width, height: props.height };
   const percent = (value: number) => `${Math.round(value * 100)}%`;
   const angleLabel = () => {
     const angle = metrics().dominantDistrictAngle;
@@ -210,7 +213,7 @@ export const CompositionDebugOverlay = (props: CompositionDebugOverlayProps) => 
   return (
     <svg
       class="city-map-composition-debug"
-      viewBox={`0 0 ${props.width} ${props.height}`}
+      viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
       preserveAspectRatio="none"
       aria-hidden="true"
     >

@@ -10,7 +10,7 @@ The target visual direction is a dark blue tactical surveillance map: raised urb
 
 Use Three.js for the 3D renderer.
 
-The project currently has `pixi.js` installed, but Pixi is the wrong default for this specific ambition. Pixi would be strong for a fast 2D/WebGL map, sprites, particles, and post-processing-like filters. The requested final direction needs real scene depth:
+The project previously had `pixi.js` installed, but Pixi is the wrong default for this specific ambition. Pixi would be strong for a fast 2D/WebGL map, sprites, particles, and post-processing-like filters. The requested final direction needs real scene depth:
 
 - variable-height extruded buildings
 - directional shadows

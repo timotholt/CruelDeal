@@ -1,11 +1,13 @@
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { findPathBetweenCoords, routeToSvgPath, type CityMap, type Point } from '@/services/playgame/city-map';
+import type { CityMapViewport } from './camera';
 
 interface RouteDemoLayerProps {
   city: CityMap;
   active: boolean;
   width: number;
   height: number;
+  viewport?: CityMapViewport;
 }
 
 interface RouteDemo {
@@ -47,6 +49,7 @@ function pickRoute(city: CityMap, step: number): RouteDemo | null {
 
 export const RouteDemoLayer = (props: RouteDemoLayerProps) => {
   const [route, setRoute] = createSignal<RouteDemo | null>(null);
+  const viewport = () => props.viewport || { x: 0, y: 0, width: props.width, height: props.height };
 
   createEffect(() => {
     if (!props.active) {
@@ -69,7 +72,7 @@ export const RouteDemoLayer = (props: RouteDemoLayerProps) => {
       {(activeRoute) => (
         <svg
           class="city-map-route-demo"
-          viewBox={`0 0 ${props.width} ${props.height}`}
+          viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
           preserveAspectRatio="none"
           aria-label="Route demo"
         >

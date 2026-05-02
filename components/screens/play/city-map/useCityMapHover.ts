@@ -1,5 +1,6 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { CitySlot, DistrictLandmark, Point } from '@/services/playgame/city-map';
+import { screenToWorld, type CityMapViewport } from './camera';
 
 export interface Size {
   width: number;
@@ -27,6 +28,7 @@ export interface VenueTooltipPlacementOptions {
 export interface CityMapHoverOptions {
   slots: Accessor<readonly CitySlot[]>;
   board: Accessor<Size>;
+  viewport?: Accessor<CityMapViewport>;
   enabled?: Accessor<boolean>;
   radius?: Accessor<number>;
 }
@@ -34,6 +36,7 @@ export interface CityMapHoverOptions {
 export interface CityMapLandmarkHoverOptions {
   landmarks: Accessor<readonly DistrictLandmark[]>;
   board: Accessor<Size>;
+  viewport?: Accessor<CityMapViewport>;
   enabled?: Accessor<boolean>;
   radius?: Accessor<number>;
 }
@@ -58,6 +61,15 @@ function squaredDistance(a: Point, b: Point) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return dx * dx + dy * dy;
+}
+
+function pointerWorldPoint(event: PointerEvent & { currentTarget: Element }, board: Size, viewport?: CityMapViewport) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return screenToWorld(
+    { x: event.clientX, y: event.clientY },
+    rect,
+    viewport || { x: 0, y: 0, width: board.width, height: board.height },
+  );
 }
 
 export function nearestHoverSlot(
@@ -161,11 +173,7 @@ export function useCityMapHover(options: CityMapHoverOptions) {
 
   const onPointerMove = (event: PointerEvent & { currentTarget: Element }) => {
     if (!enabled()) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const board = options.board();
-    const x = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * board.width : 0;
-    const y = rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * board.height : 0;
-    setPointerPoint({ x, y });
+    setPointerPoint(pointerWorldPoint(event, options.board(), options.viewport?.()));
   };
 
   const clearHover = () => setPointerPoint(null);
@@ -196,11 +204,7 @@ export function useCityMapLandmarkHover(options: CityMapLandmarkHoverOptions) {
 
   const onPointerMove = (event: PointerEvent & { currentTarget: Element }) => {
     if (!enabled()) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const board = options.board();
-    const x = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * board.width : 0;
-    const y = rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * board.height : 0;
-    setPointerPoint({ x, y });
+    setPointerPoint(pointerWorldPoint(event, options.board(), options.viewport?.()));
   };
 
   const clearHover = () => setPointerPoint(null);

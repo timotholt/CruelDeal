@@ -1,16 +1,23 @@
 import { Show } from 'solid-js';
 import type { DistrictLandmark } from '@/services/playgame/city-map';
 import { placeVenueTooltip, type Size, type VenueTooltipLayout } from './useCityMapHover';
+import type { CityMapViewport } from './camera';
 
 export interface LandmarkTooltipProps {
   landmark: DistrictLandmark | null;
   board: Size;
+  viewport?: CityMapViewport;
   layout?: VenueTooltipLayout;
 }
 
 export const LandmarkTooltip = (props: LandmarkTooltipProps) => {
+  const viewport = () => props.viewport || { x: 0, y: 0, width: props.board.width, height: props.board.height };
+  const visibleBoard = () => ({ width: viewport().width, height: viewport().height });
+  const localAnchor = () => props.landmark
+    ? { x: props.landmark.centroid.x - viewport().x, y: props.landmark.centroid.y - viewport().y }
+    : null;
   const layout = () => props.landmark
-    ? props.layout ?? placeVenueTooltip(props.landmark.centroid, props.board)
+    ? props.layout ?? placeVenueTooltip(localAnchor()!, visibleBoard())
     : null;
 
   return (
@@ -23,24 +30,24 @@ export const LandmarkTooltip = (props: LandmarkTooltipProps) => {
           <>
             <svg
               class="venue-tooltip-link"
-              viewBox={`0 0 ${props.board.width} ${props.board.height}`}
+              viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
               preserveAspectRatio="none"
               aria-hidden="true"
             >
               <line
-                x1={placed().connectorStart.x}
-                y1={placed().connectorStart.y}
-                x2={placed().connectorEnd.x}
-                y2={placed().connectorEnd.y}
+                x1={viewport().x + placed().connectorStart.x}
+                y1={viewport().y + placed().connectorStart.y}
+                x2={landmark().centroid.x}
+                y2={landmark().centroid.y}
               />
             </svg>
             <div
               class="venue-tooltip venue-tooltip--landmark"
               style={{
-                left: `${(placed().x / props.board.width) * 100}%`,
-                top: `${(placed().y / props.board.height) * 100}%`,
-                width: `${(placed().width / props.board.width) * 100}%`,
-                height: `${(placed().height / props.board.height) * 100}%`,
+                left: `${(placed().x / viewport().width) * 100}%`,
+                top: `${(placed().y / viewport().height) * 100}%`,
+                width: `${(placed().width / viewport().width) * 100}%`,
+                height: `${(placed().height / viewport().height) * 100}%`,
               }}
               role="status"
               aria-live="polite"

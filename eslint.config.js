@@ -37,7 +37,7 @@ export default tseslint.config(
             { group: ['@/components/*', '@/contexts/*'], message: 'engine/ must not import UI or context modules.' },
             { group: ['@/services/vfx/*'],            message: 'engine/ must not import VFX / animation code.' },
             { group: ['@/utils/id'],                  message: 'engine/ must generate ids via the seeded rng, not utils/id.' },
-            { group: ['howler', 'pixi.js'],           message: 'engine/ must not import audio / render libraries.' },
+            { group: ['howler'],                      message: 'engine/ must not import audio libraries.' },
           ],
         },
       ],

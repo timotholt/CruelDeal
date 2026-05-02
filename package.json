@@ -20,7 +20,6 @@
     "@tanstack/solid-router": "^1.168.20",
     "@tanstack/solid-virtual": "^3.13.24",
     "howler": "2.2.4",
-    "pixi.js": "7.4.0",
     "solid-js": "^1.9.12",
     "tailwindcss": "^4.2.2"
   },

@@ -10,12 +10,14 @@ import type {
   RoadEdge,
   TerrainPlan,
 } from '@/services/playgame/city-map';
+import type { CityMapViewport } from './camera';
 import './cityMapStyles.css';
 
 export interface CityMapSvgProps {
   city: CityMap;
   width: number;
   height: number;
+  viewport?: CityMapViewport;
   hoveredDistrictId?: string | null;
   onDistrictHover?: (id: string | null) => void;
   debug?: {
@@ -231,13 +233,14 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
   const showSlots = () => props.debug?.showSlots ?? false;
   const viewWidth = () => props.city.width || props.width;
   const viewHeight = () => props.city.height || props.height;
+  const viewport = () => props.viewport || { x: 0, y: 0, width: viewWidth(), height: viewHeight() };
 
   return (
     <svg
       class="city-map-svg"
       width={props.width}
       height={props.height}
-      viewBox={`0 0 ${viewWidth()} ${viewHeight()}`}
+      viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
       preserveAspectRatio="none"
       role="img"
       aria-label="Generated city map"

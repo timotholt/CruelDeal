@@ -15,7 +15,7 @@ Code in `engine/` MUST NOT import:
 - `@/contexts/**` (no presentation state)
 - `@/services/vfx/**` (no animations)
 - `@/utils/id` (id generation goes through `rng.fork(tag)` instead)
-- `howler` / `pixi.js` (no render / audio libraries)
+- `howler` (no audio libraries)
 
 Code in `engine/` MUST NOT use:
 
