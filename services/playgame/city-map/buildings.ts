@@ -196,7 +196,7 @@ export function generateBlockBuildings(
     let placedBox = { u1, u2, v1, v2 };
     if (footprintNearRoad(corners)) {
       let adjusted: { uvCorners: Array<{ u: number; v: number }>; corners: Point[]; box: UvBox } | null = null;
-      for (const scale of [0.9, 0.82, 0.74]) {
+      for (const scale of [0.95, 0.88, 0.8, 0.7, 0.6]) {
         const scaledUv = scaleUvCorners(uvCorners, scale);
         const scaledCorners = cornersFromUv(scaledUv);
         const box = uvBoxForCorners(scaledUv);
@@ -223,6 +223,7 @@ export function generateBlockBuildings(
 
   const consumed = new Array(nU * nV).fill(false);
   const cellIdx = (i: number, j: number) => i * nV + j;
+  const buildingCoverage = () => buildings.reduce((sum, building) => sum + building.area, 0) / Math.max(1, blockArea);
 
   for (let i = 0; i < nU; i++) {
     for (let j = 0; j < nV; j++) {
@@ -276,6 +277,35 @@ export function generateBlockBuildings(
           pushFootprint(baseU0 + tightU, baseU0 + cellU - tightU, baseV0 + tightV, baseV0 + cellV - tightV);
         }
       }
+    }
+  }
+
+  const targetCoverage = isIrregular ? 0.18 : 0.24;
+  const missingCoverage = targetCoverage - buildingCoverage();
+  if (missingCoverage > 0) {
+    const baseSize = Math.max(1.4, Math.min(cellU, cellV));
+    const maxInfillBuildings = Math.min(
+      36,
+      Math.ceil((missingCoverage * blockArea) / Math.max(5, baseSize * baseSize * 0.28)),
+    );
+    let added = 0;
+    const attempts = Math.max(24, maxInfillBuildings * 10);
+    for (let attempt = 0; attempt < attempts && added < maxInfillBuildings && buildingCoverage() < targetCoverage; attempt++) {
+      const u = minU + rng() * wU;
+      const v = minV + rng() * wV;
+      const scale = 0.34 + rng() * 0.42;
+      const aspect = rng() < 0.35 ? 0.55 + rng() * 0.35 : 0.85 + rng() * 0.45;
+      const w = Math.max(1.15, Math.min(cellU * 0.82, baseSize * scale * aspect));
+      const h = Math.max(1.15, Math.min(cellV * 0.82, baseSize * scale / Math.max(0.55, aspect)));
+      const jitterU = (rng() - 0.5) * Math.max(0, cellU - w) * 0.35;
+      const jitterV = (rng() - 0.5) * Math.max(0, cellV - h) * 0.35;
+      const placed = pushFootprint(
+        u - w / 2 + jitterU,
+        u + w / 2 + jitterU,
+        v - h / 2 + jitterV,
+        v + h / 2 + jitterV,
+      );
+      if (placed) added++;
     }
   }
 
