@@ -385,6 +385,10 @@ function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: strin
   return districts;
 }
 
+function landmassById(terrain: TerrainV35) {
+  return Object.fromEntries((terrain.landmasses || []).map((landmass) => [landmass.id, landmass]));
+}
+
 function makeIslandBridges(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] | null) {
   if (!mainlandCoastRoadPolygon) return [];
   return (terrain.channels || [])
@@ -498,6 +502,12 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
   const openSpaces: Array<Record<string, any>> = [];
   const buildings: Building[] = [];
   const districtParkCells = new Set<string>();
+  const landmasses = landmassById(terrain);
+  const satelliteLandmassIds = new Set(
+    (terrain.landmasses || [])
+      .filter((landmass) => typeof (landmass as any).compositionRole === 'string')
+      .map((landmass) => landmass.id),
+  );
 
   for (const districtId of new Set(cells.map((cell) => cell.districtId).filter(Boolean))) {
     const largest = cells
@@ -506,10 +516,30 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
     if (largest) districtParkCells.add(largest.id);
   }
 
+  for (const landmassId of satelliteLandmassIds) {
+    const landmass = landmasses[landmassId];
+    const islandCells = cells
+      .filter((cell) => cell.landmassId === landmassId && cell.buildable && cell.area > 180)
+      .sort((a, b) => b.area - a.area);
+    const harbor = islandCells[0];
+    if (!landmass || !harbor) continue;
+    districtParkCells.add(harbor.id);
+    openSpaces.push({
+      id: `${harbor.id}:harbor-light`,
+      kind: 'compound',
+      role: 'satellite-harbor',
+      cellId: harbor.id,
+      centroid: harbor.centroid || landmass.centroid,
+      compositionRole: (landmass as any).compositionRole,
+    });
+  }
+
   for (const block of cells) {
     if (!block.buildable) continue;
     if (districtParkCells.has(block.id)) {
-      openSpaces.push({ id: `${block.id}:park`, kind: 'park', role: 'landmark', cellId: block.id });
+      if (!openSpaces.some((space) => space.cellId === block.id)) {
+        openSpaces.push({ id: `${block.id}:park`, kind: 'park', role: 'landmark', cellId: block.id });
+      }
       continue;
     }
     let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, null, 7);
@@ -547,6 +577,22 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
   };
 }
 
+function buildCoastDocks(terrain: TerrainV35, normalizedSeed: number) {
+  const riverSegments = terrainWaterBodiesOfKind(terrain, 'river')
+    .flatMap((riverBody) => (riverBody.segments || []) as Array<{ a: Point; b: Point }>);
+  return (terrain.landmasses || []).flatMap((landmass, index) =>
+    generateCoastDocks(
+      landmass.polygon,
+      makeRng(normalizedSeed ^ 0xd0c5 ^ ((index + 1) * 0x45d9f3b)),
+      riverSegments,
+    ).map((dock, dockIndex) => ({
+      ...dock,
+      id: `${landmass.id}:dock:${dockIndex + 1}`,
+      landmassId: landmass.id,
+    })),
+  );
+}
+
 function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35): CityMap {
   const names = shuffle(DISTRICT_NAMES, rng);
   const colors = shuffle(DISTRICT_COLORS, rng);
@@ -575,11 +621,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...riverBankCuts.map((cut, index) => cutToRoad(cut, index, 'v35-river-bank')),
   ];
   const buildingPlan = buildStaticBuildings(cells, rng, terrain);
-  const coastDocks = generateCoastDocks(
-    terrain.mainland.polygon,
-    makeRng(normalizedSeed ^ 0xd0c5),
-    terrainWaterBodiesOfKind(terrain, 'river').flatMap((riverBody) => (riverBody.segments || []) as Array<{ a: Point; b: Point }>),
-  );
+  const coastDocks = buildCoastDocks(terrain, normalizedSeed);
   return {
     version: 'v35',
     seed,
