@@ -177,6 +177,17 @@
   height: 100%;
 }
 
+.city-map-world-layer--camera-simplified .city-map-svg {
+  filter: none;
+}
+
+.city-map-world-layer--camera-simplified .city-map-route-demo__glow,
+.city-map-world-layer--camera-simplified .city-map-composition-debug__quadrant--empty rect,
+.city-map-world-layer--camera-simplified .city-map-slot,
+.city-map-world-layer--camera-simplified .city-map-landmark {
+  filter: none;
+}
+
 .city-map-board__slot-layer {
   z-index: 4;
   overflow: visible;

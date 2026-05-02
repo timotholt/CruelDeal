@@ -10,6 +10,7 @@ export interface CityMapRendererHostProps {
   viewport: CityMapViewport;
   surfaceSize: Size;
   debugState: CityMapDebugState;
+  cameraMoving: boolean;
   interactive: boolean;
   hoveredDistrictId?: string | null;
   hoveredLandmarkId?: string | null;
@@ -29,6 +30,7 @@ export const CityMapRendererHost = (props: CityMapRendererHostProps) => {
             viewport={props.viewport}
             surfaceSize={props.surfaceSize}
             debugState={props.debugState}
+            cameraMoving={props.cameraMoving}
             interactive={props.interactive}
             hoveredDistrictId={props.hoveredDistrictId}
             hoveredLandmarkId={props.hoveredLandmarkId}
@@ -42,6 +44,7 @@ export const CityMapRendererHost = (props: CityMapRendererHostProps) => {
             viewport={props.viewport}
             surfaceSize={props.surfaceSize}
             debugState={props.debugState}
+            cameraMoving={props.cameraMoving}
             interactive={props.interactive}
             hoveredDistrictId={props.hoveredDistrictId}
             hoveredLandmarkId={props.hoveredLandmarkId}

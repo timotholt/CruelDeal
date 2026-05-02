@@ -33,6 +33,7 @@ export interface CityMapBoardProps {
     showRoads?: boolean;
     showLandmarks?: boolean;
     showSlots?: boolean;
+    simplifyDuringCameraMove?: boolean;
   };
 }
 
@@ -54,6 +55,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     showIslandDebug: false,
     showMassDebug: false,
     showSeedDebug: false,
+    simplifyDuringCameraMove: initialDebug?.simplifyDuringCameraMove ?? false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city'));
   const width = () => props.width || city().width;
@@ -90,8 +92,20 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   let suppressNextClick = false;
   let queuedCamera: CityMapCameraState | null = null;
   let cameraFrameId: number | null = null;
+  let cameraMovingTimeoutId: number | null = null;
+  const [cameraMoving, setCameraMoving] = createSignal(false);
+
+  const markCameraMoving = () => {
+    setCameraMoving(true);
+    if (cameraMovingTimeoutId != null) window.clearTimeout(cameraMovingTimeoutId);
+    cameraMovingTimeoutId = window.setTimeout(() => {
+      cameraMovingTimeoutId = null;
+      setCameraMoving(false);
+    }, 140);
+  };
 
   const scheduleCamera = (next: CityMapCameraState) => {
+    markCameraMoving();
     queuedCamera = next;
     if (cameraFrameId != null) return;
     cameraFrameId = window.requestAnimationFrame(() => {
@@ -107,6 +121,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
 
   onCleanup(() => {
     if (cameraFrameId != null) window.cancelAnimationFrame(cameraFrameId);
+    if (cameraMovingTimeoutId != null) window.clearTimeout(cameraMovingTimeoutId);
   });
 
   onMount(() => {
@@ -215,6 +230,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           viewport={viewport()}
           surfaceSize={surfaceSize()}
           debugState={debugState()}
+          cameraMoving={cameraMoving()}
           interactive={interactive()}
           hoveredDistrictId={highlight.hoveredDistrictId()}
           hoveredLandmarkId={hover.hoveredLandmarkId()}

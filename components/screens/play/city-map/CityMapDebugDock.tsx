@@ -1,4 +1,4 @@
-import { createSignal, Show, onCleanup } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 export interface CityMapDebugState {
@@ -16,6 +16,7 @@ export interface CityMapDebugState {
   showIslandDebug: boolean;
   showMassDebug: boolean;
   showSeedDebug: boolean;
+  simplifyDuringCameraMove: boolean;
 }
 
 export interface CityMapDebugDockProps {
@@ -38,6 +39,7 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showIslandDebug', label: 'Islands' },
   { key: 'showMassDebug', label: 'Mass' },
   { key: 'showSeedDebug', label: 'Seed Info' },
+  { key: 'simplifyDuringCameraMove', label: 'Pan Perf' },
 ];
 
 export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
@@ -79,7 +81,9 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
   return (
     <Portal mount={document.body}>
       <aside 
-        ref={dockRef}
+        ref={(el) => {
+          dockRef = el;
+        }}
         class="city-map-debug-dock" 
         aria-label="City map debug controls"
         style={{
@@ -107,7 +111,8 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
         </div>
         <Show when={!collapsed()}>
           <div class="city-map-debug-dock__body">
-            {rows.map((row) => (
+            <For each={rows}>
+              {(row) => (
               <label class="city-map-debug-dock__row">
                 <span>{row.label}</span>
                 <button
@@ -121,7 +126,8 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
                   {props.state[row.key] ? 'ON' : 'OFF'}
                 </button>
               </label>
-            ))}
+              )}
+            </For>
           </div>
         </Show>
       </aside>

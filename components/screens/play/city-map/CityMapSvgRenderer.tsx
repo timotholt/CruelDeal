@@ -14,6 +14,7 @@ export interface CityMapSvgRendererProps {
   viewport: CityMapViewport;
   surfaceSize: Size;
   debugState: CityMapDebugState;
+  cameraMoving: boolean;
   interactive: boolean;
   hoveredDistrictId?: string | null;
   hoveredLandmarkId?: string | null;
@@ -30,9 +31,16 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
     const ty = (-props.viewport.y / Math.max(0.001, props.viewport.height)) * props.surfaceSize.height;
     return `matrix(${scaleX}, 0, 0, ${scaleY}, ${tx}, ${ty})`;
   };
+  const simplifyForCameraMove = () => props.debugState.simplifyDuringCameraMove && props.cameraMoving;
 
   return (
-    <div class="city-map-world-layer" style={{ transform: worldTransform() }}>
+    <div
+      classList={{
+        'city-map-world-layer': true,
+        'city-map-world-layer--camera-simplified': simplifyForCameraMove(),
+      }}
+      style={{ transform: worldTransform() }}
+    >
       <Show when={props.debugState.showMap}>
         <CityMapSvg
           city={props.model.city}
@@ -40,8 +48,8 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
           height={props.model.world.height}
           hoveredDistrictId={props.hoveredDistrictId}
           debug={{
-            showLabels: props.debugState.showLabels,
-            showBuildings: props.debugState.showBuildings,
+            showLabels: props.debugState.showLabels && !simplifyForCameraMove(),
+            showBuildings: props.debugState.showBuildings && !simplifyForCameraMove(),
             showRoads: props.debugState.showRoads,
             showSlots: false,
           }}
