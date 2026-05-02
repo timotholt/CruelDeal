@@ -360,7 +360,7 @@ function pushCoastRoad(district: CityDistrict & { roads: RoadEdge[] }, id: strin
 function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: string[], colors: string[], rng: Rng) {
   const districts: Array<CityDistrict & { rawCuts: Cut[]; landmassId: string }> = [];
   for (const landmass of terrain.landmasses || []) {
-    if (landmass.kind !== 'island' || landmass.visibleArea < 2000) continue;
+    if (landmass.kind !== 'island') continue;
     const innerPolygon = insetPolygon(landmass.polygon, 6);
     if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 260) continue;
     const district = makeDistrict(

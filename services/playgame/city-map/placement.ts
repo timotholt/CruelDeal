@@ -146,12 +146,15 @@ export function placeDotsInPolygon(
   labelAvoid: LabelPosition | null = null,
   preSeeds: Point[] = []
 ) {
+  const POLY_EDGE_PAD = 13;  // min distance from district polygon edges
+  const VIEW_EDGE_PAD = 16; // min distance from viewport edges
+
   const xs = polygon.map((p) => p.x);
   const ys = polygon.map((p) => p.y);
-  const minX = Math.max(MAP_SLOT_EDGE_PAD, Math.min.apply(null, xs));
-  const maxX = Math.min(VIEW_W - MAP_SLOT_EDGE_PAD, Math.max.apply(null, xs));
-  const minY = Math.max(MAP_SLOT_EDGE_PAD, Math.min.apply(null, ys));
-  const maxY = Math.min(VIEW_H - MAP_SLOT_EDGE_PAD, Math.max.apply(null, ys));
+  const minX = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, xs));
+  const maxX = Math.min(VIEW_W - VIEW_EDGE_PAD, Math.max.apply(null, xs));
+  const minY = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, ys));
+  const maxY = Math.min(VIEW_H - VIEW_EDGE_PAD, Math.max.apply(null, ys));
   if (maxX - minX < 16 || maxY - minY < 16) return [];
 
   const area = Math.max(1, visibleArea || (maxX - minX) * (maxY - minY));
@@ -159,10 +162,13 @@ export function placeDotsInPolygon(
   const initialSpacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
 
   const edgeDistance = (x: number, y: number) => {
-    let best = Math.min(x, y, VIEW_W - x, VIEW_H - y);
+    // Viewport edge distance — kept separate so polygon edge pad can be tighter
+    const viewportDist = Math.min(x, y, VIEW_W - x, VIEW_H - y);
+    if (viewportDist < VIEW_EDGE_PAD) return -1;
+    let polyDist = Infinity;
     for (let k = 0; k < polygon.length; k++)
-      best = Math.min(best, pointToSegmentDist(x, y, polygon[k], polygon[(k + 1) % polygon.length]));
-    return best;
+      polyDist = Math.min(polyDist, pointToSegmentDist(x, y, polygon[k], polygon[(k + 1) % polygon.length]));
+    return polyDist;
   };
 
   const insidePolygon = (x: number, y: number) =>
@@ -172,19 +178,20 @@ export function placeDotsInPolygon(
   const placed: Array<Point & { edgeD: number; angle: number; radial: number }> = [];
   for (let pass = 0; pass < 4 && placed.length < target; pass++) {
     const spacing = initialSpacing * Math.pow(0.75, pass);
-    const labelExcl = labelAvoid ? labelAvoid.halfW + spacing * 0.55 + 8 : 0;
+    const labelPadX = labelAvoid ? labelAvoid.halfW + 6 : 0;
+    const labelPadY = labelAvoid ? labelAvoid.halfH + 6 : 0;
     placed.length = 0;
 
     // Pre-seeds act as occupied space — new points stay spacing-away from them.
     // Also seed active list so Bridson grows outward from large landmark positions.
     const occupied: Array<{ x: number; y: number }> = [...preSeeds];
     const tooClose = (x: number, y: number) => {
-      if (labelAvoid && Math.hypot(x - labelAvoid.x, y - labelAvoid.y) < labelExcl) return true;
+      if (labelAvoid && Math.abs(x - labelAvoid.x) < labelPadX && Math.abs(y - labelAvoid.y) < labelPadY) return true;
       return occupied.some((p) => Math.hypot(x - p.x, y - p.y) < spacing)
           || placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
     };
     const validPlacement = (x: number, y: number) =>
-      insidePolygon(x, y) && edgeDistance(x, y) >= MAP_SLOT_EDGE_PAD && !tooClose(x, y);
+      insidePolygon(x, y) && edgeDistance(x, y) >= POLY_EDGE_PAD && !tooClose(x, y);
     // Start active list from pre-seeds that are inside the polygon
     const active: Array<{ x: number; y: number }> = preSeeds.filter((p) => pointInPolygon(p, polygon));
     const addPoint = (x: number, y: number) => {
@@ -195,10 +202,10 @@ export function placeDotsInPolygon(
     const plantSeed = (): boolean => {
       if (labelAvoid && placed.length === 0) {
         for (let k = 0; k < 80; k++) {
-          const r = labelExcl + rng() * spacing;
-          const theta = rng() * Math.PI * 2;
-          const x = labelAvoid.x + r * Math.cos(theta);
-          const y = labelAvoid.y + r * Math.sin(theta);
+          const offX = (rng() < 0.5 ? -1 : 1) * (labelPadX + rng() * spacing);
+          const offY = (rng() - 0.5) * (labelPadY + spacing) * 2;
+          const x = labelAvoid.x + offX;
+          const y = labelAvoid.y + offY;
           if (validPlacement(x, y)) { addPoint(x, y); return true; }
         }
       }
@@ -217,8 +224,10 @@ export function placeDotsInPolygon(
     const seedGrid = Math.ceil(Math.sqrt(target * 2));
     const cellW = (maxX - minX) / seedGrid;
     const cellH = (maxY - minY) / seedGrid;
-    for (let col = 0; col < seedGrid && placed.length < target; col++) {
-      for (let row = 0; row < seedGrid && placed.length < target; row++) {
+    // No early-stop here — seed the full grid so all regions get starting points.
+    // The Bridson loop below stops at target; grid seeds may overshoot slightly, that's fine.
+    for (let col = 0; col < seedGrid; col++) {
+      for (let row = 0; row < seedGrid; row++) {
         for (let attempt = 0; attempt < 12; attempt++) {
           const x = minX + (col + 0.2 + rng() * 0.6) * cellW;
           const y = minY + (row + 0.2 + rng() * 0.6) * cellH;
