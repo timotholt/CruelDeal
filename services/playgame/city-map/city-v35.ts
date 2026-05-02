@@ -262,7 +262,10 @@ function makeDistrict(
     )
   );
   const landmarkPoints = allPoints.filter((_, i) => landmarkIndices.has(i)).map((p) => ({ x: p.x, y: p.y }));
-  const slotPoints = allPoints.filter((_, i) => !landmarkIndices.has(i));
+  // Exclude slot positions too close to any landmark position to prevent visual overlap
+  const slotPoints = allPoints
+    .filter((_, i) => !landmarkIndices.has(i))
+    .filter((p) => landmarkPoints.every((lp) => Math.hypot(p.x - lp.x, p.y - lp.y) >= 22));
 
   const slots: CitySlot[] = slotPoints.map((point, slotIndex) => ({
     id: `${districtId}:slot:${slotIndex}`,
@@ -361,20 +364,25 @@ function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: strin
   const districts: Array<CityDistrict & { rawCuts: Cut[]; landmassId: string }> = [];
   for (const landmass of terrain.landmasses || []) {
     if (landmass.kind !== 'island') continue;
-    const innerPolygon = insetPolygon(landmass.polygon, 6);
-    if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 260) continue;
+    const outerPolygon = landmass.polygon;
+    if (!outerPolygon || outerPolygon.length < 3) continue;
+    const innerPolygon = insetPolygon(outerPolygon, 6);
+    // Use outer polygon if inner is too degenerate to subdivide
+    const buildPoly = (innerPolygon && innerPolygon.length >= 3 && polygonArea(innerPolygon) >= 80)
+      ? innerPolygon : outerPolygon;
     const district = makeDistrict(
-      innerPolygon,
+      buildPoly,
       startIdx + districts.length,
       names,
       colors,
       rng,
       (rng() - 0.5) * (Math.PI / 4),
-      [innerPolygon],
+      [buildPoly],
       landmass.id,
       true, // flavor — no slots or landmarks
     );
-    pushCoastRoad(district, `${district.id}-coast-road`, innerPolygon);
+    // Coast road always uses the inner polygon (or outer if inner is degenerate)
+    pushCoastRoad(district, `${district.id}-coast-road`, buildPoly);
     districts.push(district);
   }
   return districts;

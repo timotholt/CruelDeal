@@ -261,5 +261,35 @@ export function placeDotsInPolygon(
     }
   }
 
+  // Trim to target using furthest-point (maximin) sampling — guarantees maximum spatial
+  // spread in the final set regardless of how many grid seeds were planted.
+  if (placed.length > target) {
+    const minD = placed.map(() => Infinity);
+    const selected = new Set<number>();
+    let first = 0;
+    let bestStart = Infinity;
+    for (let i = 0; i < placed.length; i++) {
+      const d = Math.hypot(placed[i].x - centroid.x, placed[i].y - centroid.y);
+      if (d < bestStart) { bestStart = d; first = i; }
+    }
+    selected.add(first);
+    for (let i = 0; i < placed.length; i++)
+      minD[i] = Math.hypot(placed[i].x - placed[first].x, placed[i].y - placed[first].y);
+    while (selected.size < target) {
+      let best = -1, bestMin = -1;
+      for (let i = 0; i < placed.length; i++) {
+        if (selected.has(i)) continue;
+        if (minD[i] > bestMin) { bestMin = minD[i]; best = i; }
+      }
+      if (best === -1) break;
+      selected.add(best);
+      for (let i = 0; i < placed.length; i++) {
+        const d = Math.hypot(placed[i].x - placed[best].x, placed[i].y - placed[best].y);
+        if (d < minD[i]) minD[i] = d;
+      }
+    }
+    return placed.filter((_, i) => selected.has(i));
+  }
+
   return placed;
 }

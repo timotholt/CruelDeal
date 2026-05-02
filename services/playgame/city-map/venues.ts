@@ -241,6 +241,15 @@ export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
 
     district.landmarks = selected.map((venue, index) => makeLandmark(venue, index));
     landmarks.push(...district.landmarks);
+
+    // Remove slots too close to any snapped landmark centroid (snapping shifts positions)
+    const landmarkCentroids = selected.map((v) => v.centroid).filter(Boolean);
+    if (landmarkCentroids.length > 0) {
+      district.slots = (district.slots || []).filter((slot) =>
+        landmarkCentroids.every((lc) => Math.hypot(slot.x - lc.x, slot.y - lc.y) >= 28)
+      );
+      district.dots = district.slots;
+    }
   }
 
   city.landmarks = landmarks;
