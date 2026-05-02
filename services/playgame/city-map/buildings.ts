@@ -57,10 +57,21 @@ export function generateBlockBuildings(
     return probes.some((p) => distToRiver(p.x, p.y, riverSegments) < riverBuffer);
   };
 
-  const cornerNearRoad = (corners: Point[]) => {
+  const footprintNearRoad = (corners: Point[]) => {
     if (!roadHazards?.length) return false;
-    return corners.some((corner) =>
-      roadHazards.some((hazard) => pointToSegmentDist(corner.x, corner.y, hazard.a, hazard.b) < hazard.buffer),
+    const probes = [...corners];
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0; i < corners.length; i++) {
+      const a = corners[i];
+      const b = corners[(i + 1) % corners.length];
+      cx += a.x / corners.length;
+      cy += a.y / corners.length;
+      probes.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    }
+    probes.push({ x: cx, y: cy });
+    return probes.some((point) =>
+      roadHazards.some((hazard) => pointToSegmentDist(point.x, point.y, hazard.a, hazard.b) < hazard.buffer),
     );
   };
 
@@ -143,6 +154,29 @@ export function generateBlockBuildings(
   const buildings: GeneratedBuildingFootprint[] = [];
   const placedUVBoxes: UvBox[] = [];
 
+  const cornersFromUv = (uvCorners: Array<{ u: number; v: number }>) => uvCorners.map((p) => ({
+    x: p.u * cosI - p.v * sinI,
+    y: p.u * sinI + p.v * cosI,
+  }));
+
+  const scaleUvCorners = (uvCorners: Array<{ u: number; v: number }>, scale: number) => {
+    const center = uvCorners.reduce(
+      (sum, point) => ({ u: sum.u + point.u / uvCorners.length, v: sum.v + point.v / uvCorners.length }),
+      { u: 0, v: 0 },
+    );
+    return uvCorners.map((point) => ({
+      u: center.u + (point.u - center.u) * scale,
+      v: center.v + (point.v - center.v) * scale,
+    }));
+  };
+
+  const uvBoxForCorners = (uvCorners: Array<{ u: number; v: number }>): UvBox => ({
+    u1: Math.min(...uvCorners.map((point) => point.u)),
+    u2: Math.max(...uvCorners.map((point) => point.u)),
+    v1: Math.min(...uvCorners.map((point) => point.v)),
+    v2: Math.max(...uvCorners.map((point) => point.v)),
+  });
+
   const pushFootprint = (u1: number, u2: number, v1: number, v2: number) => {
     if (u2 - u1 < 1 || v2 - v1 < 1) return false;
     if (placedUVBoxes.some((b) => u2 + 0.25 > b.u1 && u1 - 0.25 < b.u2 && v2 + 0.25 > b.v1 && v1 - 0.25 < b.v2)) {
@@ -156,19 +190,34 @@ export function generateBlockBuildings(
         ? [{ u: u1 + skew, v: v1 }, { u: u2 + skew, v: v1 }, { u: u2 - skew, v: v2 }, { u: u1 - skew, v: v2 }]
         : [{ u: u1, v: v1 + skew }, { u: u2, v: v1 - skew }, { u: u2, v: v2 - skew }, { u: u1, v: v2 + skew }];
     }
-    const corners = uvCorners.map((p) => ({
-      x: p.u * cosI - p.v * sinI,
-      y: p.u * sinI + p.v * cosI,
-    }));
+    let corners = cornersFromUv(uvCorners);
     if (!corners.every((corner) => pointInPolygon(corner, blockPolygon))) return false;
-    if (footprintNearRiver(corners) || cornerNearRoad(corners)) return false;
+    if (footprintNearRiver(corners)) return false;
+    let placedBox = { u1, u2, v1, v2 };
+    if (footprintNearRoad(corners)) {
+      let adjusted: { uvCorners: Array<{ u: number; v: number }>; corners: Point[]; box: UvBox } | null = null;
+      for (const scale of [0.9, 0.82, 0.74]) {
+        const scaledUv = scaleUvCorners(uvCorners, scale);
+        const scaledCorners = cornersFromUv(scaledUv);
+        const box = uvBoxForCorners(scaledUv);
+        if (box.u2 - box.u1 < 1 || box.v2 - box.v1 < 1) continue;
+        if (!scaledCorners.every((corner) => pointInPolygon(corner, blockPolygon))) continue;
+        if (footprintNearRiver(scaledCorners) || footprintNearRoad(scaledCorners)) continue;
+        adjusted = { uvCorners: scaledUv, corners: scaledCorners, box };
+        break;
+      }
+      if (!adjusted) return false;
+      uvCorners = adjusted.uvCorners;
+      corners = adjusted.corners;
+      placedBox = adjusted.box;
+    }
     buildings.push({
       path: `M ${corners[0].x.toFixed(2)} ${corners[0].y.toFixed(2)} L ${corners[1].x.toFixed(2)} ${corners[1].y.toFixed(2)} L ${corners[2].x.toFixed(2)} ${corners[2].y.toFixed(2)} L ${corners[3].x.toFixed(2)} ${corners[3].y.toFixed(2)} Z`,
       polygon: corners,
       area: polygonArea(corners),
       shade: rng(),
     });
-    placedUVBoxes.push({ u1, u2, v1, v2 });
+    placedUVBoxes.push(placedBox);
     return true;
   };
 

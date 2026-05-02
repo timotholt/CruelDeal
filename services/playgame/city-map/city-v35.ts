@@ -80,6 +80,7 @@ const CACHE_LIMIT = 12;
 const cache = new Map<string, CityMap>();
 
 type TerrainV35 = ReturnType<typeof buildTerrain>;
+type RoadHazard = { a: Point; b: Point; buffer: number };
 
 function shuffle<T>(list: readonly T[], rng: Rng): T[] {
   const out = list.slice();
@@ -681,6 +682,59 @@ function bridgeDeckWidthForDepth(depth = 2) {
   return depth >= 3 ? width + 0.35 : width;
 }
 
+function roadHazardBuffer(edge: RoadEdge) {
+  const width = typeof edge.render?.width === 'number'
+    ? edge.render.width
+    : roadWidthForDepth(typeof edge.depth === 'number' ? edge.depth : 2);
+  const kind = edge.kind || edge.render?.materialKey;
+  const source = edge.source;
+  const margin = source === 'coast-road' ? 0.65
+    : kind === 'highway' ? 0.75
+      : kind === 'avenue' ? 0.55
+        : kind === 'street' ? 0.38
+          : 0.26;
+  return Math.max(0.45, width / 2 + margin);
+}
+
+function roadHazardPoints(edge: RoadEdge) {
+  const points = (edge as RoadEdge & { points?: Point[] }).points;
+  if (Array.isArray(points) && points.length >= 2) return points;
+  return [edge.a, edge.b].filter(Boolean);
+}
+
+function makeRoadHazards(edges: RoadEdge[]): RoadHazard[] {
+  const hazards: RoadHazard[] = [];
+  for (const edge of edges) {
+    const points = roadHazardPoints(edge);
+    const buffer = roadHazardBuffer(edge);
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 0.001) continue;
+      hazards.push({ a, b, buffer });
+    }
+  }
+  return hazards;
+}
+
+function footprintNearRoad(polygon: Point[], roadHazards: RoadHazard[]) {
+  if (!roadHazards.length) return false;
+  const probes = [...polygon];
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    cx += a.x / polygon.length;
+    cy += a.y / polygon.length;
+    probes.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  probes.push({ x: cx, y: cy });
+  return probes.some((point) =>
+    roadHazards.some((hazard) => pointToSegmentDist(point.x, point.y, hazard.a, hazard.b) < hazard.buffer),
+  );
+}
+
 function bridgeLinePath(cx: number, cy: number, angle: number, length: number) {
   const dx = Math.cos(angle) * length * 0.5;
   const dy = Math.sin(angle) * length * 0.5;
@@ -748,7 +802,12 @@ function makeBridgePlan(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] |
   return { bridges: [...islandBridges, ...riverBridges], renderedCuts };
 }
 
-function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng: Rng, terrain: TerrainV35) {
+function buildStaticBuildings(
+  cells: Array<CityBlock & Record<string, any>>,
+  rng: Rng,
+  terrain: TerrainV35,
+  roadHazards: RoadHazard[] = [],
+) {
   const riverSegments = terrainWaterBodiesOfKind(terrain, 'river')
     .flatMap((river) => ((river.segments || []) as Array<{ a: Point; b: Point }>));
   const openSpaces: Array<Record<string, any>> = [];
@@ -812,8 +871,11 @@ function buildStaticBuildings(cells: Array<CityBlock & Record<string, any>>, rng
       }
       continue;
     }
-    let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, null, 7);
-    if (!generated.length && block.area > 110) generated = fallbackTinyBlockBuilding(block, rng);
+    let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, roadHazards, 7);
+    if (!generated.length && block.area > 110) {
+      generated = fallbackTinyBlockBuilding(block, rng)
+        .filter((gen) => !footprintNearRoad(gen.polygon, roadHazards));
+    }
     generated.forEach((gen, index) => {
       const height = block.density === 'dense' ? 12 + rng() * 18 : block.density === 'medium' ? 7 + rng() * 10 : 4 + rng() * 7;
       buildings.push({
@@ -980,7 +1042,8 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...bridgeAwareRoadCuts.map((cut, index) => cutToRoad(cut, index, 'v35-road')),
     ...riverBankCuts.map((cut, index) => cutToRoad(cut, index, 'v35-river-bank')),
   ];
-  const buildingPlan = buildStaticBuildings(cells, rng, terrain);
+  const roadHazards = makeRoadHazards(roadEdges);
+  const buildingPlan = buildStaticBuildings(cells, rng, terrain, roadHazards);
   const coastDocks = buildCoastDocks(terrain, normalizedSeed);
   return {
     version: 'v35',
