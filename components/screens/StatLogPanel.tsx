@@ -28,6 +28,8 @@ interface StatLogPanelProps {
 
 export const StatLogPanel = (props: StatLogPanelProps) => {
   const { engineState, manifest } = usePlayGame();
+  const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
+  let panelRef: HTMLDivElement | undefined;
 
   /** Resolve a sourceId (CardId | LocationId) to a display name. */
   const resolveName = (sourceId: string): string => {
@@ -43,13 +45,46 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
     return sourceId;
   };
 
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    if (!panelRef) return;
+
+    const rect = panelRef.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPosition({
+        x: moveEvent.clientX - offsetX,
+        y: moveEvent.clientY - offsetY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
+
   return (
     <div
+      ref={panelRef}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
-        top: '18vh',
-        left: 'clamp(16px, calc(50% + 120px), calc(100vw - 296px))',
+        ...(position() ? {
+          left: `${position()!.x}px`,
+          top: `${position()!.y}px`,
+        } : {
+          top: '18vh',
+          left: 'clamp(16px, calc(50% + 120px), calc(100vw - 296px))',
+        }),
         'z-index': '1010',
         background: 'rgba(10,12,20,0.97)',
         border: '1px solid rgba(255,255,255,0.12)',
@@ -66,7 +101,19 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center' }}>
+      <div 
+        onPointerDown={handlePointerDown}
+        style={{ 
+          display: 'flex', 
+          'justify-content': 'space-between', 
+          'align-items': 'center',
+          cursor: 'move',
+          'touch-action': 'none',
+          'padding-bottom': '4px',
+          'border-bottom': '1px solid rgba(255,255,255,0.05)',
+          'margin-bottom': '2px'
+        }}
+      >
         <span style={{ color: 'white', 'font-size': '0.7rem', 'font-weight': '700', 'letter-spacing': '0.08em', 'text-transform': 'uppercase' }}>
           {props.kind === 'power' ? 'Power Log' : 'Cost Log'}
         </span>

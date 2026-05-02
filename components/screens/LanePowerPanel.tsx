@@ -8,6 +8,8 @@ interface LanePowerPanelProps {
 
 export const LanePowerPanel = (props: LanePowerPanelProps) => {
   const { engineState, manifest, localSeat, seatMeta } = usePlayGame();
+  const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
+  let panelRef: HTMLDivElement | undefined;
 
   const resolveName = (sourceId: string): string => {
     const card = engineState.cards[sourceId as never];
@@ -26,13 +28,46 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
     ? seatMeta[localSeat].name
     : seatMeta[localSeat === 'P0' ? 'P1' : 'P0'].name;
 
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    if (!panelRef) return;
+
+    const rect = panelRef.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPosition({
+        x: moveEvent.clientX - offsetX,
+        y: moveEvent.clientY - offsetY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
+
   return (
     <div
+      ref={panelRef}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
-        top: '18vh',
-        left: 'clamp(16px, calc(50% + 120px), calc(100vw - 320px))',
+        ...(position() ? {
+          left: `${position()!.x}px`,
+          top: `${position()!.y}px`,
+        } : {
+          top: '18vh',
+          left: 'clamp(16px, calc(50% + 120px), calc(100vw - 320px))',
+        }),
         'z-index': '1010',
         background: 'rgba(10,12,20,0.97)',
         border: '1px solid rgba(255,255,255,0.12)',
@@ -48,7 +83,19 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
         'pointer-events': 'auto',
       }}
     >
-      <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center' }}>
+      <div 
+        onPointerDown={handlePointerDown}
+        style={{ 
+          display: 'flex', 
+          'justify-content': 'space-between', 
+          'align-items': 'center',
+          cursor: 'move',
+          'touch-action': 'none',
+          'padding-bottom': '4px',
+          'border-bottom': '1px solid rgba(255,255,255,0.05)',
+          'margin-bottom': '2px'
+        }}
+      >
         <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
           <span style={{ color: 'white', 'font-size': '0.7rem', 'font-weight': '700', 'letter-spacing': '0.08em', 'text-transform': 'uppercase' }}>
             Lane Score

@@ -1,4 +1,5 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 
 export interface CityMapDebugState {
   showMap: boolean;
@@ -27,34 +28,89 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
 
 export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
   const [collapsed, setCollapsed] = createSignal(false);
+  const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
+  let dockRef: HTMLElement | undefined;
+
+  const handlePointerDown = (e: PointerEvent) => {
+    // Only drag with left click
+    if (e.button !== 0) return;
+    
+    // Don't drag if clicking the collapse button
+    if ((e.target as HTMLElement).closest('button')) return;
+
+    if (!dockRef) return;
+
+    const rect = dockRef.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPosition({
+        x: moveEvent.clientX - offsetX,
+        y: moveEvent.clientY - offsetY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
 
   return (
-    <aside class="city-map-debug-dock" aria-label="City map debug controls">
-      <div class="city-map-debug-dock__header">
-        <span>DEBUG</span>
-        <button type="button" onClick={() => setCollapsed(!collapsed())} aria-label="Collapse debug controls">
-          {collapsed() ? '>' : 'v'}
-        </button>
-      </div>
-      <Show when={!collapsed()}>
-        <div class="city-map-debug-dock__body">
-          {rows.map((row) => (
-            <label class="city-map-debug-dock__row">
-              <span>{row.label}</span>
-              <button
-                type="button"
-                classList={{
-                  'city-map-debug-dock__toggle': true,
-                  'city-map-debug-dock__toggle--on': props.state[row.key],
-                }}
-                onClick={() => props.onToggle(row.key)}
-              >
-                {props.state[row.key] ? 'ON' : 'OFF'}
-              </button>
-            </label>
-          ))}
+    <Portal mount={document.body}>
+      <aside 
+        ref={dockRef}
+        class="city-map-debug-dock" 
+        aria-label="City map debug controls"
+        style={{
+          position: 'fixed',
+          ...(position() ? {
+            left: `${position()!.x}px`,
+            top: `${position()!.y}px`,
+            right: 'auto',
+            bottom: 'auto'
+          } : {
+            top: '10px',
+            right: '10px'
+          })
+        }}
+      >
+        <div 
+          class="city-map-debug-dock__header" 
+          onPointerDown={handlePointerDown}
+          style={{ cursor: 'move', 'touch-action': 'none' }}
+        >
+          <span>DEBUG</span>
+          <button type="button" onClick={() => setCollapsed(!collapsed())} aria-label="Collapse debug controls">
+            {collapsed() ? '>' : 'v'}
+          </button>
         </div>
-      </Show>
-    </aside>
+        <Show when={!collapsed()}>
+          <div class="city-map-debug-dock__body">
+            {rows.map((row) => (
+              <label class="city-map-debug-dock__row">
+                <span>{row.label}</span>
+                <button
+                  type="button"
+                  classList={{
+                    'city-map-debug-dock__toggle': true,
+                    'city-map-debug-dock__toggle--on': props.state[row.key],
+                  }}
+                  onClick={() => props.onToggle(row.key)}
+                >
+                  {props.state[row.key] ? 'ON' : 'OFF'}
+                </button>
+              </label>
+            ))}
+          </div>
+        </Show>
+      </aside>
+    </Portal>
   );
 };

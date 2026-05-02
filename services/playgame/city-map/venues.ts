@@ -211,7 +211,33 @@ export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
 
   const landmarks: DistrictLandmark[] = [];
   for (const district of city.districts || []) {
-    const selected = chooseLandmarkVenues(district.id, byDistrict.get(district.id) || []);
+    if ((district as any).playable === false) { district.landmarks = []; continue; }
+
+    const landmarkPoints: Array<{ x: number; y: number }> = (district as any).landmarkPoints || [];
+    const districtVenues = byDistrict.get(district.id) || [];
+
+    let selected: Venue[];
+    if (landmarkPoints.length > 0 && districtVenues.length > 0) {
+      // Always include pre-placed iconic landmarks (parks, stadiums, lakes, bridges) — their positions are fixed in geometry
+      const iconic = districtVenues.filter((v) => v.tier === 'iconic');
+      const used = new Set<string>(iconic.map((v) => v.id));
+      // Snap each Bridson point to nearest unused non-iconic building venue
+      const buildingSnapped = landmarkPoints.map((pt) => {
+        let best: Venue | null = null;
+        let bestDist = Infinity;
+        for (const v of districtVenues) {
+          if (used.has(v.id) || !v.centroid || v.tier === 'iconic') continue;
+          const d = Math.hypot(v.centroid.x - pt.x, v.centroid.y - pt.y);
+          if (d < bestDist) { bestDist = d; best = v; }
+        }
+        if (best) used.add(best.id);
+        return best;
+      }).filter((v): v is Venue => v !== null);
+      selected = [...iconic, ...buildingSnapped];
+    } else {
+      selected = chooseLandmarkVenues(district.id, districtVenues);
+    }
+
     district.landmarks = selected.map((venue, index) => makeLandmark(venue, index));
     landmarks.push(...district.landmarks);
   }

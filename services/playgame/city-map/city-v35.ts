@@ -210,6 +210,7 @@ function makeDistrict(
   gridAngle: number,
   buildablePieces?: readonly Point[][] | null,
   landmassId = 'mainland',
+  flavor = false,
 ): CityDistrict & { rawCuts: Cut[]; label?: ReturnType<typeof labelPosition>; visibleArea?: number; waterPolygons: Point[][]; landmassId: string } {
   const districtId = `district-${idx}`;
   const sourcePolygons = (buildablePieces?.length ? buildablePieces : [region])
@@ -239,33 +240,47 @@ function makeDistrict(
     .filter((block) => block.area > 36);
   const visibleArea = viewportVisibleArea(region);
   const label = labelPosition(region, [], names[idx] || `DISTRICT ${idx + 1}`);
-  const slotCount = visibleArea > 52000
-    ? 10
-    : visibleArea > 40000
-      ? 8
-      : visibleArea > 26000
-        ? 6
-        : 4;
-  const slotPoints = placeDotsInPolygon(region, rng, [], slotCount, visibleArea, label);
+  const bigLandmarkBlocks = blocks.filter((b) => b.bigLandmark).map((b) => ({ polygon: b.polygon }));
+
+  const slotCount = flavor ? 0
+    : visibleArea > 52000 ? 10
+    : visibleArea > 40000 ? 8
+    : visibleArea > 26000 ? 6
+    : 4;
+  const numLandmarks = flavor ? 0
+    : visibleArea > 40000 ? 3
+    : visibleArea > 26000 ? 2
+    : 1;
+
+  // Single Bridson pass: landmarks + slots together → guaranteed even spacing between all
+  const allPoints = flavor ? [] : placeDotsInPolygon(
+    region, rng, bigLandmarkBlocks, numLandmarks + slotCount, visibleArea, label
+  );
+  // First numLandmarks points → landmark positions; remainder → card slots
+  const landmarkPoints = allPoints.slice(0, numLandmarks).map((p) => ({ x: p.x, y: p.y }));
+  const slotPoints = allPoints.slice(numLandmarks);
+
   const slots: CitySlot[] = slotPoints.map((point, slotIndex) => ({
     id: `${districtId}:slot:${slotIndex}`,
     districtId,
     slotIndex,
-    playableBy: 'both',
-    slotRole: 'street',
-    ownerSeat: point.y < VIEW_H / 2 ? 'P1' : 'P0',
+    playableBy: 'both' as const,
+    slotRole: 'street' as const,
+    ownerSeat: (point.y < VIEW_H / 2 ? 'P1' : 'P0') as 'P0' | 'P1',
     blockId: nearestBlockId(blocks, point),
     venueId: null,
     buildingId: null,
     x: point.x,
     y: point.y,
   }));
+
   return {
     id: districtId,
     idx,
     name: names[idx] || `DISTRICT ${idx + 1}`,
     color: colors[idx % colors.length],
     landmassId,
+    playable: !flavor,
     ownershipPolygons: [region],
     polygons: blocks.filter((block) => block.buildable).map((block) => block.polygon),
     blocks,
@@ -275,6 +290,7 @@ function makeDistrict(
     rawCuts,
     label,
     labelAnchor: { x: label.x, y: label.y },
+    landmarkPoints,
     visibleArea,
     waterPolygons: [],
   };
@@ -339,7 +355,7 @@ function pushCoastRoad(district: CityDistrict & { roads: RoadEdge[] }, id: strin
 function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: string[], colors: string[], rng: Rng) {
   const districts: Array<CityDistrict & { rawCuts: Cut[]; landmassId: string }> = [];
   for (const landmass of terrain.landmasses || []) {
-    if (landmass.kind !== 'island' || landmass.visibleArea < 520) continue;
+    if (landmass.kind !== 'island' || landmass.visibleArea < 2000) continue;
     const innerPolygon = insetPolygon(landmass.polygon, 6);
     if (!innerPolygon || innerPolygon.length < 3 || polygonArea(innerPolygon) < 260) continue;
     const district = makeDistrict(
@@ -351,6 +367,7 @@ function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: strin
       (rng() - 0.5) * (Math.PI / 4),
       [innerPolygon],
       landmass.id,
+      true, // flavor — no slots or landmarks
     );
     pushCoastRoad(district, `${district.id}-coast-road`, innerPolygon);
     districts.push(district);
@@ -529,7 +546,8 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
 
   if (validInset && mainlandDistricts.length > 0) pushCoastRoad(mainlandDistricts[0], 'mainland-coast-road', mainlandInset);
 
-  const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng);
+  const maxIslands = Math.max(0, 3 - mainlandDistricts.length);
+  const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng).slice(0, maxIslands);
   const districts = [...mainlandDistricts, ...islandDistricts];
   const cells = districts.flatMap((district) => district.blocks);
 
