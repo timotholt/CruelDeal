@@ -1,5 +1,5 @@
 import { DISTRICT_SHORT_NAMES, MAP_SLOT_EDGE_PAD, MAP_SLOT_HALF_H, MAP_SLOT_HALF_W, VIEW_H, VIEW_W } from "./config";
-import { clipPolygonToRect, pointInPolygon, pointToSegmentDist, polygonCentroid, polylabel } from "./geometry";
+import { clipPolygonToRect, pointInPolygon, pointToSegmentDist, polygonCentroid } from "./geometry";
 
 type Rng = () => number;
 
@@ -35,26 +35,28 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
   const minY = Math.min.apply(null, ys);
   const maxY = Math.max.apply(null, ys);
 
+  // Area centroid of clipped (visible) polygon — what user sees, not the full off-screen district
   let cnt = 0;
   let cSumX = 0;
   let cSumY = 0;
-  for (let x = minX; x <= maxX; x += 4) {
-    for (let y = minY; y <= maxY; y += 4) {
+  for (let x = minX; x <= maxX; x += 6) {
+    for (let y = minY; y <= maxY; y += 6) {
       if (!pointInPolygon({ x, y }, visible)) continue;
-      if (landmarks.some((lm) => pointInPolygon({ x, y }, lm.polygon))) continue;
       cSumX += x;
       cSumY += y;
       cnt++;
     }
   }
-
-  const centroidX = cnt > 0 ? cSumX / cnt : (minX + maxX) / 2;
-  const centroidY = cnt > 0 ? cSumY / cnt : (minY + maxY) / 2;
-  const visualCenter = polylabel(visible, 1.2, { x: VIEW_W / 2, y: VIEW_H / 2 });
-  const targetX = Number.isFinite(visualCenter.x) ? visualCenter.x : centroidX;
-  const targetY = Number.isFinite(visualCenter.y) ? visualCenter.y : centroidY;
+  const targetX = cnt > 0 ? cSumX / cnt : (minX + maxX) / 2;
+  const targetY = cnt > 0 ? cSumY / cnt : (minY + maxY) / 2;
   const bboxCenterX = (minX + maxX) / 2;
   const bboxCenterY = (minY + maxY) / 2;
+  // Clamp helper: keeps label box inside visible bounding box regardless of fit quality
+  const clamp = (lp: LabelPosition): LabelPosition => ({
+    ...lp,
+    x: Math.max(minX + lp.halfW, Math.min(maxX - lp.halfW, lp.x)),
+    y: Math.max(minY + lp.halfH, Math.min(maxY - lp.halfH, lp.y)),
+  });
 
   const rectDotDistance = (x: number, y: number, halfW: number, halfH: number, dot: Point) => {
     const dx = Math.max(Math.abs(dot.x - x) - halfW, 0);
@@ -84,7 +86,7 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
   for (const text of textOptions) {
     const { halfW, halfH } = labelMetrics(text);
     if (labelBoxFits(targetX, targetY, halfW, halfH)) {
-      return { x: targetX, y: targetY, text, score: Infinity, hardFit: true, halfW, halfH };
+      return clamp({ x: targetX, y: targetY, text, score: Infinity, hardFit: true, halfW, halfH });
     }
     let best: LabelPosition | null = null;
     for (let x = minX; x <= maxX; x += 3) {
@@ -102,15 +104,15 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
         const dotsClear = dotDist > 24;
         const centroidDist = Math.hypot(x - targetX, y - targetY);
         const bboxCenterDist = Math.hypot(x - bboxCenterX, y - bboxCenterY);
-        const score = Math.min(edgeDist, 30) * 0.72 - centroidDist * 1.12 - bboxCenterDist * 0.04 - (boxFits ? 0 : 48) - (dotsClear ? 0 : (24 - dotDist) * 2.6 + 32);
+        const score = Math.min(edgeDist, 30) * 0.72 - centroidDist * 0.5 - bboxCenterDist * 0.04 - (boxFits ? 0 : 150) - (dotsClear ? 0 : (24 - dotDist) * 2.6 + 32);
         if (!best || score > (best.score ?? -Infinity)) best = { x, y, text, score, hardFit: boxFits && dotsClear, halfW, halfH };
       }
     }
-    if (best?.hardFit) return best;
+    if (best?.hardFit) return clamp(best);
     if (best && (!globalBest || (best.score ?? -Infinity) > (globalBest.score ?? -Infinity))) globalBest = best;
   }
 
-  return globalBest || { x: targetX, y: targetY, text: labelText, ...labelMetrics(labelText) };
+  return clamp(globalBest || { x: targetX, y: targetY, text: labelText, ...labelMetrics(labelText) });
 }
 
 export function viewportVisibleArea(polygon: Point[]) {
@@ -153,117 +155,87 @@ export function placeDotsInPolygon(
   if (maxX - minX < 16 || maxY - minY < 16) return placed;
 
   const area = Math.max(1, visibleArea || (maxX - minX) * (maxY - minY));
-  const idealSpacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
-  const insideBlocked = (x: number, y: number) => {
-    if (!pointInPolygon({ x, y }, polygon)) return true;
-    if (labelAvoid) {
-      const pad = Math.max(MAP_SLOT_HALF_W, MAP_SLOT_HALF_H) + 7;
-      if (Math.abs(x - labelAvoid.x) < labelAvoid.halfW + pad && Math.abs(y - labelAvoid.y) < labelAvoid.halfH + pad) return true;
-    }
-    return leafBlocksToAvoid.some((lb) => pointInPolygon({ x, y }, lb.polygon));
-  };
+  // spacing = minimum distance between slot centers (standard Bridson r)
+  const spacing = Math.sqrt(area / Math.max(1, target)) * 0.92;
+  // label exclusion: slot center must stay >= this far from label center
+  const labelExcl = labelAvoid ? labelAvoid.halfW + spacing * 0.55 + 8 : 0;
+
+  const centroid = polygonCentroid(polygon);
+
   const edgeDistance = (x: number, y: number) => {
     let best = Math.min(x, y, VIEW_W - x, VIEW_H - y);
-    for (let k = 0; k < polygon.length; k++) best = Math.min(best, pointToSegmentDist(x, y, polygon[k], polygon[(k + 1) % polygon.length]));
+    for (let k = 0; k < polygon.length; k++)
+      best = Math.min(best, pointToSegmentDist(x, y, polygon[k], polygon[(k + 1) % polygon.length]));
     return best;
   };
 
-  const centroid = polygonCentroid(polygon);
-  const candidates: Array<Point & { edgeD: number; angle: number; radial: number }> = [];
-  const candidateTarget = Math.max(700, target * 180);
-  let attempts = 0;
-  while (candidates.length < candidateTarget && attempts < candidateTarget * 8) {
-    attempts++;
-    const x = minX + rng() * (maxX - minX);
-    const y = minY + rng() * (maxY - minY);
-    if (insideBlocked(x, y)) continue;
-    const edgeD = edgeDistance(x, y);
-    if (edgeD < MAP_SLOT_EDGE_PAD) continue;
-    candidates.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
-  }
+  const insidePolygon = (x: number, y: number) =>
+    pointInPolygon({ x, y }, polygon) && !leafBlocksToAvoid.some((lb) => pointInPolygon({ x, y }, lb.polygon));
 
-  const angleSep = (a: number, b: number) => {
-    const d = Math.abs(a - b) % (Math.PI * 2);
-    return Math.min(d, Math.PI * 2 - d);
+  const tooClose = (x: number, y: number) => {
+    if (labelAvoid && Math.hypot(x - labelAvoid.x, y - labelAvoid.y) < labelExcl) return true;
+    return placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
   };
 
-  while (placed.length < target && candidates.length) {
-    let bestIdx = -1;
-    let bestScore = -Infinity;
-    for (let i = 0; i < candidates.length; i++) {
-      const c = candidates[i];
-      let nearestDot = placed.length ? Infinity : idealSpacing * 0.75;
-      let nearestAngle = placed.length ? Infinity : Math.PI;
-      for (const p of placed) {
-        nearestDot = Math.min(nearestDot, Math.hypot(p.x - c.x, p.y - c.y));
-        nearestAngle = Math.min(nearestAngle, angleSep(p.angle, c.angle));
-      }
-      const score = Math.min(nearestDot, idealSpacing * 1.15) * 1.2 + Math.min(c.edgeD - MAP_SLOT_EDGE_PAD, idealSpacing * 0.45) * 0.5 + Math.min(c.radial, idealSpacing * 1.35) * 0.34 + Math.min(nearestAngle, Math.PI / 2) * 12 + rng() * 0.01;
-      if (score > bestScore) {
-        bestScore = score;
-        bestIdx = i;
+  const validPlacement = (x: number, y: number) =>
+    insidePolygon(x, y) && edgeDistance(x, y) >= MAP_SLOT_EDGE_PAD && !tooClose(x, y);
+
+  // Bridson active list — slots grow outward from here
+  const active: Array<{ x: number; y: number }> = [];
+
+  const addPoint = (x: number, y: number) => {
+    const edgeD = edgeDistance(x, y);
+    placed.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
+    active.push({ x, y });
+  };
+
+  // Plant a random seed anywhere valid in the polygon
+  const plantSeed = (): boolean => {
+    // Try label annulus first (first seed grows outward from the label)
+    if (labelAvoid && placed.length === 0) {
+      for (let k = 0; k < 80; k++) {
+        const r = labelExcl + rng() * spacing;
+        const theta = rng() * Math.PI * 2;
+        const x = labelAvoid.x + r * Math.cos(theta);
+        const y = labelAvoid.y + r * Math.sin(theta);
+        if (validPlacement(x, y)) { addPoint(x, y); return true; }
       }
     }
-    if (bestIdx < 0) break;
-    placed.push(candidates.splice(bestIdx, 1)[0]);
+    for (let k = 0; k < 400; k++) {
+      const x = minX + rng() * (maxX - minX);
+      const y = minY + rng() * (maxY - minY);
+      if (validPlacement(x, y)) { addPoint(x, y); return true; }
+    }
+    return false;
+  };
+
+  if (!plantSeed()) return placed;
+
+  // Bridson: annulus is [spacing, 2*spacing] — standard correct range
+  // When active list empties before target, re-seed in an unfilled region
+  const K = 30;
+  let reseeds = 0;
+  while (placed.length < target) {
+    if (active.length === 0) {
+      if (reseeds++ > target || !plantSeed()) break;
+      continue;
+    }
+    const idx = Math.floor(rng() * active.length);
+    const ap = active[idx];
+    let found = false;
+    for (let k = 0; k < K; k++) {
+      const r = spacing * (1 + rng());          // uniform in [spacing, 2*spacing]
+      const theta = rng() * Math.PI * 2;
+      const x = ap.x + r * Math.cos(theta);
+      const y = ap.y + r * Math.sin(theta);
+      if (x < minX - spacing || x > maxX + spacing || y < minY - spacing || y > maxY + spacing) continue;
+      if (!validPlacement(x, y)) continue;
+      addPoint(x, y);
+      found = true;
+      break;
+    }
+    if (!found) active.splice(idx, 1);
   }
 
-  if (placed.length < 2) return placed;
-  relaxPlacedDots(placed, polygon, insideBlocked, edgeDistance, minX, maxX, minY, maxY, idealSpacing);
   return placed;
-}
-
-function relaxPlacedDots(
-  placed: Array<Point & { edgeD: number; angle: number; radial: number }>,
-  polygon: Point[],
-  insideBlocked: (x: number, y: number) => boolean,
-  edgeDistance: (x: number, y: number) => number,
-  minX: number,
-  maxX: number,
-  minY: number,
-  maxY: number,
-  idealSpacing: number
-) {
-  const dotRepelSpacing = idealSpacing * 0.58;
-  for (let iter = 0; iter < 10; iter++) {
-    for (let i = 0; i < placed.length; i++) {
-      let fx = 0;
-      let fy = 0;
-      for (let j = 0; j < placed.length; j++) {
-        if (i === j) continue;
-        const dx = placed[i].x - placed[j].x;
-        const dy = placed[i].y - placed[j].y;
-        const d = Math.hypot(dx, dy);
-        if (d > 0.01 && d < dotRepelSpacing) {
-          const f = ((dotRepelSpacing - d) / dotRepelSpacing) * 0.72;
-          fx += (dx / d) * f;
-          fy += (dy / d) * f;
-        }
-      }
-      for (let k = 0; k < polygon.length; k++) {
-        const a = polygon[k];
-        const b = polygon[(k + 1) % polygon.length];
-        const ex = b.x - a.x;
-        const ey = b.y - a.y;
-        const len2 = ex * ex + ey * ey || 1e-9;
-        const t = Math.max(0, Math.min(1, ((placed[i].x - a.x) * ex + (placed[i].y - a.y) * ey) / len2));
-        const cx = a.x + t * ex;
-        const cy = a.y + t * ey;
-        const dx = placed[i].x - cx;
-        const dy = placed[i].y - cy;
-        const d = Math.hypot(dx, dy);
-        if (d < MAP_SLOT_EDGE_PAD + 8 && d > 0.01) {
-          const f = ((MAP_SLOT_EDGE_PAD + 8 - d) / (MAP_SLOT_EDGE_PAD + 8)) * 1.75;
-          fx += (dx / d) * f;
-          fy += (dy / d) * f;
-        }
-      }
-      const newX = placed[i].x + fx * 0.28;
-      const newY = placed[i].y + fy * 0.28;
-      if (!insideBlocked(newX, newY) && edgeDistance(newX, newY) >= MAP_SLOT_EDGE_PAD) {
-        placed[i].x = Math.max(minX, Math.min(maxX, newX));
-        placed[i].y = Math.max(minY, Math.min(maxY, newY));
-      }
-    }
-  }
 }

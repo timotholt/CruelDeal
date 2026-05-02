@@ -403,9 +403,10 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
           <For each={props.city.districts as RenderDistrict[]}>
             {(district) => {
               const anchor = districtAnchor(district);
+              const labelText = (district as any).label?.text || districtLabel(district);
               return (
-                <text class="city-map-svg__district-label" x={anchor.x} y={anchor.y}>
-                  {districtLabel(district)}
+                <text class="city-map-svg__district-label" x={anchor.x} y={anchor.y} text-anchor="middle" dominant-baseline="middle">
+                  {labelText}
                 </text>
               );
             }}

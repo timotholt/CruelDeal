@@ -274,6 +274,7 @@ function makeDistrict(
     dots: slots,
     rawCuts,
     label,
+    labelAnchor: { x: label.x, y: label.y },
     visibleArea,
     waterPolygons: [],
   };
