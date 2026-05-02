@@ -1,5 +1,5 @@
 
-import React from 'react';
+import type { Component } from 'solid-js';
 import { ScreenKey } from '../types';
 
 // Screen Imports
@@ -17,7 +17,7 @@ import { LadderRankingScreen } from '../components/screens/LadderRankingScreen';
 export interface ScreenConfig {
     x: number; // Viewport Multiplier
     y: number; // Viewport Multiplier
-    component: React.FC<any>;
+    component: Component<any>;
     isPersistent?: boolean; // If true, stays mounted in DOM once initialized
 }
 
