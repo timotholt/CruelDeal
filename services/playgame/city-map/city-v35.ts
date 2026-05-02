@@ -250,16 +250,14 @@ function makeDistrict(
     : 6;
   const numLandmarks = flavor ? 0 : 3;
 
-  // Single Bridson pass: landmarks + slots together → guaranteed even spacing between all
-  const allPoints = flavor ? [] : placeDotsInPolygon(
+  // Grid scan + maximin gives well-spread points; shuffle before assignment so landmark
+  // vs slot roles are random among the spread set, not positionally biased.
+  const rawPoints = flavor ? [] : placeDotsInPolygon(
     region, rng, bigLandmarkBlocks, numLandmarks + slotCount, visibleArea, label, bigLandmarkCentroids
   );
-  // Pick landmark positions by striding across the full Bridson list — Bridson grows outward
-  // from seed so first N points cluster near center; striding gives even spatial coverage.
+  const allPoints = rawPoints.slice().sort(() => rng() - 0.5);
   const landmarkIndices = new Set(
-    Array.from({ length: Math.min(numLandmarks, allPoints.length) }, (_, i) =>
-      Math.round(i * (allPoints.length - 1) / Math.max(1, numLandmarks - 1))
-    )
+    Array.from({ length: Math.min(numLandmarks, allPoints.length) }, (_, i) => i)
   );
   const landmarkPoints = allPoints.filter((_, i) => landmarkIndices.has(i)).map((p) => ({ x: p.x, y: p.y }));
   // Exclude slot positions too close to any landmark position to prevent visual overlap
@@ -559,8 +557,8 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
 
   if (validInset && mainlandDistricts.length > 0) pushCoastRoad(mainlandDistricts[0], 'mainland-coast-road', mainlandInset);
 
-  const maxIslands = Math.max(0, 3 - mainlandDistricts.length);
-  const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng).slice(0, maxIslands);
+  // Islands are always flavor — no slots, no landmarks, don't count toward playable district cap.
+  const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng);
   const districts = [...mainlandDistricts, ...islandDistricts];
   const cells = districts.flatMap((district) => district.blocks);
 
