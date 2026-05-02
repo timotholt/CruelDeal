@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
 import { buildCityMap, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
 import { pointInPolygon } from '@/services/playgame/city-map/geometry';
 import {
@@ -11,15 +11,12 @@ import {
   zoomCameraAt,
   type CityMapCameraState,
 } from './camera';
-import { CityMapSvg } from './CityMapSvg';
-import { CityMapLandmarks } from './CityMapLandmarks';
-import { CityMapSlots } from './CityMapSlots';
+import { CityMapRendererHost } from './CityMapRendererHost';
 import { LandmarkTooltip } from './LandmarkTooltip';
 import { useCityMapLandmarkHover } from './useCityMapHover';
 import { useCityMapHighlight } from './useCityMapHighlight';
 import { CityMapDebugDock, type CityMapDebugState } from './CityMapDebugDock';
-import { RouteDemoLayer } from './RouteDemoLayer';
-import { CompositionDebugOverlay } from './CompositionDebugOverlay';
+import { createCityMapRenderModel, type CityMapRendererMode } from './render-model';
 import './cityMapStyles.css';
 
 export interface CityMapBoardProps {
@@ -28,6 +25,7 @@ export interface CityMapBoardProps {
   width?: number;
   height?: number;
   interactive?: boolean;
+  rendererMode?: CityMapRendererMode;
   showVenueTooltips?: boolean;
   debug?: {
     showLabels?: boolean;
@@ -60,13 +58,13 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city'));
   const width = () => props.width || city().width;
   const height = () => props.height || city().height;
+  const renderModel = createMemo(() => createCityMapRenderModel(city(), width(), height()));
   const worldSize = () => ({ width: width(), height: height() });
   const [surfaceAspect, setSurfaceAspect] = createSignal(width() / height());
   const [surfaceSize, setSurfaceSize] = createSignal(worldSize());
   const [camera, setCamera] = createSignal<CityMapCameraState>(createInitialCityMapCamera(worldSize()));
   const viewport = createMemo(() => cameraToViewport(camera(), worldSize(), surfaceAspect()));
-  const slots = createMemo(() => city().districts.flatMap((district) => district.slots || []));
-  const landmarks = createMemo(() => city().landmarks || city().districts.flatMap((district) => district.landmarks || []));
+  const landmarks = () => renderModel().landmarks;
   const interactive = () => props.interactive ?? true;
   const highlight = useCityMapHighlight({ mode: () => 'hover' });
   const hover = useCityMapLandmarkHover({
@@ -179,43 +177,17 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         onPointerCancel={clearHover}
         onClickCapture={onClickCapture}
       >
-        <Show when={debugState().showMap}>
-          <CityMapSvg
-            city={city()}
-            width={width()}
-            height={height()}
-            viewport={viewport()}
-            hoveredDistrictId={highlight.hoveredDistrictId()}
-            debug={{
-              showLabels: debugState().showLabels,
-              showBuildings: debugState().showBuildings,
-              showRoads: debugState().showRoads,
-              showSlots: false,
-            }}
-          />
-        </Show>
-        <RouteDemoLayer city={city()} active={debugState().showRouteDemo} width={width()} height={height()} viewport={viewport()} />
-        <Show when={debugState().showComposition}>
-          <CompositionDebugOverlay city={city()} width={width()} height={height()} viewport={viewport()} />
-        </Show>
-        <svg
-          class="city-map-board__slot-layer"
-          viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
-          preserveAspectRatio="none"
-          aria-hidden={!interactive()}
-        >
-          <Show when={debugState().showLandmarks}>
-            <CityMapLandmarks landmarks={landmarks()} hoveredLandmarkId={hover.hoveredLandmarkId()} />
-          </Show>
-          <Show when={debugState().showSlots}>
-            <CityMapSlots
-              slots={slots()}
-              selectedSlotId={selectedSlotId()}
-              interactive={interactive()}
-              onSlotClick={(slot) => setSelectedSlotId(slot.id)}
-            />
-          </Show>
-        </svg>
+        <CityMapRendererHost
+          mode={props.rendererMode ?? 'svg'}
+          model={renderModel()}
+          viewport={viewport()}
+          debugState={debugState()}
+          interactive={interactive()}
+          hoveredDistrictId={highlight.hoveredDistrictId()}
+          hoveredLandmarkId={hover.hoveredLandmarkId()}
+          selectedSlotId={selectedSlotId()}
+          onSlotClick={(slot) => setSelectedSlotId(slot.id)}
+        />
         <LandmarkTooltip
           landmark={hover.hoveredLandmark()}
           board={{ width: width(), height: height() }}
