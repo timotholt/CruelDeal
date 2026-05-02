@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import type { CitySlot } from '@/services/playgame/city-map';
-import type { CityMapViewport } from './camera';
+import type { CityMapViewport, Size } from './camera';
 import { CityMapSvg } from './CityMapSvg';
 import { CityMapLandmarks } from './CityMapLandmarks';
 import { CityMapSlots } from './CityMapSlots';
@@ -12,6 +12,7 @@ import type { CityMapRenderModel } from './render-model';
 export interface CityMapSvgRendererProps {
   model: CityMapRenderModel;
   viewport: CityMapViewport;
+  surfaceSize: Size;
   debugState: CityMapDebugState;
   interactive: boolean;
   hoveredDistrictId?: string | null;
@@ -21,16 +22,22 @@ export interface CityMapSvgRendererProps {
 }
 
 export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
-  const viewBox = () => `${props.viewport.x} ${props.viewport.y} ${props.viewport.width} ${props.viewport.height}`;
+  const fullViewBox = () => `0 0 ${props.model.world.width} ${props.model.world.height}`;
+  const worldTransform = () => {
+    const scaleX = props.model.world.width / Math.max(0.001, props.viewport.width);
+    const scaleY = props.model.world.height / Math.max(0.001, props.viewport.height);
+    const tx = (-props.viewport.x / Math.max(0.001, props.viewport.width)) * props.surfaceSize.width;
+    const ty = (-props.viewport.y / Math.max(0.001, props.viewport.height)) * props.surfaceSize.height;
+    return `matrix(${scaleX}, 0, 0, ${scaleY}, ${tx}, ${ty})`;
+  };
 
   return (
-    <>
+    <div class="city-map-world-layer" style={{ transform: worldTransform() }}>
       <Show when={props.debugState.showMap}>
         <CityMapSvg
           city={props.model.city}
           width={props.model.world.width}
           height={props.model.world.height}
-          viewport={props.viewport}
           hoveredDistrictId={props.hoveredDistrictId}
           debug={{
             showLabels: props.debugState.showLabels,
@@ -45,19 +52,17 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
         active={props.debugState.showRouteDemo}
         width={props.model.world.width}
         height={props.model.world.height}
-        viewport={props.viewport}
       />
       <Show when={props.debugState.showComposition}>
         <CompositionDebugOverlay
           city={props.model.city}
           width={props.model.world.width}
           height={props.model.world.height}
-          viewport={props.viewport}
         />
       </Show>
       <svg
         class="city-map-board__slot-layer"
-        viewBox={viewBox()}
+        viewBox={fullViewBox()}
         preserveAspectRatio="none"
         aria-hidden={!props.interactive}
       >
@@ -73,7 +78,6 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
           />
         </Show>
       </svg>
-    </>
+    </div>
   );
 };
-

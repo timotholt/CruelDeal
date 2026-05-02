@@ -88,6 +88,26 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   let surfaceEl: HTMLDivElement | undefined;
   let panDrag: { pointerId: number; lastX: number; lastY: number; moved: boolean } | null = null;
   let suppressNextClick = false;
+  let queuedCamera: CityMapCameraState | null = null;
+  let cameraFrameId: number | null = null;
+
+  const scheduleCamera = (next: CityMapCameraState) => {
+    queuedCamera = next;
+    if (cameraFrameId != null) return;
+    cameraFrameId = window.requestAnimationFrame(() => {
+      cameraFrameId = null;
+      if (!queuedCamera) return;
+      setCamera(queuedCamera);
+      queuedCamera = null;
+    });
+  };
+  const updateCamera = (project: (current: CityMapCameraState) => CityMapCameraState) => {
+    scheduleCamera(project(queuedCamera ?? camera()));
+  };
+
+  onCleanup(() => {
+    if (cameraFrameId != null) window.cancelAnimationFrame(cameraFrameId);
+  });
 
   onMount(() => {
     if (!surfaceEl) return;
@@ -114,7 +134,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     const anchorWorld = screenToWorld({ x: event.clientX, y: event.clientY }, rect, viewport());
     const anchorScreen = normalizedPointFromClient({ x: event.clientX, y: event.clientY }, rect);
     const zoomFactor = Math.exp(-event.deltaY * 0.0018);
-    setCamera((current) => zoomCameraAt(current, anchorWorld, anchorScreen, current.zoom * zoomFactor, worldSize(), surfaceAspect()));
+    const size = worldSize();
+    const aspect = surfaceAspect();
+    updateCamera((current) => zoomCameraAt(current, anchorWorld, anchorScreen, current.zoom * zoomFactor, size, aspect));
   };
   const onPointerDown = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!interactive() || isControlTarget(event.target) || event.button !== 0) return;
@@ -127,10 +149,20 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       const dy = event.clientY - panDrag.lastY;
       if (Math.hypot(dx, dy) > 0) {
         const rect = event.currentTarget.getBoundingClientRect();
-        setCamera((current) => panCameraByScreenDelta(current, { x: dx, y: dy }, rect, viewport(), worldSize(), surfaceAspect()));
+        const size = worldSize();
+        const aspect = surfaceAspect();
+        updateCamera((current) => panCameraByScreenDelta(
+          current,
+          { x: dx, y: dy },
+          rect,
+          cameraToViewport(current, size, aspect),
+          size,
+          aspect,
+        ));
         panDrag.lastX = event.clientX;
         panDrag.lastY = event.clientY;
         panDrag.moved = panDrag.moved || Math.hypot(dx, dy) > 3;
+        return;
       }
     }
     hover.bind.onPointerMove(event);
@@ -181,6 +213,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           mode={props.rendererMode ?? 'svg'}
           model={renderModel()}
           viewport={viewport()}
+          surfaceSize={surfaceSize()}
           debugState={debugState()}
           interactive={interactive()}
           hoveredDistrictId={highlight.hoveredDistrictId()}

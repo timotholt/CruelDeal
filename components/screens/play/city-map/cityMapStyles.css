@@ -151,7 +151,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  overflow: hidden;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -161,7 +161,15 @@
   cursor: grabbing;
 }
 
-.city-map-board__surface .city-map-svg,
+.city-map-world-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.city-map-world-layer .city-map-svg,
 .city-map-board__slot-layer {
   position: absolute;
   inset: 0;

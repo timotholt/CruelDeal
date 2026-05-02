@@ -1,5 +1,5 @@
 import type { CitySlot } from '@/services/playgame/city-map';
-import type { CityMapViewport } from './camera';
+import type { CityMapViewport, Size } from './camera';
 import type { CityMapDebugState } from './CityMapDebugDock';
 import { CityMapSvgRenderer } from './CityMapSvgRenderer';
 import type { CityMapRenderModel, CityMapRendererMode } from './render-model';
@@ -8,6 +8,7 @@ export interface CityMapRendererHostProps {
   mode: CityMapRendererMode;
   model: CityMapRenderModel;
   viewport: CityMapViewport;
+  surfaceSize: Size;
   debugState: CityMapDebugState;
   interactive: boolean;
   hoveredDistrictId?: string | null;
@@ -26,6 +27,7 @@ export const CityMapRendererHost = (props: CityMapRendererHostProps) => {
           <CityMapSvgRenderer
             model={props.model}
             viewport={props.viewport}
+            surfaceSize={props.surfaceSize}
             debugState={props.debugState}
             interactive={props.interactive}
             hoveredDistrictId={props.hoveredDistrictId}
@@ -38,6 +40,7 @@ export const CityMapRendererHost = (props: CityMapRendererHostProps) => {
           <CityMapSvgRenderer
             model={props.model}
             viewport={props.viewport}
+            surfaceSize={props.surfaceSize}
             debugState={props.debugState}
             interactive={props.interactive}
             hoveredDistrictId={props.hoveredDistrictId}
