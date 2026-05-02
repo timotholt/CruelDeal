@@ -97,7 +97,7 @@ export function makeRiverBankRoads(river: RiverPlan | null, landPolygon: Point[]
       p1: pts[0],
       p2: pts[pts.length - 1],
       polyline: pts,
-      polylineMode: null,
+      polylineMode: 'jog',
       depth: 3,
       angle: Math.atan2(pts[pts.length - 1].y - pts[0].y, pts[pts.length - 1].x - pts[0].x),
       riverBank: true

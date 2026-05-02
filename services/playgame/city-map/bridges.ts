@@ -88,6 +88,27 @@ function cutRiverHits(cut: CutSegment, riverSegments: Array<{ a: Point; b: Point
   return clustered;
 }
 
+function riverAngleAt(x: number, y: number, riverSegs: Array<{ a: Point; b: Point }>): number {
+  let bestSeg = riverSegs[0];
+  let bestDistSq = Infinity;
+  for (const seg of riverSegs) {
+    const dx = seg.b.x - seg.a.x;
+    const dy = seg.b.y - seg.a.y;
+    const lenSq = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - seg.a.x) * dx + (y - seg.a.y) * dy) / lenSq));
+    const cx = seg.a.x + t * dx;
+    const cy = seg.a.y + t * dy;
+    const d = (x - cx) ** 2 + (y - cy) ** 2;
+    if (d < bestDistSq) { bestDistSq = d; bestSeg = seg; }
+  }
+  return Math.atan2(bestSeg.b.y - bestSeg.a.y, bestSeg.b.x - bestSeg.a.x);
+}
+
+function perpScore(bridge: GeneratedBridge, riverSegs: Array<{ a: Point; b: Point }>): number {
+  const riverAngle = riverAngleAt(bridge.x, bridge.y, riverSegs);
+  return Math.abs(Math.sin((bridge.roadAngle ?? bridge.angle) - riverAngle));
+}
+
 function hasBridgeNearCut(cut: CutSegment, riverSegments: Array<{ a: Point; b: Point }>, bridges: Array<{ x: number; y: number }>) {
   for (const cutSeg of cutSegments(cut)) {
     for (const riverSeg of riverSegments) {
@@ -203,6 +224,22 @@ export function generateBridges({
   for (const candidate of offshoreCandidates) {
     if (bridges.filter((bridge) => bridge.offshore).length >= 2) break;
     if (!tooClose(candidate.x, candidate.y, candidate.depth, bridges)) bridges.push(candidate);
+  }
+
+  if (riverSegs.length) {
+    const PERP_CULL_DIST = 30;
+    const scores = bridges.map((b) => perpScore(b, riverSegs));
+    const toRemove = new Set<number>();
+    for (let i = 0; i < bridges.length; i++) {
+      if (toRemove.has(i) || bridges[i].offshore) continue;
+      for (let j = i + 1; j < bridges.length; j++) {
+        if (toRemove.has(j) || bridges[j].offshore) continue;
+        if (Math.hypot(bridges[i].x - bridges[j].x, bridges[i].y - bridges[j].y) > PERP_CULL_DIST) continue;
+        if (scores[i] >= scores[j]) toRemove.add(j);
+        else toRemove.add(i);
+      }
+    }
+    for (const idx of [...toRemove].sort((a, b) => b - a)) bridges.splice(idx, 1);
   }
 
   let renderedCuts = allCuts;
