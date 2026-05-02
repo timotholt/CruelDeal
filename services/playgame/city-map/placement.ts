@@ -174,122 +174,63 @@ export function placeDotsInPolygon(
   const insidePolygon = (x: number, y: number) =>
     pointInPolygon({ x, y }, polygon) && !leafBlocksToAvoid.some((lb) => pointInPolygon({ x, y }, lb.polygon));
 
-  // Retry with smaller spacing if Bridson can't fill target — each pass reduces by 25%
-  const placed: Array<Point & { edgeD: number; angle: number; radial: number }> = [];
-  for (let pass = 0; pass < 4 && placed.length < target; pass++) {
-    const spacing = initialSpacing * Math.pow(0.75, pass);
-    const labelPadX = labelAvoid ? labelAvoid.halfW + 6 : 0;
-    const labelPadY = labelAvoid ? labelAvoid.halfH + 6 : 0;
-    placed.length = 0;
+  const labelPadX = labelAvoid ? labelAvoid.halfW + 6 : 0;
+  const labelPadY = labelAvoid ? labelAvoid.halfH + 6 : 0;
+  const nearLabel = (x: number, y: number) =>
+    !!labelAvoid && Math.abs(x - labelAvoid.x) < labelPadX && Math.abs(y - labelAvoid.y) < labelPadY;
+  const nearSeed = (x: number, y: number, minDist: number) =>
+    preSeeds.some((p) => Math.hypot(x - p.x, y - p.y) < minDist);
 
-    // Pre-seeds act as occupied space — new points stay spacing-away from them.
-    // Also seed active list so Bridson grows outward from large landmark positions.
-    const occupied: Array<{ x: number; y: number }> = [...preSeeds];
-    const tooClose = (x: number, y: number) => {
-      if (labelAvoid && Math.abs(x - labelAvoid.x) < labelPadX && Math.abs(y - labelAvoid.y) < labelPadY) return true;
-      return occupied.some((p) => Math.hypot(x - p.x, y - p.y) < spacing)
-          || placed.some((p) => Math.hypot(x - p.x, y - p.y) < spacing);
-    };
-    const validPlacement = (x: number, y: number) =>
-      insidePolygon(x, y) && edgeDistance(x, y) >= POLY_EDGE_PAD && !tooClose(x, y);
-    // Start active list from pre-seeds that are inside the polygon
-    const active: Array<{ x: number; y: number }> = preSeeds.filter((p) => pointInPolygon(p, polygon));
-    const addPoint = (x: number, y: number) => {
-      const edgeD = edgeDistance(x, y);
-      placed.push({ x, y, edgeD, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
-      active.push({ x, y });
-    };
-    const plantSeed = (): boolean => {
-      if (labelAvoid && placed.length === 0) {
-        for (let k = 0; k < 80; k++) {
-          const offX = (rng() < 0.5 ? -1 : 1) * (labelPadX + rng() * spacing);
-          const offY = (rng() - 0.5) * (labelPadY + spacing) * 2;
-          const x = labelAvoid.x + offX;
-          const y = labelAvoid.y + offY;
-          if (validPlacement(x, y)) { addPoint(x, y); return true; }
-        }
-      }
-      for (let k = 0; k < 400; k++) {
-        const x = minX + rng() * (maxX - minX);
-        const y = minY + rng() * (maxY - minY);
-        if (validPlacement(x, y)) { addPoint(x, y); return true; }
-      }
-      return false;
-    };
-
-    if (!plantSeed()) continue;
-
-    // Multi-source BFS: plant stratified seeds spread across polygon so Bridson
-    // grows from multiple distributed roots rather than radiating from one point.
-    const seedGrid = Math.ceil(Math.sqrt(target * 2));
-    const cellW = (maxX - minX) / seedGrid;
-    const cellH = (maxY - minY) / seedGrid;
-    // No early-stop here — seed the full grid so all regions get starting points.
-    // The Bridson loop below stops at target; grid seeds may overshoot slightly, that's fine.
-    for (let col = 0; col < seedGrid; col++) {
-      for (let row = 0; row < seedGrid; row++) {
-        for (let attempt = 0; attempt < 12; attempt++) {
-          const x = minX + (col + 0.2 + rng() * 0.6) * cellW;
-          const y = minY + (row + 0.2 + rng() * 0.6) * cellH;
-          if (validPlacement(x, y)) { addPoint(x, y); break; }
-        }
+  // Replace Bridson BFS (directionally biased) with: uniform grid scan → candidate pool
+  // → furthest-point (maximin) sampling. No BFS → no left/right bias.
+  // Reduce step each pass to grow the candidate pool until we have enough to fill target.
+  type Placed = Point & { edgeD: number; angle: number; radial: number };
+  for (let pass = 0; pass < 5; pass++) {
+    const minSep = initialSpacing * Math.pow(0.75, pass);
+    const step = minSep * 0.45; // ~5x more candidates than target per pass
+    const candidates: Placed[] = [];
+    for (let gx = minX + step * 0.5; gx <= maxX; gx += step) {
+      for (let gy = minY + step * 0.5; gy <= maxY; gy += step) {
+        // Small jitter so points aren't on a perfect grid
+        const x = gx + (rng() - 0.5) * step * 0.5;
+        const y = gy + (rng() - 0.5) * step * 0.5;
+        if (!insidePolygon(x, y)) continue;
+        const ed = edgeDistance(x, y);
+        if (ed < POLY_EDGE_PAD) continue;
+        if (nearLabel(x, y)) continue;
+        if (nearSeed(x, y, minSep)) continue;
+        candidates.push({ x, y, edgeD: ed, angle: Math.atan2(y - centroid.y, x - centroid.x), radial: Math.hypot(x - centroid.x, y - centroid.y) });
       }
     }
+    if (candidates.length < target) continue;
 
-    const K = 30;
-    let reseeds = 0;
-    while (placed.length < target) {
-      if (active.length === 0) {
-        if (reseeds++ > target || !plantSeed()) break;
-        continue;
-      }
-      const idx = Math.floor(rng() * active.length);
-      const ap = active[idx];
-      let found = false;
-      for (let k = 0; k < K; k++) {
-        const r = spacing * (1 + rng());
-        const theta = rng() * Math.PI * 2;
-        const x = ap.x + r * Math.cos(theta);
-        const y = ap.y + r * Math.sin(theta);
-        if (x < minX - spacing || x > maxX + spacing || y < minY - spacing || y > maxY + spacing) continue;
-        if (!validPlacement(x, y)) continue;
-        addPoint(x, y);
-        found = true;
-        break;
-      }
-      if (!found) active.splice(idx, 1);
-    }
-  }
-
-  // Trim to target using furthest-point (maximin) sampling — guarantees maximum spatial
-  // spread in the final set regardless of how many grid seeds were planted.
-  if (placed.length > target) {
-    const minD = placed.map(() => Infinity);
+    // Furthest-point (maximin) sampling: greedily pick the point farthest from all
+    // already-selected points, starting from the one closest to the polygon centroid.
+    const minD = candidates.map(() => Infinity);
     const selected = new Set<number>();
-    let first = 0;
-    let bestStart = Infinity;
-    for (let i = 0; i < placed.length; i++) {
-      const d = Math.hypot(placed[i].x - centroid.x, placed[i].y - centroid.y);
+    let first = 0, bestStart = Infinity;
+    for (let i = 0; i < candidates.length; i++) {
+      const d = Math.hypot(candidates[i].x - centroid.x, candidates[i].y - centroid.y);
       if (d < bestStart) { bestStart = d; first = i; }
     }
     selected.add(first);
-    for (let i = 0; i < placed.length; i++)
-      minD[i] = Math.hypot(placed[i].x - placed[first].x, placed[i].y - placed[first].y);
+    for (let i = 0; i < candidates.length; i++)
+      minD[i] = Math.hypot(candidates[i].x - candidates[first].x, candidates[i].y - candidates[first].y);
     while (selected.size < target) {
       let best = -1, bestMin = -1;
-      for (let i = 0; i < placed.length; i++) {
+      for (let i = 0; i < candidates.length; i++) {
         if (selected.has(i)) continue;
         if (minD[i] > bestMin) { bestMin = minD[i]; best = i; }
       }
       if (best === -1) break;
       selected.add(best);
-      for (let i = 0; i < placed.length; i++) {
-        const d = Math.hypot(placed[i].x - placed[best].x, placed[i].y - placed[best].y);
+      for (let i = 0; i < candidates.length; i++) {
+        const d = Math.hypot(candidates[i].x - candidates[best].x, candidates[i].y - candidates[best].y);
         if (d < minD[i]) minD[i] = d;
       }
     }
-    return placed.filter((_, i) => selected.has(i));
+    return candidates.filter((_, i) => selected.has(i));
   }
 
-  return placed;
+  return [];
 }
