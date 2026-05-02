@@ -17,6 +17,7 @@ export interface CityMapSvgProps {
   width: number;
   height: number;
   hoveredDistrictId?: string | null;
+  onDistrictHover?: (id: string | null) => void;
   debug?: {
     showLabels?: boolean;
     showBuildings?: boolean;
@@ -410,6 +411,31 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
                 </text>
               );
             }}
+          </For>
+        </g>
+      </Show>
+
+      <Show when={props.onDistrictHover}>
+        <g
+          class="city-map-svg__hit-layer"
+          onMouseOver={(e) => {
+            const id = (e.target as SVGElement).dataset.districtId ?? null;
+            props.onDistrictHover!(id);
+          }}
+          onMouseLeave={() => props.onDistrictHover!(null)}
+        >
+          <For each={(props.city.districts as RenderDistrict[]).filter((d) => d.playable !== false)}>
+            {(district) => (
+              <For each={districtHoverPolygons(district)}>
+                {(polygon) => (
+                  <path
+                    class="city-map-svg__district-hit"
+                    d={polygonToPath(polygon)}
+                    data-district-id={district.id}
+                  />
+                )}
+              </For>
+            )}
           </For>
         </g>
       </Show>

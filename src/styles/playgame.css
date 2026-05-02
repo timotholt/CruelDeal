@@ -1141,6 +1141,80 @@
     background: rgba(166,109,255,0.1);
     border-color: var(--accent);
   }
+
+  /* ── Lane highlight module (useLaneHighlight) ───────────────────────────
+     All visual lane states live here. Logic in useLaneHighlight.ts.
+     Shared transition so every mode blends cleanly. */
+  .lane-slots,
+  .location {
+    transition:
+      background 0.2s ease,
+      box-shadow 0.2s ease,
+      outline 0.15s ease;
+  }
+
+  /* Hover mode */
+  #board[data-hovered-lane="0"] [data-lane="0"].lane-slots,
+  #board[data-hovered-lane="0"] [data-lane="0"].location,
+  #board[data-hovered-lane="1"] [data-lane="1"].lane-slots,
+  #board[data-hovered-lane="1"] [data-lane="1"].location,
+  #board[data-hovered-lane="2"] [data-lane="2"].lane-slots,
+  #board[data-hovered-lane="2"] [data-lane="2"].location {
+    background: rgba(255, 255, 255, 0.055);
+    outline: 1px solid rgba(255, 255, 255, 0.18);
+    outline-offset: -1px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* Score-lead mode — winning lane */
+  #board[data-lane-hl-0="winning"] [data-lane="0"].lane-slots,
+  #board[data-lane-hl-0="winning"] [data-lane="0"].location,
+  #board[data-lane-hl-1="winning"] [data-lane="1"].lane-slots,
+  #board[data-lane-hl-1="winning"] [data-lane="1"].location,
+  #board[data-lane-hl-2="winning"] [data-lane="2"].lane-slots,
+  #board[data-lane-hl-2="winning"] [data-lane="2"].location {
+    background: rgba(74, 222, 128, 0.07);
+    outline: 1px solid rgba(74, 222, 128, 0.28);
+    outline-offset: -1px;
+    box-shadow: 0 0 18px rgba(74, 222, 128, 0.08);
+  }
+
+  /* Score-lead mode — losing lane */
+  #board[data-lane-hl-0="losing"] [data-lane="0"].lane-slots,
+  #board[data-lane-hl-0="losing"] [data-lane="0"].location,
+  #board[data-lane-hl-1="losing"] [data-lane="1"].lane-slots,
+  #board[data-lane-hl-1="losing"] [data-lane="1"].location,
+  #board[data-lane-hl-2="losing"] [data-lane="2"].lane-slots,
+  #board[data-lane-hl-2="losing"] [data-lane="2"].location {
+    background: rgba(248, 113, 113, 0.07);
+    outline: 1px solid rgba(248, 113, 113, 0.28);
+    outline-offset: -1px;
+    box-shadow: 0 0 18px rgba(248, 113, 113, 0.08);
+  }
+
+  /* Score-lead mode — tied lane (subtle dim, no color) */
+  #board[data-lane-hl-0="tied"] [data-lane="0"].lane-slots,
+  #board[data-lane-hl-0="tied"] [data-lane="0"].location,
+  #board[data-lane-hl-1="tied"] [data-lane="1"].lane-slots,
+  #board[data-lane-hl-1="tied"] [data-lane="1"].location,
+  #board[data-lane-hl-2="tied"] [data-lane="2"].lane-slots,
+  #board[data-lane-hl-2="tied"] [data-lane="2"].location {
+    outline: 1px solid rgba(255, 255, 255, 0.1);
+    outline-offset: -1px;
+  }
+
+  /* Maps-enabled: keep lane-slots backgrounds transparent, only apply outline */
+  #board.maps-enabled[data-hovered-lane="0"] [data-lane="0"].lane-slots,
+  #board.maps-enabled[data-hovered-lane="1"] [data-lane="1"].lane-slots,
+  #board.maps-enabled[data-hovered-lane="2"] [data-lane="2"].lane-slots,
+  #board.maps-enabled[data-lane-hl-0="winning"] [data-lane="0"].lane-slots,
+  #board.maps-enabled[data-lane-hl-1="winning"] [data-lane="1"].lane-slots,
+  #board.maps-enabled[data-lane-hl-2="winning"] [data-lane="2"].lane-slots,
+  #board.maps-enabled[data-lane-hl-0="losing"] [data-lane="0"].lane-slots,
+  #board.maps-enabled[data-lane-hl-1="losing"] [data-lane="1"].lane-slots,
+  #board.maps-enabled[data-lane-hl-2="losing"] [data-lane="2"].lane-slots {
+    background: transparent;
+  }
   .hand.drop-target {
     background: rgba(166,109,255,0.08);
     outline: 1px dashed rgba(166,109,255,0.5);

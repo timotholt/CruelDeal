@@ -460,6 +460,13 @@
   opacity: 0.72;
 }
 
+.city-map-svg__district-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: fill;
+  cursor: pointer;
+}
+
 .city-map-svg__bridge-underlay {
   stroke: var(--city-map-road-underlay);
   stroke-linecap: butt;

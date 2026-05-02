@@ -43,6 +43,7 @@ import { LaneSlots } from './LaneSlots';
 import { LocationTile } from './LocationTile';
 import { setupDragDrop } from './useDragDrop';
 import { setupLaneMaps } from './useLaneMaps';
+import { useLaneHighlight } from './useLaneHighlight';
 import { inspectTarget, closeInspect } from './inspector';
 import { ReplayDrawer } from './ReplayDrawer';
 import { EnergyBadge } from './EnergyBadge';
@@ -114,6 +115,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const bottomBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);
   const topBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, remoteSeat, manifest);
   const localHasPriority = createMemo(() => presentedState().priority === localSeat);
+
+  useLaneHighlight({
+    boardEl: () => boardEl,
+    mode: () => 'hover',
+    scores: () => [
+      { local: bottomPower(0), remote: topPower(0) },
+      { local: bottomPower(1), remote: topPower(1) },
+      { local: bottomPower(2), remote: topPower(2) },
+    ],
+  });
   const handScale = createMemo(() => {
     const n = visibleHand().length;
     if (n <= 4) return 1;

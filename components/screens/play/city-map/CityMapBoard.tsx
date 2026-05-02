@@ -5,6 +5,7 @@ import { CityMapLandmarks } from './CityMapLandmarks';
 import { CityMapSlots } from './CityMapSlots';
 import { LandmarkTooltip } from './LandmarkTooltip';
 import { useCityMapLandmarkHover } from './useCityMapHover';
+import { useCityMapHighlight } from './useCityMapHighlight';
 import { CityMapDebugDock, type CityMapDebugState } from './CityMapDebugDock';
 import { RouteDemoLayer } from './RouteDemoLayer';
 import './cityMapStyles.css';
@@ -43,6 +44,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const slots = createMemo(() => city().districts.flatMap((district) => district.slots || []));
   const landmarks = createMemo(() => city().landmarks || city().districts.flatMap((district) => district.landmarks || []));
   const interactive = () => props.interactive ?? true;
+  const highlight = useCityMapHighlight({ mode: () => 'hover' });
   const hover = useCityMapLandmarkHover({
     landmarks,
     board: () => ({ width: width(), height: height() }),
@@ -60,6 +62,8 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
             city={city()}
             width={width()}
             height={height()}
+            hoveredDistrictId={highlight.hoveredDistrictId()}
+            onDistrictHover={highlight.onDistrictHover}
             debug={{
               showLabels: debugState().showLabels,
               showBuildings: debugState().showBuildings,
