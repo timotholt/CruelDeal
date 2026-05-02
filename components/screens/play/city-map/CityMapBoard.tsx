@@ -62,6 +62,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const height = () => props.height || city().height;
   const worldSize = () => ({ width: width(), height: height() });
   const [surfaceAspect, setSurfaceAspect] = createSignal(width() / height());
+  const [surfaceSize, setSurfaceSize] = createSignal(worldSize());
   const [camera, setCamera] = createSignal<CityMapCameraState>(createInitialCityMapCamera(worldSize()));
   const viewport = createMemo(() => cameraToViewport(camera(), worldSize(), surfaceAspect()));
   const slots = createMemo(() => city().districts.flatMap((district) => district.slots || []));
@@ -96,6 +97,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       const rect = surfaceEl!.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         const nextAspect = rect.width / rect.height;
+        setSurfaceSize({ width: rect.width, height: rect.height });
         setSurfaceAspect(nextAspect);
         setCamera((current) => clampCamera(current, worldSize(), nextAspect));
       }
@@ -217,6 +219,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         <LandmarkTooltip
           landmark={hover.hoveredLandmark()}
           board={{ width: width(), height: height() }}
+          screenSize={surfaceSize()}
           viewport={viewport()}
         />
         <CityMapDebugDock state={debugState()} onToggle={toggleDebug} />
