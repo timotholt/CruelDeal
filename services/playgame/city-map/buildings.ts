@@ -362,12 +362,19 @@ export function generateBlockBuildings(
   };
 
   const fillCommercialNewGrid = () => {
+    profile.layoutStrategy = 'commercial-new-priority-frontage';
+    profile.frontageSetback = COMMERCIAL_FRONTAGE_SETBACK;
+    profile.bypassedRoadShrink = true;
     if (!relevantRoadHazards.length) return;
     const envelopeArea = polygonArea(blockPolygon);
-    if (envelopeArea < 9) return;
+    profile.envelopeArea = envelopeArea;
+    if (envelopeArea < 9) {
+      profile.layoutFailure = 'small-envelope';
+      return;
+    }
 
-    const SETBACK = 0.5;
-    const GAP = 0.36;
+    const SETBACK = COMMERCIAL_FRONTAGE_SETBACK;
+    const GAP = 0.14;
     const MIN_DIM = 2.5;
     const gridCell = Math.max(4.0, Math.min(7.0, Math.sqrt(envelopeArea) / 5.0));
 
@@ -377,13 +384,13 @@ export function generateBlockBuildings(
     const pushWorldPoly = (poly: Point[]): boolean => {
       if (poly.length < 3) return false;
       const c = polygonCentroid(poly);
-      const shrunk = poly.map((p) => ({ x: c.x + (p.x - c.x) * 0.95, y: c.y + (p.y - c.y) * 0.95 }));
+      const shrunk = poly.map((p) => ({ x: c.x + (p.x - c.x) * 0.992, y: c.y + (p.y - c.y) * 0.992 }));
       if (!shrunk.every((p) => pointInPolygon(p, blockPolygon))) return false;
       if (footprintNearRiver(shrunk)) return false;
       const uvPts = shrunk.map(uvFromPoint);
       const box = uvBoxForCorners(uvPts);
       if (box.u2 - box.u1 < 1 || box.v2 - box.v1 < 1) return false;
-      if (placedUVBoxes.some((b) => uvBoxesOverlap(box, b))) return false;
+      if (placedUVBoxes.some((b) => uvBoxesOverlap(box, b, 0.03))) return false;
       const coords = shrunk.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
       buildings.push({
         path: `M ${coords[0]} L ${coords.slice(1).join(' L ')} Z`,
@@ -439,7 +446,7 @@ export function generateBlockBuildings(
       const lMinU = Math.min(...lp.map((p) => p.u));
       const lMaxU = Math.max(...lp.map((p) => p.u));
 
-      const depth = Math.min((origMaxV - origMinV) * 0.48, gridCell * 1.6);
+      const depth = Math.min((origMaxV - origMinV) * 0.56, gridCell * 1.9);
       if (depth < MIN_DIM || lMaxU - lMinU < MIN_DIM) continue;
 
       // Extract front strip from original block polygon so it always starts at the road edge.
@@ -451,7 +458,7 @@ export function generateBlockBuildings(
         const sMinU = Math.min(...stripPts.map((p) => p.x));
         const sMaxU = Math.max(...stripPts.map((p) => p.x));
         const sW = sMaxU - sMinU;
-        const nB = Math.max(1, Math.round(sW / gridCell));
+        const nB = Math.max(1, Math.round(sW / (gridCell * 0.86)));
         const bW = (sW - GAP * (nB + 1)) / nB;
 
         if (bW >= MIN_DIM) {
@@ -518,6 +525,8 @@ export function generateBlockBuildings(
         }
       }
     }
+    profile.placedCount = buildings.length;
+    profile.envelopeCoverage = buildings.reduce((sum, building) => sum + building.area, 0) / Math.max(1, blockArea);
   };
 
   const segmentParamForPoint = (point: Point, hazard: RoadHazard) => {

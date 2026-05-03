@@ -282,7 +282,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                 class="city-map-planning-tooltip"
                 style={{
                   left: `${Math.min(surfaceSize().width - 176, hovered().x + 12)}px`,
-                  top: `${Math.min(surfaceSize().height - 86, hovered().y + 12)}px`,
+                  top: `${Math.min(surfaceSize().height - 138, hovered().y + 12)}px`,
                 }}
               >
                 <div class="city-map-planning-tooltip__title">{label()}</div>
@@ -291,6 +291,22 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                 <div class="city-map-planning-tooltip__row">
                   road {Number(planning().roadPriority || 0)} / mod {Number(planning().modernityScore || 0).toFixed(2)}
                 </div>
+                <Show when={planning().layoutStrategy}>
+                  <div class="city-map-planning-tooltip__row">layout {planning().layoutStrategy}</div>
+                </Show>
+                <Show when={planning().placedCount != null}>
+                  <div class="city-map-planning-tooltip__row">
+                    placed {planning().placedCount} / coverage {Math.round(Number(planning().envelopeCoverage || 0) * 100)}%
+                  </div>
+                </Show>
+                <Show when={planning().frontageSetback != null}>
+                  <div class="city-map-planning-tooltip__row">
+                    setback {Number(planning().frontageSetback).toFixed(2)} / no-shrink {planning().bypassedRoadShrink ? 'yes' : 'no'}
+                  </div>
+                </Show>
+                <Show when={planning().layoutFailure}>
+                  <div class="city-map-planning-tooltip__row">failure {planning().layoutFailure}</div>
+                </Show>
               </div>
             );
           }}
