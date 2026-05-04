@@ -12,9 +12,18 @@ import {
 } from './partition';
 import { cutPath, cutPoints, cutSegments, polygonToPath, rectPolygon, smoothClosedPath, straightPolylinePath } from './paths';
 import { labelPosition, placeDotsInPolygon, viewportVisibleArea } from './placement';
-import { generateBlockBuildings, type BuildingBlockProfile } from './buildings';
+import { generateBlockBuildings } from './buildings';
 import { generateBridges } from './bridges';
 import { generateCoastDocks } from './land';
+import { classifyParcelShape } from './parcel-shapes';
+import {
+  analyzeBlockFrontage,
+  chooseBlockProfile,
+  roadValueForEdge,
+  type BlockUseTag,
+  type DistrictLandUseRole,
+  type RoadHazard,
+} from './planning';
 import { makeRiverBankRoads } from './water';
 import { enrichCityRouting, findPath } from './routing';
 import { enrichCityVenues } from './venues';
@@ -80,7 +89,6 @@ const CACHE_LIMIT = 12;
 const cache = new Map<string, CityMap>();
 
 type TerrainV35 = ReturnType<typeof buildTerrain>;
-type RoadHazard = { a: Point; b: Point; buffer: number; priority?: number; width?: number };
 
 function shuffle<T>(list: readonly T[], rng: Rng): T[] {
   const out = list.slice();
@@ -187,7 +195,9 @@ function buildingLodGroup(height: number, landmark = false): BuildingLodGroup {
 }
 
 function buildingMaterialKey(lodGroup: BuildingLodGroup, block?: CityBlock & Record<string, any>): BuildingMaterialKey {
+  const zone = block?.planning?.use;
   if (lodGroup === 'landmark') return 'landmark';
+  if (zone === 'industrial' || zone === 'infrastructure_service') return 'industrial';
   if (lodGroup === 'tower') return 'tower';
   if (lodGroup === 'midrise') return 'midrise';
   if (block?.density === 'dense') return 'industrial';
@@ -215,6 +225,29 @@ function buildingRenderMeta(height: number, shade = 0, block?: CityBlock & Recor
     shadowImportance: Math.max(0.1, Math.min(1, height / 36)),
     lodGroup,
   };
+}
+
+function districtLandUseRoleForBlock(block: CityBlock & Record<string, any>): DistrictLandUseRole {
+  if (block.landmassId && block.landmassId !== 'mainland') return 'waterfront';
+  const id = String(block.districtId || '');
+  const idx = Number(id.match(/district-(\d+)/)?.[1] || 0);
+  if (idx === 0) return 'old_core';
+  if (idx === 1) return 'interior_grid';
+  if (idx === 2) return 'backland_edge';
+  return ['commercial_core', 'civic_center', 'interior_grid'][idx % 3] as DistrictLandUseRole;
+}
+
+function buildingHeightForZone(block: CityBlock & Record<string, any>, rng: Rng) {
+  const zone = block.planning?.use as BlockUseTag | undefined;
+  if (zone === 'commercial_retail') return block.density === 'dense' ? 7 + rng() * 9 : 4.5 + rng() * 6.5;
+  if (zone === 'commercial_office') return block.density === 'dense' ? 14 + rng() * 22 : 8 + rng() * 13;
+  if (zone === 'hospitality') return block.density === 'dense' ? 12 + rng() * 24 : 7 + rng() * 15;
+  if (zone === 'mixed_use') return block.density === 'dense' ? 12 + rng() * 20 : 7 + rng() * 12;
+  if (zone === 'industrial') return 4 + rng() * 7;
+  if (zone === 'infrastructure_service') return 3 + rng() * 5;
+  if (zone === 'civic_public') return 8 + rng() * 12;
+  if (zone === 'landmark') return 22 + rng() * 24;
+  return block.density === 'dense' ? 12 + rng() * 18 : block.density === 'medium' ? 7 + rng() * 10 : 4 + rng() * 7;
 }
 
 function signedLineSide(point: Point, a: Point, b: Point) {
@@ -445,33 +478,12 @@ function macroGridAngleForTemplate(template: MacroLayoutTemplate, terrain: Terra
   return 0;
 }
 
-function districtAnglesForTemplate(template: MacroLayoutTemplate, gridAngle: number, rng: Rng) {
-  if (template === 'classic-t') {
-    return [
-      0,
-      Math.PI / 4 + (rng() - 0.5) * 0.14,
-      -Math.PI / 5 + (rng() - 0.5) * 0.14,
-    ];
-  }
-  if (template === 'offset-t') {
-    return [
-      (rng() - 0.5) * 0.12,
-      Math.PI / 2 + (rng() - 0.5) * 0.18,
-      -Math.PI / 7 + (rng() - 0.5) * 0.18,
-    ];
-  }
-  if (template === 'vertical-strips' || template === 'horizontal-bands' || template === 'diagonal-bands') {
-    return [
-      gridAngle + (rng() - 0.5) * 0.1,
-      gridAngle + (rng() - 0.5) * 0.1,
-      gridAngle + (rng() - 0.5) * 0.1,
-    ];
-  }
-  return [
-    gridAngle + (rng() - 0.5) * 0.12,
-    gridAngle + Math.PI / 2 + (rng() - 0.5) * 0.16,
-    gridAngle - Math.PI / 5 + (rng() - 0.5) * 0.16,
-  ];
+function districtAnglesForTemplate(_template: MacroLayoutTemplate, gridAngle: number, _rng: Rng) {
+  // Keep district parcel grids unskewed until frontage-frame templates can
+  // reliably solve perpendicular/parallel layouts. Macro layouts may still
+  // choose the broad city angle; individual districts should not invent their
+  // own rotated subdivision frames yet.
+  return [gridAngle, gridAngle, gridAngle];
 }
 
 function makeMainlandDistricts(terrain: TerrainV35, normalizedSeed: number, rng: Rng, names: string[], colors: string[], buildableMask?: readonly Point[] | null) {
@@ -677,6 +689,15 @@ function roadWidthForDepth(depth = 2) {
   return 0.38;
 }
 
+function roadSurfaceWidth(edge: RoadEdge) {
+  const kind = edge.kind || edge.render?.materialKey;
+  const materialKey = edge.render?.materialKey;
+  if (kind === 'highway' || materialKey === 'highway') return roadWidthForDepth(0);
+  if (kind === 'avenue' || materialKey === 'avenue' || edge.source === 'coast-road') return roadWidthForDepth(1);
+  if (kind === 'street' || materialKey === 'street') return roadWidthForDepth(2);
+  return roadWidthForDepth(3);
+}
+
 function bridgeDeckWidthForDepth(depth = 2) {
   const width = roadWidthForDepth(depth) * 3;
   return depth >= 3 ? width + 0.35 : width;
@@ -696,14 +717,6 @@ function roadHazardBuffer(edge: RoadEdge) {
   return Math.max(0.45, width / 2 + margin);
 }
 
-function roadHazardPriority(edge: RoadEdge) {
-  const kind = edge.kind || edge.render?.materialKey;
-  if (kind === 'highway') return 4;
-  if (kind === 'avenue' || edge.source === 'coast-road') return 3;
-  if (kind === 'street') return 2;
-  return 1;
-}
-
 function roadHazardPoints(edge: RoadEdge) {
   const points = (edge as RoadEdge & { points?: Point[] }).points;
   if (Array.isArray(points) && points.length >= 2) return points;
@@ -715,15 +728,24 @@ function makeRoadHazards(edges: RoadEdge[]): RoadHazard[] {
   for (const edge of edges) {
     const points = roadHazardPoints(edge);
     const buffer = roadHazardBuffer(edge);
-    const priority = roadHazardPriority(edge);
-    const width = typeof edge.render?.width === 'number'
-      ? edge.render.width
-      : roadWidthForDepth(typeof edge.depth === 'number' ? edge.depth : 2);
+    const roadValue = roadValueForEdge(edge);
+    const width = roadSurfaceWidth(edge);
     for (let i = 0; i + 1 < points.length; i++) {
       const a = points[i];
       const b = points[i + 1];
       if (Math.hypot(b.x - a.x, b.y - a.y) < 0.001) continue;
-      hazards.push({ a, b, buffer, priority, width });
+      hazards.push({
+        roadId: edge.id,
+        roadClass: roadValue.roadClass,
+        valueWeight: roadValue.weight,
+        a,
+        b,
+        buffer,
+        priority: roadValue.weight,
+        width,
+        kind: edge.kind,
+        source: edge.source,
+      });
     }
   }
   return hazards;
@@ -745,44 +767,6 @@ function footprintNearRoad(polygon: Point[], roadHazards: RoadHazard[]) {
   return probes.some((point) =>
     roadHazards.some((hazard) => pointToSegmentDist(point.x, point.y, hazard.a, hazard.b) < hazard.buffer),
   );
-}
-
-function blockRoadModernity(block: CityBlock & Record<string, any>, roadHazards: RoadHazard[]) {
-  const centroid = block.centroid || polygonCentroid(block.polygon);
-  let score = 0;
-  let priority = 0;
-  for (const hazard of roadHazards) {
-    const hazardPriority = hazard.priority || 1;
-    if (hazardPriority < 2) continue;
-    const distance = pointToSegmentDist(centroid.x, centroid.y, hazard.a, hazard.b);
-    const influence = hazardPriority / (1 + distance / 26);
-    score = Math.max(score, influence);
-    if (distance < 34) priority = Math.max(priority, hazardPriority);
-  }
-  return { score, priority };
-}
-
-function chooseBlockProfile(block: CityBlock & Record<string, any>, roadHazards: RoadHazard[], rng: Rng): BuildingBlockProfile {
-  const { score, priority } = blockRoadModernity(block, roadHazards);
-  const roll = rng();
-  const age: BuildingBlockProfile['age'] = score > 2.4
-    ? roll < 0.72 ? 'new' : roll < 0.94 ? 'average' : 'old'
-    : score > 1.15
-      ? roll < 0.22 ? 'new' : roll < 0.78 ? 'average' : 'old'
-      : roll < 0.12 ? 'average' : 'old';
-
-  const publicChance = priority >= 3 ? 0.055 : 0.075;
-  const commercialChance = Math.max(0.12, Math.min(0.72, 0.16 + score * 0.16 + (priority >= 3 ? 0.12 : 0) + (block.area > 900 ? 0.06 : 0)));
-  const useRoll = rng();
-  const use: BuildingBlockProfile['use'] = useRoll < publicChance
-    ? 'public'
-    : useRoll < publicChance + commercialChance
-      ? 'commercial'
-      : 'residential';
-
-  const profile = { age, use, modernityScore: score, roadPriority: priority };
-  block.planning = profile;
-  return profile;
 }
 
 function bridgeLinePath(cx: number, cy: number, angle: number, length: number) {
@@ -864,6 +848,9 @@ function buildStaticBuildings(
   const buildings: Building[] = [];
   const landmarkBuildings: Building[] = [];
   const districtParkCells = new Set<string>();
+  const districtZoneCounts = new Map<string, Partial<Record<BlockUseTag, number>>>();
+  const districtBlockCounts = new Map<string, number>();
+  const districtBlockIndexes = new Map<string, number>();
   const landmasses = landmassById(terrain);
   const satelliteLandmassIds = new Set(
     (terrain.landmasses || [])
@@ -872,6 +859,10 @@ function buildStaticBuildings(
   );
 
   for (const districtId of new Set(cells.map((cell) => cell.districtId).filter(Boolean))) {
+    districtBlockCounts.set(
+      districtId,
+      cells.filter((cell) => cell.districtId === districtId && cell.buildable).length,
+    );
     const largest = cells
       .filter((cell) => cell.districtId === districtId && cell.buildable && cell.area > 1100)
       .sort((a, b) => b.area - a.area)[0];
@@ -915,20 +906,47 @@ function buildStaticBuildings(
 
   for (const block of cells) {
     if (!block.buildable) continue;
-    if (districtParkCells.has(block.id)) {
+    const frontageAnalysis = analyzeBlockFrontage(block, roadHazards);
+    block.frontageAnalysis = frontageAnalysis;
+    block.shape = classifyParcelShape(block, { frontageAnalysis, roadHazards, terrain });
+    const districtId = String(block.districtId || 'district:none');
+    const districtCounts = districtZoneCounts.get(districtId) || {};
+    const blockIndexInDistrict = districtBlockIndexes.get(districtId) || 0;
+    districtBlockIndexes.set(districtId, blockIndexInDistrict + 1);
+    const plannedUseOverride = districtParkCells.has(block.id) ? 'park_open' : null;
+    const profile = chooseBlockProfile(block, frontageAnalysis, rng, {
+      districtRole: districtLandUseRoleForBlock(block),
+      districtZoneCounts: districtCounts,
+      districtBlockCount: districtBlockCounts.get(districtId) || 0,
+      blockIndexInDistrict,
+      plannedUseOverride,
+    });
+    districtCounts[profile.use] = (districtCounts[profile.use] || 0) + 1;
+    districtZoneCounts.set(districtId, districtCounts);
+    if (profile.use === 'park_open') {
       if (!openSpaces.some((space) => space.cellId === block.id)) {
-        openSpaces.push({ id: `${block.id}:park`, kind: 'park', role: 'landmark', cellId: block.id });
+        openSpaces.push({
+          id: `${block.id}:park`,
+          kind: 'park',
+          role: plannedUseOverride ? 'landmark' : 'zoned-open-space',
+          cellId: block.id,
+          blockId: block.id,
+          districtId: block.districtId,
+          polygon: block.polygon,
+          path: polygonToPath(block.polygon),
+          centroid: block.centroid || polygonCentroid(block.polygon),
+        });
       }
       continue;
     }
-    const profile = chooseBlockProfile(block, roadHazards, rng);
     let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, roadHazards, 7, profile);
     if (!generated.length && block.area > 110) {
       generated = fallbackTinyBlockBuilding(block, rng)
         .filter((gen) => !footprintNearRoad(gen.polygon, roadHazards));
     }
     generated.forEach((gen, index) => {
-      const height = block.density === 'dense' ? 12 + rng() * 18 : block.density === 'medium' ? 7 + rng() * 10 : 4 + rng() * 7;
+      const height = buildingHeightForZone(block, rng);
+      const isLandmarkZone = profile.use === 'landmark';
       buildings.push({
         id: `${block.id}:building:${index}`,
         cellId: block.id,
@@ -943,7 +961,8 @@ function buildStaticBuildings(
         fallback: !!gen.fallback,
         centroid: polygonCentroid(gen.polygon),
         shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
-        render: buildingRenderMeta(height, gen.shade, block),
+        zone: profile.use,
+        render: buildingRenderMeta(height, gen.shade, block, isLandmarkZone),
       } as Building);
     });
   }

@@ -5,6 +5,7 @@ export function createCityMaterials() {
     water: new THREE.MeshBasicMaterial({ color: 0x0d1d37, side: THREE.DoubleSide }),
     river: new THREE.MeshBasicMaterial({ color: 0x0d1d37, transparent: true, opacity: 1, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     terrain: new THREE.MeshBasicMaterial({ color: 0x1f4267, side: THREE.DoubleSide }),
+    blockBase: new THREE.MeshBasicMaterial({ color: 0x07162a, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     park: new THREE.MeshStandardMaterial({ color: 0x27936f, roughness: 0.8, metalness: 0.02, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
     plaza: new THREE.MeshStandardMaterial({ color: 0x386fa3, roughness: 0.74, metalness: 0.04, transparent: true, opacity: 0.76, side: THREE.DoubleSide }),
     roadUnderlay: new THREE.MeshBasicMaterial({ color: 0x020814, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),

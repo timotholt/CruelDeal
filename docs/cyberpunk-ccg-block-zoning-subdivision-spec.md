@@ -31,24 +31,361 @@ edge_score = edge_length * road_value_weight
 
 This side gets first claim on building placement.
 
+## Block Ground Plane Rule
+
+Every plot type is rendered and planned as a block-owned parcel, not as buildings floating directly on global terrain.
+
+Each buildable block owns a dark block ground plane:
+
+- The block ground plane uses the block polygon.
+- Buildings are placed on top of that block ground plane.
+- Roads, bridges, rivers, and water bodies remain separate network/terrain geometry.
+- Building-road separation should come from parcel/block geometry and building setback rules, not from renderer outlines.
+- Commercial, residential, industrial, civic, park, landmark, hospitality, infrastructure, and mixed-use plots all follow this rule.
+
+This applies to rectangular, rotated, diagonal, curved, waterfront, river-adjacent, and irregular blocks. For curved rivers and curved roads, the rule is still valid as long as the block polygon carries enough sampled points to represent the curved boundary. If a block boundary is stored as a coarse straight chord while the road or river is visibly curved, the geometry contract is wrong; the renderer should not hide that mismatch with screen-space outlines.
+
+Renderer layering should read as:
+
+```txt
+terrain/water -> block ground planes -> roads/rivers/bridges -> buildings -> labels/debug overlays
+```
+
+The block ground plane is the visual separator between building footprints and adjacent road/water networks. Buildings can still use zone-specific setbacks, yards, courts, service space, and frontage behavior, but they should always sit on their block's own parcel ground.
+
 ## Block Profile
 
 Each block receives:
 
-- `zone`: `commercial`, `retail`, `residential`, `landmark`, `mixed_use`, `industrial_service`, `park_civic`
+- `zone`: land-use family, such as `residential`, `commercial_retail`, `commercial_office`, `hospitality`, `industrial`, `civic_public`, `park_open`, `infrastructure_service`, `landmark`, or `mixed_use`
 - `age`: `new`, `average`, `old`
 - `frontage`: the highest-value road edge or connected edge group
 - `subdivisionFlavor`: the layout strategy chosen from zone, age, and frontage value
 
-The first implementation can focus on:
+## Land-Use Families
 
-- `commercial`
-- `residential`
-- `public` / `landmark`
+The generator should not collapse all non-residential activity into one `commercial` bucket. Different land uses respond to valuable frontage in different ways.
+
+### Residential
+
+Purpose:
+
+- housing
+- apartments
+- row homes
+- residential towers
+- mixed-density neighborhoods
+
+Frontage behavior:
+
+- valuable frontage may become yard, garden, courtyard, formal setback, entry court, promenade, or view corridor
+- buildings do not always push to the expensive street
+- high-value residential can look spacious rather than maximally filled
+
+Shape behavior:
+
+- can use repeated small lots, apartment bars, courtyards, towers, gardens, and leftover spaces
+- old residential can be loose and irregular
+- new residential can be organized but still allow open space
+
+### Commercial Retail
+
+Purpose:
+
+- storefronts
+- shops
+- restaurants
+- bars
+- markets
+- street-facing services
+
+Frontage behavior:
+
+- valuable frontage is direct money
+- buildings should usually face the expensive street
+- corners are highly valuable
+- old retail fragments frontage into many small tenants
+
+Shape behavior:
+
+- new retail may become mall/podium/pad development
+- average retail has medium repeated frontage
+- old retail has skinny frontage and messy rear additions
+
+### Commercial Office
+
+Purpose:
+
+- office blocks
+- corporate buildings
+- clinics
+- business towers
+- clean mixed-use slabs
+
+Frontage behavior:
+
+- values major roads, transit, prestige, and visibility
+- may use plazas, entry courts, or setbacks on expensive streets
+- less storefront-obsessed than retail, but still needs clear access
+
+Shape behavior:
+
+- cleaner, larger, more regular than retail
+- can use podiums, office slabs, towers, plazas, and parking/service courts
+
+### Hospitality
+
+Purpose:
+
+- hotels
+- resorts
+- inns
+- casinos
+- convention lodging
+- luxury destination blocks
+
+Frontage behavior:
+
+- behaves partly like residential and partly like commercial
+- may put lawn, garden, drop-off loop, pool deck, plaza, or formal setback on the most valuable side
+- still needs legible access, arrival, and service
+
+Shape behavior:
+
+- can be huge or small
+- can consume an entire block
+- can be a long hotel bar, tower/podium, courtyard hotel, resort block, or tiny old hotel
+- may use open space as a feature, not waste
+
+### Industrial
+
+Purpose:
+
+- warehouses
+- factories
+- logistics
+- port/rail/service yards
+- maintenance depots
+- production sheds
+
+Frontage behavior:
+
+- favors access more than prestige
+- values highways, service roads, rail/port edges, and cheap large parcels
+- does not need attractive storefront frontage
+
+Shape behavior:
+
+- favors big, long, simple buildings
+- long sheds, warehouses, loading yards, service courts
+- should cluster strongly with other industrial/service blocks
+- frontage may be dominated by driveways, yards, loading, and fences
+
+### Civic Public
+
+Purpose:
+
+- schools
+- hospitals
+- government buildings
+- transit hubs
+- plazas
+- public institutions
+
+Frontage behavior:
+
+- can claim high-value frontage for symbolic presence or access
+- may use plazas, setbacks, lawns, and formal entries
+
+Shape behavior:
+
+- can override economic subdivision
+- often includes planned open space
+
+### Park Open
+
+Purpose:
+
+- parks
+- plazas
+- buffers
+- waterfront open space
+- pocket parks
+- courtyards
+- leftover public land
+
+Frontage behavior:
+
+- does not obey normal same-zone inertia
+- can appear as an intentional interrupt between zones
+- can occupy expensive or cheap land depending on civic/planning intent
+
+Shape behavior:
+
+- can absorb awkward leftovers
+- can buffer incompatible zones
+- can create breathing room inside dense districts
+
+### Infrastructure Service
+
+Purpose:
+
+- utilities
+- substations
+- maintenance yards
+- parking/service lots
+- transit support
+- loading/support facilities
+
+Frontage behavior:
+
+- values access and adjacency, not beauty
+- often appears near industrial, highways, rail/service roads, or behind commercial blocks
+
+Shape behavior:
+
+- can occupy awkward or low-prestige parcels
+- can use yards, pads, long sheds, and fenced service zones
+
+### Landmark
+
+Purpose:
+
+- unique memorable blocks
+- arenas
+- casino resorts
+- megastructures
+- civic monuments
+- signature towers
+
+Frontage behavior:
+
+- can override normal zoning economics
+- should still orient to major value edges unless intentionally anti-grid
+
+Shape behavior:
+
+- may consume whole blocks
+- may ignore normal subdivision
+
+### Mixed Use
+
+Purpose:
+
+- residential over retail
+- office/hospitality podiums
+- street-facing retail plus towers
+- hybrid urban blocks
+
+Frontage behavior:
+
+- street-level frontage behaves like retail/commercial
+- upper/deeper block behavior can behave like residential, office, or hospitality
+
+Shape behavior:
+
+- podiums, towers, courtyards, and frontage strips are all valid
+
+## Zone Inertia And Zone Change
+
+Land use has inertia. Residential districts should produce mostly residential blocks. Commercial districts should produce mostly commercial blocks. Industrial districts should produce mostly industrial/service blocks. Parks are an exception: they can interrupt, buffer, or absorb leftover space.
+
+Each district should start with a dominant zone mix:
+
+```txt
+old core        -> commercial_retail + residential + hospitality
+waterfront      -> hospitality + commercial_retail + park_open
+highway corridor -> commercial_office + hospitality + industrial + infrastructure_service
+interior grid   -> residential
+backland/edge   -> industrial + infrastructure_service
+civic center    -> civic_public + park_open + landmark
+```
+
+Then each block scores candidate zones from district identity, neighboring zones, road hierarchy, shape, and seeded mutation:
+
+```txt
+zone_score =
+    district_affinity
+  + neighbor_inertia
+  + road_pressure
+  + shape_pressure
+  + planned_exception
+  + seeded_variation
+```
+
+### Neighbor Inertia
+
+Blocks should usually continue the land use around them:
+
+- same-zone neighbor across local/minor street: strong inertia
+- same-zone neighbor across major road: medium inertia
+- same-zone neighbor across highway, rail, river, coast, or hard barrier: weak inertia
+- same-zone neighbor inside same district cell/cluster: very strong inertia
+
+Suggested continuation chance before road/shape overrides:
+
+```txt
+same cluster / same local grid: 80-90%
+across minor street:           70-85%
+across medium/major street:    45-70%
+across highway/hard barrier:   10-35%
+```
+
+These are not hard random switches. They are weights. Road pressure and shape pressure can overpower them.
+
+### Zone Change Triggers
+
+Land use can change when a strong urban force appears:
+
+- major road or highway frontage
+- transit/bridge/route node
+- waterfront/coastal road
+- industrial access edge
+- very large or very long block
+- unusually small leftover block
+- adjacency to park/civic/landmark
+- boundary between districts
+- planned mutation for variety
+
+Suggested mutation/switch pressure:
+
+```txt
+minor local variation:        0-10%
+major road frontage:         20-40%
+highway / transit node:      35-60%
+waterfront / scenic edge:    25-55%
+industrial service edge:     30-60%
+district boundary:           25-50%
+park/civic planned interrupt: special override
+```
+
+### Shape Pressure
+
+Block shape should influence zone selection:
+
+- big/long/simple blocks bias `industrial`, `commercial_office`, `hospitality`, or `landmark`
+- small skinny high-frontage blocks bias `commercial_retail` or old commercial
+- interior square/quiet blocks bias `residential`
+- awkward leftovers bias `park_open`, `infrastructure_service`, old residential, or old retail
+- waterfront/high-value large blocks bias `hospitality`, `landmark`, or park/open civic use
+
+### Park Exception
+
+Parks do not need same-zone continuity. They can appear as:
+
+- planned civic interruption
+- waterfront amenity
+- neighborhood park
+- plaza inside commercial/hospitality
+- buffer between industrial and residential
+- leftover odd space
+- central courtyard/common area
+
+Parks should not be treated as a normal district-spreading land use.
 
 ## Commercial Age Rule
 
-For commercial blocks, age is primarily expressed through how many times the most expensive frontage is divided.
+For commercial retail and most commercial office blocks, age is primarily expressed through how many times the most expensive frontage is divided.
 
 This is the key rule:
 
@@ -56,9 +393,155 @@ This is the key rule:
 - `commercial_average`: medium frontage divisions
 - `commercial_old`: many frontage divisions
 
-New commercial does not mean many small packed buildings. It means consolidated, expensive, planned real estate. A 2,000-room resort, corporate campus, mall, hotel slab, or convention center may take an entire block and run from one end of the expensive side to the other.
+New commercial does not mean many small packed buildings. It means consolidated, expensive, planned real estate. A corporate campus, mall, office slab, retail podium, or convention/commercial center may take an entire block and run from one end of the expensive side to the other.
 
-Old commercial does not mean inefficient frontage. It means fragmented frontage: many small tenants, bars, clinics, pawn shops, tiny hotels, old arcades, and back-lot additions.
+Old commercial does not mean inefficient frontage. It means fragmented frontage: many small tenants, bars, clinics, pawn shops, old arcades, and back-lot additions.
+
+## Rectangle-First Commercial Baseline
+
+Rectangular and near-rectangular commercial blocks are the foundation of the zoning system. They must work before triangle, trapezoid, coastline, corner, or multi-frontage templates are trusted.
+
+A rectangular commercial block should never look like random buildings centered in empty lots. It should read as planned land use.
+
+Baseline rectangle pipeline:
+
+1. Rank all road-facing sides by road value.
+2. Choose the highest-value side as the primary frontage.
+3. Build a local planning frame from that frontage:
+   - `u`: parallel to the expensive road
+   - `v`: inward from the expensive road
+4. Apply the global commercial setback from every road-facing side.
+5. Divide the primary frontage according to commercial age.
+6. Place primary frontage buildings first.
+7. Fill the rear/interior using the same planning frame.
+8. Use leftover space only for explicit service, plaza, public, parking, or secondary structures.
+
+Rectangle quality rules:
+
+- Building fronts on the expensive side must be parallel to that side.
+- Frontage setback must be visually constant across the entire city.
+- Gaps between commercial buildings should be small and intentional.
+- Buildings should occupy whole grid cells or merged grid cells.
+- Commercial new should not scatter many unrelated small rectangles.
+- Commercial average should show a medium repeated rhythm.
+- Commercial old should show many narrow storefronts and varied depths.
+- A rectangle can be rotated; the logic must still work in the frontage-local frame.
+- The generator should not use generic centered random placement for commercial rectangles.
+
+### What Valuable Frontage Means By Zone
+
+Valuable frontage does not mean the same thing for every land use.
+
+Commercial uses valuable frontage for direct monetization:
+
+- storefronts
+- office entries
+- retail pads
+- corporate frontage
+- signage and pedestrian access
+
+So commercial buildings should usually put building faces close to the most expensive street, with a consistent commercial setback.
+
+Residential uses valuable frontage for prestige, access, view, privacy, and livability:
+
+- front yards
+- gardens
+- courtyards
+- setbacks
+- promenades
+- view corridors
+- apartment entries
+- high-status frontage units
+
+So expensive residential may intentionally put yard, garden, courtyard, or setback space on the most valuable side. That is not wasted space if the block reads as residential. The key difference is:
+
+- commercial monetizes the expensive edge with building/storefront frontage
+- residential can monetize the expensive edge with open space, setback, view, and prestige
+
+### Commercial Rectangle Age Gradient
+
+Commercial age mainly changes how the expensive side is divided.
+
+#### Commercial New Rectangle
+
+Frontage behavior:
+
+- few divisions on the highest-value side
+- usually `1-3` primary frontage parcels
+- larger units on expensive frontage
+- may use one building for most or all of the block
+- may merge multiple grid cells into a mega-building
+
+Interior behavior:
+
+- organized podium, service court, plaza, parking, C-shape court, L-shape court, or support pads with explicit access
+- high coverage
+- minimal wasted space
+- visual rhythm should feel corporate, planned, and expensive
+- no orphan middle buildings with no road, court, spine, or service access
+
+Expected look:
+
+- corporate slabs
+- malls
+- convention centers
+- mixed-use podiums
+- big clean rectangles or clean merged rectangles
+- C-shaped or L-shaped developments around parking/service/plaza space
+- frontage buildings with back-side service courts, not isolated middle buildings
+
+#### Commercial Average Rectangle
+
+Frontage behavior:
+
+- medium divisions on the highest-value side
+- usually `3-7` primary frontage parcels
+- medium-sized units
+- repeated but not perfectly uniform
+
+Interior behavior:
+
+- rear service alley or shared access if space allows
+- secondary buildings can be smaller
+- some variation, but still organized
+
+Expected look:
+
+- several office blocks
+- medium retail pads
+- mixed-use strips
+- small plazas or parking/service spaces
+
+#### Commercial Old Rectangle
+
+Frontage behavior:
+
+- many divisions on the highest-value side
+- usually `7-16+` primary frontage parcels
+- narrow storefronts
+- smaller frontage units
+- uneven widths are allowed
+
+Interior behavior:
+
+- depths can vary strongly
+- back-lot additions are common
+- service access may be broken or partial
+- rear buildings can feel accumulated
+
+Expected look:
+
+- tiny shops
+- pawn shops
+- bars
+- clinics
+- noodle shops
+- markets
+- messy additions behind a dense frontage strip
+
+Rectangle implementation rule:
+
+Commercial new, average, and old may share the same global setback, but they must not share the same frontage subdivision count. The visual difference between them should be obvious from parcel size alone.
 
 ## Commercial New
 
@@ -73,8 +556,6 @@ Intent:
 
 Typical forms:
 
-- whole-block resort
-- long hotel slab
 - corporate block
 - mall-like mass
 - luxury mixed-use podium
@@ -92,7 +573,9 @@ Rules:
 - If the block fronts multiple roads, the footprint should respect the same commercial setback on every road-facing side.
 - For curved or segmented frontage, use connected frontage groups rather than treating each tiny segment as unrelated.
 - Prefer large clean shapes, but allow trapezoids, wedges, and irregular polygons when the parcel shape demands it.
-- Interior space should be organized: service spine, support buildings, parking deck, plaza, or secondary tower.
+- Interior space should be organized as access-supporting space: service court, parking deck, plaza, C-shape court, L-shape court, loading/service yard, or secondary tower with an explicit access path.
+- Avoid standalone middle buildings that have no street frontage, driveway, service spine, court, or plaza connection.
+- If an interior building exists, it must explain its access visually.
 
 Suggested parameters:
 
@@ -117,7 +600,7 @@ Intent:
 
 Typical forms:
 
-- several hotel/office blocks
+- several office blocks
 - strip of mid-sized retail pads
 - shared rear access
 - mixed-use buildings along major roads
@@ -157,7 +640,6 @@ Typical forms:
 - noodle shops
 - clinics
 - bars
-- micro-hotels
 - old arcades
 - dense market streets
 - back-lot sheds and additions
@@ -185,7 +667,7 @@ serviceSpineProbability = low
 
 ## Residential Behavior
 
-Residential does not always maximize expensive frontage the way commercial does.
+Residential does not maximize expensive frontage the way commercial does. It can value the best street by creating better front yards, gardens, courtyards, entries, views, and prestige space.
 
 General intent:
 
@@ -223,8 +705,97 @@ General intent:
 Residential expensive-side behavior:
 
 - may place premium units along high-value frontage
+- may place front yards or formal setbacks on high-value frontage
 - may insert parks, courtyards, promenades, or view corridors
+- may pull buildings back from the valuable street if that improves residential character
 - old residential may fail to exploit frontage fully
+
+## Hospitality Behavior
+
+Hospitality should not be treated as generic commercial. Hotels and resorts are access-driven like commercial, but frontage and open space can behave more like residential prestige space.
+
+General intent:
+
+- arrival matters
+- view and prestige matter
+- open space can be a feature
+- building size can range from tiny to block-consuming
+- access, drop-off, and service must be legible
+
+### Hospitality New
+
+- can consume an entire block
+- can be a huge resort, convention hotel, tower podium, or casino/hotel complex
+- may use lawn, pool, plaza, garden, drop-off loop, or formal setback on the most valuable side
+- may form C-shapes, L-shapes, courtyard hotels, or podium/tower structures
+- should have clear arrival and service logic
+
+### Hospitality Average
+
+- medium hotels
+- mixed frontage and setback behavior
+- may use parking/drop-off/service courts
+- can share block space with retail or office
+
+### Hospitality Old
+
+- small hotels
+- inns
+- micro-hotels
+- older lodging above retail
+- tighter frontage and irregular back areas
+
+Hospitality expensive-side behavior:
+
+- may place building face near valuable frontage if retail/casino/convention-like
+- may pull building back for lawn, driveway, drop-off, garden, pool, or plaza
+- may occupy huge or small parcels depending on age and road/water value
+- should not create inaccessible interior buildings
+
+## Industrial Behavior
+
+Industrial should not be treated as commercial storefront real estate. It is access, loading, production, and logistics first.
+
+General intent:
+
+- big or long buildings
+- loading yards
+- service courts
+- cheap/access-heavy land
+- simple shapes
+- strong clustering with industrial and infrastructure service
+
+### Industrial New
+
+- large warehouses
+- long logistics sheds
+- production plants
+- organized truck yards
+- clean access roads
+- big repeated rectangles
+
+### Industrial Average
+
+- medium warehouses
+- mixed sheds and yards
+- shared loading/service space
+- moderate organization
+
+### Industrial Old
+
+- older sheds
+- workshops
+- irregular service yards
+- patched additions
+- messy access but still access-driven
+
+Industrial expensive-side behavior:
+
+- values highways, service roads, rail, port, and industrial access edges
+- does not need pretty storefront frontage
+- may put yards, loading, fences, and driveways on the road side
+- favors long buildings parallel or perpendicular to access roads
+- should rarely use tiny decorative buildings in the middle of a block
 
 ## Landmark Behavior
 
@@ -336,6 +907,143 @@ Behavior:
 - randomly split, extend, merge, and add secondary structures
 - produces organic accumulated messiness
 
+## Triangle / Wedge Block Templates
+
+Odd-shaped blocks should not be treated as one generic failure case. A triangle, trapezoid, or one-sided wedge can usually be solved by asking one question first:
+
+Which side is expensive?
+
+The answer determines where the clean subdivision goes, where the odd geometry is allowed to live, and whether the leftover space should become a building, park, service area, plaza, or common yard.
+
+### Template A: Flat-Side Frontage Ladder
+
+Best when:
+
+- the expensive side is a mostly flat side
+- the opposite side is also reasonably parallel
+- the wedge distortion is mild
+
+Behavior:
+
+- subdivide parallel to the expensive side
+- keep building fronts at the global commercial setback
+- allow parcel depth to vary as the wedge narrows or widens
+- strongest default for commercial average and commercial old wedge blocks
+
+This is the "normal city lot" answer: the valuable side is clean, and the weirdness is absorbed in depth.
+
+### Template B: Diagonal Frontage Band
+
+Best when:
+
+- the expensive side is the diagonal or angled side
+- the angled side is a highway, major road, or coastal road
+- the block has a cleaner cheap backside
+
+Behavior:
+
+- make the primary building band parallel to the diagonal frontage
+- keep every frontage building exactly `GLOBAL_COMMERCIAL_SETBACK` from that road
+- divide the expensive diagonal frontage according to commercial age
+- commercial new uses few large divisions
+- commercial average uses medium divisions
+- commercial old uses many skinny divisions
+- use the rear remainder for cheaper secondary buildings, parking/service, public space, or back-lot structures
+
+This is the important high-value odd-block case. If the diagonal road is expensive, the generator should not waste it with centered rectangles or unrelated orthogonal grids.
+
+### Template C: Cheap Diagonal Remainder
+
+Best when:
+
+- the expensive side is flat
+- the diagonal side is the cheapest or least important side
+- the main usable block can be a clean rectangle or ladder
+
+Behavior:
+
+- use the flat expensive frontage with regular parallel lots
+- push triangular leftover space to the cheap diagonal edge
+- leftover can become a park, service yard, utility triangle, plaza, or one odd-shaped building
+- commercial new may use the triangle as a deliberate signature building if the site is large
+
+This template intentionally dumps weirdness into the least valuable side.
+
+### Template D: Multi-Frontage Ring With Common Core
+
+Best when:
+
+- two or more sides are valuable
+- no single side should consume the entire planning logic
+- the block is commercial new, mixed-use, civic, or high-density residential
+
+Behavior:
+
+- create frontage bands along each valuable side
+- each band obeys its own road angle and global setback
+- leave a middle common zone
+- the common zone can be courtyard, park, plaza, loading/service court, transit pad, or private amenity
+
+This is the "every side matters" pattern. It is not wasted space if the interior is intentionally labeled as common/service/public space and the road-facing real estate is used well.
+
+### Template E: Back-Diagonal Absorber
+
+Best when:
+
+- the diagonal side is the cheapest side
+- one or two non-diagonal sides are more valuable
+- the block should read as planned from the street
+
+Behavior:
+
+- subdivide clean frontage along the valuable flat sides first
+- place secondary lots perpendicular or parallel to those valuable sides
+- let the diagonal backside absorb all leftover distortion
+- triangular remainder should usually be service, parking, utility, park, or low-value odd building
+
+This is similar to Template C, but useful when there are multiple valuable non-diagonal sides.
+
+### Template F: Corner-Priority Fan
+
+Best when:
+
+- the highest land value is concentrated at a corner
+- two important roads meet
+- the corner itself is more important than either side alone
+
+Behavior:
+
+- give the corner first claim
+- place a flagship building, tower pad, hotel, transit node, or large commercial structure at the corner
+- subdivide outward from that corner along both road faces
+- remaining rear parcels can become smaller secondary buildings or service/common space
+
+This solves wedge blocks where the prize is not a side, but an intersection. It should appear on commercial new, landmark, and major-road junction blocks.
+
+### Triangle Template Selection Rules
+
+1. Compute road value for every block side or frontage group.
+2. If one side clearly dominates and is diagonal or curved, choose Template B.
+3. If one side clearly dominates and is flat, choose Template A or C.
+4. If the diagonal side is low value, choose Template C or E and put irregular remainder there.
+5. If two adjacent high-value sides meet, choose Template F.
+6. If three or more sides are valuable, choose Template D.
+7. If no side is clearly valuable and the block is old residential or old commercial, allow hodgepodge accretion.
+8. Commercial new should prefer A, B, D, E, or F over generic centered rectangles.
+
+### Why This Solves Many Odd Blocks
+
+Most "bad" odd-shaped blocks are not actually hard because they are odd. They are hard because the generator does not know which edge is allowed to be ugly.
+
+These templates make that explicit:
+
+- valuable side: clean, parallel, consistent setback, intentional frontage divisions
+- cheap side: absorbs leftovers
+- multi-value sides: wrap buildings and use the center intentionally
+- corner-value sites: prioritize the corner before subdividing the rest
+
+This should solve a large share of triangle, trapezoid, wedge, coastal, diagonal-road, and corner blocks without needing a unique algorithm for every shape.
+
 ## Procedural Pipeline
 
 1. Analyze block
@@ -346,10 +1054,13 @@ Behavior:
    - compute block depth, area, aspect ratio, irregularity
 
 2. Assign zone
-   - highway frontage biases commercial, landmark, mixed-use
-   - major road frontage biases commercial, retail, mixed-use
-   - minor road frontage biases residential, small retail
-   - interior low-access blocks bias residential, park, service
+   - choose from land-use families, not only commercial/residential/public
+   - start from district dominant zone mix
+   - apply neighbor inertia
+   - weaken inertia across major streets, highways, water, rail, and district boundaries
+   - apply road pressure from highest-value frontage
+   - apply shape pressure from block size/aspect/access
+   - allow park/open/civic planned exceptions
 
 3. Assign age
    - old core biases old

@@ -18,6 +18,28 @@ road hierarchy -> frontage value -> block profile -> subdivision flavor -> footp
 
 The current implementation already has partial hooks for road hierarchy, block profiles, planning debug, and commercial-new frontage-first placement. The missing piece is making frontage analysis and subdivision contracts explicit instead of implicit inside `generateBlockBuildings`.
 
+## Current Implementation Priority
+
+The next implementation target is not triangle/wedge solving. The next implementation target is a reliable rectangle and near-rectangle solver.
+
+Reason:
+
+- Rectangular commercial blocks are the baseline case.
+- The current renderer can still produce centered/random-looking commercial rectangles with wasted space.
+- Triangle and wedge templates depend on the same frontage-local frame, setback rules, and age-based frontage division used by rectangles.
+- If rectangles are not correct, triangle work will only hide the core bug behind harder geometry.
+
+Implementation priority:
+
+1. Commercial rectangle solver.
+2. Rotated commercial rectangle solver using the same local frame.
+3. Residential rectangle policies using the same road-value analysis but different frontage response.
+4. Near-rectangle and one-weird-side templates.
+5. Triangle/wedge templates A-F.
+6. Multi-frontage and corner-priority special cases.
+
+The implementation map below should be read through that priority. Existing odd-shape code is useful as reference, but it should not be the primary path for rectangular commercial blocks.
+
 ## Current Files
 
 ### `services/playgame/city-map/types.ts`
@@ -89,7 +111,16 @@ export type SubdivisionFlavor =
 Return-value role:
 
 - `CityBlock.planning` should carry the chosen zoning/age/frontage/debug contract.
+- `CityBlock.polygon` is also the renderer-neutral parcel ground plane contract for each buildable block.
 - `Building.polygon` remains the renderer-neutral footprint contract used by both SVG and Three.
+
+Renderer contract:
+
+- Three must render a block-owned dark parcel/base mesh for every buildable `CityBlock` before rendering buildings.
+- Buildings sit on their owning block base; road/building separation should be visible because the block base and building setback are real geometry.
+- Road, bridge, river, and water geometry remains independent from block bases.
+- Do not use screen-space or building-outline passes to separate buildings from roads. Those do not survive future variable-height 3D camera work.
+- Curved roads and rivers are supported if the `CityBlock.polygon` boundary is sampled along the same curve. If the block polygon is a coarse chord while the road/river is curved, fix boundary generation rather than the renderer.
 
 ### `services/playgame/city-map/city-v35.ts`
 
@@ -227,6 +258,8 @@ Needed additions:
 
 - Include original `roadId`, `roadClass`, and `roadValueWeight`.
 - Distinguish "all nearby roads" from "roads actually bordering this block."
+- `RoadHazard.width` must mean the visible road surface width used for frontage/building clearance, not a broad visual underlay/corridor width.
+- Wider debug/underlay/glow strokes may exist in SVG or Three, but they must not be used as building setback inputs.
 
 Recommended contract:
 
@@ -458,6 +491,7 @@ interface GeneratedBlockLayout {
   lots: LotPolygon[];
   servicePaths: ServicePath[];
   openSpaces: PlannedOpenSpace[];
+  accessPaths: ServicePath[];
   metrics: BlockPlanningMetrics;
 }
 ```
@@ -495,7 +529,8 @@ Needed tweak:
 Recommended contract:
 
 ```ts
-export const GLOBAL_COMMERCIAL_SETBACK = 0.22;
+export const GLOBAL_COMMERCIAL_PARCEL_GAP = 0.22;
+export const GLOBAL_COMMERCIAL_SETBACK = GLOBAL_COMMERCIAL_PARCEL_GAP;
 ```
 
 #### `fillCommercialNewGrid()`
@@ -563,6 +598,96 @@ Returns:
 ```ts
 GeneratedBlockLayout
 ```
+
+#### `generateCommercialRectangleLayout(input)`
+
+Purpose:
+
+- New primary solver for rectangular and near-rectangular commercial blocks.
+- Produces realistic square/rectangular block layouts before any triangle/wedge template is attempted.
+- Uses the most valuable street to define the planning frame.
+
+Recommended function:
+
+```ts
+function generateCommercialRectangleLayout(input: CommercialRectangleLayoutInput): GeneratedBlockLayout
+```
+
+Parameters:
+
+```ts
+interface CommercialRectangleLayoutInput {
+  blockPolygon: Point[];
+  frontageAnalysis: BlockFrontageAnalysis;
+  profile: BuildingBlockProfile;
+  roadHazards: RoadHazard[];
+  rng: Rng;
+  commercialSetback: number;
+  gap: number;
+}
+```
+
+Derived local frame:
+
+```ts
+interface BlockPlanningFrame {
+  origin: Point;
+  u: Point; // parallel to highest-value street
+  v: Point; // inward from highest-value street
+  width: number;
+  depth: number;
+  primarySide: FrontageGroup;
+  secondarySides: FrontageGroup[];
+  backSide: FrontageGroup | null;
+}
+```
+
+Commercial behavior:
+
+```txt
+commercial_new     -> 1..3 frontage divisions, larger units, merged cells allowed
+commercial_average -> 3..7 frontage divisions, medium units, shared rear/service possible
+commercial_old     -> 7..16+ frontage divisions, narrow storefronts, varied depths
+```
+
+Algorithm:
+
+1. Build `BlockPlanningFrame` from `frontageAnalysis.primary`.
+2. Build a commercial buildable envelope by clipping every road-facing side to visible road surface edge plus `GLOBAL_COMMERCIAL_SETBACK`.
+3. Divide the primary frontage by `profile.frontageDivisionCount`.
+4. Reserve or generate corner parcels first when adjacent side roads are valuable.
+5. Place primary frontage buildings.
+6. For commercial new, treat the middle/rear as access-supporting space by default: parking, plaza, service court, C-shape court, L-shape court, loading yard, or podium/open space.
+7. Only place interior buildings when they connect to a road, service spine, driveway, court, or plaza.
+8. Fill commercial average/old rear areas according to age; average may use shared rear service, old may use back-lot additions with partial access.
+9. Use leftovers only as explicit service, plaza, parking, public, or secondary structures.
+10. Return metrics for frontage utilization, coverage, rejected parcels, orphan interior buildings, and layout strategy.
+
+Rules:
+
+- Do not use generic centered random placement for commercial rectangles.
+- Building faces along the primary frontage must be parallel to the primary road.
+- Commercial setback is global and visually constant.
+- The age gradient must be visible from parcel size alone.
+- Commercial-new layouts should not create standalone middle buildings with no access.
+- Interior commercial-new buildings require explicit access via road, service spine, driveway, court, or plaza.
+- Rotated rectangles must produce the same quality as axis-aligned rectangles.
+- Triangle/wedge templates must call or reuse this local-frame logic later, not replace it.
+
+Returns:
+
+```ts
+GeneratedBlockLayout
+```
+
+Spec lines satisfied:
+
+- rectangle-first commercial baseline
+- most valuable street defines the frame
+- commercial new/average/old frontage division counts
+- commercial monetizes expensive frontage with building/storefront face
+- consistent global commercial setback
+- realistic square/rectangular blocks
 
 #### `pushRoadFrontageFootprint(hazard, t, frontage, depth, setbackOverride?)`
 
@@ -764,6 +889,23 @@ Current tooltip fields:
 - `planning.frontageSetback`
 - `planning.bypassedRoadShrink`
 - `planning.layoutFailure`
+
+Required parcel-shape tooltip fields:
+
+- `planning.shapeFamily`
+- `planning.shapeOrientation`
+- `planning.triangleOrientation`
+- `planning.shapeConfidence`
+- `planning.selectedTemplate`
+- `planning.shapeFallbackReason`
+- top shape classification reason strings, e.g. `planning.shapeReasons`
+
+Planning hover requirement:
+
+- When the Planning debug toggle is on, hovering a plot must explain how the parcel was identified.
+- If the parcel is `unclassified`, `tiny`, or `sliver`, the tooltip must say that explicitly.
+- If the parcel is converted to `park_open` or `infrastructure_service` because classification confidence is low, the tooltip must show the fallback reason.
+- Template debugging must be visible on the plot hover, not only in console logs or hidden data.
 
 Spec concepts:
 
@@ -1094,6 +1236,8 @@ interface BlockPlanningMetrics {
   highValueFrontageUtilization: number;
   totalBuildableAreaUtilization: number;
   rejectedParcelCount: number;
+  orphanInteriorBuildingCount: number;
+  accessPathCount: number;
   sliverCleanupCount: number;
   fallbackReason?: string;
   score?: number;
@@ -1130,14 +1274,15 @@ Spec lines satisfied:
 | Zone | `profile.use` commercial/residential/public | Expand to full zone set later |
 | Age | `profile.age` old/average/new | Keep, but compute from frontage + district context |
 | Subdivision flavor | `profile.layoutStrategy` debug string | Add typed `SubdivisionFlavor` |
-| Commercial new | `fillCommercialNewGrid` | `generateCommercialNewLayout` using frontage parcels |
-| Commercial average | Generic generator | `generateCommercialAverageLayout` |
-| Commercial old | Generic generator with old flags | `generateCommercialOldLayout` |
-| Residential | Generic generator with residential flags | Separate residential new/average/old layout policies |
+| Rectangle commercial baseline | Generic and commercial-new paths both affect rectangles | Add `generateCommercialRectangleLayout` as the first solver |
+| Commercial new | `fillCommercialNewGrid` | Rectangle solver first, then `generateCommercialNewLayout` for odd/large sites |
+| Commercial average | Generic generator | Rectangle solver with `3..7` frontage divisions |
+| Commercial old | Generic generator with old flags | Rectangle solver with `7..16+` frontage divisions and varied depths |
+| Residential | Generic generator with residential flags | Separate residential policies; valuable frontage can mean yard/setback/view, not storefront |
 | Landmark | Some large park/landmark handling in `buildStaticBuildings` | Explicit landmark override layout |
 | Global commercial setback | `COMMERCIAL_FRONTAGE_SETBACK` | Export `GLOBAL_COMMERCIAL_SETBACK` |
 | Curved frontage | Segment-by-segment hazards | Connected frontage group with polyline parceling |
-| Odd plot buildings | Some clipped polygons in commercial new | Parcel envelope clipping for all frontage layouts |
+| Odd plot buildings | Some clipped polygons in commercial new | Defer until rectangle solver is stable; then apply parcel envelope clipping |
 | Service spine | Not explicit | Add `ServicePath[]` to generated layout |
 | Courtyard/park insert | Some `openSpaces` exist | Layout-level planned open spaces |
 | Cleanup | Implicit rejection | Explicit cleanup pass and metrics |
@@ -1230,6 +1375,7 @@ Existing functions:
 Recommended functions:
 
 ```ts
+generateCommercialRectangleLayout(...)
 subdivideFrontageIntoParcels(...)
 buildFrontageParcelFootprint(...)
 generateCommercialNewLayout(...)
@@ -1240,6 +1386,12 @@ generateCommercialOldLayout(...)
 Returns:
 
 - `GeneratedBlockLayout`
+
+Priority note:
+
+- `generateCommercialRectangleLayout` comes first.
+- `generateCommercialNewLayout`, `generateCommercialAverageLayout`, and `generateCommercialOldLayout` can initially delegate rectangular blocks to the rectangle solver with different age policies.
+- Triangle/wedge and odd-side parcel clipping should not be the first path for normal rectangular blocks.
 
 ### 6. Place Service/Internal Structure
 
@@ -1316,23 +1468,34 @@ GeneratedBlockLayout
 
 ## Implementation Order
 
-1. Add `planning.ts` with road value, frontage analysis, profile selection, division count, and metrics contracts.
-2. Change `city-v35.ts` to call `analyzeBlockFrontage` before `chooseBlockProfile`.
-3. Expand `BuildingBlockProfile` to include typed `subdivisionFlavor`, `frontageDivisionCount`, and primary frontage debug fields.
-4. Refactor `fillCommercialNewGrid` into `generateCommercialNewLayout(input)`.
-5. Add commercial-average and commercial-old frontage parcel functions using the same parcel contract but different division counts.
-6. Upgrade debug tooltip to show frontage group, score, division count, and utilization.
-7. Add cleanup and score metrics after the first layouts are stable.
+1. Keep `planning.ts` as the source of road value, frontage analysis, profile selection, division count, and metrics contracts.
+2. Ensure `city-v35.ts` calls `analyzeBlockFrontage` before `chooseBlockProfile`.
+3. Keep `BuildingBlockProfile` expanded with typed `subdivisionFlavor`, `frontageDivisionCount`, primary frontage debug fields, and the zone-specific frontage meaning.
+4. Implement `generateCommercialRectangleLayout(input)` as the first real layout solver.
+5. Route rectangular and near-rectangular commercial blocks through `generateCommercialRectangleLayout`.
+6. Make commercial new/average/old differ through frontage division count, depth policy, merge policy, and interior fill policy.
+7. Add commercial-new access policy: middle/rear space defaults to parking, plaza, service court, C-shape/L-shape court, loading yard, or podium/open space; interior buildings require explicit access.
+8. Add residential rectangle policies after commercial rectangles are stable; residential high-value frontage may become yard/setback/view space.
+9. Upgrade debug tooltip to show rectangle solver fields: primary side, side values, planning frame, division count, setback, layout strategy, utilization, and orphan/access metrics.
+10. Only after rectangles are stable, refactor odd-shape commercial paths into triangle/wedge templates A-F.
+11. Add cleanup and score metrics after the first rectangle layouts are stable.
 
 ## Acceptance Checklist
 
+- Rectangular commercial blocks do not use centered random building placement.
 - Highway/coast-road frontage visually dominates subdivision decisions.
-- Commercial-new blocks usually have `1..3` frontage parcels.
-- Commercial-average blocks usually have `3..7` frontage parcels.
-- Commercial-old blocks usually have `7..16+` frontage parcels.
+- The most valuable street defines the local planning frame for commercial rectangles.
+- Rotated commercial rectangles look as intentional as axis-aligned rectangles.
+- Commercial-new rectangles usually have `1..3` large frontage parcels.
+- Commercial-average rectangles usually have `3..7` medium frontage parcels.
+- Commercial-old rectangles usually have `7..16+` narrow frontage parcels.
+- Commercial age is visible from parcel size and depth rhythm alone.
 - Commercial setback is globally consistent.
-- Buildings along a curved/segmented expensive road follow that frontage as a connected group.
-- Odd-shaped commercial-new parcels become clean odd-shaped buildings instead of centered rectangles.
-- Residential blocks are allowed to waste/open space intentionally.
+- Commercial buildings monetize the expensive street with building/storefront frontage.
+- Commercial-new blocks do not produce middle buildings with no road/service/court/plaza access.
+- Commercial-new interiors read as parking, plaza, service court, C-shape/L-shape court, loading yard, podium/open space, or explicitly accessed secondary structure.
+- Residential blocks may use expensive frontage as yard, garden, courtyard, setback, view, or prestige space.
+- Buildings along a curved/segmented expensive road follow that frontage as a connected group after rectangle solver foundations are stable.
+- Odd-shaped commercial-new parcels become clean odd-shaped buildings after rectangle solver foundations are stable.
 - Landmark/public blocks can override normal economics.
 - Planning tooltip explains why a block looks the way it does.

@@ -7,7 +7,6 @@ import { createBuildingGeometry, createMapPlane, createPolygonGeometry, createPo
 import { addCityLights } from './cityLights';
 import { createCityMaterials } from './cityMaterials';
 
-const ROAD_WIDTH_SCALE = 0.46;
 const BRIDGE_WIDTH_SCALE = 0.58;
 const BASE_PLANE_OVERSCAN = 96;
 
@@ -30,9 +29,16 @@ function roadKind(edge: RoadEdge) {
 }
 
 function roadWidth(edge: RoadEdge) {
-  const base = edge.render?.width
-    ?? (roadKind(edge) === 'highway' ? 1.42 : roadKind(edge) === 'avenue' ? 1.05 : roadKind(edge) === 'street' ? 0.72 : 0.38);
-  return Math.max(0.12, base * ROAD_WIDTH_SCALE);
+  switch (roadKind(edge)) {
+    case 'highway':
+      return 1.42;
+    case 'avenue':
+      return 1.05;
+    case 'street':
+      return 0.72;
+    default:
+      return 0.38;
+  }
 }
 
 function roadRenderOrder(edge: RoadEdge) {
@@ -357,6 +363,14 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
   const landBorder = createLandBorder(model);
   if (landBorder) terrainGroup.add(landBorder);
 
+  const blockBaseGroup = new THREE.Group();
+  blockBaseGroup.name = 'city-map-block-bases';
+  scene.add(blockBaseGroup);
+  const blockBaseGeometries = model.blocks
+    .map((block) => createPolygonGeometry(block.polygon, 1.08))
+    .filter((geometry): geometry is THREE.BufferGeometry => !!geometry);
+  addBatchedMesh(blockBaseGroup, blockBaseGeometries, materials.blockBase, 'city-map-block-bases', debugWireframe, 6);
+
   if (debugState.showTerrainDebug) {
     for (const space of model.terrain.openSpaces || []) {
       addMesh(
@@ -380,7 +394,7 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
       pushGeometry(
         roadBatches,
         edge.riverBank ? materials.roadLocal : materialForRoad(materials, edge),
-        createRoadStripGeometry(edge, edge.riverBank ? 0.18 : roadWidth(edge), edge.riverBank ? 1.8 : 1.2),
+        createRoadStripGeometry(edge, edge.riverBank ? 0.18 : roadWidth(edge), edge.riverBank ? 1.8 : 1.24),
         roadRenderOrder(edge),
         `city-map-road-${roadKind(edge)}`,
       );

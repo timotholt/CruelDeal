@@ -1,6 +1,8 @@
 import { createMemo, createSignal, Show, onCleanup, onMount, untrack } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { buildCityMap, type CityBlock, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
 import { pointInPolygon } from '@/services/playgame/city-map/geometry';
+import { polygonToPath } from '@/services/playgame/city-map/paths';
 import {
   cameraToViewport,
   clampCamera,
@@ -109,6 +111,11 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   let cameraMovingTimeoutId: number | null = null;
   type CameraMotion = 'idle' | 'pan' | 'zoom';
   const [cameraMotion, setCameraMotion] = createSignal<CameraMotion>('idle');
+  const planningZoomMax = 64;
+  const gameplayZoomMax = 4;
+  const cameraDockStorageKey = 'cruel-deal.city-map.camera-dock-position';
+  const [cameraDockPosition, setCameraDockPosition] = createSignal<{ x: number; y: number } | null>(null);
+  let cameraDockEl: HTMLDivElement | undefined;
 
   const markCameraMoving = (motion: Exclude<CameraMotion, 'idle'>) => {
     setCameraMotion(motion);
@@ -143,6 +150,17 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   });
 
   onMount(() => {
+    try {
+      const raw = window.localStorage.getItem(cameraDockStorageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { x?: number; y?: number };
+        if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+          setCameraDockPosition({ x: Math.max(0, saved.x!), y: Math.max(0, saved.y!) });
+        }
+      }
+    } catch {
+      // Ignore corrupt localStorage.
+    }
     if (!surfaceEl) return;
     const updateAspect = () => {
       const rect = surfaceEl!.getBoundingClientRect();
@@ -150,7 +168,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         const nextAspect = rect.width / rect.height;
         setSurfaceSize({ width: rect.width, height: rect.height });
         setSurfaceAspect(nextAspect);
-        setCamera((current) => clampCamera(current, worldSize(), nextAspect));
+        setCamera((current) => clampCamera({ ...current, maxZoom: debugState().showComposition ? planningZoomMax : gameplayZoomMax }, worldSize(), nextAspect));
       }
     };
     updateAspect();
@@ -159,7 +177,8 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     onCleanup(() => observer.disconnect());
   });
 
-  const isControlTarget = (target: EventTarget | null) => target instanceof Element && !!target.closest('.city-map-debug-dock');
+  const isControlTarget = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest('.city-map-debug-dock, .city-map-camera-dock');
   const onWheel = (event: WheelEvent & { currentTarget: Element }) => {
     if (!interactive() || isControlTarget(event.target)) return;
     event.preventDefault();
@@ -236,7 +255,81 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     event.stopPropagation();
   };
   const toggleDebug = (key: keyof CityMapDebugState) => {
-    setDebugState((state) => ({ ...state, [key]: !state[key] }));
+    setDebugState((state) => {
+      const next = { ...state, [key]: !state[key] };
+      if (key === 'showComposition') {
+        const maxZoom = next.showComposition ? planningZoomMax : gameplayZoomMax;
+        setCamera((current) => clampCamera({ ...current, maxZoom }, worldSize(), surfaceAspect()));
+      }
+      return next;
+    });
+  };
+  const nudgeCamera = (dx: number, dy: number) => {
+    const size = worldSize();
+    const aspect = surfaceAspect();
+    updateCamera((current) => {
+      const view = cameraToViewport(current, size, aspect);
+      return clampCamera({
+        ...current,
+        center: {
+          x: current.center.x + dx * view.width,
+          y: current.center.y + dy * view.height,
+        },
+      }, size, aspect);
+    }, 'pan');
+  };
+  const zoomCameraFromDock = (factor: number) => {
+    const size = worldSize();
+    const aspect = surfaceAspect();
+    updateCamera((current) => zoomCameraAt(
+      current,
+      current.center,
+      { x: 0.5, y: 0.5 },
+      current.zoom * factor,
+      size,
+      aspect,
+    ), 'zoom');
+  };
+  const resetCamera = () => {
+    const size = worldSize();
+    const aspect = surfaceAspect();
+    updateCamera((current) => clampCamera({
+      ...current,
+      center: { x: size.width / 2, y: size.height / 2 },
+      zoom: 1,
+      maxZoom: debugState().showComposition ? planningZoomMax : gameplayZoomMax,
+    }, size, aspect), 'zoom');
+  };
+  const saveCameraDockPosition = (next: { x: number; y: number }) => {
+    try {
+      window.localStorage.setItem(cameraDockStorageKey, JSON.stringify(next));
+    } catch {
+      // Ignore storage failures; drag should still work.
+    }
+  };
+  const dragCameraDock = (event: PointerEvent) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button') || !cameraDockEl) return;
+    event.preventDefault();
+    const rect = cameraDockEl.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    let latest = { x: rect.left, y: rect.top };
+    const onMove = (moveEvent: PointerEvent) => {
+      latest = {
+        x: Math.max(0, Math.min(window.innerWidth - rect.width, moveEvent.clientX - offsetX)),
+        y: Math.max(0, Math.min(window.innerHeight - rect.height, moveEvent.clientY - offsetY)),
+      };
+      setCameraDockPosition(latest);
+    };
+    const onUp = () => {
+      saveCameraDockPosition(latest);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   return (
@@ -274,6 +367,18 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
           viewport={viewport()}
         />
         <Show when={debugState().showComposition && planningHover()}>
+          {(hovered) => (
+            <svg
+              class="city-map-planning-highlight"
+              viewBox={`${viewport().x} ${viewport().y} ${viewport().width} ${viewport().height}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path d={polygonToPath(hovered().block.polygon)} />
+            </svg>
+          )}
+        </Show>
+        <Show when={debugState().showComposition && planningHover()}>
           {(hovered) => {
             const planning = () => hovered().block.planning || {};
             const label = () => `${String(planning().use || 'unknown').toUpperCase()} / ${String(planning().age || 'unknown').toUpperCase()}`;
@@ -282,7 +387,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                 class="city-map-planning-tooltip"
                 style={{
                   left: `${Math.min(surfaceSize().width - 176, hovered().x + 12)}px`,
-                  top: `${Math.min(surfaceSize().height - 138, hovered().y + 12)}px`,
+                  top: `${Math.min(surfaceSize().height - 190, hovered().y + 12)}px`,
                 }}
               >
                 <div class="city-map-planning-tooltip__title">{label()}</div>
@@ -291,8 +396,47 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                 <div class="city-map-planning-tooltip__row">
                   road {Number(planning().roadPriority || 0)} / mod {Number(planning().modernityScore || 0).toFixed(2)}
                 </div>
+                <Show when={planning().frontageRoadClass || planning().frontageScore}>
+                  <div class="city-map-planning-tooltip__row">
+                    frontage {String(planning().frontageRoadClass || 'n/a')} / {Math.round(Number(planning().frontageScore || 0))}
+                  </div>
+                </Show>
+                <Show when={planning().frontageDivisionCount}>
+                  <div class="city-map-planning-tooltip__row">
+                    divisions {planning().frontageDivisionCount} / length {Math.round(Number(planning().frontageLength || 0))}
+                  </div>
+                </Show>
                 <Show when={planning().layoutStrategy}>
                   <div class="city-map-planning-tooltip__row">layout {planning().layoutStrategy}</div>
+                </Show>
+                <Show when={planning().shapeFamily}>
+                  <div class="city-map-planning-tooltip__row">
+                    shape {planning().shapeFamily} / {planning().shapeOrientation || 'unknown'} / {Math.round(Number(planning().shapeConfidence || 0) * 100)}%
+                  </div>
+                </Show>
+                <Show when={planning().shapeSideCount}>
+                  <div class="city-map-planning-tooltip__row">
+                    sides {planning().shapeSideCount} / {Array.isArray(planning().shapeSideKinds) ? planning().shapeSideKinds.join(',') : 'n/a'}
+                  </div>
+                </Show>
+                <Show when={Array.isArray(planning().shapeCornerAngles) && planning().shapeCornerAngles.length}>
+                  <div class="city-map-planning-tooltip__row">
+                    angles {planning().shapeCornerAngles.slice(0, 6).map((angle: number) => Math.round(angle)).join('/')}
+                  </div>
+                </Show>
+                <Show when={planning().triangleOrientation}>
+                  <div class="city-map-planning-tooltip__row">
+                    triangle {planning().triangleOrientation}
+                  </div>
+                </Show>
+                <Show when={planning().selectedTemplate}>
+                  <div class="city-map-planning-tooltip__row">template {planning().selectedTemplate}</div>
+                </Show>
+                <Show when={planning().shapeFallbackReason}>
+                  <div class="city-map-planning-tooltip__row">shape fallback {planning().shapeFallbackReason}</div>
+                </Show>
+                <Show when={Array.isArray(planning().shapeReasons) && planning().shapeReasons.length}>
+                  <div class="city-map-planning-tooltip__row">why {planning().shapeReasons.slice(0, 2).join(' / ')}</div>
                 </Show>
                 <Show when={planning().placedCount != null}>
                   <div class="city-map-planning-tooltip__row">
@@ -304,6 +448,11 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                     setback {Number(planning().frontageSetback).toFixed(2)} / no-shrink {planning().bypassedRoadShrink ? 'yes' : 'no'}
                   </div>
                 </Show>
+                <Show when={planning().highValueFrontageUtilization != null}>
+                  <div class="city-map-planning-tooltip__row">
+                    frontage use {Math.round(Number(planning().highValueFrontageUtilization || 0) * 100)}%
+                  </div>
+                </Show>
                 <Show when={planning().layoutFailure}>
                   <div class="city-map-planning-tooltip__row">failure {planning().layoutFailure}</div>
                 </Show>
@@ -313,6 +462,39 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         </Show>
         <CityMapDebugDock state={debugState()} onToggle={toggleDebug} />
       </div>
+      <Show when={debugState().showComposition}>
+        <Portal mount={document.body}>
+          <div
+            ref={(el) => {
+              cameraDockEl = el;
+            }}
+            class="city-map-camera-dock"
+            aria-label="Planning camera controls"
+            onPointerDown={dragCameraDock}
+            style={{
+              ...(cameraDockPosition() ? {
+                left: `${cameraDockPosition()!.x}px`,
+                top: `${cameraDockPosition()!.y}px`,
+              } : {
+                left: '10px',
+                top: '10px',
+              }),
+            }}
+          >
+            <button type="button" aria-label="Pan up" onClick={() => nudgeCamera(0, -0.18)}>^</button>
+            <div class="city-map-camera-dock__middle">
+              <button type="button" aria-label="Pan left" onClick={() => nudgeCamera(-0.18, 0)}>&lt;</button>
+              <button type="button" aria-label="Reset camera" onClick={resetCamera}>o</button>
+              <button type="button" aria-label="Pan right" onClick={() => nudgeCamera(0.18, 0)}>&gt;</button>
+            </div>
+            <button type="button" aria-label="Pan down" onClick={() => nudgeCamera(0, 0.18)}>v</button>
+            <div class="city-map-camera-dock__zoom">
+              <button type="button" aria-label="Zoom out" onClick={() => zoomCameraFromDock(0.78)}>-</button>
+              <button type="button" aria-label="Zoom in" onClick={() => zoomCameraFromDock(1.28)}>+</button>
+            </div>
+          </div>
+        </Portal>
+      </Show>
     </section>
   );
 };

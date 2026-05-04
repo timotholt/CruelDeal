@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 export interface CityMapDebugState {
@@ -25,6 +25,15 @@ export interface CityMapDebugDockProps {
   onToggle: (key: keyof CityMapDebugState) => void;
 }
 
+const STORAGE_KEY = 'cruel-deal.city-map.debug-dock-position';
+const unavailableKeys = new Set<keyof CityMapDebugState>([
+  'showDistrictDebug',
+  'showArterialsDebug',
+  'showIslandDebug',
+  'showMassDebug',
+  'showSeedDebug',
+]);
+
 const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showMap', label: 'City Map' },
   { key: 'useThreeRenderer', label: 'Three' },
@@ -49,6 +58,27 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
   let dockRef: HTMLElement | undefined;
 
+  onMount(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { x?: number; y?: number };
+      if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        setPosition({ x: Math.max(0, saved.x!), y: Math.max(0, saved.y!) });
+      }
+    } catch {
+      // Ignore corrupt localStorage.
+    }
+  });
+
+  const savePosition = (next: { x: number; y: number }) => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore storage failures; drag should still work.
+    }
+  };
+
   const handlePointerDown = (e: PointerEvent) => {
     // Only drag with left click
     if (e.button !== 0) return;
@@ -62,14 +92,17 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
 
+    let latest = { x: rect.left, y: rect.top };
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      setPosition({
-        x: moveEvent.clientX - offsetX,
-        y: moveEvent.clientY - offsetY,
-      });
+      latest = {
+        x: Math.max(0, Math.min(window.innerWidth - rect.width, moveEvent.clientX - offsetX)),
+        y: Math.max(0, Math.min(window.innerHeight - 28, moveEvent.clientY - offsetY)),
+      };
+      setPosition(latest);
     };
 
     const handlePointerUp = () => {
+      savePosition(latest);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
@@ -114,21 +147,28 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
         <Show when={!collapsed()}>
           <div class="city-map-debug-dock__body">
             <For each={rows}>
-              {(row) => (
+              {(row) => {
+                const unavailable = () => unavailableKeys.has(row.key);
+                return (
               <label class="city-map-debug-dock__row">
                 <span>{row.label}</span>
                 <button
                   type="button"
+                  disabled={unavailable()}
                   classList={{
                     'city-map-debug-dock__toggle': true,
                     'city-map-debug-dock__toggle--on': props.state[row.key],
+                    'city-map-debug-dock__toggle--na': unavailable(),
                   }}
-                  onClick={() => props.onToggle(row.key)}
+                  onClick={() => {
+                    if (!unavailable()) props.onToggle(row.key);
+                  }}
                 >
-                  {props.state[row.key] ? 'ON' : 'OFF'}
+                  {unavailable() ? 'N/A' : props.state[row.key] ? 'ON' : 'OFF'}
                 </button>
               </label>
-              )}
+                );
+              }}
             </For>
           </div>
         </Show>
