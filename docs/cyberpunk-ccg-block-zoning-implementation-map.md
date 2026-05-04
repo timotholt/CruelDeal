@@ -1,5 +1,7 @@
 # Cyberpunk CCG Block Zoning Implementation Map
 
+> Status: deprecated / implemented. This mapped the first explicit zoning/frontage implementation push. The core contracts now exist in code, including block/parcel planning, parcel shape classification, EG2012-style parcelization, and debug metrics. Use [pm2001-road-block-generation-spec.md](/Users/timotholt/Projects/CruelDeal/docs/pm2001-road-block-generation-spec.md) for the next road/block architecture work and [cyberpunk-ccg-block-zoning-subdivision-spec.md](/Users/timotholt/Projects/CruelDeal/docs/cyberpunk-ccg-block-zoning-subdivision-spec.md) for high-level zoning behavior.
+
 This document maps the zoning/subdivision design spec to concrete files, functions, data contracts, parameters, and return values.
 
 Source spec:

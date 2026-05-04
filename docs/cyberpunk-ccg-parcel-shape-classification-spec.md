@@ -1,5 +1,7 @@
 # Cyberpunk CCG Parcel Shape Classification Spec
 
+> Status: implemented reference. The classifier and related planning/debug contracts now exist in `services/playgame/city-map/parcel-shapes.ts`, `planning.ts`, `parcels.ts`, and `buildings.ts`. Keep this document as behavior/reference material, not as the active implementation plan. New road/block source-of-truth work should follow [pm2001-road-block-generation-spec.md](/Users/timotholt/Projects/CruelDeal/docs/pm2001-road-block-generation-spec.md).
+
 ## Purpose
 
 The city-map building pipeline needs a geometry classification layer before it chooses a building template.

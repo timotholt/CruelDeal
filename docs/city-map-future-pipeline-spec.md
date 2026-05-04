@@ -1,5 +1,7 @@
 # City Map Future Pipeline Spec
 
+> Status: partially superseded. This document is useful as historical context for terrain-first and 3D-ready goals, but its road/cell/block pipeline direction is superseded by [pm2001-road-block-generation-spec.md](/Users/timotholt/Projects/CruelDeal/docs/pm2001-road-block-generation-spec.md). Use PM2001 for the active `roads -> physical corridors -> block faces` plan.
+
 ## Purpose
 
 Define the next-generation city map pipeline for the final visual direction: a sparse, cinematic, terrain-aware city board with believable waterways, non-stiff roads, better bridges, cell-based districts, and future 2.5D/3D rendering support.

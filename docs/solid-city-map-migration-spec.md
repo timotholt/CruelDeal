@@ -1,5 +1,7 @@
 # SolidJS City Map Migration Spec
 
+> Status: deprecated / implemented. The city map has been migrated into the main Solid/Vite app. Keep this document only as historical context for the prototype-to-app migration. Current city-map road/block direction lives in [pm2001-road-block-generation-spec.md](/Users/timotholt/Projects/CruelDeal/docs/pm2001-road-block-generation-spec.md).
+
 ## Purpose
 
 Move the new procedural city map renderer out of the browser-Babel prototype in `docs/test/cyberpunk ccg/` and into the main SolidJS application. The goal is not a one-file port. The goal is a typed, testable map system that can become the `NEW GAME` destination in the main app. Gameplay integration, card passing, drag/drop, scoring, replay, and any reused legacy engine contracts are later layers.
