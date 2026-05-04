@@ -1080,6 +1080,14 @@ why side grouping unstable
 
 If the plot is converted to park/open/service because the shape was bad, the tooltip should still appear on hover. The point is to show that the system intentionally absorbed the bad parcel instead of silently failing to generate buildings.
 
+Planning hover outline rule:
+
+- Do not blindly smooth the whole plot polygon for hover.
+- Hard corners must remain hard.
+- Only boundary runs that were generated as smoothed/curved runs should render as curved in the hover outline.
+- If side-level smoothing metadata is unavailable, use the raw polygon path for hover rather than applying global smoothing.
+- Future fix: store a display boundary on the block, e.g. `block.displayPath` or `block.shape.sides[].displayPath`, so hover/debug, SVG, and Three can inspect the same partially-smoothed parcel boundary.
+
 ## Acceptance Rules
 
 ### Classifier Acceptance

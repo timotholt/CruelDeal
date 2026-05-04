@@ -250,6 +250,9 @@ function fourSideFamily(
   const opposite02 = isNearParallel(s0, s2);
   const opposite13 = isNearParallel(s1, s3);
   const rightCorners = cornerAngles.filter((angle) => Math.abs(angle - 90) < 13).length;
+  const strictRightCorners = cornerAngles.filter((angle) => Math.abs(angle - 90) <= 0.75).length;
+  const strictOpposite02 = axisDelta(s0.angle, s2.angle) < 0.015;
+  const strictOpposite13 = axisDelta(s1.angle, s3.angle) < 0.015;
   const primary = sides.find((side) => side.isPrimaryFrontage) || [...sides].sort((a, b) => b.frontageValue - a.frontageValue)[0];
   const primaryIndex = Math.max(0, sides.findIndex((side) => side.id === primary?.id));
   const primaryOpposite = sides[(primaryIndex + 2) % 4];
@@ -258,9 +261,9 @@ function fourSideFamily(
     ? isNearRightAngle(sides[(primaryIndex + 3) % 4], primary) && isNearRightAngle(primary, sides[(primaryIndex + 1) % 4])
     : false;
 
-  if (opposite02 && opposite13 && rightCorners >= 4 && rectangularity > 0.82) {
+  if (strictOpposite02 && strictOpposite13 && strictRightCorners >= 4 && rectangularity > 0.82) {
     const family: ParcelShapeFamily = orientation === 'horizontal' || orientation === 'vertical' ? 'rectangle' : 'rotated_rectangle';
-    return { family, confidence: 0.92, reason: family === 'rectangle' ? 'four sides with parallel opposites and right corners' : 'rotated four-sided rectangle with right corners' };
+    return { family, confidence: 0.92, reason: family === 'rectangle' ? 'four sides with strict parallel opposites and near-90 corners' : 'rotated four-sided rectangle with strict near-90 corners' };
   }
   if (opposite02 && opposite13 && rectangularity > 0.78) {
     return { family: 'parallelogram', confidence: 0.84, reason: 'four sides with parallel opposites but skewed corners' };
@@ -663,10 +666,10 @@ export function classifyParcelShape(
     family = quad?.family || 'irregular_quad';
     confidence = quad?.confidence || 0.56;
     reasons.push(quad?.reason || 'four dominant sides');
-  } else if (rectangularity > 0.82 && convexity > 0.92 && sides.length > 4 && sides.length <= 6) {
-    family = aspectRatio > 3 ? 'long_strip' : orientationForAngle(bounds.angle) === 'horizontal' || orientationForAngle(bounds.angle) === 'vertical' ? 'rectangle' : 'rotated_rectangle';
-    confidence = Math.min(0.94, 0.68 + rectangularity * 0.24 + convexity * 0.12);
-    reasons.push('high oriented-rectangle fit');
+  } else if (sides.length > 4 && sides.length <= 6 && rectangularity > 0.82 && convexity > 0.9) {
+    family = aspectRatio > 3 ? 'long_strip' : 'bulged_rectangle';
+    confidence = Math.min(0.82, 0.56 + rectangularity * 0.18 + convexity * 0.08);
+    reasons.push(`${sides.length} sides with high rectangle core fit`);
   } else if (mostCurvedSide && mostCurvedSide.curvature > 0.12 && primarySide?.id === mostCurvedSide.id) {
     family = aspectRatio > 2.4 ? 'crescent' : 'curved_frontage';
     confidence = 0.74;

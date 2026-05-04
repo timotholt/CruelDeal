@@ -16,6 +16,7 @@ import { generateBlockBuildings } from './buildings';
 import { generateBridges } from './bridges';
 import { generateCoastDocks } from './land';
 import { classifyParcelShape } from './parcel-shapes';
+import { subdivideBlockIntoParcels } from './parcels';
 import {
   analyzeBlockFrontage,
   chooseBlockProfile,
@@ -27,6 +28,7 @@ import {
 import { makeRiverBankRoads } from './water';
 import { enrichCityRouting, findPath } from './routing';
 import { enrichCityVenues } from './venues';
+import { URBAN_SCALE } from './urban-units';
 import type {
   Building,
   BuildingLodGroup,
@@ -36,6 +38,7 @@ import type {
   CityBlock,
   CityDistrict,
   CityMap,
+  CityParcel,
   CitySlot,
   Point,
   RoadEdge,
@@ -704,17 +707,22 @@ function bridgeDeckWidthForDepth(depth = 2) {
 }
 
 function roadHazardBuffer(edge: RoadEdge) {
-  const width = typeof edge.render?.width === 'number'
-    ? edge.render.width
-    : roadWidthForDepth(typeof edge.depth === 'number' ? edge.depth : 2);
   const kind = edge.kind || edge.render?.materialKey;
+  const corridorWidth = edge.source === 'coast-road'
+    ? URBAN_SCALE.roads.coastRoadPlacementClearance
+    : kind === 'highway' ? URBAN_SCALE.roads.highwayPlacementClearance
+      : kind === 'avenue' ? URBAN_SCALE.roads.majorPlacementClearance
+        : kind === 'street' ? URBAN_SCALE.roads.minorPlacementClearance
+          : kind === 'local' ? URBAN_SCALE.roads.localPlacementClearance
+          : edge.source === 'v35-river-bank' ? URBAN_SCALE.roads.servicePlacementClearance
+            : URBAN_SCALE.roads.alleyPlacementClearance;
   const source = edge.source;
   const margin = source === 'coast-road' ? 0.65
     : kind === 'highway' ? 0.75
       : kind === 'avenue' ? 0.55
         : kind === 'street' ? 0.38
           : 0.26;
-  return Math.max(0.45, width / 2 + margin);
+  return Math.max(0.45, corridorWidth + margin);
 }
 
 function roadHazardPoints(edge: RoadEdge) {
@@ -845,6 +853,7 @@ function buildStaticBuildings(
   const riverSegments = terrainWaterBodiesOfKind(terrain, 'river')
     .flatMap((river) => ((river.segments || []) as Array<{ a: Point; b: Point }>));
   const openSpaces: Array<Record<string, any>> = [];
+  const parcels: CityParcel[] = [];
   const buildings: Building[] = [];
   const landmarkBuildings: Building[] = [];
   const districtParkCells = new Set<string>();
@@ -923,51 +932,96 @@ function buildStaticBuildings(
     });
     districtCounts[profile.use] = (districtCounts[profile.use] || 0) + 1;
     districtZoneCounts.set(districtId, districtCounts);
+
+    const blockParcels = subdivideBlockIntoParcels(block, profile, frontageAnalysis, rng, {
+      roadHazards,
+      terrain,
+    });
+    block.parcels = blockParcels;
+    parcels.push(...blockParcels);
+
     if (profile.use === 'park_open') {
-      if (!openSpaces.some((space) => space.cellId === block.id)) {
+      const parkParcel = blockParcels[0];
+      if (parkParcel && !openSpaces.some((space) => space.parcelId === parkParcel.id || space.cellId === block.id)) {
         openSpaces.push({
-          id: `${block.id}:park`,
+          id: `${parkParcel.id}:park`,
           kind: 'park',
           role: plannedUseOverride ? 'landmark' : 'zoned-open-space',
           cellId: block.id,
           blockId: block.id,
+          parcelId: parkParcel.id,
           districtId: block.districtId,
-          polygon: block.polygon,
-          path: polygonToPath(block.polygon),
-          centroid: block.centroid || polygonCentroid(block.polygon),
+          polygon: parkParcel.polygon,
+          path: polygonToPath(parkParcel.polygon),
+          centroid: parkParcel.centroid || polygonCentroid(parkParcel.polygon),
         });
       }
       continue;
     }
-    let generated = generateBlockBuildings(block.polygon, block.fieldAngle || 0, rng, riverSegments, roadHazards, 7, profile);
-    if (!generated.length && block.area > 110) {
-      generated = fallbackTinyBlockBuilding(block, rng)
-        .filter((gen) => !footprintNearRoad(gen.polygon, roadHazards));
+
+    for (const parcel of blockParcels) {
+      const parcelProfile = parcel.planning || profile;
+      if (parcelProfile.use === 'park_open' || parcel.buildable === false || parcel.kind === 'patio') {
+        if (!openSpaces.some((space) => space.parcelId === parcel.id)) {
+          openSpaces.push({
+            id: `${parcel.id}:park`,
+            kind: parcel.kind === 'patio' ? 'patio' : 'park',
+            role: parcel.buildable === false
+              ? String(parcel.parcelCoverageRole || 'non-buildable-parcel')
+              : parcelProfile.shapeFallbackReason ? 'shape-fallback-open-space' : 'zoned-open-space',
+            cellId: block.id,
+            blockId: block.id,
+            parcelId: parcel.id,
+            districtId: block.districtId,
+            polygon: parcel.polygon,
+            path: polygonToPath(parcel.polygon),
+            centroid: parcel.centroid || polygonCentroid(parcel.polygon),
+            planning: parcelProfile,
+          });
+        }
+        continue;
+      }
+
+      const parcelBlock = {
+        ...block,
+        polygon: parcel.polygon,
+        centroid: parcel.centroid,
+        area: parcel.area,
+        fieldAngle: parcel.fieldAngle ?? block.fieldAngle,
+        planning: parcelProfile,
+      };
+      let generated = generateBlockBuildings(parcel.polygon, parcel.fieldAngle || block.fieldAngle || 0, rng, riverSegments, roadHazards, URBAN_SCALE.buildings.riverBuffer, parcelProfile);
+      if (!generated.length && (parcel.area || 0) > 110) {
+        generated = fallbackTinyBlockBuilding(parcelBlock, rng)
+          .filter((gen) => !footprintNearRoad(gen.polygon, roadHazards));
+      }
+      generated.forEach((gen, index) => {
+        const height = buildingHeightForZone(parcelBlock, rng);
+        const isLandmarkZone = parcelProfile.use === 'landmark';
+        buildings.push({
+          id: `${parcel.id}:building:${index}`,
+          cellId: block.id,
+          blockId: block.id,
+          parcelId: parcel.id,
+          districtId: block.districtId,
+          footprint: gen.polygon,
+          polygon: gen.polygon,
+          path: gen.path,
+          area: gen.area,
+          height,
+          shade: gen.shade,
+          fallback: !!gen.fallback,
+          centroid: polygonCentroid(gen.polygon),
+          shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
+          zone: parcelProfile.use,
+          render: buildingRenderMeta(height, gen.shade, parcelBlock, isLandmarkZone),
+        } as Building);
+      });
     }
-    generated.forEach((gen, index) => {
-      const height = buildingHeightForZone(block, rng);
-      const isLandmarkZone = profile.use === 'landmark';
-      buildings.push({
-        id: `${block.id}:building:${index}`,
-        cellId: block.id,
-        blockId: block.id,
-        districtId: block.districtId,
-        footprint: gen.polygon,
-        polygon: gen.polygon,
-        path: gen.path,
-        area: gen.area,
-        height,
-        shade: gen.shade,
-        fallback: !!gen.fallback,
-        centroid: polygonCentroid(gen.polygon),
-        shadow: { azimuth: -0.72, length: height * 0.58, opacity: Math.min(0.32, 0.07 + height / 100) },
-        zone: profile.use,
-        render: buildingRenderMeta(height, gen.shade, block, isLandmarkZone),
-      } as Building);
-    });
   }
 
   return {
+    parcels,
     buildings,
     openSpaces,
     landmarks: landmarkBuildings,
@@ -1114,6 +1168,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   ];
   const roadHazards = makeRoadHazards(roadEdges);
   const buildingPlan = buildStaticBuildings(cells, rng, terrain, roadHazards);
+  const parcels = buildingPlan.parcels || [];
   const coastDocks = buildCoastDocks(terrain, normalizedSeed);
   return {
     version: 'v35',
@@ -1122,7 +1177,9 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     height: VIEW_H,
     bounds: terrain.bounds,
     terrain: terrain as CityMap['terrain'],
+    blocks: cells,
     cells,
+    parcels,
     neighborhoods: [],
     adjacency: {},
     roadGraph: {

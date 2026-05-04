@@ -129,6 +129,42 @@ const assertRenderableBridges = (city: CityMap, label: string) => {
   expectEq(invisible, [], `${label}: every bridge has render geometry`);
 };
 
+const assertParcelContracts = (city: CityMap, label: string) => {
+  const parcels = city.parcels || [];
+  expectTrue(parcels.length > 0, `${label}: generated parcel hierarchy`, { parcels: parcels.length });
+  const parcelIds = new Set(parcels.map((parcel) => parcel.id));
+  const danglingBuildings = (city.buildingPlan?.buildings || [])
+    .filter((building) => !building.parcelId || !parcelIds.has(building.parcelId))
+    .map((building) => ({ id: building.id, parcelId: building.parcelId || null }));
+  expectEq(danglingBuildings, [], `${label}: every non-landmark building has a valid parcelId`);
+
+  const lowCoverageBlocks = (city.cells || [])
+    .filter((block) => block.buildable !== false && Array.isArray(block.parcels) && block.parcels.length)
+    .map((block) => {
+      const blockArea = Number(block.area || 0);
+      const parcelArea = (block.parcels || []).reduce((sum, parcel) => sum + Number(parcel.area || 0), 0);
+      return { id: block.id, coverage: blockArea > 0 ? parcelArea / blockArea : 0 };
+    })
+    .filter((entry) => entry.coverage < 0.9);
+  expectEq(lowCoverageBlocks, [], `${label}: parcels cover at least 90% of each buildable block`);
+
+  const underfilledCommercialFrontage = parcels
+    .filter((parcel) =>
+      ['frontage-strip', 'corner-frontage', 'multi-frontage'].includes(String(parcel.generationKind)) &&
+      parcel.planning?.age === 'new' &&
+      ['commercial_retail', 'commercial_office', 'hospitality', 'mixed_use'].includes(String(parcel.planning?.use)) &&
+      parcel.planning?.placedCount != null &&
+      !parcel.planning?.layoutFailure,
+    )
+    .filter((parcel) => Number(parcel.planning?.envelopeCoverage || 0) < 0.8)
+    .map((parcel) => ({
+      id: parcel.id,
+      generationKind: parcel.generationKind,
+      envelopeCoverage: parcel.planning?.envelopeCoverage,
+    }));
+  expectEq(underfilledCommercialFrontage, [], `${label}: commercial-new frontage parcels reach 80% envelope coverage when not in recovery`);
+};
+
 {
   const seed = seeds[0];
   const a = buildCityV35(seed, { cache: false });
@@ -148,6 +184,7 @@ for (const seed of seeds) {
   assertDistrictLandmarks(city, label);
   assertNoDanglingSnapEdges(city, label);
   assertRenderableBridges(city, label);
+  assertParcelContracts(city, label);
 }
 
 {

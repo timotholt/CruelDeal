@@ -1,3 +1,6 @@
+import type { ParcelShapeClassification } from './parcel-shapes';
+import type { BlockFrontageAnalysis, BuildingBlockProfile } from './planning';
+
 export interface Point {
   x: number;
   y: number;
@@ -104,6 +107,38 @@ export interface CityBlock {
   [key: string]: unknown;
 }
 
+export type ParcelGenerationKind =
+  | 'frontage-strip'
+  | 'corner-frontage'
+  | 'multi-frontage'
+  | 'interior-obb'
+  | 'patio'
+  | 'whole-block'
+  | 'merge-recovery';
+
+export interface CityParcel {
+  id: string;
+  blockId: string;
+  districtId?: string | null;
+  polygon: Point[];
+  centroid?: Point;
+  buildable?: boolean;
+  kind?: 'lot' | 'park' | 'plaza' | 'service' | 'patio';
+  frontageAnalysis?: BlockFrontageAnalysis;
+  shape?: ParcelShapeClassification;
+  planning?: BuildingBlockProfile;
+  area?: number;
+  fieldAngle?: number;
+  generationKind?: ParcelGenerationKind;
+  frontageRoadIds?: string[];
+  frontageSideCount?: number;
+  frontageDepth?: number;
+  frontageWidth?: number;
+  parentBlockArea?: number;
+  parcelCoverageRole?: 'buildable' | 'frontage' | 'interior' | 'open-space' | 'service' | 'recovery';
+  [key: string]: unknown;
+}
+
 export interface TerrainPlan {
   landPolygon?: PolygonPoint[];
   visibleLandPolygon?: PolygonPoint[];
@@ -139,6 +174,7 @@ export interface OpenSpace {
 }
 
 export interface BuildingPlan {
+  parcels?: CityParcel[];
   buildings?: Building[];
   landmarks?: Building[];
   [key: string]: unknown;
@@ -147,6 +183,7 @@ export interface BuildingPlan {
 export interface Building {
   id: string;
   blockId?: string | null;
+  parcelId?: string | null;
   districtId?: string | null;
   polygon?: Point[];
   centroid?: Point;
@@ -264,6 +301,9 @@ export interface CityMap {
   terrain: TerrainPlan;
   roadGraph: RoadGraph;
   districts: CityDistrict[];
+  blocks?: CityBlock[];
+  cells?: CityBlock[];
+  parcels?: CityParcel[];
   buildingPlan: BuildingPlan;
   bridgePlan: BridgePlan;
   coastDocks: DockPlan[];

@@ -1,4 +1,6 @@
 export { generateBlockBuildings, generateCoastStripBuildings } from './buildings';
+export { subdivideBlockIntoParcels } from './parcels';
+export { CITY_UNIT_METERS, meters, squareMeters, URBAN_SCALE } from './urban-units';
 export { generateBridges } from './bridges';
 export {
   attachRoadGraph,
@@ -36,9 +38,11 @@ export type {
   CityBlock,
   CityDistrict,
   CityMap,
+  CityParcel,
   CitySlot,
   DistrictLandmark,
   DockPlan,
+  ParcelGenerationKind,
   Point,
   RoadEdge,
   RoadRenderMeta,

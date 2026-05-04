@@ -1,10 +1,11 @@
 import { pointToSegmentDist, polygonArea, polygonCentroid } from './geometry';
 import { fallbackUseForUnclassifiedParcel, type LayoutTemplateHint, type ParcelOrientation, type ParcelShapeFamily, type TriangleOrientation } from './parcel-shapes';
-import type { CityBlock, Point, RoadEdge } from './types';
+import { URBAN_SCALE } from './urban-units';
+import type { CityBlock, ParcelGenerationKind, Point, RoadEdge } from './types';
 
 type Rng = () => number;
 
-export const GLOBAL_COMMERCIAL_PARCEL_GAP = 0.22;
+export const GLOBAL_COMMERCIAL_PARCEL_GAP = URBAN_SCALE.parcels.commercialSeamGap;
 export const GLOBAL_COMMERCIAL_SETBACK = GLOBAL_COMMERCIAL_PARCEL_GAP;
 
 export type RoadClass = 'HIGHWAY' | 'MAJOR_ROAD' | 'MINOR_ROAD' | 'ALLEY' | 'SERVICE';
@@ -115,6 +116,7 @@ export interface BuildingBlockProfile {
   subdivisionFlavor?: SubdivisionFlavor;
   frontageGroupId?: string | null;
   frontageRoadIds?: string[];
+  allFrontageRoadIds?: string[];
   frontageRoadClass?: RoadClass | null;
   frontageScore?: number;
   frontageLength?: number;
@@ -143,6 +145,11 @@ export interface BuildingBlockProfile {
   bypassedRoadShrink?: boolean;
   layoutFailure?: string;
   highValueFrontageUtilization?: number;
+  parcelGenerationKind?: ParcelGenerationKind;
+  parcelCoverageRole?: string;
+  frontageSideCount?: number;
+  frontageDepth?: number;
+  frontageWidth?: number;
   rejectedParcelCount?: number;
   sliverCleanupCount?: number;
   metrics?: BlockPlanningMetrics;
@@ -417,7 +424,7 @@ function modernityFromFrontage(frontage: BlockFrontageAnalysis) {
   if (!primary) return 0;
   const value = primary.valueWeight;
   const lengthScore = Math.min(2, primary.totalLength / Math.max(8, frontage.blockDepth * 1.2));
-  return value * 0.72 + lengthScore + Math.min(1.2, frontage.blockArea / 1600);
+  return value * 0.72 + lengthScore + Math.min(1.2, frontage.blockArea / URBAN_SCALE.parcels.largeParcelArea);
 }
 
 export function frontageDivisionCountForProfile(
@@ -636,6 +643,7 @@ export function chooseBlockProfile(
     subdivisionFlavor: selectSubdivisionFlavor({ age, use }),
     frontageGroupId: primary?.id || null,
     frontageRoadIds: primary?.roadIds || [],
+    allFrontageRoadIds: Array.from(new Set(frontage.groups.flatMap((group) => group.roadIds))),
     frontageRoadClass: primary?.roadClass || null,
     frontageScore: primary?.weightedScore || 0,
     frontageLength: primary?.totalLength || 0,

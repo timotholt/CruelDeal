@@ -1,6 +1,6 @@
 import { createMemo, createSignal, Show, onCleanup, onMount, untrack } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { buildCityMap, type CityBlock, type CityDistrict, type CityMap, type Point } from '@/services/playgame/city-map';
+import { buildCityMap, type CityBlock, type CityDistrict, type CityMap, type CityParcel, type Point } from '@/services/playgame/city-map';
 import { pointInPolygon } from '@/services/playgame/city-map/geometry';
 import { polygonToPath } from '@/services/playgame/city-map/paths';
 import {
@@ -50,14 +50,14 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const initialRendererMode = untrack(() => props.rendererMode);
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
-    useThreeRenderer: initialRendererMode === 'three',
+    useThreeRenderer: initialRendererMode ? initialRendererMode === 'three' : true,
     showBuildings: initialDebug?.showBuildings ?? true,
     showRoads: initialDebug?.showRoads ?? true,
     showLabels: initialDebug?.showLabels ?? true,
     showLandmarks: initialDebug?.showLandmarks ?? true,
     showSlots: initialDebug?.showSlots ?? true,
     showRouteDemo: false,
-    showComposition: false,
+    showComposition: true,
     showTerrainDebug: false,
     showDistrictDebug: false,
     showArterialsDebug: false,
@@ -95,6 +95,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const blockAtPoint = (point: Point) => {
     for (const block of city().cells as Array<CityBlock & Record<string, any>>) {
       if (!block.buildable) continue;
+      for (const parcel of (block.parcels || []) as Array<CityParcel & Record<string, any>>) {
+        if (pointInPolygon(point, parcel.polygon)) return parcel as CityBlock & Record<string, any>;
+      }
       if (pointInPolygon(point, block.polygon)) return block;
     }
     return null;
@@ -392,6 +395,16 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
               >
                 <div class="city-map-planning-tooltip__title">{label()}</div>
                 <div class="city-map-planning-tooltip__row">block {hovered().block.id}</div>
+                <Show when={hovered().block.generationKind}>
+                  <div class="city-map-planning-tooltip__row">
+                    parcel {String(hovered().block.generationKind)} / {String(hovered().block.parcelCoverageRole || 'n/a')}
+                  </div>
+                </Show>
+                <Show when={Array.isArray(hovered().block.frontageRoadIds) && hovered().block.frontageRoadIds.length}>
+                  <div class="city-map-planning-tooltip__row">
+                    parcel fronts {hovered().block.frontageRoadIds.join(',')} / sides {Number(hovered().block.frontageSideCount || 0)}
+                  </div>
+                </Show>
                 <div class="city-map-planning-tooltip__row">area {Math.round(Number(hovered().block.area || 0))}</div>
                 <div class="city-map-planning-tooltip__row">
                   road {Number(planning().roadPriority || 0)} / mod {Number(planning().modernityScore || 0).toFixed(2)}
@@ -421,7 +434,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
                 </Show>
                 <Show when={Array.isArray(planning().shapeCornerAngles) && planning().shapeCornerAngles.length}>
                   <div class="city-map-planning-tooltip__row">
-                    angles {planning().shapeCornerAngles.slice(0, 6).map((angle: number) => Math.round(angle)).join('/')}
+                    angles {planning().shapeCornerAngles.slice(0, 6).map((angle: number) => Number(angle).toFixed(1)).join('/')}
                   </div>
                 </Show>
                 <Show when={planning().triangleOrientation}>

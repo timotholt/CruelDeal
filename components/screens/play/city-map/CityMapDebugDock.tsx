@@ -44,13 +44,13 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showSlots', label: 'Slots' },
   { key: 'showRouteDemo', label: 'Route Demo' },
   { key: 'showComposition', label: 'Planning' },
-  { key: 'showTerrainDebug', label: 'Terrain' },
+  { key: 'showTerrainDebug', label: 'Wireframe' },
   { key: 'showDistrictDebug', label: 'Districts' },
   { key: 'showArterialsDebug', label: 'Arterials' },
   { key: 'showIslandDebug', label: 'Islands' },
   { key: 'showMassDebug', label: 'Mass' },
   { key: 'showSeedDebug', label: 'Seed Info' },
-  { key: 'simplifyDuringCameraMove', label: 'Pan Perf' },
+  { key: 'simplifyDuringCameraMove', label: 'SVG Pan Perf' },
 ];
 
 export const CityMapDebugDock = (props: CityMapDebugDockProps) => {

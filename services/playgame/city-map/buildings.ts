@@ -1,6 +1,7 @@
 import { clipPolygonToRect, distToRiver, pointInPolygon, pointToSegmentDist, polygonArea, polygonCentroid } from './geometry';
 import { GLOBAL_COMMERCIAL_SETBACK, type BuildingBlockProfile, type RoadHazard } from './planning';
 import { polygonToPath } from './paths';
+import { URBAN_SCALE } from './urban-units';
 import type { Point } from './types';
 
 type Rng = () => number;
@@ -47,7 +48,7 @@ export function generateBlockBuildings(
   rng: Rng,
   riverSegments?: Array<{ a: Point; b: Point }> | null,
   roadHazards?: RoadHazard[] | null,
-  riverBuffer = 7,
+  riverBuffer = URBAN_SCALE.buildings.riverBuffer,
   profile: BuildingBlockProfile = { age: 'average', use: 'residential' },
 ): GeneratedBuildingFootprint[] {
   const blockArea = polygonArea(blockPolygon);
@@ -84,6 +85,32 @@ export function generateBlockBuildings(
     probes.push({ x: cx, y: cy });
     return probes.some((p) => distToRiver(p.x, p.y, riverSegments) < riverBuffer);
   };
+
+  const isFrontageParcel = ['frontage-strip', 'corner-frontage', 'multi-frontage'].includes(String(profile.parcelGenerationKind || ''));
+  if (isCommercial && isModern && isFrontageParcel && blockArea >= URBAN_SCALE.parcels.minBuildableArea) {
+    const c = polygonCentroid(blockPolygon);
+    const shrink = profile.frontageSideCount && profile.frontageSideCount > 1 ? 0.97 : 0.955;
+    const footprint = blockPolygon.map((point) => ({
+      x: c.x + (point.x - c.x) * shrink,
+      y: c.y + (point.y - c.y) * shrink,
+    }));
+    if (!footprintNearRiver(footprint) && polygonArea(footprint) >= URBAN_SCALE.parcels.minBuildableArea * 0.5) {
+      const area = polygonArea(footprint);
+      profile.layoutStrategy = 'eg2012-frontage-parcel-fill';
+      profile.frontageSetback = GLOBAL_COMMERCIAL_SETBACK;
+      profile.bypassedRoadShrink = true;
+      profile.envelopeArea = blockArea;
+      profile.envelopeCoverage = area / Math.max(1, blockArea);
+      profile.placedCount = 1;
+      profile.highValueFrontageUtilization = Math.min(1, profile.envelopeCoverage);
+      return [{
+        path: polygonToPath(footprint),
+        polygon: footprint,
+        area,
+        shade: rng(),
+      }];
+    }
+  }
 
   const footprintNearRoad = (corners: Point[]) => {
     if (!roadHazards?.length) return false;
@@ -182,14 +209,14 @@ export function generateBlockBuildings(
 
   const targetSize = isCommercial
     ? isOld
-      ? 7.4 + rng() * 2.1
-      : 8.6 + rng() * 3.6
+      ? URBAN_SCALE.buildings.commercialOldModuleMin + rng() * URBAN_SCALE.buildings.commercialOldModuleJitter
+      : URBAN_SCALE.buildings.commercialNewModuleMin + rng() * URBAN_SCALE.buildings.commercialNewModuleJitter
     : isIndustrial
-      ? 10.5 + rng() * 5.5
+      ? URBAN_SCALE.buildings.industrialModuleMin + rng() * URBAN_SCALE.buildings.industrialModuleJitter
     : isResidential && isModern
-      ? 5.8 + rng() * 1.4
+      ? URBAN_SCALE.buildings.residentialNewModuleMin + rng() * URBAN_SCALE.buildings.residentialNewModuleJitter
       : isResidential && isOld
-        ? 5.4 + rng() * 2.6
+        ? URBAN_SCALE.buildings.residentialOldModuleMin + rng() * URBAN_SCALE.buildings.residentialOldModuleJitter
         : isIrregular ? 6 + rng() * 2 : 7 + rng() * 3.2;
   const skipRate = isCommercial
     ? isOld ? 0.04 : 0.0
@@ -203,11 +230,11 @@ export function generateBlockBuildings(
   const inset = isCommercial
     ? 0.28
     : isIndustrial
-      ? 0.18 + rng() * 0.16
+      ? URBAN_SCALE.setbacks.industrial + rng() * 0.16
     : isResidential && isModern
-      ? 0.42
-      : isResidential && isOld
-        ? 0.25 + rng() * 0.7
+      ? URBAN_SCALE.setbacks.modernResidential
+    : isResidential && isOld
+        ? URBAN_SCALE.setbacks.oldResidentialMin + rng() * (URBAN_SCALE.setbacks.oldResidentialMax - URBAN_SCALE.setbacks.oldResidentialMin)
         : isIrregular ? 0.5 : 0.45;
   const nU = Math.max(1, Math.round(wU / targetSize));
   const nV = Math.max(1, Math.round(wV / targetSize));
@@ -366,8 +393,11 @@ export function generateBlockBuildings(
     if (!relevantRoadHazards.length) return;
     const SETBACK = GLOBAL_COMMERCIAL_SETBACK;
     const GAP = 0.14;
-    const MIN_DIM = 2.5;
-    const commercialEnvelope = relevantRoadHazards.reduce((subject, hazard) => {
+    const MIN_DIM = URBAN_SCALE.buildings.commercialNewMinCell;
+    const commercialClearanceRoadIds = new Set(profile.allFrontageRoadIds || profile.frontageRoadIds || []);
+    const commercialClearanceHazards = relevantRoadHazards.filter((hazard) => commercialClearanceRoadIds.has(hazard.roadId));
+    const roadClearanceHazards = commercialClearanceHazards.length ? commercialClearanceHazards : relevantRoadHazards;
+    const commercialEnvelope = roadClearanceHazards.reduce((subject, hazard) => {
       if (subject.length < 3) return subject;
       return clipPolygonByRoadClearance(subject, hazard, Math.max(0, hazard.width * 0.5) + SETBACK);
     }, blockPolygon.slice());
@@ -378,7 +408,7 @@ export function generateBlockBuildings(
       return;
     }
 
-    const gridCell = Math.max(4.0, Math.min(7.0, Math.sqrt(envelopeArea) / 5.0));
+    const gridCell = Math.max(URBAN_SCALE.buildings.commercialNewGridMin, Math.min(URBAN_SCALE.buildings.commercialNewGridMax, Math.sqrt(envelopeArea) / 5.0));
 
     // Push an arbitrary world-coordinate polygon as a building footprint.
     // Every commercial-new footprint is clipped against every nearby road side
@@ -418,12 +448,59 @@ export function generateBlockBuildings(
       return true;
     };
 
-    // Commercial-new uses one planning frame: the highest-value frontage.
-    // Other road sides constrain the block shape, but they do not get to create
-    // competing frontage grids with unrelated angles.
+    // Commercial-new uses the highest-value frontage as the planning frame, but
+    // parcels with multiple real fronts should claim every meaningful side.
     let remaining = commercialEnvelope.slice();
-    const frontageHazards = relevantRoadHazards.filter((hazard) => primaryRoadIds.has(hazard.roadId));
-    const commercialNewFrontageHazards = frontageHazards.length ? frontageHazards : relevantRoadHazards.slice(0, 1);
+    const allFrontageRoadIds = commercialClearanceRoadIds;
+    const frontageHazards = roadClearanceHazards.filter((hazard) => primaryRoadIds.has(hazard.roadId));
+    const trueFrontageHazards = roadClearanceHazards.filter((hazard) => allFrontageRoadIds.has(hazard.roadId));
+    const normalize = (angle: number) => {
+      let a = angle;
+      while (a <= -Math.PI) a += Math.PI * 2;
+      while (a > Math.PI) a -= Math.PI * 2;
+      return a;
+    };
+    const axisDelta = (a: number, b: number) => {
+      const d = Math.abs(normalize(a - b));
+      return Math.min(d, Math.abs(Math.PI - d));
+    };
+    const hazardAngle = (hazard: RoadHazard) => Math.atan2(hazard.b.y - hazard.a.y, hazard.b.x - hazard.a.x);
+    const hazardLength = (hazard: RoadHazard) => Math.hypot(hazard.b.x - hazard.a.x, hazard.b.y - hazard.a.y);
+    const inwardNormal = (hazard: RoadHazard) => {
+      const dx = hazard.b.x - hazard.a.x;
+      const dy = hazard.b.y - hazard.a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const n1 = { x: -dy / len, y: dx / len };
+      const mid = { x: (hazard.a.x + hazard.b.x) / 2, y: (hazard.a.y + hazard.b.y) / 2 };
+      const toc = { x: blockCenter.x - mid.x, y: blockCenter.y - mid.y };
+      return n1.x * toc.x + n1.y * toc.y >= 0 ? n1 : { x: -n1.x, y: -n1.y };
+    };
+    const sameFrontageSide = (a: RoadHazard, b: RoadHazard) => {
+      if (a.roadId === b.roadId) return true;
+      if (axisDelta(hazardAngle(a), hazardAngle(b)) > 0.18) return false;
+      const na = inwardNormal(a);
+      const nb = inwardNormal(b);
+      return na.x * nb.x + na.y * nb.y > 0.82;
+    };
+    const commercialNewFrontageHazards: RoadHazard[] = [];
+    const addFrontageHazard = (hazard: RoadHazard) => {
+      if (commercialNewFrontageHazards.length >= 4) return;
+      if (hazard.roadClass === 'SERVICE' || hazard.roadClass === 'ALLEY') return;
+      if (hazardLength(hazard) < MIN_DIM) return;
+      if (commercialNewFrontageHazards.some((placed) => sameFrontageSide(placed, hazard))) return;
+      commercialNewFrontageHazards.push(hazard);
+    };
+    frontageHazards
+      .slice()
+      .sort((a, b) => hazardLength(b) * b.valueWeight - hazardLength(a) * a.valueWeight)
+      .forEach(addFrontageHazard);
+    trueFrontageHazards
+      .slice()
+      .sort((a, b) => hazardLength(b) * b.valueWeight - hazardLength(a) * a.valueWeight)
+      .forEach(addFrontageHazard);
+    if (!commercialNewFrontageHazards.length) {
+      roadClearanceHazards.slice(0, 1).forEach(addFrontageHazard);
+    }
 
     for (const hazard of commercialNewFrontageHazards) {
       if (remaining.length < 3) break;
@@ -479,6 +556,132 @@ export function generateBlockBuildings(
         const sMinU = Math.min(...stripPts.map((p) => p.x));
         const sMaxU = Math.max(...stripPts.map((p) => p.x));
         const sW = sMaxU - sMinU;
+        const localPointInsideStrip = (point: Point) => {
+          if (pointInPolygon(point, stripPts)) return true;
+          return stripPts.some((edgeStart, index) => {
+            const edgeEnd = stripPts[(index + 1) % stripPts.length];
+            return pointToSegmentDist(point.x, point.y, edgeStart, edgeEnd) < 0.08;
+          });
+        };
+        const spansAtV = (v: number) => {
+          const xs: number[] = [];
+          for (let i = 0; i < stripPts.length; i++) {
+            const a = stripPts[i];
+            const b = stripPts[(i + 1) % stripPts.length];
+            if (Math.abs(a.y - b.y) < 1e-6) continue;
+            const crosses = (a.y <= v && b.y > v) || (b.y <= v && a.y > v);
+            if (!crosses) continue;
+            const t = (v - a.y) / (b.y - a.y);
+            xs.push(a.x + (b.x - a.x) * t);
+          }
+          xs.sort((a, b) => a - b);
+          const spans: Array<{ min: number; max: number }> = [];
+          for (let i = 0; i + 1 < xs.length; i += 2) {
+            if (xs[i + 1] - xs[i] > 0.05) spans.push({ min: xs[i], max: xs[i + 1] });
+          }
+          return spans;
+        };
+        const overlapSpanAtV = (v: number, minU: number, maxU: number) => {
+          let best: { min: number; max: number } | null = null;
+          for (const span of spansAtV(v)) {
+            const next = { min: Math.max(minU, span.min), max: Math.min(maxU, span.max) };
+            if (next.max - next.min < MIN_DIM) continue;
+            if (!best || next.max - next.min > best.max - best.min) best = next;
+          }
+          return best;
+        };
+        const pushFrontageQuadCell = (u1: number, u2: number, v1: number, v2: number) => {
+          const depth = v2 - v1;
+          const depthSteps = [1, 0.9, 0.8, 0.68, 0.56, 0.44, 0.34];
+          for (const depthShrink of depthSteps) {
+            const sv2 = v1 + depth * depthShrink;
+            if (sv2 - v1 < MIN_DIM) continue;
+            const frontSpan = overlapSpanAtV(v1 + 0.03, u1, u2);
+            const rearSpan = overlapSpanAtV(sv2 - 0.03, u1, u2);
+            if (!frontSpan || !rearSpan) continue;
+            const frontPad = Math.min(GAP * 0.5, Math.max(0, (frontSpan.max - frontSpan.min - MIN_DIM) * 0.12));
+            const rearPad = Math.min(GAP * 0.5, Math.max(0, (rearSpan.max - rearSpan.min - MIN_DIM) * 0.12));
+            const fu1 = frontSpan.min + frontPad;
+            const fu2 = frontSpan.max - frontPad;
+            const ru1 = rearSpan.min + rearPad;
+            const ru2 = rearSpan.max - rearPad;
+            if (fu2 - fu1 < MIN_DIM || ru2 - ru1 < MIN_DIM) continue;
+            const minWidth = Math.min(fu2 - fu1, ru2 - ru1);
+            const maxWidth = Math.max(fu2 - fu1, ru2 - ru1);
+            if (minWidth / Math.max(1, maxWidth) < 0.34) continue;
+            const midV = v1 + (sv2 - v1) * 0.5;
+            const midSpan = overlapSpanAtV(midV, Math.min(fu1, ru1), Math.max(fu2, ru2));
+            if (!midSpan || midSpan.max - midSpan.min < MIN_DIM) continue;
+            const quad = [
+              { x: fu1, y: v1 },
+              { x: fu2, y: v1 },
+              { x: ru2, y: sv2 },
+              { x: ru1, y: sv2 },
+            ];
+            if (!quad.every(localPointInsideStrip)) continue;
+            const worldQuad = quad.map((p) => frLoc(p.x, p.y));
+            if (polygonArea(worldQuad) < MIN_DIM * MIN_DIM) continue;
+            return pushWorldPoly(worldQuad, { preserveEdges: true });
+          }
+          return false;
+        };
+        const pushFrontageRectCell = (u1: number, u2: number, v1: number, v2: number) => {
+          if (profile.selectedTemplate === 'angled_quad_frontage_band') {
+            return pushFrontageQuadCell(u1, u2, v1, v2);
+          }
+          const depth = v2 - v1;
+          const depthSteps = [1, 0.9, 0.8, 0.68, 0.56, 0.44, 0.34];
+          for (const depthShrink of depthSteps) {
+            const sv2 = v1 + depth * depthShrink;
+            if (sv2 - v1 < MIN_DIM) continue;
+            const sampleVs = [v1 + 0.03, v1 + (sv2 - v1) * 0.5, sv2 - 0.03];
+            let overlap = { min: u1, max: u2 };
+            let valid = true;
+            for (const sampleV of sampleVs) {
+              const span = overlapSpanAtV(sampleV, u1, u2);
+              if (!span) {
+                valid = false;
+                break;
+              }
+              overlap = { min: Math.max(overlap.min, span.min), max: Math.min(overlap.max, span.max) };
+              if (overlap.max - overlap.min < MIN_DIM) {
+                valid = false;
+                break;
+              }
+            }
+            if (!valid) continue;
+            const pad = Math.min(GAP * 0.5, Math.max(0, (overlap.max - overlap.min - MIN_DIM) * 0.18));
+            const su1 = overlap.min + pad;
+            const su2 = overlap.max - pad;
+            if (su2 - su1 < MIN_DIM) continue;
+            const rect = [
+              { x: su1, y: v1 },
+              { x: su2, y: v1 },
+              { x: su2, y: sv2 },
+              { x: su1, y: sv2 },
+            ];
+            if (!rect.every(localPointInsideStrip)) continue;
+            return pushWorldPoly(rect.map((p) => frLoc(p.x, p.y)), { preserveEdges: true });
+          }
+          return false;
+        };
+        const pushSingleFrontageRect = (v1: number, v2: number) => {
+          const widthCandidates = [
+            Math.min(sW - GAP * 2, gridCell * 2.4),
+            Math.min(sW - GAP * 2, gridCell * 1.8),
+            Math.min(sW - GAP * 2, gridCell * 1.25),
+            Math.min(sW - GAP * 2, MIN_DIM * 1.35),
+          ].filter((width) => width >= MIN_DIM);
+          const slots = 9;
+          for (const width of widthCandidates) {
+            for (let slot = 0; slot < slots; slot++) {
+              const t = slots === 1 ? 0.5 : slot / (slots - 1);
+              const centerU = sMinU + GAP + width / 2 + t * Math.max(0, sW - GAP * 2 - width);
+              if (pushFrontageRectCell(centerU - width / 2, centerU + width / 2, v1, v2)) return true;
+            }
+          }
+          return false;
+        };
         const isPrimaryFrontage = profile.frontageRoadIds?.includes(hazard.roadId);
         const targetDivisions = Math.max(1, profile.frontageDivisionCount || 2);
         const primaryShare = profile.frontageLength
@@ -488,6 +691,7 @@ export function generateBlockBuildings(
           ? Math.max(1, Math.round(targetDivisions * primaryShare))
           : Math.max(1, Math.round(sW / (gridCell * 1.7)));
         const bW = (sW - GAP * (nB + 1)) / nB;
+        const placedBeforeHazard = buildings.length;
 
         if (bW >= MIN_DIM && rearV - roadClearanceV >= MIN_DIM) {
           for (let k = 0; k < nB; k++) {
@@ -495,11 +699,21 @@ export function generateBlockBuildings(
             const bu2 = bu1 + bW;
             // Road hazards are centerline-based. Commercial frontage clears the
             // visible road edge, then uses the same parcel gap as internal seams.
-            const cell = clipPolygonToRect(stripPts, {
-              minX: bu1, minY: roadClearanceV, maxX: bu2, maxY: rearV,
-            });
-            if (cell.length >= 3) pushWorldPoly(cell.map((p) => frLoc(p.x, p.y)), { preserveEdges: true });
+            // Frontage-band templates must emit true road-local rectangles.
+            // Clipping a frontage cell against a sloped/trimmed strip can turn
+            // the footprint into a 5- or 6-sided polygon, which breaks the
+            // visual promise that tenant walls are perpendicular to the street.
+            pushFrontageRectCell(bu1, bu2, roadClearanceV, rearV);
           }
+        }
+
+        if (
+          profile.selectedTemplate === 'angled_quad_frontage_band' &&
+          buildings.length === placedBeforeHazard &&
+          sW >= MIN_DIM &&
+          rearV - roadClearanceV >= MIN_DIM
+        ) {
+          pushSingleFrontageRect(roadClearanceV, rearV);
         }
       }
 
@@ -536,11 +750,16 @@ export function generateBlockBuildings(
       const rW = rMaxU - rMinU;
       const rH = rMaxV - rMinV;
       const envelopeCoverage = () => buildings.reduce((sum, building) => sum + building.area, 0) / Math.max(1, envelopeArea);
-      const pushLocalCell = (minU: number, minV: number, maxU: number, maxV: number) => {
+      const pushLocalCell = (minU: number, minV: number, maxU: number, maxV: number, options: { allowIrregular?: boolean } = {}) => {
         if (maxU - minU < MIN_DIM || maxV - minV < MIN_DIM) return false;
         const cell = clipPolygonToRect(lp.map((p) => ({ x: p.u, y: p.v })), {
           minX: minU, minY: minV, maxX: maxU, maxY: maxV,
         });
+        if (profile.selectedTemplate === 'angled_quad_frontage_band' && !options.allowIrregular) {
+          const area = polygonArea(cell);
+          const boxArea = Math.max(1, (maxU - minU) * (maxV - minV));
+          if (cell.length !== 4 || area / boxArea < 0.72) return false;
+        }
         return cell.length >= 3 && pushWorldPoly(cell.map((p) => frLoc(p.x, p.y)));
       };
 
@@ -561,7 +780,7 @@ export function generateBlockBuildings(
         }
       }
 
-      const minNewCoverage = envelopeArea > 420 ? 0.52 : 0.44;
+      const minNewCoverage = 0.8;
       if (rW >= MIN_DIM * 2 && rH >= MIN_DIM * 2 && envelopeCoverage() < minNewCoverage) {
         const cols = Math.max(1, Math.min(4, Math.round(rW / (gridCell * 1.35))));
         const rows = Math.max(1, Math.min(3, Math.round(rH / (gridCell * 1.35))));
@@ -576,19 +795,39 @@ export function generateBlockBuildings(
         }
       }
 
-      if (envelopeCoverage() < minNewCoverage * 0.7) {
+      if (rW >= MIN_DIM * 2 && rH >= MIN_DIM * 2 && envelopeCoverage() < minNewCoverage) {
+        const cols = Math.max(1, Math.min(6, Math.round(rW / Math.max(MIN_DIM * 1.35, gridCell * 0.9))));
+        const rows = Math.max(1, Math.min(5, Math.round(rH / Math.max(MIN_DIM * 1.35, gridCell * 0.9))));
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const bu1 = rMinU + col * (rW / cols) + GAP;
+            const bu2 = rMinU + (col + 1) * (rW / cols) - GAP;
+            const bv1 = rMinV + row * (rH / rows) + GAP;
+            const bv2 = rMinV + (row + 1) * (rH / rows) - GAP;
+            pushLocalCell(bu1, bv1, bu2, bv2);
+            if (envelopeCoverage() >= minNewCoverage) break;
+          }
+          if (envelopeCoverage() >= minNewCoverage) break;
+        }
+      }
+
+      if (envelopeCoverage() < minNewCoverage) {
         // Final recovery for awkward clipped envelopes: try one large remainder
         // parcel before reporting low coverage. Overlap rejection keeps this from
         // trampling successful frontage or coarse parcels.
-        pushLocalCell(rMinU + GAP, rMinV + GAP, rMaxU - GAP, rMaxV - GAP);
+        pushLocalCell(rMinU + GAP, rMinV + GAP, rMaxU - GAP, rMaxV - GAP, { allowIrregular: true });
       }
 
-      if (envelopeCoverage() < minNewCoverage * 0.7) {
+      if (envelopeCoverage() < minNewCoverage) {
         profile.layoutFailure = 'low-commercial-new-fill';
       }
     }
+
     profile.placedCount = buildings.length;
-    profile.envelopeCoverage = buildings.reduce((sum, building) => sum + building.area, 0) / Math.max(1, blockArea);
+    profile.envelopeCoverage = buildings.reduce((sum, building) => sum + building.area, 0) / Math.max(1, envelopeArea);
+    if (isFrontageParcel && profile.envelopeCoverage < 0.8) {
+      profile.layoutFailure = profile.layoutFailure || 'low-frontage-parcel-fill';
+    }
     if (primaryRoadIds.size && profile.frontageLength) {
       const frontageBuildings = buildings.filter((building) =>
         relevantRoadHazards.some((hazard) =>
@@ -637,11 +876,11 @@ export function generateBlockBuildings(
   const frontageSetback = isCommercial
     ? GLOBAL_COMMERCIAL_SETBACK
     : isIndustrial
-      ? 0.22
+      ? URBAN_SCALE.setbacks.industrial
     : isResidential && isModern
-      ? 0.36
+      ? URBAN_SCALE.setbacks.modernResidential
       : isResidential && isOld
-        ? 0.24 + rng() * 1.25
+        ? URBAN_SCALE.setbacks.oldResidentialMin + rng() * (URBAN_SCALE.setbacks.oldResidentialMax - URBAN_SCALE.setbacks.oldResidentialMin)
       : 0.3;
 
   if (isCommercial && isModern) {
@@ -654,7 +893,7 @@ export function generateBlockBuildings(
     profile.bypassedRoadShrink = false;
   } else if (isIndustrial) {
     profile.layoutStrategy = profile.subdivisionFlavor || 'industrial-service-yard';
-    profile.frontageSetback = 0.22;
+    profile.frontageSetback = URBAN_SCALE.setbacks.industrial;
     profile.bypassedRoadShrink = false;
   } else if (isCivic) {
     profile.layoutStrategy = profile.subdivisionFlavor || 'civic-campus';
