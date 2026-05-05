@@ -285,7 +285,6 @@ export function extractPlanarFaces(
   options: PlanarFaceOptions = {},
 ): PlanarFace[] {
   const snapEpsilon = options.snapEpsilon ?? DEFAULT_SNAP_EPSILON;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const minFaceArea = options.minFaceArea ?? DEFAULT_MIN_FACE_AREA;
 
   const sorted = [...edges].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -315,24 +314,69 @@ export function extractPlanarFaces(
   }
 
   // Step 3: split at intersections
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const atomicSegments = splitAtIntersections(rawSegments, snap.vertices, snapEpsilon);
 
   // Step 4: build planar graph
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const graph = buildGraph(snap.vertices, atomicSegments);
 
   // Step 5: walk faces
   const rawFaces = walkFaces(graph);
 
-  // Temporary phase-5 stub: return raw faces as PlanarFaces without filtering
-  return rawFaces.map((face) => {
-    const polygon = face.vertexIndices.map((idx) => ({ x: snap.vertices[idx].x, y: snap.vertices[idx].y }));
-    return {
+  // Step 6: drop outer face, filter, normalize
+  const allFaces = rawFaces
+    .map((face) => {
+      const polygon = face.vertexIndices.map((idx) => ({ x: snap.vertices[idx].x, y: snap.vertices[idx].y }));
+      const signedArea = polygonArea(polygon);
+      const edgeIds = Array.from(new Set(face.edgeIds));
+      return { polygon, signedArea, edgeIds };
+    });
+
+  if (allFaces.length === 0) return [];
+
+  // Outer face: the one with negative signed area AND largest absolute area.
+  // Standard planar embedding: interior faces are CCW (positive area), outer face is CW (negative).
+  // But our input winding isn't guaranteed, so drop the one with largest |area| if it's negative.
+  let outerIdx = -1;
+  let outerAbs = -Infinity;
+  for (let i = 0; i < allFaces.length; i++) {
+    const abs = Math.abs(allFaces[i].signedArea);
+    if (allFaces[i].signedArea < 0 && abs > outerAbs) {
+      outerAbs = abs;
+      outerIdx = i;
+    }
+  }
+  // Fallback: if no negative-area face, drop the largest face regardless
+  if (outerIdx < 0) {
+    for (let i = 0; i < allFaces.length; i++) {
+      const abs = Math.abs(allFaces[i].signedArea);
+      if (abs > outerAbs) {
+        outerAbs = abs;
+        outerIdx = i;
+      }
+    }
+  }
+
+  const interiorFaces = allFaces.filter((_, i) => i !== outerIdx);
+
+  const result: PlanarFace[] = [];
+  for (const face of interiorFaces) {
+    // Force CCW: if signedArea is negative, reverse polygon
+    const polygon = face.signedArea < 0 ? face.polygon.slice().reverse() : face.polygon.slice();
+    const centroid = polygonCentroid(polygon);
+
+    // Safety net: centroid must be inside clip
+    if (clip.length >= 3 && !pointInPolygon(centroid, clip as Point[])) continue;
+
+    result.push({
       polygon,
-      area: Math.abs(polygonArea(polygon)),
-      centroid: polygonCentroid(polygon),
-      boundedByEdgeIds: Array.from(new Set(face.edgeIds)),
-    };
-  });
+      area: Math.abs(face.signedArea),
+      centroid,
+      boundedByEdgeIds: face.edgeIds,
+    });
+  }
+
+  // Sort for determinism
+  result.sort((a, b) => (a.centroid.y - b.centroid.y) || (a.centroid.x - b.centroid.x));
+
+  return result;
 }
