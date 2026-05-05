@@ -70,6 +70,105 @@ function snapAndDedupe(
   return { vertices, edgeVertexIndices };
 }
 
+interface AtomicSegment {
+  a: number;
+  b: number;
+  sourceEdgeId: string;
+}
+
+/** Split segments so they only meet at vertex endpoints. Mutates `vertices`. */
+function splitAtIntersections(
+  segments: AtomicSegment[],
+  vertices: Vertex[],
+  snapEpsilon: number,
+): AtomicSegment[] {
+  const eps2 = snapEpsilon * snapEpsilon;
+
+  const addOrReuseVertex = (x: number, y: number): number => {
+    for (let i = 0; i < vertices.length; i++) {
+      const dx = vertices[i].x - x;
+      const dy = vertices[i].y - y;
+      if (dx * dx + dy * dy <= eps2) return i;
+    }
+    vertices.push({ x, y });
+    return vertices.length - 1;
+  };
+
+  let current = segments.slice();
+  // Cap passes to avoid pathological infinite loops; 4 passes handles all realistic cases.
+  for (let pass = 0; pass < 4; pass++) {
+    const next: AtomicSegment[] = [];
+    const splitsInPass: Map<number, number[]> = new Map();  // segmentIdx → extra vertex indices
+
+    for (let i = 0; i < current.length; i++) {
+      for (let j = i + 1; j < current.length; j++) {
+        const si = current[i];
+        const sj = current[j];
+        // Shared endpoint → no true intersection
+        if (si.a === sj.a || si.a === sj.b || si.b === sj.a || si.b === sj.b) continue;
+
+        const a1 = vertices[si.a];
+        const b1 = vertices[si.b];
+        const a2 = vertices[sj.a];
+        const b2 = vertices[sj.b];
+        const hit = segIntersect(a1, b1, a2, b2);
+        if (!hit) continue;
+
+        const vIdx = addOrReuseVertex(hit.x, hit.y);
+
+        // Only count it as a split if vIdx is NOT already an endpoint of the segment
+        if (vIdx !== si.a && vIdx !== si.b) {
+          const arr = splitsInPass.get(i) || [];
+          arr.push(vIdx);
+          splitsInPass.set(i, arr);
+        }
+        if (vIdx !== sj.a && vIdx !== sj.b) {
+          const arr = splitsInPass.get(j) || [];
+          arr.push(vIdx);
+          splitsInPass.set(j, arr);
+        }
+      }
+    }
+
+    if (splitsInPass.size === 0) {
+      return current;
+    }
+
+    // Apply splits: for each original segment, if there are split points, sort them along (a, b) and emit subsegments
+    for (let i = 0; i < current.length; i++) {
+      const seg = current[i];
+      const splits = splitsInPass.get(i);
+      if (!splits || splits.length === 0) {
+        next.push(seg);
+        continue;
+      }
+      const a = vertices[seg.a];
+      const b = vertices[seg.b];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy || 1;
+
+      const tFor = (vIdx: number) => {
+        const v = vertices[vIdx];
+        return ((v.x - a.x) * dx + (v.y - a.y) * dy) / len2;
+      };
+
+      const ordered = Array.from(new Set([seg.a, ...splits, seg.b]))
+        .sort((p, q) => tFor(p) - tFor(q));
+
+      for (let k = 0; k + 1 < ordered.length; k++) {
+        if (ordered[k] !== ordered[k + 1]) {
+          next.push({ a: ordered[k], b: ordered[k + 1], sourceEdgeId: seg.sourceEdgeId });
+        }
+      }
+    }
+
+    current = next;
+  }
+
+  return current;
+}
+
 export function extractPlanarFaces(
   edges: ReadonlyArray<PlanarEdge>,
   clip: ReadonlyArray<Point>,
@@ -79,14 +178,36 @@ export function extractPlanarFaces(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const minFaceArea = options.minFaceArea ?? DEFAULT_MIN_FACE_AREA;
 
-  // Sort edges by id for determinism
   const sorted = [...edges].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  // Step 1: snap & dedupe
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const snap = snapAndDedupe(sorted, snapEpsilon);
+  // Step 1: snap & dedupe road edges + clip boundary
+  const clipEdge: PlanarEdge = {
+    id: '__clip__',
+    points: clip.map((p) => ({ x: p.x, y: p.y })),
+  };
+  // Add closing segment for clip
+  if (clip.length >= 3) {
+    clipEdge.points = [...clipEdge.points, { x: clip[0].x, y: clip[0].y }];
+  }
+  const withClip: PlanarEdge[] = [...sorted, clipEdge];
+  const snap = snapAndDedupe(withClip, snapEpsilon);
 
-  // TODO(phase-3): split segments at intersections
+  // Step 2: expand polylines into atomic segments
+  const rawSegments: AtomicSegment[] = [];
+  for (let e = 0; e < withClip.length; e++) {
+    const indices = snap.edgeVertexIndices[e];
+    const id = withClip[e].roadEdgeId ?? withClip[e].id;
+    for (let i = 0; i + 1 < indices.length; i++) {
+      if (indices[i] !== indices[i + 1]) {
+        rawSegments.push({ a: indices[i], b: indices[i + 1], sourceEdgeId: id });
+      }
+    }
+  }
+
+  // Step 3: split at intersections
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const atomicSegments = splitAtIntersections(rawSegments, snap.vertices, snapEpsilon);
+
   // TODO(phase-4): build planar graph
   // TODO(phase-5): walk faces
   // TODO(phase-6): drop outer face, filter, normalize

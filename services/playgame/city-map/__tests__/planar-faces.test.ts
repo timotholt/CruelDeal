@@ -27,3 +27,13 @@ const square = (s: number): Point[] => [
   assert.equal(faces.length, 0, 'phase 2 returns empty (walker not yet implemented)');
   pass('phase-2: snap does not crash');
 }
+
+// Phase 3: plus-sign splits into 4 intersection-created segments
+{
+  const faces = extractPlanarFaces([
+    { id: 'h', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] },
+    { id: 'v', points: [{ x: 50, y: 0 }, { x: 50, y: 100 }] },
+  ], square(100));
+  assert.equal(faces.length, 0, 'phase 3 still returns empty (walker not yet implemented)');
+  pass('phase-3: plus-sign does not crash');
+}
