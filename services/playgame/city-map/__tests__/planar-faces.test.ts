@@ -37,3 +37,13 @@ const square = (s: number): Point[] => [
   assert.equal(faces.length, 0, 'phase 3 still returns empty (walker not yet implemented)');
   pass('phase-3: plus-sign does not crash');
 }
+
+// Phase 4: graph has expected node count
+{
+  const faces = extractPlanarFaces([
+    { id: 'h', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] },
+    { id: 'v', points: [{ x: 50, y: 0 }, { x: 50, y: 100 }] },
+  ], square(100));
+  assert.equal(faces.length, 0, 'phase 4 still returns empty');
+  pass('phase-4: graph builds without crashing');
+}

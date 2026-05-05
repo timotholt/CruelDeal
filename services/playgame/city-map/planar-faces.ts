@@ -169,6 +169,47 @@ function splitAtIntersections(
   return current;
 }
 
+interface GraphNode {
+  x: number;
+  y: number;
+  neighbors: GraphNeighbor[];
+}
+
+interface GraphNeighbor {
+  to: number;          // vertex index
+  edgeId: string;      // underlying sourceEdgeId
+  angle: number;       // radians, -PI..PI
+}
+
+function buildGraph(vertices: Vertex[], segments: AtomicSegment[]): GraphNode[] {
+  const nodes: GraphNode[] = vertices.map((v) => ({ x: v.x, y: v.y, neighbors: [] }));
+
+  const seen = new Set<string>();  // dedupe bidirectional entries
+
+  for (const seg of segments) {
+    if (seg.a === seg.b) continue;
+    const key1 = `${seg.a}:${seg.b}`;
+    const key2 = `${seg.b}:${seg.a}`;
+    if (seen.has(key1) || seen.has(key2)) continue;
+    seen.add(key1);
+
+    const a = nodes[seg.a];
+    const b = nodes[seg.b];
+    const angleAB = Math.atan2(b.y - a.y, b.x - a.x);
+    const angleBA = Math.atan2(a.y - b.y, a.x - b.x);
+
+    a.neighbors.push({ to: seg.b, edgeId: seg.sourceEdgeId, angle: angleAB });
+    b.neighbors.push({ to: seg.a, edgeId: seg.sourceEdgeId, angle: angleBA });
+  }
+
+  // Sort neighbors by angle ascending for deterministic face walking
+  for (const node of nodes) {
+    node.neighbors.sort((p, q) => p.angle - q.angle);
+  }
+
+  return nodes;
+}
+
 export function extractPlanarFaces(
   edges: ReadonlyArray<PlanarEdge>,
   clip: ReadonlyArray<Point>,
@@ -208,7 +249,10 @@ export function extractPlanarFaces(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const atomicSegments = splitAtIntersections(rawSegments, snap.vertices, snapEpsilon);
 
-  // TODO(phase-4): build planar graph
+  // Step 4: build planar graph
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const graph = buildGraph(snap.vertices, atomicSegments);
+
   // TODO(phase-5): walk faces
   // TODO(phase-6): drop outer face, filter, normalize
 
