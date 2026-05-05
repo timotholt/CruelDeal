@@ -1,8 +1,10 @@
 # PM2001 Road And Block Generation Spec
 
-Status: active planning spec  
+Status: implemented through Phase 6 behind `roadBlockModel: 'pm2001-road-faces'`; Phase 7 default flip pending visual inspection  
 Created: 2026-05-04  
 Primary source of truth for: physical road corridors, road-face blocks, and the transition from painted roads to roads that consume land.
+
+Implementation note: v1 uses existing road centerlines and legacy BSP cells as temporary simple-polygon seeds, then splits/subtracts PM2001 physical road corridors to produce road-face blocks. Full PM2001 local road growth and graph-normalization remain future work.
 
 ## Purpose
 

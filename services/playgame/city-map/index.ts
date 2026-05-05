@@ -1,6 +1,14 @@
 export { generateBlockBuildings, generateCoastStripBuildings } from './buildings';
 export { subdivideBlockIntoParcels } from './parcels';
 export { CITY_UNIT_METERS, meters, squareMeters, URBAN_SCALE } from './urban-units';
+export {
+  attachPM2001RoadMetadata,
+  buildPM2001BlockFacesForDistrict,
+  physicalRoadClassForEdge,
+  physicalRoadWidthForClass,
+  roadCorridorPolygon,
+  roadStyleForDistrict,
+} from './pm2001';
 export { generateBridges } from './bridges';
 export {
   attachRoadGraph,
@@ -44,9 +52,11 @@ export type {
   DockPlan,
   ParcelGenerationKind,
   Point,
+  PhysicalRoadClass,
   RoadEdge,
   RoadRenderMeta,
   RoadGraph,
+  RoadStyleId,
   TerrainRenderMeta,
   TerrainPlan,
   Venue,

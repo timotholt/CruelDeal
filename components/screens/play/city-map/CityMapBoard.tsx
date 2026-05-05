@@ -51,6 +51,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
     useThreeRenderer: initialRendererMode ? initialRendererMode === 'three' : true,
+    usePM2001RoadFaces: false,
     showBuildings: initialDebug?.showBuildings ?? true,
     showRoads: initialDebug?.showRoads ?? true,
     showLabels: initialDebug?.showLabels ?? true,
@@ -66,7 +67,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     showSeedDebug: false,
     simplifyDuringCameraMove: initialDebug?.simplifyDuringCameraMove ?? false,
   });
-  const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city'));
+  const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city', {
+    roadBlockModel: debugState().usePM2001RoadFaces ? 'pm2001-road-faces' : 'legacy-bsp',
+  }));
   const width = () => props.width || city().width;
   const height = () => props.height || city().height;
   const renderModel = createMemo(() => createCityMapRenderModel(city(), width(), height()));

@@ -92,7 +92,18 @@ function makeReplacementSlot(district: CityMap['districts'][number], point: { x:
   };
 }
 
-function refillDistrictSlots(district: CityMap['districts'][number], avoidPoints: Array<{ x: number; y: number }>) {
+function pointInAnyRoadCorridor(point: { x: number; y: number }, roadEdges: readonly any[] = []) {
+  return roadEdges.some((edge) => {
+    const corridor = edge?.corridorPolygon || [];
+    return corridor.length >= 3 && pointInPolygon(point, corridor);
+  });
+}
+
+function refillDistrictSlots(
+  district: CityMap['districts'][number],
+  avoidPoints: Array<{ x: number; y: number }>,
+  roadEdges: readonly any[] = [],
+) {
   const target = (district as CityMap['districts'][number] & { targetSlotCount?: number }).targetSlotCount;
   if (!target || (district.slots || []).length >= target) return;
 
@@ -107,7 +118,29 @@ function refillDistrictSlots(district: CityMap['districts'][number], avoidPoints
     ...avoidPoints,
     ...existing.map((slot) => ({ x: slot.x, y: slot.y })),
   ];
-  const points = placeDotsInPolygon(polygon, () => 0.5, [], target, visibleArea, label, seedPoints);
+  let points = placeDotsInPolygon(polygon, () => 0.5, [], target, visibleArea, label, seedPoints)
+    .filter((point) => !pointInAnyRoadCorridor(point, roadEdges));
+  for (let attempt = 0; points.length < missing && attempt < 4; attempt++) {
+    points = [
+      ...points,
+      ...placeDotsInPolygon(polygon, () => (attempt + 2) / 7, [], missing - points.length, visibleArea, label, [
+        ...seedPoints,
+        ...points,
+      ]).filter((point) => !pointInAnyRoadCorridor(point, roadEdges)),
+    ];
+  }
+  if (points.length < missing) {
+    const candidates = [...(district.blocks || [])]
+      .filter((block) => block.buildable !== false && block.polygon?.length >= 3)
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+      .map((block) => block.centroid || polygonCentroid(block.polygon));
+    for (const point of candidates) {
+      if (pointInAnyRoadCorridor(point, roadEdges)) continue;
+      if ([...seedPoints, ...points].some((existing) => Math.hypot(existing.x - point.x, existing.y - point.y) < 18)) continue;
+      points.push(point);
+      if (points.length >= missing) break;
+    }
+  }
   const additions = points.slice(0, missing).map((point, index) =>
     makeReplacementSlot(district, point, existing.length + index),
   );
@@ -302,11 +335,13 @@ export function assignDistrictLandmarks(city: CityMap, venues: Venue[]) {
     // Remove slots too close to any snapped landmark centroid (snapping shifts positions)
     const landmarkCentroids = selected.map((v) => v.centroid).filter(Boolean);
     if (landmarkCentroids.length > 0) {
+      const roadEdges = (district as any).pm2001 ? city.roadGraph?.edges || [] : [];
       district.slots = (district.slots || []).filter((slot) =>
         landmarkCentroids.every((lc) => Math.hypot(slot.x - lc.x, slot.y - lc.y) >= 28)
+        && !pointInAnyRoadCorridor(slot, roadEdges)
       );
       district.dots = district.slots;
-      refillDistrictSlots(district, landmarkCentroids);
+      refillDistrictSlots(district, landmarkCentroids, roadEdges);
     }
   }
 

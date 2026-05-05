@@ -4,6 +4,7 @@ import { Portal } from 'solid-js/web';
 export interface CityMapDebugState {
   showMap: boolean;
   useThreeRenderer: boolean;
+  usePM2001RoadFaces: boolean;
   showBuildings: boolean;
   showRoads: boolean;
   showLabels: boolean;
@@ -37,6 +38,7 @@ const unavailableKeys = new Set<keyof CityMapDebugState>([
 const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showMap', label: 'City Map' },
   { key: 'useThreeRenderer', label: 'Three' },
+  { key: 'usePM2001RoadFaces', label: 'PM2001 Blocks' },
   { key: 'showBuildings', label: 'Buildings' },
   { key: 'showRoads', label: 'Roads' },
   { key: 'showLabels', label: 'Labels' },

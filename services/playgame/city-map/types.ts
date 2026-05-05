@@ -12,6 +12,8 @@ export type BuildingRoofStyle = 'flat' | 'antenna' | 'tiered' | 'mechanical';
 export type RoadRenderMaterialKey = 'local' | 'street' | 'avenue' | 'highway' | 'bridge' | 'route';
 export type RoadRenderLodGroup = 'major' | 'minor' | 'micro';
 export type TerrainMaterialKey = 'land' | 'water' | 'park' | 'plaza' | 'industrial';
+export type PhysicalRoadClass = 'highway' | 'arterial' | 'avenue' | 'street' | 'local' | 'alley' | 'service';
+export type RoadStyleId = 'tight_grid' | 'loose_grid' | 'curvy_residential' | 'industrial_spine' | 'coastal_curve' | 'old_core';
 
 export interface BuildingRenderMeta {
   extrudable: boolean;
@@ -86,9 +88,18 @@ export interface RoadEdge {
   id: string;
   a: Point;
   b: Point;
+  centerline?: Point[];
+  roadClass?: PhysicalRoadClass;
+  physicalWidth?: number;
+  corridorPolygon?: Point[];
   source?: string;
   kind?: string;
   districtId?: string | null;
+  pm2001?: {
+    generator: 'global-goal' | 'local-constraint' | 'connector' | 'coast' | 'fallback';
+    styleId: RoadStyleId;
+    hierarchyDepth: number;
+  };
   render?: RoadRenderMeta;
   [key: string]: unknown;
 }

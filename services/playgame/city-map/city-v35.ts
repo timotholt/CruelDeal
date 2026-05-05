@@ -17,6 +17,7 @@ import { generateBridges } from './bridges';
 import { generateCoastDocks } from './land';
 import { classifyParcelShape } from './parcel-shapes';
 import { subdivideBlockIntoParcels } from './parcels';
+import { attachPM2001RoadMetadata, buildPM2001BlockFacesForDistrict, pointInRoadCorridor, roadStyleForDistrict } from './pm2001';
 import {
   analyzeBlockFrontage,
   chooseBlockProfile,
@@ -64,6 +65,7 @@ export interface CityMapOptions {
   cache?: boolean;
   cacheKey?: string;
   rng?: Rng;
+  roadBlockModel?: 'legacy-bsp' | 'pm2001-road-faces';
   baseCityFactory?: (context: BaseCityFactoryContext) => CityMap;
 }
 
@@ -616,6 +618,80 @@ function pushCoastRoad(district: CityDistrict & { roads: RoadEdge[] }, id: strin
   });
 }
 
+function assignDistrictSlotsFromBlocks(
+  district: CityDistrict & Record<string, any>,
+  rng: Rng,
+  roadEdges: RoadEdge[],
+) {
+  if (district.playable === false) {
+    district.slots = [];
+    district.dots = [];
+    return;
+  }
+  const region = ((district.ownershipPolygons && district.ownershipPolygons[0]) || district.polygons?.[0]) as Point[] | undefined;
+  if (!region || region.length < 3) return;
+  const blocks = (district.blocks || []) as CityBlock[];
+  const visibleArea = Number(district.visibleArea || viewportVisibleArea(region));
+  const label = district.label;
+  const existingLandmarks = (district.landmarkPoints || []) as Point[];
+  const targetSlotCount = Number(district.targetSlotCount || district.slots?.length || district.dots?.length || 0);
+  const avoidBlocks = blocks
+    .filter((block) => (block as any).bigLandmark)
+    .map((block) => ({ polygon: block.polygon }));
+  const avoidCentroids = blocks
+    .filter((block) => (block as any).bigLandmark)
+    .map((block) => block.centroid || polygonCentroid(block.polygon));
+
+  let slotPoints = placeDotsInPolygon(
+    region,
+    rng,
+    avoidBlocks,
+    targetSlotCount,
+    visibleArea,
+    label,
+    [...avoidCentroids, ...existingLandmarks],
+  ).filter((point) => !pointInRoadCorridor(point, roadEdges));
+
+  let refillAttempt = 0;
+  while (slotPoints.length < targetSlotCount && refillAttempt < 4) {
+    const more = placeDotsInPolygon(
+      region,
+      rng,
+      avoidBlocks,
+      targetSlotCount - slotPoints.length,
+      visibleArea,
+      label,
+      [...avoidCentroids, ...existingLandmarks, ...slotPoints],
+    ).filter((point) => !pointInRoadCorridor(point, roadEdges));
+    slotPoints = [...slotPoints, ...more];
+    refillAttempt++;
+  }
+  if (slotPoints.length < targetSlotCount) {
+    for (const block of blocks.filter((block) => block.buildable !== false)) {
+      const point = block.centroid || polygonCentroid(block.polygon);
+      if (pointInRoadCorridor(point, roadEdges)) continue;
+      if ([...avoidCentroids, ...existingLandmarks, ...slotPoints].some((existing) => Math.hypot(existing.x - point.x, existing.y - point.y) < 18)) continue;
+      slotPoints.push(point);
+      if (slotPoints.length >= targetSlotCount) break;
+    }
+  }
+
+  district.slots = slotPoints.slice(0, targetSlotCount).map((point, slotIndex) => ({
+    id: `${district.id}:slot:${slotIndex}`,
+    districtId: district.id,
+    slotIndex,
+    playableBy: 'both' as const,
+    slotRole: 'street' as const,
+    ownerSeat: (point.y < VIEW_H / 2 ? 'P1' : 'P0') as 'P0' | 'P1',
+    blockId: nearestBlockId(blocks, point),
+    venueId: null,
+    buildingId: null,
+    x: point.x,
+    y: point.y,
+  }));
+  district.dots = district.slots;
+}
+
 function makeIslandDistricts(terrain: TerrainV35, startIdx: number, names: string[], colors: string[], rng: Rng) {
   const districts: Array<CityDistrict & { rawCuts: Cut[]; landmassId: string }> = [];
   for (const landmass of terrain.landmasses || []) {
@@ -1138,7 +1214,28 @@ function attachRenderMetadata(city: CityMap) {
   }
 }
 
-function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35): CityMap {
+function applyPM2001BlockFaces(
+  districts: Array<CityDistrict & Record<string, any>>,
+  roadEdges: RoadEdge[],
+  rng: Rng,
+) {
+  for (const district of districts) {
+    const result = buildPM2001BlockFacesForDistrict(district, roadEdges);
+    if (!result.blocks.length) continue;
+    const style = roadStyleForDistrict(district);
+    district.blocks = result.blocks;
+    district.polygons = result.blocks.filter((block) => block.buildable).map((block) => block.polygon);
+    district.pm2001 = {
+      styleId: style.id,
+      roadMask: result.roadMask,
+      rejectedFaces: result.rejectedFaces,
+      blockCount: result.blocks.length,
+    };
+    assignDistrictSlotsFromBlocks(district, rng, roadEdges);
+  }
+}
+
+function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35, options: CityMapOptions = {}): CityMap {
   const names = shuffle(DISTRICT_NAMES, rng);
   const colors = shuffle(DISTRICT_COLORS, rng);
   const mainlandInset = insetPolygon(terrain.mainland.polygon, 6);
@@ -1150,7 +1247,6 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   // Islands are always flavor — no slots, no landmarks, don't count toward playable district cap.
   const islandDistricts = makeIslandDistricts(terrain, mainlandDistricts.length, names, colors, rng);
   const districts = [...mainlandDistricts, ...islandDistricts];
-  const cells = districts.flatMap((district) => district.blocks);
   const clippedMacroCuts = validInset ? clipCutsToPolygon(macroCuts, mainlandInset) : macroCuts;
 
   const rawRoadCuts = [
@@ -1166,6 +1262,11 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...bridgeAwareRoadCuts.map((cut, index) => cutToRoad(cut, index, 'v35-road')),
     ...riverBankCuts.map((cut, index) => cutToRoad(cut, index, 'v35-river-bank')),
   ];
+  attachPM2001RoadMetadata(roadEdges);
+  if (options.roadBlockModel === 'pm2001-road-faces') {
+    applyPM2001BlockFaces(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng);
+  }
+  const cells = districts.flatMap((district) => district.blocks);
   const roadHazards = makeRoadHazards(roadEdges);
   const buildingPlan = buildStaticBuildings(cells, rng, terrain, roadHazards);
   const parcels = buildingPlan.parcels || [];
@@ -1188,7 +1289,9 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
       bridgeCandidates: [],
       roadCells: [],
       blockedCells: cells.filter((cell) => !cell.buildable).map((cell) => cell.id),
-      roadCorridors: [],
+      roadCorridors: roadEdges
+        .filter((edge) => Array.isArray(edge.corridorPolygon) && edge.corridorPolygon.length >= 3)
+        .map((edge) => ({ roadId: edge.id, polygon: edge.corridorPolygon, physicalWidth: edge.physicalWidth })),
     },
     districts,
     districtAdjacency: {},
@@ -1277,14 +1380,14 @@ function normalizeCityShape(city: CityMap, seed: string | number): CityMap {
  */
 export function buildCityV35(seed: string | number = 1, opts: CityMapOptions = {}): CityMap {
   const normalizedSeed = normalizeSeed(seed);
-  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}`;
+  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}`;
   if (opts.cache !== false && cache.has(key)) return cache.get(key)!;
 
   const rng: Rng = opts.rng || makeRng(normalizedSeed ^ 0x3355);
   const terrain = buildTerrain(normalizedSeed);
   const baseCity = opts.baseCityFactory
     ? opts.baseCityFactory({ seed, normalizedSeed, rng, terrain, options: opts })
-    : buildBaseCity(seed, normalizedSeed, rng, terrain);
+    : buildBaseCity(seed, normalizedSeed, rng, terrain, opts);
 
   const city = normalizeCityShape(baseCity, seed);
   enrichCityRouting(city);
