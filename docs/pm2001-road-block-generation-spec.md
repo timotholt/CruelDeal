@@ -1,10 +1,10 @@
 # PM2001 Road And Block Generation Spec
 
-Status: implemented through Phase 6 behind `roadBlockModel: 'pm2001-road-faces'`; Phase 7 default flip pending visual inspection  
+Status: active implementation spec; corridor/block-face infrastructure is partially implemented, PM2001 road growth remains incomplete  
 Created: 2026-05-04  
 Primary source of truth for: physical road corridors, road-face blocks, and the transition from painted roads to roads that consume land.
 
-Implementation note: v1 uses existing road centerlines and legacy BSP cells as temporary simple-polygon seeds, then splits/subtracts PM2001 physical road corridors to produce road-face blocks. Full PM2001 local road growth and graph-normalization remain future work.
+Implementation note: the current code has road corridor/block-face infrastructure and an early PM2001 road debug path. This spec is normative for replacing long clipped grid lines with PM2001-style road growth: global goals propose ideal successors, local constraints transform them into actual road segments, and normalized road corridors consume land before blocks are created.
 
 ## Purpose
 
@@ -85,6 +85,7 @@ Add an option:
 
 ```ts
 export interface CityMapOptions {
+  pm2001Roads?: boolean;
   roadBlockModel?: 'legacy-bsp' | 'pm2001-road-faces';
 }
 ```
@@ -92,10 +93,19 @@ export interface CityMapOptions {
 Initial default:
 
 ```ts
-roadBlockModel: 'legacy-bsp'
+{
+  pm2001Roads: false,
+  roadBlockModel: 'legacy-bsp',
+}
 ```
 
 Flip the default only after screenshots and tests are stable.
+
+Debug toggles must keep the two ideas separate:
+
+- `PM2001 Roads`: switches local road centerline generation to the PM2001 growth path.
+- `Road-Face Blocks`: switches block/cell source to road-corridor-derived faces.
+- `Road Corridors`: shows physical road land consumed by road widths.
 
 ## Road Types And Widths
 
@@ -145,7 +155,12 @@ These map to the existing `URBAN_SCALE.roads` constants. Do not encode new width
 
 ## Road Style Profiles
 
-PM2001 uses image maps and pattern rules. For Cruel Deal v1, replace image maps with deterministic district style profiles.
+PM2001 uses global goals driven by maps and pattern rules. For Cruel Deal v1, replace imported image maps with deterministic fields derived from existing city data:
+
+- district role and density become the population/density map
+- coast/water/island geometry becomes the water/terrain constraint map
+- macro roads, bridges, ports, and landmarks become the high-level goal structure
+- the selected `RoadStyleProfile` becomes the street-pattern map
 
 ```ts
 export type RoadStyleId =
@@ -162,14 +177,24 @@ export interface RoadStyleProfile {
   spacingJitter: number;
   angleJitter: number;
   curvature: number;
+  targetRoadDensity: number;
+  continuationProbability: number;
   branchProbability: number;
+  crossStreetProbability: number;
   deadEndProbability: number;
   loopProbability: number;
+  segmentLengthMin: number;
+  segmentLengthMax: number;
+  maxUninterruptedLength: number;
   snapDistance: number;
+  intersectionExtensionDistance: number;
+  minParallelSpacing: number;
   minBlockArea: number;
   maxBlockAspect: number;
 }
 ```
+
+The profile is not a line-fill recipe. It parameterizes a road growth process. Local streets should be short enough to form real blocks; long district-spanning roads are macro/global-goal roads and must be broken at intersections.
 
 Recommended defaults:
 
@@ -222,28 +247,72 @@ These roads should become `RoadEdge` records with:
 
 ### 3. Local Road Growth
 
+PM2001 road generation is a priority/frontier growth system.
+
 For each district:
 
-1. Select `RoadStyleProfile`.
-2. Find seed roads from macro roads touching or crossing the district.
-3. Create candidate local road segments from existing vertices and boundary anchors.
-4. Score candidates using style profile and local constraints.
-5. Accept/reject deterministically with seeded randomness.
-6. Repeat until target density or max attempts is reached.
+1. Select a `RoadStyleProfile`.
+2. Seed a priority queue with eligible macro-road nodes, district gateway nodes, coast-road anchors, bridge approaches, and selected boundary anchors.
+3. Pop one active road end from the queue.
+4. Ask global goals for one or more ideal successors.
+5. Run each ideal successor through local constraints to produce an actual successor.
+6. Insert accepted successors into the normalized road graph immediately.
+7. Queue new road ends produced by accepted successors.
+8. Repeat until target road density, queue exhaustion, or max attempts is reached.
 
-Candidate generation should support:
+Global goals produce ideal successors from:
 
-- grid-parallel streets
-- cross streets
-- curved residential streets
-- loops
-- short connectors
-- sparse industrial spines
-- waterfront-following roads
+- street-pattern field: tight grid, loose grid, old core, residential curve, industrial spine, coastal curve
+- density field: where the city wants more or fewer roads
+- terrain/water field: where roads should avoid, follow, bridge, or terminate
+- macro-road field: where connectors should feed into the existing higher-order network
+
+An ideal successor contains:
+
+```ts
+export interface PM2001IdealSuccessor {
+  startNodeId: string;
+  heading: number;
+  length: number;
+  roadClass: PhysicalRoadClass;
+  role: 'continuation' | 'branch' | 'cross-street' | 'connector' | 'coast-follow' | 'loop-closure';
+  priority: number;
+  styleId: RoadStyleId;
+}
+```
+
+Candidate generation must support:
+
+- continuation roads that preserve a street family
+- cross streets that create the second grid direction
+- curved residential continuations with bounded heading drift
+- loops and cul-de-sacs where the profile allows them
+- short connectors to macro roads, bridge approaches, venues, and coast roads
+- sparse industrial spines with service branches
+- waterfront-following roads that track the coast without crossing water
+
+Hard rule: do not generate local roads as district-wide infinite lines clipped to the district polygon. That creates the striped screenshots and is not PM2001 growth. A long local street can emerge only by repeated accepted successors and must be split at every intersection.
 
 ### 4. Local Constraints
 
-Reject or adjust a candidate road if:
+Local constraints transform an ideal successor into an actual successor. They should adjust first, reject second.
+
+For each ideal successor:
+
+1. Build a proposed segment or short polyline from the active road end.
+2. Trim it to the district buildable polygon.
+3. Reject water crossing unless a bridge/shore-road rule explicitly permits it.
+4. Reject forbidden terrain or slope if those fields are present.
+5. Find intersections with existing road edges.
+6. If the route intersects an existing edge, split the existing edge and snap the new endpoint to the intersection.
+7. If the proposed endpoint is within `snapDistance` of an existing node, snap to that node.
+8. If extending the endpoint by at most `intersectionExtensionDistance` would reach a valid road intersection, extend and snap.
+9. Reject near-parallel duplicates closer than `minParallelSpacing`.
+10. Reject segments shorter than `segmentLengthMin`, unless they are legal intersection extensions.
+11. Reject if the new edge would create a block below `style.minBlockArea` or a thin block above `style.maxBlockAspect`.
+12. Accept dead ends and loop closures only when the profile allows them.
+
+Reject a candidate road if:
 
 - it exits the district buildable polygon without being clipped intentionally
 - it crosses water without a bridge plan
@@ -265,6 +334,17 @@ Dead ends:
 
 - allowed only for `curvy_residential`, `industrial_spine`, and rare `old_core`
 - never allowed for highways/arterials
+
+Output:
+
+```ts
+export interface PM2001ActualSuccessor {
+  accepted: boolean;
+  edge?: RoadEdge;
+  adjustedReason?: 'snap-node' | 'split-edge' | 'extend-to-intersection' | 'trim-to-land' | 'curve-fit';
+  rejectedReason?: 'water' | 'duplicate' | 'too-short' | 'too-thin-block' | 'too-small-block' | 'forbidden-crossing' | 'out-of-bounds';
+}
+```
 
 ### 5. Road Graph Normalization
 
@@ -391,9 +471,10 @@ Changes:
 
 ## Implementation Phases
 
-### Phase 1: Metadata And Feature Flag
+### Phase 1: Metadata And Feature Flags
 
 - Add `roadBlockModel` option.
+- Add `pm2001Roads` option.
 - Add road physical width metadata.
 - Ensure every road can expose a centerline.
 - Keep legacy BSP blocks active.
@@ -418,7 +499,24 @@ Acceptance:
 - intersections union visually in debug
 - no route/slot/building behavior changes yet
 
-### Phase 3: Polygon Boolean Adapter
+### Phase 3: PM2001 Road Growth Behind Flag
+
+- Implement the priority/frontier road-growth queue.
+- Implement global-goal successor selection from style, density, terrain/water, and macro-road fields.
+- Implement local-constraint transformation from ideal successors to actual successors.
+- Normalize intersections as roads are accepted.
+- Keep the existing long-line/grid prototype as diagnostic code only, or remove it.
+
+Acceptance:
+
+- `PM2001 Roads` visibly changes road count and topology versus legacy roads
+- grid profiles produce both primary and cross-street families
+- no local road family exceeds 70% of total local-road length in grid-like districts
+- average local segment length is below `style.maxUninterruptedLength`
+- district-spanning local stripes are absent unless they are explicitly classified as macro roads
+- repeated seed generates identical road graph
+
+### Phase 4: Polygon Boolean Adapter
 
 - Add adapter.
 - Choose a polygon boolean library.
@@ -430,7 +528,7 @@ Acceptance:
 - `district - roadMask` works for rectangles, T intersections, X intersections, coast-road loops, and narrow slivers
 - invalid/empty polygons are cleaned
 
-### Phase 4: PM2001 Block Faces Behind Flag
+### Phase 5: PM2001 Block Faces Behind Flag
 
 - Generate block faces from `district - roadMask`.
 - Attach as `district.pm2001Blocks` first.
@@ -443,7 +541,7 @@ Acceptance:
 - block coverage plus road mask covers most buildable district land
 - tiny/sliver faces are dropped or marked non-buildable
 
-### Phase 5: Switch Parcel/Building Generation Behind Flag
+### Phase 6: Switch Parcel/Building Generation Behind Flag
 
 - When `roadBlockModel === 'pm2001-road-faces'`, use PM2001 faces as `district.blocks`, `city.cells`, and `city.blocks`.
 - Feed those faces into parcelization/buildings.
@@ -456,7 +554,7 @@ Acceptance:
 - highlighted parcels do not overlap roads visually
 - debug tooltip clearly shows block source
 
-### Phase 6: Slots/Venues/Routing Cleanup
+### Phase 7: Slots/Venues/Routing Cleanup
 
 - Move slots to PM2001 blocks.
 - Ensure active slots do not sit inside road corridors.
@@ -469,7 +567,7 @@ Acceptance:
 - route demo still works
 - venues remain deterministic
 
-### Phase 7: Make PM2001 Default
+### Phase 8: Make PM2001 Default
 
 Flip default only after repeated visual inspection.
 
@@ -483,6 +581,10 @@ Acceptance:
 
 Add focused tests:
 
+- PM2001 road growth produces both dominant and cross-street directions for grid profiles
+- local road segments are bounded by `segmentLengthMax` except accepted macro/global roads
+- accepted road intersections are split into shared graph nodes
+- duplicate near-parallel candidates are rejected without rejecting valid cross streets
 - road class maps to expected physical width
 - corridor polygon area roughly equals `length * physicalWidth`
 - intersecting road corridors union into one road mask
@@ -514,6 +616,7 @@ Add debug toggles:
 - Rejected road candidates
 - Rejected block slivers
 - Legacy BSP blocks
+- Road-growth frontier/accepted/rejected candidates
 
 Planning tooltip should show:
 
@@ -523,6 +626,20 @@ Planning tooltip should show:
 - road style profile
 - block coverage role
 - parcel generation kind
+
+## Current Implementation Divergences To Fix
+
+The current implementation is useful scaffolding, but it is not yet PM2001-faithful road generation.
+
+- It can still create local roads as long style-grid lines clipped to ownership/district polygons.
+- It does not yet use a priority/frontier queue of active road ends.
+- It does not fully separate global-goal ideal successors from local-constraint actual successors.
+- It does not yet use density/terrain/water/style fields as explicit global-goal maps.
+- It does not normalize every accepted intersection before downstream corridor/block extraction.
+- It relies on some legacy BSP/ownership geometry as a fallback block seed.
+- It should reject only near-parallel duplicates, not valid cross streets.
+
+These divergences are implementation debt, not alternate interpretations of PM2001.
 
 ## Non-Goals For V1
 
@@ -543,3 +660,15 @@ This spec supersedes older city-road/block planning docs where they describe:
 - parcel/building clearance as a substitute for physical road corridors
 
 Those docs may still contain useful historical context, renderer details, or zoning rules, but PM2001 is now the active road/block-generation direction.
+
+## Paper Alignment Notes
+
+PM2001 terms used by this spec:
+
+- global goals: high-level maps and rules that choose the preferred/ideal next road segment
+- local constraints: checks and adjustments that make a proposed segment legal in the current road graph and terrain
+- ideal successor: the segment proposed by global goals
+- actual successor: the accepted, snapped, trimmed, split, or rejected result after local constraints
+- road graph: the normalized network consumed by routing, corridor generation, and block extraction
+
+Source: Parish and Muller, 2001, [Procedural Modeling of Cities](https://cgl.ethz.ch/Downloads/Publications/Papers/2001/p_Par01.pdf).

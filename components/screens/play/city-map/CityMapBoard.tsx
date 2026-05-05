@@ -51,7 +51,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
     useThreeRenderer: initialRendererMode ? initialRendererMode === 'three' : true,
-    usePM2001RoadFaces: false,
+    useRoadFaceBlocks: false,
+    usePM2001Roads: false,
+    showRoadCorridors: false,
     showBuildings: initialDebug?.showBuildings ?? true,
     showRoads: initialDebug?.showRoads ?? true,
     showLabels: initialDebug?.showLabels ?? true,
@@ -68,7 +70,8 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     simplifyDuringCameraMove: initialDebug?.simplifyDuringCameraMove ?? false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city', {
-    roadBlockModel: debugState().usePM2001RoadFaces ? 'pm2001-road-faces' : 'legacy-bsp',
+    roadBlockModel: debugState().useRoadFaceBlocks ? 'pm2001-road-faces' : 'legacy-bsp',
+    pm2001Roads: debugState().usePM2001Roads,
   }));
   const width = () => props.width || city().width;
   const height = () => props.height || city().height;
@@ -398,6 +401,16 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
               >
                 <div class="city-map-planning-tooltip__title">{label()}</div>
                 <div class="city-map-planning-tooltip__row">block {hovered().block.id}</div>
+                <Show when={hovered().block.source || hovered().block.roadStyleId}>
+                  <div class="city-map-planning-tooltip__row">
+                    source {String(hovered().block.source || 'legacy-bsp')} / {String(hovered().block.roadStyleId || 'n/a')}
+                  </div>
+                </Show>
+                <Show when={Array.isArray(hovered().block.boundedByRoadIds) && hovered().block.boundedByRoadIds.length}>
+                  <div class="city-map-planning-tooltip__row">
+                    roads {hovered().block.boundedByRoadIds.slice(0, 3).join(',')}
+                  </div>
+                </Show>
                 <Show when={hovered().block.generationKind}>
                   <div class="city-map-planning-tooltip__row">
                     parcel {String(hovered().block.generationKind)} / {String(hovered().block.parcelCoverageRole || 'n/a')}

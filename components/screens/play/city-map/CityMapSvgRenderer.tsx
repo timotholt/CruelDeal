@@ -53,6 +53,7 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
             showLabels: props.debugState.showLabels && !simplifyForCameraMove(),
             showBuildings: props.debugState.showBuildings && !simplifyForCameraMove(),
             showRoads: props.debugState.showRoads && !simplifyForZoom(),
+            showRoadCorridors: props.debugState.showRoadCorridors && !simplifyForZoom(),
             showSlots: false,
           }}
         />

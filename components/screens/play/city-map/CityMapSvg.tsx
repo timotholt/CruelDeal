@@ -24,6 +24,7 @@ export interface CityMapSvgProps {
     showLabels?: boolean;
     showBuildings?: boolean;
     showRoads?: boolean;
+    showRoadCorridors?: boolean;
     showSlots?: boolean;
   };
 }
@@ -230,6 +231,7 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
   const showLabels = () => props.debug?.showLabels ?? true;
   const showBuildings = () => props.debug?.showBuildings ?? true;
   const showRoads = () => props.debug?.showRoads ?? true;
+  const showRoadCorridors = () => props.debug?.showRoadCorridors ?? false;
   const showSlots = () => props.debug?.showSlots ?? false;
   const viewWidth = () => props.city.width || props.width;
   const viewHeight = () => props.city.height || props.height;
@@ -299,6 +301,19 @@ export const CityMapSvg = (props: CityMapSvgProps) => {
           <For each={(props.city.buildingPlan.landmarks || []) as RenderBuilding[]}>
             {(building) => (
               <path class="city-map-svg__building city-map-svg__building--landmark" d={buildingPath(building)} />
+            )}
+          </For>
+        </g>
+      </Show>
+
+      <Show when={showRoadCorridors()}>
+        <g class="city-map-svg__road-corridors">
+          <For each={(props.city.roadGraph.edges as RenderRoadEdge[]).filter((edge) => Array.isArray(edge.corridorPolygon) && edge.corridorPolygon.length >= 3)}>
+            {(edge) => (
+              <path
+                class={`city-map-svg__road-corridor city-map-svg__road-corridor--${edge.source === 'pm2001-road' ? 'pm2001' : 'existing'}`}
+                d={polygonToPath(edge.corridorPolygon as Point[])}
+              />
             )}
           </For>
         </g>

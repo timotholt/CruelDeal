@@ -66,6 +66,7 @@ export interface CityMapOptions {
   cacheKey?: string;
   rng?: Rng;
   roadBlockModel?: 'legacy-bsp' | 'pm2001-road-faces';
+  pm2001Roads?: boolean;
   baseCityFactory?: (context: BaseCityFactoryContext) => CityMap;
 }
 
@@ -593,6 +594,129 @@ function clipCutToPolygon(cut: Cut, polygon: readonly Point[], index: number) {
 
 function clipCutsToPolygon(cuts: readonly Cut[], polygon: readonly Point[]) {
   return cuts.flatMap((cut, index) => clipCutToPolygon(cut, polygon, index));
+}
+
+function pointDistanceToParallelRoads(point: Point, angle: number, roadEdges: readonly RoadEdge[]) {
+  let best = Infinity;
+  for (const edge of roadEdges) {
+    const points = edge.centerline || (edge as RoadEdge & { points?: Point[] }).points || [edge.a, edge.b];
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const segmentAngle = Math.atan2(b.y - a.y, b.x - a.x);
+      if (angleDelta(angle, segmentAngle) > 0.28) continue;
+      best = Math.min(best, pointToSegmentDist(point.x, point.y, a, b));
+    }
+  }
+  return best;
+}
+
+function bendRoadRun(a: Point, b: Point, region: Point[], curvature: number, rng: Rng) {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (curvature <= 0.02 || len < 30) return [a, b];
+  const dx = (b.x - a.x) / len;
+  const dy = (b.y - a.y) / len;
+  const bend = Math.min(11, len * curvature * 0.45) * (rng() < 0.5 ? -1 : 1);
+  const mid = {
+    x: (a.x + b.x) / 2 - dy * bend,
+    y: (a.y + b.y) / 2 + dx * bend,
+  };
+  if (!pointInPolygon(mid, region)) return [a, b];
+  return [a, mid, b];
+}
+
+function pm2001RoadEdge(
+  district: CityDistrict & Record<string, any>,
+  points: Point[],
+  index: number,
+  kind: 'avenue' | 'street' | 'local',
+  styleId: ReturnType<typeof roadStyleForDistrict>['id'],
+): RoadEdge {
+  return {
+    id: `${district.id}:pm2001-road:${index}`,
+    kind,
+    source: 'pm2001-road',
+    districtId: district.id,
+    a: points[0],
+    b: points[points.length - 1],
+    points,
+    centerline: points,
+    path: straightPolylinePath(points),
+    render: roadRenderForKind(kind, 'pm2001-road'),
+    pm2001: {
+      generator: 'local-constraint',
+      styleId,
+      hierarchyDepth: kind === 'avenue' ? 1 : kind === 'street' ? 2 : 3,
+    },
+  };
+}
+
+function generatePM2001LocalRoadEdges(
+  districts: Array<CityDistrict & Record<string, any>>,
+  existingRoadEdges: readonly RoadEdge[],
+  rng: Rng,
+) {
+  const roads: RoadEdge[] = [];
+  for (const district of districts) {
+    if (district.playable === false) continue;
+    const region = ((district.ownershipPolygons && district.ownershipPolygons[0]) || district.polygons?.[0]) as Point[] | undefined;
+    if (!region || region.length < 3 || polygonArea(region) < 600) continue;
+    const style = roadStyleForDistrict(district);
+    const bounds = polygonBBox(region);
+    const span = Math.max(bounds.w, bounds.h);
+    if (span < style.spacing * 1.45) continue;
+    const center = polygonCentroid(region);
+    const baseAngle = Number(district.fieldAngle ?? district.blocks?.[0]?.fieldAngle ?? 0);
+    const axisCount = style.id === 'industrial_spine' ? 1 : 2;
+    const densityScale = style.id === 'tight_grid' || style.id === 'old_core' ? 1.15
+      : style.id === 'curvy_residential' ? 0.72
+        : style.id === 'industrial_spine' ? 0.52
+          : 0.86;
+    const targetPerAxis = Math.max(1, Math.min(5, Math.floor((span / style.spacing) * densityScale)));
+    let localIndex = 0;
+    const allRoads = () => [...existingRoadEdges, ...roads];
+
+    for (let axis = 0; axis < axisCount; axis++) {
+      const axisAngle = baseAngle + axis * Math.PI / 2 + (rng() - 0.5) * style.angleJitter;
+      const dir = { x: Math.cos(axisAngle), y: Math.sin(axisAngle) };
+      const normal = { x: -dir.y, y: dir.x };
+      const total = axis === 0 && style.id === 'industrial_spine' ? 1 : targetPerAxis;
+      for (let i = 0; i < total; i++) {
+        const centeredIndex = i - (total - 1) / 2;
+        const offset = centeredIndex * style.spacing * (1 + (rng() - 0.5) * style.spacingJitter);
+        const origin = {
+          x: center.x + normal.x * offset,
+          y: center.y + normal.y * offset,
+        };
+        const a = { x: origin.x - dir.x * 4000, y: origin.y - dir.y * 4000 };
+        const b = { x: origin.x + dir.x * 4000, y: origin.y + dir.y * 4000 };
+        const runs = clipSegmentToPolygon(a, b, region);
+        for (const [start, end] of runs) {
+          const length = Math.hypot(end.x - start.x, end.y - start.y);
+          if (length < Math.max(18, style.spacing * 0.8)) continue;
+          const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+          if (pointDistanceToParallelRoads(mid, axisAngle, allRoads()) < style.spacing * 0.34) continue;
+          const kind = style.id === 'industrial_spine' && axis === 0 ? 'avenue'
+            : axis === 0 && (style.id === 'tight_grid' || style.id === 'old_core') ? 'street'
+              : 'local';
+          const points = bendRoadRun(start, end, region, axis === 0 ? style.curvature : style.curvature * 0.55, rng);
+          roads.push(pm2001RoadEdge(district, points, localIndex++, kind, style.id));
+        }
+      }
+    }
+
+    if ((style.id === 'curvy_residential' || style.id === 'coastal_curve') && roads.filter((road) => road.districtId === district.id).length < 2) {
+      const angle = baseAngle + Math.PI / 4 + (rng() - 0.5) * 0.45;
+      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      const a = { x: center.x - dir.x * 4000, y: center.y - dir.y * 4000 };
+      const b = { x: center.x + dir.x * 4000, y: center.y + dir.y * 4000 };
+      for (const [start, end] of clipSegmentToPolygon(a, b, region).slice(0, 1)) {
+        const points = bendRoadRun(start, end, region, Math.max(0.18, style.curvature), rng);
+        roads.push(pm2001RoadEdge(district, points, localIndex++, 'local', style.id));
+      }
+    }
+  }
+  return roads;
 }
 
 function makeCoastCut(id: string, polygon: Point[]): Cut {
@@ -1249,10 +1373,15 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   const districts = [...mainlandDistricts, ...islandDistricts];
   const clippedMacroCuts = validInset ? clipCutsToPolygon(macroCuts, mainlandInset) : macroCuts;
 
+  const coastRoadCuts = districts
+    .flatMap((district) => district.roads || [])
+    .filter((road) => road.source === 'coast-road')
+    .map((road) => road.cut);
+  const legacyLocalRoadCuts = options.pm2001Roads ? [] : districts.flatMap((district) => district.rawCuts || []);
   const rawRoadCuts = [
     ...clippedMacroCuts,
-    ...districts.flatMap((district) => district.rawCuts || []),
-    ...districts.flatMap((district) => district.roads || []).filter((road) => road.source === 'coast-road').map((road) => road.cut),
+    ...legacyLocalRoadCuts,
+    ...coastRoadCuts,
   ].filter(Boolean) as Cut[];
   const bridgePlan = makeBridgePlan(terrain, validInset ? mainlandInset : null, rawRoadCuts);
   const bridgeAwareRoadCuts = bridgePlan.renderedCuts || rawRoadCuts;
@@ -1262,8 +1391,14 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...bridgeAwareRoadCuts.map((cut, index) => cutToRoad(cut, index, 'v35-road')),
     ...riverBankCuts.map((cut, index) => cutToRoad(cut, index, 'v35-river-bank')),
   ];
+  if (options.pm2001Roads) {
+    roadEdges.push(...generatePM2001LocalRoadEdges(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng));
+  }
   attachPM2001RoadMetadata(roadEdges);
   if (options.roadBlockModel === 'pm2001-road-faces') {
+    if (options.pm2001Roads) {
+      for (const district of districts as Array<CityDistrict & Record<string, any>>) district.pm2001UseOwnershipSeed = true;
+    }
     applyPM2001BlockFaces(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng);
   }
   const cells = districts.flatMap((district) => district.blocks);
@@ -1380,7 +1515,7 @@ function normalizeCityShape(city: CityMap, seed: string | number): CityMap {
  */
 export function buildCityV35(seed: string | number = 1, opts: CityMapOptions = {}): CityMap {
   const normalizedSeed = normalizeSeed(seed);
-  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}`;
+  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}:${opts.pm2001Roads ? 'pm2001-roads' : 'legacy-roads'}`;
   if (opts.cache !== false && cache.has(key)) return cache.get(key)!;
 
   const rng: Rng = opts.rng || makeRng(normalizedSeed ^ 0x3355);

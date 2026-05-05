@@ -80,4 +80,19 @@ function rect(x1: number, y1: number, x2: number, y2: number): Point[] {
   assert.deepEqual(buildingsWithBadIds, [], 'pm2001 buildings keep blockId and parcelId');
 }
 
+{
+  const legacy = buildCityV35('pm2001-road-growth-seed', { cache: false });
+  const city = buildCityV35('pm2001-road-growth-seed', {
+    cache: false,
+    pm2001Roads: true,
+    roadBlockModel: 'pm2001-road-faces',
+  });
+  const generatedRoads = city.roadGraph.edges.filter((edge) => edge.source === 'pm2001-road');
+  assert.ok(generatedRoads.length >= 6, 'pm2001 road toggle generates local roads');
+  assert.notEqual(city.roadGraph.edges.length, legacy.roadGraph.edges.length, 'pm2001 road toggle changes road network');
+  assert.ok(generatedRoads.every((edge) => edge.pm2001?.generator === 'local-constraint'), 'generated roads are tagged as local-constraint');
+  assert.ok(generatedRoads.every((edge) => Array.isArray(edge.corridorPolygon) && edge.corridorPolygon.length >= 3), 'generated roads expose physical corridors');
+  assert.ok(city.cells.some((block) => String((block as any).source) === 'pm2001-road-face'), 'generated roads feed road-face blocks');
+}
+
 console.log('city-map pm2001 road/block tests passed');

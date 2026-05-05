@@ -601,6 +601,18 @@
   opacity: 0.95;
 }
 
+.city-map-svg__road-corridor {
+  fill: hsla(52, 92%, 64%, 0.18);
+  stroke: hsla(52, 92%, 72%, 0.58);
+  stroke-width: 0.35;
+  pointer-events: none;
+}
+
+.city-map-svg__road-corridor--pm2001 {
+  fill: hsla(172, 88%, 58%, 0.22);
+  stroke: hsla(172, 88%, 70%, 0.72);
+}
+
 .city-map-svg__road--local {
   stroke: var(--city-map-road-local);
   stroke-width: 0.38;

@@ -36,7 +36,7 @@ export const CityMapThreeRenderer = (props: CityMapThreeRendererProps) => {
     hostEl.append(renderer.domElement);
 
     scene = createCityScene(props.model, props.debugState).scene;
-    sceneKey = `${props.model.city.seed}:${props.debugState.showRoads}:${props.debugState.showBuildings}:${props.debugState.showTerrainDebug}`;
+    sceneKey = `${props.model.city.seed}:${props.model.roads.length}:${props.model.blocks.length}:${props.debugState.showRoads}:${props.debugState.showBuildings}:${props.debugState.showTerrainDebug}:${props.debugState.showRoadCorridors}`;
     camera = createCityOrthographicCamera();
     updateCityCamera(camera, props.viewport, props.surfaceSize);
     renderFrame();
@@ -45,7 +45,7 @@ export const CityMapThreeRenderer = (props: CityMapThreeRendererProps) => {
   createEffect(() => {
     const model = props.model;
     const debugState = props.debugState;
-    const nextSceneKey = `${model.city.seed}:${debugState.showRoads}:${debugState.showBuildings}:${debugState.showTerrainDebug}`;
+    const nextSceneKey = `${model.city.seed}:${model.roads.length}:${model.blocks.length}:${debugState.showRoads}:${debugState.showBuildings}:${debugState.showTerrainDebug}:${debugState.showRoadCorridors}`;
     if (!renderer || !camera) return;
     if (nextSceneKey !== sceneKey) {
       if (scene) disposeThreeObject(scene);

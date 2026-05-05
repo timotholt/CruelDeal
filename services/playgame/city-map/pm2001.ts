@@ -130,7 +130,7 @@ export function attachPM2001RoadMetadata(edges: RoadEdge[], defaultStyleId: Road
     edge.centerline = centerline;
     edge.corridorPolygon = edge.corridorPolygon || roadCorridorPolygon(edge);
     edge.pm2001 = edge.pm2001 || {
-      generator: edge.source === 'coast-road' ? 'coast' : edge.source === 'v35-road' ? 'global-goal' : 'fallback',
+      generator: edge.source === 'coast-road' ? 'coast' : edge.source === 'pm2001-road' ? 'local-constraint' : edge.source === 'v35-road' ? 'global-goal' : 'fallback',
       styleId: defaultStyleId,
       hierarchyDepth: roadClass === 'highway' ? 0 : roadClass === 'avenue' || roadClass === 'arterial' ? 1 : roadClass === 'street' ? 2 : 3,
     };
@@ -265,7 +265,7 @@ export function buildPM2001BlockFacesForDistrict(
   const fallbackEntries = ((district.ownershipPolygons?.length ? district.ownershipPolygons : district.polygons || []) as Point[][])
     .filter((polygon) => polygon?.length >= 3 && polygonArea(polygon) > 20)
     .map((polygon, index) => ({ id: `${district.id}:ownership:${index}`, polygon, legacyBlock: null }));
-  const subjects = sourceEntries.length ? sourceEntries : fallbackEntries;
+  const subjects = district.pm2001UseOwnershipSeed ? fallbackEntries : sourceEntries.length ? sourceEntries : fallbackEntries;
   const candidateFaces: PolygonSet = [];
   const roadMask: PolygonSet = [];
   const rejectedFaces: PolygonSet = [];

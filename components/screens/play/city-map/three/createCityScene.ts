@@ -419,6 +419,16 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
     }
   }
 
+  if (debugState.showRoadCorridors) {
+    const corridorGroup = new THREE.Group();
+    corridorGroup.name = 'city-map-road-corridors-debug';
+    scene.add(corridorGroup);
+    const corridorGeometries = model.roads
+      .map((edge) => createPolygonGeometry(edge.corridorPolygon, 1.18))
+      .filter((geometry): geometry is THREE.BufferGeometry => !!geometry);
+    addBatchedMesh(corridorGroup, corridorGeometries, materials.roadCorridorDebug, 'city-map-road-corridors-debug', undefined, 9);
+  }
+
   const waterFeaturesGroup = new THREE.Group();
   waterFeaturesGroup.name = 'city-map-water-features';
   scene.add(waterFeaturesGroup);

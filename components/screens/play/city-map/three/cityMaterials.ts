@@ -13,6 +13,7 @@ export function createCityMaterials() {
     roadStreet: new THREE.MeshBasicMaterial({ color: 0x66b4e8, transparent: true, opacity: 0.52, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     roadAvenue: new THREE.MeshBasicMaterial({ color: 0x7ad8ff, transparent: true, opacity: 0.68, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     roadHighway: new THREE.MeshBasicMaterial({ color: 0xb8f1ff, transparent: true, opacity: 0.88, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
+    roadCorridorDebug: new THREE.MeshBasicMaterial({ color: 0x5fffe3, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     bridge: new THREE.MeshBasicMaterial({ color: 0xd8fbff, transparent: true, opacity: 0.88, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
     buildingLowrise: new THREE.MeshStandardMaterial({ color: 0x3d7fc4, roughness: 0.68, metalness: 0.08, transparent: true, opacity: 0.78, side: THREE.DoubleSide }),
     buildingMidrise: new THREE.MeshStandardMaterial({ color: 0x4f9be2, roughness: 0.64, metalness: 0.1, transparent: true, opacity: 0.82, side: THREE.DoubleSide }),
