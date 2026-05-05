@@ -1,10 +1,10 @@
 # PM2001 Road And Block Generation Spec
 
-Status: active implementation spec; corridor/block-face infrastructure is partially implemented, PM2001 road growth remains incomplete  
+Status: active implementation spec; PM2001-style frontier road growth and road-face blocks are behind debug/options flags  
 Created: 2026-05-04  
 Primary source of truth for: physical road corridors, road-face blocks, and the transition from painted roads to roads that consume land.
 
-Implementation note: the current code has road corridor/block-face infrastructure and an early PM2001 road debug path. This spec is normative for replacing long clipped grid lines with PM2001-style road growth: global goals propose ideal successors, local constraints transform them into actual road segments, and normalized road corridors consume land before blocks are created.
+Implementation note: the current code has road corridor/block-face infrastructure and a PM2001 road debug path that uses frontier growth. This spec is normative for keeping that path aligned with PM2001: global goals propose ideal successors, local constraints transform them into actual road segments, and normalized road corridors consume land before blocks are created.
 
 ## Purpose
 
@@ -293,6 +293,17 @@ Candidate generation must support:
 
 Hard rule: do not generate local roads as district-wide infinite lines clipped to the district polygon. That creates the striped screenshots and is not PM2001 growth. A long local street can emerge only by repeated accepted successors and must be split at every intersection.
 
+Connectivity rule: local road growth must produce a connected, block-forming graph. A generated local road is not valid merely because it lies inside the district and avoids duplicates. It must start from an existing graph node or accepted frontier node, and its endpoint must be made legal by one of:
+
+- snapping to an existing road node
+- intersecting and splitting an existing road edge
+- extending a short distance to a valid intersection
+- closing a loop with an existing road family
+- reaching a valid district/boundary gateway
+- becoming an allowed cul-de-sac/dead end for the active style
+
+Disconnected orphan stubs are rejected unless the style explicitly allows them as dead ends. Even then, they should be rare and should not dominate the road length.
+
 ### 4. Local Constraints
 
 Local constraints transform an ideal successor into an actual successor. They should adjust first, reject second.
@@ -310,7 +321,9 @@ For each ideal successor:
 9. Reject near-parallel duplicates closer than `minParallelSpacing`.
 10. Reject segments shorter than `segmentLengthMin`, unless they are legal intersection extensions.
 11. Reject if the new edge would create a block below `style.minBlockArea` or a thin block above `style.maxBlockAspect`.
-12. Accept dead ends and loop closures only when the profile allows them.
+12. Reject disconnected orphan stubs unless the profile allows a dead end at that location.
+13. Prefer endpoint adjustments that create intersections, graph reachability, or loop closure.
+14. Accept dead ends and loop closures only when the profile allows them.
 
 Reject a candidate road if:
 
@@ -322,11 +335,14 @@ Reject a candidate road if:
 - it creates an excessively thin block
 - it duplicates a nearby road
 - it crosses a higher-class road without legal intersection splitting
+- it does not connect back into the road graph, unless accepted as a style-legal dead end
+- it reduces the chance of producing usable road-bounded block faces
 
 Snap behavior:
 
 - snap endpoints to nearby road nodes within `style.snapDistance`
 - split existing road edges at legal crossings
+- extend endpoints to nearby legal intersections within `style.intersectionExtensionDistance`
 - merge near-duplicate nodes after all road growth
 - preserve bridge endpoints and coast-road continuity
 
@@ -334,6 +350,8 @@ Dead ends:
 
 - allowed only for `curvy_residential`, `industrial_spine`, and rare `old_core`
 - never allowed for highways/arterials
+- must be tagged as intentional dead ends, not incidental failed connections
+- should remain below the profile's dead-end target plus tolerance
 
 Output:
 
@@ -341,8 +359,9 @@ Output:
 export interface PM2001ActualSuccessor {
   accepted: boolean;
   edge?: RoadEdge;
+  endpointKind?: 'node-snap' | 'edge-split' | 'intersection-extension' | 'loop-closure' | 'boundary-gateway' | 'dead-end';
   adjustedReason?: 'snap-node' | 'split-edge' | 'extend-to-intersection' | 'trim-to-land' | 'curve-fit';
-  rejectedReason?: 'water' | 'duplicate' | 'too-short' | 'too-thin-block' | 'too-small-block' | 'forbidden-crossing' | 'out-of-bounds';
+  rejectedReason?: 'water' | 'duplicate' | 'too-short' | 'too-thin-block' | 'too-small-block' | 'forbidden-crossing' | 'out-of-bounds' | 'orphan-stub' | 'non-block-forming';
 }
 ```
 
@@ -357,6 +376,14 @@ After road growth:
 - classify edge hierarchy
 - compute edge length and node IDs
 - preserve `roadGraph.nodes` for routing
+
+Graph acceptance metrics:
+
+- At least 85% of PM2001 local-road length should belong to the largest connected component, measured after intersection splitting.
+- At least 60% of generated local-road endpoints should touch another road node, split edge, valid gateway, or loop closure.
+- Dead-end endpoint ratio should stay below `style.deadEndProbability` plus a small tolerance, except for explicit residential/industrial cul-de-sac profiles.
+- Grid-like districts must contain both primary and cross-street families; no direction family should exceed 70% of local-road length.
+- Local roads should create usable closed faces, not just decorative strokes. If road growth cannot create enough faces, prefer fewer accepted roads over many orphan stubs.
 
 The routing layer should consume the normalized graph, not reconstruct graph topology from rendered paths.
 
@@ -627,19 +654,17 @@ Planning tooltip should show:
 - block coverage role
 - parcel generation kind
 
-## Current Implementation Divergences To Fix
+## Current Implementation Notes And Remaining Divergences
 
-The current implementation is useful scaffolding, but it is not yet PM2001-faithful road generation.
+The current implementation now follows the PM2001 road-growth shape, but it is still a game-practical adaptation.
 
-- It can still create local roads as long style-grid lines clipped to ownership/district polygons.
-- It does not yet use a priority/frontier queue of active road ends.
-- It does not fully separate global-goal ideal successors from local-constraint actual successors.
-- It does not yet use density/terrain/water/style fields as explicit global-goal maps.
-- It does not normalize every accepted intersection before downstream corridor/block extraction.
+- It uses deterministic district style fields instead of imported population/elevation/street-pattern image maps.
+- It handles water mostly through existing land/district polygons; explicit terrain/slope constraint maps remain future work.
+- It relies on the routing enrichment pass to expose shared graph nodes after road growth.
 - It relies on some legacy BSP/ownership geometry as a fallback block seed.
-- It should reject only near-parallel duplicates, not valid cross streets.
+- It does not yet expose rejected road-growth candidates in the debug overlay.
 
-These divergences are implementation debt, not alternate interpretations of PM2001.
+These are implementation debt and scope boundaries, not alternate interpretations of PM2001.
 
 ## Non-Goals For V1
 

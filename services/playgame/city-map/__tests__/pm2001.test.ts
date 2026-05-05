@@ -19,6 +19,34 @@ function rect(x1: number, y1: number, x2: number, y2: number): Point[] {
   ];
 }
 
+function roadPoints(edge: RoadEdge) {
+  return edge.centerline || (edge as RoadEdge & { points?: Point[] }).points || [edge.a, edge.b];
+}
+
+function roadLength(edge: RoadEdge) {
+  const points = roadPoints(edge);
+  let length = 0;
+  for (let i = 0; i + 1 < points.length; i++) {
+    length += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  return length;
+}
+
+function maxDirectionFamilyShare(edges: RoadEdge[]) {
+  const bins = [0, 0, 0, 0];
+  for (const edge of edges) {
+    const points = roadPoints(edge);
+    for (let i = 0; i + 1 < points.length; i++) {
+      const length = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+      if (length < 0.1) continue;
+      const angle = (Math.atan2(points[i + 1].y - points[i].y, points[i + 1].x - points[i].x) + Math.PI) % Math.PI;
+      bins[Math.min(3, Math.floor(angle / (Math.PI / 4)))] += length;
+    }
+  }
+  const total = bins.reduce((sum, length) => sum + length, 0);
+  return total > 0 ? Math.max(...bins) / total : 1;
+}
+
 {
   assert.equal(physicalRoadWidthForClass('highway'), URBAN_SCALE.roads.highwayCorridor, 'highway width uses urban scale');
   assert.equal(physicalRoadWidthForClass('avenue'), URBAN_SCALE.roads.majorCorridor, 'avenue width uses urban scale');
@@ -93,6 +121,31 @@ function rect(x1: number, y1: number, x2: number, y2: number): Point[] {
   assert.ok(generatedRoads.every((edge) => edge.pm2001?.generator === 'local-constraint'), 'generated roads are tagged as local-constraint');
   assert.ok(generatedRoads.every((edge) => Array.isArray(edge.corridorPolygon) && edge.corridorPolygon.length >= 3), 'generated roads expose physical corridors');
   assert.ok(city.cells.some((block) => String((block as any).source) === 'pm2001-road-face'), 'generated roads feed road-face blocks');
+  assert.ok(generatedRoads.some((edge) => edge.pm2001Role === 'cross-street'), 'pm2001 growth emits cross-street successors');
+  assert.ok(generatedRoads.every((edge) => roadLength(edge) <= 68), 'pm2001 local roads are short growth successors, not district-spanning stripes');
+  assert.ok(maxDirectionFamilyShare(generatedRoads) < 0.7, 'pm2001 grid-like growth preserves multiple direction families');
+}
+
+{
+  const a = buildCityV35('pm2001-deterministic-growth', {
+    cache: false,
+    pm2001Roads: true,
+    roadBlockModel: 'pm2001-road-faces',
+  }).roadGraph.edges.filter((edge) => edge.source === 'pm2001-road').map((edge) => ({
+    id: edge.id,
+    role: edge.pm2001Role,
+    points: roadPoints(edge).map((point) => [Number(point.x.toFixed(3)), Number(point.y.toFixed(3))]),
+  }));
+  const b = buildCityV35('pm2001-deterministic-growth', {
+    cache: false,
+    pm2001Roads: true,
+    roadBlockModel: 'pm2001-road-faces',
+  }).roadGraph.edges.filter((edge) => edge.source === 'pm2001-road').map((edge) => ({
+    id: edge.id,
+    role: edge.pm2001Role,
+    points: roadPoints(edge).map((point) => [Number(point.x.toFixed(3)), Number(point.y.toFixed(3))]),
+  }));
+  assert.deepEqual(a, b, 'pm2001 road growth is deterministic for identical seed');
 }
 
 console.log('city-map pm2001 road/block tests passed');

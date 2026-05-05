@@ -11,21 +11,29 @@ interface RoadStyleProfile {
   spacingJitter: number;
   angleJitter: number;
   curvature: number;
+  targetRoadDensity: number;
+  continuationProbability: number;
   branchProbability: number;
+  crossStreetProbability: number;
   deadEndProbability: number;
   loopProbability: number;
+  segmentLengthMin: number;
+  segmentLengthMax: number;
+  maxUninterruptedLength: number;
   snapDistance: number;
+  intersectionExtensionDistance: number;
+  minParallelSpacing: number;
   minBlockArea: number;
   maxBlockAspect: number;
 }
 
 const ROAD_STYLE_PROFILES: Record<RoadStyleId, RoadStyleProfile> = {
-  tight_grid: { id: 'tight_grid', spacing: 18, spacingJitter: 0.1, angleJitter: 0.05, curvature: 0, branchProbability: 0.08, deadEndProbability: 0.02, loopProbability: 0.18, snapDistance: 3, minBlockArea: 95, maxBlockAspect: 7 },
-  loose_grid: { id: 'loose_grid', spacing: 26, spacingJitter: 0.24, angleJitter: 0.12, curvature: 0.08, branchProbability: 0.12, deadEndProbability: 0.04, loopProbability: 0.12, snapDistance: 3, minBlockArea: 115, maxBlockAspect: 7.5 },
-  curvy_residential: { id: 'curvy_residential', spacing: 28, spacingJitter: 0.32, angleJitter: 0.22, curvature: 0.26, branchProbability: 0.24, deadEndProbability: 0.16, loopProbability: 0.1, snapDistance: 4, minBlockArea: 120, maxBlockAspect: 8 },
-  industrial_spine: { id: 'industrial_spine', spacing: 36, spacingJitter: 0.18, angleJitter: 0.08, curvature: 0.04, branchProbability: 0.08, deadEndProbability: 0.1, loopProbability: 0.04, snapDistance: 5, minBlockArea: 180, maxBlockAspect: 9 },
-  coastal_curve: { id: 'coastal_curve', spacing: 24, spacingJitter: 0.22, angleJitter: 0.16, curvature: 0.22, branchProbability: 0.14, deadEndProbability: 0.06, loopProbability: 0.12, snapDistance: 4, minBlockArea: 105, maxBlockAspect: 8 },
-  old_core: { id: 'old_core', spacing: 16, spacingJitter: 0.38, angleJitter: 0.2, curvature: 0.1, branchProbability: 0.18, deadEndProbability: 0.08, loopProbability: 0.18, snapDistance: 3, minBlockArea: 80, maxBlockAspect: 8.5 },
+  tight_grid: { id: 'tight_grid', spacing: 18, spacingJitter: 0.1, angleJitter: 0.05, curvature: 0, targetRoadDensity: 0.9, continuationProbability: 0.82, branchProbability: 0.18, crossStreetProbability: 0.72, deadEndProbability: 0.02, loopProbability: 0.18, segmentLengthMin: 10, segmentLengthMax: 28, maxUninterruptedLength: 34, snapDistance: 3, intersectionExtensionDistance: 7, minParallelSpacing: 7, minBlockArea: 95, maxBlockAspect: 7 },
+  loose_grid: { id: 'loose_grid', spacing: 26, spacingJitter: 0.24, angleJitter: 0.12, curvature: 0.08, targetRoadDensity: 0.68, continuationProbability: 0.74, branchProbability: 0.22, crossStreetProbability: 0.58, deadEndProbability: 0.04, loopProbability: 0.12, segmentLengthMin: 12, segmentLengthMax: 36, maxUninterruptedLength: 44, snapDistance: 3, intersectionExtensionDistance: 8, minParallelSpacing: 9, minBlockArea: 115, maxBlockAspect: 7.5 },
+  curvy_residential: { id: 'curvy_residential', spacing: 28, spacingJitter: 0.32, angleJitter: 0.22, curvature: 0.26, targetRoadDensity: 0.54, continuationProbability: 0.66, branchProbability: 0.34, crossStreetProbability: 0.34, deadEndProbability: 0.16, loopProbability: 0.1, segmentLengthMin: 12, segmentLengthMax: 34, maxUninterruptedLength: 42, snapDistance: 4, intersectionExtensionDistance: 9, minParallelSpacing: 10, minBlockArea: 120, maxBlockAspect: 8 },
+  industrial_spine: { id: 'industrial_spine', spacing: 36, spacingJitter: 0.18, angleJitter: 0.08, curvature: 0.04, targetRoadDensity: 0.42, continuationProbability: 0.86, branchProbability: 0.18, crossStreetProbability: 0.24, deadEndProbability: 0.1, loopProbability: 0.04, segmentLengthMin: 16, segmentLengthMax: 48, maxUninterruptedLength: 58, snapDistance: 5, intersectionExtensionDistance: 10, minParallelSpacing: 14, minBlockArea: 180, maxBlockAspect: 9 },
+  coastal_curve: { id: 'coastal_curve', spacing: 24, spacingJitter: 0.22, angleJitter: 0.16, curvature: 0.22, targetRoadDensity: 0.58, continuationProbability: 0.7, branchProbability: 0.24, crossStreetProbability: 0.38, deadEndProbability: 0.06, loopProbability: 0.12, segmentLengthMin: 12, segmentLengthMax: 34, maxUninterruptedLength: 42, snapDistance: 4, intersectionExtensionDistance: 9, minParallelSpacing: 9, minBlockArea: 105, maxBlockAspect: 8 },
+  old_core: { id: 'old_core', spacing: 16, spacingJitter: 0.38, angleJitter: 0.2, curvature: 0.1, targetRoadDensity: 0.96, continuationProbability: 0.68, branchProbability: 0.32, crossStreetProbability: 0.68, deadEndProbability: 0.08, loopProbability: 0.18, segmentLengthMin: 8, segmentLengthMax: 24, maxUninterruptedLength: 32, snapDistance: 3, intersectionExtensionDistance: 7, minParallelSpacing: 6, minBlockArea: 80, maxBlockAspect: 8.5 },
 };
 
 export function roadStyleForDistrict(district: CityDistrict & Record<string, any>): RoadStyleProfile {

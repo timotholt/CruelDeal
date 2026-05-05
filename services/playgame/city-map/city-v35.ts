@@ -596,21 +596,6 @@ function clipCutsToPolygon(cuts: readonly Cut[], polygon: readonly Point[]) {
   return cuts.flatMap((cut, index) => clipCutToPolygon(cut, polygon, index));
 }
 
-function pointDistanceToParallelRoads(point: Point, angle: number, roadEdges: readonly RoadEdge[]) {
-  let best = Infinity;
-  for (const edge of roadEdges) {
-    const points = edge.centerline || (edge as RoadEdge & { points?: Point[] }).points || [edge.a, edge.b];
-    for (let i = 0; i + 1 < points.length; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const segmentAngle = Math.atan2(b.y - a.y, b.x - a.x);
-      if (angleDelta(angle, segmentAngle) > 0.28) continue;
-      best = Math.min(best, pointToSegmentDist(point.x, point.y, a, b));
-    }
-  }
-  return best;
-}
-
 function bendRoadRun(a: Point, b: Point, region: Point[], curvature: number, rng: Rng) {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   if (curvature <= 0.02 || len < 30) return [a, b];
@@ -625,12 +610,43 @@ function bendRoadRun(a: Point, b: Point, region: Point[], curvature: number, rng
   return [a, mid, b];
 }
 
+type PM2001RoadKind = 'avenue' | 'street' | 'local';
+type PM2001RoadStyle = ReturnType<typeof roadStyleForDistrict>;
+type PM2001RoadRole = 'continuation' | 'branch' | 'cross-street' | 'connector' | 'coast-follow' | 'loop-closure';
+
+interface PM2001RoadFrontier {
+  point: Point;
+  heading: number;
+  depth: number;
+  priority: number;
+  source: 'gateway' | 'seed' | 'growth';
+}
+
+interface PM2001IdealSuccessor {
+  start: Point;
+  heading: number;
+  length: number;
+  kind: PM2001RoadKind;
+  role: PM2001RoadRole;
+  priority: number;
+}
+
+interface PM2001RoadSegment {
+  a: Point;
+  b: Point;
+  angle: number;
+  roadId: string;
+  source?: string;
+}
+
 function pm2001RoadEdge(
   district: CityDistrict & Record<string, any>,
   points: Point[],
   index: number,
-  kind: 'avenue' | 'street' | 'local',
+  kind: PM2001RoadKind,
   styleId: ReturnType<typeof roadStyleForDistrict>['id'],
+  role: PM2001RoadRole = 'connector',
+  adjustedReason?: string,
 ): RoadEdge {
   return {
     id: `${district.id}:pm2001-road:${index}`,
@@ -648,7 +664,238 @@ function pm2001RoadEdge(
       styleId,
       hierarchyDepth: kind === 'avenue' ? 1 : kind === 'street' ? 2 : 3,
     },
+    pm2001Role: role,
+    pm2001ActualSuccessor: {
+      accepted: true,
+      adjustedReason,
+    },
   };
+}
+
+function roadEdgePoints(edge: RoadEdge) {
+  const points = edge.centerline || (edge as RoadEdge & { points?: Point[] }).points;
+  if (Array.isArray(points) && points.length >= 2) return points.map((point) => ({ x: point.x, y: point.y }));
+  return [edge.a, edge.b].filter(Boolean).map((point) => ({ x: point.x, y: point.y }));
+}
+
+function roadSegmentsForEdges(edges: readonly RoadEdge[]): PM2001RoadSegment[] {
+  const segments: PM2001RoadSegment[] = [];
+  for (const edge of edges) {
+    const points = roadEdgePoints(edge);
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 0.5) continue;
+      segments.push({
+        a,
+        b,
+        angle: Math.atan2(b.y - a.y, b.x - a.x),
+        roadId: edge.id,
+        source: edge.source,
+      });
+    }
+  }
+  return segments;
+}
+
+function segmentLength(a: Point, b: Point) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function pointAlong(a: Point, heading: number, length: number): Point {
+  return { x: a.x + Math.cos(heading) * length, y: a.y + Math.sin(heading) * length };
+}
+
+function normalizeAngle(angle: number) {
+  const twoPi = Math.PI * 2;
+  return ((angle % twoPi) + twoPi) % twoPi;
+}
+
+function sameLocation(a: Point, b: Point, eps = 0.75) {
+  return Math.hypot(a.x - b.x, a.y - b.y) <= eps;
+}
+
+function snapToNearestRoadNode(point: Point, edges: readonly RoadEdge[], snapDistance: number) {
+  let best: { point: Point; distance: number } | null = null;
+  for (const edge of edges) {
+    const points = roadEdgePoints(edge);
+    for (const candidate of [points[0], points[points.length - 1]]) {
+      if (!candidate) continue;
+      const distance = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+      if (distance <= snapDistance && (!best || distance < best.distance)) {
+        best = { point: candidate, distance };
+      }
+    }
+  }
+  return best?.point || null;
+}
+
+function nearestRoadIntersection(a: Point, b: Point, roadSegments: readonly PM2001RoadSegment[], minT = 0.08, maxT = 1.0) {
+  let best: { point: Point; t: number; roadId: string } | null = null;
+  for (const segment of roadSegments) {
+    const hit = segIntersect(a, b, segment.a, segment.b);
+    if (!hit) continue;
+    if (hit.t < minT || hit.t > maxT || hit.u < 0.03 || hit.u > 0.97) continue;
+    if (sameLocation(hit, a, 1.1)) continue;
+    if (!best || hit.t < best.t) best = { point: { x: hit.x, y: hit.y }, t: hit.t, roadId: segment.roadId };
+  }
+  return best;
+}
+
+function tooCloseToParallelRoad(a: Point, b: Point, roadSegments: readonly PM2001RoadSegment[], minSpacing: number) {
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  for (const segment of roadSegments) {
+    if (angleDelta(angle, segment.angle) > 0.24) continue;
+    if (sameLocation(a, segment.a, 1.2) || sameLocation(a, segment.b, 1.2) || sameLocation(b, segment.a, 1.2) || sameLocation(b, segment.b, 1.2)) {
+      continue;
+    }
+    if (pointToSegmentDist(mid.x, mid.y, segment.a, segment.b) < minSpacing) return true;
+  }
+  return false;
+}
+
+function candidateInsideRegion(start: Point, heading: number, region: readonly Point[], probe = 3) {
+  const p = pointAlong(start, heading, probe);
+  return pointInPolygon(p, region);
+}
+
+function pushFrontier(frontier: PM2001RoadFrontier[], entry: PM2001RoadFrontier, region: readonly Point[]) {
+  if (!pointInPolygon(entry.point, region)) return;
+  if (!candidateInsideRegion(entry.point, entry.heading, region)) return;
+  frontier.push(entry);
+}
+
+function createGatewayFrontiers(
+  region: Point[],
+  existingRoadEdges: readonly RoadEdge[],
+  baseAngle: number,
+  style: PM2001RoadStyle,
+  rng: Rng,
+) {
+  const frontier: PM2001RoadFrontier[] = [];
+  const seen = new Set<string>();
+  const key = (point: Point, heading: number) => `${Math.round(point.x / 4)}:${Math.round(point.y / 4)}:${Math.round(normalizeAngle(heading) / 0.4)}`;
+
+  for (const edge of existingRoadEdges) {
+    if (edge.source === 'coast-road') continue;
+    for (const [start, end] of roadSegmentsForEdges([edge]).flatMap((segment) => clipSegmentToPolygon(segment.a, segment.b, region))) {
+      const len = segmentLength(start, end);
+      if (len < style.spacing * 0.65) continue;
+      const roadAngle = Math.atan2(end.y - start.y, end.x - start.x);
+      const sampleCount = Math.max(1, Math.min(3, Math.floor(len / Math.max(18, style.spacing))));
+      for (let i = 0; i < sampleCount; i++) {
+        const t = (i + 1) / (sampleCount + 1);
+        const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
+        for (const turn of [-1, 1]) {
+          const heading = roadAngle + turn * Math.PI / 2 + (rng() - 0.5) * style.angleJitter;
+          const k = key(point, heading);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          pushFrontier(frontier, { point, heading, depth: 0, priority: 1.2, source: 'gateway' }, region);
+        }
+      }
+    }
+  }
+
+  if (frontier.length < 2) {
+    const center = polygonCentroid(region);
+    const headings = [
+      baseAngle,
+      baseAngle + Math.PI,
+      baseAngle + Math.PI / 2,
+      baseAngle - Math.PI / 2,
+    ];
+    for (const heading of headings) {
+      pushFrontier(frontier, { point: center, heading: heading + (rng() - 0.5) * style.angleJitter, depth: 0, priority: 1, source: 'seed' }, region);
+    }
+  }
+
+  return frontier;
+}
+
+function idealSuccessorsForFrontier(frontier: PM2001RoadFrontier, style: PM2001RoadStyle, baseAngle: number, rng: Rng): PM2001IdealSuccessor[] {
+  const jitter = () => (rng() - 0.5) * style.angleJitter;
+  const length = () => style.segmentLengthMin + rng() * (style.segmentLengthMax - style.segmentLengthMin);
+  const gridish = style.id === 'tight_grid' || style.id === 'loose_grid' || style.id === 'old_core';
+  const axis = gridish
+    ? (angleDelta(frontier.heading, baseAngle) < angleDelta(frontier.heading, baseAngle + Math.PI / 2) ? baseAngle : baseAngle + Math.PI / 2)
+    : frontier.heading;
+  const heading = gridish ? axis + (Math.cos(frontier.heading - axis) < 0 ? Math.PI : 0) + jitter() : frontier.heading + jitter();
+  const kind: PM2001RoadKind = style.id === 'industrial_spine' && frontier.depth <= 1 ? 'street' : frontier.depth <= 1 && gridish ? 'street' : 'local';
+  const successors: PM2001IdealSuccessor[] = [];
+
+  if (frontier.source !== 'gateway' || rng() < style.continuationProbability) {
+    successors.push({ start: frontier.point, heading, length: length(), kind, role: 'continuation', priority: frontier.priority });
+  }
+
+  if (frontier.source === 'gateway' || rng() < style.crossStreetProbability) {
+    const turn = rng() < 0.5 ? -1 : 1;
+    successors.push({
+      start: frontier.point,
+      heading: heading + turn * Math.PI / 2 + jitter(),
+      length: length(),
+      kind: 'local',
+      role: 'cross-street',
+      priority: frontier.priority * 0.95,
+    });
+  }
+
+  if (rng() < style.branchProbability) {
+    const turn = rng() < 0.5 ? -1 : 1;
+    const branchAngle = style.id === 'curvy_residential' || style.id === 'coastal_curve'
+      ? heading + turn * (Math.PI / 4 + rng() * Math.PI / 5)
+      : heading + turn * Math.PI / 2;
+    successors.push({
+      start: frontier.point,
+      heading: branchAngle + jitter(),
+      length: length() * (0.78 + rng() * 0.28),
+      kind: 'local',
+      role: 'branch',
+      priority: frontier.priority * 0.82,
+    });
+  }
+
+  return successors.sort((a, b) => b.priority - a.priority);
+}
+
+function applyPM2001LocalConstraints(
+  ideal: PM2001IdealSuccessor,
+  region: Point[],
+  roadEdges: readonly RoadEdge[],
+  style: PM2001RoadStyle,
+) {
+  const rawEnd = pointAlong(ideal.start, ideal.heading, ideal.length);
+  const clippedRuns = clipSegmentToPolygon(ideal.start, rawEnd, region);
+  const run = clippedRuns.find(([start]) => sameLocation(start, ideal.start, 1.25)) || clippedRuns[0];
+  if (!run) return { accepted: false, rejectedReason: 'out-of-bounds' as const };
+  let end = run[1];
+  let adjustedReason: string | undefined = !sameLocation(end, rawEnd, 0.9) ? 'trim-to-land' : undefined;
+  const roadSegments = roadSegmentsForEdges(roadEdges);
+  const intersection = nearestRoadIntersection(ideal.start, end, roadSegments, 0.12, 1.0);
+  if (intersection) {
+    end = intersection.point;
+    adjustedReason = 'split-edge';
+  } else {
+    const extended = pointAlong(ideal.start, ideal.heading, segmentLength(ideal.start, end) + style.intersectionExtensionDistance);
+    const extension = nearestRoadIntersection(ideal.start, extended, roadSegments, 0.86, 1.0);
+    if (extension && pointInPolygon(extension.point, region)) {
+      end = extension.point;
+      adjustedReason = 'extend-to-intersection';
+    }
+  }
+  const snapped = snapToNearestRoadNode(end, roadEdges, style.snapDistance);
+  if (snapped && !sameLocation(snapped, ideal.start, 1.1) && pointInPolygon(snapped, region)) {
+    end = { x: snapped.x, y: snapped.y };
+    adjustedReason = 'snap-node';
+  }
+  const length = segmentLength(ideal.start, end);
+  if (length < style.segmentLengthMin) return { accepted: false, rejectedReason: 'too-short' as const };
+  if (length > style.maxUninterruptedLength + style.intersectionExtensionDistance) return { accepted: false, rejectedReason: 'too-long' as const };
+  if (tooCloseToParallelRoad(ideal.start, end, roadSegments, style.minParallelSpacing)) return { accepted: false, rejectedReason: 'duplicate' as const };
+  const mid = { x: (ideal.start.x + end.x) / 2, y: (ideal.start.y + end.y) / 2 };
+  if (!pointInPolygon(mid, region)) return { accepted: false, rejectedReason: 'out-of-bounds' as const };
+  return { accepted: true, end, adjustedReason };
 }
 
 function generatePM2001LocalRoadEdges(
@@ -662,57 +909,53 @@ function generatePM2001LocalRoadEdges(
     const region = ((district.ownershipPolygons && district.ownershipPolygons[0]) || district.polygons?.[0]) as Point[] | undefined;
     if (!region || region.length < 3 || polygonArea(region) < 600) continue;
     const style = roadStyleForDistrict(district);
-    const bounds = polygonBBox(region);
-    const span = Math.max(bounds.w, bounds.h);
-    if (span < style.spacing * 1.45) continue;
+    const area = polygonArea(region);
+    if (area < style.spacing * style.spacing) continue;
     const center = polygonCentroid(region);
     const baseAngle = Number(district.fieldAngle ?? district.blocks?.[0]?.fieldAngle ?? 0);
-    const axisCount = style.id === 'industrial_spine' ? 1 : 2;
-    const densityScale = style.id === 'tight_grid' || style.id === 'old_core' ? 1.15
-      : style.id === 'curvy_residential' ? 0.72
-        : style.id === 'industrial_spine' ? 0.52
-          : 0.86;
-    const targetPerAxis = Math.max(1, Math.min(5, Math.floor((span / style.spacing) * densityScale)));
+    const targetRoads = Math.max(3, Math.min(28, Math.floor((area / (style.spacing * style.spacing)) * style.targetRoadDensity)));
+    const maxAttempts = targetRoads * 9;
     let localIndex = 0;
-    const allRoads = () => [...existingRoadEdges, ...roads];
-
-    for (let axis = 0; axis < axisCount; axis++) {
-      const axisAngle = baseAngle + axis * Math.PI / 2 + (rng() - 0.5) * style.angleJitter;
-      const dir = { x: Math.cos(axisAngle), y: Math.sin(axisAngle) };
-      const normal = { x: -dir.y, y: dir.x };
-      const total = axis === 0 && style.id === 'industrial_spine' ? 1 : targetPerAxis;
-      for (let i = 0; i < total; i++) {
-        const centeredIndex = i - (total - 1) / 2;
-        const offset = centeredIndex * style.spacing * (1 + (rng() - 0.5) * style.spacingJitter);
-        const origin = {
-          x: center.x + normal.x * offset,
-          y: center.y + normal.y * offset,
-        };
-        const a = { x: origin.x - dir.x * 4000, y: origin.y - dir.y * 4000 };
-        const b = { x: origin.x + dir.x * 4000, y: origin.y + dir.y * 4000 };
-        const runs = clipSegmentToPolygon(a, b, region);
-        for (const [start, end] of runs) {
-          const length = Math.hypot(end.x - start.x, end.y - start.y);
-          if (length < Math.max(18, style.spacing * 0.8)) continue;
-          const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-          if (pointDistanceToParallelRoads(mid, axisAngle, allRoads()) < style.spacing * 0.34) continue;
-          const kind = style.id === 'industrial_spine' && axis === 0 ? 'avenue'
-            : axis === 0 && (style.id === 'tight_grid' || style.id === 'old_core') ? 'street'
-              : 'local';
-          const points = bendRoadRun(start, end, region, axis === 0 ? style.curvature : style.curvature * 0.55, rng);
-          roads.push(pm2001RoadEdge(district, points, localIndex++, kind, style.id));
-        }
-      }
+    const districtRoads = () => [...existingRoadEdges, ...roads];
+    const frontier = createGatewayFrontiers(region, existingRoadEdges, baseAngle, style, rng);
+    if (frontier.length < 2) {
+      pushFrontier(frontier, { point: center, heading: baseAngle, depth: 0, priority: 1, source: 'seed' }, region);
+      pushFrontier(frontier, { point: center, heading: baseAngle + Math.PI / 2, depth: 0, priority: 1, source: 'seed' }, region);
     }
 
-    if ((style.id === 'curvy_residential' || style.id === 'coastal_curve') && roads.filter((road) => road.districtId === district.id).length < 2) {
-      const angle = baseAngle + Math.PI / 4 + (rng() - 0.5) * 0.45;
-      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
-      const a = { x: center.x - dir.x * 4000, y: center.y - dir.y * 4000 };
-      const b = { x: center.x + dir.x * 4000, y: center.y + dir.y * 4000 };
-      for (const [start, end] of clipSegmentToPolygon(a, b, region).slice(0, 1)) {
-        const points = bendRoadRun(start, end, region, Math.max(0.18, style.curvature), rng);
-        roads.push(pm2001RoadEdge(district, points, localIndex++, 'local', style.id));
+    let attempts = 0;
+    while (frontier.length && roads.filter((road) => road.districtId === district.id).length < targetRoads && attempts < maxAttempts) {
+      attempts++;
+      frontier.sort((a, b) => b.priority - a.priority);
+      const active = frontier.shift()!;
+      const ideals = idealSuccessorsForFrontier(active, style, baseAngle, rng);
+      for (const ideal of ideals) {
+        if (roads.filter((road) => road.districtId === district.id).length >= targetRoads) break;
+        const actual = applyPM2001LocalConstraints(ideal, region, districtRoads(), style);
+        if (!actual.accepted || !actual.end) continue;
+        const points = bendRoadRun(ideal.start, actual.end, region, style.curvature * (ideal.role === 'cross-street' ? 0.45 : 1), rng);
+        const edge = pm2001RoadEdge(district, points, localIndex++, ideal.kind, style.id, ideal.role, actual.adjustedReason);
+        roads.push(edge);
+        const endHeading = Math.atan2(actual.end.y - ideal.start.y, actual.end.x - ideal.start.x);
+        if (active.depth < 8 && candidateInsideRegion(actual.end, endHeading, region, style.segmentLengthMin * 0.45)) {
+          pushFrontier(frontier, {
+            point: actual.end,
+            heading: endHeading + (rng() - 0.5) * style.angleJitter,
+            depth: active.depth + 1,
+            priority: active.priority * 0.82,
+            source: 'growth',
+          }, region);
+        }
+        if (active.depth < 5 && rng() < style.branchProbability) {
+          const turn = rng() < 0.5 ? -1 : 1;
+          pushFrontier(frontier, {
+            point: actual.end,
+            heading: endHeading + turn * Math.PI / 2 + (rng() - 0.5) * style.angleJitter,
+            depth: active.depth + 1,
+            priority: active.priority * 0.66,
+            source: 'growth',
+          }, region);
+        }
       }
     }
   }
