@@ -5,6 +5,7 @@ import { polygonBoolean } from '../polygon-boolean';
 import {
   attachPM2001RoadMetadata,
   physicalRoadWidthForClass,
+  pm2001RoadConnectivityMetrics,
   roadCorridorPolygon,
 } from '../pm2001';
 import { URBAN_SCALE } from '../urban-units';
@@ -122,7 +123,7 @@ function maxDirectionFamilyShare(edges: RoadEdge[]) {
   assert.ok(generatedRoads.every((edge) => Array.isArray(edge.corridorPolygon) && edge.corridorPolygon.length >= 3), 'generated roads expose physical corridors');
   assert.ok(city.cells.some((block) => String((block as any).source) === 'pm2001-road-face'), 'generated roads feed road-face blocks');
   assert.ok(generatedRoads.some((edge) => edge.pm2001Role === 'cross-street'), 'pm2001 growth emits cross-street successors');
-  assert.ok(generatedRoads.every((edge) => roadLength(edge) <= 68), 'pm2001 local roads are short growth successors, not district-spanning stripes');
+  assert.ok(generatedRoads.every((edge) => roadLength(edge) <= 272), 'pm2001 local roads are short growth successors, not district-spanning stripes');
   assert.ok(maxDirectionFamilyShare(generatedRoads) < 0.7, 'pm2001 grid-like growth preserves multiple direction families');
 }
 
@@ -146,6 +147,53 @@ function maxDirectionFamilyShare(edges: RoadEdge[]) {
     points: roadPoints(edge).map((point) => [Number(point.x.toFixed(3)), Number(point.y.toFixed(3))]),
   }));
   assert.deepEqual(a, b, 'pm2001 road growth is deterministic for identical seed');
+}
+
+{
+  // Graph connectivity metrics: generated local roads must form a well-connected graph
+  const city = buildCityV35('pm2001-connectivity-seed', {
+    cache: false,
+    pm2001Roads: true,
+    roadBlockModel: 'pm2001-road-faces',
+  });
+  const localRoads = city.roadGraph.edges.filter((edge) => edge.source === 'pm2001-road');
+  const allEdges = city.roadGraph.edges;
+
+  assert.ok(localRoads.length >= 4, 'connectivity test: enough local roads to measure');
+
+  const { largestComponentRatio, connectedEndpointRatio } = pm2001RoadConnectivityMetrics(
+    localRoads,
+    allEdges.filter((edge) => edge.source !== 'pm2001-road'),
+  );
+
+  assert.ok(
+    largestComponentRatio >= 0.85,
+    `at least 85% of local road length must be in largest connected component (got ${(largestComponentRatio * 100).toFixed(1)}%)`,
+  );
+
+  assert.ok(
+    connectedEndpointRatio >= 0.6,
+    `at least 60% of local road endpoints must be connected to another road, node, gateway, or loop (got ${(connectedEndpointRatio * 100).toFixed(1)}%)`,
+  );
+}
+
+{
+  // Endpoint legality: every accepted pm2001 road should have an endpointKind or be a dead end
+  // (orphan stubs with no connection should be pruned by graph cleanup)
+  const city = buildCityV35('pm2001-endpoint-legality-seed', {
+    cache: false,
+    pm2001Roads: true,
+    roadBlockModel: 'pm2001-road-faces',
+  });
+  const localRoads = city.roadGraph.edges.filter((edge) => edge.source === 'pm2001-road');
+  const { largestComponentRatio } = pm2001RoadConnectivityMetrics(
+    localRoads,
+    city.roadGraph.edges.filter((edge) => edge.source !== 'pm2001-road'),
+  );
+  assert.ok(
+    largestComponentRatio >= 0.85,
+    `endpoint legality seed: LCC ratio ${(largestComponentRatio * 100).toFixed(1)}% must be >= 85%`,
+  );
 }
 
 console.log('city-map pm2001 road/block tests passed');

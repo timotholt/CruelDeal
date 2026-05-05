@@ -81,15 +81,15 @@ export function generateRiver(landPolygon: Point[], rng: Rng): RiverPlan {
     segments: sampleSmoothPolyline(pts, 10),
     pts,
     widthScale,
-    outerWidth: 7 * widthScale,
-    innerWidth: 3.5 * widthScale,
-    buildingBuffer: 7 * widthScale
+    outerWidth: 28 * widthScale,
+    innerWidth: 14 * widthScale,
+    buildingBuffer: 28 * widthScale
   };
 }
 
 export function makeRiverBankRoads(river: RiverPlan | null, landPolygon: Point[]): RiverBankRoadCut[] {
   if (!river || !river.segments || river.segments.length < 1) return [];
-  const offset = Math.max(4, river.outerWidth / 2 + 1.35);
+  const offset = Math.max(16, river.outerWidth / 2 + 5.4);
   const cuts: RiverBankRoadCut[] = [];
   const basePts = [river.segments[0].a, ...river.segments.map((s) => s.b)];
   const runLength = (pts: Point[]) =>
@@ -100,7 +100,7 @@ export function makeRiverBankRoads(river: RiverPlan | null, landPolygon: Point[]
   const pushRun = (pts: Point[]) => {
     if (pts.length < 2) return;
     const len = runLength(pts);
-    if (len < 26) return;
+    if (len < 104) return;
     cuts.push({
       p1: pts[0],
       p2: pts[pts.length - 1],
@@ -140,9 +140,9 @@ export function generateRivers(landPolygon: Point[], rng: Rng): RiverPlan | null
         bestDist = d;
         bestRiver = candidate;
       }
-      if (d > 46) break;
+      if (d > 184) break;
     }
-    river2 = bestDist > 28 ? bestRiver : null;
+    river2 = bestDist > 112 ? bestRiver : null;
   }
   if (river1 && river2) {
     return {

@@ -18,13 +18,13 @@ export interface LabelPosition extends Point {
 
 export function labelMetrics(text: string) {
   return {
-    halfW: Math.min(62, Math.max(24, text.length * 4.9)),
-    halfH: 8
+    halfW: Math.min(248, Math.max(96, text.length * 19.6)),
+    halfH: 32
   };
 }
 
 export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Point[] }> = [], labelText = "", dots: Point[] = []): LabelPosition {
-  const margin = 24;
+  const margin = 96;
   const visible = clipPolygonToRect(polygon, { minX: margin, minY: margin, maxX: VIEW_W - margin, maxY: VIEW_H - margin });
   if (visible.length < 3) {
     // Polygon is off-viewport (or too clipped). Return its own centroid so the
@@ -47,8 +47,8 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
   let cnt = 0;
   let cSumX = 0;
   let cSumY = 0;
-  for (let x = minX; x <= maxX; x += 6) {
-    for (let y = minY; y <= maxY; y += 6) {
+  for (let x = minX; x <= maxX; x += 24) {
+    for (let y = minY; y <= maxY; y += 24) {
       if (!pointInPolygon({ x, y }, visible)) continue;
       cSumX += x;
       cSumY += y;
@@ -97,8 +97,8 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
       return clamp({ x: targetX, y: targetY, text, score: Infinity, hardFit: true, halfW, halfH });
     }
     let best: LabelPosition | null = null;
-    for (let x = minX; x <= maxX; x += 3) {
-      for (let y = minY; y <= maxY; y += 3) {
+    for (let x = minX; x <= maxX; x += 12) {
+      for (let y = minY; y <= maxY; y += 12) {
         if (!pointInPolygon({ x, y }, visible)) continue;
         if (landmarks.some((lm) => pointInPolygon({ x, y }, lm.polygon))) continue;
         const boxFits = labelBoxFits(x, y, halfW, halfH);
@@ -108,11 +108,11 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
           for (let i = 0; i < lm.polygon.length; i++) edgeDist = Math.min(edgeDist, pointToSegmentDist(x, y, lm.polygon[i], lm.polygon[(i + 1) % lm.polygon.length]));
         }
         let dotDist = Infinity;
-        for (const dot of dots) dotDist = Math.min(dotDist, rectDotDistance(x, y, halfW + 10, halfH + 10, dot));
-        const dotsClear = dotDist > 24;
+        for (const dot of dots) dotDist = Math.min(dotDist, rectDotDistance(x, y, halfW + 40, halfH + 40, dot));
+        const dotsClear = dotDist > 96;
         const centroidDist = Math.hypot(x - targetX, y - targetY);
         const bboxCenterDist = Math.hypot(x - bboxCenterX, y - bboxCenterY);
-        const score = Math.min(edgeDist, 30) * 0.72 - centroidDist * 0.5 - bboxCenterDist * 0.04 - (boxFits ? 0 : 150) - (dotsClear ? 0 : (24 - dotDist) * 2.6 + 32);
+        const score = Math.min(edgeDist, 120) * 0.72 - centroidDist * 0.5 - bboxCenterDist * 0.04 - (boxFits ? 0 : 150) - (dotsClear ? 0 : (96 - dotDist) * 2.6 + 32);
         if (!best || score > (best.score ?? -Infinity)) best = { x, y, text, score, hardFit: boxFits && dotsClear, halfW, halfH };
       }
     }
@@ -129,7 +129,7 @@ export function labelPosition(polygon: Point[], landmarks: Array<{ polygon: Poin
 }
 
 export function viewportVisibleArea(polygon: Point[]) {
-  const step = 6;
+  const step = 24;
   let count = 0;
   for (let x = step / 2; x < VIEW_W; x += step) {
     for (let y = step / 2; y < VIEW_H; y += step) {
@@ -159,8 +159,8 @@ export function placeDotsInPolygon(
   labelAvoid: LabelPosition | null = null,
   preSeeds: Point[] = []
 ) {
-  const POLY_EDGE_PAD = 13;  // min distance from district polygon edges
-  const VIEW_EDGE_PAD = 16; // min distance from viewport edges
+  const POLY_EDGE_PAD = 52;  // min distance from district polygon edges
+  const VIEW_EDGE_PAD = 64; // min distance from viewport edges
 
   const xs = polygon.map((p) => p.x);
   const ys = polygon.map((p) => p.y);
@@ -168,7 +168,7 @@ export function placeDotsInPolygon(
   const maxX = Math.min(VIEW_W - VIEW_EDGE_PAD, Math.max.apply(null, xs));
   const minY = Math.max(VIEW_EDGE_PAD, Math.min.apply(null, ys));
   const maxY = Math.min(VIEW_H - VIEW_EDGE_PAD, Math.max.apply(null, ys));
-  if (maxX - minX < 16 || maxY - minY < 16) return [];
+  if (maxX - minX < 64 || maxY - minY < 64) return [];
 
   const area = Math.max(1, visibleArea || (maxX - minX) * (maxY - minY));
   const centroid = polygonCentroid(polygon);
@@ -235,8 +235,8 @@ export function placeDotsInPolygon(
     const selectedKeys = new Set(selected.map(pointKey));
     const relaxedEdgePad = Math.max(7, POLY_EDGE_PAD * 0.62);
     const seedClearance = Math.max(12, initialSpacing * 0.32);
-    const duplicateClearance = 8;
-    const step = Math.max(5, Math.min(14, initialSpacing * 0.22));
+    const duplicateClearance = 32;
+    const step = Math.max(20, Math.min(56, initialSpacing * 0.22));
     const candidates: Placed[] = [];
 
     for (let x = minX; x <= maxX; x += step) {
@@ -274,7 +274,7 @@ export function placeDotsInPolygon(
         const minToSeed = preSeeds.length
           ? Math.min(...preSeeds.map((p) => Math.hypot(candidate.x - p.x, candidate.y - p.y)))
           : initialSpacing;
-        const edgeScore = Math.min(candidate.edgeD, 28) * 0.38;
+        const edgeScore = Math.min(candidate.edgeD, 112) * 0.38;
         const score = minToSelected * 1.28 + minToSeed * 0.34 + edgeScore - candidate.radial * 0.015;
         if (score > bestScore) {
           bestScore = score;

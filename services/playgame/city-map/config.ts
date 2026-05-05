@@ -1,15 +1,15 @@
 import type { MicroLandmarkShape } from './types';
 
-export const VIEW_W = 360;
-export const VIEW_H = 448;
-export const MAP_SLOT_HALF_W = 13.5;
-export const MAP_SLOT_HALF_H = 19;
-export const MAP_SLOT_EDGE_PAD = 30;
+export const VIEW_W = 1440;
+export const VIEW_H = 1792;
+export const MAP_SLOT_HALF_W = 54;
+export const MAP_SLOT_HALF_H = 76;
+export const MAP_SLOT_EDGE_PAD = 120;
 
 export const LAND_RX = VIEW_W * 0.68;
 export const LAND_RY = VIEW_H * 0.68;
 
-export const CELL_UNIT = 26;
+export const CELL_UNIT = 104;
 
 export const DISTRICT_NAMES = [
   'DOWNTOWN',

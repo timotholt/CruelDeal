@@ -56,8 +56,8 @@ export function generateLandPolygon(rng: Rng): TerrainPoint[] {
   };
 
   const exposeAngle = exposedMode ? rng() * Math.PI * 2 : 0;
-  const cx = VIEW_W / 2 + (rng() - 0.5) * (exposedMode ? 30 : 35);
-  const cy = VIEW_H / 2 + (rng() - 0.5) * (exposedMode ? 30 : 35);
+  const cx = VIEW_W / 2 + (rng() - 0.5) * (exposedMode ? 120 : 140);
+  const cy = VIEW_H / 2 + (rng() - 0.5) * (exposedMode ? 120 : 140);
   const verts: TerrainPoint[] = [];
 
   for (let i = 0; i < N; i++) {
@@ -98,10 +98,10 @@ export function generateCoastDocks(
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const segLen = Math.hypot(dx, dy);
-    if (segLen < 28) continue;
+    if (segLen < 112) continue;
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
-    if (mx < -8 || mx > VIEW_W + 8 || my < -8 || my > VIEW_H + 8) continue;
+    if (mx < -32 || mx > VIEW_W + 32 || my < -32 || my > VIEW_H + 32) continue;
 
     const p1x = -dy / segLen;
     const p1y = dx / segLen;
@@ -114,15 +114,15 @@ export function generateCoastDocks(
     for (let cluster = 0; cluster < clusterCount; cluster++) {
       if (rng() < 0.3) continue;
       const clusterT = 0.18 + rng() * 0.64;
-      const longTwin = rng() < 0.18 && segLen > 36;
+      const longTwin = rng() < 0.18 && segLen > 144;
       const dockCount = longTwin ? 2 : 3 + Math.floor(rng() * 3);
-      const pierW = longTwin ? 2.4 : 3.4;
-      const pierLen = longTwin ? 17.5 : 11.4;
-      const spacing = longTwin ? 4.7 : 5.4;
+      const pierW = longTwin ? 9.6 : 13.6;
+      const pierLen = longTwin ? 70 : 45.6;
+      const spacing = longTwin ? 18.8 : 21.6;
       const clusterWidth = spacing * (dockCount - 1);
       const angle = Math.atan2(outward.y, outward.x) + Math.PI / 2;
       const candidate: Array<{ path: string; polygon: TerrainPoint[]; box: ReturnType<typeof polygonBBox> }> = [];
-      const pierHitsRiver = (poly: TerrainPoint[]) => riverSegments.some((seg) => poly.some((p) => pointToSegmentDist(p.x, p.y, seg.a, seg.b) < 13));
+      const pierHitsRiver = (poly: TerrainPoint[]) => riverSegments.some((seg) => poly.some((p) => pointToSegmentDist(p.x, p.y, seg.a, seg.b) < 52));
 
       for (let k = 0; k < dockCount; k++) {
         const along = (k - (dockCount - 1) / 2) * spacing;
@@ -132,7 +132,7 @@ export function generateCoastDocks(
         const baseY = a.y + dy * t;
         const cx = baseX + outward.x * (pierLen / 2 - 2.4);
         const cy = baseY + outward.y * (pierLen / 2 - 2.4);
-        if (cx < -4 || cx > VIEW_W + 4 || cy < -4 || cy > VIEW_H + 4) continue;
+        if (cx < -16 || cx > VIEW_W + 16 || cy < -16 || cy > VIEW_H + 16) continue;
         const poly = rectPolygon(cx, cy, pierW, pierLen, angle);
         if (pierHitsRiver(poly)) continue;
         const box = polygonBBox(poly);

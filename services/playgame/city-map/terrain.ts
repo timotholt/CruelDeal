@@ -15,7 +15,7 @@ import { generateRivers, type RiverPlan, type Segment } from "./water";
 
 type Rng = () => number;
 
-export const MIN_ISLAND_CHANNEL = 14;
+export const MIN_ISLAND_CHANNEL = 56;
 
 export interface Point {
   x: number;
@@ -66,7 +66,7 @@ function polygonEdges(polygon: Point[]) {
   return edges;
 }
 
-function visibleSampleArea(polygon: Point[], step = 8) {
+function visibleSampleArea(polygon: Point[], step = 32) {
   let count = 0;
   for (let x = step / 2; x < VIEW_W; x += step) {
     for (let y = step / 2; y < VIEW_H; y += step) {
@@ -148,8 +148,8 @@ export function buildCoastline(landmasses: LandmassPlan[]) {
         midpoint,
         outward: { x: nx, y: ny },
         kind,
-        dockable: length >= 24 && kind !== "inlet",
-        bridgeable: length >= 18
+        dockable: length >= 96 && kind !== "inlet",
+        bridgeable: length >= 72
       };
       edges.push(data);
       if (data.dockable) docksAllowedEdges.push(id);
@@ -178,26 +178,26 @@ function makeLandmass(id: string, kind: "mainland" | "island", polygon: Point[],
 
 function makeIslandCandidate(landPolygon: Point[], rng: Rng) {
   const side = Math.floor(rng() * 4);
-  const waterPad = 16;
+  const waterPad = 64;
   let cx: number;
   let cy: number;
   if (side === 0) {
     cx = -waterPad + rng() * (VIEW_W + waterPad * 2);
-    cy = 18 + rng() * 74;
+    cy = 72 + rng() * 296;
   } else if (side === 1) {
-    cx = VIEW_W - 74 + rng() * 92;
+    cx = VIEW_W - 296 + rng() * 368;
     cy = -waterPad + rng() * (VIEW_H + waterPad * 2);
   } else if (side === 2) {
     cx = -waterPad + rng() * (VIEW_W + waterPad * 2);
-    cy = VIEW_H - 74 + rng() * 92;
+    cy = VIEW_H - 296 + rng() * 368;
   } else {
-    cx = -18 + rng() * 92;
+    cx = -72 + rng() * 368;
     cy = -waterPad + rng() * (VIEW_H + waterPad * 2);
   }
   if (pointInPolygon({ x: cx, y: cy }, landPolygon)) return null;
-  const radius = 22 + rng() * 46;
+  const radius = 88 + rng() * 184;
   const poly = makeBlob(cx, cy, radius, rng, 16 + Math.floor(rng() * 7), 0.38);
-  const visibleVerts = poly.filter((p) => p.x > -6 && p.x < VIEW_W + 6 && p.y > -6 && p.y < VIEW_H + 6).length;
+  const visibleVerts = poly.filter((p) => p.x > -24 && p.x < VIEW_W + 24 && p.y > -24 && p.y < VIEW_H + 24).length;
   if (visibleVerts < 4) return null;
   if (polygonToPolygonDist(poly, landPolygon) < MIN_ISLAND_CHANNEL) return null;
   return poly;
@@ -212,12 +212,12 @@ function planTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: Segme
   for (let attempt = 0; attempt < 140 && islands.length < target; attempt++) {
     const poly = makeIslandCandidate(landPolygon, rng);
     if (!poly) continue;
-    if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 12)) continue;
-    if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 16)) continue;
+    if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 48)) continue;
+    if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 64)) continue;
     // Reject islands too close to mainland — they overlap visually with mainland
     // and produce confusing ghost districts on top of the main land mass.
     const distToMainland = polygonToPolygonDist(poly, landPolygon);
-    if (distToMainland < 16) continue;
+    if (distToMainland < 64) continue;
     islands.push(makeLandmass(`island-${islands.length + 1}`, "island", poly, { minimumChannel: distToMainland }));
   }
   return addCompositionSatelliteIslandIfNeeded(landPolygon, islands, rng, riverSegments);
@@ -225,7 +225,7 @@ function planTerrainIslands(landPolygon: Point[], rng: Rng, riverSegments: Segme
 
 type CompositionQuadrantId = "nw" | "ne" | "sw" | "se";
 
-function quadrantVisibleSampleArea(polygon: Point[], bounds: { minX: number; minY: number; maxX: number; maxY: number }, step = 8) {
+function quadrantVisibleSampleArea(polygon: Point[], bounds: { minX: number; minY: number; maxX: number; maxY: number }, step = 32) {
   let count = 0;
   for (let x = bounds.minX + step / 2; x < bounds.maxX; x += step) {
     for (let y = bounds.minY + step / 2; y < bounds.maxY; y += step) {
@@ -236,10 +236,10 @@ function quadrantVisibleSampleArea(polygon: Point[], bounds: { minX: number; min
 }
 
 function compositionQuadrantBounds(id: CompositionQuadrantId) {
-  const west = { minX: 8, maxX: VIEW_W * 0.42 };
-  const east = { minX: VIEW_W * 0.58, maxX: VIEW_W - 8 };
-  const north = { minY: 8, maxY: VIEW_H * 0.38 };
-  const south = { minY: VIEW_H * 0.62, maxY: VIEW_H - 8 };
+  const west = { minX: 32, maxX: VIEW_W * 0.42 };
+  const east = { minX: VIEW_W * 0.58, maxX: VIEW_W - 32 };
+  const north = { minY: 32, maxY: VIEW_H * 0.38 };
+  const south = { minY: VIEW_H * 0.62, maxY: VIEW_H - 32 };
   return {
     ...(id === "nw" || id === "sw" ? west : east),
     ...(id === "nw" || id === "ne" ? north : south),
@@ -253,20 +253,20 @@ function satelliteCentersForQuadrant(id: CompositionQuadrantId) {
   const sx = bounds.maxX - bounds.minX;
   const sy = bounds.maxY - bounds.minY;
   return [
-    { x: cx, y: cy, r: 24 },
-    { x: cx + sx * 0.18, y: cy - sy * 0.12, r: 22 },
-    { x: cx - sx * 0.16, y: cy + sy * 0.14, r: 21 },
-    { x: cx + sx * 0.08, y: cy + sy * 0.2, r: 19 },
-    { x: cx - sx * 0.2, y: cy - sy * 0.18, r: 18 },
+    { x: cx, y: cy, r: 96 },
+    { x: cx + sx * 0.18, y: cy - sy * 0.12, r: 88 },
+    { x: cx - sx * 0.16, y: cy + sy * 0.14, r: 84 },
+    { x: cx + sx * 0.08, y: cy + sy * 0.2, r: 76 },
+    { x: cx - sx * 0.2, y: cy - sy * 0.18, r: 72 },
   ];
 }
 
 function makeSatelliteCandidate(quadrantId: CompositionQuadrantId, index: number, rng: Rng) {
   const centers = satelliteCentersForQuadrant(quadrantId);
   const base = centers[index % centers.length];
-  const cx = base.x + (rng() - 0.5) * 18;
-  const cy = base.y + (rng() - 0.5) * 18;
-  const radius = base.r + (rng() - 0.5) * 6;
+  const cx = base.x + (rng() - 0.5) * 72;
+  const cy = base.y + (rng() - 0.5) * 72;
+  const radius = base.r + (rng() - 0.5) * 24;
   return makeBlob(cx, cy, radius, rng, 14 + Math.floor(rng() * 5), 0.28);
 }
 
@@ -294,11 +294,11 @@ function addCompositionSatelliteIslandIfNeeded(
 
   for (let attempt = 0; attempt < 12; attempt++) {
     const poly = makeSatelliteCandidate(target.id, attempt, rng);
-    const visibleVerts = poly.filter((p) => p.x > 8 && p.x < VIEW_W - 8 && p.y > 8 && p.y < VIEW_H - 8).length;
+    const visibleVerts = poly.filter((p) => p.x > 32 && p.x < VIEW_W - 32 && p.y > 32 && p.y < VIEW_H - 32).length;
     if (visibleVerts < 4) continue;
     if (poly.some((p) => pointInPolygon(p, landPolygon))) continue;
-    if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 12)) continue;
-    if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 16)) continue;
+    if (riverSegments.length && poly.some((p) => distToRiver(p.x, p.y, riverSegments) < 48)) continue;
+    if (islands.some((existing) => polygonToPolygonDist(poly, existing.polygon) < 64)) continue;
 
     const distToMainland = polygonToPolygonDist(poly, landPolygon);
     if (distToMainland < MIN_ISLAND_CHANNEL) continue;
@@ -307,7 +307,7 @@ function addCompositionSatelliteIslandIfNeeded(
       compositionRole: `satellite-balance:${target.id}`,
       minimumChannel: distToMainland,
     });
-    if (satellite.visibleArea < 360) continue;
+    if (satellite.visibleArea < 5760) continue;
     return [...islands, satellite];
   }
 
@@ -341,7 +341,7 @@ function buildChannels(mainland: LandmassPlan, islands: LandmassPlan[]) {
       landmassIds: [mainland.id, island.id],
       minWidth: polygonToPolygonDist(mainland.polygon, island.polygon),
       centerline: [mainlandPoint, islandPoint],
-      bridgeAllowed: island.visibleArea > 420
+      bridgeAllowed: island.visibleArea > 6720
     };
   });
 }
@@ -363,7 +363,7 @@ function makeElevation(rng: Rng, landmasses: LandmassPlan[]) {
         break;
       }
     }
-    hills.push({ id: `hill-${i + 1}`, x, y, radius: 80 + rng() * 130, height: 0.12 + rng() * 0.34 });
+    hills.push({ id: `hill-${i + 1}`, x, y, radius: 320 + rng() * 520, height: 0.12 + rng() * 0.34 });
   }
   return { base: 0, hills, shadowHint: { azimuth: -0.72, elevation: 0.55 } };
 }

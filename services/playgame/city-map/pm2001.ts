@@ -28,12 +28,12 @@ interface RoadStyleProfile {
 }
 
 const ROAD_STYLE_PROFILES: Record<RoadStyleId, RoadStyleProfile> = {
-  tight_grid: { id: 'tight_grid', spacing: 18, spacingJitter: 0.1, angleJitter: 0.05, curvature: 0, targetRoadDensity: 0.9, continuationProbability: 0.82, branchProbability: 0.18, crossStreetProbability: 0.72, deadEndProbability: 0.02, loopProbability: 0.18, segmentLengthMin: 10, segmentLengthMax: 28, maxUninterruptedLength: 34, snapDistance: 3, intersectionExtensionDistance: 7, minParallelSpacing: 7, minBlockArea: 95, maxBlockAspect: 7 },
-  loose_grid: { id: 'loose_grid', spacing: 26, spacingJitter: 0.24, angleJitter: 0.12, curvature: 0.08, targetRoadDensity: 0.68, continuationProbability: 0.74, branchProbability: 0.22, crossStreetProbability: 0.58, deadEndProbability: 0.04, loopProbability: 0.12, segmentLengthMin: 12, segmentLengthMax: 36, maxUninterruptedLength: 44, snapDistance: 3, intersectionExtensionDistance: 8, minParallelSpacing: 9, minBlockArea: 115, maxBlockAspect: 7.5 },
-  curvy_residential: { id: 'curvy_residential', spacing: 28, spacingJitter: 0.32, angleJitter: 0.22, curvature: 0.26, targetRoadDensity: 0.54, continuationProbability: 0.66, branchProbability: 0.34, crossStreetProbability: 0.34, deadEndProbability: 0.16, loopProbability: 0.1, segmentLengthMin: 12, segmentLengthMax: 34, maxUninterruptedLength: 42, snapDistance: 4, intersectionExtensionDistance: 9, minParallelSpacing: 10, minBlockArea: 120, maxBlockAspect: 8 },
-  industrial_spine: { id: 'industrial_spine', spacing: 36, spacingJitter: 0.18, angleJitter: 0.08, curvature: 0.04, targetRoadDensity: 0.42, continuationProbability: 0.86, branchProbability: 0.18, crossStreetProbability: 0.24, deadEndProbability: 0.1, loopProbability: 0.04, segmentLengthMin: 16, segmentLengthMax: 48, maxUninterruptedLength: 58, snapDistance: 5, intersectionExtensionDistance: 10, minParallelSpacing: 14, minBlockArea: 180, maxBlockAspect: 9 },
-  coastal_curve: { id: 'coastal_curve', spacing: 24, spacingJitter: 0.22, angleJitter: 0.16, curvature: 0.22, targetRoadDensity: 0.58, continuationProbability: 0.7, branchProbability: 0.24, crossStreetProbability: 0.38, deadEndProbability: 0.06, loopProbability: 0.12, segmentLengthMin: 12, segmentLengthMax: 34, maxUninterruptedLength: 42, snapDistance: 4, intersectionExtensionDistance: 9, minParallelSpacing: 9, minBlockArea: 105, maxBlockAspect: 8 },
-  old_core: { id: 'old_core', spacing: 16, spacingJitter: 0.38, angleJitter: 0.2, curvature: 0.1, targetRoadDensity: 0.96, continuationProbability: 0.68, branchProbability: 0.32, crossStreetProbability: 0.68, deadEndProbability: 0.08, loopProbability: 0.18, segmentLengthMin: 8, segmentLengthMax: 24, maxUninterruptedLength: 32, snapDistance: 3, intersectionExtensionDistance: 7, minParallelSpacing: 6, minBlockArea: 80, maxBlockAspect: 8.5 },
+  tight_grid: { id: 'tight_grid', spacing: 72, spacingJitter: 0.1, angleJitter: 0.05, curvature: 0, targetRoadDensity: 0.9, continuationProbability: 0.82, branchProbability: 0.18, crossStreetProbability: 0.72, deadEndProbability: 0.02, loopProbability: 0.18, segmentLengthMin: 40, segmentLengthMax: 112, maxUninterruptedLength: 136, snapDistance: 12, intersectionExtensionDistance: 28, minParallelSpacing: 28, minBlockArea: 1520, maxBlockAspect: 7 },
+  loose_grid: { id: 'loose_grid', spacing: 104, spacingJitter: 0.24, angleJitter: 0.12, curvature: 0.08, targetRoadDensity: 0.68, continuationProbability: 0.74, branchProbability: 0.22, crossStreetProbability: 0.58, deadEndProbability: 0.04, loopProbability: 0.12, segmentLengthMin: 48, segmentLengthMax: 144, maxUninterruptedLength: 176, snapDistance: 12, intersectionExtensionDistance: 32, minParallelSpacing: 36, minBlockArea: 1840, maxBlockAspect: 7.5 },
+  curvy_residential: { id: 'curvy_residential', spacing: 112, spacingJitter: 0.32, angleJitter: 0.22, curvature: 0.26, targetRoadDensity: 0.54, continuationProbability: 0.66, branchProbability: 0.34, crossStreetProbability: 0.34, deadEndProbability: 0.16, loopProbability: 0.1, segmentLengthMin: 48, segmentLengthMax: 136, maxUninterruptedLength: 168, snapDistance: 16, intersectionExtensionDistance: 36, minParallelSpacing: 40, minBlockArea: 1920, maxBlockAspect: 8 },
+  industrial_spine: { id: 'industrial_spine', spacing: 144, spacingJitter: 0.18, angleJitter: 0.08, curvature: 0.04, targetRoadDensity: 0.42, continuationProbability: 0.86, branchProbability: 0.18, crossStreetProbability: 0.24, deadEndProbability: 0.1, loopProbability: 0.04, segmentLengthMin: 64, segmentLengthMax: 192, maxUninterruptedLength: 232, snapDistance: 20, intersectionExtensionDistance: 40, minParallelSpacing: 56, minBlockArea: 2880, maxBlockAspect: 9 },
+  coastal_curve: { id: 'coastal_curve', spacing: 96, spacingJitter: 0.22, angleJitter: 0.16, curvature: 0.22, targetRoadDensity: 0.58, continuationProbability: 0.7, branchProbability: 0.24, crossStreetProbability: 0.38, deadEndProbability: 0.06, loopProbability: 0.12, segmentLengthMin: 48, segmentLengthMax: 136, maxUninterruptedLength: 168, snapDistance: 16, intersectionExtensionDistance: 36, minParallelSpacing: 36, minBlockArea: 1680, maxBlockAspect: 8 },
+  old_core: { id: 'old_core', spacing: 64, spacingJitter: 0.38, angleJitter: 0.2, curvature: 0.1, targetRoadDensity: 0.96, continuationProbability: 0.68, branchProbability: 0.32, crossStreetProbability: 0.68, deadEndProbability: 0.08, loopProbability: 0.18, segmentLengthMin: 32, segmentLengthMax: 96, maxUninterruptedLength: 128, snapDistance: 12, intersectionExtensionDistance: 28, minParallelSpacing: 24, minBlockArea: 1280, maxBlockAspect: 8.5 },
 };
 
 export function roadStyleForDistrict(district: CityDistrict & Record<string, any>): RoadStyleProfile {
@@ -333,4 +333,142 @@ export function pointInRoadCorridor(point: Point, roadEdges: readonly RoadEdge[]
     const corridor = edge.corridorPolygon || [];
     return corridor.length >= 3 && pointInPolygon(point, corridor);
   });
+}
+
+// Compute graph-connectivity metrics for a set of PM2001-generated local roads.
+//
+// largestComponentRatio: fraction of total local-road length in the single largest
+//   connected component. Connectivity is counted both through direct endpoint proximity
+//   between local roads AND through shared connections to the same existing road edge,
+//   so roads in separate districts that both tie into the macro network are treated as
+//   connected. This matches the spec intent: "after intersection splitting" across the
+//   full road graph.
+//
+// connectedEndpointRatio: fraction of local road endpoints that touch another road,
+//   node, gateway, or loop (either a peer local road or an existing road edge).
+export function pm2001RoadConnectivityMetrics(
+  localRoads: readonly RoadEdge[],
+  existingEdges: readonly RoadEdge[],
+  snapDist = 20,
+): { largestComponentRatio: number; connectedEndpointRatio: number } {
+  if (!localRoads.length) return { largestComponentRatio: 1, connectedEndpointRatio: 1 };
+
+  const ptsOf = (edge: RoadEdge): Point[] => edgeCenterline(edge);
+  const endpointsOf = (edge: RoadEdge): [Point, Point] => {
+    const pts = edgeCenterline(edge);
+    return [pts[0], pts[pts.length - 1]];
+  };
+
+  const n = localRoads.length;
+  const m = existingEdges.length;
+  // Union-find over n local roads + m existing edges as virtual connector nodes.
+  // Indices [0, n-1] = local roads; [n, n+m-1] = existing edges.
+  const parent = Array.from({ length: n + m }, (_, i) => i);
+  function find(i: number): number {
+    if (parent[i] !== i) parent[i] = find(parent[i]);
+    return parent[i];
+  }
+  function unite(i: number, j: number) { parent[find(i)] = find(j); }
+
+  const eps = Math.max(snapDist * 2, 6);
+  const localPts = localRoads.map(ptsOf);
+  const localEps = localRoads.map(endpointsOf);
+  const existingPts = existingEdges.map(ptsOf);
+
+  // Union local roads that directly share/near endpoints or T-intersect
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (find(i) === find(j)) continue;
+      const [si, ei] = localEps[i];
+      const [sj, ej] = localEps[j];
+      const nearEp =
+        Math.hypot(si.x - sj.x, si.y - sj.y) <= eps ||
+        Math.hypot(si.x - ej.x, si.y - ej.y) <= eps ||
+        Math.hypot(ei.x - sj.x, ei.y - sj.y) <= eps ||
+        Math.hypot(ei.x - ej.x, ei.y - ej.y) <= eps;
+      if (nearEp) { unite(i, j); continue; }
+      // T-intersections
+      const pj = localPts[j];
+      const pi = localPts[i];
+      let hit = false;
+      for (const ep of [si, ei]) {
+        for (let k = 0; k + 1 < pj.length && !hit; k++) {
+          if (pointToSegmentDist(ep.x, ep.y, pj[k], pj[k + 1]) <= eps) hit = true;
+        }
+      }
+      if (!hit) {
+        for (const ep of [sj, ej]) {
+          for (let k = 0; k + 1 < pi.length && !hit; k++) {
+            if (pointToSegmentDist(ep.x, ep.y, pi[k], pi[k + 1]) <= eps) hit = true;
+          }
+        }
+      }
+      if (hit) unite(i, j);
+    }
+  }
+
+  // Union local roads to existing edge virtual nodes (cross-district connectivity)
+  for (let i = 0; i < n; i++) {
+    const [si, ei] = localEps[i];
+    for (let j = 0; j < m; j++) {
+      const ePts = existingPts[j];
+      for (let k = 0; k + 1 < ePts.length; k++) {
+        const distS = pointToSegmentDist(si.x, si.y, ePts[k], ePts[k + 1]);
+        const distE = pointToSegmentDist(ei.x, ei.y, ePts[k], ePts[k + 1]);
+        if (distS <= eps * 1.5 || distE <= eps * 1.5) {
+          unite(i, n + j);
+          break;
+        }
+      }
+    }
+  }
+
+  // Measure component lengths (only over local roads)
+  const componentLength = new Map<number, number>();
+  let totalLength = 0;
+  for (let i = 0; i < n; i++) {
+    const pts = localPts[i];
+    let len = 0;
+    for (let k = 0; k + 1 < pts.length; k++) {
+      len += Math.hypot(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y);
+    }
+    const c = find(i);
+    componentLength.set(c, (componentLength.get(c) ?? 0) + len);
+    totalLength += len;
+  }
+
+  const largestComponent = componentLength.size ? Math.max(...componentLength.values()) : 0;
+  const largestComponentRatio = totalLength > 0 ? largestComponent / totalLength : 1;
+
+  // Connected endpoint ratio: endpoint touches any road (local or existing)
+  let connectedEndpoints = 0;
+  let totalEndpoints = 0;
+  for (let i = 0; i < n; i++) {
+    const [start, end] = localEps[i];
+    for (const ep of [start, end]) {
+      totalEndpoints++;
+      let connected = false;
+      for (let j = 0; j < n && !connected; j++) {
+        if (j === i) continue;
+        const [sj, ej] = localEps[j];
+        if (Math.hypot(ep.x - sj.x, ep.y - sj.y) <= eps || Math.hypot(ep.x - ej.x, ep.y - ej.y) <= eps) {
+          connected = true;
+        }
+        const pj = localPts[j];
+        for (let k = 0; k + 1 < pj.length && !connected; k++) {
+          if (pointToSegmentDist(ep.x, ep.y, pj[k], pj[k + 1]) <= eps) connected = true;
+        }
+      }
+      for (let j = 0; j < m && !connected; j++) {
+        const ePts = existingPts[j];
+        for (let k = 0; k + 1 < ePts.length && !connected; k++) {
+          if (pointToSegmentDist(ep.x, ep.y, ePts[k], ePts[k + 1]) <= eps * 1.5) connected = true;
+        }
+      }
+      if (connected) connectedEndpoints++;
+    }
+  }
+
+  const connectedEndpointRatio = totalEndpoints > 0 ? connectedEndpoints / totalEndpoints : 1;
+  return { largestComponentRatio, connectedEndpointRatio };
 }

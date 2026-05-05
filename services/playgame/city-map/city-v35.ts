@@ -275,17 +275,17 @@ function polygonUsesCutBoundary(polygon: readonly Point[], cut: Cut) {
     const a = polygon[i];
     const b = polygon[(i + 1) % polygon.length];
     const edgeLen = Math.hypot(b.x - a.x, b.y - a.y);
-    if (edgeLen < 4) continue;
+    if (edgeLen < 16) continue;
     for (const segment of segments) {
       const da = pointToSegmentDist(a.x, a.y, segment.a, segment.b);
       const db = pointToSegmentDist(b.x, b.y, segment.a, segment.b);
-      if (da < 2.25 && db < 2.25) {
+      if (da < 9 && db < 9) {
         matchedSpan += edgeLen;
         break;
       }
     }
   }
-  return matchedSpan >= 5;
+  return matchedSpan >= 20;
 }
 
 function clipPolygonToCutSide(subject: Point[], cut: Cut, keepPoint: Point) {
@@ -305,7 +305,7 @@ function clipPolygonToCutSide(subject: Point[], cut: Cut, keepPoint: Point) {
 
   const ux = dx / len;
   const uy = dy / len;
-  const huge = 4000;
+  const huge = 16000;
   const result = splitPolygonByLine(
     subject,
     { x: a.x - ux * huge, y: a.y - uy * huge },
@@ -313,7 +313,7 @@ function clipPolygonToCutSide(subject: Point[], cut: Cut, keepPoint: Point) {
   );
   if (!result) return subject;
 
-  const halves = [result[0], result[1]].filter((poly) => poly && poly.length >= 3 && polygonArea(poly) > 20);
+  const halves = [result[0], result[1]].filter((poly) => poly && poly.length >= 3 && polygonArea(poly) > 320);
   const selected = halves.find((poly) => signedLineSide(polygonCentroid(poly), a, b) * keepSide >= -1e-6);
   return selected || subject;
 }
@@ -335,7 +335,7 @@ function buildMainlandBuildablePolygons(
       }
       return buildable;
     })
-    .filter((poly) => poly && poly.length >= 3 && polygonArea(poly) > 50);
+    .filter((poly) => poly && poly.length >= 3 && polygonArea(poly) > 800);
 }
 
 function makeDistrict(
@@ -351,7 +351,7 @@ function makeDistrict(
 ): CityDistrict & { rawCuts: Cut[]; label?: ReturnType<typeof labelPosition>; visibleArea?: number; waterPolygons: Point[][]; landmassId: string } {
   const districtId = `district-${idx}`;
   const sourcePolygons = (buildablePieces?.length ? buildablePieces : [region])
-    .filter((polygon) => polygon && polygon.length >= 3 && polygonArea(polygon) > 50)
+    .filter((polygon) => polygon && polygon.length >= 3 && polygonArea(polygon) > 800)
     .map((polygon) => polygon.map((point) => ({ ...point })));
   const roots = sourcePolygons.map((polygon) => bspSubdivide(polygon, 2, gridAngle, rng));
   const leaves = roots.flatMap((root) => collectLeaves(root));
@@ -368,13 +368,13 @@ function makeDistrict(
         centroid,
         area,
         fieldAngle: gridAngle,
-        buildable: area > 85,
-        density: area > 850 ? 'dense' : area > 360 ? 'medium' : 'sparse',
+        buildable: area > 1360,
+        density: area > 13600 ? 'dense' : area > 5760 ? 'medium' : 'sparse',
         bigLandmark: !!leaf.bigLandmark,
       };
       return block;
     })
-    .filter((block) => block.area > 36);
+    .filter((block) => block.area > 576);
   const visibleArea = viewportVisibleArea(region);
   const label = labelPosition(region, [], names[idx] || `DISTRICT ${idx + 1}`);
   const bigLandmarkBlockData = blocks.filter((b) => b.bigLandmark);
@@ -383,8 +383,8 @@ function makeDistrict(
 
   const bbox = polygonBBox(region);
   const aspect = Math.max(bbox.w, bbox.h) / Math.max(1, Math.min(bbox.w, bbox.h));
-  const areaSlotCount = visibleArea > 52000 ? 10
-    : visibleArea > 40000 ? 8
+  const areaSlotCount = visibleArea > 832000 ? 10
+    : visibleArea > 640000 ? 8
     : 6;
   const slotCount = flavor ? 0
     : aspect > 3.2 ? Math.min(areaSlotCount, 6)
@@ -647,6 +647,7 @@ function pm2001RoadEdge(
   styleId: ReturnType<typeof roadStyleForDistrict>['id'],
   role: PM2001RoadRole = 'connector',
   adjustedReason?: string,
+  endpointKind?: string,
 ): RoadEdge {
   return {
     id: `${district.id}:pm2001-road:${index}`,
@@ -667,6 +668,7 @@ function pm2001RoadEdge(
     pm2001Role: role,
     pm2001ActualSuccessor: {
       accepted: true,
+      endpointKind: endpointKind as any,
       adjustedReason,
     },
   };
@@ -775,24 +777,38 @@ function createGatewayFrontiers(
 ) {
   const frontier: PM2001RoadFrontier[] = [];
   const seen = new Set<string>();
-  const key = (point: Point, heading: number) => `${Math.round(point.x / 4)}:${Math.round(point.y / 4)}:${Math.round(normalizeAngle(heading) / 0.4)}`;
+  const key = (point: Point, heading: number) => `${Math.round(point.x / 16)}:${Math.round(point.y / 16)}:${Math.round(normalizeAngle(heading) / 0.4)}`;
 
   for (const edge of existingRoadEdges) {
-    if (edge.source === 'coast-road') continue;
+    const isCoastRoad = edge.source === 'coast-road';
     for (const [start, end] of roadSegmentsForEdges([edge]).flatMap((segment) => clipSegmentToPolygon(segment.a, segment.b, region))) {
       const len = segmentLength(start, end);
       if (len < style.spacing * 0.65) continue;
       const roadAngle = Math.atan2(end.y - start.y, end.x - start.x);
-      const sampleCount = Math.max(1, Math.min(3, Math.floor(len / Math.max(18, style.spacing))));
+      // Coast roads: sample more sparsely; non-coast: standard sampling
+      const sampleCount = Math.max(1, Math.min(isCoastRoad ? 2 : 3, Math.floor(len / Math.max(72, style.spacing))));
       for (let i = 0; i < sampleCount; i++) {
         const t = (i + 1) / (sampleCount + 1);
         const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
         for (const turn of [-1, 1]) {
           const heading = roadAngle + turn * Math.PI / 2 + (rng() - 0.5) * style.angleJitter;
-          const k = key(point, heading);
-          if (seen.has(k)) continue;
-          seen.add(k);
-          pushFrontier(frontier, { point, heading, depth: 0, priority: 1.2, source: 'gateway' }, region);
+          if (isCoastRoad) {
+            // Only allow inward-facing coast gateways; move start slightly inward so
+            // pointInPolygon passes (coast road lies on the district boundary).
+            const inwardProbe = pointAlong(point, heading, style.spacing * 0.5);
+            if (!pointInPolygon(inwardProbe, region)) continue;
+            const inwardStart = pointAlong(point, heading, 8);
+            if (!pointInPolygon(inwardStart, region)) continue;
+            const k = key(inwardStart, heading);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            frontier.push({ point: inwardStart, heading, depth: 0, priority: 0.9, source: 'gateway' });
+          } else {
+            const k = key(point, heading);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            pushFrontier(frontier, { point, heading, depth: 0, priority: 1.2, source: 'gateway' }, region);
+          }
         }
       }
     }
@@ -870,24 +886,30 @@ function applyPM2001LocalConstraints(
   const run = clippedRuns.find(([start]) => sameLocation(start, ideal.start, 1.25)) || clippedRuns[0];
   if (!run) return { accepted: false, rejectedReason: 'out-of-bounds' as const };
   let end = run[1];
-  let adjustedReason: string | undefined = !sameLocation(end, rawEnd, 0.9) ? 'trim-to-land' : undefined;
+  const clippedToBoundary = !sameLocation(end, rawEnd, 0.9);
+  let adjustedReason: string | undefined = clippedToBoundary ? 'trim-to-land' : undefined;
+  // boundary contact counts as legal endpoint (district gateway)
+  let endpointKind: string | undefined = clippedToBoundary ? 'boundary-gateway' : undefined;
   const roadSegments = roadSegmentsForEdges(roadEdges);
   const intersection = nearestRoadIntersection(ideal.start, end, roadSegments, 0.12, 1.0);
   if (intersection) {
     end = intersection.point;
     adjustedReason = 'split-edge';
+    endpointKind = 'edge-split';
   } else {
     const extended = pointAlong(ideal.start, ideal.heading, segmentLength(ideal.start, end) + style.intersectionExtensionDistance);
     const extension = nearestRoadIntersection(ideal.start, extended, roadSegments, 0.86, 1.0);
     if (extension && pointInPolygon(extension.point, region)) {
       end = extension.point;
       adjustedReason = 'extend-to-intersection';
+      endpointKind = 'intersection-extension';
     }
   }
   const snapped = snapToNearestRoadNode(end, roadEdges, style.snapDistance);
   if (snapped && !sameLocation(snapped, ideal.start, 1.1) && pointInPolygon(snapped, region)) {
     end = { x: snapped.x, y: snapped.y };
     adjustedReason = 'snap-node';
+    endpointKind = 'node-snap';
   }
   const length = segmentLength(ideal.start, end);
   if (length < style.segmentLengthMin) return { accepted: false, rejectedReason: 'too-short' as const };
@@ -895,7 +917,89 @@ function applyPM2001LocalConstraints(
   if (tooCloseToParallelRoad(ideal.start, end, roadSegments, style.minParallelSpacing)) return { accepted: false, rejectedReason: 'duplicate' as const };
   const mid = { x: (ideal.start.x + end.x) / 2, y: (ideal.start.y + end.y) / 2 };
   if (!pointInPolygon(mid, region)) return { accepted: false, rejectedReason: 'out-of-bounds' as const };
-  return { accepted: true, end, adjustedReason };
+  return { accepted: true, end, adjustedReason, endpointKind };
+}
+
+// Remove generated roads that are not connected to the existing road network.
+// Keeps the largest component anchored to existing roads, or the largest component overall
+// if the district has no existing roads. Tolerates style-allowed dead ends (leaves) but
+// removes whole isolated sub-graphs (disconnected trees seeded from unconnected points).
+function pruneOrphanDistrictRoads(
+  generated: RoadEdge[],
+  existingRoads: readonly RoadEdge[],
+  snapDist: number,
+): RoadEdge[] {
+  if (generated.length <= 2) return generated;
+  const n = generated.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  function find(i: number): number {
+    if (parent[i] !== i) parent[i] = find(parent[i]);
+    return parent[i];
+  }
+  function unite(i: number, j: number) { parent[find(i)] = find(j); }
+
+  const eps = Math.max(snapDist * 2, 24);
+  const endpts = generated.map((road) => {
+    const pts = roadEdgePoints(road);
+    return { start: pts[0], end: pts[pts.length - 1], pts };
+  });
+
+  // Union generated roads that share near-endpoints or where one endpoint is on another road
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const { start: si, end: ei, pts: pi } = endpts[i];
+      const { start: sj, end: ej, pts: pj } = endpts[j];
+      const nearEndpoints =
+        Math.hypot(si.x - sj.x, si.y - sj.y) <= eps ||
+        Math.hypot(si.x - ej.x, si.y - ej.y) <= eps ||
+        Math.hypot(ei.x - sj.x, ei.y - sj.y) <= eps ||
+        Math.hypot(ei.x - ej.x, ei.y - ej.y) <= eps;
+      if (nearEndpoints) { unite(i, j); continue; }
+      // T-intersection: endpoint near middle of road
+      outer: for (const ep of [si, ei]) {
+        for (let k = 0; k + 1 < pj.length; k++) {
+          if (pointToSegmentDist(ep.x, ep.y, pj[k], pj[k + 1]) <= eps) { unite(i, j); break outer; }
+        }
+      }
+      for (const ep of [sj, ej]) {
+        let hit = false;
+        for (let k = 0; k + 1 < pi.length && !hit; k++) {
+          if (pointToSegmentDist(ep.x, ep.y, pi[k], pi[k + 1]) <= eps) hit = true;
+        }
+        if (hit) { unite(i, j); break; }
+      }
+    }
+  }
+
+  // Determine which components are anchored to existing road edges
+  const anchoredComponents = new Set<number>();
+  const existingPtsList = existingRoads.map(roadEdgePoints);
+  for (let i = 0; i < n; i++) {
+    const { start: si, end: ei } = endpts[i];
+    for (const exPts of existingPtsList) {
+      let anchored = false;
+      for (let k = 0; k + 1 < exPts.length && !anchored; k++) {
+        if (
+          pointToSegmentDist(si.x, si.y, exPts[k], exPts[k + 1]) <= eps * 1.5 ||
+          pointToSegmentDist(ei.x, ei.y, exPts[k], exPts[k + 1]) <= eps * 1.5
+        ) {
+          anchored = true;
+        }
+      }
+      if (anchored) { anchoredComponents.add(find(i)); break; }
+    }
+  }
+
+  // If no anchored components, keep only the largest component (districts with no macro roads)
+  if (anchoredComponents.size === 0) {
+    const sizes = new Map<number, number>();
+    for (let i = 0; i < n; i++) sizes.set(find(i), (sizes.get(find(i)) ?? 0) + 1);
+    let bestC = 0; let bestSz = 0;
+    for (const [c, sz] of sizes) { if (sz > bestSz) { bestSz = sz; bestC = c; } }
+    anchoredComponents.add(bestC);
+  }
+
+  return generated.filter((_, i) => anchoredComponents.has(find(i)));
 }
 
 function generatePM2001LocalRoadEdges(
@@ -924,6 +1028,7 @@ function generatePM2001LocalRoadEdges(
     }
 
     let attempts = 0;
+    const districtRoadsBefore = roads.length;
     while (frontier.length && roads.filter((road) => road.districtId === district.id).length < targetRoads && attempts < maxAttempts) {
       attempts++;
       frontier.sort((a, b) => b.priority - a.priority);
@@ -934,7 +1039,7 @@ function generatePM2001LocalRoadEdges(
         const actual = applyPM2001LocalConstraints(ideal, region, districtRoads(), style);
         if (!actual.accepted || !actual.end) continue;
         const points = bendRoadRun(ideal.start, actual.end, region, style.curvature * (ideal.role === 'cross-street' ? 0.45 : 1), rng);
-        const edge = pm2001RoadEdge(district, points, localIndex++, ideal.kind, style.id, ideal.role, actual.adjustedReason);
+        const edge = pm2001RoadEdge(district, points, localIndex++, ideal.kind, style.id, ideal.role, actual.adjustedReason, actual.endpointKind);
         roads.push(edge);
         const endHeading = Math.atan2(actual.end.y - ideal.start.y, actual.end.x - ideal.start.x);
         if (active.depth < 8 && candidateInsideRegion(actual.end, endHeading, region, style.segmentLengthMin * 0.45)) {
@@ -958,6 +1063,10 @@ function generatePM2001LocalRoadEdges(
         }
       }
     }
+    // Prune orphan sub-graphs: remove generated roads disconnected from existing network
+    const districtGenerated = roads.splice(districtRoadsBefore);
+    const pruned = pruneOrphanDistrictRoads(districtGenerated, existingRoadEdges, style.snapDistance);
+    roads.push(...pruned);
   }
   return roads;
 }
@@ -1267,9 +1376,9 @@ function makeBridgePlan(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] |
     .map((bridge, index) => {
       const depth = bridge.depth ?? 2;
       const delta = bridgeRiverDelta(bridge, riverSegments);
-      const baseLength = Math.max((river?.outerWidth || 7) + 8, depth <= 1 ? 13 : 10);
+      const baseLength = Math.max((river?.outerWidth || 28) + 32, depth <= 1 ? 52 : 40);
       const shallowFactor = 1 / Math.max(0.34, Math.sin(Math.max(delta, 0.22)));
-      const maxLength = depth <= 1 ? 64 : depth >= 4 ? 36 : 52;
+      const maxLength = depth <= 1 ? 256 : depth >= 4 ? 144 : 208;
       const length = Math.min(maxLength, baseLength * shallowFactor);
       const center = { x: bridge.x, y: bridge.y };
       return {
@@ -1316,7 +1425,7 @@ function buildStaticBuildings(
       cells.filter((cell) => cell.districtId === districtId && cell.buildable).length,
     );
     const largest = cells
-      .filter((cell) => cell.districtId === districtId && cell.buildable && cell.area > 1100)
+      .filter((cell) => cell.districtId === districtId && cell.buildable && cell.area > 17600)
       .sort((a, b) => b.area - a.area)[0];
     if (largest) districtParkCells.add(largest.id);
   }
@@ -1324,7 +1433,7 @@ function buildStaticBuildings(
   for (const landmassId of satelliteLandmassIds) {
     const landmass = landmasses[landmassId];
     const islandCells = cells
-      .filter((cell) => cell.landmassId === landmassId && cell.buildable && cell.area > 180)
+      .filter((cell) => cell.landmassId === landmassId && cell.buildable && cell.area > 2880)
       .sort((a, b) => b.area - a.area);
     const harbor = islandCells[0];
     if (!landmass || !harbor) continue;
