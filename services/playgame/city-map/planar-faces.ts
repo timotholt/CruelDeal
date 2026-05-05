@@ -210,6 +210,75 @@ function buildGraph(vertices: Vertex[], segments: AtomicSegment[]): GraphNode[] 
   return nodes;
 }
 
+interface RawFace {
+  vertexIndices: number[];
+  edgeIds: string[];
+}
+
+function walkFaces(nodes: GraphNode[]): RawFace[] {
+  // Map each directed half-edge (fromIdx, neighborIndex) to unique id
+  const visited = new Set<string>();
+  const faces: RawFace[] = [];
+
+  const halfEdgeKey = (from: number, neighborIdx: number) => `${from}:${neighborIdx}`;
+
+  for (let from = 0; from < nodes.length; from++) {
+    const node = nodes[from];
+    for (let ni = 0; ni < node.neighbors.length; ni++) {
+      const startKey = halfEdgeKey(from, ni);
+      if (visited.has(startKey)) continue;
+
+      const vertexIndices: number[] = [];
+      const edgeIds: string[] = [];
+
+      let curFrom = from;
+      let curNeighborIdx = ni;
+      let guard = 0;
+      const maxSteps = nodes.length * 4 + 16;
+
+      while (guard++ < maxSteps) {
+        const key = halfEdgeKey(curFrom, curNeighborIdx);
+        if (visited.has(key)) break;
+        visited.add(key);
+
+        const curNode = nodes[curFrom];
+        const neighbor = curNode.neighbors[curNeighborIdx];
+        vertexIndices.push(curFrom);
+        edgeIds.push(neighbor.edgeId);
+
+        // Move to neighbor.to
+        const to = neighbor.to;
+        const toNode = nodes[to];
+
+        // Find index of curFrom in toNode.neighbors
+        let backIdx = -1;
+        for (let i = 0; i < toNode.neighbors.length; i++) {
+          if (toNode.neighbors[i].to === curFrom) {
+            backIdx = i;
+            break;
+          }
+        }
+        if (backIdx < 0) break;  // graph inconsistency; bail
+
+        // Next half-edge: one clockwise from backIdx, i.e. (backIdx - 1 + n) % n
+        const n = toNode.neighbors.length;
+        const nextNeighborIdx = (backIdx - 1 + n) % n;
+
+        curFrom = to;
+        curNeighborIdx = nextNeighborIdx;
+
+        if (curFrom === from && curNeighborIdx === ni) break;  // completed cycle
+      }
+
+      if (vertexIndices.length >= 3) {
+        faces.push({ vertexIndices, edgeIds });
+      }
+    }
+  }
+
+  return faces;
+}
+
 export function extractPlanarFaces(
   edges: ReadonlyArray<PlanarEdge>,
   clip: ReadonlyArray<Point>,
@@ -253,8 +322,17 @@ export function extractPlanarFaces(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const graph = buildGraph(snap.vertices, atomicSegments);
 
-  // TODO(phase-5): walk faces
-  // TODO(phase-6): drop outer face, filter, normalize
+  // Step 5: walk faces
+  const rawFaces = walkFaces(graph);
 
-  return [];
+  // Temporary phase-5 stub: return raw faces as PlanarFaces without filtering
+  return rawFaces.map((face) => {
+    const polygon = face.vertexIndices.map((idx) => ({ x: snap.vertices[idx].x, y: snap.vertices[idx].y }));
+    return {
+      polygon,
+      area: Math.abs(polygonArea(polygon)),
+      centroid: polygonCentroid(polygon),
+      boundedByEdgeIds: Array.from(new Set(face.edgeIds)),
+    };
+  });
 }

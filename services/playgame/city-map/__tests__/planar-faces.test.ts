@@ -24,7 +24,7 @@ const square = (s: number): Point[] => [
     { id: 'e1', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
     { id: 'e2', points: [{ x: 10.1, y: 0 }, { x: 20, y: 0 }] },  // 10.1 ≈ 10 → snaps
   ], square(100));
-  assert.equal(faces.length, 0, 'phase 2 returns empty (walker not yet implemented)');
+  assert.ok(faces.length >= 1, `phase 2 snap produces faces, got ${faces.length}`);
   pass('phase-2: snap does not crash');
 }
 
@@ -34,7 +34,7 @@ const square = (s: number): Point[] => [
     { id: 'h', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] },
     { id: 'v', points: [{ x: 50, y: 0 }, { x: 50, y: 100 }] },
   ], square(100));
-  assert.equal(faces.length, 0, 'phase 3 still returns empty (walker not yet implemented)');
+  assert.ok(faces.length >= 4, `phase 3 plus-sign produces faces, got ${faces.length}`);
   pass('phase-3: plus-sign does not crash');
 }
 
@@ -44,6 +44,17 @@ const square = (s: number): Point[] => [
     { id: 'h', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] },
     { id: 'v', points: [{ x: 50, y: 0 }, { x: 50, y: 100 }] },
   ], square(100));
-  assert.equal(faces.length, 0, 'phase 4 still returns empty');
+  assert.ok(faces.length >= 4, `phase 4 graph produces faces, got ${faces.length}`);
   pass('phase-4: graph builds without crashing');
+}
+
+// Phase 5: plus-sign produces faces
+{
+  const faces = extractPlanarFaces([
+    { id: 'h', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] },
+    { id: 'v', points: [{ x: 50, y: 0 }, { x: 50, y: 100 }] },
+  ], square(100));
+  // Expected: 4 interior faces + 1 outer face = 5 total (outer face dropped in phase 6)
+  assert.ok(faces.length >= 4 && faces.length <= 5, `phase 5 produces 4–5 faces, got ${faces.length}`);
+  pass('phase-5: plus-sign produces faces (unfiltered)');
 }
