@@ -1,4 +1,6 @@
 import { pointInPolygon, pointToSegmentDist, polygonArea, polygonCentroid, segIntersect } from './geometry';
+import { extractPlanarFaces } from './planar-faces';
+import type { PlanarEdge } from './planar-faces';
 import { splitPolygonByLine } from './partition';
 import { polygonBoolean, type PolygonSet } from './polygon-boolean';
 import { polygonToPath } from './paths';
@@ -471,4 +473,57 @@ export function pm2001RoadConnectivityMetrics(
 
   const connectedEndpointRatio = totalEndpoints > 0 ? connectedEndpoints / totalEndpoints : 1;
   return { largestComponentRatio, connectedEndpointRatio };
+}
+
+export function buildPlanarBlockFacesForDistrict(
+  district: CityDistrict & Record<string, any>,
+  roadEdges: readonly RoadEdge[],
+): PM2001BlockFaceResult {
+  const clip = (district.ownershipPolygons?.[0] || district.polygons?.[0]) as Point[] | undefined;
+  if (!clip || clip.length < 3) {
+    return { blocks: [], roadMask: [], rejectedFaces: [] };
+  }
+
+  const planarEdges: PlanarEdge[] = roadEdges
+    .filter((edge) => {
+      const centerline = edge.centerline && edge.centerline.length >= 2
+        ? edge.centerline
+        : [edge.a, edge.b];
+      return centerline.some((point) => point && pointInPolygon(point, clip));
+    })
+    .map((edge) => ({
+      id: edge.id,
+      points: (edge.centerline && edge.centerline.length >= 2
+        ? edge.centerline
+        : [edge.a, edge.b])
+        .filter(Boolean)
+        .map((p) => ({ x: p.x, y: p.y })),
+      roadEdgeId: edge.id,
+    }))
+    .filter((edge) => edge.points.length >= 2);
+
+  const faces = extractPlanarFaces(planarEdges, clip, { snapEpsilon: 0.5, minFaceArea: 20 });
+
+  const style = roadStyleForDistrict(district);
+  const blocks = faces.map((face, index) => {
+    const aspect = bboxAspect(face.polygon);
+    const buildable = face.area >= style.minBlockArea && aspect <= style.maxBlockAspect;
+    return {
+      id: `${district.id}:planar-face:${index}`,
+      districtId: district.id,
+      landmassId: district.landmassId,
+      polygon: face.polygon,
+      path: polygonToPath(face.polygon),
+      centroid: face.centroid,
+      area: face.area,
+      source: 'planar-face',
+      boundedByRoadIds: face.boundedByEdgeIds.filter((id) => !id.startsWith('__clip__')),
+      roadStyleId: style.id,
+      fieldAngle: Number((district as any).fieldAngle ?? 0),
+      buildable,
+      density: face.area > 850 ? 'dense' : face.area > 360 ? 'medium' : 'sparse',
+    } as CityBlock & Record<string, any>;
+  });
+
+  return { blocks, roadMask: [], rejectedFaces: [] };
 }
