@@ -51,6 +51,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
     useThreeRenderer: initialRendererMode ? initialRendererMode === 'three' : true,
+    roadGenerationMode: 'legacy',
     useRoadFaceBlocks: false,
     usePM2001Roads: false,
     showRoadCorridors: false,
@@ -70,8 +71,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     simplifyDuringCameraMove: initialDebug?.simplifyDuringCameraMove ?? false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city', {
-    roadBlockModel: debugState().useRoadFaceBlocks ? 'pm2001-road-faces' : 'legacy-bsp',
-    pm2001Roads: debugState().usePM2001Roads,
+    roadGenerationMode: debugState().roadGenerationMode,
+    roadBlockModel: debugState().useRoadFaceBlocks || debugState().roadGenerationMode === 'tensor' ? 'pm2001-road-faces' : 'legacy-bsp',
+    pm2001Roads: debugState().roadGenerationMode === 'pm2001',
   }));
   const width = () => props.width || city().width;
   const height = () => props.height || city().height;
@@ -489,7 +491,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
             );
           }}
         </Show>
-        <CityMapDebugDock state={debugState()} onToggle={toggleDebug} />
+        <CityMapDebugDock state={debugState()} onToggle={toggleDebug} onSetRoadGenerationMode={(mode) => setDebugState((s) => ({ ...s, roadGenerationMode: mode }))} />
       </div>
       <Show when={debugState().showComposition}>
         <Portal mount={document.body}>

@@ -37,6 +37,8 @@ export type {
   CityMapOptions,
   CityMapSummary,
   CityRoute,
+  RoadGenerationMode,
+  TensorGenerationConfig,
 } from './city-v35';
 export type {
   BridgePlan,

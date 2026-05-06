@@ -4,6 +4,7 @@ import { Portal } from 'solid-js/web';
 export interface CityMapDebugState {
   showMap: boolean;
   useThreeRenderer: boolean;
+  roadGenerationMode: 'legacy' | 'pm2001' | 'tensor';
   useRoadFaceBlocks: boolean;
   usePM2001Roads: boolean;
   showRoadCorridors: boolean;
@@ -26,10 +27,12 @@ export interface CityMapDebugState {
 export interface CityMapDebugDockProps {
   state: CityMapDebugState;
   onToggle: (key: keyof CityMapDebugState) => void;
+  onSetRoadGenerationMode?: (mode: 'legacy' | 'pm2001' | 'tensor') => void;
 }
 
 const STORAGE_KEY = 'cruel-deal.city-map.debug-dock-position';
 const unavailableKeys = new Set<keyof CityMapDebugState>([
+  'roadGenerationMode',
   'showDistrictDebug',
   'showArterialsDebug',
   'showIslandDebug',
@@ -152,6 +155,20 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
         </div>
         <Show when={!collapsed()}>
           <div class="city-map-debug-dock__body">
+            <label class="city-map-debug-dock__row">
+              <span>Road Gen</span>
+              <button
+                type="button"
+                class="city-map-debug-dock__toggle city-map-debug-dock__toggle--on"
+                onClick={() => props.onSetRoadGenerationMode?.(
+                  props.state.roadGenerationMode === 'legacy' ? 'pm2001'
+                    : props.state.roadGenerationMode === 'pm2001' ? 'tensor'
+                    : 'legacy'
+                )}
+              >
+                {props.state.roadGenerationMode.toUpperCase()}
+              </button>
+            </label>
             <For each={rows}>
               {(row) => {
                 const unavailable = () => unavailableKeys.has(row.key);
@@ -163,7 +180,7 @@ export const CityMapDebugDock = (props: CityMapDebugDockProps) => {
                   disabled={unavailable()}
                   classList={{
                     'city-map-debug-dock__toggle': true,
-                    'city-map-debug-dock__toggle--on': props.state[row.key],
+                    'city-map-debug-dock__toggle--on': !!props.state[row.key],
                     'city-map-debug-dock__toggle--na': unavailable(),
                   }}
                   onClick={() => {

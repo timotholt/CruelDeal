@@ -53,6 +53,19 @@ import type {
 
 type Rng = () => number;
 
+export type RoadGenerationMode = 'legacy' | 'pm2001' | 'tensor';
+
+export interface TensorGenerationConfig {
+  preset?: string;
+  roadDensity?: { main?: number; major?: number; minor?: number };
+  stepSize?: number;
+  collisionRadius?: number;
+  simplifyTolerance?: number;
+  fields?: Array<{ id: string; kind: string; position?: { x: number; y: number }; angle?: number; size?: number; decay?: number; strength: number }>;
+  clipping?: { enabled?: boolean; boundaryMode?: 'stop' | 'clip' };
+  debug?: { exposeTensorField?: boolean; exposeStreamlines?: boolean; exposeRejectedRoads?: boolean };
+}
+
 export interface BaseCityFactoryContext {
   seed: string | number;
   normalizedSeed: number;
@@ -65,8 +78,10 @@ export interface CityMapOptions {
   cache?: boolean;
   cacheKey?: string;
   rng?: Rng;
+  roadGenerationMode?: RoadGenerationMode;
   roadBlockModel?: 'legacy-bsp' | 'pm2001-road-faces';
   pm2001Roads?: boolean;
+  tensorRoads?: TensorGenerationConfig;
   baseCityFactory?: (context: BaseCityFactoryContext) => CityMap;
 }
 
@@ -1712,6 +1727,7 @@ function applyPM2001BlockFaces(
 }
 
 function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35, options: CityMapOptions = {}): CityMap {
+  const mode: RoadGenerationMode = options.roadGenerationMode ?? (options.pm2001Roads ? 'pm2001' : 'legacy');
   const names = shuffle(DISTRICT_NAMES, rng);
   const colors = shuffle(DISTRICT_COLORS, rng);
   const mainlandInset = insetPolygon(terrain.mainland.polygon, 6);
@@ -1729,7 +1745,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     .flatMap((district) => district.roads || [])
     .filter((road) => road.source === 'coast-road')
     .map((road) => road.cut);
-  const legacyLocalRoadCuts = options.pm2001Roads ? [] : districts.flatMap((district) => district.rawCuts || []);
+  const legacyLocalRoadCuts = mode === 'pm2001' || mode === 'tensor' ? [] : districts.flatMap((district) => district.rawCuts || []);
   const rawRoadCuts = [
     ...clippedMacroCuts,
     ...legacyLocalRoadCuts,
@@ -1743,12 +1759,17 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     ...bridgeAwareRoadCuts.map((cut, index) => cutToRoad(cut, index, 'v35-road')),
     ...riverBankCuts.map((cut, index) => cutToRoad(cut, index, 'v35-river-bank')),
   ];
-  if (options.pm2001Roads) {
+  if (mode === 'pm2001') {
     roadEdges.push(...generatePM2001LocalRoadEdges(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng));
   }
+  if (mode === 'tensor') {
+    // Placeholder: tensor road generation will be implemented in Phase 2.
+    // For now, tensor mode produces the same infrastructure roads as legacy
+    // but skips both legacy local cuts and PM2001 local growth.
+  }
   attachPM2001RoadMetadata(roadEdges);
-  if (options.roadBlockModel === 'pm2001-road-faces') {
-    if (options.pm2001Roads) {
+  if (options.roadBlockModel === 'pm2001-road-faces' || mode === 'tensor') {
+    if (mode === 'pm2001') {
       for (const district of districts as Array<CityDistrict & Record<string, any>>) district.pm2001UseOwnershipSeed = true;
     }
     applyPM2001BlockFaces(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng);
@@ -1867,7 +1888,7 @@ function normalizeCityShape(city: CityMap, seed: string | number): CityMap {
  */
 export function buildCityV35(seed: string | number = 1, opts: CityMapOptions = {}): CityMap {
   const normalizedSeed = normalizeSeed(seed);
-  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}:${opts.pm2001Roads ? 'pm2001-roads' : 'legacy-roads'}`;
+  const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}:${opts.roadGenerationMode || (opts.pm2001Roads ? 'pm2001' : 'legacy')}`;
   if (opts.cache !== false && cache.has(key)) return cache.get(key)!;
 
   const rng: Rng = opts.rng || makeRng(normalizedSeed ^ 0x3355);
