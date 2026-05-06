@@ -30,6 +30,16 @@ import { makeRiverBankRoads } from './water';
 import { enrichCityRouting, findPath } from './routing';
 import { enrichCityVenues } from './venues';
 import { URBAN_SCALE } from './urban-units';
+import {
+  cleanTensorRoads,
+  createIslandMask,
+  createTensorField,
+  generateTensorRoadSegments,
+  resolveTensorConfig,
+  type TensorGenerationConfig,
+  type TensorRoadSegment,
+  type Vec2,
+} from './tensor';
 import type {
   Building,
   BuildingLodGroup,
@@ -55,16 +65,7 @@ type Rng = () => number;
 
 export type RoadGenerationMode = 'legacy' | 'pm2001' | 'tensor';
 
-export interface TensorGenerationConfig {
-  preset?: string;
-  roadDensity?: { main?: number; major?: number; minor?: number };
-  stepSize?: number;
-  collisionRadius?: number;
-  simplifyTolerance?: number;
-  fields?: Array<{ id: string; kind: string; position?: { x: number; y: number }; angle?: number; size?: number; decay?: number; strength: number }>;
-  clipping?: { enabled?: boolean; boundaryMode?: 'stop' | 'clip' };
-  debug?: { exposeTensorField?: boolean; exposeStreamlines?: boolean; exposeRejectedRoads?: boolean };
-}
+export type { TensorGenerationConfig } from './tensor';
 
 export interface BaseCityFactoryContext {
   seed: string | number;
@@ -178,6 +179,33 @@ function cutToRoad(cut: Cut, index: number, source: string): RoadEdge {
     depth: cut.depth,
     render: roadRenderForKind(kind, roadSource),
     cut,
+  };
+}
+
+function tensorRoadToRoadEdge(segment: TensorRoadSegment): RoadEdge {
+  const points: Point[] = segment.points.map((p) => ({ x: p.x, y: p.y }));
+  const kind = segment.roadClass === 'highway'
+    ? 'highway' as const
+    : segment.roadClass === 'major'
+      ? 'avenue' as const
+      : segment.roadClass === 'minor'
+        ? 'street' as const
+        : 'local' as const;
+  return {
+    id: segment.id,
+    kind,
+    source: 'tensor-road',
+    a: points[0],
+    b: points[points.length - 1],
+    points,
+    centerline: points,
+    path: straightPolylinePath(points),
+    render: roadRenderForKind(kind, 'tensor-road'),
+    tensor: {
+      generator: 'streamline',
+      roadClass: segment.roadClass,
+      tags: segment.tags,
+    },
   };
 }
 
@@ -1763,9 +1791,54 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     roadEdges.push(...generatePM2001LocalRoadEdges(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng));
   }
   if (mode === 'tensor') {
-    // Placeholder: tensor road generation will be implemented in Phase 2.
-    // For now, tensor mode produces the same infrastructure roads as legacy
-    // but skips both legacy local cuts and PM2001 local growth.
+    const tensorConfig = resolveTensorConfig(options.tensorRoads);
+    const density = tensorConfig.roadDensity || { major: 20, minor: 80 };
+    const stepSize = tensorConfig.stepSize || 8;
+    const collisionRadius = tensorConfig.collisionRadius || 12;
+    const simplifyTolerance = tensorConfig.simplifyTolerance || 2;
+
+    const mainlandOutline: Vec2[] = terrain.mainland.polygon.map((p: Point) => ({ x: p.x, y: p.y }));
+    const mainlandInsetVec: Vec2[] = (validInset ? mainlandInset : terrain.mainland.polygon).map((p: Point) => ({ x: p.x, y: p.y }));
+    const island = createIslandMask(mainlandOutline, mainlandInsetVec);
+
+    const tensorField = createTensorField(tensorConfig.fields || [], island, rng);
+
+    const existingTensorRoads: TensorRoadSegment[] = roadEdges.map((edge) => ({
+      id: edge.id,
+      roadClass: edge.kind === 'highway' ? 'highway' : edge.kind === 'avenue' ? 'major' : 'minor',
+      points: ((edge.centerline || edge.points || []) as Point[]).map((p: Point) => ({ x: p.x, y: p.y })),
+      tags: [edge.source || 'existing'],
+    }));
+
+    const majorRoads = generateTensorRoadSegments({
+      roadClass: 'major',
+      tensorField,
+      island,
+      rng,
+      existingRoads: existingTensorRoads,
+      seedCount: density.major || 20,
+      stepSize,
+      collisionRadius,
+      maxLength: 600,
+      minLength: 40,
+    });
+
+    const allExisting = [...existingTensorRoads, ...majorRoads];
+    const minorRoads = generateTensorRoadSegments({
+      roadClass: 'minor',
+      tensorField,
+      island,
+      rng,
+      existingRoads: allExisting,
+      seedCount: density.minor || 80,
+      stepSize,
+      collisionRadius: collisionRadius * 0.7,
+      maxLength: 300,
+      minLength: 20,
+    });
+
+    const allTensorRoads = cleanTensorRoads([...majorRoads, ...minorRoads], island, simplifyTolerance);
+    roadEdges.push(...allTensorRoads.map((seg) => tensorRoadToRoadEdge(seg)));
   }
   attachPM2001RoadMetadata(roadEdges);
   if (options.roadBlockModel === 'pm2001-road-faces' || mode === 'tensor') {
