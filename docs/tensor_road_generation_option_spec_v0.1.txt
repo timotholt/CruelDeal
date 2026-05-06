@@ -1,0 +1,1486 @@
+# Tensor-Based Road Generation Option — Implementation Spec
+Project: Cyberpunk CCG / Island City Map Generator
+Version: v0.1
+Date: 2026-05-05
+Target Stack: SolidJS + Vite + TypeScript
+
+---
+
+## 1. Goal
+
+Add a third city/road generation option called `tensor` while keeping the existing two generation modes intact.
+
+The tensor mode may reuse or adapt code ideas from:
+
+- https://github.com/ProbableTrain/MapGenerator
+
+The purpose is not to clone that whole application. The purpose is to extract the useful road-generation approach and fit it into the existing game-map architecture.
+
+Primary goal:
+
+> Generate roads and city blocks that feel more like a real island city, while still producing clean data that can be converted into 3 playable CCG districts.
+
+---
+
+## 2. Non-Goals
+
+This feature should NOT:
+
+- Replace the existing two generators.
+- Force the whole app to use the ProbableTrain UI or Gulp build system.
+- Require React.
+- Require Unity.
+- Require a full visual editor in v1.
+- Require STL/3D export.
+- Require every procedural detail from ProbableTrain/MapGenerator.
+- Make gameplay depend on tiny road details.
+- Make the map unreadable on mobile.
+
+---
+
+## 3. Existing Codebase Requirement
+
+The current codebase does not have a separate `MapGenerationService` yet. The
+public city-map entry is:
+
+```ts
+buildCityV35(seed, opts)
+buildCityMap(seed, opts) // alias exported from services/playgame/city-map/index.ts
+```
+
+The current active options are:
+
+```ts
+export interface CityMapOptions {
+  cache?: boolean;
+  cacheKey?: string;
+  rng?: () => number;
+  roadBlockModel?: "legacy-bsp" | "pm2001-road-faces";
+  pm2001Roads?: boolean;
+  baseCityFactory?: (context: BaseCityFactoryContext) => CityMap;
+}
+```
+
+Important: `pm2001Roads` and `roadBlockModel` are separate switches.
+
+- `pm2001Roads: false` means legacy district-local BSP cuts are used as local roads.
+- `pm2001Roads: true` means PM2001-inspired local road growth replaces those local cuts.
+- `roadBlockModel: "legacy-bsp"` means blocks come from BSP leaves.
+- `roadBlockModel: "pm2001-road-faces"` means blocks come from road-corridor faces.
+
+The tensor version should become a third road-generation option without breaking
+the above modes. Prefer a conservative extension:
+
+```ts
+export type RoadGenerationMode = "legacy" | "pm2001" | "tensor";
+
+export interface CityMapOptions {
+  roadGenerationMode?: RoadGenerationMode;
+
+  // Keep existing options for backward compatibility during migration.
+  pm2001Roads?: boolean;
+  roadBlockModel?: "legacy-bsp" | "pm2001-road-faces";
+
+  tensorRoads?: TensorGenerationConfig;
+}
+```
+
+Backward-compatibility rule:
+
+```ts
+const roadGenerationMode =
+  opts.roadGenerationMode
+  ?? (opts.pm2001Roads ? "pm2001" : "legacy");
+```
+
+Do not remove `pm2001Roads` or `roadBlockModel` in the first tensor pass. The
+debug UI and tests already use them.
+
+---
+
+## 4. Clean Architecture Principle
+
+The tensor generator should be treated as a replaceable backend.
+
+Recommended architecture for this codebase:
+
+```text
+components/screens/play/city-map/*
+  ↓
+buildCityMap / buildCityV35
+  ↓
+buildBaseCity
+  ├── legacy BSP local cuts
+  ├── PM2001 local road growth
+  └── tensor road generation
+        ↓
+      shared road metadata / road corridors
+        ↓
+      existing block faces, parcels, buildings, routing, venues
+```
+
+The UI should not know whether the roads came from:
+
+- simple grid generation
+- current custom generator
+- tensor-field streamlines
+
+The UI should only receive a normalized generated map object.
+
+For v1, "normalized generated map object" means the existing `CityMap` type from
+`services/playgame/city-map/types.ts`, not a brand-new app-level type. If a
+separate `GeneratedMap` abstraction is introduced later, it should be an adapter
+layer around `CityMap`, not a replacement for the renderer/routing contract.
+
+---
+
+## 5. Generator Strategy Interface
+
+If a strategy interface is introduced, keep it local to city-map internals first:
+
+```ts
+export interface RoadGenerator {
+  readonly id: RoadGenerationMode;
+  generateRoads(input: RoadGenerationInput): RoadEdge[];
+}
+```
+
+Recommended input:
+
+```ts
+export interface RoadGenerationInput {
+  seed: string | number;
+  normalizedSeed: number;
+  rng: () => number;
+  width: number;
+  height: number;
+
+  terrain: ReturnType<typeof buildTerrain>;
+  districts: Array<CityDistrict & Record<string, unknown>>;
+  existingRoadEdges: RoadEdge[];
+  macroCuts: Cut[];
+  mainlandInset: Point[] | null;
+
+  tensor?: TensorGenerationConfig;
+}
+```
+
+Required output:
+
+```ts
+RoadEdge[]
+```
+
+Those `RoadEdge`s must already satisfy the existing downstream road contract:
+
+- `id`
+- `kind`
+- `source`
+- `a`
+- `b`
+- `points` or `centerline`
+- `path`
+- `render`
+
+After generation, the existing `attachPM2001RoadMetadata(roadEdges)` step should
+still attach `roadClass`, `physicalWidth`, `centerline`, and `corridorPolygon`.
+Despite the PM2001 name, that function is currently the shared road-physicality
+metadata step.
+
+Use `source: "tensor-road"` and attach tensor-specific metadata separately:
+
+```ts
+edge.tensor = {
+  generator: "streamline",
+  preset: "island_city",
+  fieldId: "downtown-grid",
+  streamlineId: "tensor:major:12",
+};
+```
+
+Do not overload `edge.pm2001` for tensor roads except through the existing
+fallback metadata attach step.
+
+---
+
+## 6. Normalized Geometry Types
+
+Use your own geometry types instead of exposing ProbableTrain internals directly.
+In this repo, prefer the existing types first:
+
+```ts
+import type {
+  CityBlock,
+  CityDistrict,
+  CityMap,
+  Point,
+  RoadEdge,
+} from "./types";
+```
+
+Only introduce tensor-local aliases when they clarify the imported algorithm:
+
+```ts
+export interface Vec2 {
+  x: number;
+  y: number;
+}
+
+export interface Polyline {
+  points: Vec2[];
+}
+
+export interface Polygon {
+  points: Vec2[];
+}
+```
+
+Adapter rule:
+
+- Tensor core may use `Vec2`, `Polyline`, and `TensorSample`.
+- City-map integration must convert to `Point` and `RoadEdge`.
+- Renderer, routing, blocks, parcels, and buildings must not consume
+  ProbableTrain-specific objects.
+
+Tensor road core output:
+
+```ts
+export type RoadClass = "highway" | "major" | "minor" | "alley";
+
+export interface TensorRoadSegment {
+  id: string;
+  roadClass: RoadClass;
+  points: Vec2[];
+  tags: string[];
+}
+```
+
+City-map adapter output:
+
+```ts
+function tensorRoadToRoadEdge(segment: TensorRoadSegment): RoadEdge {
+  const points = segment.points.map((p) => ({ x: p.x, y: p.y }));
+  return {
+    id: segment.id,
+    kind: segment.roadClass === "highway"
+      ? "highway"
+      : segment.roadClass === "major"
+        ? "avenue"
+        : segment.roadClass === "minor"
+          ? "street"
+          : "local",
+    source: "tensor-road",
+    a: points[0],
+    b: points[points.length - 1],
+    points,
+    centerline: points,
+    path: straightPolylinePath(points),
+    render: roadRenderForKind(kind, "tensor-road"),
+  };
+}
+```
+
+The actual block and district types live in
+`services/playgame/city-map/types.ts` and should be used directly:
+
+```ts
+// Actual CityBlock from services/playgame/city-map/types.ts
+export interface CityBlock {
+  id: string;
+  districtId?: string | null;
+  polygon: Point[];
+  centroid?: Point;
+  [key: string]: unknown;  // carries planning, frontageAnalysis, parcels, etc.
+}
+
+// Actual CityDistrict from services/playgame/city-map/types.ts
+export interface CityDistrict {
+  id: string;
+  idx: number;
+  name: string;
+  color: string;
+  playable?: boolean;
+  ownershipPolygons: Point[][];
+  polygons: Point[][];
+  blocks: CityBlock[];
+  roads: RoadEdge[];
+  slots: CitySlot[];
+  dots: CitySlot[];
+  landmarks?: DistrictLandmark[];
+  landmarkPoints?: Array<{ x: number; y: number }>;
+  maxLandmarks?: number;
+  labelAnchor?: { x: number; y: number };
+}
+```
+
+---
+
+### Conceptual type sketches (non-contractual)
+
+The following interfaces describe the *intent* behind zoning and district
+assignment. They do not exist in the codebase and should not be implemented
+as new top-level types. The actual code paths are:
+
+- Zoning: `chooseBlockProfile()` in `services/playgame/city-map/planning.ts`
+- District land-use role: `districtLandUseRoleForBlock()` in `city-v35.ts`
+- Block frontage: `analyzeBlockFrontage()` in `services/playgame/city-map/planning.ts`
+
+```ts
+// CONCEPTUAL ONLY — not a codebase type
+export type ZoneType =
+  | "commercial"
+  | "residential"
+  | "retail"
+  | "industrial"
+  | "landmark"
+  | "park";
+
+// CONCEPTUAL ONLY — not a codebase type
+export type ZoneAge =
+  | "new"
+  | "average"
+  | "old";
+```
+
+Tensor mode should feed road-face blocks into the existing
+`chooseBlockProfile` / `subdivideBlockIntoParcels` / `generateBlockBuildings`
+pipeline rather than inventing a parallel zoning system.
+
+---
+
+## 7. Tensor Generator Configuration
+
+Recommended initial config:
+
+```ts
+export interface TensorGenerationConfig {
+  preset: TensorPreset;
+
+  roadDensity: {
+    main: number;
+    major: number;
+    minor: number;
+  };
+
+  stepSize: number;
+  collisionRadius: number;
+  simplifyTolerance: number;
+
+  fields: TensorFieldConfig[];
+
+  clipping: {
+    enabled: boolean;
+    boundaryMode: "stop" | "clip";
+  };
+
+  debug?: {
+    exposeTensorField?: boolean;
+    exposeStreamlines?: boolean;
+    exposeRejectedRoads?: boolean;
+  };
+}
+```
+
+Presets:
+
+```ts
+export type TensorPreset =
+  | "organized_city"
+  | "island_city"
+  | "old_downtown"
+  | "beachfront_resort"
+  | "debug_minimal";
+```
+
+Field config:
+
+```ts
+export type TensorFieldKind =
+  | "grid"
+  | "radial"
+  | "coast_following"
+  | "noise"
+  | "attractor"
+  | "repulsor";
+
+export interface TensorFieldConfig {
+  id: string;
+  kind: TensorFieldKind;
+  position?: Vec2;
+  angle?: number;
+  size?: number;
+  decay?: number;
+  strength: number;
+}
+```
+
+---
+
+## 8. ProbableTrain Code Usage Strategy
+
+The ProbableTrain project is TypeScript/Gulp. Your project is SolidJS/Vite.
+
+Do NOT import its app directly.
+
+Recommended extraction:
+
+```text
+ProbableTrain code
+  ↓
+copy/adapt core algorithm files only
+  ↓
+wrap in your own tensor road generator (function or class)
+  ↓
+return RoadEdge[] with source: "tensor-road"
+```
+
+The first implementation target is a road-generator adapter that slots into
+`buildBaseCity`, not a standalone `MapGenerationService` or `GeneratedMap`
+abstraction. A broader `MapGenerationService` can be introduced later if the
+architecture warrants it.
+
+Likely useful conceptual modules:
+
+```text
+tensor field logic
+streamline road generation
+polygon/block finding
+water/coastline handling
+building generation, optional
+```
+
+Likely not needed:
+
+```text
+dat.gui UI
+Gulp build setup
+export buttons
+STL export
+style themes
+full app shell
+```
+
+---
+
+## 9. Tensor Mode Pipeline
+
+Original conceptual pipeline (from ProbableTrain-inspired design):
+
+```text
+1. Resolve seed
+2. Create island shape
+3. Create coastline/highway ring
+4. Build tensor field from preset/config
+5. Generate main roads
+6. Generate major roads
+7. Generate minor roads
+8. Clip/reject roads outside island
+9. Build road graph
+10. Find blocks/polygons
+11. Reject ocean/outside polygons
+12. Assign blocks to 3 districts
+13. Apply zoning + age rules
+14. Generate lots/buildings, optional
+15. Return normalized GeneratedMap
+```
+
+**Codebase-adjusted pipeline (actual implementation target):**
+
+```text
+1. Resolve seed through existing normalizeSeed()
+2. Build existing terrain through buildTerrain(normalizedSeed)
+3. Build current mainland/island districts through makeMainlandDistricts/makeIslandDistricts
+4. Keep macro cuts, coast road cuts, bridges, river-bank roads as existing infrastructure
+5. Build tensor field from tensorRoads preset/config
+6. Generate tensor local/interior roads as TensorRoadSegment[]
+7. Convert tensor roads to RoadEdge[] with source: "tensor-road"
+8. Combine:
+   - bridge-aware macro/coast roads
+   - river-bank roads
+   - tensor roads
+9. Run attachPM2001RoadMetadata(roadEdges)
+10. Prefer roadBlockModel: "pm2001-road-faces" for tensor mode so blocks are
+    derived from road corridors instead of legacy BSP leaves
+11. Feed resulting CityBlock[] into existing parcel/building/venue/routing path
+12. Expose debug metadata on roadGraph/composition without changing renderer contract
+```
+
+Implementation skeleton:
+
+```ts
+export class TensorRoadGenerator implements RoadGenerator {
+  readonly id = "tensor" as const;
+
+  generateRoads(input: RoadGenerationInput): RoadEdge[] {
+    const island = islandFromTerrain(input.terrain, input.mainlandInset);
+    const tensorField = createTensorField(input.tensor, island, input.rng);
+
+    const mainRoads = generateTensorRoadSegments({
+      roadClass: "major",
+      tensorField,
+      island,
+      rng: input.rng,
+      existingRoads: input.existingRoadEdges,
+    });
+
+    const minorRoads = generateTensorRoadSegments({
+      roadClass: "minor",
+      tensorField,
+      island,
+      rng: input.rng,
+      existingRoads: [...input.existingRoadEdges, ...mainRoads],
+    });
+
+    return cleanTensorRoads([
+      ...mainRoads,
+      ...minorRoads,
+    ], island);
+  }
+}
+```
+
+The original all-in-one `GeneratedMap` skeleton remains useful for future
+architecture cleanup, but it should not be the first implementation target in
+this repo. The first implementation target is a road-generator adapter that can
+slot into `buildBaseCity`.
+
+---
+
+## 10. Island / Terrain Boundary Constraint
+
+The tensor generator must respect the existing terrain boundary from the
+beginning. Do not generate a rectangular city and hope it looks like an island.
+
+**Reuse existing terrain, do not create a separate island pipeline in v1.**
+
+The existing `buildTerrain(normalizedSeed)` in
+`services/playgame/city-map/terrain.ts` already produces:
+
+- `terrain.mainland.polygon` — the primary landmass
+- `terrain.landmasses[]` — islands and satellite landmasses
+- `terrain.waterBodies[]` — rivers, lakes, ocean
+
+Tensor roads should be clipped to the mainland inset polygon (the same
+`insetPolygon(terrain.mainland.polygon, 6)` used by `buildBaseCity`).
+
+---
+
+### Conceptual island-mask interface (non-contractual)
+
+If a local abstraction is useful inside the tensor/ directory, it should wrap
+the existing terrain polygons, not replace them:
+
+```ts
+// CONCEPTUAL — wraps existing terrain, not a new shape generator
+export interface IslandMask {
+  outline: Point[];        // from terrain.mainland.polygon or landmass.polygon
+  inset: Point[];          // from insetPolygon(outline, 6)
+  containsPoint(point: Point): boolean;
+  containsPolygon(poly: Point[], threshold?: number): boolean;
+}
+```
+
+Implementation should live in `services/playgame/city-map/tensor/islandMask.ts`.
+
+Rules:
+
+- No tensor roads should exist outside the mainland/landmass inset.
+- Buildings should not appear outside buildable polygons.
+- Blocks that are mostly ocean should be discarded (existing pipeline already does this).
+- Roads that touch the island edge may be kept only if they connect to the coast road.
+- The coast road / highway ring already exists via `pushCoastRoad` and `makeCoastCut`;
+  tensor mode should reuse it, not reinvent it.
+
+---
+
+## 11. Coastline Highway Ring
+
+For the island concept, the highway ring is not optional.
+
+**The existing codebase already provides this.** In `buildBaseCity`
+(`services/playgame/city-map/city-v35.ts`):
+
+```ts
+const mainlandInset = insetPolygon(terrain.mainland.polygon, 6);
+// ...
+pushCoastRoad(mainlandDistricts[0], 'mainland-coast-road', mainlandInset);
+```
+
+`pushCoastRoad` creates a `RoadEdge` with `source: "coast-road"`, `kind: "avenue"`,
+and a smooth closed path. Island districts get their own coast roads via
+`makeIslandDistricts`.
+
+Tensor mode should reuse this existing coast-road infrastructure. The coast
+road already serves as:
+
+- visual island boundary road
+- expensive commercial frontage (via `roadValueForEdge`)
+- anchor for waterfront zoning
+- connection source for inward roads (PM2001 gateway frontiers already use it)
+
+Do not create a separate `RoadSegment` type or a parallel coast-highway
+generator. The existing `coast-road` edges should be part of
+`existingRoadEdges` passed to the tensor road generator.
+
+---
+
+## 12. District Generation
+
+Do not require the tensor generator to directly create exactly 3 districts.
+
+**Reuse the existing district creation pipeline.** The current codebase creates
+3 playable mainland districts via `makeMainlandDistricts()` in
+`services/playgame/city-map/city-v35.ts`, which uses `macroDivide3` to split
+the mainland polygon and `makeDistrict` to populate each region with BSP blocks,
+slots, and landmarks.
+
+For tensor mode, the recommended approach is:
+
+```text
+1. Generate tensor roads (RoadEdge[])
+2. Combine with existing macro cuts, coast roads, river-bank roads
+3. Run attachPM2001RoadMetadata
+4. Use roadBlockModel: "pm2001-road-faces" to derive blocks from road corridors
+5. Keep the 3 districts from makeMainlandDistricts — they already own the regions
+6. Replace each district's blocks with road-face blocks filtered to that district's
+   ownership polygon
+```
+
+---
+
+### Conceptual district layout modes (non-contractual)
+
+The following modes describe design intent. The actual implementation should
+work within the existing `makeMainlandDistricts` / `macroDivide3` framework:
+
+```ts
+// CONCEPTUAL ONLY — not a codebase type
+export type DistrictLayoutMode =
+  | "left_middle_right"
+  | "north_center_south"
+  | "coast_downtown_inland"
+  | "custom_anchors";
+```
+
+Initial recommended mode for island CCG:
+
+```text
+District 1: Coast / Port / Resort
+District 2: Downtown / Old Commercial
+District 3: Inland / Residential / Industrial
+```
+
+These map roughly to the existing `districtLandUseRoleForBlock` roles:
+`waterfront`, `old_core`/`commercial_core`, `backland_edge`/`interior_grid`.
+
+---
+
+## 13. Zoning Rules
+
+Zoning should happen after districts are assigned.
+
+**Reuse the existing zoning pipeline.** The current codebase handles zoning via
+`chooseBlockProfile()` in `services/playgame/city-map/planning.ts`, which
+selects a `BuildingBlockProfile` (use, age, density, etc.) based on district
+role, frontage analysis, and block geometry. This feeds directly into
+`subdivideBlockIntoParcels` and `generateBlockBuildings`.
+
+Tensor mode should feed road-face blocks through this same pipeline. The
+existing `districtLandUseRoleForBlock` function already assigns roles like
+`waterfront`, `old_core`, `interior_grid`, `backland_edge` based on district
+index and landmass.
+
+---
+
+### Conceptual zoning config (non-contractual)
+
+The following describes design intent. Implementation should work through
+`chooseBlockProfile` and its `DistrictLandUseRole` / `BlockUseTag` system:
+
+```ts
+// CONCEPTUAL ONLY — not a codebase type
+export interface ZoningConfig {
+  byDistrict: Record<string, {
+    zoneWeights: Partial<Record<ZoneType, number>>;
+    ageWeights: Partial<Record<ZoneAge, number>>;
+    landmarkChance: number;
+    parkChance: number;
+  }>;
+}
+```
+
+Recommended island defaults (conceptual):
+
+```text
+Coast district:
+- high commercial probability
+- resort/hotel/retail
+- new or average age
+- highway frontage is expensive
+
+Downtown district:
+- commercial/retail/landmark
+- old or average age
+- smaller, denser buildings
+- hodgepodge block subdivision
+
+Inland district:
+- residential/industrial/parks
+- average or old age
+- more irregular interior lots
+```
+
+---
+
+## 14. Building/Lot Generation
+
+Building generation should be optional in v1.
+
+Roads and blocks are more important than individual buildings.
+
+Recommended phases:
+
+### v1
+- Roads
+- Blocks
+- District assignment
+- Zoning metadata
+
+### v2
+- Simple building footprints
+- Lot subdivision
+- Expensive frontage logic
+
+### v3
+- Visual building style by age/zone
+- Landmarks
+- Parks
+- Special CCG map modifiers
+
+Building rules based on current design:
+
+```text
+New commercial:
+- fewer buildings
+- larger footprints
+- efficient use of space
+- favors expensive frontage
+
+Average commercial:
+- medium buildings
+- mixed frontage and interior use
+
+Old commercial:
+- many small skinny buildings
+- narrow frontage
+- hodgepodge layout
+- maximum tenant count on expensive side
+
+Residential:
+- less orderly
+- may include parks
+- less aggressive frontage optimization
+```
+
+---
+
+## 15. UI Integration in SolidJS
+
+The current UI integration point is `CityMapBoard.tsx`, which builds the city
+inside a memo:
+
+```ts
+const city = createMemo(() => props.city || buildCityMap(props.seed ?? "new-game-city", {
+  roadBlockModel: debugState().useRoadFaceBlocks ? "pm2001-road-faces" : "legacy-bsp",
+  pm2001Roads: debugState().usePM2001Roads,
+}));
+```
+
+For the first implementation, add tensor as a debug-dock option, not as a
+production settings screen:
+
+```ts
+export interface CityMapDebugState {
+  roadGenerationMode: "legacy" | "pm2001" | "tensor";
+  useRoadFaceBlocks: boolean;
+}
+```
+
+Then map debug state to `buildCityMap` options:
+
+```ts
+const mode = debugState().roadGenerationMode;
+
+const city = createMemo(() => buildCityMap(props.seed ?? "new-game-city", {
+  roadGenerationMode: mode,
+  pm2001Roads: mode === "pm2001",
+  roadBlockModel: debugState().useRoadFaceBlocks || mode === "tensor"
+    ? "pm2001-road-faces"
+    : "legacy-bsp",
+  tensorRoads: mode === "tensor" ? tensorConfig() : undefined,
+}));
+```
+
+UI labels should be explicit:
+
+```text
+Road Generator: Legacy / PM2001 / Tensor
+Block Model: Legacy BSP / Road Faces
+Road Corridors: ON/OFF
+Tensor Field: ON/OFF
+Tensor Seeds: ON/OFF
+Rejected Tensor Roads: ON/OFF
+```
+
+Avoid adding a full tensor editor in v1. Preset selection plus debug overlays is
+enough.
+
+For backward compatibility, the existing `PM2001 Roads` toggle can remain while
+the selector is introduced. If both exist temporarily, the selector wins:
+
+```ts
+roadGenerationMode = debugState().roadGenerationMode
+  ?? (debugState().usePM2001Roads ? "pm2001" : "legacy");
+```
+
+Rendering should continue to consume `CityMap` through:
+
+```ts
+createCityMapRenderModel(city(), width(), height());
+```
+
+---
+
+## 16. Debug UI
+
+Tensor generation needs debug visibility.
+
+Minimum useful debug toggles:
+
+```ts
+export interface MapDebugOptions {
+  showTensorField: boolean;
+  showTensorSeeds: boolean;
+  showRejectedTensorRoads: boolean;
+
+  // Already present or close to present:
+  showCoastHighway: boolean;
+  showRoadCorridors: boolean;
+  showRoads: boolean;
+  showDistrictOverlay: boolean;
+  showZoningColors: boolean;
+}
+```
+
+Debug overlays should be optional and not part of the production board.
+
+Codebase-specific debug data should live on existing city objects:
+
+```ts
+city.composition.tensor = {
+  preset,
+  fieldSamples,
+  seedPoints,
+  rejectedRoads,
+  warnings,
+  metrics,
+};
+
+roadEdge.tensor = {
+  generator: "streamline",
+  roadClass: "major",
+  fieldId,
+  streamlineId,
+};
+```
+
+The renderer should ignore these fields unless a debug toggle is on.
+
+---
+
+## 17. Validation Rules
+
+The tensor generator should return warnings instead of silently failing.
+
+Validation can be added as a post-generation step in `buildBaseCity` or as a
+separate utility in `services/playgame/city-map/tensor/`. The existing
+`summarizeCityV35` already provides basic metrics; tensor-specific validation
+should extend that pattern.
+
+Recommended validations (conceptual):
+
+```ts
+// CONCEPTUAL — extend the existing CityMapSummary pattern
+export interface MapValidationResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  metrics: {
+    roadCount: number;
+    blockCount: number;
+    districtCount: number;
+    averageBlockArea: number;
+    percentRoadsInsideIsland: number;
+    percentBlocksInsideIsland: number;
+  };
+}
+```
+
+Minimum pass conditions:
+
+- 3 districts exist.
+- Each district has at least 1 block.
+- At least 95% of road points are inside the island, excluding debug/rejected roads.
+- At least 95% of blocks are inside island.
+- Coast highway exists.
+- Road count is above minimum.
+- Block count is above minimum.
+- No buildings are placed outside the island.
+- No district is empty.
+
+Recommended fallback behavior:
+
+```text
+If tensor generation fails:
+  1. Retry with same seed but safer preset.
+  2. Retry with debug_minimal preset.
+  3. Fall back to existing generator.
+  4. Attach warnings to metadata.
+```
+
+---
+
+## 18. Performance Requirements
+
+Target:
+
+```text
+Desktop dev:
+- under 500ms preferred
+- under 2 seconds acceptable for debug
+
+Mobile:
+- generate once before match or campaign screen
+- avoid expensive regeneration during play
+```
+
+Recommendations:
+
+- Cache generated maps by seed + config hash.
+- Avoid generation every render.
+- Run generation inside a Web Worker if it blocks UI.
+- Keep gameplay independent from visual building detail.
+- Consider generating campaign maps offline or at load time.
+
+---
+
+## 19. Testing Plan
+
+Unit tests (in `services/playgame/city-map/__tests__/`):
+
+- seeded RNG produces stable tensor field output
+- islandMask containsPoint works against existing terrain polygons
+- road clipping to mainlandInset works
+- tensorRoadToRoadEdge produces valid RoadEdge with source: "tensor-road"
+- district assignment produces exactly 3 playable districts via makeMainlandDistricts
+- no block has invalid polygon geometry
+- attachPM2001RoadMetadata attaches physicalWidth/centerline/corridorPolygon to tensor roads
+
+Integration tests:
+
+- generate 100 maps with random seeds using roadGenerationMode: "tensor"
+- assert no empty districts
+- assert coast road exists (via pushCoastRoad)
+- assert block count within expected range
+- assert no catastrophic geometry failure
+- assert createCityMapRenderModel succeeds for all seeds
+
+Golden tests:
+
+- fixed seeds saved as snapshots (CityMap JSON or summary)
+- visual outputs compared manually or with rough image diff
+
+Recommended test seeds:
+
+```text
+debug-flat-001
+island-balanced-001
+island-dense-001
+coast-chaos-001
+downtown-grid-001
+bad-seed-regression-001
+```
+
+---
+
+## 20. Implementation Phases
+
+### Phase 1 — Codebase Interface First
+
+- Add `RoadGenerationMode = "legacy" | "pm2001" | "tensor"`.
+- Add `roadGenerationMode?: RoadGenerationMode` and `tensorRoads?: TensorGenerationConfig` to `CityMapOptions`.
+- Preserve `pm2001Roads` and `roadBlockModel`.
+- Route `"legacy"` and `"pm2001"` to the exact current behavior.
+- Add a placeholder tensor path that returns no extra tensor roads but still compiles.
+- Add debug UI selector or equivalent clear toggles.
+
+Done when:
+- app can switch between all 3 modes
+- existing modes still work
+- default output is unchanged when no new option is passed
+
+### Phase 2 — Tensor Core In Repo Shape
+
+- Copy/adapt tensor/streamline logic from ProbableTrain.
+- Remove GUI dependencies.
+- Remove Gulp dependencies.
+- Make it compile under Vite.
+- Make it return `TensorRoadSegment[]`.
+- Add an adapter from `TensorRoadSegment` to `RoadEdge`.
+
+Done when:
+- tensor mode can generate raw `RoadEdge`s in the app
+- generated tensor roads carry `source: "tensor-road"`
+- generated tensor roads receive `centerline`, `physicalWidth`, and `corridorPolygon`
+
+### Phase 3 — Existing Terrain Boundary
+
+- Use `buildTerrain(normalizedSeed)` and existing mainland/island polygons.
+- Reuse the existing coast road/highway-ring concept where possible.
+- Stop/clip roads outside island.
+- Add debug overlay.
+
+Done when:
+- tensor roads stay inside island
+- coast road continues to appear reliably
+- river-bank roads and bridge generation still work
+
+### Phase 4 — Road-Face Blocks
+
+- Prefer `roadBlockModel: "pm2001-road-faces"` for tensor mode.
+- Use existing road-corridor block-face extraction first.
+- Filter outside/ocean blocks using existing terrain/buildable polygons.
+- Keep current 3 playable district creation from `makeMainlandDistricts`.
+- Add district overlay.
+
+Done when:
+- every generated tensor map has the existing 3 playable mainland districts
+- blocks do not contain tensor road centerline samples
+- slots avoid road corridors
+
+### Phase 5 — Existing Parcel/Zoning Path
+
+- Feed tensor road-face blocks into existing frontage analysis.
+- Reuse current `chooseBlockProfile`, `subdivideBlockIntoParcels`, and building generation.
+- Add tensor-specific zoning bias only after the baseline path works.
+
+Done when:
+- districts feel different
+- buildings/parcels/venues still have valid `blockId` and `parcelId`
+- routing still resolves between venues
+
+### Phase 6 — Gameplay/Visual Polish
+
+- Keep output as `CityMap`.
+- Attach district names/effects through existing venue/district systems.
+- Add tensor debug metrics to composition overlay.
+- Only then consider a broader `MapGenerationService` abstraction.
+
+Done when:
+- the game can play using generated tensor districts
+- tensor mode is visually distinct from legacy and PM2001
+- default mode remains stable
+
+---
+
+## 21. Recommended First Presets
+
+### `organized_city`
+
+Purpose:
+- Buenos Aires / planned city / readable grid
+
+Fields:
+
+```text
+1 dominant grid field
+1 weak radial/center field
+low noise
+```
+
+Use for:
+- debugging
+- clean mobile readability
+- baseline comparison
+
+### `island_city`
+
+Purpose:
+- coastal island with neighborhoods
+
+Fields:
+
+```text
+1 coast-following field
+1 downtown grid field
+1 port/radial field
+1 inland residential field
+small noise field
+```
+
+Use for:
+- default campaign map
+- cyberpunk island city
+
+### `old_downtown`
+
+Purpose:
+- dense older commercial district
+
+Fields:
+
+```text
+several small grid fields
+moderate decay
+angle variation
+some radial fields
+```
+
+Use for:
+- downtown district
+- old commercial style
+
+### `beachfront_resort`
+
+Purpose:
+- expensive coastal/highway frontage
+
+Fields:
+
+```text
+coast-following field
+parallel strip grid
+low-medium density minor roads
+large block sizes
+```
+
+Use for:
+- resort/commercial coastline
+
+---
+
+## 22. Important Design Opinion
+
+The tensor generator should produce believable city structure.
+
+The CCG adapter should produce gameplay clarity.
+
+Do not let the city generator directly control gameplay rules in v1.
+
+Correct separation:
+
+```text
+Tensor generator:
+- roads
+- blocks
+- shape
+- zoning hints
+
+CCG adapter:
+- 3 districts
+- district names
+- location effects
+- card placement areas
+```
+
+This keeps the map visually rich without making the card game unreadable.
+
+---
+
+## 23. Open Questions — Resolved
+
+These were the key decisions from the original spec draft. Answers reflect the
+current codebase state as of 2026-05-05.
+
+### A. Existing Generators
+
+1. **What are the current generator modes called in code?**
+   - "legacy" (BSP local cuts) and "pm2001" (PM2001-inspired local road growth).
+   - Controlled by `pm2001Roads?: boolean` in `CityMapOptions`.
+
+2. **Do they already share a common interface?**
+   - No formal `RoadGenerator` interface yet. Both are inline in `buildBaseCity`.
+   - A `RoadGenerator` interface is proposed in Section 5 of this spec.
+
+3. **What does their output object currently look like?**
+   - Both produce `RoadEdge[]` consumed by `attachPM2001RoadMetadata` and the
+     downstream block/building/routing pipeline.
+
+### B. Rendering
+
+4. **Rendering technology?**
+   - Three.js (primary) with SVG fallback. Controlled by `CityMapRendererHost`
+     in `components/screens/play/city-map/CityMapRendererHost.tsx`.
+   - Render model created via `createCityMapRenderModel(city, width, height)`.
+
+5. **Should tensor mode render roads/blocks only first?**
+   - Yes. Roads and blocks first; buildings are already handled by the existing
+     pipeline once blocks exist.
+
+6. **Map visual during matches or campaign only?**
+   - The city map board (`CityMapBoard`) is used during play. Tensor mode must
+     produce valid `CityMap` output that the board can render.
+
+### C. Island Shape
+
+7. **Fixed or fully procedural?**
+   - Procedural via `buildTerrain(normalizedSeed)`. Tensor mode reuses the
+     existing terrain, not a separate island generator.
+
+8. **Always surrounded by a highway ring?**
+   - Yes, the existing coast road (`pushCoastRoad`) serves this role.
+
+9. **Bridges/causeways?**
+   - Already handled by `makeBridgePlan` / `generateBridges`. Tensor mode
+     should not break bridge generation.
+
+### D. Districts
+
+10. **Left/middle/right or coast/downtown/inland?**
+    - The existing `makeMainlandDistricts` uses `macroDivide3` with various
+      templates. Tensor mode should work within this framework.
+
+11. **District shapes visible to player?**
+    - Yes, districts are rendered with colors and labels on the city map board.
+
+### E. Gameplay
+
+12. **Districts act like Snap locations?**
+    - Yes, districts have landmarks with effects. Tensor mode must produce
+      districts compatible with the existing venue/landmark system.
+
+13. **Roads purely visual?**
+    - Roads influence gameplay indirectly through frontage value, routing
+      distances, and slot placement. Tensor roads must carry the same metadata.
+
+### F. Procedural Control
+
+14. **Manual debug editor for tensor fields?**
+    - Not in v1. Presets and seed-based generation are sufficient.
+
+15. **Campaign maps saved permanently?**
+    - Maps are cached by seed+config hash. No permanent persistence needed
+      beyond the existing cache.
+
+### G. Tech
+
+16. **Main thread or Web Worker?**
+    - Main thread first. Web Worker only if generation blocks UI noticeably.
+
+17. **Copy/adapt ProbableTrain code?**
+    - Yes, adapt core algorithms only. Confirm license compatibility.
+
+---
+
+## 24. Initial Recommended Answers
+
+If you want the fastest sane first version, use these defaults:
+
+```text
+Generator mode name:
+- "tensor" (RoadGenerationMode = "legacy" | "pm2001" | "tensor")
+
+Rendering:
+- Three.js (existing renderer via createCityMapRenderModel)
+- SVG fallback already exists
+
+Island:
+- Reuse existing buildTerrain / mainland polygon / landmasses
+- Reuse existing coast road (pushCoastRoad) as highway ring
+- Clip tensor roads to mainlandInset
+
+Districts:
+- Reuse existing makeMainlandDistricts / macroDivide3
+- Replace BSP blocks with road-face blocks per district
+
+Gameplay:
+- Districts act like Snap locations (existing venue/landmark system)
+- Roads carry physicalWidth, corridorPolygon, frontage value
+- District effects selected after generation (existing enrichCityVenues)
+
+Tensor controls:
+- Presets only in v1
+- No full tensor editor yet
+- Debug toggles in CityMapDebugDock
+
+Performance:
+- Main thread first
+- Web Worker only if generation blocks UI
+
+Buildings:
+- v2, not v1 (existing pipeline handles buildings once blocks exist)
+
+Persistence:
+- Existing seed+config cache (buildCityV35 cache)
+```
+
+---
+
+## 25. Definition of Done for v1
+
+Tensor mode v1 is done when:
+
+- `RoadGenerationMode = "legacy" | "pm2001" | "tensor"` exists in `CityMapOptions`.
+- `buildCityV35(seed, { roadGenerationMode: "tensor", roadBlockModel: "pm2001-road-faces" })` produces a valid `CityMap`.
+- The existing two generators still work with no behavior change.
+- Tensor mode compiles under the existing SolidJS + Vite build.
+- Tensor roads carry `source: "tensor-road"` in `roadGraph.edges`.
+- `attachPM2001RoadMetadata` attaches `physicalWidth`, `centerline`, and `corridorPolygon` to tensor roads.
+- Tensor roads stay inside the mainland inset / terrain boundary.
+- Existing coast roads, bridges, and river-bank roads still appear.
+- Road-face blocks are derived from road corridors via `buildPM2001BlockFacesForDistrict`.
+- The 3 playable mainland districts exist with valid blocks, slots, and landmarks.
+- `createCityMapRenderModel(city, width, height)` renders the tensor map without errors.
+- Debug metadata is exposed on `city.composition.tensor` and `roadEdge.tensor`.
+- The map can be regenerated from seed (cache works correctly with the new option).
+- Failures return warnings or fall back to legacy generator instead of crashing.
+
+---
+
+## 26. Suggested File Layout
+
+Tensor core lives under `services/playgame/city-map/tensor/`. Do not place the
+first implementation under `src/lib/map-generation/` unless doing a later
+architecture migration.
+
+```text
+services/playgame/city-map/
+  tensor/
+    types.ts                  # TensorGenerationConfig, TensorRoadSegment, Vec2, etc.
+    createTensorField.ts      # Build tensor field from preset/config + terrain
+    generateTensorRoads.ts    # Streamline-based road generation → TensorRoadSegment[]
+    islandMask.ts             # Wrap terrain polygons for containsPoint/containsPolygon
+    roadCleanup.ts            # Clip, deduplicate, simplify tensor roads
+    tensorPresets.ts          # Preset definitions (organized_city, island_city, etc.)
+    index.ts                  # Public exports: generateTensorRoads, tensorPresets
+```
+
+Existing files that will be modified:
+
+```text
+services/playgame/city-map/
+  city-v35.ts                 # Add RoadGenerationMode, tensor path in buildBaseCity
+  types.ts                    # RoadEdge already supports [key: string]: unknown for tensor metadata
+  index.ts                    # Export new types if needed
+
+components/screens/play/city-map/
+  CityMapBoard.tsx            # Map debug state to roadGenerationMode option
+  CityMapDebugDock.tsx        # Add tensor-specific debug toggles
+```
+
+---
+
+## 27. Minimal First Coding Target
+
+Before trying to produce beautiful maps, build this:
+
+```ts
+import { buildCityV35 } from './services/playgame/city-map';
+
+const city = buildCityV35('test-001', {
+  roadGenerationMode: 'tensor',
+  roadBlockModel: 'pm2001-road-faces',
+  tensorRoads: {
+    preset: 'organized_city',
+    roadDensity: { main: 8, major: 20, minor: 80 },
+    stepSize: 8,
+    collisionRadius: 12,
+    simplifyTolerance: 2,
+    fields: [],
+    clipping: { enabled: true, boundaryMode: 'stop' },
+  },
+});
+```
+
+Expected result:
+
+```text
+- city.version === 'v35'
+- city.roadGraph.edges includes entries with source: "tensor-road"
+- city.roadGraph.edges includes existing coast-road, v35-road, v35-river-bank edges
+- attachPM2001RoadMetadata has run: tensor edges have physicalWidth, centerline, corridorPolygon
+- city.districts.length >= 3 (mainland playable districts)
+- city.blocks (cells) derived from road-face blocks
+- createCityMapRenderModel(city, width, height) succeeds
+- roads stay inside terrain.mainland inset
+- no roads in ocean
+```
+
+That is the proof-of-life milestone.
+
+---
+
+## 28. Integration Guidance
+
+### Cache key
+
+The `buildCityV35` cache key must include `roadGenerationMode` to avoid
+returning stale maps:
+
+```ts
+const key = `city-v35:${normalizedSeed}:${opts.cacheKey || 'default'}:${opts.roadBlockModel || 'legacy-bsp'}:${opts.roadGenerationMode || (opts.pm2001Roads ? 'pm2001-roads' : 'legacy-roads')}`;
+```
+
+### PM2001 metadata function name
+
+`attachPM2001RoadMetadata` is confusingly named but currently shared across all
+road sources. Do not rename it in the first tensor pass. The function already
+handles `source: "coast-road"`, `"pm2001-road"`, `"v35-road"`, `"v35-river-bank"`,
+and fallback. Tensor roads with `source: "tensor-road"` will hit the fallback
+branch, which is acceptable. A later cleanup pass can rename it to
+`attachRoadPhysicalMetadata`.
+
+### Renderer contract
+
+The renderer consumes `CityMap` via `createCityMapRenderModel(city, width, height)`
+in `components/screens/play/city-map/render-model.ts`. Tensor mode must not
+change this contract. The render model already handles `RoadEdge.render` for
+visual styling; tensor roads just need valid `render` metadata (provided by
+`roadRenderForKind`).
+
+### Debug data locations
+
+- `city.composition.tensor` — preset, field samples, seed points, rejected roads,
+  warnings, metrics
+- `roadEdge.tensor` — generator, roadClass, fieldId, streamlineId
+
+The renderer should ignore these fields unless a debug toggle is on.
+
+### RoadBlockModel preference
+
+Tensor mode should prefer `roadBlockModel: "pm2001-road-faces"` so blocks are
+derived from road corridors. The `buildPM2001BlockFacesForDistrict` function in
+`services/playgame/city-map/pm2001.ts` already handles this. If
+`roadBlockModel` is `"legacy-bsp"`, tensor roads will still appear but blocks
+will come from BSP leaves, which may not align with the road network.
+
+### Terrain/coast/bridge reuse
+
+Tensor mode must reuse, not replace:
+- `buildTerrain(normalizedSeed)` for land/water geometry
+- `pushCoastRoad` / `makeCoastCut` for the coast highway ring
+- `makeBridgePlan` / `generateBridges` for river and island bridges
+- `makeRiverBankRoads` for river-bank roads
+
+The tensor generator receives `existingRoadEdges` containing all of the above
+and should grow inward from them.
+
+### First coding target checklist
+
+1. `buildCityV35(seed, { roadGenerationMode: "tensor", roadBlockModel: "pm2001-road-faces" })`
+2. Produces existing `CityMap`
+3. `roadGraph.edges` includes `source: "tensor-road"`
+4. Roads stay inside terrain/mainland inset
+5. `attachPM2001RoadMetadata` still attaches `physicalWidth`/`corridorPolygon`
+6. Road-face blocks/parcels/buildings/routing still use existing pipeline
+7. `createCityMapRenderModel` renders without errors
