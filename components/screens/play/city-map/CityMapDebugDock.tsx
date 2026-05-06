@@ -21,6 +21,9 @@ export interface CityMapDebugState {
   showIslandDebug: boolean;
   showMassDebug: boolean;
   showSeedDebug: boolean;
+  showTensorField: boolean;
+  showTensorSeeds: boolean;
+  showRejectedTensorRoads: boolean;
   simplifyDuringCameraMove: boolean;
 }
 
@@ -59,6 +62,9 @@ const rows: Array<{ key: keyof CityMapDebugState; label: string }> = [
   { key: 'showIslandDebug', label: 'Islands' },
   { key: 'showMassDebug', label: 'Mass' },
   { key: 'showSeedDebug', label: 'Seed Info' },
+  { key: 'showTensorField', label: 'Tensor Field' },
+  { key: 'showTensorSeeds', label: 'Tensor Seeds' },
+  { key: 'showRejectedTensorRoads', label: 'Rejected Roads' },
   { key: 'simplifyDuringCameraMove', label: 'SVG Pan Perf' },
 ];
 

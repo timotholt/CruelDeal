@@ -1,5 +1,6 @@
 export { createTensorField } from './createTensorField';
 export { generateTensorRoadSegments } from './generateTensorRoads';
+export type { StreamlineOptions, StreamlineResult } from './generateTensorRoads';
 export { createIslandMask } from './islandMask';
 export { cleanTensorRoads } from './roadCleanup';
 export { resolveTensorConfig } from './tensorPresets';

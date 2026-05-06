@@ -68,6 +68,9 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
     showIslandDebug: false,
     showMassDebug: false,
     showSeedDebug: false,
+    showTensorField: false,
+    showTensorSeeds: false,
+    showRejectedTensorRoads: false,
     simplifyDuringCameraMove: initialDebug?.simplifyDuringCameraMove ?? false,
   });
   const city = createMemo(() => props.city || buildCityMap(props.seed ?? 'new-game-city', {

@@ -5,6 +5,7 @@ import { CityMapSvg } from './CityMapSvg';
 import { CityMapLandmarks } from './CityMapLandmarks';
 import { CityMapSlots } from './CityMapSlots';
 import { CompositionDebugOverlay } from './CompositionDebugOverlay';
+import { TensorDebugOverlay } from './TensorDebugOverlay';
 import { RouteDemoLayer } from './RouteDemoLayer';
 import type { CityMapDebugState } from './CityMapDebugDock';
 import type { CityMapRenderModel } from './render-model';
@@ -71,6 +72,19 @@ export const CityMapSvgRenderer = (props: CityMapSvgRendererProps) => {
           height={props.model.world.height}
         />
       </Show>
+      <svg
+        class="city-map-board__tensor-debug-layer"
+        viewBox={fullViewBox()}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <TensorDebugOverlay
+          city={props.model.city}
+          width={props.model.world.width}
+          height={props.model.world.height}
+          debugState={props.debugState}
+        />
+      </svg>
       <svg
         class="city-map-board__slot-layer"
         viewBox={fullViewBox()}

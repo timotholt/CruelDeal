@@ -1756,6 +1756,7 @@ function applyPM2001BlockFaces(
 
 function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, terrain: TerrainV35, options: CityMapOptions = {}): CityMap {
   const mode: RoadGenerationMode = options.roadGenerationMode ?? (options.pm2001Roads ? 'pm2001' : 'legacy');
+  let tensorDebug: Record<string, unknown> | undefined;
   const names = shuffle(DISTRICT_NAMES, rng);
   const colors = shuffle(DISTRICT_COLORS, rng);
   const mainlandInset = insetPolygon(terrain.mainland.polygon, 6);
@@ -1810,7 +1811,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
       tags: [edge.source || 'existing'],
     }));
 
-    const majorRoads = generateTensorRoadSegments({
+    const majorResult = generateTensorRoadSegments({
       roadClass: 'major',
       tensorField,
       island,
@@ -1823,8 +1824,8 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
       minLength: 40,
     });
 
-    const allExisting = [...existingTensorRoads, ...majorRoads];
-    const minorRoads = generateTensorRoadSegments({
+    const allExisting = [...existingTensorRoads, ...majorResult.segments];
+    const minorResult = generateTensorRoadSegments({
       roadClass: 'minor',
       tensorField,
       island,
@@ -1835,10 +1836,26 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
       collisionRadius: collisionRadius * 0.7,
       maxLength: 300,
       minLength: 20,
+      perpendicularAxis: true,
     });
 
-    const allTensorRoads = cleanTensorRoads([...majorRoads, ...minorRoads], island, simplifyTolerance);
+    const allTensorRoads = cleanTensorRoads([...majorResult.segments, ...minorResult.segments], island, simplifyTolerance);
     roadEdges.push(...allTensorRoads.map((seg) => tensorRoadToRoadEdge(seg)));
+
+    tensorDebug = {
+      preset: tensorConfig.preset || 'island_city',
+      majorSeeds: majorResult.seeds,
+      minorSeeds: minorResult.seeds,
+      rejectedRoads: [...majorResult.rejected, ...minorResult.rejected],
+      fieldConfigs: tensorConfig.fields || [],
+      metrics: {
+        majorGenerated: majorResult.segments.length,
+        minorGenerated: minorResult.segments.length,
+        majorRejected: majorResult.rejected.length,
+        minorRejected: minorResult.rejected.length,
+        afterCleanup: allTensorRoads.length,
+      },
+    };
   }
   attachPM2001RoadMetadata(roadEdges);
   if (options.roadBlockModel === 'pm2001-road-faces' || mode === 'tensor') {
@@ -1882,6 +1899,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     buildingPlan,
     composition: {
       macroLayoutTemplate,
+      tensor: tensorDebug,
     },
     venues: [],
     venueById: {},

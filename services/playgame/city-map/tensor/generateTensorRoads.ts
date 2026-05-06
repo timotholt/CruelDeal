@@ -11,21 +11,32 @@ export interface StreamlineOptions {
   collisionRadius: number;
   maxLength: number;
   minLength: number;
+  perpendicularAxis?: boolean;
 }
 
-export function generateTensorRoadSegments(opts: StreamlineOptions): TensorRoadSegment[] {
+export interface StreamlineResult {
+  segments: TensorRoadSegment[];
+  rejected: TensorRoadSegment[];
+  seeds: Vec2[];
+}
+
+export function generateTensorRoadSegments(opts: StreamlineOptions): StreamlineResult {
   const seeds = placeSeeds(opts);
   const segments: TensorRoadSegment[] = [];
+  const rejected: TensorRoadSegment[] = [];
   let idCounter = 0;
 
   for (const seed of seeds) {
     const segment = traceStreamline(seed, opts, idCounter++);
-    if (segment && segment.points.length >= 2 && segmentLength(segment) >= opts.minLength) {
+    if (!segment || segment.points.length < 2) continue;
+    if (segmentLength(segment) >= opts.minLength) {
       segments.push(segment);
+    } else {
+      rejected.push(segment);
     }
   }
 
-  return segments;
+  return { segments, rejected, seeds: seeds.map((s) => s.pos) };
 }
 
 function placeSeeds(opts: StreamlineOptions): Seed[] {
@@ -76,24 +87,18 @@ function traceStreamline(
   opts: StreamlineOptions,
   id: number,
 ): TensorRoadSegment | null {
-  const points: Vec2[] = [{ x: seed.pos.x, y: seed.pos.y }];
-  let current = { x: seed.pos.x, y: seed.pos.y };
+  const seedSample = opts.tensorField.sample(seed.pos.x, seed.pos.y);
+  const axisOffset = opts.perpendicularAxis ? Math.PI / 2 : 0;
+  const startAngle = seedSample.angle + axisOffset;
 
-  for (let step = 0; step < opts.maxLength / opts.stepSize; step++) {
-    const sample = opts.tensorField.sample(current.x, current.y);
-    if (sample.strength < 0.01) break;
+  const forward = traceInDirection(seed.pos, startAngle, opts);
+  const backward = traceInDirection(seed.pos, startAngle + Math.PI, opts);
 
-    const next: Vec2 = {
-      x: current.x + Math.cos(sample.angle) * opts.stepSize,
-      y: current.y + Math.sin(sample.angle) * opts.stepSize,
-    };
-
-    if (!opts.island.containsPoint(next.x, next.y)) break;
-    if (tooCloseToExisting(next, points, opts)) break;
-
-    points.push(next);
-    current = next;
-  }
+  const points: Vec2[] = [
+    ...backward.slice().reverse(),
+    { x: seed.pos.x, y: seed.pos.y },
+    ...forward,
+  ];
 
   if (points.length < 2) return null;
 
@@ -105,16 +110,57 @@ function traceStreamline(
   };
 }
 
+function traceInDirection(start: Vec2, initialAngle: number, opts: StreamlineOptions): Vec2[] {
+  const points: Vec2[] = [];
+  let current = { x: start.x, y: start.y };
+  let prevAngle = initialAngle;
+
+  for (let step = 0; step < opts.maxLength / opts.stepSize; step++) {
+    const sample = opts.tensorField.sample(current.x, current.y);
+    if (sample.strength < 0.01) break;
+
+    const axisOffset = opts.perpendicularAxis ? Math.PI / 2 : 0;
+    let angle = sample.angle + axisOffset;
+
+    const diff = normalizeAngleDiff(angle - prevAngle);
+    if (Math.abs(diff) > Math.PI / 2) angle += Math.PI;
+    prevAngle = angle;
+
+    const next: Vec2 = {
+      x: current.x + Math.cos(angle) * opts.stepSize,
+      y: current.y + Math.sin(angle) * opts.stepSize,
+    };
+
+    if (!opts.island.containsPoint(next.x, next.y)) break;
+    if (tooCloseToExisting(next, points, opts)) break;
+
+    points.push(next);
+    current = next;
+  }
+
+  return points;
+}
+
+function normalizeAngleDiff(diff: number): number {
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  return diff;
+}
+
 function tooCloseToExisting(
   p: Vec2,
   currentPoints: Vec2[],
   opts: StreamlineOptions,
 ): boolean {
   for (const road of opts.existingRoads) {
+    const isSameClass = road.roadClass === opts.roadClass;
+    const isHighway = road.roadClass === 'highway';
+    const radius = isHighway ? opts.collisionRadius : isSameClass ? opts.collisionRadius : 0;
+    if (radius <= 0) continue;
     for (const rp of road.points) {
       const dx = p.x - rp.x;
       const dy = p.y - rp.y;
-      if (Math.sqrt(dx * dx + dy * dy) < opts.collisionRadius) return true;
+      if (Math.sqrt(dx * dx + dy * dy) < radius) return true;
     }
   }
   for (let i = 0; i < currentPoints.length - 1; i++) {

@@ -482,6 +482,67 @@ export function createCityScene(model: CityMapRenderModel, debugState: CityMapDe
   grid.renderOrder = 40;
   scene.add(grid);
 
+  const tensorData = (model.city.composition as any)?.tensor;
+  if (tensorData) {
+    const tensorGroup = new THREE.Group();
+    tensorGroup.name = 'city-map-tensor-debug';
+    tensorGroup.visible = debugState.showTensorField || debugState.showTensorSeeds || debugState.showRejectedTensorRoads;
+    tensorGroup.renderOrder = 35;
+    scene.add(tensorGroup);
+
+    if (debugState.showTensorSeeds) {
+      const majorSeedMat = new THREE.MeshBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.9 });
+      const minorSeedMat = new THREE.MeshBasicMaterial({ color: 0xffd93d, transparent: true, opacity: 0.8 });
+      const seedGeo = new THREE.SphereGeometry(2, 6, 6);
+
+      for (const seed of (tensorData.majorSeeds || []) as Array<{ x: number; y: number }>) {
+        const mesh = new THREE.Mesh(seedGeo, majorSeedMat);
+        mesh.position.set(seed.x, 1.5, seed.y);
+        mesh.renderOrder = 36;
+        tensorGroup.add(mesh);
+      }
+      for (const seed of (tensorData.minorSeeds || []) as Array<{ x: number; y: number }>) {
+        const mesh = new THREE.Mesh(seedGeo, minorSeedMat);
+        mesh.position.set(seed.x, 1.5, seed.y);
+        mesh.renderOrder = 36;
+        tensorGroup.add(mesh);
+      }
+    }
+
+    if (debugState.showRejectedTensorRoads) {
+      const rejectedMat = new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.5 });
+      for (const road of (tensorData.rejectedRoads || []) as any[]) {
+        if (!road.points || road.points.length < 2) continue;
+        const pts = road.points.map((p: any) => new THREE.Vector3(p.x, 1.2, p.y));
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        const line = new THREE.Line(geo, rejectedMat);
+        line.renderOrder = 37;
+        tensorGroup.add(line);
+      }
+    }
+
+    if (debugState.showTensorField) {
+      const fieldMat = new THREE.LineBasicMaterial({ color: 0x5fffe3, transparent: true, opacity: 0.3 });
+      const arrowMat = new THREE.MeshBasicMaterial({ color: 0x5fffe3, transparent: true, opacity: 0.5 });
+      const spacing = 60;
+      const cols = Math.ceil(model.world.width / spacing);
+      const rows = Math.ceil(model.world.height / spacing);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = col * spacing + spacing / 2;
+          const y = row * spacing + spacing / 2;
+          const arrowLen = 12;
+          const endX = x + arrowLen;
+          const pts = [new THREE.Vector3(x, 1.1, y), new THREE.Vector3(endX, 1.1, y)];
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          const line = new THREE.Line(geo, fieldMat);
+          line.renderOrder = 38;
+          tensorGroup.add(line);
+        }
+      }
+    }
+  }
+
   addCityLights(scene);
 
   return { scene, materials };

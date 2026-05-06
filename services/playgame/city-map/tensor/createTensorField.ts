@@ -36,10 +36,32 @@ interface LocalField {
   sample(x: number, y: number): TensorSample;
 }
 
+function islandBBox(island: IslandMask): { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of island.outline) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+}
+
+function resolveCenter(pos: Vec2 | undefined, island: IslandMask): Vec2 {
+  if (!pos) return centroid(island.outline);
+  const bb = islandBBox(island);
+  return { x: bb.minX + pos.x * bb.w, y: bb.minY + pos.y * bb.h };
+}
+
+function resolveRadius(size: number | undefined, island: IslandMask): number {
+  const bb = islandBBox(island);
+  return (size ?? 0.4) * Math.max(bb.w, bb.h);
+}
+
 function buildField(cfg: TensorFieldConfig, island: IslandMask, rng: () => number): LocalField {
   switch (cfg.kind) {
     case 'grid':
-      return buildGridField(cfg);
+      return buildGridField(cfg, island);
     case 'radial':
       return buildRadialField(cfg, island);
     case 'coast_following':
@@ -47,25 +69,23 @@ function buildField(cfg: TensorFieldConfig, island: IslandMask, rng: () => numbe
     case 'noise':
       return buildNoiseField(cfg, rng);
     case 'attractor':
-      return buildAttractorField(cfg);
+      return buildAttractorField(cfg, island);
     case 'repulsor':
-      return buildRepulsorField(cfg);
-    default:
-      return buildGridField(cfg);
+      return buildRepulsorField(cfg, island);
   }
 }
 
-function buildGridField(cfg: TensorFieldConfig): LocalField {
+function buildGridField(cfg: TensorFieldConfig, island: IslandMask): LocalField {
   const angleRad = ((cfg.angle ?? 0) * Math.PI) / 180;
-  const pos = cfg.position;
-  const size = cfg.size;
+  const center = cfg.position ? resolveCenter(cfg.position, island) : null;
+  const radius = center ? resolveRadius(cfg.size, island) : 0;
 
   return {
     sample(x: number, y: number): TensorSample {
-      if (pos && size) {
-        const dx = x - pos.x;
-        const dy = y - pos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) / size;
+      if (center) {
+        const dx = x - center.x;
+        const dy = y - center.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) / radius;
         if (dist > 1) return { pos: { x, y }, angle: 0, strength: 0 };
         const falloff = 1 - dist;
         return { pos: { x, y }, angle: angleRad, strength: cfg.strength * falloff };
@@ -76,8 +96,8 @@ function buildGridField(cfg: TensorFieldConfig): LocalField {
 }
 
 function buildRadialField(cfg: TensorFieldConfig, island: IslandMask): LocalField {
-  const center = cfg.position || centroid(island.outline);
-  const size = cfg.size || 0.5;
+  const center = resolveCenter(cfg.position, island);
+  const radius = resolveRadius(cfg.size, island);
 
   return {
     sample(x: number, y: number): TensorSample {
@@ -86,7 +106,7 @@ function buildRadialField(cfg: TensorFieldConfig, island: IslandMask): LocalFiel
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 0.001) return { pos: { x, y }, angle: 0, strength: 0 };
       const angle = Math.atan2(dy, dx) + Math.PI / 2;
-      const falloff = Math.max(0, 1 - dist / size);
+      const falloff = Math.max(0, 1 - dist / radius);
       return { pos: { x, y }, angle, strength: cfg.strength * falloff };
     },
   };
@@ -94,7 +114,7 @@ function buildRadialField(cfg: TensorFieldConfig, island: IslandMask): LocalFiel
 
 function buildCoastFollowingField(cfg: TensorFieldConfig, island: IslandMask): LocalField {
   const outline = island.outline;
-  if (outline.length < 3) return buildGridField({ ...cfg, kind: 'grid', angle: 0 });
+  if (outline.length < 3) return buildGridField({ ...cfg, kind: 'grid', angle: 0 }, island);
 
   return {
     sample(x: number, y: number): TensorSample {
@@ -134,9 +154,9 @@ function buildNoiseField(cfg: TensorFieldConfig, rng: () => number): LocalField 
   };
 }
 
-function buildAttractorField(cfg: TensorFieldConfig): LocalField {
-  const center = cfg.position || { x: 0.5, y: 0.5 };
-  const size = cfg.size || 0.3;
+function buildAttractorField(cfg: TensorFieldConfig, island: IslandMask): LocalField {
+  const center = resolveCenter(cfg.position, island);
+  const radius = resolveRadius(cfg.size, island);
 
   return {
     sample(x: number, y: number): TensorSample {
@@ -145,15 +165,15 @@ function buildAttractorField(cfg: TensorFieldConfig): LocalField {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 0.001) return { pos: { x, y }, angle: 0, strength: 0 };
       const angle = Math.atan2(dy, dx);
-      const falloff = Math.max(0, 1 - dist / size);
+      const falloff = Math.max(0, 1 - dist / radius);
       return { pos: { x, y }, angle, strength: cfg.strength * falloff };
     },
   };
 }
 
-function buildRepulsorField(cfg: TensorFieldConfig): LocalField {
-  const center = cfg.position || { x: 0.5, y: 0.5 };
-  const size = cfg.size || 0.3;
+function buildRepulsorField(cfg: TensorFieldConfig, island: IslandMask): LocalField {
+  const center = resolveCenter(cfg.position, island);
+  const radius = resolveRadius(cfg.size, island);
 
   return {
     sample(x: number, y: number): TensorSample {
@@ -162,7 +182,7 @@ function buildRepulsorField(cfg: TensorFieldConfig): LocalField {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 0.001) return { pos: { x, y }, angle: 0, strength: 0 };
       const angle = Math.atan2(dy, dx);
-      const falloff = Math.max(0, 1 - dist / size);
+      const falloff = Math.max(0, 1 - dist / radius);
       return { pos: { x, y }, angle, strength: cfg.strength * falloff };
     },
   };
