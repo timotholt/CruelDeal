@@ -301,6 +301,7 @@ export interface CityDistrict {
   landmarks?: DistrictLandmark[];
   landmarkPoints?: Array<{ x: number; y: number }>;
   maxLandmarks?: number;
+  targetSlotCount?: number;
   labelAnchor?: { x: number; y: number };
 }
 

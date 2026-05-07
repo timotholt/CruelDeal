@@ -155,7 +155,7 @@ function roadRenderForKind(kind?: string, source?: string): RoadRenderMeta {
 
   return {
     width,
-    elevation: materialKey === 'bridge' ? 0.45 : 0.03,
+    elevation: source === 'bridge' ? 0.45 : 0.03,
     glowStrength,
     materialKey,
     lodGroup,
@@ -1190,7 +1190,7 @@ function assignDistrictSlotsFromBlocks(
       const point = block.centroid || polygonCentroid(block.polygon);
       if (pointInRoadCorridor(point, roadEdges)) continue;
       if ([...avoidCentroids, ...existingLandmarks, ...slotPoints].some((existing) => Math.hypot(existing.x - point.x, existing.y - point.y) < 18)) continue;
-      slotPoints.push(point);
+      (slotPoints as unknown as Point[]).push(point);
       if (slotPoints.length >= targetSlotCount) break;
     }
   }
@@ -1406,7 +1406,7 @@ function makeBridgePlan(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] |
   const riverSegments = ((river?.segments || []) as Array<{ a: Point; b: Point }>);
   const riverBridgeResult = river && mainlandCoastRoadPolygon
     ? generateBridges({
-        allCuts: roadCuts,
+        allCuts: roadCuts as any,
         river: river as { outerWidth: number },
         riverSegments,
         coastRoadPolygon: mainlandCoastRoadPolygon,
@@ -1419,7 +1419,7 @@ function makeBridgePlan(terrain: TerrainV35, mainlandCoastRoadPolygon: Point[] |
     .map((bridge, index) => {
       const depth = bridge.depth ?? 2;
       const delta = bridgeRiverDelta(bridge, riverSegments);
-      const baseLength = Math.max((river?.outerWidth || 28) + 32, depth <= 1 ? 52 : 40);
+      const baseLength = Math.max((Number(river?.outerWidth) || 28) + 32, depth <= 1 ? 52 : 40);
       const shallowFactor = 1 / Math.max(0.34, Math.sin(Math.max(delta, 0.22)));
       const maxLength = depth <= 1 ? 256 : depth >= 4 ? 144 : 208;
       const length = Math.min(maxLength, baseLength * shallowFactor);
@@ -1512,7 +1512,7 @@ function buildStaticBuildings(
     if (!block.buildable) continue;
     const frontageAnalysis = analyzeBlockFrontage(block, roadHazards);
     block.frontageAnalysis = frontageAnalysis;
-    block.shape = classifyParcelShape(block, { frontageAnalysis, roadHazards, terrain });
+    block.shape = classifyParcelShape(block, { frontageAnalysis, roadHazards, terrain: terrain as unknown as CityMap['terrain'] });
     const districtId = String(block.districtId || 'district:none');
     const districtCounts = districtZoneCounts.get(districtId) || {};
     const blockIndexInDistrict = districtBlockIndexes.get(districtId) || 0;
@@ -1530,7 +1530,7 @@ function buildStaticBuildings(
 
     const blockParcels = subdivideBlockIntoParcels(block, profile, frontageAnalysis, rng, {
       roadHazards,
-      terrain,
+      terrain: terrain as unknown as CityMap['terrain'],
     });
     block.parcels = blockParcels;
     parcels.push(...blockParcels);
@@ -1875,7 +1875,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     width: VIEW_W,
     height: VIEW_H,
     bounds: terrain.bounds,
-    terrain: terrain as CityMap['terrain'],
+    terrain: terrain as unknown as CityMap['terrain'],
     blocks: cells,
     cells,
     parcels,

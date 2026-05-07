@@ -51,11 +51,11 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
   const [debugState, setDebugState] = createSignal<CityMapDebugState>({
     showMap: true,
     useThreeRenderer: initialRendererMode ? initialRendererMode === 'three' : true,
-    roadGenerationMode: 'legacy',
+    roadGenerationMode: 'tensor',
     useRoadFaceBlocks: false,
     usePM2001Roads: false,
     showRoadCorridors: false,
-    showBuildings: initialDebug?.showBuildings ?? true,
+    showBuildings: initialDebug?.showBuildings ?? false,
     showRoads: initialDebug?.showRoads ?? true,
     showLabels: initialDebug?.showLabels ?? true,
     showLandmarks: initialDebug?.showLandmarks ?? true,
@@ -351,6 +351,7 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
       <div
         ref={(el) => {
           surfaceEl = el;
+          el.addEventListener('click', onClickCapture, true);
         }}
         class="city-map-board__surface"
         onWheel={onWheel}
@@ -359,7 +360,6 @@ export const CityMapBoard = (props: CityMapBoardProps) => {
         onPointerUp={onPointerUp}
         onPointerLeave={clearHover}
         onPointerCancel={clearHover}
-        onClickCapture={onClickCapture}
       >
         <CityMapRendererHost
           mode={debugState().useThreeRenderer ? 'three' : 'svg'}
