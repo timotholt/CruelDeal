@@ -26,11 +26,15 @@ export function generateTensorRoadSegments(opts: StreamlineOptions): StreamlineR
   const rejected: TensorRoadSegment[] = [];
   let idCounter = 0;
 
+  const liveExisting = [...opts.existingRoads];
+  const liveOpts = { ...opts, existingRoads: liveExisting };
+
   for (const seed of seeds) {
-    const segment = traceStreamline(seed, opts, idCounter++);
+    const segment = traceStreamline(seed, liveOpts, idCounter++);
     if (!segment || segment.points.length < 2) continue;
     if (segmentLength(segment) >= opts.minLength) {
       segments.push(segment);
+      liveExisting.push(segment);
     } else {
       rejected.push(segment);
     }
@@ -41,22 +45,28 @@ export function generateTensorRoadSegments(opts: StreamlineOptions): StreamlineR
 
 function placeSeeds(opts: StreamlineOptions): Seed[] {
   const seeds: Seed[] = [];
+  const roadSeedSpacing = opts.collisionRadius * 3;
 
   for (const road of opts.existingRoads) {
+    if (seeds.length >= opts.seedCount) break;
     if (road.points.length < 2) continue;
+    let distSinceSeed = roadSeedSpacing;
     for (let i = 0; i < road.points.length - 1; i++) {
       const a = road.points[i];
       const b = road.points[i + 1];
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < opts.stepSize * 2) continue;
+      distSinceSeed += len;
+      if (len < opts.stepSize * 2 || distSinceSeed < roadSeedSpacing) continue;
+      distSinceSeed = 0;
       const nx = -dy / len;
       const ny = dx / len;
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const seedPos = { x: mid.x + nx * opts.stepSize * 2, y: mid.y + ny * opts.stepSize * 2 };
       if (opts.island.containsPoint(seedPos.x, seedPos.y)) {
         seeds.push({ pos: seedPos, priority: 1 });
+        if (seeds.length >= opts.seedCount) break;
       }
     }
   }
