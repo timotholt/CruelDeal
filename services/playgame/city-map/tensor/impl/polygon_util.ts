@@ -157,6 +157,49 @@ export default class PolygonUtil {
         }
     }
 
+    public static clipPolylineToPolygon(polyline: Vector[], polygon: Vector[]): Vector[][] {
+        return PolygonUtil.splitPolylineByPolygon(polyline, polygon, true);
+    }
+
+    public static cutPolylineFromPolygon(polyline: Vector[], polygon: Vector[]): Vector[][] {
+        return PolygonUtil.splitPolylineByPolygon(polyline, polygon, false);
+    }
+
+    private static splitPolylineByPolygon(polyline: Vector[], polygon: Vector[], keepInside: boolean): Vector[][] {
+        if (polyline.length < 2 || polygon.length < 3) return [];
+
+        const clipped: Vector[][] = [];
+        let current: Vector[] = [];
+
+        const flushCurrent = () => {
+            if (current.length >= 2) {
+                clipped.push(current);
+            }
+            current = [];
+        };
+
+        for (let i = 0; i < polyline.length - 1; i++) {
+            const segments = PolygonUtil.splitSegmentByPolygon(polyline[i], polyline[i + 1], polygon, keepInside);
+            for (const segment of segments) {
+                if (current.length === 0) {
+                    current.push(segment[0], segment[1]);
+                } else if (current[current.length - 1].distanceToSquared(segment[0]) < 0.0001) {
+                    current.push(segment[1]);
+                } else {
+                    flushCurrent();
+                    current.push(segment[0], segment[1]);
+                }
+            }
+
+            if (segments.length === 0) {
+                flushCurrent();
+            }
+        }
+
+        flushCurrent();
+        return clipped;
+    }
+
     public static averagePoint(polygon: Vector[]): Vector {
         if (polygon.length === 0) return Vector.zeroVector();
         const sum = Vector.zeroVector();
@@ -184,8 +227,114 @@ export default class PolygonUtil {
         return inside;
     }
 
+    public static polygonsIntersect(a: Vector[], b: Vector[]): boolean {
+        if (a.length < 2 || b.length < 2) return false;
+        if (!PolygonUtil.boundingBoxesOverlap(a, b)) return false;
+
+        for (const point of a) {
+            if (PolygonUtil.insidePolygon(point, b)) return true;
+        }
+
+        for (const point of b) {
+            if (PolygonUtil.insidePolygon(point, a)) return true;
+        }
+
+        for (let i = 0; i < a.length; i++) {
+            const aStart = a[i];
+            const aEnd = a[(i + 1) % a.length];
+            for (let j = 0; j < b.length; j++) {
+                const bStart = b[j];
+                const bEnd = b[(j + 1) % b.length];
+                if (PolygonUtil.segmentIntersectionT(aStart, aEnd, bStart, bEnd) !== null) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public static boundingBoxesOverlap(a: Vector[], b: Vector[]): boolean {
+        const boxA = PolygonUtil.boundingBox(a);
+        const boxB = PolygonUtil.boundingBox(b);
+        return boxA.minX <= boxB.maxX
+            && boxA.maxX >= boxB.minX
+            && boxA.minY <= boxB.maxY
+            && boxA.maxY >= boxB.minY;
+    }
+
     public static pointInRectangle(point: Vector, origin: Vector, dimensions: Vector): boolean {
         return point.x >= origin.x && point.y >= origin.y && point.x <= dimensions.x && point.y <= dimensions.y;
+    }
+
+    private static splitSegmentByPolygon(start: Vector, end: Vector, polygon: Vector[], keepInside: boolean): Vector[][] {
+        const tValues = [0, 1];
+
+        for (let i = 0; i < polygon.length; i++) {
+            const edgeStart = polygon[i];
+            const edgeEnd = polygon[(i + 1) % polygon.length];
+            const t = PolygonUtil.segmentIntersectionT(start, end, edgeStart, edgeEnd);
+            if (t !== null) tValues.push(t);
+        }
+
+        const uniqueT = Array.from(new Set(tValues
+            .filter(t => t >= 0 && t <= 1)
+            .map(t => Math.round(t * 1000000) / 1000000)))
+            .sort((a, b) => a - b);
+
+        const out: Vector[][] = [];
+        for (let i = 0; i < uniqueT.length - 1; i++) {
+            const t0 = uniqueT[i];
+            const t1 = uniqueT[i + 1];
+            if (t1 - t0 < 0.000001) continue;
+
+            const mid = PolygonUtil.interpolateSegment(start, end, (t0 + t1) / 2);
+            if (PolygonUtil.insidePolygon(mid, polygon) === keepInside) {
+                out.push([
+                    PolygonUtil.interpolateSegment(start, end, t0),
+                    PolygonUtil.interpolateSegment(start, end, t1),
+                ]);
+            }
+        }
+
+        return out;
+    }
+
+    private static segmentIntersectionT(a: Vector, b: Vector, c: Vector, d: Vector): number | null {
+        const r = b.clone().sub(a);
+        const s = d.clone().sub(c);
+        const denominator = r.cross(s);
+        if (Math.abs(denominator) < 0.000001) return null;
+
+        const cMinusA = c.clone().sub(a);
+        const t = cMinusA.cross(s) / denominator;
+        const u = cMinusA.cross(r) / denominator;
+        if (t < -0.000001 || t > 1.000001 || u < -0.000001 || u > 1.000001) {
+            return null;
+        }
+
+        return Math.max(0, Math.min(1, t));
+    }
+
+    private static interpolateSegment(start: Vector, end: Vector, t: number): Vector {
+        return new Vector(
+            start.x + (end.x - start.x) * t,
+            start.y + (end.y - start.y) * t
+        );
+    }
+
+    private static boundingBox(polygon: Vector[]): { minX: number; minY: number; maxX: number; maxY: number } {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const point of polygon) {
+            minX = Math.min(minX, point.x);
+            minY = Math.min(minY, point.y);
+            maxX = Math.max(maxX, point.x);
+            maxY = Math.max(maxY, point.y);
+        }
+        return { minX, minY, maxX, maxY };
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

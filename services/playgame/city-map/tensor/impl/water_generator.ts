@@ -159,10 +159,11 @@ export default class WaterGenerator extends StreamlineGenerator {
             return;
         }
 
-        this._riverPolygon = PolygonUtil.resizeGeometry(
-            bestRiver,
+        const extendedRiver = this.extendOpenPolyline(bestRiver, this.params.riverSize * 4);
+        this._riverPolygon = this.simplifyStreamline(PolygonUtil.resizeGeometry(
+            extendedRiver,
             this.params.riverSize - this.params.riverBankSize,
-            false);
+            false));
         this.tensorField.river = this._riverPolygon;
     }
 
@@ -276,6 +277,16 @@ export default class WaterGenerator extends StreamlineGenerator {
             length += streamline[i - 1].distanceTo(streamline[i]);
         }
         return length;
+    }
+
+    private extendOpenPolyline(polyline: Vector[], distance: number): Vector[] {
+        if (polyline.length < 2) return polyline;
+        const extended = polyline.map(point => point.clone());
+        extended.unshift(extended[0].clone().add(
+            extended[0].clone().sub(extended[1]).setLength(distance)));
+        extended.push(extended[extended.length - 1].clone().add(
+            extended[extended.length - 1].clone().sub(extended[extended.length - 2]).setLength(distance)));
+        return extended;
     }
 
     private vectorOffScreen(v: Vector): boolean {

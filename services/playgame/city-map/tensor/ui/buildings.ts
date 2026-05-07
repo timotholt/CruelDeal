@@ -6,6 +6,7 @@ import Graph from '../impl/graph';
 import Vector from '../vector';
 import { tensorRandom } from '../rng';
 import PolygonFinder from '../impl/polygon_finder';
+import type { PolygonFinderStats } from '../impl/polygon_finder';
 import {PolygonParams} from '../impl/polygon_finder';
 
 export interface BuildingModel {
@@ -74,12 +75,14 @@ export default class Buildings {
     private preGenerateCallback: () => void = () => {};
     private postGenerateCallback: () => void = () => {};
     private _models: BuildingModels = new BuildingModels([]);
+    public lastPolygonStats: PolygonFinderStats | null = null;
 
     private buildingParams: PolygonParams = {
         maxLength: 20,
         minArea: 50,
         shrinkSpacing: 4,
         chanceNoDivide: 0.05,
+        preciseWaterCheck: false,
     };
 
     constructor(private tensorField: TensorField,
@@ -122,6 +125,10 @@ export default class Buildings {
         this.allStreamlines = s;
     }
 
+    setPreciseWaterCheck(enabled: boolean): void {
+        this.buildingParams.preciseWaterCheck = enabled;
+    }
+
     reset(): void {
         this.polygonFinder.reset();
         this._models = new BuildingModels([]);
@@ -137,6 +144,7 @@ export default class Buildings {
         const g = new Graph(this.allStreamlines, this.dstep, true);
         this.polygonFinder = new PolygonFinder(g.nodes, this.buildingParams, this.tensorField);
         this.polygonFinder.findPolygons();
+        this.lastPolygonStats = this.polygonFinder.lastStats;
         await this.polygonFinder.shrink(animate);
         await this.polygonFinder.divide(animate);
         this.redraw();

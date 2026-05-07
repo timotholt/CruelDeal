@@ -10,6 +10,14 @@ export interface PolygonParams {
     minArea: number;
     shrinkSpacing: number;
     chanceNoDivide: number;
+    preciseWaterCheck?: boolean;
+}
+
+export interface PolygonFinderStats {
+    candidates: number;
+    accepted: number;
+    filterMs: number;
+    preciseWaterChecks: number;
 }
 
 export default class PolygonFinder {
@@ -20,6 +28,12 @@ export default class PolygonFinder {
     private resolveShrink: () => void = () => {};
     private toDivide: Vector[][] = [];
     private resolveDivide: () => void = () => {};
+    public lastStats: PolygonFinderStats = {
+        candidates: 0,
+        accepted: 0,
+        filterMs: 0,
+        preciseWaterChecks: 0,
+    };
 
     constructor(private nodes: Node[], private params: PolygonParams, private tensorField: TensorField) {}
 
@@ -128,12 +142,51 @@ export default class PolygonFinder {
     }
 
     private filterPolygonsByWater(polygons: Vector[][]): Vector[][] {
+        const start = performance.now();
         const out: Vector[][] = [];
+        let preciseWaterChecks = 0;
         for (const p of polygons) {
             const avg = PolygonUtil.averagePoint(p);
-            if (this.tensorField.onLand(avg) && !this.tensorField.inParks(avg)) out.push(p);
+            if (this.params.preciseWaterCheck) {
+                preciseWaterChecks++;
+                if (this.polygonOnBuildableLand(p, avg)) out.push(p);
+            } else if (this.tensorField.onLand(avg) && !this.tensorField.inParks(avg)) {
+                out.push(p);
+            }
         }
+        this.lastStats = {
+            candidates: polygons.length,
+            accepted: out.length,
+            filterMs: performance.now() - start,
+            preciseWaterChecks,
+        };
         return out;
+    }
+
+    private polygonOnBuildableLand(polygon: Vector[], avg: Vector): boolean {
+        if (!this.tensorField.onLand(avg) || this.tensorField.inParks(avg)) return false;
+
+        for (const point of polygon) {
+            if (!this.tensorField.onLand(point) || this.tensorField.inParks(point)) {
+                return false;
+            }
+        }
+
+        if (this.tensorField.sea.length > 0 && PolygonUtil.polygonsIntersect(polygon, this.tensorField.sea)) {
+            return false;
+        }
+
+        if (!this.tensorField.ignoreRiver
+            && this.tensorField.river.length > 0
+            && PolygonUtil.polygonsIntersect(polygon, this.tensorField.river)) {
+            return false;
+        }
+
+        for (const park of this.tensorField.parks) {
+            if (PolygonUtil.polygonsIntersect(polygon, park)) return false;
+        }
+
+        return true;
     }
 
     private removePolygonAdjacencies(polygon: Node[]): void {

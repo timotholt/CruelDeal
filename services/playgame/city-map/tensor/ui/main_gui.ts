@@ -17,6 +17,7 @@ import CanvasWrapper from './canvas_wrapper';
 import Buildings, {BuildingModel} from './buildings';
 import PolygonUtil from '../impl/polygon_util';
 import type { MapShape } from '../types';
+import GenerationProfiler from './generation_profiler';
 
 /**
  * Handles Map folder, glues together impl
@@ -32,12 +33,14 @@ export default class MainGUI {
     private smallParks: Vector[][] = [];
     private animate: boolean = true;
     private animationSpeed: number = 30;
+    private lastParkPolygonDetail = '';
 
     private coastline: WaterGUI;
     private mainRoads: RoadGUI;
     private majorRoads: RoadGUI;
     private minorRoads: RoadGUI;
     private buildings: Buildings;
+    private mapShape: MapShape = 'peninsula';
 
     private coastlineParams: WaterParams;
     private mainParams: StreamlineParams;
@@ -193,8 +196,10 @@ export default class MainGUI {
             minArea: 80,
             shrinkSpacing: 4,
             chanceNoDivide: 1,
+            preciseWaterCheck: this.usesIslandClip(),
         }, this.tensorField);
         p.findPolygons();
+        this.lastParkPolygonDetail = this.formatPolygonStats(p.lastStats);
         const polygons = p.polygons;
 
         if (this.minorRoads.allStreamlines.length === 0) {
@@ -230,16 +235,97 @@ export default class MainGUI {
 
     async generateEverything(animate?: boolean): Promise<void> {
         const anim = animate ?? this.animate;
-        this.coastline.generateRoads();
-        await this.mainRoads.generateRoads();
-        await this.majorRoads.generateRoads(anim);
-        await this.minorRoads.generateRoads(anim);
-        this.redraw = true;
-        await this.buildings.generate(anim);
+        const profiler = new GenerationProfiler(`${this.mapShape}${anim ? ' animated' : ' instant'}`);
+        if (this.mapShape === 'island-jagged' || this.mapShape === 'island-smooth') {
+            try {
+                await this.generateIslandByClipping(anim, profiler);
+            } finally {
+                profiler.finish();
+            }
+            return;
+        }
+
+        try {
+            this.buildings.setPreciseWaterCheck(false);
+            profiler.time('coastline', () => this.coastline.generateRoads());
+            await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
+            await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
+            await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
+            this.redraw = true;
+            await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
+        } finally {
+            profiler.finish();
+        }
     }
 
     setMapShape(mapShape: MapShape): void {
+        this.mapShape = mapShape;
         this.coastline.setMapShape(mapShape);
+    }
+
+    private async generateIslandByClipping(anim: boolean, profiler: GenerationProfiler): Promise<void> {
+        profiler.time('island water', () => this.coastline.generateRoads());
+
+        const landPolygon = this.coastline.landPolygonWorld;
+        const riverPolygon = this.coastline.riverPolygonWorld;
+
+        this.tensorField.landPolygon = [];
+        this.tensorField.river = [];
+        this.tensorField.parks = [];
+
+        await profiler.timeAsync('main roads open world', () => this.mainRoads.generateRoads());
+        await profiler.timeAsync('major roads open world', () => this.majorRoads.generateRoads(anim));
+        await profiler.timeAsync('minor roads open world', () => this.minorRoads.generateRoads(anim));
+
+        profiler.time('clip roads to island', () => {
+            this.mainRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.mainRoads.allStreamlines, landPolygon, riverPolygon));
+            this.majorRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.majorRoads.allStreamlines, landPolygon, riverPolygon));
+            this.minorRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.minorRoads.allStreamlines, landPolygon, riverPolygon));
+        });
+
+        this.tensorField.landPolygon = landPolygon;
+        this.tensorField.river = riverPolygon;
+        this.buildings.setPreciseWaterCheck(true);
+        this.bigParks = [];
+        this.smallParks = [];
+        profiler.time('parks', () => this.addParks(), () => this.lastParkPolygonDetail);
+        this.redraw = true;
+        await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
+    }
+
+    private clipRoadSetToBuildableLand(roads: Vector[][], landPolygon: Vector[], riverPolygon: Vector[]): Vector[][] {
+        const minLength = this.minorParams.dstep * 4;
+        const clipped: Vector[][] = [];
+        for (const road of roads) {
+            for (const landSegment of PolygonUtil.clipPolylineToPolygon(road, landPolygon)) {
+                const riverCutSegments = riverPolygon.length > 0
+                    ? PolygonUtil.cutPolylineFromPolygon(landSegment, riverPolygon)
+                    : [landSegment];
+                for (const segment of riverCutSegments) {
+                    if (this.streamlineLength(segment) >= minLength) {
+                        clipped.push(segment);
+                    }
+                }
+            }
+        }
+        return clipped;
+    }
+
+    private usesIslandClip(): boolean {
+        return this.mapShape === 'island-jagged' || this.mapShape === 'island-smooth';
+    }
+
+    private formatPolygonStats(stats: { candidates: number; accepted: number; filterMs: number; preciseWaterChecks: number } | null): string {
+        if (!stats) return '';
+        return `${stats.accepted}/${stats.candidates} accepted, ${stats.preciseWaterChecks} precise checks, filter ${stats.filterMs.toFixed(1)}ms`;
+    }
+
+    private streamlineLength(streamline: Vector[]): number {
+        let length = 0;
+        for (let i = 1; i < streamline.length; i++) {
+            length += streamline[i - 1].distanceTo(streamline[i]);
+        }
+        return length;
     }
 
     update(): void {

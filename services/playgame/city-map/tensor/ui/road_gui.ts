@@ -92,6 +92,14 @@ export default class RoadGUI {
         this.streamlines.clearStreamlines();
     }
 
+    replaceStreamlines(streamlines: Vector[][]): void {
+        const cloned = streamlines.map(streamline => streamline.map(point => point.clone()));
+        this.streamlines.allStreamlinesSimple = cloned;
+        this.streamlines.allStreamlines = cloned;
+        this.streamlines.streamlinesMajor = cloned;
+        this.streamlines.streamlinesMinor = [];
+    }
+
     async generateRoads(animate = false): Promise<void> {
         this.preGenerateCallback();
 
