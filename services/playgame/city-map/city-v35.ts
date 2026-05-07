@@ -1866,7 +1866,8 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
   }
   const cells = districts.flatMap((district) => district.blocks);
   const roadHazards = makeRoadHazards(roadEdges);
-  const buildingPlan = buildStaticBuildings(cells, rng, terrain, roadHazards);
+  // const buildingPlan = buildStaticBuildings(cells, rng, terrain, roadHazards);
+  const buildingPlan = { buildings: [], parcels: [], landmarks: [], openSpaces: [] };
   const parcels = buildingPlan.parcels || [];
   const coastDocks = buildCoastDocks(terrain, normalizedSeed);
   return {
