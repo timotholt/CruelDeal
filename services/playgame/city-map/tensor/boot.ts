@@ -11,10 +11,7 @@ import colourSchemes from './colour_schemes.json';
 import Vector from './vector';
 import Util from './util';
 import { MAP_SHAPES, type MapShape } from './types';
-
-/** Fixed virtual resolution (9:16). Same on all devices. */
-const VIRTUAL_W = 900;
-const VIRTUAL_H = 1600;
+import { VIEWPORT_DIMENSIONS, WORLD_ORIGIN, WORLD_DIMENSIONS } from './world';
 
 export interface TensorBootOptions {
     seed?: string;
@@ -51,7 +48,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
 
     // 1. Context — lock to fixed virtual resolution (device-independent)
     setTensorContainer(container);
-    setVirtualResolution(VIRTUAL_W, VIRTUAL_H);
+    setVirtualResolution(VIEWPORT_DIMENSIONS.x, VIEWPORT_DIMENSIONS.y);
     DomainController.resetInstance();
 
     // 2. GUI — scoped inside the container, not document.body
@@ -67,6 +64,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
 
     // 3. Core services
     const domainController = DomainController.getInstance();
+    domainController.frameBounds(WORLD_ORIGIN, WORLD_DIMENSIONS);
     const dragController = new DragController(gui);
 
     // 4. Root controls: zoom then generate

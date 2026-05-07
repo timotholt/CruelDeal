@@ -7,7 +7,8 @@ import FieldIntegrator from '../impl/integrator';
 import {StreamlineParams} from '../impl/streamlines';
 import StreamlineGenerator from '../impl/streamlines';
 import Vector from '../vector';
-import { getContainerWidth, getContainerHeight, onTensorResize } from '../context';
+import { onTensorResize } from '../context';
+import { WORLD_ORIGIN, WORLD_DIMENSIONS } from '../world';
 
 /**
  * Handles creation of roads
@@ -29,8 +30,8 @@ export default class RoadGUI {
                 protected redraw: () => void,
                 protected _animate = false) {
         this.streamlines = new StreamlineGenerator(
-            this.integrator, this.domainController.origin,
-            this.domainController.worldDimensions, this.params);
+            this.integrator, WORLD_ORIGIN,
+            WORLD_DIMENSIONS, this.params);
 
         this.setPathIterations();
         onTensorResize(() => this.setPathIterations());
@@ -96,8 +97,8 @@ export default class RoadGUI {
 
         this.domainController.zoom = this.domainController.zoom / Util.DRAW_INFLATE_AMOUNT;
         this.streamlines = new StreamlineGenerator(
-            this.integrator, this.domainController.origin,
-            this.domainController.worldDimensions, Object.assign({}, this.params));
+            this.integrator, WORLD_ORIGIN,
+            WORLD_DIMENSIONS, Object.assign({}, this.params));
         this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
 
         for (const s of this.existingStreamlines) {
@@ -126,7 +127,7 @@ export default class RoadGUI {
     }
 
     private setPathIterations(): void {
-        const max = 1.5 * Math.max(getContainerWidth(), getContainerHeight());
+        const max = 1.5 * Math.max(WORLD_DIMENSIONS.x, WORLD_DIMENSIONS.y);
         this.params.pathIterations = max / this.params.dstep;
         Util.updateGui(this.guiFolder);
     }

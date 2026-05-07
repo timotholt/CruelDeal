@@ -109,6 +109,20 @@ export default class DomainController {
         }
     }
 
+    frameBounds(origin: Vector, dimensions: Vector, padding = 1): void {
+        const fitZoom = Math.min(
+            this._screenDimensions.x / dimensions.x,
+            this._screenDimensions.y / dimensions.y
+        ) * padding;
+        this._zoom = Math.max(0.3, Math.min(20, fitZoom));
+        const viewportWorldDimensions = this.worldDimensions;
+        this._origin = origin.clone()
+            .add(dimensions.clone().divideScalar(2))
+            .sub(viewportWorldDimensions.divideScalar(2));
+        this.moved = true;
+        this.zoomCallback();
+    }
+
     onScreen(v: Vector): boolean {
         const screenSpace = this.worldToScreen(v.clone());
         return screenSpace.x >= 0 && screenSpace.y >= 0

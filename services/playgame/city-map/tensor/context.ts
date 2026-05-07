@@ -3,9 +3,9 @@
  * Replaces window.innerWidth/Height to scope the generator to its container element.
  *
  * When a virtual resolution is set, getContainerWidth/Height return fixed
- * values regardless of actual container pixel size. The canvas CSS stretches
- * the buffer to fill the real container. This makes the world deterministic
- * across all devices.
+ * viewport values regardless of actual container pixel size. The canvas CSS
+ * stretches the buffer to fill the real container. Generation has its own
+ * fixed world bounds in tensor/world.ts.
  */
 
 let _container: HTMLElement | null = null;
@@ -25,9 +25,8 @@ export function clearTensorContainer(): void {
 }
 
 /**
- * Lock the coordinate system to a fixed virtual resolution.
- * All generation and rendering uses these dimensions; the canvas is then
- * CSS-scaled to fill the actual container.
+ * Lock the viewport coordinate system to a fixed virtual resolution.
+ * Rendering uses these dimensions; generation uses WORLD_DIMENSIONS.
  */
 export function setVirtualResolution(w: number, h: number): void {
     _virtualW = w;

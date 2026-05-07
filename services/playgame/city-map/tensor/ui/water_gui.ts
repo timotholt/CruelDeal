@@ -9,6 +9,7 @@ import Vector from '../vector';
 import RoadGUI from './road_gui';
 import TensorField from '../impl/tensor_field';
 import type { MapShape } from '../types';
+import { WORLD_ORIGIN, WORLD_DIMENSIONS } from '../world';
 
 export default class WaterGUI extends RoadGUI {
     protected streamlines: WaterGenerator;
@@ -23,8 +24,8 @@ export default class WaterGUI extends RoadGUI {
                 redraw: () => void) {
         super(params, integrator, guiFolder, closeTensorFolder, folderName, redraw);
         this.streamlines = new WaterGenerator(
-            this.integrator, this.domainController.origin,
-            this.domainController.worldDimensions,
+            this.integrator, WORLD_ORIGIN,
+            WORLD_DIMENSIONS,
             Object.assign({}, this.params), this.tensorField);
     }
 
@@ -52,8 +53,8 @@ export default class WaterGUI extends RoadGUI {
 
         this.domainController.zoom = this.domainController.zoom / Util.DRAW_INFLATE_AMOUNT;
         this.streamlines = new WaterGenerator(
-            this.integrator, this.domainController.origin,
-            this.domainController.worldDimensions,
+            this.integrator, WORLD_ORIGIN,
+            WORLD_DIMENSIONS,
             Object.assign({}, this.params), this.tensorField);
         this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
 

@@ -9,6 +9,7 @@ import {BasisField, FIELD_TYPE} from '../impl/basis_field';
 import Util from '../util';
 import Vector from '../vector';
 import { tensorRandom } from '../rng';
+import { WORLD_ORIGIN, WORLD_DIMENSIONS } from '../world';
 
 /**
  * Extension of TensorField that handles interaction with dat.GUI
@@ -37,10 +38,10 @@ export default class TensorFieldGUI extends TensorField {
 
     setRecommended(): void {
         this.reset();
-        const size = this.domainController.worldDimensions.multiplyScalar(this.TENSOR_SPAWN_SCALE);
-        const newOrigin = this.domainController.worldDimensions
+        const size = WORLD_DIMENSIONS.clone().multiplyScalar(this.TENSOR_SPAWN_SCALE);
+        const newOrigin = WORLD_DIMENSIONS.clone()
             .multiplyScalar((1 - this.TENSOR_SPAWN_SCALE) / 2)
-            .add(this.domainController.origin);
+            .add(WORLD_ORIGIN);
         this.addGridAtLocation(newOrigin);
         this.addGridAtLocation(newOrigin.clone().add(size));
         this.addGridAtLocation(newOrigin.clone().add(new Vector(size.x, 0)));
@@ -49,7 +50,7 @@ export default class TensorFieldGUI extends TensorField {
     }
 
     addRadialRandom(): void {
-        const width = this.domainController.worldDimensions.x;
+        const width = WORLD_DIMENSIONS.x;
         this.addRadial(this.randomLocation(),
             Util.randomRange(width / 10, width / 5),
             Util.randomRange(50));
@@ -60,7 +61,7 @@ export default class TensorFieldGUI extends TensorField {
     }
 
     private addGridAtLocation(location: Vector): void {
-        const width = this.domainController.worldDimensions.x;
+        const width = WORLD_DIMENSIONS.x;
         this.addGrid(location,
             Util.randomRange(width / 4, width),
             Util.randomRange(50),
@@ -68,10 +69,10 @@ export default class TensorFieldGUI extends TensorField {
     }
 
     private randomLocation(): Vector {
-        const size = this.domainController.worldDimensions.multiplyScalar(this.TENSOR_SPAWN_SCALE);
+        const size = WORLD_DIMENSIONS.clone().multiplyScalar(this.TENSOR_SPAWN_SCALE);
         const location = new Vector(tensorRandom(), tensorRandom()).multiply(size);
-        const newOrigin = this.domainController.worldDimensions.multiplyScalar((1 - this.TENSOR_SPAWN_SCALE) / 2);
-        return location.add(this.domainController.origin).add(newOrigin);
+        const newOrigin = WORLD_DIMENSIONS.clone().multiplyScalar((1 - this.TENSOR_SPAWN_SCALE) / 2);
+        return location.add(WORLD_ORIGIN).add(newOrigin);
     }
 
     private getCrossLocations(): Vector[] {
