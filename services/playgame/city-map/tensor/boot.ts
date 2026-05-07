@@ -12,8 +12,8 @@ import Vector from './vector';
 import Util from './util';
 
 /** Fixed virtual resolution (9:16). Same on all devices. */
-const VIRTUAL_W = 450;
-const VIRTUAL_H = 800;
+const VIRTUAL_W = 900;
+const VIRTUAL_H = 1600;
 
 export interface TensorBootOptions {
     seed?: string;
@@ -185,8 +185,8 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     };
     loop();
 
-    // 15. Auto-generate on mount
-    mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+    // 15. Auto-generate on mount (animate=false for instant results)
+    mainGui.generateEverything(false).catch((e) => console.error('[TensorMap] generateEverything failed', e));
 
     // 16. Cleanup
     return {

@@ -226,13 +226,14 @@ export default class MainGUI {
         this.tensorField.parks.push(...this.smallParks);
     }
 
-    async generateEverything(): Promise<void> {
+    async generateEverything(animate?: boolean): Promise<void> {
+        const anim = animate ?? this.animate;
         this.coastline.generateRoads();
         await this.mainRoads.generateRoads();
-        await this.majorRoads.generateRoads(this.animate);
-        await this.minorRoads.generateRoads(this.animate);
+        await this.majorRoads.generateRoads(anim);
+        await this.minorRoads.generateRoads(anim);
         this.redraw = true;
-        await this.buildings.generate(this.animate);
+        await this.buildings.generate(anim);
     }
 
     update(): void {
