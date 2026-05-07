@@ -22,6 +22,18 @@ export interface TensorBootOptions {
 export interface TensorBoot {
     cleanup: () => void;
     generate: () => void;
+    setZoom: (z: number) => void;
+    getZoom: () => number;
+    setColourScheme: (scheme: string) => void;
+    getColourSchemes: () => string[];
+    setZoomBuildings: (enabled: boolean) => void;
+    setBuildingModels: (enabled: boolean) => void;
+    setShowFrame: (enabled: boolean) => void;
+    setOrthographic: (enabled: boolean) => void;
+    setCamera: (x: number, y: number) => void;
+    setDrawCentre: (enabled: boolean) => void;
+    setHighDPI: (enabled: boolean) => void;
+    downloadPng: () => void;
 }
 
 /**
@@ -43,6 +55,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     gui.domElement.style.top = '0';
     gui.domElement.style.right = '0';
     gui.domElement.style.zIndex = '100';
+    gui.domElement.style.display = 'none';
     container.appendChild(gui.domElement);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const schemes = colourSchemes as any;
@@ -82,8 +95,16 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     let style: Style;
     let showFrame = false;
     let highDPI = false;
+    const styleState = {
+        colourScheme: 'Default',
+        zoomBuildings: false,
+        buildingModels: false,
+        showFrame: false,
+    };
 
     function changeColourScheme(scheme: string): void {
+        if (!schemes[scheme]) return;
+        styleState.colourScheme = scheme;
         const colourScheme: ColourScheme = Object.assign({}, schemes[scheme] as ColourScheme);
         Util.updateGui(styleFolder);
         if (scheme.startsWith('Drawn')) {
@@ -92,6 +113,8 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
             style = new DefaultStyle(canvas, dragController, colourScheme, scheme.startsWith('Heightmap'));
         }
         style.showFrame = showFrame;
+        style.zoomBuildings = styleState.zoomBuildings;
+        style.showBuildingModels = styleState.buildingModels;
         const scale = highDPI ? 2 : 1;
         style.canvasScale = scale;
         tensorCanvas.canvasScale = scale;
@@ -111,54 +134,50 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     };
 
     // 11. Style folder
-    const styleState = {
-        colourScheme: 'Default',
-        zoomBuildings: false,
-        buildingModels: false,
-        showFrame: false,
-    };
-    styleFolder.add(styleState, 'colourScheme', Object.keys(schemes))
+    const colourSchemeController = styleFolder.add(styleState, 'colourScheme', Object.keys(schemes))
         .onChange((val: string) => changeColourScheme(val));
-    styleFolder.add(styleState, 'zoomBuildings').onChange((val: boolean) => {
+    const zoomBuildingsController = styleFolder.add(styleState, 'zoomBuildings').onChange((val: boolean) => {
         previousFrameDrawTensor = true;
         style.zoomBuildings = val;
     });
-    styleFolder.add(styleState, 'buildingModels').onChange((val: boolean) => {
+    const buildingModelsController = styleFolder.add(styleState, 'buildingModels').onChange((val: boolean) => {
         previousFrameDrawTensor = true;
         style.showBuildingModels = val;
     });
-    styleFolder.add(styleState, 'showFrame').onChange((val: boolean) => {
+    const showFrameController = styleFolder.add(styleState, 'showFrame').onChange((val: boolean) => {
         showFrame = val;
         previousFrameDrawTensor = true;
         style.showFrame = val;
     });
-    styleFolder.add(domainController, 'orthographic');
+    const orthographicController = styleFolder.add(domainController, 'orthographic');
     const cameraState = { cameraX: 0, cameraY: 0 };
     const updateCamera = () => {
         domainController.cameraDirection = new Vector(cameraState.cameraX / 10, cameraState.cameraY / 10);
     };
-    styleFolder.add(cameraState, 'cameraX', -15, 15).step(1).onChange(updateCamera);
-    styleFolder.add(cameraState, 'cameraY', -15, 15).step(1).onChange(updateCamera);
+    const cameraXController = styleFolder.add(cameraState, 'cameraX', -15, 15).step(1).onChange(updateCamera);
+    const cameraYController = styleFolder.add(cameraState, 'cameraY', -15, 15).step(1).onChange(updateCamera);
 
     // 12. Options folder
-    optionsFolder.add(tensorFieldGui, 'drawCentre');
+    const drawCentreController = optionsFolder.add(tensorFieldGui, 'drawCentre');
     const optState = { highDPI: false };
-    optionsFolder.add(optState, 'highDPI').onChange((val: boolean) => {
+    const highDPIController = optionsFolder.add(optState, 'highDPI').onChange((val: boolean) => {
         highDPI = val;
         const scale = val ? 2 : 1;
         style.canvasScale = scale;
         tensorCanvas.canvasScale = scale;
+        previousFrameDrawTensor = true;
     });
 
     // 13. Download folder
     const dlState = { imageScale: 3 };
     downloadsFolder.add(dlState, 'imageScale', 1, 5).step(1);
-    downloadsFolder.add({ PNG: () => {
+    const downloadPng = () => {
         const link = document.createElement('a');
         link.download = 'map.png';
         link.href = canvas.toDataURL('image/png');
         link.click();
-    } }, 'PNG');
+    };
+    downloadsFolder.add({ PNG: downloadPng }, 'PNG');
 
     const showTensorField = () => !tensorFolder.closed || mainGui.roadsEmpty();
 
@@ -191,6 +210,61 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     // 16. Cleanup
     return {
         generate: () => guiActions.generate(),
+        setZoom: (z: number) => {
+            domainController.zoom = z;
+            zoomController.updateDisplay();
+        },
+        getZoom: () => domainController.zoom,
+        setColourScheme: (scheme: string) => {
+            changeColourScheme(scheme);
+            colourSchemeController.updateDisplay();
+        },
+        getColourSchemes: () => Object.keys(schemes),
+        setZoomBuildings: (enabled: boolean) => {
+            styleState.zoomBuildings = enabled;
+            previousFrameDrawTensor = true;
+            style.zoomBuildings = enabled;
+            zoomBuildingsController.updateDisplay();
+        },
+        setBuildingModels: (enabled: boolean) => {
+            styleState.buildingModels = enabled;
+            previousFrameDrawTensor = true;
+            style.showBuildingModels = enabled;
+            buildingModelsController.updateDisplay();
+        },
+        setShowFrame: (enabled: boolean) => {
+            styleState.showFrame = enabled;
+            showFrame = enabled;
+            previousFrameDrawTensor = true;
+            style.showFrame = enabled;
+            showFrameController.updateDisplay();
+        },
+        setOrthographic: (enabled: boolean) => {
+            domainController.orthographic = enabled;
+            orthographicController.updateDisplay();
+        },
+        setCamera: (x: number, y: number) => {
+            cameraState.cameraX = x;
+            cameraState.cameraY = y;
+            updateCamera();
+            cameraXController.updateDisplay();
+            cameraYController.updateDisplay();
+        },
+        setDrawCentre: (enabled: boolean) => {
+            tensorFieldGui.drawCentre = enabled;
+            previousFrameDrawTensor = true;
+            drawCentreController.updateDisplay();
+        },
+        setHighDPI: (enabled: boolean) => {
+            optState.highDPI = enabled;
+            highDPI = enabled;
+            const scale = enabled ? 2 : 1;
+            style.canvasScale = scale;
+            tensorCanvas.canvasScale = scale;
+            previousFrameDrawTensor = true;
+            highDPIController.updateDisplay();
+        },
+        downloadPng,
         cleanup: () => {
             cancelAnimationFrame(animationId);
             try { gui.domElement.remove(); } catch (_) {}

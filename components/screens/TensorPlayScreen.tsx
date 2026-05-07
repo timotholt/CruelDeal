@@ -7,9 +7,10 @@
  * Route: /dev/tensor-play
  */
 
-import { onMount, onCleanup } from 'solid-js';
-import { boot } from '@/services/playgame/city-map/tensor/boot';
+import { createSignal, onMount, onCleanup } from 'solid-js';
+import { boot, type TensorBoot } from '@/services/playgame/city-map/tensor/boot';
 import Util from '@/services/playgame/city-map/tensor/util';
+import { TensorDebugPanel } from '../debug/TensorDebugPanel';
 import '../screens/play/city-map/cityMapStyles.css';
 import '@/src/styles/playgame.css';
 
@@ -22,12 +23,12 @@ export const TensorPlayScreen = (props: TensorPlayScreenProps) => {
   let areaRef: HTMLDivElement | undefined;
   // eslint-disable-next-line no-unassigned-vars
   let canvasRef: HTMLCanvasElement | undefined;
-  let generateRef: (() => void) | undefined;
+  const [controls, setControls] = createSignal<TensorBoot>();
 
   onMount(() => {
     if (!areaRef || !canvasRef) return;
     const result = boot(areaRef, canvasRef, { seed: 'tensor-dev' });
-    generateRef = result.generate;
+    setControls(result);
     onCleanup(result.cleanup);
   });
 
@@ -83,6 +84,7 @@ export const TensorPlayScreen = (props: TensorPlayScreenProps) => {
                 "touch-action": 'none',
               }}
             />
+            <TensorDebugPanel controls={controls()} />
           </div>
 
           {/* Action bar */}
@@ -91,7 +93,7 @@ export const TensorPlayScreen = (props: TensorPlayScreenProps) => {
             <button
               class="end-turn"
               type="button"
-              onClick={() => generateRef?.()}
+              onClick={() => controls()?.generate()}
             >
               GENERATE
             </button>
