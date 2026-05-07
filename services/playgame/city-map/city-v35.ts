@@ -17,7 +17,7 @@ import { generateBridges } from './bridges';
 import { generateCoastDocks } from './land';
 import { classifyParcelShape } from './parcel-shapes';
 import { subdivideBlockIntoParcels } from './parcels';
-import { attachPM2001RoadMetadata, buildPM2001BlockFacesForDistrict, pointInRoadCorridor, roadStyleForDistrict } from './pm2001';
+import { attachPM2001RoadMetadata, buildPlanarBlockFacesForDistrict, buildPM2001BlockFacesForDistrict, pointInRoadCorridor, roadStyleForDistrict } from './pm2001';
 import {
   analyzeBlockFrontage,
   chooseBlockProfile,
@@ -39,7 +39,7 @@ import {
   type TensorGenerationConfig,
   type TensorRoadSegment,
   type Vec2,
-} from './tensor';
+} from './tensor-broken';
 import type {
   Building,
   BuildingLodGroup,
@@ -65,7 +65,7 @@ type Rng = () => number;
 
 export type RoadGenerationMode = 'legacy' | 'pm2001' | 'tensor';
 
-export type { TensorGenerationConfig } from './tensor';
+export type { TensorGenerationConfig } from './tensor-broken';
 
 export interface BaseCityFactoryContext {
   seed: string | number;
@@ -191,6 +191,10 @@ function tensorRoadToRoadEdge(segment: TensorRoadSegment): RoadEdge {
       : segment.roadClass === 'minor'
         ? 'street' as const
         : 'local' as const;
+  const physicalWidth = kind === 'highway' ? 12
+    : kind === 'avenue' ? 6
+    : kind === 'local' ? 2
+    : 4;
   return {
     id: segment.id,
     kind,
@@ -199,6 +203,7 @@ function tensorRoadToRoadEdge(segment: TensorRoadSegment): RoadEdge {
     b: points[points.length - 1],
     points,
     centerline: points,
+    physicalWidth,
     path: straightPolylinePath(points),
     render: roadRenderForKind(kind, 'tensor-road'),
     tensor: {
@@ -1737,9 +1742,12 @@ function applyPM2001BlockFaces(
   districts: Array<CityDistrict & Record<string, any>>,
   roadEdges: RoadEdge[],
   rng: Rng,
+  usePlanarFaces = false,
 ) {
   for (const district of districts) {
-    const result = buildPM2001BlockFacesForDistrict(district, roadEdges);
+    const result = usePlanarFaces
+      ? buildPlanarBlockFacesForDistrict(district, roadEdges)
+      : buildPM2001BlockFacesForDistrict(district, roadEdges);
     if (!result.blocks.length) continue;
     const style = roadStyleForDistrict(district);
     district.blocks = result.blocks;
@@ -1862,7 +1870,7 @@ function buildBaseCity(seed: string | number, normalizedSeed: number, rng: Rng, 
     if (mode === 'pm2001') {
       for (const district of districts as Array<CityDistrict & Record<string, any>>) district.pm2001UseOwnershipSeed = true;
     }
-    applyPM2001BlockFaces(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng);
+    applyPM2001BlockFaces(districts as Array<CityDistrict & Record<string, any>>, roadEdges, rng, mode === 'tensor');
   }
   const cells = districts.flatMap((district) => district.blocks);
   const roadHazards = makeRoadHazards(roadEdges);

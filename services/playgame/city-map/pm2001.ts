@@ -192,7 +192,7 @@ function segmentTouchesPolygon(a: Point, b: Point, polygon: readonly Point[]) {
 function splitPolygonByRoadCenterlines(polygon: Point[], roadEdges: readonly RoadEdge[]) {
   let faces = [polygon];
   for (const edge of roadEdges) {
-    if (edge.source === 'coast-road') continue;
+    if (edge.source === 'coast-road' || edge.source === 'tensor-road') continue;
     for (const [a, b] of centerlineSegments(edge)) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -242,7 +242,7 @@ function boundedRoadIdsForFace(face: readonly Point[], roadEdges: readonly RoadE
 
 function faceContainsRoadCenterlineSample(face: readonly Point[], roadEdges: readonly RoadEdge[]) {
   for (const edge of roadEdges) {
-    if (edge.source === 'coast-road') continue;
+    if (edge.source === 'coast-road' || edge.source === 'tensor-road') continue;
     const centerline = edgeCenterline(edge);
     for (let i = 0; i < centerline.length; i++) {
       if (pointInPolygon(centerline[i], face)) return true;
