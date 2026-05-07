@@ -1,9 +1,10 @@
 import log from 'loglevel';
+import 'jsts/org/locationtech/jts/monkey.js';
 import {GeometryFactory, Coordinate} from 'jsts/org/locationtech/jts/geom';
 import {Polygonizer} from 'jsts/org/locationtech/jts/operation/polygonize';
 import {BufferParameters} from 'jsts/org/locationtech/jts/operation/buffer';
 import Vector from '../vector';
-import {Slice as PolyKSlice, ContainsPoint as PolyKContainsPoint} from 'polyk';
+import {Slice as PolyKSlice} from 'polyk';
 
 export default class PolygonUtil {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -19,11 +19,13 @@ export interface WaterParams extends StreamlineParams {
 }
 
 /**
- * Extends StreamlineGenerator to create coastlines and rivers
+ * Integrates polylines to create coastline and river, with controllable noise.
+ * Faithful port of the original MapGenerator-master WaterGenerator.
  */
 export default class WaterGenerator extends StreamlineGenerator {
+    private readonly TRIES = 100;
+    private coastlineMajor = true;
     private _coastline: Vector[] = [];
-    private _river: Vector[] = [];
     private _seaPolygon: Vector[] = [];
     private _riverPolygon: Vector[] = [];
     private _riverSecondaryRoad: Vector[] = [];
@@ -31,17 +33,13 @@ export default class WaterGenerator extends StreamlineGenerator {
     constructor(integrator: FieldIntegrator,
                 origin: Vector,
                 worldDimensions: Vector,
-                private waterParams: WaterParams,
+                protected params: WaterParams,
                 private tensorField: TensorField) {
-        super(integrator, origin, worldDimensions, waterParams);
+        super(integrator, origin, worldDimensions, params);
     }
 
     get coastline(): Vector[] {
         return this._coastline;
-    }
-
-    get river(): Vector[] {
-        return this._river;
     }
 
     get seaPolygon(): Vector[] {
@@ -56,123 +54,147 @@ export default class WaterGenerator extends StreamlineGenerator {
         return this._riverSecondaryRoad;
     }
 
-    /**
-     * Creates a coastline from a single streamline
-     */
     createCoast(): void {
-        this.clearStreamlines();
-        this._coastline = [];
-        this._seaPolygon = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let coastStreamline: Vector[] = [];
+        let major = true;
 
-        const cn = this.waterParams.coastNoise;
-        if (cn.noiseEnabled) {
-            this.tensorField.enableGlobalNoise(cn.noiseAngle, cn.noiseSize);
+        if (this.params.coastNoise.noiseEnabled) {
+            this.tensorField.enableGlobalNoise(this.params.coastNoise.noiseAngle, this.params.coastNoise.noiseSize);
         }
 
-        const streamline = this._sampleCoastlineStreamline();
-        if (streamline.length < 2) return;
+        for (let i = 0; i < this.TRIES; i++) {
+            major = Math.random() < 0.5;
+            const seed = this.getSeed(major);
+            if (!seed) continue;
+            coastStreamline = this.extendStreamline(this.integrateStreamline(seed, major));
+            if (this.reachesEdges(coastStreamline)) break;
+        }
 
-        this._coastline = streamline;
-        this.allStreamlines.push(streamline);
-        this.allStreamlinesSimple.push(this.simplifyStreamline(streamline));
-        this.grid(true).addPolyline(streamline);
+        this.tensorField.disableGlobalNoise();
 
-        this._seaPolygon = PolygonUtil.lineRectanglePolygonIntersection(
-            this.origin, this.worldDimensions, streamline);
+        this._coastline = coastStreamline;
+        this.coastlineMajor = major;
+
+        const road = this.simplifyStreamline(coastStreamline);
+        this._seaPolygon = this.getSeaPolygon(road);
+        this.allStreamlinesSimple.push(road);
         this.tensorField.sea = this._seaPolygon;
 
-        if (cn.noiseEnabled) {
-            this.tensorField.disableGlobalNoise();
+        const complex = this.complexifyStreamline(road);
+        this.grid(major).addPolyline(complex);
+        this.streamlines(major).push(complex);
+        this.allStreamlines.push(complex);
+    }
+
+    createRiver(): void {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let riverStreamline: Vector[] = [];
+
+        const oldSea = this.tensorField.sea;
+        this.tensorField.sea = [];
+
+        if (this.params.riverNoise.noiseEnabled) {
+            this.tensorField.enableGlobalNoise(this.params.riverNoise.noiseAngle, this.params.riverNoise.noiseSize);
         }
+
+        for (let i = 0; i < this.TRIES; i++) {
+            const seed = this.getSeed(!this.coastlineMajor);
+            if (!seed) continue;
+            riverStreamline = this.extendStreamline(this.integrateStreamline(seed, !this.coastlineMajor));
+            if (this.reachesEdges(riverStreamline)) break;
+            if (i === this.TRIES - 1) log.error('Failed to find river reaching edge');
+        }
+
+        this.tensorField.sea = oldSea;
+        this.tensorField.disableGlobalNoise();
+
+        const expandedNoisy = this.complexifyStreamline(
+            PolygonUtil.resizeGeometry(riverStreamline, this.params.riverSize, false));
+        this._riverPolygon = PolygonUtil.resizeGeometry(
+            riverStreamline, this.params.riverSize - this.params.riverBankSize, false);
+
+        const firstOffScreen = expandedNoisy.findIndex(v => this.vectorOffScreen(v));
+        for (let i = 0; i < firstOffScreen; i++) {
+            expandedNoisy.push(expandedNoisy.shift()!);
+        }
+
+        const riverSplitPoly = this.getSeaPolygon(riverStreamline);
+        const road1 = expandedNoisy.filter(v =>
+            !PolygonUtil.insidePolygon(v, this._seaPolygon)
+            && !this.vectorOffScreen(v)
+            && PolygonUtil.insidePolygon(v, riverSplitPoly));
+        const road1Simple = this.simplifyStreamline(road1);
+        const road2 = expandedNoisy.filter(v =>
+            !PolygonUtil.insidePolygon(v, this._seaPolygon)
+            && !this.vectorOffScreen(v)
+            && !PolygonUtil.insidePolygon(v, riverSplitPoly));
+        const road2Simple = this.simplifyStreamline(road2);
+
+        if (road1.length === 0 || road2.length === 0) return;
+
+        if (road1[0].distanceToSquared(road2[0]) < road1[0].distanceToSquared(road2[road2.length - 1])) {
+            road2Simple.reverse();
+        }
+
+        this.tensorField.river = road1Simple.concat(road2Simple);
+
+        this.allStreamlinesSimple.push(road1Simple);
+        this._riverSecondaryRoad = road2Simple;
+
+        this.grid(!this.coastlineMajor).addPolyline(road1);
+        this.grid(!this.coastlineMajor).addPolyline(road2);
+        this.streamlines(!this.coastlineMajor).push(road1);
+        this.streamlines(!this.coastlineMajor).push(road2);
+        this.allStreamlines.push(road1);
+        this.allStreamlines.push(road2);
+    }
+
+    private getSeaPolygon(polyline: Vector[]): Vector[] {
+        return PolygonUtil.lineRectanglePolygonIntersection(this.origin, this.worldDimensions, polyline);
     }
 
     /**
-     * Creates a river
+     * Extends streamline past both world edges so the line exits the bounding rectangle.
+     * Required for lineRectanglePolygonIntersection to correctly split the rectangle.
      */
-    createRiver(): void {
-        this._river = [];
-        this._riverPolygon = [];
-        this._riverSecondaryRoad = [];
-
-        const rn = this.waterParams.riverNoise;
-        if (rn.noiseEnabled) {
-            this.tensorField.enableGlobalNoise(rn.noiseAngle, rn.noiseSize);
-        }
-
-        const streamline = this._sampleRiverStreamline();
-        if (streamline.length < 2) {
-            if (rn.noiseEnabled) this.tensorField.disableGlobalNoise();
-            return;
-        }
-
-        this._river = streamline;
-        this.allStreamlines.push(streamline);
-        this.allStreamlinesSimple.push(this.simplifyStreamline(streamline));
-        this.grid(true).addPolyline(streamline);
-
-        const expandedRiver = PolygonUtil.resizeGeometry(streamline, this.waterParams.riverBankSize, false);
-        if (expandedRiver.length > 0) {
-            this._riverPolygon = expandedRiver;
-            this.tensorField.river = this._riverPolygon;
-        }
-
-        this._riverSecondaryRoad = streamline;
-
-        if (rn.noiseEnabled) {
-            this.tensorField.disableGlobalNoise();
-        }
+    private extendStreamline(streamline: Vector[]): Vector[] {
+        if (streamline.length < 2) return streamline;
+        streamline.unshift(streamline[0].clone().add(
+            streamline[0].clone().sub(streamline[1]).setLength(this.params.dstep * 5)));
+        streamline.push(streamline[streamline.length - 1].clone().add(
+            streamline[streamline.length - 1].clone().sub(streamline[streamline.length - 2]).setLength(this.params.dstep * 5)));
+        return streamline;
     }
 
-    private _sampleCoastlineStreamline(): Vector[] {
-        // Sample from a point near an edge
-        const seed = this._getCoastSeed();
-        if (!seed) return [];
-        return this._integrateFromSeed(seed);
+    private reachesEdges(streamline: Vector[]): boolean {
+        return streamline.length > 0
+            && this.vectorOffScreen(streamline[0])
+            && this.vectorOffScreen(streamline[streamline.length - 1]);
     }
 
-    private _sampleRiverStreamline(): Vector[] {
-        const seed = this._getRiverSeed();
-        if (!seed) return [];
-        return this._integrateFromSeed(seed);
+    private vectorOffScreen(v: Vector): boolean {
+        const toOrigin = v.clone().sub(this.origin);
+        return toOrigin.x <= 0 || toOrigin.y <= 0
+            || toOrigin.x >= this.worldDimensions.x || toOrigin.y >= this.worldDimensions.y;
     }
 
-    private _getCoastSeed(): Vector | null {
-        for (let i = 0; i < this.params.seedTries; i++) {
-            const p = new Vector(
-                Math.random() * this.worldDimensions.x + this.origin.x,
-                this.origin.y + 1
-            );
-            if (this.integrator.onLand(p)) return p;
-        }
-        return null;
-    }
-
-    private _getRiverSeed(): Vector | null {
-        for (let i = 0; i < this.params.seedTries; i++) {
-            const p = new Vector(
-                Math.random() * this.worldDimensions.x + this.origin.x,
-                Math.random() * this.worldDimensions.y * 0.3 + this.origin.y
-            );
-            if (this.integrator.onLand(p)) return p;
-        }
-        return null;
-    }
-
-    private _integrateFromSeed(seed: Vector): Vector[] {
+    private complexifyStreamline(s: Vector[]): Vector[] {
         const out: Vector[] = [];
-        let current = seed.clone();
-        const direction = this.integrator.integrate(current, true);
-        if (direction.lengthSq() < 0.001) return [];
-
-        for (let i = 0; i < this.params.pathIterations; i++) {
-            out.push(current.clone());
-            const d = this.integrator.integrate(current, true);
-            if (d.lengthSq() < 0.001) break;
-            if (d.dot(direction) < 0) d.negate();
-            current.add(d);
-            if (!this.pointInBounds(current)) break;
+        for (let i = 0; i < s.length - 1; i++) {
+            out.push(...this.complexifyStreamlineRecursive(s[i], s[i + 1]));
         }
-
         return out;
+    }
+
+    private complexifyStreamlineRecursive(v1: Vector, v2: Vector): Vector[] {
+        if (v1.distanceToSquared(v2) <= this.paramsSq.dstep) {
+            return [v1, v2];
+        }
+        const d = v2.clone().sub(v1);
+        const halfway = v1.clone().add(d.multiplyScalar(0.5));
+        const complex = this.complexifyStreamlineRecursive(v1, halfway);
+        complex.push(...this.complexifyStreamlineRecursive(halfway, v2));
+        return complex;
     }
 }

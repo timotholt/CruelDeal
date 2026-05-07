@@ -4,153 +4,180 @@ import {Node} from './graph';
 import TensorField from './tensor_field';
 import PolygonUtil from './polygon_util';
 
-export default class PolygonFinder {
-    public polygons: Vector[][] = [];
-    private _shrunkPolygons: Vector[][] = [];
-    private _dividedPolygons: Vector[][] = [];
-
-    constructor(private nodes: Node[],
-                private polygonParams: PolygonParams,
-                private tensorField: TensorField) {}
-
-    get shrunkPolygons(): Vector[][] {
-        return this._shrunkPolygons;
-    }
-
-    get dividedPolygons(): Vector[][] {
-        return this._dividedPolygons;
-    }
-
-    reset(): void {
-        this.polygons = [];
-        this._shrunkPolygons = [];
-        this._dividedPolygons = [];
-    }
-
-    findPolygons(): void {
-        this._findPolygons();
-    }
-
-    update(): boolean {
-        return false;
-    }
-
-    /**
-     * Shrink polygons to prevent roads overlapping with buildings.
-     * Returns a Promise for API compatibility with animated mode.
-     */
-    async shrink(_animate = false): Promise<void> {
-        this._shrunkPolygons = [];
-        for (const p of this.polygons) {
-            if (p.length < 3) continue;
-            if (PolygonUtil.calcPolygonArea(p) < this.polygonParams.minArea) continue;
-            const resized = PolygonUtil.resizeGeometry(p, -this.polygonParams.shrinkSpacing, true);
-            if (resized.length > 2) {
-                this._shrunkPolygons.push(resized);
-            }
-        }
-    }
-
-    /**
-     * Divide polygons.
-     * Returns a Promise for API compatibility with animated mode.
-     */
-    async divide(_animate = false): Promise<void> {
-        this._dividedPolygons = [];
-        for (const p of this._shrunkPolygons) {
-            this._dividedPolygons.push(...PolygonUtil.subdividePolygon(p, this.polygonParams.minArea));
-        }
-        // Swap polygons to divided result for subsequent queries
-        this.polygons = this._dividedPolygons;
-    }
-
-    private _findPolygons(): void {
-        this.polygons = [];
-        const visited = new Set<Node>();
-
-        for (const node of this.nodes) {
-            if (!visited.has(node)) {
-                visited.add(node);
-                for (const startNeighbor of node.adj) {
-                    const polygon = this._tracePolygon(node, startNeighbor, visited);
-                    if (polygon !== null && polygon.length > 2) {
-                        if (this.tensorField.onLand(PolygonUtil.averagePoint(polygon)) ||
-                            this.tensorField.inParks(PolygonUtil.averagePoint(polygon))) {
-                            this.polygons.push(polygon);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Finds a polygon starting from a directed edge (node, next)
-     */
-    private _tracePolygon(start: Node, next: Node, visited: Set<Node>): Vector[] | null {
-        const polygon: Vector[] = [start.value];
-        const maxLen = this.nodes.length + 1;
-        let current = start;
-        let previous = start;
-
-        let i = 0;
-        while (next !== start && i < maxLen) {
-            polygon.push(next.value);
-            if (visited.has(next) && next !== start) {
-                return null;
-            }
-            visited.add(next);
-
-            const nextNext = this._getNextNode(previous, current, next);
-            if (nextNext === null) return null;
-
-            previous = current;
-            current = next;
-            next = nextNext;
-            i++;
-        }
-
-        if (i >= maxLen) return null;
-        return polygon;
-    }
-
-    /**
-     * Returns the most clockwise next node from current, coming from previous.
-     */
-    private _getNextNode(previous: Node, current: Node, next: Node): Node | null {
-        // Direction we are currently facing
-        const directionIn = next.value.clone().sub(current.value);
-
-        let mostClockwise: Node = null;
-        let mostClockwiseAngle = Infinity;
-
-        for (const neighbor of next.adj) {
-            if (neighbor === current) continue;
-
-            const directionOut = neighbor.value.clone().sub(next.value);
-            let angle = Vector.angleBetween(directionIn, directionOut);
-
-            // Normalise to range (0, 2*PI] — clockwise from incoming direction
-            if (angle <= 0) angle += 2 * Math.PI;
-
-            if (angle < mostClockwiseAngle) {
-                mostClockwiseAngle = angle;
-                mostClockwise = neighbor;
-            }
-        }
-
-        if (mostClockwise === null && next.adj.length > 0) {
-            // Dead-end: go back
-            return current;
-        }
-
-        return mostClockwise;
-    }
-}
-
 export interface PolygonParams {
     maxLength: number;
     minArea: number;
     shrinkSpacing: number;
     chanceNoDivide: number;
+}
+
+export default class PolygonFinder {
+    private _polygons: Vector[][] = [];
+    private _shrunkPolygons: Vector[][] = [];
+    private _dividedPolygons: Vector[][] = [];
+    private toShrink: Vector[][] = [];
+    private resolveShrink: () => void = () => {};
+    private toDivide: Vector[][] = [];
+    private resolveDivide: () => void = () => {};
+
+    constructor(private nodes: Node[], private params: PolygonParams, private tensorField: TensorField) {}
+
+    get polygons(): Vector[][] {
+        if (this._dividedPolygons.length > 0) return this._dividedPolygons;
+        if (this._shrunkPolygons.length > 0) return this._shrunkPolygons;
+        return this._polygons;
+    }
+
+    reset(): void {
+        this.toShrink = [];
+        this.toDivide = [];
+        this._polygons = [];
+        this._shrunkPolygons = [];
+        this._dividedPolygons = [];
+    }
+
+    update(): boolean {
+        let change = false;
+        if (this.toShrink.length > 0) {
+            const resolve = this.toShrink.length === 1;
+            const toShrinkPoly = this.toShrink.pop();
+            if (toShrinkPoly && this.stepShrink(toShrinkPoly)) change = true;
+            if (resolve) this.resolveShrink();
+        }
+        if (this.toDivide.length > 0) {
+            const resolve = this.toDivide.length === 1;
+            const toDividePoly = this.toDivide.pop();
+            if (toDividePoly && this.stepDivide(toDividePoly)) change = true;
+            if (resolve) this.resolveDivide();
+        }
+        return change;
+    }
+
+    async shrink(animate = false): Promise<void> {
+        return new Promise<void>(resolve => {
+            if (this._polygons.length === 0) this.findPolygons();
+            if (animate) {
+                if (this._polygons.length === 0) { resolve(); return; }
+                this.toShrink = this._polygons.slice();
+                this.resolveShrink = resolve;
+            } else {
+                this._shrunkPolygons = [];
+                for (const p of this._polygons) this.stepShrink(p);
+                resolve();
+            }
+        });
+    }
+
+    private stepShrink(polygon: Vector[]): boolean {
+        const shrunk = PolygonUtil.resizeGeometry(polygon, -this.params.shrinkSpacing);
+        if (shrunk.length > 0) {
+            this._shrunkPolygons.push(shrunk);
+            return true;
+        }
+        return false;
+    }
+
+    async divide(animate = false): Promise<void> {
+        return new Promise<void>(resolve => {
+            if (this._polygons.length === 0) this.findPolygons();
+            let polygons = this._polygons;
+            if (this._shrunkPolygons.length > 0) polygons = this._shrunkPolygons;
+            if (animate) {
+                if (polygons.length === 0) { resolve(); return; }
+                this.toDivide = polygons.slice();
+                this.resolveDivide = resolve;
+            } else {
+                this._dividedPolygons = [];
+                for (const p of polygons) this.stepDivide(p);
+                resolve();
+            }
+        });
+    }
+
+    private stepDivide(polygon: Vector[]): boolean {
+        if (this.params.chanceNoDivide > 0 && Math.random() < this.params.chanceNoDivide) {
+            this._dividedPolygons.push(polygon);
+            return true;
+        }
+        const divided = PolygonUtil.subdividePolygon(polygon, this.params.minArea);
+        if (divided.length > 0) {
+            this._dividedPolygons.push(...divided);
+            return true;
+        }
+        return false;
+    }
+
+    findPolygons(): void {
+        this._shrunkPolygons = [];
+        this._dividedPolygons = [];
+        const polygons: Vector[][] = [];
+
+        for (const node of this.nodes) {
+            if (node.adj.length < 2) continue;
+            for (const nextNode of node.adj) {
+                const polygon = this.recursiveWalk([node, nextNode]);
+                if (polygon !== null && polygon.length < this.params.maxLength) {
+                    this.removePolygonAdjacencies(polygon);
+                    polygons.push(polygon.map(n => n.value.clone()));
+                }
+            }
+        }
+
+        this._polygons = this.filterPolygonsByWater(polygons);
+    }
+
+    private filterPolygonsByWater(polygons: Vector[][]): Vector[][] {
+        const out: Vector[][] = [];
+        for (const p of polygons) {
+            const avg = PolygonUtil.averagePoint(p);
+            if (this.tensorField.onLand(avg) && !this.tensorField.inParks(avg)) out.push(p);
+        }
+        return out;
+    }
+
+    private removePolygonAdjacencies(polygon: Node[]): void {
+        for (let i = 0; i < polygon.length; i++) {
+            const current = polygon[i];
+            const next = polygon[(i + 1) % polygon.length];
+            const index = current.adj.indexOf(next);
+            if (index >= 0) {
+                current.adj.splice(index, 1);
+            } else {
+                log.error('PolygonFinder - node not in adj');
+            }
+        }
+    }
+
+    private recursiveWalk(visited: Node[], count = 0): Node[] | null {
+        if (count >= this.params.maxLength) return null;
+        const nextNode = this.getRightmostNode(visited[visited.length - 2], visited[visited.length - 1]);
+        if (nextNode === null) return null;
+        const visitedIndex = visited.indexOf(nextNode);
+        if (visitedIndex >= 0) {
+            return visited.slice(visitedIndex);
+        } else {
+            visited.push(nextNode);
+            return this.recursiveWalk(visited, count++);
+        }
+    }
+
+    private getRightmostNode(nodeFrom: Node, nodeTo: Node): Node | null {
+        if (nodeTo.adj.length === 0) return null;
+        const backwardsDiff = nodeFrom.value.clone().sub(nodeTo.value);
+        const transformAngle = Math.atan2(backwardsDiff.y, backwardsDiff.x);
+        let rightmostNode: Node | null = null;
+        let smallestTheta = Math.PI * 2;
+        for (const nextNode of nodeTo.adj) {
+            if (nextNode !== nodeFrom) {
+                const nextVector = nextNode.value.clone().sub(nodeTo.value);
+                let nextAngle = Math.atan2(nextVector.y, nextVector.x) - transformAngle;
+                if (nextAngle < 0) nextAngle += Math.PI * 2;
+                if (nextAngle < smallestTheta) {
+                    smallestTheta = nextAngle;
+                    rightmostNode = nextNode;
+                }
+            }
+        }
+        return rightmostNode;
+    }
 }

@@ -21,22 +21,31 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
     setTensorContainer(container);
     DomainController.resetInstance();
 
-    // 2. dat.GUI
+    // 2. dat.GUI + colour scheme
     const gui = new dat.GUI({ autoPlace: true });
-
-    // 3. Folders
-    const tensorFolder = gui.addFolder('Tensor Field');
-    const mapFolder = gui.addFolder('Map');
-
-    // 4. Colour scheme (first entry in JSON)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const schemes = colourSchemes as any;
-    const schemeKey = Object.keys(schemes)[0];
-    const colourScheme = schemes[schemeKey];
+    let schemeKey: string = Object.keys(schemes)[0];
+    let colourScheme = schemes[schemeKey];
 
-    // 5. Core services
+    // 3. Core services
+    const domainController = DomainController.getInstance();
     const dragController = new DragController(gui);
 
+    // 4. Root-level: zoom then generate (matches original main.ts order)
+    const zoomController = gui.add(domainController, 'zoom', 0.2, 5).step(0.1);
+    domainController.setZoomUpdate(() => zoomController.updateDisplay());
+
+    // generate uses a mutable ref so mainGui can be assigned after folder setup
+    const guiActions = { generate: () => {} };
+    gui.add(guiActions, 'generate');
+
+    // 5. Folders
+    const tensorFolder = gui.addFolder('Tensor Field');
+    const mapFolder = gui.addFolder('Map');
+    const styleFolder = gui.addFolder('Style');
+
+    // 6. TensorField
     const tensorFieldGui = new TensorFieldGUI(
         tensorFolder,
         dragController,
@@ -49,21 +58,33 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
             noiseAngleGlobal: 20,
         }
     );
-
-    // Pre-populate with a recommended field layout
     tensorFieldGui.setRecommended();
-    tensorFolder.open();
-    mapFolder.open();
 
-    // 6. Style + MainGUI
+    // 7. Style + MainGUI
     const closeTensorFolder = () => tensorFolder.close();
     const style = new DefaultStyle(canvas, dragController, colourScheme);
     const tensorCanvas = new DefaultCanvasWrapper(canvas, 1, true);
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
 
+    // Wire up generate now that mainGui exists
+    guiActions.generate = () => {
+        tensorFieldGui.setRecommended();
+        mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+    };
+
+    // 8. Style folder
+    const styleObj = { colourScheme: schemeKey };
+    styleFolder.add(styleObj, 'colourScheme', Object.keys(schemes)).onChange((val: string) => {
+        schemeKey = val;
+        colourScheme = schemes[val];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (style as any).colourScheme = colourScheme;
+    });
+    styleFolder.add(tensorFieldGui, 'drawCentre');
+
     const showTensorField = () => !tensorFolder.closed || mainGui.roadsEmpty();
 
-    // 7. Render loop (mirrors original main.ts draw logic)
+    // 9. Render loop (mirrors original main.ts draw logic)
     let previousFrameDrawTensor = true;
     let animationId = 0;
     const loop = () => {
@@ -85,10 +106,10 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
     };
     loop();
 
-    // 8. Auto-generate on mount
+    // 10. Auto-generate on mount
     mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
 
-    // 9. Cleanup
+    // 11. Cleanup
     return {
         cleanup: () => {
             cancelAnimationFrame(animationId);

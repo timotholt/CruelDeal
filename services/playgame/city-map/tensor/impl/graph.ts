@@ -47,7 +47,10 @@ export default class Graph {
      * Finds all intersections, and creates a list of Nodes
      */
     constructor(streamlines: Vector[][], dstep: number, deleteDangling=false) {
-        const intersections: Intersection[] = isect.bush(this.streamlinesToSegment(streamlines)).run();
+        const segments = this.streamlinesToSegment(streamlines);
+        const intersections: Intersection[] = segments.length > 0
+            ? isect.bush(segments).run()
+            : [];
         const quadtree = (d3.quadtree() as d3.Quadtree<Node>).x(n => n.value.x).y(n => n.value.y);
         const nodeAddRadius = 0.001;
 
