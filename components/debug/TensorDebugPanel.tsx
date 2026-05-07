@@ -11,6 +11,12 @@ type TensorTab = 'generation' | 'debug';
 
 const STORAGE_KEY = 'cruel-deal.tensor-debug-panel-position';
 const debugPlaceholders = ['Map', 'Roads', 'Buildings', 'Labels', 'Tensor', 'Seeds'];
+const mapShapeLabels: Record<MapShape, string> = {
+  peninsula: 'peninsula',
+  'island-jagged': 'island (jagged)',
+  'island-smooth': 'island (smooth)',
+  landlocked: 'landlocked',
+};
 
 export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const [collapsed, setCollapsed] = createSignal(false);
@@ -186,7 +192,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                 <span>Map Shape</span>
                 <select value={mapShape()} onChange={(e) => updateMapShape(e.currentTarget.value as MapShape)}>
                   <For each={props.controls?.getMapShapes() ?? []}>
-                    {(shape) => <option value={shape}>{shape}</option>}
+                    {(shape) => <option value={shape}>{mapShapeLabels[shape]}</option>}
                   </For>
                 </select>
               </label>

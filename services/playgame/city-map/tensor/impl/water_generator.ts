@@ -5,7 +5,7 @@ import TensorField from './tensor_field';
 import StreamlineGenerator, {StreamlineParams} from './streamlines';
 import FieldIntegrator from './integrator';
 import PolygonUtil from './polygon_util';
-import { generateIslandMask, worldBoundsPolygon } from './island_mask';
+import { generateIslandMask, smoothClosedPolygon, worldBoundsPolygon } from './island_mask';
 import type { MapShape } from '../types';
 
 export interface NoiseParams {
@@ -99,8 +99,8 @@ export default class WaterGenerator extends StreamlineGenerator {
     createMapShape(mapShape: MapShape): void {
         this.clearWater();
         if (mapShape === 'landlocked') return;
-        if (mapShape === 'island') {
-            this.createIsland();
+        if (mapShape === 'island-jagged' || mapShape === 'island-smooth') {
+            this.createIsland(mapShape === 'island-smooth');
             return;
         }
 
@@ -108,8 +108,16 @@ export default class WaterGenerator extends StreamlineGenerator {
         this.createRiver();
     }
 
-    private createIsland(): void {
-        const land = generateIslandMask(this.origin, this.worldDimensions, 0.38, 0.42, 0.18, tensorRandom);
+    private createIsland(smooth: boolean): void {
+        const roughLand = generateIslandMask(
+            this.origin,
+            this.worldDimensions,
+            0.38,
+            0.42,
+            smooth ? 0.08 : 0.18,
+            tensorRandom,
+            smooth ? 72 : 56);
+        const land = smooth ? smoothClosedPolygon(roughLand, 2) : roughLand;
         this._landPolygon = land;
         this._coastline = land.concat([land[0].clone()]);
         this._seaPolygon = worldBoundsPolygon(this.origin, this.worldDimensions);
@@ -120,6 +128,42 @@ export default class WaterGenerator extends StreamlineGenerator {
         this.allStreamlines.push(this._coastline);
         this.grid(true).addPolyline(this._coastline);
         this.streamlines(true).push(this._coastline);
+        this.createIslandRiver(smooth ? 35 : 25);
+    }
+
+    private createIslandRiver(maxTries: number): void {
+        let bestRiver: Vector[] = [];
+        let bestLength = 0;
+
+        if (this.params.riverNoise.noiseEnabled) {
+            this.tensorField.enableGlobalNoise(this.params.riverNoise.noiseAngle, this.params.riverNoise.noiseSize);
+        }
+
+        for (let i = 0; i < maxTries; i++) {
+            const seed = this.getSeed(!this.coastlineMajor);
+            if (!seed) continue;
+
+            const riverStreamline = this.integrateStreamline(seed, !this.coastlineMajor);
+            const riverLength = this.streamlineLength(riverStreamline);
+            if (riverLength > bestLength && this.crossesIslandBoundary(riverStreamline)) {
+                bestRiver = riverStreamline;
+                bestLength = riverLength;
+            }
+        }
+
+        this.tensorField.disableGlobalNoise();
+
+        const minRiverLength = Math.min(this.worldDimensions.x, this.worldDimensions.y) * 0.35;
+        if (bestRiver.length < 6 || bestLength < minRiverLength) {
+            log.warn('Failed to find island river');
+            return;
+        }
+
+        this._riverPolygon = PolygonUtil.resizeGeometry(
+            bestRiver,
+            this.params.riverSize - this.params.riverBankSize,
+            false);
+        this.tensorField.river = this._riverPolygon;
     }
 
     private clearWater(): void {
@@ -218,6 +262,20 @@ export default class WaterGenerator extends StreamlineGenerator {
         return streamline.length > 0
             && this.vectorOffScreen(streamline[0])
             && this.vectorOffScreen(streamline[streamline.length - 1]);
+    }
+
+    private crossesIslandBoundary(streamline: Vector[]): boolean {
+        if (streamline.length < 2 || this._landPolygon.length === 0) return false;
+        return !PolygonUtil.insidePolygon(streamline[0], this._landPolygon)
+            && !PolygonUtil.insidePolygon(streamline[streamline.length - 1], this._landPolygon);
+    }
+
+    private streamlineLength(streamline: Vector[]): number {
+        let length = 0;
+        for (let i = 1; i < streamline.length; i++) {
+            length += streamline[i - 1].distanceTo(streamline[i]);
+        }
+        return length;
     }
 
     private vectorOffScreen(v: Vector): boolean {
