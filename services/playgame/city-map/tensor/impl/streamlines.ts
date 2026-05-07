@@ -1,6 +1,7 @@
 import log from 'loglevel';
 import simplify from 'simplify-js';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import GridStorage from './grid_storage';
 import FieldIntegrator from './integrator';
 
@@ -285,8 +286,8 @@ export default class StreamlineGenerator {
 
     protected samplePoint(): Vector {
         return new Vector(
-            Math.random() * this.worldDimensions.x,
-            Math.random() * this.worldDimensions.y)
+            tensorRandom() * this.worldDimensions.x,
+            tensorRandom() * this.worldDimensions.y)
             .add(this.origin);
     }
 
@@ -406,7 +407,7 @@ export default class StreamlineGenerator {
         let count = 0;
         let pointsEscaped = false;
 
-        const collideBoth = Math.random() < this.params.collideEarly;
+        const collideBoth = tensorRandom() < this.params.collideEarly;
 
         const d = this.integrator.integrate(seed, major);
 

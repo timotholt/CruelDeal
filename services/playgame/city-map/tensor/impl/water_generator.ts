@@ -1,5 +1,6 @@
 import log from 'loglevel';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import TensorField from './tensor_field';
 import StreamlineGenerator, {StreamlineParams} from './streamlines';
 import FieldIntegrator from './integrator';
@@ -64,7 +65,7 @@ export default class WaterGenerator extends StreamlineGenerator {
         }
 
         for (let i = 0; i < this.TRIES; i++) {
-            major = Math.random() < 0.5;
+            major = tensorRandom() < 0.5;
             const seed = this.getSeed(major);
             if (!seed) continue;
             coastStreamline = this.extendStreamline(this.integrateStreamline(seed, major));

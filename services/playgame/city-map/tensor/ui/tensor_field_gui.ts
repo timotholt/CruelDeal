@@ -8,6 +8,7 @@ import {NoiseParams} from '../impl/tensor_field';
 import {BasisField, FIELD_TYPE} from '../impl/basis_field';
 import Util from '../util';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 
 /**
  * Extension of TensorField that handles interaction with dat.GUI
@@ -68,7 +69,7 @@ export default class TensorFieldGUI extends TensorField {
 
     private randomLocation(): Vector {
         const size = this.domainController.worldDimensions.multiplyScalar(this.TENSOR_SPAWN_SCALE);
-        const location = new Vector(Math.random(), Math.random()).multiply(size);
+        const location = new Vector(tensorRandom(), tensorRandom()).multiply(size);
         const newOrigin = this.domainController.worldDimensions.multiplyScalar((1 - this.TENSOR_SPAWN_SCALE) / 2);
         return location.add(this.domainController.origin).add(newOrigin);
     }

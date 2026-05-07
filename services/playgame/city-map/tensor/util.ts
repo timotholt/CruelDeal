@@ -1,4 +1,5 @@
 import * as dat from 'dat.gui';
+import { tensorRandom } from './rng';
 
 export default class Util {
     /**
@@ -14,7 +15,7 @@ export default class Util {
     static readonly SVG_ID = 'tensor-map-svg';
 
     static randomRange(max: number, min=0): number {
-        return (Math.random() * (max - min)) + min;
+        return (tensorRandom() * (max - min)) + min;
     }
 
     static updateGui(gui: dat.GUI): void {

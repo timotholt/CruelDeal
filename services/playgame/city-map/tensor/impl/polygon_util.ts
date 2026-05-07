@@ -4,6 +4,7 @@ import {GeometryFactory, Coordinate} from 'jsts/org/locationtech/jts/geom';
 import {Polygonizer} from 'jsts/org/locationtech/jts/operation/polygonize';
 import {BufferParameters} from 'jsts/org/locationtech/jts/operation/buffer';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import {Slice as PolyKSlice} from 'polyk';
 
 export default class PolygonUtil {
@@ -114,7 +115,7 @@ export default class PolygonUtil {
         }
 
         // Between 0.4 and 0.6
-        const deviation = (Math.random() * 0.2) + 0.4;
+        const deviation = (tensorRandom() * 0.2) + 0.4;
 
         const averagePoint = longestSide[0].clone().add(longestSide[1]).multiplyScalar(deviation);
         const differenceVector = longestSide[0].clone().sub(longestSide[1]);

@@ -9,6 +9,7 @@ import Graph from '../impl/graph';
 import RoadGUI from './road_gui';
 import WaterGUI from './water_gui';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import PolygonFinder, {PolygonParams} from '../impl/polygon_finder';
 import WaterGenerator from '../impl/water_generator';
 import Style, {DefaultStyle, RoughStyle} from './style';
@@ -199,13 +200,13 @@ export default class MainGUI {
             this.smallParks = [];
             if (polygons.length > this.numBigParks) {
                 if (this.clusterBigParks) {
-                    const parkIndex = Math.floor(Math.random() * (polygons.length - this.numBigParks));
+                    const parkIndex = Math.floor(tensorRandom() * (polygons.length - this.numBigParks));
                     for (let i = parkIndex; i < parkIndex + this.numBigParks; i++) {
                         this.bigParks.push(polygons[i]);
                     }
                 } else {
                     for (let i = 0; i < this.numBigParks; i++) {
-                        const parkIndex = Math.floor(Math.random() * polygons.length);
+                        const parkIndex = Math.floor(tensorRandom() * polygons.length);
                         this.bigParks.push(polygons[parkIndex]);
                     }
                 }
@@ -215,7 +216,7 @@ export default class MainGUI {
         } else {
             this.smallParks = [];
             for (let i = 0; i < this.numSmallParks; i++) {
-                const parkIndex = Math.floor(Math.random() * polygons.length);
+                const parkIndex = Math.floor(tensorRandom() * polygons.length);
                 this.smallParks.push(polygons[parkIndex]);
             }
         }

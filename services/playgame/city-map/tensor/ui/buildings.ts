@@ -4,6 +4,7 @@ import DomainController from './domain_controller';
 import TensorField from '../impl/tensor_field';
 import Graph from '../impl/graph';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import PolygonFinder from '../impl/polygon_finder';
 import {PolygonParams} from '../impl/polygon_finder';
 
@@ -22,7 +23,7 @@ class BuildingModels {
     constructor(lots: Vector[][]) {
         for (const lot of lots) {
             this._buildingModels.push({
-                height: Math.random() * 20 + 20,
+                height: tensorRandom() * 20 + 20,
                 lotWorld: lot,
                 lotScreen: [],
                 roof: [],

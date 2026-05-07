@@ -1,5 +1,6 @@
 import log from 'loglevel';
 import Vector from '../vector';
+import { tensorRandom } from '../rng';
 import {Node} from './graph';
 import TensorField from './tensor_field';
 import PolygonUtil from './polygon_util';
@@ -95,7 +96,7 @@ export default class PolygonFinder {
     }
 
     private stepDivide(polygon: Vector[]): boolean {
-        if (this.params.chanceNoDivide > 0 && Math.random() < this.params.chanceNoDivide) {
+        if (this.params.chanceNoDivide > 0 && tensorRandom() < this.params.chanceNoDivide) {
             this._dividedPolygons.push(polygon);
             return true;
         }

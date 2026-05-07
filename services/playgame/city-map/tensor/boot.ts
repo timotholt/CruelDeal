@@ -6,9 +6,14 @@ import DragController from './ui/drag_controller';
 import TensorFieldGUI from './ui/tensor_field_gui';
 import MainGUI from './ui/main_gui';
 import {setTensorContainer, clearTensorContainer} from './context';
+import { setTensorSeed } from './rng';
 import colourSchemes from './colour_schemes.json';
 import Vector from './vector';
 import Util from './util';
+
+export interface TensorBootOptions {
+    seed?: string;
+}
 
 export interface TensorBoot {
     cleanup: () => void;
@@ -19,7 +24,10 @@ export interface TensorBoot {
  * Initialises the map generator inside the given container + canvas.
  * Must be called after the container is mounted in the DOM.
  */
-export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorBoot {
+export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options: TensorBootOptions = {}): TensorBoot {
+    // 0. Seed RNG for deterministic generation
+    setTensorSeed(options.seed ?? 'tensor-default');
+
     // 1. Context
     setTensorContainer(container);
     DomainController.resetInstance();
@@ -97,10 +105,11 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
 
     // 10. Wire generate — firstGenerate skips tensor field randomisation
-    let firstGenerate = true;
+    let generateCount = 0;
     guiActions.generate = () => {
-        if (!firstGenerate) tensorFieldGui.setRecommended();
-        else firstGenerate = false;
+        // Re-seed for determinism: same seed + same generate index → same map
+        setTensorSeed(`${options.seed ?? 'tensor-default'}::gen${generateCount++}`);
+        if (generateCount > 1) tensorFieldGui.setRecommended();
         mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
     };
 

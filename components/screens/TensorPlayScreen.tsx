@@ -26,7 +26,7 @@ export const TensorPlayScreen = (props: TensorPlayScreenProps) => {
 
   onMount(() => {
     if (!areaRef || !canvasRef) return;
-    const result = boot(areaRef, canvasRef);
+    const result = boot(areaRef, canvasRef, { seed: 'tensor-dev' });
     generateRef = result.generate;
     onCleanup(result.cleanup);
   });
