@@ -12,6 +12,7 @@ import Util from './util';
 
 export interface TensorBoot {
     cleanup: () => void;
+    generate: () => void;
 }
 
 /**
@@ -23,8 +24,13 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
     setTensorContainer(container);
     DomainController.resetInstance();
 
-    // 2. GUI
-    const gui = new dat.GUI({ autoPlace: true });
+    // 2. GUI — scoped inside the container, not document.body
+    const gui = new dat.GUI({ autoPlace: false });
+    gui.domElement.style.position = 'absolute';
+    gui.domElement.style.top = '0';
+    gui.domElement.style.right = '0';
+    gui.domElement.style.zIndex = '100';
+    container.appendChild(gui.domElement);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const schemes = colourSchemes as any;
 
@@ -178,8 +184,10 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
 
     // 16. Cleanup
     return {
+        generate: () => guiActions.generate(),
         cleanup: () => {
             cancelAnimationFrame(animationId);
+            try { gui.domElement.remove(); } catch (_) {}
             try { gui.destroy(); } catch (_) {}
             DomainController.resetInstance();
             clearTensorContainer();

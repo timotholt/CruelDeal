@@ -18,6 +18,7 @@ import { audio } from "./services/audio";
 import { createEffect, createMemo, Show } from "solid-js";
 import { ScreenKey } from "./types";
 import TensorMapView from "./services/playgame/city-map/tensor/TensorMapView";
+import { TensorPlayScreen } from "./components/screens/TensorPlayScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -97,7 +98,7 @@ const indexRoute = createRoute({
 const gameRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/game",
-    component: () => <GameScreen onBack={() => router.history.back()} />,
+    component: () => <GameScreen onExit={() => router.history.back()} />,
 });
 
 // NEW game screen — the port of the vfx-engine demo. See components/screens/PlayScreen.tsx.
@@ -134,7 +135,7 @@ const storeRoute = createRoute({
 const profileRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/profile",
-    component: () => <ProfileScreen onNavigate={(s) => router.navigate({ to: s === 'MENU' ? '/' : `/${s.toLowerCase()}` })} />,
+    component: () => <ProfileScreen onExit={() => router.history.back()} />,
 });
 
 const inboxRoute = createRoute({
@@ -177,6 +178,12 @@ const devTensorRoute = createRoute({
     ),
 });
 
+const devTensorPlayRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/tensor-play",
+    component: () => <TensorPlayScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -193,6 +200,7 @@ const routeTree = rootRoute.addChildren([
     rankRoute,
     progressionRoute,
     devTensorRoute,
+    devTensorPlayRoute,
 ]);
 
 export const router = createRouter({ routeTree });
