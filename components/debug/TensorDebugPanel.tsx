@@ -88,8 +88,15 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   };
 
   const updateZoom = (next: number) => {
-    setZoom(next);
-    props.controls?.setZoom(next);
+    const applied = props.controls?.setZoom(next) ?? next;
+    setZoom(applied);
+  };
+
+  const handleGenerate = () => {
+    props.controls?.generate();
+    setZoom(props.controls?.getZoom() ?? zoom());
+    setCameraX(0);
+    setCameraY(0);
   };
 
   const updateColourScheme = (next: string) => {
@@ -171,7 +178,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                 <p class="tensor-debug-panel__placeholder">CityMap debug toggles will be connected in the next slice.</p>
               </>
             }>
-              <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={() => props.controls?.generate()}>
+              <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={handleGenerate}>
                 Generate
               </button>
 
@@ -188,10 +195,10 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                 <span>Zoom <b>{zoom().toFixed(1)}</b></span>
                 <input
                   type="range"
-                  min="0.3"
+                  min={(props.controls?.getMinZoom() ?? 0.5).toString()}
                   max="5"
                   step="0.1"
-                  value={zoom()}
+                  value={zoom().toString()}
                   onInput={(e) => updateZoom(e.currentTarget.valueAsNumber)}
                 />
               </label>

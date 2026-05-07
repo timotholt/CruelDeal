@@ -102,17 +102,7 @@ export default class DomainController {
     }
 
     set zoom(z: number) {
-        const minZoom = this.getMinZoomForBounds();
-        const nextZoom = Math.max(minZoom, Math.min(20, z));
-        if (nextZoom >= 0.3 && nextZoom <= 20) {
-            this.moved = true;
-            const oldWorldSpaceMidpoint = this.origin.add(this.worldDimensions.divideScalar(2));
-            this._zoom = nextZoom;
-            const newWorldSpaceMidpoint = this.origin.add(this.worldDimensions.divideScalar(2));
-            this.pan(newWorldSpaceMidpoint.sub(oldWorldSpaceMidpoint));
-            this.clampOriginToBounds();
-            this.zoomCallback();
-        }
+        this.setZoomAroundPoint(z, this.getViewCenter());
     }
 
     frameBounds(origin: Vector, dimensions: Vector, padding = 1): void {
@@ -129,6 +119,47 @@ export default class DomainController {
             .sub(viewportWorldDimensions.divideScalar(2));
         this.clampOriginToBounds();
         this.moved = true;
+        this.zoomCallback();
+    }
+
+    get minZoom(): number {
+        return this.getMinZoomForBounds();
+    }
+
+    getViewCenter(): Vector {
+        return this.origin.add(this.worldDimensions.divideScalar(2));
+    }
+
+    getBoundsCenter(): Vector {
+        if (!this.boundsOrigin || !this.boundsDimensions) return this.getViewCenter();
+        return this.boundsOrigin.clone().add(this.boundsDimensions.clone().divideScalar(2));
+    }
+
+    setZoomAroundBoundsCenter(z: number): void {
+        this.setZoomAroundPoint(z, this.getBoundsCenter());
+    }
+
+    setViewPanFractions(xFraction: number, yFraction: number): void {
+        if (!this.boundsOrigin || !this.boundsDimensions) return;
+
+        const view = this.worldDimensions;
+        const maxX = Math.max(0, this.boundsDimensions.x - view.x);
+        const maxY = Math.max(0, this.boundsDimensions.y - view.y);
+        const normalizedX = Math.max(-1, Math.min(1, xFraction));
+        const normalizedY = Math.max(-1, Math.min(1, yFraction));
+
+        this._origin.x = this.boundsOrigin.x + ((normalizedX + 1) / 2) * maxX;
+        this._origin.y = this.boundsOrigin.y + ((normalizedY + 1) / 2) * maxY;
+        this.clampOriginToBounds();
+        this.moved = true;
+    }
+
+    private setZoomAroundPoint(z: number, worldPoint: Vector): void {
+        const nextZoom = Math.max(this.getMinZoomForBounds(), Math.min(20, z));
+        this.moved = true;
+        this._zoom = nextZoom;
+        this._origin = worldPoint.clone().sub(this.worldDimensions.divideScalar(2));
+        this.clampOriginToBounds();
         this.zoomCallback();
     }
 

@@ -95,11 +95,9 @@ export default class RoadGUI {
     async generateRoads(animate = false): Promise<void> {
         this.preGenerateCallback();
 
-        this.domainController.zoom = this.domainController.zoom / Util.DRAW_INFLATE_AMOUNT;
         this.streamlines = new StreamlineGenerator(
             this.integrator, WORLD_ORIGIN,
             WORLD_DIMENSIONS, Object.assign({}, this.params));
-        this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
 
         for (const s of this.existingStreamlines) {
             this.streamlines.addExistingStreamlines(s.streamlines);

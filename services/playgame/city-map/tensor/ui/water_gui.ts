@@ -1,7 +1,6 @@
 import log from 'loglevel';
 import * as dat from 'dat.gui';
 import DomainController from './domain_controller';
-import Util from '../util';
 import FieldIntegrator from '../impl/integrator';
 import {StreamlineParams} from '../impl/streamlines';
 import WaterGenerator, {WaterParams} from '../impl/water_generator';
@@ -51,12 +50,10 @@ export default class WaterGUI extends RoadGUI {
     generateRoads(): Promise<void> {
         this.preGenerateCallback();
 
-        this.domainController.zoom = this.domainController.zoom / Util.DRAW_INFLATE_AMOUNT;
         this.streamlines = new WaterGenerator(
             this.integrator, WORLD_ORIGIN,
             WORLD_DIMENSIONS,
             Object.assign({}, this.params), this.tensorField);
-        this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
 
         this.streamlines.createMapShape(this.mapShape);
 

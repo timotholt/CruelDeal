@@ -37,9 +37,12 @@ export default abstract class CanvasWrapper {
         this._height = getContainerHeight() * this._scale;
         this.canvas.width = this._width;
         this.canvas.height = this._height;
-        this.canvas.style.width = getContainerWidth() + 'px';
-        this.canvas.style.height = getContainerHeight() + 'px';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.afterSetDimensions();
     }
+
+    protected afterSetDimensions(): void {}
 
     abstract clearCanvas(): void;
     abstract drawFrame(left: number, right: number, top: number, bottom: number): void;
@@ -61,8 +64,14 @@ export class DefaultCanvasWrapper extends CanvasWrapper {
     constructor(canvas: HTMLCanvasElement, scale = 1, resizeToWindow = true) {
         super(canvas, scale, resizeToWindow);
         this.ctx = canvas.getContext('2d')!;
+        this.afterSetDimensions();
         this.ctx.fillStyle = 'black';
         this.ctx.fillRect(0, 0, getContainerWidth(), getContainerHeight());
+    }
+
+    protected afterSetDimensions(): void {
+        if (!this.ctx) return;
+        this.ctx.setTransform(this._scale, 0, 0, this._scale, 0, 0);
     }
 
     clearCanvas(): void {

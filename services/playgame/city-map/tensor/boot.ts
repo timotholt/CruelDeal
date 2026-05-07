@@ -21,8 +21,9 @@ export interface TensorBootOptions {
 export interface TensorBoot {
     cleanup: () => void;
     generate: () => void;
-    setZoom: (z: number) => void;
+    setZoom: (z: number) => number;
     getZoom: () => number;
+    getMinZoom: () => number;
     setColourScheme: (scheme: string) => void;
     getColourSchemes: () => string[];
     setZoomBuildings: (enabled: boolean) => void;
@@ -132,11 +133,6 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
 
     // 10. Wire generate
     let generateCount = 0;
-    guiActions.generate = () => {
-        setTensorSeed(`${options.seed ?? 'tensor-default'}::gen${generateCount++}`);
-        tensorFieldGui.setRecommended();
-        mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
-    };
     const mapShapeController = mapFolder.add(shapeState, 'mapShape', MAP_SHAPES)
         .onChange((val: MapShape) => mainGui.setMapShape(val));
 
@@ -186,6 +182,23 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     };
     downloadsFolder.add({ PNG: downloadPng }, 'PNG');
 
+    const resetViewToWorld = () => {
+        cameraState.cameraX = 0;
+        cameraState.cameraY = 0;
+        updateCamera();
+        domainController.frameBounds(WORLD_ORIGIN, WORLD_DIMENSIONS);
+        zoomController.updateDisplay();
+        cameraXController.updateDisplay();
+        cameraYController.updateDisplay();
+    };
+
+    guiActions.generate = () => {
+        resetViewToWorld();
+        setTensorSeed(`${options.seed ?? 'tensor-default'}::gen${generateCount++}`);
+        tensorFieldGui.setRecommended();
+        mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+    };
+
     const showTensorField = () => !tensorFolder.closed || mainGui.roadsEmpty();
 
     // 14. Render loop
@@ -218,10 +231,12 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     return {
         generate: () => guiActions.generate(),
         setZoom: (z: number) => {
-            domainController.zoom = z;
+            domainController.setZoomAroundBoundsCenter(z);
             zoomController.updateDisplay();
+            return domainController.zoom;
         },
         getZoom: () => domainController.zoom,
+        getMinZoom: () => domainController.minZoom,
         setColourScheme: (scheme: string) => {
             changeColourScheme(scheme);
             colourSchemeController.updateDisplay();
@@ -254,6 +269,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
             cameraState.cameraX = x;
             cameraState.cameraY = y;
             updateCamera();
+            domainController.setViewPanFractions(x / 15, y / 15);
             cameraXController.updateDisplay();
             cameraYController.updateDisplay();
         },
