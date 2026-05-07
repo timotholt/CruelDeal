@@ -165,6 +165,10 @@ export default class PolygonUtil {
         return PolygonUtil.splitPolylineByPolygon(polyline, polygon, false);
     }
 
+    public static getPolylineInsidePolygon(polyline: Vector[], polygon: Vector[]): Vector[][] {
+        return PolygonUtil.splitPolylineByPolygon(polyline, polygon, true);
+    }
+
     private static splitPolylineByPolygon(polyline: Vector[], polygon: Vector[], keepInside: boolean): Vector[][] {
         if (polyline.length < 2 || polygon.length < 3) return [];
 

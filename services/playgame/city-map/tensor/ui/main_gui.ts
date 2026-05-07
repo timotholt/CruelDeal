@@ -18,6 +18,8 @@ import Buildings, {BuildingModel} from './buildings';
 import PolygonUtil from '../impl/polygon_util';
 import type { MapShape } from '../types';
 import GenerationProfiler from './generation_profiler';
+import BridgeGenerator from '../impl/bridge_generator';
+import type { BridgeRoadClass, BridgeSegment } from '../impl/bridges';
 
 /**
  * Handles Map folder, glues together impl
@@ -34,12 +36,14 @@ export default class MainGUI {
     private animate: boolean = true;
     private animationSpeed: number = 30;
     private lastParkPolygonDetail = '';
+    private lastBridgeDetail = '';
 
     private coastline: WaterGUI;
     private mainRoads: RoadGUI;
     private majorRoads: RoadGUI;
     private minorRoads: RoadGUI;
     private buildings: Buildings;
+    private bridges: BridgeSegment[] = [];
     private mapShape: MapShape = 'peninsula';
 
     private coastlineParams: WaterParams;
@@ -119,6 +123,7 @@ export default class MainGUI {
             allStreamlines.push(...this.majorRoads.allStreamlines);
             allStreamlines.push(...this.minorRoads.allStreamlines);
             allStreamlines.push(...this.coastline.streamlinesWithSecondaryRoad);
+            allStreamlines.push(...this.bridges.map(bridge => [bridge.start, bridge.end]));
             this.buildings.setAllStreamlines(allStreamlines);
         });
 
@@ -139,6 +144,7 @@ export default class MainGUI {
             this.bigParks = [];
             this.smallParks = [];
             this.buildings.reset();
+            this.bridges = [];
             tensorField.parks = [];
             tensorField.sea = [];
             tensorField.landPolygon = [];
@@ -151,6 +157,7 @@ export default class MainGUI {
             this.bigParks = [];
             this.smallParks = [];
             this.buildings.reset();
+            this.bridges = [];
             tensorField.parks = [];
             tensorField.ignoreRiver = true;
         });
@@ -164,6 +171,7 @@ export default class MainGUI {
             this.bigParks = [];
             this.smallParks = [];
             this.buildings.reset();
+            this.bridges = [];
             tensorField.parks = [];
             tensorField.ignoreRiver = true;
         });
@@ -251,6 +259,8 @@ export default class MainGUI {
             await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
             await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
             await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
+            profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
+            profiler.time('parks', () => this.addParks(), () => this.lastParkPolygonDetail);
             this.redraw = true;
             await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
         } finally {
@@ -278,13 +288,14 @@ export default class MainGUI {
         await profiler.timeAsync('minor roads open world', () => this.minorRoads.generateRoads(anim));
 
         profiler.time('clip roads to island', () => {
-            this.mainRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.mainRoads.allStreamlines, landPolygon, riverPolygon));
-            this.majorRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.majorRoads.allStreamlines, landPolygon, riverPolygon));
-            this.minorRoads.replaceStreamlines(this.clipRoadSetToBuildableLand(this.minorRoads.allStreamlines, landPolygon, riverPolygon));
+            this.mainRoads.replaceStreamlines(this.clipRoadSetToLand(this.mainRoads.allStreamlines, landPolygon));
+            this.majorRoads.replaceStreamlines(this.clipRoadSetToLand(this.majorRoads.allStreamlines, landPolygon));
+            this.minorRoads.replaceStreamlines(this.clipRoadSetToLand(this.minorRoads.allStreamlines, landPolygon));
         });
 
         this.tensorField.landPolygon = landPolygon;
         this.tensorField.river = riverPolygon;
+        profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
         this.buildings.setPreciseWaterCheck(true);
         this.bigParks = [];
         this.smallParks = [];
@@ -293,22 +304,45 @@ export default class MainGUI {
         await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
     }
 
-    private clipRoadSetToBuildableLand(roads: Vector[][], landPolygon: Vector[], riverPolygon: Vector[]): Vector[][] {
+    private clipRoadSetToLand(roads: Vector[][], landPolygon: Vector[]): Vector[][] {
         const minLength = this.minorParams.dstep * 4;
         const clipped: Vector[][] = [];
         for (const road of roads) {
-            for (const landSegment of PolygonUtil.clipPolylineToPolygon(road, landPolygon)) {
-                const riverCutSegments = riverPolygon.length > 0
-                    ? PolygonUtil.cutPolylineFromPolygon(landSegment, riverPolygon)
-                    : [landSegment];
-                for (const segment of riverCutSegments) {
-                    if (this.streamlineLength(segment) >= minLength) {
-                        clipped.push(segment);
-                    }
+            for (const segment of PolygonUtil.clipPolylineToPolygon(road, landPolygon)) {
+                if (this.streamlineLength(segment) >= minLength) {
+                    clipped.push(segment);
                 }
             }
         }
         return clipped;
+    }
+
+    private applyBridgeLayer(): void {
+        const barriers = this.coastline.waterBarriersWorld;
+        this.bridges = [];
+        this.lastBridgeDetail = '0/0 bridges accepted';
+        if (barriers.length === 0) return;
+
+        const generator = new BridgeGenerator();
+        const result = generator.generate({
+            roads: {
+                main: this.mainRoads.allStreamlines,
+                major: this.majorRoads.allStreamlines,
+                minor: this.minorRoads.allStreamlines,
+            },
+            barriers,
+        });
+
+        this.mainRoads.replaceStreamlines(this.filterRoads(result.roads.main, 'main'));
+        this.majorRoads.replaceStreamlines(this.filterRoads(result.roads.major, 'major'));
+        this.minorRoads.replaceStreamlines(this.filterRoads(result.roads.minor, 'minor'));
+        this.bridges = result.bridges;
+        this.lastBridgeDetail = `${result.bridges.length}/${result.candidates} bridges accepted`;
+    }
+
+    private filterRoads(roads: Vector[][], roadClass: BridgeRoadClass): Vector[][] {
+        const minLength = roadClass === 'minor' ? this.minorParams.dstep * 4 : this.minorParams.dstep * 8;
+        return roads.filter(road => this.streamlineLength(road) >= minLength);
     }
 
     private usesIslandClip(): boolean {
@@ -354,6 +388,12 @@ export default class MainGUI {
         style.landPolygon = this.coastline.landPolygon;
         style.coastline = this.coastline.coastline;
         style.river = this.coastline.river;
+        style.bridges = this.bridges.map(bridge => ({
+            ...bridge,
+            start: this.domainController.worldToScreen(bridge.start.clone()),
+            end: this.domainController.worldToScreen(bridge.end.clone()),
+            center: this.domainController.worldToScreen(bridge.center.clone()),
+        }));
         style.lots = this.buildings.lots;
 
         if ((style instanceof DefaultStyle && style.showBuildingModels) || style instanceof RoughStyle) {

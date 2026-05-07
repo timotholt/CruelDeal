@@ -9,6 +9,7 @@ import RoadGUI from './road_gui';
 import TensorField from '../impl/tensor_field';
 import type { MapShape } from '../types';
 import { WORLD_ORIGIN, WORLD_DIMENSIONS } from '../world';
+import type { WaterBarrier } from '../impl/bridges';
 
 export default class WaterGUI extends RoadGUI {
     protected streamlines: WaterGenerator;
@@ -99,6 +100,16 @@ export default class WaterGUI extends RoadGUI {
 
     get riverPolygonWorld(): Vector[] {
         return this.streamlines.riverPolygon.map(v => v.clone());
+    }
+
+    get waterBarriersWorld(): WaterBarrier[] {
+        const river = this.riverPolygonWorld;
+        if (river.length < 3) return [];
+        return [{
+            id: 'river-0',
+            kind: 'river',
+            polygon: river,
+        }];
     }
 
     protected addDevParamsToFolder(params: StreamlineParams, folder: dat.GUI): void {

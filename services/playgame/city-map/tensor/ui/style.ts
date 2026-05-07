@@ -5,6 +5,7 @@ import CanvasWrapper, {DefaultCanvasWrapper, RoughCanvasWrapper} from './canvas_
 import Vector from '../vector';
 import Util from '../util';
 import {BuildingModel} from './buildings';
+import type { BridgeSegment } from '../impl/bridges';
 
 export interface ColourScheme {
     bgColour: string;
@@ -39,6 +40,7 @@ export default abstract class Style {
     public coastline: Vector[] = [];
     public river: Vector[] = [];
     public secondaryRiver: Vector[] = [];
+    public bridges: BridgeSegment[] = [];
     public parks: Vector[][] = [];
     public lots: Vector[][] = [];
     public buildingModels: BuildingModel[] = [];
@@ -150,6 +152,8 @@ export class DefaultStyle extends Style {
         canvas.setLineWidth(1);
         canvas.drawPolygon(this.river);
 
+        this.drawBridgeOutlines(canvas);
+
         canvas.setStrokeStyle(this.colourScheme.minorRoadOutline);
         canvas.setLineWidth(this.colourScheme.outlineSize + this.colourScheme.minorWidth * this.domainController.zoom);
         for (const s of this.minorRoads) canvas.drawPolyline(s);
@@ -177,6 +181,8 @@ export class DefaultStyle extends Style {
         canvas.setLineWidth(this.colourScheme.mainWidth * this.domainController.zoom);
         for (const s of this.mainRoads) canvas.drawPolyline(s);
         for (const s of this.coastlineRoads) canvas.drawPolyline(s);
+
+        this.drawBridgeDecks(canvas);
 
         canvas.setLineWidth(1);
 
@@ -210,6 +216,27 @@ export class DefaultStyle extends Style {
             canvas.setFillStyle(this.colourScheme.frameColour);
             canvas.setStrokeStyle(this.colourScheme.frameColour);
             canvas.drawFrame(30, 30, 30, 30);
+        }
+    }
+
+    private drawBridgeOutlines(canvas: DefaultCanvasWrapper): void {
+        for (const bridge of this.bridges) {
+            canvas.setStrokeStyle(this.colourScheme.mainRoadOutline);
+            canvas.setLineWidth(this.colourScheme.outlineSize + (bridge.width + 3) * this.domainController.zoom);
+            canvas.drawPolyline([bridge.start, bridge.end]);
+        }
+    }
+
+    private drawBridgeDecks(canvas: DefaultCanvasWrapper): void {
+        for (const bridge of this.bridges) {
+            const colour = bridge.roadClass === 'main'
+                ? this.colourScheme.mainRoadColour
+                : bridge.roadClass === 'major'
+                    ? this.colourScheme.majorRoadColour
+                    : this.colourScheme.minorRoadColour;
+            canvas.setStrokeStyle(colour);
+            canvas.setLineWidth(bridge.width * this.domainController.zoom);
+            canvas.drawPolyline([bridge.start, bridge.end]);
         }
     }
 }
@@ -258,6 +285,10 @@ export class RoughStyle extends Style {
         canvas.setOptions({ strokeWidth: 3, stroke: this.colourScheme.mainRoadColour });
         this.mainRoads.forEach(s => canvas.drawPolyline(s));
         this.coastlineRoads.forEach(s => canvas.drawPolyline(s));
+        this.bridges.forEach(bridge => {
+            canvas.setOptions({ strokeWidth: Math.max(2, bridge.width), stroke: this.colourScheme.mainRoadColour });
+            canvas.drawPolyline([bridge.start, bridge.end]);
+        });
 
         if (!this.dragging) {
             if (!this.colourScheme.zoomBuildings || this.domainController.zoom >= 2) {
