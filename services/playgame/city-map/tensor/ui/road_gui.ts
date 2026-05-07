@@ -1,0 +1,133 @@
+import log from 'loglevel';
+import * as dat from 'dat.gui';
+import CanvasWrapper from './canvas_wrapper';
+import DomainController from './domain_controller';
+import Util from '../util';
+import FieldIntegrator from '../impl/integrator';
+import {StreamlineParams} from '../impl/streamlines';
+import StreamlineGenerator from '../impl/streamlines';
+import Vector from '../vector';
+import { getContainerWidth, getContainerHeight, onTensorResize } from '../context';
+
+/**
+ * Handles creation of roads
+ */
+export default class RoadGUI {
+    protected streamlines: StreamlineGenerator;
+    private existingStreamlines: RoadGUI[] = [];
+    protected domainController = DomainController.getInstance();
+    protected preGenerateCallback: () => void = () => {};
+    protected postGenerateCallback: () => void = () => {};
+
+    private streamlinesInProgress: boolean = false;
+
+    constructor(protected params: StreamlineParams,
+                protected integrator: FieldIntegrator,
+                protected guiFolder: dat.GUI,
+                protected closeTensorFolder: () => void,
+                protected folderName: string,
+                protected redraw: () => void,
+                protected _animate = false) {
+        this.streamlines = new StreamlineGenerator(
+            this.integrator, this.domainController.origin,
+            this.domainController.worldDimensions, this.params);
+
+        this.setPathIterations();
+        onTensorResize(() => this.setPathIterations());
+    }
+
+    initFolder(): RoadGUI {
+        const roadGUI = {
+            Generate: () => this.generateRoads(this._animate).then(() => this.redraw()),
+            JoinDangling: (): void => {
+                this.streamlines.joinDanglingStreamlines();
+                this.redraw();
+            },
+        };
+
+        const folder = this.guiFolder.addFolder(this.folderName);
+        folder.add(roadGUI, 'Generate');
+
+        const paramsFolder = folder.addFolder('Params');
+        paramsFolder.add(this.params, 'dsep');
+        paramsFolder.add(this.params, 'dtest');
+
+        const devParamsFolder = paramsFolder.addFolder('Dev');
+        this.addDevParamsToFolder(this.params, devParamsFolder);
+        return this;
+    }
+
+    set animate(b: boolean) {
+        this._animate = b;
+    }
+
+    get allStreamlines(): Vector[][] {
+        return this.streamlines.allStreamlinesSimple;
+    }
+
+    get roads(): Vector[][] {
+        return this.streamlines.allStreamlinesSimple.map(s =>
+            s.map(v => this.domainController.worldToScreen(v.clone()))
+        );
+    }
+
+    roadsEmpty(): boolean {
+        return this.streamlines.allStreamlinesSimple.length === 0;
+    }
+
+    setExistingStreamlines(existingStreamlines: RoadGUI[]): void {
+        this.existingStreamlines = existingStreamlines;
+    }
+
+    setPreGenerateCallback(callback: () => void) {
+        this.preGenerateCallback = callback;
+    }
+
+    setPostGenerateCallback(callback: () => void) {
+        this.postGenerateCallback = callback;
+    }
+
+    clearStreamlines(): void {
+        this.streamlines.clearStreamlines();
+    }
+
+    async generateRoads(animate = false): Promise<void> {
+        this.preGenerateCallback();
+
+        this.domainController.zoom = this.domainController.zoom / Util.DRAW_INFLATE_AMOUNT;
+        this.streamlines = new StreamlineGenerator(
+            this.integrator, this.domainController.origin,
+            this.domainController.worldDimensions, Object.assign({}, this.params));
+        this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
+
+        for (const s of this.existingStreamlines) {
+            this.streamlines.addExistingStreamlines(s.streamlines);
+        }
+
+        this.closeTensorFolder();
+        this.redraw();
+
+        return this.streamlines.createAllStreamlines(animate).then(() => this.postGenerateCallback());
+    }
+
+    update(): boolean {
+        return this.streamlines.update();
+    }
+
+    protected addDevParamsToFolder(params: StreamlineParams, folder: dat.GUI): void {
+        folder.add(params, 'pathIterations');
+        folder.add(params, 'seedTries');
+        folder.add(params, 'dstep');
+        folder.add(params, 'dlookahead');
+        folder.add(params, 'dcirclejoin');
+        folder.add(params, 'joinangle');
+        folder.add(params, 'simplifyTolerance');
+        folder.add(params, 'collideEarly');
+    }
+
+    private setPathIterations(): void {
+        const max = 1.5 * Math.max(getContainerWidth(), getContainerHeight());
+        this.params.pathIterations = max / this.params.dstep;
+        Util.updateGui(this.guiFolder);
+    }
+}

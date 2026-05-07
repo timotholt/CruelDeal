@@ -1,0 +1,25 @@
+.tensor-map-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+}
+
+.tensor-map-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+}
+
+/* Keep dat.gui inside the container view */
+.tensor-map-container .dg.ac {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 100;
+}

@@ -17,6 +17,7 @@ import { InspectorOverlay } from "./components/InspectorOverlay";
 import { audio } from "./services/audio";
 import { createEffect, createMemo, Show } from "solid-js";
 import { ScreenKey } from "./types";
+import TensorMapView from "./services/playgame/city-map/tensor/TensorMapView";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -165,6 +166,16 @@ const progressionRoute = createRoute({
     component: ProgressionScreen,
 });
 
+const devTensorRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/tensor",
+    component: () => (
+        <div class="w-full h-full">
+            <TensorMapView />
+        </div>
+    ),
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -180,6 +191,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     rankRoute,
     progressionRoute,
+    devTensorRoute,
 ]);
 
 export const router = createRouter({ routeTree });
