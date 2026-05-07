@@ -27,6 +27,8 @@ export default class DomainController {
 
     private _cameraDirection = Vector.zeroVector();
     private _orthographic = false;
+    private boundsOrigin: Vector | null = null;
+    private boundsDimensions: Vector | null = null;
 
     // Set after pan or zoom
     public moved = false;
@@ -75,6 +77,7 @@ export default class DomainController {
     pan(delta: Vector) {
         this.moved = true;
         this._origin.sub(delta);
+        this.clampOriginToBounds();
     }
 
     get origin(): Vector {
@@ -99,17 +102,22 @@ export default class DomainController {
     }
 
     set zoom(z: number) {
-        if (z >= 0.3 && z <= 20) {
+        const minZoom = this.getMinZoomForBounds();
+        const nextZoom = Math.max(minZoom, Math.min(20, z));
+        if (nextZoom >= 0.3 && nextZoom <= 20) {
             this.moved = true;
             const oldWorldSpaceMidpoint = this.origin.add(this.worldDimensions.divideScalar(2));
-            this._zoom = z;
+            this._zoom = nextZoom;
             const newWorldSpaceMidpoint = this.origin.add(this.worldDimensions.divideScalar(2));
             this.pan(newWorldSpaceMidpoint.sub(oldWorldSpaceMidpoint));
+            this.clampOriginToBounds();
             this.zoomCallback();
         }
     }
 
     frameBounds(origin: Vector, dimensions: Vector, padding = 1): void {
+        this.boundsOrigin = origin.clone();
+        this.boundsDimensions = dimensions.clone();
         const fitZoom = Math.min(
             this._screenDimensions.x / dimensions.x,
             this._screenDimensions.y / dimensions.y
@@ -119,8 +127,40 @@ export default class DomainController {
         this._origin = origin.clone()
             .add(dimensions.clone().divideScalar(2))
             .sub(viewportWorldDimensions.divideScalar(2));
+        this.clampOriginToBounds();
         this.moved = true;
         this.zoomCallback();
+    }
+
+    private getMinZoomForBounds(): number {
+        if (!this.boundsDimensions) return 0.3;
+        return Math.max(
+            0.3,
+            this._screenDimensions.x / this.boundsDimensions.x,
+            this._screenDimensions.y / this.boundsDimensions.y
+        );
+    }
+
+    private clampOriginToBounds(): void {
+        if (!this.boundsOrigin || !this.boundsDimensions) return;
+
+        const view = this.worldDimensions;
+        const minX = this.boundsOrigin.x;
+        const minY = this.boundsOrigin.y;
+        const maxX = this.boundsOrigin.x + this.boundsDimensions.x - view.x;
+        const maxY = this.boundsOrigin.y + this.boundsDimensions.y - view.y;
+
+        if (maxX < minX) {
+            this._origin.x = this.boundsOrigin.x + (this.boundsDimensions.x - view.x) / 2;
+        } else {
+            this._origin.x = Math.max(minX, Math.min(maxX, this._origin.x));
+        }
+
+        if (maxY < minY) {
+            this._origin.y = this.boundsOrigin.y + (this.boundsDimensions.y - view.y) / 2;
+        } else {
+            this._origin.y = Math.max(minY, Math.min(maxY, this._origin.y));
+        }
     }
 
     onScreen(v: Vector): boolean {
