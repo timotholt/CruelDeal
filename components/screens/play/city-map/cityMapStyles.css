@@ -374,7 +374,7 @@
   z-index: 1000;
   right: 8px;
   bottom: 8px;
-  width: min(224px, calc(100% - 16px));
+  width: min(204px, calc(100% - 16px));
   max-height: min(78%, 520px);
   overflow: hidden;
   border: 1px solid rgba(93, 255, 230, 0.34);
@@ -382,6 +382,7 @@
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
   color: rgba(226, 252, 255, 0.94);
   font-family: "Roboto Mono", "SFMono-Regular", monospace;
+  font-size: 7px;
   pointer-events: auto;
   backdrop-filter: blur(8px);
 }
@@ -390,10 +391,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 7px;
   border-bottom: 1px solid rgba(93, 255, 230, 0.18);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 900;
   letter-spacing: 1.4px;
 }
@@ -401,7 +402,7 @@
 .tensor-debug-panel button,
 .tensor-debug-panel select,
 .tensor-debug-panel input {
-  font: inherit;
+  font-family: inherit;
 }
 
 .tensor-debug-panel__header button,
@@ -414,8 +415,8 @@
 }
 
 .tensor-debug-panel__header button {
-  width: 24px;
-  height: 20px;
+  width: 22px;
+  height: 18px;
   line-height: 1;
 }
 
@@ -423,12 +424,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  padding: 7px 7px 0;
+  padding: 6px 6px 0;
 }
 
 .tensor-debug-panel__tab {
-  min-height: 26px;
-  font-size: 8px;
+  min-height: 19px;
+  font-size: 6px;
   font-weight: 900;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -442,10 +443,10 @@
 
 .tensor-debug-panel__body {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   max-height: calc(min(78vh, 520px) - 76px);
   overflow-y: auto;
-  padding: 7px;
+  padding: 6px;
 }
 
 .tensor-debug-panel__field {
@@ -469,33 +470,34 @@
 
 .tensor-debug-panel__field input[type="range"] {
   width: 100%;
-  min-height: 22px;
+  min-height: 18px;
   accent-color: rgb(255, 208, 93);
 }
 
 .tensor-debug-panel__field select {
-  min-height: 28px;
+  min-height: 22px;
   width: 100%;
   border: 1px solid rgba(93, 255, 230, 0.28);
   background: rgba(5, 12, 28, 0.94);
   color: rgba(226, 252, 255, 0.94);
-  padding: 0 7px;
-  font-size: 8px;
+  padding: 0 6px;
+  font-size: 7px;
 }
 
 .tensor-debug-panel__toggle-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 5px;
+  gap: 4px;
 }
 
 .tensor-debug-panel__button,
 .tensor-debug-panel__toggle {
-  min-height: 28px;
-  padding: 4px 6px;
-  font-size: 8px;
+  min-height: 18px;
+  padding: 1px 4px;
+  font-size: 5.5px;
   font-weight: 900;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.35px;
+  line-height: 1.15;
   text-transform: uppercase;
 }
 
@@ -506,10 +508,17 @@
   color: rgba(255, 238, 178, 0.98);
 }
 
+.tensor-debug-panel__toggle--disabled,
+.tensor-debug-panel__toggle--disabled:disabled {
+  border-color: rgba(146, 164, 190, 0.22);
+  background: rgba(146, 164, 190, 0.08);
+  color: rgba(146, 164, 190, 0.58);
+}
+
 .tensor-debug-panel__placeholder {
   margin: 0;
   color: rgba(146, 164, 190, 0.9);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
   line-height: 1.45;
 }

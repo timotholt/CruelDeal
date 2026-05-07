@@ -9,6 +9,7 @@ export interface TensorDebugPanelProps {
 type TensorTab = 'generation' | 'debug';
 
 const STORAGE_KEY = 'cruel-deal.tensor-debug-panel-position';
+const debugPlaceholders = ['Map', 'Roads', 'Buildings', 'Labels', 'Tensor', 'Seeds'];
 
 export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const [collapsed, setCollapsed] = createSignal(false);
@@ -149,7 +150,18 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
 
           <div class="tensor-debug-panel__body">
             <Show when={activeTab() === 'generation'} fallback={
-              <p class="tensor-debug-panel__placeholder">CityMap debug toggles will be connected in the next slice.</p>
+              <>
+                <div class="tensor-debug-panel__toggle-grid">
+                  <For each={debugPlaceholders}>
+                    {(label) => (
+                      <button type="button" class="tensor-debug-panel__toggle tensor-debug-panel__toggle--disabled" disabled>
+                        {label}
+                      </button>
+                    )}
+                  </For>
+                </div>
+                <p class="tensor-debug-panel__placeholder">CityMap debug toggles will be connected in the next slice.</p>
+              </>
             }>
               <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={() => props.controls?.generate()}>
                 Generate
