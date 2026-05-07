@@ -11,22 +11,9 @@ import colourSchemes from './colour_schemes.json';
 import Vector from './vector';
 import Util from './util';
 
-/**
- * Fixed virtual resolution for the tensor map (9:16 aspect).
- * Same on all devices — the canvas CSS stretches to fill the container.
- */
+/** Fixed virtual resolution (9:16). Same on all devices. */
 const VIRTUAL_W = 450;
 const VIRTUAL_H = 800;
-
-/**
- * Generation zoom: lower = bigger world. At GEN_ZOOM the world is
- * VIRTUAL_W/GEN_ZOOM × VIRTUAL_H/GEN_ZOOM world units.
- * With 0.4: world = 1125 × 2000 world units.
- */
-const GEN_ZOOM = 0.4;
-
-/** Starting view zoom — shows VIRTUAL_W × VIRTUAL_H world units. */
-const VIEW_ZOOM = 1.0;
 
 export interface TensorBootOptions {
     seed?: string;
@@ -64,9 +51,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     const domainController = DomainController.getInstance();
     const dragController = new DragController(gui);
 
-    // 4. Fixed zoom — deterministic world size on all devices
-
-    // 5. Root controls: zoom then generate
+    // 4. Root controls: zoom then generate
     const zoomController = gui.add(domainController, 'zoom', 0.2, 5).step(0.1);
     domainController.setZoomUpdate(() => zoomController.updateDisplay());
 
@@ -117,22 +102,12 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     // 9. MainGUI
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
 
-    // Helper: generate at GEN_ZOOM (large world), then restore VIEW_ZOOM
-    function generateAtScale(): Promise<void> {
-        domainController.zoom = GEN_ZOOM;
-        return mainGui.generateEverything().then(() => {
-            domainController.zoom = VIEW_ZOOM;
-            zoomController.updateDisplay();
-        });
-    }
-
-    // 10. Wire generate — firstGenerate skips tensor field randomisation
+    // 10. Wire generate
     let generateCount = 0;
     guiActions.generate = () => {
-        // Re-seed for determinism: same seed + same generate index → same map
         setTensorSeed(`${options.seed ?? 'tensor-default'}::gen${generateCount++}`);
-        if (generateCount > 1) tensorFieldGui.setRecommended();
-        generateAtScale().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+        tensorFieldGui.setRecommended();
+        mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
     };
 
     // 11. Style folder
@@ -211,7 +186,7 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     loop();
 
     // 15. Auto-generate on mount
-    generateAtScale().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+    mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
 
     // 16. Cleanup
     return {

@@ -231,6 +231,8 @@ export default class StreamlineGenerator {
                 while (this.createStreamline(major)) {
                     major = !major;
                 }
+                this.streamlinesDone = true;
+                resolve();
             }
         }).then(() => this.joinDanglingStreamlines());
     }
