@@ -23,6 +23,7 @@ export default class TensorField {
 
     public parks: Vector[][] = [];
     public sea: Vector[] = [];
+    public landPolygon: Vector[] = [];
     public river: Vector[] = [];
     public ignoreRiver = false;
 
@@ -70,6 +71,7 @@ export default class TensorField {
         this.basisFields = [];
         this.parks = [];
         this.sea = [];
+        this.landPolygon = [];
         this.river = [];
     }
 
@@ -115,6 +117,10 @@ export default class TensorField {
     }
 
     onLand(point: Vector): boolean {
+        if (this.landPolygon.length > 0 && !PolygonUtil.insidePolygon(point, this.landPolygon)) {
+            return false;
+        }
+
         const inSea = PolygonUtil.insidePolygon(point, this.sea);
         if (this.ignoreRiver) {
             return !inSea;

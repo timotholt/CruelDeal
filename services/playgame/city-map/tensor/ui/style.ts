@@ -35,6 +35,7 @@ export default abstract class Style {
     protected canvas: CanvasWrapper;
 
     public seaPolygon: Vector[] = [];
+    public landPolygon: Vector[] = [];
     public coastline: Vector[] = [];
     public river: Vector[] = [];
     public secondaryRiver: Vector[] = [];
@@ -129,6 +130,12 @@ export class DefaultStyle extends Style {
         canvas.setStrokeStyle(this.colourScheme.seaColour);
         canvas.setLineWidth(0.1);
         canvas.drawPolygon(this.seaPolygon);
+
+        if (this.landPolygon.length > 0) {
+            canvas.setFillStyle(bgColour);
+            canvas.setStrokeStyle(bgColour);
+            canvas.drawPolygon(this.landPolygon);
+        }
 
         canvas.setStrokeStyle(bgColour);
         canvas.setLineWidth(30 * this.domainController.zoom);
@@ -231,6 +238,10 @@ export class RoughStyle extends Style {
 
         canvas.setOptions({ roughness: 0, fillWeight: 1, fill: this.colourScheme.seaColour, fillStyle: 'solid', stroke: 'none', strokeWidth: 1 });
         canvas.drawPolygon(this.seaPolygon);
+        if (this.landPolygon.length > 0) {
+            canvas.setOptions({ fill: this.colourScheme.bgColour, fillStyle: 'solid', stroke: 'none' });
+            canvas.drawPolygon(this.landPolygon);
+        }
         canvas.setOptions({ stroke: this.colourScheme.bgColour, strokeWidth: 30 });
         canvas.drawPolyline(this.coastline);
         canvas.setOptions({ roughness: 0, fillWeight: 1, fill: this.colourScheme.seaColour, fillStyle: 'solid', stroke: 'none', strokeWidth: 1 });

@@ -5,6 +5,8 @@ import TensorField from './tensor_field';
 import StreamlineGenerator, {StreamlineParams} from './streamlines';
 import FieldIntegrator from './integrator';
 import PolygonUtil from './polygon_util';
+import { generateIslandMask, worldBoundsPolygon } from './island_mask';
+import type { MapShape } from '../types';
 
 export interface NoiseParams {
     noiseEnabled: boolean;
@@ -28,6 +30,7 @@ export default class WaterGenerator extends StreamlineGenerator {
     private coastlineMajor = true;
     private _coastline: Vector[] = [];
     private _seaPolygon: Vector[] = [];
+    private _landPolygon: Vector[] = [];
     private _riverPolygon: Vector[] = [];
     private _riverSecondaryRoad: Vector[] = [];
 
@@ -45,6 +48,10 @@ export default class WaterGenerator extends StreamlineGenerator {
 
     get seaPolygon(): Vector[] {
         return this._seaPolygon;
+    }
+
+    get landPolygon(): Vector[] {
+        return this._landPolygon;
     }
 
     get riverPolygon(): Vector[] {
@@ -81,11 +88,50 @@ export default class WaterGenerator extends StreamlineGenerator {
         this._seaPolygon = this.getSeaPolygon(road);
         this.allStreamlinesSimple.push(road);
         this.tensorField.sea = this._seaPolygon;
+        this.tensorField.landPolygon = [];
 
         const complex = this.complexifyStreamline(road);
         this.grid(major).addPolyline(complex);
         this.streamlines(major).push(complex);
         this.allStreamlines.push(complex);
+    }
+
+    createMapShape(mapShape: MapShape): void {
+        this.clearWater();
+        if (mapShape === 'landlocked') return;
+        if (mapShape === 'island') {
+            this.createIsland();
+            return;
+        }
+
+        this.createCoast();
+        this.createRiver();
+    }
+
+    private createIsland(): void {
+        const land = generateIslandMask(this.origin, this.worldDimensions, 0.38, 0.42, 0.18, tensorRandom);
+        this._landPolygon = land;
+        this._coastline = land.concat([land[0].clone()]);
+        this._seaPolygon = worldBoundsPolygon(this.origin, this.worldDimensions);
+        this.tensorField.landPolygon = land;
+        this.tensorField.sea = [];
+        this.tensorField.river = [];
+        this.allStreamlinesSimple.push(this._coastline);
+        this.allStreamlines.push(this._coastline);
+        this.grid(true).addPolyline(this._coastline);
+        this.streamlines(true).push(this._coastline);
+    }
+
+    private clearWater(): void {
+        this._coastline = [];
+        this._seaPolygon = [];
+        this._landPolygon = [];
+        this._riverPolygon = [];
+        this._riverSecondaryRoad = [];
+        this.tensorField.sea = [];
+        this.tensorField.landPolygon = [];
+        this.tensorField.river = [];
+        this.clearStreamlines();
     }
 
     createRiver(): void {

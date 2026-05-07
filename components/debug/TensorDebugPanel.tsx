@@ -1,6 +1,7 @@
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { TensorBoot } from '../../services/playgame/city-map/tensor/boot';
+import type { MapShape } from '../../services/playgame/city-map/tensor/types';
 
 export interface TensorDebugPanelProps {
   controls?: TensorBoot;
@@ -16,6 +17,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const [activeTab, setActiveTab] = createSignal<TensorTab>('generation');
   const [zoom, setZoom] = createSignal(1);
   const [colourScheme, setColourScheme] = createSignal('Default');
+  const [mapShape, setMapShape] = createSignal<MapShape>('peninsula');
   const [zoomBuildings, setZoomBuildings] = createSignal(false);
   const [buildingModels, setBuildingModels] = createSignal(false);
   const [showFrame, setShowFrame] = createSignal(false);
@@ -31,6 +33,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
     const controls = props.controls;
     if (!controls) return;
     setZoom(controls.getZoom());
+    setMapShape(controls.getMapShape());
     const schemes = controls.getColourSchemes();
     if (schemes.includes('Default')) setColourScheme('Default');
     else if (schemes[0]) setColourScheme(schemes[0]);
@@ -92,6 +95,11 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const updateColourScheme = (next: string) => {
     setColourScheme(next);
     props.controls?.setColourScheme(next);
+  };
+
+  const updateMapShape = (next: MapShape) => {
+    setMapShape(next);
+    props.controls?.setMapShape(next);
   };
 
   const updateCamera = (x: number, y: number) => {
@@ -166,6 +174,15 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
               <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={() => props.controls?.generate()}>
                 Generate
               </button>
+
+              <label class="tensor-debug-panel__field">
+                <span>Map Shape</span>
+                <select value={mapShape()} onChange={(e) => updateMapShape(e.currentTarget.value as MapShape)}>
+                  <For each={props.controls?.getMapShapes() ?? []}>
+                    {(shape) => <option value={shape}>{shape}</option>}
+                  </For>
+                </select>
+              </label>
 
               <label class="tensor-debug-panel__field">
                 <span>Zoom <b>{zoom().toFixed(1)}</b></span>

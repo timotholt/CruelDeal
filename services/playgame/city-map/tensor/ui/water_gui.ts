@@ -8,9 +8,11 @@ import WaterGenerator, {WaterParams} from '../impl/water_generator';
 import Vector from '../vector';
 import RoadGUI from './road_gui';
 import TensorField from '../impl/tensor_field';
+import type { MapShape } from '../types';
 
 export default class WaterGUI extends RoadGUI {
     protected streamlines: WaterGenerator;
+    private mapShape: MapShape = 'peninsula';
 
     constructor(private tensorField: TensorField,
                 protected params: WaterParams,
@@ -55,13 +57,16 @@ export default class WaterGUI extends RoadGUI {
             Object.assign({}, this.params), this.tensorField);
         this.domainController.zoom = this.domainController.zoom * Util.DRAW_INFLATE_AMOUNT;
 
-        this.streamlines.createCoast();
-        this.streamlines.createRiver();
+        this.streamlines.createMapShape(this.mapShape);
 
         this.closeTensorFolder();
         this.redraw();
         this.postGenerateCallback();
         return Promise.resolve();
+    }
+
+    setMapShape(mapShape: MapShape): void {
+        this.mapShape = mapShape;
     }
 
     get streamlinesWithSecondaryRoad(): Vector[][] {
@@ -84,6 +89,10 @@ export default class WaterGUI extends RoadGUI {
 
     get seaPolygon(): Vector[] {
         return this.streamlines.seaPolygon.map(v => this.domainController.worldToScreen(v.clone()));
+    }
+
+    get landPolygon(): Vector[] {
+        return this.streamlines.landPolygon.map(v => this.domainController.worldToScreen(v.clone()));
     }
 
     protected addDevParamsToFolder(params: StreamlineParams, folder: dat.GUI): void {

@@ -16,6 +16,7 @@ import Style, {DefaultStyle, RoughStyle} from './style';
 import CanvasWrapper from './canvas_wrapper';
 import Buildings, {BuildingModel} from './buildings';
 import PolygonUtil from '../impl/polygon_util';
+import type { MapShape } from '../types';
 
 /**
  * Handles Map folder, glues together impl
@@ -137,6 +138,7 @@ export default class MainGUI {
             this.buildings.reset();
             tensorField.parks = [];
             tensorField.sea = [];
+            tensorField.landPolygon = [];
             tensorField.river = [];
         });
 
@@ -236,6 +238,10 @@ export default class MainGUI {
         await this.buildings.generate(anim);
     }
 
+    setMapShape(mapShape: MapShape): void {
+        this.coastline.setMapShape(mapShape);
+    }
+
     update(): void {
         let continueUpdate = true;
         const start = performance.now();
@@ -259,6 +265,7 @@ export default class MainGUI {
         this.redraw = false;
 
         style.seaPolygon = this.coastline.seaPolygon;
+        style.landPolygon = this.coastline.landPolygon;
         style.coastline = this.coastline.coastline;
         style.river = this.coastline.river;
         style.lots = this.buildings.lots;

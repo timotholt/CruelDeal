@@ -10,6 +10,7 @@ import { setTensorSeed } from './rng';
 import colourSchemes from './colour_schemes.json';
 import Vector from './vector';
 import Util from './util';
+import { MAP_SHAPES, type MapShape } from './types';
 
 /** Fixed virtual resolution (9:16). Same on all devices. */
 const VIRTUAL_W = 900;
@@ -17,6 +18,7 @@ const VIRTUAL_H = 1600;
 
 export interface TensorBootOptions {
     seed?: string;
+    mapShape?: MapShape;
 }
 
 export interface TensorBoot {
@@ -34,6 +36,9 @@ export interface TensorBoot {
     setDrawCentre: (enabled: boolean) => void;
     setHighDPI: (enabled: boolean) => void;
     downloadPng: () => void;
+    setMapShape: (shape: MapShape) => void;
+    getMapShape: () => MapShape;
+    getMapShapes: () => MapShape[];
 }
 
 /**
@@ -124,6 +129,8 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
 
     // 9. MainGUI
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
+    const shapeState = { mapShape: (options.mapShape ?? 'peninsula') as MapShape };
+    mainGui.setMapShape(shapeState.mapShape);
 
     // 10. Wire generate
     let generateCount = 0;
@@ -132,6 +139,8 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
         tensorFieldGui.setRecommended();
         mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
     };
+    const mapShapeController = mapFolder.add(shapeState, 'mapShape', MAP_SHAPES)
+        .onChange((val: MapShape) => mainGui.setMapShape(val));
 
     // 11. Style folder
     const colourSchemeController = styleFolder.add(styleState, 'colourScheme', Object.keys(schemes))
@@ -265,6 +274,13 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
             highDPIController.updateDisplay();
         },
         downloadPng,
+        setMapShape: (shape: MapShape) => {
+            shapeState.mapShape = shape;
+            mainGui.setMapShape(shape);
+            mapShapeController.updateDisplay();
+        },
+        getMapShape: () => shapeState.mapShape,
+        getMapShapes: () => MAP_SHAPES.slice(),
         cleanup: () => {
             cancelAnimationFrame(animationId);
             try { gui.domElement.remove(); } catch (_) {}
