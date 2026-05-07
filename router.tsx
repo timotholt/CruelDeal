@@ -30,6 +30,7 @@ const RootComponent = () => {
         
         // NOTE: /play must be tested BEFORE /game because `/play` doesn't
         // contain "/game" but we want them distinct.
+        if (path.includes("/dev")) return "GAME";
         if (path.includes("/play")) return "PLAY";
         if (path.includes("/game")) return "GAME";
         if (path.includes("/deck")) return "DECK";

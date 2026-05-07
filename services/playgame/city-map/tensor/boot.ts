@@ -1,5 +1,6 @@
 import * as dat from 'dat.gui';
 import {DefaultStyle} from './ui/style';
+import {DefaultCanvasWrapper} from './ui/canvas_wrapper';
 import DomainController from './ui/domain_controller';
 import DragController from './ui/drag_controller';
 import TensorFieldGUI from './ui/tensor_field_gui';
@@ -51,22 +52,43 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement): TensorB
 
     // Pre-populate with a recommended field layout
     tensorFieldGui.setRecommended();
+    tensorFolder.open();
+    mapFolder.open();
 
     // 6. Style + MainGUI
     const closeTensorFolder = () => tensorFolder.close();
     const style = new DefaultStyle(canvas, dragController, colourScheme);
+    const tensorCanvas = new DefaultCanvasWrapper(canvas, 1, true);
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
 
-    // 7. Render loop
+    const showTensorField = () => !tensorFolder.closed || mainGui.roadsEmpty();
+
+    // 7. Render loop (mirrors original main.ts draw logic)
+    let previousFrameDrawTensor = true;
     let animationId = 0;
     const loop = () => {
         mainGui.update();
-        mainGui.draw(style);
+        if (showTensorField()) {
+            previousFrameDrawTensor = true;
+            dragController.setDragDisabled(false);
+            tensorFieldGui.draw(tensorCanvas);
+        } else {
+            dragController.setDragDisabled(true);
+            if (previousFrameDrawTensor) {
+                previousFrameDrawTensor = false;
+                mainGui.draw(style, true);
+            } else {
+                mainGui.draw(style);
+            }
+        }
         animationId = requestAnimationFrame(loop);
     };
     loop();
 
-    // 8. Cleanup
+    // 8. Auto-generate on mount
+    mainGui.generateEverything().catch((e) => console.error('[TensorMap] generateEverything failed', e));
+
+    // 9. Cleanup
     return {
         cleanup: () => {
             cancelAnimationFrame(animationId);
