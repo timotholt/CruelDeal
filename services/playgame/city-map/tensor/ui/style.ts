@@ -221,8 +221,13 @@ export class DefaultStyle extends Style {
 
     private drawBridgeOutlines(canvas: DefaultCanvasWrapper): void {
         for (const bridge of this.bridges) {
-            canvas.setStrokeStyle(this.colourScheme.mainRoadOutline);
-            canvas.setLineWidth(this.colourScheme.outlineSize + (bridge.width + 3) * this.domainController.zoom);
+            const outline = bridge.roadClass === 'main'
+                ? this.colourScheme.mainRoadOutline
+                : bridge.roadClass === 'major'
+                    ? this.colourScheme.majorRoadOutline
+                    : this.colourScheme.minorRoadOutline;
+            canvas.setStrokeStyle(outline);
+            canvas.setLineWidth((bridge.width + this.colourScheme.outlineSize) * this.domainController.zoom);
             canvas.drawPolyline([bridge.start, bridge.end]);
         }
     }

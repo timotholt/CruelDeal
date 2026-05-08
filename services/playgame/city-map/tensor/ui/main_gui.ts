@@ -254,13 +254,13 @@ export default class MainGUI {
         }
 
         try {
+            this.bridges = [];
+            this.lastBridgeDetail = 'original water path';
             this.buildings.setPreciseWaterCheck(false);
             profiler.time('coastline', () => this.coastline.generateRoads());
             await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
             await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
             await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
-            profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
-            profiler.time('parks', () => this.addParks(), () => this.lastParkPolygonDetail);
             this.redraw = true;
             await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
         } finally {
@@ -280,7 +280,7 @@ export default class MainGUI {
         const riverPolygon = this.coastline.riverPolygonWorld;
 
         this.tensorField.landPolygon = [];
-        this.tensorField.river = [];
+        this.tensorField.river = riverPolygon;
         this.tensorField.parks = [];
 
         await profiler.timeAsync('main roads open world', () => this.mainRoads.generateRoads());
@@ -296,6 +296,7 @@ export default class MainGUI {
         this.tensorField.landPolygon = landPolygon;
         this.tensorField.river = riverPolygon;
         profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
+        profiler.time('trim stubs', () => this.trimRiverStubs(riverPolygon));
         this.buildings.setPreciseWaterCheck(true);
         this.bigParks = [];
         this.smallParks = [];
@@ -315,6 +316,72 @@ export default class MainGUI {
             }
         }
         return clipped;
+    }
+
+    private trimRiverStubs(riverPolygon: Vector[]): void {
+        if (riverPolygon.length < 3) return;
+        const trimDistance = this.coastlineParams.riverBankSize;
+        const probeDistance = this.minorParams.dstep * 2;
+        const minLength = this.minorParams.dstep * 4;
+
+        const trim = (roads: Vector[][]): Vector[][] =>
+            roads
+                .map(road => this.trimRoadStubEnds(road, riverPolygon, trimDistance, probeDistance))
+                .filter(road => road.length >= 2 && this.streamlineLength(road) >= minLength);
+
+        this.mainRoads.replaceStreamlines(trim(this.mainRoads.allStreamlines));
+        this.majorRoads.replaceStreamlines(trim(this.majorRoads.allStreamlines));
+        this.minorRoads.replaceStreamlines(trim(this.minorRoads.allStreamlines));
+    }
+
+    private trimRoadStubEnds(road: Vector[], riverPolygon: Vector[], trimDistance: number, probeDistance: number): Vector[] {
+        const checkAndTrimEnd = (poly: Vector[]): Vector[] => {
+            if (poly.length < 2) return poly;
+            const last = poly[poly.length - 1];
+            const prev = poly[poly.length - 2];
+            if (last.distanceTo(prev) < 1e-6) return poly;
+            const dir = last.clone().sub(prev);
+            const probe = last.clone().add(dir.setLength(probeDistance));
+            if (!PolygonUtil.insidePolygon(probe, riverPolygon)) return poly;
+            if (this.isBridgeEndpoint(last)) return poly;
+            return this.trimFromEnd(poly, trimDistance);
+        };
+
+        let result = checkAndTrimEnd(road.slice());
+
+        if (result.length >= 2) {
+            result.reverse();
+            result = checkAndTrimEnd(result);
+            result.reverse();
+        }
+
+        return result;
+    }
+
+    private isBridgeEndpoint(point: Vector): boolean {
+        const threshold = this.minorParams.dsep;
+        return this.bridges.some(b =>
+            b.start.distanceTo(point) < threshold ||
+            b.end.distanceTo(point) < threshold
+        );
+    }
+
+    private trimFromEnd(polyline: Vector[], trimDistance: number): Vector[] {
+        const result = polyline.slice();
+        let accumulated = 0;
+        while (result.length >= 2) {
+            const last = result[result.length - 1];
+            const prev = result[result.length - 2];
+            const segLen = last.distanceTo(prev);
+            if (accumulated + segLen >= trimDistance) {
+                const remaining = trimDistance - accumulated;
+                result[result.length - 1] = last.clone().add(prev.clone().sub(last).setLength(remaining));
+                break;
+            }
+            accumulated += segLen;
+            result.pop();
+        }
+        return result.length >= 2 ? result : [];
     }
 
     private applyBridgeLayer(): void {

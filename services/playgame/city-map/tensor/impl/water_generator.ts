@@ -132,25 +132,29 @@ export default class WaterGenerator extends StreamlineGenerator {
     }
 
     private createIslandRiver(maxTries: number): void {
-        let bestRiver: Vector[] = [];
-        let bestLength = 0;
+        const oldLandPolygon = this.tensorField.landPolygon;
+        this.tensorField.landPolygon = [];
 
         if (this.params.riverNoise.noiseEnabled) {
             this.tensorField.enableGlobalNoise(this.params.riverNoise.noiseAngle, this.params.riverNoise.noiseSize);
         }
 
+        let bestRiver: Vector[] = [];
+        let bestLength = 0;
+
         for (let i = 0; i < maxTries; i++) {
             const seed = this.getSeed(!this.coastlineMajor);
             if (!seed) continue;
-
-            const riverStreamline = this.integrateStreamline(seed, !this.coastlineMajor);
-            const riverLength = this.streamlineLength(riverStreamline);
-            if (riverLength > bestLength && this.crossesIslandBoundary(riverStreamline)) {
-                bestRiver = riverStreamline;
-                bestLength = riverLength;
+            const candidate = this.extendStreamline(this.integrateStreamline(seed, !this.coastlineMajor));
+            if (!this.reachesEdges(candidate) || !this.crossesIsland(candidate)) continue;
+            const length = this.streamlineLength(candidate);
+            if (length > bestLength) {
+                bestRiver = candidate;
+                bestLength = length;
             }
         }
 
+        this.tensorField.landPolygon = oldLandPolygon;
         this.tensorField.disableGlobalNoise();
 
         const minRiverLength = Math.min(this.worldDimensions.x, this.worldDimensions.y) * 0.35;
@@ -159,11 +163,7 @@ export default class WaterGenerator extends StreamlineGenerator {
             return;
         }
 
-        const extendedRiver = this.extendOpenPolyline(bestRiver, this.params.riverSize * 4);
-        this._riverPolygon = this.simplifyStreamline(PolygonUtil.resizeGeometry(
-            extendedRiver,
-            this.params.riverSize - this.params.riverBankSize,
-            false));
+        this.createRiverCorridor(bestRiver, true);
         this.tensorField.river = this._riverPolygon;
     }
 
@@ -201,29 +201,51 @@ export default class WaterGenerator extends StreamlineGenerator {
         this.tensorField.sea = oldSea;
         this.tensorField.disableGlobalNoise();
 
+        this.createRiverCorridor(riverStreamline, false);
+    }
+
+    private getSeaPolygon(polyline: Vector[]): Vector[] {
+        return PolygonUtil.lineRectanglePolygonIntersection(this.origin, this.worldDimensions, polyline);
+    }
+
+    private createRiverCorridor(riverStreamline: Vector[], clipRoadsToIsland: boolean): void {
         const expandedNoisy = this.complexifyStreamline(
             PolygonUtil.resizeGeometry(riverStreamline, this.params.riverSize, false));
-        this._riverPolygon = PolygonUtil.resizeGeometry(
-            riverStreamline, this.params.riverSize - this.params.riverBankSize, false);
+        this._riverPolygon = this.simplifyStreamline(PolygonUtil.resizeGeometry(
+            riverStreamline,
+            this.params.riverSize - this.params.riverBankSize,
+            false));
 
         const firstOffScreen = expandedNoisy.findIndex(v => this.vectorOffScreen(v));
         for (let i = 0; i < firstOffScreen; i++) {
             expandedNoisy.push(expandedNoisy.shift()!);
         }
 
+        const onBuildableSide = (v: Vector) => clipRoadsToIsland
+            ? PolygonUtil.insidePolygon(v, this._landPolygon)
+            : !PolygonUtil.insidePolygon(v, this._seaPolygon);
+
         const riverSplitPoly = this.getSeaPolygon(riverStreamline);
-        const road1 = expandedNoisy.filter(v =>
-            !PolygonUtil.insidePolygon(v, this._seaPolygon)
+        let road1 = expandedNoisy.filter(v =>
+            onBuildableSide(v)
             && !this.vectorOffScreen(v)
             && PolygonUtil.insidePolygon(v, riverSplitPoly));
-        const road1Simple = this.simplifyStreamline(road1);
-        const road2 = expandedNoisy.filter(v =>
-            !PolygonUtil.insidePolygon(v, this._seaPolygon)
+        let road2 = expandedNoisy.filter(v =>
+            onBuildableSide(v)
             && !this.vectorOffScreen(v)
             && !PolygonUtil.insidePolygon(v, riverSplitPoly));
-        const road2Simple = this.simplifyStreamline(road2);
+
+        if (clipRoadsToIsland) {
+            road1 = this.clipRiverBankToIsland(road1);
+            road2 = this.clipRiverBankToIsland(road2);
+        }
 
         if (road1.length === 0 || road2.length === 0) return;
+
+        const road1Simple = this.simplifyStreamline(road1);
+        const road2Simple = this.simplifyStreamline(road2);
+
+        if (road1Simple.length === 0 || road2Simple.length === 0) return;
 
         if (road1[0].distanceToSquared(road2[0]) < road1[0].distanceToSquared(road2[road2.length - 1])) {
             road2Simple.reverse();
@@ -242,8 +264,21 @@ export default class WaterGenerator extends StreamlineGenerator {
         this.allStreamlines.push(road2);
     }
 
-    private getSeaPolygon(polyline: Vector[]): Vector[] {
-        return PolygonUtil.lineRectanglePolygonIntersection(this.origin, this.worldDimensions, polyline);
+    private clipRiverBankToIsland(bank: Vector[]): Vector[] {
+        if (this._landPolygon.length === 0) return bank;
+        const segments = PolygonUtil.clipPolylineToPolygon(bank, this._landPolygon);
+        if (segments.length === 0) return [];
+
+        let longest = segments[0];
+        let longestLength = this.streamlineLength(longest);
+        for (const segment of segments.slice(1)) {
+            const length = this.streamlineLength(segment);
+            if (length > longestLength) {
+                longest = segment;
+                longestLength = length;
+            }
+        }
+        return longest;
     }
 
     /**
@@ -265,10 +300,9 @@ export default class WaterGenerator extends StreamlineGenerator {
             && this.vectorOffScreen(streamline[streamline.length - 1]);
     }
 
-    private crossesIslandBoundary(streamline: Vector[]): boolean {
-        if (streamline.length < 2 || this._landPolygon.length === 0) return false;
-        return !PolygonUtil.insidePolygon(streamline[0], this._landPolygon)
-            && !PolygonUtil.insidePolygon(streamline[streamline.length - 1], this._landPolygon);
+    private crossesIsland(streamline: Vector[]): boolean {
+        if (this._landPolygon.length === 0) return false;
+        return streamline.some(v => PolygonUtil.insidePolygon(v, this._landPolygon));
     }
 
     private streamlineLength(streamline: Vector[]): number {
@@ -277,16 +311,6 @@ export default class WaterGenerator extends StreamlineGenerator {
             length += streamline[i - 1].distanceTo(streamline[i]);
         }
         return length;
-    }
-
-    private extendOpenPolyline(polyline: Vector[], distance: number): Vector[] {
-        if (polyline.length < 2) return polyline;
-        const extended = polyline.map(point => point.clone());
-        extended.unshift(extended[0].clone().add(
-            extended[0].clone().sub(extended[1]).setLength(distance)));
-        extended.push(extended[extended.length - 1].clone().add(
-            extended[extended.length - 1].clone().sub(extended[extended.length - 2]).setLength(distance)));
-        return extended;
     }
 
     private vectorOffScreen(v: Vector): boolean {
