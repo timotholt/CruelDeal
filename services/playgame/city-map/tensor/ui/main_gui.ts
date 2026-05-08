@@ -255,12 +255,13 @@ export default class MainGUI {
 
         try {
             this.bridges = [];
-            this.lastBridgeDetail = 'original water path';
             this.buildings.setPreciseWaterCheck(false);
             profiler.time('coastline', () => this.coastline.generateRoads());
             await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
             await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
             await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
+            profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
+            profiler.time('trim stubs', () => this.trimRiverStubs(this.coastline.riverPolygonWorld));
             this.redraw = true;
             await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
         } finally {
