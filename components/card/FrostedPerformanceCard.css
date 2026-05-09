@@ -13,9 +13,11 @@
   color: var(--frost-ink);
   isolation: isolate;
   overflow: hidden;
+  background-color: #9aa5b4;
   background:
-    linear-gradient(140deg, rgba(255,255,255,0.92), rgba(218,226,239,0.72) 34%, rgba(150,162,184,0.48) 100%),
-    radial-gradient(circle at 18% 9%, rgba(255,255,255,0.8), transparent 42%);
+    linear-gradient(140deg, rgba(236,242,250,0.58), rgba(184,195,211,0.42) 36%, rgba(82,94,113,0.32) 100%),
+    radial-gradient(circle at 18% 9%, rgba(255,255,255,0.18), transparent 44%),
+    #9aa5b4;
   box-shadow:
     0 24px 66px rgba(0,0,0,0.62),
     0 0 20px rgba(185,205,230,0.16),
@@ -24,8 +26,7 @@
     inset 0 0 30px rgba(255,255,255,0.34);
 }
 
-.frosted-card::before,
-.frosted-card::after {
+.frosted-card::before {
   content: "";
   position: absolute;
   pointer-events: none;
@@ -41,12 +42,6 @@
     inset 0 0 20px rgba(255,255,255,0.42);
 }
 
-.frosted-card::after {
-  inset: calc(var(--frost-card-w) * 0.038);
-  border: 1px solid rgba(255,255,255,0.32);
-  opacity: 0.82;
-}
-
 .frosted-card__grain {
   position: absolute;
   inset: 0;
@@ -55,7 +50,6 @@
   opacity: 0.16;
   mix-blend-mode: overlay;
   background-image:
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 1px, transparent 1px 7px),
     repeating-linear-gradient(0deg, rgba(15,23,42,0.14) 0 1px, transparent 1px 9px);
 }
 
@@ -95,16 +89,56 @@
   display: block;
 }
 
+.frosted-card__faceplate {
+  position: absolute;
+  left: calc(var(--frost-card-w) * 0.072);
+  right: calc(var(--frost-card-w) * 0.072);
+  top: calc(var(--frost-card-w) * 0.06);
+  height: calc(var(--frost-card-w) * 0.17);
+  z-index: 5;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.68), rgba(74,88,110,0.28)) left 78% / 32% 1px no-repeat,
+    linear-gradient(90deg, rgba(74,88,110,0.28), rgba(255,255,255,0.68)) right 78% / 32% 1px no-repeat;
+}
+
+.frosted-card__faceplate::before {
+  content: "";
+  position: absolute;
+  left: 32%;
+  right: 32%;
+  bottom: 0;
+  height: 22%;
+  clip-path: polygon(0 0, 12% 100%, 88% 100%, 100% 0, calc(100% - 1px) 0, 87.5% calc(100% - 1px), 12.5% calc(100% - 1px), 1px 0);
+  background: rgba(255,255,255,0.58);
+  filter: drop-shadow(0 1px 1px rgba(55,70,92,0.22));
+}
+
+.frosted-card__faceplate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(78% + 1px);
+  height: 1px;
+  opacity: 0.46;
+  background:
+    linear-gradient(90deg, rgba(74,88,110,0.24), transparent) left center / 32% 1px no-repeat,
+    linear-gradient(90deg, transparent, rgba(74,88,110,0.24)) right center / 32% 1px no-repeat;
+}
+
 .frosted-card__title {
   position: absolute;
   left: 50%;
-  top: calc(var(--frost-card-w) * 0.057);
+  top: calc(var(--frost-card-w) * 0.047);
   width: calc(var(--frost-card-w) * 0.42);
+  height: calc(var(--frost-card-w) * 0.126);
   transform: translateX(-50%);
   z-index: 7;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: calc(var(--frost-card-w) * 0.019);
   color: rgba(7,10,16,0.88);
   text-align: center;
@@ -245,13 +279,13 @@
   bottom: calc(var(--frost-card-w) * 0.035);
   z-index: 7;
   height: calc(var(--frost-card-w) * 0.045);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   color: rgba(22,30,44,0.64);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: calc(var(--frost-card-w) * 0.016);
   font-weight: 600;
+  line-height: 1;
   letter-spacing: calc(var(--frost-card-w) * 0.005);
   text-transform: uppercase;
   text-shadow: 0 1px 0 rgba(255,255,255,0.42);

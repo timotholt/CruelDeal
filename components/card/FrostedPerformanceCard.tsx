@@ -17,6 +17,7 @@ export const FrostedPerformanceCard = (props: FrostedPerformanceCardProps) => {
       <div class="frosted-card__art-shell">
         <img class="frosted-card__art" src={props.artUrl ?? DEFAULT_ART} alt="" />
       </div>
+      <div class="frosted-card__faceplate" aria-hidden="true" />
 
       <div class="frosted-card__title">
         <div class="frosted-card__name">{props.name ?? 'LYRIA'}</div>
@@ -35,7 +36,7 @@ export const FrostedPerformanceCard = (props: FrostedPerformanceCardProps) => {
 
       <div class="frosted-card__rail frosted-card__rail--left" aria-hidden="true" />
       <div class="frosted-card__rail frosted-card__rail--right" aria-hidden="true" />
-      <div class="frosted-card__footer">{props.footer ?? '// S-Class Performer'}</div>
+      <div class="frosted-card__footer">{props.footer ?? '// S-Class'}</div>
       <div class="frosted-card__grain" aria-hidden="true" />
     </article>
   );
