@@ -19,6 +19,7 @@ import { createEffect, createMemo, Show } from "solid-js";
 import { ScreenKey } from "./types";
 import TensorMapView from "./services/playgame/city-map/tensor/TensorMapView";
 import { TensorPlayScreen } from "./components/screens/TensorPlayScreen";
+import { CardFrameLabScreen } from "./components/screens/CardFrameLabScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -184,6 +185,12 @@ const devTensorPlayRoute = createRoute({
     component: () => <TensorPlayScreen />,
 });
 
+const devCardFrameRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/card-frame",
+    component: () => <CardFrameLabScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -199,6 +206,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     rankRoute,
     progressionRoute,
+    devCardFrameRoute,
     devTensorRoute,
     devTensorPlayRoute,
 ]);
