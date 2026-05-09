@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cyberpunk Card Frame Prototype</title>
+  <style>
+    :root {
+      --card-w: 420px;
+      --card-r: 30px;
+      --white: #f5f7f8;
+      --ice: #e9eef2;
+      --metal: #bfc8cf;
+      --ink: #111418;
+      --red: #d81420;
+      --glass: rgba(245, 248, 250, 0.72);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 30%, #30333a 0%, #111217 42%, #050507 100%);
+      font-family: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .card {
+      position: relative;
+      width: var(--card-w);
+      aspect-ratio: 5 / 7;
+      border-radius: var(--card-r);
+      overflow: hidden;
+      background: #edf1f4;
+      box-shadow:
+        0 40px 100px rgba(0, 0, 0, 0.65),
+        0 0 0 1px rgba(255,255,255,0.75),
+        inset 0 0 0 1px rgba(255,255,255,0.9);
+      isolation: isolate;
+    }
+
+    /* Replace this background image with your own raw image. */
+    .art {
+      position: absolute;
+      inset: 26px 28px 150px;
+      border-radius: 18px 18px 6px 6px;
+      overflow: hidden;
+      background: url("a9876b68-6572-47aa-b8f3-692d8a9a557a.png") center top / cover no-repeat;
+      clip-path: polygon(
+        13% 0%, 87% 0%,
+        100% 11%, 100% 100%,
+        0% 100%, 0% 11%
+      );
+      z-index: 1;
+    }
+
+    .art::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    /* Main frosted polycarbonate body */
+    .frame-body {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      border-radius: var(--card-r);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.15), rgba(225,232,237,.08) 30%, rgba(255,255,255,.12) 58%, rgba(178,190,200,.05)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.15), transparent 34%);
+      mask:
+        linear-gradient(#000 0 0) padding-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask:
+        linear-gradient(#000 0 0) padding-box,
+        linear-gradient(#000 0 0);
+      border: 20px solid transparent;
+      box-shadow:
+        inset 0 0 32px rgba(255,255,255,.92),
+        inset 0 0 0 1px rgba(80,90,100,.18),
+        inset 0 0 0 5px rgba(255,255,255,.24);
+    }
+
+    /* Angular upper stat pods */
+    .pod {
+      position: absolute;
+      top: 0;
+      width: 126px;
+      height: 150px;
+      z-index: 6;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(214,222,228,.74)),
+        repeating-linear-gradient(110deg, rgba(255,255,255,.08) 0 2px, transparent 2px 7px);
+      border: 1px solid rgba(115,125,135,.25);
+      box-shadow:
+        inset 0 0 18px rgba(255,255,255,.85),
+        inset 0 -12px 24px rgba(130,145,155,.15),
+        0 1px 0 rgba(255,255,255,.8);
+    }
+
+    .pod.left {
+      left: 0;
+      border-top-left-radius: var(--card-r);
+      clip-path: polygon(0 0, 100% 0, 100% 47%, 72% 68%, 42% 100%, 0 100%);
+    }
+
+    .pod.right {
+      right: 0;
+      border-top-right-radius: var(--card-r);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 58% 100%, 28% 68%, 0 47%);
+    }
+
+    .stat {
+      position: absolute;
+      top: 20px;
+      width: 92px;
+      z-index: 8;
+      text-align: center;
+      color: var(--ink);
+    }
+
+    .stat.left { left: 14px; }
+    .stat.right { right: 14px; }
+
+    .stat .num {
+      font-size: 70px;
+      line-height: .85;
+      font-weight: 700;
+      letter-spacing: -3px;
+    }
+
+    .stat .rule {
+      width: 34px;
+      height: 1px;
+      margin: 12px auto 8px;
+      background: var(--red);
+      box-shadow: 0 0 8px rgba(216,20,32,.45);
+    }
+
+    .stat .label {
+      font-size: 13px;
+      letter-spacing: 4px;
+      font-weight: 700;
+    }
+
+    /* Side light rails */
+    .rail {
+      position: absolute;
+      top: 176px;
+      bottom: 188px;
+      width: 22px;
+      z-index: 7;
+      opacity: .8;
+    }
+
+    .rail.left { left: 6px; }
+    .rail.right { right: 6px; }
+
+    .rail::before,
+    .rail::after {
+      content: "";
+      position: absolute;
+      left: 8px;
+      width: 5px;
+      height: 52px;
+      border-radius: 99px;
+      background: linear-gradient(to bottom, rgba(255,255,255,.8), rgba(240,248,255,.2));
+      box-shadow: 0 0 16px rgba(210,230,255,.65);
+    }
+
+    .rail::before { top: 10px; }
+    .rail::after { bottom: 10px; }
+
+    .red-node {
+      position: absolute;
+      width: 4px;
+      height: 28px;
+      border-radius: 99px;
+      background: var(--red);
+      z-index: 9;
+      box-shadow: 0 0 10px rgba(216,20,32,.7);
+    }
+
+    .red-node.l1 { left: 25px; top: 187px; }
+    .red-node.l2 { left: 25px; bottom: 205px; }
+    .red-node.r1 { right: 25px; top: 187px; }
+    .red-node.r2 { right: 25px; bottom: 205px; }
+
+    /* Inner bevel line around artwork */
+    .inner-line {
+      position: absolute;
+      inset: 24px 26px 144px;
+      z-index: 5;
+      pointer-events: none;
+      border: 1px solid rgba(255,255,255,.74);
+      border-radius: 20px 20px 6px 6px;
+      clip-path: polygon(13% 0%, 87% 0%, 100% 11%, 100% 100%, 0% 100%, 0% 11%);
+      box-shadow:
+        inset 0 0 0 1px rgba(95,110,120,.16),
+        0 0 14px rgba(255,255,255,.38);
+    }
+
+    .text-panel {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 18px;
+      height: 180px;
+      z-index: 10;
+      padding: 36px 22px 22px;
+      text-align: right;
+      color: var(--ink);
+      background:
+        linear-gradient(to top, rgba(245,247,248,.96) 0%, rgba(245,247,248,.91) 58%, rgba(245,247,248,.08) 100%);
+      border-radius: 0 0 18px 18px;
+    }
+
+    .name {
+      margin: 0 0 8px;
+      font-size: 27px;
+      letter-spacing: 13px;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .type {
+      margin: 0 0 18px;
+      color: var(--red);
+      font-size: 13px;
+      letter-spacing: 5px;
+      font-weight: 700;
+    }
+
+    .ability-title {
+      margin: 0 0 10px;
+      font-size: 14px;
+      letter-spacing: 5px;
+      font-weight: 700;
+    }
+
+    .ability-text {
+      margin: 0;
+      font-family: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.65;
+      letter-spacing: .5px;
+      max-width: 310px;
+      margin-left: auto;
+    }
+
+    .bottom-glow {
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 0;
+      height: 20px;
+      z-index: 11;
+      border-radius: 0 0 var(--card-r) var(--card-r);
+      background: linear-gradient(to right, transparent, rgba(255,255,255,.9), transparent);
+      opacity: .7;
+      pointer-events: none;
+    }
+
+    .texture {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      opacity: .16;
+      mix-blend-mode: multiply;
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(0,0,0,.25) 0 1px, transparent 1px),
+        linear-gradient(115deg, transparent 0 45%, rgba(0,0,0,.08) 46%, transparent 47%);
+      background-size: 5px 5px, 140px 140px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="art"></div>
+
+    <div class="frame-body"></div>
+    <div class="pod left"></div>
+    <div class="pod right"></div>
+    <div class="inner-line"></div>
+
+    <div class="stat left">
+      <div class="num">4</div>
+      <div class="rule"></div>
+      <div class="label">COST</div>
+    </div>
+
+    <div class="stat right">
+      <div class="num">4</div>
+      <div class="rule"></div>
+      <div class="label">POWER</div>
+    </div>
+
+    <div class="rail left"></div>
+    <div class="rail right"></div>
+    <div class="red-node l1"></div>
+    <div class="red-node l2"></div>
+    <div class="red-node r1"></div>
+    <div class="red-node r2"></div>
+
+    <section class="text-panel">
+      <h1 class="name">STAGE SIREN</h1>
+      <p class="type">OPERATIVE • HUMAN</p>
+      <h2 class="ability-title">PUBLIC INFLUENCE</h2>
+      <p class="ability-text">When you play this card, look at the top 3 cards of your deck. Put 1 into your hand and the rest on the bottom of your deck.</p>
+    </section>
+
+    <div class="bottom-glow"></div>
+    <div class="texture"></div>
+  </div>
+</body>
+</html>

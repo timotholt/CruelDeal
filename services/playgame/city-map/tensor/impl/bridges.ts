@@ -1,6 +1,6 @@
 import Vector from '../vector';
 
-export type BridgeRoadClass = 'main' | 'major' | 'minor';
+export type BridgeRoadClass = 'main' | 'coast' | 'major' | 'minor';
 export type BridgeBarrierKind = 'river' | 'canal';
 
 export interface WaterBarrier {

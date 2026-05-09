@@ -13,9 +13,10 @@ export interface BridgeGenerationResult {
     candidates: number;
 }
 
-const ROAD_CLASS_PRIORITY: BridgeRoadClass[] = ['main', 'major', 'minor'];
+const ROAD_CLASS_PRIORITY: BridgeRoadClass[] = ['main', 'coast', 'major', 'minor'];
 const ROAD_WIDTH: Record<BridgeRoadClass, number> = {
     main: 10,
+    coast: 10,
     major: 8,
     minor: 5,
 };

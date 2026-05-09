@@ -389,10 +389,13 @@ export default class MainGUI {
         this.lastBridgeDetail = '0/0 bridges accepted';
         if (barriers.length === 0) return;
 
+        const coastlineRoad = this.coastline.coastlineRoadWorld;
+
         const generator = new BridgeGenerator();
         const result = generator.generate({
             roads: {
                 main: this.mainRoads.allStreamlines,
+                coast: coastlineRoad.length >= 2 ? [coastlineRoad] : [],
                 major: this.majorRoads.allStreamlines,
                 minor: this.minorRoads.allStreamlines,
             },
@@ -400,6 +403,7 @@ export default class MainGUI {
         });
 
         this.mainRoads.replaceStreamlines(this.filterRoads(result.roads.main, 'main'));
+        this.coastline.replaceCoastlineRoad(this.filterRoads(result.roads.coast, 'main'));
         this.majorRoads.replaceStreamlines(this.filterRoads(result.roads.major, 'major'));
         this.minorRoads.replaceStreamlines(this.filterRoads(result.roads.minor, 'minor'));
         this.bridges = result.bridges;

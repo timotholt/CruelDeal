@@ -221,7 +221,7 @@ export class DefaultStyle extends Style {
 
     private drawBridgeOutlines(canvas: DefaultCanvasWrapper): void {
         for (const bridge of this.bridges) {
-            const outline = bridge.roadClass === 'main'
+            const outline = (bridge.roadClass === 'main' || bridge.roadClass === 'coast')
                 ? this.colourScheme.mainRoadOutline
                 : bridge.roadClass === 'major'
                     ? this.colourScheme.majorRoadOutline
@@ -234,7 +234,7 @@ export class DefaultStyle extends Style {
 
     private drawBridgeDecks(canvas: DefaultCanvasWrapper): void {
         for (const bridge of this.bridges) {
-            const colour = bridge.roadClass === 'main'
+            const colour = (bridge.roadClass === 'main' || bridge.roadClass === 'coast')
                 ? this.colourScheme.mainRoadColour
                 : bridge.roadClass === 'major'
                     ? this.colourScheme.majorRoadColour
@@ -291,7 +291,12 @@ export class RoughStyle extends Style {
         this.mainRoads.forEach(s => canvas.drawPolyline(s));
         this.coastlineRoads.forEach(s => canvas.drawPolyline(s));
         this.bridges.forEach(bridge => {
-            canvas.setOptions({ strokeWidth: Math.max(2, bridge.width), stroke: this.colourScheme.mainRoadColour });
+            const colour = (bridge.roadClass === 'main' || bridge.roadClass === 'coast')
+                ? this.colourScheme.mainRoadColour
+                : bridge.roadClass === 'major'
+                    ? this.colourScheme.majorRoadColour
+                    : this.colourScheme.minorRoadColour;
+            canvas.setOptions({ strokeWidth: Math.max(2, bridge.width), stroke: colour });
             canvas.drawPolyline([bridge.start, bridge.end]);
         });
 

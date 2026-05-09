@@ -98,6 +98,17 @@ export default class WaterGUI extends RoadGUI {
         return this.streamlines.landPolygon.map(v => v.clone());
     }
 
+    get coastlineRoadWorld(): Vector[] {
+        return this.streamlines.allStreamlinesSimple[0] ?? [];
+    }
+
+    replaceCoastlineRoad(segments: Vector[][]): void {
+        const rest = this.streamlines.allStreamlinesSimple.slice(1);
+        const updated = [...segments, ...rest];
+        this.streamlines.allStreamlinesSimple = updated;
+        this.streamlines.allStreamlines = updated;
+    }
+
     get riverPolygonWorld(): Vector[] {
         return this.streamlines.riverPolygon.map(v => v.clone());
     }
