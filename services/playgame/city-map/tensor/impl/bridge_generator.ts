@@ -35,6 +35,7 @@ export default class BridgeGenerator {
         const candidates: BridgeCandidate[] = [];
         const roads: Record<BridgeRoadClass, Vector[][]> = {
             main: input.roads.main.map(road => road.map(point => point.clone())),
+            coast: input.roads.coast.map(road => road.map(point => point.clone())),
             major: input.roads.major.map(road => road.map(point => point.clone())),
             minor: input.roads.minor.map(road => road.map(point => point.clone())),
         };
