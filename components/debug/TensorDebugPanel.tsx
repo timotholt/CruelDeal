@@ -2,6 +2,7 @@ import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { TensorBoot } from '../../services/playgame/city-map/tensor/boot';
 import type { MapShape } from '../../services/playgame/city-map/tensor/types';
+import type { TensorMapSize } from '../../services/playgame/city-map/tensor/world';
 
 export interface TensorDebugPanelProps {
   controls?: TensorBoot;
@@ -17,6 +18,11 @@ const mapShapeLabels: Record<MapShape, string> = {
   'island-smooth': 'island (smooth)',
   landlocked: 'landlocked',
 };
+const mapSizeLabels: Record<TensorMapSize, string> = {
+  small: 'S',
+  medium: 'M',
+  large: 'L',
+};
 
 export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const [collapsed, setCollapsed] = createSignal(false);
@@ -24,6 +30,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
   const [zoom, setZoom] = createSignal(1);
   const [colourScheme, setColourScheme] = createSignal('Default');
   const [mapShape, setMapShape] = createSignal<MapShape>('peninsula');
+  const [mapSize, setMapSize] = createSignal<TensorMapSize>('large');
   const [zoomBuildings, setZoomBuildings] = createSignal(false);
   const [buildingModels, setBuildingModels] = createSignal(false);
   const [showFrame, setShowFrame] = createSignal(false);
@@ -40,6 +47,7 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
     if (!controls) return;
     setZoom(controls.getZoom());
     setMapShape(controls.getMapShape());
+    setMapSize(controls.getMapSize());
     const schemes = controls.getColourSchemes();
     if (schemes.includes('Default')) setColourScheme('Default');
     else if (schemes[0]) setColourScheme(schemes[0]);
@@ -115,6 +123,14 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
     props.controls?.setMapShape(next);
   };
 
+  const updateMapSize = (next: TensorMapSize) => {
+    setMapSize(next);
+    props.controls?.setMapSize(next);
+    setZoom(props.controls?.getZoom() ?? zoom());
+    setCameraX(0);
+    setCameraY(0);
+  };
+
   const updateCamera = (x: number, y: number) => {
     setCameraX(x);
     setCameraY(y);
@@ -184,10 +200,6 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                 <p class="tensor-debug-panel__placeholder">CityMap debug toggles will be connected in the next slice.</p>
               </>
             }>
-              <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={handleGenerate}>
-                Generate
-              </button>
-
               <label class="tensor-debug-panel__field">
                 <span>Map Shape</span>
                 <select value={mapShape()} onChange={(e) => updateMapShape(e.currentTarget.value as MapShape)}>
@@ -196,6 +208,31 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                   </For>
                 </select>
               </label>
+
+              <div class="tensor-debug-panel__field">
+                <span>Map Size</span>
+                <div class="tensor-debug-panel__size-grid">
+                  <For each={props.controls?.getMapSizes() ?? []}>
+                    {(size) => (
+                      <button
+                        type="button"
+                        classList={{
+                          'tensor-debug-panel__size-button': true,
+                          'tensor-debug-panel__size-button--active': mapSize() === size,
+                        }}
+                        onClick={() => updateMapSize(size)}
+                        aria-label={`Map size ${size}`}
+                      >
+                        {mapSizeLabels[size]}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              <button class="tensor-debug-panel__button tensor-debug-panel__button--primary" type="button" onClick={handleGenerate}>
+                Generate
+              </button>
 
               <label class="tensor-debug-panel__field">
                 <span>Zoom <b>{zoom().toFixed(1)}</b></span>
@@ -208,24 +245,6 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                   onInput={(e) => updateZoom(e.currentTarget.valueAsNumber)}
                 />
               </label>
-
-              <label class="tensor-debug-panel__field">
-                <span>Colour Scheme</span>
-                <select value={colourScheme()} onChange={(e) => updateColourScheme(e.currentTarget.value)}>
-                  <For each={props.controls?.getColourSchemes() ?? []}>
-                    {(scheme) => <option value={scheme}>{scheme}</option>}
-                  </For>
-                </select>
-              </label>
-
-              <div class="tensor-debug-panel__toggle-grid">
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': zoomBuildings() }} onClick={() => toggle(zoomBuildings(), setZoomBuildings, (value) => props.controls?.setZoomBuildings(value))}>Zoom bldgs</button>
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': buildingModels() }} onClick={() => toggle(buildingModels(), setBuildingModels, (value) => props.controls?.setBuildingModels(value))}>3D bldgs</button>
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': showFrame() }} onClick={() => toggle(showFrame(), setShowFrame, (value) => props.controls?.setShowFrame(value))}>Show frame</button>
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': orthographic() }} onClick={() => toggle(orthographic(), setOrthographic, (value) => props.controls?.setOrthographic(value))}>Ortho</button>
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': drawCentre() }} onClick={() => toggle(drawCentre(), setDrawCentre, (value) => props.controls?.setDrawCentre(value))}>Centres</button>
-                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': highDPI() }} onClick={() => toggle(highDPI(), setHighDPI, (value) => props.controls?.setHighDPI(value))}>High DPI</button>
-              </div>
 
               <label class="tensor-debug-panel__field">
                 <span>Camera X <b>{cameraX()}</b></span>
@@ -250,6 +269,24 @@ export const TensorDebugPanel = (props: TensorDebugPanelProps) => {
                   onInput={(e) => updateCamera(cameraX(), e.currentTarget.valueAsNumber)}
                 />
               </label>
+
+              <label class="tensor-debug-panel__field">
+                <span>Colour Scheme</span>
+                <select value={colourScheme()} onChange={(e) => updateColourScheme(e.currentTarget.value)}>
+                  <For each={props.controls?.getColourSchemes() ?? []}>
+                    {(scheme) => <option value={scheme}>{scheme}</option>}
+                  </For>
+                </select>
+              </label>
+
+              <div class="tensor-debug-panel__toggle-grid">
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': zoomBuildings() }} onClick={() => toggle(zoomBuildings(), setZoomBuildings, (value) => props.controls?.setZoomBuildings(value))}>Zoom bldgs</button>
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': buildingModels() }} onClick={() => toggle(buildingModels(), setBuildingModels, (value) => props.controls?.setBuildingModels(value))}>3D bldgs</button>
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': showFrame() }} onClick={() => toggle(showFrame(), setShowFrame, (value) => props.controls?.setShowFrame(value))}>Show frame</button>
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': orthographic() }} onClick={() => toggle(orthographic(), setOrthographic, (value) => props.controls?.setOrthographic(value))}>Ortho</button>
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': drawCentre() }} onClick={() => toggle(drawCentre(), setDrawCentre, (value) => props.controls?.setDrawCentre(value))}>Centres</button>
+                <button type="button" classList={{ 'tensor-debug-panel__toggle': true, 'tensor-debug-panel__toggle--on': highDPI() }} onClick={() => toggle(highDPI(), setHighDPI, (value) => props.controls?.setHighDPI(value))}>High DPI</button>
+              </div>
 
               <button class="tensor-debug-panel__button" type="button" onClick={() => props.controls?.downloadPng()}>
                 Download PNG

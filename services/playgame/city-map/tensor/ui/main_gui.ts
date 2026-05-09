@@ -280,6 +280,13 @@ export default class MainGUI {
         this.coastline.setMapShape(mapShape);
     }
 
+    refreshWorldDimensions(): void {
+        this.coastline.refreshWorldDimensions();
+        this.mainRoads.refreshWorldDimensions();
+        this.majorRoads.refreshWorldDimensions();
+        this.minorRoads.refreshWorldDimensions();
+    }
+
     private async generateIslandRoads(anim: boolean, profiler: GenerationProfiler): Promise<void> {
         profiler.time('island water', () => this.coastline.generateRoads());
 

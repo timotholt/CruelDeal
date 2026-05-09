@@ -11,11 +11,19 @@ import colourSchemes from './colour_schemes.json';
 import Vector from './vector';
 import Util from './util';
 import { MAP_SHAPES, type MapShape } from './types';
-import { VIEWPORT_DIMENSIONS, WORLD_ORIGIN, WORLD_DIMENSIONS } from './world';
+import {
+    MAP_SIZES,
+    setWorldDimensions,
+    VIEWPORT_DIMENSIONS,
+    WORLD_ORIGIN,
+    WORLD_DIMENSIONS,
+    type TensorMapSize,
+} from './world';
 
 export interface TensorBootOptions {
     seed?: string;
     mapShape?: MapShape;
+    mapSize?: TensorMapSize;
 }
 
 export interface TensorBoot {
@@ -37,6 +45,9 @@ export interface TensorBoot {
     setMapShape: (shape: MapShape) => void;
     getMapShape: () => MapShape;
     getMapShapes: () => MapShape[];
+    setMapSize: (size: TensorMapSize) => void;
+    getMapSize: () => TensorMapSize;
+    getMapSizes: () => TensorMapSize[];
 }
 
 /**
@@ -46,6 +57,7 @@ export interface TensorBoot {
 export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options: TensorBootOptions = {}): TensorBoot {
     // 0. Seed RNG for deterministic generation
     setTensorSeed(options.seed ?? 'tensor-default');
+    setWorldDimensions(options.mapSize ?? 'large');
 
     // 1. Context — lock to fixed virtual resolution (device-independent)
     setTensorContainer(container);
@@ -129,12 +141,19 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
     // 9. MainGUI
     const mainGui = new MainGUI(mapFolder, tensorFieldGui, closeTensorFolder);
     const shapeState = { mapShape: (options.mapShape ?? 'peninsula') as MapShape };
+    const sizeState = { mapSize: (options.mapSize ?? 'large') as TensorMapSize };
     mainGui.setMapShape(shapeState.mapShape);
 
     // 10. Wire generate
     let generateCount = 0;
     const mapShapeController = mapFolder.add(shapeState, 'mapShape', MAP_SHAPES)
         .onChange((val: MapShape) => mainGui.setMapShape(val));
+    const mapSizeController = mapFolder.add(sizeState, 'mapSize', MAP_SIZES)
+        .onChange((val: TensorMapSize) => {
+            setWorldDimensions(val);
+            mainGui.refreshWorldDimensions();
+            resetViewToWorld();
+        });
 
     // 11. Style folder
     const colourSchemeController = styleFolder.add(styleState, 'colourScheme', Object.keys(schemes))
@@ -295,6 +314,15 @@ export function boot(container: HTMLElement, canvas: HTMLCanvasElement, options:
         },
         getMapShape: () => shapeState.mapShape,
         getMapShapes: () => MAP_SHAPES.slice(),
+        setMapSize: (size: TensorMapSize) => {
+            sizeState.mapSize = size;
+            setWorldDimensions(size);
+            mainGui.refreshWorldDimensions();
+            resetViewToWorld();
+            mapSizeController.updateDisplay();
+        },
+        getMapSize: () => sizeState.mapSize,
+        getMapSizes: () => MAP_SIZES.slice(),
         cleanup: () => {
             cancelAnimationFrame(animationId);
             try { gui.domElement.remove(); } catch (_) {}

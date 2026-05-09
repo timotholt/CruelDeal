@@ -102,6 +102,7 @@ export default class RoadGUI {
 
     async generateRoads(animate = false): Promise<void> {
         this.preGenerateCallback();
+        this.refreshWorldDimensions();
 
         this.streamlines = new StreamlineGenerator(
             this.integrator, WORLD_ORIGIN,
@@ -130,6 +131,10 @@ export default class RoadGUI {
         folder.add(params, 'joinangle');
         folder.add(params, 'simplifyTolerance');
         folder.add(params, 'collideEarly');
+    }
+
+    refreshWorldDimensions(): void {
+        this.setPathIterations();
     }
 
     private setPathIterations(): void {

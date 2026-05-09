@@ -408,7 +408,8 @@
 .tensor-debug-panel__header button,
 .tensor-debug-panel__tab,
 .tensor-debug-panel__button,
-.tensor-debug-panel__toggle {
+.tensor-debug-panel__toggle,
+.tensor-debug-panel__size-button {
   border: 1px solid rgba(93, 255, 230, 0.28);
   background: rgba(93, 255, 230, 0.08);
   color: rgba(226, 252, 255, 0.94);
@@ -490,8 +491,15 @@
   gap: 4px;
 }
 
+.tensor-debug-panel__size-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
 .tensor-debug-panel__button,
-.tensor-debug-panel__toggle {
+.tensor-debug-panel__toggle,
+.tensor-debug-panel__size-button {
   min-height: 18px;
   padding: 1px 4px;
   font-size: 5.5px;
@@ -502,7 +510,8 @@
 }
 
 .tensor-debug-panel__button--primary,
-.tensor-debug-panel__toggle--on {
+.tensor-debug-panel__toggle--on,
+.tensor-debug-panel__size-button--active {
   border-color: rgba(255, 208, 93, 0.68);
   background: rgba(255, 208, 93, 0.18);
   color: rgba(255, 238, 178, 0.98);
