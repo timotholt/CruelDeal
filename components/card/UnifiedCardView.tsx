@@ -23,6 +23,7 @@ const SCALE_MAP = {
 };
 
 export const UnifiedCardView = (props: UnifiedCardViewProps) => {
+    let cardRef: HTMLDivElement | undefined;
     const scale = () => SCALE_MAP[props.size];
     
     // Derived state should be reactive to props.card changes
@@ -62,6 +63,7 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
             </div>
         }>
             <div
+                ref={(el) => cardRef = el}
                 onPointerDown={(e) => props.onPointerDown?.(e)}
                 onClick={() => props.onClick?.()}
                 class={`
@@ -96,8 +98,8 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
 
                 {/* 3. Badges */}
                 <Show when={visual()}>
-                    <CardBadge value={() => visual()?.currentCost || 0} type="cost" colorClass={() => visual()?.costColor || 'text-white'} />
-                    <CardBadge value={() => visual()?.currentPower || 0} type="power" colorClass={() => visual()?.powerColor || 'text-white'} />
+                    <CardBadge anchor={() => cardRef} value={() => visual()?.currentCost || 0} type="cost" colorClass={() => visual()?.costColor || 'text-white'} />
+                    <CardBadge anchor={() => cardRef} value={() => visual()?.currentPower || 0} type="power" colorClass={() => visual()?.powerColor || 'text-white'} />
                 </Show>
 
                 {/* 4. Nameplate Overlay */}

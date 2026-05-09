@@ -91,3 +91,127 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   100% { transform: scale(1); filter: brightness(1); text-shadow: 0 0 10px rgba(99,102,241,0.3); } 
 }
 .animate-completion-flare { animation: completion-flare 3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Tactical card badge system. Ported from the card-frame prototype's HexBadge. */
+.hex-badge {
+  --hex-badge-border: linear-gradient(135deg, #ff0000, #101010);
+  --hex-badge-fill: radial-gradient(circle, #800000 0%, #050505 70%);
+  --hex-badge-delay: 0s;
+  --hex-badge-size: 80px;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--hex-badge-size);
+  height: var(--hex-badge-size);
+  color: #fff;
+  font-family: "IBM Plex Sans Condensed", "Arial Black", Impact, sans-serif;
+  pointer-events: none;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.hex-badge,
+.hex-badge * {
+  box-sizing: border-box;
+}
+
+.hex-badge--narrow {
+  --hex-badge-clip: polygon(30% 5%, 70% 5%, 95% 30%, 95% 70%, 70% 95%, 30% 95%, 5% 70%, 5% 30%);
+}
+
+.hex-badge--wide {
+  --hex-badge-clip: polygon(24% 5%, 76% 5%, 98% 50%, 76% 95%, 24% 95%, 2% 50%);
+}
+
+.hex-badge__base,
+.hex-badge__shape {
+  position: absolute;
+  clip-path: var(--hex-badge-clip);
+}
+
+.hex-badge__base {
+  inset: 0;
+  z-index: 0;
+  background: var(--hex-badge-border);
+  background-size: 220% 220%;
+  animation: hex-badge-gradient 6.4s ease-in-out infinite;
+  animation-delay: var(--hex-badge-delay);
+}
+
+.hex-badge__shape {
+  inset: 6%;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--hex-badge-fill);
+  background-size: 180% 180%;
+  animation: hex-badge-gradient 5.2s ease-in-out infinite;
+  animation-delay: var(--hex-badge-delay);
+}
+
+.hex-badge__shape::after {
+  content: "";
+  position: absolute;
+  inset: 8% 10% 18%;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.26), transparent 42%),
+    radial-gradient(circle at 38% 34%, rgba(255,255,255,0.14), transparent 48%);
+  clip-path: var(--hex-badge-clip);
+  animation: hex-badge-breathe 4.4s ease-in-out infinite;
+  animation-delay: var(--hex-badge-delay);
+}
+
+.hex-badge__value {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 72%;
+  height: 72%;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  text-shadow: 0 0.07em 0.05em rgba(0,0,0,0.9), 0 0 0.18em rgba(255,255,255,0.36);
+  transform: translateY(2%);
+}
+
+.hex-badge__label {
+  position: absolute;
+  left: 50%;
+  top: 72%;
+  z-index: 3;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: calc(var(--hex-badge-size) * 0.12);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 0.08em 0.12em rgba(0,0,0,0.9);
+}
+
+@keyframes hex-badge-gradient {
+  0%, 100% {
+    background-position: 0% 18%;
+    filter: brightness(0.96);
+  }
+  45% {
+    background-position: 100% 82%;
+    filter: brightness(1.18);
+  }
+  68% {
+    background-position: 54% 36%;
+    filter: brightness(1.04);
+  }
+}
+
+@keyframes hex-badge-breathe {
+  0%, 100% {
+    opacity: 0.64;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.92;
+    transform: scale(1.025);
+  }
+}
