@@ -98,16 +98,19 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   --hex-badge-fill: radial-gradient(circle, #800000 0%, #050505 70%);
   --hex-badge-delay: 0s;
   --hex-badge-size: 80px;
-  position: relative;
-  display: inline-grid;
-  place-items: center;
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--hex-badge-size);
   height: var(--hex-badge-size);
   color: #fff;
-  font-family: "IBM Plex Sans Condensed", "Arial Black", Impact, sans-serif;
+  font-family: "Inter", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   pointer-events: none;
   overflow: visible;
   isolation: isolate;
+  z-index: 50;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .hex-badge,
@@ -116,64 +119,74 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 }
 
 .hex-badge--narrow {
-  --hex-badge-clip: polygon(30% 5%, 70% 5%, 95% 30%, 95% 70%, 70% 95%, 30% 95%, 5% 70%, 5% 30%);
+  --hex-badge-usable-width: calc(var(--hex-badge-size) * 0.81);
+  --hex-badge-clip: polygon(50% 0%, 92% 15%, 92% 85%, 50% 100%, 8% 85%, 8% 15%);
 }
 
 .hex-badge--wide {
-  --hex-badge-clip: polygon(24% 5%, 76% 5%, 98% 50%, 76% 95%, 24% 95%, 2% 50%);
+  --hex-badge-usable-width: calc(var(--hex-badge-size) * 0.78);
+  --hex-badge-clip: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
 }
 
 .hex-badge__base,
 .hex-badge__shape {
   position: absolute;
+  inset: 0;
   clip-path: var(--hex-badge-clip);
+  border-radius: 0.6rem;
 }
 
 .hex-badge__base {
-  inset: 0;
   z-index: 0;
-  background: var(--hex-badge-border);
-  background-size: 220% 220%;
-  animation: hex-badge-gradient 6.4s ease-in-out infinite;
-  animation-delay: var(--hex-badge-delay);
+  background: rgba(4,4,6,0.95);
 }
 
 .hex-badge__shape {
-  inset: 6%;
   z-index: 1;
   overflow: hidden;
+  background: var(--hex-badge-border);
+}
+
+.hex-badge__shape::before {
+  content: "";
+  position: absolute;
+  inset: 0.32rem;
+  clip-path: inherit;
+  border-radius: inherit;
   background: var(--hex-badge-fill);
-  background-size: 180% 180%;
-  animation: hex-badge-gradient 5.2s ease-in-out infinite;
+  background-size: 220% 220%;
+  animation: hexBadgeFlow 10s ease-in-out infinite;
   animation-delay: var(--hex-badge-delay);
 }
 
 .hex-badge__shape::after {
   content: "";
   position: absolute;
-  inset: 8% 10% 18%;
+  inset: 0.45rem;
+  clip-path: inherit;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.26), transparent 42%),
-    radial-gradient(circle at 38% 34%, rgba(255,255,255,0.14), transparent 48%);
-  clip-path: var(--hex-badge-clip);
-  animation: hex-badge-breathe 4.4s ease-in-out infinite;
-  animation-delay: var(--hex-badge-delay);
+    linear-gradient(165deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.08) 40%, transparent 70%),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 40%);
+  opacity: 0.6;
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 .hex-badge__value {
   position: relative;
   z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 72%;
-  height: 72%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hex-badge-usable-width, calc(var(--hex-badge-size) * 0.7));
   font-weight: 900;
   font-style: italic;
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
   text-align: center;
-  text-shadow: 0 0.07em 0.05em rgba(0,0,0,0.9), 0 0 0.18em rgba(255,255,255,0.36);
-  transform: translateY(2%);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0.25rem 0.625rem rgba(0, 0, 0, 0.55);
+  -webkit-text-stroke: 1px rgba(255,255,255,0.17);
 }
 
 .hex-badge__label {
@@ -190,28 +203,8 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   text-shadow: 0 0.08em 0.12em rgba(0,0,0,0.9);
 }
 
-@keyframes hex-badge-gradient {
-  0%, 100% {
-    background-position: 0% 18%;
-    filter: brightness(0.96);
-  }
-  45% {
-    background-position: 100% 82%;
-    filter: brightness(1.18);
-  }
-  68% {
-    background-position: 54% 36%;
-    filter: brightness(1.04);
-  }
-}
-
-@keyframes hex-badge-breathe {
-  0%, 100% {
-    opacity: 0.64;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.92;
-    transform: scale(1.025);
-  }
+@keyframes hexBadgeFlow {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
 }
