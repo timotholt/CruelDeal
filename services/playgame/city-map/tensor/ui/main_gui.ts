@@ -244,24 +244,30 @@ export default class MainGUI {
     async generateEverything(animate?: boolean): Promise<void> {
         const anim = animate ?? this.animate;
         const profiler = new GenerationProfiler(`${this.mapShape}${anim ? ' animated' : ' instant'}`);
-        if (this.mapShape === 'island-jagged' || this.mapShape === 'island-smooth') {
-            try {
-                await this.generateIslandByClipping(anim, profiler);
-            } finally {
-                profiler.finish();
-            }
-            return;
-        }
 
         try {
             this.bridges = [];
-            this.buildings.setPreciseWaterCheck(false);
-            profiler.time('coastline', () => this.coastline.generateRoads());
-            await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
-            await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
-            await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
+
+            if (this.usesIslandClip()) {
+                this.buildings.setPreciseWaterCheck(true);
+                await this.generateIslandRoads(anim, profiler);
+            } else {
+                this.buildings.setPreciseWaterCheck(false);
+                profiler.time('coastline', () => this.coastline.generateRoads());
+                await profiler.timeAsync('main roads', () => this.mainRoads.generateRoads());
+                await profiler.timeAsync('major roads', () => this.majorRoads.generateRoads(anim));
+                await profiler.timeAsync('minor roads', () => this.minorRoads.generateRoads(anim));
+            }
+
             profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
             profiler.time('trim stubs', () => this.trimRiverStubs(this.coastline.riverPolygonWorld));
+
+            if (this.usesIslandClip()) {
+                this.bigParks = [];
+                this.smallParks = [];
+                profiler.time('parks', () => this.addParks(), () => this.lastParkPolygonDetail);
+            }
+
             this.redraw = true;
             await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
         } finally {
@@ -274,7 +280,7 @@ export default class MainGUI {
         this.coastline.setMapShape(mapShape);
     }
 
-    private async generateIslandByClipping(anim: boolean, profiler: GenerationProfiler): Promise<void> {
+    private async generateIslandRoads(anim: boolean, profiler: GenerationProfiler): Promise<void> {
         profiler.time('island water', () => this.coastline.generateRoads());
 
         const landPolygon = this.coastline.landPolygonWorld;
@@ -296,14 +302,6 @@ export default class MainGUI {
 
         this.tensorField.landPolygon = landPolygon;
         this.tensorField.river = riverPolygon;
-        profiler.time('bridges', () => this.applyBridgeLayer(), () => this.lastBridgeDetail);
-        profiler.time('trim stubs', () => this.trimRiverStubs(riverPolygon));
-        this.buildings.setPreciseWaterCheck(true);
-        this.bigParks = [];
-        this.smallParks = [];
-        profiler.time('parks', () => this.addParks(), () => this.lastParkPolygonDetail);
-        this.redraw = true;
-        await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
     }
 
     private clipRoadSetToLand(roads: Vector[][], landPolygon: Vector[]): Vector[][] {
