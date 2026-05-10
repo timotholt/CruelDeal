@@ -20,6 +20,7 @@ import type { MapShape } from '../types';
 import GenerationProfiler from './generation_profiler';
 import BridgeGenerator from '../impl/bridge_generator';
 import type { BridgeRoadClass, BridgeSegment } from '../impl/bridges';
+import { parcelizeBuildableLand, type BuildableParcelizerStats } from '../impl/buildable_parcelizer';
 
 /**
  * Handles Map folder, glues together impl
@@ -37,6 +38,7 @@ export default class MainGUI {
     private animationSpeed: number = 30;
     private lastParkPolygonDetail = '';
     private lastBridgeDetail = '';
+    private lastParcelizerStats: BuildableParcelizerStats | null = null;
 
     private coastline: WaterGUI;
     private mainRoads: RoadGUI;
@@ -269,7 +271,25 @@ export default class MainGUI {
             }
 
             this.redraw = true;
-            await profiler.timeAsync('buildings', () => this.buildings.generate(anim), () => this.formatPolygonStats(this.buildings.lastPolygonStats));
+            if (this.usesIslandClip()) {
+                const parcels = profiler.time(
+                    'parcelize buildable land',
+                    () => this.parcelizeIslandBuildableLand(),
+                    () => this.formatParcelizerStats(this.lastParcelizerStats)
+                );
+                const useParcelizedBuildings = this.shouldUseParcelizedBuildings(parcels);
+                await profiler.timeAsync(
+                    useParcelizedBuildings ? 'buildings' : 'buildings fallback',
+                    () => useParcelizedBuildings ? this.buildings.generateFromParcels(parcels, anim) : this.buildings.generate(anim),
+                    () => this.formatPolygonStats(this.buildings.lastPolygonStats)
+                );
+            } else {
+                await profiler.timeAsync(
+                    'buildings',
+                    () => this.buildings.generate(anim),
+                    () => this.formatPolygonStats(this.buildings.lastPolygonStats)
+                );
+            }
         } finally {
             profiler.finish();
         }
@@ -309,6 +329,20 @@ export default class MainGUI {
 
         this.tensorField.landPolygon = landPolygon;
         this.tensorField.river = riverPolygon;
+    }
+
+    private shouldUseParcelizedBuildings(parcels: Vector[][]): boolean {
+        if (parcels.length < 20) {
+            return false;
+        }
+
+        const landArea = PolygonUtil.calcPolygonArea(this.coastline.landPolygonWorld);
+        if (landArea <= 0) {
+            return false;
+        }
+
+        const maxParcelArea = landArea * 0.2;
+        return parcels.every(parcel => PolygonUtil.calcPolygonArea(parcel) <= maxParcelArea);
     }
 
     private clipRoadSetToLand(roads: Vector[][], landPolygon: Vector[]): Vector[][] {
@@ -417,6 +451,35 @@ export default class MainGUI {
         this.lastBridgeDetail = `${result.bridges.length}/${result.candidates} bridges accepted`;
     }
 
+    private parcelizeIslandBuildableLand(): Vector[][] {
+        const landPolygon = this.coastline.landPolygonWorld;
+        if (landPolygon.length < 3) return [];
+
+        const riverPolygon = this.coastline.riverPolygonWorld;
+        const blockedPolygons = [
+            ...this.bigParks.map(park => park.map(point => point.clone())),
+            ...this.smallParks.map(park => park.map(point => point.clone())),
+        ];
+        const result = parcelizeBuildableLand({
+            landPolygons: [landPolygon],
+            riverPolygons: riverPolygon.length >= 3 ? [riverPolygon] : [],
+            blockedPolygons,
+            roadPolylines: [
+                ...this.mainRoads.allStreamlines,
+                ...this.majorRoads.allStreamlines,
+                ...this.minorRoads.allStreamlines,
+                ...this.coastline.streamlinesWithSecondaryRoad,
+            ],
+            bridgePolylines: this.bridges.map(bridge => [bridge.start, bridge.end]),
+            roadBuffer: 3,
+            bridgeBuffer: 4,
+            minParcelArea: this.minorParams.dsep,
+            minParcelWidth: this.minorParams.dsep * 0.45,
+        });
+        this.lastParcelizerStats = result.stats;
+        return result.parcels;
+    }
+
     private filterRoads(roads: Vector[][], roadClass: BridgeRoadClass): Vector[][] {
         const minLength = roadClass === 'minor' ? this.minorParams.dstep * 4 : this.minorParams.dstep * 8;
         return roads.filter(road => this.streamlineLength(road) >= minLength);
@@ -429,6 +492,11 @@ export default class MainGUI {
     private formatPolygonStats(stats: { candidates: number; accepted: number; filterMs: number; preciseWaterChecks: number } | null): string {
         if (!stats) return '';
         return `${stats.accepted}/${stats.candidates} accepted, ${stats.preciseWaterChecks} precise checks, filter ${stats.filterMs.toFixed(1)}ms`;
+    }
+
+    private formatParcelizerStats(stats: BuildableParcelizerStats | null): string {
+        if (!stats) return '';
+        return `${stats.acceptedFaceCount}/${stats.rawFaceCount} parcels accepted, ${stats.roadMaskCount} road edges, ${stats.rejectedBlocked} blocked, ${stats.rejectedTiny} tiny, ${stats.rejectedSliver} sliver`;
     }
 
     private streamlineLength(streamline: Vector[]): number {

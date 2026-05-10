@@ -152,6 +152,19 @@ export default class Buildings {
         this.postGenerateCallback();
     }
 
+    async generateFromParcels(parcels: Vector[][], animate: boolean): Promise<void> {
+        this.preGenerateCallback();
+        this._models = new BuildingModels([]);
+        this.polygonFinder = new PolygonFinder([], this.buildingParams, this.tensorField);
+        this.polygonFinder.setPolygons(parcels);
+        this.lastPolygonStats = this.polygonFinder.lastStats;
+        await this.polygonFinder.shrink(animate);
+        await this.polygonFinder.divide(animate);
+        this.redraw();
+        this._models = new BuildingModels(this.polygonFinder.polygons);
+        this.postGenerateCallback();
+    }
+
     setPreGenerateCallback(callback: () => void): void {
         this.preGenerateCallback = callback;
     }

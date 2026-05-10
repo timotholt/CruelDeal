@@ -85,7 +85,7 @@ export default class PolygonUtil {
     /**
      * Recursively divide a polygon by its longest side until the minArea stopping condition is met
      */
-    public static subdividePolygon(p: Vector[], minArea: number): Vector[][] {
+    public static subdividePolygon(p: Vector[], minArea: number, depth = 0): Vector[][] {
         const area = PolygonUtil.calcPolygonArea(p);
         if (area < 0.5 * minArea) {
             return [];
@@ -106,29 +106,48 @@ export default class PolygonUtil {
             }
         }
 
-        if (area / (perimeter * perimeter) < 0.04) {
+        const box = PolygonUtil.boundingBox(p);
+        const minDimension = Math.min(box.maxX - box.minX, box.maxY - box.minY);
+        const maxDimension = Math.max(box.maxX - box.minX, box.maxY - box.minY);
+        if (minDimension < Math.sqrt(minArea)) {
             return [];
         }
 
-        if (area < 2 * minArea) {
+        const aspectRatio = maxDimension / Math.max(minDimension, 0.000001);
+        const targetArea = aspectRatio > 4
+            ? Math.max(minArea, Math.min(700, minDimension * 18))
+            : minArea;
+
+        if (area < 2 * targetArea || depth >= 32) {
             return [p];
         }
 
         // Between 0.4 and 0.6
         const deviation = (tensorRandom() * 0.2) + 0.4;
 
-        const averagePoint = longestSide[0].clone().add(longestSide[1]).multiplyScalar(deviation);
+        const averagePoint = longestSide[0].clone().add(longestSide[1].clone().sub(longestSide[0]).multiplyScalar(deviation));
         const differenceVector = longestSide[0].clone().sub(longestSide[1]);
+        const diagonal = Math.hypot(box.maxX - box.minX, box.maxY - box.minY);
         const perpVector = (new Vector(differenceVector.y, -1 * differenceVector.x))
             .normalize()
-            .multiplyScalar(100);
+            .multiplyScalar(Math.max(longestSideLength * 2, diagonal * 2, 1));
 
         const bisect = [averagePoint.clone().add(perpVector), averagePoint.clone().sub(perpVector)];
 
         try {
             const sliced = PolyKSlice(PolygonUtil.polygonToPolygonArray(p), bisect[0].x, bisect[0].y, bisect[1].x, bisect[1].y);
+            if (sliced.length < 2) {
+                return [p];
+            }
+
             for (const s of sliced) {
-                divided.push(...PolygonUtil.subdividePolygon(PolygonUtil.polygonArrayToPolygon(s), minArea));
+                const polygon = PolygonUtil.polygonArrayToPolygon(s);
+                const childArea = PolygonUtil.calcPolygonArea(polygon);
+                if (childArea >= area * 0.995) {
+                    return [p];
+                }
+
+                divided.push(...PolygonUtil.subdividePolygon(polygon, targetArea, depth + 1));
             }
 
             return divided;

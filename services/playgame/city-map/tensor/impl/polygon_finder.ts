@@ -51,6 +51,20 @@ export default class PolygonFinder {
         this._dividedPolygons = [];
     }
 
+    setPolygons(polygons: Vector[][]): void {
+        this.toShrink = [];
+        this.toDivide = [];
+        this._polygons = polygons.map(polygon => polygon.map(point => point.clone()));
+        this._shrunkPolygons = [];
+        this._dividedPolygons = [];
+        this.lastStats = {
+            candidates: polygons.length,
+            accepted: polygons.length,
+            filterMs: 0,
+            preciseWaterChecks: 0,
+        };
+    }
+
     update(): boolean {
         let change = false;
         if (this.toShrink.length > 0) {
