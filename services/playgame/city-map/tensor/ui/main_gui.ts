@@ -21,6 +21,7 @@ import GenerationProfiler from './generation_profiler';
 import BridgeGenerator from '../impl/bridge_generator';
 import type { BridgeRoadClass, BridgeSegment } from '../impl/bridges';
 import { parcelizeBuildableLand, type BuildableParcelizerStats } from '../impl/buildable_parcelizer';
+import { generateFrontageLots, type FrontageLotLayoutStats } from '../impl/frontage_lot_layout';
 
 /**
  * Handles Map folder, glues together impl
@@ -39,6 +40,7 @@ export default class MainGUI {
     private lastParkPolygonDetail = '';
     private lastBridgeDetail = '';
     private lastParcelizerStats: BuildableParcelizerStats | null = null;
+    private lastFrontageLotStats: FrontageLotLayoutStats | null = null;
 
     private coastline: WaterGUI;
     private mainRoads: RoadGUI;
@@ -272,15 +274,27 @@ export default class MainGUI {
 
             this.redraw = true;
             if (this.usesIslandClip()) {
-                const parcels = profiler.time(
+                const parcelResult = profiler.time(
                     'parcelize buildable land',
                     () => this.parcelizeIslandBuildableLand(),
                     () => this.formatParcelizerStats(this.lastParcelizerStats)
                 );
-                const useParcelizedBuildings = this.shouldUseParcelizedBuildings(parcels);
+                const frontageLots = profiler.time(
+                    'frontage lots',
+                    () => this.generateFrontageLots(parcelResult.buildableParcels),
+                    () => this.formatFrontageLotStats(this.lastFrontageLotStats)
+                );
+                const useParcelizedBuildings = this.shouldUseParcelizedBuildings(parcelResult.parcels)
+                    && frontageLots.length > 0;
                 await profiler.timeAsync(
                     useParcelizedBuildings ? 'buildings' : 'buildings fallback',
-                    () => useParcelizedBuildings ? this.buildings.generateFromParcels(parcels, anim) : this.buildings.generate(anim),
+                    () => {
+                        if (useParcelizedBuildings) {
+                            this.buildings.generateFromLots(frontageLots);
+                            return Promise.resolve();
+                        }
+                        return this.buildings.generate(anim);
+                    },
                     () => this.formatPolygonStats(this.buildings.lastPolygonStats)
                 );
             } else {
@@ -451,9 +465,24 @@ export default class MainGUI {
         this.lastBridgeDetail = `${result.bridges.length}/${result.candidates} bridges accepted`;
     }
 
-    private parcelizeIslandBuildableLand(): Vector[][] {
+    private parcelizeIslandBuildableLand(): ReturnType<typeof parcelizeBuildableLand> {
         const landPolygon = this.coastline.landPolygonWorld;
-        if (landPolygon.length < 3) return [];
+        if (landPolygon.length < 3) {
+            const result = parcelizeBuildableLand({
+                landPolygons: [],
+                riverPolygons: [],
+                blockedPolygons: [],
+                roadPolylines: [],
+                classifiedRoadPolylines: [],
+                bridgePolylines: [],
+                roadBuffer: 3,
+                bridgeBuffer: 4,
+                minParcelArea: this.minorParams.dsep,
+                minParcelWidth: this.minorParams.dsep * 0.45,
+            });
+            this.lastParcelizerStats = result.stats;
+            return result;
+        }
 
         const riverPolygon = this.coastline.riverPolygonWorld;
         const blockedPolygons = [
@@ -464,11 +493,28 @@ export default class MainGUI {
             landPolygons: [landPolygon],
             riverPolygons: riverPolygon.length >= 3 ? [riverPolygon] : [],
             blockedPolygons,
-            roadPolylines: [
-                ...this.mainRoads.allStreamlines,
-                ...this.majorRoads.allStreamlines,
-                ...this.minorRoads.allStreamlines,
-                ...this.coastline.streamlinesWithSecondaryRoad,
+            roadPolylines: [],
+            classifiedRoadPolylines: [
+                ...this.mainRoads.allStreamlines.map((points, index) => ({
+                    id: `main-${index}`,
+                    roadClass: 'main' as const,
+                    points,
+                })),
+                ...this.coastline.streamlinesWithSecondaryRoad.map((points, index) => ({
+                    id: `coast-${index}`,
+                    roadClass: 'coast' as const,
+                    points,
+                })),
+                ...this.majorRoads.allStreamlines.map((points, index) => ({
+                    id: `major-${index}`,
+                    roadClass: 'major' as const,
+                    points,
+                })),
+                ...this.minorRoads.allStreamlines.map((points, index) => ({
+                    id: `minor-${index}`,
+                    roadClass: 'minor' as const,
+                    points,
+                })),
             ],
             bridgePolylines: this.bridges.map(bridge => [bridge.start, bridge.end]),
             roadBuffer: 3,
@@ -477,7 +523,17 @@ export default class MainGUI {
             minParcelWidth: this.minorParams.dsep * 0.45,
         });
         this.lastParcelizerStats = result.stats;
-        return result.parcels;
+        return result;
+    }
+
+    private generateFrontageLots(parcels: ReturnType<typeof parcelizeBuildableLand>['buildableParcels']): Vector[][] {
+        const result = generateFrontageLots({
+            parcels,
+            defaultMinArea: this.minorParams.dsep,
+            defaultShrinkSpacing: 4,
+        });
+        this.lastFrontageLotStats = result.stats;
+        return result.lots;
     }
 
     private filterRoads(roads: Vector[][], roadClass: BridgeRoadClass): Vector[][] {
@@ -496,7 +552,12 @@ export default class MainGUI {
 
     private formatParcelizerStats(stats: BuildableParcelizerStats | null): string {
         if (!stats) return '';
-        return `${stats.acceptedFaceCount}/${stats.rawFaceCount} parcels accepted, ${stats.roadMaskCount} road edges, ${stats.rejectedBlocked} blocked, ${stats.rejectedTiny} tiny, ${stats.rejectedSliver} sliver`;
+        return `${stats.acceptedFaceCount}/${stats.rawFaceCount} parcels accepted, ${stats.roadMaskCount} road edges, ${stats.mainFrontageCount} main, ${stats.waterfrontFrontageCount} water, ${stats.majorFrontageCount} major, ${stats.minorFrontageCount} minor`;
+    }
+
+    private formatFrontageLotStats(stats: FrontageLotLayoutStats | null): string {
+        if (!stats) return '';
+        return `${stats.lotCount}/${stats.parcelCount} lots, ${stats.usedFrontageCount} frontage, ${stats.fallbackCount} fallback, ${stats.rejectedSliverCount} slivers`;
     }
 
     private streamlineLength(streamline: Vector[]): number {

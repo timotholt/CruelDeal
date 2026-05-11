@@ -165,6 +165,17 @@ export default class Buildings {
         this.postGenerateCallback();
     }
 
+    generateFromLots(lots: Vector[][]): void {
+        this.preGenerateCallback();
+        this._models = new BuildingModels([]);
+        this.polygonFinder = new PolygonFinder([], this.buildingParams, this.tensorField);
+        this.polygonFinder.setPolygons(lots);
+        this.lastPolygonStats = this.polygonFinder.lastStats;
+        this.redraw();
+        this._models = new BuildingModels(this.polygonFinder.polygons);
+        this.postGenerateCallback();
+    }
+
     setPreGenerateCallback(callback: () => void): void {
         this.preGenerateCallback = callback;
     }
