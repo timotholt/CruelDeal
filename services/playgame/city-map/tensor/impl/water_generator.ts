@@ -81,6 +81,9 @@ export default class WaterGenerator extends StreamlineGenerator {
 
         this.tensorField.disableGlobalNoise();
 
+        // The coast starts life as a tensor-field streamline. Once we have a
+        // line that exits two world edges, we can split the world rectangle
+        // into sea and land by polygonizing that line against the bounds.
         this._coastline = coastStreamline;
         this.coastlineMajor = major;
 
@@ -132,6 +135,10 @@ export default class WaterGenerator extends StreamlineGenerator {
     }
 
     private createIslandRiver(maxTries: number): void {
+        // Island rivers are still tensor-field streamlines, but the search is
+        // performed against the full world first. The land polygon is restored
+        // after choosing a candidate so the final corridor can be clipped back
+        // to the island.
         const oldLandPolygon = this.tensorField.landPolygon;
         this.tensorField.landPolygon = [];
 
@@ -183,6 +190,9 @@ export default class WaterGenerator extends StreamlineGenerator {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let riverStreamline: Vector[] = [];
 
+        // Peninsula rivers are generated after the coast exists. Temporarily
+        // ignoring sea lets the tensor streamline search find a world-scale
+        // river instead of immediately failing when a candidate crosses water.
         const oldSea = this.tensorField.sea;
         this.tensorField.sea = [];
 
@@ -209,6 +219,10 @@ export default class WaterGenerator extends StreamlineGenerator {
     }
 
     private createRiverCorridor(riverStreamline: Vector[], clipRoadsToIsland: boolean): void {
+        // A river has three generated pieces:
+        // 1. the accepted centerline from tensor integration,
+        // 2. a buffered water polygon, and
+        // 3. a wider buffered outline split into two riverbank road polylines.
         const expandedNoisy = this.complexifyStreamline(
             PolygonUtil.resizeGeometry(riverStreamline, this.params.riverSize, false));
         this._riverPolygon = this.simplifyStreamline(PolygonUtil.resizeGeometry(
@@ -221,10 +235,18 @@ export default class WaterGenerator extends StreamlineGenerator {
             expandedNoisy.push(expandedNoisy.shift()!);
         }
 
+        // In peninsula mode, _seaPolygon is the non-buildable side of the
+        // coast split, so riverbank roads keep the opposite side. In island
+        // mode, _seaPolygon is the whole world bounds, so the meaningful test
+        // is whether the candidate bank point is inside the island land polygon.
         const onBuildableSide = (v: Vector) => clipRoadsToIsland
             ? PolygonUtil.insidePolygon(v, this._landPolygon)
             : !PolygonUtil.insidePolygon(v, this._seaPolygon);
 
+        // Splitting the widened river outline by a rectangle-side polygon gives
+        // us the two banks. Those bank lines are then registered as streamlines,
+        // which makes the rest of the city generator treat river edges like
+        // strong road/path constraints.
         const riverSplitPoly = this.getSeaPolygon(riverStreamline);
         let road1 = expandedNoisy.filter(v =>
             onBuildableSide(v)
@@ -265,6 +287,9 @@ export default class WaterGenerator extends StreamlineGenerator {
     }
 
     private clipRiverBankToIsland(bank: Vector[]): Vector[] {
+        // Island rivers are generated as full-world corridors and then trimmed
+        // back to the island. Keeping the longest clipped bank segment avoids
+        // tiny accidental bank fragments near the island boundary.
         if (this._landPolygon.length === 0) return bank;
         const segments = PolygonUtil.clipPolylineToPolygon(bank, this._landPolygon);
         if (segments.length === 0) return [];
