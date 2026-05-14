@@ -74,7 +74,7 @@ export const HandCard = (props: HandCardProps) => {
   return (
     <div
       ref={bindCardRef(props.card.id)}
-      class={'hand-card-motion' + (props.hidden ? ' hand-card-motion--incoming' : '')}
+      class={'hand-card-motion' + (props.hidden ? ' hand-card-motion--reserved' : '')}
       data-card-id={props.card.id}
       style={{
         visibility: props.hidden ? 'hidden' : 'visible',

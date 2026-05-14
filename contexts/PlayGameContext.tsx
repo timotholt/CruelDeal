@@ -11,7 +11,7 @@
  *                      and reconciles the store) or via direct path-based
  *                      Solid setter for UI-only fields (phase).
  *   - `ui`           : Separate store for purely-visual state that has no
- *                      engine counterpart: incoming animation buffer, undo
+ *                      engine counterpart: hand reservations, undo
  *                      history snapshots, isFlipped flag.
  *   - `manifest`     : BOOTSTRAP_MANIFEST — read-only, injected into every
  *                      selector call and exposed to VFX script actions.
@@ -97,7 +97,7 @@ export interface PlayGameContextValue {
   remoteSeat: Seat;
   /** Viewer-facing metadata for both seats. */
   seatMeta: Record<Seat, { name: string }>;
-  /** UI-only sidecar state (incoming buffer, undo, flip flag). */
+  /** UI-only sidecar state (hand reservations, undo, flip flag). */
   ui: UiState;
   /** Setter for UI sidecar state. */
   setUi: SetStoreFunction<UiState>;
@@ -140,7 +140,7 @@ export const PlayGameProvider = (props: {
   );
 
   const [ui, setUi] = createStore<UiState>({
-    incoming: [],
+    handReservations: [],
     history: [],
     isFlipped: false,
     lockedResult: null,
@@ -184,10 +184,7 @@ export const PlayGameProvider = (props: {
       toHand: true,
     });
 
-    // Build a ResolvedCard from the updated engine state for the animation buffer.
-    const resolved = resolveCard(top.id as CardId, unwrap(engineState) as EngineMatchState, manifest);
-    if (resolved) setUi('incoming', (prev) => [...prev, resolved]);
-    return resolved;
+    return resolveCard(top.id as CardId, unwrap(engineState) as EngineMatchState, manifest);
   };
 
   /**
@@ -265,7 +262,7 @@ export const PlayGameProvider = (props: {
     const newSeed = `match-${Date.now().toString(36)}`;
     const fresh = createInitialEngineState(newSeed, manifest) as EngineStateStore;
     setEngineState(reconcile(fresh));
-    setUi({ incoming: [], history: [], isFlipped: false, lockedResult: null, showEndGamePrompt: false });
+    setUi({ handReservations: [], history: [], isFlipped: false, lockedResult: null, showEndGamePrompt: false });
     engineRng = createRng(newSeed);
   };
 

@@ -1,0 +1,55 @@
+import { For, createMemo } from 'solid-js';
+import type { ResolvedCard } from '@/services/playgame/view';
+import { HAND_SLOT_RESERVE_MS } from '@/services/playgame/presentation/handPresentation';
+import { HandCard } from './HandCard';
+
+interface HandRowProps {
+  cards: ResolvedCard[];
+  reservedIds: ReadonlySet<string>;
+  energy: number;
+  interactive: boolean;
+}
+
+export const HandRow = (props: HandRowProps) => {
+  const handScale = createMemo(() => {
+    const n = props.cards.length;
+    if (n <= 4) return 1;
+    if (n <= 5) return 0.9;
+    if (n <= 6) return 0.82;
+    return 0.74;
+  });
+  const cardIds = createMemo<string[]>(() => props.cards.map((card) => card.id));
+  const cardById = createMemo<Map<string, ResolvedCard>>(() => (
+    new Map(props.cards.map((card) => [card.id, card]))
+  ));
+
+  return (
+    <div
+      class="hand"
+      id="hand"
+      style={{
+        '--hand-scale': handScale().toFixed(3),
+        '--hand-slot-reserve-ms': `${HAND_SLOT_RESERVE_MS}ms`,
+      }}
+    >
+      <For each={cardIds()}>
+        {(cardId) => {
+          const initialCard = cardById().get(cardId) as ResolvedCard;
+          const card = createMemo<ResolvedCard>(
+            (previous) => cardById().get(cardId) ?? previous,
+            initialCard,
+          );
+          const reserved = createMemo(() => props.reservedIds.has(cardId));
+          return (
+            <HandCard
+              card={card()}
+              playable={card().cost <= props.energy}
+              interactive={props.interactive && !reserved()}
+              hidden={reserved()}
+            />
+          );
+        }}
+      </For>
+    </div>
+  );
+};

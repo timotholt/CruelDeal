@@ -26,7 +26,7 @@ export interface DragDropOpts {
   /** Fresh getter for the engine state (called per-event). */
   engineState: MatchState;
   isResolving: () => boolean;
-  /** Fresh getter for the visible local hand (cards not in the incoming buffer). */
+  /** Fresh getter for interactive local hand cards (reserved hidden slots excluded). */
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
   /** Returns true on success; false if the engine rejected the stage intent. */

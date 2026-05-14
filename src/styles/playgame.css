@@ -800,6 +800,7 @@
     min-height: calc(var(--hand-card-h) + 10px);
     --hand-scale: 1;
     --hand-gap: 6px;
+    --hand-slot-reserve-ms: 240ms;
     gap: var(--hand-gap);
     flex-wrap: nowrap;
     overflow: visible;
@@ -811,12 +812,12 @@
     margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
     will-change: translate, flex-basis, width, margin;
     transition:
-      flex-basis 240ms cubic-bezier(.2,0,.2,1),
-      width 240ms cubic-bezier(.2,0,.2,1),
-      margin 240ms cubic-bezier(.2,0,.2,1);
+      flex-basis var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
+      width var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
+      margin var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1);
   }
-  .hand .hand-card-motion--incoming {
-    animation: hand-slot-reserve 240ms cubic-bezier(.2,0,.2,1) both;
+  .hand .hand-card-motion--reserved {
+    animation: hand-slot-reserve var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1) both;
   }
   .hand .hand-card-motion > .card {
     transform-origin: bottom center;

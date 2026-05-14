@@ -8,12 +8,12 @@ import { Timeline } from '@/services/vfx/timeline';
 import { unwrap } from 'solid-js/store';
 import { batch } from 'solid-js';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
+import { HAND_SLOT_RESERVE_MS } from './handPresentation';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardId } from '../engine/types/ids';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-const HAND_SLOT_RESERVE_MS = 240;
 
 const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   if (ctx.deckEl && ctx.deckEl.isConnected) return ctx.deckEl.getBoundingClientRect();
@@ -23,14 +23,14 @@ const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
 };
 
-const setIncoming = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
-  ctx.setUi('incoming', (prev: ResolvedCard[]) => (
+const reserveHandSlot = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
+  ctx.setUi('handReservations', (prev: ResolvedCard[]) => (
     prev.some((item) => item.id === card.id) ? prev : [...prev, card]
   ));
 };
 
-const clearIncoming = (ctx: PlayScriptCtx, cardId: string): void => {
-  ctx.setUi('incoming', (prev: ResolvedCard[]) => prev.filter((item) => item.id !== cardId));
+const releaseHandSlot = (ctx: PlayScriptCtx, cardId: string): void => {
+  ctx.setUi('handReservations', (prev: ResolvedCard[]) => prev.filter((item) => item.id !== cardId));
 };
 
 const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['timing']): void => {
@@ -150,7 +150,7 @@ const animateCardEnterHand = async (
     ctx.dispatch(event);
     const raw = unwrap(ctx.state) as EngineMatchState;
     resolved = resolveCard(structural.cardId, raw, ctx.manifest);
-    if (resolved) setIncoming(ctx, resolved);
+    if (resolved) reserveHandSlot(ctx, resolved);
   });
 
   if (!resolved) {
@@ -173,7 +173,7 @@ const animateCardEnterHand = async (
     boardWrap: ctx.boardWrap,
     sfx: ctx.sfx,
   });
-  clearIncoming(ctx, resolved.id);
+  releaseHandSlot(ctx, resolved.id);
   await nextFrame();
 
   const el = ctx.cardRefs.get(resolved.id);

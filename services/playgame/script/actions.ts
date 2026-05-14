@@ -43,7 +43,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   dispatch: (event: MatchEvent) => void;
   /** Helper to change the match phase (RESOLVING ↔ AWAITING_INTENT). */
   setPhase: (phase: MatchPhase) => void;
-  /** UI sidecar state (incoming buffer, undo history, flip flag). */
+  /** UI sidecar state (hand reservations, undo history, flip flag). */
   ui: UiState;
   /** Setter for UI sidecar. */
   setUi: SetStoreFunction<UiState>;
@@ -140,7 +140,7 @@ export const fadeInLocationTile = (laneIndex: number, ms = 400): Step => (ctx) =
 /**
  * Pull cards from the local engine deck and route each CARD_DRAWN event
  * through the presentation adapter. The reducer still owns the DECK→HAND
- * mutation; the adapter owns the incoming-hand buffer and deck-slide timing.
+ * mutation; the adapter owns hidden hand-slot reservation and deck-slide timing.
  *
  * Deck is pre-populated and seed-driven by `createInitialMatchState()`.
  * The explicit `drawQueue` ctx is kept for test fixtures that pre-seed

@@ -38,7 +38,7 @@ import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { ZoomInspector } from '../ZoomInspector';
-import { HandCard } from './HandCard';
+import { HandRow } from './HandRow';
 import { LaneSlots } from './LaneSlots';
 import { LocationTile } from './LocationTile';
 import { setupDragDrop } from './useDragDrop';
@@ -103,22 +103,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   // ── Derived projections ─────────────────────────────────────────────────
   const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(presentedState(), localSeat, manifest));
-  /**
-   * Hand presentation is slot-based: incoming cards stay in layout as hidden
-   * reserved slots so existing cards can FLIP-slide while the deck flyer owns
-   * the visible draw moment.
-   */
-  const incomingHandIds = createMemo<Set<string>>(() => (
-    replayEnabled() ? new Set<string>() : new Set(ui.incoming.map((card) => card.id))
+  const reservedHandIds = createMemo<Set<string>>(() => (
+    replayEnabled() ? new Set<string>() : new Set(ui.handReservations.map((card) => card.id))
   ));
   const interactiveHand = createMemo<ResolvedCard[]>(() => {
-    const incoming = incomingHandIds();
-    return hand().filter((card) => !incoming.has(card.id));
+    const reserved = reservedHandIds();
+    return hand().filter((card) => !reserved.has(card.id));
   });
-  const handSlotIds = createMemo<string[]>(() => hand().map((card) => card.id));
-  const handSlotById = createMemo<Map<string, ResolvedCard>>(() => (
-    new Map(hand().map((card) => [card.id, card]))
-  ));
 
   const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
   const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
@@ -137,13 +128,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
       { local: bottomPower(1), remote: topPower(1) },
       { local: bottomPower(2), remote: topPower(2) },
     ],
-  });
-  const handScale = createMemo(() => {
-    const n = hand().length;
-    if (n <= 4) return 1;
-    if (n <= 5) return 0.9;
-    if (n <= 6) return 0.82;
-    return 0.74;
   });
   const localDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DISCARD', manifest));
   const localDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DESTROYED', manifest));
@@ -406,26 +390,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
           </div>
         </div>
 
-        <div class="hand" id="hand" style={{ '--hand-scale': handScale().toFixed(3) }}>
-          <For each={handSlotIds()}>
-            {(cardId) => {
-              const initialCard = handSlotById().get(cardId) as ResolvedCard;
-              const card = createMemo<ResolvedCard>(
-                (previous) => handSlotById().get(cardId) ?? previous,
-                initialCard,
-              );
-              const isIncoming = createMemo(() => incomingHandIds().has(cardId));
-              return (
-                <HandCard
-                  card={card()}
-                  playable={card().cost <= presentedState().energy[localSeat]}
-                  interactive={boardInteractive() && !isIncoming()}
-                  hidden={isIncoming()}
-                />
-              );
-            }}
-          </For>
-        </div>
+        <HandRow
+          cards={hand()}
+          reservedIds={reservedHandIds()}
+          energy={presentedState().energy[localSeat]}
+          interactive={boardInteractive()}
+        />
 
         <div class="action-bar">
           <button

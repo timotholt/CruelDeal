@@ -31,7 +31,7 @@ import { newShortId } from '@/utils/id';
  * `services/playgame/script/actions.ts` can import it without a cycle.
  */
 export interface UiState {
-  incoming: ResolvedCard[];
+  handReservations: ResolvedCard[];
   history: EngineMatchState[];
   isFlipped: boolean;
   lockedResult: MatchResult | null;
