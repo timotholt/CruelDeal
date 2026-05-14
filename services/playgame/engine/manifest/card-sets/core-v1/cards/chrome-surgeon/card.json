@@ -1,0 +1,45 @@
+{
+  "defId": "chrome-surgeon",
+  "version": 1,
+  "name": "Chrome Surgeon",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "FIRST_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "HAND"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHROME SURGEON",
+    "flavorText": "What's in your hand will serve you better now.",
+    "rulesText": "On Reveal: Give the first card in your hand +2 Power.",
+    "accent": "#b5838d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

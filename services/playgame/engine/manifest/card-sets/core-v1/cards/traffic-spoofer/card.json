@@ -1,0 +1,32 @@
+{
+  "defId": "traffic-spoofer",
+  "version": 1,
+  "name": "Traffic Spoofer",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": [
+    "Hacker",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "TRAFFIC SPOOFER",
+    "flavorText": "Re-routes the threat before it arrives.",
+    "rulesText": "On Reveal: Move the lowest-Power enemy card here to another location.",
+    "accent": "#7209b7",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

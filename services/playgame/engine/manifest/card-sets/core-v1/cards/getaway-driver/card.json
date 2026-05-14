@@ -1,0 +1,31 @@
+{
+  "defId": "getaway-driver",
+  "version": 1,
+  "name": "Getaway Driver",
+  "basePower": 4,
+  "cost": 3,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GETAWAY DRIVER",
+    "flavorText": "Knows which door leads out.",
+    "rulesText": "On Reveal: Move one of your other cards here to another location.",
+    "accent": "#e9c46a",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

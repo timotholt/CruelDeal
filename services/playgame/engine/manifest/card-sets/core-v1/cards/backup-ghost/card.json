@@ -1,0 +1,31 @@
+{
+  "defId": "backup-ghost",
+  "version": 1,
+  "name": "Backup Ghost",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "AI"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "ADD_DISCARDED_CARD_TO_HAND",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BACKUP GHOST",
+    "flavorText": "Everything deleted leaves a trace.",
+    "rulesText": "On Reveal: Add a card you discarded this game to your hand.",
+    "accent": "#4cc9f0",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

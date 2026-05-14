@@ -1,0 +1,61 @@
+{
+  "defId": "hive-riot",
+  "version": 1,
+  "name": "Hive Riot",
+  "basePower": 4,
+  "cost": 6,
+  "tribes": [
+    "Drone",
+    "AI"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          },
+          "pred": {
+            "kind": "COST_CMP",
+            "target": {
+              "kind": "SELF"
+            },
+            "op": "==",
+            "value": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        },
+        "do": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HIVE RIOT",
+    "flavorText": "When the swarm revolts, everyone pays.",
+    "rulesText": "On Reveal: Give your 1-Cost cards +2 Power.",
+    "accent": "#f4a261",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "defId": "distributed-mind",
+  "version": 1,
+  "name": "Distributed Mind",
+  "basePower": 4,
+  "cost": 5,
+  "tribes": [
+    "AI"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          },
+          "pred": {
+            "kind": "IN_FULL_LANE",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DISTRIBUTED MIND",
+    "flavorText": "Density produces clarity.",
+    "rulesText": "Ongoing: Your cards at full locations have +2 Power.",
+    "accent": "#3a0ca3",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

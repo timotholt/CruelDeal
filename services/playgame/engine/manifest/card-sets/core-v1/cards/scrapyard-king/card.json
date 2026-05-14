@@ -1,0 +1,37 @@
+{
+  "defId": "scrapyard-king",
+  "version": 1,
+  "name": "Scrapyard King",
+  "basePower": 8,
+  "cost": 6,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "TRACKED_STAT",
+          "owner": "SELF_OWNER",
+          "stat": "totalCardsDestroyed"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SCRAPYARD KING",
+    "flavorText": "Every death adds to the throne.",
+    "rulesText": "On Reveal: +1 Power for each card destroyed this game.",
+    "accent": "#ffd60a",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

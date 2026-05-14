@@ -1,0 +1,31 @@
+{
+  "defId": "neon-courier",
+  "version": 1,
+  "name": "Neon Courier",
+  "basePower": 3,
+  "cost": 2,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "MOVE_SELF_TO_RANDOM_OTHER_LANE",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NEON COURIER",
+    "flavorText": "Never where you left them.",
+    "rulesText": "On Reveal: Move this to another location.",
+    "accent": "#ff6b9d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

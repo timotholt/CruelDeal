@@ -1,0 +1,23 @@
+{
+  "defId": "street-kid",
+  "version": 1,
+  "name": "Street Kid",
+  "basePower": 2,
+  "cost": 1,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "STREET KID",
+    "flavorText": "Everywhere, all at once.",
+    "rulesText": "",
+    "accent": "#f4a261",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

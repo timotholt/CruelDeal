@@ -1,0 +1,34 @@
+{
+  "defId": "crash-dummy",
+  "version": 1,
+  "name": "Crash Dummy",
+  "basePower": 2,
+  "cost": 1,
+  "tribes": [
+    "Drone"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "DRAW",
+        "owner": "SELF_OWNER",
+        "count": {
+          "kind": "LIT",
+          "n": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CRASH DUMMY",
+    "flavorText": "Designed to fail perfectly.",
+    "rulesText": "When Destroyed: Draw a card.",
+    "accent": "#ffcc00",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

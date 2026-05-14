@@ -1,0 +1,58 @@
+{
+  "defId": "military-fixer",
+  "version": 1,
+  "name": "Military Fixer",
+  "basePower": 2,
+  "cost": 3,
+  "tribes": [
+    "Military",
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "CREATE_CARD_IN_ZONE",
+            "pool": {
+              "kind": "COST_RANGE",
+              "ownerDeck": "SELF_OWNER",
+              "min": 4,
+              "max": 5
+            },
+            "owner": "SELF_OWNER",
+            "destination": {
+              "kind": "HAND"
+            }
+          },
+          {
+            "kind": "CREATE_CARD_IN_ZONE",
+            "pool": {
+              "kind": "COST_RANGE",
+              "ownerDeck": "SELF_OWNER",
+              "min": 4,
+              "max": 5
+            },
+            "owner": "SELF_OWNER",
+            "destination": {
+              "kind": "HAND"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MILITARY FIXER",
+    "flavorText": "Heavy assets, low profile.",
+    "rulesText": "On Reveal: Add two random 4–5 Cost cards to your hand.",
+    "accent": "#495057",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

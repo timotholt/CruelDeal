@@ -1,0 +1,34 @@
+{
+  "defId": "ghost-vendor",
+  "version": 1,
+  "name": "Ghost Vendor",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "Hacker",
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "REPLACE_CREATED_HAND_CARD_HIGHER_COST",
+        "args": {
+          "costDelta": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GHOST VENDOR",
+    "flavorText": "Trade the knockoff for something real.",
+    "rulesText": "On Reveal: Replace a created card in your hand with one that costs 1 more.",
+    "accent": "#dee2e6",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

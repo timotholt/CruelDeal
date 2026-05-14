@@ -1,0 +1,106 @@
+{
+  "defId": "meat-grinder",
+  "version": 1,
+  "name": "Meat Grinder",
+  "basePower": 6,
+  "cost": 5,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "MUL",
+              "a": {
+                "kind": "LIT",
+                "n": 2
+              },
+              "b": {
+                "kind": "COUNT",
+                "of": {
+                  "kind": "WHERE",
+                  "of": {
+                    "kind": "SAME_LANE",
+                    "of": {
+                      "kind": "SELF"
+                    },
+                    "ownerFilter": "ANY_OWNER",
+                    "exclude": {
+                      "kind": "SELF"
+                    }
+                  },
+                  "pred": {
+                    "kind": "COST_CMP",
+                    "target": {
+                      "kind": "SELF"
+                    },
+                    "op": "==",
+                    "value": {
+                      "kind": "LIT",
+                      "n": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "kind": "FOREACH",
+            "over": {
+              "kind": "WHERE",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "ANY_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              },
+              "pred": {
+                "kind": "COST_CMP",
+                "target": {
+                  "kind": "SELF"
+                },
+                "op": "==",
+                "value": {
+                  "kind": "LIT",
+                  "n": 1
+                }
+              }
+            },
+            "do": [
+              {
+                "kind": "DESTROY",
+                "target": {
+                  "kind": "SELF"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MEAT GRINDER",
+    "flavorText": "The cheap parts make the best fuel.",
+    "rulesText": "On Reveal: Destroy all 1-Cost cards here and gain +2 Power each.",
+    "accent": "#e63946",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

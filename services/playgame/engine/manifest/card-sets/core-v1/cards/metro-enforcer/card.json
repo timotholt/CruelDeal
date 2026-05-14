@@ -1,0 +1,60 @@
+{
+  "defId": "metro-enforcer",
+  "version": 1,
+  "name": "Metro Enforcer",
+  "basePower": 7,
+  "cost": 4,
+  "tribes": [
+    "Military"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "NOT",
+            "p": {
+              "kind": "EXISTS",
+              "target": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          },
+          "then": {
+            "kind": "LIT",
+            "n": 2
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "METRO ENFORCER",
+    "flavorText": "Alone in the lane. Exactly how they like it.",
+    "rulesText": "Ongoing: +2 Power if this is your only card here.",
+    "accent": "#495057",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

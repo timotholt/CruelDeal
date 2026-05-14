@@ -1,0 +1,21 @@
+{
+  "defId": "junk-card",
+  "version": 1,
+  "name": "Junk",
+  "basePower": 0,
+  "cost": 1,
+  "tribes": [],
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "JUNK",
+    "flavorText": "Corrupted. Useless. Unavoidable.",
+    "rulesText": "",
+    "accent": "#6c757d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "defId": "maintenance-cloud",
+  "version": 1,
+  "name": "Maintenance Cloud",
+  "basePower": 2,
+  "cost": 3,
+  "tribes": [
+    "AI",
+    "Drone"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "MIN_POWER_OF",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MAINTENANCE CLOUD",
+    "flavorText": "Constant incremental correction.",
+    "rulesText": "End of Turn: Give your lowest-Power card here +1 Power.",
+    "accent": "#74c69d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

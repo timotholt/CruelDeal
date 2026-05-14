@@ -1,0 +1,33 @@
+{
+  "defId": "overclock-chip",
+  "version": 1,
+  "name": "Overclock Chip",
+  "basePower": 0,
+  "cost": 1,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "OVERCLOCK_CHIP",
+        "args": {
+          "powerDelta": 5
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "OVERCLOCK CHIP",
+    "flavorText": "Five seconds of perfect. Then the bill.",
+    "rulesText": "On Reveal: Give a friendly card here +5 Power. Destroy it at end of next turn.",
+    "accent": "#ffba08",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

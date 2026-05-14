@@ -1,0 +1,39 @@
+{
+  "defId": "citywide-mesh",
+  "version": 1,
+  "name": "Citywide Mesh",
+  "basePower": 5,
+  "cost": 6,
+  "tribes": [
+    "AI"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "ALL_CARDS",
+          "ownerFilter": "SELF_OWNER",
+          "zoneFilter": "LANE"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CITYWIDE MESH",
+    "flavorText": "Every node is stronger for the network.",
+    "rulesText": "Ongoing: All your other cards have +1 Power.",
+    "accent": "#4cc9f0",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

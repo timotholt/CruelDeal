@@ -1,0 +1,62 @@
+{
+  "defId": "predictive-cop",
+  "version": 1,
+  "name": "Predictive Cop",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "AI",
+    "Military"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "EXISTS",
+          "target": {
+            "kind": "WHERE",
+            "of": {
+              "kind": "SAME_LANE",
+              "of": {
+                "kind": "SELF"
+              },
+              "ownerFilter": "OPP_OWNER"
+            },
+            "pred": {
+              "kind": "HAS_TAG",
+              "target": {
+                "kind": "SELF"
+              },
+              "tag": "PLAYED_THIS_TURN"
+            }
+          }
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 4
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PREDICTIVE COP",
+    "flavorText": "The crime was already calculated.",
+    "rulesText": "On Reveal: If your opponent played a card here this turn, gain +4 Power.",
+    "accent": "#003049",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

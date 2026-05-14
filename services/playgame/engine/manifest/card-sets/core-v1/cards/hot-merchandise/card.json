@@ -1,0 +1,39 @@
+{
+  "defId": "hot-merchandise",
+  "version": 1,
+  "name": "Hot Merchandise",
+  "basePower": 9,
+  "cost": 5,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_PENDING",
+        "effect": {
+          "kind": "SCHEDULED",
+          "when": "END_OF_NEXT_TURN",
+          "effect": {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HOT MERCHANDISE",
+    "flavorText": "Magnificent until it isn't yours.",
+    "rulesText": "On Reveal: Destroy this at the end of next turn.",
+    "accent": "#ff6b6b",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

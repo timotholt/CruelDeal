@@ -1,0 +1,45 @@
+{
+  "defId": "neon-singularity",
+  "version": 1,
+  "name": "Neon Singularity",
+  "basePower": 6,
+  "cost": 6,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "MUL",
+          "a": {
+            "kind": "LIT",
+            "n": 2
+          },
+          "b": {
+            "kind": "TRACKED_STAT",
+            "owner": "SELF_OWNER",
+            "stat": "energyUnspentLastTurn"
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NEON SINGULARITY",
+    "flavorText": "Patience converts to power at the moment of impact.",
+    "rulesText": "On Reveal: +2 Power for each Energy you had unspent last turn.",
+    "accent": "#ff6b9d",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

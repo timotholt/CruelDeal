@@ -1,0 +1,45 @@
+{
+  "defId": "hard-reset",
+  "version": 1,
+  "name": "Hard Reset",
+  "basePower": 5,
+  "cost": 5,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "do": [
+          {
+            "kind": "RESET_POWER",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HARD RESET",
+    "flavorText": "Everything goes back to factory.",
+    "rulesText": "On Reveal: Reset all cards here to base Power.",
+    "accent": "#023e8a",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

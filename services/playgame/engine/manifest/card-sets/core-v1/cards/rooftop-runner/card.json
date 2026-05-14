@@ -1,0 +1,37 @@
+{
+  "defId": "rooftop-runner",
+  "version": 1,
+  "name": "Rooftop Runner",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Merc",
+    "Bio"
+  ],
+  "abilities": {
+    "onMove": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 3
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ROOFTOP RUNNER",
+    "flavorText": "The run is the reward.",
+    "rulesText": "When Moved: Gain +3 Power.",
+    "accent": "#80ed99",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "defId": "gutter-legion",
+  "version": 1,
+  "name": "Gutter Legion",
+  "basePower": 5,
+  "cost": 5,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "FULL_LANES_POWER",
+        "args": {
+          "ownerFilter": "SELF_OWNER",
+          "delta": 3
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GUTTER LEGION",
+    "flavorText": "A full block belongs to the gang.",
+    "rulesText": "Ongoing: Your full locations have +3 Power.",
+    "accent": "#c1121f",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

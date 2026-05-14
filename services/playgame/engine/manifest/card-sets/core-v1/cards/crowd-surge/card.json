@@ -1,0 +1,37 @@
+{
+  "defId": "crowd-surge",
+  "version": 1,
+  "name": "Crowd Surge",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "TRACKED_STAT",
+          "owner": "SELF_OWNER",
+          "stat": "cardsPlayedThisTurn"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CROWD SURGE",
+    "flavorText": "Momentum counts every body.",
+    "rulesText": "On Reveal: +1 Power for each card you played this turn.",
+    "accent": "#e63946",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

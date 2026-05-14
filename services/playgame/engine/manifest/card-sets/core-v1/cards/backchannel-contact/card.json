@@ -1,0 +1,34 @@
+{
+  "defId": "backchannel-contact",
+  "version": 1,
+  "name": "Backchannel Contact",
+  "basePower": 3,
+  "cost": 2,
+  "tribes": [
+    "Merc",
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "REPLACE_HAND_CARD_HIGHER_COST",
+        "args": {
+          "costDelta": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BACKCHANNEL CONTACT",
+    "flavorText": "Upgrades cost something. Always.",
+    "rulesText": "On Reveal: Replace a card in your hand with one that costs 1 more.",
+    "accent": "#90e0ef",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

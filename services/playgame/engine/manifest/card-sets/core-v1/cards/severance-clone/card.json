@@ -1,0 +1,34 @@
+{
+  "defId": "severance-clone",
+  "version": 1,
+  "name": "Severance Clone",
+  "basePower": 1,
+  "cost": 2,
+  "tribes": [
+    "Corp",
+    "Bio"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "POWER_TO_DESTROYER",
+        "args": {
+          "delta": 2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SEVERANCE CLONE",
+    "flavorText": "The kill is its own reward.",
+    "rulesText": "When Destroyed: Give the card that destroyed this +2 Power.",
+    "accent": "#e9c46a",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

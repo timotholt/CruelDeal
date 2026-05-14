@@ -1,0 +1,54 @@
+{
+  "defId": "camera-rat",
+  "version": 1,
+  "name": "Camera Rat",
+  "basePower": 2,
+  "cost": 1,
+  "tribes": [
+    "Hacker",
+    "Drone"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "HAND_SIZE",
+            "owner": "OPP_OWNER"
+          },
+          "op": ">=",
+          "b": {
+            "kind": "LIT",
+            "n": 5
+          }
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CAMERA RAT",
+    "flavorText": "Watches the hand. Reports to the boss.",
+    "rulesText": "On Reveal: If your opponent has 5 or more cards in hand, gain +2 Power.",
+    "accent": "#adb5bd",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

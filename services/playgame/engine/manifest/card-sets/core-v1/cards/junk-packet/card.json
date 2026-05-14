@@ -1,0 +1,41 @@
+{
+  "defId": "junk-packet",
+  "version": 1,
+  "name": "Junk Packet",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Hacker",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "junk-card"
+          ]
+        },
+        "owner": "OPP_OWNER",
+        "destination": {
+          "kind": "DECK",
+          "position": "BOTTOM"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "JUNK PACKET",
+    "flavorText": "Worthless data travels fastest.",
+    "rulesText": "On Reveal: Add a 0-Power Junk card to your opponent's deck.",
+    "accent": "#adb5bd",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

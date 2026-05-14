@@ -1,0 +1,49 @@
+{
+  "defId": "procurement-bot",
+  "version": 1,
+  "name": "Procurement Bot",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Drone",
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "COST_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "HAND"
+          },
+          "pred": {
+            "kind": "WAS_CREATED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PROCUREMENT BOT",
+    "flavorText": "Unauthorised discounts are still discounts.",
+    "rulesText": "Ongoing: Your created cards in hand cost 1 less.",
+    "accent": "#caf0f8",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

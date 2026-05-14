@@ -1,0 +1,50 @@
+{
+  "defId": "illegal-implant",
+  "version": 1,
+  "name": "Illegal Implant",
+  "basePower": 8,
+  "cost": 5,
+  "tribes": [
+    "Bio",
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "COST_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "TRACKED_FLAG",
+            "owner": "SELF_OWNER",
+            "flag": "reducedAnyCostThisGame"
+          },
+          "then": {
+            "kind": "LIT",
+            "n": -1
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ILLEGAL IMPLANT",
+    "flavorText": "The market rewarded the rule-breaker.",
+    "rulesText": "Ongoing: Costs 1 less if you reduced a card's Cost this game.",
+    "accent": "#9d4edd",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "defId": "borrowed-gun",
+  "version": 1,
+  "name": "Borrowed Gun",
+  "basePower": 3,
+  "cost": 1,
+  "tribes": [
+    "Tech",
+    "Military"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "WAS_CREATED",
+          "target": {
+            "kind": "SELF"
+          }
+        },
+        "then": [
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BORROWED GUN",
+    "flavorText": "Returns to the lender one way or another.",
+    "rulesText": "End of Turn: Destroy this if it was created.",
+    "accent": "#6c757d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

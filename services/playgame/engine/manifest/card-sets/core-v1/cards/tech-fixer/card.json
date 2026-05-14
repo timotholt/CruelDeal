@@ -1,0 +1,40 @@
+{
+  "defId": "tech-fixer",
+  "version": 1,
+  "name": "Tech Fixer",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Merc",
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DECK_BY_TRIBE",
+          "ownerDeck": "SELF_OWNER",
+          "tribe": "AI",
+          "excludeInPlay": true
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "TECH FIXER",
+    "flavorText": "Every system has a back door.",
+    "rulesText": "On Reveal: Draw an AI card.",
+    "accent": "#00b4d8",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

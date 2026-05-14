@@ -1,0 +1,67 @@
+{
+  "defId": "middle-manager",
+  "version": 1,
+  "name": "Middle Manager",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "COPY_TEXT_OF",
+            "into": {
+              "kind": "SELF"
+            },
+            "source": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            },
+            "copyKind": "ON_REVEAL"
+          },
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MIDDLE MANAGER",
+    "flavorText": "Acquisition begins with paperwork.",
+    "rulesText": "On Reveal: Destroy your lowest-Cost card here and copy its On Reveal text.",
+    "accent": "#457b9d",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

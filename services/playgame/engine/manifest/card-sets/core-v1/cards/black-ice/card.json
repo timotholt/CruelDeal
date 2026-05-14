@@ -1,0 +1,45 @@
+{
+  "defId": "black-ice",
+  "version": 1,
+  "name": "Black ICE",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "REMOVE_TEXT",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          }
+        },
+        "textKind": "ONGOING"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLACK ICE",
+    "flavorText": "Persistent systems are the most vulnerable.",
+    "rulesText": "On Reveal: Remove Ongoing text from a random enemy card here.",
+    "accent": "#000814",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
-    "engine:cli": "tsx services/playgame/engine/cli/main.ts"
+    "engine:cli": "tsx services/playgame/engine/cli/main.ts",
+    "cards:validate": "tsx services/playgame/engine/manifest/validate-cards.ts"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

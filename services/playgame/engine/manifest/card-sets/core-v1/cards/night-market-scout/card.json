@@ -1,0 +1,43 @@
+{
+  "defId": "night-market-scout",
+  "version": 1,
+  "name": "Night Market Scout",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "HAND_EMPTY",
+          "owner": "SELF_OWNER"
+        },
+        "then": [
+          {
+            "kind": "DRAW",
+            "owner": "SELF_OWNER",
+            "count": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NIGHT MARKET SCOUT",
+    "flavorText": "Empty hands don't survive long.",
+    "rulesText": "On Reveal: If your hand is empty, draw a card.",
+    "accent": "#f4a261",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

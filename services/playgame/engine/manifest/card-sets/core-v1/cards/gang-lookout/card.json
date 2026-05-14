@@ -1,0 +1,36 @@
+{
+  "defId": "gang-lookout",
+  "version": 1,
+  "name": "Gang Lookout",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onAnyCardPlayedHere": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GANG LOOKOUT",
+    "flavorText": "Watches every play. Learns from every play.",
+    "rulesText": "After a card is played here, gain +1 Power.",
+    "accent": "#e9c46a",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

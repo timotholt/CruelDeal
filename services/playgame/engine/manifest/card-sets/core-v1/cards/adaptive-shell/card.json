@@ -1,0 +1,58 @@
+{
+  "defId": "adaptive-shell",
+  "version": 1,
+  "name": "Adaptive Shell",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Tech",
+    "Bio"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NOT",
+          "p": {
+            "kind": "EXISTS",
+            "target": {
+              "kind": "SAME_LANE",
+              "of": {
+                "kind": "SELF"
+              },
+              "ownerFilter": "SELF_OWNER",
+              "exclude": {
+                "kind": "SELF"
+              }
+            }
+          }
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ADAPTIVE SHELL",
+    "flavorText": "Alone it evolves. Crowded it coasts.",
+    "rulesText": "End of Turn: If this is your only card here, gain +2 Power.",
+    "accent": "#52b788",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

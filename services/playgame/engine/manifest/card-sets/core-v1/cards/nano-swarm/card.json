@@ -1,0 +1,47 @@
+{
+  "defId": "nano-swarm",
+  "version": 1,
+  "name": "Nano Swarm",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "COUNT",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NANO SWARM",
+    "flavorText": "The collective is the organism.",
+    "rulesText": "Ongoing: +1 Power for each other friendly card here.",
+    "accent": "#00b4d8",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

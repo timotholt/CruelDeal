@@ -1,0 +1,60 @@
+{
+  "defId": "grey-goo-bloom",
+  "version": 1,
+  "name": "Grey Goo Bloom",
+  "basePower": 6,
+  "cost": 5,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "LANE_FULL",
+          "laneOf": {
+            "kind": "SELF"
+          }
+        },
+        "then": [
+          {
+            "kind": "FOREACH",
+            "over": {
+              "kind": "SAME_LANE",
+              "of": {
+                "kind": "SELF"
+              },
+              "ownerFilter": "SELF_OWNER"
+            },
+            "do": [
+              {
+                "kind": "ADD_POWER",
+                "target": {
+                  "kind": "SELF"
+                },
+                "delta": {
+                  "kind": "LIT",
+                  "n": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GREY GOO BLOOM",
+    "flavorText": "When the lane is full, the system matures.",
+    "rulesText": "End of Turn: If this location is full, give your cards here +1 Power.",
+    "accent": "#adb5bd",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

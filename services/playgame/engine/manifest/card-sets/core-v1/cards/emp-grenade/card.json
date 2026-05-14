@@ -1,0 +1,32 @@
+{
+  "defId": "emp-grenade",
+  "version": 1,
+  "name": "EMP Grenade",
+  "basePower": 2,
+  "cost": 3,
+  "tribes": [
+    "Military",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "DISABLE_ONGOINGS_THIS_LANE_THIS_TURN",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "EMP GRENADE",
+    "flavorText": "Silence is the loudest weapon.",
+    "rulesText": "On Reveal: Disable Ongoing effects here this turn.",
+    "accent": "#f9c74f",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

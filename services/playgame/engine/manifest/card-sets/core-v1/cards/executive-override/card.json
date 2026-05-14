@@ -1,0 +1,67 @@
+{
+  "defId": "executive-override",
+  "version": 1,
+  "name": "Executive Override",
+  "basePower": 5,
+  "cost": 6,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "COPY_TEXT_OF",
+            "into": {
+              "kind": "SELF"
+            },
+            "source": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            },
+            "copyKind": "ON_REVEAL"
+          },
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "EXECUTIVE OVERRIDE",
+    "flavorText": "Authority is acquired, not assigned.",
+    "rulesText": "On Reveal: Destroy another friendly card here and copy its On Reveal text.",
+    "accent": "#780000",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

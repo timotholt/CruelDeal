@@ -1,0 +1,48 @@
+{
+  "defId": "escape-route",
+  "version": 1,
+  "name": "Escape Route",
+  "basePower": 6,
+  "cost": 5,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          },
+          "pred": {
+            "kind": "EVER_MOVED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ESCAPE ROUTE",
+    "flavorText": "Movement is remembered.",
+    "rulesText": "Ongoing: Your cards that have moved this game have +1 Power.",
+    "accent": "#adb5bd",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "defId": "corruption-bloom",
+  "version": 1,
+  "name": "Corruption Bloom",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          },
+          "pred": {
+            "kind": "POWER_REDUCED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CORRUPTION BLOOM",
+    "flavorText": "What is weakened keeps weakening.",
+    "rulesText": "Ongoing: Enemy cards here with reduced Power have -1 Power.",
+    "accent": "#3a0ca3",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

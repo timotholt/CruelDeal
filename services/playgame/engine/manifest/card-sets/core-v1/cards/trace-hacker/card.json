@@ -1,0 +1,33 @@
+{
+  "defId": "trace-hacker",
+  "version": 1,
+  "name": "Trace Hacker",
+  "basePower": 4,
+  "cost": 3,
+  "tribes": [
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "MOVE_ENEMY_CARD_TO_OTHER_LANE",
+        "args": {
+          "selector": "RANDOM_ENEMY_HERE"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "TRACE HACKER",
+    "flavorText": "You were never supposed to be there.",
+    "rulesText": "On Reveal: Move a random enemy card here to another location.",
+    "accent": "#7209b7",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "setId": "core-v1",
+  "displayName": "Core V1",
+  "status": "active",
+  "cardsPath": "cards",
+  "notes": "Primary 3-lane MVP card set migrated from cyberpunk-cards.ts."
+}

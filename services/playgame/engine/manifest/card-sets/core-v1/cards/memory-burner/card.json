@@ -1,0 +1,37 @@
+{
+  "defId": "memory-burner",
+  "version": 1,
+  "name": "Memory Burner",
+  "basePower": 4,
+  "cost": 2,
+  "tribes": [
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DISCARD",
+        "target": {
+          "kind": "MIN_COST_OF",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "HAND"
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MEMORY BURNER",
+    "flavorText": "What you lose you can't be questioned about.",
+    "rulesText": "On Reveal: Discard the lowest-Cost card in your hand.",
+    "accent": "#e63946",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

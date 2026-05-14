@@ -1,0 +1,57 @@
+{
+  "defId": "block-party",
+  "version": 1,
+  "name": "Block Party",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "SELF_OWNER",
+          "exclude": {
+            "kind": "SELF"
+          }
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "LANE_FULL",
+            "laneOf": {
+              "kind": "SELF"
+            }
+          },
+          "then": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLOCK PARTY",
+    "flavorText": "When there's no room left, everyone's stronger.",
+    "rulesText": "Ongoing: If this lane is full, your other cards here have +1 Power.",
+    "accent": "#e9c46a",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

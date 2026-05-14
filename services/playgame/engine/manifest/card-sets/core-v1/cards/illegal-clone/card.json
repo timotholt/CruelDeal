@@ -1,0 +1,39 @@
+{
+  "defId": "illegal-clone",
+  "version": 1,
+  "name": "Illegal Clone",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "illegal-clone"
+          ]
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ILLEGAL CLONE",
+    "flavorText": "The copy protests just as loudly.",
+    "rulesText": "When Destroyed: Add a copy of this to your hand.",
+    "accent": "#80ed99",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

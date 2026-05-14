@@ -1,0 +1,50 @@
+{
+  "defId": "scrap-rat",
+  "version": 1,
+  "name": "Scrap Rat",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SCRAP RAT",
+    "flavorText": "Salvage is the only economy worth trusting.",
+    "rulesText": "When Destroyed: Give a random friendly card here +2 Power.",
+    "accent": "#ff8c42",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "defId": "firewall-daemon",
+  "version": 1,
+  "name": "Firewall Daemon",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          },
+          "pred": {
+            "kind": "TEXT_DISABLED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "FIREWALL DAEMON",
+    "flavorText": "What can't run is already losing.",
+    "rulesText": "Ongoing: Enemy cards with disabled text have -2 Power.",
+    "accent": "#5a189a",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "defId": "street-fixer",
+  "version": 1,
+  "name": "Street Fixer",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DECK_BY_TRIBE",
+          "ownerDeck": "SELF_OWNER",
+          "tribe": "Tech",
+          "excludeInPlay": true
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "STREET FIXER",
+    "flavorText": "Knows where to find the right tool.",
+    "rulesText": "On Reveal: Draw a Tech card.",
+    "accent": "#e9c46a",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

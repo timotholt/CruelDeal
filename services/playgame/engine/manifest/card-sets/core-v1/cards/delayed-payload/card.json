@@ -1,0 +1,50 @@
+{
+  "defId": "delayed-payload",
+  "version": 1,
+  "name": "Delayed Payload",
+  "basePower": 7,
+  "cost": 5,
+  "tribes": [
+    "Tech",
+    "Military"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "COST_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "TRACKED_FLAG",
+            "owner": "SELF_OWNER",
+            "flag": "spentNoEnergyLastTurn"
+          },
+          "then": {
+            "kind": "LIT",
+            "n": -2
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DELAYED PAYLOAD",
+    "flavorText": "The most dangerous turn is the one you passed.",
+    "rulesText": "Ongoing: Costs 2 less if you spent no Energy last turn.",
+    "accent": "#e63946",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

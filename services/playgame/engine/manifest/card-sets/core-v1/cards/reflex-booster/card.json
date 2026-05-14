@@ -1,0 +1,51 @@
+{
+  "defId": "reflex-booster",
+  "version": 1,
+  "name": "Reflex Booster",
+  "basePower": 1,
+  "cost": 2,
+  "tribes": [
+    "Bio",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 3
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "REFLEX BOOSTER",
+    "flavorText": "One implant changes everything.",
+    "rulesText": "On Reveal: Give a random friendly card here +3 Power.",
+    "accent": "#c77dff",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

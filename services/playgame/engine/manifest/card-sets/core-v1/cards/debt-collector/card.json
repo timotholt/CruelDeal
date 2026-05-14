@@ -1,0 +1,38 @@
+{
+  "defId": "debt-collector",
+  "version": 1,
+  "name": "Debt Collector",
+  "basePower": 6,
+  "cost": 4,
+  "tribes": [
+    "Corp",
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "TRACKED_STAT",
+          "owner": "SELF_OWNER",
+          "stat": "totalCostReduced"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DEBT COLLECTOR",
+    "flavorText": "Every discount you took, she remembers.",
+    "rulesText": "On Reveal: +1 Power for each Cost you reduced this game.",
+    "accent": "#495057",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

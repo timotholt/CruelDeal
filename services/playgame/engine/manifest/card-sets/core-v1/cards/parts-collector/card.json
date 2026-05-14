@@ -1,0 +1,37 @@
+{
+  "defId": "parts-collector",
+  "version": 1,
+  "name": "Parts Collector",
+  "basePower": 4,
+  "cost": 3,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "TRACKED_STAT",
+          "owner": "SELF_OWNER",
+          "stat": "cardsYouDestroyed"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PARTS COLLECTOR",
+    "flavorText": "The count is the currency.",
+    "rulesText": "On Reveal: +1 Power for each card you destroyed this game.",
+    "accent": "#8ecae6",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

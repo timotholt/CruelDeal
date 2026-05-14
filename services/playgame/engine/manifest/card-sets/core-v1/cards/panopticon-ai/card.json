@@ -1,0 +1,34 @@
+{
+  "defId": "panopticon-ai",
+  "version": 1,
+  "name": "Panopticon AI",
+  "basePower": 5,
+  "cost": 5,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "DEBUFF_ENEMY_ON_HAND_ENTRY",
+        "args": {
+          "delta": -1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PANOPTICON AI",
+    "flavorText": "Every card they draw arrives weaker.",
+    "rulesText": "Ongoing: Enemy cards added to hand have -1 Power.",
+    "accent": "#4361ee",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

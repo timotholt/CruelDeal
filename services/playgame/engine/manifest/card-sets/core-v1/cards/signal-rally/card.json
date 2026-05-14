@@ -1,0 +1,53 @@
+{
+  "defId": "signal-rally",
+  "version": 1,
+  "name": "Signal Rally",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "AI"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          },
+          "pred": {
+            "kind": "COST_CMP",
+            "target": {
+              "kind": "SELF"
+            },
+            "op": "==",
+            "value": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SIGNAL RALLY",
+    "flavorText": "The cheap parts fight hardest.",
+    "rulesText": "Ongoing: Your 1-Cost cards have +1 Power.",
+    "accent": "#00b4d8",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

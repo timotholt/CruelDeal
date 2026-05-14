@@ -1,0 +1,34 @@
+{
+  "defId": "black-market-dealer",
+  "version": 1,
+  "name": "Black Market Dealer",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "ADD_DISCOUNTED_CARD_TO_HAND",
+        "args": {
+          "costDelta": -2,
+          "expiresTurns": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLACK MARKET DEALER",
+    "flavorText": "The discount expires when trust does.",
+    "rulesText": "On Reveal: Add a random card to your hand that costs 2 less next turn.",
+    "accent": "#212529",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

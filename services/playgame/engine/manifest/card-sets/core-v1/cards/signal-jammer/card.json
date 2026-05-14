@@ -1,0 +1,38 @@
+{
+  "defId": "signal-jammer",
+  "version": 1,
+  "name": "Signal Jammer",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Hacker",
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "DISABLE_ON_REVEAL",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "OPP_OWNER"
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SIGNAL JAMMER",
+    "flavorText": "Nothing gets in. Nothing gets out.",
+    "rulesText": "Ongoing: Enemy On Reveal abilities do not trigger here.",
+    "accent": "#f72585",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "defId": "dead-drop",
+  "version": 1,
+  "name": "Dead Drop",
+  "basePower": 1,
+  "cost": 3,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "ADD_DISCOUNTED_CARD_TO_HAND",
+        "args": {
+          "costDelta": -1,
+          "expiresTurns": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DEAD DROP",
+    "flavorText": "Free for one turn. Then you owe.",
+    "rulesText": "On Reveal: Add a random card to your hand that costs 1 less next turn.",
+    "accent": "#48cae4",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

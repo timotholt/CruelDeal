@@ -1,0 +1,86 @@
+{
+  "defId": "acquisition-team",
+  "version": 1,
+  "name": "Acquisition Team",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "COPY_TEXT_OF",
+            "into": {
+              "kind": "MAX_POWER_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "MIN_COST_OF",
+                  "of": {
+                    "kind": "SAME_LANE",
+                    "of": {
+                      "kind": "SELF"
+                    },
+                    "ownerFilter": "SELF_OWNER",
+                    "exclude": {
+                      "kind": "SELF"
+                    }
+                  }
+                }
+              }
+            },
+            "source": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          },
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "MIN_COST_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ACQUISITION TEAM",
+    "flavorText": "Synergy through hostile integration.",
+    "rulesText": "On Reveal: Destroy your lowest-Cost card here and give its text to your highest-Power card here.",
+    "accent": "#264653",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

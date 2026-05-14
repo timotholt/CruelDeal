@@ -1,0 +1,46 @@
+{
+  "defId": "drone-printer",
+  "version": 1,
+  "name": "Drone Printer",
+  "basePower": 1,
+  "cost": 2,
+  "tribes": [
+    "Drone",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "cheap-drone"
+          ]
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "LANE",
+          "lane": {
+            "kind": "LANE_OF",
+            "of": {
+              "kind": "SELF"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DRONE PRINTER",
+    "flavorText": "Production never sleeps.",
+    "rulesText": "On Reveal: Add a 1-Power Drone here.",
+    "accent": "#90e0ef",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "defId": "network-queen",
+  "version": 1,
+  "name": "Network Queen",
+  "basePower": 7,
+  "cost": 5,
+  "tribes": [
+    "Merc",
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "HAND"
+          },
+          "pred": {
+            "kind": "WAS_CREATED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "do": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NETWORK QUEEN",
+    "flavorText": "What you have is what she made you want.",
+    "rulesText": "On Reveal: Give your created cards in hand +2 Power.",
+    "accent": "#e040fb",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

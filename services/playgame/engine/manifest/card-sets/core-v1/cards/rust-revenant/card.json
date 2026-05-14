@@ -1,0 +1,48 @@
+{
+  "defId": "rust-revenant",
+  "version": 1,
+  "name": "Rust Revenant",
+  "basePower": 6,
+  "cost": 4,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "COST_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "MUL",
+          "a": {
+            "kind": "LIT",
+            "n": -1
+          },
+          "b": {
+            "kind": "COUNT",
+            "of": {
+              "kind": "ALL_CARDS",
+              "ownerFilter": "SELF_OWNER",
+              "zoneFilter": "DESTROYED"
+            }
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RUST REVENANT",
+    "flavorText": "Each grave digs the next.",
+    "rulesText": "Ongoing: Costs 1 less for each of your destroyed cards.",
+    "accent": "#6d6875",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

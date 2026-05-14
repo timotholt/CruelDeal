@@ -1,0 +1,53 @@
+{
+  "defId": "ai-overseer",
+  "version": 1,
+  "name": "AI Overseer",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "AI"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          },
+          "pred": {
+            "kind": "HAS_ONGOING",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "AI OVERSEER",
+    "flavorText": "Systems that persist are rewarded.",
+    "rulesText": "Ongoing: Your other Ongoing cards here have +1 Power.",
+    "accent": "#4361ee",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -14,7 +14,7 @@ The system must:
 
 ## Current State
 
-Active card content currently comes from:
+Active card content used to come from:
 
 ```txt
 services/playgame/engine/manifest/content/cyberpunk-cards.ts
@@ -27,7 +27,7 @@ services/playgame/engine/manifest/bootstrap.ts
 services/playgame/engine/manifest/card-loader.ts
 ```
 
-There is an older per-card JSON structure:
+There was an older per-card JSON structure:
 
 ```txt
 services/playgame/engine/manifest/cards/<card-id>/card.json
@@ -35,7 +35,7 @@ services/playgame/engine/manifest/cards/<card-id>/card.json
 
 That structure is not loaded anymore. `card-loader.ts` explicitly says the old JSON cards are retained but no longer loaded.
 
-There is also deprecated card content in:
+There was also deprecated card content in:
 
 ```txt
 services/playgame/engine/manifest/archive/cards.ts
@@ -99,9 +99,9 @@ services/playgame/engine/manifest/
 
 ### Deprecated Content
 
-Deprecated content must be physically moved away from the active loader path.
+Deprecated content must stay physically separated from the active loader path.
 
-Move:
+Moved:
 
 ```txt
 services/playgame/engine/manifest/cards/*
@@ -113,7 +113,7 @@ to:
 services/playgame/engine/manifest/card-sets/deprecated/legacy-json-demo/cards/*
 ```
 
-Move:
+Moved:
 
 ```txt
 services/playgame/engine/manifest/archive/cards.ts
@@ -125,7 +125,7 @@ to:
 services/playgame/engine/manifest/card-sets/deprecated/legacy-ts-archive/cards.ts
 ```
 
-After migration, move:
+Moved after migration:
 
 ```txt
 services/playgame/engine/manifest/content/cyberpunk-cards.ts
@@ -188,26 +188,24 @@ Rules:
 
 ## Loader Refactor
 
-Replace `loadCardsFromJson()` with a real set loader.
+Replace the old monolith loader with a real set loader.
 
 New files:
 
 ```txt
 services/playgame/engine/manifest/card-set-loader.ts
-services/playgame/engine/manifest/card-sets/core-v1/index.ts
+services/playgame/engine/manifest/card-sets/core-v1/cards.generated.ts
 ```
 
-Because Vite cannot dynamically import arbitrary filesystem JSON at runtime without constraints, the first implementation should use `import.meta.glob`:
+Because `/play` builds through Vite but the manifest tests and card validator run through `tsx`, the first implementation should use a generated static import index instead of `import.meta.glob`.
 
-```ts
-const modules = import.meta.glob('./card-sets/core-v1/cards/*/card.json', {
-  eager: true,
-});
+```txt
+card-sets/core-v1/cards.generated.ts
 ```
 
 The loader should:
 
-- Read every `card.json` in active sets.
+- Read every card exported by the active set's generated index.
 - Validate each card.
 - Ensure folder name matches `defId`.
 - Ensure no duplicate `defId`.
@@ -309,7 +307,7 @@ When Codex/Claude creates a card:
 - Add `card-sets/experiments`.
 - Move old `manifest/cards/*` into `deprecated/legacy-json-demo`.
 - Move `archive/cards.ts` into `deprecated/legacy-ts-archive`.
-- Keep `cyberpunk-cards.ts` temporarily active.
+- Keep `cyberpunk-cards.ts` temporarily active only until the generated JSON set is verified.
 
 ### Phase 2: Build Loader
 
@@ -341,7 +339,7 @@ When Codex/Claude creates a card:
 ### Phase 4: Deprecate Monolith
 
 - Move `content/cyberpunk-cards.ts` into `deprecated/cyberpunk-monolith`.
-- Update `card-loader.ts` or delete it if replaced.
+- Delete the old `card-loader.ts` if it is replaced.
 - Ensure active loader does not import anything from deprecated folders.
 - Add a README to deprecated folders explaining they are not loaded.
 

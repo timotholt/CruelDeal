@@ -1,0 +1,57 @@
+{
+  "defId": "bone-market",
+  "version": 1,
+  "name": "Bone Market",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "CREATE_CARD_IN_ZONE",
+            "pool": {
+              "kind": "COST_RANGE",
+              "ownerDeck": "SELF_OWNER",
+              "min": 1,
+              "max": 4
+            },
+            "owner": "SELF_OWNER",
+            "destination": {
+              "kind": "HAND"
+            }
+          },
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "MIN_POWER_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BONE MARKET",
+    "flavorText": "Fair exchange is no robbery.",
+    "rulesText": "On Reveal: Add a random card to your hand, then destroy your lowest-Power card here.",
+    "accent": "#b5838d",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

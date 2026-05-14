@@ -1,0 +1,23 @@
+{
+  "defId": "loaded-suit",
+  "version": 1,
+  "name": "Loaded Suit",
+  "basePower": 8,
+  "cost": 5,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "LOADED SUIT",
+    "flavorText": "The money did the talking before they walked in.",
+    "rulesText": "",
+    "accent": "#ffd60a",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

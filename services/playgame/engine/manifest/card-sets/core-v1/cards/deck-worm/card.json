@@ -1,0 +1,46 @@
+{
+  "defId": "deck-worm",
+  "version": 1,
+  "name": "Deck Worm",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Hacker",
+    "AI"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "FIRST_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "OPP_OWNER",
+            "zoneFilter": "DECK"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -3
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DECK WORM",
+    "flavorText": "It finds the next card before they do.",
+    "rulesText": "On Reveal: Give the top card of your opponent's deck -3 Power.",
+    "accent": "#9d4edd",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

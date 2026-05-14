@@ -1,0 +1,42 @@
+{
+  "defId": "redline-bruiser",
+  "version": 1,
+  "name": "Redline Bruiser",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Merc",
+    "Bio"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "COUNT",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "DESTROYED"
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "REDLINE BRUISER",
+    "flavorText": "Every fall feeds the fury.",
+    "rulesText": "Ongoing: +1 Power for each of your destroyed cards.",
+    "accent": "#c1121f",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

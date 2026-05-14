@@ -1,0 +1,54 @@
+{
+  "defId": "grey-market-cache",
+  "version": 1,
+  "name": "Grey Market Cache",
+  "basePower": 2,
+  "cost": 3,
+  "tribes": [
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADJUST_COST",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "WHERE",
+            "of": {
+              "kind": "ALL_CARDS",
+              "ownerFilter": "SELF_OWNER",
+              "zoneFilter": "HAND"
+            },
+            "pred": {
+              "kind": "WAS_CREATED",
+              "target": {
+                "kind": "SELF"
+              }
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GREY MARKET CACHE",
+    "flavorText": "No provenance. No problem.",
+    "rulesText": "On Reveal: Reduce the Cost of a created card in your hand by 2.",
+    "accent": "#adb5bd",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

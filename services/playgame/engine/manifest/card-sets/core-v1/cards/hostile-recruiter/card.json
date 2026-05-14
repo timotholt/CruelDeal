@@ -1,0 +1,46 @@
+{
+  "defId": "hostile-recruiter",
+  "version": 1,
+  "name": "Hostile Recruiter",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "COPY_TEXT_OF",
+        "into": {
+          "kind": "SELF"
+        },
+        "source": {
+          "kind": "MIN_COST_OF",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "copyKind": "ONGOING"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HOSTILE RECRUITER",
+    "flavorText": "Your talents belong to us now.",
+    "rulesText": "On Reveal: Copy the Ongoing text of your lowest-Cost card here.",
+    "accent": "#1d3557",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

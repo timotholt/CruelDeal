@@ -1,0 +1,39 @@
+{
+  "defId": "drone-pup",
+  "version": 1,
+  "name": "Drone Pup",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Drone"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "cheap-drone"
+          ]
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DRONE PUP",
+    "flavorText": "Every unit spawns a replacement.",
+    "rulesText": "When Destroyed: Add a 1-Power Drone to your hand.",
+    "accent": "#adb5bd",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

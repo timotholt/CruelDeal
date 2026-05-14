@@ -1,0 +1,44 @@
+{
+  "defId": "knockoff-cyberarm",
+  "version": 1,
+  "name": "Knockoff Cyberarm",
+  "basePower": 5,
+  "cost": 3,
+  "tribes": [
+    "Bio",
+    "Tech"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "POWER_INCREASED",
+          "target": {
+            "kind": "SELF"
+          }
+        },
+        "then": [
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "KNOCKOFF CYBERARM",
+    "flavorText": "Works great. Right up until it doesn't.",
+    "rulesText": "End of Turn: Destroy this if it has increased Power.",
+    "accent": "#a8dadc",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

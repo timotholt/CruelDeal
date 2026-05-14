@@ -1,0 +1,31 @@
+{
+  "defId": "adrenal-graft",
+  "version": 1,
+  "name": "Adrenal Graft",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "DRAW_ON_POWER_GAIN",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ADRENAL GRAFT",
+    "flavorText": "Every boost sharpens the mind.",
+    "rulesText": "When this gains Power, draw a card.",
+    "accent": "#f4a261",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

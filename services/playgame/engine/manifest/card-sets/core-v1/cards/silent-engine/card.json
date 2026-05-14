@@ -1,0 +1,65 @@
+{
+  "defId": "silent-engine",
+  "version": 1,
+  "name": "Silent Engine",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "HAS_UNSPENT_ENERGY",
+          "owner": "SELF_OWNER"
+        },
+        "then": [
+          {
+            "kind": "FOREACH",
+            "over": {
+              "kind": "WHERE",
+              "of": {
+                "kind": "ALL_CARDS",
+                "ownerFilter": "SELF_OWNER",
+                "zoneFilter": "LANE"
+              },
+              "pred": {
+                "kind": "HAS_ONGOING",
+                "target": {
+                  "kind": "SELF"
+                }
+              }
+            },
+            "do": [
+              {
+                "kind": "ADD_POWER",
+                "target": {
+                  "kind": "SELF"
+                },
+                "delta": {
+                  "kind": "LIT",
+                  "n": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SILENT ENGINE",
+    "flavorText": "Restraint is the best amplifier.",
+    "rulesText": "End of Turn: If you have unspent Energy, give your Ongoing cards +1 Power.",
+    "accent": "#caf0f8",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

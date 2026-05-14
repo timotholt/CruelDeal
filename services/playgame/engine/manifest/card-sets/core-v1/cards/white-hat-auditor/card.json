@@ -1,0 +1,55 @@
+{
+  "defId": "white-hat-auditor",
+  "version": 1,
+  "name": "White-Hat Auditor",
+  "basePower": 3,
+  "cost": 3,
+  "tribes": [
+    "Hacker",
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          },
+          "pred": {
+            "kind": "WAS_CREATED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "do": [
+          {
+            "kind": "REMOVE_TEXT",
+            "target": {
+              "kind": "SELF"
+            },
+            "textKind": "ALL"
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "WHITE-HAT AUDITOR",
+    "flavorText": "Unauthorised assets get flagged and stripped.",
+    "rulesText": "On Reveal: Enemy created cards here lose their text.",
+    "accent": "#dee2e6",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

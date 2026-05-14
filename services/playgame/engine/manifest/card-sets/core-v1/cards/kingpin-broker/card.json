@@ -1,0 +1,58 @@
+{
+  "defId": "kingpin-broker",
+  "version": 1,
+  "name": "Kingpin Broker",
+  "basePower": 7,
+  "cost": 6,
+  "tribes": [
+    "Merc",
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER"
+          },
+          "pred": {
+            "kind": "COST_REDUCED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "do": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "KINGPIN BROKER",
+    "flavorText": "He discounted them. Now they serve him.",
+    "rulesText": "On Reveal: Give your discounted cards here +2 Power.",
+    "accent": "#ffd60a",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

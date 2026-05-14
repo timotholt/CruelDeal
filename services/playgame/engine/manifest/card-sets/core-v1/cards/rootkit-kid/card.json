@@ -1,0 +1,57 @@
+{
+  "defId": "rootkit-kid",
+  "version": 1,
+  "name": "Rootkit Kid",
+  "basePower": 1,
+  "cost": 2,
+  "tribes": [
+    "Hacker"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          },
+          "pred": {
+            "kind": "WAS_CREATED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "do": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": -2
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ROOTKIT KID",
+    "flavorText": "Borrowed things break easiest.",
+    "rulesText": "On Reveal: Enemy created cards here have -2 Power.",
+    "accent": "#9d4edd",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

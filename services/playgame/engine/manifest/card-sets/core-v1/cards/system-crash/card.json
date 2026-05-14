@@ -1,0 +1,44 @@
+{
+  "defId": "system-crash",
+  "version": 1,
+  "name": "System Crash",
+  "basePower": 3,
+  "cost": 4,
+  "tribes": [
+    "Hacker",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "RESET_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "OPP_OWNER"
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SYSTEM CRASH",
+    "flavorText": "The numbers go back to zero.",
+    "rulesText": "On Reveal: Reset a random enemy card here to its base Power.",
+    "accent": "#560bad",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

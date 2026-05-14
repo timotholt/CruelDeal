@@ -1,0 +1,45 @@
+{
+  "defId": "signal-booster",
+  "version": 1,
+  "name": "Signal Booster",
+  "basePower": 1,
+  "cost": 2,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "SELF_OWNER",
+          "exclude": {
+            "kind": "SELF"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SIGNAL BOOSTER",
+    "flavorText": "Amplification is a form of loyalty.",
+    "rulesText": "Ongoing: Your other cards here have +1 Power.",
+    "accent": "#0096c7",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

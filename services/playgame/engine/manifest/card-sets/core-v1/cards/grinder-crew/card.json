@@ -1,0 +1,74 @@
+{
+  "defId": "grinder-crew",
+  "version": 1,
+  "name": "Grinder Crew",
+  "basePower": 3,
+  "cost": 2,
+  "tribes": [
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "EXISTS",
+          "target": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "then": [
+          {
+            "kind": "DESTROY",
+            "target": {
+              "kind": "RANDOM_N",
+              "count": {
+                "kind": "LIT",
+                "n": 1
+              },
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "SELF_OWNER",
+                "exclude": {
+                  "kind": "SELF"
+                }
+              }
+            }
+          },
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 3
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GRINDER CREW",
+    "flavorText": "They make room the old-fashioned way.",
+    "rulesText": "On Reveal: Destroy another friendly card here and gain +3 Power.",
+    "accent": "#ff5a1f",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

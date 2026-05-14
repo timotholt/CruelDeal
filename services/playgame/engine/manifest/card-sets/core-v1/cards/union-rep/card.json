@@ -1,0 +1,34 @@
+{
+  "defId": "union-rep",
+  "version": 1,
+  "name": "Union Rep",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Corp",
+    "Merc"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "BLOCK_FRIENDLY_DESTROY",
+        "laneOf": {
+          "kind": "SELF"
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "UNION REP",
+    "flavorText": "Your own cards can't touch them while she's watching.",
+    "rulesText": "Ongoing: Your cards here cannot be destroyed by your own cards.",
+    "accent": "#e9c46a",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "defId": "capacitor-drone",
+  "version": 1,
+  "name": "Capacitor Drone",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Drone",
+    "Tech"
+  ],
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "HAS_UNSPENT_ENERGY",
+          "owner": "SELF_OWNER"
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "SELF"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CAPACITOR DRONE",
+    "flavorText": "Charges on patience.",
+    "rulesText": "End of Turn: If you have unspent Energy, gain +1 Power.",
+    "accent": "#f9c74f",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

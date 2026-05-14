@@ -1,0 +1,46 @@
+{
+  "defId": "replication-node",
+  "version": 1,
+  "name": "Replication Node",
+  "basePower": 3,
+  "cost": 4,
+  "tribes": [
+    "AI",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "cheap-drone"
+          ]
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "LANE",
+          "lane": {
+            "kind": "LANE_OF",
+            "of": {
+              "kind": "SELF"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "REPLICATION NODE",
+    "flavorText": "One becomes two. Two becomes enough.",
+    "rulesText": "On Reveal: Add a 1-Power Drone here.",
+    "accent": "#4cc9f0",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

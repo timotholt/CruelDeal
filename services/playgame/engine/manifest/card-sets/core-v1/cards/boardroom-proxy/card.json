@@ -1,0 +1,32 @@
+{
+  "defId": "boardroom-proxy",
+  "version": 1,
+  "name": "Boardroom Proxy",
+  "basePower": 6,
+  "cost": 5,
+  "tribes": [
+    "Corp",
+    "AI"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "COPY_ONGOING_OF_CHEAPEST_ONGOING",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BOARDROOM PROXY",
+    "flavorText": "Sits in every meeting at once.",
+    "rulesText": "Ongoing: This also has the Ongoing text of your lowest-Cost Ongoing card here.",
+    "accent": "#023e8a",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "defId": "chop-doc",
+  "version": 1,
+  "name": "Chop Doc",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DESTROY",
+        "target": {
+          "kind": "MIN_POWER_OF",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER"
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHOP DOC",
+    "flavorText": "The weakest part is always the first to go.",
+    "rulesText": "On Reveal: Destroy your lowest-Power card here.",
+    "accent": "#e63946",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

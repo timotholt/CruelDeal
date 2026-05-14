@@ -1,0 +1,32 @@
+{
+  "defId": "talent-scout",
+  "version": 1,
+  "name": "Talent Scout",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": [
+    "Corp",
+    "Merc"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CALL_BUILTIN",
+        "fn": "DRAW_LOWEST_COST_CARD",
+        "args": {}
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "TALENT SCOUT",
+    "flavorText": "Identifies what you need before you do.",
+    "rulesText": "On Reveal: Draw your lowest-Cost card from your deck.",
+    "accent": "#f4a261",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

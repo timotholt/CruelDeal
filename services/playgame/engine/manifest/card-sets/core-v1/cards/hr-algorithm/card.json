@@ -1,0 +1,49 @@
+{
+  "defId": "hr-algorithm",
+  "version": 1,
+  "name": "HR Algorithm",
+  "basePower": 2,
+  "cost": 3,
+  "tribes": [
+    "AI",
+    "Corp"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "SELF_OWNER",
+            "zoneFilter": "LANE"
+          },
+          "pred": {
+            "kind": "HAS_COPIED_TEXT",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HR ALGORITHM",
+    "flavorText": "Performance metrics have been optimised.",
+    "rulesText": "Ongoing: Your cards with copied text have +2 Power.",
+    "accent": "#2a9d8f",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

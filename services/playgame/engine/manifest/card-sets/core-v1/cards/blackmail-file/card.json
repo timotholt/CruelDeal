@@ -1,0 +1,46 @@
+{
+  "defId": "blackmail-file",
+  "version": 1,
+  "name": "Blackmail File",
+  "basePower": 2,
+  "cost": 2,
+  "tribes": [
+    "Hacker",
+    "Corp"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADJUST_COST",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "ALL_CARDS",
+            "ownerFilter": "OPP_OWNER",
+            "zoneFilter": "HAND"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLACKMAIL FILE",
+    "flavorText": "What they don't know costs them.",
+    "rulesText": "On Reveal: Increase the Cost of a random card in your opponent's hand by 1.",
+    "accent": "#212529",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

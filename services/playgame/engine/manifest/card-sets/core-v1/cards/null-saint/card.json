@@ -1,0 +1,46 @@
+{
+  "defId": "null-saint",
+  "version": 1,
+  "name": "Null Saint",
+  "basePower": 8,
+  "cost": 6,
+  "tribes": [
+    "Hacker",
+    "AI"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "OPP_OWNER"
+        },
+        "do": [
+          {
+            "kind": "REMOVE_TEXT",
+            "target": {
+              "kind": "SELF"
+            },
+            "textKind": "ALL"
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NULL SAINT",
+    "flavorText": "When Null Saint arrives, their rules stop.",
+    "rulesText": "On Reveal: Remove all text from enemy cards here.",
+    "accent": "#10002b",
+    "frame": "legendary",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

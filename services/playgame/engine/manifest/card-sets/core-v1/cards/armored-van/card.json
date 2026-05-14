@@ -1,0 +1,24 @@
+{
+  "defId": "armored-van",
+  "version": 1,
+  "name": "Armored Van",
+  "basePower": 5,
+  "cost": 3,
+  "tribes": [
+    "Military",
+    "Tech"
+  ],
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "ARMORED VAN",
+    "flavorText": "Doesn't need an ability. It's an armored van.",
+    "rulesText": "",
+    "accent": "#6c757d",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

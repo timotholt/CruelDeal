@@ -1,0 +1,39 @@
+{
+  "defId": "golden-parachute",
+  "version": 1,
+  "name": "Golden Parachute",
+  "basePower": 1,
+  "cost": 1,
+  "tribes": [
+    "Corp"
+  ],
+  "abilities": {
+    "onDestroyed": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "golden-parachute"
+          ]
+        },
+        "owner": "SELF_OWNER",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GOLDEN PARACHUTE",
+    "flavorText": "The exit strategy was always the plan.",
+    "rulesText": "When Destroyed: Add a copy of this to your hand.",
+    "accent": "#ffd60a",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

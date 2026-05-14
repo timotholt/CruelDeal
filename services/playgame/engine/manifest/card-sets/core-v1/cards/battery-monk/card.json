@@ -1,0 +1,49 @@
+{
+  "defId": "battery-monk",
+  "version": 1,
+  "name": "Battery Monk",
+  "basePower": 2,
+  "cost": 1,
+  "tribes": [
+    "Bio"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SELF"
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "TRACKED_FLAG",
+            "owner": "SELF_OWNER",
+            "flag": "hadUnspentEnergyLastTurn"
+          },
+          "then": {
+            "kind": "LIT",
+            "n": 2
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BATTERY MONK",
+    "flavorText": "Restraint accumulates.",
+    "rulesText": "Ongoing: +2 Power if you ended last turn with unspent Energy.",
+    "accent": "#f9c74f",
+    "frame": "common",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

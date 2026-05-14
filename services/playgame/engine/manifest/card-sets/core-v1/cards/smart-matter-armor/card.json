@@ -1,0 +1,51 @@
+{
+  "defId": "smart-matter-armor",
+  "version": 1,
+  "name": "Smart Matter Armor",
+  "basePower": 5,
+  "cost": 4,
+  "tribes": [
+    "Tech",
+    "Bio"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER"
+          },
+          "pred": {
+            "kind": "POWER_INCREASED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SMART MATTER ARMOR",
+    "flavorText": "The upgrade recognizes the upgrade.",
+    "rulesText": "Ongoing: Cards here with increased Power have +2 Power.",
+    "accent": "#4895ef",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

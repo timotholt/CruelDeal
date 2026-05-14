@@ -1,0 +1,45 @@
+{
+  "defId": "kill-switch",
+  "version": 1,
+  "name": "Kill Switch",
+  "basePower": 4,
+  "cost": 4,
+  "tribes": [
+    "Hacker",
+    "Tech"
+  ],
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "do": [
+          {
+            "kind": "REMOVE_COPIED_TEXT",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "KILL SWITCH",
+    "flavorText": "The deal is off. All of it.",
+    "rulesText": "On Reveal: Remove copied text from all cards here.",
+    "accent": "#c1121f",
+    "frame": "epic",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}

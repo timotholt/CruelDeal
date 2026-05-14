@@ -1,0 +1,52 @@
+{
+  "defId": "quiet-protocol",
+  "version": 1,
+  "name": "Quiet Protocol",
+  "basePower": 0,
+  "cost": 2,
+  "tribes": [
+    "AI",
+    "Hacker"
+  ],
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "ALL_CARDS",
+          "ownerFilter": "SELF_OWNER",
+          "zoneFilter": "LANE"
+        },
+        "delta": {
+          "kind": "IF_ELSE",
+          "if": {
+            "kind": "TRACKED_FLAG",
+            "owner": "SELF_OWNER",
+            "flag": "hadUnspentEnergyLastTurn"
+          },
+          "then": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "else": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "QUIET PROTOCOL",
+    "flavorText": "Discipline propagates.",
+    "rulesText": "Ongoing: Your cards have +1 Power if you ended last turn with unspent Energy.",
+    "accent": "#90e0ef",
+    "frame": "rare",
+    "art": {
+      "portrait": {
+        "path": ""
+      }
+    }
+  }
+}
