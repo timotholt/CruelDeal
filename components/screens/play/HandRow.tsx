@@ -10,6 +10,32 @@ interface HandRowProps {
   interactive: boolean;
 }
 
+interface HandSlotProps {
+  cardId: string;
+  cardById: Map<string, ResolvedCard>;
+  reservedIds: ReadonlySet<string>;
+  energy: number;
+  interactive: boolean;
+}
+
+const HandSlot = (props: HandSlotProps) => {
+  const initialCard = props.cardById.get(props.cardId) as ResolvedCard;
+  const card = createMemo<ResolvedCard>(
+    (previous) => props.cardById.get(props.cardId) ?? previous,
+    initialCard,
+  );
+  const reserved = createMemo(() => props.reservedIds.has(props.cardId));
+
+  return (
+    <HandCard
+      card={card()}
+      playable={card().cost <= props.energy}
+      interactive={props.interactive && !reserved()}
+      hidden={reserved()}
+    />
+  );
+};
+
 export const HandRow = (props: HandRowProps) => {
   const handScale = createMemo(() => {
     const n = props.cards.length;
@@ -33,22 +59,15 @@ export const HandRow = (props: HandRowProps) => {
       }}
     >
       <For each={cardIds()}>
-        {(cardId) => {
-          const initialCard = cardById().get(cardId) as ResolvedCard;
-          const card = createMemo<ResolvedCard>(
-            (previous) => cardById().get(cardId) ?? previous,
-            initialCard,
-          );
-          const reserved = createMemo(() => props.reservedIds.has(cardId));
-          return (
-            <HandCard
-              card={card()}
-              playable={card().cost <= props.energy}
-              interactive={props.interactive && !reserved()}
-              hidden={reserved()}
-            />
-          );
-        }}
+        {(cardId) => (
+          <HandSlot
+            cardId={cardId}
+            cardById={cardById()}
+            reservedIds={props.reservedIds}
+            energy={props.energy}
+            interactive={props.interactive}
+          />
+        )}
       </For>
     </div>
   );

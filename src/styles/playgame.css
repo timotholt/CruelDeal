@@ -620,6 +620,14 @@
     border-color: rgba(166, 109, 255, 0.6);
     box-shadow: 0 14px 30px rgba(166,109,255,0.25), 0 6px 14px rgba(0,0,0,0.4);
   }
+  .inspector-clone.card:hover,
+  .inspector-clone .card:hover {
+    border-color: var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .inspector-clone .card:hover {
+    transform: scale(var(--hand-scale, 1));
+  }
   .card.selected {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent), 0 14px 30px rgba(166,109,255,0.4);
@@ -801,6 +809,7 @@
     --hand-scale: 1;
     --hand-gap: 6px;
     --hand-slot-reserve-ms: 240ms;
+    --hand-scale-ms: 180ms;
     gap: var(--hand-gap);
     flex-wrap: nowrap;
     overflow: visible;
@@ -814,7 +823,7 @@
     transition:
       flex-basis var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
       width var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
-      margin var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1);
+      margin var(--hand-scale-ms) ease;
   }
   .hand .hand-card-motion--reserved {
     animation: hand-slot-reserve var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1) both;
@@ -822,6 +831,11 @@
   .hand .hand-card-motion > .card {
     transform-origin: bottom center;
     transform: scale(var(--hand-scale));
+    transition:
+      opacity 0.5s ease,
+      transform var(--hand-scale-ms) ease,
+      box-shadow 0.15s,
+      border-color 0.15s;
   }
   .hand .hand-card-motion:hover > .card {
     transform: translateY(-10px) scale(calc(var(--hand-scale) * 1.05));

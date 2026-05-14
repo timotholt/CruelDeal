@@ -9,7 +9,7 @@
  * iterated without touching engine-coupled files.
  */
 
-import { createEffect } from 'solid-js';
+import { createEffect, createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { dragState } from './useDragDrop';
@@ -28,6 +28,8 @@ interface HandCardProps {
 export const HandCard = (props: HandCardProps) => {
   const { bindCardRef } = useVfx();
   const cardId = () => props.card.id as CardId;
+  const isHidden = createMemo(() => Boolean(props.hidden));
+  const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
 
   createEffect(() => {
     const sources = props.card.textDisabled
@@ -44,7 +46,7 @@ export const HandCard = (props: HandCardProps) => {
   };
 
   const onDragStart = (e: DragEvent): void => {
-    if (props.interactive === false || props.hidden) {
+    if (!isInteractive()) {
       e.preventDefault();
       return;
     }
@@ -60,7 +62,7 @@ export const HandCard = (props: HandCardProps) => {
     dragState.id = null;
   };
   const onClick = (e: MouseEvent): void => {
-    if (props.interactive === false || props.hidden) return;
+    if (!isInteractive()) return;
     e.stopPropagation();
     openInspect({
       kind: 'card',
@@ -74,27 +76,23 @@ export const HandCard = (props: HandCardProps) => {
   return (
     <div
       ref={bindCardRef(props.card.id)}
-      class={'hand-card-motion' + (props.hidden ? ' hand-card-motion--reserved' : '')}
+      class={'hand-card-motion' + (isHidden() ? ' hand-card-motion--reserved' : '')}
       data-card-id={props.card.id}
       style={{
-        visibility: props.hidden ? 'hidden' : 'visible',
-        'pointer-events': props.hidden ? 'none' : 'auto',
-        cursor: props.interactive === false || props.hidden ? 'default' : 'pointer',
+        visibility: isHidden() ? 'hidden' : 'visible',
+        'pointer-events': isHidden() ? 'none' : 'auto',
+        cursor: isInteractive() ? 'pointer' : 'default',
       }}
-      draggable={props.interactive !== false && !props.hidden}
+      draggable={isInteractive()}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
     >
       <div
         class={'card' + (props.card.textDisabled ? ' text-disabled' : '')}
-        // NOTE: the `transition` list MUST include the CSS hover properties
-        // (transform, box-shadow, border-color) or the inline `transition`
-        // shorthand wipes the :hover animation defined in playgame.css.
         style={{
           opacity: props.playable ? 1 : 0.5,
-          cursor: props.interactive === false || props.hidden ? 'default' : 'pointer',
-          transition: 'opacity 0.5s ease, transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+          cursor: isInteractive() ? 'pointer' : 'default',
         }}
       >
         <CardVfxStack cardId={props.card.id as CardId}>

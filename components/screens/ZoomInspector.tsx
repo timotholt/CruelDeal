@@ -31,6 +31,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
   const [isClosing, setIsClosing] = createSignal(false);
   const [logKind, setLogKind] = createSignal<'power' | 'cost' | null>(null);
   const [laneLogSide, setLaneLogSide] = createSignal<'top' | 'bottom' | null>(null);
+  const [cardTextStyle, setCardTextStyle] = createSignal<Record<string, string>>({});
 
   const handleClose = () => {
     if (isClosing()) return;
@@ -62,7 +63,11 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
     // Position clone absolutely at original location — always full brightness in inspector
     clone.style.opacity = '1';
     clone.style.transition = 'none';
-    clone.classList.add('card-clone');
+    clone.classList.add('card-clone', 'inspector-clone');
+    clone.draggable = false;
+    clone.querySelectorAll('[draggable="true"]').forEach((el) => {
+      (el as HTMLElement).draggable = false;
+    });
     cloneRef.appendChild(clone);
     Object.assign(clone.style, {
       position: 'absolute',
@@ -98,6 +103,10 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       if (el.classList.contains('cost'))  { setLogKind(k => k === 'cost' ? null : 'cost'); return; }
       handleClose();
     });
+    clone.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
 
     // Style power/cost as tappable when card inspector is open
     if (props.target.kind === 'card') {
@@ -131,6 +140,22 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
     // Translate to center
     const translateX = centerX - (rect.left + rect.width / 2);
     const translateY = centerY - (rect.top + rect.height / 2);
+    const finalCardBottom = centerY + (rect.height * scale) / 2;
+    const safeHeight = Math.min(viewportHeight, viewportWidth * 16 / 9);
+    const safeWidth = Math.min(viewportWidth, viewportHeight * 9 / 16);
+    const safeTop = (viewportHeight - safeHeight) / 2;
+    const safeBottom = safeTop + safeHeight;
+    const textTop = Math.min(finalCardBottom + 24, safeBottom - 112);
+    const textMaxHeight = Math.max(56, safeBottom - textTop - 12);
+
+    setCardTextStyle({
+      top: `${Math.max(safeTop + 12, textTop)}px`,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: `${Math.max(240, safeWidth - 28)}px`,
+      'max-width': `calc(100vw - 28px)`,
+      'max-height': `${textMaxHeight}px`,
+    });
 
     requestAnimationFrame(() => {
       Object.assign(clone.style, {
@@ -195,15 +220,13 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         <div
           style={{
             position: 'fixed',
-            bottom: '20%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            'max-width': '80vw',
+            ...cardTextStyle(),
             'text-align': 'center',
             color: 'white',
             'font-size': '0.9rem',
+            'line-height': '1.35',
             'z-index': '1001',
-            animation: 'fadeIn 0.4s ease-in 0.1s both',
+            overflow: 'auto',
             'text-decoration': (props.target as { kind: 'card'; card: ResolvedCard }).card?.textDisabled ? 'line-through' : 'none',
             'text-decoration-thickness': '2px',
             'text-decoration-color': 'rgba(255, 96, 128, 0.9)',
