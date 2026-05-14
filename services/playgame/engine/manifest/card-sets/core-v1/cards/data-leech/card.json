@@ -4,9 +4,6 @@
   "name": "Data Leech",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -27,5 +24,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

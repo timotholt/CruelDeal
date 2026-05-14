@@ -4,10 +4,6 @@
   "name": "Panopticon AI",
   "basePower": 5,
   "cost": 5,
-  "tribes": [
-    "AI",
-    "Hacker"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -30,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

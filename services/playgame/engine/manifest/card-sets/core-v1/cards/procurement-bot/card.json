@@ -4,10 +4,6 @@
   "name": "Procurement Bot",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Drone",
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -45,5 +41,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

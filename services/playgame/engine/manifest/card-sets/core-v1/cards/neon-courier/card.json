@@ -4,9 +4,6 @@
   "name": "Neon Courier",
   "basePower": 3,
   "cost": 2,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -27,5 +24,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

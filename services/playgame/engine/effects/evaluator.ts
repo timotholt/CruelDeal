@@ -153,6 +153,20 @@ type CardRevealOptions = {
   readonly firePlayedTriggers: boolean;
 };
 
+function banishResolvedSpell(state: MatchState, cardId: CardId, manifest: Manifest): EvalResult {
+  const card = state.cards[cardId];
+  const def = card ? manifest.cards[card.defId] : undefined;
+  if (!card || !def || def.cardType !== 'spell' || card.zone !== 'LANE') {
+    return { events: [], state };
+  }
+  const banish: MatchEvent = {
+    type: 'CARD_BANISHED',
+    cardId,
+    cause: { sourceId: cardId, effectKind: 'SYSTEM' },
+  };
+  return { events: [banish], state: apply(state, banish, manifest) };
+}
+
 /**
  * Reveal a newly-played/spawned card. This is the full "card was played here"
  * path: flip, fire On Reveal, then notify card/location played-here triggers.
@@ -245,7 +259,12 @@ function resolveCardReveal(
     s = apply(s, flip, manifest);
   }
 
-  if (suppressed) return { events, state: s };
+  if (suppressed) {
+    const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+    events.push(...spellCleanup.events);
+    s = spellCleanup.state;
+    return { events, state: s };
+  }
 
   const def = manifest.cards[card.defId];
   const onReveal = def?.abilities.onReveal ?? [];
@@ -258,6 +277,9 @@ function resolveCardReveal(
       events.push(...post.events);
       s = post.state;
     }
+    const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+    events.push(...spellCleanup.events);
+    s = spellCleanup.state;
     return { events, state: s };
   }
 
@@ -309,6 +331,10 @@ function resolveCardReveal(
     events.push(...post.events);
     s = post.state;
   }
+
+  const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+  events.push(...spellCleanup.events);
+  s = spellCleanup.state;
 
   return { events, state: s };
 }

@@ -4,9 +4,6 @@
   "name": "Rust Revenant",
   "basePower": 6,
   "cost": 4,
-  "tribes": [
-    "Bio"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -44,5 +41,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

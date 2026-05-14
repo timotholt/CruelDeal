@@ -4,10 +4,6 @@
   "name": "Hive Riot",
   "basePower": 4,
   "cost": 6,
-  "tribes": [
-    "Drone",
-    "AI"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -57,5 +53,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

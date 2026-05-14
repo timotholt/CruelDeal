@@ -4,9 +4,6 @@
   "name": "Crash Dummy",
   "basePower": 2,
   "cost": 1,
-  "tribes": [
-    "Drone"
-  ],
   "abilities": {
     "onDestroyed": [
       {
@@ -30,5 +27,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

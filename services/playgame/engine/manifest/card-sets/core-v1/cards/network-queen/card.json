@@ -4,10 +4,6 @@
   "name": "Network Queen",
   "basePower": 7,
   "cost": 5,
-  "tribes": [
-    "Merc",
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -52,5 +48,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

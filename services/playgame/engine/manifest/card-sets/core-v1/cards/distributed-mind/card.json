@@ -4,9 +4,6 @@
   "name": "Distributed Mind",
   "basePower": 4,
   "cost": 5,
-  "tribes": [
-    "AI"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -44,5 +41,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

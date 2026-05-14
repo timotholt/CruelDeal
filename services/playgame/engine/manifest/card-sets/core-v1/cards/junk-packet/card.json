@@ -4,10 +4,6 @@
   "name": "Junk Packet",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Hacker",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -37,5 +33,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

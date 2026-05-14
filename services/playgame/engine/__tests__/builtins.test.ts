@@ -20,7 +20,7 @@ import type { EffectExpr } from '../types/ability';
 function mkDef(defId: string, basePower: number, cost: number): CardDef {
   return {
     defId, version: 1, name: defId, basePower, cost,
-    tribes: [],
+    cardType: 'character',
     abilities: {},
     cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
   };

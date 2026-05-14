@@ -4,10 +4,6 @@
   "name": "Military Fixer",
   "basePower": 2,
   "cost": 3,
-  "tribes": [
-    "Military",
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -54,5 +50,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

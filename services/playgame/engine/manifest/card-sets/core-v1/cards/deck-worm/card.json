@@ -4,10 +4,6 @@
   "name": "Deck Worm",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Hacker",
-    "AI"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -42,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

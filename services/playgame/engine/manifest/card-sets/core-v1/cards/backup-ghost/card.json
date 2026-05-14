@@ -4,9 +4,6 @@
   "name": "Backup Ghost",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "AI"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -27,5 +24,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

@@ -4,9 +4,6 @@
   "name": "Executive Override",
   "basePower": 5,
   "cost": 6,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -63,5 +60,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

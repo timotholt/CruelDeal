@@ -4,9 +4,6 @@
   "name": "Loaded Suit",
   "basePower": 8,
   "cost": 5,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {},
   "cosmetic": {
     "displayName": "LOADED SUIT",
@@ -19,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

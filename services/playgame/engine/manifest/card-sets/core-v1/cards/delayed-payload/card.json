@@ -4,10 +4,6 @@
   "name": "Delayed Payload",
   "basePower": 7,
   "cost": 5,
-  "tribes": [
-    "Tech",
-    "Military"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -46,5 +42,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

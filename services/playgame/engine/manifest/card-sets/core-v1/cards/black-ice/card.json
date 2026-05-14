@@ -4,10 +4,6 @@
   "name": "Black ICE",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "AI",
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -41,5 +37,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

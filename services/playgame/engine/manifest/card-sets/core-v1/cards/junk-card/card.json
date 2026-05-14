@@ -4,7 +4,6 @@
   "name": "Junk",
   "basePower": 0,
   "cost": 1,
-  "tribes": [],
   "abilities": {},
   "cosmetic": {
     "displayName": "JUNK",
@@ -17,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

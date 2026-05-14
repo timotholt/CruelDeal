@@ -98,7 +98,7 @@ export const buildWorkbenchAssets = (): WorkbenchAsset[] => {
         name: card.name,
         displayName: card.cosmetic.displayName,
         defId: card.defId,
-        tribes: [...card.tribes],
+        cardType: card.cardType,
         cost: card.cost,
         power: card.basePower,
         frame: card.cosmetic.frame ?? 'common',
@@ -161,7 +161,7 @@ export const buildPromptForAsset = (asset: WorkbenchAsset): string => {
     return [
       GLOBAL_STYLE_PROMPT,
       `Create a portrait-format card illustration for "${asset.promptInputs.name}".`,
-      `Faction/tribe: ${(asset.promptInputs.tribes as string[]).join(', ') || 'none'}.`,
+      `Card type: ${asset.promptInputs.cardType}.`,
       `Gameplay identity: cost ${asset.promptInputs.cost}, power ${asset.promptInputs.power}, rarity ${asset.promptInputs.frame}.`,
       `Rules inspiration: ${asset.promptInputs.rulesText || 'No rules text.'}`,
       `Flavor inspiration: ${asset.promptInputs.flavorText || 'No flavor text.'}`,

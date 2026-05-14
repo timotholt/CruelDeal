@@ -4,10 +4,6 @@
   "name": "Firewall Daemon",
   "basePower": 4,
   "cost": 4,
-  "tribes": [
-    "AI",
-    "Hacker"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -47,5 +43,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

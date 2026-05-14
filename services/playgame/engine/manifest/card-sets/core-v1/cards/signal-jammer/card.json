@@ -4,10 +4,6 @@
   "name": "Signal Jammer",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Hacker",
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -34,5 +30,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

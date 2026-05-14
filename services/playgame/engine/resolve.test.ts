@@ -36,7 +36,7 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 // ---- Fixture builders ------------------------------------------------------
 
 const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => ({
-  defId, version: 1, name: defId, basePower, cost, tribes: [], abilities: {},
+  defId, version: 1, name: defId, basePower, cost, cardType: 'character', abilities: {},
   cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
   ...extra,
 });

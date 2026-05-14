@@ -30,9 +30,11 @@ export const validateCardModule = (module: CardModule): CardValidationIssue[] =>
   if (folder !== card.defId) issues.push({ cardId, message: `folder "${folder}" must match defId "${card.defId}"` });
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(card.defId)) issues.push({ cardId, message: 'defId must be kebab-case' });
   if (!Number.isInteger(card.version) || card.version < 1) issues.push({ cardId, message: 'version must be an integer >= 1' });
+  if (!['character', 'device', 'spell'].includes(card.cardType)) {
+    issues.push({ cardId, message: 'cardType must be character, device, or spell' });
+  }
   if (!Number.isInteger(card.cost) || card.cost < 0 || card.cost > 6) issues.push({ cardId, message: 'cost must be an integer in [0,6]' });
   if (!Number.isInteger(card.basePower) || card.basePower < 0) issues.push({ cardId, message: 'basePower must be an integer >= 0' });
-  if (!Array.isArray(card.tribes)) issues.push({ cardId, message: 'tribes must be an array' });
   if (!card.abilities || typeof card.abilities !== 'object') issues.push({ cardId, message: 'abilities must be an object' });
   if (!card.cosmetic || typeof card.cosmetic !== 'object') issues.push({ cardId, message: 'cosmetic must be an object' });
   if (!card.cosmetic?.displayName) issues.push({ cardId, message: 'cosmetic.displayName is required' });

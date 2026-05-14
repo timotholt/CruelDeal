@@ -4,9 +4,6 @@
   "name": "AI Overseer",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "AI"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -49,5 +46,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

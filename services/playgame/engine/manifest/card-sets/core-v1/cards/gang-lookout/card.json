@@ -4,9 +4,6 @@
   "name": "Gang Lookout",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onAnyCardPlayedHere": [
       {
@@ -32,5 +29,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

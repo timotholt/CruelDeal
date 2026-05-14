@@ -22,6 +22,8 @@ export interface AssetRef {
 
 // ---- Card ------------------------------------------------------------------
 
+export type CardType = 'character' | 'device' | 'spell';
+
 export interface CardAbilities {
   onReveal?: EffectExpr[];
   ongoing?: OngoingExpr[];
@@ -49,9 +51,9 @@ export interface CardDef {
   defId: string;
   version: number;
   name: string;                         // display only; real display name is cosmetic
+  cardType: CardType;
   basePower: number;
   cost: number;
-  tribes: readonly string[];
   abilities: CardAbilities;
   cosmetic: CardCosmetic;
 }

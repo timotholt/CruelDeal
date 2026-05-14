@@ -4,9 +4,6 @@
   "name": "Stored Charge",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -45,5 +42,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

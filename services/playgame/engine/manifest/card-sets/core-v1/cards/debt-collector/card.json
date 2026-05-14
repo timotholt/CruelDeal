@@ -4,10 +4,6 @@
   "name": "Debt Collector",
   "basePower": 6,
   "cost": 4,
-  "tribes": [
-    "Corp",
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -34,5 +30,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

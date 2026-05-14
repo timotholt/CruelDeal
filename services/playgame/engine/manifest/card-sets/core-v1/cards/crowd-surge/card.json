@@ -4,9 +4,6 @@
   "name": "Crowd Surge",
   "basePower": 4,
   "cost": 4,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -33,5 +30,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

@@ -4,10 +4,6 @@
   "name": "Union Rep",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Corp",
-    "Merc"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -30,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

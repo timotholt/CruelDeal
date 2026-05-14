@@ -4,10 +4,6 @@
   "name": "Boardroom Proxy",
   "basePower": 6,
   "cost": 5,
-  "tribes": [
-    "Corp",
-    "AI"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -28,5 +24,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

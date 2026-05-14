@@ -4,10 +4,6 @@
   "name": "White-Hat Auditor",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "Hacker",
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -51,5 +47,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

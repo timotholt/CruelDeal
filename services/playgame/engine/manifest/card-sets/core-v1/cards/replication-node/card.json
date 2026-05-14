@@ -4,10 +4,6 @@
   "name": "Replication Node",
   "basePower": 3,
   "cost": 4,
-  "tribes": [
-    "AI",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -42,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

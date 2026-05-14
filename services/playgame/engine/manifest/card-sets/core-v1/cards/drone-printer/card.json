@@ -4,10 +4,6 @@
   "name": "Drone Printer",
   "basePower": 1,
   "cost": 2,
-  "tribes": [
-    "Drone",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -42,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

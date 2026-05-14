@@ -61,7 +61,7 @@ export interface ResolvedCard {
   art: string;
   /** Portrait image path (e.g. "/art/cards/sentinel/portrait.webp"), or null if no art yet. */
   portraitPath: string | null;
-  /** Primary tribe (used as "type" label in UI). */
+  /** Card type label shown on the card face. */
   type: string;
   /** Rules text / flavor shown in the inspector. */
   text: string;
@@ -126,7 +126,7 @@ export function resolveCard(
     basePower: def.basePower,
     art: def.cosmetic.accent ?? '#4a5568',
     portraitPath: def.cosmetic.art.portrait.path || null,
-    type: def.tribes[0] ?? 'striker',
+    type: def.cardType,
     text: def.cosmetic.rulesText ?? '',
     textDisabled: inst.textOverride?.kind === 'BLANK_ONGOING' ||
       inst.textOverride?.kind === 'BLANK_ALL' ||

@@ -4,10 +4,6 @@
   "name": "Kingpin Broker",
   "basePower": 7,
   "cost": 6,
-  "tribes": [
-    "Merc",
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -54,5 +50,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

@@ -4,9 +4,6 @@
   "name": "Acquisition Team",
   "basePower": 5,
   "cost": 4,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -82,5 +79,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

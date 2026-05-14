@@ -4,9 +4,6 @@
   "name": "Bone Market",
   "basePower": 4,
   "cost": 4,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -53,5 +50,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

@@ -52,7 +52,7 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   name: defId,
   basePower,
   cost,
-  tribes: [],
+  cardType: 'character',
   abilities: {},
   cosmetic: {
     displayName: defId,

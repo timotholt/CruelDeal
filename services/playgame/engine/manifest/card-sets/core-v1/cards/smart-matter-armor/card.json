@@ -4,10 +4,6 @@
   "name": "Smart Matter Armor",
   "basePower": 5,
   "cost": 4,
-  "tribes": [
-    "Tech",
-    "Bio"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -47,5 +43,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

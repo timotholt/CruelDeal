@@ -4,10 +4,6 @@
   "name": "Pack Tactics",
   "basePower": 2,
   "cost": 3,
-  "tribes": [
-    "Military",
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -48,5 +44,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

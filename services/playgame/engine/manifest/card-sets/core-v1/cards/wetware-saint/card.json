@@ -4,10 +4,6 @@
   "name": "Wetware Saint",
   "basePower": 5,
   "cost": 4,
-  "tribes": [
-    "Bio",
-    "AI"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -47,5 +43,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

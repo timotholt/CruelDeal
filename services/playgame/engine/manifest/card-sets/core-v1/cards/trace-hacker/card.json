@@ -4,9 +4,6 @@
   "name": "Trace Hacker",
   "basePower": 4,
   "cost": 3,
-  "tribes": [
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -29,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

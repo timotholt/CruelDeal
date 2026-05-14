@@ -23,7 +23,7 @@ const basicCard = (defId: string, abilities: CardDef['abilities'] = {}): CardDef
   name: defId,
   basePower: 2,
   cost: 1,
-  tribes: [],
+  cardType: 'character',
   abilities,
   cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
 });

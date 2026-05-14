@@ -4,9 +4,6 @@
   "name": "Metro Enforcer",
   "basePower": 7,
   "cost": 4,
-  "tribes": [
-    "Military"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -56,5 +53,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

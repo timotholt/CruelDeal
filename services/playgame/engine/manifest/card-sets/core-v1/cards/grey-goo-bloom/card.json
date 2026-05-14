@@ -4,10 +4,6 @@
   "name": "Grey Goo Bloom",
   "basePower": 6,
   "cost": 5,
-  "tribes": [
-    "AI",
-    "Tech"
-  ],
   "abilities": {
     "onEndOfTurn": [
       {
@@ -56,5 +52,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

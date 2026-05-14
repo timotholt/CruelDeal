@@ -4,9 +4,6 @@
   "name": "Memory Burner",
   "basePower": 4,
   "cost": 2,
-  "tribes": [
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -33,5 +30,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

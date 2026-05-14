@@ -4,10 +4,6 @@
   "name": "Borrowed Gun",
   "basePower": 3,
   "cost": 1,
-  "tribes": [
-    "Tech",
-    "Military"
-  ],
   "abilities": {
     "onEndOfTurn": [
       {
@@ -40,5 +36,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

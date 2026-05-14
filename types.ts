@@ -67,6 +67,7 @@ export interface UserProfile {
 }
 
 export type CardRarity = "Common" | "Rare" | "Epic" | "Legendary";
+export type CardType = "character" | "device" | "spell";
 
 // --- Progression Types ---
 export type ProgressionRewardType = 'booster' | 'credits' | 'gold' | 'box' | 'card' | 'tokens';
@@ -211,6 +212,7 @@ export interface LocationInstance {
 export interface CardDefinition {
   id: string;
   name: string;
+  cardType?: CardType;
   rarity: CardRarity;
   baseCost: number;
   basePower: number;

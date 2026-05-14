@@ -4,10 +4,6 @@
   "name": "Reflex Booster",
   "basePower": 1,
   "cost": 2,
-  "tribes": [
-    "Bio",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -47,5 +43,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

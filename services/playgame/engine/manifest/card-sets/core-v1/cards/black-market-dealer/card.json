@@ -4,9 +4,6 @@
   "name": "Black Market Dealer",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -30,5 +27,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

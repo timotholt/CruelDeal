@@ -4,9 +4,6 @@
   "name": "Gutter Legion",
   "basePower": 5,
   "cost": 5,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -30,5 +27,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

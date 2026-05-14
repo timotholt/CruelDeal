@@ -21,7 +21,7 @@ import type { EvalCtx } from '../projections/context';
 function mkDef(defId: string, basePower: number, cost: number, hasOngoing = false): CardDef {
   return {
     defId, version: 1, name: defId, basePower, cost,
-    tribes: [],
+    cardType: 'character',
     abilities: hasOngoing ? {
       ongoing: [{
         kind: 'POWER_ADD',

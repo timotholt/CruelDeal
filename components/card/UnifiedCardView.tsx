@@ -42,6 +42,11 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
         return 'rgba(0,0,0,0.1)';
     };
 
+    const cardTypeLabel = () => {
+        const type = visual()?.def?.cardType ?? 'character';
+        return type.toUpperCase();
+    };
+
     // Base card width at md scale
     const baseWidth = 5.2; // rem
 
@@ -122,6 +127,17 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
                                 class="font-black italic uppercase tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]"
                             />
                         </Show>
+                     </div>
+                     <div
+                        class="w-full text-center font-black uppercase text-slate-300/80"
+                        style={{
+                            "font-size": '0.42em',
+                            "letter-spacing": '0.12em',
+                            "line-height": '1',
+                            "margin-top": '0.25em'
+                        }}
+                     >
+                        {cardTypeLabel()}
                      </div>
                 </div>
             </div>

@@ -4,19 +4,15 @@
   "name": "Chrome Broker",
   "basePower": 1,
   "cost": 2,
-  "tribes": [
-    "Bio",
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
         "kind": "CREATE_CARD_IN_ZONE",
         "pool": {
-          "kind": "DECK_BY_TRIBE",
+          "kind": "DECK_BY_CARD_TYPE",
           "ownerDeck": "SELF_OWNER",
-          "tribe": "Bio",
-          "excludeInPlay": true
+          "excludeInPlay": true,
+          "cardType": "character"
         },
         "owner": "SELF_OWNER",
         "destination": {
@@ -28,7 +24,7 @@
   "cosmetic": {
     "displayName": "CHROME BROKER",
     "flavorText": "Flesh is inventory.",
-    "rulesText": "On Reveal: Add a random Bio card to your hand.",
+    "rulesText": "On Reveal: Add a random Character card to your hand.",
     "accent": "#b5838d",
     "frame": "common",
     "art": {
@@ -36,5 +32,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

@@ -4,10 +4,6 @@
   "name": "Neon Singularity",
   "basePower": 6,
   "cost": 6,
-  "tribes": [
-    "AI",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -41,5 +37,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

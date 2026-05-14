@@ -4,10 +4,6 @@
   "name": "Backchannel Contact",
   "basePower": 3,
   "cost": 2,
-  "tribes": [
-    "Merc",
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -30,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

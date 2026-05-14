@@ -4,9 +4,6 @@
   "name": "Golden Parachute",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {
     "onDestroyed": [
       {
@@ -35,5 +32,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

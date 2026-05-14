@@ -28,7 +28,7 @@ import type {
   LaneTag,
   SpawnSource,
 } from '../types/state';
-import type { CardDef, Manifest } from '../manifest/types';
+import type { CardDef, CardType, Manifest } from '../manifest/types';
 import type { CardId, LaneIdx, Owner } from '../types/ids';
 import { getCardPower } from './power';
 
@@ -121,9 +121,7 @@ export interface CardFilter {
   powerDelta?: NumComparison;
 
   // Taxonomy
-  tribe?: StringComparison;
-  allTribes?: readonly string[];
-  noTribe?: StringComparison;
+  cardType?: CardType | readonly CardType[];
 
   // Abilities
   hasOnReveal?: boolean;
@@ -211,19 +209,10 @@ export function matchesCard(
   if (filter.powerDelta !== undefined && !matchesNum(card.powerDelta, filter.powerDelta)) return false;
 
   // ── Taxonomy ──────────────────────────────────────────────────────────
-  if (filter.tribe !== undefined) {
+  if (filter.cardType !== undefined) {
     if (!def) return false;
-    const hit = def.tribes.some((t) => matchesString(t, filter.tribe!));
-    if (!hit) return false;
-  }
-  if (filter.allTribes !== undefined) {
-    if (!def) return false;
-    for (const t of filter.allTribes) {
-      if (!def.tribes.includes(t)) return false;
-    }
-  }
-  if (filter.noTribe !== undefined) {
-    if (def && def.tribes.some((t) => matchesString(t, filter.noTribe!))) return false;
+    const cardTypes = arrayOrOne(filter.cardType);
+    if (!cardTypes.includes(def.cardType)) return false;
   }
 
   // ── Abilities ─────────────────────────────────────────────────────────
@@ -352,9 +341,7 @@ export interface CardDefFilter {
   cost?: NumComparison;
   basePower?: NumComparison;
 
-  tribe?: StringComparison;
-  allTribes?: readonly string[];
-  noTribe?: StringComparison;
+  cardType?: CardType | readonly CardType[];
 
   hasOnReveal?: boolean;
   hasOngoing?: boolean;
@@ -385,17 +372,9 @@ export function matchesCardDef(
   if (filter.cost !== undefined && !matchesNum(def.cost, filter.cost)) return false;
   if (filter.basePower !== undefined && !matchesNum(def.basePower, filter.basePower)) return false;
 
-  if (filter.tribe !== undefined) {
-    const hit = def.tribes.some((t) => matchesString(t, filter.tribe!));
-    if (!hit) return false;
-  }
-  if (filter.allTribes !== undefined) {
-    for (const t of filter.allTribes) {
-      if (!def.tribes.includes(t)) return false;
-    }
-  }
-  if (filter.noTribe !== undefined) {
-    if (def.tribes.some((t) => matchesString(t, filter.noTribe!))) return false;
+  if (filter.cardType !== undefined) {
+    const cardTypes = arrayOrOne(filter.cardType);
+    if (!cardTypes.includes(def.cardType)) return false;
   }
 
   if (!matchesAbilityFlags(def, filter)) return false;

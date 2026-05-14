@@ -4,10 +4,6 @@
   "name": "Ghost Vendor",
   "basePower": 4,
   "cost": 4,
-  "tribes": [
-    "Hacker",
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -30,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

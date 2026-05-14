@@ -4,9 +4,6 @@
   "name": "Escape Route",
   "basePower": 6,
   "cost": 5,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -44,5 +41,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

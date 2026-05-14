@@ -15,6 +15,7 @@
  */
 
 import type { CardId, LocationId, Owner } from './ids';
+import type { CardType } from '../manifest/types';
 
 export type OwnerRef = Owner | 'SELF_OWNER' | 'OPP_OWNER' | 'EVENT_OWNER' | 'EVENT_OPP_OWNER';
 
@@ -179,10 +180,10 @@ export type PoolRef =
   | { kind: 'COST_RANGE'; ownerDeck: OwnerRef; min: number; max: number }
   | { kind: 'ANY_RANDOM'; ownerFilter: OwnerFilter }
   /**
-   * Draw from the owner's deck filtered by tribe (tag).
+   * Draw from the owner's deck filtered by the top-level card taxonomy.
    * `excludeInPlay` skips cards already on the board or in hand.
    */
-  | { kind: 'DECK_BY_TRIBE'; ownerDeck: OwnerRef; tribe: string; excludeInPlay?: boolean };
+  | { kind: 'DECK_BY_CARD_TYPE'; ownerDeck: OwnerRef; cardType: CardType; excludeInPlay?: boolean };
 
 // ---- Effect expressions (On Reveal / Activate / triggered) -----------------
 

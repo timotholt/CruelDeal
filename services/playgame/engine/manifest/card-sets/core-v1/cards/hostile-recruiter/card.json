@@ -4,9 +4,6 @@
   "name": "Hostile Recruiter",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -42,5 +39,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

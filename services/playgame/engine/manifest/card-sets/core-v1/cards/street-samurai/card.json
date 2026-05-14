@@ -4,9 +4,6 @@
   "name": "Street Samurai",
   "basePower": 4,
   "cost": 2,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {},
   "cosmetic": {
     "displayName": "STREET SAMURAI",
@@ -19,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

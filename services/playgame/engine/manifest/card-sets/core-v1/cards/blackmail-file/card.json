@@ -4,10 +4,6 @@
   "name": "Blackmail File",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Hacker",
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -42,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

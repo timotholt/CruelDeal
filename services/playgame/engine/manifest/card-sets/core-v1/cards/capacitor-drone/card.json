@@ -4,10 +4,6 @@
   "name": "Capacitor Drone",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Drone",
-    "Tech"
-  ],
   "abilities": {
     "onEndOfTurn": [
       {
@@ -42,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

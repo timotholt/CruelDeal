@@ -4,9 +4,6 @@
   "name": "Overclock Chip",
   "basePower": 0,
   "cost": 1,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -29,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

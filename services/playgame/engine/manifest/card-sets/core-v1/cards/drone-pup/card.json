@@ -4,9 +4,6 @@
   "name": "Drone Pup",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Drone"
-  ],
   "abilities": {
     "onDestroyed": [
       {
@@ -35,5 +32,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

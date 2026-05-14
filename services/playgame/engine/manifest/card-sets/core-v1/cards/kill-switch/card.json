@@ -4,10 +4,6 @@
   "name": "Kill Switch",
   "basePower": 4,
   "cost": 4,
-  "tribes": [
-    "Hacker",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -41,5 +37,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

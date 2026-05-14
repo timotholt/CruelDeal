@@ -4,10 +4,6 @@
   "name": "Hard Reset",
   "basePower": 5,
   "cost": 5,
-  "tribes": [
-    "AI",
-    "Hacker"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -41,5 +37,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

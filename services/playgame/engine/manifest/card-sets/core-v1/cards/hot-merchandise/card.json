@@ -4,9 +4,6 @@
   "name": "Hot Merchandise",
   "basePower": 9,
   "cost": 5,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -35,5 +32,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

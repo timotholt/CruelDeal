@@ -4,9 +4,6 @@
   "name": "Grey Market Cache",
   "basePower": 2,
   "cost": 3,
-  "tribes": [
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -50,5 +47,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

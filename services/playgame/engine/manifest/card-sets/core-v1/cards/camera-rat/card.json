@@ -4,10 +4,6 @@
   "name": "Camera Rat",
   "basePower": 2,
   "cost": 1,
-  "tribes": [
-    "Hacker",
-    "Drone"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -50,5 +46,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

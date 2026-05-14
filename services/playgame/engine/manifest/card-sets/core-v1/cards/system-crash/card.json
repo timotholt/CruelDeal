@@ -4,10 +4,6 @@
   "name": "System Crash",
   "basePower": 3,
   "cost": 4,
-  "tribes": [
-    "Hacker",
-    "Tech"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -40,5 +36,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "spell"
 }

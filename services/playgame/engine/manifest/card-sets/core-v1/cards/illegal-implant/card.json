@@ -4,10 +4,6 @@
   "name": "Illegal Implant",
   "basePower": 8,
   "cost": 5,
-  "tribes": [
-    "Bio",
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -46,5 +42,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

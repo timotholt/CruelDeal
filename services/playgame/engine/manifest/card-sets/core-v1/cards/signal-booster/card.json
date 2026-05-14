@@ -4,10 +4,6 @@
   "name": "Signal Booster",
   "basePower": 1,
   "cost": 2,
-  "tribes": [
-    "AI",
-    "Tech"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -41,5 +37,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

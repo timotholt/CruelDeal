@@ -4,9 +4,6 @@
   "name": "Adrenal Graft",
   "basePower": 3,
   "cost": 3,
-  "tribes": [
-    "Bio"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -27,5 +24,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

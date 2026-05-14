@@ -4,9 +4,6 @@
   "name": "Chrome Surgeon",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Bio"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -41,5 +38,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

@@ -4,9 +4,6 @@
   "name": "Street Kid",
   "basePower": 2,
   "cost": 1,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {},
   "cosmetic": {
     "displayName": "STREET KID",
@@ -19,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

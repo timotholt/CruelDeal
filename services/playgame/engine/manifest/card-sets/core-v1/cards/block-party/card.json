@@ -4,9 +4,6 @@
   "name": "Block Party",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "ongoing": [
       {
@@ -53,5 +50,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

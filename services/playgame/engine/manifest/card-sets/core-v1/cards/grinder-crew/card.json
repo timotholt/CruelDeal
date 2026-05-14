@@ -4,9 +4,6 @@
   "name": "Grinder Crew",
   "basePower": 3,
   "cost": 2,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -70,5 +67,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

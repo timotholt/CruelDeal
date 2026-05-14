@@ -4,9 +4,6 @@
   "name": "Illegal Clone",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Bio"
-  ],
   "abilities": {
     "onDestroyed": [
       {
@@ -35,5 +32,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

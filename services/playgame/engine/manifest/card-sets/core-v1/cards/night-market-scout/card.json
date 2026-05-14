@@ -4,9 +4,6 @@
   "name": "Night Market Scout",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Merc"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -39,5 +36,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

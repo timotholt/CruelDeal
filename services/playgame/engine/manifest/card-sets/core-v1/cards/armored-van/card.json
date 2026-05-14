@@ -4,10 +4,6 @@
   "name": "Armored Van",
   "basePower": 5,
   "cost": 3,
-  "tribes": [
-    "Military",
-    "Tech"
-  ],
   "abilities": {},
   "cosmetic": {
     "displayName": "ARMORED VAN",
@@ -20,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

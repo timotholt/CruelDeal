@@ -4,10 +4,6 @@
   "name": "Adaptive Shell",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Tech",
-    "Bio"
-  ],
   "abilities": {
     "onEndOfTurn": [
       {
@@ -54,5 +50,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

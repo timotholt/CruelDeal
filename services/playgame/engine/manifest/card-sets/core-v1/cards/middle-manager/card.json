@@ -4,9 +4,6 @@
   "name": "Middle Manager",
   "basePower": 2,
   "cost": 2,
-  "tribes": [
-    "Corp"
-  ],
   "abilities": {
     "onReveal": [
       {
@@ -63,5 +60,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

@@ -40,7 +40,7 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 // ---- Fixture builders ------------------------------------------------------
 
 const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => ({
-  defId, version: 1, name: defId, basePower, cost, tribes: [], abilities: {},
+  defId, version: 1, name: defId, basePower, cost, cardType: 'character', abilities: {},
   cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
   ...extra,
 });
@@ -918,6 +918,27 @@ function buildState(
   eq(res.state.cards['c1' as CardId]?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
   eq(res.state.lanes[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
   eq(res.state.hand.P0.map(c => c.id), ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
+}
+
+// -- SPELL cards resolve, then banish ---------------------------------------
+
+{
+  const pulse = mkCard('pulse', 0, 1, {
+    cardType: 'spell',
+    abilities: {
+      onReveal: [{
+        kind: 'ADD_POWER',
+        target: { kind: 'SELF' },
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    },
+  });
+  const manifest = mkManifest([pulse]);
+  const s0 = buildState([{ def: 'pulse', owner: 'P0', lane: 0, revealed: false }]);
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('spell-cleanup'));
+  truthy(res.events.some((e) => e.type === 'CARD_BANISHED'), 'SPELL: emits CARD_BANISHED after reveal');
+  eq(res.state.cards['c1' as CardId]?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
+  eq(res.state.lanes[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
 }
 
 // -- Exit -------------------------------------------------------------------

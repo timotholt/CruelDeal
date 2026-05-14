@@ -4,10 +4,6 @@
   "name": "Silent Engine",
   "basePower": 5,
   "cost": 4,
-  "tribes": [
-    "AI",
-    "Tech"
-  ],
   "abilities": {
     "onEndOfTurn": [
       {
@@ -61,5 +57,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "device"
 }

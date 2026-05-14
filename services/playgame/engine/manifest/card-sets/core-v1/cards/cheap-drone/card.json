@@ -4,9 +4,6 @@
   "name": "Cheap Drone",
   "basePower": 1,
   "cost": 1,
-  "tribes": [
-    "Drone"
-  ],
   "abilities": {},
   "cosmetic": {
     "displayName": "CHEAP DRONE",
@@ -19,5 +16,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }

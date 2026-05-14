@@ -4,10 +4,6 @@
   "name": "Severance Clone",
   "basePower": 1,
   "cost": 2,
-  "tribes": [
-    "Corp",
-    "Bio"
-  ],
   "abilities": {
     "onDestroyed": [
       {
@@ -30,5 +26,6 @@
         "path": ""
       }
     }
-  }
+  },
+  "cardType": "character"
 }
