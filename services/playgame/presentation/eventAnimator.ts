@@ -6,11 +6,14 @@ import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Timeline } from '@/services/vfx/timeline';
 import { unwrap } from 'solid-js/store';
+import { batch } from 'solid-js';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardId } from '../engine/types/ids';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const HAND_SLOT_RESERVE_MS = 240;
 
 const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   if (ctx.deckEl && ctx.deckEl.isConnected) return ctx.deckEl.getBoundingClientRect();
@@ -141,10 +144,15 @@ const animateCardEnterHand = async (
   const oldRects = captureHandRects(oldIds, ctx.cardRefs);
 
   playSfx(ctx, choreography.sfx, 'on-dispatch');
-  ctx.dispatch(event);
 
-  const raw = unwrap(ctx.state) as EngineMatchState;
-  const resolved = resolveCard(structural.cardId, raw, ctx.manifest);
+  let resolved: ResolvedCard | null = null;
+  batch(() => {
+    ctx.dispatch(event);
+    const raw = unwrap(ctx.state) as EngineMatchState;
+    resolved = resolveCard(structural.cardId, raw, ctx.manifest);
+    if (resolved) setIncoming(ctx, resolved);
+  });
+
   if (!resolved) {
     playVfx(ctx, choreography);
     playSfx(ctx, choreography.sfx, 'after-dispatch');
@@ -152,15 +160,12 @@ const animateCardEnterHand = async (
     return;
   }
 
-  setIncoming(ctx, resolved);
   playVfx(ctx, choreography);
   playSfx(ctx, choreography.sfx, 'after-dispatch');
 
-  await nextFrame();
-  clearIncoming(ctx, resolved.id);
-  await nextFrame();
-
   playLayoutSlide(oldRects, ctx.cardRefs);
+  await wait(HAND_SLOT_RESERVE_MS);
+
   await slideFromDeckToHand({
     cardId: resolved.id,
     startRect: deckSourceRect(ctx),
@@ -168,6 +173,8 @@ const animateCardEnterHand = async (
     boardWrap: ctx.boardWrap,
     sfx: ctx.sfx,
   });
+  clearIncoming(ctx, resolved.id);
+  await nextFrame();
 
   const el = ctx.cardRefs.get(resolved.id);
   if (el) {

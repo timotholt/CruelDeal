@@ -22,6 +22,7 @@ interface HandCardProps {
   card: ResolvedCard;
   playable: boolean;
   interactive?: boolean;
+  hidden?: boolean;
 }
 
 export const HandCard = (props: HandCardProps) => {
@@ -43,7 +44,7 @@ export const HandCard = (props: HandCardProps) => {
   };
 
   const onDragStart = (e: DragEvent): void => {
-    if (props.interactive === false) {
+    if (props.interactive === false || props.hidden) {
       e.preventDefault();
       return;
     }
@@ -59,7 +60,7 @@ export const HandCard = (props: HandCardProps) => {
     dragState.id = null;
   };
   const onClick = (e: MouseEvent): void => {
-    if (props.interactive === false) return;
+    if (props.interactive === false || props.hidden) return;
     e.stopPropagation();
     openInspect({
       kind: 'card',
@@ -73,32 +74,41 @@ export const HandCard = (props: HandCardProps) => {
   return (
     <div
       ref={bindCardRef(props.card.id)}
-      class={'card' + (props.card.textDisabled ? ' text-disabled' : '')}
+      class={'hand-card-motion' + (props.hidden ? ' hand-card-motion--incoming' : '')}
       data-card-id={props.card.id}
-      // NOTE: the `transition` list MUST include the CSS hover properties
-      // (transform, box-shadow, border-color) or the inline `transition`
-      // shorthand wipes the :hover animation defined in playgame.css.
       style={{
-        opacity: props.playable ? 1 : 0.5,
-        cursor: props.interactive === false ? 'default' : 'pointer',
-        transition: 'opacity 0.5s ease, transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+        visibility: props.hidden ? 'hidden' : 'visible',
+        'pointer-events': props.hidden ? 'none' : 'auto',
+        cursor: props.interactive === false || props.hidden ? 'default' : 'pointer',
       }}
-      draggable={props.interactive !== false}
+      draggable={props.interactive !== false && !props.hidden}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
     >
-      <CardVfxStack cardId={props.card.id as CardId}>
-        <div class="cost">{props.card.cost}</div>
-        <div class={'power ' + powerClass()}>{props.card.power}</div>
-        {props.card.portraitPath
-          ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
-          : <div class="bar" style={{ background: props.card.art }} />
-        }
-        <div class="name">{props.card.name}</div>
-        <div class="type">{props.card.type}</div>
-        {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
-      </CardVfxStack>
+      <div
+        class={'card' + (props.card.textDisabled ? ' text-disabled' : '')}
+        // NOTE: the `transition` list MUST include the CSS hover properties
+        // (transform, box-shadow, border-color) or the inline `transition`
+        // shorthand wipes the :hover animation defined in playgame.css.
+        style={{
+          opacity: props.playable ? 1 : 0.5,
+          cursor: props.interactive === false || props.hidden ? 'default' : 'pointer',
+          transition: 'opacity 0.5s ease, transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+        }}
+      >
+        <CardVfxStack cardId={props.card.id as CardId}>
+          <div class="cost">{props.card.cost}</div>
+          <div class={'power ' + powerClass()}>{props.card.power}</div>
+          {props.card.portraitPath
+            ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
+            : <div class="bar" style={{ background: props.card.art }} />
+          }
+          <div class="name">{props.card.name}</div>
+          <div class="type">{props.card.type}</div>
+          {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
+        </CardVfxStack>
+      </div>
     </div>
   );
 };

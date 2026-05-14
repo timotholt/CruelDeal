@@ -804,15 +804,40 @@
     flex-wrap: nowrap;
     overflow: visible;
   }
-.hand .card {
+  .hand .hand-card-motion {
+    flex: 0 0 var(--hand-card-w);
+    width: var(--hand-card-w);
+    height: var(--hand-card-h);
+    margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
+    will-change: translate, flex-basis, width, margin;
+    transition:
+      flex-basis 240ms cubic-bezier(.2,0,.2,1),
+      width 240ms cubic-bezier(.2,0,.2,1),
+      margin 240ms cubic-bezier(.2,0,.2,1);
+  }
+  .hand .hand-card-motion--incoming {
+    animation: hand-slot-reserve 240ms cubic-bezier(.2,0,.2,1) both;
+  }
+  .hand .hand-card-motion > .card {
     transform-origin: bottom center;
     transform: scale(var(--hand-scale));
-    flex: 0 0 var(--hand-card-w);
-    margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
   }
-  .hand .card:hover {
+  .hand .hand-card-motion:hover > .card {
     transform: translateY(-10px) scale(calc(var(--hand-scale) * 1.05));
     z-index: 5;
+  }
+
+  @keyframes hand-slot-reserve {
+    from {
+      flex-basis: 0;
+      width: 0;
+      margin-inline: 0;
+    }
+    to {
+      flex-basis: var(--hand-card-w);
+      width: var(--hand-card-w);
+      margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
+    }
   }
 
   /* Flying card used during play animation */
@@ -1238,7 +1263,7 @@
   .card.undoable:active {
     cursor: grabbing;
   }
-  .hand .card.dragging { opacity: 0.25; }
+  .hand .hand-card-motion.dragging { opacity: 0.25; }
   .card.pending {
     outline: none;
   }

@@ -42,6 +42,39 @@ export interface LayoutSlideOpts {
   easing?: string;
 }
 
+const removeTransitionPart = (transition: string, property: 'all' | 'translate'): string => {
+  if (!transition || transition === 'none') return transition;
+  return transition
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => {
+      const firstToken = part.split(/\s+/)[0];
+      return firstToken !== property;
+    })
+    .join(', ');
+};
+
+const withoutTranslateTransitions = (transition: string): string => (
+  removeTransitionPart(removeTransitionPart(transition, 'translate'), 'all')
+);
+
+const appendTransition = (transition: string, addition: string): string => {
+  if (!transition || transition === 'none') return addition;
+  return `${transition}, ${addition}`;
+};
+
+const restoreTransition = (
+  el: HTMLElement,
+  expectedMergedTransition: string,
+  previousTransition: string,
+): void => {
+  if (el.style.transition === expectedMergedTransition) {
+    el.style.transition = previousTransition;
+    return;
+  }
+  el.style.transition = removeTransitionPart(el.style.transition, 'translate');
+};
+
 /**
  * For each captured rect whose id still has a live element, animate the
  * element from its old position to its new one.
@@ -63,17 +96,20 @@ export function playLayoutSlide(
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
 
     // Instantly apply inverse offset (puts element in old position),
-    // then transition it away to slide to new position.
-    newEl.style.transition = 'none';
+    // then transition it away to slide to new position. Keep existing
+    // transform/hover transitions intact; only add and later remove translate.
+    const previousTransition = newEl.style.transition;
+    const slideTransition = `translate ${duration}ms ${easing}`;
+    const mergedTransition = appendTransition(previousTransition, slideTransition);
+
+    newEl.style.transition = withoutTranslateTransitions(previousTransition);
     newEl.style.translate = `${dx}px ${dy}px`;
     void newEl.offsetWidth; // force commit
-    newEl.style.transition = `translate ${duration}ms ${easing}`;
+    newEl.style.transition = mergedTransition;
     newEl.style.translate = '0px 0px';
 
     const cleanup = () => {
-      if (newEl.style.transition && newEl.style.transition.includes('translate')) {
-        newEl.style.transition = '';
-      }
+      restoreTransition(newEl, mergedTransition, previousTransition);
       newEl.style.translate = '';
     };
     const onEnd = (e: TransitionEvent) => {

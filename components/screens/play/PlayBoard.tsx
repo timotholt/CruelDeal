@@ -104,16 +104,21 @@ export const PlayBoard = (props: PlayBoardProps) => {
   // ── Derived projections ─────────────────────────────────────────────────
   const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(presentedState(), localSeat, manifest));
   /**
-   * Visible hand = engine hand MINUS cards still in the incoming buffer.
-   * The draw-slide animation needs the new card to appear in the DOM only
-   * after the event animator releases it from `ui.incoming`, otherwise the
-   * card lands in its final hand slot before the deck-slide runs.
+   * Hand presentation is slot-based: incoming cards stay in layout as hidden
+   * reserved slots so existing cards can FLIP-slide while the deck flyer owns
+   * the visible draw moment.
    */
-  const visibleHand = createMemo<ResolvedCard[]>(() => {
-    if (replayEnabled()) return hand();
-    const incoming = new Set(ui.incoming.map((c) => c.id));
-    return hand().filter((c) => !incoming.has(c.id));
+  const incomingHandIds = createMemo<Set<string>>(() => (
+    replayEnabled() ? new Set<string>() : new Set(ui.incoming.map((card) => card.id))
+  ));
+  const interactiveHand = createMemo<ResolvedCard[]>(() => {
+    const incoming = incomingHandIds();
+    return hand().filter((card) => !incoming.has(card.id));
   });
+  const handSlotIds = createMemo<string[]>(() => hand().map((card) => card.id));
+  const handSlotById = createMemo<Map<string, ResolvedCard>>(() => (
+    new Map(hand().map((card) => [card.id, card]))
+  ));
 
   const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
   const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
@@ -134,7 +139,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     ],
   });
   const handScale = createMemo(() => {
-    const n = visibleHand().length;
+    const n = hand().length;
     if (n <= 4) return 1;
     if (n <= 5) return 0.9;
     if (n <= 6) return 0.82;
@@ -164,7 +169,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
     // both the restored card and the shuffled hand into place.
-    const allIds = [lastStaged as string, ...visibleHand().map((c) => c.id)];
+    const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
     const oldRects = captureHandRects(allIds, cardRefs);
     actions.undoPending();
     requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
@@ -205,7 +210,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       localSeat,
       engineState,
       isResolving,
-      localHand: visibleHand,
+      localHand: interactiveHand,
       cardRefs,
       stageCardInLane: actions.stageCardInLane,
       undoPendingCard: actions.undoPendingCard,
@@ -402,14 +407,23 @@ export const PlayBoard = (props: PlayBoardProps) => {
         </div>
 
         <div class="hand" id="hand" style={{ '--hand-scale': handScale().toFixed(3) }}>
-          <For each={visibleHand()}>
-            {(card) => (
-              <HandCard
-                card={card}
-                playable={card.cost <= presentedState().energy[localSeat]}
-                interactive={boardInteractive()}
-              />
-            )}
+          <For each={handSlotIds()}>
+            {(cardId) => {
+              const initialCard = handSlotById().get(cardId) as ResolvedCard;
+              const card = createMemo<ResolvedCard>(
+                (previous) => handSlotById().get(cardId) ?? previous,
+                initialCard,
+              );
+              const isIncoming = createMemo(() => incomingHandIds().has(cardId));
+              return (
+                <HandCard
+                  card={card()}
+                  playable={card().cost <= presentedState().energy[localSeat]}
+                  interactive={boardInteractive() && !isIncoming()}
+                  hidden={isIncoming()}
+                />
+              );
+            }}
           </For>
         </div>
 
