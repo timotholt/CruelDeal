@@ -367,6 +367,18 @@
     overflow: visible;
     transition: background 0.25s ease, box-shadow 0.25s ease;
   }
+  .lane-slots::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 18px rgba(255,255,255,0.06);
+    opacity: 0;
+    transform: scale(0.985);
+    transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    pointer-events: none;
+  }
   .board.dragging-card .player-row .lane-slots {
     background:
       linear-gradient(180deg, var(--lane-bg-2), var(--lane-bg)),
@@ -1145,25 +1157,23 @@
   /* ── Lane highlight module (useLaneHighlight) ───────────────────────────
      All visual lane states live here. Logic in useLaneHighlight.ts.
      Shared transition so every mode blends cleanly. */
-  .lane-slots,
-  .location {
+  .lane-slots {
     transition:
       background 0.2s ease,
-      box-shadow 0.2s ease,
-      outline 0.15s ease;
+      box-shadow 0.2s ease;
   }
 
-  /* Hover mode */
+  /* Hover mode: highlight only the card landing zones, never the location tile. */
   #board[data-hovered-lane="0"] [data-lane="0"].lane-slots,
-  #board[data-hovered-lane="0"] [data-lane="0"].location,
   #board[data-hovered-lane="1"] [data-lane="1"].lane-slots,
-  #board[data-hovered-lane="1"] [data-lane="1"].location,
-  #board[data-hovered-lane="2"] [data-lane="2"].lane-slots,
-  #board[data-hovered-lane="2"] [data-lane="2"].location {
+  #board[data-hovered-lane="2"] [data-lane="2"].lane-slots {
     background: rgba(255, 255, 255, 0.055);
-    outline: 1px solid rgba(255, 255, 255, 0.18);
-    outline-offset: -1px;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  #board[data-hovered-lane="0"] [data-lane="0"].lane-slots::after,
+  #board[data-hovered-lane="1"] [data-lane="1"].lane-slots::after,
+  #board[data-hovered-lane="2"] [data-lane="2"].lane-slots::after {
+    opacity: 1;
+    transform: scale(1);
   }
 
   /* Score-lead mode — winning lane */

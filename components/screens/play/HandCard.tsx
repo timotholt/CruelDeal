@@ -59,6 +59,7 @@ export const HandCard = (props: HandCardProps) => {
     dragState.id = null;
   };
   const onClick = (e: MouseEvent): void => {
+    if (props.interactive === false) return;
     e.stopPropagation();
     openInspect({
       kind: 'card',
@@ -79,7 +80,7 @@ export const HandCard = (props: HandCardProps) => {
       // shorthand wipes the :hover animation defined in playgame.css.
       style={{
         opacity: props.playable ? 1 : 0.5,
-        cursor: 'pointer',
+        cursor: props.interactive === false ? 'default' : 'pointer',
         transition: 'opacity 0.5s ease, transform 0.15s, box-shadow 0.15s, border-color 0.15s',
       }}
       draggable={props.interactive !== false}

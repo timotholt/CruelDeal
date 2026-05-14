@@ -49,10 +49,17 @@ export function useLaneHighlight(opts: UseLaneHighlightOptions): void {
     if (!el || opts.mode() !== 'hover') return;
 
     const onOver = (e: MouseEvent): void => {
-      const laneEl = (e.target as Element | null)?.closest('[data-lane]');
+      const target = e.target as Element | null;
+      const laneEl = target?.closest('.lane-slots') as HTMLElement | null;
+      if (!laneEl || target?.closest('.card')) {
+        el.removeAttribute(HOVERED_ATTR);
+        return;
+      }
       const lane = laneEl?.getAttribute('data-lane') ?? null;
       if (lane !== null) {
         el.setAttribute(HOVERED_ATTR, lane);
+      } else {
+        el.removeAttribute(HOVERED_ATTR);
       }
     };
 

@@ -1,8 +1,8 @@
 /**
- * PlayScreen — city-map game shell for the /play route.
+ * CityMapScreen — city-map experiment shell for the /citymap route.
  *
- * The old lane board lives at /play/legacy while the new district/venue
- * surface uses the same 9:16 phone board chrome as the actual game.
+ * This is parked as an authoring/tooling experiment. The actual game now lives
+ * on the three-lane board at `/play`.
  */
 
 import { For, createMemo, createSignal } from 'solid-js';
@@ -21,7 +21,7 @@ import { HiddenHandIndicator } from './play/HiddenHandIndicator';
 import { TurnOrb } from './play/TurnOrb';
 import { CityMapBoard } from './play/city-map/CityMapBoard';
 
-interface PlayScreenProps {
+interface CityMapScreenProps {
   onExit?: () => void;
 }
 
@@ -41,7 +41,7 @@ function drawOpeningHands(seed: string): MatchState {
   return state;
 }
 
-const CityGameBoard = (props: PlayScreenProps) => {
+const CityGameBoard = (props: CityMapScreenProps) => {
   const pg = usePlayGame();
   const { engineState, manifest, localSeat, remoteSeat, seatMeta } = pg;
   const localHand = createMemo(() => getHandForSeat(engineState, localSeat, manifest));
@@ -124,7 +124,7 @@ const CityGameBoard = (props: PlayScreenProps) => {
   );
 };
 
-export const PlayScreen = (props: PlayScreenProps) => {
+export const CityMapScreen = (props: CityMapScreenProps) => {
   const [seed] = createSignal(makeMatchSeed());
   const [initialState] = createSignal(drawOpeningHands(seed()));
 

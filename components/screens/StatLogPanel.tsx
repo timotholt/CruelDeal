@@ -4,7 +4,7 @@
  * clicks the power or cost number on a zoomed card.
  */
 
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { CostLogEntry, PowerLogEntry } from '@/services/playgame/engine/types/state';
 import type { CostModifierEntry, PowerModifierEntry } from '@/services/playgame/engine/projections';

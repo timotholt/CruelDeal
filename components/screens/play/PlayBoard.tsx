@@ -84,13 +84,21 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return timeline.frames[replayFrameIndex()] ?? null;
   });
   const presentedState = createMemo<EngineMatchState>(() => replayFrame()?.state ?? engineState);
-  const boardInteractive = createMemo(() => !replayEnabled());
+  const boardLocked = createMemo(() => isResolving() || presentedState().phase === 'RESOLVING');
+  const boardInteractive = createMemo(() => !replayEnabled() && !boardLocked());
 
   createEffect(() => {
     const timeline = replayTimeline();
     if (!timeline) return;
     const maxIndex = Math.max(0, timeline.frames.length - 1);
     if (replayFrameIndex() > maxIndex) setReplayFrameIndex(maxIndex);
+  });
+
+  createEffect(() => {
+    if (!boardLocked()) return;
+    closeInspect();
+    setOpenPile(null);
+    setOpenMenuSeat(null);
   });
 
   // ── Derived projections ─────────────────────────────────────────────────
@@ -247,10 +255,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
   };
 
   const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
+    if (!boardInteractive()) return;
     setOpenMenuSeat((current) => current === seat ? null : seat);
   };
 
   const handleOpenPile = (owner: 'P0' | 'P1', zone: CardZone): void => {
+    if (!boardInteractive()) return;
     setOpenMenuSeat(null);
     setOpenPile({ owner, zone });
   };
@@ -368,6 +378,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   topPower={topPower(i)}
                   bottomBreakdown={bottomBreakdown(i)}
                   topBreakdown={topBreakdown(i)}
+                  interactive={boardInteractive()}
                 />
               )}
             </For>
@@ -407,7 +418,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
             class={`retreat-btn${ui.lockedResult ? ' result-locked' : ''}`}
             disabled={!boardInteractive() || isResolving()}
             onClick={() => {
-              if (!boardInteractive() || isResolving()) return;
+              if (!boardInteractive()) return;
               props.onExit?.();
             }}
           >
@@ -418,16 +429,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
           <button
             class="energy-button"
             title="Tap to undo last played card"
-            disabled={!boardInteractive() || isResolving()}
+            disabled={!boardInteractive()}
             onClick={handleUndoPending}
           >
             <EnergyBadge value={presentedState().energy[localSeat]} title={`Your energy ${presentedState().energy[localSeat]}`} />
           </button>
           <button
             class="end-turn"
-            disabled={!boardInteractive() || isResolving()}
+            disabled={!boardInteractive()}
             onClick={() => {
-              if (!boardInteractive() || isResolving() || !script) return;
+              if (!boardInteractive() || !script) return;
               void script.run(resolveTurnFlow());
             }}
           >

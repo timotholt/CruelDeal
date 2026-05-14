@@ -98,6 +98,7 @@ export const BoardCard = (props: BoardCardProps) => {
   };
 
   const onClick = (e: MouseEvent): void => {
+    if (!interactive()) return;
     if (isFaceDown()) return;
     e.stopPropagation();
     openInspect({

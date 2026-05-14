@@ -151,7 +151,13 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
   };
 
-  const onDragStart = (): void => {
+  const onDragStart = (e: DragEvent): void => {
+    if (isResolving()) {
+      e.preventDefault();
+      dragState.id = null;
+      clearDropState();
+      return;
+    }
     boardEl.classList.add('dragging-card');
   };
   const onDragEnd = (): void => {

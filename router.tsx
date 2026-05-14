@@ -1,8 +1,8 @@
 import { createRootRoute, createRoute, createRouter, Outlet, useNavigate, useRouter } from "@tanstack/solid-router";
 import { MainMenuScreen } from "./components/screens/MainMenuScreen";
 import { GameScreen } from "./components/screens/GameScreen";
-import { PlayScreen } from "./components/screens/PlayScreen";
-import { LegacyPlayScreen } from "./components/screens/LegacyPlayScreen";
+import { CityMapScreen } from "./components/screens/CityMapScreen";
+import { ClassicPlayScreen } from "./components/screens/ClassicPlayScreen";
 import { DeckScreen } from "./components/screens/DeckScreen";
 import { SeasonScreen } from "./components/screens/SeasonScreen";
 import { StoreScreen } from "./components/screens/StoreScreen";
@@ -33,6 +33,7 @@ const RootComponent = () => {
         // NOTE: /play must be tested BEFORE /game because `/play` doesn't
         // contain "/game" but we want them distinct.
         if (path.includes("/dev")) return "GAME";
+        if (path.includes("/citymap")) return "GAME";
         if (path.includes("/play")) return "PLAY";
         if (path.includes("/game")) return "GAME";
         if (path.includes("/deck")) return "DECK";
@@ -102,17 +103,22 @@ const gameRoute = createRoute({
     component: () => <GameScreen onExit={() => router.history.back()} />,
 });
 
-// NEW game screen — the port of the vfx-engine demo. See components/screens/PlayScreen.tsx.
 const playRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/play",
-    component: () => <PlayScreen onExit={() => router.history.back()} />,
+    component: () => <ClassicPlayScreen onExit={() => router.history.back()} />,
 });
 
-const legacyPlayRoute = createRoute({
+const cityMapRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/citymap",
+    component: () => <CityMapScreen onExit={() => router.history.back()} />,
+});
+
+const legacyPlayAliasRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/play/legacy",
-    component: () => <LegacyPlayScreen onExit={() => router.history.back()} />,
+    component: () => <ClassicPlayScreen onExit={() => router.history.back()} />,
 });
 
 const deckRoute = createRoute({
@@ -196,7 +202,8 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     gameRoute,
     playRoute,
-    legacyPlayRoute,
+    cityMapRoute,
+    legacyPlayAliasRoute,
     deckRoute,
     seasonRoute,
     storeRoute,

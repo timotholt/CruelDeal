@@ -1,9 +1,8 @@
 /**
- * LegacyPlayScreen — the old engine-backed /play board kept for reference.
+ * ClassicPlayScreen — the engine-backed three-lane card battler.
  *
- * The city map migration makes PlayScreen city-first. This shell preserves the
- * previous debug deck picker and lane board at /play/legacy while the new game
- * surface comes online.
+ * This is the canonical `/play` game surface. The city-map experiment has moved
+ * to `/citymap` while it evolves into an authoring tool.
  */
 
 import { createSignal, Show } from 'solid-js';
@@ -17,11 +16,11 @@ import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstra
 import type { Deck } from '@/services/playgame/engine/manifest/types';
 import type { MatchState } from '@/services/playgame/engine/types/state';
 
-interface LegacyPlayScreenProps {
+interface ClassicPlayScreenProps {
   onExit?: () => void;
 }
 
-export const LegacyPlayScreen = (props: LegacyPlayScreenProps) => {
+export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
   const [initialState, setInitialState] = createSignal<MatchState | null>(null);
 
   const handleDeckConfirmed = (playerCards: Deck, oppCards: Deck) => {

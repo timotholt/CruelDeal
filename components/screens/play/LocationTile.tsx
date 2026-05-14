@@ -16,10 +16,12 @@ interface LocationTileProps {
   topPower: number;
   bottomBreakdown: LanePowerBreakdown;
   topBreakdown: LanePowerBreakdown;
+  interactive?: boolean;
 }
 
 export const LocationTile = (props: LocationTileProps) => {
   const onClick = (e: MouseEvent): void => {
+    if (props.interactive === false) return;
     e.stopPropagation();
     openInspect({
       kind: 'location',
@@ -37,7 +39,7 @@ export const LocationTile = (props: LocationTileProps) => {
       class={'location' + (props.location.revealed ? '' : ' location--hidden')}
       data-lane={props.laneIdx}
       onClick={onClick}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: props.interactive === false ? 'default' : 'pointer' }}
     >
       <div class="lane-score enemy-score">{props.topPower}</div>
       <div class="loc-name">{props.location.revealed ? props.location.name : '???'}</div>
