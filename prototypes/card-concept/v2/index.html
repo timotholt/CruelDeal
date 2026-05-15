@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Card Prototype v2</title>
+  <style>
+    :root {
+      --card-w: 420px;
+      --card-r: 30px;
+      --white: oklch(99.5% 0.004 255);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: oklch(8% 0.008 255);
+      font-family: Arial, sans-serif;
+    }
+
+    .card {
+      position: relative;
+      width: var(--card-w);
+      aspect-ratio: 5 / 7;
+      border-radius: var(--card-r);
+      background: oklch(from var(--white) l c h / 0.60);
+      border: 2px solid oklch(from var(--white) l c h / 0.70);
+      box-shadow:
+        /* crisp glow around border edge */
+        0 0 24px oklch(from var(--white) l c h / 0.50),
+        /* inner depth */
+        inset 0 0 30px oklch(0% 0 0 / 0.08);
+    }
+  </style>
+</head>
+<body>
+  <div class="card"></div>
+</body>
+</html>
