@@ -29,6 +29,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
   let containerRef: HTMLDivElement | undefined;
   let cloneRef: HTMLDivElement | undefined;
   const [isClosing, setIsClosing] = createSignal(false);
+  const [showCardText, setShowCardText] = createSignal(false);
   const [logKind, setLogKind] = createSignal<'power' | 'cost' | null>(null);
   const [laneLogSide, setLaneLogSide] = createSignal<'top' | 'bottom' | null>(null);
   const [cardTextStyle, setCardTextStyle] = createSignal<Record<string, string>>({});
@@ -36,6 +37,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
   const handleClose = () => {
     if (isClosing()) return;
     setIsClosing(true);
+    setShowCardText(false);
 
     const clone = cloneRef?.querySelector('.card-clone') as HTMLElement;
     if (clone) {
@@ -124,7 +126,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
     }
 
     // Force layout
-    clone.offsetHeight;
+    void clone.offsetHeight;
 
     // Calculate transform to center and scale up
     const viewportWidth = window.innerWidth;
@@ -162,6 +164,10 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
         transformOrigin: 'center center',
       });
+
+      if (props.target.kind === 'card') {
+        window.setTimeout(() => setShowCardText(true), 210);
+      }
     });
 
     // Dim board
@@ -227,6 +233,9 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
             'line-height': '1.35',
             'z-index': '1001',
             overflow: 'auto',
+            opacity: showCardText() ? '1' : '0',
+            transition: 'opacity 120ms ease',
+            'pointer-events': showCardText() ? 'auto' : 'none',
             'text-decoration': (props.target as { kind: 'card'; card: ResolvedCard }).card?.textDisabled ? 'line-through' : 'none',
             'text-decoration-thickness': '2px',
             'text-decoration-color': 'rgba(255, 96, 128, 0.9)',
