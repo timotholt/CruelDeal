@@ -259,6 +259,7 @@ export type CardTag =
   | { kind: 'SHURI_DOUBLED' }
   | { kind: 'ONGOING_DISABLED'; sourceId: CardId }
   | { kind: 'FROM_SPAWN'; sourceId: CardId }
+  | { kind: 'DESTROY_IMMUNE' }
   /** Set by the engine when a card is played; cleared at TURN_ENDED. */
   | { kind: 'PLAYED_THIS_TURN' }
   /** Set the first time a card moves; never cleared. Used by Escape Route. */
@@ -289,6 +290,7 @@ export type PendingEffect =
       sourceId: CardId;
       sourceOwner: Owner | null;
       sourceLane: LaneIdx | null;
+      fireTurn: number;
       effect: import('./ability').EffectExpr;
     };
 

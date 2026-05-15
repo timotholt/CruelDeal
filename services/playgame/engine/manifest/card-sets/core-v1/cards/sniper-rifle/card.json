@@ -1,0 +1,28 @@
+{
+  "defId": "sniper-rifle",
+  "version": 1,
+  "name": "Sniper Rifle",
+  "basePower": 0,
+  "cost": 3,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DESTROY",
+        "target": {
+          "kind": "RANDOM_N",
+          "of": { "kind": "ALL_CARDS", "ownerFilter": "OPP_OWNER", "zoneFilter": "LANE" },
+          "count": { "kind": "LIT", "n": 1 }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SNIPER RIFLE",
+    "flavorText": "The contract arrives before the sound.",
+    "rulesText": "On Reveal: Destroy one random enemy card. Banish this card.",
+    "accent": "#118ab2",
+    "frame": "epic",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "spell"
+}

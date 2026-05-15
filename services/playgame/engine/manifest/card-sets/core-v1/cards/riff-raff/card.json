@@ -1,0 +1,21 @@
+{
+  "defId": "riff-raff",
+  "version": 1,
+  "name": "Riff Raff",
+  "basePower": 2,
+  "cost": 1,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "RIFF_RAFF", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RIFF RAFF",
+    "flavorText": "One shout becomes a crowd.",
+    "rulesText": "On Reveal: Add a 1/1 Riff Raff at every other location.",
+    "accent": "#f4a261",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

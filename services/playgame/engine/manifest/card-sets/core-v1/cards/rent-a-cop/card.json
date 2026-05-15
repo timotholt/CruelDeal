@@ -1,0 +1,34 @@
+{
+  "defId": "rent-a-cop",
+  "version": 1,
+  "name": "Rent-a-Cop",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": { "kind": "SELF" },
+        "delta": {
+          "kind": "COUNT",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": { "kind": "SELF" },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": { "kind": "SELF" }
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RENT-A-COP",
+    "flavorText": "Minimum training. Maximum flashlight.",
+    "rulesText": "Ongoing: +1 Power for every friendly card here.",
+    "accent": "#4cc9f0",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

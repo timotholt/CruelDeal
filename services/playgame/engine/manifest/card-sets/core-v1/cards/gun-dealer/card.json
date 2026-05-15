@@ -1,0 +1,38 @@
+{
+  "defId": "gun-dealer",
+  "version": 1,
+  "name": "Gun Dealer",
+  "basePower": 2,
+  "cost": 3,
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "of": {
+            "kind": "WHERE",
+            "of": { "kind": "ALL_CARDS", "ownerFilter": "SELF_OWNER", "zoneFilter": "LANE" },
+            "pred": {
+              "kind": "COST_CMP",
+              "target": { "kind": "SELF" },
+              "op": "==",
+              "value": { "kind": "LIT", "n": 1 }
+            }
+          },
+          "count": { "kind": "LIT", "n": 3 }
+        },
+        "delta": { "kind": "LIT", "n": 1 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GUN DEALER",
+    "flavorText": "Cheap crews become expensive problems.",
+    "rulesText": "End of Turn: Give up to 3 friendly 1-Cost cards +1 Power.",
+    "accent": "#e76f51",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -1,0 +1,21 @@
+{
+  "defId": "security-detail",
+  "version": 1,
+  "name": "Security Detail",
+  "basePower": 2,
+  "cost": 3,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "SECURITY_DETAIL", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SECURITY DETAIL",
+    "flavorText": "Two more badges appear when the paperwork clears.",
+    "rulesText": "On Reveal: Add 2 Guards here with the same Power.",
+    "accent": "#4895ef",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

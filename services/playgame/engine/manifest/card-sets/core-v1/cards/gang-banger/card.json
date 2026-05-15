@@ -1,0 +1,26 @@
+{
+  "defId": "gang-banger",
+  "version": 1,
+  "name": "Gang Banger",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "onEndOfTurn": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": { "kind": "DEF_ID_LIST", "ids": ["gang-banger-token"] },
+        "owner": "SELF_OWNER",
+        "destination": { "kind": "LANE", "lane": { "kind": "LANE_OF", "of": { "kind": "SELF" } } }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GANG BANGER",
+    "flavorText": "A corner is only empty once.",
+    "rulesText": "End of Turn: Add a 1/1 Gang Banger here.",
+    "accent": "#bc6c25",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

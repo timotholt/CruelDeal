@@ -1,0 +1,17 @@
+{
+  "defId": "gang-banger-token",
+  "version": 1,
+  "name": "Gang Banger",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "GANG BANGER",
+    "flavorText": "The block remembers who showed up.",
+    "rulesText": "",
+    "accent": "#bc6c25",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

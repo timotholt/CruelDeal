@@ -17,7 +17,7 @@
 
 import type { MatchEvent } from '../types/events';
 import type { MatchState, SpawnSource } from '../types/state';
-import type { CardId, Owner } from '../types/ids';
+import type { CardId, LaneIdx, Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { EffectCtx } from './evaluator';
 import { apply } from '../apply';
@@ -269,6 +269,7 @@ function addDiscountedCardToHand(
         sourceId: newId,
         sourceOwner: owner,
         sourceLane: null,
+        fireTurn: state.turn + 1,
         effect: revertEffect,
       },
     };
@@ -337,6 +338,7 @@ function overclockChip(
       sourceId: targetId,
       sourceOwner: owner,
       sourceLane: ctx.selfLane,
+      fireTurn: state.turn + 1,
       effect: destroyEffect,
     },
   };
@@ -551,6 +553,185 @@ function disableOngoingsThisLaneThisTurn(
   return { events, state: s };
 }
 
+function spawnTokenInLane(
+  state: MatchState,
+  ctx: EffectCtx,
+  manifest: Manifest,
+  owner: Owner,
+  lane: LaneIdx,
+  defId: string,
+  salt: string,
+): BuiltinResult {
+  if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
+  const cardId = mintCardId(ctx, salt);
+  const event: MatchEvent = {
+    type: 'CARD_ADDED_TO_LANE',
+    owner,
+    cardId,
+    lane,
+    defId,
+    spawnSource: spawnSource(ctx, owner),
+  };
+  return { events: [event], state: apply(state, event, manifest) };
+}
+
+function securityDetail(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  const lane = ctx.selfLane;
+  const sourceId = ctx.self as CardId;
+  if (owner === null || lane === null || !sourceId) return noop(state);
+  const sourcePower = getCardPower(state, sourceId, manifest);
+  const guardBasePower = manifest.cards['guard']?.basePower ?? sourcePower;
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (let i = 0; i < 2; i++) {
+    const spawned = spawnTokenInLane(s, ctx, manifest, owner, lane, 'guard', `guard:${i}`);
+    if (spawned.events.length === 0) break;
+    events.push(...spawned.events);
+    s = spawned.state;
+    const addEvent = spawned.events[0];
+    if (addEvent.type !== 'CARD_ADDED_TO_LANE') continue;
+    const delta = sourcePower - guardBasePower;
+    if (delta === 0) continue;
+    const powerEvent: MatchEvent = {
+      type: 'CARD_POWER_CHANGED',
+      cardId: addEvent.cardId,
+      delta,
+      cause: ctx.source,
+    };
+    events.push(powerEvent);
+    s = apply(s, powerEvent, manifest);
+  }
+  return { events, state: s };
+}
+
+function corporateClimber(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  const lane = ctx.selfLane;
+  const self = ctx.self as CardId;
+  if (owner === null || lane === null || !self) return noop(state);
+  const victims = state.lanes[lane].cards[owner].filter(id => id !== self);
+  if (victims.length === 0) return noop(state);
+  const gainedPower = victims.reduce((sum, id) => sum + getCardPower(state, id, manifest), 0);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const cardId of victims) {
+    const card = s.cards[cardId];
+    if (!card || card.zone !== 'LANE') continue;
+    if (card.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
+    const destroyEvent: MatchEvent = { type: 'CARD_DESTROYED', cardId, cause: ctx.source };
+    events.push(destroyEvent);
+    s = apply(s, destroyEvent, manifest);
+  }
+  if (gainedPower > 0 && s.cards[self]?.zone === 'LANE') {
+    const powerEvent: MatchEvent = {
+      type: 'CARD_POWER_CHANGED',
+      cardId: self,
+      delta: gainedPower,
+      cause: ctx.source,
+    };
+    events.push(powerEvent);
+    s = apply(s, powerEvent, manifest);
+  }
+  return { events, state: s };
+}
+
+function traumaTeam(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  const lane = ctx.selfLane;
+  if (owner === null || lane === null) return noop(state);
+  if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
+
+  let turn = 1;
+  const destroyedLastTurn: CardId[] = [];
+  for (const entry of state.log) {
+    const event = entry.event as MatchEvent;
+    if (event.type === 'TURN_STARTED') turn = event.turn;
+    if (event.type === 'CARD_DESTROYED' && turn === state.turn - 1) {
+      const card = state.cards[event.cardId];
+      if (card?.owner === owner && card.zone === 'DESTROYED') destroyedLastTurn.push(event.cardId);
+    }
+  }
+  if (destroyedLastTurn.length === 0) return noop(state);
+
+  const cardId = ctx.rng.fork('revive').pick(destroyedLastTurn);
+  const event: MatchEvent = {
+    type: 'CARD_RETURNED_TO_LANE',
+    cardId,
+    lane,
+    revealed: true,
+    cause: ctx.source,
+  };
+  return { events: [event], state: apply(state, event, manifest) };
+}
+
+function socialWorker(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  const lane = ctx.selfLane;
+  const self = ctx.self as CardId;
+  if (owner === null || lane === null || !self) return noop(state);
+  const targets = [
+    ...state.lanes[lane].cards.P0,
+    ...state.lanes[lane].cards.P1,
+  ].filter(id => id !== self);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const cardId of targets) {
+    const card = s.cards[cardId];
+    if (!card) continue;
+    const currentCost = getCardCost(s, cardId, manifest);
+    const candidates = Object.values(manifest.cards)
+      .filter(def => def.cardType === 'character' && def.cost === currentCost + 1)
+      .map(def => def.defId);
+    if (candidates.length === 0) continue;
+    const newDefId = ctx.rng.fork(`social:${cardId}`).pick(candidates);
+    const event: MatchEvent = {
+      type: 'CARD_TRANSFORMED',
+      cardId,
+      oldDefId: card.defId,
+      newDefId,
+      cause: ctx.source,
+      resetStats: true,
+    };
+    events.push(event);
+    s = apply(s, event, manifest);
+  }
+  return { events, state: s };
+}
+
+function riffRaff(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  const lane = ctx.selfLane;
+  if (owner === null || lane === null) return noop(state);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const targetLane of ([0, 1, 2] as LaneIdx[]).filter(l => l !== lane)) {
+    const spawned = spawnTokenInLane(s, ctx, manifest, owner, targetLane, 'riff-raff-token', `riff:${targetLane}`);
+    events.push(...spawned.events);
+    s = spawned.state;
+  }
+  return { events, state: s };
+}
+
 // ---- Projection/phase-owned builtins ---------------------------------------
 
 /**
@@ -606,6 +787,11 @@ const REGISTRY = new Map<string, BuiltinHandler>([
   ['ADD_DISCARDED_CARD_TO_HAND',       addDiscardedCardToHand],
   ['FULL_LANES_POWER',                 (_s) => fullLanesPower(_s)],
   ['DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', disableOngoingsThisLaneThisTurn],
+  ['SECURITY_DETAIL',                  securityDetail],
+  ['CORPORATE_CLIMBER',                corporateClimber],
+  ['TRAUMA_TEAM',                      traumaTeam],
+  ['SOCIAL_WORKER',                    socialWorker],
+  ['RIFF_RAFF',                        riffRaff],
 ]);
 
 export function invokeBuiltin(

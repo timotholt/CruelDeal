@@ -1,0 +1,35 @@
+{
+  "defId": "riot-gear",
+  "version": 1,
+  "name": "Riot Gear",
+  "basePower": 0,
+  "cost": 2,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "FOREACH",
+        "over": {
+          "kind": "WHERE",
+          "of": { "kind": "ALL_CARDS", "ownerFilter": "SELF_OWNER", "zoneFilter": "LANE" },
+          "pred": {
+            "kind": "OR",
+            "any": [
+              { "kind": "COST_CMP", "target": { "kind": "SELF" }, "op": "==", "value": { "kind": "LIT", "n": 1 } },
+              { "kind": "COST_CMP", "target": { "kind": "SELF" }, "op": "==", "value": { "kind": "LIT", "n": 6 } }
+            ]
+          }
+        },
+        "do": [{ "kind": "ADD_CARD_TAG", "target": { "kind": "SELF" }, "tag": { "kind": "DESTROY_IMMUNE" } }]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RIOT GEAR",
+    "flavorText": "Cheap helmets and elite armor share the same supplier.",
+    "rulesText": "On Reveal: Your 1-Cost and 6-Cost cards can't be destroyed. Banish this card.",
+    "accent": "#8d99ae",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "spell"
+}

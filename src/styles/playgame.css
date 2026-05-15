@@ -675,10 +675,11 @@
     height: var(--hcard-bar-h); border-radius: 2px; margin: 2px 0;
   }
   .card .type {
-    font-family: var(--font-mono); font-size: var(--hcard-font-type);
+    font-family: var(--font-mono); font-size: clamp(5px, var(--hcard-font-type), 0.72rem);
     color: var(--muted); text-align: center;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    align-self: end; overflow: hidden;
+    letter-spacing: 0; text-transform: uppercase;
+    align-self: end; justify-self: stretch; width: 100%; min-width: 0; overflow: hidden;
+    white-space: nowrap;
   }
   .card.text-disabled {
     border-color: rgba(255, 96, 128, 0.55);
@@ -718,7 +719,7 @@
   .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
   .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
   .lane-slots .card .name { font-size: var(--card-font-name); }
-  .lane-slots .card .type { font-size: var(--card-font-type); }
+  .lane-slots .card .type { font-size: clamp(5px, var(--card-font-type), 0.54rem); }
   .lane-slots .card .bar  { height: var(--card-bar-h); }
   .lane-slots .card .cost {
     top: var(--card-badge-off); left: var(--card-badge-off);

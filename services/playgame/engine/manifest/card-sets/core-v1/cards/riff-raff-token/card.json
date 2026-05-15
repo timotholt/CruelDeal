@@ -1,0 +1,17 @@
+{
+  "defId": "riff-raff-token",
+  "version": 1,
+  "name": "Riff Raff",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "RIFF RAFF",
+    "flavorText": "Somebody always knows somebody.",
+    "rulesText": "",
+    "accent": "#f4a261",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

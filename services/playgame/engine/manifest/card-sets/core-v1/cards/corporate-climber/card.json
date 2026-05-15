@@ -1,0 +1,21 @@
+{
+  "defId": "corporate-climber",
+  "version": 1,
+  "name": "Corporate Climber",
+  "basePower": 3,
+  "cost": 3,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "CORPORATE_CLIMBER", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CORPORATE CLIMBER",
+    "flavorText": "Every promotion leaves a vacancy.",
+    "rulesText": "On Reveal: Destroy your other cards here. Gain their Power.",
+    "accent": "#ffd166",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

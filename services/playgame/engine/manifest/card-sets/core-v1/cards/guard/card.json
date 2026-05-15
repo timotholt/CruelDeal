@@ -1,0 +1,17 @@
+{
+  "defId": "guard",
+  "version": 1,
+  "name": "Guard",
+  "basePower": 2,
+  "cost": 1,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "GUARD",
+    "flavorText": "Posted, bored, and blocking the door.",
+    "rulesText": "",
+    "accent": "#6c757d",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -516,6 +516,7 @@ export function evalEffect(
         const preCard = s.cards[id];
         const preLane = preCard?.lane ?? null;
         const preOwner = preCard?.owner ?? null;
+        if (preCard?.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
         if (isFriendlyDestroyBlocked(s, id, ctx, manifest)) continue;
         const e: MatchEvent = { type: 'CARD_DESTROYED', cardId: id, cause: ctx.source };
         events.push(e);
@@ -704,7 +705,7 @@ export function evalEffect(
             defId,
             spawnSource,
           };
-          let s = apply(state, e, manifest);
+          const s = apply(state, e, manifest);
           const locTrig = fireLocationTrigger(
             s,
             lane,
@@ -716,6 +717,9 @@ export function evalEffect(
           );
           return { events: [e, ...locTrig.events], state: locTrig.state };
         }
+
+        default:
+          return { events: [], state };
       }
     }
 
@@ -1299,6 +1303,8 @@ function resolveCardTagSpec(
       return { kind: 'ONGOING_DISABLED', sourceId: source.sourceId as CardId };
     case 'FROM_SPAWN':
       return { kind: 'FROM_SPAWN', sourceId: source.sourceId as CardId };
+    case 'DESTROY_IMMUNE':
+      return { kind: 'DESTROY_IMMUNE' };
   }
 }
 
@@ -1336,6 +1342,7 @@ function resolvePendingEffectSpec(
         sourceId,
         sourceOwner: owner,
         sourceLane: lane,
+        fireTurn: state.turn + 1,
         effect: spec.effect,
       };
   }

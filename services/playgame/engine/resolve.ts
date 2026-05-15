@@ -284,6 +284,38 @@ export function resolveTurn(
     }
   }
 
+  // Phase 1.93  Fire SCHEDULED END_OF_NEXT_TURN effects whose target turn
+  // has arrived. These run after normal EOT triggers and before TURN_ENDED
+  // clears transient tags/staging order.
+  {
+    const scheduled = s.pendingEffects.filter(
+      (p): p is Extract<PendingEffect, { kind: 'SCHEDULED' }> =>
+        p.kind === 'SCHEDULED' &&
+        p.when === 'END_OF_NEXT_TURN' &&
+        ((p.fireTurn ?? s.turn) <= s.turn),
+    );
+    for (let i = 0; i < scheduled.length; i++) {
+      const pe = scheduled[i];
+      const subCtx: EffectCtx = {
+        state: s,
+        manifest,
+        self: pe.sourceId,
+        selfKind: 'card',
+        selfLane: pe.sourceLane,
+        selfOwner: pe.sourceOwner,
+        rng: rng.fork(`scheduled-end:${pe.sourceId}:${i}`),
+        source: { sourceId: pe.sourceId, effectKind: 'ON_REVEAL' },
+        depth: 0,
+      };
+      const res = evalEffect(s, pe.effect, subCtx, manifest);
+      events.push(...res.events);
+      s = res.state;
+      const remove: MatchEvent = { type: 'PENDING_EFFECT_REMOVED', effect: pe };
+      events.push(remove);
+      s = apply(s, remove, manifest);
+    }
+  }
+
   // Phase 1.95  DRAW_ON_POWER_GAIN — scan all reveal+EOT events for positive
   //             power changes on cards that have the reactive draw trigger.
   {
@@ -411,7 +443,9 @@ export function resolveTurn(
   {
     const scheduled = s.pendingEffects.filter(
       (p): p is Extract<PendingEffect, { kind: 'SCHEDULED' }> =>
-        p.kind === 'SCHEDULED' && p.when === 'START_OF_NEXT_TURN',
+        p.kind === 'SCHEDULED' &&
+        p.when === 'START_OF_NEXT_TURN' &&
+        ((p.fireTurn ?? s.turn) <= s.turn),
     );
     for (let i = 0; i < scheduled.length; i++) {
       const pe = scheduled[i];

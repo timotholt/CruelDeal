@@ -35,15 +35,16 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
   },
   {
     id: 'corporate-copy',
-    name: 'Corporate Copy',
-    archetype: 'Copy',
-    difficulty: 'Hard',
-    gamePlan: 'Sacrifice specific cards to copy their text. Turn copied abilities into board advantage.',
+    name: 'Corp Spec',
+    archetype: 'Ongoing',
+    difficulty: 'Medium',
+    gamePlan: 'Stack Ongoing lane buffs, flood protected bodies, then cash crowded lanes into Power.',
     color: '#4488ff',
     cards: [
-      { defId: 'scrap-rat' }, { defId: 'chop-doc' }, { defId: 'middle-manager' }, { defId: 'hostile-recruiter' },
-      { defId: 'golden-parachute' }, { defId: 'severance-clone' }, { defId: 'hr-algorithm' }, { defId: 'acquisition-team' },
-      { defId: 'boardroom-proxy' }, { defId: 'executive-override' }, { defId: 'signal-booster' }, { defId: 'ai-overseer' },
+      { defId: 'rent-a-cop' }, { defId: 'hired-gun' }, { defId: 'riff-raff' }, { defId: 'signal-rally' },
+      { defId: 'signal-booster' }, { defId: 'boardroom-proxy' }, { defId: 'security-detail' }, { defId: 'gun-dealer' },
+      { defId: 'corporate-climber' }, { defId: 'block-party' },
+      { defId: 'ai-overseer' }, { defId: 'citywide-mesh' },
     ],
   },
   {
@@ -67,7 +68,7 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Build Ongoing engines. Let small persistent buffs scale over time.',
     color: '#00ddaa',
     cards: [
-      { defId: 'street-fixer' }, { defId: 'procurement-bot' }, { defId: 'nano-swarm' }, { defId: 'signal-booster' },
+      { defId: 'street-fixer' }, { defId: 'procurement-bot' }, { defId: 'rent-a-cop' }, { defId: 'signal-booster' },
       { defId: 'adaptive-shell' }, { defId: 'maintenance-cloud' }, { defId: 'ai-overseer' }, { defId: 'replication-node' },
       { defId: 'smart-matter-armor' }, { defId: 'distributed-mind' }, { defId: 'grey-goo-bloom' }, { defId: 'citywide-mesh' },
     ],
@@ -108,7 +109,7 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     cards: [
       { defId: 'battery-monk' }, { defId: 'capacitor-drone' }, { defId: 'quiet-protocol' }, { defId: 'stored-charge' },
       { defId: 'ambush-runner' }, { defId: 'silent-engine' }, { defId: 'delayed-payload' }, { defId: 'neon-singularity' },
-      { defId: 'nano-swarm' }, { defId: 'adaptive-shell' }, { defId: 'black-market-dealer' }, { defId: 'grey-market-cache' },
+      { defId: 'rent-a-cop' }, { defId: 'adaptive-shell' }, { defId: 'black-market-dealer' }, { defId: 'grey-market-cache' },
     ],
   },
   {
@@ -119,7 +120,7 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Flood lanes with cheap cards and Drones. Turn full locations into Power.',
     color: '#44ff88',
     cards: [
-      { defId: 'nano-swarm' }, { defId: 'signal-booster' }, { defId: 'replication-node' }, { defId: 'street-kid' },
+      { defId: 'rent-a-cop' }, { defId: 'signal-booster' }, { defId: 'replication-node' }, { defId: 'street-kid' },
       { defId: 'drone-pup' }, { defId: 'gang-lookout' }, { defId: 'drone-printer' }, { defId: 'block-party' },
       { defId: 'pack-tactics' }, { defId: 'signal-rally' }, { defId: 'gutter-legion' }, { defId: 'hive-riot' },
     ],

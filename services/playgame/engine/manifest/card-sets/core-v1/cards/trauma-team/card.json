@@ -1,0 +1,21 @@
+{
+  "defId": "trauma-team",
+  "version": 1,
+  "name": "Trauma Team",
+  "basePower": 3,
+  "cost": 2,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "TRAUMA_TEAM", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "TRAUMA TEAM",
+    "flavorText": "If the policy is active, death is negotiable.",
+    "rulesText": "On Reveal: One of your cards destroyed last turn is revived here.",
+    "accent": "#2a9d8f",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -1,0 +1,32 @@
+{
+  "defId": "rpg",
+  "version": 1,
+  "name": "RPG",
+  "basePower": 0,
+  "cost": 3,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DESTROY",
+        "target": {
+          "kind": "RANDOM_N",
+          "of": {
+            "kind": "WHERE",
+            "of": { "kind": "ALL_CARDS", "ownerFilter": "OPP_OWNER", "zoneFilter": "LANE" },
+            "pred": { "kind": "POWER_CMP", "target": { "kind": "SELF" }, "op": ">=", "value": { "kind": "LIT", "n": 10 } }
+          },
+          "count": { "kind": "LIT", "n": 1 }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RPG",
+    "flavorText": "Overkill is a budgeting term.",
+    "rulesText": "On Reveal: Destroy one enemy card with 10+ Power. Banish this card.",
+    "accent": "#ef476f",
+    "frame": "epic",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "spell"
+}

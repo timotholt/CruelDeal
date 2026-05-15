@@ -27,7 +27,23 @@ import ProcurementBotCard from './cards/procurement-bot/card.json';
 import DeadDropCard from './cards/dead-drop/card.json';
 import TalentScoutCard from './cards/talent-scout/card.json';
 import NetworkQueenCard from './cards/network-queen/card.json';
-import NanoSwarmCard from './cards/nano-swarm/card.json';
+import RentACopCard from './cards/rent-a-cop/card.json';
+import HiredGunCard from './cards/hired-gun/card.json';
+import SecurityDetailCard from './cards/security-detail/card.json';
+import GuardCard from './cards/guard/card.json';
+import CorporateClimberCard from './cards/corporate-climber/card.json';
+import GunDealerCard from './cards/gun-dealer/card.json';
+import TraumaTeamCard from './cards/trauma-team/card.json';
+import RiffRaffCard from './cards/riff-raff/card.json';
+import RiffRaffTokenCard from './cards/riff-raff-token/card.json';
+import FragGrenadeCard from './cards/frag-grenade/card.json';
+import RiotGearCard from './cards/riot-gear/card.json';
+import RpgCard from './cards/rpg/card.json';
+import SniperRifleCard from './cards/sniper-rifle/card.json';
+import ExOperativeCard from './cards/ex-operative/card.json';
+import GangBangerCard from './cards/gang-banger/card.json';
+import GangBangerTokenCard from './cards/gang-banger-token/card.json';
+import SocialWorkerCard from './cards/social-worker/card.json';
 import SignalBoosterCard from './cards/signal-booster/card.json';
 import AdaptiveShellCard from './cards/adaptive-shell/card.json';
 import MaintenanceCloudCard from './cards/maintenance-cloud/card.json';
@@ -135,7 +151,23 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'dead-drop', card: DeadDropCard as unknown as CardDef },
   { folder: 'talent-scout', card: TalentScoutCard as unknown as CardDef },
   { folder: 'network-queen', card: NetworkQueenCard as unknown as CardDef },
-  { folder: 'nano-swarm', card: NanoSwarmCard as unknown as CardDef },
+  { folder: 'rent-a-cop', card: RentACopCard as unknown as CardDef },
+  { folder: 'hired-gun', card: HiredGunCard as unknown as CardDef },
+  { folder: 'security-detail', card: SecurityDetailCard as unknown as CardDef },
+  { folder: 'guard', card: GuardCard as unknown as CardDef },
+  { folder: 'corporate-climber', card: CorporateClimberCard as unknown as CardDef },
+  { folder: 'gun-dealer', card: GunDealerCard as unknown as CardDef },
+  { folder: 'trauma-team', card: TraumaTeamCard as unknown as CardDef },
+  { folder: 'riff-raff', card: RiffRaffCard as unknown as CardDef },
+  { folder: 'riff-raff-token', card: RiffRaffTokenCard as unknown as CardDef },
+  { folder: 'frag-grenade', card: FragGrenadeCard as unknown as CardDef },
+  { folder: 'riot-gear', card: RiotGearCard as unknown as CardDef },
+  { folder: 'rpg', card: RpgCard as unknown as CardDef },
+  { folder: 'sniper-rifle', card: SniperRifleCard as unknown as CardDef },
+  { folder: 'ex-operative', card: ExOperativeCard as unknown as CardDef },
+  { folder: 'gang-banger', card: GangBangerCard as unknown as CardDef },
+  { folder: 'gang-banger-token', card: GangBangerTokenCard as unknown as CardDef },
+  { folder: 'social-worker', card: SocialWorkerCard as unknown as CardDef },
   { folder: 'signal-booster', card: SignalBoosterCard as unknown as CardDef },
   { folder: 'adaptive-shell', card: AdaptiveShellCard as unknown as CardDef },
   { folder: 'maintenance-cloud', card: MaintenanceCloudCard as unknown as CardDef },

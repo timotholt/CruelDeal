@@ -1,0 +1,21 @@
+{
+  "defId": "social-worker",
+  "version": 1,
+  "name": "Social Worker",
+  "basePower": 3,
+  "cost": 5,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "SOCIAL_WORKER", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SOCIAL WORKER",
+    "flavorText": "Intervention is just transformation with a clipboard.",
+    "rulesText": "On Reveal: Replace all other cards here with random character cards of one higher Cost.",
+    "accent": "#90be6d",
+    "frame": "epic",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -327,6 +327,7 @@ export type CardTagSpec =
   | { kind: 'SHURI_DOUBLED' }
   | { kind: 'ONGOING_DISABLED'; sourceRef: 'SELF' }
   | { kind: 'FROM_SPAWN' }
+  | { kind: 'DESTROY_IMMUNE' }
   /**
    * Set by the engine when a card is played; cleared at end of turn.
    * Used by Exploit Artist / Predictive Cop to detect "opponent played here".

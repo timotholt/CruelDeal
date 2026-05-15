@@ -1,0 +1,32 @@
+{
+  "defId": "ex-operative",
+  "version": 1,
+  "name": "Ex-Operative",
+  "basePower": 2,
+  "cost": 2,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": { "kind": "DEF_ID_LIST", "ids": ["frag-grenade", "riot-gear", "rpg", "sniper-rifle"] },
+        "owner": "SELF_OWNER",
+        "destination": { "kind": "HAND" }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": { "kind": "DEF_ID_LIST", "ids": ["frag-grenade", "riot-gear", "rpg", "sniper-rifle"] },
+        "owner": "SELF_OWNER",
+        "destination": { "kind": "HAND" }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "EX-OPERATIVE",
+    "flavorText": "Nobody leaves the service empty-handed.",
+    "rulesText": "On Reveal: Add two Gear cards to your hand.",
+    "accent": "#06d6a0",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

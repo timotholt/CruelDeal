@@ -1,0 +1,28 @@
+{
+  "defId": "hired-gun",
+  "version": 1,
+  "name": "Hired Gun",
+  "basePower": 4,
+  "cost": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_PENDING",
+        "effect": {
+          "kind": "SCHEDULED",
+          "when": "END_OF_NEXT_TURN",
+          "effect": { "kind": "BANISH", "target": { "kind": "SELF" } }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HIRED GUN",
+    "flavorText": "Paid through tomorrow. Gone by midnight.",
+    "rulesText": "On Reveal: Banish this card at the end of the next turn.",
+    "accent": "#f77f00",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}
