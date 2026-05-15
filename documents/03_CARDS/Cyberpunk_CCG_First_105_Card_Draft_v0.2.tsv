@@ -66,7 +66,7 @@ id	name	cost	power	kind	tags	archetype	slot	text	domain
 065	Street Kid	1	2	Character	Merc	Swarm / Gang	Cheap body	No ability.	cheap cards
 066	Drone Pup	1	1	Object	Drone	Swarm / Gang	Cheap body	When Destroyed: Add a 1-Power Drone to your hand.	destroyed + created
 067	Gang Lookout	1	1	Character	Merc	Swarm / Gang	Cards-played payoff	After you play a card here, this gains +1 Power.	cards played this turn
-068	Drone Printer	2	1	Object	Drone Tech	Swarm / Gang	Token creator	On Reveal: Add a 1-Power Drone here.	created cards + lane
+068	Drone Pilot	2	1	Object	Drone Tech	Swarm / Gang	Token creator	On Reveal: Add a 1-Power Drone here.	created cards + lane
 069	Block Party	2	2	Object	Merc	Swarm / Gang	Full-lane payoff	Ongoing: If this lane is full, your cards here have +1 Power.	full lane
 070	Pack Tactics	3	2	Object	Military Merc	Swarm / Gang	Local buff	On Reveal: Give your other cards here +1 Power.	cards in lane
 071	Signal Rally	3	3	Object	AI	Swarm / Gang	Bridge to Nanotech	Ongoing: Your 1-Cost cards have +1 Power.	cheap cards
@@ -97,7 +97,7 @@ id	name	cost	power	kind	tags	archetype	slot	text	domain
 096	Armored Van	3	5	Object	Military Tech	Generic	Simple rate card	No ability.	baseline stats
 097	Night Market Scout	1	1	Character	Merc	Generic	Simple draw	On Reveal: Draw a card if your hand is empty.	hand size
 098	Metro Enforcer	4	7	Character	Military	Generic	Simple condition	If this is your only card here, this has +2 Power.	cards in lane
-099	Cheap Drone	1	1	Object	Drone	Generic	Simple token body	No ability.	cheap cards
+099	Drone	1	1	Object	Drone	Generic	Simple token body	No ability.	cheap cards
 100	Loaded Suit	5	8	Character	Corp	Generic	Simple big card	No ability.	baseline stats
 101	Union Rep	2	2	Character	Corp Merc	Counter / Tech	Anti-destroy	Ongoing: Your cards here cannot be destroyed by your own cards.	destroy prevention
 102	White-Hat Auditor	3	3	Character	Hacker Corp	Counter / Tech	Anti-created	On Reveal: Enemy created cards here lose their text.	enemy created cards

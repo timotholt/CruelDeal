@@ -67,7 +67,7 @@ CYBERPUNK CCG — COMPACT CARD LIST v0.2
 065. Street Kid (1/2) [Character; Merc] — No ability.
 066. Drone Pup (1/1) [Object; Drone] — When Destroyed: Add a 1-Power Drone to your hand.
 067. Gang Lookout (1/1) [Character; Merc] — After you play a card here, this gains +1 Power.
-068. Drone Printer (2/1) [Object; Drone Tech] — On Reveal: Add a 1-Power Drone here.
+068. Drone Pilot (2/1) [Object; Drone Tech] — On Reveal: Add a 1-Power Drone here.
 069. Block Party (2/2) [Object; Merc] — Ongoing: If this lane is full, your cards here have +1 Power.
 070. Pack Tactics (3/2) [Object; Military Merc] — On Reveal: Give your other cards here +1 Power.
 071. Signal Rally (3/3) [Object; AI] — Ongoing: Your 1-Cost cards have +1 Power.
@@ -98,7 +98,7 @@ CYBERPUNK CCG — COMPACT CARD LIST v0.2
 096. Armored Van (3/5) [Object; Military Tech] — No ability.
 097. Night Market Scout (1/1) [Character; Merc] — On Reveal: Draw a card if your hand is empty.
 098. Metro Enforcer (4/7) [Character; Military] — If this is your only card here, this has +2 Power.
-099. Cheap Drone (1/1) [Object; Drone] — No ability.
+099. Drone (1/1) [Object; Drone] — No ability.
 100. Loaded Suit (5/8) [Character; Corp] — No ability.
 101. Union Rep (2/2) [Character; Corp Merc] — Ongoing: Your cards here cannot be destroyed by your own cards.
 102. White-Hat Auditor (3/3) [Character; Hacker Corp] — On Reveal: Enemy created cards here lose their text.

@@ -1,12 +1,12 @@
 {
-  "defId": "cheap-drone",
+  "defId": "drone",
   "version": 1,
-  "name": "Cheap Drone",
+  "name": "Drone",
   "basePower": 1,
   "cost": 1,
   "abilities": {},
   "cosmetic": {
-    "displayName": "CHEAP DRONE",
+    "displayName": "DRONE",
     "flavorText": "Expendable by design.",
     "rulesText": "",
     "accent": "#adb5bd",

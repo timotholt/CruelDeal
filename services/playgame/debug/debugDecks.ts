@@ -120,7 +120,7 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     color: '#44ff88',
     cards: [
       { defId: 'rent-a-cop' }, { defId: 'signal-booster' }, { defId: 'replication-node' }, { defId: 'street-kid' },
-      { defId: 'drone-pup' }, { defId: 'gang-lookout' }, { defId: 'drone-printer' }, { defId: 'block-party' },
+      { defId: 'drone-pup' }, { defId: 'gang-lookout' }, { defId: 'drone-pilot' }, { defId: 'block-party' },
       { defId: 'pack-tactics' }, { defId: 'signal-rally' }, { defId: 'gutter-legion' }, { defId: 'hive-riot' },
     ],
   },

@@ -632,7 +632,7 @@ SWARM / GANG
     Text: After you play a card here, this gains +1 Power.
     Domain: cards played this turn
 
-068. Drone Printer
+068. Drone Pilot
     Cost/Power: 2/1
     Type: Object
     Tags: Drone Tech
@@ -910,7 +910,7 @@ GENERIC
     Text: If this is your only card here, this has +2 Power.
     Domain: cards in lane
 
-099. Cheap Drone
+099. Drone
     Cost/Power: 1/1
     Type: Object
     Tags: Drone
@@ -1042,7 +1042,7 @@ COUNTER / TECH
 065 | Swarm / Gang | Cheap body | 1/2 | Street Kid | No ability.
 066 | Swarm / Gang | Cheap body | 1/1 | Drone Pup | When Destroyed: Add a 1-Power Drone to your hand.
 067 | Swarm / Gang | Cards-played payoff | 1/1 | Gang Lookout | After you play a card here, this gains +1 Power.
-068 | Swarm / Gang | Token creator | 2/1 | Drone Printer | On Reveal: Add a 1-Power Drone here.
+068 | Swarm / Gang | Token creator | 2/1 | Drone Pilot | On Reveal: Add a 1-Power Drone here.
 069 | Swarm / Gang | Full-lane payoff | 2/2 | Block Party | Ongoing: If this lane is full, your cards here have +1 Power.
 070 | Swarm / Gang | Local buff | 3/2 | Pack Tactics | On Reveal: Give your other cards here +1 Power.
 071 | Swarm / Gang | Bridge to Nanotech | 3/3 | Signal Rally | Ongoing: Your 1-Cost cards have +1 Power.
@@ -1073,7 +1073,7 @@ COUNTER / TECH
 096 | Generic | Simple rate card | 3/5 | Armored Van | No ability.
 097 | Generic | Simple draw | 1/1 | Night Market Scout | On Reveal: Draw a card if your hand is empty.
 098 | Generic | Simple condition | 4/7 | Metro Enforcer | If this is your only card here, this has +2 Power.
-099 | Generic | Simple token body | 1/1 | Cheap Drone | No ability.
+099 | Generic | Simple token body | 1/1 | Drone | No ability.
 100 | Generic | Simple big card | 5/8 | Loaded Suit | No ability.
 101 | Counter / Tech | Anti-destroy | 2/2 | Union Rep | Ongoing: Your cards here cannot be destroyed by your own cards.
 102 | Counter / Tech | Anti-created | 3/3 | White-Hat Auditor | On Reveal: Enemy created cards here lose their text.

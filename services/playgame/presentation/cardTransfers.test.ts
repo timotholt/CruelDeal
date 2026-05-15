@@ -118,7 +118,7 @@ const stateWithHandCard = () => {
     owner: 'P1',
     cardId: 'spawned' as CardId,
     lane: 2 as LaneIdx,
-    defId: 'cheap-drone',
+    defId: 'drone',
     spawnSource: { kind: 'SYSTEM' },
   });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);

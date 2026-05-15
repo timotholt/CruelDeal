@@ -598,11 +598,11 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
     accent: '#adb5bd',
     abilities: {
       onReveal: [
-        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P0', destination: { kind: 'LANE', lane: self } },
-        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['cheap-drone'] }, owner: 'P1', destination: { kind: 'LANE', lane: self } },
+        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['drone'] }, owner: 'P0', destination: { kind: 'LANE', lane: self } },
+        { kind: 'CREATE_CARD_IN_ZONE', pool: { kind: 'DEF_ID_LIST', ids: ['drone'] }, owner: 'P1', destination: { kind: 'LANE', lane: self } },
       ],
     },
-    note: 'Implemented with CREATE_CARD_IN_ZONE and cheap-drone token.',
+    note: 'Implemented with CREATE_CARD_IN_ZONE and drone token.',
   }),
 
   p({

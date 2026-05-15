@@ -88,7 +88,7 @@ import NeonSingularityCard from './cards/neon-singularity/card.json';
 import StreetKidCard from './cards/street-kid/card.json';
 import DronePupCard from './cards/drone-pup/card.json';
 import GangLookoutCard from './cards/gang-lookout/card.json';
-import DronePrinterCard from './cards/drone-printer/card.json';
+import DronePilotCard from './cards/drone-pilot/card.json';
 import BlockPartyCard from './cards/block-party/card.json';
 import PackTacticsCard from './cards/pack-tactics/card.json';
 import SignalRallyCard from './cards/signal-rally/card.json';
@@ -119,7 +119,7 @@ import StreetSamuraiCard from './cards/street-samurai/card.json';
 import ArmoredVanCard from './cards/armored-van/card.json';
 import NightMarketScoutCard from './cards/night-market-scout/card.json';
 import MetroEnforcerCard from './cards/metro-enforcer/card.json';
-import CheapDroneCard from './cards/cheap-drone/card.json';
+import DroneCard from './cards/drone/card.json';
 import LoadedSuitCard from './cards/loaded-suit/card.json';
 import UnionRepCard from './cards/union-rep/card.json';
 import WhiteHatAuditorCard from './cards/white-hat-auditor/card.json';
@@ -218,7 +218,7 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'street-kid', card: StreetKidCard as unknown as CardDef },
   { folder: 'drone-pup', card: DronePupCard as unknown as CardDef },
   { folder: 'gang-lookout', card: GangLookoutCard as unknown as CardDef },
-  { folder: 'drone-printer', card: DronePrinterCard as unknown as CardDef },
+  { folder: 'drone-pilot', card: DronePilotCard as unknown as CardDef },
   { folder: 'block-party', card: BlockPartyCard as unknown as CardDef },
   { folder: 'pack-tactics', card: PackTacticsCard as unknown as CardDef },
   { folder: 'signal-rally', card: SignalRallyCard as unknown as CardDef },
@@ -249,7 +249,7 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'armored-van', card: ArmoredVanCard as unknown as CardDef },
   { folder: 'night-market-scout', card: NightMarketScoutCard as unknown as CardDef },
   { folder: 'metro-enforcer', card: MetroEnforcerCard as unknown as CardDef },
-  { folder: 'cheap-drone', card: CheapDroneCard as unknown as CardDef },
+  { folder: 'drone', card: DroneCard as unknown as CardDef },
   { folder: 'loaded-suit', card: LoadedSuitCard as unknown as CardDef },
   { folder: 'union-rep', card: UnionRepCard as unknown as CardDef },
   { folder: 'white-hat-auditor', card: WhiteHatAuditorCard as unknown as CardDef },

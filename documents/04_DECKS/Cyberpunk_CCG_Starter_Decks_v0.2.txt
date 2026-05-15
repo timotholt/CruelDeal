@@ -307,7 +307,7 @@ Deck List:
     065. Street Kid (1/2) — No ability.
     066. Drone Pup (1/1) — When Destroyed: Add a 1-Power Drone to your hand.
     067. Gang Lookout (1/1) — After you play a card here, this gains +1 Power.
-    068. Drone Printer (2/1) — On Reveal: Add a 1-Power Drone here.
+    068. Drone Pilot (2/1) — On Reveal: Add a 1-Power Drone here.
     069. Block Party (2/2) — Ongoing: If this lane is full, your cards here have +1 Power.
     070. Pack Tactics (3/2) — On Reveal: Give your other cards here +1 Power.
     071. Signal Rally (3/3) — Ongoing: Your 1-Cost cards have +1 Power.
@@ -323,7 +323,7 @@ Curve:
     6-Cost: 1
 
 Play Pattern:
-    - Early: Street Kid, Drone Pup, Gang Lookout, Drone Printer, and Nano Swarm fill lanes.
+    - Early: Street Kid, Drone Pup, Gang Lookout, Drone Pilot, and Nano Swarm fill lanes.
     - Mid: Block Party, Pack Tactics, Signal Rally, Signal Booster, and Replication Node buff the crowd.
     - Late: Gutter Legion and Hive Riot reward full locations and cheap bodies.
 

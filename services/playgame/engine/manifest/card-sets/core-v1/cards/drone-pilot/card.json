@@ -1,7 +1,7 @@
 {
-  "defId": "drone-printer",
+  "defId": "drone-pilot",
   "version": 1,
-  "name": "Drone Printer",
+  "name": "Drone Pilot",
   "basePower": 1,
   "cost": 2,
   "abilities": {
@@ -11,7 +11,7 @@
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [
-            "cheap-drone"
+            "drone"
           ]
         },
         "owner": "SELF_OWNER",
@@ -28,7 +28,7 @@
     ]
   },
   "cosmetic": {
-    "displayName": "DRONE PRINTER",
+    "displayName": "DRONE PILOT",
     "flavorText": "Production never sleeps.",
     "rulesText": "On Reveal: Add a 1-Power Drone here.",
     "accent": "#90e0ef",

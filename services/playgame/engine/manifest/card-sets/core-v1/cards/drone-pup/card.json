@@ -11,7 +11,7 @@
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [
-            "cheap-drone"
+            "drone"
           ]
         },
         "owner": "SELF_OWNER",
