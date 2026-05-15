@@ -58,6 +58,19 @@ function otherLanes(lane: 0 | 1 | 2): Array<0 | 1 | 2> {
   return ([0, 1, 2] as Array<0 | 1 | 2>).filter(l => l !== lane);
 }
 
+function getPermanentCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
+  const card = state.cards[cardId];
+  if (!card) return 0;
+  const def = manifest.cards[card.defId];
+  if (!def) return 0;
+
+  let power = def.basePower + card.powerDelta;
+  if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
+    power = Math.floor(power * 2);
+  }
+  return power;
+}
+
 // ---- Handlers ---------------------------------------------------------------
 
 /** When Destroyed: give the card that caused this +delta Power. */
@@ -583,7 +596,7 @@ function securityDetail(
   const lane = ctx.selfLane;
   const sourceId = ctx.self as CardId;
   if (owner === null || lane === null || !sourceId) return noop(state);
-  const sourcePower = getCardPower(state, sourceId, manifest);
+  const sourcePower = getPermanentCardPower(state, sourceId, manifest);
   const guardBasePower = manifest.cards['guard']?.basePower ?? sourcePower;
 
   const events: MatchEvent[] = [];

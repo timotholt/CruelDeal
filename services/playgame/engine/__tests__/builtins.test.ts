@@ -7,11 +7,12 @@
 import { describe, it, expect } from 'vitest';
 import { evalEffect } from '../effects/evaluator';
 import { apply } from '../apply';
+import { getCardPower } from '../projections/power';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
 import type { MatchState, CardInstance } from '../types/state';
 import type { CardId, LaneIdx, Owner } from '../types/ids';
-import type { CardDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationDef, Manifest } from '../manifest/types';
 import type { EffectCtx } from '../effects/evaluator';
 import type { EffectExpr } from '../types/ability';
 
@@ -23,6 +24,21 @@ function mkDef(defId: string, basePower: number, cost: number): CardDef {
     cardType: 'character',
     abilities: {},
     cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
+  };
+}
+
+function mkLocation(defId: string, abilities: LocationDef['abilities']): LocationDef {
+  return {
+    defId,
+    version: 1,
+    name: defId,
+    rarity: 1,
+    abilities,
+    cosmetic: {
+      displayName: defId,
+      description: '',
+      art: { map: { path: '' } },
+    },
   };
 }
 
@@ -287,6 +303,56 @@ describe('CALL_BUILTIN: ADD_DISCARDED_CARD_TO_HAND', () => {
     const state = buildState({ P0: [self], P1: [] });
     const { events } = runBuiltin('ADD_DISCARDED_CARD_TO_HAND', {}, state, manifest, 'self' as CardId, 'P0', 0);
     expect(events).toHaveLength(0);
+  });
+});
+
+// ---- SECURITY_DETAIL --------------------------------------------------------
+
+describe('CALL_BUILTIN: SECURITY_DETAIL', () => {
+  it('does not bake live location Ongoing power into spawned Guards', () => {
+    const self = mkCard('self', 'security-detail', 'P0', 'LANE', 0);
+    const securityDetail = {
+      ...mkDef('security-detail', 2, 3),
+      abilities: { onReveal: [{ kind: 'CALL_BUILTIN', fn: 'SECURITY_DETAIL', args: {} }] },
+    } as CardDef;
+    const guard = mkDef('guard', 2, 1);
+    const blackHalo = mkLocation('black-halo', {
+      ongoing: [{
+        kind: 'POWER_ADD',
+        target: {
+          kind: 'WHERE',
+          of: { kind: 'SAME_LANE', of: { kind: 'SELF' } },
+          pred: { kind: 'HAS_ABILITY', target: { kind: 'SELF' }, slot: 'ON_REVEAL' },
+        },
+        delta: { kind: 'LIT', n: 2 },
+        stack: 'ADDITIVE',
+      }],
+    });
+    const manifest = {
+      ...buildManifest([securityDetail, guard]),
+      locations: { 'black-halo': blackHalo },
+    };
+    const base = buildState({ P0: [self], P1: [] });
+    const state: MatchState = {
+      ...base,
+      lanes: [
+        {
+          ...base.lanes[0],
+          location: { id: 'loc0' as any, defId: 'black-halo', lane: 0, tags: [] },
+          locationRevealed: true,
+        },
+        base.lanes[1],
+        base.lanes[2],
+      ],
+    };
+
+    const { state: after } = runBuiltin('SECURITY_DETAIL', {}, state, manifest, 'self' as CardId, 'P0', 0);
+    const guards = after.lanes[0].cards.P0.filter(id => id !== 'self');
+
+    expect(getCardPower(after, 'self' as CardId, manifest)).toBe(4);
+    expect(guards).toHaveLength(2);
+    expect(guards.map(id => getCardPower(after, id, manifest))).toEqual([2, 2]);
+    expect(guards.map(id => after.cards[id]!.powerDelta)).toEqual([0, 0]);
   });
 });
 
