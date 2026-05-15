@@ -11,6 +11,9 @@
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "engine:cli": "tsx services/playgame/engine/cli/main.ts",
+    "cards:generate": "tsx scripts/cards/generate-card-modules.ts",
+    "cards:generate:check": "tsx scripts/cards/generate-card-modules.ts --check",
+    "cards:rename": "tsx scripts/cards/rename-card.ts",
     "cards:validate": "tsx services/playgame/engine/manifest/validate-cards.ts"
   },
   "dependencies": {
