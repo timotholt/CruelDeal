@@ -25,7 +25,7 @@
  */
 
 /** Capture the current bounding rect for each id that still has a live ref. */
-export function captureHandRects(
+export function captureCardRects(
   ids: readonly string[],
   cardElMap: Map<string, HTMLElement>,
 ): Map<string, DOMRect> {
@@ -36,6 +36,9 @@ export function captureHandRects(
   }
   return rects;
 }
+
+/** @deprecated Use captureCardRects. */
+export const captureHandRects = captureCardRects;
 
 export interface LayoutSlideOpts {
   duration?: number;
@@ -79,7 +82,7 @@ const restoreTransition = (
  * For each captured rect whose id still has a live element, animate the
  * element from its old position to its new one.
  */
-export function playLayoutSlide(
+export function playCardLayoutSlide(
   oldRects: Map<string, DOMRect>,
   cardElMap: Map<string, HTMLElement>,
   opts: LayoutSlideOpts = {},
@@ -125,3 +128,6 @@ export function playLayoutSlide(
     }, duration + 100);
   }
 }
+
+/** @deprecated Use playCardLayoutSlide. */
+export const playLayoutSlide = playCardLayoutSlide;

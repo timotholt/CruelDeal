@@ -11,6 +11,7 @@ import { For, Show } from 'solid-js';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { Seat } from '@/services/playgame/engine/types/ids';
+import { useVfx } from '../../game/VfxHost';
 import { BoardCard } from './BoardCard';
 
 interface LaneSlotsProps {
@@ -25,6 +26,11 @@ interface LaneSlotsProps {
 }
 
 export const LaneSlots = (props: LaneSlotsProps) => {
+  const { bindZoneRef } = useVfx();
+  const owner = (): Seat | null => {
+    if (!props.viewerSeat) return null;
+    return props.side === 'bottom' ? props.viewerSeat : props.viewerSeat === 'P0' ? 'P1' : 'P0';
+  };
   const slotCardForGrid = (gridIdx: number): ResolvedCard | undefined => {
     const mapping = props.side === 'top' ? [2, 3, 0, 1] : [0, 1, 2, 3];
     const s = mapping.indexOf(gridIdx);
@@ -33,6 +39,10 @@ export const LaneSlots = (props: LaneSlotsProps) => {
 
   return (
     <div
+      ref={(el) => {
+        const seat = owner();
+        if (seat) bindZoneRef(`${seat}:lane:${props.laneIdx as 0 | 1 | 2}`)(el);
+      }}
       class={'lane-slots ' + (props.side === 'top' ? 'top' : 'bot')}
       data-lane={props.laneIdx}
       data-side={props.side}

@@ -30,6 +30,7 @@ import {
 } from 'solid-js';
 import { VFXEngine, vfxSfx } from '@/services/vfx';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { ZoneAnchorKey } from '@/services/playgame/presentation/cardTransfers';
 
 export interface VfxContextValue {
   /** The live engine once mounted (null until then). */
@@ -38,12 +39,15 @@ export interface VfxContextValue {
   boardRef: Accessor<HTMLElement | null>;
   /** Live map of card instanceId -> current DOM element. */
   cardRefs: Map<string, HTMLElement>;
+  /** Live map of logical card zone anchor -> current DOM element. */
+  zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
   /**
    * Returns a Solid `ref` callback that registers the element under `id`
    * for the lifetime of the caller component. Usage:
    *   <div ref={bindCardRef(card.instanceId)}>...</div>
    */
   bindCardRef: (id: string) => (el: HTMLElement) => void;
+  bindZoneRef: (key: ZoneAnchorKey) => (el: HTMLElement) => void;
 }
 
 const VfxCtx = createContext<VfxContextValue>();
@@ -61,6 +65,7 @@ export const VfxHost = (props: VfxHostProps) => {
   const [engine, setEngine] = createSignal<VFXEngine | null>(null);
   const [board, setBoard] = createSignal<HTMLElement | null>(null);
   const cardRefs = new Map<string, HTMLElement>();
+  const zoneRefs = new Map<ZoneAnchorKey, HTMLElement>();
 
   onMount(() => {
     if (!boardEl) return;
@@ -88,11 +93,20 @@ export const VfxHost = (props: VfxHostProps) => {
     });
   };
 
+  const bindZoneRef = (key: ZoneAnchorKey) => (el: HTMLElement) => {
+    zoneRefs.set(key, el);
+    onCleanup(() => {
+      if (zoneRefs.get(key) === el) zoneRefs.delete(key);
+    });
+  };
+
   const value: VfxContextValue = {
     engine,
     boardRef: board,
     cardRefs,
+    zoneRefs,
     bindCardRef,
+    bindZoneRef,
   };
 
   return (

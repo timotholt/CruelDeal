@@ -15,6 +15,7 @@ import type { Step } from './runner';
 import type { MatchState as EngineMatchState, MatchPhase } from '../engine/types/state';
 import type { MatchEvent } from '../engine/types/events';
 import { type CardId, type LaneIdx, type Seat } from '../engine/types/ids';
+import type { ZoneAnchorKey } from '../presentation/cardTransfers';
 import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
@@ -63,6 +64,8 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   toastArea: HTMLElement;
   /** Map from card id -> its live DOM element (from VfxHost). */
   cardRefs: Map<string, HTMLElement>;
+  /** Map from logical card zone anchor -> live DOM element (from VfxHost). */
+  zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
   /** Queue of card defs to deal from, pre-seeded by the flow. */
   drawQueue: import('../engine/manifest/types').CardDef[];
   /** Deck anchor element — visual origin for draw slides. */

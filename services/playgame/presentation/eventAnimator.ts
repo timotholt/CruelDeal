@@ -3,7 +3,7 @@ import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
 import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
-import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Timeline } from '@/services/vfx/timeline';
 import { unwrap } from 'solid-js/store';
 import { batch } from 'solid-js';
@@ -11,6 +11,15 @@ import { describeEventChoreography, type EventChoreography, type SfxCue, type Vf
 import { HAND_SLOT_RESERVE_MS } from './handPresentation';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardId } from '../engine/types/ids';
+import { apply } from '../engine/apply';
+import {
+  assertTransferCoverage,
+  deriveCardTransfers,
+  isVisibleZone,
+  zoneAnchorKey,
+  type CardTransfer,
+  type CardZoneRef,
+} from './cardTransfers';
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,6 +32,13 @@ const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
 };
 
+const fallbackRect = (ctx: PlayScriptCtx): DOMRect => {
+  const b = ctx.boardEl.getBoundingClientRect();
+  const w = 70;
+  const h = 100;
+  return new DOMRect(b.left + b.width / 2 - w / 2, b.top + b.height / 2 - h / 2, w, h);
+};
+
 const reserveHandSlot = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
   ctx.setUi('handReservations', (prev: ResolvedCard[]) => (
     prev.some((item) => item.id === card.id) ? prev : [...prev, card]
@@ -31,6 +47,16 @@ const reserveHandSlot = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
 
 const releaseHandSlot = (ctx: PlayScriptCtx, cardId: string): void => {
   ctx.setUi('handReservations', (prev: ResolvedCard[]) => prev.filter((item) => item.id !== cardId));
+};
+
+const cardIdsWithRefs = (ctx: PlayScriptCtx): string[] => [...ctx.cardRefs.keys()];
+
+const cloneCurrentCardElements = (ctx: PlayScriptCtx): Map<string, HTMLElement> => {
+  const clones = new Map<string, HTMLElement>();
+  for (const [id, el] of ctx.cardRefs) {
+    if (el.isConnected) clones.set(id, el.cloneNode(true) as HTMLElement);
+  }
+  return clones;
 };
 
 const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['timing']): void => {
@@ -123,15 +149,213 @@ const playVfx = (ctx: PlayScriptCtx, choreography: EventChoreography): void => {
   for (const cue of choreography.vfx) playVfxCue(ctx, cue);
 };
 
-const animateCardEnterHand = async (
-  ctx: PlayScriptCtx,
-  event: MatchEvent,
-  choreography: EventChoreography,
-): Promise<void> => {
-  const structural = choreography.structural;
-  if (structural.kind !== 'card-enter-hand') return;
+const rectForZone = (ctx: PlayScriptCtx, zone: CardZoneRef): DOMRect => {
+  const key = zoneAnchorKey(zone);
+  const el = key ? ctx.zoneRefs?.get(key) : null;
+  if (el && el.isConnected) return el.getBoundingClientRect();
+  if (zone.kind === 'DECK' && zone.owner === ctx.localSeat && ctx.deckEl?.isConnected) {
+    return ctx.deckEl.getBoundingClientRect();
+  }
+  return fallbackRect(ctx);
+};
 
-  if (structural.owner !== ctx.localSeat) {
+const rectForTransferEndpoint = (
+  ctx: PlayScriptCtx,
+  transfer: CardTransfer,
+  zone: CardZoneRef,
+  capturedCardRects: Map<string, DOMRect>,
+  endpoint: 'from' | 'to',
+): { rect: DOMRect; el: HTMLElement | null; visibleCard: boolean } => {
+  const captured = capturedCardRects.get(transfer.cardId as string);
+  if (endpoint === 'from' && captured && isVisibleZone(zone)) {
+    return { rect: captured, el: null, visibleCard: true };
+  }
+  const el = isVisibleZone(zone) ? ctx.cardRefs.get(transfer.cardId as string) ?? null : null;
+  if (el && el.isConnected) return { rect: el.getBoundingClientRect(), el, visibleCard: true };
+  if (captured && isVisibleZone(zone)) return { rect: captured, el: null, visibleCard: true };
+  return { rect: rectForZone(ctx, zone), el: null, visibleCard: false };
+};
+
+const cloneForTransfer = (
+  transfer: CardTransfer,
+  sourceEl: HTMLElement | null,
+  destinationEl: HTMLElement | null,
+): HTMLElement => {
+  const basis = sourceEl ?? destinationEl;
+  const flyer = basis
+    ? (basis.cloneNode(true) as HTMLElement)
+    : document.createElement('div');
+  if (!basis) flyer.className = 'card transfer-flyer-card facedown';
+  flyer.classList.add('transfer-flyer');
+  flyer.removeAttribute('ref');
+  flyer.removeAttribute('draggable');
+  flyer.style.pointerEvents = 'none';
+  flyer.style.position = 'absolute';
+  flyer.style.margin = '0';
+  flyer.style.zIndex = String(transfer.style.zIndex);
+  flyer.style.willChange = 'left, top, width, height, transform, opacity';
+  if (transfer.face === 'faceDown') flyer.classList.add('facedown');
+  return flyer;
+};
+
+type PreparedTransfer = {
+  transfer: CardTransfer;
+  flyer: HTMLElement;
+  sourceRect: DOMRect;
+  sourceEl: HTMLElement | null;
+  sourceVisibility: string | null;
+};
+
+const placeFlyerAtRect = (ctx: PlayScriptCtx, flyer: HTMLElement, rect: DOMRect): void => {
+  const boardRect = ctx.boardWrap.getBoundingClientRect();
+  flyer.style.left = rect.left - boardRect.left + 'px';
+  flyer.style.top = rect.top - boardRect.top + 'px';
+  flyer.style.width = rect.width + 'px';
+  flyer.style.height = rect.height + 'px';
+};
+
+const shouldPrepareSourceBeforeDispatch = (transfer: CardTransfer): boolean => (
+  isVisibleZone(transfer.from)
+  && transfer.style.route !== 'layout-only'
+  && !(transfer.from.kind === 'DECK' && transfer.to.kind === 'HAND')
+);
+
+const prepareTransferBeforeDispatch = (
+  ctx: PlayScriptCtx,
+  transfer: CardTransfer,
+  capturedCardRects: Map<string, DOMRect>,
+  capturedCardClones: Map<string, HTMLElement>,
+): PreparedTransfer | null => {
+  if (!shouldPrepareSourceBeforeDispatch(transfer)) return null;
+  const source = rectForTransferEndpoint(ctx, transfer, transfer.from, capturedCardRects, 'from');
+  const sourceEl = ctx.cardRefs.get(transfer.cardId as string) ?? source.el;
+  const flyer = cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? sourceEl ?? null, null);
+  flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
+  flyer.style.transform = `scale(${transfer.style.scale.from})`;
+  placeFlyerAtRect(ctx, flyer, source.rect);
+  ctx.boardWrap.appendChild(flyer);
+
+  const sourceVisibility = sourceEl?.style.visibility ?? null;
+  if (sourceEl) sourceEl.style.visibility = 'hidden';
+
+  return { transfer, flyer, sourceRect: source.rect, sourceEl, sourceVisibility };
+};
+
+const restorePreparedSource = (prepared: PreparedTransfer | null): void => {
+  if (!prepared?.sourceEl?.isConnected) return;
+  prepared.sourceEl.style.visibility = prepared.sourceVisibility ?? '';
+};
+
+const isLocalHandEntryOverride = (ctx: PlayScriptCtx, transfer: CardTransfer): boolean => (
+  transfer.to.kind === 'HAND'
+  && transfer.to.owner === ctx.localSeat
+  && (transfer.from.kind === 'DECK' || transfer.from.kind === 'GENERATED')
+);
+
+const animateOneTransfer = async (
+  ctx: PlayScriptCtx,
+  transfer: CardTransfer,
+  capturedCardRects: Map<string, DOMRect>,
+  capturedCardClones: Map<string, HTMLElement>,
+  useTransferSfx: boolean,
+  prepared: PreparedTransfer | null = null,
+): Promise<void> => {
+  if (isLocalHandEntryOverride(ctx, transfer)) {
+    const startRect = transfer.from.kind === 'DECK' ? rectForZone(ctx, transfer.from) : deckSourceRect(ctx);
+    await slideFromDeckToHand({
+      cardId: transfer.cardId as string,
+      startRect,
+      cardElMap: ctx.cardRefs,
+      boardWrap: ctx.boardWrap,
+      sfx: useTransferSfx ? ctx.sfx : undefined,
+    });
+    return;
+  }
+
+  const source = rectForTransferEndpoint(ctx, transfer, transfer.from, capturedCardRects, 'from');
+  const destination = rectForTransferEndpoint(ctx, transfer, transfer.to, capturedCardRects, 'to');
+
+  if (transfer.style.route === 'anchor-to-anchor') {
+    const key = zoneAnchorKey(transfer.to);
+    const anchor = key ? ctx.zoneRefs?.get(key) : null;
+    if (anchor) {
+      const tl = new Timeline();
+      tl.add(anchor, 'vfx-pop', { 'scale-start': '0.92' }, 220, 0);
+      tl.play();
+      await wait(240);
+    }
+    return;
+  }
+
+  const destinationVisibility = destination.el?.style.visibility;
+  if (destination.el) destination.el.style.visibility = 'hidden';
+
+  const boardRect = ctx.boardWrap.getBoundingClientRect();
+  const flyer = prepared?.flyer ?? cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? source.el, destination.el);
+  if (!prepared) {
+    placeFlyerAtRect(ctx, flyer, source.rect);
+    flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
+    flyer.style.transform = `scale(${transfer.style.scale.from})`;
+    ctx.boardWrap.appendChild(flyer);
+  }
+
+  if (useTransferSfx && transfer.style.sfx) ctx.sfx?.(transfer.style.sfx);
+
+  await nextFrame();
+  flyer.style.transition = [
+    `left ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+    `top ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+    `width ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+    `height ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+    `transform ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+    `opacity ${transfer.style.durationMs}ms ${transfer.style.easing}`,
+  ].join(', ');
+  flyer.style.left = destination.rect.left - boardRect.left + 'px';
+  flyer.style.top = destination.rect.top - boardRect.top + 'px';
+  flyer.style.width = destination.rect.width + 'px';
+  flyer.style.height = destination.rect.height + 'px';
+  flyer.style.transform = `scale(${transfer.style.scale.to})`;
+  flyer.style.opacity = transfer.style.opacity === 'fadeOut' ? '0' : '1';
+
+  await wait(transfer.style.durationMs + 30);
+  flyer.remove();
+  if (destination.el) destination.el.style.visibility = destinationVisibility ?? '';
+  restorePreparedSource(prepared);
+
+  if (destination.el && isVisibleZone(transfer.to)) {
+    const tl = new Timeline();
+    tl.add(destination.el, 'vfx-pop', { 'scale-start': '0.88' }, 180, 0);
+    tl.play();
+    await wait(200);
+  }
+};
+
+const reserveVisibleHandDestinations = (
+  ctx: PlayScriptCtx,
+  transfers: readonly CardTransfer[],
+  afterState: EngineMatchState,
+): string[] => {
+  const reserved: string[] = [];
+  for (const transfer of transfers) {
+    if (transfer.to.kind !== 'HAND' || transfer.to.owner !== ctx.localSeat) continue;
+    const resolved = resolveCard(transfer.cardId, afterState, ctx.manifest);
+    if (!resolved) continue;
+    reserveHandSlot(ctx, resolved);
+    reserved.push(resolved.id);
+  }
+  return reserved;
+};
+
+export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promise<void> {
+  const choreography = describeEventChoreography(event);
+  playSfx(ctx, choreography.sfx, 'on-start');
+
+  const before = unwrap(ctx.state) as EngineMatchState;
+  const after = apply(before, event, ctx.manifest) as EngineMatchState;
+  const transfers = deriveCardTransfers(before, event, after);
+  if (import.meta.env.DEV) assertTransferCoverage(before, event, after, transfers);
+
+  if (transfers.length === 0) {
     playSfx(ctx, choreography.sfx, 'on-dispatch');
     ctx.dispatch(event);
     playVfx(ctx, choreography);
@@ -140,89 +364,30 @@ const animateCardEnterHand = async (
     return;
   }
 
-  const oldIds = ctx.state.hand[ctx.localSeat].map((card) => card.id as string);
-  const oldRects = captureHandRects(oldIds, ctx.cardRefs);
+  const oldRects = captureCardRects(cardIdsWithRefs(ctx), ctx.cardRefs);
+  const oldClones = cloneCurrentCardElements(ctx);
+  const preparedTransfers = new Map<CardTransfer, PreparedTransfer>();
+  for (const transfer of transfers) {
+    const prepared = prepareTransferBeforeDispatch(ctx, transfer, oldRects, oldClones);
+    if (prepared) preparedTransfers.set(transfer, prepared);
+  }
 
   playSfx(ctx, choreography.sfx, 'on-dispatch');
-
-  let resolved: ResolvedCard | null = null;
+  let reservedHandIds: string[] = [];
   batch(() => {
     ctx.dispatch(event);
-    const raw = unwrap(ctx.state) as EngineMatchState;
-    resolved = resolveCard(structural.cardId, raw, ctx.manifest);
-    if (resolved) reserveHandSlot(ctx, resolved);
+    reservedHandIds = reserveVisibleHandDestinations(ctx, transfers, after);
   });
-
-  if (!resolved) {
-    playVfx(ctx, choreography);
-    playSfx(ctx, choreography.sfx, 'after-dispatch');
-    playSfx(ctx, choreography.sfx, 'on-complete');
-    return;
-  }
 
   playVfx(ctx, choreography);
   playSfx(ctx, choreography.sfx, 'after-dispatch');
+  playCardLayoutSlide(oldRects, ctx.cardRefs);
+  if (reservedHandIds.length > 0) await wait(HAND_SLOT_RESERVE_MS);
 
-  playLayoutSlide(oldRects, ctx.cardRefs);
-  await wait(HAND_SLOT_RESERVE_MS);
-
-  await slideFromDeckToHand({
-    cardId: resolved.id,
-    startRect: deckSourceRect(ctx),
-    cardElMap: ctx.cardRefs,
-    boardWrap: ctx.boardWrap,
-    sfx: ctx.sfx,
-  });
-  releaseHandSlot(ctx, resolved.id);
-  await nextFrame();
-
-  const el = ctx.cardRefs.get(resolved.id);
-  if (el) {
-    const tl = new Timeline();
-    tl.add(el, 'vfx-pop', { 'scale-start': '0.8' }, structural.popDurationMs, 0);
-    tl.play();
-    await new Promise<void>((resolve) => setTimeout(resolve, structural.popDurationMs + 40));
+  for (const transfer of transfers) {
+    await animateOneTransfer(ctx, transfer, oldRects, oldClones, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
   }
+  for (const id of reservedHandIds) releaseHandSlot(ctx, id);
 
   playSfx(ctx, choreography.sfx, 'on-complete');
-};
-
-export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promise<void> {
-  const choreography = describeEventChoreography(event);
-  playSfx(ctx, choreography.sfx, 'on-start');
-
-  switch (choreography.structural.kind) {
-    case 'card-move': {
-      const id = choreography.structural.cardId as string;
-      const el = ctx.cardRefs.get(id);
-      const oldRect = el && el.isConnected ? el.getBoundingClientRect() : null;
-
-      playSfx(ctx, choreography.sfx, 'on-dispatch');
-      ctx.dispatch(event);
-      playVfx(ctx, choreography);
-      playSfx(ctx, choreography.sfx, 'after-dispatch');
-
-      if (oldRect) {
-        const rects = new Map<string, DOMRect>([[id, oldRect]]);
-        playLayoutSlide(rects, ctx.cardRefs, { duration: choreography.structural.durationMs });
-        await new Promise<void>((r) => setTimeout(r, choreography.structural.durationMs));
-      }
-      playSfx(ctx, choreography.sfx, 'on-complete');
-      return;
-    }
-
-    case 'card-enter-hand':
-      await animateCardEnterHand(ctx, event, choreography);
-      return;
-
-    case 'dispatch-only':
-    case 'card-flip':
-    case 'location-reveal':
-      playSfx(ctx, choreography.sfx, 'on-dispatch');
-      ctx.dispatch(event);
-      playVfx(ctx, choreography);
-      playSfx(ctx, choreography.sfx, 'after-dispatch');
-      playSfx(ctx, choreography.sfx, 'on-complete');
-      return;
-  }
 }

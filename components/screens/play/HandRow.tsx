@@ -1,9 +1,12 @@
 import { For, createMemo } from 'solid-js';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { HAND_SLOT_RESERVE_MS } from '@/services/playgame/presentation/handPresentation';
+import type { Seat } from '@/services/playgame/engine/types/ids';
+import { useVfx } from '@/components/game/VfxHost';
 import { HandCard } from './HandCard';
 
 interface HandRowProps {
+  owner: Seat;
   cards: ResolvedCard[];
   reservedIds: ReadonlySet<string>;
   energy: number;
@@ -40,6 +43,7 @@ const HandSlot = (props: HandSlotProps) => {
 };
 
 export const HandRow = (props: HandRowProps) => {
+  const { bindZoneRef } = useVfx();
   const handScale = createMemo(() => {
     const n = props.cards.length;
     if (n <= 4) return 1;
@@ -54,6 +58,7 @@ export const HandRow = (props: HandRowProps) => {
 
   return (
     <div
+      ref={bindZoneRef(`${props.owner}:hand`)}
       class="hand"
       id="hand"
       style={{

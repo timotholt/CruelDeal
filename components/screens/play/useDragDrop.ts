@@ -136,7 +136,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       const oldRects = captureHandRects(allIds, cardRefs);
       const ok = undoPendingCard(dragState.id);
       if (!ok) return;
-      requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+      queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
       return;
     }
 
@@ -147,7 +147,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       const oldRects = captureHandRects(handIds, cardRefs);
       const ok = stageCardInLane(dragState.id, lane);
       if (!ok) return;
-      requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+      queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
     }
   };
 

@@ -63,7 +63,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     engineState, setEngineState, dispatch, manifest, ui, setUi,
     initialState, engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
   } = pg;
-  const { cardRefs, boardRef } = useVfx();
+  const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
   const [replayEnabled, setReplayEnabled] = createSignal(false);
   const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
@@ -158,7 +158,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
     const oldRects = captureHandRects(allIds, cardRefs);
     actions.undoPending();
-    requestAnimationFrame(() => playLayoutSlide(oldRects, cardRefs));
+    queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
   };
 
   // ── Script instance for opening + resolveTurn ────────────────────────────
@@ -229,6 +229,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       boardWrap: boardWrapEl,
       toastArea: toastAreaEl,
       cardRefs,
+      zoneRefs,
       drawQueue,
       deckEl,
     };
@@ -395,6 +396,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
         </div>
 
         <HandRow
+          owner={localSeat}
           cards={hand()}
           reservedIds={reservedHandIds()}
           energy={presentedState().energy[localSeat]}
@@ -436,13 +438,44 @@ export const PlayBoard = (props: PlayBoardProps) => {
         </div>
 
         <div
-          ref={deckEl}
+          ref={(el) => {
+            deckEl = el;
+            bindZoneRef(`${localSeat}:deck`)(el);
+          }}
           class="deck-anchor"
           aria-hidden="true"
           style={{
             position: 'absolute',
             right: '-80px',
             bottom: '120px',
+            width: '48px',
+            height: '68px',
+            visibility: 'hidden',
+            'pointer-events': 'none',
+          }}
+        />
+        <div
+          ref={bindZoneRef(`${remoteSeat}:deck`)}
+          class="deck-anchor deck-anchor--remote"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            right: '-80px',
+            top: '120px',
+            width: '48px',
+            height: '68px',
+            visibility: 'hidden',
+            'pointer-events': 'none',
+          }}
+        />
+        <div
+          ref={bindZoneRef('generated')}
+          class="generated-anchor"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
             width: '48px',
             height: '68px',
             visibility: 'hidden',

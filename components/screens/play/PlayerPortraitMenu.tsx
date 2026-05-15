@@ -1,5 +1,6 @@
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import type { CardZone } from '@/services/playgame/engine/types/state';
+import { useVfx } from '../../game/VfxHost';
 
 interface PlayerPortraitMenuProps {
   owner: Seat;
@@ -17,8 +18,17 @@ interface PlayerPortraitMenuProps {
 }
 
 export const PlayerPortraitMenu = (props: PlayerPortraitMenuProps) => {
+  const { bindZoneRef } = useVfx();
   return (
-    <div class={'portrait-menu-anchor portrait-menu-anchor--' + props.side} onClick={(e) => e.stopPropagation()}>
+    <div
+      ref={(el) => {
+        bindZoneRef(`${props.owner}:discard`)(el);
+        bindZoneRef(`${props.owner}:destroyed`)(el);
+        bindZoneRef(`${props.owner}:banished`)(el);
+      }}
+      class={'portrait-menu-anchor portrait-menu-anchor--' + props.side}
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         class="portrait-trigger"
         classList={{ 'portrait-trigger--priority': props.hasPriority }}
