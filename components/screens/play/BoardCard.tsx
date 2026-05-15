@@ -117,7 +117,7 @@ export const BoardCard = (props: BoardCardProps) => {
     <div
       ref={bindCardRef(props.card.id)}
       class={
-        'card' +
+        'card lane-card' +
         (props.side === 'top' ? ' enemy' : '') +
         (isFaceDown() ? ' facedown' : '') +
         (isPending() ? ' pending' : '') +

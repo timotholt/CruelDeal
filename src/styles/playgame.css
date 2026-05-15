@@ -709,23 +709,32 @@
     opacity: 0.7;
   }
 
-  /* Lane cards — smaller tokens, same structure */
+  /* Lane cards — smaller tokens, same structure. The explicit class travels
+     with zoom-inspector clones after they leave the .lane-slots subtree. */
+  .card.lane-card,
   .lane-slots .card {
     width: var(--card-w); height: var(--card-h);
     padding: var(--card-pad);
     border-radius: var(--card-radius);
     grid-template-rows: var(--card-badge-size) 1fr var(--card-badge-size);
   }
+  .card.lane-card:not(.facedown),
   .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
+  .card.lane-card.facedown,
   .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
+  .card.lane-card .name,
   .lane-slots .card .name { font-size: var(--card-font-name); }
+  .card.lane-card .type,
   .lane-slots .card .type { font-size: clamp(5px, var(--card-font-type), 0.54rem); }
+  .card.lane-card .bar,
   .lane-slots .card .bar  { height: var(--card-bar-h); }
+  .card.lane-card .cost,
   .lane-slots .card .cost {
     top: var(--card-badge-off); left: var(--card-badge-off);
     width: var(--card-badge-size); height: var(--card-badge-size);
     font-size: var(--card-font-badge);
   }
+  .card.lane-card .power,
   .lane-slots .card .power {
     top: var(--card-badge-off); right: var(--card-badge-off);
     min-width: var(--card-badge-size); height: var(--card-badge-size);
