@@ -622,6 +622,99 @@ function securityDetail(
   return { events, state: s };
 }
 
+function recklessRecruiter(
+  state: MatchState, _fn: string, _args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const owner = ctx.selfOwner;
+  if (owner === null) return noop(state);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  for (const card of state.deck[owner]) {
+    const giveCost = ctx.rng.fork(`recruit:${card.id}`).int(0, 1) === 0;
+    const event: MatchEvent = giveCost
+      ? { type: 'CARD_COST_CHANGED', cardId: card.id, delta: -1, cause: ctx.source }
+      : { type: 'CARD_POWER_CHANGED', cardId: card.id, delta: 2, cause: ctx.source };
+    events.push(event);
+    s = apply(s, event, manifest);
+  }
+  return { events, state: s };
+}
+
+function cardWasPlayedAtLaneThisTurn(state: MatchState, lane: LaneIdx, owner?: Owner): boolean {
+  let turn = 1;
+  for (const entry of state.log) {
+    const event = entry.event as MatchEvent;
+    if (event.type === 'TURN_STARTED') turn = event.turn;
+    if (event.type !== 'CARD_STAGED') continue;
+    if (turn !== state.turn || event.lane !== lane) continue;
+    if (owner && event.owner !== owner) continue;
+    return true;
+  }
+  return false;
+}
+
+function barracadeCheck(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const self = ctx.self as CardId;
+  const lane = ctx.selfLane;
+  if (!self || lane === null) return noop(state);
+  const card = state.cards[self];
+  if (!card || card.zone !== 'LANE') return noop(state);
+  if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
+
+  const delta = (args.powerDelta as number) ?? 4;
+  const event: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
+  return { events: [event], state: apply(state, event, manifest) };
+}
+
+function leonReturn(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const self = ctx.self as CardId;
+  if (!self) return noop(state);
+  const card = state.cards[self];
+  if (!card || card.zone !== 'LANE') return noop(state);
+
+  const events: MatchEvent[] = [];
+  let s = state;
+  const moveEvent: MatchEvent = {
+    type: 'CARD_MOVED_TO_ZONE',
+    cardId: self,
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  };
+  events.push(moveEvent);
+  s = apply(s, moveEvent, manifest);
+  if (s.cards[self]?.zone !== 'HAND') return { events, state: s };
+
+  const delta = (args.powerDelta as number) ?? 2;
+  const powerEvent: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
+  events.push(powerEvent);
+  s = apply(s, powerEvent, manifest);
+  return { events, state: s };
+}
+
+function riotSquad(
+  state: MatchState, _fn: string, args: BuiltinArgs,
+  ctx: EffectCtx, manifest: Manifest,
+): BuiltinResult {
+  const self = ctx.self as CardId;
+  const lane = ctx.selfLane;
+  const owner = ctx.selfOwner;
+  if (!self || lane === null || owner === null) return noop(state);
+  const enemy: Owner = owner === 'P0' ? 'P1' : 'P0';
+  if (cardWasPlayedAtLaneThisTurn(state, lane, enemy)) return noop(state);
+
+  const delta = (args.powerDelta as number) ?? 2;
+  const event: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
+  return { events: [event], state: apply(state, event, manifest) };
+}
+
 function corporateClimber(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
@@ -801,6 +894,10 @@ const REGISTRY = new Map<string, BuiltinHandler>([
   ['FULL_LANES_POWER',                 (_s) => fullLanesPower(_s)],
   ['DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', disableOngoingsThisLaneThisTurn],
   ['SECURITY_DETAIL',                  securityDetail],
+  ['RECKLESS_RECRUITER',               recklessRecruiter],
+  ['BARRACADE_CHECK',                  barracadeCheck],
+  ['LEON_RETURN',                      leonReturn],
+  ['RIOT_SQUAD',                       riotSquad],
   ['CORPORATE_CLIMBER',                corporateClimber],
   ['TRAUMA_TEAM',                      traumaTeam],
   ['SOCIAL_WORKER',                    socialWorker],

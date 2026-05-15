@@ -1,0 +1,28 @@
+{
+  "defId": "barracade",
+  "version": 1,
+  "name": "Barracade",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADD_PENDING",
+        "effect": {
+          "kind": "SCHEDULED",
+          "when": "END_OF_NEXT_TURN",
+          "effect": { "kind": "CALL_BUILTIN", "fn": "BARRACADE_CHECK", "args": { "powerDelta": 4 } }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BARRACADE",
+    "flavorText": "Held together by steel, spite, and overtime.",
+    "rulesText": "On Reveal: If a card is played at this location next turn, +4 Power.",
+    "accent": "#2a9d8f",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

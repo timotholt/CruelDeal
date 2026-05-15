@@ -1,0 +1,21 @@
+{
+  "defId": "leon",
+  "version": 1,
+  "name": "Leon",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "onTurnStart": [
+      { "kind": "CALL_BUILTIN", "fn": "LEON_RETURN", "args": { "powerDelta": 2 } }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "LEON",
+    "flavorText": "Always early. Never where payroll left him.",
+    "rulesText": "Start of Turn: Return this to your hand with +2 Power.",
+    "accent": "#90be6d",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

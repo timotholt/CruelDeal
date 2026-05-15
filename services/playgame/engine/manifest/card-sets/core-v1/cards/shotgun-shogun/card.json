@@ -1,0 +1,37 @@
+{
+  "defId": "shotgun-shogun",
+  "version": 1,
+  "name": "Shotgun Shogun",
+  "basePower": 2,
+  "cost": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DESTROY",
+        "target": {
+          "kind": "RANDOM_N",
+          "of": {
+            "kind": "WHERE",
+            "of": { "kind": "SAME_LANE", "of": { "kind": "SELF" }, "ownerFilter": "OPP_OWNER" },
+            "pred": {
+              "kind": "COST_CMP",
+              "target": { "kind": "SELF" },
+              "op": "==",
+              "value": { "kind": "LIT", "n": 1 }
+            }
+          },
+          "count": { "kind": "LIT", "n": 1 }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SHOTGUN SHOGUN",
+    "flavorText": "A tiny court, a loud verdict.",
+    "rulesText": "On Reveal: Destroy an enemy 1-Cost card here.",
+    "accent": "#e63946",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -32,6 +32,8 @@ export interface CardAbilities {
    *  Order: one owner's cards first (by lane, then intra-lane order), then the
    *  other owner's. Runs BEFORE TURN_ENDED (so effects can still see the board). */
   onEndOfTurn?: EffectExpr[];
+  /** Fires after TURN_STARTED bookkeeping and before normal draws. */
+  onTurnStart?: EffectExpr[];
   /** Fires immediately after the card is moved to a new lane (any cause).
    *  SELF refers to the moved card; `selfLane` is already the NEW lane. */
   onMove?: EffectExpr[];

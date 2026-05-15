@@ -22,6 +22,7 @@ interface HandCardProps {
   card: ResolvedCard;
   playable: boolean;
   interactive?: boolean;
+  inspectable?: boolean;
   hidden?: boolean;
 }
 
@@ -30,6 +31,7 @@ export const HandCard = (props: HandCardProps) => {
   const cardId = () => props.card.id as CardId;
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
+  const isInspectable = createMemo(() => props.inspectable !== false && !isHidden());
 
   createEffect(() => {
     const sources = props.card.textDisabled
@@ -62,7 +64,7 @@ export const HandCard = (props: HandCardProps) => {
     dragState.id = null;
   };
   const onClick = (e: MouseEvent): void => {
-    if (!isInteractive()) return;
+    if (!isInspectable()) return;
     e.stopPropagation();
     openInspect({
       kind: 'card',
@@ -81,7 +83,7 @@ export const HandCard = (props: HandCardProps) => {
       style={{
         visibility: isHidden() ? 'hidden' : 'visible',
         'pointer-events': isHidden() ? 'none' : 'auto',
-        cursor: isInteractive() ? 'pointer' : 'default',
+        cursor: isInspectable() ? 'pointer' : 'default',
       }}
       draggable={isInteractive()}
       onDragStart={onDragStart}

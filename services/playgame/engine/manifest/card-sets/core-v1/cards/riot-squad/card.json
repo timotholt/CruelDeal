@@ -1,0 +1,21 @@
+{
+  "defId": "riot-squad",
+  "version": 1,
+  "name": "Riot Squad",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "onEndOfTurn": [
+      { "kind": "CALL_BUILTIN", "fn": "RIOT_SQUAD", "args": { "powerDelta": 2 } }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RIOT SQUAD",
+    "flavorText": "Quiet streets look good on quarterly reports.",
+    "rulesText": "End of Turn: +2 Power if the enemy played no cards here this turn.",
+    "accent": "#577590",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

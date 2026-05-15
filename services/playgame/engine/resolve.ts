@@ -186,6 +186,7 @@ function hasPowerGainDrawTrigger(def: { abilities: import('./manifest/types').Ca
     (list ?? []).some(e => (e as any).kind === 'CALL_BUILTIN' && (e as any).fn === 'DRAW_ON_POWER_GAIN');
   return has(def.abilities.onReveal)
     || has(def.abilities.onEndOfTurn)
+    || has(def.abilities.onTurnStart)
     || has(def.abilities.onDestroyed)
     || has(def.abilities.onMove)
     || has(def.abilities.onDiscarded)
@@ -470,8 +471,48 @@ export function resolveTurn(
     }
   }
 
-  // Phase 5.6  Location start-of-turn triggers, after TURN_STARTED and
-  // scheduled start effects, before normal draws.
+  // Phase 5.6  Card start-of-turn triggers, after TURN_STARTED and scheduled
+  // start effects, before location triggers and normal draws.
+  {
+    const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
+    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+      for (const owner of ['P0', 'P1'] as const) {
+        const ids = s.lanes[lane].cards[owner];
+        for (const id of ids) {
+          const card = s.cards[id];
+          if (!card || !card.revealed) continue;
+          const def = manifest.cards[card.defId];
+          const effs = def?.abilities.onTurnStart;
+          if (!effs || effs.length === 0) continue;
+          triggerFires.push({ cardId: id, effects: effs });
+        }
+      }
+    }
+    for (let i = 0; i < triggerFires.length; i++) {
+      const { cardId, effects: effs } = triggerFires[i];
+      for (let j = 0; j < effs.length; j++) {
+        const card = s.cards[cardId];
+        if (!card || card.zone !== 'LANE') break;
+        const subCtx: EffectCtx = {
+          state: s,
+          manifest,
+          self: cardId,
+          selfKind: 'card',
+          selfLane: card.lane,
+          selfOwner: card.owner,
+          rng: rng.fork(`turn-start:${cardId}:${j}`),
+          source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+          depth: 0,
+        };
+        const res = evalEffect(s, effs[j], subCtx, manifest);
+        events.push(...res.events);
+        s = res.state;
+      }
+    }
+  }
+
+  // Phase 5.7  Location start-of-turn triggers, after card start triggers,
+  // before normal draws.
   {
     for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
       const trig = fireLocationTrigger(

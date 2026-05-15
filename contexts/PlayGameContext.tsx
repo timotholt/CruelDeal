@@ -80,11 +80,17 @@ function createInitialEngineState(seed: string, manifest: Manifest): EngineMatch
   return createInitialMatchState(seed, manifest);
 }
 
+function cloneEngineState(state: EngineMatchState): EngineMatchState {
+  return structuredClone(state) as EngineMatchState;
+}
+
 // ── Context value type ───────────────────────────────────────────────────────
 
 export interface PlayGameContextValue {
   /** Engine state — single source of truth. */
   engineState: EngineMatchState;
+  /** Exact starting state for deterministic replay. */
+  initialState: EngineMatchState;
   /** Solid setter for path-based engine state updates (use dispatch for game events). */
   setEngineState: SetStoreFunction<EngineStateStore>;
   /** Apply a game event to the engine state (apply → reconcile). */
@@ -135,8 +141,10 @@ export const PlayGameProvider = (props: {
     P1: props.seatMeta?.P1 ?? { name: localSeat === 'P1' ? 'YOU' : 'OPPONENT' },
   };
 
+  const startingState = props.initialState ?? createInitialEngineState(seed, manifest);
+  const initialState = cloneEngineState(startingState);
   const [engineState, setEngineState] = createStore<EngineStateStore>(
-    (props.initialState ?? createInitialEngineState(seed, manifest)) as EngineStateStore,
+    cloneEngineState(startingState) as EngineStateStore,
   );
 
   const [ui, setUi] = createStore<UiState>({
@@ -150,7 +158,7 @@ export const PlayGameProvider = (props: {
   const isResolving: Accessor<boolean> = () => engineState.phase === 'RESOLVING';
 
   // RNG maintained across turns for determinism.
-  let engineRng: Rng = createRng(seed);
+  let engineRng: Rng = createRng(initialState.seed);
 
   /**
    * Apply one engine event to the store via reconcile.
@@ -268,6 +276,7 @@ export const PlayGameProvider = (props: {
 
   const value: PlayGameContextValue = {
     engineState: engineState as unknown as EngineMatchState,
+    initialState,
     setEngineState,
     dispatch,
     manifest,
@@ -294,12 +303,13 @@ export const PlayGameProvider = (props: {
       getReplayBundle: () =>
         exportReplayBundle(unwrap(engineState) as EngineMatchState, manifest, {
           localSeat,
-        }),
+        }, initialState),
       getReplayTimeline: () => {
         const live = unwrap(engineState) as EngineMatchState;
         return replayMatch({
           seed: live.seed,
           manifest,
+          initialState,
           events: live.log.map((entry) => entry.event as MatchEvent),
         });
       },
@@ -308,6 +318,7 @@ export const PlayGameProvider = (props: {
         const replay = replayMatch({
           seed: live.seed,
           manifest,
+          initialState,
           events: live.log.map((entry) => entry.event as MatchEvent),
         });
         return replay.frames[index] ?? null;
@@ -316,7 +327,7 @@ export const PlayGameProvider = (props: {
         const json = JSON.stringify(
           exportReplayBundle(unwrap(engineState) as EngineMatchState, manifest, {
             localSeat,
-          }),
+          }, initialState),
           null,
           2,
         );

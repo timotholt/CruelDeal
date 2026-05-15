@@ -41,10 +41,9 @@ export const DEBUG_DECKS: readonly DebugDeck[] = [
     gamePlan: 'Stack Ongoing lane buffs, flood protected bodies, then cash crowded lanes into Power.',
     color: '#4488ff',
     cards: [
-      { defId: 'rent-a-cop' }, { defId: 'hired-gun' }, { defId: 'riff-raff' }, { defId: 'signal-rally' },
-      { defId: 'signal-booster' }, { defId: 'boardroom-proxy' }, { defId: 'security-detail' }, { defId: 'gun-dealer' },
-      { defId: 'corporate-climber' }, { defId: 'block-party' },
-      { defId: 'ai-overseer' }, { defId: 'citywide-mesh' },
+      { defId: 'rent-a-cop' }, { defId: 'hired-gun' }, { defId: 'riff-raff' }, { defId: 'drill-instructor' },
+      { defId: 'reckless-recruiter' }, { defId: 'shotgun-shogun' }, { defId: 'barracade' }, { defId: 'leon' },
+      { defId: 'riot-squad' }, { defId: 'security-detail' }, { defId: 'gun-dealer' }, { defId: 'corporate-climber' },
     ],
   },
   {

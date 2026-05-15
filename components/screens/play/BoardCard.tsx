@@ -22,6 +22,7 @@ interface BoardCardProps {
   side: 'top' | 'bottom';
   laneIdx: number;
   interactive?: boolean;
+  inspectable?: boolean;
   viewerSeat?: Seat;
   phase?: EngineMatchState['phase'];
   stagingOrder?: readonly string[];
@@ -43,6 +44,7 @@ export const BoardCard = (props: BoardCardProps) => {
   const phase = (): EngineMatchState['phase'] => props.phase ?? engineState.phase;
   const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState.stagingOrder;
   const interactive = (): boolean => props.interactive ?? true;
+  const inspectable = (): boolean => props.inspectable ?? interactive();
 
   /**
    * True if this is a player card that was staged THIS turn and can still
@@ -98,7 +100,7 @@ export const BoardCard = (props: BoardCardProps) => {
   };
 
   const onClick = (e: MouseEvent): void => {
-    if (!interactive()) return;
+    if (!inspectable()) return;
     if (isFaceDown()) return;
     e.stopPropagation();
     openInspect({

@@ -39,6 +39,8 @@ export { createInitialMatchState } from './cli/initState';
 export { runMatch, type RunMatchOptions, type RunMatchResult } from './cli/runMatch';
 export {
   replayMatch,
+  replayBundle,
+  assertReplayBundle,
   exportReplayBundle,
   validateReplayBundle,
   type ReplayBundle,

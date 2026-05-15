@@ -61,7 +61,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const pg = usePlayGame();
   const {
     engineState, setEngineState, dispatch, manifest, ui, setUi,
-    engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
+    initialState, engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
   } = pg;
   const { cardRefs, boardRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
@@ -75,6 +75,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return replayMatch({
       seed: engineState.seed,
       manifest,
+      initialState,
       events: engineState.log.map((entry) => entry.event as MatchEvent),
     });
   });
@@ -86,6 +87,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const presentedState = createMemo<EngineMatchState>(() => replayFrame()?.state ?? engineState);
   const boardLocked = createMemo(() => isResolving() || presentedState().phase === 'RESOLVING');
   const boardInteractive = createMemo(() => !replayEnabled() && !boardLocked());
+  const boardInspectable = createMemo(() => replayEnabled() || boardInteractive());
 
   createEffect(() => {
     const timeline = replayTimeline();
@@ -95,7 +97,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
 
   createEffect(() => {
-    if (!boardLocked()) return;
+    if (!boardLocked() || replayEnabled()) return;
     closeInspect();
     setOpenPile(null);
     setOpenMenuSeat(null);
@@ -271,7 +273,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const json = JSON.stringify(
       exportReplayBundle(engineState as EngineMatchState, manifest, {
         localSeat,
-      }),
+      }, initialState),
       null,
       2,
     );
@@ -349,6 +351,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   laneIdx={i}
                   cards={topLane(i)}
                   interactive={boardInteractive()}
+                  inspectable={boardInspectable()}
                   viewerSeat={localSeat}
                   phase={presentedState().phase}
                   stagingOrder={presentedState().stagingOrder}
@@ -367,7 +370,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   topPower={topPower(i)}
                   bottomBreakdown={bottomBreakdown(i)}
                   topBreakdown={topBreakdown(i)}
-                  interactive={boardInteractive()}
+                  interactive={boardInspectable()}
                 />
               )}
             </For>
@@ -381,6 +384,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   laneIdx={i}
                   cards={bottomLane(i)}
                   interactive={boardInteractive()}
+                  inspectable={boardInspectable()}
                   viewerSeat={localSeat}
                   phase={presentedState().phase}
                   stagingOrder={presentedState().stagingOrder}
@@ -395,6 +399,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
           reservedIds={reservedHandIds()}
           energy={presentedState().energy[localSeat]}
           interactive={boardInteractive()}
+          inspectable={boardInspectable()}
         />
 
         <div class="action-bar">

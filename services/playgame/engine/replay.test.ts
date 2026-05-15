@@ -1,6 +1,10 @@
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { runMatch } from './cli/runMatch';
 import { exportReplayBundle, replayMatch, validateReplayBundle } from './replay';
+import { createInitialMatchState } from './cli/initState';
+import { apply } from './apply';
+import type { MatchEvent } from './types/events';
+import type { MatchState } from './types/state';
 
 let failures = 0;
 const pass = (label: string) => { console.log(`PASS: ${label}`); };
@@ -13,8 +17,10 @@ const eq = <T>(actual: T, expected: T, label: string) => {
   else fail(label, { actual, expected });
 };
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
+const clone = <T>(value: T): T => structuredClone(value) as T;
 
 {
+  const initialState = createInitialMatchState('replay-seed-1', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-1',
     manifest: BOOTSTRAP_MANIFEST,
@@ -22,6 +28,7 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
   const replayed = replayMatch({
     seed: result.finalState.seed,
     manifest: BOOTSTRAP_MANIFEST,
+    initialState,
     events: result.events,
   });
 
@@ -30,6 +37,7 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 }
 
 {
+  const initialState = createInitialMatchState('replay-seed-2', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-2',
     manifest: BOOTSTRAP_MANIFEST,
@@ -37,30 +45,53 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
   const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, {
     localSeat: 'P0',
     notes: 'test bundle',
-  });
+  }, initialState);
   eq(bundle.seed, result.finalState.seed, 'exportReplayBundle: seed copied');
   eq(bundle.events.length, result.finalState.log.length, 'exportReplayBundle: event count matches log');
   eq(bundle.manifestVersion, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifestVersion copied');
+  eq(bundle.manifestSnapshot.version, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifest snapshot copied');
 }
 
 {
+  const initialState = createInitialMatchState('replay-custom-initial', BOOTSTRAP_MANIFEST, {
+    P0: [{ defId: 'drill-instructor' }],
+    P1: [{ defId: 'junk-card' }],
+  });
+  const initialSnapshot = clone(initialState);
+  const cardId = initialState.deck.P0[0].id;
+  const draw: MatchEvent = { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true };
+  const finalState = apply(initialState, draw, BOOTSTRAP_MANIFEST);
+  const replayed = replayMatch({
+    seed: finalState.seed,
+    manifest: BOOTSTRAP_MANIFEST,
+    initialState,
+    events: [draw],
+  });
+  eq(replayed.initialState.cards[cardId]!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
+  eq(replayed.finalState, finalState, 'replayMatch: supplied initial state reaches expected final state');
+  eq(initialState, initialSnapshot, 'apply/replayMatch: supplied initial state remains unmutated');
+}
+
+{
+  const initialState = createInitialMatchState('replay-seed-3', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-3',
     manifest: BOOTSTRAP_MANIFEST,
   });
-  const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST);
+  const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState);
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
   truthy(validation.ok, 'validateReplayBundle: valid bundle passes');
   eq(validation.errors.length, 0, 'validateReplayBundle: valid bundle has no errors');
 }
 
 {
+  const initialState = createInitialMatchState('replay-seed-4', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-4',
     manifest: BOOTSTRAP_MANIFEST,
   });
   const bundle = {
-    ...exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST),
+    ...exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState),
     manifestVersion: BOOTSTRAP_MANIFEST.version + 1,
   };
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
@@ -69,6 +100,37 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
     validation.errors.some((e) => e.includes('Manifest version mismatch')),
     'validateReplayBundle: mismatch error reported',
   );
+}
+
+{
+  const result = runMatch({
+    seed: 'replay-missing-initial',
+    manifest: BOOTSTRAP_MANIFEST,
+  });
+  let threw = false;
+  try {
+    replayMatch({
+      seed: result.finalState.seed,
+      manifest: BOOTSTRAP_MANIFEST,
+      initialState: undefined as never,
+      events: result.events,
+    });
+  } catch {
+    threw = true;
+  }
+  truthy(threw, 'replayMatch: missing initialState throws');
+}
+
+{
+  const currentState = createInitialMatchState('replay-bad-export', BOOTSTRAP_MANIFEST);
+  const badInitial = { ...currentState, seed: 'different-seed' } as MatchState;
+  let threw = false;
+  try {
+    exportReplayBundle(currentState, BOOTSTRAP_MANIFEST, undefined, badInitial);
+  } catch {
+    threw = true;
+  }
+  truthy(threw, 'exportReplayBundle: mismatched initialState throws');
 }
 
 if (failures > 0) {

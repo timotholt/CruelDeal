@@ -1,0 +1,21 @@
+{
+  "defId": "reckless-recruiter",
+  "version": 1,
+  "name": "Reckless Recruiter",
+  "basePower": 4,
+  "cost": 3,
+  "abilities": {
+    "onReveal": [
+      { "kind": "CALL_BUILTIN", "fn": "RECKLESS_RECRUITER", "args": {} }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RECKLESS RECRUITER",
+    "flavorText": "Benefits package includes hazard pay and missing context.",
+    "rulesText": "On Reveal: Give each card in your deck -1 Cost or +2 Power.",
+    "accent": "#ffb703",
+    "frame": "rare",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

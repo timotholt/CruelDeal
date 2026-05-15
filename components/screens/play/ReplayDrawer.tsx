@@ -113,6 +113,22 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   <button
                     class="replay-chip"
                     type="button"
+                    onClick={() => props.onFrameChange(0)}
+                    disabled={props.frameIndex <= 0}
+                  >
+                    First
+                  </button>
+                  <button
+                    class="replay-chip"
+                    type="button"
+                    onClick={() => props.onFrameChange(Math.max(0, props.frameIndex - 10))}
+                    disabled={props.frameIndex <= 0}
+                  >
+                    -10
+                  </button>
+                  <button
+                    class="replay-chip"
+                    type="button"
                     onClick={() => props.onFrameChange(Math.max(0, props.frameIndex - 1))}
                     disabled={props.frameIndex <= 0}
                   >
@@ -125,6 +141,22 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                     disabled={props.frameIndex >= props.frameCount - 1}
                   >
                     Next
+                  </button>
+                  <button
+                    class="replay-chip"
+                    type="button"
+                    onClick={() => props.onFrameChange(Math.min(props.frameCount - 1, props.frameIndex + 10))}
+                    disabled={props.frameIndex >= props.frameCount - 1}
+                  >
+                    +10
+                  </button>
+                  <button
+                    class="replay-chip"
+                    type="button"
+                    onClick={() => props.onFrameChange(Math.max(props.frameCount - 1, 0))}
+                    disabled={props.frameIndex >= props.frameCount - 1}
+                  >
+                    Last
                   </button>
                 </div>
 

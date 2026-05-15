@@ -324,6 +324,7 @@ function matchesAbilityFlags(
       (a.onDestroyed?.length ?? 0) > 0 ||
       (a.onDiscarded?.length ?? 0) > 0 ||
       (a.onEndOfTurn?.length ?? 0) > 0 ||
+      (a.onTurnStart?.length ?? 0) > 0 ||
       (a.onAnyCardPlayedHere?.length ?? 0) > 0 ||
       (a.activate?.length ?? 0) > 0;
     if (any !== filter.hasAnyAbility) return false;

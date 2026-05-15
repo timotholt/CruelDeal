@@ -1,0 +1,25 @@
+{
+  "defId": "drill-instructor",
+  "version": 1,
+  "name": "Drill Instructor",
+  "basePower": 1,
+  "cost": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "SET_POWER",
+        "target": { "kind": "ALL_CARDS", "ownerFilter": "SELF_OWNER", "zoneFilter": "HAND" },
+        "value": { "kind": "LIT", "n": 3 }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DRILL INSTRUCTOR",
+    "flavorText": "The first lesson is posture. The second is recoil.",
+    "rulesText": "On Reveal: Set the Power of all cards in your hand to 3.",
+    "accent": "#f4a261",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

@@ -8,6 +8,7 @@ interface HandRowProps {
   reservedIds: ReadonlySet<string>;
   energy: number;
   interactive: boolean;
+  inspectable?: boolean;
 }
 
 interface HandSlotProps {
@@ -16,6 +17,7 @@ interface HandSlotProps {
   reservedIds: ReadonlySet<string>;
   energy: number;
   interactive: boolean;
+  inspectable?: boolean;
 }
 
 const HandSlot = (props: HandSlotProps) => {
@@ -31,6 +33,7 @@ const HandSlot = (props: HandSlotProps) => {
       card={card()}
       playable={card().cost <= props.energy}
       interactive={props.interactive && !reserved()}
+      inspectable={(props.inspectable ?? props.interactive) && !reserved()}
       hidden={reserved()}
     />
   );
@@ -66,6 +69,7 @@ export const HandRow = (props: HandRowProps) => {
             reservedIds={props.reservedIds}
             energy={props.energy}
             interactive={props.interactive}
+            inspectable={props.inspectable}
           />
         )}
       </For>

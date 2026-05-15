@@ -514,6 +514,7 @@ function hasEffectiveAbility(
     if (s === 'ANY') {
       return (printed.onReveal?.length ?? 0) > 0 ||
         (printed.ongoing?.length ?? 0) > 0 ||
+        (printed.onTurnStart?.length ?? 0) > 0 ||
         (printed.activate?.length ?? 0) > 0;
     }
     if (s === 'ON_REVEAL') return (printed.onReveal?.length ?? 0) > 0;
@@ -550,6 +551,7 @@ function hasEffectiveAbility(
   if (slot === 'ANY') {
     return (source.onReveal?.length ?? 0) > 0 ||
       (source.ongoing?.length ?? 0) > 0 ||
+      (source.onTurnStart?.length ?? 0) > 0 ||
       (source.activate?.length ?? 0) > 0;
   }
   if (slot === 'ON_REVEAL') return (source.onReveal?.length ?? 0) > 0;

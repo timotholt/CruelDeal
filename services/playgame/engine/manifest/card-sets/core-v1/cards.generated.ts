@@ -29,6 +29,12 @@ import TalentScoutCard from './cards/talent-scout/card.json';
 import NetworkQueenCard from './cards/network-queen/card.json';
 import RentACopCard from './cards/rent-a-cop/card.json';
 import HiredGunCard from './cards/hired-gun/card.json';
+import DrillInstructorCard from './cards/drill-instructor/card.json';
+import RecklessRecruiterCard from './cards/reckless-recruiter/card.json';
+import ShotgunShogunCard from './cards/shotgun-shogun/card.json';
+import BarracadeCard from './cards/barracade/card.json';
+import LeonCard from './cards/leon/card.json';
+import RiotSquadCard from './cards/riot-squad/card.json';
 import SecurityDetailCard from './cards/security-detail/card.json';
 import GuardCard from './cards/guard/card.json';
 import CorporateClimberCard from './cards/corporate-climber/card.json';
@@ -153,6 +159,12 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'network-queen', card: NetworkQueenCard as unknown as CardDef },
   { folder: 'rent-a-cop', card: RentACopCard as unknown as CardDef },
   { folder: 'hired-gun', card: HiredGunCard as unknown as CardDef },
+  { folder: 'drill-instructor', card: DrillInstructorCard as unknown as CardDef },
+  { folder: 'reckless-recruiter', card: RecklessRecruiterCard as unknown as CardDef },
+  { folder: 'shotgun-shogun', card: ShotgunShogunCard as unknown as CardDef },
+  { folder: 'barracade', card: BarracadeCard as unknown as CardDef },
+  { folder: 'leon', card: LeonCard as unknown as CardDef },
+  { folder: 'riot-squad', card: RiotSquadCard as unknown as CardDef },
   { folder: 'security-detail', card: SecurityDetailCard as unknown as CardDef },
   { folder: 'guard', card: GuardCard as unknown as CardDef },
   { folder: 'corporate-climber', card: CorporateClimberCard as unknown as CardDef },

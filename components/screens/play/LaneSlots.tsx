@@ -18,6 +18,7 @@ interface LaneSlotsProps {
   laneIdx: number;
   cards: ResolvedCard[];
   interactive?: boolean;
+  inspectable?: boolean;
   viewerSeat?: Seat;
   phase?: EngineMatchState['phase'];
   stagingOrder?: readonly string[];
@@ -46,6 +47,7 @@ export const LaneSlots = (props: LaneSlotsProps) => {
                   side={props.side}
                   laneIdx={props.laneIdx}
                   interactive={props.interactive}
+                  inspectable={props.inspectable}
                   viewerSeat={props.viewerSeat}
                   phase={props.phase}
                   stagingOrder={props.stagingOrder}
