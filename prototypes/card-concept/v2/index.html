@@ -99,43 +99,56 @@
       z-index: 3;
       inset: 12px 15px 18px;
       overflow: hidden;
-      transform: translateZ(20px);
+      transform: translateZ(12px);
       border-radius: 16px 16px 16px 16px;
       background:
         linear-gradient(180deg, rgb(250 253 255 / 0.72), rgb(221 231 248 / 0.48) 19%, rgb(132 154 188 / 0.22)),
         linear-gradient(145deg, rgb(250 253 255 / 0.58), rgb(132 154 188 / 0.22));
       box-shadow:
         0 0 0 1px rgb(255 255 255 / 0.74),
-        0 10px 24px rgb(3 7 15 / 0.22),
+        0 4px 10px rgb(3 7 15 / 0.12),
         inset 0 0 0 1px rgb(93 120 164 / 0.22),
         inset 0 0 24px rgb(255 255 255 / 0.38);
     }
 
-    .inner-plate::before {
-      content: "";
-      position: absolute;
-      inset: 4px;
-      z-index: 2;
-      pointer-events: none;
-      border-radius: 12px;
-      border: 1px solid rgb(255 255 255 / 0.7);
-      box-shadow: inset 0 0 18px rgb(255 255 255 / 0.32);
-    }
-
-    .art {
+    .art-well {
       position: absolute;
       z-index: 1;
       left: 6px;
       right: 6px;
-      top: 126px;
+      top: 136px;
       bottom: 6px;
+      padding: 5px;
       overflow: hidden;
-      border-radius: 3px 3px 12px 12px;
+      --well-shape: polygon(
+        0 0,
+        35% 0,
+        38% 8px,
+        62% 8px,
+        65% 0,
+        100% 0,
+        100% calc(100% - 10px),
+        calc(100% - 10px) 100%,
+        10px 100%,
+        0 calc(100% - 10px)
+      );
+      clip-path: var(--well-shape);
+      background: linear-gradient(145deg, rgb(255 255 255 / 0.74), rgb(127 148 181 / 0.34));
+      box-shadow:
+        inset 0 0 0 1px rgb(255 255 255 / 0.38),
+        inset 0 0 20px rgb(2 7 16 / 0.22);
+    }
+
+    .art {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      clip-path: var(--well-shape);
       background: url("card-art.png") center / cover no-repeat;
       box-shadow:
-        0 0 0 1px rgb(255 255 255 / 0.36),
-        inset 0 0 0 1px rgb(255 255 255 / 0.26),
-        inset 0 0 40px rgb(1 5 12 / 0.74);
+        inset 0 0 0 1px rgb(255 255 255 / 0.18),
+        inset 0 0 34px rgb(1 5 12 / 0.66);
     }
 
     .art::before,
@@ -186,18 +199,6 @@
       backdrop-filter: blur(12px);
       border-radius: 16px 16px 0 0;
       box-shadow: inset 0 -22px 30px rgb(122 143 178 / 0.12);
-    }
-
-    .titlebar::before {
-      content: "";
-      position: absolute;
-      left: 38%;
-      right: 38%;
-      bottom: -1px;
-      height: 20px;
-      background: linear-gradient(180deg, rgb(232 238 250 / 0.88), rgb(146 155 177 / 0.48));
-      clip-path: polygon(0 0, 100% 0, 82% 100%, 18% 100%);
-      box-shadow: 0 1px 0 rgb(255 255 255 / 0.78);
     }
 
     .titlebar::after {
@@ -380,7 +381,9 @@
           <p class="subtitle">SONIC SIREN</p>
           <span class="sigil" aria-hidden="true"></span>
         </header>
-        <div class="art" aria-hidden="true"></div>
+        <div class="art-well" aria-hidden="true">
+          <div class="art"></div>
+        </div>
       </div>
 
       <div class="stat stat-left">5</div>
