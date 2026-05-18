@@ -7,6 +7,7 @@ import { UserProfile } from './types';
 import { router } from './router';
 import { RouterProvider } from '@tanstack/solid-router';
 import { LoginScreen } from './components/screens/LoginScreen';
+import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ export default function App() {
   const [profile, setProfile] = createSignal<UserProfile | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
+  const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
 
   const performLogin = async () => {
     setIsAuthenticating(true);
@@ -73,6 +75,9 @@ export default function App() {
               </button>
           </div>
       )}>
+        <Show
+          when={isUiTestPath()}
+          fallback={
           <Show 
               when={profile()} 
               fallback={
@@ -98,6 +103,12 @@ export default function App() {
                 </UserProvider>
               </UIProvider>
           </Show>
+          }
+        >
+          <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
+            <UiMaterialLabScreen />
+          </div>
+        </Show>
       </ErrorBoundary>
     </QueryClientProvider>
   );
