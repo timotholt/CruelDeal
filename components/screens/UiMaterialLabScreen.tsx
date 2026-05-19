@@ -49,11 +49,13 @@ interface LabControls {
   edgeHighlight: EdgeName | 'none';
   glow: GlowTone;
   gradient: SurfaceGradient;
+  sheen: boolean;
   selected: boolean;
   disabled: boolean;
   hoverPreview: boolean;
   textureStrength: number;
   textureScale: number;
+  glowStrength: number;
   glassOpacity: number;
   borderOpacity: number;
   cornerSize: number;
@@ -72,11 +74,13 @@ const controlDefaults: LabControls = {
   edgeHighlight: 'bottom',
   glow: 'gold',
   gradient: 'both',
+  sheen: true,
   selected: true,
   disabled: false,
   hoverPreview: true,
   textureStrength: 58,
   textureScale: 512,
+  glowStrength: 42,
   glassOpacity: 42,
   borderOpacity: 34,
   cornerSize: 18,
@@ -242,10 +246,12 @@ export const UiMaterialLabScreen = () => {
       edgeHighlight: current.edgeHighlight,
       glow: current.glow,
       gradient: current.gradient,
+      sheen: current.sheen,
       selected: current.selected,
       hoverPreview: current.hoverPreview,
       textureStrength: current.textureStrength,
       textureScale: current.textureScale,
+      glowStrength: current.glowStrength,
       glassOpacity: current.glassOpacity,
       borderOpacity: current.borderOpacity,
       cornerSize: current.cornerSize,
@@ -326,18 +332,27 @@ export const UiMaterialLabScreen = () => {
               <MaterialPanel material="glass" corners="top" edgeHighlight="bottom" glow="gold" gradient="both" padded>
                 <div class="ui-lab-control-grid">
                   <SectionLabel>Controls</SectionLabel>
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Preview</SectionLabel>
 
                   <div class="ui-lab-control-row">
-                    <span>Target</span>
+                    <ControlLabel tip="Chooses which sample component the primary preview renders: a panel, standard button, square tile, or CTA composite.">
+                      Target
+                    </ControlLabel>
                     <Segments
                       value={controls().target}
                       options={['panel', 'button', 'tile', 'cta'] as const}
                       onChange={(value) => update('target', value)}
                     />
                   </div>
+                  </div>
 
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Surface</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <span>Material</span>
+                    <ControlLabel tip="Material preset. Stone is opaque and slab-like. Glass is translucent, blurred, and smoky.">
+                      Material
+                    </ControlLabel>
                     <Segments
                       value={controls().material}
                       options={['stone', 'glass'] as const}
@@ -361,16 +376,23 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Shape</span>
+                    <ControlLabel tip="Surface silhouette. Rect keeps square corners with radius; beveled clips the corners into a cyber-slab shape.">
+                      Shape
+                    </ControlLabel>
                     <Segments
                       value={controls().shape}
                       options={['rect', 'beveled'] as const}
                       onChange={(value) => update('shape', value)}
                     />
                   </div>
+                  </div>
 
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Glow State</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <span>Corners</span>
+                    <ControlLabel tip="Chooses which corner brackets can glow. They become visible when Selected or Hover is enabled and Glow is not None.">
+                      Corners
+                    </ControlLabel>
                     <Segments
                       value={controls().cornerPreset}
                       options={['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const}
@@ -379,7 +401,9 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Custom</span>
+                    <ControlLabel tip="Only used when Corners is set to Custom. Pick individual corner brackets.">
+                      Custom
+                    </ControlLabel>
                     <div class="ui-lab-toggles">
                       <For each={cornerOptions}>
                         {(corner) => (
@@ -392,7 +416,9 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Edge</span>
+                    <ControlLabel tip="Chooses one edge highlight line. It becomes visible when Selected or Hover is enabled and Glow is not None.">
+                      Edge
+                    </ControlLabel>
                     <Segments
                       value={controls().edgeHighlight}
                       options={['none', 'top', 'right', 'bottom', 'left'] as const}
@@ -401,25 +427,41 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Glow</span>
+                    <ControlLabel tip="Color used by corner brackets, edge highlights, and their drop glow. None disables the colored highlight.">
+                      Glow
+                    </ControlLabel>
                     <Segments
                       value={controls().glow}
-                      options={['gold', 'cyan', 'white', 'red', 'none'] as const}
+                      options={['none', 'gold', 'cyan', 'white', 'red'] as const}
                       onChange={(value) => update('glow', value)}
                     />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>State</span>
+                    <ControlLabel tip="Drop-shadow intensity for corner brackets and edge highlights. This does not change the bracket length; it changes the glow halo.">
+                      Glow Power
+                    </ControlLabel>
+                    <Slider value={controls().glowStrength} min={0} max={100} onInput={(value) => update('glowStrength', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Simulates component states. Corner and edge glow are intentionally tied to selected/hover states.">
+                      State
+                    </ControlLabel>
                     <div class="ui-lab-toggles">
                       <ToggleButton active={controls().selected} onClick={() => update('selected', !controls().selected)}>selected</ToggleButton>
                       <ToggleButton active={controls().hoverPreview} onClick={() => update('hoverPreview', !controls().hoverPreview)}>hover</ToggleButton>
                       <ToggleButton active={controls().disabled} onClick={() => update('disabled', !controls().disabled)}>disabled</ToggleButton>
                     </div>
                   </div>
+                  </div>
 
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Light</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <span>Gradient</span>
+                    <ControlLabel tip="Vertical light/dark wash over the material. None removes this wash; use Side Sheen to control the diagonal left-to-right shine separately.">
+                      Gradient
+                    </ControlLabel>
                     <Segments
                       value={controls().gradient}
                       options={['none', 'top-light', 'bottom-dark', 'both'] as const}
@@ -428,6 +470,18 @@ export const UiMaterialLabScreen = () => {
                     />
                   </div>
 
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Toggles the diagonal/side sheen that can read like a left-to-right gradient. Turn this off when you want only the vertical gradient.">
+                      Side Sheen
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <ToggleButton active={controls().sheen} onClick={() => update('sheen', !controls().sheen)}>on</ToggleButton>
+                    </div>
+                  </div>
+                  </div>
+
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Amounts</SectionLabel>
                   <div class="ui-lab-control-row">
                     <ControlLabel tip="Texture opacity. Higher values make the selected texture layer more visible; lower values let the base material and gradients dominate.">
                       Tex Opacity
@@ -474,6 +528,7 @@ export const UiMaterialLabScreen = () => {
                       Radius
                     </ControlLabel>
                     <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+                  </div>
                   </div>
                 </div>
               </MaterialPanel>

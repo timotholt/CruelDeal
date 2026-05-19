@@ -17,11 +17,13 @@ interface SurfaceOptions {
   edgeHighlight?: EdgeName | EdgeName[] | 'none';
   glow?: GlowTone;
   gradient?: SurfaceGradient;
+  sheen?: boolean;
   selected?: boolean;
   interactive?: boolean;
   hoverPreview?: boolean;
   textureStrength?: number;
   textureScale?: number;
+  glowStrength?: number;
   glassOpacity?: number;
   borderOpacity?: number;
   cornerSize?: number;
@@ -71,12 +73,12 @@ export interface SegmentedMeterProps {
 
 const allCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 
-const glowColors: Record<GlowTone, { color: string; shadow: string }> = {
-  none: { color: 'transparent', shadow: 'transparent' },
-  gold: { color: 'rgba(255, 210, 105, 0.98)', shadow: 'rgba(255, 188, 72, 0.78)' },
-  cyan: { color: 'rgba(77, 220, 255, 0.95)', shadow: 'rgba(55, 190, 255, 0.72)' },
-  white: { color: 'rgba(255, 250, 232, 0.92)', shadow: 'rgba(255, 255, 240, 0.62)' },
-  red: { color: 'rgba(255, 92, 83, 0.96)', shadow: 'rgba(255, 75, 64, 0.68)' },
+const glowColors: Record<GlowTone, { color: string; rgb: string }> = {
+  none: { color: 'transparent', rgb: '0 0 0' },
+  gold: { color: 'rgba(255, 210, 105, 0.98)', rgb: '255 188 72' },
+  cyan: { color: 'rgba(77, 220, 255, 0.95)', rgb: '55 190 255' },
+  white: { color: 'rgba(255, 250, 232, 0.92)', rgb: '255 255 240' },
+  red: { color: 'rgba(255, 92, 83, 0.96)', rgb: '255 75 64' },
 };
 
 const resolveCorners = (corners: CornerSpec | undefined): CornerName[] => {
@@ -103,6 +105,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a-height';
+  const glowAlpha = selectedOrHover && options.glow !== 'none' ? (options.glowStrength ?? 42) / 100 : 0;
 
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
@@ -114,7 +117,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
       : 'none',
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
-    '--corner-shadow': selectedOrHover ? glow.shadow : 'transparent',
+    '--glow-alpha': `${glowAlpha}`,
+    '--corner-shadow': `rgb(${glow.rgb} / ${glowAlpha})`,
     '--corner-tl': corners.includes('top-left') ? activeCornerColor : 'transparent',
     '--corner-tr': corners.includes('top-right') ? activeCornerColor : 'transparent',
     '--corner-br': corners.includes('bottom-right') ? activeCornerColor : 'transparent',
@@ -132,6 +136,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     `cd-surface--${options.material || 'stone'}`,
     `cd-surface--texture-${options.texture || 'road012a-height'}`,
     `cd-surface--${options.shape || 'rect'}`,
+    options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
@@ -163,11 +168,13 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'edgeHighlight',
     'glow',
     'gradient',
+    'sheen',
     'selected',
     'interactive',
     'hoverPreview',
     'textureStrength',
     'textureScale',
+    'glowStrength',
     'glassOpacity',
     'borderOpacity',
     'cornerSize',
@@ -196,11 +203,13 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'edgeHighlight',
     'glow',
     'gradient',
+    'sheen',
     'selected',
     'interactive',
     'hoverPreview',
     'textureStrength',
     'textureScale',
+    'glowStrength',
     'glassOpacity',
     'borderOpacity',
     'cornerSize',

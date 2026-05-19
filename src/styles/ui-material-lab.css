@@ -110,7 +110,18 @@
 
 .ui-lab-control-grid {
   display: grid;
-  gap: 9px;
+  gap: 12px;
+}
+
+.ui-lab-control-group {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.ui-lab-control-group + .ui-lab-control-group {
+  padding-top: 10px;
+  border-top: 1px solid rgba(235, 226, 205, 0.13);
 }
 
 .ui-lab-control-row {
@@ -480,8 +491,8 @@
   border-radius: var(--surface-radius);
   color: #f4eee0;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.18),
-    inset 0 -1px 0 rgba(0,0,0,0.5),
+    inset 0 1px 0 rgb(255 255 255 / calc(var(--border-alpha) * 0.58)),
+    inset 0 -1px 0 rgb(0 0 0 / calc(var(--border-alpha) + 0.18)),
     0 12px 26px rgba(0,0,0,0.36);
 }
 
@@ -509,6 +520,10 @@
     linear-gradient(135deg, rgba(255,255,255,0.12), transparent 36%, rgba(0,0,0,0.22)),
     rgba(31, 34, 33, var(--glass-alpha));
   backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.cd-surface--sheen-off.cd-surface--glass .cd-surface__material {
+  background: rgba(31, 34, 33, var(--glass-alpha));
 }
 
 .cd-surface__texture {
@@ -544,6 +559,10 @@
     linear-gradient(115deg, rgba(255,255,255,0.09), transparent 38%, rgba(0,0,0,0.22));
 }
 
+.cd-surface--sheen-off.cd-surface--gradient-both .cd-surface__gradient {
+  background: linear-gradient(180deg, rgba(255,255,255,0.2), transparent 36%, rgba(0,0,0,0.32));
+}
+
 .cd-surface--gradient-top-light .cd-surface__gradient {
   background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 50%);
 }
@@ -563,7 +582,7 @@
     linear-gradient(var(--edge-right), var(--edge-right)) right / 1px 100% no-repeat,
     linear-gradient(var(--edge-bottom), var(--edge-bottom)) bottom / 100% 1px no-repeat,
     linear-gradient(var(--edge-left), var(--edge-left)) left / 1px 100% no-repeat;
-  filter: drop-shadow(0 0 8px var(--corner-shadow));
+  filter: drop-shadow(0 0 3px var(--corner-shadow)) drop-shadow(0 0 8px var(--corner-shadow));
 }
 
 .cd-surface__corners {
@@ -578,7 +597,7 @@
     linear-gradient(var(--corner-bl), var(--corner-bl)) left bottom / 1px var(--corner-size) no-repeat,
     linear-gradient(var(--corner-br), var(--corner-br)) right bottom / var(--corner-size) 1px no-repeat,
     linear-gradient(var(--corner-br), var(--corner-br)) right bottom / 1px var(--corner-size) no-repeat;
-  filter: drop-shadow(0 0 7px var(--corner-shadow)) drop-shadow(0 0 16px var(--corner-shadow));
+  filter: drop-shadow(0 0 3px var(--corner-shadow)) drop-shadow(0 0 9px var(--corner-shadow));
   opacity: 0.94;
 }
 
