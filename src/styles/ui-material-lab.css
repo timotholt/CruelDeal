@@ -230,6 +230,28 @@
   box-shadow: inset 0 -1px 0 rgba(255, 211, 109, 0.45), 0 0 12px rgba(255, 188, 72, 0.16);
 }
 
+.ui-lab-checkbox {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  color: rgba(245, 238, 220, 0.76);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ui-lab-checkbox input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #efc85d;
+}
+
+.ui-lab-checkbox:focus-within {
+  color: #ffe4a4;
+}
+
 .ui-lab-select {
   min-height: 30px;
   width: 100%;
@@ -522,6 +544,10 @@
   backdrop-filter: blur(16px) saturate(1.08);
 }
 
+.cd-surface--raw .cd-surface__material {
+  background: #f5f2ea;
+}
+
 .cd-surface--sheen-off.cd-surface--glass .cd-surface__material {
   background: rgba(31, 34, 33, var(--glass-alpha));
 }
@@ -549,8 +575,17 @@
   filter: contrast(1.52) brightness(0.92) saturate(0.25);
 }
 
+.cd-surface--raw .cd-surface__texture {
+  mix-blend-mode: normal;
+  filter: none;
+}
+
 .cd-surface__gradient {
   z-index: 0;
+}
+
+.cd-surface--raw .cd-surface__gradient {
+  background: transparent;
 }
 
 .cd-surface--gradient-both .cd-surface__gradient {

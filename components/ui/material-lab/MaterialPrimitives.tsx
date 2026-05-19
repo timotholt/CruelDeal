@@ -1,7 +1,7 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
 import { getTextureOption, type TextureKind } from './TextureOptions';
 
-export type MaterialKind = 'stone' | 'glass';
+export type MaterialKind = 'raw' | 'stone' | 'glass';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
 export type EdgeName = 'top' | 'right' | 'bottom' | 'left';
@@ -110,7 +110,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
-    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (options.material === 'glass' ? 12 : 58)) / 100}`,
+    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (options.material === 'raw' ? 100 : options.material === 'glass' ? 12 : 58)) / 100}`,
     '--texture-scale': `${options.textureScale ?? (options.material === 'glass' ? 384 : 512)}px`,
     '--texture-image': textureId !== 'none'
       ? `url("${getTextureOption(textureId).url}")`

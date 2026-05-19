@@ -41,6 +41,7 @@ type CornerControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'cus
 
 interface LabControls {
   target: PreviewTarget;
+  applyToControlPanel: boolean;
   material: MaterialKind;
   texture: TextureKind;
   shape: ShapeKind;
@@ -66,6 +67,7 @@ const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'b
 
 const controlDefaults: LabControls = {
   target: 'button',
+  applyToControlPanel: false,
   material: 'stone',
   texture: 'road012a-height',
   shape: 'rect',
@@ -119,6 +121,17 @@ const ToggleButton = (props: { active: boolean; children: JSX.Element; onClick: 
   <button type="button" class={`ui-lab-mini-button ${props.active ? 'is-active' : ''}`} onClick={() => props.onClick()}>
     {props.children}
   </button>
+);
+
+const CheckboxControl = (props: { checked: boolean; children: JSX.Element; onChange: (checked: boolean) => void }) => (
+  <label class="ui-lab-checkbox">
+    <input
+      type="checkbox"
+      checked={props.checked}
+      onChange={(event) => props.onChange(event.currentTarget.checked)}
+    />
+    <span>{props.children}</span>
+  </label>
 );
 
 const ControlLabel = (props: { children: JSX.Element; tip?: string }) => {
@@ -207,6 +220,14 @@ export const UiMaterialLabScreen = () => {
     setControls((current) => ({ ...current, [key]: value }));
   };
 
+  const updateMaterial = (material: MaterialKind) => {
+    setControls((current) => ({
+      ...current,
+      material,
+      textureStrength: material === 'raw' && current.texture !== 'none' ? 100 : current.textureStrength,
+    }));
+  };
+
   const updateTexture = (texture: TextureKind) => {
     setControls((current) => ({
       ...current,
@@ -214,7 +235,7 @@ export const UiMaterialLabScreen = () => {
       textureStrength: texture === 'none'
         ? 0
         : current.textureStrength === 0
-          ? current.material === 'glass' ? 18 : 58
+          ? current.material === 'raw' ? 100 : current.material === 'glass' ? 18 : 58
           : current.textureStrength,
     }));
   };
@@ -261,9 +282,22 @@ export const UiMaterialLabScreen = () => {
 
   const propsReadout = createMemo(() => JSON.stringify({
     target: controls().target,
+    applyToControlPanel: controls().applyToControlPanel,
     ...surfaceProps(),
     disabled: controls().disabled,
   }, null, 2));
+
+  const controlPanelProps = createMemo(() => (
+    controls().applyToControlPanel
+      ? surfaceProps()
+      : {
+        material: 'glass' as const,
+        corners: 'top' as const,
+        edgeHighlight: 'bottom' as const,
+        glow: 'gold' as const,
+        gradient: 'both' as const,
+      }
+  ));
 
   const renderPreview = () => {
     const current = controls();
@@ -272,7 +306,7 @@ export const UiMaterialLabScreen = () => {
         <MaterialPanel {...surfaceProps()} padded>
           <div class="ui-lab-typography">
             <SectionLabel>Preview Panel</SectionLabel>
-            <p class="ui-lab-small-copy">Stone and glass share one surface system: material, gradient, edge, corners, and content.</p>
+            <p class="ui-lab-small-copy">Raw, stone, and glass share one surface system: material, gradient, edge, corners, and content.</p>
           </div>
         </MaterialPanel>
       );
@@ -329,7 +363,7 @@ export const UiMaterialLabScreen = () => {
             </header>
 
             <div class="ui-lab-grid">
-              <MaterialPanel material="glass" corners="top" edgeHighlight="bottom" glow="gold" gradient="both" padded>
+              <MaterialPanel {...controlPanelProps()} padded>
                 <div class="ui-lab-control-grid">
                   <SectionLabel>Controls</SectionLabel>
                   <div class="ui-lab-control-group">
@@ -345,18 +379,30 @@ export const UiMaterialLabScreen = () => {
                       onChange={(value) => update('target', value)}
                     />
                   </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="When enabled, this main controls panel uses the same material settings as the selected preview target.">
+                      Apply
+                    </ControlLabel>
+                    <CheckboxControl
+                      checked={controls().applyToControlPanel}
+                      onChange={(checked) => update('applyToControlPanel', checked)}
+                    >
+                      Use settings on controls
+                    </CheckboxControl>
+                  </div>
                   </div>
 
                   <div class="ui-lab-control-group">
                     <SectionLabel size="xs">Surface</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Material preset. Stone is opaque and slab-like. Glass is translucent, blurred, and smoky.">
+                    <ControlLabel tip="Material preset. Raw shows the selected texture directly. Stone is opaque and slab-like. Glass is translucent, blurred, and smoky.">
                       Material
                     </ControlLabel>
                     <Segments
                       value={controls().material}
-                      options={['stone', 'glass'] as const}
-                      onChange={(value) => update('material', value)}
+                      options={['raw', 'stone', 'glass'] as const}
+                      onChange={updateMaterial}
                     />
                   </div>
 
