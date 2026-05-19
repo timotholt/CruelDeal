@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, JSX, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import { Portal } from '../ui/Portal';
 import {
@@ -39,6 +39,12 @@ import {
 type PreviewTarget = 'panel' | 'button' | 'tile' | 'cta';
 type CornerControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'custom';
 
+interface SavedPreset {
+  id: string;
+  name: string;
+  controls: LabControls;
+}
+
 interface LabControls {
   target: PreviewTarget;
   applyToControlPanel: boolean;
@@ -63,30 +69,41 @@ interface LabControls {
   radius: number;
 }
 
+const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v1';
+const presetStorageVersion = 1;
+const defaultPresetId = 'default';
+const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
+const materialOptions = ['raw', 'stone', 'glass'] as const;
+const shapeOptions = ['rect', 'beveled'] as const;
+const cornerPresetOptions = ['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const;
+const edgeOptions = ['none', 'top', 'right', 'bottom', 'left'] as const;
+const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
+const gradientOptions = ['none', 'top-light', 'bottom-dark', 'both'] as const;
+const textureScaleStops = [128, 256, 512, 1024] as const;
 const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 
 const controlDefaults: LabControls = {
-  target: 'button',
-  applyToControlPanel: false,
-  material: 'stone',
-  texture: 'road012a-height',
+  target: 'panel',
+  applyToControlPanel: true,
+  material: 'raw',
+  texture: 'stone04',
   shape: 'rect',
-  cornerPreset: 'all',
+  cornerPreset: 'none',
   customCorners: ['top-left', 'bottom-right'],
-  edgeHighlight: 'bottom',
-  glow: 'gold',
-  gradient: 'both',
-  sheen: true,
-  selected: true,
+  edgeHighlight: 'none',
+  glow: 'none',
+  gradient: 'none',
+  sheen: false,
+  selected: false,
   disabled: false,
-  hoverPreview: true,
-  textureStrength: 58,
+  hoverPreview: false,
+  textureStrength: 100,
   textureScale: 512,
-  glowStrength: 42,
+  glowStrength: 50,
   glassOpacity: 42,
-  borderOpacity: 34,
+  borderOpacity: 50,
   cornerSize: 18,
-  radius: 7,
+  radius: 6,
 };
 
 const loadoutItems: Array<{ name: string; detail: string; icon: () => JSX.Element }> = [
@@ -95,6 +112,78 @@ const loadoutItems: Array<{ name: string; detail: string; icon: () => JSX.Elemen
   { name: 'Amp', detail: 'Synapse-3', icon: () => <CubeIcon class="w-8 h-8" /> },
   { name: 'Drone', detail: 'Shade', icon: () => <TargetMarkIcon class="w-8 h-8" /> },
 ];
+
+const isOneOf = <T extends readonly string[]>(value: unknown, options: T): value is T[number] => (
+  typeof value === 'string' && options.includes(value)
+);
+
+const clamp = (value: unknown, fallback: number, min: number, max: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+};
+
+const sanitizeControls = (value: unknown): LabControls => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<LabControls> : {};
+  return {
+    target: isOneOf(input.target, previewTargetOptions) ? input.target : controlDefaults.target,
+    applyToControlPanel: typeof input.applyToControlPanel === 'boolean' ? input.applyToControlPanel : controlDefaults.applyToControlPanel,
+    material: isOneOf(input.material, materialOptions) ? input.material : controlDefaults.material,
+    texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
+    shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
+    cornerPreset: isOneOf(input.cornerPreset, cornerPresetOptions) ? input.cornerPreset : controlDefaults.cornerPreset,
+    customCorners: Array.isArray(input.customCorners)
+      ? input.customCorners.filter((corner): corner is CornerName => cornerOptions.includes(corner as CornerName))
+      : controlDefaults.customCorners,
+    edgeHighlight: isOneOf(input.edgeHighlight, edgeOptions) ? input.edgeHighlight : controlDefaults.edgeHighlight,
+    glow: isOneOf(input.glow, glowOptions) ? input.glow : controlDefaults.glow,
+    gradient: isOneOf(input.gradient, gradientOptions) ? input.gradient : controlDefaults.gradient,
+    sheen: typeof input.sheen === 'boolean' ? input.sheen : controlDefaults.sheen,
+    selected: typeof input.selected === 'boolean' ? input.selected : controlDefaults.selected,
+    disabled: typeof input.disabled === 'boolean' ? input.disabled : controlDefaults.disabled,
+    hoverPreview: typeof input.hoverPreview === 'boolean' ? input.hoverPreview : controlDefaults.hoverPreview,
+    textureStrength: clamp(input.textureStrength, controlDefaults.textureStrength, 0, 100),
+    textureScale: textureScaleStops.includes(input.textureScale as typeof textureScaleStops[number])
+      ? input.textureScale as typeof textureScaleStops[number]
+      : controlDefaults.textureScale,
+    glowStrength: clamp(input.glowStrength, controlDefaults.glowStrength, 0, 100),
+    glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
+    borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
+    cornerSize: clamp(input.cornerSize, controlDefaults.cornerSize, 8, 34),
+    radius: clamp(input.radius, controlDefaults.radius, 0, 8),
+  };
+};
+
+const storageAvailable = () => typeof window !== 'undefined' && !!window.localStorage;
+
+const loadStoredPresets = (): SavedPreset[] => {
+  if (!storageAvailable()) return [];
+  try {
+    const raw = window.localStorage.getItem(presetStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { version?: unknown; presets?: unknown };
+    if (parsed.version !== presetStorageVersion || !Array.isArray(parsed.presets)) return [];
+    return parsed.presets.flatMap((preset): SavedPreset[] => {
+      if (typeof preset !== 'object' || preset === null) return [];
+      const item = preset as Partial<SavedPreset>;
+      if (typeof item.id !== 'string' || typeof item.name !== 'string' || !item.name.trim()) return [];
+      return [{ id: item.id, name: item.name.trim(), controls: sanitizeControls(item.controls) }];
+    });
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredPresets = (presets: SavedPreset[]) => {
+  if (!storageAvailable()) return;
+  try {
+    window.localStorage.setItem(presetStorageKey, JSON.stringify({
+      version: presetStorageVersion,
+      presets,
+    }));
+  } catch {
+    // localStorage can be unavailable in private/low-storage modes; keep the UI usable.
+  }
+};
 
 const Segments = <T extends string>(props: {
   value: T;
@@ -193,8 +282,6 @@ const Slider = (props: { value: number; min?: number; max?: number; step?: numbe
   </label>
 );
 
-const textureScaleStops = [128, 256, 512, 1024] as const;
-
 const TextureScaleSlider = (props: { value: number; onInput: (value: number) => void }) => {
   const index = () => Math.max(0, textureScaleStops.findIndex((stop) => stop === props.value));
 
@@ -215,9 +302,64 @@ const TextureScaleSlider = (props: { value: number; onInput: (value: number) => 
 
 export const UiMaterialLabScreen = () => {
   const [controls, setControls] = createSignal<LabControls>(controlDefaults);
+  const [savedPresets, setSavedPresets] = createSignal<SavedPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = createSignal(defaultPresetId);
+  const [presetName, setPresetName] = createSignal('Default');
+
+  onMount(() => {
+    setSavedPresets(loadStoredPresets());
+  });
 
   const update = <K extends keyof LabControls>(key: K, value: LabControls[K]) => {
     setControls((current) => ({ ...current, [key]: value }));
+  };
+
+  const presetOptions = createMemo(() => [
+    { id: defaultPresetId, name: 'Default' },
+    ...savedPresets().map((preset) => ({ id: preset.id, name: preset.name })),
+  ]);
+
+  const persistPresets = (presets: SavedPreset[]) => {
+    setSavedPresets(presets);
+    saveStoredPresets(presets);
+  };
+
+  const applyPreset = (id: string) => {
+    setSelectedPresetId(id);
+    if (id === defaultPresetId) {
+      setControls(controlDefaults);
+      setPresetName('Default');
+      return;
+    }
+
+    const preset = savedPresets().find((item) => item.id === id);
+    if (!preset) return;
+    setControls({ ...preset.controls });
+    setPresetName(preset.name);
+  };
+
+  const saveCurrentPreset = () => {
+    const name = presetName().trim();
+    if (!name || name.toLowerCase() === 'default') return;
+    const id = selectedPresetId() !== defaultPresetId
+      ? selectedPresetId()
+      : `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const nextPreset = { id, name, controls: { ...controls() } };
+    const existingIndex = savedPresets().findIndex((preset) => preset.id === id || preset.name.toLowerCase() === name.toLowerCase());
+    const next = existingIndex >= 0
+      ? savedPresets().map((preset, index) => index === existingIndex ? { ...nextPreset, id: preset.id } : preset)
+      : [...savedPresets(), nextPreset];
+
+    persistPresets(next);
+    setSelectedPresetId(existingIndex >= 0 ? next[existingIndex].id : id);
+    setPresetName(name);
+  };
+
+  const deleteCurrentPreset = () => {
+    const id = selectedPresetId();
+    if (id === defaultPresetId) return;
+    persistPresets(savedPresets().filter((preset) => preset.id !== id));
+    applyPreset(defaultPresetId);
   };
 
   const updateMaterial = (material: MaterialKind) => {
@@ -370,12 +512,56 @@ export const UiMaterialLabScreen = () => {
                     <SectionLabel size="xs">Preview</SectionLabel>
 
                   <div class="ui-lab-control-row">
+                    <ControlLabel tip="Loads the built-in default or a preset saved in this browser.">
+                      Preset
+                    </ControlLabel>
+                    <select
+                      class="ui-lab-select"
+                      value={selectedPresetId()}
+                      onChange={(event) => applyPreset(event.currentTarget.value)}
+                    >
+                      <For each={presetOptions()}>
+                        {(preset) => <option value={preset.id}>{preset.name}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Name for saving the current material settings as a local preset.">
+                      Name
+                    </ControlLabel>
+                    <input
+                      class="ui-lab-input"
+                      value={presetName()}
+                      onInput={(event) => setPresetName(event.currentTarget.value)}
+                      placeholder="Preset name"
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Save overwrites a matching selected/name preset. Delete only affects local presets.">
+                      Store
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <button type="button" class="ui-lab-mini-button" onClick={saveCurrentPreset}>Save</button>
+                      <button
+                        type="button"
+                        class="ui-lab-mini-button"
+                        disabled={selectedPresetId() === defaultPresetId}
+                        onClick={deleteCurrentPreset}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="ui-lab-control-row">
                     <ControlLabel tip="Chooses which sample component the primary preview renders: a panel, standard button, square tile, or CTA composite.">
                       Target
                     </ControlLabel>
                     <Segments
                       value={controls().target}
-                      options={['panel', 'button', 'tile', 'cta'] as const}
+                      options={previewTargetOptions}
                       onChange={(value) => update('target', value)}
                     />
                   </div>
@@ -401,7 +587,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().material}
-                      options={['raw', 'stone', 'glass'] as const}
+                      options={materialOptions}
                       onChange={updateMaterial}
                     />
                   </div>
@@ -427,7 +613,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().shape}
-                      options={['rect', 'beveled'] as const}
+                      options={shapeOptions}
                       onChange={(value) => update('shape', value)}
                     />
                   </div>
@@ -441,7 +627,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().cornerPreset}
-                      options={['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const}
+                      options={cornerPresetOptions}
                       onChange={(value) => update('cornerPreset', value)}
                     />
                   </div>
@@ -467,7 +653,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().edgeHighlight}
-                      options={['none', 'top', 'right', 'bottom', 'left'] as const}
+                      options={edgeOptions}
                       onChange={(value) => update('edgeHighlight', value)}
                     />
                   </div>
@@ -478,7 +664,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().glow}
-                      options={['none', 'gold', 'cyan', 'white', 'red'] as const}
+                      options={glowOptions}
                       onChange={(value) => update('glow', value)}
                     />
                   </div>
@@ -510,7 +696,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <Segments
                       value={controls().gradient}
-                      options={['none', 'top-light', 'bottom-dark', 'both'] as const}
+                      options={gradientOptions}
                       labels={{ 'top-light': 'top', 'bottom-dark': 'bottom' }}
                       onChange={(value) => update('gradient', value)}
                     />
