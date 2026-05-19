@@ -1,4 +1,5 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
+import { getTextureOption, type TextureKind } from './TextureOptions';
 
 export type MaterialKind = 'stone' | 'glass';
 export type ShapeKind = 'rect' | 'beveled';
@@ -10,6 +11,7 @@ export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
 
 interface SurfaceOptions {
   material?: MaterialKind;
+  texture?: TextureKind;
   shape?: ShapeKind;
   corners?: CornerSpec;
   edgeHighlight?: EdgeName | EdgeName[] | 'none';
@@ -19,6 +21,7 @@ interface SurfaceOptions {
   interactive?: boolean;
   hoverPreview?: boolean;
   textureStrength?: number;
+  textureScale?: number;
   glassOpacity?: number;
   borderOpacity?: number;
   cornerSize?: number;
@@ -99,11 +102,16 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const selectedOrHover = options.selected || options.hoverPreview;
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
+  const textureId = options.texture || 'road012a-height';
 
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
-    '--texture-strength': `${(options.textureStrength ?? (options.material === 'glass' ? 12 : 58)) / 100}`,
+    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (options.material === 'glass' ? 12 : 58)) / 100}`,
+    '--texture-scale': `${options.textureScale ?? (options.material === 'glass' ? 384 : 512)}px`,
+    '--texture-image': textureId !== 'none'
+      ? `url("${getTextureOption(textureId).url}")`
+      : 'none',
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--corner-shadow': selectedOrHover ? glow.shadow : 'transparent',
@@ -122,6 +130,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   return [
     'cd-surface',
     `cd-surface--${options.material || 'stone'}`,
+    `cd-surface--texture-${options.texture || 'road012a-height'}`,
     `cd-surface--${options.shape || 'rect'}`,
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
     options.selected ? 'is-selected' : '',
@@ -148,6 +157,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'padded',
     'compact',
     'material',
+    'texture',
     'shape',
     'corners',
     'edgeHighlight',
@@ -157,6 +167,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'interactive',
     'hoverPreview',
     'textureStrength',
+    'textureScale',
     'glassOpacity',
     'borderOpacity',
     'cornerSize',
@@ -179,6 +190,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'children',
     'class',
     'material',
+    'texture',
     'shape',
     'corners',
     'edgeHighlight',
@@ -188,6 +200,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'interactive',
     'hoverPreview',
     'textureStrength',
+    'textureScale',
     'glassOpacity',
     'borderOpacity',
     'cornerSize',
@@ -269,4 +282,3 @@ export const SegmentedMeter = (props: SegmentedMeterProps) => {
     </div>
   );
 };
-

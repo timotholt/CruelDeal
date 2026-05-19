@@ -1,5 +1,6 @@
-import { createMemo, createSignal, For, JSX } from 'solid-js';
+import { createMemo, createSignal, For, JSX, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
+import { Portal } from '../ui/Portal';
 import {
   ArrowRightIcon,
   CalendarIcon,
@@ -31,6 +32,8 @@ import {
   type MaterialKind,
   type ShapeKind,
   type SurfaceGradient,
+  type TextureKind,
+  textureOptions,
 } from '../ui/material-lab';
 
 type PreviewTarget = 'panel' | 'button' | 'tile' | 'cta';
@@ -39,6 +42,7 @@ type CornerControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'cus
 interface LabControls {
   target: PreviewTarget;
   material: MaterialKind;
+  texture: TextureKind;
   shape: ShapeKind;
   cornerPreset: CornerControl;
   customCorners: CornerName[];
@@ -49,6 +53,7 @@ interface LabControls {
   disabled: boolean;
   hoverPreview: boolean;
   textureStrength: number;
+  textureScale: number;
   glassOpacity: number;
   borderOpacity: number;
   cornerSize: number;
@@ -60,6 +65,7 @@ const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'b
 const controlDefaults: LabControls = {
   target: 'button',
   material: 'stone',
+  texture: 'road012a-height',
   shape: 'rect',
   cornerPreset: 'all',
   customCorners: ['top-left', 'bottom-right'],
@@ -70,17 +76,18 @@ const controlDefaults: LabControls = {
   disabled: false,
   hoverPreview: true,
   textureStrength: 58,
+  textureScale: 512,
   glassOpacity: 42,
   borderOpacity: 34,
   cornerSize: 18,
   radius: 7,
 };
 
-const loadoutItems: Array<{ name: string; detail: string; icon: JSX.Element }> = [
-  { name: 'Neurodeck', detail: 'Kitsune-X', icon: <DocumentIcon class="w-8 h-8" /> },
-  { name: 'Breacher', detail: 'Overcrack', icon: <DataDiamondIcon class="w-8 h-8" /> },
-  { name: 'Amp', detail: 'Synapse-3', icon: <CubeIcon class="w-8 h-8" /> },
-  { name: 'Drone', detail: 'Shade', icon: <TargetMarkIcon class="w-8 h-8" /> },
+const loadoutItems: Array<{ name: string; detail: string; icon: () => JSX.Element }> = [
+  { name: 'Neurodeck', detail: 'Kitsune-X', icon: () => <DocumentIcon class="w-8 h-8" /> },
+  { name: 'Breacher', detail: 'Overcrack', icon: () => <DataDiamondIcon class="w-8 h-8" /> },
+  { name: 'Amp', detail: 'Synapse-3', icon: () => <CubeIcon class="w-8 h-8" /> },
+  { name: 'Drone', detail: 'Shade', icon: () => <TargetMarkIcon class="w-8 h-8" /> },
 ];
 
 const Segments = <T extends string>(props: {
@@ -110,12 +117,58 @@ const ToggleButton = (props: { active: boolean; children: JSX.Element; onClick: 
   </button>
 );
 
-const Slider = (props: { value: number; min?: number; max?: number; onInput: (value: number) => void }) => (
+const ControlLabel = (props: { children: JSX.Element; tip?: string }) => {
+  const [position, setPosition] = createSignal<{ left: number; top: number } | null>(null);
+
+  const showTooltip = (event: MouseEvent | FocusEvent) => {
+    if (!props.tip) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const bubbleHalfWidth = 120;
+    setPosition({
+      left: Math.min(Math.max(rect.left + rect.width / 2, bubbleHalfWidth + 8), window.innerWidth - bubbleHalfWidth - 8),
+      top: rect.top - 9,
+    });
+  };
+
+  const hideTooltip = () => setPosition(null);
+
+  return (
+    <>
+      <span
+        class={`ui-lab-control-label ${props.tip ? 'ui-lab-control-label--tip' : ''}`}
+        tabIndex={props.tip ? 0 : undefined}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        aria-label={props.tip ? `${props.children}: ${props.tip}` : undefined}
+      >
+        {props.children}
+      </span>
+      <Show when={props.tip && position()}>
+        {(pos) => (
+          <Portal>
+            <div
+              class="ui-lab-tooltip-portal"
+              role="tooltip"
+              style={{ left: `${pos().left}px`, top: `${pos().top}px` }}
+            >
+              {props.tip}
+            </div>
+          </Portal>
+        )}
+      </Show>
+    </>
+  );
+};
+
+const Slider = (props: { value: number; min?: number; max?: number; step?: number; onInput: (value: number) => void }) => (
   <label class="ui-lab-slider">
     <input
       type="range"
       min={props.min ?? 0}
       max={props.max ?? 100}
+      step={props.step ?? 1}
       value={props.value}
       onInput={(event) => props.onInput(Number(event.currentTarget.value))}
     />
@@ -123,11 +176,43 @@ const Slider = (props: { value: number; min?: number; max?: number; onInput: (va
   </label>
 );
 
+const textureScaleStops = [128, 256, 512, 1024] as const;
+
+const TextureScaleSlider = (props: { value: number; onInput: (value: number) => void }) => {
+  const index = () => Math.max(0, textureScaleStops.findIndex((stop) => stop === props.value));
+
+  return (
+    <label class="ui-lab-slider">
+      <input
+        type="range"
+        min={0}
+        max={textureScaleStops.length - 1}
+        step={1}
+        value={index()}
+        onInput={(event) => props.onInput(textureScaleStops[Number(event.currentTarget.value)])}
+      />
+      <output>{props.value}</output>
+    </label>
+  );
+};
+
 export const UiMaterialLabScreen = () => {
   const [controls, setControls] = createSignal<LabControls>(controlDefaults);
 
   const update = <K extends keyof LabControls>(key: K, value: LabControls[K]) => {
     setControls((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateTexture = (texture: TextureKind) => {
+    setControls((current) => ({
+      ...current,
+      texture,
+      textureStrength: texture === 'none'
+        ? 0
+        : current.textureStrength === 0
+          ? current.material === 'glass' ? 18 : 58
+          : current.textureStrength,
+    }));
   };
 
   const toggleCorner = (corner: CornerName) => {
@@ -151,6 +236,7 @@ export const UiMaterialLabScreen = () => {
     const current = controls();
     return {
       material: current.material,
+      texture: current.texture,
       shape: current.shape,
       corners: activeCorners(),
       edgeHighlight: current.edgeHighlight,
@@ -159,6 +245,7 @@ export const UiMaterialLabScreen = () => {
       selected: current.selected,
       hoverPreview: current.hoverPreview,
       textureStrength: current.textureStrength,
+      textureScale: current.textureScale,
       glassOpacity: current.glassOpacity,
       borderOpacity: current.borderOpacity,
       cornerSize: current.cornerSize,
@@ -259,6 +346,21 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
+                    <ControlLabel tip="Selects which image file is used by the material texture layer. None disables the layer.">
+                      Texture
+                    </ControlLabel>
+                    <select
+                      class="ui-lab-select"
+                      value={controls().texture}
+                      onChange={(event) => updateTexture(event.currentTarget.value as TextureKind)}
+                    >
+                      <For each={textureOptions}>
+                        {(texture) => <option value={texture.id}>{texture.label}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
                     <span>Shape</span>
                     <Segments
                       value={controls().shape}
@@ -327,27 +429,50 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Texture</span>
-                    <Slider value={controls().textureStrength} onInput={(value) => update('textureStrength', value)} />
+                    <ControlLabel tip="Texture opacity. Higher values make the selected texture layer more visible; lower values let the base material and gradients dominate.">
+                      Tex Opacity
+                    </ControlLabel>
+                    <Slider
+                      value={controls().textureStrength}
+                      onInput={(value) => update('textureStrength', controls().texture === 'none' ? 0 : value)}
+                    />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Glass</span>
+                    <ControlLabel tip="Texture tile size in CSS pixels. Snaps to powers of two so the 1K source map is not blurred by odd scaling. Larger values show more source detail and less repetition.">
+                      Tex Scale
+                    </ControlLabel>
+                    <TextureScaleSlider
+                      value={controls().textureScale}
+                      onInput={(value) => update('textureScale', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Glass fill opacity. Higher values make glass more solid; lower values make it more transparent and dependent on the background.">
+                      Glass Alpha
+                    </ControlLabel>
                     <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Border</span>
+                    <ControlLabel tip="Border opacity for the surface outline and bevel frame.">
+                      Border Alpha
+                    </ControlLabel>
                     <Slider value={controls().borderOpacity} onInput={(value) => update('borderOpacity', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Corner</span>
+                    <ControlLabel tip="Length of the glowing corner bracket segments in CSS pixels.">
+                      Corner Size
+                    </ControlLabel>
                     <Slider value={controls().cornerSize} min={8} max={34} onInput={(value) => update('cornerSize', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <span>Radius</span>
+                    <ControlLabel tip="Surface border radius in CSS pixels. Keep this small for the sharp sci-fi slab look.">
+                      Radius
+                    </ControlLabel>
                     <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
                   </div>
                 </div>
@@ -476,7 +601,7 @@ export const UiMaterialLabScreen = () => {
                     <For each={loadoutItems}>
                       {(item) => (
                       <MaterialPanel material="glass" compact corners="top" glow="white" class="ui-lab-loadout-item">
-                        <span class="ui-lab-loadout-icon">{item.icon}</span>
+                        <span class="ui-lab-loadout-icon">{item.icon()}</span>
                         <span class="ui-lab-loadout-name">{item.name}<br />{item.detail}</span>
                       </MaterialPanel>
                       )}

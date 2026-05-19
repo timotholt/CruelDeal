@@ -127,6 +127,73 @@
   text-transform: uppercase;
 }
 
+.ui-lab-control-label {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px dotted transparent;
+  outline: none;
+}
+
+.ui-lab-control-label--tip {
+  cursor: help;
+}
+
+.ui-lab-control-label--tip:hover,
+.ui-lab-control-label--tip:focus-visible {
+  border-bottom-color: rgba(239, 200, 93, 0.55);
+  color: #efc85d;
+}
+
+.ui-lab-tooltip-portal {
+  position: fixed;
+  z-index: 9999;
+  width: 240px;
+  max-width: min(240px, calc(100vw - 24px));
+  padding: 10px 11px;
+  border: 1px solid rgba(239, 200, 93, 0.38);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(38, 38, 34, 0.96), rgba(11, 12, 11, 0.96)),
+    rgba(15, 15, 13, 0.96);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.55), 0 0 16px rgba(239, 200, 93, 0.12);
+  color: rgba(245, 238, 220, 0.88);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  pointer-events: none;
+  text-align: left;
+  text-transform: none;
+  transform: translate(-50%, -100%);
+  animation: uiLabTooltipIn 120ms ease-out both;
+}
+
+.ui-lab-tooltip-portal::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(239, 200, 93, 0.38);
+  border-bottom: 1px solid rgba(239, 200, 93, 0.38);
+  background: rgba(11, 12, 11, 0.96);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@keyframes uiLabTooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
 .ui-lab-segments,
 .ui-lab-toggles {
   display: flex;
@@ -150,6 +217,24 @@
   border-color: rgba(255, 211, 109, 0.72);
   color: #ffe4a4;
   box-shadow: inset 0 -1px 0 rgba(255, 211, 109, 0.45), 0 0 12px rgba(255, 188, 72, 0.16);
+}
+
+.ui-lab-select {
+  min-height: 30px;
+  width: 100%;
+  border: 1px solid rgba(232, 223, 200, 0.24);
+  border-radius: 5px;
+  background: rgba(14, 15, 14, 0.84);
+  color: rgba(245, 238, 220, 0.82);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ui-lab-select:focus-visible {
+  outline: 1px solid rgba(255, 211, 109, 0.72);
+  outline-offset: 2px;
 }
 
 .ui-lab-slider {
@@ -415,7 +500,7 @@
 }
 
 .cd-surface__material {
-  z-index: -5;
+  z-index: 0;
   background: rgba(45, 44, 39, 0.98);
 }
 
@@ -427,26 +512,30 @@
 }
 
 .cd-surface__texture {
-  z-index: -4;
-  background-image: url("/art/textures/road012a/Road012A_1K-JPG_Color.jpg");
-  background-size: 190px 190px;
+  z-index: 0;
+  background-image: var(--texture-image);
+  background-size: var(--texture-scale) var(--texture-scale);
   background-position: center;
   opacity: var(--texture-strength);
-  mix-blend-mode: overlay;
+  mix-blend-mode: multiply;
+}
+
+.cd-surface--texture-none .cd-surface__texture {
+  background-image: none;
 }
 
 .cd-surface--stone .cd-surface__texture {
-  mix-blend-mode: multiply;
-  filter: contrast(1.18) brightness(0.92) saturate(0.68);
+  mix-blend-mode: overlay;
+  filter: contrast(1.56) brightness(0.9) saturate(0.28);
 }
 
 .cd-surface--glass .cd-surface__texture {
-  mix-blend-mode: soft-light;
-  filter: contrast(1.24) saturate(0.4);
+  mix-blend-mode: overlay;
+  filter: contrast(1.52) brightness(0.92) saturate(0.25);
 }
 
 .cd-surface__gradient {
-  z-index: -3;
+  z-index: 0;
 }
 
 .cd-surface--gradient-both .cd-surface__gradient {
@@ -468,7 +557,7 @@
 }
 
 .cd-surface__edge {
-  z-index: -1;
+  z-index: 1;
   background:
     linear-gradient(var(--edge-top), var(--edge-top)) top / 100% 1px no-repeat,
     linear-gradient(var(--edge-right), var(--edge-right)) right / 1px 100% no-repeat,
@@ -478,7 +567,7 @@
 }
 
 .cd-surface__corners {
-  z-index: 0;
+  z-index: 1;
   inset: -1px;
   background:
     linear-gradient(var(--corner-tl), var(--corner-tl)) left top / var(--corner-size) 1px no-repeat,
@@ -535,7 +624,10 @@
 }
 
 .cd-button {
+  appearance: none;
+  background: transparent;
   min-width: 0;
+  padding: 0;
   border: 1px solid rgba(235, 226, 205, var(--border-alpha));
   font-family: inherit;
   text-transform: uppercase;
@@ -617,7 +709,7 @@
 .cd-section-label {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
   color: #f5efe1;
   font-weight: 700;
   letter-spacing: 0.06em;
