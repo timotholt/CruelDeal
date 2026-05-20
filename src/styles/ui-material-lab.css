@@ -508,6 +508,18 @@
   --texture-strength: 0.58;
   --glass-alpha: 0.42;
   --border-alpha: 0.34;
+  --edge-wear-alpha: 0;
+  --edge-wear-width: 5px;
+  --edge-wear-scale: 256px;
+  --edge-wear-image: none;
+  --light-alpha: 0.2;
+  --dark-alpha: 0.32;
+  --border-top: rgba(235, 226, 205, var(--border-alpha));
+  --border-right: rgba(235, 226, 205, var(--border-alpha));
+  --border-bottom: rgba(235, 226, 205, var(--border-alpha));
+  --border-left: rgba(235, 226, 205, var(--border-alpha));
+  --border-top-shadow: rgb(255 255 255 / calc(var(--border-alpha) * 0.58));
+  --border-bottom-shadow: rgb(0 0 0 / calc(var(--border-alpha) + 0.18));
   --corner-tl: transparent;
   --corner-tr: transparent;
   --corner-br: transparent;
@@ -520,12 +532,12 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(235, 226, 205, var(--border-alpha));
+  border: 1px solid transparent;
   border-radius: var(--surface-radius);
   color: #f4eee0;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / calc(var(--border-alpha) * 0.58)),
-    inset 0 -1px 0 rgb(0 0 0 / calc(var(--border-alpha) + 0.18)),
+    inset 0 1px 0 var(--border-top-shadow),
+    inset 0 -1px 0 var(--border-bottom-shadow),
     0 12px 26px rgba(0,0,0,0.36);
 }
 
@@ -536,6 +548,8 @@
 .cd-surface__material,
 .cd-surface__texture,
 .cd-surface__gradient,
+.cd-surface__edge-wear,
+.cd-surface__border,
 .cd-surface__edge,
 .cd-surface__corners {
   position: absolute;
@@ -601,24 +615,68 @@
 
 .cd-surface--gradient-both .cd-surface__gradient {
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.2), transparent 36%, rgba(0,0,0,0.32)),
-    linear-gradient(115deg, rgba(255,255,255,0.09), transparent 38%, rgba(0,0,0,0.22));
+    linear-gradient(180deg, rgb(255 255 255 / var(--light-alpha)), transparent 36%, rgb(0 0 0 / var(--dark-alpha))),
+    linear-gradient(115deg, rgb(255 255 255 / calc(var(--light-alpha) * 0.45)), transparent 38%, rgb(0 0 0 / calc(var(--dark-alpha) * 0.69)));
 }
 
 .cd-surface--sheen-off.cd-surface--gradient-both .cd-surface__gradient {
-  background: linear-gradient(180deg, rgba(255,255,255,0.2), transparent 36%, rgba(0,0,0,0.32));
+  background: linear-gradient(180deg, rgb(255 255 255 / var(--light-alpha)), transparent 36%, rgb(0 0 0 / var(--dark-alpha)));
 }
 
 .cd-surface--gradient-top-light .cd-surface__gradient {
-  background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 50%);
+  background: linear-gradient(180deg, rgb(255 255 255 / var(--light-alpha)), transparent 50%);
 }
 
 .cd-surface--gradient-bottom-dark .cd-surface__gradient {
-  background: linear-gradient(180deg, transparent 34%, rgba(0,0,0,0.38));
+  background: linear-gradient(180deg, transparent 34%, rgb(0 0 0 / var(--dark-alpha)));
 }
 
 .cd-surface--gradient-none .cd-surface__gradient {
   background: transparent;
+}
+
+.cd-surface__edge-wear {
+  z-index: 1;
+  padding: var(--edge-wear-width);
+  border-radius: inherit;
+  overflow: hidden;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.cd-surface__edge-wear::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--edge-wear-width) * -1);
+  background: rgb(4 5 5 / var(--edge-wear-alpha));
+  -webkit-mask-image: var(--edge-wear-image);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: repeat;
+  -webkit-mask-size: var(--edge-wear-scale) var(--edge-wear-scale);
+  mask-image: var(--edge-wear-image);
+  mask-mode: luminance;
+  mask-position: center;
+  mask-repeat: repeat;
+  mask-size: var(--edge-wear-scale) var(--edge-wear-scale);
+  filter: contrast(2.8);
+}
+
+.cd-surface__border {
+  z-index: 1;
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    var(--border-top)
+    var(--border-right)
+    var(--border-bottom)
+    var(--border-left);
+  border-radius: inherit;
 }
 
 .cd-surface__edge {

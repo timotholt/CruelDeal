@@ -27,6 +27,7 @@ import {
   MaterialPanel,
   type CornerName,
   type CornerSpec,
+  type BorderSpec,
   type EdgeName,
   type GlowTone,
   type MaterialKind,
@@ -38,6 +39,7 @@ import {
 
 type PreviewTarget = 'panel' | 'button' | 'tile' | 'cta';
 type CornerControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'custom';
+type BorderControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'three-sided' | 'custom';
 
 interface SavedPreset {
   id: string;
@@ -51,6 +53,12 @@ interface LabControls {
   material: MaterialKind;
   texture: TextureKind;
   shape: ShapeKind;
+  borderPreset: BorderControl;
+  customBorderEdges: EdgeName[];
+  edgeWearTexture: TextureKind;
+  edgeWearOpacity: number;
+  edgeWearWidth: number;
+  edgeWearScale: number;
   cornerPreset: CornerControl;
   customCorners: CornerName[];
   edgeHighlight: EdgeName | 'none';
@@ -65,6 +73,8 @@ interface LabControls {
   glowStrength: number;
   glassOpacity: number;
   borderOpacity: number;
+  lightStrength: number;
+  darkStrength: number;
   cornerSize: number;
   radius: number;
 }
@@ -75,8 +85,10 @@ const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions = ['raw', 'stone', 'glass'] as const;
 const shapeOptions = ['rect', 'beveled'] as const;
+const borderPresetOptions = ['all', 'three-sided', 'none', 'top', 'right', 'bottom', 'left', 'custom'] as const;
 const cornerPresetOptions = ['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const;
 const edgeOptions = ['none', 'top', 'right', 'bottom', 'left'] as const;
+const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
 const gradientOptions = ['none', 'top-light', 'bottom-dark', 'both'] as const;
 const textureScaleStops = [128, 256, 512, 1024] as const;
@@ -88,6 +100,12 @@ const controlDefaults: LabControls = {
   material: 'raw',
   texture: 'stone04',
   shape: 'rect',
+  borderPreset: 'all',
+  customBorderEdges: ['top', 'right', 'left'],
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  edgeWearWidth: 5,
+  edgeWearScale: 256,
   cornerPreset: 'none',
   customCorners: ['top-left', 'bottom-right'],
   edgeHighlight: 'none',
@@ -102,6 +120,8 @@ const controlDefaults: LabControls = {
   glowStrength: 50,
   glassOpacity: 42,
   borderOpacity: 50,
+  lightStrength: 20,
+  darkStrength: 32,
   cornerSize: 18,
   radius: 6,
 };
@@ -130,6 +150,16 @@ const sanitizeControls = (value: unknown): LabControls => {
     material: isOneOf(input.material, materialOptions) ? input.material : controlDefaults.material,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
     shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
+    borderPreset: isOneOf(input.borderPreset, borderPresetOptions) ? input.borderPreset : controlDefaults.borderPreset,
+    customBorderEdges: Array.isArray(input.customBorderEdges)
+      ? input.customBorderEdges.filter((edge): edge is EdgeName => borderEdgeOptions.includes(edge as EdgeName))
+      : controlDefaults.customBorderEdges,
+    edgeWearTexture: isOneOf(input.edgeWearTexture, textureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
+    edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
+    edgeWearWidth: clamp(input.edgeWearWidth, controlDefaults.edgeWearWidth, 1, 24),
+    edgeWearScale: textureScaleStops.includes(input.edgeWearScale as typeof textureScaleStops[number])
+      ? input.edgeWearScale as typeof textureScaleStops[number]
+      : controlDefaults.edgeWearScale,
     cornerPreset: isOneOf(input.cornerPreset, cornerPresetOptions) ? input.cornerPreset : controlDefaults.cornerPreset,
     customCorners: Array.isArray(input.customCorners)
       ? input.customCorners.filter((corner): corner is CornerName => cornerOptions.includes(corner as CornerName))
@@ -148,6 +178,8 @@ const sanitizeControls = (value: unknown): LabControls => {
     glowStrength: clamp(input.glowStrength, controlDefaults.glowStrength, 0, 100),
     glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
+    lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
+    darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
     cornerSize: clamp(input.cornerSize, controlDefaults.cornerSize, 8, 34),
     radius: clamp(input.radius, controlDefaults.radius, 0, 8),
   };
@@ -394,9 +426,26 @@ export const UiMaterialLabScreen = () => {
     });
   };
 
+  const toggleBorderEdge = (edge: EdgeName) => {
+    setControls((current) => {
+      const exists = current.customBorderEdges.includes(edge);
+      return {
+        ...current,
+        customBorderEdges: exists
+          ? current.customBorderEdges.filter((item) => item !== edge)
+          : [...current.customBorderEdges, edge],
+      };
+    });
+  };
+
   const activeCorners = createMemo<CornerSpec>(() => {
     const current = controls();
     return current.cornerPreset === 'custom' ? current.customCorners : current.cornerPreset;
+  });
+
+  const activeBorder = createMemo<BorderSpec>(() => {
+    const current = controls();
+    return current.borderPreset === 'custom' ? current.customBorderEdges : current.borderPreset;
   });
 
   const surfaceProps = createMemo(() => {
@@ -405,6 +454,11 @@ export const UiMaterialLabScreen = () => {
       material: current.material,
       texture: current.texture,
       shape: current.shape,
+      border: activeBorder(),
+      edgeWearTexture: current.edgeWearTexture,
+      edgeWearOpacity: current.edgeWearOpacity,
+      edgeWearWidth: current.edgeWearWidth,
+      edgeWearScale: current.edgeWearScale,
       corners: activeCorners(),
       edgeHighlight: current.edgeHighlight,
       glow: current.glow,
@@ -417,6 +471,8 @@ export const UiMaterialLabScreen = () => {
       glowStrength: current.glowStrength,
       glassOpacity: current.glassOpacity,
       borderOpacity: current.borderOpacity,
+      lightStrength: current.lightStrength,
+      darkStrength: current.darkStrength,
       cornerSize: current.cornerSize,
       radius: current.radius,
     };
@@ -620,6 +676,88 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Border</SectionLabel>
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Chooses which sides draw the neutral surface border. Three-sided keeps top, right, and left while removing the bottom border.">
+                      Sides
+                    </ControlLabel>
+                    <Segments
+                      value={controls().borderPreset}
+                      options={borderPresetOptions}
+                      labels={{ 'three-sided': '3 sides' }}
+                      onChange={(value) => update('borderPreset', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Only used when Sides is set to Custom. Pick individual neutral border sides.">
+                      Custom
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <For each={borderEdgeOptions}>
+                        {(edge) => (
+                          <ToggleButton active={controls().customBorderEdges.includes(edge)} onClick={() => toggleBorderEdge(edge)}>
+                            {edge}
+                          </ToggleButton>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Border opacity for the selected neutral border sides. Set Sides to None to hide the border entirely.">
+                      Alpha
+                    </ControlLabel>
+                    <Slider value={controls().borderOpacity} onInput={(value) => update('borderOpacity', value)} />
+                  </div>
+                  </div>
+
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Edge Wear</SectionLabel>
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Texture used as the alpha mask for micro-chipped edge wear. It can be different from the main surface texture. None disables the wear layer.">
+                      Texture
+                    </ControlLabel>
+                    <select
+                      class="ui-lab-select"
+                      value={controls().edgeWearTexture}
+                      onChange={(event) => update('edgeWearTexture', event.currentTarget.value as TextureKind)}
+                    >
+                      <For each={textureOptions}>
+                        {(texture) => <option value={texture.id}>{texture.label}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Strength of the masked edge erosion. Higher values make chipped portions cut darker into the border and surface edge.">
+                      Alpha
+                    </ControlLabel>
+                    <Slider
+                      value={controls().edgeWearOpacity}
+                      onInput={(value) => update('edgeWearOpacity', controls().edgeWearTexture === 'none' ? 0 : value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Width of the inward edge ring in CSS pixels. Higher values make the worn texture reach farther into the surface.">
+                      Width
+                    </ControlLabel>
+                    <Slider value={controls().edgeWearWidth} min={1} max={24} onInput={(value) => update('edgeWearWidth', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Tile size for the edge-wear texture. Smaller values create finer/noisier edge detail.">
+                      Scale
+                    </ControlLabel>
+                    <TextureScaleSlider
+                      value={controls().edgeWearScale}
+                      onInput={(value) => update('edgeWearScale', value)}
+                    />
+                  </div>
+                  </div>
+
+                  <div class="ui-lab-control-group">
                     <SectionLabel size="xs">Glow State</SectionLabel>
                   <div class="ui-lab-control-row">
                     <ControlLabel tip="Chooses which corner brackets can glow. They become visible when Selected or Hover is enabled and Glow is not None.">
@@ -703,6 +841,20 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
+                    <ControlLabel tip="White highlight opacity in the gradient wash. This controls the bright top side and the bright side-sheen component.">
+                      White
+                    </ControlLabel>
+                    <Slider value={controls().lightStrength} min={0} max={100} onInput={(value) => update('lightStrength', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Dark shadow opacity in the gradient wash. This controls the bottom shadow and the dark side-sheen component.">
+                      Dark
+                    </ControlLabel>
+                    <Slider value={controls().darkStrength} min={0} max={100} onInput={(value) => update('darkStrength', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
                     <ControlLabel tip="Toggles the diagonal/side sheen that can read like a left-to-right gradient. Turn this off when you want only the vertical gradient.">
                       Side Sheen
                     </ControlLabel>
@@ -739,13 +891,6 @@ export const UiMaterialLabScreen = () => {
                       Glass Alpha
                     </ControlLabel>
                     <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Border opacity for the surface outline and bevel frame.">
-                      Border Alpha
-                    </ControlLabel>
-                    <Slider value={controls().borderOpacity} onInput={(value) => update('borderOpacity', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">

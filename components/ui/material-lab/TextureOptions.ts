@@ -5,6 +5,26 @@ export const textureOptions = [
     url: '',
   },
   {
+    id: 'edge-micro-chips-fine',
+    label: 'Edge Micro Chips Fine',
+    url: '/art/ui/edge-micro-chips-fine.svg',
+  },
+  {
+    id: 'edge-micro-chips-rough',
+    label: 'Edge Micro Chips Rough',
+    url: '/art/ui/edge-micro-chips-rough.svg',
+  },
+  {
+    id: 'edge-bw-chips-fine',
+    label: 'Edge B/W Chips Fine',
+    url: '/art/ui/edge-bw-chips-fine.svg',
+  },
+  {
+    id: 'edge-bw-chips-heavy',
+    label: 'Edge B/W Chips Heavy',
+    url: '/art/ui/edge-bw-chips-heavy.svg',
+  },
+  {
     id: 'road012a',
     label: 'Road012A',
     url: '/art/textures/road012a/Road012A_1K-JPG_Color.jpg',

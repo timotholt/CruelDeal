@@ -5,6 +5,7 @@ export type MaterialKind = 'raw' | 'stone' | 'glass';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
 export type EdgeName = 'top' | 'right' | 'bottom' | 'left';
+export type BorderSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'three-sided' | EdgeName[];
 export type CornerName = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
 export type CornerSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | CornerName[];
 export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
@@ -15,6 +16,7 @@ interface SurfaceOptions {
   shape?: ShapeKind;
   corners?: CornerSpec;
   edgeHighlight?: EdgeName | EdgeName[] | 'none';
+  border?: BorderSpec;
   glow?: GlowTone;
   gradient?: SurfaceGradient;
   sheen?: boolean;
@@ -26,6 +28,12 @@ interface SurfaceOptions {
   glowStrength?: number;
   glassOpacity?: number;
   borderOpacity?: number;
+  lightStrength?: number;
+  darkStrength?: number;
+  edgeWearTexture?: TextureKind;
+  edgeWearOpacity?: number;
+  edgeWearWidth?: number;
+  edgeWearScale?: number;
   cornerSize?: number;
   radius?: number;
 }
@@ -97,9 +105,19 @@ const resolveEdges = (edges: EdgeName | EdgeName[] | 'none' | undefined): EdgeNa
   return Array.isArray(edges) ? edges : [edges];
 };
 
+const resolveBorder = (border: BorderSpec | undefined): EdgeName[] => {
+  if (!border) return ['top', 'right', 'bottom', 'left'];
+  if (border === 'none') return [];
+  if (border === 'all') return ['top', 'right', 'bottom', 'left'];
+  if (border === 'three-sided') return ['top', 'right', 'left'];
+  if (Array.isArray(border)) return border;
+  return [border];
+};
+
 const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const corners = resolveCorners(options.corners);
   const edges = resolveEdges(options.edgeHighlight);
+  const borderEdges = resolveBorder(options.border);
   const glow = glowColors[options.glow || 'gold'];
   const selectedOrHover = options.selected || options.hoverPreview;
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
@@ -117,8 +135,22 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
       : 'none',
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
+    '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
+    '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
+    '--edge-wear-alpha': `${options.edgeWearTexture && options.edgeWearTexture !== 'none' ? (options.edgeWearOpacity ?? 0) / 100 : 0}`,
+    '--edge-wear-width': `${options.edgeWearWidth ?? 5}px`,
+    '--edge-wear-scale': `${options.edgeWearScale ?? 256}px`,
+    '--edge-wear-image': options.edgeWearTexture && options.edgeWearTexture !== 'none'
+      ? `url("${getTextureOption(options.edgeWearTexture).url}")`
+      : 'none',
     '--glow-alpha': `${glowAlpha}`,
     '--corner-shadow': `rgb(${glow.rgb} / ${glowAlpha})`,
+    '--border-top': borderEdges.includes('top') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-right': borderEdges.includes('right') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-bottom': borderEdges.includes('bottom') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-left': borderEdges.includes('left') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-top-shadow': borderEdges.includes('top') ? 'rgb(255 255 255 / calc(var(--border-alpha) * 0.58))' : 'transparent',
+    '--border-bottom-shadow': borderEdges.includes('bottom') ? 'rgb(0 0 0 / calc(var(--border-alpha) + 0.18))' : 'transparent',
     '--corner-tl': corners.includes('top-left') ? activeCornerColor : 'transparent',
     '--corner-tr': corners.includes('top-right') ? activeCornerColor : 'transparent',
     '--corner-br': corners.includes('bottom-right') ? activeCornerColor : 'transparent',
@@ -150,6 +182,8 @@ export const SurfaceLayers = () => (
     <span class="cd-surface__material" aria-hidden="true" />
     <span class="cd-surface__texture" aria-hidden="true" />
     <span class="cd-surface__gradient" aria-hidden="true" />
+    <span class="cd-surface__border" aria-hidden="true" />
+    <span class="cd-surface__edge-wear" aria-hidden="true" />
     <span class="cd-surface__edge" aria-hidden="true" />
     <span class="cd-surface__corners" aria-hidden="true" />
   </>
@@ -166,6 +200,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'shape',
     'corners',
     'edgeHighlight',
+    'border',
     'glow',
     'gradient',
     'sheen',
@@ -177,6 +212,12 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'glowStrength',
     'glassOpacity',
     'borderOpacity',
+    'lightStrength',
+    'darkStrength',
+    'edgeWearTexture',
+    'edgeWearOpacity',
+    'edgeWearWidth',
+    'edgeWearScale',
     'cornerSize',
     'radius',
   ]);
@@ -201,6 +242,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'shape',
     'corners',
     'edgeHighlight',
+    'border',
     'glow',
     'gradient',
     'sheen',
@@ -212,6 +254,12 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glowStrength',
     'glassOpacity',
     'borderOpacity',
+    'lightStrength',
+    'darkStrength',
+    'edgeWearTexture',
+    'edgeWearOpacity',
+    'edgeWearWidth',
+    'edgeWearScale',
     'cornerSize',
     'radius',
     'size',
