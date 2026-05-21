@@ -35,6 +35,7 @@ import {
   type MaterialKind,
   type ShapeKind,
   type SurfaceGradient,
+  type TintTone,
   type TextureKind,
   edgeTextureOptions,
   textureOptions,
@@ -67,6 +68,7 @@ interface LabControls {
   customCorners: CornerName[];
   edgeHighlight: EdgeName | 'none';
   glow: GlowTone;
+  tint: TintTone;
   gradient: SurfaceGradient;
   sheen: boolean;
   selected: boolean;
@@ -75,6 +77,7 @@ interface LabControls {
   textureStrength: number;
   textureScale: number;
   glowStrength: number;
+  tintStrength: number;
   glassOpacity: number;
   borderOpacity: number;
   lightStrength: number;
@@ -95,6 +98,7 @@ const edgeOptions = ['none', 'top', 'right', 'bottom', 'left'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
 const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
+const tintOptions = ['none', 'gold', 'cyan', 'white', 'red', 'green'] as const;
 const gradientOptions = ['none', 'top-light', 'bottom-dark', 'both'] as const;
 const textureScaleStops = [128, 256, 512, 1024] as const;
 const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
@@ -116,6 +120,7 @@ const controlDefaults: LabControls = {
   customCorners: ['top-left', 'bottom-right'],
   edgeHighlight: 'none',
   glow: 'none',
+  tint: 'none',
   gradient: 'none',
   sheen: false,
   selected: false,
@@ -124,6 +129,7 @@ const controlDefaults: LabControls = {
   textureStrength: 100,
   textureScale: 512,
   glowStrength: 50,
+  tintStrength: 32,
   glassOpacity: 42,
   borderOpacity: 50,
   lightStrength: 20,
@@ -173,6 +179,7 @@ const sanitizeControls = (value: unknown): LabControls => {
       : controlDefaults.customCorners,
     edgeHighlight: isOneOf(input.edgeHighlight, edgeOptions) ? input.edgeHighlight : controlDefaults.edgeHighlight,
     glow: isOneOf(input.glow, glowOptions) ? input.glow : controlDefaults.glow,
+    tint: isOneOf(input.tint, tintOptions) ? input.tint : controlDefaults.tint,
     gradient: isOneOf(input.gradient, gradientOptions) ? input.gradient : controlDefaults.gradient,
     sheen: typeof input.sheen === 'boolean' ? input.sheen : controlDefaults.sheen,
     selected: typeof input.selected === 'boolean' ? input.selected : controlDefaults.selected,
@@ -183,6 +190,7 @@ const sanitizeControls = (value: unknown): LabControls => {
       ? input.textureScale as typeof textureScaleStops[number]
       : controlDefaults.textureScale,
     glowStrength: clamp(input.glowStrength, controlDefaults.glowStrength, 0, 100),
+    tintStrength: clamp(input.tintStrength, controlDefaults.tintStrength, 0, 100),
     glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
@@ -501,6 +509,7 @@ export const UiMaterialLabScreen = () => {
       corners: activeCorners(),
       edgeHighlight: current.edgeHighlight,
       glow: current.glow,
+      tint: current.tint,
       gradient: current.gradient,
       sheen: current.sheen,
       selected: current.selected,
@@ -508,6 +517,7 @@ export const UiMaterialLabScreen = () => {
       textureStrength: current.textureStrength,
       textureScale: current.textureScale,
       glowStrength: current.glowStrength,
+      tintStrength: current.tintStrength,
       glassOpacity: current.glassOpacity,
       borderOpacity: current.borderOpacity,
       lightStrength: current.lightStrength,
@@ -701,6 +711,29 @@ export const UiMaterialLabScreen = () => {
                         {(texture) => <option value={texture.id}>{texture.label}</option>}
                       </For>
                     </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Optional color wash over the base material and texture. None skips the tint layer entirely.">
+                      Tint
+                    </ControlLabel>
+                    <Segments
+                      value={controls().tint}
+                      options={tintOptions}
+                      onChange={(value) => update('tint', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Opacity for the optional tint wash. At zero, the tint layer is not rendered.">
+                      Tint Power
+                    </ControlLabel>
+                    <Slider
+                      value={controls().tintStrength}
+                      min={0}
+                      max={100}
+                      onInput={(value) => update('tintStrength', controls().tint === 'none' ? 0 : value)}
+                    />
                   </div>
 
                   <div class="ui-lab-control-row">

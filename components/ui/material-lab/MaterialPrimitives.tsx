@@ -4,6 +4,7 @@ import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type Text
 export type MaterialKind = 'raw' | 'stone' | 'glass';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
+export type TintTone = 'none' | 'gold' | 'cyan' | 'white' | 'red' | 'green';
 export type EdgeName = 'top' | 'right' | 'bottom' | 'left';
 export type BorderSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'three-sided' | EdgeName[];
 export type CornerName = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
@@ -19,6 +20,7 @@ interface SurfaceOptions {
   edgeHighlight?: EdgeName | EdgeName[] | 'none';
   border?: BorderSpec;
   glow?: GlowTone;
+  tint?: TintTone;
   gradient?: SurfaceGradient;
   sheen?: boolean;
   selected?: boolean;
@@ -27,6 +29,7 @@ interface SurfaceOptions {
   textureStrength?: number;
   textureScale?: number;
   glowStrength?: number;
+  tintStrength?: number;
   glassOpacity?: number;
   borderOpacity?: number;
   lightStrength?: number;
@@ -91,6 +94,19 @@ const glowColors: Record<GlowTone, { color: string; rgb: string }> = {
   red: { color: 'rgba(255, 92, 83, 0.96)', rgb: '255 75 64' },
 };
 
+const tintColors: Record<TintTone, { rgb: string }> = {
+  none: { rgb: '0 0 0' },
+  gold: { rgb: '255 188 72' },
+  cyan: { rgb: '55 190 255' },
+  white: { rgb: '255 250 232' },
+  red: { rgb: '255 75 64' },
+  green: { rgb: '86 218 142' },
+};
+
+const hasTint = (options: SurfaceOptions) => (
+  !!options.tint && options.tint !== 'none' && (options.tintStrength ?? 32) > 0
+);
+
 const resolveCorners = (corners: CornerSpec | undefined): CornerName[] => {
   if (!corners || corners === 'none') return [];
   if (Array.isArray(corners)) return corners;
@@ -126,6 +142,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a-height';
   const glowAlpha = selectedOrHover && options.glow !== 'none' ? (options.glowStrength ?? 42) / 100 : 0;
+  const tint = tintColors[options.tint || 'none'];
 
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
@@ -135,6 +152,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--texture-image': textureId !== 'none'
       ? `url("${getTextureOption(textureId).url}")`
       : 'none',
+    '--tint-rgb': tint.rgb,
+    '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
@@ -175,15 +194,19 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
     options.hoverPreview ? 'is-hover-preview' : '',
+    hasTint(options) ? 'cd-surface--tinted' : '',
     options.edgeWearLayer === 'above-highlights' ? 'cd-surface--edge-wear-above' : '',
     extra,
   ].filter(Boolean).join(' ');
 };
 
-export const SurfaceLayers = () => (
+export const SurfaceLayers = (props: { tinted?: boolean }) => (
   <>
     <span class="cd-surface__material" aria-hidden="true" />
     <span class="cd-surface__texture" aria-hidden="true" />
+    <Show when={props.tinted}>
+      <span class="cd-surface__tint" aria-hidden="true" />
+    </Show>
     <span class="cd-surface__gradient" aria-hidden="true" />
     <span class="cd-surface__border" aria-hidden="true" />
     <span class="cd-surface__edge-wear" aria-hidden="true" />
@@ -205,6 +228,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'edgeHighlight',
     'border',
     'glow',
+    'tint',
     'gradient',
     'sheen',
     'selected',
@@ -213,6 +237,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'textureStrength',
     'textureScale',
     'glowStrength',
+    'tintStrength',
     'glassOpacity',
     'borderOpacity',
     'lightStrength',
@@ -231,7 +256,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
       class={surfaceClass(local, `cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`)}
       style={surfaceStyle(local)}
     >
-      <SurfaceLayers />
+      <SurfaceLayers tinted={hasTint(local)} />
       <div class="cd-surface__content cd-panel__content">{local.children}</div>
     </section>
   );
@@ -248,6 +273,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'edgeHighlight',
     'border',
     'glow',
+    'tint',
     'gradient',
     'sheen',
     'selected',
@@ -256,6 +282,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'textureStrength',
     'textureScale',
     'glowStrength',
+    'tintStrength',
     'glassOpacity',
     'borderOpacity',
     'lightStrength',
@@ -290,7 +317,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       disabled={local.disabled}
       {...rest}
     >
-      <SurfaceLayers />
+      <SurfaceLayers tinted={hasTint(local)} />
       <span class="cd-surface__content cd-button__content">
         <Show when={local.icon && iconPosition() !== 'right'}>
           <span class="cd-button__icon">{local.icon}</span>

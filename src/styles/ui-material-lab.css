@@ -506,6 +506,8 @@
   --corner-size: 18px;
   --surface-radius: 7px;
   --texture-strength: 0.58;
+  --tint-rgb: 0 0 0;
+  --tint-alpha: 0;
   --glass-alpha: 0.42;
   --border-alpha: 0.34;
   --edge-wear-alpha: 0;
@@ -547,6 +549,7 @@
 
 .cd-surface__material,
 .cd-surface__texture,
+.cd-surface__tint,
 .cd-surface__gradient,
 .cd-surface__edge-wear,
 .cd-surface__border,
@@ -603,6 +606,12 @@
 .cd-surface--raw .cd-surface__texture {
   mix-blend-mode: normal;
   filter: none;
+}
+
+.cd-surface__tint {
+  z-index: 0;
+  background: rgb(var(--tint-rgb) / var(--tint-alpha));
+  mix-blend-mode: color;
 }
 
 .cd-surface__gradient {
