@@ -667,6 +667,10 @@
   filter: contrast(2.8);
 }
 
+.cd-surface--edge-wear-above .cd-surface__edge-wear {
+  z-index: 3;
+}
+
 .cd-surface__border {
   z-index: 1;
   border-style: solid;

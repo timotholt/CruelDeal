@@ -1,5 +1,5 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
-import { getTextureOption, type TextureKind } from './TextureOptions';
+import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 
 export type MaterialKind = 'raw' | 'stone' | 'glass';
 export type ShapeKind = 'rect' | 'beveled';
@@ -9,6 +9,7 @@ export type BorderSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 
 export type CornerName = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
 export type CornerSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | CornerName[];
 export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
+export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
 
 interface SurfaceOptions {
   material?: MaterialKind;
@@ -30,10 +31,11 @@ interface SurfaceOptions {
   borderOpacity?: number;
   lightStrength?: number;
   darkStrength?: number;
-  edgeWearTexture?: TextureKind;
+  edgeWearTexture?: EdgeTextureKind;
   edgeWearOpacity?: number;
   edgeWearWidth?: number;
   edgeWearScale?: number;
+  edgeWearLayer?: EdgeWearLayer;
   cornerSize?: number;
   radius?: number;
 }
@@ -141,7 +143,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--edge-wear-width': `${options.edgeWearWidth ?? 5}px`,
     '--edge-wear-scale': `${options.edgeWearScale ?? 256}px`,
     '--edge-wear-image': options.edgeWearTexture && options.edgeWearTexture !== 'none'
-      ? `url("${getTextureOption(options.edgeWearTexture).url}")`
+      ? `url("${getEdgeTextureOption(options.edgeWearTexture).url}")`
       : 'none',
     '--glow-alpha': `${glowAlpha}`,
     '--corner-shadow': `rgb(${glow.rgb} / ${glowAlpha})`,
@@ -173,6 +175,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
     options.hoverPreview ? 'is-hover-preview' : '',
+    options.edgeWearLayer === 'above-highlights' ? 'cd-surface--edge-wear-above' : '',
     extra,
   ].filter(Boolean).join(' ');
 };
@@ -218,6 +221,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'edgeWearOpacity',
     'edgeWearWidth',
     'edgeWearScale',
+    'edgeWearLayer',
     'cornerSize',
     'radius',
   ]);
@@ -260,6 +264,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'edgeWearOpacity',
     'edgeWearWidth',
     'edgeWearScale',
+    'edgeWearLayer',
     'cornerSize',
     'radius',
     'size',

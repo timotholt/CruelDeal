@@ -29,11 +29,14 @@ import {
   type CornerSpec,
   type BorderSpec,
   type EdgeName,
+  type EdgeTextureKind,
+  type EdgeWearLayer,
   type GlowTone,
   type MaterialKind,
   type ShapeKind,
   type SurfaceGradient,
   type TextureKind,
+  edgeTextureOptions,
   textureOptions,
 } from '../ui/material-lab';
 
@@ -55,10 +58,11 @@ interface LabControls {
   shape: ShapeKind;
   borderPreset: BorderControl;
   customBorderEdges: EdgeName[];
-  edgeWearTexture: TextureKind;
+  edgeWearTexture: EdgeTextureKind;
   edgeWearOpacity: number;
   edgeWearWidth: number;
   edgeWearScale: number;
+  edgeWearLayer: EdgeWearLayer;
   cornerPreset: CornerControl;
   customCorners: CornerName[];
   edgeHighlight: EdgeName | 'none';
@@ -89,6 +93,7 @@ const borderPresetOptions = ['all', 'three-sided', 'none', 'top', 'right', 'bott
 const cornerPresetOptions = ['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const;
 const edgeOptions = ['none', 'top', 'right', 'bottom', 'left'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
+const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
 const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
 const gradientOptions = ['none', 'top-light', 'bottom-dark', 'both'] as const;
 const textureScaleStops = [128, 256, 512, 1024] as const;
@@ -106,6 +111,7 @@ const controlDefaults: LabControls = {
   edgeWearOpacity: 0,
   edgeWearWidth: 5,
   edgeWearScale: 256,
+  edgeWearLayer: 'below-highlights',
   cornerPreset: 'none',
   customCorners: ['top-left', 'bottom-right'],
   edgeHighlight: 'none',
@@ -154,12 +160,13 @@ const sanitizeControls = (value: unknown): LabControls => {
     customBorderEdges: Array.isArray(input.customBorderEdges)
       ? input.customBorderEdges.filter((edge): edge is EdgeName => borderEdgeOptions.includes(edge as EdgeName))
       : controlDefaults.customBorderEdges,
-    edgeWearTexture: isOneOf(input.edgeWearTexture, textureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
+    edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
     edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
     edgeWearWidth: clamp(input.edgeWearWidth, controlDefaults.edgeWearWidth, 1, 24),
     edgeWearScale: textureScaleStops.includes(input.edgeWearScale as typeof textureScaleStops[number])
       ? input.edgeWearScale as typeof textureScaleStops[number]
       : controlDefaults.edgeWearScale,
+    edgeWearLayer: isOneOf(input.edgeWearLayer, edgeWearLayerOptions) ? input.edgeWearLayer : controlDefaults.edgeWearLayer,
     cornerPreset: isOneOf(input.cornerPreset, cornerPresetOptions) ? input.cornerPreset : controlDefaults.cornerPreset,
     customCorners: Array.isArray(input.customCorners)
       ? input.customCorners.filter((corner): corner is CornerName => cornerOptions.includes(corner as CornerName))
@@ -337,6 +344,7 @@ export const UiMaterialLabScreen = () => {
   const [savedPresets, setSavedPresets] = createSignal<SavedPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = createSignal(defaultPresetId);
   const [presetName, setPresetName] = createSignal('Default');
+  const [jsonCopied, setJsonCopied] = createSignal(false);
 
   onMount(() => {
     setSavedPresets(loadStoredPresets());
@@ -370,14 +378,26 @@ export const UiMaterialLabScreen = () => {
     setPresetName(preset.name);
   };
 
+  const createPresetId = () => `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const uniquePresetName = (baseName: string) => {
+    const trimmed = baseName.trim() || 'Preset';
+    const names = new Set(savedPresets().map((preset) => preset.name.toLowerCase()));
+    if (!names.has(trimmed.toLowerCase())) return trimmed;
+
+    let index = 2;
+    while (names.has(`${trimmed} ${index}`.toLowerCase())) index += 1;
+    return `${trimmed} ${index}`;
+  };
+
   const saveCurrentPreset = () => {
     const name = presetName().trim();
     if (!name || name.toLowerCase() === 'default') return;
     const id = selectedPresetId() !== defaultPresetId
       ? selectedPresetId()
-      : `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      : createPresetId();
     const nextPreset = { id, name, controls: { ...controls() } };
-    const existingIndex = savedPresets().findIndex((preset) => preset.id === id || preset.name.toLowerCase() === name.toLowerCase());
+    const existingIndex = savedPresets().findIndex((preset) => preset.id === id);
     const next = existingIndex >= 0
       ? savedPresets().map((preset, index) => index === existingIndex ? { ...nextPreset, id: preset.id } : preset)
       : [...savedPresets(), nextPreset];
@@ -387,11 +407,29 @@ export const UiMaterialLabScreen = () => {
     setPresetName(name);
   };
 
+  const saveNewPreset = () => {
+    const name = uniquePresetName(presetName().toLowerCase() === 'default' ? 'Preset' : presetName());
+    const id = createPresetId();
+    persistPresets([...savedPresets(), { id, name, controls: { ...controls() } }]);
+    setSelectedPresetId(id);
+    setPresetName(name);
+  };
+
   const deleteCurrentPreset = () => {
     const id = selectedPresetId();
     if (id === defaultPresetId) return;
     persistPresets(savedPresets().filter((preset) => preset.id !== id));
     applyPreset(defaultPresetId);
+  };
+
+  const copyPropsJson = async () => {
+    try {
+      await navigator.clipboard.writeText(propsReadout());
+      setJsonCopied(true);
+      window.setTimeout(() => setJsonCopied(false), 1400);
+    } catch {
+      setJsonCopied(false);
+    }
   };
 
   const updateMaterial = (material: MaterialKind) => {
@@ -459,6 +497,7 @@ export const UiMaterialLabScreen = () => {
       edgeWearOpacity: current.edgeWearOpacity,
       edgeWearWidth: current.edgeWearWidth,
       edgeWearScale: current.edgeWearScale,
+      edgeWearLayer: current.edgeWearLayer,
       corners: activeCorners(),
       edgeHighlight: current.edgeHighlight,
       glow: current.glow,
@@ -600,6 +639,7 @@ export const UiMaterialLabScreen = () => {
                     </ControlLabel>
                     <div class="ui-lab-toggles">
                       <button type="button" class="ui-lab-mini-button" onClick={saveCurrentPreset}>Save</button>
+                      <button type="button" class="ui-lab-mini-button" onClick={saveNewPreset}>Save New</button>
                       <button
                         type="button"
                         class="ui-lab-mini-button"
@@ -721,12 +761,24 @@ export const UiMaterialLabScreen = () => {
                     <select
                       class="ui-lab-select"
                       value={controls().edgeWearTexture}
-                      onChange={(event) => update('edgeWearTexture', event.currentTarget.value as TextureKind)}
+                      onChange={(event) => update('edgeWearTexture', event.currentTarget.value as EdgeTextureKind)}
                     >
-                      <For each={textureOptions}>
+                      <For each={edgeTextureOptions}>
                         {(texture) => <option value={texture.id}>{texture.label}</option>}
                       </For>
                     </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Controls whether edge wear sits below glow/highlight layers or above them so it can cut into hover and selected borders too.">
+                      Layer
+                    </ControlLabel>
+                    <Segments
+                      value={controls().edgeWearLayer}
+                      options={edgeWearLayerOptions}
+                      labels={{ 'below-highlights': 'below', 'above-highlights': 'above' }}
+                      onChange={(value) => update('edgeWearLayer', value)}
+                    />
                   </div>
 
                   <div class="ui-lab-control-row">
@@ -913,6 +965,11 @@ export const UiMaterialLabScreen = () => {
               <section class="ui-lab-section">
                 <SectionLabel>Primary Preview</SectionLabel>
                 {renderPreview()}
+                <div class="ui-lab-row">
+                  <button type="button" class="ui-lab-mini-button" onClick={copyPropsJson}>
+                    {jsonCopied() ? 'Copied' : 'Copy JSON'}
+                  </button>
+                </div>
                 <pre class="ui-lab-props">{propsReadout()}</pre>
               </section>
 
