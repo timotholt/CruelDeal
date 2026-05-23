@@ -160,10 +160,9 @@ Example material variables:
 }
 
 .cd-surface__glass {
-  --surface-fill: rgba(35, 38, 38, 0.42);
-  --surface-texture-opacity: 0.12;
-  --surface-blur: 16px;
-  --surface-border: rgba(235, 230, 215, 0.34);
+  --glass-alpha: 0.42;
+  --glass-blur: 10px;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.08);
 }
 ```
 
@@ -206,6 +205,7 @@ interface MaterialSurfaceProps {
   hoverPreview?: boolean;
   textureStrength?: number;
   glassOpacity?: number;
+  glassBlur?: number;
   borderOpacity?: number;
   cornerSize?: number;
   radius?: number;
@@ -539,6 +539,7 @@ interface UiLabControls {
   hoverPreview: boolean;
   textureStrength: number;
   glassOpacity: number;
+  glassBlur: number;
   borderOpacity: number;
   cornerSize: number;
   radius: number;

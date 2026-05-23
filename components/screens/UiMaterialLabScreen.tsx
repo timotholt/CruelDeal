@@ -74,6 +74,7 @@ interface LabControls {
   glowStrength: number;
   tintStrength: number;
   glassOpacity: number;
+  glassBlur: number;
   borderOpacity: number;
   lightStrength: number;
   darkStrength: number;
@@ -123,6 +124,7 @@ const controlDefaults: LabControls = {
   glowStrength: 50,
   tintStrength: 32,
   glassOpacity: 42,
+  glassBlur: 10,
   borderOpacity: 50,
   lightStrength: 20,
   darkStrength: 32,
@@ -227,6 +229,7 @@ const sanitizeControls = (value: unknown): LabControls => {
     glowStrength: clamp(input.glowStrength, controlDefaults.glowStrength, 0, 100),
     tintStrength: clamp(input.tintStrength, controlDefaults.tintStrength, 0, 100),
     glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
+    glassBlur: clamp(input.glassBlur, controlDefaults.glassBlur, 0, 24),
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
@@ -594,6 +597,7 @@ export const UiMaterialLabScreen = () => {
       glowStrength: current.glowStrength,
       tintStrength: current.tintStrength,
       glassOpacity: current.glassOpacity,
+      glassBlur: current.glassBlur,
       borderOpacity: current.borderOpacity,
       lightStrength: current.lightStrength,
       darkStrength: current.darkStrength,
@@ -810,6 +814,18 @@ export const UiMaterialLabScreen = () => {
                       Glass Alpha
                     </ControlLabel>
                     <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Backdrop blur for the glass pane. This controls frostiness without changing the hard shine.">
+                      Glass Blur
+                    </ControlLabel>
+                    <Slider
+                      value={controls().glassBlur}
+                      min={0}
+                      max={24}
+                      onInput={(value) => update('glassBlur', value)}
+                    />
                   </div>
 
                   <div class="ui-lab-control-row">

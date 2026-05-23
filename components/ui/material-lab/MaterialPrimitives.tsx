@@ -32,6 +32,7 @@ interface SurfaceOptions {
   glowStrength?: number;
   tintStrength?: number;
   glassOpacity?: number;
+  glassBlur?: number;
   borderOpacity?: number;
   lightStrength?: number;
   darkStrength?: number;
@@ -177,6 +178,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--tint-rgb': tint.rgb,
     '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
     '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
+    '--glass-blur': `${hasGlass(options) ? options.glassBlur ?? 10 : 0}px`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
@@ -244,10 +246,10 @@ export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowin
     <Show when={props.tinted}>
       <span class="cd-surface__tint" aria-hidden="true" />
     </Show>
+    <span class="cd-surface__gradient" aria-hidden="true" />
     <Show when={props.glass}>
       <span class="cd-surface__glass" aria-hidden="true" />
     </Show>
-    <span class="cd-surface__gradient" aria-hidden="true" />
     <Show when={props.glowing}>
       <span class="cd-surface__glow" aria-hidden="true" />
     </Show>
@@ -288,6 +290,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassBlur',
     'borderOpacity',
     'lightStrength',
     'darkStrength',
@@ -334,6 +337,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassBlur',
     'borderOpacity',
     'lightStrength',
     'darkStrength',
