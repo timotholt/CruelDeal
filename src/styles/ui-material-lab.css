@@ -1,4 +1,6 @@
 .ui-lab-page {
+  --control-x: 18px;
+  --control-y: 18px;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -111,6 +113,54 @@
 .ui-lab-control-grid {
   display: grid;
   gap: 12px;
+}
+
+.cd-surface.ui-lab-controls-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  width: min(374px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  transform: translate(var(--control-x), var(--control-y));
+}
+
+.ui-lab-controls-panel .cd-panel__content {
+  display: grid;
+  max-height: calc(100vh - 18px);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 0;
+}
+
+.ui-lab-controls-panel .ui-lab-control-grid {
+  overflow: auto;
+  padding: 12px 15px 15px;
+}
+
+.ui-lab-controls-drag {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 13px;
+  border-bottom: 1px solid rgba(235, 226, 205, 0.16);
+  color: rgba(245, 238, 220, 0.82);
+  cursor: grab;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.ui-lab-controls-drag:active {
+  cursor: grabbing;
+}
+
+.ui-lab-controls-drag span:last-child {
+  color: rgba(239, 200, 93, 0.72);
+  font-size: 9px;
 }
 
 .ui-lab-control-group {
@@ -526,7 +576,21 @@
   --corner-tr: transparent;
   --corner-br: transparent;
   --corner-bl: transparent;
+  --corner-arc-size: calc(var(--surface-radius) + 1px);
   --corner-shadow: transparent;
+  --glow-core: 2px;
+  --glow-mid: 8px;
+  --glow-wide: 18px;
+  --glow-spread: 12px;
+  --glow-corner-spread: 22px;
+  --glow-top-wash: transparent;
+  --glow-right-wash: transparent;
+  --glow-bottom-wash: transparent;
+  --glow-left-wash: transparent;
+  --glow-tl-wash: transparent;
+  --glow-tr-wash: transparent;
+  --glow-br-wash: transparent;
+  --glow-bl-wash: transparent;
   --edge-top: transparent;
   --edge-right: transparent;
   --edge-bottom: transparent;
@@ -544,6 +608,7 @@
 }
 
 .cd-surface--beveled {
+  border-radius: 0;
   clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
 }
 
@@ -551,6 +616,7 @@
 .cd-surface__texture,
 .cd-surface__tint,
 .cd-surface__gradient,
+.cd-surface__glow,
 .cd-surface__edge-wear,
 .cd-surface__border,
 .cd-surface__edge,
@@ -644,6 +710,20 @@
   background: transparent;
 }
 
+.cd-surface__glow {
+  z-index: 1;
+  background:
+    linear-gradient(180deg, var(--glow-top-wash), transparent) top / 100% var(--glow-spread) no-repeat,
+    linear-gradient(270deg, var(--glow-right-wash), transparent) right / var(--glow-spread) 100% no-repeat,
+    linear-gradient(0deg, var(--glow-bottom-wash), transparent) bottom / 100% var(--glow-spread) no-repeat,
+    linear-gradient(90deg, var(--glow-left-wash), transparent) left / var(--glow-spread) 100% no-repeat,
+    radial-gradient(circle at left top, var(--glow-tl-wash), transparent 68%) left top / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at right top, var(--glow-tr-wash), transparent 68%) right top / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at right bottom, var(--glow-br-wash), transparent 68%) right bottom / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at left bottom, var(--glow-bl-wash), transparent 68%) left bottom / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat;
+  mix-blend-mode: screen;
+}
+
 .cd-surface__edge-wear {
   z-index: 1;
   padding: var(--edge-wear-width);
@@ -692,6 +772,23 @@
   border-radius: inherit;
 }
 
+.cd-surface--beveled .cd-surface__border {
+  padding: 1px;
+  border: 0;
+  background:
+    linear-gradient(180deg, var(--border-top), var(--border-bottom)),
+    linear-gradient(90deg, var(--border-left), var(--border-right));
+  clip-path: inherit;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
 .cd-surface__edge {
   z-index: 1;
   background:
@@ -699,12 +796,15 @@
     linear-gradient(var(--edge-right), var(--edge-right)) right / 1px 100% no-repeat,
     linear-gradient(var(--edge-bottom), var(--edge-bottom)) bottom / 100% 1px no-repeat,
     linear-gradient(var(--edge-left), var(--edge-left)) left / 1px 100% no-repeat;
-  filter: drop-shadow(0 0 3px var(--corner-shadow)) drop-shadow(0 0 8px var(--corner-shadow));
+  filter:
+    drop-shadow(0 0 var(--glow-core) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-mid) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-wide) var(--corner-shadow));
 }
 
 .cd-surface__corners {
   z-index: 1;
-  inset: -1px;
+  inset: 0;
   background:
     linear-gradient(var(--corner-tl), var(--corner-tl)) left top / var(--corner-size) 1px no-repeat,
     linear-gradient(var(--corner-tl), var(--corner-tl)) left top / 1px var(--corner-size) no-repeat,
@@ -714,8 +814,60 @@
     linear-gradient(var(--corner-bl), var(--corner-bl)) left bottom / 1px var(--corner-size) no-repeat,
     linear-gradient(var(--corner-br), var(--corner-br)) right bottom / var(--corner-size) 1px no-repeat,
     linear-gradient(var(--corner-br), var(--corner-br)) right bottom / 1px var(--corner-size) no-repeat;
-  filter: drop-shadow(0 0 3px var(--corner-shadow)) drop-shadow(0 0 9px var(--corner-shadow));
+  filter:
+    drop-shadow(0 0 var(--glow-core) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-mid) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-wide) var(--corner-shadow));
   opacity: 0.94;
+}
+
+.cd-surface__corner-arc {
+  position: absolute;
+  width: var(--corner-arc-size);
+  height: var(--corner-arc-size);
+  border-color: transparent;
+  border-style: solid;
+  border-width: 0;
+}
+
+.cd-surface__corner-arc--tl {
+  left: 0;
+  top: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+  border-top-color: var(--corner-tl);
+  border-left-color: var(--corner-tl);
+  border-top-left-radius: var(--surface-radius);
+}
+
+.cd-surface__corner-arc--tr {
+  right: 0;
+  top: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-top-color: var(--corner-tr);
+  border-right-color: var(--corner-tr);
+  border-top-right-radius: var(--surface-radius);
+}
+
+.cd-surface__corner-arc--br {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  border-right-color: var(--corner-br);
+  border-bottom-color: var(--corner-br);
+  border-bottom-right-radius: var(--surface-radius);
+}
+
+.cd-surface__corner-arc--bl {
+  left: 0;
+  bottom: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+  border-bottom-color: var(--corner-bl);
+  border-left-color: var(--corner-bl);
+  border-bottom-left-radius: var(--surface-radius);
 }
 
 .cd-surface.is-interactive {

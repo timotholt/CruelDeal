@@ -132,6 +132,13 @@ const resolveBorder = (border: BorderSpec | undefined): EdgeName[] => {
   return [border];
 };
 
+const hasGlow = (options: SurfaceOptions) => {
+  if (!options.selected && !options.hoverPreview) return false;
+  if (!options.glow || options.glow === 'none') return false;
+  if ((options.glowStrength ?? 42) <= 0) return false;
+  return resolveCorners(options.corners).length > 0 || resolveEdges(options.edgeHighlight).length > 0;
+};
+
 const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const corners = resolveCorners(options.corners);
   const edges = resolveEdges(options.edgeHighlight);
@@ -140,8 +147,17 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const selectedOrHover = options.selected || options.hoverPreview;
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
-  const textureId = options.texture || 'road012a-height';
-  const glowAlpha = selectedOrHover && options.glow !== 'none' ? (options.glowStrength ?? 42) / 100 : 0;
+  const textureId = options.texture || 'road012a';
+  const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
+  const glowIntensity = selectedOrHover && options.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
+  const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
+  const glowCore = 2 + Math.round(glowIntensity * 8);
+  const glowMid = 8 + Math.round(glowIntensity * 24);
+  const glowWide = 18 + Math.round(glowIntensity * 54);
+  const glowWashAlpha = glowIntensity > 0 ? Math.min(0.9, 0.18 + glowIntensity * 0.62) : 0;
+  const glowSpread = 12 + Math.round(glowIntensity * 34);
+  const glowCornerSpread = 22 + Math.round(glowIntensity * 54);
+  const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
   const tint = tintColors[options.tint || 'none'];
 
   return {
@@ -165,6 +181,20 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
       ? `url("${getEdgeTextureOption(options.edgeWearTexture).url}")`
       : 'none',
     '--glow-alpha': `${glowAlpha}`,
+    '--glow-core': `${glowCore}px`,
+    '--glow-mid': `${glowMid}px`,
+    '--glow-wide': `${glowWide}px`,
+    '--glow-rgb': glow.rgb,
+    '--glow-spread': `${glowSpread}px`,
+    '--glow-corner-spread': `${glowCornerSpread}px`,
+    '--glow-top-wash': edges.includes('top') ? glowWash : 'transparent',
+    '--glow-right-wash': edges.includes('right') ? glowWash : 'transparent',
+    '--glow-bottom-wash': edges.includes('bottom') ? glowWash : 'transparent',
+    '--glow-left-wash': edges.includes('left') ? glowWash : 'transparent',
+    '--glow-tl-wash': corners.includes('top-left') ? glowWash : 'transparent',
+    '--glow-tr-wash': corners.includes('top-right') ? glowWash : 'transparent',
+    '--glow-br-wash': corners.includes('bottom-right') ? glowWash : 'transparent',
+    '--glow-bl-wash': corners.includes('bottom-left') ? glowWash : 'transparent',
     '--corner-shadow': `rgb(${glow.rgb} / ${glowAlpha})`,
     '--border-top': borderEdges.includes('top') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
     '--border-right': borderEdges.includes('right') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
@@ -187,7 +217,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   return [
     'cd-surface',
     `cd-surface--${options.material || 'stone'}`,
-    `cd-surface--texture-${options.texture || 'road012a-height'}`,
+    `cd-surface--texture-${options.texture || 'road012a'}`,
     `cd-surface--${options.shape || 'rect'}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
@@ -200,7 +230,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   ].filter(Boolean).join(' ');
 };
 
-export const SurfaceLayers = (props: { tinted?: boolean }) => (
+export const SurfaceLayers = (props: { tinted?: boolean; glowing?: boolean }) => (
   <>
     <span class="cd-surface__material" aria-hidden="true" />
     <span class="cd-surface__texture" aria-hidden="true" />
@@ -208,10 +238,18 @@ export const SurfaceLayers = (props: { tinted?: boolean }) => (
       <span class="cd-surface__tint" aria-hidden="true" />
     </Show>
     <span class="cd-surface__gradient" aria-hidden="true" />
+    <Show when={props.glowing}>
+      <span class="cd-surface__glow" aria-hidden="true" />
+    </Show>
     <span class="cd-surface__border" aria-hidden="true" />
     <span class="cd-surface__edge-wear" aria-hidden="true" />
     <span class="cd-surface__edge" aria-hidden="true" />
-    <span class="cd-surface__corners" aria-hidden="true" />
+    <span class="cd-surface__corners" aria-hidden="true">
+      <span class="cd-surface__corner-arc cd-surface__corner-arc--tl" />
+      <span class="cd-surface__corner-arc cd-surface__corner-arc--tr" />
+      <span class="cd-surface__corner-arc cd-surface__corner-arc--br" />
+      <span class="cd-surface__corner-arc cd-surface__corner-arc--bl" />
+    </span>
   </>
 );
 
@@ -256,7 +294,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
       class={surfaceClass(local, `cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`)}
       style={surfaceStyle(local)}
     >
-      <SurfaceLayers tinted={hasTint(local)} />
+      <SurfaceLayers tinted={hasTint(local)} glowing={hasGlow(local)} />
       <div class="cd-surface__content cd-panel__content">{local.children}</div>
     </section>
   );
@@ -317,7 +355,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       disabled={local.disabled}
       {...rest}
     >
-      <SurfaceLayers tinted={hasTint(local)} />
+      <SurfaceLayers tinted={hasTint(local)} glowing={hasGlow(local)} />
       <span class="cd-surface__content cd-button__content">
         <Show when={local.icon && iconPosition() !== 'right'}>
           <span class="cd-button__icon">{local.icon}</span>

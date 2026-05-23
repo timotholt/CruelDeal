@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, JSX, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import { Portal } from '../ui/Portal';
 import {
@@ -26,8 +26,6 @@ import {
   MaterialButton,
   MaterialPanel,
   type CornerName,
-  type CornerSpec,
-  type BorderSpec,
   type EdgeName,
   type EdgeTextureKind,
   type EdgeWearLayer,
@@ -42,8 +40,6 @@ import {
 } from '../ui/material-lab';
 
 type PreviewTarget = 'panel' | 'button' | 'tile' | 'cta';
-type CornerControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'custom';
-type BorderControl = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'three-sided' | 'custom';
 
 interface SavedPreset {
   id: string;
@@ -57,16 +53,14 @@ interface LabControls {
   material: MaterialKind;
   texture: TextureKind;
   shape: ShapeKind;
-  borderPreset: BorderControl;
-  customBorderEdges: EdgeName[];
+  borderEdges: EdgeName[];
   edgeWearTexture: EdgeTextureKind;
   edgeWearOpacity: number;
   edgeWearWidth: number;
   edgeWearScale: number;
   edgeWearLayer: EdgeWearLayer;
-  cornerPreset: CornerControl;
-  customCorners: CornerName[];
-  edgeHighlight: EdgeName | 'none';
+  glowCorners: CornerName[];
+  glowEdges: EdgeName[];
   glow: GlowTone;
   tint: TintTone;
   gradient: SurfaceGradient;
@@ -92,10 +86,8 @@ const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions = ['raw', 'stone', 'glass'] as const;
 const shapeOptions = ['rect', 'beveled'] as const;
-const borderPresetOptions = ['all', 'three-sided', 'none', 'top', 'right', 'bottom', 'left', 'custom'] as const;
-const cornerPresetOptions = ['none', 'all', 'top', 'right', 'bottom', 'left', 'custom'] as const;
-const edgeOptions = ['none', 'top', 'right', 'bottom', 'left'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
+const glowEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
 const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
 const tintOptions = ['none', 'gold', 'cyan', 'white', 'red', 'green'] as const;
@@ -109,16 +101,14 @@ const controlDefaults: LabControls = {
   material: 'raw',
   texture: 'stone04',
   shape: 'rect',
-  borderPreset: 'all',
-  customBorderEdges: ['top', 'right', 'left'],
+  borderEdges: ['top', 'right', 'bottom', 'left'],
   edgeWearTexture: 'none',
   edgeWearOpacity: 0,
   edgeWearWidth: 5,
   edgeWearScale: 256,
   edgeWearLayer: 'below-highlights',
-  cornerPreset: 'none',
-  customCorners: ['top-left', 'bottom-right'],
-  edgeHighlight: 'none',
+  glowCorners: [],
+  glowEdges: [],
   glow: 'none',
   tint: 'none',
   gradient: 'none',
@@ -154,18 +144,60 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   return Math.min(max, Math.max(min, value));
 };
 
+const uniqueEdges = (value: unknown, fallback: EdgeName[]): EdgeName[] => (
+  Array.isArray(value)
+    ? borderEdgeOptions.filter((edge) => value.includes(edge))
+    : fallback
+);
+
+const uniqueCorners = (value: unknown, fallback: CornerName[]): CornerName[] => (
+  Array.isArray(value)
+    ? cornerOptions.filter((corner) => value.includes(corner))
+    : fallback
+);
+
+const edgesFromLegacyPreset = (preset: unknown): EdgeName[] | null => {
+  if (Array.isArray(preset)) return uniqueEdges(preset, []);
+  if (preset === 'all') return ['top', 'right', 'bottom', 'left'];
+  if (preset === 'three-sided') return ['top', 'right', 'left'];
+  if (borderEdgeOptions.includes(preset as EdgeName)) return [preset as EdgeName];
+  if (preset === 'none') return [];
+  return null;
+};
+
+const cornersFromLegacyPreset = (preset: unknown): CornerName[] | null => {
+  if (Array.isArray(preset)) return uniqueCorners(preset, []);
+  if (preset === 'all') return ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+  if (preset === 'top') return ['top-left', 'top-right'];
+  if (preset === 'right') return ['top-right', 'bottom-right'];
+  if (preset === 'bottom') return ['bottom-left', 'bottom-right'];
+  if (preset === 'left') return ['top-left', 'bottom-left'];
+  if (preset === 'none') return [];
+  return null;
+};
+
 const sanitizeControls = (value: unknown): LabControls => {
   const input = typeof value === 'object' && value !== null ? value as Partial<LabControls> : {};
+  const legacyInput = input as Partial<LabControls> & {
+    borderPreset?: unknown;
+    customBorderEdges?: unknown;
+    cornerPreset?: unknown;
+    customCorners?: unknown;
+    edgeHighlight?: unknown;
+  };
+  const legacyBorderEdges = edgesFromLegacyPreset(legacyInput.borderPreset);
+  const legacyGlowCorners = cornersFromLegacyPreset(legacyInput.cornerPreset);
+  const legacyGlowEdges = edgesFromLegacyPreset(legacyInput.edgeHighlight);
   return {
     target: isOneOf(input.target, previewTargetOptions) ? input.target : controlDefaults.target,
     applyToControlPanel: typeof input.applyToControlPanel === 'boolean' ? input.applyToControlPanel : controlDefaults.applyToControlPanel,
     material: isOneOf(input.material, materialOptions) ? input.material : controlDefaults.material,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
     shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
-    borderPreset: isOneOf(input.borderPreset, borderPresetOptions) ? input.borderPreset : controlDefaults.borderPreset,
-    customBorderEdges: Array.isArray(input.customBorderEdges)
-      ? input.customBorderEdges.filter((edge): edge is EdgeName => borderEdgeOptions.includes(edge as EdgeName))
-      : controlDefaults.customBorderEdges,
+    borderEdges: uniqueEdges(
+      input.borderEdges,
+      legacyBorderEdges ?? uniqueEdges(legacyInput.customBorderEdges, controlDefaults.borderEdges),
+    ),
     edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
     edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
     edgeWearWidth: clamp(input.edgeWearWidth, controlDefaults.edgeWearWidth, 1, 24),
@@ -173,11 +205,11 @@ const sanitizeControls = (value: unknown): LabControls => {
       ? input.edgeWearScale as typeof textureScaleStops[number]
       : controlDefaults.edgeWearScale,
     edgeWearLayer: isOneOf(input.edgeWearLayer, edgeWearLayerOptions) ? input.edgeWearLayer : controlDefaults.edgeWearLayer,
-    cornerPreset: isOneOf(input.cornerPreset, cornerPresetOptions) ? input.cornerPreset : controlDefaults.cornerPreset,
-    customCorners: Array.isArray(input.customCorners)
-      ? input.customCorners.filter((corner): corner is CornerName => cornerOptions.includes(corner as CornerName))
-      : controlDefaults.customCorners,
-    edgeHighlight: isOneOf(input.edgeHighlight, edgeOptions) ? input.edgeHighlight : controlDefaults.edgeHighlight,
+    glowCorners: uniqueCorners(
+      input.glowCorners,
+      legacyGlowCorners ?? uniqueCorners(legacyInput.customCorners, controlDefaults.glowCorners),
+    ),
+    glowEdges: uniqueEdges(input.glowEdges, legacyGlowEdges ?? controlDefaults.glowEdges),
     glow: isOneOf(input.glow, glowOptions) ? input.glow : controlDefaults.glow,
     tint: isOneOf(input.tint, tintOptions) ? input.tint : controlDefaults.tint,
     gradient: isOneOf(input.gradient, gradientOptions) ? input.gradient : controlDefaults.gradient,
@@ -298,7 +330,7 @@ const ControlLabel = (props: { children: JSX.Element; tip?: string }) => {
       >
         {props.children}
       </span>
-      <Show when={props.tip && position()}>
+      <Show when={position()}>
         {(pos) => (
           <Portal>
             <div
@@ -353,9 +385,46 @@ export const UiMaterialLabScreen = () => {
   const [selectedPresetId, setSelectedPresetId] = createSignal(defaultPresetId);
   const [presetName, setPresetName] = createSignal('Default');
   const [jsonCopied, setJsonCopied] = createSignal(false);
+  const [controlPosition, setControlPosition] = createSignal({ x: 18, y: 18 });
+  let dragOrigin: { pointerX: number; pointerY: number; windowX: number; windowY: number } | null = null;
 
   onMount(() => {
     setSavedPresets(loadStoredPresets());
+    window.addEventListener('pointermove', dragControls);
+    window.addEventListener('pointerup', stopDraggingControls);
+    window.addEventListener('pointercancel', stopDraggingControls);
+  });
+
+  const stopDraggingControls = () => {
+    dragOrigin = null;
+  };
+
+  const dragControls = (event: PointerEvent) => {
+    if (!dragOrigin) return;
+    const maxX = Math.max(8, window.innerWidth - 392);
+    const maxY = Math.max(8, window.innerHeight - 120);
+    setControlPosition({
+      x: Math.min(maxX, Math.max(8, dragOrigin.windowX + event.clientX - dragOrigin.pointerX)),
+      y: Math.min(maxY, Math.max(8, dragOrigin.windowY + event.clientY - dragOrigin.pointerY)),
+    });
+  };
+
+  const startDraggingControls = (event: PointerEvent) => {
+    const current = controlPosition();
+    dragOrigin = {
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      windowX: current.x,
+      windowY: current.y,
+    };
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  };
+
+  onCleanup(() => {
+    window.removeEventListener('pointermove', dragControls);
+    window.removeEventListener('pointerup', stopDraggingControls);
+    window.removeEventListener('pointercancel', stopDraggingControls);
   });
 
   const update = <K extends keyof LabControls>(key: K, value: LabControls[K]) => {
@@ -462,37 +531,39 @@ export const UiMaterialLabScreen = () => {
 
   const toggleCorner = (corner: CornerName) => {
     setControls((current) => {
-      const exists = current.customCorners.includes(corner);
+      const exists = current.glowCorners.includes(corner);
       return {
         ...current,
-        customCorners: exists
-          ? current.customCorners.filter((item) => item !== corner)
-          : [...current.customCorners, corner],
+        glowCorners: exists
+          ? current.glowCorners.filter((item) => item !== corner)
+          : [...current.glowCorners, corner],
       };
     });
   };
 
   const toggleBorderEdge = (edge: EdgeName) => {
     setControls((current) => {
-      const exists = current.customBorderEdges.includes(edge);
+      const exists = current.borderEdges.includes(edge);
       return {
         ...current,
-        customBorderEdges: exists
-          ? current.customBorderEdges.filter((item) => item !== edge)
-          : [...current.customBorderEdges, edge],
+        borderEdges: exists
+          ? current.borderEdges.filter((item) => item !== edge)
+          : [...current.borderEdges, edge],
       };
     });
   };
 
-  const activeCorners = createMemo<CornerSpec>(() => {
-    const current = controls();
-    return current.cornerPreset === 'custom' ? current.customCorners : current.cornerPreset;
-  });
-
-  const activeBorder = createMemo<BorderSpec>(() => {
-    const current = controls();
-    return current.borderPreset === 'custom' ? current.customBorderEdges : current.borderPreset;
-  });
+  const toggleGlowEdge = (edge: EdgeName) => {
+    setControls((current) => {
+      const exists = current.glowEdges.includes(edge);
+      return {
+        ...current,
+        glowEdges: exists
+          ? current.glowEdges.filter((item) => item !== edge)
+          : [...current.glowEdges, edge],
+      };
+    });
+  };
 
   const surfaceProps = createMemo(() => {
     const current = controls();
@@ -500,14 +571,14 @@ export const UiMaterialLabScreen = () => {
       material: current.material,
       texture: current.texture,
       shape: current.shape,
-      border: activeBorder(),
+      border: current.borderEdges,
       edgeWearTexture: current.edgeWearTexture,
       edgeWearOpacity: current.edgeWearOpacity,
       edgeWearWidth: current.edgeWearWidth,
       edgeWearScale: current.edgeWearScale,
       edgeWearLayer: current.edgeWearLayer,
-      corners: activeCorners(),
-      edgeHighlight: current.edgeHighlight,
+      corners: current.glowCorners,
+      edgeHighlight: current.glowEdges,
       glow: current.glow,
       tint: current.tint,
       gradient: current.gradient,
@@ -600,7 +671,13 @@ export const UiMaterialLabScreen = () => {
   };
 
   return (
-    <main class="ui-lab-page">
+    <main
+      class="ui-lab-page"
+      style={{
+        '--control-x': `${controlPosition().x}px`,
+        '--control-y': `${controlPosition().y}px`,
+      } as JSX.CSSProperties}
+    >
       <div class="ui-lab-stage">
         <div class="ui-lab-frame">
           <div class="ui-lab-scroll">
@@ -610,9 +687,25 @@ export const UiMaterialLabScreen = () => {
             </header>
 
             <div class="ui-lab-grid">
-              <MaterialPanel {...controlPanelProps()} padded>
+              <Portal>
+              <div
+                class="ui-lab-controls-portal"
+                style={{
+                  '--control-x': `${controlPosition().x}px`,
+                  '--control-y': `${controlPosition().y}px`,
+                } as JSX.CSSProperties}
+              >
+              <MaterialPanel {...controlPanelProps()} padded class="ui-lab-controls-panel">
+                <div
+                  class="ui-lab-controls-drag"
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={startDraggingControls}
+                >
+                  <span>Controls</span>
+                  <span>Drag</span>
+                </div>
                 <div class="ui-lab-control-grid">
-                  <SectionLabel>Controls</SectionLabel>
                   <div class="ui-lab-control-group">
                     <SectionLabel size="xs">Preview</SectionLabel>
 
@@ -699,6 +792,13 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
+                    <ControlLabel tip="Glass fill opacity. Higher values make glass more solid; lower values make it more transparent and dependent on the background.">
+                      Glass Alpha
+                    </ControlLabel>
+                    <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
                     <ControlLabel tip="Selects which image file is used by the material texture layer. None disables the layer.">
                       Texture
                     </ControlLabel>
@@ -711,6 +811,26 @@ export const UiMaterialLabScreen = () => {
                         {(texture) => <option value={texture.id}>{texture.label}</option>}
                       </For>
                     </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Texture opacity. Higher values make the selected texture layer more visible; lower values let the base material and gradients dominate.">
+                      Tex Opacity
+                    </ControlLabel>
+                    <Slider
+                      value={controls().textureStrength}
+                      onInput={(value) => update('textureStrength', controls().texture === 'none' ? 0 : value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Texture tile size in CSS pixels. Snaps to powers of two so the 1K source map is not blurred by odd scaling. Larger values show more source detail and less repetition.">
+                      Tex Scale
+                    </ControlLabel>
+                    <TextureScaleSlider
+                      value={controls().textureScale}
+                      onInput={(value) => update('textureScale', value)}
+                    />
                   </div>
 
                   <div class="ui-lab-control-row">
@@ -746,30 +866,25 @@ export const UiMaterialLabScreen = () => {
                       onChange={(value) => update('shape', value)}
                     />
                   </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Surface border radius in CSS pixels. Keep this small for the sharp sci-fi slab look.">
+                      Radius
+                    </ControlLabel>
+                    <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+                  </div>
                   </div>
 
                   <div class="ui-lab-control-group">
                     <SectionLabel size="xs">Border</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Chooses which sides draw the neutral surface border. Three-sided keeps top, right, and left while removing the bottom border.">
+                    <ControlLabel tip="Pick the individual sides that draw the neutral surface border. Turning all four off hides it.">
                       Sides
-                    </ControlLabel>
-                    <Segments
-                      value={controls().borderPreset}
-                      options={borderPresetOptions}
-                      labels={{ 'three-sided': '3 sides' }}
-                      onChange={(value) => update('borderPreset', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Only used when Sides is set to Custom. Pick individual neutral border sides.">
-                      Custom
                     </ControlLabel>
                     <div class="ui-lab-toggles">
                       <For each={borderEdgeOptions}>
                         {(edge) => (
-                          <ToggleButton active={controls().customBorderEdges.includes(edge)} onClick={() => toggleBorderEdge(edge)}>
+                          <ToggleButton active={controls().borderEdges.includes(edge)} onClick={() => toggleBorderEdge(edge)}>
                             {edge}
                           </ToggleButton>
                         )}
@@ -778,7 +893,7 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Border opacity for the selected neutral border sides. Set Sides to None to hide the border entirely.">
+                    <ControlLabel tip="Border opacity for the selected neutral border sides. Turn all sides off to hide the border entirely.">
                       Alpha
                     </ControlLabel>
                     <Slider value={controls().borderOpacity} onInput={(value) => update('borderOpacity', value)} />
@@ -845,24 +960,13 @@ export const UiMaterialLabScreen = () => {
                   <div class="ui-lab-control-group">
                     <SectionLabel size="xs">Glow State</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Chooses which corner brackets can glow. They become visible when Selected or Hover is enabled and Glow is not None.">
+                    <ControlLabel tip="Pick individual corner brackets for the selected or hover glow.">
                       Corners
-                    </ControlLabel>
-                    <Segments
-                      value={controls().cornerPreset}
-                      options={cornerPresetOptions}
-                      onChange={(value) => update('cornerPreset', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Only used when Corners is set to Custom. Pick individual corner brackets.">
-                      Custom
                     </ControlLabel>
                     <div class="ui-lab-toggles">
                       <For each={cornerOptions}>
                         {(corner) => (
-                          <ToggleButton active={controls().customCorners.includes(corner)} onClick={() => toggleCorner(corner)}>
+                          <ToggleButton active={controls().glowCorners.includes(corner)} onClick={() => toggleCorner(corner)}>
                             {corner.replace('-', ' ')}
                           </ToggleButton>
                         )}
@@ -871,14 +975,18 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Chooses one edge highlight line. It becomes visible when Selected or Hover is enabled and Glow is not None.">
-                      Edge
+                    <ControlLabel tip="Pick individual edge highlight lines for the selected or hover glow.">
+                      Edges
                     </ControlLabel>
-                    <Segments
-                      value={controls().edgeHighlight}
-                      options={edgeOptions}
-                      onChange={(value) => update('edgeHighlight', value)}
-                    />
+                    <div class="ui-lab-toggles">
+                      <For each={glowEdgeOptions}>
+                        {(edge) => (
+                          <ToggleButton active={controls().glowEdges.includes(edge)} onClick={() => toggleGlowEdge(edge)}>
+                            {edge}
+                          </ToggleButton>
+                        )}
+                      </For>
+                    </div>
                   </div>
 
                   <div class="ui-lab-control-row">
@@ -893,10 +1001,17 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Drop-shadow intensity for corner brackets and edge highlights. This does not change the bracket length; it changes the glow halo.">
+                    <ControlLabel tip="Intensity for corner brackets and edge highlights. Higher values thicken the lit line and expand the halo.">
                       Glow Power
                     </ControlLabel>
                     <Slider value={controls().glowStrength} min={0} max={100} onInput={(value) => update('glowStrength', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Length of the glowing corner bracket segments in CSS pixels.">
+                      Bracket Size
+                    </ControlLabel>
+                    <Slider value={controls().cornerSize} min={8} max={34} onInput={(value) => update('cornerSize', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
@@ -949,51 +1064,10 @@ export const UiMaterialLabScreen = () => {
                   </div>
                   </div>
 
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Amounts</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Texture opacity. Higher values make the selected texture layer more visible; lower values let the base material and gradients dominate.">
-                      Tex Opacity
-                    </ControlLabel>
-                    <Slider
-                      value={controls().textureStrength}
-                      onInput={(value) => update('textureStrength', controls().texture === 'none' ? 0 : value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Texture tile size in CSS pixels. Snaps to powers of two so the 1K source map is not blurred by odd scaling. Larger values show more source detail and less repetition.">
-                      Tex Scale
-                    </ControlLabel>
-                    <TextureScaleSlider
-                      value={controls().textureScale}
-                      onInput={(value) => update('textureScale', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Glass fill opacity. Higher values make glass more solid; lower values make it more transparent and dependent on the background.">
-                      Glass Alpha
-                    </ControlLabel>
-                    <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Length of the glowing corner bracket segments in CSS pixels.">
-                      Corner Size
-                    </ControlLabel>
-                    <Slider value={controls().cornerSize} min={8} max={34} onInput={(value) => update('cornerSize', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Surface border radius in CSS pixels. Keep this small for the sharp sci-fi slab look.">
-                      Radius
-                    </ControlLabel>
-                    <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
-                  </div>
-                  </div>
                 </div>
               </MaterialPanel>
+              </div>
+              </Portal>
 
               <section class="ui-lab-section">
                 <SectionLabel>Primary Preview</SectionLabel>
