@@ -666,14 +666,7 @@
   position: absolute;
   inset: 1px;
   border-radius: inherit;
-  background:
-    linear-gradient(90deg, transparent, rgb(255 255 255 / calc(var(--glass-alpha) * 0.54)) 16% 84%, transparent) top / 100% 1px no-repeat,
-    linear-gradient(180deg,
-      transparent 0%,
-      transparent 74%,
-      rgb(0 0 0 / calc(var(--glass-alpha) * 0.16)) 82%,
-      rgb(255 255 255 / calc(var(--glass-alpha) * 0.12)) 88%,
-      transparent 100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / calc(var(--glass-alpha) * 0.54)) 16% 84%, transparent) top / 100% 1px no-repeat;
   opacity: 0.88;
 }
 
