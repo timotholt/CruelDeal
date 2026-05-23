@@ -1,7 +1,7 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 
-export type MaterialKind = 'raw' | 'stone' | 'glass';
+export type MaterialKind = 'raw' | 'stone';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
 export type TintTone = 'none' | 'gold' | 'cyan' | 'white' | 'red' | 'green';
@@ -14,6 +14,7 @@ export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
 
 interface SurfaceOptions {
   material?: MaterialKind;
+  glass?: boolean;
   texture?: TextureKind;
   shape?: ShapeKind;
   corners?: CornerSpec;
@@ -107,6 +108,10 @@ const hasTint = (options: SurfaceOptions) => (
   !!options.tint && options.tint !== 'none' && (options.tintStrength ?? 32) > 0
 );
 
+const hasGlass = (options: SurfaceOptions) => (
+  options.glass === true
+);
+
 const resolveCorners = (corners: CornerSpec | undefined): CornerName[] => {
   if (!corners || corners === 'none') return [];
   if (Array.isArray(corners)) return corners;
@@ -148,6 +153,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a';
+  const material = options.material || 'stone';
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
   const glowIntensity = selectedOrHover && options.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
   const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
@@ -163,14 +169,14 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
-    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (options.material === 'raw' ? 100 : options.material === 'glass' ? 12 : 58)) / 100}`,
-    '--texture-scale': `${options.textureScale ?? (options.material === 'glass' ? 384 : 512)}px`,
+    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (material === 'raw' ? 100 : 58)) / 100}`,
+    '--texture-scale': `${options.textureScale ?? 512}px`,
     '--texture-image': textureId !== 'none'
       ? `url("${getTextureOption(textureId).url}")`
       : 'none',
     '--tint-rgb': tint.rgb,
     '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
-    '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
+    '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
@@ -221,6 +227,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     `cd-surface--${options.shape || 'rect'}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
+    hasGlass(options) ? 'cd-surface--glass' : '',
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
     options.hoverPreview ? 'is-hover-preview' : '',
@@ -230,12 +237,15 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   ].filter(Boolean).join(' ');
 };
 
-export const SurfaceLayers = (props: { tinted?: boolean; glowing?: boolean }) => (
+export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowing?: boolean }) => (
   <>
     <span class="cd-surface__material" aria-hidden="true" />
     <span class="cd-surface__texture" aria-hidden="true" />
     <Show when={props.tinted}>
       <span class="cd-surface__tint" aria-hidden="true" />
+    </Show>
+    <Show when={props.glass}>
+      <span class="cd-surface__glass" aria-hidden="true" />
     </Show>
     <span class="cd-surface__gradient" aria-hidden="true" />
     <Show when={props.glowing}>
@@ -260,6 +270,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'padded',
     'compact',
     'material',
+    'glass',
     'texture',
     'shape',
     'corners',
@@ -294,7 +305,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
       class={surfaceClass(local, `cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`)}
       style={surfaceStyle(local)}
     >
-      <SurfaceLayers tinted={hasTint(local)} glowing={hasGlow(local)} />
+      <SurfaceLayers tinted={hasTint(local)} glass={hasGlass(local)} glowing={hasGlow(local)} />
       <div class="cd-surface__content cd-panel__content">{local.children}</div>
     </section>
   );
@@ -305,6 +316,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'children',
     'class',
     'material',
+    'glass',
     'texture',
     'shape',
     'corners',
@@ -355,7 +367,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       disabled={local.disabled}
       {...rest}
     >
-      <SurfaceLayers tinted={hasTint(local)} glowing={hasGlow(local)} />
+      <SurfaceLayers tinted={hasTint(local)} glass={hasGlass(local)} glowing={hasGlow(local)} />
       <span class="cd-surface__content cd-button__content">
         <Show when={local.icon && iconPosition() !== 'right'}>
           <span class="cd-button__icon">{local.icon}</span>

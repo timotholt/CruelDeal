@@ -147,7 +147,7 @@ Use:
 - optional gold or cyan corner glow
 - optional bottom edge highlight
 
-Glass should not be implemented as "stone opacity 0%". Stone and glass should be sibling material modes that share the same surface machinery.
+Glass should not be implemented as "stone opacity 0%" or as a base material. Stone/raw define the surface substrate; glass is an optional translucent layer above that substrate.
 
 Example material variables:
 
@@ -159,7 +159,7 @@ Example material variables:
   --surface-border: rgba(225, 215, 190, 0.24);
 }
 
-.cd-surface--glass {
+.cd-surface__glass {
   --surface-fill: rgba(35, 38, 38, 0.42);
   --surface-texture-opacity: 0.12;
   --surface-blur: 16px;
@@ -176,7 +176,7 @@ Base visual primitive used internally by panels and buttons.
 Suggested props:
 
 ```ts
-type MaterialKind = "stone" | "glass";
+type MaterialKind = "raw" | "stone";
 type ShapeKind = "rect" | "beveled";
 type GlowTone = "none" | "gold" | "cyan" | "white" | "red";
 type EdgeName = "top" | "right" | "bottom" | "left";
@@ -195,6 +195,7 @@ type SurfaceGradient = "none" | "top-light" | "bottom-dark" | "both";
 
 interface MaterialSurfaceProps {
   material?: MaterialKind;
+  glass?: boolean;
   shape?: ShapeKind;
   corners?: CornerSpec;
   edgeHighlight?: EdgeName | EdgeName[] | "none";
