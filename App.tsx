@@ -8,6 +8,7 @@ import { router } from './router';
 import { RouterProvider } from '@tanstack/solid-router';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
+import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPreviewScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
+  const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
 
   const performLogin = async () => {
     setIsAuthenticating(true);
@@ -76,7 +78,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isUiTestPath()}
+          when={isUiTestPath() || isLoginMaterialPath()}
           fallback={
           <Show 
               when={profile()} 
@@ -106,7 +108,9 @@ export default function App() {
           }
         >
           <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
-            <UiMaterialLabScreen />
+            <Show when={isLoginMaterialPath()} fallback={<UiMaterialLabScreen />}>
+              <LoginMaterialPreviewScreen />
+            </Show>
           </div>
         </Show>
       </ErrorBoundary>

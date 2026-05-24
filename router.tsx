@@ -21,6 +21,7 @@ import TensorMapView from "./services/playgame/city-map/tensor/TensorMapView";
 import { TensorPlayScreen } from "./components/screens/TensorPlayScreen";
 import { CardFrameLabScreen } from "./components/screens/CardFrameLabScreen";
 import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
+import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -34,6 +35,7 @@ const RootComponent = () => {
         // NOTE: /play must be tested BEFORE /game because `/play` doesn't
         // contain "/game" but we want them distinct.
         if (path.includes("/uitest")) return "GAME";
+        if (path.includes("/login-material")) return "GAME";
         if (path.includes("/dev")) return "GAME";
         if (path.includes("/citymap")) return "GAME";
         if (path.includes("/play")) return "PLAY";
@@ -205,6 +207,12 @@ const uiTestRoute = createRoute({
     component: () => <UiMaterialLabScreen />,
 });
 
+const loginMaterialRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/login-material",
+    component: () => <LoginMaterialPreviewScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -222,6 +230,7 @@ const routeTree = rootRoute.addChildren([
     rankRoute,
     progressionRoute,
     uiTestRoute,
+    loginMaterialRoute,
     devCardFrameRoute,
     devTensorRoute,
     devTensorPlayRoute,

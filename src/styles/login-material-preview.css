@@ -1,0 +1,269 @@
+.login-material-phone {
+  position: relative;
+  width: min(420px, calc((100vh - 44px) * 9 / 16));
+  height: min(calc(100vh - 44px), calc((100vw - 430px) * 16 / 9));
+  min-height: 620px;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border: 1px solid rgb(255 237 194 / 0.28);
+  border-radius: 9px;
+  background: #070707;
+  box-shadow:
+    0 28px 88px rgb(0 0 0 / 0.68),
+    0 0 42px rgb(239 200 93 / 0.12);
+}
+
+.login-material-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: translate(var(--login-bg-x, 0), var(--login-bg-y, 0)) scale(var(--login-bg-scale));
+  filter: blur(var(--login-bg-blur)) saturate(0.94) contrast(1.04);
+}
+
+.login-material-bg-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 74% 42%, rgb(255 229 174 / calc(var(--login-bg-gold) * 0.08)), transparent 24%),
+    linear-gradient(180deg, transparent 0 58%, rgb(255 255 255 / 0.14) 100%),
+    linear-gradient(180deg, transparent 0 56%, rgb(0 0 0 / calc(var(--login-bg-dark) * 0.18))),
+    rgb(0 0 0 / var(--login-bg-dim));
+  pointer-events: none;
+}
+
+.login-material-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  padding: 34px 30px 22px;
+}
+
+.login-material-selectable {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+
+.login-material-selectable:focus-visible {
+  outline: 2px solid rgb(239 200 93 / 0.82);
+  outline-offset: 3px;
+}
+
+.login-material-brand {
+  width: min(310px, 84%);
+  margin: 0 auto 12px;
+  color: #171717;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.34);
+  transform: translate(var(--login-brand-x, 0), var(--login-brand-y, 0));
+}
+
+.login-material-brand h1 {
+  margin: 0;
+  color: #141414;
+  font-family: inherit;
+  font-size: var(--login-brand-title-size, 24px);
+  font-weight: 700;
+  letter-spacing: var(--login-brand-tracking, 0.18em);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.login-material-auth-select {
+  align-self: end;
+  margin-bottom: 96px;
+}
+
+.login-material-auth {
+  width: 100%;
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: translateY(var(--login-auth-offset-y, 3rem));
+}
+
+.login-material-form {
+  display: grid;
+  gap: var(--login-auth-gap, 6px);
+}
+
+.login-material-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 11px;
+  margin: 0 0 10px;
+  color: rgb(22 22 22 / 0.45);
+}
+
+.login-material-divider span {
+  height: 1px;
+  background: currentColor;
+}
+
+.login-material-divider strong {
+  color: rgb(22 22 22 / 0.58);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.login-material-social-row {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.login-material-provider-button {
+  position: relative;
+  width: 100%;
+  min-height: 40px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.login-material-provider-button--google {
+  min-height: 40px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.18);
+}
+
+.login-material-provider-button--apple {
+  min-height: 44px;
+  background: #000;
+}
+
+.login-material-provider-button--facebook {
+  min-height: 40px;
+  background: #1877f2;
+}
+
+.login-material-provider-fallback {
+  display: flex;
+  min-height: inherit;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 13px;
+  color: #1f1f1f;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.login-material-provider-preview-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.login-material-provider-preview-icon--google {
+  color: #4285f4;
+  font-family: Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.login-material-provider-preview-icon--apple {
+  overflow: hidden;
+  color: transparent;
+  position: relative;
+}
+
+.login-material-provider-preview-icon--apple::before {
+  content: "";
+  width: 14px;
+  height: 17px;
+  background: #fff;
+  clip-path: path("M9.8 3.6c.8-1 1.3-2.1 1.2-3.2-1.1.1-2.3.7-3.1 1.6-.7.8-1.3 2-1.2 3.1 1.2.1 2.3-.6 3.1-1.5Zm4.4 9.2c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-2-3.5-2-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.1-.9-1.6 0-3.1.9-3.9 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.5 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.2.8s2.2-1.2 3-2.4c.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.5-3.9Z");
+}
+
+.login-material-provider-preview-icon--facebook {
+  color: #fff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 23px;
+  font-weight: 700;
+}
+
+.login-material-provider-button--facebook .login-material-provider-fallback {
+  color: #fff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-weight: 700;
+}
+
+.login-material-page .is-editing {
+  outline: 2px solid rgb(239 200 93 / 0.9);
+  outline-offset: 3px;
+}
+
+.login-material-bg.is-editing {
+  outline-offset: -6px;
+}
+
+.login-material-backdrop-editor {
+  gap: 4px;
+}
+
+.login-material-backdrop-editor .ui-lab-control-row {
+  gap: 6px;
+}
+
+.login-material-text-input {
+  padding: 0 9px;
+  text-transform: none;
+}
+
+.login-material-font-control {
+  position: relative;
+}
+
+.login-material-font-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 8;
+  display: grid;
+  min-width: 170px;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid rgb(239 200 93 / 0.36);
+  border-radius: 6px;
+  background: rgb(14 15 14 / 0.96);
+  box-shadow:
+    0 14px 28px rgb(0 0 0 / 0.54),
+    0 0 18px rgb(239 200 93 / 0.12);
+}
+
+.login-material-font-popover .ui-lab-mini-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+@media (max-width: 1120px) {
+  .login-material-phone {
+    width: min(360px, calc((58vh - 20px) * 9 / 16));
+    height: min(58vh, calc((100vw - 20px) * 16 / 9));
+    min-height: 0;
+  }
+}
