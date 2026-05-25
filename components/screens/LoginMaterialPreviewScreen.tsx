@@ -8,8 +8,10 @@ import {
 } from '../ui/material-lab';
 
 type LoginPartId = 'backdrop' | 'brandPlate' | 'authPanel';
+type BackdropMode = 'light' | 'dark';
 
 interface BackdropRecipe {
+  mode: BackdropMode;
   dim: number;
   blur: number;
   scale: number;
@@ -43,14 +45,20 @@ const partLabels: Array<MaterialWorkbenchPart<LoginPartId>> = [
 ];
 
 const defaultBackdrop: BackdropRecipe = {
+  mode: 'light',
   dim: 0,
   blur: 0,
   scale: 107,
   x: 0,
-  y: -11,
+  y: -22,
   goldWash: 0,
   darkWash: 0,
 };
+
+const backdropModes: Array<{ id: BackdropMode; label: string; src: string }> = [
+  { id: 'light', label: 'Light', src: '/art/login/login-social-bg.png' },
+  { id: 'dark', label: 'Dark', src: '/art/login/login-social-bg-dark.png' },
+];
 
 const fontOptions = [
   { label: 'Tech Mono', value: '"JetBrains Mono", "IBM Plex Sans Condensed", ui-monospace, monospace' },
@@ -69,15 +77,15 @@ const defaultBrandText: BrandTextRecipe = {
   title: 'Cruel Company',
   fontFamily: fontOptions[0].value,
   align: 'center',
-  titleSize: 24,
+  titleSize: 28,
   x: 0,
   y: 0,
-  letterSpacing: 18,
+  letterSpacing: 26,
 };
 
 const defaultAuthLayout: AuthLayoutRecipe = {
-  offsetY: 3,
-  gap: 6,
+  offsetY: 4,
+  gap: 0,
 };
 
 const cloneBackdrop = (backdrop: BackdropRecipe): BackdropRecipe => ({ ...backdrop });
@@ -92,6 +100,7 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
 const sanitizeBackdrop = (value: unknown): BackdropRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<BackdropRecipe> : {};
   return {
+    mode: input.mode === 'dark' ? 'dark' : defaultBackdrop.mode,
     dim: clamp(input.dim, defaultBackdrop.dim, 0, 80),
     blur: clamp(input.blur, defaultBackdrop.blur, 0, 18),
     scale: clamp(input.scale, defaultBackdrop.scale, 100, 130),
@@ -249,6 +258,18 @@ const BackdropRecipeEditor = (props: { backdrop: BackdropRecipe; onChange: (back
     <div class="ui-lab-control-group login-material-backdrop-editor">
       <SectionLabel size="xs">Backdrop</SectionLabel>
       <div class="ui-lab-control-row">
+        <span>Mode</span>
+        <div class="ui-lab-toggles">
+          <For each={backdropModes}>
+            {(mode) => (
+              <MiniButton active={props.backdrop.mode === mode.id} onClick={() => update('mode', mode.id)}>
+                {mode.label}
+              </MiniButton>
+            )}
+          </For>
+        </div>
+      </div>
+      <div class="ui-lab-control-row">
         <span>Image Dim</span>
         <Slider value={props.backdrop.dim} min={0} max={80} onInput={(value) => update('dim', value)} />
       </div>
@@ -387,6 +408,7 @@ export const LoginMaterialPreviewScreen = () => {
   };
 
   const selectedClass = (part: LoginPartId) => selectedPart() === part ? 'is-editing' : '';
+  const selectedBackdropMode = () => backdropModes.find((mode) => mode.id === backdrop().mode) ?? backdropModes[0];
   const backdropStyle = () => ({
     '--login-bg-dim': `${backdrop().dim / 100}`,
     '--login-bg-blur': `${backdrop().blur}px`,
@@ -410,8 +432,8 @@ export const LoginMaterialPreviewScreen = () => {
   }) as JSX.CSSProperties;
 
   const preview = (
-    <div class="login-material-phone" style={backdropStyle()}>
-      <img class={`login-material-bg ${selectedClass('backdrop')}`} src="/art/login/login-social-bg.png" alt="" />
+    <div class={`login-material-phone login-material-phone--${selectedBackdropMode().id}`} style={backdropStyle()}>
+      <img class={`login-material-bg ${selectedClass('backdrop')}`} src={selectedBackdropMode().src} alt="" />
       <div class="login-material-bg-wash" />
 
       <div class="login-material-content">
