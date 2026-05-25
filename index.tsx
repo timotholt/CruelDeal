@@ -5,6 +5,7 @@ import App from './App';
 // in index.css are not split across other statements in the bundled output.
 import './src/styles/playgame.css';
 import './index.css';
+import './src/styles/app-viewport.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

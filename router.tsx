@@ -22,6 +22,7 @@ import { TensorPlayScreen } from "./components/screens/TensorPlayScreen";
 import { CardFrameLabScreen } from "./components/screens/CardFrameLabScreen";
 import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
 import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
+import { AppViewport } from "./components/ui/AppViewport";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -70,23 +71,25 @@ const RootComponent = () => {
     };
 
     return (
-        <div class="w-full h-full relative overflow-hidden bg-black flex flex-col">
-            {/* Screen Layer - EXACT structure preserved */}
-            <div class="flex-1 relative overflow-hidden">
-                <Outlet />
+        <AppViewport>
+            <div class="w-full h-full relative overflow-hidden bg-black flex flex-col">
+                {/* Screen Layer - EXACT structure preserved */}
+                <div class="flex-1 relative overflow-hidden">
+                    <Outlet />
+                </div>
+
+                {/* Persistent Navigation Layer */}
+                <Show when={activeScreen() !== "GAME" && activeScreen() !== "PLAY"}>
+                    <NavigationBar
+                        activeScreen={activeScreen()}
+                        onNavigate={handleNavigate}
+                    />
+                </Show>
+
+                {/* Global Inspector Overlay */}
+                <InspectorOverlay />
             </div>
-
-            {/* Persistent Navigation Layer */}
-            <Show when={activeScreen() !== "GAME" && activeScreen() !== "PLAY"}>
-                <NavigationBar 
-                    activeScreen={activeScreen()} 
-                    onNavigate={handleNavigate} 
-                />
-            </Show>
-
-            {/* Global Inspector Overlay */}
-            <InspectorOverlay />
-        </div>
+        </AppViewport>
     );
 };
 

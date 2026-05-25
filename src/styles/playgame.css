@@ -235,16 +235,15 @@
   }
   .var-select button.active { background: var(--accent); color: #111; border-color: var(--accent); }
 
-  /* board-wrap: covers the full viewport with position:fixed so its size
-     is always exactly the viewport — no dependency on parent height chains.
-     The 9:16 board column is flex-centered inside it. */
+  /* board-wrap: covers the active 9:16 app frame. AppViewport owns browser
+     letterboxing; the play board now sizes against that center frame. */
   .board-wrap {
-    position: fixed;
-    inset: 0;                  /* top:0 right:0 bottom:0 left:0 */
+    position: absolute;
+    inset: 0;
     display: flex;
-    align-items: center;       /* vertical centre → letterbox bars top/bottom */
+    align-items: center;
     justify-content: center;
-    background: #000;          /* letterbox colour */
+    background: #000;
     overflow: hidden;
     z-index: 1;
   }
@@ -267,7 +266,7 @@
     position: relative;
     width: var(--board-w);
     height: var(--board-h);   /* ← fixed 9:16, not 100vh */
-    max-height: 100vh;         /* safety: never clip on very short screens */
+    max-height: 100%;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;

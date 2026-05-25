@@ -11,8 +11,18 @@
 import { onCleanup, onMount } from 'solid-js';
 
 export const BoardSizer = () => {
+  let resizeObserver: ResizeObserver | undefined;
+
+  const getSizingHost = (): HTMLElement | null => {
+    return document.querySelector('[data-app-frame]') as HTMLElement | null;
+  };
+
   const applySize = (): void => {
-    const w = Math.min((window.innerHeight * 9) / 16, window.innerWidth, 420);
+    const host = getSizingHost();
+    const rect = host?.getBoundingClientRect();
+    const hostWidth = rect?.width || window.innerWidth;
+    const hostHeight = rect?.height || window.innerHeight;
+    const w = Math.min((hostHeight * 9) / 16, hostWidth, 420);
     const h = (w * 16) / 9;
     document.documentElement.style.setProperty('--board-w', w + 'px');
     document.documentElement.style.setProperty('--board-h', h + 'px');
@@ -31,12 +41,18 @@ export const BoardSizer = () => {
   onMount(() => {
     applySize();
     window.addEventListener('resize', applySize);
+    const host = getSizingHost();
+    if (host) {
+      resizeObserver = new ResizeObserver(applySize);
+      resizeObserver.observe(host);
+    }
     // Locations render after mount; wait a frame for layout.
     requestAnimationFrame(applyToastY);
     window.addEventListener('resize', applyToastY);
     onCleanup(() => {
       window.removeEventListener('resize', applySize);
       window.removeEventListener('resize', applyToastY);
+      resizeObserver?.disconnect();
     });
   });
 

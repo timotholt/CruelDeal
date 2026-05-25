@@ -9,6 +9,7 @@ import { RouterProvider } from '@tanstack/solid-router';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
 import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPreviewScreen';
+import { AppViewport } from './components/ui/AppViewport';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,20 +84,22 @@ export default function App() {
           <Show 
               when={profile()} 
               fallback={
-                  <Show when={isAuthenticating()} fallback={
-                      <LoginScreen onLogin={performLogin} />
-                  }>
-                      <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
-                          {error() ? (
-                              <div class="text-red-500 animate-none flex flex-col items-center gap-4">
-                                  <span>Error: {error()}</span>
-                                  <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
-                              </div>
-                          ) : (
-                              "Linking Neural Grid..."
-                          )}
-                      </div>
-                  </Show>
+                  <AppViewport>
+                      <Show when={isAuthenticating()} fallback={
+                          <LoginScreen onLogin={performLogin} />
+                      }>
+                          <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
+                              {error() ? (
+                                  <div class="text-red-500 animate-none flex flex-col items-center gap-4">
+                                      <span>Error: {error()}</span>
+                                      <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
+                                  </div>
+                              ) : (
+                                  "Linking Neural Grid..."
+                              )}
+                          </div>
+                      </Show>
+                  </AppViewport>
               }
           >
               <UIProvider>
