@@ -36,7 +36,7 @@ interface AuthLayoutRecipe {
   gap: number;
 }
 
-const storageKey = 'cruel-deal.login-material-preview.v7';
+const storageKey = 'cruel-deal.login-material-preview.v9';
 
 const partLabels: Array<MaterialWorkbenchPart<LoginPartId>> = [
   { id: 'backdrop', label: 'Backdrop', detail: 'image tone' },
@@ -48,15 +48,15 @@ const defaultBackdrop: BackdropRecipe = {
   mode: 'light',
   dim: 0,
   blur: 0,
-  scale: 107,
-  x: 0,
-  y: -22,
+  scale: 106,
+  x: -3,
+  y: -27,
   goldWash: 0,
   darkWash: 0,
 };
 
 const backdropModes: Array<{ id: BackdropMode; label: string; src: string }> = [
-  { id: 'light', label: 'Light', src: '/art/login/login-social-bg.png' },
+  { id: 'light', label: 'Final', src: '/art/login/cruel-company-final-login.png' },
   { id: 'dark', label: 'Dark', src: '/art/login/login-social-bg-dark.png' },
 ];
 
@@ -77,10 +77,10 @@ const defaultBrandText: BrandTextRecipe = {
   title: 'Cruel Company',
   fontFamily: fontOptions[0].value,
   align: 'center',
-  titleSize: 28,
+  titleSize: 26,
   x: 0,
   y: 0,
-  letterSpacing: 26,
+  letterSpacing: 32,
 };
 
 const defaultAuthLayout: AuthLayoutRecipe = {

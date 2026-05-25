@@ -186,7 +186,7 @@ export const HomeCommandBar = (props: HomeCommandBarProps) => {
     });
 
     return (
-        <div class="w-full h-full flex items-end px-1 pb-1.5 gap-1.5 pointer-events-none relative overflow-visible">
+        <div class="cruel-company-commandbar w-full h-full flex items-end px-1 pb-1.5 gap-1.5 pointer-events-none relative overflow-visible">
             <Show when={isRollerOpen()}>
                 <Portal>
                     <div 

@@ -31,17 +31,13 @@
   object-fit: cover;
   object-position: center;
   transform: translate(var(--login-bg-x, 0), var(--login-bg-y, 0)) scale(var(--login-bg-scale));
-  filter: blur(var(--login-bg-blur)) saturate(0.94) contrast(1.04);
+  filter: blur(var(--login-bg-blur));
 }
 
 .login-material-bg-wash {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 74% 42%, rgb(255 229 174 / calc(var(--login-bg-gold) * 0.08)), transparent 24%),
-    linear-gradient(180deg, transparent 0 58%, rgb(255 255 255 / 0.14) 100%),
-    linear-gradient(180deg, transparent 0 56%, rgb(0 0 0 / calc(var(--login-bg-dark) * 0.18))),
-    rgb(0 0 0 / var(--login-bg-dim));
+  background: transparent;
   pointer-events: none;
 }
 
@@ -73,7 +69,7 @@
 }
 
 .login-material-brand {
-  width: min(310px, 84%);
+  width: min(310px, 94%);
   margin: 0 auto 12px;
   color: #171717;
   text-transform: uppercase;

@@ -17,7 +17,7 @@ export const NavigationBar = (props: NavigationBarProps) => {
     const showCommandShadow = isHome;
 
     return (
-        <div class="absolute bottom-0 left-0 right-0 z-50 pointer-events-none flex flex-col justify-end h-auto select-none overflow-visible">
+        <div class={`absolute bottom-0 left-0 right-0 z-50 pointer-events-none flex flex-col justify-end h-auto select-none overflow-visible ${isHome() ? 'cruel-company-nav' : ''}`}>
             
             {/* PERSISTENT COMMAND BAR LAYER */}
             <div class="relative h-16 w-full pointer-events-none overflow-visible">

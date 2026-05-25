@@ -1,12 +1,11 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
-import { StandardHeader } from '../ui/StandardHeader';
 import { ScreenKey } from '../../types';
-import { NewsCard } from '../menu/NewsCard';
 import { UserProfileDropdown } from '../menu/UserProfileDropdown';
 import { useUI } from '../../contexts/UIContext';
 import { api } from '../../services/api';
 import { useNavigate } from '@tanstack/solid-router';
+import '../../src/styles/main-material-preview.css';
 
 interface MainMenuScreenProps {
   onNavigate?: (screen: ScreenKey) => void;
@@ -46,44 +45,62 @@ export const MainMenuScreen = (props: MainMenuScreenProps) => {
   return (
     <Show when={content()}>
       {(data) => (
-        <div class="w-full h-full flex flex-col relative bg-transparent">
-          <StandardHeader 
-              title={userContext.user.username}
-              class="!pl-0.5 !pr-1"
-              leftContent={<UserProfileDropdown onLogout={props.onLogout} onNavigate={handleInternalNavigate} />}
-              showCurrency={true}
-              onCreditClick={() => handleCurrencyClick('store-credits')}
-              onGoldClick={() => handleCurrencyClick('store-gold')}
-              onTokenClick={() => handleCurrencyClick('store-tokens')}
-          />
-          <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-24">
-              <div class="mb-6">
-                  <h1 class="text-2xl font-black text-white tracking-tight mb-1">{data().welcomeHeader}</h1>
-                  <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">{data().dailyBriefingLabel}</p>
+        <div class="main-material-screen main-screen-phone">
+          <img class="main-material-bg" src="/art/login/cruel-company-final-login.png" alt="" />
+          <div class="main-material-wash" />
+          <div class="main-material-grain" />
+
+          <div class="main-material-frame">
+            <header class="main-material-topbar">
+              <div class="main-material-profile-slot">
+                <UserProfileDropdown onLogout={props.onLogout} onNavigate={handleInternalNavigate} />
               </div>
-              <div 
-                class="w-full aspect-video rounded-2xl bg-gradient-to-br from-indigo-900/60 to-slate-900/60 border border-indigo-500/30 backdrop-blur-sm relative overflow-hidden p-5 flex flex-col justify-end mb-6 shadow-2xl group cursor-pointer" 
+              <div class="main-material-commander">{userContext.user.username}</div>
+              <div class="main-material-currencies">
+                <button type="button" class="main-material-currency-chip main-material-currency-chip--credits" onClick={() => handleCurrencyClick('store-credits')}>
+                  {userContext.user.credits}
+                </button>
+                <button type="button" class="main-material-currency-chip main-material-currency-chip--gold" onClick={() => handleCurrencyClick('store-gold')}>
+                  {userContext.user.gold}
+                </button>
+                <button type="button" class="main-material-currency-chip main-material-currency-chip--tokens" onClick={() => handleCurrencyClick('store-tokens')}>
+                  {userContext.user.tokens}
+                </button>
+              </div>
+            </header>
+
+            <div class="main-material-scroll">
+              <div class="main-material-title-block">
+                <h1>{data().welcomeHeader}</h1>
+                <p>{data().dailyBriefingLabel}</p>
+              </div>
+
+              <button
+                type="button"
+                class="main-material-hero w-full text-left"
                 onClick={() => handleInternalNavigate('STORE')}
               >
-                    <div class="absolute inset-0 bg-[url('https://picsum.photos/seed/space/400/200')] opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700" />
-                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-                    <div class="relative z-10">
-                        <div class="inline-block bg-indigo-600 text-white text-[0.6rem] font-bold px-2 py-0.5 rounded mb-2 shadow-lg">{data().seasonPassLabel}</div>
-                        <h2 class="text-3xl font-black text-white leading-none mb-1">{data().currentSeasonTheme}</h2>
-                        <p class="text-indigo-200 text-xs max-w-[80%]">{data().seasonSubtitle}</p>
-                    </div>
-              </div>
-              
-              <For each={news().slice(0, 2)}>
-                  {(item) => (
-                      <NewsCard type={item.type} title={item.title} subtitle={item.subtitle} imageColor={item.color} />
-                  )}
-              </For>
+                <div class="main-material-hero-content">
+                  <div class="main-material-tag">{data().seasonPassLabel}</div>
+                  <h2>{data().currentSeasonTheme}</h2>
+                  <p>{data().seasonSubtitle}</p>
+                </div>
+              </button>
 
-              <div class="text-center py-6">
-                  <div class="inline-block h-1 w-12 bg-white/10 rounded-full mb-2" />
-                  <p class="text-[0.6rem] text-slate-600 font-bold uppercase tracking-[0.3em]">{data().endTransmissionLabel}</p>
+              <div class="main-material-news-list">
+                <For each={news().slice(0, 2)}>
+                  {(item, index) => (
+                    <article class={`main-material-news-card ${index() === 0 ? 'main-material-news-card--dark' : ''}`}>
+                      <div class="main-material-tag">{item.type}</div>
+                      <h3>{item.title}</h3>
+                      <p>{item.subtitle}</p>
+                    </article>
+                  )}
+                </For>
               </div>
+
+              <div class="main-material-end">{data().endTransmissionLabel}</div>
+            </div>
           </div>
         </div>
       )}

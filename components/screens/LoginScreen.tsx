@@ -9,9 +9,9 @@ interface LoginScreenProps {
 const backdropStyle = {
   '--login-bg-dim': '0',
   '--login-bg-blur': '0px',
-  '--login-bg-scale': '1.07',
-  '--login-bg-x': '0px',
-  '--login-bg-y': '-22px',
+  '--login-bg-scale': '1.06',
+  '--login-bg-x': '-3px',
+  '--login-bg-y': '-27px',
   '--login-bg-gold': '0',
   '--login-bg-dark': '0',
 } as const;
@@ -19,8 +19,8 @@ const backdropStyle = {
 const brandStyle = {
   '--login-brand-x': '0px',
   '--login-brand-y': '0px',
-  '--login-brand-title-size': '28px',
-  '--login-brand-tracking': '0.26em',
+  '--login-brand-title-size': '26px',
+  '--login-brand-tracking': '0.32em',
   'font-family': '"JetBrains Mono", "IBM Plex Sans Condensed", ui-monospace, monospace',
   'text-align': 'center',
 } as const;
@@ -43,7 +43,7 @@ export const LoginScreen = (props: LoginScreenProps) => {
 
   return (
     <div class="login-material-phone login-screen-phone login-material-phone--light" style={backdropStyle}>
-      <img class="login-material-bg" src="/art/login/login-social-bg.png" alt="" />
+      <img class="login-material-bg" src="/art/login/cruel-company-final-login.png" alt="" />
       <div class="login-material-bg-wash" />
 
       <div class="login-material-content">
