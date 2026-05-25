@@ -86,7 +86,7 @@ const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v1';
 const presetStorageVersion = 1;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
-const materialOptions = ['raw', 'stone'] as const;
+const materialOptions: MaterialKind[] = ['none', 'raw', 'stone'];
 const shapeOptions = ['rect', 'beveled'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const glowEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
@@ -519,7 +519,11 @@ export const UiMaterialLabScreen = () => {
     setControls((current) => ({
       ...current,
       material,
-      textureStrength: material === 'raw' && current.texture !== 'none' ? 100 : current.textureStrength,
+      textureStrength: material === 'none'
+        ? 0
+        : material === 'raw' && current.texture !== 'none'
+          ? 100
+          : current.textureStrength,
     }));
   };
 
@@ -530,7 +534,7 @@ export const UiMaterialLabScreen = () => {
       textureStrength: texture === 'none'
         ? 0
         : current.textureStrength === 0
-          ? current.material === 'raw' ? 100 : 58
+          ? current.material === 'none' ? 0 : current.material === 'raw' ? 100 : 58
           : current.textureStrength,
     }));
   };

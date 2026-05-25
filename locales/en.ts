@@ -3,11 +3,11 @@ import { LocalizationSchema } from '../types/localization';
 
 export const en: LocalizationSchema = {
     // Navigation
-    NAV_SEASON: "Season",
-    NAV_INBOX: "Inbox",
+    NAV_SEASON: "Battle Pass",
+    NAV_INBOX: "Comms",
     NAV_MAIN: "Main",
-    NAV_COLLECTION: "Collection",
-    NAV_STORE: "Store",
+    NAV_COLLECTION: "Assets",
+    NAV_STORE: "Exchange",
 
     // Common UI
     UI_CLOSE: "Close",

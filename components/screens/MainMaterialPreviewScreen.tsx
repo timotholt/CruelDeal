@@ -2,16 +2,27 @@ import { createEffect, createSignal, For, JSX, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import '../../src/styles/main-material-preview.css';
 import {
+  MaterialButton,
+  MaterialPanel,
+  MaterialRecipeEditor,
   MaterialWorkbenchLayout,
   SectionLabel,
+  cloneMaterialRecipe,
+  createMaterialRecipe,
+  materialRecipeToSurfaceProps,
+  sanitizeMaterialRecipe,
+  type MaterialRecipe,
   type MaterialWorkbenchPart,
 } from '../ui/material-lab';
 
-type MainPartId = 'backdrop' | 'titleBlock' | 'feedCards' | 'navBars';
-type BackdropMode = 'company' | 'dark';
+type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar';
+type BackdropMode = 'stone04' | 'stone01' | 'stone02' | 'stone03' | 'company' | 'dark';
+type BackdropLayerMode = 'none' | BackdropMode;
 
 interface BackdropRecipe {
   mode: BackdropMode;
+  layerMode: BackdropLayerMode;
+  layerOpacity: number;
   dim: number;
   blur: number;
   scale: number;
@@ -43,18 +54,35 @@ interface NavRecipe {
   bottomReserve: number;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v2';
+interface SurfaceRecipes {
+  topBar: MaterialRecipe;
+  profile: MaterialRecipe;
+  currencies: MaterialRecipe;
+  feed: MaterialRecipe;
+  toolbar: MaterialRecipe;
+  nav: MaterialRecipe;
+}
+
+const storageKey = 'cruel-deal.main-material-preview.v5';
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
-  { id: 'backdrop', label: 'Backdrop', detail: 'image tone' },
+  { id: 'backdrop', label: 'Backdrop', detail: 'image stack' },
+  { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
+  { id: 'profileButton', label: 'Profile', detail: 'button material' },
+  { id: 'currencyButtons', label: 'Wallet', detail: 'chip material' },
   { id: 'titleBlock', label: 'Title', detail: 'briefing type' },
-  { id: 'feedCards', label: 'Feed', detail: 'card rhythm' },
-  { id: 'navBars', label: 'Nav', detail: 'bottom reserve' },
+  { id: 'feedCards', label: 'Feed', detail: 'glass cards' },
+  { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
+  { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
 ];
 
-const backdropModes: Array<{ id: BackdropMode; label: string; src: string }> = [
-  { id: 'company', label: 'Final', src: '/art/login/cruel-company-final-login.png' },
-  { id: 'dark', label: 'Dark', src: '/art/login/login-social-bg-dark.png' },
+const backdropModes: Array<{ id: BackdropMode; label: string; src: string; fit?: 'cover' | 'tile' }> = [
+  { id: 'stone04', label: 'Stone 04', src: '/art/textures/stone-local/Stone04.png', fit: 'tile' },
+  { id: 'stone01', label: 'Stone 01', src: '/art/textures/stone-local/Stone01.png', fit: 'tile' },
+  { id: 'stone02', label: 'Stone 02', src: '/art/textures/stone-local/Stone02.png', fit: 'tile' },
+  { id: 'stone03', label: 'Stone 03', src: '/art/textures/stone-local/Stone03.png', fit: 'tile' },
+  { id: 'company', label: 'Login Art', src: '/art/login/cruel-company-final-login.png', fit: 'cover' },
+  { id: 'dark', label: 'Dark Art', src: '/art/login/login-social-bg-dark.png', fit: 'cover' },
 ];
 
 const fontOptions = [
@@ -67,7 +95,9 @@ const fontOptions = [
 ] as const;
 
 const defaultBackdrop: BackdropRecipe = {
-  mode: 'company',
+  mode: 'stone04',
+  layerMode: 'none',
+  layerOpacity: 28,
   dim: 0,
   blur: 0,
   scale: 100,
@@ -99,10 +129,145 @@ const defaultNav: NavRecipe = {
   bottomReserve: 146,
 };
 
+const defaultTopBarSurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone04',
+  textureStrength: 38,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 26,
+  glassBlur: 6,
+  tint: 'gold',
+  tintStrength: 12,
+  gradient: 'top-light',
+  borderOpacity: 44,
+  glow: 'none',
+  edgeHighlight: ['bottom'],
+  lightStrength: 42,
+  darkStrength: 14,
+  radius: 6,
+});
+
+const defaultProfileSurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone03',
+  textureStrength: 44,
+  textureScale: 256,
+  glass: false,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'bottom-dark',
+  borderOpacity: 36,
+  glow: 'none',
+  edgeHighlight: ['top'],
+  lightStrength: 18,
+  darkStrength: 54,
+  radius: 5,
+});
+
+const defaultCurrencySurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone04',
+  textureStrength: 26,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 16,
+  glassBlur: 3,
+  tint: 'white',
+  tintStrength: 8,
+  gradient: 'top-light',
+  borderOpacity: 28,
+  glow: 'none',
+  edgeHighlight: ['top'],
+  lightStrength: 34,
+  darkStrength: 14,
+  radius: 4,
+});
+
+const defaultFeedSurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone04',
+  textureStrength: 46,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 44,
+  glassBlur: 8,
+  tint: 'white',
+  tintStrength: 8,
+  gradient: 'both',
+  borderOpacity: 18,
+  glow: 'none',
+  glowStrength: 0,
+  corners: [],
+  edgeHighlight: 'none',
+  lightStrength: 22,
+  darkStrength: 8,
+  edgeWearTexture: 'edge-bw-chips-fine',
+  edgeWearOpacity: 7,
+  edgeWearWidth: 5,
+  radius: 7,
+});
+
+const defaultToolbarSurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone03',
+  textureStrength: 58,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 18,
+  glassBlur: 4,
+  tint: 'gold',
+  tintStrength: 14,
+  gradient: 'both',
+  borderOpacity: 44,
+  glow: 'none',
+  edgeHighlight: ['top'],
+  lightStrength: 42,
+  darkStrength: 28,
+  radius: 6,
+});
+
+const defaultNavSurface = createMaterialRecipe({
+  material: 'stone',
+  texture: 'stone04',
+  textureStrength: 48,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 24,
+  glassBlur: 8,
+  tint: 'white',
+  tintStrength: 10,
+  gradient: 'top-light',
+  borderOpacity: 34,
+  glow: 'gold',
+  glowStrength: 28,
+  edgeHighlight: ['top'],
+  lightStrength: 48,
+  darkStrength: 28,
+  radius: 6,
+});
+
 const cloneBackdrop = (value: BackdropRecipe): BackdropRecipe => ({ ...value });
 const cloneTitle = (value: TitleRecipe): TitleRecipe => ({ ...value });
 const cloneFeed = (value: FeedRecipe): FeedRecipe => ({ ...value });
 const cloneNav = (value: NavRecipe): NavRecipe => ({ ...value });
+const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
+  topBar: cloneMaterialRecipe(value.topBar),
+  profile: cloneMaterialRecipe(value.profile),
+  currencies: cloneMaterialRecipe(value.currencies),
+  feed: cloneMaterialRecipe(value.feed),
+  toolbar: cloneMaterialRecipe(value.toolbar),
+  nav: cloneMaterialRecipe(value.nav),
+});
+
+const defaultSurfaces: SurfaceRecipes = {
+  topBar: defaultTopBarSurface,
+  profile: defaultProfileSurface,
+  currencies: defaultCurrencySurface,
+  feed: defaultFeedSurface,
+  toolbar: defaultToolbarSurface,
+  nav: defaultNavSurface,
+};
 
 const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
@@ -111,8 +276,14 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
 
 const sanitizeBackdrop = (value: unknown): BackdropRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<BackdropRecipe> : {};
+  const mode = backdropModes.some((option) => option.id === input.mode) ? input.mode as BackdropMode : defaultBackdrop.mode;
+  const layerMode = input.layerMode === 'none' || backdropModes.some((option) => option.id === input.layerMode)
+    ? input.layerMode as BackdropLayerMode
+    : defaultBackdrop.layerMode;
   return {
-    mode: input.mode === 'dark' ? 'dark' : defaultBackdrop.mode,
+    mode,
+    layerMode,
+    layerOpacity: clamp(input.layerOpacity, defaultBackdrop.layerOpacity, 0, 100),
     dim: clamp(input.dim, defaultBackdrop.dim, 0, 80),
     blur: clamp(input.blur, defaultBackdrop.blur, 0, 18),
     scale: clamp(input.scale, defaultBackdrop.scale, 100, 130),
@@ -156,6 +327,18 @@ const sanitizeNav = (value: unknown): NavRecipe => {
   };
 };
 
+const sanitizeSurfaces = (value: unknown): SurfaceRecipes => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<Record<keyof SurfaceRecipes, unknown>> : {};
+  return {
+    topBar: sanitizeMaterialRecipe(input.topBar, defaultTopBarSurface),
+    profile: sanitizeMaterialRecipe(input.profile, defaultProfileSurface),
+    currencies: sanitizeMaterialRecipe(input.currencies, defaultCurrencySurface),
+    feed: sanitizeMaterialRecipe(input.feed, defaultFeedSurface),
+    toolbar: sanitizeMaterialRecipe(input.toolbar, defaultToolbarSurface),
+    nav: sanitizeMaterialRecipe(input.nav, defaultNavSurface),
+  };
+};
+
 const Slider = (props: { value: number; min?: number; max?: number; onInput: (value: number) => void }) => (
   <label class="ui-lab-slider">
     <input
@@ -186,18 +369,35 @@ const BackdropRecipeEditor = (props: { backdrop: BackdropRecipe; onChange: (back
 
   return (
     <div class="ui-lab-control-group">
-      <SectionLabel size="xs">Backdrop</SectionLabel>
+      <SectionLabel size="xs">Image Stack</SectionLabel>
       <div class="ui-lab-control-row">
-        <span>Mode</span>
-        <div class="ui-lab-toggles">
+        <span>Base</span>
+        <select
+          class="ui-lab-input"
+          value={props.backdrop.mode}
+          onChange={(event) => update('mode', event.currentTarget.value as BackdropMode)}
+        >
           <For each={backdropModes}>
-            {(mode) => (
-              <MiniButton active={props.backdrop.mode === mode.id} onClick={() => update('mode', mode.id)}>
-                {mode.label}
-              </MiniButton>
-            )}
+            {(mode) => <option value={mode.id}>{mode.label}</option>}
           </For>
-        </div>
+        </select>
+      </div>
+      <div class="ui-lab-control-row">
+        <span>Second Layer</span>
+        <select
+          class="ui-lab-input"
+          value={props.backdrop.layerMode}
+          onChange={(event) => update('layerMode', event.currentTarget.value as BackdropLayerMode)}
+        >
+          <option value="none">None</option>
+          <For each={backdropModes}>
+            {(mode) => <option value={mode.id}>{mode.label}</option>}
+          </For>
+        </select>
+      </div>
+      <div class="ui-lab-control-row">
+        <span>Second Alpha</span>
+        <Slider value={props.backdrop.layerOpacity} min={0} max={100} onInput={(value) => update('layerOpacity', value)} />
       </div>
       <div class="ui-lab-control-row">
         <span>Dim</span>
@@ -342,6 +542,22 @@ const NavRecipeEditor = (props: { nav: NavRecipe; onChange: (nav: NavRecipe) => 
   </div>
 );
 
+const SurfaceRecipeEditor = (props: {
+  title: string;
+  recipe: MaterialRecipe;
+  onChange: (recipe: MaterialRecipe) => void;
+  extraControls?: JSX.Element;
+}) => (
+  <div class="main-material-surface-editor">
+    <SectionLabel size="xs">{props.title}</SectionLabel>
+    <MaterialRecipeEditor
+      recipe={props.recipe}
+      onChange={props.onChange}
+      extraControls={props.extraControls}
+    />
+  </div>
+);
+
 const FakeProfileIcon = () => (
   <div class="main-material-profile-button" aria-hidden="true">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8">
@@ -357,9 +573,18 @@ const MainMaterialPreview = (props: {
   title: TitleRecipe;
   feed: FeedRecipe;
   nav: NavRecipe;
+  surfaces: SurfaceRecipes;
 }) => {
   const selectedBackdropMode = () => backdropModes.find((mode) => mode.id === props.backdrop.mode) ?? backdropModes[0];
+  const selectedLayerMode = () => props.backdrop.layerMode === 'none'
+    ? null
+    : backdropModes.find((mode) => mode.id === props.backdrop.layerMode) ?? null;
   const style = () => ({
+    '--main-bg-image': `url("${selectedBackdropMode().src}")`,
+    '--main-bg-size': selectedBackdropMode().fit === 'tile' ? '360px 360px' : 'cover',
+    '--main-layer-image': selectedLayerMode() ? `url("${selectedLayerMode()!.src}")` : 'none',
+    '--main-layer-size': selectedLayerMode()?.fit === 'tile' ? '360px 360px' : 'cover',
+    '--main-layer-opacity': `${props.backdrop.layerOpacity / 100}`,
     '--main-bg-dim': `${props.backdrop.dim / 100}`,
     '--main-bg-blur': `${props.backdrop.blur}px`,
     '--main-bg-scale': `${props.backdrop.scale / 100}`,
@@ -381,21 +606,53 @@ const MainMaterialPreview = (props: {
   }) as JSX.CSSProperties;
 
   return (
-    <div class="main-material-phone" style={style()}>
-      <div class="main-material-screen">
-        <img class={`main-material-bg ${props.selectedClass('backdrop')}`} src={selectedBackdropMode().src} alt="" />
+    <div class={`main-material-phone ${props.selectedClass('backdrop')}`} style={style()}>
+        <div class="main-material-screen">
+        <div class="main-material-bg" />
+        <div class="main-material-bg-layer" />
         <div class="main-material-wash" />
         <div class="main-material-grain" />
-        <div class="main-material-frame">
-          <header class="main-material-topbar">
-            <div class="main-material-profile-slot"><FakeProfileIcon /></div>
+        <div class="main-material-frame main-material-frame--editor">
+          <MaterialPanel
+            {...materialRecipeToSurfaceProps(props.surfaces.topBar)}
+            padded={false}
+            class={`main-material-topbar ${props.selectedClass('topBar')}`}
+          >
+            <MaterialPanel
+              {...materialRecipeToSurfaceProps(props.surfaces.profile)}
+              padded={false}
+              class={`main-material-profile-slot ${props.selectedClass('profileButton')}`}
+            >
+              <FakeProfileIcon />
+            </MaterialPanel>
             <div class="main-material-commander">COMMANDER</div>
-            <div class="main-material-currencies">
-              <button type="button" class="main-material-currency-chip main-material-currency-chip--credits">500</button>
-              <button type="button" class="main-material-currency-chip main-material-currency-chip--gold">5400</button>
-              <button type="button" class="main-material-currency-chip main-material-currency-chip--tokens">3050</button>
+            <div class={`main-material-currencies ${props.selectedClass('currencyButtons')}`}>
+              <MaterialButton
+                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                size="sm"
+                class="main-material-currency-chip main-material-currency-chip--credits"
+                icon={<span class="main-material-currency-icon main-material-currency-icon--credits" />}
+              >
+                500
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                size="sm"
+                class="main-material-currency-chip main-material-currency-chip--gold"
+                icon={<span class="main-material-currency-icon main-material-currency-icon--gold" />}
+              >
+                5400
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                size="sm"
+                class="main-material-currency-chip main-material-currency-chip--tokens"
+                icon={<span class="main-material-currency-icon main-material-currency-icon--tokens" />}
+              >
+                3050
+              </MaterialButton>
             </div>
-          </header>
+          </MaterialPanel>
 
           <main class="main-material-scroll">
             <section class={`main-material-title-block ${props.selectedClass('titleBlock')}`}>
@@ -403,47 +660,63 @@ const MainMaterialPreview = (props: {
               <p>{props.title.subtitle}</p>
             </section>
 
-            <section class={`main-material-hero ${props.selectedClass('feedCards')}`}>
+            <MaterialPanel
+              {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+              padded={false}
+              class={`main-material-hero ${props.selectedClass('feedCards')}`}
+            >
               <div class="main-material-hero-content">
-                <div class="main-material-tag">SEASON PASS</div>
+                <div class="main-material-tag">BATTLE PASS</div>
                 <h2>COSMIC ECLIPSE</h2>
                 <p>Unlock the new Titan variant and earn double credits this weekend.</p>
               </div>
-            </section>
+            </MaterialPanel>
 
             <div class={`main-material-news-list ${props.selectedClass('feedCards')}`}>
-              <article class="main-material-news-card main-material-news-card--dark">
+              <MaterialPanel
+                {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+                padded={false}
+                class="main-material-news-card main-material-news-card--dark"
+              >
                 <div class="main-material-tag">PATCH NOTES</div>
                 <h3>Update 1.4.0: Spatial UI</h3>
                 <p>Navigation has been rebuilt for faster daily command decisions.</p>
-              </article>
-              <article class="main-material-news-card">
+              </MaterialPanel>
+              <MaterialPanel
+                {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+                padded={false}
+                class="main-material-news-card"
+              >
                 <div class="main-material-tag">COMMUNITY</div>
                 <h3>Top Decks of the Week</h3>
                 <p>See what the pros are using to climb the company ladder.</p>
-              </article>
+              </MaterialPanel>
             </div>
 
             <div class="main-material-end">END OF TRANSMISSION</div>
           </main>
-        </div>
 
-        <div class={`main-material-fake-command ${props.selectedClass('navBars')}`}>
-          <button type="button" class="main-material-action main-material-action--dark"><span>LOG</span></button>
-          <button type="button" class="main-material-action"><span>PLAY{'\n'}CONQUEST</span></button>
-          <button type="button" class="main-material-action main-material-action--red"><span>DECK{'\n'}ASSAULT</span></button>
-          <button type="button" class="main-material-action"><span>PLAY{'\n'}LADDER</span></button>
-          <button type="button" class="main-material-action main-material-action--dark"><span>10</span></button>
-        </div>
+          <footer class="main-material-bottom-stack">
+          <div class={`main-material-fake-command ${props.selectedClass('toolBar')}`}>
+            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
+            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
+            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
+            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
+            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
+          </div>
 
-        <nav class={`main-material-fake-nav ${props.selectedClass('navBars')}`}>
-          <button type="button" class="main-material-nav-item"><span class="main-material-nav-icon">*</span><span class="main-material-nav-label">Season</span></button>
-          <button type="button" class="main-material-nav-item"><span class="main-material-nav-icon">M</span><span class="main-material-nav-label">Inbox</span></button>
-          <button type="button" class="main-material-nav-item is-active"><span class="main-material-nav-icon">V</span><span class="main-material-nav-label">Main</span></button>
-          <button type="button" class="main-material-nav-item"><span class="main-material-nav-icon">B</span><span class="main-material-nav-label">Collection</span></button>
-          <button type="button" class="main-material-nav-item"><span class="main-material-nav-icon">$</span><span class="main-material-nav-label">Store</span></button>
-        </nav>
-      </div>
+          <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
+            <div class="main-material-fake-nav-grid">
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
+            </div>
+          </div>
+          </footer>
+        </div>
+        </div>
     </div>
   );
 };
@@ -454,6 +727,11 @@ export const MainMaterialPreviewScreen = () => {
   const [title, setTitle] = createSignal<TitleRecipe>(cloneTitle(defaultTitle));
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
+  const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
+
+  const updateSurface = (key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
+    setSurfaces((current) => ({ ...current, [key]: recipe }));
+  };
 
   onMount(() => {
     try {
@@ -464,16 +742,19 @@ export const MainMaterialPreviewScreen = () => {
         title?: unknown;
         feed?: unknown;
         nav?: unknown;
+        surfaces?: unknown;
       };
       setBackdrop(sanitizeBackdrop(parsed.backdrop));
       setTitle(sanitizeTitle(parsed.title));
       setFeed(sanitizeFeed(parsed.feed));
       setNav(sanitizeNav(parsed.nav));
+      setSurfaces(sanitizeSurfaces(parsed.surfaces));
     } catch {
       setBackdrop(cloneBackdrop(defaultBackdrop));
       setTitle(cloneTitle(defaultTitle));
       setFeed(cloneFeed(defaultFeed));
       setNav(cloneNav(defaultNav));
+      setSurfaces(cloneSurfaceRecipes(defaultSurfaces));
     }
   });
 
@@ -483,15 +764,28 @@ export const MainMaterialPreviewScreen = () => {
       title: title(),
       feed: feed(),
       nav: nav(),
+      surfaces: surfaces(),
     }));
   });
 
   const resetSelected = () => {
     const part = selectedPart();
-    if (part === 'backdrop') setBackdrop(cloneBackdrop(defaultBackdrop));
+    if (part === 'backdrop') {
+      setBackdrop(cloneBackdrop(defaultBackdrop));
+    }
+    if (part === 'topBar') updateSurface('topBar', cloneMaterialRecipe(defaultTopBarSurface));
+    if (part === 'profileButton') updateSurface('profile', cloneMaterialRecipe(defaultProfileSurface));
+    if (part === 'currencyButtons') updateSurface('currencies', cloneMaterialRecipe(defaultCurrencySurface));
     if (part === 'titleBlock') setTitle(cloneTitle(defaultTitle));
-    if (part === 'feedCards') setFeed(cloneFeed(defaultFeed));
-    if (part === 'navBars') setNav(cloneNav(defaultNav));
+    if (part === 'feedCards') {
+      setFeed(cloneFeed(defaultFeed));
+      updateSurface('feed', cloneMaterialRecipe(defaultFeedSurface));
+    }
+    if (part === 'toolBar') updateSurface('toolbar', cloneMaterialRecipe(defaultToolbarSurface));
+    if (part === 'navBar') {
+      setNav(cloneNav(defaultNav));
+      updateSurface('nav', cloneMaterialRecipe(defaultNavSurface));
+    }
   };
 
   const resetAll = () => {
@@ -499,6 +793,7 @@ export const MainMaterialPreviewScreen = () => {
     setTitle(cloneTitle(defaultTitle));
     setFeed(cloneFeed(defaultFeed));
     setNav(cloneNav(defaultNav));
+    setSurfaces(cloneSurfaceRecipes(defaultSurfaces));
   };
 
   const exportJson = () => {
@@ -507,6 +802,7 @@ export const MainMaterialPreviewScreen = () => {
       title: title(),
       feed: feed(),
       nav: nav(),
+      surfaces: surfaces(),
     }, null, 2));
   };
 
@@ -517,21 +813,75 @@ export const MainMaterialPreviewScreen = () => {
       when={selectedPart() === 'backdrop'}
       fallback={(
         <Show
-          when={selectedPart() === 'titleBlock'}
+          when={selectedPart() === 'topBar'}
           fallback={(
             <Show
-              when={selectedPart() === 'feedCards'}
+              when={selectedPart() === 'profileButton'}
               fallback={(
-                <Show when={selectedPart() === 'navBars'} fallback={null}>
-                  <NavRecipeEditor nav={nav()} onChange={setNav} />
+                <Show
+                  when={selectedPart() === 'currencyButtons'}
+                  fallback={(
+                    <Show
+                      when={selectedPart() === 'titleBlock'}
+                      fallback={(
+                        <Show
+                          when={selectedPart() === 'feedCards'}
+                          fallback={(
+                            <Show
+                              when={selectedPart() === 'toolBar'}
+                              fallback={(
+                                <Show when={selectedPart() === 'navBar'} fallback={null}>
+                                  <SurfaceRecipeEditor
+                                    title="Nav Bar Material"
+                                    recipe={surfaces().nav}
+                                    onChange={(recipe) => updateSurface('nav', recipe)}
+                                    extraControls={<NavRecipeEditor nav={nav()} onChange={setNav} />}
+                                  />
+                                </Show>
+                              )}
+                            >
+                              <SurfaceRecipeEditor
+                                title="Tool Bar Material"
+                                recipe={surfaces().toolbar}
+                                onChange={(recipe) => updateSurface('toolbar', recipe)}
+                              />
+                            </Show>
+                          )}
+                        >
+                          <SurfaceRecipeEditor
+                            title="Feed Material"
+                            recipe={surfaces().feed}
+                            onChange={(recipe) => updateSurface('feed', recipe)}
+                            extraControls={<FeedRecipeEditor feed={feed()} onChange={setFeed} />}
+                          />
+                        </Show>
+                      )}
+                    >
+                      <TitleRecipeEditor title={title()} onChange={setTitle} />
+                    </Show>
+                  )}
+                >
+                  <SurfaceRecipeEditor
+                    title="Wallet Chip Material"
+                    recipe={surfaces().currencies}
+                    onChange={(recipe) => updateSurface('currencies', recipe)}
+                  />
                 </Show>
               )}
             >
-              <FeedRecipeEditor feed={feed()} onChange={setFeed} />
+              <SurfaceRecipeEditor
+                title="Profile Button Material"
+                recipe={surfaces().profile}
+                onChange={(recipe) => updateSurface('profile', recipe)}
+              />
             </Show>
           )}
         >
-          <TitleRecipeEditor title={title()} onChange={setTitle} />
+          <SurfaceRecipeEditor
+            title="Top Bar Material"
+            recipe={surfaces().topBar}
+            onChange={(recipe) => updateSurface('topBar', recipe)}
+          />
         </Show>
       )}
     >
@@ -553,6 +903,7 @@ export const MainMaterialPreviewScreen = () => {
           title={title()}
           feed={feed()}
           nav={nav()}
+          surfaces={surfaces()}
         />
       )}
       editor={editor}

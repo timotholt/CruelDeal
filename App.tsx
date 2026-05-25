@@ -83,33 +83,33 @@ export default function App() {
         <Show
           when={isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath()}
           fallback={
-          <Show 
-              when={profile()} 
-              fallback={
-                  <AppViewport>
-                      <Show when={isAuthenticating()} fallback={
-                          <LoginScreen onLogin={performLogin} />
-                      }>
-                          <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
-                              {error() ? (
-                                  <div class="text-red-500 animate-none flex flex-col items-center gap-4">
-                                      <span>Error: {error()}</span>
-                                      <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
-                                  </div>
-                              ) : (
-                                  "Linking Neural Grid..."
-                              )}
-                          </div>
-                      </Show>
-                  </AppViewport>
-              }
-          >
-              <UIProvider>
-                <UserProvider initialUser={profile()!}>
-                  <AppContent />
-                </UserProvider>
-              </UIProvider>
-          </Show>
+            <AppViewport>
+              <Show
+                  when={profile()}
+                  fallback={
+                    <Show when={isAuthenticating()} fallback={
+                        <LoginScreen onLogin={performLogin} />
+                    }>
+                        <div class="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-mono text-sm animate-pulse whitespace-pre uppercase tracking-[0.5em]">
+                            {error() ? (
+                                <div class="text-red-500 animate-none flex flex-col items-center gap-4">
+                                    <span>Error: {error()}</span>
+                                    <button onClick={() => setError(null)} class="text-xs underline tracking-normal">Back to Login</button>
+                                </div>
+                            ) : (
+                                "Linking Neural Grid..."
+                            )}
+                        </div>
+                    </Show>
+                  }
+              >
+                  <UIProvider>
+                    <UserProvider initialUser={profile()!}>
+                      <AppContent />
+                    </UserProvider>
+                  </UIProvider>
+              </Show>
+            </AppViewport>
           }
         >
           <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">

@@ -1,7 +1,7 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 
-export type MaterialKind = 'raw' | 'stone';
+export type MaterialKind = 'none' | 'raw' | 'stone';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
 export type TintTone = 'none' | 'gold' | 'cyan' | 'white' | 'red' | 'green';
@@ -155,6 +155,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a';
   const material = options.material || 'stone';
+  const suppressMaterialTexture = material === 'none' || textureId === 'none';
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
   const glowIntensity = selectedOrHover && options.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
   const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
@@ -170,9 +171,9 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
-    '--texture-strength': `${textureId === 'none' ? 0 : (options.textureStrength ?? (material === 'raw' ? 100 : 58)) / 100}`,
+    '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? (material === 'raw' ? 100 : 58)) / 100}`,
     '--texture-scale': `${options.textureScale ?? 512}px`,
-    '--texture-image': textureId !== 'none'
+    '--texture-image': !suppressMaterialTexture
       ? `url("${getTextureOption(textureId).url}")`
       : 'none',
     '--tint-rgb': tint.rgb,

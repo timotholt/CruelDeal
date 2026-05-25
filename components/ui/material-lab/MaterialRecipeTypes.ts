@@ -49,7 +49,7 @@ export interface MaterialRecipe {
 
 export const materialRecipeEdges: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 export const materialRecipeCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
-export const materialRecipeMaterials: MaterialKind[] = ['raw', 'stone'];
+export const materialRecipeMaterials: MaterialKind[] = ['none', 'raw', 'stone'];
 export const materialRecipeShapes: ShapeKind[] = ['rect', 'beveled'];
 export const materialRecipeGlows: GlowTone[] = ['none', 'gold', 'cyan', 'white', 'red'];
 export const materialRecipeTints: TintTone[] = ['none', 'gold', 'cyan', 'white', 'red', 'green'];
