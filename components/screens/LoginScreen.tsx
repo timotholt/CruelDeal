@@ -1,92 +1,108 @@
 import { createSignal } from 'solid-js';
-import { SlantedButton } from '../ui/SlantedButton';
-import { DynamicBackground } from '../ui/DynamicBackground';
-import { t } from '../../services/localization';
 import { audio } from '../../services/audio';
+import '../../src/styles/login-material-preview.css';
 
 interface LoginScreenProps {
   onLogin: () => void;
 }
 
-export const LoginScreen = (props: LoginScreenProps) => {
-  const [isAnimating, setIsAnimating] = createSignal(false);
+const backdropStyle = {
+  '--login-bg-dim': '0',
+  '--login-bg-blur': '0px',
+  '--login-bg-scale': '1.07',
+  '--login-bg-x': '0px',
+  '--login-bg-y': '-22px',
+  '--login-bg-gold': '0',
+  '--login-bg-dark': '0',
+} as const;
 
-  const handleLogin = () => {
-      // Audio initialization MUST happen inside a user interaction callback
-      audio.init();
-      audio.playUiClick();
-      
-      setIsAnimating(true);
-      // Fake network delay for realism
-      setTimeout(props.onLogin, 800);
+const brandStyle = {
+  '--login-brand-x': '0px',
+  '--login-brand-y': '0px',
+  '--login-brand-title-size': '28px',
+  '--login-brand-tracking': '0.26em',
+  'font-family': '"JetBrains Mono", "IBM Plex Sans Condensed", ui-monospace, monospace',
+  'text-align': 'center',
+} as const;
+
+const authLayoutStyle = {
+  '--login-auth-offset-y': '4rem',
+  '--login-auth-gap': '0px',
+} as const;
+
+export const LoginScreen = (props: LoginScreenProps) => {
+  const [isAuthenticating, setIsAuthenticating] = createSignal(false);
+
+  const handleSocialLogin = () => {
+    if (isAuthenticating()) return;
+    audio.init();
+    audio.playUiClick();
+    setIsAuthenticating(true);
+    props.onLogin();
   };
 
   return (
-    <div class={`w-full h-full flex flex-col items-center justify-center p-6 relative overflow-hidden transition-opacity duration-700 ${isAnimating() ? 'opacity-0' : 'opacity-100'}`}>
-      
-      {/* THE SNAZZY ENGINE: Dynamic Background Layer */}
-      <DynamicBackground opacity={1} showContrastShield={false} />
-      
-      {/* ATMOSPHERIC DEPTH: Radial bloom and stardust patterns */}
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-black/60 pointer-events-none z-[1]" />
-      <div class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.15] animate-[pulse_6s_infinite] pointer-events-none z-[2]" />
-      
-      {/* Logo Section */}
-      <div class="relative z-10 mb-10 flex flex-col items-center animate-pop">
-        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center font-black text-white text-3xl shadow-[0_0_2.5rem_rgba(79,70,229,0.5)] mb-4 ring-2 ring-white/20">
-            <span class="tracking-tighter drop-shadow-md">CD</span>
-        </div>
-        <h1 class="text-3xl font-black text-white tracking-tighter italic drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] text-center mb-2 leading-none">
-            CRUEL<br/>DEAL
-        </h1>
-        <div class="flex items-center gap-2">
-            <div class="h-px w-6 bg-indigo-500/50" />
-            <p class="text-indigo-300 font-bold tracking-[0.2em] text-[0.5rem] uppercase">
-                {t('LOGIN_SUBTITLE')}
-            </p>
-            <div class="h-px w-6 bg-indigo-500/50" />
-        </div>
-      </div>
+    <div class="login-screen-root">
+      <div class="login-material-phone login-screen-phone login-material-phone--light" style={backdropStyle}>
+        <img class="login-material-bg" src="/art/login/login-social-bg.png" alt="" />
+        <div class="login-material-bg-wash" />
 
-      {/* Login Options */}
-      <div class="w-full max-w-[16rem] space-y-3 z-10 animate-slide-up">
-          <SlantedButton variant="blue" onClick={handleLogin} fullWidth size="md" class="shadow-xl">
-              Facebook
-          </SlantedButton>
-          
-          <SlantedButton variant="secondary" onClick={handleLogin} fullWidth size="md" class="shadow-xl">
-              Google
-          </SlantedButton>
+        <div class="login-material-content">
+          <div class="login-material-auth-select">
+            <div class="login-material-auth" style={authLayoutStyle}>
+              <div class="login-material-form">
+                <div class="login-material-brand" style={brandStyle}>
+                  <h1>Cruel Company</h1>
+                </div>
 
-          <div class="relative py-1">
-              <div class="absolute inset-0 flex items-center">
-                  <div class="w-full border-t border-white/10" />
+                <div class="login-material-divider">
+                  <span />
+                  <strong>Login With</strong>
+                  <span />
+                </div>
+
+                <div class="login-material-social-row">
+                  <button
+                    class="login-material-provider-button login-material-provider-button--google"
+                    type="button"
+                    disabled={isAuthenticating()}
+                    onClick={handleSocialLogin}
+                  >
+                    <span class="login-material-provider-fallback">
+                      <span class="login-material-provider-preview-icon login-material-provider-preview-icon--google">G</span>
+                      <span>Sign in with Google</span>
+                    </span>
+                  </button>
+
+                  <button
+                    class="login-material-provider-button login-material-provider-button--apple"
+                    type="button"
+                    disabled={isAuthenticating()}
+                    onClick={handleSocialLogin}
+                  >
+                    <span class="login-material-provider-fallback">
+                      <span class="login-material-provider-preview-icon login-material-provider-preview-icon--apple">Apple</span>
+                      <span>Sign in with Apple</span>
+                    </span>
+                  </button>
+
+                  <button
+                    class="login-material-provider-button login-material-provider-button--facebook"
+                    type="button"
+                    disabled={isAuthenticating()}
+                    onClick={handleSocialLogin}
+                  >
+                    <span class="login-material-provider-fallback">
+                      <span class="login-material-provider-preview-icon login-material-provider-preview-icon--facebook">f</span>
+                      <span>Continue with Facebook</span>
+                    </span>
+                  </button>
+                </div>
               </div>
-              <div class="relative flex justify-center text-[0.5rem]">
-                  <span class="bg-black/40 backdrop-blur-sm px-3 py-0.5 rounded-full text-slate-400 font-black uppercase border border-white/5">Or</span>
-              </div>
+            </div>
           </div>
-
-          <SlantedButton variant="warning" onClick={handleLogin} fullWidth size="sm" class="shadow-lg">
-              {t('LOGIN_GUEST')}
-          </SlantedButton>
+        </div>
       </div>
-
-      <div class="mt-4 text-slate-400 text-[0.45rem] text-center leading-relaxed font-medium whitespace-nowrap z-10 animate-slide-up opacity-0" style={{ "animation-delay": "0.3s" }}>
-          {t('LOGIN_FOOTER')}
-      </div>
-      
-      <style>{`
-        .animate-slide-up {
-            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-            transform: translateY(15px);
-            animation-delay: 0.2s;
-        }
-        @keyframes slideUp {
-            to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 };

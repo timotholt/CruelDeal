@@ -13,6 +13,26 @@
     0 0 42px rgb(239 200 93 / 0.12);
 }
 
+.login-screen-root {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: hidden;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 50% 48%, rgb(239 200 93 / 0.1), transparent 30%),
+    #050505;
+}
+
+.login-screen-phone {
+  width: min(430px, calc((100dvh - 40px) * 9 / 16), calc(100vw - 40px));
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 9 / 16;
+}
+
 .login-material-bg {
   position: absolute;
   inset: 0;
@@ -131,11 +151,21 @@
 }
 
 .login-material-provider-button {
+  appearance: none;
   position: relative;
   width: 100%;
   min-height: 40px;
   overflow: hidden;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.login-material-provider-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .login-material-provider-button--google {
@@ -148,6 +178,12 @@
 .login-material-provider-button--apple {
   min-height: 44px;
   background: #000;
+}
+
+.login-material-provider-button--apple .login-material-provider-fallback {
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
 }
 
 .login-material-provider-button--facebook {
