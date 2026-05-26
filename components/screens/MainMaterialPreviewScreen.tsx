@@ -16,13 +16,10 @@ import {
 } from '../ui/material-lab';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar';
-type BackdropMode = 'stone04' | 'stone01' | 'stone02' | 'stone03' | 'company' | 'dark';
-type BackdropLayerMode = 'none' | BackdropMode;
+type BackdropFit = 'cover' | 'tile';
 
 interface BackdropRecipe {
-  mode: BackdropMode;
-  layerMode: BackdropLayerMode;
-  layerOpacity: number;
+  fit: BackdropFit;
   dim: number;
   blur: number;
   scale: number;
@@ -55,6 +52,7 @@ interface NavRecipe {
 }
 
 interface SurfaceRecipes {
+  backdrop: MaterialRecipe;
   topBar: MaterialRecipe;
   profile: MaterialRecipe;
   currencies: MaterialRecipe;
@@ -63,10 +61,14 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v5';
+const storageKey = 'cruel-deal.main-material-preview.v7';
+const obsoleteStorageKeys = [
+  'cruel-deal.main-material-preview.v5',
+  'cruel-deal.main-material-preview.v6',
+];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
-  { id: 'backdrop', label: 'Backdrop', detail: 'image stack' },
+  { id: 'backdrop', label: 'Backdrop', detail: 'second layer' },
   { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
   { id: 'profileButton', label: 'Profile', detail: 'button material' },
   { id: 'currencyButtons', label: 'Wallet', detail: 'chip material' },
@@ -74,15 +76,6 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'feedCards', label: 'Feed', detail: 'glass cards' },
   { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
   { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
-];
-
-const backdropModes: Array<{ id: BackdropMode; label: string; src: string; fit?: 'cover' | 'tile' }> = [
-  { id: 'stone04', label: 'Stone 04', src: '/art/textures/stone-local/Stone04.png', fit: 'tile' },
-  { id: 'stone01', label: 'Stone 01', src: '/art/textures/stone-local/Stone01.png', fit: 'tile' },
-  { id: 'stone02', label: 'Stone 02', src: '/art/textures/stone-local/Stone02.png', fit: 'tile' },
-  { id: 'stone03', label: 'Stone 03', src: '/art/textures/stone-local/Stone03.png', fit: 'tile' },
-  { id: 'company', label: 'Login Art', src: '/art/login/cruel-company-final-login.png', fit: 'cover' },
-  { id: 'dark', label: 'Dark Art', src: '/art/login/login-social-bg-dark.png', fit: 'cover' },
 ];
 
 const fontOptions = [
@@ -95,9 +88,7 @@ const fontOptions = [
 ] as const;
 
 const defaultBackdrop: BackdropRecipe = {
-  mode: 'stone04',
-  layerMode: 'none',
-  layerOpacity: 28,
+  fit: 'cover',
   dim: 0,
   blur: 0,
   scale: 100,
@@ -129,8 +120,28 @@ const defaultNav: NavRecipe = {
   bottomReserve: 146,
 };
 
+const defaultBackdropSurface = createMaterialRecipe({
+  material: 'raw',
+  texture: 'background01',
+  textureStrength: 100,
+  textureScale: 512,
+  glass: false,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'none',
+  border: [],
+  borderOpacity: 0,
+  glow: 'none',
+  edgeHighlight: [],
+  lightStrength: 0,
+  darkStrength: 0,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 0,
+});
+
 const defaultTopBarSurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone04',
   textureStrength: 38,
   textureScale: 512,
@@ -149,7 +160,7 @@ const defaultTopBarSurface = createMaterialRecipe({
 });
 
 const defaultProfileSurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone03',
   textureStrength: 44,
   textureScale: 256,
@@ -166,7 +177,7 @@ const defaultProfileSurface = createMaterialRecipe({
 });
 
 const defaultCurrencySurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone04',
   textureStrength: 26,
   textureScale: 256,
@@ -185,7 +196,7 @@ const defaultCurrencySurface = createMaterialRecipe({
 });
 
 const defaultFeedSurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone04',
   textureStrength: 46,
   textureScale: 256,
@@ -209,7 +220,7 @@ const defaultFeedSurface = createMaterialRecipe({
 });
 
 const defaultToolbarSurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone03',
   textureStrength: 58,
   textureScale: 256,
@@ -228,7 +239,7 @@ const defaultToolbarSurface = createMaterialRecipe({
 });
 
 const defaultNavSurface = createMaterialRecipe({
-  material: 'stone',
+  material: 'raw',
   texture: 'stone04',
   textureStrength: 48,
   textureScale: 256,
@@ -252,6 +263,7 @@ const cloneTitle = (value: TitleRecipe): TitleRecipe => ({ ...value });
 const cloneFeed = (value: FeedRecipe): FeedRecipe => ({ ...value });
 const cloneNav = (value: NavRecipe): NavRecipe => ({ ...value });
 const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
+  backdrop: cloneMaterialRecipe(value.backdrop),
   topBar: cloneMaterialRecipe(value.topBar),
   profile: cloneMaterialRecipe(value.profile),
   currencies: cloneMaterialRecipe(value.currencies),
@@ -261,6 +273,7 @@ const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
 });
 
 const defaultSurfaces: SurfaceRecipes = {
+  backdrop: defaultBackdropSurface,
   topBar: defaultTopBarSurface,
   profile: defaultProfileSurface,
   currencies: defaultCurrencySurface,
@@ -276,14 +289,8 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
 
 const sanitizeBackdrop = (value: unknown): BackdropRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<BackdropRecipe> : {};
-  const mode = backdropModes.some((option) => option.id === input.mode) ? input.mode as BackdropMode : defaultBackdrop.mode;
-  const layerMode = input.layerMode === 'none' || backdropModes.some((option) => option.id === input.layerMode)
-    ? input.layerMode as BackdropLayerMode
-    : defaultBackdrop.layerMode;
   return {
-    mode,
-    layerMode,
-    layerOpacity: clamp(input.layerOpacity, defaultBackdrop.layerOpacity, 0, 100),
+    fit: input.fit === 'tile' || input.fit === 'cover' ? input.fit : defaultBackdrop.fit,
     dim: clamp(input.dim, defaultBackdrop.dim, 0, 80),
     blur: clamp(input.blur, defaultBackdrop.blur, 0, 18),
     scale: clamp(input.scale, defaultBackdrop.scale, 100, 130),
@@ -330,6 +337,7 @@ const sanitizeNav = (value: unknown): NavRecipe => {
 const sanitizeSurfaces = (value: unknown): SurfaceRecipes => {
   const input = typeof value === 'object' && value !== null ? value as Partial<Record<keyof SurfaceRecipes, unknown>> : {};
   return {
+    backdrop: sanitizeMaterialRecipe(input.backdrop, defaultBackdropSurface),
     topBar: sanitizeMaterialRecipe(input.topBar, defaultTopBarSurface),
     profile: sanitizeMaterialRecipe(input.profile, defaultProfileSurface),
     currencies: sanitizeMaterialRecipe(input.currencies, defaultCurrencySurface),
@@ -369,39 +377,13 @@ const BackdropRecipeEditor = (props: { backdrop: BackdropRecipe; onChange: (back
 
   return (
     <div class="ui-lab-control-group">
-      <SectionLabel size="xs">Image Stack</SectionLabel>
+      <SectionLabel size="xs">Backdrop Layout</SectionLabel>
       <div class="ui-lab-control-row">
-        <span>Base</span>
-        <select
-          class="ui-lab-input"
-          value={props.backdrop.mode}
-          onChange={(event) => update('mode', event.currentTarget.value as BackdropMode)}
-        >
-          <For each={backdropModes}>
-            {(mode) => <option value={mode.id}>{mode.label}</option>}
-          </For>
-        </select>
-      </div>
-      <div class="ui-lab-control-row">
-        <span>Second Layer</span>
-        <select
-          class="ui-lab-input"
-          value={props.backdrop.layerMode}
-          onChange={(event) => update('layerMode', event.currentTarget.value as BackdropLayerMode)}
-        >
-          <option value="none">None</option>
-          <For each={backdropModes}>
-            {(mode) => <option value={mode.id}>{mode.label}</option>}
-          </For>
-        </select>
-      </div>
-      <div class="ui-lab-control-row">
-        <span>Second Alpha</span>
-        <Slider value={props.backdrop.layerOpacity} min={0} max={100} onInput={(value) => update('layerOpacity', value)} />
-      </div>
-      <div class="ui-lab-control-row">
-        <span>Dim</span>
-        <Slider value={props.backdrop.dim} min={0} max={80} onInput={(value) => update('dim', value)} />
+        <span>Fit</span>
+        <div class="ui-lab-toggles">
+          <MiniButton active={props.backdrop.fit === 'cover'} onClick={() => update('fit', 'cover')}>cover</MiniButton>
+          <MiniButton active={props.backdrop.fit === 'tile'} onClick={() => update('fit', 'tile')}>tile</MiniButton>
+        </div>
       </div>
       <div class="ui-lab-control-row">
         <span>Blur</span>
@@ -418,6 +400,10 @@ const BackdropRecipeEditor = (props: { backdrop: BackdropRecipe; onChange: (back
       <div class="ui-lab-control-row">
         <span>Y</span>
         <Slider value={props.backdrop.y} min={-120} max={120} onInput={(value) => update('y', value)} />
+      </div>
+      <div class="ui-lab-control-row">
+        <span>Dim</span>
+        <Slider value={props.backdrop.dim} min={0} max={80} onInput={(value) => update('dim', value)} />
       </div>
       <div class="ui-lab-control-row">
         <span>Warmth</span>
@@ -575,18 +561,14 @@ const MainMaterialPreview = (props: {
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
-  const selectedBackdropMode = () => backdropModes.find((mode) => mode.id === props.backdrop.mode) ?? backdropModes[0];
-  const selectedLayerMode = () => props.backdrop.layerMode === 'none'
-    ? null
-    : backdropModes.find((mode) => mode.id === props.backdrop.layerMode) ?? null;
   const style = () => ({
-    '--main-bg-image': `url("${selectedBackdropMode().src}")`,
-    '--main-bg-size': selectedBackdropMode().fit === 'tile' ? '360px 360px' : 'cover',
-    '--main-layer-image': selectedLayerMode() ? `url("${selectedLayerMode()!.src}")` : 'none',
-    '--main-layer-size': selectedLayerMode()?.fit === 'tile' ? '360px 360px' : 'cover',
-    '--main-layer-opacity': `${props.backdrop.layerOpacity / 100}`,
+    '--main-bg-texture-size': props.backdrop.fit === 'cover'
+      ? 'auto max(100%, var(--texture-scale))'
+      : 'var(--texture-scale) var(--texture-scale)',
+    '--main-bg-texture-repeat': props.backdrop.fit === 'cover' ? 'no-repeat' : 'repeat',
     '--main-bg-dim': `${props.backdrop.dim / 100}`,
     '--main-bg-blur': `${props.backdrop.blur}px`,
+    '--main-bg-blur-scale': `${props.backdrop.blur / 180}`,
     '--main-bg-scale': `${props.backdrop.scale / 100}`,
     '--main-bg-x': `${props.backdrop.x}px`,
     '--main-bg-y': `${props.backdrop.y}px`,
@@ -606,10 +588,12 @@ const MainMaterialPreview = (props: {
   }) as JSX.CSSProperties;
 
   return (
-    <div class={`main-material-phone ${props.selectedClass('backdrop')}`} style={style()}>
-        <div class="main-material-screen">
-        <div class="main-material-bg" />
-        <div class="main-material-bg-layer" />
+    <div class="main-material-phone" style={style()}>
+        <MaterialPanel
+          {...materialRecipeToSurfaceProps(props.surfaces.backdrop)}
+          padded={false}
+          class={`main-material-screen main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
+        >
         <div class="main-material-wash" />
         <div class="main-material-grain" />
         <div class="main-material-frame main-material-frame--editor">
@@ -716,7 +700,7 @@ const MainMaterialPreview = (props: {
           </div>
           </footer>
         </div>
-        </div>
+        </MaterialPanel>
     </div>
   );
 };
@@ -735,6 +719,7 @@ export const MainMaterialPreviewScreen = () => {
 
   onMount(() => {
     try {
+      obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
@@ -772,6 +757,7 @@ export const MainMaterialPreviewScreen = () => {
     const part = selectedPart();
     if (part === 'backdrop') {
       setBackdrop(cloneBackdrop(defaultBackdrop));
+      updateSurface('backdrop', cloneMaterialRecipe(defaultBackdropSurface));
     }
     if (part === 'topBar') updateSurface('topBar', cloneMaterialRecipe(defaultTopBarSurface));
     if (part === 'profileButton') updateSurface('profile', cloneMaterialRecipe(defaultProfileSurface));
@@ -885,7 +871,12 @@ export const MainMaterialPreviewScreen = () => {
         </Show>
       )}
     >
-      <BackdropRecipeEditor backdrop={backdrop()} onChange={setBackdrop} />
+      <SurfaceRecipeEditor
+        title="Backdrop Material"
+        recipe={surfaces().backdrop}
+        onChange={(recipe) => updateSurface('backdrop', recipe)}
+        extraControls={<BackdropRecipeEditor backdrop={backdrop()} onChange={setBackdrop} />}
+      />
     </Show>
   );
 

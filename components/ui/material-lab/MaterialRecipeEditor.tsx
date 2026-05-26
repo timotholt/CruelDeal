@@ -111,6 +111,23 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     props.onChange({ ...props.recipe, [key]: value });
   };
 
+  const updateMaterial = (material: MaterialKind) => {
+    props.onChange({
+      ...props.recipe,
+      material,
+      textureStrength: material === 'none' ? 0 : props.recipe.textureStrength || 100,
+    });
+  };
+
+  const updateTexture = (texture: TextureKind) => {
+    props.onChange({
+      ...props.recipe,
+      texture,
+      material: texture === 'none' ? 'none' : props.recipe.material === 'none' ? 'raw' : props.recipe.material,
+      textureStrength: texture === 'none' ? 0 : props.recipe.textureStrength || 100,
+    });
+  };
+
   const toggleList = (key: 'border' | 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
     const current = props.recipe[key] as Array<EdgeName | CornerName>;
     const next = current.includes(value)
@@ -124,8 +141,13 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         <div class="ui-lab-control-group">
           <SectionLabel size="xs">Surface</SectionLabel>
           <div class="ui-lab-control-row">
-            <ControlLabel>Material</ControlLabel>
-            <Segments value={props.recipe.material} options={materialRecipeMaterials} onChange={(value: MaterialKind) => update('material', value)} />
+            <ControlLabel>Base</ControlLabel>
+            <Segments
+              value={props.recipe.material}
+              options={materialRecipeMaterials}
+              labels={{ raw: 'texture' }}
+              onChange={updateMaterial}
+            />
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Glass</ControlLabel>
@@ -143,7 +165,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Texture</ControlLabel>
-            <select class="ui-lab-select" value={props.recipe.texture} onChange={(event) => update('texture', event.currentTarget.value as TextureKind)}>
+            <select class="ui-lab-select" value={props.recipe.texture} onChange={(event) => updateTexture(event.currentTarget.value as TextureKind)}>
               <For each={textureOptions}>
                 {(texture) => <option value={texture.id}>{texture.label}</option>}
               </For>

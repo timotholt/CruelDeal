@@ -1,7 +1,7 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 
-export type MaterialKind = 'none' | 'raw' | 'stone';
+export type MaterialKind = 'none' | 'raw';
 export type ShapeKind = 'rect' | 'beveled';
 export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
 export type TintTone = 'none' | 'gold' | 'cyan' | 'white' | 'red' | 'green';
@@ -154,7 +154,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
   const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a';
-  const material = options.material || 'stone';
+  const material = options.material || 'raw';
   const suppressMaterialTexture = material === 'none' || textureId === 'none';
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
   const glowIntensity = selectedOrHover && options.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
@@ -171,7 +171,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
-    '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? (material === 'raw' ? 100 : 58)) / 100}`,
+    '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? 100) / 100}`,
     '--texture-scale': `${options.textureScale ?? 512}px`,
     '--texture-image': !suppressMaterialTexture
       ? `url("${getTextureOption(textureId).url}")`
@@ -180,6 +180,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
     '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
     '--glass-blur': `${hasGlass(options) ? options.glassBlur ?? 10 : 0}px`,
+    '--glass-blur-scale': `${hasGlass(options) ? (options.glassBlur ?? 10) / 240 : 0}`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
@@ -225,7 +226,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
 const surfaceClass = (options: SurfaceOptions, extra = '') => {
   return [
     'cd-surface',
-    `cd-surface--${options.material || 'stone'}`,
+    `cd-surface--${options.material || 'raw'}`,
     `cd-surface--texture-${options.texture || 'road012a'}`,
     `cd-surface--${options.shape || 'rect'}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',

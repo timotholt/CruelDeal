@@ -8,7 +8,16 @@ import {
 } from '../ui/material-lab';
 
 type LoginPartId = 'backdrop' | 'brandPlate' | 'authPanel';
-type BackdropMode = 'light' | 'dark';
+type BackdropMode =
+  | 'light'
+  | 'dark'
+  | 'background01'
+  | 'background02'
+  | 'background10'
+  | 'blackLeather01'
+  | 'copper01'
+  | 'gold01'
+  | 'silver01';
 
 interface BackdropRecipe {
   mode: BackdropMode;
@@ -36,7 +45,8 @@ interface AuthLayoutRecipe {
   gap: number;
 }
 
-const storageKey = 'cruel-deal.login-material-preview.v9';
+const storageKey = 'cruel-deal.login-material-preview.v10';
+const obsoleteStorageKeys = ['cruel-deal.login-material-preview.v9'];
 
 const partLabels: Array<MaterialWorkbenchPart<LoginPartId>> = [
   { id: 'backdrop', label: 'Backdrop', detail: 'image tone' },
@@ -58,6 +68,13 @@ const defaultBackdrop: BackdropRecipe = {
 const backdropModes: Array<{ id: BackdropMode; label: string; src: string }> = [
   { id: 'light', label: 'Final', src: '/art/login/cruel-company-final-login.png' },
   { id: 'dark', label: 'Dark', src: '/art/login/login-social-bg-dark.png' },
+  { id: 'background01', label: 'Background 01', src: '/art/textures/stone-local/Background01.png' },
+  { id: 'background02', label: 'Background 02', src: '/art/textures/stone-local/Background02.png' },
+  { id: 'background10', label: 'Background 10', src: '/art/textures/stone-local/Background10.png' },
+  { id: 'blackLeather01', label: 'Black Leather 01', src: '/art/textures/stone-local/BlackLeather01.png' },
+  { id: 'copper01', label: 'Copper 01', src: '/art/textures/stone-local/Copper01.png' },
+  { id: 'gold01', label: 'Gold 01', src: '/art/textures/stone-local/Gold01.png' },
+  { id: 'silver01', label: 'Silver 01', src: '/art/textures/stone-local/Silver01.png' },
 ];
 
 const fontOptions = [
@@ -354,6 +371,7 @@ export const LoginMaterialPreviewScreen = () => {
 
   onMount(() => {
     try {
+      obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {

@@ -909,20 +909,21 @@
   background-position: center;
   opacity: var(--texture-strength);
   mix-blend-mode: multiply;
+  transform-origin: center;
 }
 
 .cd-surface--texture-none > .cd-surface__texture {
   background-image: none;
 }
 
-.cd-surface--stone > .cd-surface__texture {
-  mix-blend-mode: overlay;
-  filter: contrast(1.56) brightness(0.9) saturate(0.28);
-}
-
 .cd-surface--raw > .cd-surface__texture {
   mix-blend-mode: normal;
   filter: none;
+}
+
+.cd-surface--glass > .cd-surface__texture {
+  filter: blur(var(--glass-blur, 0));
+  transform: scale(calc(1 + var(--glass-blur-scale, 0)));
 }
 
 .cd-surface--none > .cd-surface__texture {

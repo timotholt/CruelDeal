@@ -30,6 +30,41 @@ export const textureOptions = [
     url: '/art/textures/stone-local/Stone04.png',
   },
   {
+    id: 'background01',
+    label: 'Background 01',
+    url: '/art/textures/stone-local/Background01.png',
+  },
+  {
+    id: 'background02',
+    label: 'Background 02',
+    url: '/art/textures/stone-local/Background02.png',
+  },
+  {
+    id: 'background10',
+    label: 'Background 10',
+    url: '/art/textures/stone-local/Background10.png',
+  },
+  {
+    id: 'blackLeather01',
+    label: 'Black Leather 01',
+    url: '/art/textures/stone-local/BlackLeather01.png',
+  },
+  {
+    id: 'copper01',
+    label: 'Copper 01',
+    url: '/art/textures/stone-local/Copper01.png',
+  },
+  {
+    id: 'gold01',
+    label: 'Gold 01',
+    url: '/art/textures/stone-local/Gold01.png',
+  },
+  {
+    id: 'silver01',
+    label: 'Silver 01',
+    url: '/art/textures/stone-local/Silver01.png',
+  },
+  {
     id: 'asphalt001',
     label: 'Asphalt001',
     url: '/art/textures/asphalt001/Asphalt001_1K-JPG_Color.jpg',
