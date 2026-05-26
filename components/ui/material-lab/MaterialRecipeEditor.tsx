@@ -176,20 +176,6 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
             />
           </div>
           <div class="ui-lab-control-row">
-            <ControlLabel>Glass</ControlLabel>
-            <div class="ui-lab-toggles">
-              <ToggleButton active={props.recipe.glass} onClick={() => update('glass', !props.recipe.glass)}>on</ToggleButton>
-            </div>
-          </div>
-          <div class="ui-lab-control-row">
-            <ControlLabel>Glass Alpha</ControlLabel>
-            <Slider value={props.recipe.glassOpacity} onInput={(value) => update('glassOpacity', value)} />
-          </div>
-          <div class="ui-lab-control-row">
-            <ControlLabel>Glass Blur</ControlLabel>
-            <Slider value={props.recipe.glassBlur} min={0} max={24} onInput={(value) => update('glassBlur', value)} />
-          </div>
-          <div class="ui-lab-control-row">
             <ControlLabel>Texture</ControlLabel>
             <select class="ui-lab-select" value={props.recipe.texture} onChange={(event) => updateTexture(event.currentTarget.value as TextureKind)}>
               <For each={textureOptions}>
@@ -220,6 +206,36 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           <div class="ui-lab-control-row">
             <ControlLabel>Radius</ControlLabel>
             <Slider value={props.recipe.radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+          </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Glass</SectionLabel>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Enabled</ControlLabel>
+            <div class="ui-lab-toggles">
+              <ToggleButton active={props.recipe.glass} onClick={() => update('glass', !props.recipe.glass)}>on</ToggleButton>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Alpha</ControlLabel>
+            <Slider value={props.recipe.glassOpacity} onInput={(value) => update('glassOpacity', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Blur</ControlLabel>
+            <Slider value={props.recipe.glassBlur} min={0} max={24} onInput={(value) => update('glassBlur', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Shine Width</ControlLabel>
+            <Slider value={props.recipe.glassHighlightWidth} onInput={(value) => update('glassHighlightWidth', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Shine Height</ControlLabel>
+            <Slider value={props.recipe.glassHighlightHeight} onInput={(value) => update('glassHighlightHeight', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Shine Y</ControlLabel>
+            <Slider value={props.recipe.glassHighlightY} onInput={(value) => update('glassHighlightY', value)} />
           </div>
         </div>
 

@@ -62,11 +62,12 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v8';
+const storageKey = 'cruel-deal.main-material-preview.v9';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
   'cruel-deal.main-material-preview.v7',
+  'cruel-deal.main-material-preview.v8',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [

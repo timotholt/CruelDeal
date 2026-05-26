@@ -21,6 +21,9 @@ export interface MaterialRecipe {
   glass: boolean;
   glassOpacity: number;
   glassBlur: number;
+  glassHighlightWidth: number;
+  glassHighlightHeight: number;
+  glassHighlightY: number;
   tint: TintTone;
   tintStrength: number;
   gradient: SurfaceGradient;
@@ -99,6 +102,9 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
   glass: false,
   glassOpacity: 34,
   glassBlur: 8,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 34,
+  glassHighlightY: 10,
   tint: 'none',
   tintStrength: 0,
   gradient: 'both',
@@ -189,6 +195,9 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     glass: typeof input.glass === 'boolean' ? input.glass : fallback.glass,
     glassOpacity: clamp(input.glassOpacity, fallback.glassOpacity, 0, 100),
     glassBlur: clamp(input.glassBlur, fallback.glassBlur, 0, 24),
+    glassHighlightWidth: clamp(input.glassHighlightWidth, fallback.glassHighlightWidth, 0, 100),
+    glassHighlightHeight: clamp(input.glassHighlightHeight, fallback.glassHighlightHeight, 0, 100),
+    glassHighlightY: clamp(input.glassHighlightY, fallback.glassHighlightY, 0, 100),
     tint: isOneOf(input.tint, materialRecipeTints) ? input.tint : fallback.tint,
     tintStrength: clamp(input.tintStrength, fallback.tintStrength, 0, 100),
     gradient: isOneOf(input.gradient, materialRecipeGradients) ? input.gradient : fallback.gradient,
@@ -225,6 +234,9 @@ export const materialRecipeToSurfaceProps = (recipe: MaterialRecipe, state: Mate
   glass: recipe.glass,
   glassOpacity: recipe.glassOpacity,
   glassBlur: recipe.glassBlur,
+  glassHighlightWidth: recipe.glassHighlightWidth,
+  glassHighlightHeight: recipe.glassHighlightHeight,
+  glassHighlightY: recipe.glassHighlightY,
   tint: recipe.tint,
   tintStrength: recipe.tintStrength,
   gradient: recipe.gradient,

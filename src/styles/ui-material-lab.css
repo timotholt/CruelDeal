@@ -761,6 +761,9 @@
   --tint-rgb: 0 0 0;
   --tint-alpha: 0;
   --glass-alpha: 0.42;
+  --glass-highlight-width: 100%;
+  --glass-highlight-height: 34%;
+  --glass-highlight-y: 10%;
   --border-alpha: 0.34;
   --edge-wear-alpha: 0;
   --edge-wear-width: 5px;
@@ -855,10 +858,10 @@
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.78)) 7%,
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.96)) 50%,
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.78)) 93%,
-      transparent 100%) top 10% left / 100% 34% no-repeat,
+      transparent 100%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat,
     linear-gradient(180deg,
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.32)),
-      transparent 72%) top 10% left / 100% 34% no-repeat;
+      transparent 72%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat;
   mix-blend-mode: screen;
   opacity: 0.94;
 }
@@ -868,7 +871,7 @@
   position: absolute;
   inset: 1px;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / calc(var(--glass-alpha) * 0.54)) 16% 84%, transparent) top / 100% 1px no-repeat;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / calc(var(--glass-alpha) * 0.54)) 16% 84%, transparent) center var(--glass-highlight-y) / var(--glass-highlight-width) 1px no-repeat;
   opacity: 0.88;
 }
 
@@ -894,7 +897,7 @@
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.48)) 8%,
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.62)) 50%,
       rgb(255 255 255 / calc(var(--glass-alpha) * 0.48)) 92%,
-      transparent 100%) top 10% left / 100% 28% no-repeat;
+      transparent 100%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat;
   opacity: 0.72;
 }
 

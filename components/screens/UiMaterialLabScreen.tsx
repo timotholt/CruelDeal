@@ -74,18 +74,22 @@ interface LabControls {
   tintStrength: number;
   glassOpacity: number;
   glassBlur: number;
+  glassHighlightWidth: number;
+  glassHighlightHeight: number;
+  glassHighlightY: number;
   borderOpacity: number;
   lightStrength: number;
   darkStrength: number;
   radius: number;
 }
 
-const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v3';
+const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v4';
 const obsoletePresetStorageKeys = [
   'cruel-deal.ui-material-lab.presets.v1',
   'cruel-deal.ui-material-lab.presets.v2',
+  'cruel-deal.ui-material-lab.presets.v3',
 ];
-const presetStorageVersion = 3;
+const presetStorageVersion = 4;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
@@ -131,6 +135,9 @@ const controlDefaults: LabControls = {
   tintStrength: 32,
   glassOpacity: 42,
   glassBlur: 10,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 34,
+  glassHighlightY: 10,
   borderOpacity: 50,
   lightStrength: 20,
   darkStrength: 32,
@@ -218,6 +225,9 @@ const sanitizeControls = (value: unknown): LabControls => {
     tintStrength: clamp(input.tintStrength, controlDefaults.tintStrength, 0, 100),
     glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
     glassBlur: clamp(input.glassBlur, controlDefaults.glassBlur, 0, 24),
+    glassHighlightWidth: clamp(input.glassHighlightWidth, controlDefaults.glassHighlightWidth, 0, 100),
+    glassHighlightHeight: clamp(input.glassHighlightHeight, controlDefaults.glassHighlightHeight, 0, 100),
+    glassHighlightY: clamp(input.glassHighlightY, controlDefaults.glassHighlightY, 0, 100),
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
@@ -622,6 +632,9 @@ export const UiMaterialLabScreen = () => {
       tintStrength: current.tintStrength,
       glassOpacity: current.glassOpacity,
       glassBlur: current.glassBlur,
+      glassHighlightWidth: current.glassHighlightWidth,
+      glassHighlightHeight: current.glassHighlightHeight,
+      glassHighlightY: current.glassHighlightY,
       borderOpacity: current.borderOpacity,
       lightStrength: current.lightStrength,
       darkStrength: current.darkStrength,
@@ -828,34 +841,6 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Adds a separate translucent glass pane above the base material and texture.">
-                      Glass
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().glass} onClick={() => update('glass', !controls().glass)}>on</ToggleButton>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Strength of the glass pane and specular highlight. The base material remains visible underneath.">
-                      Glass Alpha
-                    </ControlLabel>
-                    <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Backdrop blur for the glass pane. This controls frostiness without changing the hard shine.">
-                      Glass Blur
-                    </ControlLabel>
-                    <Slider
-                      value={controls().glassBlur}
-                      min={0}
-                      max={24}
-                      onInput={(value) => update('glassBlur', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
                     <ControlLabel tip="Selects which image file is used by the material texture layer. None disables the layer.">
                       Texture
                     </ControlLabel>
@@ -929,6 +914,67 @@ export const UiMaterialLabScreen = () => {
                       Radius
                     </ControlLabel>
                     <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+                  </div>
+                  </div>
+
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Glass</SectionLabel>
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Adds a separate translucent glass pane above the base material and texture.">
+                      Enabled
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <ToggleButton active={controls().glass} onClick={() => update('glass', !controls().glass)}>on</ToggleButton>
+                    </div>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Strength of the glass pane and specular highlight. The base material remains visible underneath.">
+                      Alpha
+                    </ControlLabel>
+                    <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Backdrop blur for the glass pane. This controls frostiness without changing the hard shine.">
+                      Blur
+                    </ControlLabel>
+                    <Slider
+                      value={controls().glassBlur}
+                      min={0}
+                      max={24}
+                      onInput={(value) => update('glassBlur', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Horizontal length of the main glass reflection band.">
+                      Shine Width
+                    </ControlLabel>
+                    <Slider
+                      value={controls().glassHighlightWidth}
+                      onInput={(value) => update('glassHighlightWidth', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Vertical thickness of the main glass reflection band.">
+                      Shine Height
+                    </ControlLabel>
+                    <Slider
+                      value={controls().glassHighlightHeight}
+                      onInput={(value) => update('glassHighlightHeight', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Vertical position of the glass reflection band from the top edge.">
+                      Shine Y
+                    </ControlLabel>
+                    <Slider
+                      value={controls().glassHighlightY}
+                      onInput={(value) => update('glassHighlightY', value)}
+                    />
                   </div>
                   </div>
 

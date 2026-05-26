@@ -33,6 +33,9 @@ interface SurfaceOptions {
   tintStrength?: number;
   glassOpacity?: number;
   glassBlur?: number;
+  glassHighlightWidth?: number;
+  glassHighlightHeight?: number;
+  glassHighlightY?: number;
   borderOpacity?: number;
   lightStrength?: number;
   darkStrength?: number;
@@ -181,6 +184,9 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
     '--glass-blur': `${hasGlass(options) ? options.glassBlur ?? 10 : 0}px`,
     '--glass-blur-scale': `${hasGlass(options) ? (options.glassBlur ?? 10) / 240 : 0}`,
+    '--glass-highlight-width': `${hasGlass(options) ? options.glassHighlightWidth ?? 100 : 100}%`,
+    '--glass-highlight-height': `${hasGlass(options) ? options.glassHighlightHeight ?? 34 : 34}%`,
+    '--glass-highlight-y': `${hasGlass(options) ? options.glassHighlightY ?? 10 : 10}%`,
     '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
@@ -293,6 +299,9 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'tintStrength',
     'glassOpacity',
     'glassBlur',
+    'glassHighlightWidth',
+    'glassHighlightHeight',
+    'glassHighlightY',
     'borderOpacity',
     'lightStrength',
     'darkStrength',
@@ -340,6 +349,9 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'tintStrength',
     'glassOpacity',
     'glassBlur',
+    'glassHighlightWidth',
+    'glassHighlightHeight',
+    'glassHighlightY',
     'borderOpacity',
     'lightStrength',
     'darkStrength',
