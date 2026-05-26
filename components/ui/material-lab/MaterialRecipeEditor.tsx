@@ -234,7 +234,7 @@ const GlassSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Blur</ControlLabel>
-      <Slider value={props.recipe.glassBlur} min={0} max={24} onInput={(value) => props.update('glassBlur', value)} />
+      <Slider value={props.recipe.glassBlur} min={0} max={24} step={0.25} onInput={(value) => props.update('glassBlur', value)} />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Shine Width</ControlLabel>
