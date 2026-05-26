@@ -820,6 +820,12 @@
     0 12px 26px rgba(0,0,0,0.36);
 }
 
+.cd-surface--glass {
+  isolation: auto;
+  backdrop-filter: blur(var(--glass-blur, 0)) saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0)) saturate(1.08);
+}
+
 .cd-surface--beveled {
   border-radius: 0;
   clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
@@ -846,13 +852,13 @@
 }
 
 .cd-surface__glass {
-  z-index: 0;
+  z-index: 1;
   background:
     linear-gradient(180deg, rgb(255 255 255 / calc(var(--glass-alpha) * 0.16)), transparent 30%),
     linear-gradient(180deg, rgb(255 255 255 / calc(var(--glass-alpha) * 0.07)), transparent 38% 72%, rgb(0 0 0 / calc(var(--glass-alpha) * 0.05))),
     rgb(255 255 255 / calc(var(--glass-alpha) * 0.04));
-  backdrop-filter: blur(var(--glass-blur, 10px)) saturate(1.08);
-  -webkit-backdrop-filter: blur(var(--glass-blur, 10px)) saturate(1.08);
+  backdrop-filter: blur(var(--glass-blur, 0)) saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0)) saturate(1.08);
 }
 
 .cd-surface__glass::before {
@@ -884,14 +890,17 @@
 }
 
 .cd-surface--none > .cd-surface__material,
-.cd-surface--none > .cd-surface__texture,
-.cd-surface--none > .cd-surface__gradient {
+.cd-surface--none > .cd-surface__texture {
   background: transparent;
   opacity: 0;
 }
 
 .cd-surface--raw > .cd-surface__material {
   background: #f5f2ea;
+}
+
+.cd-surface--glass > .cd-surface__material {
+  background: transparent;
 }
 
 .cd-surface--sheen-off > .cd-surface__glass {
@@ -932,11 +941,6 @@
   filter: none;
 }
 
-.cd-surface--glass > .cd-surface__texture {
-  filter: blur(var(--glass-blur, 0));
-  transform: scale(calc(1 + var(--glass-blur-scale, 0)));
-}
-
 .cd-surface--none > .cd-surface__texture {
   background-image: none;
   mix-blend-mode: normal;
@@ -954,10 +958,6 @@
 }
 
 .cd-surface--raw > .cd-surface__gradient {
-  background: transparent;
-}
-
-.cd-surface--none > .cd-surface__gradient {
   background: transparent;
 }
 
@@ -1165,12 +1165,13 @@
 
 .cd-surface__content {
   position: relative;
+  left: var(--content-x);
+  top: var(--content-y);
   z-index: 2;
   font-family: var(--content-font-family);
   color: var(--content-color);
   text-align: var(--content-align);
   text-shadow: var(--content-shadow);
-  transform: translate(var(--content-x), var(--content-y));
 }
 
 .cd-surface__content--under-glass {

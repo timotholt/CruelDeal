@@ -1,4 +1,5 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 
 export type MaterialKind = 'none' | 'raw';
@@ -99,6 +100,19 @@ export interface SegmentedMeterProps {
   segments?: number;
   tone?: 'gold' | 'red' | 'cyan' | 'white';
   showPercent?: boolean;
+}
+
+type MaterialSurfaceRoot = 'section' | 'button';
+type MaterialSurfaceContent = 'div' | 'span';
+
+interface MaterialSurfaceProps extends SurfaceOptions {
+  as: MaterialSurfaceRoot;
+  class: string;
+  contentAs: MaterialSurfaceContent;
+  contentClass: string;
+  children: JSX.Element;
+  disabled?: boolean;
+  rootProps?: JSX.HTMLAttributes<HTMLElement>;
 }
 
 const allCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
@@ -315,6 +329,37 @@ export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean
   </>
 );
 
+const MaterialSurface = (props: MaterialSurfaceProps) => {
+  const contentLayer = () => props.contentLayer || 'over-glass';
+  const content = (layer: ContentLayer) => (
+    <Dynamic
+      component={props.contentAs}
+      class={`cd-surface__content cd-surface__content--${layer} ${props.contentClass}`}
+    >
+      {props.children}
+    </Dynamic>
+  );
+
+  return (
+    <Dynamic
+      component={props.as}
+      {...(props.rootProps || {})}
+      class={surfaceClass(props, props.class)}
+      style={surfaceStyle(props)}
+      disabled={props.disabled}
+    >
+      <SurfaceBaseLayers tinted={hasTint(props)} />
+      <Show when={contentLayer() === 'under-glass'}>
+        {content('under-glass')}
+      </Show>
+      <SurfaceOverlayLayers glass={hasGlass(props)} glowing={hasGlow(props)} />
+      <Show when={contentLayer() === 'over-glass'}>
+        {content('over-glass')}
+      </Show>
+    </Dynamic>
+  );
+};
+
 export const MaterialPanel = (props: MaterialPanelProps) => {
   const [local] = splitProps(props, [
     'children',
@@ -365,25 +410,16 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'textY',
   ]);
 
-  const contentLayer = () => local.contentLayer || 'over-glass';
-  const content = (layer: ContentLayer) => (
-    <div class={`cd-surface__content cd-surface__content--${layer} cd-panel__content`}>{local.children}</div>
-  );
-
   return (
-    <section
-      class={surfaceClass(local, `cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`)}
-      style={surfaceStyle(local)}
+    <MaterialSurface
+      {...local}
+      as="section"
+      class={`cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`}
+      contentAs="div"
+      contentClass="cd-panel__content"
     >
-      <SurfaceBaseLayers tinted={hasTint(local)} />
-      <Show when={contentLayer() === 'under-glass'}>
-        {content('under-glass')}
-      </Show>
-      <SurfaceOverlayLayers glass={hasGlass(local)} glowing={hasGlow(local)} />
-      <Show when={contentLayer() === 'over-glass'}>
-        {content('over-glass')}
-      </Show>
-    </section>
+      {local.children}
+    </MaterialSurface>
   );
 };
 
@@ -445,10 +481,20 @@ export const MaterialButton = (props: MaterialButtonProps) => {
   const size = () => local.size || 'md';
   const iconPosition = () => local.iconPosition || 'left';
   const hasTopIcon = () => iconPosition() === 'top';
-  const contentLayer = () => local.contentLayer || 'over-glass';
   const label = () => local.textContent || local.children;
-  const content = (layer: ContentLayer) => (
-    <span class={`cd-surface__content cd-surface__content--${layer} cd-button__content`}>
+
+  return (
+    <MaterialSurface
+      {...local}
+      as="button"
+      class={`cd-button cd-button--${size()} ${local.fullWidth ? 'cd-button--full' : ''} ${hasTopIcon() ? 'cd-button--vertical' : ''} ${local.class || ''}`}
+      contentAs="span"
+      contentClass="cd-button__content"
+      interactive
+      selected={local.selected || local.pressed}
+      disabled={local.disabled}
+      rootProps={rest}
+    >
       <Show when={local.icon && iconPosition() !== 'right'}>
         <span class="cd-button__icon">{local.icon}</span>
       </Show>
@@ -458,28 +504,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       <Show when={local.iconRight || (local.icon && iconPosition() === 'right')}>
         <span class="cd-button__icon cd-button__icon--right">{local.iconRight || local.icon}</span>
       </Show>
-    </span>
-  );
-
-  return (
-    <button
-      class={surfaceClass(
-        { ...local, interactive: true, selected: local.selected || local.pressed },
-        `cd-button cd-button--${size()} ${local.fullWidth ? 'cd-button--full' : ''} ${hasTopIcon() ? 'cd-button--vertical' : ''} ${local.class || ''}`,
-      )}
-      style={surfaceStyle({ ...local, selected: local.selected || local.pressed })}
-      disabled={local.disabled}
-      {...rest}
-    >
-      <SurfaceBaseLayers tinted={hasTint(local)} />
-      <Show when={contentLayer() === 'under-glass'}>
-        {content('under-glass')}
-      </Show>
-      <SurfaceOverlayLayers glass={hasGlass(local)} glowing={hasGlow(local)} />
-      <Show when={contentLayer() === 'over-glass'}>
-        {content('over-glass')}
-      </Show>
-    </button>
+    </MaterialSurface>
   );
 };
 

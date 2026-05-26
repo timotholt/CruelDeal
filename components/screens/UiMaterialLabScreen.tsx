@@ -25,7 +25,10 @@ import {
   UserIcon,
   MaterialButton,
   MaterialPanel,
+  MaterialRecipeEditor,
+  createMaterialRecipe,
   createMaterialStateOverlays,
+  materialRecipeToSurfaceProps,
   materialRecipeContentLayers,
   materialRecipeStates,
   materialRecipeTextAligns,
@@ -37,10 +40,10 @@ import {
   type EdgeName,
   type EdgeTextureKind,
   type EdgeWearLayer,
-  type GlowTone,
   type MaterialRecipeState,
   type MaterialStateOverlay,
   type MaterialKind,
+  type MaterialRecipe,
   type ShapeKind,
   type SurfaceGradient,
   type TintTone,
@@ -113,7 +116,6 @@ const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
 const shapeOptions = ['rect', 'beveled'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
-const glowEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
 const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
 const tintOptions = ['none', 'gold', 'cyan', 'white', 'red', 'green'] as const;
@@ -170,6 +172,85 @@ const controlDefaults: LabControls = {
   textX: 0,
   textY: 0,
 };
+
+const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMaterialRecipe({
+  material: controls.material,
+  texture: controls.texture,
+  shape: controls.shape,
+  glass: controls.glass,
+  glassOpacity: controls.glassOpacity,
+  glassBlur: controls.glassBlur,
+  glassHighlightWidth: controls.glassHighlightWidth,
+  glassHighlightHeight: controls.glassHighlightHeight,
+  glassHighlightY: controls.glassHighlightY,
+  tint: controls.tint,
+  tintStrength: controls.tintStrength,
+  gradient: controls.gradient,
+  sheen: controls.sheen,
+  disabled: controls.disabled,
+  border: controls.borderEdges,
+  textureStrength: controls.textureStrength,
+  textureScale: controls.textureScale,
+  borderOpacity: controls.borderOpacity,
+  lightStrength: controls.lightStrength,
+  darkStrength: controls.darkStrength,
+  edgeWearTexture: controls.edgeWearTexture,
+  edgeWearOpacity: controls.edgeWearOpacity,
+  edgeWearWidth: controls.edgeWearWidth,
+  edgeWearScale: controls.edgeWearScale,
+  edgeWearLayer: controls.edgeWearLayer,
+  radius: controls.radius,
+  textContent: controls.textContent,
+  contentLayer: controls.contentLayer,
+  textFontFamily: controls.textFontFamily,
+  textSizeRem: controls.textSizeRem,
+  textTone: controls.textTone,
+  textEmboss: controls.textEmboss,
+  textAlign: controls.textAlign,
+  textX: controls.textX,
+  textY: controls.textY,
+  states: controls.states,
+});
+
+const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabControls => ({
+  ...current,
+  material: recipe.material,
+  texture: recipe.texture,
+  shape: recipe.shape,
+  glass: recipe.glass,
+  glassOpacity: recipe.glassOpacity,
+  glassBlur: recipe.glassBlur,
+  glassHighlightWidth: recipe.glassHighlightWidth,
+  glassHighlightHeight: recipe.glassHighlightHeight,
+  glassHighlightY: recipe.glassHighlightY,
+  tint: recipe.tint,
+  tintStrength: recipe.tintStrength,
+  gradient: recipe.gradient,
+  sheen: recipe.sheen,
+  disabled: recipe.disabled,
+  borderEdges: recipe.border,
+  textureStrength: recipe.textureStrength,
+  textureScale: recipe.textureScale,
+  borderOpacity: recipe.borderOpacity,
+  lightStrength: recipe.lightStrength,
+  darkStrength: recipe.darkStrength,
+  edgeWearTexture: recipe.edgeWearTexture,
+  edgeWearOpacity: recipe.edgeWearOpacity,
+  edgeWearWidth: recipe.edgeWearWidth,
+  edgeWearScale: recipe.edgeWearScale,
+  edgeWearLayer: recipe.edgeWearLayer,
+  radius: recipe.radius,
+  textContent: recipe.textContent,
+  contentLayer: recipe.contentLayer,
+  textFontFamily: recipe.textFontFamily,
+  textSizeRem: recipe.textSizeRem,
+  textTone: recipe.textTone,
+  textEmboss: recipe.textEmboss,
+  textAlign: recipe.textAlign,
+  textX: recipe.textX,
+  textY: recipe.textY,
+  states: recipe.states,
+});
 
 const loadoutItems: Array<{ name: string; detail: string; icon: () => JSX.Element }> = [
   { name: 'Neurodeck', detail: 'Kitsune-X', icon: () => <DocumentIcon class="w-8 h-8" /> },
@@ -389,38 +470,6 @@ const ControlLabel = (props: { children: JSX.Element; tip?: string }) => {
   );
 };
 
-const Slider = (props: { value: number; min?: number; max?: number; step?: number; onInput: (value: number) => void }) => (
-  <label class="ui-lab-slider">
-    <input
-      type="range"
-      min={props.min ?? 0}
-      max={props.max ?? 100}
-      step={props.step ?? 1}
-      value={props.value}
-      onInput={(event) => props.onInput(Number(event.currentTarget.value))}
-    />
-    <output>{props.value}</output>
-  </label>
-);
-
-const TextureScaleSlider = (props: { value: number; onInput: (value: number) => void }) => {
-  const index = () => Math.max(0, textureScaleStops.findIndex((stop) => stop === props.value));
-
-  return (
-    <label class="ui-lab-slider">
-      <input
-        type="range"
-        min={0}
-        max={textureScaleStops.length - 1}
-        step={1}
-        value={index()}
-        onInput={(event) => props.onInput(textureScaleStops[Number(event.currentTarget.value)])}
-      />
-      <output>{props.value}</output>
-    </label>
-  );
-};
-
 export const UiMaterialLabScreen = () => {
   const [controls, setControls] = createSignal<LabControls>(controlDefaults);
   const [activeState, setActiveState] = createSignal<MaterialRecipeState>('focus');
@@ -472,6 +521,12 @@ export const UiMaterialLabScreen = () => {
 
   const update = <K extends keyof LabControls>(key: K, value: LabControls[K]) => {
     setControls((current) => ({ ...current, [key]: value }));
+  };
+
+  const activeRecipe = createMemo(() => controlsToRecipe(controls()));
+
+  const updateFromRecipe = (recipe: MaterialRecipe) => {
+    setControls((current) => recipeToControls(recipe, current));
   };
 
   const presetOptions = createMemo(() => [
@@ -552,143 +607,7 @@ export const UiMaterialLabScreen = () => {
     }
   };
 
-  const updateMaterial = (material: MaterialKind) => {
-    setControls((current) => ({
-      ...current,
-      material,
-      textureStrength: material === 'none'
-        ? 0
-        : material === 'raw' && current.texture !== 'none'
-          ? 100
-          : current.textureStrength,
-    }));
-  };
-
-  const updateTexture = (texture: TextureKind) => {
-    setControls((current) => ({
-      ...current,
-      texture,
-      textureStrength: texture === 'none'
-        ? 0
-        : current.textureStrength === 0
-          ? current.material === 'none' ? 0 : current.material === 'raw' ? 100 : 58
-          : current.textureStrength,
-    }));
-  };
-
-  const stateOverlay = () => controls().states[activeState()];
-
-  const updateState = <K extends keyof MaterialStateOverlay>(key: K, value: MaterialStateOverlay[K]) => {
-    setControls((current) => ({
-      ...current,
-      states: {
-        ...current.states,
-        [activeState()]: {
-          ...current.states[activeState()],
-          [key]: value,
-        },
-      },
-    }));
-  };
-
-  const toggleCorner = (corner: CornerName) => {
-    setControls((current) => {
-      const overlay = current.states[activeState()];
-      const exists = overlay.corners.includes(corner);
-      return {
-        ...current,
-        states: {
-          ...current.states,
-          [activeState()]: {
-            ...overlay,
-            corners: exists
-              ? overlay.corners.filter((item) => item !== corner)
-              : [...overlay.corners, corner],
-          },
-        },
-      };
-    });
-  };
-
-  const toggleBorderEdge = (edge: EdgeName) => {
-    setControls((current) => {
-      const exists = current.borderEdges.includes(edge);
-      return {
-        ...current,
-        borderEdges: exists
-          ? current.borderEdges.filter((item) => item !== edge)
-          : [...current.borderEdges, edge],
-      };
-    });
-  };
-
-  const toggleGlowEdge = (edge: EdgeName) => {
-    setControls((current) => {
-      const overlay = current.states[activeState()];
-      const exists = overlay.edgeHighlight.includes(edge);
-      return {
-        ...current,
-        states: {
-          ...current.states,
-          [activeState()]: {
-            ...overlay,
-            edgeHighlight: exists
-              ? overlay.edgeHighlight.filter((item) => item !== edge)
-              : [...overlay.edgeHighlight, edge],
-          },
-        },
-      };
-    });
-  };
-
-  const surfaceProps = createMemo(() => {
-    const current = controls();
-    const overlay = current.states[activeState()];
-    const overlayActive = overlay.enabled && overlay.glow !== 'none' && overlay.glowStrength > 0;
-    return {
-      material: current.material,
-      glass: current.glass,
-      texture: current.texture,
-      shape: current.shape,
-      border: current.borderEdges,
-      edgeWearTexture: current.edgeWearTexture,
-      edgeWearOpacity: current.edgeWearOpacity,
-      edgeWearWidth: current.edgeWearWidth,
-      edgeWearScale: current.edgeWearScale,
-      edgeWearLayer: current.edgeWearLayer,
-      corners: overlayActive ? overlay.corners : [],
-      edgeHighlight: overlayActive ? overlay.edgeHighlight : [],
-      glow: overlayActive ? overlay.glow : 'none',
-      tint: current.tint,
-      gradient: current.gradient,
-      sheen: current.sheen,
-      selected: overlayActive && activeState() !== 'hover',
-      hoverPreview: overlayActive && activeState() === 'hover',
-      textureStrength: current.textureStrength,
-      textureScale: current.textureScale,
-      glowStrength: overlayActive ? overlay.glowStrength : 0,
-      tintStrength: current.tintStrength,
-      glassOpacity: current.glassOpacity,
-      glassBlur: current.glassBlur,
-      glassHighlightWidth: current.glassHighlightWidth,
-      glassHighlightHeight: current.glassHighlightHeight,
-      glassHighlightY: current.glassHighlightY,
-      borderOpacity: current.borderOpacity,
-      lightStrength: current.lightStrength,
-      darkStrength: current.darkStrength,
-      cornerSize: overlayActive ? overlay.cornerSize : 16,
-      radius: current.radius,
-      textContent: current.textContent,
-      contentLayer: current.contentLayer,
-      textFontFamily: current.textFontFamily,
-      textSizeRem: current.textSizeRem,
-      textTone: current.textTone,
-      textEmboss: current.textEmboss,
-      textAlign: current.textAlign,
-      textX: current.textX,
-      textY: current.textY,
-    };
-  });
+  const surfaceProps = createMemo(() => materialRecipeToSurfaceProps(activeRecipe(), activeState()));
 
   const propsReadout = createMemo(() => JSON.stringify({
     target: controls().target,
@@ -873,464 +792,35 @@ export const UiMaterialLabScreen = () => {
                   </div>
                   </div>
 
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Surface</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Base layer. Glass is a separate translucent pane above it.">
-                      Base
-                    </ControlLabel>
-                    <Segments
-                      value={controls().material}
-                      options={materialOptions}
-                      labels={{ raw: 'texture' }}
-                      onChange={updateMaterial}
-                    />
-                  </div>
+                  <MaterialRecipeEditor
+                    recipe={activeRecipe()}
+                    onChange={updateFromRecipe}
+                    extraControls={
+                      <div class="ui-lab-control-group">
+                        <SectionLabel size="xs">Special</SectionLabel>
+                        <div class="ui-lab-control-row">
+                          <ControlLabel tip="Chooses which authored state is shown in the primary preview. The glow section controls which state is being edited.">
+                            Preview State
+                          </ControlLabel>
+                          <Segments
+                            value={activeState()}
+                            options={materialRecipeStates}
+                            labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
+                            onChange={setActiveState}
+                          />
+                        </div>
 
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Selects which image file is used by the material texture layer. None disables the layer.">
-                      Texture
-                    </ControlLabel>
-                    <select
-                      class="ui-lab-select"
-                      value={controls().texture}
-                      onChange={(event) => updateTexture(event.currentTarget.value as TextureKind)}
-                    >
-                      <For each={textureOptions}>
-                        {(texture) => <option value={texture.id}>{texture.label}</option>}
-                      </For>
-                    </select>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Texture opacity. Higher values make the selected texture layer more visible; lower values let the base material and gradients dominate.">
-                      Tex Opacity
-                    </ControlLabel>
-                    <Slider
-                      value={controls().textureStrength}
-                      onInput={(value) => update('textureStrength', controls().texture === 'none' ? 0 : value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Texture tile size in CSS pixels. Snaps to powers of two so the 1K source map is not blurred by odd scaling. Larger values show more source detail and less repetition.">
-                      Tex Scale
-                    </ControlLabel>
-                    <TextureScaleSlider
-                      value={controls().textureScale}
-                      onInput={(value) => update('textureScale', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Optional color wash over the base material and texture. None skips the tint layer entirely.">
-                      Tint
-                    </ControlLabel>
-                    <Segments
-                      value={controls().tint}
-                      options={tintOptions}
-                      onChange={(value) => update('tint', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Opacity for the optional tint wash. At zero, the tint layer is not rendered.">
-                      Tint Power
-                    </ControlLabel>
-                    <Slider
-                      value={controls().tintStrength}
-                      min={0}
-                      max={100}
-                      onInput={(value) => update('tintStrength', controls().tint === 'none' ? 0 : value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Surface silhouette. Rect keeps square corners with radius; beveled clips the corners into a cyber-slab shape.">
-                      Shape
-                    </ControlLabel>
-                    <Segments
-                      value={controls().shape}
-                      options={shapeOptions}
-                      onChange={(value) => update('shape', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Surface border radius in CSS pixels. Keep this small for the sharp sci-fi slab look.">
-                      Radius
-                    </ControlLabel>
-                    <Slider value={controls().radius} min={0} max={8} onInput={(value) => update('radius', value)} />
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Glass</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Adds a separate translucent glass pane above the base material and texture.">
-                      Enabled
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().glass} onClick={() => update('glass', !controls().glass)}>on</ToggleButton>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Strength of the glass pane and specular highlight. The base material remains visible underneath.">
-                      Alpha
-                    </ControlLabel>
-                    <Slider value={controls().glassOpacity} onInput={(value) => update('glassOpacity', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Backdrop blur for the glass pane. This controls frostiness without changing the hard shine.">
-                      Blur
-                    </ControlLabel>
-                    <Slider
-                      value={controls().glassBlur}
-                      min={0}
-                      max={24}
-                      onInput={(value) => update('glassBlur', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Horizontal length of the main glass reflection band.">
-                      Shine Width
-                    </ControlLabel>
-                    <Slider
-                      value={controls().glassHighlightWidth}
-                      onInput={(value) => update('glassHighlightWidth', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Vertical thickness of the main glass reflection band.">
-                      Shine Height
-                    </ControlLabel>
-                    <Slider
-                      value={controls().glassHighlightHeight}
-                      onInput={(value) => update('glassHighlightHeight', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Vertical position of the glass reflection band from the top edge.">
-                      Shine Y
-                    </ControlLabel>
-                    <Slider
-                      value={controls().glassHighlightY}
-                      onInput={(value) => update('glassHighlightY', value)}
-                    />
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Border</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Pick the individual sides that draw the neutral surface border. Turning all four off hides it.">
-                      Sides
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <For each={borderEdgeOptions}>
-                        {(edge) => (
-                          <ToggleButton active={controls().borderEdges.includes(edge)} onClick={() => toggleBorderEdge(edge)}>
-                            {edge}
-                          </ToggleButton>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Border opacity for the selected neutral border sides. Turn all sides off to hide the border entirely.">
-                      Alpha
-                    </ControlLabel>
-                    <Slider value={controls().borderOpacity} onInput={(value) => update('borderOpacity', value)} />
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Edge Wear</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Texture used as the alpha mask for micro-chipped edge wear. It can be different from the main surface texture. None disables the wear layer.">
-                      Texture
-                    </ControlLabel>
-                    <select
-                      class="ui-lab-select"
-                      value={controls().edgeWearTexture}
-                      onChange={(event) => update('edgeWearTexture', event.currentTarget.value as EdgeTextureKind)}
-                    >
-                      <For each={edgeTextureOptions}>
-                        {(texture) => <option value={texture.id}>{texture.label}</option>}
-                      </For>
-                    </select>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Controls whether edge wear sits below glow/highlight layers or above them so it can cut into hover and selected borders too.">
-                      Layer
-                    </ControlLabel>
-                    <Segments
-                      value={controls().edgeWearLayer}
-                      options={edgeWearLayerOptions}
-                      labels={{ 'below-highlights': 'below', 'above-highlights': 'above' }}
-                      onChange={(value) => update('edgeWearLayer', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Strength of the masked edge erosion. Higher values make chipped portions cut darker into the border and surface edge.">
-                      Alpha
-                    </ControlLabel>
-                    <Slider
-                      value={controls().edgeWearOpacity}
-                      onInput={(value) => update('edgeWearOpacity', controls().edgeWearTexture === 'none' ? 0 : value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Width of the inward edge ring in CSS pixels. Higher values make the worn texture reach farther into the surface.">
-                      Width
-                    </ControlLabel>
-                    <Slider value={controls().edgeWearWidth} min={1} max={24} onInput={(value) => update('edgeWearWidth', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Tile size for the edge-wear texture. Smaller values create finer/noisier edge detail.">
-                      Scale
-                    </ControlLabel>
-                    <TextureScaleSlider
-                      value={controls().edgeWearScale}
-                      onInput={(value) => update('edgeWearScale', value)}
-                    />
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">State Overlay</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Choose which authored state you are editing and previewing. None is the normal/rest surface; Focus is the active nav/button state.">
-                      State
-                    </ControlLabel>
-                    <Segments
-                      value={activeState()}
-                      options={materialRecipeStates}
-                      labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
-                      onChange={setActiveState}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Turns the glow/highlight overlay on for the selected state. Off means this state uses only the base material.">
-                      Enabled
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={stateOverlay().enabled} onClick={() => updateState('enabled', !stateOverlay().enabled)}>on</ToggleButton>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Pick individual corner brackets for this state.">
-                      Corners
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <For each={cornerOptions}>
-                        {(corner) => (
-                          <ToggleButton active={stateOverlay().corners.includes(corner)} onClick={() => toggleCorner(corner)}>
-                            {corner.replace('-', ' ')}
-                          </ToggleButton>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Pick individual edge highlight lines for this state.">
-                      Edges
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <For each={glowEdgeOptions}>
-                        {(edge) => (
-                          <ToggleButton active={stateOverlay().edgeHighlight.includes(edge)} onClick={() => toggleGlowEdge(edge)}>
-                            {edge}
-                          </ToggleButton>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Color used by corner brackets, edge highlights, and their drop glow for this state.">
-                      Glow
-                    </ControlLabel>
-                    <Segments
-                      value={stateOverlay().glow}
-                      options={glowOptions}
-                      onChange={(value) => updateState('glow', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Intensity for this state's brackets and edge highlights. Higher values thicken the lit line and expand the halo.">
-                      Glow Power
-                    </ControlLabel>
-                    <Slider value={stateOverlay().glowStrength} min={0} max={100} onInput={(value) => updateState('glowStrength', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Length of this state's glowing corner bracket segments in CSS pixels.">
-                      Bracket Size
-                    </ControlLabel>
-                    <Slider value={stateOverlay().cornerSize} min={8} max={34} onInput={(value) => updateState('cornerSize', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Simulates unavailable interaction state. The authored none/hover/focus state is controlled above.">
-                      Disabled
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().disabled} onClick={() => update('disabled', !controls().disabled)}>disabled</ToggleButton>
-                    </div>
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Text</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Preview label text. Use commas for split button rows, such as nav labels.">
-                      Content
-                    </ControlLabel>
-                    <input
-                      class="ui-lab-input"
-                      value={controls().textContent}
-                      onInput={(event) => update('textContent', event.currentTarget.value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Font family applied to content inside the material surface.">
-                      Font
-                    </ControlLabel>
-                    <select
-                      class="ui-lab-select"
-                      value={controls().textFontFamily}
-                      onChange={(event) => update('textFontFamily', event.currentTarget.value)}
-                    >
-                      <For each={materialRecipeTextFonts}>
-                        {(font) => <option value={font.value}>{font.label}</option>}
-                      </For>
-                    </select>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Font size in rem units.">
-                      Size
-                    </ControlLabel>
-                    <Slider
-                      value={controls().textSizeRem}
-                      min={0.5}
-                      max={3}
-                      step={0.05}
-                      onInput={(value) => update('textSizeRem', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Text tone with matching emboss/shadow defaults.">
-                      Color
-                    </ControlLabel>
-                    <Segments
-                      value={controls().textTone}
-                      options={materialRecipeTextTones}
-                      onChange={(value) => update('textTone', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Adds the appropriate highlight or shadow for engraved glass text.">
-                      Emboss
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().textEmboss} onClick={() => update('textEmboss', !controls().textEmboss)}>on</ToggleButton>
-                    </div>
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Horizontal text alignment inside the material surface.">
-                      Align
-                    </ControlLabel>
-                    <Segments
-                      value={controls().textAlign}
-                      options={materialRecipeTextAligns}
-                      onChange={(value) => update('textAlign', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Whether content is engraved above the glass pane or printed under it.">
-                      Layer
-                    </ControlLabel>
-                    <Segments
-                      value={controls().contentLayer}
-                      options={materialRecipeContentLayers}
-                      labels={{ 'over-glass': 'over', 'under-glass': 'under' }}
-                      onChange={(value) => update('contentLayer', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Horizontal text offset in CSS pixels.">
-                      X
-                    </ControlLabel>
-                    <Slider value={controls().textX} min={-80} max={80} onInput={(value) => update('textX', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Vertical text offset in CSS pixels.">
-                      Y
-                    </ControlLabel>
-                    <Slider value={controls().textY} min={-80} max={80} onInput={(value) => update('textY', value)} />
-                  </div>
-                  </div>
-
-                  <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Gradient</SectionLabel>
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Vertical light/dark wash over the material. None removes this wash; use Side Sheen to control the diagonal left-to-right shine separately.">
-                      Mode
-                    </ControlLabel>
-                    <Segments
-                      value={controls().gradient}
-                      options={gradientOptions}
-                      labels={{ 'top-light': 'top', 'bottom-dark': 'bottom' }}
-                      onChange={(value) => update('gradient', value)}
-                    />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="White highlight opacity in the gradient wash. This controls the bright top side and the bright side-sheen component.">
-                      White
-                    </ControlLabel>
-                    <Slider value={controls().lightStrength} min={0} max={100} onInput={(value) => update('lightStrength', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Dark shadow opacity in the gradient wash. This controls the bottom shadow and the dark side-sheen component.">
-                      Dark
-                    </ControlLabel>
-                    <Slider value={controls().darkStrength} min={0} max={100} onInput={(value) => update('darkStrength', value)} />
-                  </div>
-
-                  <div class="ui-lab-control-row">
-                    <ControlLabel tip="Toggles the diagonal/side sheen that can read like a left-to-right gradient. Turn this off when you want only the vertical gradient.">
-                      Side Sheen
-                    </ControlLabel>
-                    <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().sheen} onClick={() => update('sheen', !controls().sheen)}>on</ToggleButton>
-                    </div>
-                  </div>
-                  </div>
+                        <div class="ui-lab-control-row">
+                          <ControlLabel tip="Simulates unavailable interaction state. The authored none/hover/focus state is controlled separately.">
+                            Disabled
+                          </ControlLabel>
+                          <div class="ui-lab-toggles">
+                            <ToggleButton active={controls().disabled} onClick={() => update('disabled', !controls().disabled)}>disabled</ToggleButton>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  />
 
                 </div>
               </MaterialPanel>
