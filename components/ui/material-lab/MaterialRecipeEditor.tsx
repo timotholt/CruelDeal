@@ -27,6 +27,7 @@ import {
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
+  materialRecipeTextTones,
   materialRecipeTextureScales,
   materialRecipeTints,
   type MaterialRecipeState,
@@ -395,6 +396,30 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
               labels={Object.fromEntries(materialRecipeTextFonts.map((option) => [option.value, option.label]))}
               onChange={(value) => update('textFontFamily', value)}
             />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Size</ControlLabel>
+            <Slider
+              value={props.recipe.textSizeRem}
+              min={0.5}
+              max={3}
+              step={0.05}
+              onInput={(value) => update('textSizeRem', value)}
+            />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Color</ControlLabel>
+            <Segments
+              value={props.recipe.textTone}
+              options={materialRecipeTextTones}
+              onChange={(value) => update('textTone', value)}
+            />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Emboss</ControlLabel>
+            <div class="ui-lab-toggles">
+              <ToggleButton active={props.recipe.textEmboss} onClick={() => update('textEmboss', !props.recipe.textEmboss)}>on</ToggleButton>
+            </div>
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Align</ControlLabel>

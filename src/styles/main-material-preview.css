@@ -219,12 +219,12 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-currency-chip .cd-button__label {
-  color: #16140f;
-  font-size: 11px;
+  color: var(--content-color);
+  font-size: var(--content-size, 11px);
   font-style: italic;
   letter-spacing: 0;
   line-height: 1;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
+  text-shadow: var(--content-shadow);
 }
 
 .main-material-currency-icon {
@@ -500,20 +500,20 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-action .cd-button__label {
-  color: #17140f;
-  font-size: 11px;
+  color: var(--content-color);
+  font-size: var(--content-size, 11px);
   font-style: italic;
   letter-spacing: 0;
   line-height: 0.88;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.38);
+  text-shadow: var(--content-shadow);
 }
 
 .main-material-action--dark .cd-button__label {
-  color: #17140f;
+  color: var(--content-color);
 }
 
 .main-material-action--red .cd-button__label {
-  color: #17140f;
+  color: var(--content-color);
 }
 
 .main-material-nav-item {
@@ -542,7 +542,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-nav-item .cd-button__icon {
-  color: #17140f;
+  color: var(--content-color);
 }
 
 .main-material-nav-item .cd-button__label {
@@ -550,18 +550,18 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   min-height: 8px;
   max-width: 100%;
   overflow: hidden;
-  color: #17140f;
-  font-size: 8px;
+  color: var(--content-color);
+  font-size: var(--content-size, 8px);
   font-style: italic;
   letter-spacing: 0;
   line-height: 1;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.38);
+  text-shadow: var(--content-shadow);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .main-material-nav-item.is-active .cd-button__label {
-  color: #17140f;
+  color: var(--content-color);
 }
 
 .main-material-page .is-editing {

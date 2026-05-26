@@ -14,6 +14,7 @@ import type {
   TintTone,
   ContentAlign,
   ContentLayer,
+  TextTone,
 } from './MaterialPrimitives';
 
 export interface MaterialRecipe {
@@ -46,6 +47,9 @@ export interface MaterialRecipe {
   textContent: string;
   contentLayer: ContentLayer;
   textFontFamily: string;
+  textSizeRem: number;
+  textTone: TextTone;
+  textEmboss: boolean;
   textAlign: ContentAlign;
   textX: number;
   textY: number;
@@ -75,6 +79,7 @@ export const materialRecipeTextureScales = [128, 256, 512, 1024] as const;
 export const materialRecipeEdgeWearLayers = ['below-highlights', 'above-highlights'] as const;
 export const materialRecipeContentLayers: ContentLayer[] = ['over-glass', 'under-glass'];
 export const materialRecipeTextAligns: ContentAlign[] = ['left', 'center', 'right'];
+export const materialRecipeTextTones: TextTone[] = ['black', 'white'];
 export const materialRecipeTextFonts = [
   { label: 'inherit', value: 'inherit' },
   { label: 'condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
@@ -144,6 +149,9 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
   textContent: '',
   contentLayer: 'over-glass',
   textFontFamily: 'inherit',
+  textSizeRem: 0.8125,
+  textTone: 'white',
+  textEmboss: true,
   textAlign: 'center',
   textX: 0,
   textY: 0,
@@ -249,6 +257,9 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
       ? input.textFontFamily
       : fallback.textFontFamily,
+    textSizeRem: clamp(input.textSizeRem, fallback.textSizeRem, 0.5, 3),
+    textTone: isOneOf(input.textTone, materialRecipeTextTones) ? input.textTone : fallback.textTone,
+    textEmboss: typeof input.textEmboss === 'boolean' ? input.textEmboss : fallback.textEmboss,
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
     textX: clamp(input.textX, fallback.textX, -80, 80),
     textY: clamp(input.textY, fallback.textY, -80, 80),
@@ -297,6 +308,9 @@ export const materialRecipeToSurfaceProps = (recipe: MaterialRecipe, state: Mate
   textContent: recipe.textContent,
   contentLayer: recipe.contentLayer,
   textFontFamily: recipe.textFontFamily,
+  textSizeRem: recipe.textSizeRem,
+  textTone: recipe.textTone,
+  textEmboss: recipe.textEmboss,
   textAlign: recipe.textAlign,
   textX: recipe.textX,
   textY: recipe.textY,

@@ -62,13 +62,14 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v10';
+const storageKey = 'cruel-deal.main-material-preview.v11';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
   'cruel-deal.main-material-preview.v7',
   'cruel-deal.main-material-preview.v8',
   'cruel-deal.main-material-preview.v9',
+  'cruel-deal.main-material-preview.v10',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -189,6 +190,8 @@ const defaultCurrencySurface = createMaterialRecipe({
   lightStrength: 34,
   darkStrength: 14,
   radius: 4,
+  textTone: 'black',
+  textSizeRem: 0.6875,
 });
 
 const defaultFeedSurface = createMaterialRecipe({
@@ -226,6 +229,8 @@ const defaultToolbarSurface = createMaterialRecipe({
   lightStrength: 42,
   darkStrength: 28,
   radius: 6,
+  textTone: 'black',
+  textSizeRem: 0.6875,
 });
 
 const defaultNavSurface = createMaterialRecipe({
@@ -243,6 +248,8 @@ const defaultNavSurface = createMaterialRecipe({
   lightStrength: 48,
   darkStrength: 28,
   radius: 6,
+  textTone: 'black',
+  textSizeRem: 0.5,
   states: createMaterialStateOverlays({
     focus: {
       enabled: true,

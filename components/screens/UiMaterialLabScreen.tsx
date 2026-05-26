@@ -30,6 +30,7 @@ import {
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
+  materialRecipeTextTones,
   type CornerName,
   type ContentAlign,
   type ContentLayer,
@@ -44,6 +45,7 @@ import {
   type SurfaceGradient,
   type TintTone,
   type TextureKind,
+  type TextTone,
   edgeTextureOptions,
   textureOptions,
 } from '../ui/material-lab';
@@ -89,19 +91,23 @@ interface LabControls {
   textContent: string;
   contentLayer: ContentLayer;
   textFontFamily: string;
+  textSizeRem: number;
+  textTone: TextTone;
+  textEmboss: boolean;
   textAlign: ContentAlign;
   textX: number;
   textY: number;
 }
 
-const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v5';
+const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v6';
 const obsoletePresetStorageKeys = [
   'cruel-deal.ui-material-lab.presets.v1',
   'cruel-deal.ui-material-lab.presets.v2',
   'cruel-deal.ui-material-lab.presets.v3',
   'cruel-deal.ui-material-lab.presets.v4',
+  'cruel-deal.ui-material-lab.presets.v5',
 ];
-const presetStorageVersion = 5;
+const presetStorageVersion = 6;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
@@ -157,6 +163,9 @@ const controlDefaults: LabControls = {
   textContent: 'View Intel',
   contentLayer: 'over-glass',
   textFontFamily: 'inherit',
+  textSizeRem: 0.8125,
+  textTone: 'white',
+  textEmboss: true,
   textAlign: 'center',
   textX: 0,
   textY: 0,
@@ -255,6 +264,9 @@ const sanitizeControls = (value: unknown): LabControls => {
     textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
       ? input.textFontFamily
       : controlDefaults.textFontFamily,
+    textSizeRem: clamp(input.textSizeRem, controlDefaults.textSizeRem, 0.5, 3),
+    textTone: isOneOf(input.textTone, materialRecipeTextTones) ? input.textTone : controlDefaults.textTone,
+    textEmboss: typeof input.textEmboss === 'boolean' ? input.textEmboss : controlDefaults.textEmboss,
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : controlDefaults.textAlign,
     textX: clamp(input.textX, controlDefaults.textX, -80, 80),
     textY: clamp(input.textY, controlDefaults.textY, -80, 80),
@@ -669,6 +681,9 @@ export const UiMaterialLabScreen = () => {
       textContent: current.textContent,
       contentLayer: current.contentLayer,
       textFontFamily: current.textFontFamily,
+      textSizeRem: current.textSizeRem,
+      textTone: current.textTone,
+      textEmboss: current.textEmboss,
       textAlign: current.textAlign,
       textX: current.textX,
       textY: current.textY,
@@ -1206,6 +1221,39 @@ export const UiMaterialLabScreen = () => {
                         {(font) => <option value={font.value}>{font.label}</option>}
                       </For>
                     </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Font size in rem units.">
+                      Size
+                    </ControlLabel>
+                    <Slider
+                      value={controls().textSizeRem}
+                      min={0.5}
+                      max={3}
+                      step={0.05}
+                      onInput={(value) => update('textSizeRem', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Text tone with matching emboss/shadow defaults.">
+                      Color
+                    </ControlLabel>
+                    <Segments
+                      value={controls().textTone}
+                      options={materialRecipeTextTones}
+                      onChange={(value) => update('textTone', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Adds the appropriate highlight or shadow for engraved glass text.">
+                      Emboss
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <ToggleButton active={controls().textEmboss} onClick={() => update('textEmboss', !controls().textEmboss)}>on</ToggleButton>
+                    </div>
                   </div>
 
                   <div class="ui-lab-control-row">

@@ -13,6 +13,7 @@ export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
 export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
 export type ContentLayer = 'over-glass' | 'under-glass';
 export type ContentAlign = 'left' | 'center' | 'right';
+export type TextTone = 'black' | 'white';
 
 interface SurfaceOptions {
   material?: MaterialKind;
@@ -51,6 +52,9 @@ interface SurfaceOptions {
   textContent?: string;
   contentLayer?: ContentLayer;
   textFontFamily?: string;
+  textSizeRem?: number;
+  textTone?: TextTone;
+  textEmboss?: boolean;
   textAlign?: ContentAlign;
   textX?: number;
   textY?: number;
@@ -180,6 +184,14 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const tint = tintColors[options.tint || 'none'];
   const contentAlign = options.textAlign || 'center';
   const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
+  const textTone = options.textTone || 'white';
+  const textColor = textTone === 'black' ? 'rgb(23 20 15)' : 'rgb(244 238 224)';
+  const textEmboss = options.textEmboss !== false;
+  const textShadow = textEmboss
+    ? textTone === 'black'
+      ? '0 1px 0 rgb(255 255 255 / 0.38)'
+      : '0 2px 6px rgb(0 0 0 / 0.64)'
+    : 'none';
 
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
@@ -237,6 +249,9 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--edge-bottom': edges.includes('bottom') ? activeEdgeColor : 'transparent',
     '--edge-left': edges.includes('left') ? activeEdgeColor : 'transparent',
     '--content-font-family': options.textFontFamily || 'inherit',
+    '--content-size': `${options.textSizeRem ?? 0.8125}rem`,
+    '--content-color': textColor,
+    '--content-shadow': textShadow,
     '--content-align': contentAlign,
     '--content-justify': contentJustify,
     '--content-x': `${options.textX ?? 0}px`,
@@ -342,6 +357,9 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'textContent',
     'contentLayer',
     'textFontFamily',
+    'textSizeRem',
+    'textTone',
+    'textEmboss',
     'textAlign',
     'textX',
     'textY',
@@ -416,6 +434,9 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'textContent',
     'contentLayer',
     'textFontFamily',
+    'textSizeRem',
+    'textTone',
+    'textEmboss',
     'textAlign',
     'textX',
     'textY',

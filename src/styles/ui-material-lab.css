@@ -765,6 +765,9 @@
   --glass-highlight-height: 34%;
   --glass-highlight-y: 10%;
   --content-font-family: inherit;
+  --content-size: 0.8125rem;
+  --content-color: #f4eee0;
+  --content-shadow: 0 2px 6px rgba(0,0,0,0.64);
   --content-align: center;
   --content-justify: center;
   --content-x: 0px;
@@ -1164,7 +1167,9 @@
   position: relative;
   z-index: 2;
   font-family: var(--content-font-family);
+  color: var(--content-color);
   text-align: var(--content-align);
+  text-shadow: var(--content-shadow);
   transform: translate(var(--content-x), var(--content-y));
 }
 
@@ -1218,13 +1223,13 @@
 
 .cd-button__label {
   min-width: 0;
-  color: #f4eee0;
-  font-size: 13px;
+  color: var(--content-color);
+  font-size: var(--content-size);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: 0.04em;
   text-align: center;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.64);
+  text-shadow: var(--content-shadow);
 }
 
 .cd-button__icon {
