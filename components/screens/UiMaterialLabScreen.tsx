@@ -25,11 +25,15 @@ import {
   UserIcon,
   MaterialButton,
   MaterialPanel,
+  createMaterialStateOverlays,
+  materialRecipeStates,
   type CornerName,
   type EdgeName,
   type EdgeTextureKind,
   type EdgeWearLayer,
   type GlowTone,
+  type MaterialRecipeState,
+  type MaterialStateOverlay,
   type MaterialKind,
   type ShapeKind,
   type SurfaceGradient,
@@ -60,31 +64,28 @@ interface LabControls {
   edgeWearWidth: number;
   edgeWearScale: number;
   edgeWearLayer: EdgeWearLayer;
-  glowCorners: CornerName[];
-  glowEdges: EdgeName[];
-  glow: GlowTone;
+  states: Record<MaterialRecipeState, MaterialStateOverlay>;
   tint: TintTone;
   gradient: SurfaceGradient;
   sheen: boolean;
-  selected: boolean;
   disabled: boolean;
-  hoverPreview: boolean;
   textureStrength: number;
   textureScale: number;
-  glowStrength: number;
   tintStrength: number;
   glassOpacity: number;
   glassBlur: number;
   borderOpacity: number;
   lightStrength: number;
   darkStrength: number;
-  cornerSize: number;
   radius: number;
 }
 
-const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v2';
-const obsoletePresetStorageKeys = ['cruel-deal.ui-material-lab.presets.v1'];
-const presetStorageVersion = 2;
+const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v3';
+const obsoletePresetStorageKeys = [
+  'cruel-deal.ui-material-lab.presets.v1',
+  'cruel-deal.ui-material-lab.presets.v2',
+];
+const presetStorageVersion = 3;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
@@ -111,25 +112,28 @@ const controlDefaults: LabControls = {
   edgeWearWidth: 5,
   edgeWearScale: 256,
   edgeWearLayer: 'below-highlights',
-  glowCorners: [],
-  glowEdges: [],
-  glow: 'none',
+  states: createMaterialStateOverlays({
+    focus: {
+      enabled: true,
+      glow: 'gold',
+      glowStrength: 48,
+      corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
+      edgeHighlight: ['top', 'bottom'],
+      cornerSize: 18,
+    },
+  }),
   tint: 'none',
   gradient: 'none',
   sheen: false,
-  selected: false,
   disabled: false,
-  hoverPreview: false,
   textureStrength: 100,
   textureScale: 512,
-  glowStrength: 50,
   tintStrength: 32,
   glassOpacity: 42,
   glassBlur: 10,
   borderOpacity: 50,
   lightStrength: 20,
   darkStrength: 32,
-  cornerSize: 18,
   radius: 6,
 };
 
@@ -161,38 +165,32 @@ const uniqueCorners = (value: unknown, fallback: CornerName[]): CornerName[] => 
     : fallback
 );
 
-const edgesFromLegacyPreset = (preset: unknown): EdgeName[] | null => {
-  if (Array.isArray(preset)) return uniqueEdges(preset, []);
-  if (preset === 'all') return ['top', 'right', 'bottom', 'left'];
-  if (preset === 'three-sided') return ['top', 'right', 'left'];
-  if (borderEdgeOptions.includes(preset as EdgeName)) return [preset as EdgeName];
-  if (preset === 'none') return [];
-  return null;
+const sanitizeStateOverlay = (value: unknown, fallback: MaterialStateOverlay): MaterialStateOverlay => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<MaterialStateOverlay> : {};
+  return {
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
+    glow: isOneOf(input.glow, glowOptions) ? input.glow : fallback.glow,
+    glowStrength: clamp(input.glowStrength, fallback.glowStrength, 0, 100),
+    corners: uniqueCorners(input.corners, fallback.corners),
+    edgeHighlight: uniqueEdges(input.edgeHighlight, fallback.edgeHighlight),
+    cornerSize: clamp(input.cornerSize, fallback.cornerSize, 8, 34),
+  };
 };
 
-const cornersFromLegacyPreset = (preset: unknown): CornerName[] | null => {
-  if (Array.isArray(preset)) return uniqueCorners(preset, []);
-  if (preset === 'all') return ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
-  if (preset === 'top') return ['top-left', 'top-right'];
-  if (preset === 'right') return ['top-right', 'bottom-right'];
-  if (preset === 'bottom') return ['bottom-left', 'bottom-right'];
-  if (preset === 'left') return ['top-left', 'bottom-left'];
-  if (preset === 'none') return [];
-  return null;
+const sanitizeStateOverlays = (value: unknown): Record<MaterialRecipeState, MaterialStateOverlay> => {
+  const input = typeof value === 'object' && value !== null
+    ? value as Partial<Record<MaterialRecipeState, unknown>>
+    : {};
+  const fallback = controlDefaults.states;
+  return {
+    rest: sanitizeStateOverlay(input.rest, fallback.rest),
+    hover: sanitizeStateOverlay(input.hover, fallback.hover),
+    focus: sanitizeStateOverlay(input.focus, fallback.focus),
+  };
 };
 
 const sanitizeControls = (value: unknown): LabControls => {
   const input = typeof value === 'object' && value !== null ? value as Partial<LabControls> : {};
-  const legacyInput = input as Partial<LabControls> & {
-    borderPreset?: unknown;
-    customBorderEdges?: unknown;
-    cornerPreset?: unknown;
-    customCorners?: unknown;
-    edgeHighlight?: unknown;
-  };
-  const legacyBorderEdges = edgesFromLegacyPreset(legacyInput.borderPreset);
-  const legacyGlowCorners = cornersFromLegacyPreset(legacyInput.cornerPreset);
-  const legacyGlowEdges = edgesFromLegacyPreset(legacyInput.edgeHighlight);
   return {
     target: isOneOf(input.target, previewTargetOptions) ? input.target : controlDefaults.target,
     applyToControlPanel: typeof input.applyToControlPanel === 'boolean' ? input.applyToControlPanel : controlDefaults.applyToControlPanel,
@@ -200,10 +198,7 @@ const sanitizeControls = (value: unknown): LabControls => {
     glass: typeof input.glass === 'boolean' ? input.glass : controlDefaults.glass,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
     shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
-    borderEdges: uniqueEdges(
-      input.borderEdges,
-      legacyBorderEdges ?? uniqueEdges(legacyInput.customBorderEdges, controlDefaults.borderEdges),
-    ),
+    borderEdges: uniqueEdges(input.borderEdges, controlDefaults.borderEdges),
     edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
     edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
     edgeWearWidth: clamp(input.edgeWearWidth, controlDefaults.edgeWearWidth, 1, 24),
@@ -211,30 +206,21 @@ const sanitizeControls = (value: unknown): LabControls => {
       ? input.edgeWearScale as typeof textureScaleStops[number]
       : controlDefaults.edgeWearScale,
     edgeWearLayer: isOneOf(input.edgeWearLayer, edgeWearLayerOptions) ? input.edgeWearLayer : controlDefaults.edgeWearLayer,
-    glowCorners: uniqueCorners(
-      input.glowCorners,
-      legacyGlowCorners ?? uniqueCorners(legacyInput.customCorners, controlDefaults.glowCorners),
-    ),
-    glowEdges: uniqueEdges(input.glowEdges, legacyGlowEdges ?? controlDefaults.glowEdges),
-    glow: isOneOf(input.glow, glowOptions) ? input.glow : controlDefaults.glow,
+    states: sanitizeStateOverlays(input.states),
     tint: isOneOf(input.tint, tintOptions) ? input.tint : controlDefaults.tint,
     gradient: isOneOf(input.gradient, gradientOptions) ? input.gradient : controlDefaults.gradient,
     sheen: typeof input.sheen === 'boolean' ? input.sheen : controlDefaults.sheen,
-    selected: typeof input.selected === 'boolean' ? input.selected : controlDefaults.selected,
     disabled: typeof input.disabled === 'boolean' ? input.disabled : controlDefaults.disabled,
-    hoverPreview: typeof input.hoverPreview === 'boolean' ? input.hoverPreview : controlDefaults.hoverPreview,
     textureStrength: clamp(input.textureStrength, controlDefaults.textureStrength, 0, 100),
     textureScale: textureScaleStops.includes(input.textureScale as typeof textureScaleStops[number])
       ? input.textureScale as typeof textureScaleStops[number]
       : controlDefaults.textureScale,
-    glowStrength: clamp(input.glowStrength, controlDefaults.glowStrength, 0, 100),
     tintStrength: clamp(input.tintStrength, controlDefaults.tintStrength, 0, 100),
     glassOpacity: clamp(input.glassOpacity, controlDefaults.glassOpacity, 0, 100),
     glassBlur: clamp(input.glassBlur, controlDefaults.glassBlur, 0, 24),
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
-    cornerSize: clamp(input.cornerSize, controlDefaults.cornerSize, 8, 34),
     radius: clamp(input.radius, controlDefaults.radius, 0, 8),
   };
 };
@@ -389,6 +375,7 @@ const TextureScaleSlider = (props: { value: number; onInput: (value: number) => 
 
 export const UiMaterialLabScreen = () => {
   const [controls, setControls] = createSignal<LabControls>(controlDefaults);
+  const [activeState, setActiveState] = createSignal<MaterialRecipeState>('focus');
   const [savedPresets, setSavedPresets] = createSignal<SavedPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = createSignal(defaultPresetId);
   const [presetName, setPresetName] = createSignal('Default');
@@ -541,14 +528,36 @@ export const UiMaterialLabScreen = () => {
     }));
   };
 
+  const stateOverlay = () => controls().states[activeState()];
+
+  const updateState = <K extends keyof MaterialStateOverlay>(key: K, value: MaterialStateOverlay[K]) => {
+    setControls((current) => ({
+      ...current,
+      states: {
+        ...current.states,
+        [activeState()]: {
+          ...current.states[activeState()],
+          [key]: value,
+        },
+      },
+    }));
+  };
+
   const toggleCorner = (corner: CornerName) => {
     setControls((current) => {
-      const exists = current.glowCorners.includes(corner);
+      const overlay = current.states[activeState()];
+      const exists = overlay.corners.includes(corner);
       return {
         ...current,
-        glowCorners: exists
-          ? current.glowCorners.filter((item) => item !== corner)
-          : [...current.glowCorners, corner],
+        states: {
+          ...current.states,
+          [activeState()]: {
+            ...overlay,
+            corners: exists
+              ? overlay.corners.filter((item) => item !== corner)
+              : [...overlay.corners, corner],
+          },
+        },
       };
     });
   };
@@ -567,18 +576,27 @@ export const UiMaterialLabScreen = () => {
 
   const toggleGlowEdge = (edge: EdgeName) => {
     setControls((current) => {
-      const exists = current.glowEdges.includes(edge);
+      const overlay = current.states[activeState()];
+      const exists = overlay.edgeHighlight.includes(edge);
       return {
         ...current,
-        glowEdges: exists
-          ? current.glowEdges.filter((item) => item !== edge)
-          : [...current.glowEdges, edge],
+        states: {
+          ...current.states,
+          [activeState()]: {
+            ...overlay,
+            edgeHighlight: exists
+              ? overlay.edgeHighlight.filter((item) => item !== edge)
+              : [...overlay.edgeHighlight, edge],
+          },
+        },
       };
     });
   };
 
   const surfaceProps = createMemo(() => {
     const current = controls();
+    const overlay = current.states[activeState()];
+    const overlayActive = overlay.enabled && overlay.glow !== 'none' && overlay.glowStrength > 0;
     return {
       material: current.material,
       glass: current.glass,
@@ -590,24 +608,24 @@ export const UiMaterialLabScreen = () => {
       edgeWearWidth: current.edgeWearWidth,
       edgeWearScale: current.edgeWearScale,
       edgeWearLayer: current.edgeWearLayer,
-      corners: current.glowCorners,
-      edgeHighlight: current.glowEdges,
-      glow: current.glow,
+      corners: overlayActive ? overlay.corners : [],
+      edgeHighlight: overlayActive ? overlay.edgeHighlight : [],
+      glow: overlayActive ? overlay.glow : 'none',
       tint: current.tint,
       gradient: current.gradient,
       sheen: current.sheen,
-      selected: current.selected,
-      hoverPreview: current.hoverPreview,
+      selected: overlayActive && activeState() !== 'hover',
+      hoverPreview: overlayActive && activeState() === 'hover',
       textureStrength: current.textureStrength,
       textureScale: current.textureScale,
-      glowStrength: current.glowStrength,
+      glowStrength: overlayActive ? overlay.glowStrength : 0,
       tintStrength: current.tintStrength,
       glassOpacity: current.glassOpacity,
       glassBlur: current.glassBlur,
       borderOpacity: current.borderOpacity,
       lightStrength: current.lightStrength,
       darkStrength: current.darkStrength,
-      cornerSize: current.cornerSize,
+      cornerSize: overlayActive ? overlay.cornerSize : 16,
       radius: current.radius,
     };
   });
@@ -615,7 +633,9 @@ export const UiMaterialLabScreen = () => {
   const propsReadout = createMemo(() => JSON.stringify({
     target: controls().target,
     applyToControlPanel: controls().applyToControlPanel,
+    previewState: activeState(),
     ...surfaceProps(),
+    states: controls().states,
     disabled: controls().disabled,
   }, null, 2));
 
@@ -995,15 +1015,36 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Glow State</SectionLabel>
+                    <SectionLabel size="xs">State Overlay</SectionLabel>
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Pick individual corner brackets for the selected or hover glow.">
+                    <ControlLabel tip="Choose which authored state you are editing and previewing. None is the normal/rest surface; Focus is the active nav/button state.">
+                      State
+                    </ControlLabel>
+                    <Segments
+                      value={activeState()}
+                      options={materialRecipeStates}
+                      labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
+                      onChange={setActiveState}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Turns the glow/highlight overlay on for the selected state. Off means this state uses only the base material.">
+                      Enabled
+                    </ControlLabel>
+                    <div class="ui-lab-toggles">
+                      <ToggleButton active={stateOverlay().enabled} onClick={() => updateState('enabled', !stateOverlay().enabled)}>on</ToggleButton>
+                    </div>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Pick individual corner brackets for this state.">
                       Corners
                     </ControlLabel>
                     <div class="ui-lab-toggles">
                       <For each={cornerOptions}>
                         {(corner) => (
-                          <ToggleButton active={controls().glowCorners.includes(corner)} onClick={() => toggleCorner(corner)}>
+                          <ToggleButton active={stateOverlay().corners.includes(corner)} onClick={() => toggleCorner(corner)}>
                             {corner.replace('-', ' ')}
                           </ToggleButton>
                         )}
@@ -1012,13 +1053,13 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Pick individual edge highlight lines for the selected or hover glow.">
+                    <ControlLabel tip="Pick individual edge highlight lines for this state.">
                       Edges
                     </ControlLabel>
                     <div class="ui-lab-toggles">
                       <For each={glowEdgeOptions}>
                         {(edge) => (
-                          <ToggleButton active={controls().glowEdges.includes(edge)} onClick={() => toggleGlowEdge(edge)}>
+                          <ToggleButton active={stateOverlay().edgeHighlight.includes(edge)} onClick={() => toggleGlowEdge(edge)}>
                             {edge}
                           </ToggleButton>
                         )}
@@ -1027,37 +1068,35 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Color used by corner brackets, edge highlights, and their drop glow. None disables the colored highlight.">
+                    <ControlLabel tip="Color used by corner brackets, edge highlights, and their drop glow for this state.">
                       Glow
                     </ControlLabel>
                     <Segments
-                      value={controls().glow}
+                      value={stateOverlay().glow}
                       options={glowOptions}
-                      onChange={(value) => update('glow', value)}
+                      onChange={(value) => updateState('glow', value)}
                     />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Intensity for corner brackets and edge highlights. Higher values thicken the lit line and expand the halo.">
+                    <ControlLabel tip="Intensity for this state's brackets and edge highlights. Higher values thicken the lit line and expand the halo.">
                       Glow Power
                     </ControlLabel>
-                    <Slider value={controls().glowStrength} min={0} max={100} onInput={(value) => update('glowStrength', value)} />
+                    <Slider value={stateOverlay().glowStrength} min={0} max={100} onInput={(value) => updateState('glowStrength', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Length of the glowing corner bracket segments in CSS pixels.">
+                    <ControlLabel tip="Length of this state's glowing corner bracket segments in CSS pixels.">
                       Bracket Size
                     </ControlLabel>
-                    <Slider value={controls().cornerSize} min={8} max={34} onInput={(value) => update('cornerSize', value)} />
+                    <Slider value={stateOverlay().cornerSize} min={8} max={34} onInput={(value) => updateState('cornerSize', value)} />
                   </div>
 
                   <div class="ui-lab-control-row">
-                    <ControlLabel tip="Simulates component states. Corner and edge glow are intentionally tied to selected/hover states.">
-                      State
+                    <ControlLabel tip="Simulates unavailable interaction state. The authored none/hover/focus state is controlled above.">
+                      Disabled
                     </ControlLabel>
                     <div class="ui-lab-toggles">
-                      <ToggleButton active={controls().selected} onClick={() => update('selected', !controls().selected)}>selected</ToggleButton>
-                      <ToggleButton active={controls().hoverPreview} onClick={() => update('hoverPreview', !controls().hoverPreview)}>hover</ToggleButton>
                       <ToggleButton active={controls().disabled} onClick={() => update('disabled', !controls().disabled)}>disabled</ToggleButton>
                     </div>
                   </div>

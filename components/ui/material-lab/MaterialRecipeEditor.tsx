@@ -1,4 +1,4 @@
-import { For, JSX } from 'solid-js';
+import { createSignal, For, JSX } from 'solid-js';
 import {
   edgeTextureOptions,
   textureOptions,
@@ -23,8 +23,11 @@ import {
   materialRecipeGradients,
   materialRecipeMaterials,
   materialRecipeShapes,
+  materialRecipeStates,
   materialRecipeTextureScales,
   materialRecipeTints,
+  type MaterialRecipeState,
+  type MaterialStateOverlay,
   type MaterialRecipe,
 } from './MaterialRecipeTypes';
 
@@ -105,7 +108,9 @@ interface MaterialRecipeEditorProps {
 }
 
 export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
+  const [activeState, setActiveState] = createSignal<MaterialRecipeState>('focus');
   const hasTexture = () => props.recipe.texture !== 'none';
+  const stateOverlay = () => props.recipe.states[activeState()];
 
   const update = <K extends keyof MaterialRecipe>(key: K, value: MaterialRecipe[K]) => {
     props.onChange({ ...props.recipe, [key]: value });
@@ -128,12 +133,33 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     });
   };
 
-  const toggleList = (key: 'border' | 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
-    const current = props.recipe[key] as Array<EdgeName | CornerName>;
+  const toggleList = (key: 'border', value: EdgeName) => {
+    const current = props.recipe[key];
     const next = current.includes(value)
       ? current.filter((item) => item !== value)
       : [...current, value];
     update(key, next as never);
+  };
+
+  const updateState = <K extends keyof MaterialStateOverlay>(key: K, value: MaterialStateOverlay[K]) => {
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: {
+          ...stateOverlay(),
+          [key]: value,
+        },
+      },
+    });
+  };
+
+  const toggleStateList = (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
+    const current = stateOverlay()[key] as Array<EdgeName | CornerName>;
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value];
+    updateState(key, next as never);
   };
 
   return (
@@ -247,12 +273,27 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         </div>
 
         <div class="ui-lab-control-group">
-          <SectionLabel size="xs">Glow State</SectionLabel>
+          <SectionLabel size="xs">State Overlay</SectionLabel>
+          <div class="ui-lab-control-row">
+            <ControlLabel>State</ControlLabel>
+            <Segments
+              value={activeState()}
+              options={materialRecipeStates}
+              labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
+              onChange={setActiveState}
+            />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Enabled</ControlLabel>
+            <div class="ui-lab-toggles">
+              <ToggleButton active={stateOverlay().enabled} onClick={() => updateState('enabled', !stateOverlay().enabled)}>on</ToggleButton>
+            </div>
+          </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Corners</ControlLabel>
             <div class="ui-lab-toggles">
               <For each={materialRecipeCorners}>
-                {(corner) => <ToggleButton active={props.recipe.corners.includes(corner)} onClick={() => toggleList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
+                {(corner) => <ToggleButton active={stateOverlay().corners.includes(corner)} onClick={() => toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
               </For>
             </div>
           </div>
@@ -260,29 +301,21 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
             <ControlLabel>Edges</ControlLabel>
             <div class="ui-lab-toggles">
               <For each={materialRecipeEdges}>
-                {(edge) => <ToggleButton active={props.recipe.edgeHighlight.includes(edge)} onClick={() => toggleList('edgeHighlight', edge)}>{edge}</ToggleButton>}
+                {(edge) => <ToggleButton active={stateOverlay().edgeHighlight.includes(edge)} onClick={() => toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
               </For>
             </div>
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Glow</ControlLabel>
-            <Segments value={props.recipe.glow} options={materialRecipeGlows} onChange={(value: GlowTone) => update('glow', value)} />
+            <Segments value={stateOverlay().glow} options={materialRecipeGlows} onChange={(value: GlowTone) => updateState('glow', value)} />
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Glow Power</ControlLabel>
-            <Slider value={props.recipe.glowStrength} onInput={(value) => update('glowStrength', value)} />
+            <Slider value={stateOverlay().glowStrength} onInput={(value) => updateState('glowStrength', value)} />
           </div>
           <div class="ui-lab-control-row">
             <ControlLabel>Bracket Size</ControlLabel>
-            <Slider value={props.recipe.cornerSize} min={8} max={34} onInput={(value) => update('cornerSize', value)} />
-          </div>
-          <div class="ui-lab-control-row">
-            <ControlLabel>State</ControlLabel>
-            <div class="ui-lab-toggles">
-              <ToggleButton active={props.recipe.selected} onClick={() => update('selected', !props.recipe.selected)}>selected</ToggleButton>
-              <ToggleButton active={props.recipe.hoverPreview} onClick={() => update('hoverPreview', !props.recipe.hoverPreview)}>hover</ToggleButton>
-              <ToggleButton active={props.recipe.disabled} onClick={() => update('disabled', !props.recipe.disabled)}>disabled</ToggleButton>
-            </div>
+            <Slider value={stateOverlay().cornerSize} min={8} max={34} onInput={(value) => updateState('cornerSize', value)} />
           </div>
         </div>
 

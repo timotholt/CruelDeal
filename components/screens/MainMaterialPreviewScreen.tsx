@@ -9,6 +9,7 @@ import {
   SectionLabel,
   cloneMaterialRecipe,
   createMaterialRecipe,
+  createMaterialStateOverlays,
   materialRecipeToSurfaceProps,
   sanitizeMaterialRecipe,
   type MaterialRecipe,
@@ -61,10 +62,11 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v7';
+const storageKey = 'cruel-deal.main-material-preview.v8';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
+  'cruel-deal.main-material-preview.v7',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -131,8 +133,6 @@ const defaultBackdropSurface = createMaterialRecipe({
   gradient: 'none',
   border: [],
   borderOpacity: 0,
-  glow: 'none',
-  edgeHighlight: [],
   lightStrength: 0,
   darkStrength: 0,
   edgeWearTexture: 'none',
@@ -152,8 +152,6 @@ const defaultTopBarSurface = createMaterialRecipe({
   tintStrength: 12,
   gradient: 'top-light',
   borderOpacity: 44,
-  glow: 'none',
-  edgeHighlight: ['bottom'],
   lightStrength: 42,
   darkStrength: 14,
   radius: 6,
@@ -169,8 +167,6 @@ const defaultProfileSurface = createMaterialRecipe({
   tintStrength: 0,
   gradient: 'bottom-dark',
   borderOpacity: 36,
-  glow: 'none',
-  edgeHighlight: ['top'],
   lightStrength: 18,
   darkStrength: 54,
   radius: 5,
@@ -188,8 +184,6 @@ const defaultCurrencySurface = createMaterialRecipe({
   tintStrength: 8,
   gradient: 'top-light',
   borderOpacity: 28,
-  glow: 'none',
-  edgeHighlight: ['top'],
   lightStrength: 34,
   darkStrength: 14,
   radius: 4,
@@ -207,10 +201,6 @@ const defaultFeedSurface = createMaterialRecipe({
   tintStrength: 8,
   gradient: 'both',
   borderOpacity: 18,
-  glow: 'none',
-  glowStrength: 0,
-  corners: [],
-  edgeHighlight: 'none',
   lightStrength: 22,
   darkStrength: 8,
   edgeWearTexture: 'edge-bw-chips-fine',
@@ -231,8 +221,6 @@ const defaultToolbarSurface = createMaterialRecipe({
   tintStrength: 14,
   gradient: 'both',
   borderOpacity: 44,
-  glow: 'none',
-  edgeHighlight: ['top'],
   lightStrength: 42,
   darkStrength: 28,
   radius: 6,
@@ -250,12 +238,19 @@ const defaultNavSurface = createMaterialRecipe({
   tintStrength: 10,
   gradient: 'top-light',
   borderOpacity: 34,
-  glow: 'gold',
-  glowStrength: 28,
-  edgeHighlight: ['top'],
   lightStrength: 48,
   darkStrength: 28,
   radius: 6,
+  states: createMaterialStateOverlays({
+    focus: {
+      enabled: true,
+      glow: 'gold',
+      glowStrength: 50,
+      corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
+      edgeHighlight: ['top', 'bottom'],
+      cornerSize: 18,
+    },
+  }),
 });
 
 const cloneBackdrop = (value: BackdropRecipe): BackdropRecipe => ({ ...value });
@@ -561,10 +556,11 @@ const MainMaterialPreview = (props: {
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
+  const backdropTextureScale = () => props.surfaces.backdrop.textureScale;
   const style = () => ({
     '--main-bg-texture-size': props.backdrop.fit === 'cover'
-      ? 'auto max(100%, var(--texture-scale))'
-      : 'var(--texture-scale) var(--texture-scale)',
+      ? 'cover'
+      : `${backdropTextureScale()}px ${backdropTextureScale()}px`,
     '--main-bg-texture-repeat': props.backdrop.fit === 'cover' ? 'no-repeat' : 'repeat',
     '--main-bg-dim': `${props.backdrop.dim / 100}`,
     '--main-bg-blur': `${props.backdrop.blur}px`,
@@ -691,11 +687,11 @@ const MainMaterialPreview = (props: {
 
           <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
             <div class="main-material-fake-nav-grid">
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav)} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'focus')} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
+              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
             </div>
           </div>
           </footer>
