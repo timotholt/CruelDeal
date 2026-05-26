@@ -764,6 +764,11 @@
   --glass-highlight-width: 100%;
   --glass-highlight-height: 34%;
   --glass-highlight-y: 10%;
+  --content-font-family: inherit;
+  --content-align: center;
+  --content-justify: center;
+  --content-x: 0px;
+  --content-y: 0px;
   --border-alpha: 0.34;
   --edge-wear-alpha: 0;
   --edge-wear-width: 5px;
@@ -1158,6 +1163,17 @@
 .cd-surface__content {
   position: relative;
   z-index: 2;
+  font-family: var(--content-font-family);
+  text-align: var(--content-align);
+  transform: translate(var(--content-x), var(--content-y));
+}
+
+.cd-surface__content--under-glass {
+  z-index: 0;
+}
+
+.cd-surface__content--over-glass {
+  z-index: 2;
 }
 
 .cd-panel {
@@ -1195,7 +1211,7 @@
   width: 100%;
   height: 100%;
   align-items: center;
-  justify-content: center;
+  justify-content: var(--content-justify);
   gap: 9px;
   padding: 0 14px;
 }

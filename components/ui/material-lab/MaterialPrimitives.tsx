@@ -11,6 +11,8 @@ export type CornerName = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-lef
 export type CornerSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | CornerName[];
 export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
 export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
+export type ContentLayer = 'over-glass' | 'under-glass';
+export type ContentAlign = 'left' | 'center' | 'right';
 
 interface SurfaceOptions {
   material?: MaterialKind;
@@ -46,6 +48,12 @@ interface SurfaceOptions {
   edgeWearLayer?: EdgeWearLayer;
   cornerSize?: number;
   radius?: number;
+  textContent?: string;
+  contentLayer?: ContentLayer;
+  textFontFamily?: string;
+  textAlign?: ContentAlign;
+  textX?: number;
+  textY?: number;
 }
 
 export interface MaterialPanelProps extends SurfaceOptions {
@@ -170,6 +178,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const glowCornerSpread = 22 + Math.round(glowIntensity * 54);
   const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
   const tint = tintColors[options.tint || 'none'];
+  const contentAlign = options.textAlign || 'center';
+  const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
 
   return {
     '--corner-size': `${options.cornerSize ?? 18}px`,
@@ -226,6 +236,11 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--edge-right': edges.includes('right') ? activeEdgeColor : 'transparent',
     '--edge-bottom': edges.includes('bottom') ? activeEdgeColor : 'transparent',
     '--edge-left': edges.includes('left') ? activeEdgeColor : 'transparent',
+    '--content-font-family': options.textFontFamily || 'inherit',
+    '--content-align': contentAlign,
+    '--content-justify': contentJustify,
+    '--content-x': `${options.textX ?? 0}px`,
+    '--content-y': `${options.textY ?? 0}px`,
   } as JSX.CSSProperties;
 };
 
@@ -249,12 +264,24 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
 
 export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowing?: boolean }) => (
   <>
+    <SurfaceBaseLayers tinted={props.tinted} />
+    <SurfaceOverlayLayers glass={props.glass} glowing={props.glowing} />
+  </>
+);
+
+export const SurfaceBaseLayers = (props: { tinted?: boolean }) => (
+  <>
     <span class="cd-surface__material" aria-hidden="true" />
     <span class="cd-surface__texture" aria-hidden="true" />
     <Show when={props.tinted}>
       <span class="cd-surface__tint" aria-hidden="true" />
     </Show>
     <span class="cd-surface__gradient" aria-hidden="true" />
+  </>
+);
+
+export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean }) => (
+  <>
     <Show when={props.glass}>
       <span class="cd-surface__glass" aria-hidden="true" />
     </Show>
@@ -312,15 +339,32 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'edgeWearLayer',
     'cornerSize',
     'radius',
+    'textContent',
+    'contentLayer',
+    'textFontFamily',
+    'textAlign',
+    'textX',
+    'textY',
   ]);
+
+  const contentLayer = () => local.contentLayer || 'over-glass';
+  const content = (layer: ContentLayer) => (
+    <div class={`cd-surface__content cd-surface__content--${layer} cd-panel__content`}>{local.children}</div>
+  );
 
   return (
     <section
       class={surfaceClass(local, `cd-panel ${local.padded === false ? 'cd-panel--flush' : ''} ${local.compact ? 'cd-panel--compact' : ''} ${local.class || ''}`)}
       style={surfaceStyle(local)}
     >
-      <SurfaceLayers tinted={hasTint(local)} glass={hasGlass(local)} glowing={hasGlow(local)} />
-      <div class="cd-surface__content cd-panel__content">{local.children}</div>
+      <SurfaceBaseLayers tinted={hasTint(local)} />
+      <Show when={contentLayer() === 'under-glass'}>
+        {content('under-glass')}
+      </Show>
+      <SurfaceOverlayLayers glass={hasGlass(local)} glowing={hasGlow(local)} />
+      <Show when={contentLayer() === 'over-glass'}>
+        {content('over-glass')}
+      </Show>
     </section>
   );
 };
@@ -369,11 +413,32 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'fullWidth',
     'pressed',
     'disabled',
+    'textContent',
+    'contentLayer',
+    'textFontFamily',
+    'textAlign',
+    'textX',
+    'textY',
   ]);
 
   const size = () => local.size || 'md';
   const iconPosition = () => local.iconPosition || 'left';
   const hasTopIcon = () => iconPosition() === 'top';
+  const contentLayer = () => local.contentLayer || 'over-glass';
+  const label = () => local.textContent || local.children;
+  const content = (layer: ContentLayer) => (
+    <span class={`cd-surface__content cd-surface__content--${layer} cd-button__content`}>
+      <Show when={local.icon && iconPosition() !== 'right'}>
+        <span class="cd-button__icon">{local.icon}</span>
+      </Show>
+      <Show when={label()}>
+        <span class="cd-button__label">{label()}</span>
+      </Show>
+      <Show when={local.iconRight || (local.icon && iconPosition() === 'right')}>
+        <span class="cd-button__icon cd-button__icon--right">{local.iconRight || local.icon}</span>
+      </Show>
+    </span>
+  );
 
   return (
     <button
@@ -385,18 +450,14 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       disabled={local.disabled}
       {...rest}
     >
-      <SurfaceLayers tinted={hasTint(local)} glass={hasGlass(local)} glowing={hasGlow(local)} />
-      <span class="cd-surface__content cd-button__content">
-        <Show when={local.icon && iconPosition() !== 'right'}>
-          <span class="cd-button__icon">{local.icon}</span>
-        </Show>
-        <Show when={local.children}>
-          <span class="cd-button__label">{local.children}</span>
-        </Show>
-        <Show when={local.iconRight || (local.icon && iconPosition() === 'right')}>
-          <span class="cd-button__icon cd-button__icon--right">{local.iconRight || local.icon}</span>
-        </Show>
-      </span>
+      <SurfaceBaseLayers tinted={hasTint(local)} />
+      <Show when={contentLayer() === 'under-glass'}>
+        {content('under-glass')}
+      </Show>
+      <SurfaceOverlayLayers glass={hasGlass(local)} glowing={hasGlow(local)} />
+      <Show when={contentLayer() === 'over-glass'}>
+        {content('over-glass')}
+      </Show>
     </button>
   );
 };

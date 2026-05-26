@@ -12,6 +12,8 @@ import type {
   ShapeKind,
   SurfaceGradient,
   TintTone,
+  ContentAlign,
+  ContentLayer,
 } from './MaterialPrimitives';
 
 export interface MaterialRecipe {
@@ -41,6 +43,12 @@ export interface MaterialRecipe {
   edgeWearScale: number;
   edgeWearLayer: 'below-highlights' | 'above-highlights';
   radius: number;
+  textContent: string;
+  contentLayer: ContentLayer;
+  textFontFamily: string;
+  textAlign: ContentAlign;
+  textX: number;
+  textY: number;
   states: Record<MaterialRecipeState, MaterialStateOverlay>;
 }
 
@@ -65,6 +73,17 @@ export const materialRecipeTints: TintTone[] = ['none', 'gold', 'cyan', 'white',
 export const materialRecipeGradients: SurfaceGradient[] = ['none', 'top-light', 'bottom-dark', 'both'];
 export const materialRecipeTextureScales = [128, 256, 512, 1024] as const;
 export const materialRecipeEdgeWearLayers = ['below-highlights', 'above-highlights'] as const;
+export const materialRecipeContentLayers: ContentLayer[] = ['over-glass', 'under-glass'];
+export const materialRecipeTextAligns: ContentAlign[] = ['left', 'center', 'right'];
+export const materialRecipeTextFonts = [
+  { label: 'inherit', value: 'inherit' },
+  { label: 'condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
+  { label: 'tech mono', value: '"JetBrains Mono", "IBM Plex Sans Condensed", ui-monospace, monospace' },
+  { label: 'din', value: '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
+  { label: 'bank', value: '"Bank Gothic", "Copperplate", "JetBrains Mono", ui-monospace, monospace' },
+  { label: 'wide', value: '"Arial Black", "Impact", ui-sans-serif, system-ui, sans-serif' },
+  { label: 'system', value: 'ui-sans-serif, system-ui, sans-serif' },
+] as const;
 
 export const createMaterialStateOverlay = (overrides: Partial<MaterialStateOverlay> = {}): MaterialStateOverlay => ({
   enabled: false,
@@ -122,6 +141,12 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
   edgeWearScale: 256,
   edgeWearLayer: 'below-highlights',
   radius: 6,
+  textContent: '',
+  contentLayer: 'over-glass',
+  textFontFamily: 'inherit',
+  textAlign: 'center',
+  textX: 0,
+  textY: 0,
   states: createMaterialStateOverlays(),
   ...overrides,
 });
@@ -219,6 +244,14 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
       : fallback.edgeWearScale,
     edgeWearLayer: isOneOf(input.edgeWearLayer, materialRecipeEdgeWearLayers) ? input.edgeWearLayer : fallback.edgeWearLayer,
     radius: clamp(input.radius, fallback.radius, 0, 8),
+    textContent: typeof input.textContent === 'string' ? input.textContent : fallback.textContent,
+    contentLayer: isOneOf(input.contentLayer, materialRecipeContentLayers) ? input.contentLayer : fallback.contentLayer,
+    textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
+      ? input.textFontFamily
+      : fallback.textFontFamily,
+    textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
+    textX: clamp(input.textX, fallback.textX, -80, 80),
+    textY: clamp(input.textY, fallback.textY, -80, 80),
     states: sanitizeMaterialStateOverlays(input.states, fallbackStates),
   };
 };
@@ -261,5 +294,11 @@ export const materialRecipeToSurfaceProps = (recipe: MaterialRecipe, state: Mate
   edgeWearLayer: recipe.edgeWearLayer,
   cornerSize: overlayActive ? overlay.cornerSize : 16,
   radius: recipe.radius,
+  textContent: recipe.textContent,
+  contentLayer: recipe.contentLayer,
+  textFontFamily: recipe.textFontFamily,
+  textAlign: recipe.textAlign,
+  textX: recipe.textX,
+  textY: recipe.textY,
   };
 };

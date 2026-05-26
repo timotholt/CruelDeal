@@ -19,11 +19,14 @@ import {
   materialRecipeCorners,
   materialRecipeEdges,
   materialRecipeEdgeWearLayers,
+  materialRecipeContentLayers,
   materialRecipeGlows,
   materialRecipeGradients,
   materialRecipeMaterials,
   materialRecipeShapes,
   materialRecipeStates,
+  materialRecipeTextAligns,
+  materialRecipeTextFonts,
   materialRecipeTextureScales,
   materialRecipeTints,
   type MaterialRecipeState,
@@ -78,6 +81,14 @@ const Select = <T extends string>(props: { value: T; options: readonly T[]; onCh
       {(option) => <option value={option}>{props.labels?.[option] || option}</option>}
     </For>
   </select>
+);
+
+const TextInput = (props: { value: string; onInput: (value: string) => void }) => (
+  <input
+    class="ui-lab-input"
+    value={props.value}
+    onInput={(event) => props.onInput(event.currentTarget.value)}
+  />
 );
 
 const TextureScaleSlider = (props: { value: number; disabled?: boolean; onInput: (value: number) => void }) => {
@@ -165,7 +176,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   return (
     <>
         <div class="ui-lab-control-group">
-          <SectionLabel size="xs">Surface</SectionLabel>
+          <SectionLabel size="xs">Material</SectionLabel>
           <div class="ui-lab-control-row">
             <ControlLabel>Base</ControlLabel>
             <Segments
@@ -175,6 +186,18 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
               onChange={updateMaterial}
             />
           </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Shape</ControlLabel>
+            <Segments value={props.recipe.shape} options={materialRecipeShapes} onChange={(value: ShapeKind) => update('shape', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Radius</ControlLabel>
+            <Slider value={props.recipe.radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+          </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Texture</SectionLabel>
           <div class="ui-lab-control-row">
             <ControlLabel>Texture</ControlLabel>
             <select class="ui-lab-select" value={props.recipe.texture} onChange={(event) => updateTexture(event.currentTarget.value as TextureKind)}>
@@ -191,6 +214,10 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
             <ControlLabel>Tex Scale</ControlLabel>
             <TextureScaleSlider disabled={!hasTexture()} value={props.recipe.textureScale} onInput={(value) => update('textureScale', value)} />
           </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Tint</SectionLabel>
           <div class="ui-lab-control-row">
             <ControlLabel>Tint</ControlLabel>
             <Segments value={props.recipe.tint} options={materialRecipeTints} onChange={(value: TintTone) => update('tint', value)} />
@@ -199,13 +226,32 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
             <ControlLabel>Tint Power</ControlLabel>
             <Slider value={props.recipe.tintStrength} onInput={(value) => update('tintStrength', value)} />
           </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Gradient</SectionLabel>
           <div class="ui-lab-control-row">
-            <ControlLabel>Shape</ControlLabel>
-            <Segments value={props.recipe.shape} options={materialRecipeShapes} onChange={(value: ShapeKind) => update('shape', value)} />
+            <ControlLabel>Mode</ControlLabel>
+            <Segments
+              value={props.recipe.gradient}
+              options={materialRecipeGradients}
+              labels={{ 'top-light': 'top', 'bottom-dark': 'bottom' }}
+              onChange={(value: SurfaceGradient) => update('gradient', value)}
+            />
           </div>
           <div class="ui-lab-control-row">
-            <ControlLabel>Radius</ControlLabel>
-            <Slider value={props.recipe.radius} min={0} max={8} onInput={(value) => update('radius', value)} />
+            <ControlLabel>White</ControlLabel>
+            <Slider value={props.recipe.lightStrength} onInput={(value) => update('lightStrength', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Dark</ControlLabel>
+            <Slider value={props.recipe.darkStrength} onInput={(value) => update('darkStrength', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Side Sheen</ControlLabel>
+            <div class="ui-lab-toggles">
+              <ToggleButton active={props.recipe.sheen} onClick={() => update('sheen', !props.recipe.sheen)}>on</ToggleButton>
+            </div>
           </div>
         </div>
 
@@ -289,7 +335,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         </div>
 
         <div class="ui-lab-control-group">
-          <SectionLabel size="xs">State Overlay</SectionLabel>
+          <SectionLabel size="xs">Glow</SectionLabel>
           <div class="ui-lab-control-row">
             <ControlLabel>State</ControlLabel>
             <Segments
@@ -336,29 +382,44 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         </div>
 
         <div class="ui-lab-control-group">
-          <SectionLabel size="xs">Light</SectionLabel>
+          <SectionLabel size="xs">Text</SectionLabel>
           <div class="ui-lab-control-row">
-            <ControlLabel>Gradient</ControlLabel>
-            <Segments
-              value={props.recipe.gradient}
-              options={materialRecipeGradients}
-              labels={{ 'top-light': 'top', 'bottom-dark': 'bottom' }}
-              onChange={(value: SurfaceGradient) => update('gradient', value)}
+            <ControlLabel>Content</ControlLabel>
+            <TextInput value={props.recipe.textContent} onInput={(value) => update('textContent', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Font</ControlLabel>
+            <Select
+              value={props.recipe.textFontFamily}
+              options={materialRecipeTextFonts.map((option) => option.value)}
+              labels={Object.fromEntries(materialRecipeTextFonts.map((option) => [option.value, option.label]))}
+              onChange={(value) => update('textFontFamily', value)}
             />
           </div>
           <div class="ui-lab-control-row">
-            <ControlLabel>White</ControlLabel>
-            <Slider value={props.recipe.lightStrength} onInput={(value) => update('lightStrength', value)} />
+            <ControlLabel>Align</ControlLabel>
+            <Segments
+              value={props.recipe.textAlign}
+              options={materialRecipeTextAligns}
+              onChange={(value) => update('textAlign', value)}
+            />
           </div>
           <div class="ui-lab-control-row">
-            <ControlLabel>Dark</ControlLabel>
-            <Slider value={props.recipe.darkStrength} onInput={(value) => update('darkStrength', value)} />
+            <ControlLabel>Layer</ControlLabel>
+            <Segments
+              value={props.recipe.contentLayer}
+              options={materialRecipeContentLayers}
+              labels={{ 'over-glass': 'over', 'under-glass': 'under' }}
+              onChange={(value) => update('contentLayer', value)}
+            />
           </div>
           <div class="ui-lab-control-row">
-            <ControlLabel>Side Sheen</ControlLabel>
-            <div class="ui-lab-toggles">
-              <ToggleButton active={props.recipe.sheen} onClick={() => update('sheen', !props.recipe.sheen)}>on</ToggleButton>
-            </div>
+            <ControlLabel>X</ControlLabel>
+            <Slider value={props.recipe.textX} min={-80} max={80} onInput={(value) => update('textX', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <ControlLabel>Y</ControlLabel>
+            <Slider value={props.recipe.textY} min={-80} max={80} onInput={(value) => update('textY', value)} />
           </div>
         </div>
 

@@ -62,12 +62,13 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v9';
+const storageKey = 'cruel-deal.main-material-preview.v10';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
   'cruel-deal.main-material-preview.v7',
   'cruel-deal.main-material-preview.v8',
+  'cruel-deal.main-material-preview.v9',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -267,6 +268,25 @@ const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
   toolbar: cloneMaterialRecipe(value.toolbar),
   nav: cloneMaterialRecipe(value.nav),
 });
+
+const recipeTextItems = (recipe: MaterialRecipe) => (
+  recipe.textContent
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+);
+
+const materialRecipeItemProps = (
+  recipe: MaterialRecipe,
+  index: number,
+  state: Parameters<typeof materialRecipeToSurfaceProps>[1] = 'rest',
+) => {
+  const props = materialRecipeToSurfaceProps(recipe, state);
+  const items = recipeTextItems(recipe);
+  return items.length > 1
+    ? { ...props, textContent: items[index] || '' }
+    : props;
+};
 
 const defaultSurfaces: SurfaceRecipes = {
   backdrop: defaultBackdropSurface,
@@ -609,7 +629,7 @@ const MainMaterialPreview = (props: {
             <div class="main-material-commander">COMMANDER</div>
             <div class={`main-material-currencies ${props.selectedClass('currencyButtons')}`}>
               <MaterialButton
-                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 0)}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--credits"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--credits" />}
@@ -617,7 +637,7 @@ const MainMaterialPreview = (props: {
                 500
               </MaterialButton>
               <MaterialButton
-                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 1)}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--gold"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--gold" />}
@@ -625,7 +645,7 @@ const MainMaterialPreview = (props: {
                 5400
               </MaterialButton>
               <MaterialButton
-                {...materialRecipeToSurfaceProps(props.surfaces.currencies)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 2)}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--tokens"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--tokens" />}
@@ -679,20 +699,20 @@ const MainMaterialPreview = (props: {
 
           <footer class="main-material-bottom-stack">
           <div class={`main-material-fake-command ${props.selectedClass('toolBar')}`}>
-            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
-            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
-            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
-            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
-            <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.toolbar)} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 0)} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 1)} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 2)} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 3)} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 4)} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
           </div>
 
           <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
             <div class="main-material-fake-nav-grid">
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'focus')} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
-              <MaterialButton {...materialRecipeToSurfaceProps(props.surfaces.nav, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
+              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 0, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
+              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 1, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
+              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 2, 'focus')} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
+              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 3, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
+              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 4, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
             </div>
           </div>
           </footer>

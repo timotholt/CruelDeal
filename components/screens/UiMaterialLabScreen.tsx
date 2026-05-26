@@ -26,8 +26,13 @@ import {
   MaterialButton,
   MaterialPanel,
   createMaterialStateOverlays,
+  materialRecipeContentLayers,
   materialRecipeStates,
+  materialRecipeTextAligns,
+  materialRecipeTextFonts,
   type CornerName,
+  type ContentAlign,
+  type ContentLayer,
   type EdgeName,
   type EdgeTextureKind,
   type EdgeWearLayer,
@@ -81,15 +86,22 @@ interface LabControls {
   lightStrength: number;
   darkStrength: number;
   radius: number;
+  textContent: string;
+  contentLayer: ContentLayer;
+  textFontFamily: string;
+  textAlign: ContentAlign;
+  textX: number;
+  textY: number;
 }
 
-const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v4';
+const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v5';
 const obsoletePresetStorageKeys = [
   'cruel-deal.ui-material-lab.presets.v1',
   'cruel-deal.ui-material-lab.presets.v2',
   'cruel-deal.ui-material-lab.presets.v3',
+  'cruel-deal.ui-material-lab.presets.v4',
 ];
-const presetStorageVersion = 4;
+const presetStorageVersion = 5;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
@@ -142,6 +154,12 @@ const controlDefaults: LabControls = {
   lightStrength: 20,
   darkStrength: 32,
   radius: 6,
+  textContent: 'View Intel',
+  contentLayer: 'over-glass',
+  textFontFamily: 'inherit',
+  textAlign: 'center',
+  textX: 0,
+  textY: 0,
 };
 
 const loadoutItems: Array<{ name: string; detail: string; icon: () => JSX.Element }> = [
@@ -232,6 +250,14 @@ const sanitizeControls = (value: unknown): LabControls => {
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
     radius: clamp(input.radius, controlDefaults.radius, 0, 8),
+    textContent: typeof input.textContent === 'string' ? input.textContent : controlDefaults.textContent,
+    contentLayer: isOneOf(input.contentLayer, materialRecipeContentLayers) ? input.contentLayer : controlDefaults.contentLayer,
+    textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
+      ? input.textFontFamily
+      : controlDefaults.textFontFamily,
+    textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : controlDefaults.textAlign,
+    textX: clamp(input.textX, controlDefaults.textX, -80, 80),
+    textY: clamp(input.textY, controlDefaults.textY, -80, 80),
   };
 };
 
@@ -640,6 +666,12 @@ export const UiMaterialLabScreen = () => {
       darkStrength: current.darkStrength,
       cornerSize: overlayActive ? overlay.cornerSize : 16,
       radius: current.radius,
+      textContent: current.textContent,
+      contentLayer: current.contentLayer,
+      textFontFamily: current.textFontFamily,
+      textAlign: current.textAlign,
+      textX: current.textX,
+      textY: current.textY,
     };
   });
 
@@ -671,7 +703,7 @@ export const UiMaterialLabScreen = () => {
       return (
         <MaterialPanel {...surfaceProps()} padded>
           <div class="ui-lab-typography">
-            <SectionLabel>Preview Panel</SectionLabel>
+            <SectionLabel>{current.textContent || 'Preview Panel'}</SectionLabel>
             <p class="ui-lab-small-copy">Raw texture and glass share one surface system: material, gradient, edge, corners, and content.</p>
           </div>
         </MaterialPanel>
@@ -699,7 +731,7 @@ export const UiMaterialLabScreen = () => {
               <strong>Initiate Extraction</strong>
               <SectionLabel size="sm">Prepare. Breach. Extract.</SectionLabel>
             </div>
-            <MaterialButton material="raw" glass selected corners="all" edgeHighlight="bottom" glow="gold" size="tile" icon={<ArrowRightIcon class="w-9 h-9" />} />
+            <MaterialButton {...surfaceProps()} selected corners="all" edgeHighlight="bottom" glow="gold" size="tile" icon={<ArrowRightIcon class="w-9 h-9" />} />
           </div>
         </MaterialPanel>
       );
@@ -1149,10 +1181,76 @@ export const UiMaterialLabScreen = () => {
                   </div>
 
                   <div class="ui-lab-control-group">
-                    <SectionLabel size="xs">Light</SectionLabel>
+                    <SectionLabel size="xs">Text</SectionLabel>
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Preview label text. Use commas for split button rows, such as nav labels.">
+                      Content
+                    </ControlLabel>
+                    <input
+                      class="ui-lab-input"
+                      value={controls().textContent}
+                      onInput={(event) => update('textContent', event.currentTarget.value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Font family applied to content inside the material surface.">
+                      Font
+                    </ControlLabel>
+                    <select
+                      class="ui-lab-select"
+                      value={controls().textFontFamily}
+                      onChange={(event) => update('textFontFamily', event.currentTarget.value)}
+                    >
+                      <For each={materialRecipeTextFonts}>
+                        {(font) => <option value={font.value}>{font.label}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Horizontal text alignment inside the material surface.">
+                      Align
+                    </ControlLabel>
+                    <Segments
+                      value={controls().textAlign}
+                      options={materialRecipeTextAligns}
+                      onChange={(value) => update('textAlign', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Whether content is engraved above the glass pane or printed under it.">
+                      Layer
+                    </ControlLabel>
+                    <Segments
+                      value={controls().contentLayer}
+                      options={materialRecipeContentLayers}
+                      labels={{ 'over-glass': 'over', 'under-glass': 'under' }}
+                      onChange={(value) => update('contentLayer', value)}
+                    />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Horizontal text offset in CSS pixels.">
+                      X
+                    </ControlLabel>
+                    <Slider value={controls().textX} min={-80} max={80} onInput={(value) => update('textX', value)} />
+                  </div>
+
+                  <div class="ui-lab-control-row">
+                    <ControlLabel tip="Vertical text offset in CSS pixels.">
+                      Y
+                    </ControlLabel>
+                    <Slider value={controls().textY} min={-80} max={80} onInput={(value) => update('textY', value)} />
+                  </div>
+                  </div>
+
+                  <div class="ui-lab-control-group">
+                    <SectionLabel size="xs">Gradient</SectionLabel>
                   <div class="ui-lab-control-row">
                     <ControlLabel tip="Vertical light/dark wash over the material. None removes this wash; use Side Sheen to control the diagonal left-to-right shine separately.">
-                      Gradient
+                      Mode
                     </ControlLabel>
                     <Segments
                       value={controls().gradient}
