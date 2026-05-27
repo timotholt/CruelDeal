@@ -137,13 +137,15 @@ const controlDefaults: LabControls = {
   edgeWearScale: 256,
   edgeWearLayer: 'below-highlights',
   states: createMaterialStateOverlays({
-    focus: {
+    active: {
       enabled: true,
-      glow: 'gold',
-      glowStrength: 48,
-      corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
-      edgeHighlight: ['top', 'bottom'],
-      cornerSize: 18,
+      glow: {
+        tone: 'gold',
+        glowStrength: 48,
+        corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
+        edgeHighlight: ['top', 'bottom'],
+        cornerSize: 18,
+      },
     },
   }),
   tint: 'none',
@@ -244,7 +246,7 @@ const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabCont
   contentLayer: recipe.contentLayer,
   textFontFamily: recipe.textFontFamily,
   textSizeRem: recipe.textSizeRem,
-  textTone: recipe.textTone,
+  textTone: recipe.textTone || (recipe.contentTone === 'black' ? 'black' : 'white'),
   textEmboss: recipe.textEmboss,
   textAlign: recipe.textAlign,
   textX: recipe.textX,
@@ -282,13 +284,23 @@ const uniqueCorners = (value: unknown, fallback: CornerName[]): CornerName[] => 
 
 const sanitizeStateOverlay = (value: unknown, fallback: MaterialStateOverlay): MaterialStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<MaterialStateOverlay> : {};
+  const legacy = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
   return {
     enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
-    glow: isOneOf(input.glow, glowOptions) ? input.glow : fallback.glow,
-    glowStrength: clamp(input.glowStrength, fallback.glowStrength, 0, 100),
-    corners: uniqueCorners(input.corners, fallback.corners),
-    edgeHighlight: uniqueEdges(input.edgeHighlight, fallback.edgeHighlight),
-    cornerSize: clamp(input.cornerSize, fallback.cornerSize, 8, 34),
+    surface: fallback.surface,
+    glow: {
+      ...fallback.glow,
+      tone: isOneOf((input.glow as { tone?: unknown } | undefined)?.tone ?? legacy.glow, glowOptions)
+        ? ((input.glow as { tone?: unknown } | undefined)?.tone ?? legacy.glow) as MaterialStateOverlay['glow']['tone']
+        : fallback.glow.tone,
+      glowStrength: clamp((input.glow as { glowStrength?: unknown } | undefined)?.glowStrength ?? legacy.glowStrength, fallback.glow.glowStrength, 0, 100),
+      corners: uniqueCorners((input.glow as { corners?: unknown } | undefined)?.corners ?? legacy.corners, fallback.glow.corners),
+      edgeHighlight: uniqueEdges((input.glow as { edgeHighlight?: unknown } | undefined)?.edgeHighlight ?? legacy.edgeHighlight, fallback.glow.edgeHighlight),
+      cornerSize: clamp((input.glow as { cornerSize?: unknown } | undefined)?.cornerSize ?? legacy.cornerSize, fallback.glow.cornerSize, 8, 34),
+    },
+    emission: fallback.emission,
+    content: fallback.content,
+    motion: fallback.motion,
   };
 };
 
@@ -300,7 +312,8 @@ const sanitizeStateOverlays = (value: unknown): Record<MaterialRecipeState, Mate
   return {
     rest: sanitizeStateOverlay(input.rest, fallback.rest),
     hover: sanitizeStateOverlay(input.hover, fallback.hover),
-    focus: sanitizeStateOverlay(input.focus, fallback.focus),
+    active: sanitizeStateOverlay(input.active, fallback.active),
+    pressed: sanitizeStateOverlay(input.pressed, fallback.pressed),
   };
 };
 
@@ -472,7 +485,7 @@ const ControlLabel = (props: { children: JSX.Element; tip?: string }) => {
 
 export const UiMaterialLabScreen = () => {
   const [controls, setControls] = createSignal<LabControls>(controlDefaults);
-  const [activeState, setActiveState] = createSignal<MaterialRecipeState>('focus');
+  const [activeState, setActiveState] = createSignal<MaterialRecipeState>('active');
   const [savedPresets, setSavedPresets] = createSignal<SavedPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = createSignal(defaultPresetId);
   const [presetName, setPresetName] = createSignal('Default');
@@ -805,13 +818,13 @@ export const UiMaterialLabScreen = () => {
                           <Segments
                             value={activeState()}
                             options={materialRecipeStates}
-                            labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
+                            labels={{ rest: 'rest', hover: 'hover', active: 'active', pressed: 'pressed' }}
                             onChange={setActiveState}
                           />
                         </div>
 
                         <div class="ui-lab-control-row">
-                          <ControlLabel tip="Simulates unavailable interaction state. The authored none/hover/focus state is controlled separately.">
+                          <ControlLabel tip="Simulates unavailable interaction state. The authored rest/hover/active/pressed state is controlled separately.">
                             Disabled
                           </ControlLabel>
                           <div class="ui-lab-toggles">

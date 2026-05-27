@@ -8,11 +8,9 @@ import {
 import type {
   CornerName,
   EdgeName,
-  GlowTone,
   MaterialKind,
   ShapeKind,
   SurfaceGradient,
-  TintTone,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
 import {
@@ -20,6 +18,11 @@ import {
   materialRecipeEdges,
   materialRecipeEdgeWearLayers,
   materialRecipeContentLayers,
+  materialRecipeContentTones,
+  materialRecipeEmissionEdges,
+  materialRecipeEmissionKinds,
+  materialRecipeFontStyles,
+  materialRecipeFontWeights,
   materialRecipeGlows,
   materialRecipeGradients,
   materialRecipeMaterials,
@@ -27,12 +30,18 @@ import {
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
-  materialRecipeTextTones,
+  materialRecipeTextTransforms,
   materialRecipeTextureScales,
   materialRecipeTints,
+  createMaterialStateOverlay,
+  type EdgeEmissionKind,
+  type FontStyleToken,
+  type FontWeightToken,
   type MaterialRecipeState,
+  type MaterialTone,
   type MaterialStateOverlay,
   type MaterialRecipe,
+  type TextTransformToken,
 } from './MaterialRecipeTypes';
 
 const ControlLabel = (props: { children: JSX.Element }) => (
@@ -117,12 +126,20 @@ interface MaterialRecipeEditorProps {
   recipe: MaterialRecipe;
   onChange: (recipe: MaterialRecipe) => void;
   activeState?: MaterialRecipeState;
+  activeStateOptions?: readonly MaterialRecipeState[];
+  activeStateLabels?: Partial<Record<MaterialRecipeState, string>>;
+  interactionLabel?: string;
   onActiveStateChange?: (state: MaterialRecipeState) => void;
   extraControls?: JSX.Element;
 }
 
 type RecipeUpdate = <K extends keyof MaterialRecipe>(key: K, value: MaterialRecipe[K]) => void;
-type StateUpdate = <K extends keyof MaterialStateOverlay>(key: K, value: MaterialStateOverlay[K]) => void;
+type StateOverlayGroup = Exclude<keyof MaterialStateOverlay, 'enabled'>;
+type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialStateOverlay[G]>(
+  group: G,
+  key: K,
+  value: MaterialStateOverlay[G][K],
+) => void;
 
 const MaterialSection = (props: {
   recipe: MaterialRecipe;
@@ -183,7 +200,7 @@ const TintSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
     <SectionLabel size="xs">Tint</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Tint</ControlLabel>
-      <Segments value={props.recipe.tint} options={materialRecipeTints} onChange={(value: TintTone) => props.update('tint', value)} />
+      <Segments value={props.recipe.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.update('tint', value)} />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Tint Power</ControlLabel>
@@ -310,35 +327,107 @@ const EdgeWearSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }
   </div>
 );
 
-const GlowSection = (props: {
+type StatePresetId = 'quiet-hover' | 'gold-active' | 'cyan-data' | 'danger-active' | 'cta-powered' | 'nav-tab';
+
+const statePresetIds: StatePresetId[] = ['quiet-hover', 'gold-active', 'cyan-data', 'danger-active', 'cta-powered', 'nav-tab'];
+const statePresetLabels: Record<StatePresetId, string> = {
+  'quiet-hover': 'quiet hover',
+  'gold-active': 'gold plate',
+  'cyan-data': 'cyan tab',
+  'danger-active': 'danger',
+  'cta-powered': 'powered',
+  'nav-tab': 'nav tab',
+};
+
+const StateSelectorSection = (props: {
   activeState: MaterialRecipeState;
+  activeStateOptions: readonly MaterialRecipeState[];
+  activeStateLabels?: Partial<Record<MaterialRecipeState, string>>;
+  interactionLabel?: string;
   setActiveState: (state: MaterialRecipeState) => void;
-  stateOverlay: MaterialStateOverlay;
-  updateState: StateUpdate;
-  toggleStateList: (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => void;
+  applyPreset: (preset: StatePresetId) => void;
 }) => (
   <div class="ui-lab-control-group">
-    <SectionLabel size="xs">Glow</SectionLabel>
+    <SectionLabel size="xs">State</SectionLabel>
+    {props.interactionLabel && (
+      <div class="ui-lab-control-row">
+        <ControlLabel>Interaction</ControlLabel>
+        <span>{props.interactionLabel}</span>
+      </div>
+    )}
     <div class="ui-lab-control-row">
       <ControlLabel>State</ControlLabel>
       <Segments
         value={props.activeState}
-        options={materialRecipeStates}
-        labels={{ rest: 'none', hover: 'hover', focus: 'focus' }}
+        options={props.activeStateOptions}
+        labels={{ rest: 'rest', hover: 'hover', active: 'active', pressed: 'pressed', ...props.activeStateLabels }}
         onChange={props.setActiveState}
       />
     </div>
     <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
+      <ControlLabel>Preset</ControlLabel>
       <div class="ui-lab-toggles">
-        <ToggleButton active={props.stateOverlay.enabled} onClick={() => props.updateState('enabled', !props.stateOverlay.enabled)}>on</ToggleButton>
+        <For each={statePresetIds}>
+          {(preset) => <ToggleButton active={false} onClick={() => props.applyPreset(preset)}>{statePresetLabels[preset]}</ToggleButton>}
+        </For>
       </div>
     </div>
+  </div>
+);
+
+const StateSurfaceSection = (props: {
+  stateOverlay: MaterialStateOverlay;
+  updateEnabled: (enabled: boolean) => void;
+  updateStateGroup: StateGroupUpdate;
+}) => (
+  <div class="ui-lab-control-group">
+    <SectionLabel size="xs">State Surface</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Enabled</ControlLabel>
+      <div class="ui-lab-toggles">
+        <ToggleButton active={props.stateOverlay.enabled} onClick={() => props.updateEnabled(!props.stateOverlay.enabled)}>on</ToggleButton>
+      </div>
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Tint</ControlLabel>
+      <Segments value={props.stateOverlay.surface.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('surface', 'tint', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.stateOverlay.surface.tintStrength === null ? 'ui-lab-control-row--disabled' : ''}`}>
+      <ControlLabel>Tint Power</ControlLabel>
+      <div class="ui-lab-stack">
+        <ToggleButton active={props.stateOverlay.surface.tintStrength === null} onClick={() => props.updateStateGroup('surface', 'tintStrength', props.stateOverlay.surface.tintStrength === null ? 8 : null)}>
+          inherit
+        </ToggleButton>
+        <Slider disabled={props.stateOverlay.surface.tintStrength === null} value={props.stateOverlay.surface.tintStrength ?? 0} onInput={(value) => props.updateStateGroup('surface', 'tintStrength', value)} />
+      </div>
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Border +</ControlLabel>
+      <Slider value={props.stateOverlay.surface.borderOpacityBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'borderOpacityBoost', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Light +</ControlLabel>
+      <Slider value={props.stateOverlay.surface.lightStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'lightStrengthBoost', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Dark +</ControlLabel>
+      <Slider value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
+    </div>
+  </div>
+);
+
+const GlowSection = (props: {
+  stateOverlay: MaterialStateOverlay;
+  updateStateGroup: StateGroupUpdate;
+  toggleStateList: (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => void;
+}) => (
+  <div class="ui-lab-control-group">
+    <SectionLabel size="xs">State Glow</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Corners</ControlLabel>
       <div class="ui-lab-toggles">
         <For each={materialRecipeCorners}>
-          {(corner) => <ToggleButton active={props.stateOverlay.corners.includes(corner)} onClick={() => props.toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
+          {(corner) => <ToggleButton active={props.stateOverlay.glow.corners.includes(corner)} onClick={() => props.toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
         </For>
       </div>
     </div>
@@ -346,21 +435,137 @@ const GlowSection = (props: {
       <ControlLabel>Edges</ControlLabel>
       <div class="ui-lab-toggles">
         <For each={materialRecipeEdges}>
-          {(edge) => <ToggleButton active={props.stateOverlay.edgeHighlight.includes(edge)} onClick={() => props.toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
+          {(edge) => <ToggleButton active={props.stateOverlay.glow.edgeHighlight.includes(edge)} onClick={() => props.toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
         </For>
       </div>
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Glow</ControlLabel>
-      <Segments value={props.stateOverlay.glow} options={materialRecipeGlows} onChange={(value: GlowTone) => props.updateState('glow', value)} />
+      <Segments value={props.stateOverlay.glow.tone} options={materialRecipeGlows} onChange={(value: MaterialTone) => props.updateStateGroup('glow', 'tone', value)} />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Glow Power</ControlLabel>
-      <Slider value={props.stateOverlay.glowStrength} onInput={(value) => props.updateState('glowStrength', value)} />
+      <Slider value={props.stateOverlay.glow.glowStrength} onInput={(value) => props.updateStateGroup('glow', 'glowStrength', value)} />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Bracket Size</ControlLabel>
-      <Slider value={props.stateOverlay.cornerSize} min={8} max={34} onInput={(value) => props.updateState('cornerSize', value)} />
+      <Slider value={props.stateOverlay.glow.cornerSize} min={8} max={34} onInput={(value) => props.updateStateGroup('glow', 'cornerSize', value)} />
+    </div>
+  </div>
+);
+
+const EdgeEmissionSection = (props: {
+  stateOverlay: MaterialStateOverlay;
+  updateStateGroup: StateGroupUpdate;
+}) => (
+  <div class="ui-lab-control-group">
+    <SectionLabel size="xs">Edge Emission</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Type</ControlLabel>
+      <Segments value={props.stateOverlay.emission.emission} options={materialRecipeEmissionKinds} labels={{ 'center-blip': 'blip', 'rail-and-blip': 'rail + blip' }} onChange={(value: EdgeEmissionKind) => props.updateStateGroup('emission', 'emission', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Edge</ControlLabel>
+      <Segments value={props.stateOverlay.emission.emissionEdge} options={materialRecipeEmissionEdges} onChange={(value) => props.updateStateGroup('emission', 'emissionEdge', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Tone</ControlLabel>
+      <Segments value={props.stateOverlay.emission.emissionTone} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('emission', 'emissionTone', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Power</ControlLabel>
+      <Slider value={props.stateOverlay.emission.emissionStrength} onInput={(value) => props.updateStateGroup('emission', 'emissionStrength', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Length</ControlLabel>
+      <Slider value={props.stateOverlay.emission.emissionLength} min={10} max={100} onInput={(value) => props.updateStateGroup('emission', 'emissionLength', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Thick</ControlLabel>
+      <Slider value={props.stateOverlay.emission.emissionThickness} min={1} max={8} onInput={(value) => props.updateStateGroup('emission', 'emissionThickness', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Blip</ControlLabel>
+      <Slider value={props.stateOverlay.emission.emissionBlipSize} min={8} max={44} onInput={(value) => props.updateStateGroup('emission', 'emissionBlipSize', value)} />
+    </div>
+  </div>
+);
+
+const ContentStateSection = (props: {
+  stateOverlay: MaterialStateOverlay;
+  updateStateGroup: StateGroupUpdate;
+}) => {
+  const embossOptions = ['inherit', 'on', 'off'] as const;
+  const fontWeightOptions = ['inherit', ...materialRecipeFontWeights] as const;
+  const fontStyleOptions = ['inherit', ...materialRecipeFontStyles] as const;
+  const transformOptions = ['inherit', ...materialRecipeTextTransforms] as const;
+  const letterInherited = () => props.stateOverlay.content.letterSpacing === null;
+
+  return (
+    <div class="ui-lab-control-group">
+      <SectionLabel size="xs">State Content</SectionLabel>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Label Tone</ControlLabel>
+        <Segments value={props.stateOverlay.content.contentTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'contentTone', value)} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Icon Tone</ControlLabel>
+        <Segments value={props.stateOverlay.content.iconTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'iconTone', value)} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Label Glow</ControlLabel>
+        <Slider value={props.stateOverlay.content.contentGlowStrength} onInput={(value) => props.updateStateGroup('content', 'contentGlowStrength', value)} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Icon Glow</ControlLabel>
+        <Slider value={props.stateOverlay.content.iconGlowStrength} onInput={(value) => props.updateStateGroup('content', 'iconGlowStrength', value)} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Emboss</ControlLabel>
+        <Segments
+          value={props.stateOverlay.content.contentEmboss === true ? 'on' : props.stateOverlay.content.contentEmboss === false ? 'off' : 'inherit'}
+          options={embossOptions}
+          onChange={(value) => props.updateStateGroup('content', 'contentEmboss', value === 'inherit' ? 'inherit' : value === 'on')}
+        />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Weight</ControlLabel>
+        <Segments value={props.stateOverlay.content.fontWeight} options={fontWeightOptions} onChange={(value) => props.updateStateGroup('content', 'fontWeight', value as FontWeightToken | 'inherit')} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Style</ControlLabel>
+        <Segments value={props.stateOverlay.content.fontStyle} options={fontStyleOptions} onChange={(value) => props.updateStateGroup('content', 'fontStyle', value as FontStyleToken | 'inherit')} />
+      </div>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Case</ControlLabel>
+        <Segments value={props.stateOverlay.content.textTransform} options={transformOptions} onChange={(value) => props.updateStateGroup('content', 'textTransform', value as TextTransformToken | 'inherit')} />
+      </div>
+      <div class={`ui-lab-control-row ${letterInherited() ? 'ui-lab-control-row--disabled' : ''}`}>
+        <ControlLabel>Track</ControlLabel>
+        <div class="ui-lab-stack">
+          <ToggleButton active={letterInherited()} onClick={() => props.updateStateGroup('content', 'letterSpacing', letterInherited() ? 0 : null)}>
+            inherit
+          </ToggleButton>
+          <Slider disabled={letterInherited()} value={props.stateOverlay.content.letterSpacing ?? 0} min={-0.08} max={0.24} step={0.005} onInput={(value) => props.updateStateGroup('content', 'letterSpacing', value)} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MotionSection = (props: {
+  stateOverlay: MaterialStateOverlay;
+  updateStateGroup: StateGroupUpdate;
+}) => (
+  <div class="ui-lab-control-group">
+    <SectionLabel size="xs">State Motion</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Scale</ControlLabel>
+      <Slider value={props.stateOverlay.motion.scale} min={0.94} max={1.04} step={0.005} onInput={(value) => props.updateStateGroup('motion', 'scale', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Y</ControlLabel>
+      <Slider value={props.stateOverlay.motion.translateY} min={-4} max={4} onInput={(value) => props.updateStateGroup('motion', 'translateY', value)} />
     </div>
   </div>
 );
@@ -392,12 +597,36 @@ const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
       />
     </div>
     <div class="ui-lab-control-row">
-      <ControlLabel>Color</ControlLabel>
+      <ControlLabel>Label Tone</ControlLabel>
       <Segments
-        value={props.recipe.textTone}
-        options={materialRecipeTextTones}
-        onChange={(value) => props.update('textTone', value)}
+        value={props.recipe.contentTone}
+        options={materialRecipeContentTones}
+        onChange={(value: MaterialTone) => props.update('contentTone', value)}
       />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Icon Tone</ControlLabel>
+      <Segments
+        value={props.recipe.iconTone}
+        options={materialRecipeContentTones}
+        onChange={(value: MaterialTone) => props.update('iconTone', value)}
+      />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Weight</ControlLabel>
+      <Segments value={props.recipe.fontWeight} options={materialRecipeFontWeights} onChange={(value: FontWeightToken) => props.update('fontWeight', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Style</ControlLabel>
+      <Segments value={props.recipe.fontStyle} options={materialRecipeFontStyles} onChange={(value: FontStyleToken) => props.update('fontStyle', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Case</ControlLabel>
+      <Segments value={props.recipe.textTransform} options={materialRecipeTextTransforms} onChange={(value: TextTransformToken) => props.update('textTransform', value)} />
+    </div>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Track</ControlLabel>
+      <Slider value={props.recipe.letterSpacing} min={-0.08} max={0.24} step={0.005} onInput={(value) => props.update('letterSpacing', value)} />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Emboss</ControlLabel>
@@ -434,14 +663,19 @@ const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
 );
 
 export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
-  const [localActiveState, setLocalActiveState] = createSignal<MaterialRecipeState>('focus');
-  const activeState = () => props.activeState ?? localActiveState();
+  const [localActiveState, setLocalActiveState] = createSignal<MaterialRecipeState>('active');
+  const activeStateOptions = () => props.activeStateOptions?.length ? props.activeStateOptions : materialRecipeStates;
+  const activeState = () => {
+    const state = props.activeState ?? localActiveState();
+    return activeStateOptions().includes(state) ? state : activeStateOptions()[0];
+  };
   const setActiveState = (state: MaterialRecipeState) => {
+    if (!activeStateOptions().includes(state)) return;
     setLocalActiveState(state);
     props.onActiveStateChange?.(state);
   };
   const hasTexture = () => props.recipe.texture !== 'none';
-  const stateOverlay = () => props.recipe.states[activeState()];
+  const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
 
   const update: RecipeUpdate = (key, value) => {
     props.onChange({ ...props.recipe, [key]: value });
@@ -471,25 +705,102 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     update('border', next);
   };
 
-  const updateState: StateUpdate = (key, value) => {
+  const updateEnabled = (enabled: boolean) => {
     props.onChange({
       ...props.recipe,
       states: {
         ...props.recipe.states,
         [activeState()]: {
           ...stateOverlay(),
-          [key]: value,
+          enabled,
+        },
+      },
+    });
+  };
+
+  const updateStateGroup: StateGroupUpdate = (group, key, value) => {
+    const overlay = stateOverlay();
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: {
+          ...overlay,
+          [group]: {
+            ...overlay[group],
+            [key]: value,
+          },
         },
       },
     });
   };
 
   const toggleStateList = (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
-    const current = stateOverlay()[key] as Array<EdgeName | CornerName>;
+    const current = stateOverlay().glow[key] as Array<EdgeName | CornerName>;
     const next = current.includes(value)
       ? current.filter((item) => item !== value)
       : [...current, value];
-    updateState(key, next as never);
+    updateStateGroup('glow', key, next as never);
+  };
+
+  const applyPreset = (preset: StatePresetId) => {
+    const base = stateOverlay();
+    const presetOverlay = (() => {
+      if (preset === 'quiet-hover') {
+        return createMaterialStateOverlay({
+          enabled: true,
+          surface: { tint: 'white', tintStrength: 6, borderOpacityBoost: 8 },
+          glow: { tone: 'white', glowStrength: 16, corners: ['top-left', 'top-right'], edgeHighlight: ['top'] },
+          content: { contentTone: 'white', iconTone: 'inherit' },
+        });
+      }
+      if (preset === 'cyan-data') {
+        return createMaterialStateOverlay({
+          enabled: true,
+          surface: { tint: 'cyan', tintStrength: 22, borderOpacityBoost: 18 },
+          glow: { tone: 'cyan', glowStrength: 46, corners: ['top-left', 'top-right'], edgeHighlight: ['top'] },
+          emission: { emission: 'center-blip', emissionTone: 'cyan', emissionStrength: 54, emissionLength: 40, emissionBlipSize: 18 },
+          content: { contentTone: 'cyan', iconTone: 'cyan', contentGlowStrength: 18, iconGlowStrength: 22 },
+        });
+      }
+      if (preset === 'danger-active') {
+        return createMaterialStateOverlay({
+          enabled: true,
+          surface: { tint: 'red', tintStrength: 28, borderOpacityBoost: 20 },
+          glow: { tone: 'red', glowStrength: 58, corners: materialRecipeCorners, edgeHighlight: ['bottom'] },
+          emission: { emission: 'center-blip', emissionTone: 'red', emissionStrength: 70, emissionLength: 36, emissionBlipSize: 20 },
+          content: { contentTone: 'white', iconTone: 'white' },
+        });
+      }
+      if (preset === 'cta-powered') {
+        return createMaterialStateOverlay({
+          enabled: true,
+          surface: { tint: 'gold', tintStrength: 42, borderOpacityBoost: 28, lightStrengthBoost: 16 },
+          glow: { tone: 'gold', glowStrength: 72, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'] },
+          emission: { emission: 'rail-and-blip', emissionTone: 'gold', emissionStrength: 82, emissionLength: 62, emissionThickness: 2, emissionBlipSize: 22 },
+          content: { contentTone: 'black', iconTone: 'black', fontWeight: 'black', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
+        });
+      }
+      return createMaterialStateOverlay({
+        enabled: true,
+        surface: { tint: 'gold', tintStrength: preset === 'nav-tab' ? 34 : 34, borderOpacityBoost: 24, lightStrengthBoost: 18, darkStrengthBoost: 8 },
+        glow: { tone: 'gold', glowStrength: 56, corners: materialRecipeCorners, edgeHighlight: ['top', 'bottom'], cornerSize: 18 },
+        emission: { emission: 'rail-and-blip', emissionTone: 'gold', emissionStrength: 70, emissionLength: 54, emissionThickness: 2, emissionBlipSize: 18 },
+        content: { contentTone: 'black', iconTone: 'black', fontWeight: 'black', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
+        motion: { translateY: 0, scale: 1 },
+      });
+    })();
+
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: {
+          ...base,
+          ...presetOverlay,
+        },
+      },
+    });
   };
 
   return (
@@ -501,13 +812,23 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <GlassSection recipe={props.recipe} update={update} />
       <BorderSection recipe={props.recipe} update={update} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} update={update} />
-      <GlowSection
+      <StateSelectorSection
         activeState={activeState()}
+        activeStateOptions={activeStateOptions()}
+        activeStateLabels={props.activeStateLabels}
+        interactionLabel={props.interactionLabel}
         setActiveState={setActiveState}
+        applyPreset={applyPreset}
+      />
+      <StateSurfaceSection stateOverlay={stateOverlay()} updateEnabled={updateEnabled} updateStateGroup={updateStateGroup} />
+      <GlowSection
         stateOverlay={stateOverlay()}
-        updateState={updateState}
+        updateStateGroup={updateStateGroup}
         toggleStateList={toggleStateList}
       />
+      <EdgeEmissionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
+      <ContentStateSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
+      <MotionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
       <TextSection recipe={props.recipe} update={update} />
       {props.extraControls}
     </>

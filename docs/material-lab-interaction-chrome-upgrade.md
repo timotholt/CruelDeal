@@ -1201,6 +1201,70 @@ hover: {
 
 This is not a recipe state. It is a fallback accessibility affordance.
 
+## Server-Fed Content Markup
+
+Feed cards, store offers, inbox notices, and promotional panels will eventually be driven by server/CMS content. Do not solve the full localization system before building the material interaction chrome, but keep the feed/store visual system ready for server-fed content.
+
+Use a tiny line-based authoring format for feed/store bodies instead of raw HTML or JSON block authoring. The format should be human-writable in a CMS text area, locale-ready, and parsed into typed blocks before rendering.
+
+Example:
+
+```txt
+// COSMIC ECLIPSE
+/// BATTLE PASS
+Unlock the new Titan variant and earn double credits this weekend.
+
+/cta View Rewards open_pass
+```
+
+Initial block syntax:
+
+- `// Header` creates a header block.
+- `/// Subheader` creates a subheader or eyebrow block.
+- Plain text creates body paragraph blocks.
+- Blank lines separate paragraphs.
+- `/br` creates an explicit line break.
+- `/cta Label action_id` creates an action button block.
+- `/link Label https://example.com` creates an external link block.
+- `/img asset_id Alt text` creates an image block.
+- `/price currency amount` creates a price block.
+- `/reward reward_id` creates a reward visual block.
+
+Parsing rules:
+
+- `//`, `///`, and `/command` syntax only has meaning at the start of a line after trimming leading whitespace.
+- URLs such as `https://example.com` must not be interpreted as headers because header syntax is line-start only.
+- Unknown commands should fail validation in authoring/dev tools; production can either drop the block or render it as safe plain text.
+- No raw HTML.
+- No server-provided CSS class names.
+- No server-provided inline styles.
+- Commands and action IDs are stable identifiers and should not be translated.
+- Visible text is localized by the content source before parsing.
+
+Renderer shape:
+
+```txt
+localized markup string
+  -> parseFeedMarkup(markup)
+  -> FeedBlock[]
+  -> FeedContent renderer
+  -> material-lab-designed feed/store components
+```
+
+This parser does not require a localization system first. During early implementation, static English strings can feed `parseFeedMarkup(markup)`. Later, the server/CMS can return the already-localized markup string for the user's locale, or return a content key that resolves to localized markup before parsing.
+
+The material lab should design the visual components and CSS hooks that the renderer uses:
+
+- header
+- subheader/eyebrow
+- body paragraph
+- CTA row
+- image frame
+- price row
+- reward row
+
+The parser and renderer should be a separate follow-up workstream. This interaction chrome upgrade should only avoid decisions that would make server-fed content difficult later.
+
 ## Implementation Order
 
 1. Update material type definitions:
@@ -1299,3 +1363,4 @@ This is not a recipe state. It is a fallback accessibility affordance.
 - No bitmap filter tint system as the primary icon strategy.
 - No nav-only paint layer that cannot be reused elsewhere.
 - No broad production screen redesign beyond replacing the nav component after the preview proves the system.
+- No full localization system or server-fed content parser in this interaction chrome pass.

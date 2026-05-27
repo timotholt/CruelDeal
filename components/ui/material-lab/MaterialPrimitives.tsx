@@ -1,11 +1,21 @@
 import { For, JSX, Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
+import type {
+  EdgeEmissionEdge,
+  EdgeEmissionKind,
+  FontStyleToken,
+  FontWeightToken,
+  MaterialRecipeState,
+  MaterialSurfaceStateVars,
+  MaterialTone,
+  TextTransformToken,
+} from './MaterialRecipeTypes';
 
 export type MaterialKind = 'none' | 'raw';
 export type ShapeKind = 'rect' | 'beveled';
-export type GlowTone = 'none' | 'gold' | 'cyan' | 'white' | 'red';
-export type TintTone = 'none' | 'gold' | 'cyan' | 'white' | 'red' | 'green';
+export type GlowTone = MaterialTone;
+export type TintTone = MaterialTone;
 export type EdgeName = 'top' | 'right' | 'bottom' | 'left';
 export type BorderSpec = 'none' | 'all' | 'top' | 'right' | 'bottom' | 'left' | 'three-sided' | EdgeName[];
 export type CornerName = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
@@ -55,10 +65,29 @@ interface SurfaceOptions {
   textFontFamily?: string;
   textSizeRem?: number;
   textTone?: TextTone;
+  contentTone?: MaterialTone;
+  iconTone?: MaterialTone;
+  contentGlowStrength?: number;
+  iconGlowStrength?: number;
+  fontWeight?: FontWeightToken;
+  fontStyle?: FontStyleToken;
+  textTransform?: TextTransformToken;
+  letterSpacing?: number;
   textEmboss?: boolean;
   textAlign?: ContentAlign;
   textX?: number;
   textY?: number;
+  emission?: EdgeEmissionKind;
+  emissionEdge?: EdgeEmissionEdge;
+  emissionTone?: MaterialTone;
+  emissionStrength?: number;
+  emissionLength?: number;
+  emissionThickness?: number;
+  emissionBlipSize?: number;
+  stateScale?: number;
+  stateTranslateY?: number;
+  stateVars?: Partial<Record<MaterialRecipeState, MaterialSurfaceStateVars>>;
+  visualState?: Exclude<MaterialRecipeState, 'hover'>;
 }
 
 export interface MaterialPanelProps extends SurfaceOptions {
@@ -71,13 +100,14 @@ export interface MaterialPanelProps extends SurfaceOptions {
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'tile' | 'cta';
 export type IconPosition = 'left' | 'right' | 'top';
 
-export interface MaterialButtonProps extends SurfaceOptions, JSX.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface MaterialButtonProps extends SurfaceOptions, Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, 'textContent'> {
   size?: ButtonSize;
   icon?: JSX.Element;
   iconRight?: JSX.Element;
   iconPosition?: IconPosition;
   fullWidth?: boolean;
   pressed?: boolean;
+  visualState?: Exclude<MaterialRecipeState, 'hover'>;
 }
 
 export interface SectionLabelProps {
@@ -117,21 +147,35 @@ interface MaterialSurfaceProps extends SurfaceOptions {
 
 const allCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 
-const glowColors: Record<GlowTone, { color: string; rgb: string }> = {
+const glowColors: Record<MaterialTone, { color: string; rgb: string }> = {
   none: { color: 'transparent', rgb: '0 0 0' },
+  inherit: { color: 'rgba(244, 238, 224, 0.92)', rgb: '244 238 224' },
+  black: { color: 'rgba(23, 20, 15, 0.98)', rgb: '23 20 15' },
   gold: { color: 'rgba(255, 210, 105, 0.98)', rgb: '255 188 72' },
   cyan: { color: 'rgba(77, 220, 255, 0.95)', rgb: '55 190 255' },
   white: { color: 'rgba(255, 250, 232, 0.92)', rgb: '255 255 240' },
+  muted: { color: 'rgba(143, 137, 124, 0.92)', rgb: '143 137 124' },
   red: { color: 'rgba(255, 92, 83, 0.96)', rgb: '255 75 64' },
+  green: { color: 'rgba(86, 218, 142, 0.96)', rgb: '86 218 142' },
 };
 
-const tintColors: Record<TintTone, { rgb: string }> = {
+const tintColors: Record<MaterialTone, { rgb: string }> = {
   none: { rgb: '0 0 0' },
+  inherit: { rgb: '244 238 224' },
+  black: { rgb: '23 20 15' },
   gold: { rgb: '255 188 72' },
   cyan: { rgb: '55 190 255' },
   white: { rgb: '255 250 232' },
+  muted: { rgb: '143 137 124' },
   red: { rgb: '255 75 64' },
   green: { rgb: '86 218 142' },
+};
+
+const fontWeights: Record<FontWeightToken, number> = {
+  regular: 400,
+  medium: 600,
+  bold: 800,
+  black: 900,
 };
 
 const hasTint = (options: SurfaceOptions) => (
@@ -168,10 +212,37 @@ const resolveBorder = (border: BorderSpec | undefined): EdgeName[] => {
 };
 
 const hasGlow = (options: SurfaceOptions) => {
-  if (!options.selected && !options.hoverPreview) return false;
   if (!options.glow || options.glow === 'none') return false;
   if ((options.glowStrength ?? 42) <= 0) return false;
   return resolveCorners(options.corners).length > 0 || resolveEdges(options.edgeHighlight).length > 0;
+};
+
+const hasEmission = (options: SurfaceOptions) => (
+  !!options.emission && options.emission !== 'none' && (options.emissionStrength ?? 0) > 0
+);
+
+const stateHasEmission = (vars?: MaterialSurfaceStateVars) => (
+  Number(vars?.cssVars['--emission-alpha'] || 0) > 0
+);
+
+const shouldRenderEmission = (options: SurfaceOptions) => (
+  hasEmission(options) || stateHasEmission(options.stateVars?.hover) || stateHasEmission(options.stateVars?.pressed)
+);
+
+const surfaceEmissionKind = (options: SurfaceOptions): EdgeEmissionKind => {
+  if (options.emission && options.emission !== 'none') return options.emission;
+  if (stateHasEmission(options.stateVars?.pressed)) return 'center-blip';
+  return 'none';
+};
+
+const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
+  if (!vars) return {};
+  return Object.fromEntries(
+    Object.entries(vars.cssVars).map(([key, value]) => [
+      `--${prefix}-${key.replace(/^--/, '')}`,
+      value,
+    ]),
+  );
 };
 
 const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
@@ -179,14 +250,13 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const edges = resolveEdges(options.edgeHighlight);
   const borderEdges = resolveBorder(options.border);
   const glow = glowColors[options.glow || 'gold'];
-  const selectedOrHover = options.selected || options.hoverPreview;
-  const activeCornerColor = selectedOrHover ? glow.color : 'transparent';
-  const activeEdgeColor = selectedOrHover ? glow.color : 'transparent';
+  const activeCornerColor = hasGlow(options) ? glow.color : 'transparent';
+  const activeEdgeColor = hasGlow(options) ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a';
   const material = options.material || 'raw';
   const suppressMaterialTexture = material === 'none' || textureId === 'none';
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
-  const glowIntensity = selectedOrHover && options.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
+  const glowIntensity = hasGlow(options) ? Math.pow(glowPower, 0.58) : 0;
   const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
   const glowCore = 2 + Math.round(glowIntensity * 8);
   const glowMid = 8 + Math.round(glowIntensity * 24);
@@ -198,16 +268,28 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const tint = tintColors[options.tint || 'none'];
   const contentAlign = options.textAlign || 'center';
   const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
-  const textTone = options.textTone || 'white';
-  const textColor = textTone === 'black' ? 'rgb(23 20 15)' : 'rgb(244 238 224)';
+  const contentTone = options.contentTone && options.contentTone !== 'inherit'
+    ? options.contentTone
+    : options.textTone || 'white';
+  const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
+  const contentRgb = tintColors[contentTone].rgb;
+  const iconRgb = tintColors[iconTone].rgb;
+  const textColor = `rgb(${contentRgb} / 1)`;
   const textEmboss = options.textEmboss !== false;
   const textShadow = textEmboss
-    ? textTone === 'black'
+    ? contentTone === 'black'
       ? '0 1px 0 rgb(255 255 255 / 0.38)'
       : '0 2px 6px rgb(0 0 0 / 0.64)'
     : 'none';
+  const emissionTone = options.emissionTone || 'none';
+  const emissionRgb = tintColors[emissionTone].rgb;
+  const stateVars = options.stateVars || {};
+  const currentVars = stateVars[options.visualState || 'rest']?.cssVars || {};
 
   return {
+    ...currentVars,
+    ...prefixedVars('hover', stateVars.hover),
+    ...prefixedVars('pressed', stateVars.pressed),
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
     '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? 100) / 100}`,
@@ -264,12 +346,30 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--edge-left': edges.includes('left') ? activeEdgeColor : 'transparent',
     '--content-font-family': options.textFontFamily || 'inherit',
     '--content-size': `${options.textSizeRem ?? 0.8125}rem`,
+    '--content-rgb': contentRgb,
+    '--icon-rgb': iconRgb,
     '--content-color': textColor,
     '--content-shadow': textShadow,
+    '--content-glow-alpha': `${(options.contentGlowStrength ?? 0) / 100}`,
+    '--icon-glow-alpha': `${(options.iconGlowStrength ?? 0) / 100}`,
+    '--content-glow-shadow': '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))',
+    '--icon-glow-shadow': 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))',
+    '--icon-color': `rgb(${iconRgb} / 1)`,
+    '--content-font-weight': `${fontWeights[options.fontWeight || 'black']}`,
+    '--content-font-style': options.fontStyle || 'italic',
+    '--content-text-transform': options.textTransform || 'uppercase',
+    '--content-letter-spacing': `${options.letterSpacing ?? 0}em`,
     '--content-align': contentAlign,
     '--content-justify': contentJustify,
     '--content-x': `${options.textX ?? 0}px`,
     '--content-y': `${options.textY ?? 0}px`,
+    '--emission-rgb': emissionRgb,
+    '--emission-alpha': `${hasEmission(options) ? (options.emissionStrength ?? 0) / 100 : 0}`,
+    '--emission-length': `${options.emissionLength ?? 42}%`,
+    '--emission-thickness': `${options.emissionThickness ?? 1}px`,
+    '--emission-blip-size': `${options.emissionBlipSize ?? 12}px`,
+    '--state-scale': `${options.stateScale ?? 1}`,
+    '--state-translate-y': `${options.stateTranslateY ?? 0}px`,
   } as JSX.CSSProperties;
 };
 
@@ -285,6 +385,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
     options.hoverPreview ? 'is-hover-preview' : '',
+    options.visualState ? `is-visual-${options.visualState}` : '',
     hasTint(options) ? 'cd-surface--tinted' : '',
     options.edgeWearLayer === 'above-highlights' ? 'cd-surface--edge-wear-above' : '',
     extra,
@@ -309,13 +410,16 @@ export const SurfaceBaseLayers = (props: { tinted?: boolean }) => (
   </>
 );
 
-export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean }) => (
+export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean; emitting?: boolean }) => (
   <>
     <Show when={props.glass}>
       <span class="cd-surface__glass" aria-hidden="true" />
     </Show>
     <Show when={props.glowing}>
       <span class="cd-surface__glow" aria-hidden="true" />
+    </Show>
+    <Show when={props.emitting}>
+      <span class="cd-surface__emission" aria-hidden="true" />
     </Show>
     <span class="cd-surface__border" aria-hidden="true" />
     <span class="cd-surface__edge-wear" aria-hidden="true" />
@@ -345,6 +449,8 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       component={props.as}
       {...(props.rootProps || {})}
       data-material-surface={props.as}
+      data-emission={surfaceEmissionKind(props)}
+      data-emission-edge={props.emissionEdge || 'bottom'}
       class={surfaceClass(props, props.class)}
       style={surfaceStyle(props)}
       disabled={props.disabled}
@@ -353,7 +459,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       <Show when={contentLayer() === 'under-glass'}>
         {content('under-glass')}
       </Show>
-      <SurfaceOverlayLayers glass={hasGlass(props)} glowing={hasGlow(props)} />
+      <SurfaceOverlayLayers glass={hasGlass(props)} glowing={hasGlow(props)} emitting={shouldRenderEmission(props)} />
       <Show when={contentLayer() === 'over-glass'}>
         {content('over-glass')}
       </Show>
@@ -405,10 +511,29 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'textFontFamily',
     'textSizeRem',
     'textTone',
+    'contentTone',
+    'iconTone',
+    'contentGlowStrength',
+    'iconGlowStrength',
+    'fontWeight',
+    'fontStyle',
+    'textTransform',
+    'letterSpacing',
     'textEmboss',
     'textAlign',
     'textX',
     'textY',
+    'emission',
+    'emissionEdge',
+    'emissionTone',
+    'emissionStrength',
+    'emissionLength',
+    'emissionThickness',
+    'emissionBlipSize',
+    'stateScale',
+    'stateTranslateY',
+    'stateVars',
+    'visualState',
   ]);
 
   return (
@@ -473,16 +598,36 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'textFontFamily',
     'textSizeRem',
     'textTone',
+    'contentTone',
+    'iconTone',
+    'contentGlowStrength',
+    'iconGlowStrength',
+    'fontWeight',
+    'fontStyle',
+    'textTransform',
+    'letterSpacing',
     'textEmboss',
     'textAlign',
     'textX',
     'textY',
+    'emission',
+    'emissionEdge',
+    'emissionTone',
+    'emissionStrength',
+    'emissionLength',
+    'emissionThickness',
+    'emissionBlipSize',
+    'stateScale',
+    'stateTranslateY',
+    'stateVars',
+    'visualState',
   ]);
 
   const size = () => local.size || 'md';
   const iconPosition = () => local.iconPosition || 'left';
   const hasTopIcon = () => iconPosition() === 'top';
   const label = () => local.textContent || local.children;
+  const labelIsText = () => typeof label() === 'string' || typeof label() === 'number';
 
   return (
     <MaterialSurface
@@ -493,6 +638,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
       contentClass="cd-button__content"
       interactive
       selected={local.selected || local.pressed}
+      visualState={local.visualState || (local.pressed ? 'pressed' : local.selected ? 'active' : 'rest')}
       disabled={local.disabled}
       rootProps={rest}
     >
@@ -500,7 +646,9 @@ export const MaterialButton = (props: MaterialButtonProps) => {
         <span class="cd-button__icon">{local.icon}</span>
       </Show>
       <Show when={label()}>
-        <span class="cd-button__label">{label()}</span>
+        <Show when={labelIsText()} fallback={label()}>
+          <span class="cd-button__label">{label()}</span>
+        </Show>
       </Show>
       <Show when={local.iconRight || (local.icon && iconPosition() === 'right')}>
         <span class="cd-button__icon cd-button__icon--right">{local.iconRight || local.icon}</span>

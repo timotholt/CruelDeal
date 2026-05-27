@@ -3,4 +3,5 @@ export * from './MaterialPrimitives';
 export * from './MaterialRecipeEditor';
 export * from './MaterialRecipeTypes';
 export * from './MaterialWorkbenchLayout';
+export * from './materialPresets';
 export * from './TextureOptions';

@@ -270,6 +270,11 @@
   gap: 5px;
 }
 
+.ui-lab-stack {
+  display: grid;
+  gap: 6px;
+}
+
 .ui-lab-mini-button {
   min-height: 28px;
   padding: 0 9px;
@@ -793,6 +798,17 @@
   --content-font-family: inherit;
   --content-size: 0.8125rem;
   --content-color: #f4eee0;
+  --icon-color: #f4eee0;
+  --content-rgb: 244 238 224;
+  --icon-rgb: 244 238 224;
+  --content-glow-alpha: 0;
+  --icon-glow-alpha: 0;
+  --content-glow-shadow: 0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha));
+  --icon-glow-shadow: drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)));
+  --content-font-weight: 900;
+  --content-font-style: italic;
+  --content-text-transform: uppercase;
+  --content-letter-spacing: 0em;
   --content-shadow: 0 2px 6px rgba(0,0,0,0.64);
   --content-align: center;
   --content-justify: center;
@@ -834,6 +850,13 @@
   --edge-right: transparent;
   --edge-bottom: transparent;
   --edge-left: transparent;
+  --emission-rgb: 255 188 72;
+  --emission-alpha: 0;
+  --emission-length: 42%;
+  --emission-thickness: 1px;
+  --emission-blip-size: 12px;
+  --state-scale: 1;
+  --state-translate-y: 0px;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -844,6 +867,7 @@
     inset 0 1px 0 var(--border-top-shadow),
     inset 0 -1px 0 var(--border-bottom-shadow),
     0 12px 26px rgba(0,0,0,0.36);
+  transform: translateY(var(--state-translate-y)) scale(var(--state-scale));
 }
 
 .cd-surface--glass {
@@ -863,6 +887,7 @@
 .cd-surface__glass,
 .cd-surface__gradient,
 .cd-surface__glow,
+.cd-surface__emission,
 .cd-surface__edge-wear,
 .cd-surface__border,
 .cd-surface__edge,
@@ -1023,6 +1048,60 @@
   mix-blend-mode: screen;
 }
 
+.cd-surface__emission {
+  z-index: 1;
+  opacity: var(--emission-alpha);
+  mix-blend-mode: screen;
+  filter:
+    drop-shadow(0 0 4px rgb(var(--emission-rgb) / 0.8))
+    drop-shadow(0 0 14px rgb(var(--emission-rgb) / 0.55))
+    drop-shadow(0 0 28px rgb(var(--emission-rgb) / 0.34));
+}
+
+.cd-surface[data-emission='line'][data-emission-edge='bottom'] > .cd-surface__emission {
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--emission-rgb) / 0.22) 12%,
+      rgb(var(--emission-rgb) / 0.98) 50%,
+      rgb(var(--emission-rgb) / 0.22) 88%,
+      transparent
+    )
+    center bottom / var(--emission-length) var(--emission-thickness) no-repeat;
+}
+
+.cd-surface[data-emission='center-blip'][data-emission-edge='bottom'] > .cd-surface__emission {
+  background:
+    radial-gradient(
+      ellipse at center bottom,
+      rgb(var(--emission-rgb) / 0.95) 0%,
+      rgb(var(--emission-rgb) / 0.52) 34%,
+      transparent 74%
+    )
+    center bottom / var(--emission-blip-size) calc(var(--emission-blip-size) * 0.58) no-repeat;
+}
+
+.cd-surface[data-emission='rail-and-blip'][data-emission-edge='bottom'] > .cd-surface__emission {
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--emission-rgb) / 0.18) 12%,
+      rgb(var(--emission-rgb) / 0.98) 50%,
+      rgb(var(--emission-rgb) / 0.18) 88%,
+      transparent
+    )
+    center bottom / var(--emission-length) var(--emission-thickness) no-repeat,
+    radial-gradient(
+      ellipse at center bottom,
+      rgb(var(--emission-rgb) / 0.95) 0%,
+      rgb(var(--emission-rgb) / 0.52) 32%,
+      transparent 72%
+    )
+    center bottom / var(--emission-blip-size) calc(var(--emission-blip-size) * 0.58) no-repeat;
+}
+
 .cd-surface__edge-wear {
   z-index: 1;
   padding: var(--edge-wear-width);
@@ -1171,22 +1250,120 @@
 
 .cd-surface.is-interactive {
   cursor: pointer;
-  transition: transform 150ms ease, border-color 150ms ease, filter 150ms ease;
+  transition: transform 150ms ease, border-color 150ms ease, filter 150ms ease, color 150ms ease;
 }
 
-.cd-surface.is-interactive:hover,
 .cd-surface.is-hover-preview {
   border-color: rgba(255, 223, 152, 0.48);
   filter: brightness(1.08);
 }
 
 .cd-surface.is-interactive:active {
-  transform: translateY(1px);
+  --content-rgb: var(--pressed-content-rgb, var(--content-rgb));
+  --icon-rgb: var(--pressed-icon-rgb, var(--icon-rgb));
+  --content-glow-alpha: var(--pressed-content-glow-alpha, var(--content-glow-alpha));
+  --icon-glow-alpha: var(--pressed-icon-glow-alpha, var(--icon-glow-alpha));
+  --content-font-weight: var(--pressed-content-font-weight, var(--content-font-weight));
+  --content-font-style: var(--pressed-content-font-style, var(--content-font-style));
+  --content-text-transform: var(--pressed-content-text-transform, var(--content-text-transform));
+  --content-letter-spacing: var(--pressed-content-letter-spacing, var(--content-letter-spacing));
+  --content-color: rgb(var(--content-rgb) / 1);
+  --icon-color: rgb(var(--icon-rgb) / 1);
+  --tint-rgb: var(--pressed-tint-rgb, var(--tint-rgb));
+  --tint-alpha: var(--pressed-tint-alpha, var(--tint-alpha));
+  --border-alpha: var(--pressed-border-alpha, var(--border-alpha));
+  --light-alpha: var(--pressed-light-alpha, var(--light-alpha));
+  --dark-alpha: var(--pressed-dark-alpha, var(--dark-alpha));
+  --glow-rgb: var(--pressed-glow-rgb, var(--glow-rgb));
+  --glow-alpha: var(--pressed-glow-alpha, var(--glow-alpha));
+  --glow-top-wash: var(--pressed-glow-top-wash, var(--glow-top-wash));
+  --glow-right-wash: var(--pressed-glow-right-wash, var(--glow-right-wash));
+  --glow-bottom-wash: var(--pressed-glow-bottom-wash, var(--glow-bottom-wash));
+  --glow-left-wash: var(--pressed-glow-left-wash, var(--glow-left-wash));
+  --glow-tl-wash: var(--pressed-glow-tl-wash, var(--glow-tl-wash));
+  --glow-tr-wash: var(--pressed-glow-tr-wash, var(--glow-tr-wash));
+  --glow-br-wash: var(--pressed-glow-br-wash, var(--glow-br-wash));
+  --glow-bl-wash: var(--pressed-glow-bl-wash, var(--glow-bl-wash));
+  --corner-shadow: var(--pressed-corner-shadow, var(--corner-shadow));
+  --corner-tl: var(--pressed-corner-tl, var(--corner-tl));
+  --corner-tr: var(--pressed-corner-tr, var(--corner-tr));
+  --corner-br: var(--pressed-corner-br, var(--corner-br));
+  --corner-bl: var(--pressed-corner-bl, var(--corner-bl));
+  --edge-top: var(--pressed-edge-top, var(--edge-top));
+  --edge-right: var(--pressed-edge-right, var(--edge-right));
+  --edge-bottom: var(--pressed-edge-bottom, var(--edge-bottom));
+  --edge-left: var(--pressed-edge-left, var(--edge-left));
+  --emission-rgb: var(--pressed-emission-rgb, var(--emission-rgb));
+  --emission-alpha: var(--pressed-emission-alpha, var(--emission-alpha));
+  --emission-length: var(--pressed-emission-length, var(--emission-length));
+  --emission-thickness: var(--pressed-emission-thickness, var(--emission-thickness));
+  --emission-blip-size: var(--pressed-emission-blip-size, var(--emission-blip-size));
+  transform:
+    translateY(var(--pressed-state-translate-y, var(--pressed-translate-y, 1px)))
+    scale(var(--pressed-state-scale, var(--pressed-scale, 0.985)));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cd-surface.is-interactive:hover {
+    --content-rgb: var(--hover-content-rgb, var(--content-rgb));
+    --icon-rgb: var(--hover-icon-rgb, var(--icon-rgb));
+    --content-glow-alpha: var(--hover-content-glow-alpha, var(--content-glow-alpha));
+    --icon-glow-alpha: var(--hover-icon-glow-alpha, var(--icon-glow-alpha));
+    --content-font-weight: var(--hover-content-font-weight, var(--content-font-weight));
+    --content-font-style: var(--hover-content-font-style, var(--content-font-style));
+    --content-text-transform: var(--hover-content-text-transform, var(--content-text-transform));
+    --content-letter-spacing: var(--hover-content-letter-spacing, var(--content-letter-spacing));
+    --content-color: rgb(var(--content-rgb) / 1);
+    --icon-color: rgb(var(--icon-rgb) / 1);
+    --tint-rgb: var(--hover-tint-rgb, var(--tint-rgb));
+    --tint-alpha: var(--hover-tint-alpha, var(--tint-alpha));
+    --border-alpha: var(--hover-border-alpha, var(--border-alpha));
+    --light-alpha: var(--hover-light-alpha, var(--light-alpha));
+    --dark-alpha: var(--hover-dark-alpha, var(--dark-alpha));
+    --glow-rgb: var(--hover-glow-rgb, var(--glow-rgb));
+    --glow-alpha: var(--hover-glow-alpha, var(--glow-alpha));
+    --glow-top-wash: var(--hover-glow-top-wash, var(--glow-top-wash));
+    --glow-right-wash: var(--hover-glow-right-wash, var(--glow-right-wash));
+    --glow-bottom-wash: var(--hover-glow-bottom-wash, var(--glow-bottom-wash));
+    --glow-left-wash: var(--hover-glow-left-wash, var(--glow-left-wash));
+    --glow-tl-wash: var(--hover-glow-tl-wash, var(--glow-tl-wash));
+    --glow-tr-wash: var(--hover-glow-tr-wash, var(--glow-tr-wash));
+    --glow-br-wash: var(--hover-glow-br-wash, var(--glow-br-wash));
+    --glow-bl-wash: var(--hover-glow-bl-wash, var(--glow-bl-wash));
+    --corner-shadow: var(--hover-corner-shadow, var(--corner-shadow));
+    --corner-tl: var(--hover-corner-tl, var(--corner-tl));
+    --corner-tr: var(--hover-corner-tr, var(--corner-tr));
+    --corner-br: var(--hover-corner-br, var(--corner-br));
+    --corner-bl: var(--hover-corner-bl, var(--corner-bl));
+    --edge-top: var(--hover-edge-top, var(--edge-top));
+    --edge-right: var(--hover-edge-right, var(--edge-right));
+    --edge-bottom: var(--hover-edge-bottom, var(--edge-bottom));
+    --edge-left: var(--hover-edge-left, var(--edge-left));
+    --emission-rgb: var(--hover-emission-rgb, var(--emission-rgb));
+    --emission-alpha: var(--hover-emission-alpha, var(--emission-alpha));
+    --emission-length: var(--hover-emission-length, var(--emission-length));
+    --emission-thickness: var(--hover-emission-thickness, var(--emission-thickness));
+    --emission-blip-size: var(--hover-emission-blip-size, var(--emission-blip-size));
+    border-color: rgba(255, 223, 152, 0.48);
+    filter: brightness(1.08);
+    transform:
+      translateY(var(--hover-state-translate-y, var(--hover-translate-y, 0px)))
+      scale(var(--hover-state-scale, var(--hover-scale, 1)));
+  }
 }
 
 .cd-surface:disabled {
   cursor: not-allowed;
   opacity: 0.46;
+}
+
+.cd-surface:focus {
+  outline: none;
+}
+
+.cd-surface:focus-visible {
+  outline: 1px solid rgb(255 220 128 / 0.55);
+  outline-offset: 2px;
 }
 
 .cd-surface__content {
@@ -1195,9 +1372,9 @@
   top: var(--content-y);
   z-index: 2;
   font-family: var(--content-font-family);
-  color: var(--content-color);
+  color: rgb(var(--content-rgb) / 1);
   text-align: var(--content-align);
-  text-shadow: var(--content-shadow);
+  text-shadow: var(--content-shadow), var(--content-glow-shadow);
 }
 
 .cd-surface__content--under-glass {
@@ -1250,13 +1427,15 @@
 
 .cd-button__label {
   min-width: 0;
-  color: var(--content-color);
+  color: rgb(var(--content-rgb) / 1);
   font-size: var(--content-size);
-  font-weight: 700;
+  font-weight: var(--content-font-weight);
+  font-style: var(--content-font-style);
   line-height: 1.05;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--content-letter-spacing);
   text-align: center;
-  text-shadow: var(--content-shadow);
+  text-shadow: var(--content-shadow), var(--content-glow-shadow);
+  text-transform: var(--content-text-transform);
 }
 
 .cd-button__icon {
@@ -1266,6 +1445,11 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  color: rgb(var(--icon-rgb) / 1);
+  filter: var(--icon-glow-shadow);
+}
+
+.cd-button__icon svg {
   color: currentColor;
 }
 
@@ -1305,6 +1489,52 @@
 
 .cd-button--cta {
   min-height: 72px;
+}
+
+.cd-nav-item {
+  width: 100%;
+  min-width: 0;
+  height: 52px;
+  color: rgb(var(--content-rgb) / 1);
+}
+
+.cd-nav-item .cd-button__content {
+  gap: 2px;
+  padding: 6px 2px;
+}
+
+.cd-nav-item .cd-button__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.cd-nav-item__label {
+  display: block;
+  width: 100%;
+  height: 0.875rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cd-nav-item__game-text {
+  color: rgb(var(--content-rgb) / 1);
+  font-weight: var(--content-font-weight);
+  font-style: var(--content-font-style);
+  letter-spacing: var(--content-letter-spacing);
+  text-shadow: var(--content-shadow), var(--content-glow-shadow);
+  text-transform: var(--content-text-transform);
+}
+
+.cd-nav-item__game-text > div {
+  font-weight: var(--content-font-weight) !important;
+  text-transform: var(--content-text-transform);
+}
+
+@container (max-width: 360px) {
+  .cd-nav-item {
+    --emission-length: 46%;
+    --emission-blip-size: 15px;
+  }
 }
 
 .cd-section-label {

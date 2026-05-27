@@ -1,4 +1,5 @@
 import {} from 'solid-js';
+import '../../src/styles/ui-material-lab.css';
 import { ScreenKey } from '../../types';
 import { HomeCommandBar } from '../navigation/HomeCommandBar';
 import { DeckCommandBar } from '../navigation/DeckCommandBar';

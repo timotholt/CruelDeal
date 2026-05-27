@@ -478,6 +478,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 1px;
+  container-type: inline-size;
 }
 
 .main-material-action,
@@ -549,35 +550,70 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-nav-item .cd-button__icon {
-  color: var(--content-color);
+  color: rgb(var(--icon-rgb) / 1);
 }
 
-.main-material-nav-item .cd-button__label {
-  display: block;
-  min-height: 8px;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--content-color);
-  font-size: var(--content-size, 8px);
-  font-style: italic;
-  letter-spacing: 0;
-  line-height: 1;
-  text-shadow: var(--content-shadow);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.main-material-selection-overlay-control {
+  display: grid;
+  gap: 6px;
 }
 
-.main-material-nav-item.is-active .cd-button__label {
-  color: var(--content-color);
-}
-
-.main-material-page .is-editing {
-  outline: 2px solid rgb(239 200 93 / 0.9);
+.main-material-page .is-editing-persistent,
+.main-material-page .is-editing-flash {
+  outline: 2px solid rgb(239 200 93 / 0);
   outline-offset: 3px;
 }
 
-.main-material-backdrop-surface.is-editing {
+.main-material-page .is-editing-persistent {
+  outline-color: rgb(239 200 93 / 0.9);
+  box-shadow: 0 0 0 1px rgb(239 200 93 / 0.2), 0 0 18px rgb(239 200 93 / 0.22);
+}
+
+.main-material-page .is-editing-flash-a {
+  animation: main-material-selection-flash-a 820ms ease-out both;
+}
+
+.main-material-page .is-editing-flash-b {
+  animation: main-material-selection-flash-b 820ms ease-out both;
+}
+
+.main-material-backdrop-surface.is-editing-persistent,
+.main-material-backdrop-surface.is-editing-flash {
   outline-offset: -6px;
+}
+
+@keyframes main-material-selection-flash-a {
+  0% {
+    outline-color: rgb(239 200 93 / 0);
+    box-shadow: 0 0 0 0 rgb(239 200 93 / 0);
+  }
+
+  18% {
+    outline-color: rgb(239 200 93 / 0.95);
+    box-shadow: 0 0 0 1px rgb(239 200 93 / 0.24), 0 0 22px rgb(239 200 93 / 0.34);
+  }
+
+  100% {
+    outline-color: rgb(239 200 93 / 0);
+    box-shadow: 0 0 0 4px rgb(239 200 93 / 0);
+  }
+}
+
+@keyframes main-material-selection-flash-b {
+  0% {
+    outline-color: rgb(239 200 93 / 0);
+    box-shadow: 0 0 0 0 rgb(239 200 93 / 0);
+  }
+
+  18% {
+    outline-color: rgb(239 200 93 / 0.95);
+    box-shadow: 0 0 0 1px rgb(239 200 93 / 0.24), 0 0 22px rgb(239 200 93 / 0.34);
+  }
+
+  100% {
+    outline-color: rgb(239 200 93 / 0);
+    box-shadow: 0 0 0 4px rgb(239 200 93 / 0);
+  }
 }
 
 .main-material-text-input {

@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, JSX, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import '../../src/styles/main-material-preview.css';
 import {
@@ -9,16 +9,20 @@ import {
   SectionLabel,
   cloneMaterialRecipe,
   createMaterialRecipe,
-  createMaterialStateOverlays,
+  navTabMaterialRecipe,
   materialRecipeToSurfaceProps,
   sanitizeMaterialRecipe,
   type MaterialRecipe,
   type MaterialRecipeState,
   type MaterialWorkbenchPart,
 } from '../ui/material-lab';
+import { MaterialNavItem } from '../navigation/MaterialNavItem';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar';
 type BackdropFit = 'cover' | 'tile';
+type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
+type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
+type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
 
 interface BackdropRecipe {
   fit: BackdropFit;
@@ -63,7 +67,7 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-const storageKey = 'cruel-deal.main-material-preview.v11';
+const storageKey = 'cruel-deal.main-material-preview.v12';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
@@ -71,6 +75,7 @@ const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v8',
   'cruel-deal.main-material-preview.v9',
   'cruel-deal.main-material-preview.v10',
+  'cruel-deal.main-material-preview.v11',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -83,6 +88,63 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
   { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
 ];
+
+const selectionOverlayModes: readonly SelectionOverlayMode[] = ['off', 'flash', 'persistent'];
+const selectionOverlayLabels: Record<SelectionOverlayMode, string> = {
+  off: 'Off',
+  flash: 'Flash',
+  persistent: 'Persistent',
+};
+
+const interactionRoles: Record<MainPartId, InteractionRole> = {
+  backdrop: 'static',
+  topBar: 'static',
+  profileButton: 'disclosure',
+  currencyButtons: 'momentary',
+  titleBlock: 'static',
+  feedCards: 'static',
+  toolBar: 'momentary',
+  navBar: 'selectable',
+};
+
+const interactionRoleLabels: Record<InteractionRole, string> = {
+  static: 'Static',
+  momentary: 'Momentary',
+  selectable: 'Selectable',
+  disclosure: 'Disclosure',
+};
+
+const interactionStateOptions: Record<InteractionRole, readonly MaterialRecipeState[]> = {
+  static: ['rest'],
+  momentary: ['rest', 'hover', 'pressed'],
+  selectable: ['rest', 'hover', 'active', 'pressed'],
+  disclosure: ['rest', 'hover', 'active', 'pressed'],
+};
+
+const interactionStateLabels: Record<InteractionRole, Partial<Record<MaterialRecipeState, string>>> = {
+  static: { rest: 'Rest' },
+  momentary: { rest: 'Rest', hover: 'Hover', pressed: 'Pressed' },
+  selectable: { rest: 'Rest', hover: 'Hover', active: 'Active', pressed: 'Pressed' },
+  disclosure: { rest: 'Rest', hover: 'Hover', active: 'Open', pressed: 'Pressed' },
+};
+
+const defaultPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
+const stateOptionsForPart = (part: MainPartId) => interactionStateOptions[interactionRoles[part]];
+const coercePreviewStateForPart = (part: MainPartId, state: MaterialRecipeState): MaterialRecipeState => {
+  const options = stateOptionsForPart(part);
+  return options.includes(state) ? state : defaultPreviewStateForRole(interactionRoles[part]);
+};
+
+const createDefaultPreviewStates = (): PreviewStatesByPart => ({
+  backdrop: defaultPreviewStateForRole(interactionRoles.backdrop),
+  topBar: defaultPreviewStateForRole(interactionRoles.topBar),
+  profileButton: defaultPreviewStateForRole(interactionRoles.profileButton),
+  currencyButtons: defaultPreviewStateForRole(interactionRoles.currencyButtons),
+  titleBlock: defaultPreviewStateForRole(interactionRoles.titleBlock),
+  feedCards: defaultPreviewStateForRole(interactionRoles.feedCards),
+  toolBar: defaultPreviewStateForRole(interactionRoles.toolBar),
+  navBar: defaultPreviewStateForRole(interactionRoles.navBar),
+});
 
 const fontOptions = [
   { label: 'Condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
@@ -234,34 +296,7 @@ const defaultToolbarSurface = createMaterialRecipe({
   textSizeRem: 0.6875,
 });
 
-const defaultNavSurface = createMaterialRecipe({
-  material: 'raw',
-  texture: 'stone04',
-  textureStrength: 48,
-  textureScale: 256,
-  glass: true,
-  glassOpacity: 24,
-  glassBlur: 8,
-  tint: 'white',
-  tintStrength: 10,
-  gradient: 'top-light',
-  borderOpacity: 34,
-  lightStrength: 48,
-  darkStrength: 28,
-  radius: 6,
-  textTone: 'black',
-  textSizeRem: 0.5,
-  states: createMaterialStateOverlays({
-    focus: {
-      enabled: true,
-      glow: 'gold',
-      glowStrength: 50,
-      corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
-      edgeHighlight: ['top', 'bottom'],
-      cornerSize: 18,
-    },
-  }),
-});
+const defaultNavSurface = navTabMaterialRecipe;
 
 const cloneBackdrop = (value: BackdropRecipe): BackdropRecipe => ({ ...value });
 const cloneTitle = (value: TitleRecipe): TitleRecipe => ({ ...value });
@@ -555,6 +590,9 @@ const NavRecipeEditor = (props: { nav: NavRecipe; onChange: (nav: NavRecipe) => 
 const SurfaceRecipeEditor = (props: {
   title: string;
   recipe: MaterialRecipe;
+  interactionRole: InteractionRole;
+  stateOptions: readonly MaterialRecipeState[];
+  stateLabels: Partial<Record<MaterialRecipeState, string>>;
   onChange: (recipe: MaterialRecipe) => void;
   activeState: MaterialRecipeState;
   onActiveStateChange: (state: MaterialRecipeState) => void;
@@ -566,6 +604,9 @@ const SurfaceRecipeEditor = (props: {
       recipe={props.recipe}
       onChange={props.onChange}
       activeState={props.activeState}
+      activeStateOptions={props.stateOptions}
+      activeStateLabels={props.stateLabels}
+      interactionLabel={interactionRoleLabels[props.interactionRole]}
       onActiveStateChange={props.onActiveStateChange}
       extraControls={props.extraControls}
     />
@@ -582,8 +623,7 @@ const FakeProfileIcon = () => (
 );
 
 const MainMaterialPreview = (props: {
-  selectedPart: MainPartId;
-  previewState: MaterialRecipeState;
+  previewStates: PreviewStatesByPart;
   activeNavIndex: number;
   onActiveNavIndexChange: (index: number) => void;
   selectedClass: (part: MainPartId) => string;
@@ -620,12 +660,11 @@ const MainMaterialPreview = (props: {
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
   }) as JSX.CSSProperties;
 
-  const stateForPart = (part: MainPartId) => props.selectedPart === part ? props.previewState : 'rest';
+  const stateForPart = (part: MainPartId) => coercePreviewStateForPart(part, props.previewStates[part]);
   const navItemState = (index: number) => {
     if (index !== props.activeNavIndex) return 'rest';
-    return props.selectedPart === 'navBar' ? props.previewState : 'focus';
+    return stateForPart('navBar');
   };
-  const navItemPressed = (index: number) => navItemState(index) === 'focus';
   const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
 
   return (
@@ -735,61 +774,51 @@ const MainMaterialPreview = (props: {
 
           <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
             <div class="main-material-fake-nav-grid">
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.nav, 0, navItemState(0))}
-                size="sm"
-                iconPosition="top"
-                pressed={navItemPressed(0)}
+              <MaterialNavItem
+                label="Battle Pass"
+                icon={<span class="main-material-nav-icon">*</span>}
+                active={0 === props.activeNavIndex}
+                recipe={props.surfaces.nav}
+                visualState={navItemState(0)}
                 class={navItemClass(0)}
                 onClick={() => props.onActiveNavIndexChange(0)}
-                icon={<span class="main-material-nav-icon">*</span>}
-              >
-                Battle Pass
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.nav, 1, navItemState(1))}
-                size="sm"
-                iconPosition="top"
-                pressed={navItemPressed(1)}
+              />
+              <MaterialNavItem
+                label="Comms"
+                icon={<span class="main-material-nav-icon">M</span>}
+                active={1 === props.activeNavIndex}
+                recipe={props.surfaces.nav}
+                visualState={navItemState(1)}
                 class={navItemClass(1)}
                 onClick={() => props.onActiveNavIndexChange(1)}
-                icon={<span class="main-material-nav-icon">M</span>}
-              >
-                Comms
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.nav, 2, navItemState(2))}
-                size="sm"
-                iconPosition="top"
-                pressed={navItemPressed(2)}
+              />
+              <MaterialNavItem
+                label="Main"
+                icon={<span class="main-material-nav-icon">V</span>}
+                active={2 === props.activeNavIndex}
+                recipe={props.surfaces.nav}
+                visualState={navItemState(2)}
                 class={navItemClass(2)}
                 onClick={() => props.onActiveNavIndexChange(2)}
-                icon={<span class="main-material-nav-icon">V</span>}
-              >
-                Main
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.nav, 3, navItemState(3))}
-                size="sm"
-                iconPosition="top"
-                pressed={navItemPressed(3)}
+              />
+              <MaterialNavItem
+                label="Assets"
+                icon={<span class="main-material-nav-icon">B</span>}
+                active={3 === props.activeNavIndex}
+                recipe={props.surfaces.nav}
+                visualState={navItemState(3)}
                 class={navItemClass(3)}
                 onClick={() => props.onActiveNavIndexChange(3)}
-                icon={<span class="main-material-nav-icon">B</span>}
-              >
-                Assets
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.nav, 4, navItemState(4))}
-                size="sm"
-                iconPosition="top"
-                pressed={navItemPressed(4)}
+              />
+              <MaterialNavItem
+                label="Exchange"
+                icon={<span class="main-material-nav-icon">$</span>}
+                active={4 === props.activeNavIndex}
+                recipe={props.surfaces.nav}
+                visualState={navItemState(4)}
                 class={navItemClass(4)}
                 onClick={() => props.onActiveNavIndexChange(4)}
-                icon={<span class="main-material-nav-icon">$</span>}
-              >
-                Exchange
-              </MaterialButton>
+              />
             </div>
           </div>
           </footer>
@@ -801,8 +830,11 @@ const MainMaterialPreview = (props: {
 
 export const MainMaterialPreviewScreen = () => {
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
-  const [previewState, setPreviewState] = createSignal<MaterialRecipeState>('focus');
+  const [previewStates, setPreviewStates] = createSignal<PreviewStatesByPart>(createDefaultPreviewStates());
   const [activeNavIndex, setActiveNavIndex] = createSignal(2);
+  const [selectionOverlayMode, setSelectionOverlayMode] = createSignal<SelectionOverlayMode>('flash');
+  const [selectionFlashPart, setSelectionFlashPart] = createSignal<MainPartId | null>('feedCards');
+  const [selectionFlashTick, setSelectionFlashTick] = createSignal(0);
   const [backdrop, setBackdrop] = createSignal<BackdropRecipe>(cloneBackdrop(defaultBackdrop));
   const [title, setTitle] = createSignal<TitleRecipe>(cloneTitle(defaultTitle));
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
@@ -849,6 +881,43 @@ export const MainMaterialPreviewScreen = () => {
     }));
   });
 
+  createEffect(() => {
+    const mode = selectionOverlayMode();
+    const part = selectedPart();
+    const tick = selectionFlashTick();
+
+    if (mode !== 'flash') {
+      setSelectionFlashPart(null);
+      return;
+    }
+
+    setSelectionFlashPart(part);
+    const timeout = window.setTimeout(() => {
+      setSelectionFlashPart((current) => current === part ? null : current);
+    }, 820);
+
+    onCleanup(() => window.clearTimeout(timeout));
+    void tick;
+  });
+
+  const selectPart = (part: MainPartId) => {
+    setSelectedPart(part);
+    setPreviewStates((current) => {
+      const nextState = coercePreviewStateForPart(part, current[part]);
+      return nextState === current[part] ? current : { ...current, [part]: nextState };
+    });
+    setSelectionFlashTick((tick) => tick + 1);
+  };
+
+  const selectedInteractionRole = () => interactionRoles[selectedPart()];
+  const selectedStateOptions = () => stateOptionsForPart(selectedPart());
+  const selectedStateLabels = () => interactionStateLabels[selectedInteractionRole()];
+  const selectedPreviewState = () => coercePreviewStateForPart(selectedPart(), previewStates()[selectedPart()]);
+  const setSelectedPreviewState = (state: MaterialRecipeState) => {
+    const part = selectedPart();
+    setPreviewStates((current) => ({ ...current, [part]: coercePreviewStateForPart(part, state) }));
+  };
+
   const resetSelected = () => {
     const part = selectedPart();
     if (part === 'backdrop') {
@@ -888,7 +957,31 @@ export const MainMaterialPreviewScreen = () => {
     }, null, 2));
   };
 
-  const selectedClass = (part: MainPartId) => selectedPart() === part ? 'is-editing' : '';
+  const selectedClass = (part: MainPartId) => {
+    if (selectionOverlayMode() === 'persistent' && selectedPart() === part) return 'is-editing-persistent';
+    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === part) {
+      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
+    }
+    return '';
+  };
+
+  const selectionOverlayControl = (
+    <div class="main-material-selection-overlay-control">
+      <SectionLabel size="xs">Overlay</SectionLabel>
+      <div class="ui-lab-segments" aria-label="Selection overlay mode">
+        <For each={selectionOverlayModes}>
+          {(mode) => (
+            <MiniButton
+              active={selectionOverlayMode() === mode}
+              onClick={() => setSelectionOverlayMode(mode)}
+            >
+              {selectionOverlayLabels[mode]}
+            </MiniButton>
+          )}
+        </For>
+      </div>
+    </div>
+  );
 
   const editor = (
     <Show
@@ -916,9 +1009,12 @@ export const MainMaterialPreviewScreen = () => {
                                   <SurfaceRecipeEditor
                                     title="Nav Bar Material"
                                     recipe={surfaces().nav}
+                                    interactionRole={selectedInteractionRole()}
+                                    stateOptions={selectedStateOptions()}
+                                    stateLabels={selectedStateLabels()}
                                     onChange={(recipe) => updateSurface('nav', recipe)}
-                                    activeState={previewState()}
-                                    onActiveStateChange={setPreviewState}
+                                    activeState={selectedPreviewState()}
+                                    onActiveStateChange={setSelectedPreviewState}
                                     extraControls={<NavRecipeEditor nav={nav()} onChange={setNav} />}
                                   />
                                 </Show>
@@ -927,9 +1023,12 @@ export const MainMaterialPreviewScreen = () => {
                               <SurfaceRecipeEditor
                                 title="Tool Bar Material"
                                 recipe={surfaces().toolbar}
+                                interactionRole={selectedInteractionRole()}
+                                stateOptions={selectedStateOptions()}
+                                stateLabels={selectedStateLabels()}
                                 onChange={(recipe) => updateSurface('toolbar', recipe)}
-                                activeState={previewState()}
-                                onActiveStateChange={setPreviewState}
+                                activeState={selectedPreviewState()}
+                                onActiveStateChange={setSelectedPreviewState}
                               />
                             </Show>
                           )}
@@ -937,9 +1036,12 @@ export const MainMaterialPreviewScreen = () => {
                           <SurfaceRecipeEditor
                             title="Feed Material"
                             recipe={surfaces().feed}
+                            interactionRole={selectedInteractionRole()}
+                            stateOptions={selectedStateOptions()}
+                            stateLabels={selectedStateLabels()}
                             onChange={(recipe) => updateSurface('feed', recipe)}
-                            activeState={previewState()}
-                            onActiveStateChange={setPreviewState}
+                            activeState={selectedPreviewState()}
+                            onActiveStateChange={setSelectedPreviewState}
                             extraControls={<FeedRecipeEditor feed={feed()} onChange={setFeed} />}
                           />
                         </Show>
@@ -952,9 +1054,12 @@ export const MainMaterialPreviewScreen = () => {
                   <SurfaceRecipeEditor
                     title="Wallet Chip Material"
                     recipe={surfaces().currencies}
+                    interactionRole={selectedInteractionRole()}
+                    stateOptions={selectedStateOptions()}
+                    stateLabels={selectedStateLabels()}
                     onChange={(recipe) => updateSurface('currencies', recipe)}
-                    activeState={previewState()}
-                    onActiveStateChange={setPreviewState}
+                    activeState={selectedPreviewState()}
+                    onActiveStateChange={setSelectedPreviewState}
                   />
                 </Show>
               )}
@@ -962,9 +1067,12 @@ export const MainMaterialPreviewScreen = () => {
               <SurfaceRecipeEditor
                 title="Profile Button Material"
                 recipe={surfaces().profile}
+                interactionRole={selectedInteractionRole()}
+                stateOptions={selectedStateOptions()}
+                stateLabels={selectedStateLabels()}
                 onChange={(recipe) => updateSurface('profile', recipe)}
-                activeState={previewState()}
-                onActiveStateChange={setPreviewState}
+                activeState={selectedPreviewState()}
+                onActiveStateChange={setSelectedPreviewState}
               />
             </Show>
           )}
@@ -972,9 +1080,12 @@ export const MainMaterialPreviewScreen = () => {
           <SurfaceRecipeEditor
             title="Top Bar Material"
             recipe={surfaces().topBar}
+            interactionRole={selectedInteractionRole()}
+            stateOptions={selectedStateOptions()}
+            stateLabels={selectedStateLabels()}
             onChange={(recipe) => updateSurface('topBar', recipe)}
-            activeState={previewState()}
-            onActiveStateChange={setPreviewState}
+            activeState={selectedPreviewState()}
+            onActiveStateChange={setSelectedPreviewState}
           />
         </Show>
       )}
@@ -982,9 +1093,12 @@ export const MainMaterialPreviewScreen = () => {
       <SurfaceRecipeEditor
         title="Backdrop Material"
         recipe={surfaces().backdrop}
+        interactionRole={selectedInteractionRole()}
+        stateOptions={selectedStateOptions()}
+        stateLabels={selectedStateLabels()}
         onChange={(recipe) => updateSurface('backdrop', recipe)}
-        activeState={previewState()}
-        onActiveStateChange={setPreviewState}
+        activeState={selectedPreviewState()}
+        onActiveStateChange={setSelectedPreviewState}
         extraControls={<BackdropRecipeEditor backdrop={backdrop()} onChange={setBackdrop} />}
       />
     </Show>
@@ -996,11 +1110,10 @@ export const MainMaterialPreviewScreen = () => {
       subtitle="Material Preview"
       parts={partLabels}
       selectedPartId={selectedPart()}
-      onSelectPart={setSelectedPart}
+      onSelectPart={selectPart}
       preview={(
         <MainMaterialPreview
-          selectedPart={selectedPart()}
-          previewState={previewState()}
+          previewStates={previewStates()}
           activeNavIndex={activeNavIndex()}
           onActiveNavIndexChange={setActiveNavIndex}
           selectedClass={selectedClass}
@@ -1012,7 +1125,12 @@ export const MainMaterialPreviewScreen = () => {
         />
       )}
       editor={editor}
-      actions={<button type="button" class="ui-lab-mini-button" onClick={exportJson}>Export</button>}
+      actions={(
+        <>
+          {selectionOverlayControl}
+          <button type="button" class="ui-lab-mini-button" onClick={exportJson}>Export</button>
+        </>
+      )}
       footer={(
         <>
           <button type="button" class="ui-lab-mini-button" onClick={resetSelected}>Reset Selected</button>
