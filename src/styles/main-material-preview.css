@@ -1,7 +1,7 @@
 .main-material-phone {
   position: relative;
-  width: min(390px, calc((100vh - 120px) * 9 / 16));
-  height: min(calc(100vh - 120px), calc((100vw - 430px) * 16 / 9));
+  width: 100%;
+  height: auto;
   min-height: 0;
   aspect-ratio: 9 / 16;
   overflow: hidden;
@@ -33,7 +33,10 @@
 }
 
 section.main-material-backdrop-surface.cd-surface {
+  position: absolute;
+  inset: 0;
   border: 0 !important;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -443,7 +446,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-bottom-stack {
   position: relative;
-  z-index: 8;
+  z-index: auto;
   display: grid;
   grid-template-rows: 40px 68px;
   gap: 4px;
@@ -453,7 +456,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-fake-command {
   position: relative;
-  z-index: 2;
+  z-index: auto;
   display: grid;
   grid-template-columns: 0.55fr repeat(3, 1fr) 0.55fr;
   gap: 6px;
@@ -463,7 +466,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-fake-nav {
   position: relative;
-  z-index: 1;
+  z-index: auto;
   height: 68px;
   overflow: hidden;
 }
@@ -471,7 +474,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 .main-material-fake-nav-grid {
   position: absolute;
   inset: 7px 8px;
-  z-index: 3;
+  z-index: auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 1px;

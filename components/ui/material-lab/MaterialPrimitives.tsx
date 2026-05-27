@@ -344,6 +344,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
     <Dynamic
       component={props.as}
       {...(props.rootProps || {})}
+      data-material-surface={props.as}
       class={surfaceClass(props, props.class)}
       style={surfaceStyle(props)}
       disabled={props.disabled}

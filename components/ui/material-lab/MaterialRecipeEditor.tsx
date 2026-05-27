@@ -116,6 +116,8 @@ const TextureScaleSlider = (props: { value: number; disabled?: boolean; onInput:
 interface MaterialRecipeEditorProps {
   recipe: MaterialRecipe;
   onChange: (recipe: MaterialRecipe) => void;
+  activeState?: MaterialRecipeState;
+  onActiveStateChange?: (state: MaterialRecipeState) => void;
   extraControls?: JSX.Element;
 }
 
@@ -432,7 +434,12 @@ const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
 );
 
 export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
-  const [activeState, setActiveState] = createSignal<MaterialRecipeState>('focus');
+  const [localActiveState, setLocalActiveState] = createSignal<MaterialRecipeState>('focus');
+  const activeState = () => props.activeState ?? localActiveState();
+  const setActiveState = (state: MaterialRecipeState) => {
+    setLocalActiveState(state);
+    props.onActiveStateChange?.(state);
+  };
   const hasTexture = () => props.recipe.texture !== 'none';
   const stateOverlay = () => props.recipe.states[activeState()];
 

@@ -13,6 +13,7 @@ import {
   materialRecipeToSurfaceProps,
   sanitizeMaterialRecipe,
   type MaterialRecipe,
+  type MaterialRecipeState,
   type MaterialWorkbenchPart,
 } from '../ui/material-lab';
 
@@ -555,6 +556,8 @@ const SurfaceRecipeEditor = (props: {
   title: string;
   recipe: MaterialRecipe;
   onChange: (recipe: MaterialRecipe) => void;
+  activeState: MaterialRecipeState;
+  onActiveStateChange: (state: MaterialRecipeState) => void;
   extraControls?: JSX.Element;
 }) => (
   <div class="main-material-surface-editor">
@@ -562,6 +565,8 @@ const SurfaceRecipeEditor = (props: {
     <MaterialRecipeEditor
       recipe={props.recipe}
       onChange={props.onChange}
+      activeState={props.activeState}
+      onActiveStateChange={props.onActiveStateChange}
       extraControls={props.extraControls}
     />
   </div>
@@ -577,6 +582,10 @@ const FakeProfileIcon = () => (
 );
 
 const MainMaterialPreview = (props: {
+  selectedPart: MainPartId;
+  previewState: MaterialRecipeState;
+  activeNavIndex: number;
+  onActiveNavIndexChange: (index: number) => void;
   selectedClass: (part: MainPartId) => string;
   backdrop: BackdropRecipe;
   title: TitleRecipe;
@@ -611,23 +620,34 @@ const MainMaterialPreview = (props: {
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
   }) as JSX.CSSProperties;
 
+  const stateForPart = (part: MainPartId) => props.selectedPart === part ? props.previewState : 'rest';
+  const navItemState = (index: number) => {
+    if (index !== props.activeNavIndex) return 'rest';
+    return props.selectedPart === 'navBar' ? props.previewState : 'focus';
+  };
+  const navItemPressed = (index: number) => navItemState(index) === 'focus';
+  const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
+
   return (
     <div class="main-material-phone" style={style()}>
+      <div class="main-material-screen">
         <MaterialPanel
-          {...materialRecipeToSurfaceProps(props.surfaces.backdrop)}
+          {...materialRecipeToSurfaceProps(props.surfaces.backdrop, stateForPart('backdrop'))}
           padded={false}
-          class={`main-material-screen main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
+          class={`main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
         >
-        <div class="main-material-wash" />
-        <div class="main-material-grain" />
+          <div class="main-material-wash" />
+          <div class="main-material-grain" />
+        </MaterialPanel>
+
         <div class="main-material-frame main-material-frame--editor">
           <MaterialPanel
-            {...materialRecipeToSurfaceProps(props.surfaces.topBar)}
+            {...materialRecipeToSurfaceProps(props.surfaces.topBar, stateForPart('topBar'))}
             padded={false}
             class={`main-material-topbar ${props.selectedClass('topBar')}`}
           >
             <MaterialPanel
-              {...materialRecipeToSurfaceProps(props.surfaces.profile)}
+              {...materialRecipeToSurfaceProps(props.surfaces.profile, stateForPart('profileButton'))}
               padded={false}
               class={`main-material-profile-slot ${props.selectedClass('profileButton')}`}
             >
@@ -636,7 +656,7 @@ const MainMaterialPreview = (props: {
             <div class="main-material-commander">COMMANDER</div>
             <div class={`main-material-currencies ${props.selectedClass('currencyButtons')}`}>
               <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 0)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 0, stateForPart('currencyButtons'))}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--credits"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--credits" />}
@@ -644,7 +664,7 @@ const MainMaterialPreview = (props: {
                 500
               </MaterialButton>
               <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 1)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 1, stateForPart('currencyButtons'))}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--gold"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--gold" />}
@@ -652,7 +672,7 @@ const MainMaterialPreview = (props: {
                 5400
               </MaterialButton>
               <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 2)}
+                {...materialRecipeItemProps(props.surfaces.currencies, 2, stateForPart('currencyButtons'))}
                 size="sm"
                 class="main-material-currency-chip main-material-currency-chip--tokens"
                 icon={<span class="main-material-currency-icon main-material-currency-icon--tokens" />}
@@ -669,7 +689,7 @@ const MainMaterialPreview = (props: {
             </section>
 
             <MaterialPanel
-              {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+              {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
               padded={false}
               class={`main-material-hero ${props.selectedClass('feedCards')}`}
             >
@@ -682,7 +702,7 @@ const MainMaterialPreview = (props: {
 
             <div class={`main-material-news-list ${props.selectedClass('feedCards')}`}>
               <MaterialPanel
-                {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+                {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
                 padded={false}
                 class="main-material-news-card main-material-news-card--dark"
               >
@@ -691,7 +711,7 @@ const MainMaterialPreview = (props: {
                 <p>Navigation has been rebuilt for faster daily command decisions.</p>
               </MaterialPanel>
               <MaterialPanel
-                {...materialRecipeToSurfaceProps(props.surfaces.feed)}
+                {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
                 padded={false}
                 class="main-material-news-card"
               >
@@ -706,31 +726,83 @@ const MainMaterialPreview = (props: {
 
           <footer class="main-material-bottom-stack">
           <div class={`main-material-fake-command ${props.selectedClass('toolBar')}`}>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 0)} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 1)} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 2)} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 3)} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 4)} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 0, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 1, stateForPart('toolBar'))} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 2, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 3, stateForPart('toolBar'))} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
+            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 4, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
           </div>
 
           <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
             <div class="main-material-fake-nav-grid">
-              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 0, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">*</span>}>Battle Pass</MaterialButton>
-              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 1, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">M</span>}>Comms</MaterialButton>
-              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 2, 'focus')} size="sm" iconPosition="top" pressed class="main-material-nav-item is-active" icon={<span class="main-material-nav-icon">V</span>}>Main</MaterialButton>
-              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 3, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">B</span>}>Assets</MaterialButton>
-              <MaterialButton {...materialRecipeItemProps(props.surfaces.nav, 4, 'rest')} size="sm" iconPosition="top" class="main-material-nav-item" icon={<span class="main-material-nav-icon">$</span>}>Exchange</MaterialButton>
+              <MaterialButton
+                {...materialRecipeItemProps(props.surfaces.nav, 0, navItemState(0))}
+                size="sm"
+                iconPosition="top"
+                pressed={navItemPressed(0)}
+                class={navItemClass(0)}
+                onClick={() => props.onActiveNavIndexChange(0)}
+                icon={<span class="main-material-nav-icon">*</span>}
+              >
+                Battle Pass
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeItemProps(props.surfaces.nav, 1, navItemState(1))}
+                size="sm"
+                iconPosition="top"
+                pressed={navItemPressed(1)}
+                class={navItemClass(1)}
+                onClick={() => props.onActiveNavIndexChange(1)}
+                icon={<span class="main-material-nav-icon">M</span>}
+              >
+                Comms
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeItemProps(props.surfaces.nav, 2, navItemState(2))}
+                size="sm"
+                iconPosition="top"
+                pressed={navItemPressed(2)}
+                class={navItemClass(2)}
+                onClick={() => props.onActiveNavIndexChange(2)}
+                icon={<span class="main-material-nav-icon">V</span>}
+              >
+                Main
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeItemProps(props.surfaces.nav, 3, navItemState(3))}
+                size="sm"
+                iconPosition="top"
+                pressed={navItemPressed(3)}
+                class={navItemClass(3)}
+                onClick={() => props.onActiveNavIndexChange(3)}
+                icon={<span class="main-material-nav-icon">B</span>}
+              >
+                Assets
+              </MaterialButton>
+              <MaterialButton
+                {...materialRecipeItemProps(props.surfaces.nav, 4, navItemState(4))}
+                size="sm"
+                iconPosition="top"
+                pressed={navItemPressed(4)}
+                class={navItemClass(4)}
+                onClick={() => props.onActiveNavIndexChange(4)}
+                icon={<span class="main-material-nav-icon">$</span>}
+              >
+                Exchange
+              </MaterialButton>
             </div>
           </div>
           </footer>
         </div>
-        </MaterialPanel>
+      </div>
     </div>
   );
 };
 
 export const MainMaterialPreviewScreen = () => {
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
+  const [previewState, setPreviewState] = createSignal<MaterialRecipeState>('focus');
+  const [activeNavIndex, setActiveNavIndex] = createSignal(2);
   const [backdrop, setBackdrop] = createSignal<BackdropRecipe>(cloneBackdrop(defaultBackdrop));
   const [title, setTitle] = createSignal<TitleRecipe>(cloneTitle(defaultTitle));
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
@@ -845,6 +917,8 @@ export const MainMaterialPreviewScreen = () => {
                                     title="Nav Bar Material"
                                     recipe={surfaces().nav}
                                     onChange={(recipe) => updateSurface('nav', recipe)}
+                                    activeState={previewState()}
+                                    onActiveStateChange={setPreviewState}
                                     extraControls={<NavRecipeEditor nav={nav()} onChange={setNav} />}
                                   />
                                 </Show>
@@ -854,6 +928,8 @@ export const MainMaterialPreviewScreen = () => {
                                 title="Tool Bar Material"
                                 recipe={surfaces().toolbar}
                                 onChange={(recipe) => updateSurface('toolbar', recipe)}
+                                activeState={previewState()}
+                                onActiveStateChange={setPreviewState}
                               />
                             </Show>
                           )}
@@ -862,6 +938,8 @@ export const MainMaterialPreviewScreen = () => {
                             title="Feed Material"
                             recipe={surfaces().feed}
                             onChange={(recipe) => updateSurface('feed', recipe)}
+                            activeState={previewState()}
+                            onActiveStateChange={setPreviewState}
                             extraControls={<FeedRecipeEditor feed={feed()} onChange={setFeed} />}
                           />
                         </Show>
@@ -875,6 +953,8 @@ export const MainMaterialPreviewScreen = () => {
                     title="Wallet Chip Material"
                     recipe={surfaces().currencies}
                     onChange={(recipe) => updateSurface('currencies', recipe)}
+                    activeState={previewState()}
+                    onActiveStateChange={setPreviewState}
                   />
                 </Show>
               )}
@@ -883,6 +963,8 @@ export const MainMaterialPreviewScreen = () => {
                 title="Profile Button Material"
                 recipe={surfaces().profile}
                 onChange={(recipe) => updateSurface('profile', recipe)}
+                activeState={previewState()}
+                onActiveStateChange={setPreviewState}
               />
             </Show>
           )}
@@ -891,6 +973,8 @@ export const MainMaterialPreviewScreen = () => {
             title="Top Bar Material"
             recipe={surfaces().topBar}
             onChange={(recipe) => updateSurface('topBar', recipe)}
+            activeState={previewState()}
+            onActiveStateChange={setPreviewState}
           />
         </Show>
       )}
@@ -899,6 +983,8 @@ export const MainMaterialPreviewScreen = () => {
         title="Backdrop Material"
         recipe={surfaces().backdrop}
         onChange={(recipe) => updateSurface('backdrop', recipe)}
+        activeState={previewState()}
+        onActiveStateChange={setPreviewState}
         extraControls={<BackdropRecipeEditor backdrop={backdrop()} onChange={setBackdrop} />}
       />
     </Show>
@@ -913,6 +999,10 @@ export const MainMaterialPreviewScreen = () => {
       onSelectPart={setSelectedPart}
       preview={(
         <MainMaterialPreview
+          selectedPart={selectedPart()}
+          previewState={previewState()}
+          activeNavIndex={activeNavIndex()}
+          onActiveNavIndexChange={setActiveNavIndex}
           selectedClass={selectedClass}
           backdrop={backdrop()}
           title={title()}

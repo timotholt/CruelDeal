@@ -371,11 +371,14 @@
 }
 
 .material-workbench {
-  display: grid;
+  --material-workbench-gap: 8px;
+  --material-workbench-parts-width: 164px;
+  --material-workbench-editor-width: 374px;
+  --material-workbench-preview-width: min(520px, calc((100vh - 20px) * 9 / 16), calc(100vw - 16px));
+  position: relative;
+  display: block;
   width: 100%;
   height: 100%;
-  grid-template-columns: minmax(220px, 252px) minmax(300px, 1fr) minmax(320px, 374px);
-  gap: 12px;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% -12%, rgba(255, 204, 120, 0.16), transparent 36%),
@@ -385,6 +388,9 @@
 }
 
 .material-workbench-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   display: flex;
   min-height: 0;
   align-items: stretch;
@@ -392,11 +398,17 @@
 }
 
 .material-workbench-sidebar--parts {
-  padding: 18px 0 18px 18px;
+  left: 0;
+  width: var(--material-workbench-parts-width);
+  justify-content: flex-start;
+  padding: 0;
 }
 
 .material-workbench-sidebar--editor {
-  padding: 18px 18px 18px 0;
+  right: 0;
+  width: var(--material-workbench-editor-width);
+  justify-content: flex-end;
+  padding: 0;
 }
 
 .material-workbench button {
@@ -407,16 +419,24 @@
   position: relative;
   left: auto;
   top: auto;
-  width: 100%;
-  height: calc(100vh - 36px);
+  z-index: auto;
+  height: 100vh;
   max-height: none;
   transform: none;
+}
+
+.material-workbench-sidebar--parts .material-workbench-controls-panel {
+  width: var(--material-workbench-parts-width);
+}
+
+.material-workbench-sidebar--editor .material-workbench-controls-panel {
+  width: min(var(--material-workbench-editor-width), 100%);
 }
 
 .material-workbench-controls-panel .cd-panel__content {
   display: grid;
   height: 100%;
-  max-height: calc(100vh - 36px);
+  max-height: 100vh;
   grid-template-rows: auto minmax(0, 1fr);
   padding: 0;
 }
@@ -432,15 +452,15 @@
 }
 
 .material-workbench-footer {
-  display: flex;
-  gap: 7px;
-  padding: 10px 15px 15px;
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px 10px;
   border-top: 1px solid rgba(235, 226, 205, 0.13);
 }
 
 .material-workbench-footer > button {
   min-height: 31px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid rgba(236, 220, 178, 0.22);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.045);
@@ -454,16 +474,16 @@
   display: grid;
   min-height: 0;
   align-content: start;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 6px;
 }
 
 .material-workbench-parts button {
   display: grid;
   min-width: 0;
-  min-height: 46px;
+  min-height: 42px;
   gap: 2px;
-  padding: 8px;
+  padding: 7px 8px;
   text-align: left;
 }
 
@@ -487,11 +507,17 @@
 }
 
 .material-workbench-stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   display: flex;
+  width: var(--material-workbench-preview-width);
   min-width: 0;
   align-items: center;
   justify-content: center;
-  padding: 18px 0;
+  padding: 10px 0;
+  transform: translateX(-50%);
 }
 
 @media (max-width: 860px) {
