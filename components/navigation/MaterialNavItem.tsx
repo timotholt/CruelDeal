@@ -37,7 +37,7 @@ export const MaterialNavItem = (props: MaterialNavItemProps) => {
       <span class="cd-nav-item__label">
         <GameText
           text={props.label}
-          baseFontSize={0.75}
+          baseFontSize={resolved().textSizeRem ?? 0.75}
           minScale={0.4}
           maxScale={1}
           skewFactor={0.9}

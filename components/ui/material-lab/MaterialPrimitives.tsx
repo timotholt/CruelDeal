@@ -627,7 +627,6 @@ export const MaterialButton = (props: MaterialButtonProps) => {
   const iconPosition = () => local.iconPosition || 'left';
   const hasTopIcon = () => iconPosition() === 'top';
   const label = () => local.textContent || local.children;
-  const labelIsText = () => typeof label() === 'string' || typeof label() === 'number';
 
   return (
     <MaterialSurface
@@ -646,9 +645,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
         <span class="cd-button__icon">{local.icon}</span>
       </Show>
       <Show when={label()}>
-        <Show when={labelIsText()} fallback={label()}>
-          <span class="cd-button__label">{label()}</span>
-        </Show>
+        <span class="cd-button__label">{label()}</span>
       </Show>
       <Show when={local.iconRight || (local.icon && iconPosition() === 'right')}>
         <span class="cd-button__icon cd-button__icon--right">{local.iconRight || local.icon}</span>

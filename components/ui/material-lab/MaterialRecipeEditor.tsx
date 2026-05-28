@@ -129,6 +129,8 @@ interface MaterialRecipeEditorProps {
   activeStateOptions?: readonly MaterialRecipeState[];
   activeStateLabels?: Partial<Record<MaterialRecipeState, string>>;
   interactionLabel?: string;
+  forcePreview?: boolean;
+  onForcePreviewChange?: (forcePreview: boolean) => void;
   onActiveStateChange?: (state: MaterialRecipeState) => void;
   extraControls?: JSX.Element;
 }
@@ -344,6 +346,8 @@ const StateSelectorSection = (props: {
   activeStateOptions: readonly MaterialRecipeState[];
   activeStateLabels?: Partial<Record<MaterialRecipeState, string>>;
   interactionLabel?: string;
+  forcePreview?: boolean;
+  onForcePreviewChange?: (forcePreview: boolean) => void;
   setActiveState: (state: MaterialRecipeState) => void;
   applyPreset: (preset: StatePresetId) => void;
 }) => (
@@ -356,14 +360,32 @@ const StateSelectorSection = (props: {
       </div>
     )}
     <div class="ui-lab-control-row">
-      <ControlLabel>State</ControlLabel>
-      <Segments
-        value={props.activeState}
-        options={props.activeStateOptions}
-        labels={{ rest: 'rest', hover: 'hover', active: 'active', pressed: 'pressed', ...props.activeStateLabels }}
-        onChange={props.setActiveState}
-      />
+      <ControlLabel>Tabs</ControlLabel>
+      <div class="ui-lab-state-tabs" role="tablist" aria-label="State recipe tabs">
+        <For each={props.activeStateOptions}>
+          {(state) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={props.activeState === state}
+              class={`ui-lab-state-tab ${props.activeState === state ? 'is-active' : ''}`}
+              onClick={() => props.setActiveState(state)}
+            >
+              {props.activeStateLabels?.[state] || state}
+            </button>
+          )}
+        </For>
+      </div>
     </div>
+    {props.onForcePreviewChange && (
+      <div class="ui-lab-control-row">
+        <ControlLabel>Force Preview</ControlLabel>
+        <div class="ui-lab-force-preview" aria-label="Force preview">
+          <ToggleButton active={!props.forcePreview} onClick={() => props.onForcePreviewChange?.(false)}>Off</ToggleButton>
+          <ToggleButton active={!!props.forcePreview} onClick={() => props.onForcePreviewChange?.(true)}>On</ToggleButton>
+        </div>
+      </div>
+    )}
     <div class="ui-lab-control-row">
       <ControlLabel>Preset</ControlLabel>
       <div class="ui-lab-toggles">
@@ -503,13 +525,13 @@ const ContentStateSection = (props: {
 
   return (
     <div class="ui-lab-control-group">
-      <SectionLabel size="xs">State Content</SectionLabel>
+      <SectionLabel size="xs">State Text</SectionLabel>
       <div class="ui-lab-control-row">
-        <ControlLabel>Label Tone</ControlLabel>
+        <ControlLabel>Label Color</ControlLabel>
         <Segments value={props.stateOverlay.content.contentTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'contentTone', value)} />
       </div>
       <div class="ui-lab-control-row">
-        <ControlLabel>Icon Tone</ControlLabel>
+        <ControlLabel>Icon Color</ControlLabel>
         <Segments value={props.stateOverlay.content.iconTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'iconTone', value)} />
       </div>
       <div class="ui-lab-control-row">
@@ -572,7 +594,7 @@ const MotionSection = (props: {
 
 const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) => (
   <div class="ui-lab-control-group">
-    <SectionLabel size="xs">Text</SectionLabel>
+    <SectionLabel size="xs">Base Text</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Content</ControlLabel>
       <TextInput value={props.recipe.textContent} onInput={(value) => props.update('textContent', value)} />
@@ -597,7 +619,7 @@ const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
       />
     </div>
     <div class="ui-lab-control-row">
-      <ControlLabel>Label Tone</ControlLabel>
+      <ControlLabel>Label Color</ControlLabel>
       <Segments
         value={props.recipe.contentTone}
         options={materialRecipeContentTones}
@@ -605,7 +627,7 @@ const TextSection = (props: { recipe: MaterialRecipe; update: RecipeUpdate }) =>
       />
     </div>
     <div class="ui-lab-control-row">
-      <ControlLabel>Icon Tone</ControlLabel>
+      <ControlLabel>Icon Color</ControlLabel>
       <Segments
         value={props.recipe.iconTone}
         options={materialRecipeContentTones}
@@ -812,11 +834,14 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <GlassSection recipe={props.recipe} update={update} />
       <BorderSection recipe={props.recipe} update={update} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} update={update} />
+      <TextSection recipe={props.recipe} update={update} />
       <StateSelectorSection
         activeState={activeState()}
         activeStateOptions={activeStateOptions()}
         activeStateLabels={props.activeStateLabels}
         interactionLabel={props.interactionLabel}
+        forcePreview={props.forcePreview}
+        onForcePreviewChange={props.onForcePreviewChange}
         setActiveState={setActiveState}
         applyPreset={applyPreset}
       />
@@ -829,7 +854,6 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <EdgeEmissionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
       <ContentStateSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
       <MotionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
-      <TextSection recipe={props.recipe} update={update} />
       {props.extraControls}
     </>
   );

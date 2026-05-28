@@ -207,7 +207,40 @@ Default material button labels should use `black`, `italic`, `uppercase`, and `0
 
 ### Material Recipe
 
-Keep the base recipe mostly intact, but add `contentTone` and `iconTone` as base-level fields. Rename or augment `textTone` carefully, because current `TextTone` only supports `black | white`.
+Keep the base recipe mostly intact, but make base text/icon treatment explicit. Base text is the default/inactive treatment for the component. State text lives inside each state tab and overrides base text only where needed.
+
+Editor organization:
+
+```txt
+Base Text
+- Label Color
+- Icon Color
+- Font
+- Size
+- Weight
+- Style
+- Case
+- Track
+- Emboss
+- Align
+- Layer
+- X
+- Y
+
+State Tabs
+  State Text
+  - Label Color: inherit / muted / black / white / gold / cyan / red / green
+  - Icon Color: inherit / muted / black / white / gold / cyan / red / green
+  - Label Glow
+  - Icon Glow
+  - Emboss: inherit / on / off
+  - Weight: inherit / regular / medium / bold / black
+  - Style: inherit / normal / italic
+  - Case: inherit / none / uppercase
+  - Track: inherit / numeric em value
+```
+
+This means an inactive/default nav button can be tuned in Base Text, while hover/active/pressed label and icon changes are tuned inside their state tabs. Do not make authors edit ordinary inactive label color through a confusing state-only control.
 
 Recommended clean model:
 
@@ -257,7 +290,7 @@ export interface MaterialRecipe {
 }
 ```
 
-If keeping `textTone` temporarily is easier during implementation, do not expose it in the redesigned editor. Expose `contentTone` instead.
+If keeping `textTone` temporarily is easier during implementation, do not expose it in the redesigned editor. Expose `contentTone` as `Base Text > Label Color` instead.
 
 ## Defaults
 
@@ -827,19 +860,45 @@ Keep media queries for hover capability.
 
 The editor should remain dense, but state controls need clearer grouping.
 
-### State Selector
+### State Tabs And Preview
 
-Replace current Glow state selector labels:
+State editing should use a true tabbed interface. The tabs choose which state recipe is being edited; the controls inside the tab apply only to that state.
 
 ```txt
-State: Rest | Hover | Active | Pressed
+State Tabs: Rest | Hover | Active/Open | Pressed
 ```
 
-Default selected state in the editor should be `active`, because selected/powered UI is the most important art pass.
+Tab availability is role-aware:
+
+- Static parts: `Rest`
+- Momentary parts: `Rest | Hover | Pressed`
+- Selectable parts: `Rest | Hover | Active | Pressed`
+- Disclosure parts: `Rest | Hover | Open | Pressed`, where `Open` edits the underlying `active` recipe state.
+
+The selected state tab means "I am editing this state's recipe." It does not automatically mean "force the phone preview to show this state."
+
+Add a compact `Force preview` toggle near the state tabs:
+
+```txt
+Force preview: Off | On
+```
+
+Behavior:
+
+- `Force preview: On` applies the selected state tab to the selected editable part in the phone preview.
+- `Force preview: Off` shows the phone preview as the player would normally see it.
+- When force preview is off, hover only appears from real pointer hover on devices that support hover.
+- When force preview is off, pressed only appears from native pointer-down/touch press.
+- When force preview is off, durable player-facing active/open states still appear where the real UI has them, such as the active nav tab.
+- Selecting a part never forces an invalid state. If the currently selected state tab is invalid for the new part's role, coerce the tab to that role's default.
+
+Default selected tab should be `active` for selectable parts, `rest` for static/momentary/disclosure parts. Default `Force preview` should be `Off`, so the phone preview reads as player-facing UI unless the editor explicitly asks to force the edited state.
+
+State tabs should visually read like editor tabs, not in-game nav tabs. Keep them compact and unambiguous.
 
 ### Surface State Section
 
-Add a new state section before glow:
+Inside each state tab, show the controls for that state. Start with surface controls:
 
 ```txt
 State Surface
@@ -886,12 +945,35 @@ Recommended slider ranges:
 - `Thickness`: 1-8 px
 - `Blip Size`: 8-44 px
 
-### Content State Section
+### Base Text Section
 
-New section:
+Base text controls live outside the state tabs. They define the component's normal/default label and icon treatment.
 
 ```txt
-State Content
+Base Text
+- Label Color: muted / black / white / gold / cyan / red / green
+- Icon Color: inherit / muted / black / white / gold / cyan / red / green
+- Font
+- Size
+- Weight: regular / medium / bold / black
+- Style: normal / italic
+- Case: none / uppercase
+- Track: numeric em value
+- Emboss: on / off
+- Align
+- Layer
+- X
+- Y
+```
+
+For nav buttons, Base Text is the inactive/default nav label and icon styling. `Icon Color: inherit` means the icon follows the base label color.
+
+### State Text Section
+
+State text controls live inside each state tab. They are overrides for hover/active/open/pressed treatment and should default to `inherit` wherever possible.
+
+```txt
+State Text
 - Label Tone: inherit / muted / black / white / gold / cyan / red / green
 - Icon Tone: inherit / muted / black / white / gold / cyan / red / green
 - Label Glow
@@ -903,7 +985,7 @@ State Content
 - Track: inherit / numeric em value
 ```
 
-Important: label/icon color should not be implemented as surface tint. It is separate because active plates may need black text, while dark powered plates may need gold/cyan text.
+Important: label/icon color should not be implemented as surface tint. It is separate because active plates may need black text, while dark powered plates may need gold/cyan text. State Text inherits from Base Text unless a state field explicitly overrides it.
 
 ### Motion Section
 
@@ -1304,11 +1386,13 @@ The parser and renderer should be a separate follow-up workstream. This interact
    - focus-visible fallback
 
 6. Redesign `MaterialRecipeEditor`:
-   - state selector labels
+   - state tabs
+   - `Force preview` toggle integration with main preview state behavior
+   - Base Text section outside state tabs
    - state surface section
    - state glow section
    - edge emission section
-   - state content section
+   - State Text section inside state tabs
    - motion section
    - state presets
 
@@ -1341,6 +1425,10 @@ The parser and renderer should be a separate follow-up workstream. This interact
 
 - Material lab exposes `rest`, `hover`, `active`, and `pressed`.
 - There is no `focus` state in material recipe types or editor labels.
+- State editing uses role-aware tabs, and the selected tab is separate from whether the phone preview is forced to show that state.
+- `Force preview` defaults to off, preserving player-facing preview behavior unless explicitly enabled.
+- Base Text controls default/inactive label and icon treatment outside the state tabs.
+- State Text controls label/icon overrides inside each state tab and defaults to inheriting from Base Text.
 - A material recipe can make a button change body tint on hover and active, using recipe-derived hover variables rather than generic CSS polish.
 - A material recipe can make text and icon colors change independently by state.
 - A material recipe can control label font weight, italic style, uppercase transform, and letter spacing by base recipe and by state overlay.

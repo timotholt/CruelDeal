@@ -10,6 +10,7 @@ import {
   cloneMaterialRecipe,
   createMaterialRecipe,
   navTabMaterialRecipe,
+  materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
   sanitizeMaterialRecipe,
   type MaterialRecipe,
@@ -23,6 +24,13 @@ type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
 type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
 type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
+type MaterialPresetsByPart = Record<MainPartId, MaterialPreset[]>;
+
+interface MaterialPreset {
+  id: string;
+  name: string;
+  recipe: MaterialRecipe;
+}
 
 interface BackdropRecipe {
   fit: BackdropFit;
@@ -68,6 +76,7 @@ interface SurfaceRecipes {
 }
 
 const storageKey = 'cruel-deal.main-material-preview.v12';
+const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
   'cruel-deal.main-material-preview.v6',
@@ -88,6 +97,8 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
   { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
 ];
+
+const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part.label])) as Record<MainPartId, string>;
 
 const selectionOverlayModes: readonly SelectionOverlayMode[] = ['off', 'flash', 'persistent'];
 const selectionOverlayLabels: Record<SelectionOverlayMode, string> = {
@@ -129,6 +140,7 @@ const interactionStateLabels: Record<InteractionRole, Partial<Record<MaterialRec
 };
 
 const defaultPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
+const playerFacingPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
 const stateOptionsForPart = (part: MainPartId) => interactionStateOptions[interactionRoles[part]];
 const coercePreviewStateForPart = (part: MainPartId, state: MaterialRecipeState): MaterialRecipeState => {
   const options = stateOptionsForPart(part);
@@ -144,6 +156,28 @@ const createDefaultPreviewStates = (): PreviewStatesByPart => ({
   feedCards: defaultPreviewStateForRole(interactionRoles.feedCards),
   toolBar: defaultPreviewStateForRole(interactionRoles.toolBar),
   navBar: defaultPreviewStateForRole(interactionRoles.navBar),
+});
+
+const createEmptyMaterialPresets = (): MaterialPresetsByPart => ({
+  backdrop: [],
+  topBar: [],
+  profileButton: [],
+  currencyButtons: [],
+  titleBlock: [],
+  feedCards: [],
+  toolBar: [],
+  navBar: [],
+});
+
+const createEmptySelectedPresetIds = (): Record<MainPartId, string> => ({
+  backdrop: '',
+  topBar: '',
+  profileButton: '',
+  currencyButtons: '',
+  titleBlock: '',
+  feedCards: '',
+  toolBar: '',
+  navBar: '',
 });
 
 const fontOptions = [
@@ -324,7 +358,9 @@ const materialRecipeItemProps = (
   index: number,
   state: Parameters<typeof materialRecipeToSurfaceProps>[1] = 'rest',
 ) => {
-  const props = materialRecipeToSurfaceProps(recipe, state);
+  const props = state === 'hover'
+    ? materialRecipeToSurfaceProps(recipe, 'hover')
+    : materialRecipeToInteractiveSurfaceProps(recipe, state);
   const items = recipeTextItems(recipe);
   return items.length > 1
     ? { ...props, textContent: items[index] || '' }
@@ -339,6 +375,17 @@ const defaultSurfaces: SurfaceRecipes = {
   feed: defaultFeedSurface,
   toolbar: defaultToolbarSurface,
   nav: defaultNavSurface,
+};
+
+const defaultSurfaceForPart = (part: MainPartId): MaterialRecipe => {
+  if (part === 'backdrop') return defaultBackdropSurface;
+  if (part === 'topBar') return defaultTopBarSurface;
+  if (part === 'profileButton') return defaultProfileSurface;
+  if (part === 'currencyButtons') return defaultCurrencySurface;
+  if (part === 'feedCards') return defaultFeedSurface;
+  if (part === 'toolBar') return defaultToolbarSurface;
+  if (part === 'navBar') return defaultNavSurface;
+  return defaultFeedSurface;
 };
 
 const clamp = (value: unknown, fallback: number, min: number, max: number) => {
@@ -404,6 +451,28 @@ const sanitizeSurfaces = (value: unknown): SurfaceRecipes => {
     toolbar: sanitizeMaterialRecipe(input.toolbar, defaultToolbarSurface),
     nav: sanitizeMaterialRecipe(input.nav, defaultNavSurface),
   };
+};
+
+const sanitizeMaterialPresets = (value: unknown): MaterialPresetsByPart => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<Record<MainPartId, unknown>> : {};
+  const empty = createEmptyMaterialPresets();
+  partLabels.forEach((part) => {
+    const rawPresets = Array.isArray(input[part.id]) ? input[part.id] as unknown[] : [];
+    empty[part.id] = rawPresets
+      .map((preset, index): MaterialPreset | null => {
+        if (typeof preset !== 'object' || preset === null) return null;
+        const raw = preset as Partial<MaterialPreset>;
+        const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : `${part.id}-${index}`;
+        const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `${part.label} Preset ${index + 1}`;
+        return {
+          id,
+          name,
+          recipe: sanitizeMaterialRecipe(raw.recipe, defaultSurfaceForPart(part.id)),
+        };
+      })
+      .filter((preset): preset is MaterialPreset => !!preset);
+  });
+  return empty;
 };
 
 const Slider = (props: { value: number; min?: number; max?: number; onInput: (value: number) => void }) => (
@@ -593,6 +662,14 @@ const SurfaceRecipeEditor = (props: {
   interactionRole: InteractionRole;
   stateOptions: readonly MaterialRecipeState[];
   stateLabels: Partial<Record<MaterialRecipeState, string>>;
+  forcePreview: boolean;
+  onForcePreviewChange: (forcePreview: boolean) => void;
+  presets: MaterialPreset[];
+  selectedPresetId: string;
+  onSelectPreset: (id: string) => void;
+  onSavePreset: () => void;
+  onSaveNewPreset: () => void;
+  onDeletePreset: () => void;
   onChange: (recipe: MaterialRecipe) => void;
   activeState: MaterialRecipeState;
   onActiveStateChange: (state: MaterialRecipeState) => void;
@@ -600,6 +677,26 @@ const SurfaceRecipeEditor = (props: {
 }) => (
   <div class="main-material-surface-editor">
     <SectionLabel size="xs">{props.title}</SectionLabel>
+    <div class="main-material-preset-control ui-lab-control-group">
+      <div class="ui-lab-control-row">
+        <span>Material Preset</span>
+        <select
+          class="ui-lab-select"
+          value={props.selectedPresetId}
+          onChange={(event) => props.onSelectPreset(event.currentTarget.value)}
+        >
+          <option value="">Unsaved</option>
+          <For each={props.presets}>
+            {(preset) => <option value={preset.id}>{preset.name}</option>}
+          </For>
+        </select>
+      </div>
+      <div class="main-material-preset-actions">
+        <button type="button" class="ui-lab-mini-button" onClick={props.onSavePreset}>Save</button>
+        <button type="button" class="ui-lab-mini-button" onClick={props.onSaveNewPreset}>Save New</button>
+        <button type="button" class="ui-lab-mini-button" disabled={!props.selectedPresetId} onClick={props.onDeletePreset}>Delete</button>
+      </div>
+    </div>
     <MaterialRecipeEditor
       recipe={props.recipe}
       onChange={props.onChange}
@@ -607,6 +704,8 @@ const SurfaceRecipeEditor = (props: {
       activeStateOptions={props.stateOptions}
       activeStateLabels={props.stateLabels}
       interactionLabel={interactionRoleLabels[props.interactionRole]}
+      forcePreview={props.forcePreview}
+      onForcePreviewChange={props.onForcePreviewChange}
       onActiveStateChange={props.onActiveStateChange}
       extraControls={props.extraControls}
     />
@@ -624,6 +723,8 @@ const FakeProfileIcon = () => (
 
 const MainMaterialPreview = (props: {
   previewStates: PreviewStatesByPart;
+  selectedPart: MainPartId;
+  forcePreview: boolean;
   activeNavIndex: number;
   onActiveNavIndexChange: (index: number) => void;
   selectedClass: (part: MainPartId) => string;
@@ -660,7 +761,12 @@ const MainMaterialPreview = (props: {
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
   }) as JSX.CSSProperties;
 
-  const stateForPart = (part: MainPartId) => coercePreviewStateForPart(part, props.previewStates[part]);
+  const stateForPart = (part: MainPartId) => {
+    if (props.forcePreview && props.selectedPart === part) {
+      return coercePreviewStateForPart(part, props.previewStates[part]);
+    }
+    return playerFacingPreviewStateForRole(interactionRoles[part]);
+  };
   const navItemState = (index: number) => {
     if (index !== props.activeNavIndex) return 'rest';
     return stateForPart('navBar');
@@ -831,6 +937,7 @@ const MainMaterialPreview = (props: {
 export const MainMaterialPreviewScreen = () => {
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
   const [previewStates, setPreviewStates] = createSignal<PreviewStatesByPart>(createDefaultPreviewStates());
+  const [forcePreview, setForcePreview] = createSignal(false);
   const [activeNavIndex, setActiveNavIndex] = createSignal(2);
   const [selectionOverlayMode, setSelectionOverlayMode] = createSignal<SelectionOverlayMode>('flash');
   const [selectionFlashPart, setSelectionFlashPart] = createSignal<MainPartId | null>('feedCards');
@@ -840,6 +947,9 @@ export const MainMaterialPreviewScreen = () => {
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
   const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
+  const [materialPresets, setMaterialPresets] = createSignal<MaterialPresetsByPart>(createEmptyMaterialPresets());
+  const [selectedPresetIds, setSelectedPresetIds] = createSignal<Record<MainPartId, string>>(createEmptySelectedPresetIds());
+  const [materialPresetsLoaded, setMaterialPresetsLoaded] = createSignal(false);
 
   const updateSurface = (key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
     setSurfaces((current) => ({ ...current, [key]: recipe }));
@@ -849,25 +959,35 @@ export const MainMaterialPreviewScreen = () => {
     try {
       obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
       const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        backdrop?: unknown;
-        title?: unknown;
-        feed?: unknown;
-        nav?: unknown;
-        surfaces?: unknown;
-      };
-      setBackdrop(sanitizeBackdrop(parsed.backdrop));
-      setTitle(sanitizeTitle(parsed.title));
-      setFeed(sanitizeFeed(parsed.feed));
-      setNav(sanitizeNav(parsed.nav));
-      setSurfaces(sanitizeSurfaces(parsed.surfaces));
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          backdrop?: unknown;
+          title?: unknown;
+          feed?: unknown;
+          nav?: unknown;
+          surfaces?: unknown;
+        };
+        setBackdrop(sanitizeBackdrop(parsed.backdrop));
+        setTitle(sanitizeTitle(parsed.title));
+        setFeed(sanitizeFeed(parsed.feed));
+        setNav(sanitizeNav(parsed.nav));
+        setSurfaces(sanitizeSurfaces(parsed.surfaces));
+      }
     } catch {
       setBackdrop(cloneBackdrop(defaultBackdrop));
       setTitle(cloneTitle(defaultTitle));
       setFeed(cloneFeed(defaultFeed));
       setNav(cloneNav(defaultNav));
       setSurfaces(cloneSurfaceRecipes(defaultSurfaces));
+    }
+
+    try {
+      const rawPresets = window.localStorage.getItem(materialPresetStorageKey);
+      setMaterialPresets(sanitizeMaterialPresets(rawPresets ? JSON.parse(rawPresets) : null));
+    } catch {
+      setMaterialPresets(createEmptyMaterialPresets());
+    } finally {
+      setMaterialPresetsLoaded(true);
     }
   });
 
@@ -879,6 +999,11 @@ export const MainMaterialPreviewScreen = () => {
       nav: nav(),
       surfaces: surfaces(),
     }));
+  });
+
+  createEffect(() => {
+    if (!materialPresetsLoaded()) return;
+    window.localStorage.setItem(materialPresetStorageKey, JSON.stringify(materialPresets()));
   });
 
   createEffect(() => {
@@ -916,6 +1041,87 @@ export const MainMaterialPreviewScreen = () => {
   const setSelectedPreviewState = (state: MaterialRecipeState) => {
     const part = selectedPart();
     setPreviewStates((current) => ({ ...current, [part]: coercePreviewStateForPart(part, state) }));
+  };
+
+  const currentRecipeForPart = (part: MainPartId): MaterialRecipe => {
+    const current = surfaces();
+    if (part === 'backdrop') return current.backdrop;
+    if (part === 'topBar') return current.topBar;
+    if (part === 'profileButton') return current.profile;
+    if (part === 'currencyButtons') return current.currencies;
+    if (part === 'feedCards') return current.feed;
+    if (part === 'toolBar') return current.toolbar;
+    if (part === 'navBar') return current.nav;
+    return current.feed;
+  };
+
+  const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
+    if (part === 'backdrop') updateSurface('backdrop', cloneMaterialRecipe(recipe));
+    if (part === 'topBar') updateSurface('topBar', cloneMaterialRecipe(recipe));
+    if (part === 'profileButton') updateSurface('profile', cloneMaterialRecipe(recipe));
+    if (part === 'currencyButtons') updateSurface('currencies', cloneMaterialRecipe(recipe));
+    if (part === 'feedCards') updateSurface('feed', cloneMaterialRecipe(recipe));
+    if (part === 'toolBar') updateSurface('toolbar', cloneMaterialRecipe(recipe));
+    if (part === 'navBar') updateSurface('nav', cloneMaterialRecipe(recipe));
+  };
+
+  const selectedMaterialPresets = () => materialPresets()[selectedPart()];
+  const selectedPresetId = () => selectedPresetIds()[selectedPart()];
+  const setSelectedPresetId = (part: MainPartId, id: string) => {
+    setSelectedPresetIds((current) => ({ ...current, [part]: id }));
+  };
+
+  const selectMaterialPreset = (part: MainPartId, id: string) => {
+    setSelectedPresetId(part, id);
+    const preset = materialPresets()[part].find((item) => item.id === id);
+    if (preset) applyRecipeForPart(part, preset.recipe);
+  };
+
+  const createPresetId = (part: MainPartId) => `${part}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const saveNewMaterialPreset = (part: MainPartId) => {
+    const name = window.prompt('Name this material preset', `${partLabelById[part]} Preset ${materialPresets()[part].length + 1}`)?.trim();
+    if (!name) return;
+    const id = createPresetId(part);
+    const preset: MaterialPreset = {
+      id,
+      name,
+      recipe: cloneMaterialRecipe(currentRecipeForPart(part)),
+    };
+    setMaterialPresets((current) => ({ ...current, [part]: [...current[part], preset] }));
+    setSelectedPresetId(part, id);
+  };
+
+  const saveMaterialPreset = (part: MainPartId) => {
+    const id = selectedPresetIds()[part];
+    if (!id) {
+      saveNewMaterialPreset(part);
+      return;
+    }
+    setMaterialPresets((current) => ({
+      ...current,
+      [part]: current[part].map((preset) => (
+        preset.id === id
+          ? { ...preset, recipe: cloneMaterialRecipe(currentRecipeForPart(part)) }
+          : preset
+      )),
+    }));
+  };
+
+  const deleteMaterialPreset = (part: MainPartId) => {
+    const id = selectedPresetIds()[part];
+    const preset = materialPresets()[part].find((item) => item.id === id);
+    if (!preset) return;
+    if (!window.confirm(`Delete material preset "${preset.name}"?`)) return;
+    setMaterialPresets((current) => ({ ...current, [part]: current[part].filter((item) => item.id !== id) }));
+    setSelectedPresetId(part, '');
+  };
+
+  const clearMaterialPresets = () => {
+    if (!window.confirm('Delete all saved material presets? This will not affect the current working preview.')) return;
+    setMaterialPresets(createEmptyMaterialPresets());
+    setSelectedPresetIds(createEmptySelectedPresetIds());
+    window.localStorage.removeItem(materialPresetStorageKey);
   };
 
   const resetSelected = () => {
@@ -1012,6 +1218,14 @@ export const MainMaterialPreviewScreen = () => {
                                     interactionRole={selectedInteractionRole()}
                                     stateOptions={selectedStateOptions()}
                                     stateLabels={selectedStateLabels()}
+                                    forcePreview={forcePreview()}
+                                    onForcePreviewChange={setForcePreview}
+                                    presets={selectedMaterialPresets()}
+                                    selectedPresetId={selectedPresetId()}
+                                    onSelectPreset={(id) => selectMaterialPreset('navBar', id)}
+                                    onSavePreset={() => saveMaterialPreset('navBar')}
+                                    onSaveNewPreset={() => saveNewMaterialPreset('navBar')}
+                                    onDeletePreset={() => deleteMaterialPreset('navBar')}
                                     onChange={(recipe) => updateSurface('nav', recipe)}
                                     activeState={selectedPreviewState()}
                                     onActiveStateChange={setSelectedPreviewState}
@@ -1026,6 +1240,14 @@ export const MainMaterialPreviewScreen = () => {
                                 interactionRole={selectedInteractionRole()}
                                 stateOptions={selectedStateOptions()}
                                 stateLabels={selectedStateLabels()}
+                                forcePreview={forcePreview()}
+                                onForcePreviewChange={setForcePreview}
+                                presets={selectedMaterialPresets()}
+                                selectedPresetId={selectedPresetId()}
+                                onSelectPreset={(id) => selectMaterialPreset('toolBar', id)}
+                                onSavePreset={() => saveMaterialPreset('toolBar')}
+                                onSaveNewPreset={() => saveNewMaterialPreset('toolBar')}
+                                onDeletePreset={() => deleteMaterialPreset('toolBar')}
                                 onChange={(recipe) => updateSurface('toolbar', recipe)}
                                 activeState={selectedPreviewState()}
                                 onActiveStateChange={setSelectedPreviewState}
@@ -1039,6 +1261,14 @@ export const MainMaterialPreviewScreen = () => {
                             interactionRole={selectedInteractionRole()}
                             stateOptions={selectedStateOptions()}
                             stateLabels={selectedStateLabels()}
+                            forcePreview={forcePreview()}
+                            onForcePreviewChange={setForcePreview}
+                            presets={selectedMaterialPresets()}
+                            selectedPresetId={selectedPresetId()}
+                            onSelectPreset={(id) => selectMaterialPreset('feedCards', id)}
+                            onSavePreset={() => saveMaterialPreset('feedCards')}
+                            onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
+                            onDeletePreset={() => deleteMaterialPreset('feedCards')}
                             onChange={(recipe) => updateSurface('feed', recipe)}
                             activeState={selectedPreviewState()}
                             onActiveStateChange={setSelectedPreviewState}
@@ -1057,6 +1287,14 @@ export const MainMaterialPreviewScreen = () => {
                     interactionRole={selectedInteractionRole()}
                     stateOptions={selectedStateOptions()}
                     stateLabels={selectedStateLabels()}
+                    forcePreview={forcePreview()}
+                    onForcePreviewChange={setForcePreview}
+                    presets={selectedMaterialPresets()}
+                    selectedPresetId={selectedPresetId()}
+                    onSelectPreset={(id) => selectMaterialPreset('currencyButtons', id)}
+                    onSavePreset={() => saveMaterialPreset('currencyButtons')}
+                    onSaveNewPreset={() => saveNewMaterialPreset('currencyButtons')}
+                    onDeletePreset={() => deleteMaterialPreset('currencyButtons')}
                     onChange={(recipe) => updateSurface('currencies', recipe)}
                     activeState={selectedPreviewState()}
                     onActiveStateChange={setSelectedPreviewState}
@@ -1070,6 +1308,14 @@ export const MainMaterialPreviewScreen = () => {
                 interactionRole={selectedInteractionRole()}
                 stateOptions={selectedStateOptions()}
                 stateLabels={selectedStateLabels()}
+                forcePreview={forcePreview()}
+                onForcePreviewChange={setForcePreview}
+                presets={selectedMaterialPresets()}
+                selectedPresetId={selectedPresetId()}
+                onSelectPreset={(id) => selectMaterialPreset('profileButton', id)}
+                onSavePreset={() => saveMaterialPreset('profileButton')}
+                onSaveNewPreset={() => saveNewMaterialPreset('profileButton')}
+                onDeletePreset={() => deleteMaterialPreset('profileButton')}
                 onChange={(recipe) => updateSurface('profile', recipe)}
                 activeState={selectedPreviewState()}
                 onActiveStateChange={setSelectedPreviewState}
@@ -1083,6 +1329,14 @@ export const MainMaterialPreviewScreen = () => {
             interactionRole={selectedInteractionRole()}
             stateOptions={selectedStateOptions()}
             stateLabels={selectedStateLabels()}
+            forcePreview={forcePreview()}
+            onForcePreviewChange={setForcePreview}
+            presets={selectedMaterialPresets()}
+            selectedPresetId={selectedPresetId()}
+            onSelectPreset={(id) => selectMaterialPreset('topBar', id)}
+            onSavePreset={() => saveMaterialPreset('topBar')}
+            onSaveNewPreset={() => saveNewMaterialPreset('topBar')}
+            onDeletePreset={() => deleteMaterialPreset('topBar')}
             onChange={(recipe) => updateSurface('topBar', recipe)}
             activeState={selectedPreviewState()}
             onActiveStateChange={setSelectedPreviewState}
@@ -1096,6 +1350,14 @@ export const MainMaterialPreviewScreen = () => {
         interactionRole={selectedInteractionRole()}
         stateOptions={selectedStateOptions()}
         stateLabels={selectedStateLabels()}
+        forcePreview={forcePreview()}
+        onForcePreviewChange={setForcePreview}
+        presets={selectedMaterialPresets()}
+        selectedPresetId={selectedPresetId()}
+        onSelectPreset={(id) => selectMaterialPreset('backdrop', id)}
+        onSavePreset={() => saveMaterialPreset('backdrop')}
+        onSaveNewPreset={() => saveNewMaterialPreset('backdrop')}
+        onDeletePreset={() => deleteMaterialPreset('backdrop')}
         onChange={(recipe) => updateSurface('backdrop', recipe)}
         activeState={selectedPreviewState()}
         onActiveStateChange={setSelectedPreviewState}
@@ -1114,6 +1376,8 @@ export const MainMaterialPreviewScreen = () => {
       preview={(
         <MainMaterialPreview
           previewStates={previewStates()}
+          selectedPart={selectedPart()}
+          forcePreview={forcePreview()}
           activeNavIndex={activeNavIndex()}
           onActiveNavIndexChange={setActiveNavIndex}
           selectedClass={selectedClass}
@@ -1135,6 +1399,7 @@ export const MainMaterialPreviewScreen = () => {
         <>
           <button type="button" class="ui-lab-mini-button" onClick={resetSelected}>Reset Selected</button>
           <button type="button" class="ui-lab-mini-button" onClick={resetAll}>Reset All</button>
+          <button type="button" class="ui-lab-mini-button" onClick={clearMaterialPresets}>Clear Material Presets</button>
         </>
       )}
       class="main-material-page"

@@ -558,6 +558,16 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   gap: 6px;
 }
 
+.main-material-preset-control {
+  padding-top: 0;
+}
+
+.main-material-preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .main-material-page .is-editing-persistent,
 .main-material-page .is-editing-flash {
   outline: 2px solid rgb(239 200 93 / 0);
