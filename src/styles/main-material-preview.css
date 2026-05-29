@@ -287,6 +287,10 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   will-change: transform;
 }
 
+.main-material-feed-stage.is-dragging .main-material-feed-track {
+  transition: none;
+}
+
 .main-material-feed-slide {
   position: relative;
   flex: 0 0 100%;

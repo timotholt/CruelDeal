@@ -788,6 +788,104 @@ const FakeProfileIcon = () => (
   </div>
 );
 
+const clampSlideIndex = (index: number, slideCount: number) => Math.max(0, Math.min(slideCount - 1, index));
+
+const FeedCarousel = (props: {
+  slides: FeedSlide[];
+  class: string;
+  feed: FeedRecipe;
+  surfaceRecipe: MaterialRecipe;
+  surfaceState: MaterialRecipeState;
+}) => {
+  const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
+  const [dragStartX, setDragStartX] = createSignal<number | null>(null);
+  const [dragDeltaX, setDragDeltaX] = createSignal(0);
+  const lastSlideIndex = () => props.slides.length - 1;
+  const canGoPrevious = () => activeSlideIndex() > 0;
+  const canGoNext = () => activeSlideIndex() < lastSlideIndex();
+  const feedStyle = () => ({
+    '--main-card-gap': `${props.feed.cardGap}px`,
+    '--main-news-gap': `${props.feed.newsGap}px`,
+    '--main-feed-slide-index': activeSlideIndex(),
+    '--main-feed-drag-x': `${dragDeltaX()}px`,
+  }) as JSX.CSSProperties;
+  const showSlide = (index: number) => {
+    setActiveSlideIndex(clampSlideIndex(index, props.slides.length));
+  };
+  const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLElement }) => {
+    setDragStartX(event.clientX);
+    setDragDeltaX(0);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const handleFeedPointerMove = (event: PointerEvent) => {
+    const startX = dragStartX();
+    if (startX === null) return;
+    const rawDeltaX = event.clientX - startX;
+    const isPullingPastStart = rawDeltaX > 0 && !canGoPrevious();
+    const isPullingPastEnd = rawDeltaX < 0 && !canGoNext();
+    const resistance = isPullingPastStart || isPullingPastEnd ? 0.28 : 1;
+    setDragDeltaX(Math.max(-72, Math.min(72, rawDeltaX * resistance)));
+  };
+  const finishFeedDrag = () => {
+    const deltaX = dragDeltaX();
+    if (Math.abs(deltaX) > 38) {
+      if (deltaX < 0 && canGoNext()) showSlide(activeSlideIndex() + 1);
+      if (deltaX > 0 && canGoPrevious()) showSlide(activeSlideIndex() - 1);
+    }
+    setDragStartX(null);
+    setDragDeltaX(0);
+  };
+
+  return (
+    <section
+      class={`main-material-feed-stage ${props.class} ${dragStartX() !== null ? 'is-dragging' : ''}`}
+      style={feedStyle()}
+      aria-label="Briefing feed"
+      onPointerDown={handleFeedPointerDown}
+      onPointerMove={handleFeedPointerMove}
+      onPointerUp={finishFeedDrag}
+      onPointerCancel={finishFeedDrag}
+      onPointerLeave={finishFeedDrag}
+    >
+      <div class="main-material-feed-track">
+        <For each={props.slides}>
+          {(slide) => (
+            <MaterialPanel
+              {...materialSurfacePropsForPart('feedCards', props.surfaceRecipe, props.surfaceState)}
+              padded={false}
+              class={`main-material-feed-slide main-material-feed-slide--${slide.tone}`}
+            >
+              <div class="main-material-feed-content">
+                <div class="main-material-tag">{slide.eyebrow}</div>
+                <h2>{slide.title}</h2>
+                <p>{slide.body}</p>
+              </div>
+              <Show when={slide.meta}>
+                <div class="main-material-feed-meta">
+                  <strong>{slide.meta}</strong>
+                </div>
+              </Show>
+            </MaterialPanel>
+          )}
+        </For>
+      </div>
+      <div class="main-material-feed-dots" aria-label="Feed slides">
+        <For each={props.slides}>
+          {(_, index) => (
+            <button
+              type="button"
+              class={index() === activeSlideIndex() ? 'is-active' : ''}
+              aria-label={`Show feed slide ${index() + 1}`}
+              aria-current={index() === activeSlideIndex() ? 'true' : undefined}
+              onClick={() => showSlide(index())}
+            />
+          )}
+        </For>
+      </div>
+    </section>
+  );
+};
+
 const MainMaterialPreview = (props: {
   previewStates: PreviewStatesByPart;
   selectedPart: MainPartId;
@@ -801,9 +899,6 @@ const MainMaterialPreview = (props: {
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
-  const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
-  const [dragStartX, setDragStartX] = createSignal<number | null>(null);
-  const [dragDeltaX, setDragDeltaX] = createSignal(0);
   const backdropTextureScale = () => props.surfaces.backdrop.textureScale;
   const style = () => ({
     '--main-bg-texture-size': props.backdrop.fit === 'cover'
@@ -819,11 +914,7 @@ const MainMaterialPreview = (props: {
     '--main-bg-warm': `${props.backdrop.warm / 100}`,
     '--main-bg-dark': `${props.backdrop.dark / 100}`,
     '--main-content-y': `${props.feed.contentY}px`,
-    '--main-card-gap': `${props.feed.cardGap}px`,
-    '--main-news-gap': `${props.feed.newsGap}px`,
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
-    '--main-feed-slide-index': activeSlideIndex(),
-    '--main-feed-drag-x': `${dragDeltaX()}px`,
   }) as JSX.CSSProperties;
 
   const stateForPart = (part: MainPartId) => {
@@ -837,29 +928,6 @@ const MainMaterialPreview = (props: {
     return stateForPart('navBar');
   };
   const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
-  const wrapSlideIndex = (index: number) => (index + feedSlides.length) % feedSlides.length;
-  const showSlide = (index: number) => setActiveSlideIndex(wrapSlideIndex(index));
-  const nextSlide = () => showSlide(activeSlideIndex() + 1);
-  const previousSlide = () => showSlide(activeSlideIndex() - 1);
-  const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLElement }) => {
-    setDragStartX(event.clientX);
-    setDragDeltaX(0);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const handleFeedPointerMove = (event: PointerEvent) => {
-    const startX = dragStartX();
-    if (startX === null) return;
-    setDragDeltaX(Math.max(-64, Math.min(64, event.clientX - startX)));
-  };
-  const finishFeedDrag = () => {
-    const deltaX = dragDeltaX();
-    if (Math.abs(deltaX) > 38) {
-      if (deltaX < 0) nextSlide();
-      if (deltaX > 0) previousSlide();
-    }
-    setDragStartX(null);
-    setDragDeltaX(0);
-  };
 
   return (
     <div class="main-material-phone" style={style()}>
@@ -916,50 +984,13 @@ const MainMaterialPreview = (props: {
           </MaterialPanel>
 
           <main class="main-material-scroll">
-            <section
-              class={`main-material-feed-stage ${props.selectedClass('feedCards')}`}
-              aria-label="Briefing feed"
-              onPointerDown={handleFeedPointerDown}
-              onPointerMove={handleFeedPointerMove}
-              onPointerUp={finishFeedDrag}
-              onPointerCancel={finishFeedDrag}
-              onPointerLeave={finishFeedDrag}
-            >
-              <div class="main-material-feed-track">
-                <For each={feedSlides}>
-                  {(slide) => (
-                    <MaterialPanel
-                      {...materialSurfacePropsForPart('feedCards', props.surfaces.feed, stateForPart('feedCards'))}
-                      padded={false}
-                      class={`main-material-feed-slide main-material-feed-slide--${slide.tone}`}
-                    >
-                      <div class="main-material-feed-content">
-                        <div class="main-material-tag">{slide.eyebrow}</div>
-                        <h2>{slide.title}</h2>
-                        <p>{slide.body}</p>
-                      </div>
-                      <Show when={slide.meta}>
-                        <div class="main-material-feed-meta">
-                          <strong>{slide.meta}</strong>
-                        </div>
-                      </Show>
-                    </MaterialPanel>
-                  )}
-                </For>
-              </div>
-              <div class="main-material-feed-dots" aria-label="Feed slides">
-                <For each={feedSlides}>
-                  {(_, index) => (
-                    <button
-                      type="button"
-                      class={index() === activeSlideIndex() ? 'is-active' : ''}
-                      aria-label={`Show feed slide ${index() + 1}`}
-                      onClick={() => showSlide(index())}
-                    />
-                  )}
-                </For>
-              </div>
-            </section>
+            <FeedCarousel
+              slides={feedSlides}
+              class={props.selectedClass('feedCards')}
+              feed={props.feed}
+              surfaceRecipe={props.surfaces.feed}
+              surfaceState={stateForPart('feedCards')}
+            />
           </main>
 
           <footer class="main-material-bottom-stack">
