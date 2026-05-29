@@ -75,6 +75,14 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
+interface FeedSlide {
+  eyebrow: string;
+  title: string;
+  body: string;
+  meta: string;
+  tone: 'gold' | 'white' | 'dark';
+}
+
 const storageKey = 'cruel-deal.main-material-preview.v12';
 const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
 const obsoleteStorageKeys = [
@@ -92,7 +100,6 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
   { id: 'profileButton', label: 'Profile', detail: 'button material' },
   { id: 'currencyButtons', label: 'Wallet', detail: 'chip material' },
-  { id: 'titleBlock', label: 'Title', detail: 'briefing type' },
   { id: 'feedCards', label: 'Feed', detail: 'glass cards' },
   { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
   { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
@@ -221,6 +228,30 @@ const defaultFeed: FeedRecipe = {
 const defaultNav: NavRecipe = {
   bottomReserve: 146,
 };
+
+const feedSlides: FeedSlide[] = [
+  {
+    eyebrow: 'Season Pass',
+    title: 'Cosmic Eclipse',
+    body: 'Unlock the Titan variant and double credits before the weekend window closes.',
+    meta: '03 days left',
+    tone: 'gold',
+  },
+  {
+    eyebrow: 'Patch Notes',
+    title: 'Spatial UI',
+    body: 'Navigation has been rebuilt around faster command choices and thumb-first play.',
+    meta: 'Update 1.4.0',
+    tone: 'white',
+  },
+  {
+    eyebrow: 'Community',
+    title: 'Top Decks',
+    body: 'See the ladder lists gaining ground across the company circuit this week.',
+    meta: '12 decks live',
+    tone: 'dark',
+  },
+];
 
 const defaultBackdropSurface = createMaterialRecipe({
   material: 'raw',
@@ -626,11 +657,11 @@ const FeedRecipeEditor = (props: { feed: FeedRecipe; onChange: (feed: FeedRecipe
         <Slider value={props.feed.titleGap} min={10} max={50} onInput={(value) => update('titleGap', value)} />
       </div>
       <div class="ui-lab-control-row">
-        <span>Card Gap</span>
+        <span>Copy Lift</span>
         <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
       </div>
       <div class="ui-lab-control-row">
-        <span>News Gap</span>
+        <span>Dot Gap</span>
         <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
       </div>
       <div class="ui-lab-control-row">
@@ -734,6 +765,9 @@ const MainMaterialPreview = (props: {
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
+  const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
+  const [dragStartX, setDragStartX] = createSignal<number | null>(null);
+  const [dragDeltaX, setDragDeltaX] = createSignal(0);
   const backdropTextureScale = () => props.surfaces.backdrop.textureScale;
   const style = () => ({
     '--main-bg-texture-size': props.backdrop.fit === 'cover'
@@ -759,6 +793,8 @@ const MainMaterialPreview = (props: {
     '--main-news-gap': `${props.feed.newsGap}px`,
     '--main-card-radius': `${props.feed.radius}px`,
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
+    '--main-feed-slide-index': activeSlideIndex(),
+    '--main-feed-drag-x': `${dragDeltaX()}px`,
   }) as JSX.CSSProperties;
 
   const stateForPart = (part: MainPartId) => {
@@ -772,6 +808,29 @@ const MainMaterialPreview = (props: {
     return stateForPart('navBar');
   };
   const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
+  const wrapSlideIndex = (index: number) => (index + feedSlides.length) % feedSlides.length;
+  const showSlide = (index: number) => setActiveSlideIndex(wrapSlideIndex(index));
+  const nextSlide = () => showSlide(activeSlideIndex() + 1);
+  const previousSlide = () => showSlide(activeSlideIndex() - 1);
+  const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLElement }) => {
+    setDragStartX(event.clientX);
+    setDragDeltaX(0);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const handleFeedPointerMove = (event: PointerEvent) => {
+    const startX = dragStartX();
+    if (startX === null) return;
+    setDragDeltaX(Math.max(-64, Math.min(64, event.clientX - startX)));
+  };
+  const finishFeedDrag = () => {
+    const deltaX = dragDeltaX();
+    if (Math.abs(deltaX) > 38) {
+      if (deltaX < 0) nextSlide();
+      if (deltaX > 0) previousSlide();
+    }
+    setDragStartX(null);
+    setDragDeltaX(0);
+  };
 
   return (
     <div class="main-material-phone" style={style()}>
@@ -828,45 +887,49 @@ const MainMaterialPreview = (props: {
           </MaterialPanel>
 
           <main class="main-material-scroll">
-            <section class={`main-material-title-block ${props.selectedClass('titleBlock')}`}>
-              <h1>{props.title.title}</h1>
-              <p>{props.title.subtitle}</p>
-            </section>
-
-            <MaterialPanel
-              {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
-              padded={false}
-              class={`main-material-hero ${props.selectedClass('feedCards')}`}
+            <section
+              class={`main-material-feed-stage ${props.selectedClass('feedCards')}`}
+              aria-label="Briefing feed"
+              onPointerDown={handleFeedPointerDown}
+              onPointerMove={handleFeedPointerMove}
+              onPointerUp={finishFeedDrag}
+              onPointerCancel={finishFeedDrag}
+              onPointerLeave={finishFeedDrag}
             >
-              <div class="main-material-hero-content">
-                <div class="main-material-tag">BATTLE PASS</div>
-                <h2>COSMIC ECLIPSE</h2>
-                <p>Unlock the new Titan variant and earn double credits this weekend.</p>
+              <div class="main-material-feed-track">
+                <For each={feedSlides}>
+                  {(slide, index) => (
+                    <MaterialPanel
+                      {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
+                      padded={false}
+                      class={`main-material-feed-slide main-material-feed-slide--${slide.tone}`}
+                    >
+                      <div class="main-material-feed-content">
+                        <div class="main-material-tag">{slide.eyebrow}</div>
+                        <h2>{slide.title}</h2>
+                        <p>{slide.body}</p>
+                      </div>
+                      <div class="main-material-feed-meta">
+                        <span>{String(index() + 1).padStart(2, '0')}</span>
+                        <strong>{slide.meta}</strong>
+                      </div>
+                    </MaterialPanel>
+                  )}
+                </For>
               </div>
-            </MaterialPanel>
-
-            <div class={`main-material-news-list ${props.selectedClass('feedCards')}`}>
-              <MaterialPanel
-                {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
-                padded={false}
-                class="main-material-news-card main-material-news-card--dark"
-              >
-                <div class="main-material-tag">PATCH NOTES</div>
-                <h3>Update 1.4.0: Spatial UI</h3>
-                <p>Navigation has been rebuilt for faster daily command decisions.</p>
-              </MaterialPanel>
-              <MaterialPanel
-                {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
-                padded={false}
-                class="main-material-news-card"
-              >
-                <div class="main-material-tag">COMMUNITY</div>
-                <h3>Top Decks of the Week</h3>
-                <p>See what the pros are using to climb the company ladder.</p>
-              </MaterialPanel>
-            </div>
-
-            <div class="main-material-end">END OF TRANSMISSION</div>
+              <div class="main-material-feed-dots" aria-label="Feed slides">
+                <For each={feedSlides}>
+                  {(_, index) => (
+                    <button
+                      type="button"
+                      class={index() === activeSlideIndex() ? 'is-active' : ''}
+                      aria-label={`Show feed slide ${index() + 1}`}
+                      onClick={() => showSlide(index())}
+                    />
+                  )}
+                </For>
+              </div>
+            </section>
           </main>
 
           <footer class="main-material-bottom-stack">
