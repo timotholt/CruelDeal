@@ -729,6 +729,11 @@ export const materialRecipeToSurfaceProps = (recipe: MaterialRecipe, state: Mate
   };
 };
 
+export const materialRecipeToStaticSurfaceProps = (recipe: MaterialRecipe) => ({
+  ...resolveSurfaceState(recipe, 'rest'),
+  stateful: false,
+});
+
 export const materialRecipeToInteractiveSurfaceProps = (
   recipe: MaterialRecipe,
   visualState: Exclude<MaterialRecipeState, 'hover'>,

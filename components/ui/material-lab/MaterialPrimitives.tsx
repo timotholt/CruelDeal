@@ -86,6 +86,7 @@ interface SurfaceOptions {
   emissionBlipSize?: number;
   stateScale?: number;
   stateTranslateY?: number;
+  stateful?: boolean;
   stateVars?: Partial<Record<MaterialRecipeState, MaterialSurfaceStateVars>>;
   visualState?: Exclude<MaterialRecipeState, 'hover'>;
 }
@@ -184,6 +185,31 @@ const hasTint = (options: SurfaceOptions) => (
 
 const hasGlass = (options: SurfaceOptions) => (
   options.glass === true
+);
+
+const hasMaterialBase = (options: SurfaceOptions) => (
+  (options.material || 'raw') !== 'none'
+);
+
+const hasTextureLayer = (options: SurfaceOptions) => (
+  hasMaterialBase(options)
+  && (options.texture || 'road012a') !== 'none'
+  && (options.textureStrength ?? 100) > 0
+);
+
+const hasGradientLayer = (options: SurfaceOptions) => (
+  (options.gradient || 'both') !== 'none'
+  && ((options.lightStrength ?? 20) > 0 || (options.darkStrength ?? 32) > 0)
+);
+
+const hasBorderLayer = (options: SurfaceOptions) => (
+  resolveBorder(options.border).length > 0 && (options.borderOpacity ?? 34) > 0
+);
+
+const hasEdgeWearLayer = (options: SurfaceOptions) => (
+  !!options.edgeWearTexture
+  && options.edgeWearTexture !== 'none'
+  && (options.edgeWearOpacity ?? 0) > 0
 );
 
 const resolveCorners = (corners: CornerSpec | undefined): CornerName[] => {
@@ -368,8 +394,10 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--emission-length': `${options.emissionLength ?? 42}%`,
     '--emission-thickness': `${options.emissionThickness ?? 1}px`,
     '--emission-blip-size': `${options.emissionBlipSize ?? 12}px`,
-    '--state-scale': `${options.stateScale ?? 1}`,
-    '--state-translate-y': `${options.stateTranslateY ?? 0}px`,
+    ...(options.stateful === false ? {} : {
+      '--state-scale': `${options.stateScale ?? 1}`,
+      '--state-translate-y': `${options.stateTranslateY ?? 0}px`,
+    }),
   } as JSX.CSSProperties;
 };
 
@@ -394,23 +422,29 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
 
 export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowing?: boolean }) => (
   <>
-    <SurfaceBaseLayers tinted={props.tinted} />
-    <SurfaceOverlayLayers glass={props.glass} glowing={props.glowing} />
+    <SurfaceBaseLayers material texture tinted={props.tinted} gradient />
+    <SurfaceOverlayLayers glass={props.glass} glowing={props.glowing} border edgeWear />
   </>
 );
 
-export const SurfaceBaseLayers = (props: { tinted?: boolean }) => (
+export const SurfaceBaseLayers = (props: { material?: boolean; texture?: boolean; tinted?: boolean; gradient?: boolean }) => (
   <>
-    <span class="cd-surface__material" aria-hidden="true" />
-    <span class="cd-surface__texture" aria-hidden="true" />
+    <Show when={props.material}>
+      <span class="cd-surface__material" aria-hidden="true" />
+    </Show>
+    <Show when={props.texture}>
+      <span class="cd-surface__texture" aria-hidden="true" />
+    </Show>
     <Show when={props.tinted}>
       <span class="cd-surface__tint" aria-hidden="true" />
     </Show>
-    <span class="cd-surface__gradient" aria-hidden="true" />
+    <Show when={props.gradient}>
+      <span class="cd-surface__gradient" aria-hidden="true" />
+    </Show>
   </>
 );
 
-export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean; emitting?: boolean }) => (
+export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean; emitting?: boolean; border?: boolean; edgeWear?: boolean }) => (
   <>
     <Show when={props.glass}>
       <span class="cd-surface__glass" aria-hidden="true" />
@@ -421,15 +455,21 @@ export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean
     <Show when={props.emitting}>
       <span class="cd-surface__emission" aria-hidden="true" />
     </Show>
-    <span class="cd-surface__border" aria-hidden="true" />
-    <span class="cd-surface__edge-wear" aria-hidden="true" />
-    <span class="cd-surface__edge" aria-hidden="true" />
-    <span class="cd-surface__corners" aria-hidden="true">
-      <span class="cd-surface__corner-arc cd-surface__corner-arc--tl" />
-      <span class="cd-surface__corner-arc cd-surface__corner-arc--tr" />
-      <span class="cd-surface__corner-arc cd-surface__corner-arc--br" />
-      <span class="cd-surface__corner-arc cd-surface__corner-arc--bl" />
-    </span>
+    <Show when={props.border}>
+      <span class="cd-surface__border" aria-hidden="true" />
+    </Show>
+    <Show when={props.edgeWear}>
+      <span class="cd-surface__edge-wear" aria-hidden="true" />
+    </Show>
+    <Show when={props.glowing}>
+      <span class="cd-surface__edge" aria-hidden="true" />
+      <span class="cd-surface__corners" aria-hidden="true">
+        <span class="cd-surface__corner-arc cd-surface__corner-arc--tl" />
+        <span class="cd-surface__corner-arc cd-surface__corner-arc--tr" />
+        <span class="cd-surface__corner-arc cd-surface__corner-arc--br" />
+        <span class="cd-surface__corner-arc cd-surface__corner-arc--bl" />
+      </span>
+    </Show>
   </>
 );
 
@@ -455,11 +495,22 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       style={surfaceStyle(props)}
       disabled={props.disabled}
     >
-      <SurfaceBaseLayers tinted={hasTint(props)} />
+      <SurfaceBaseLayers
+        material={hasMaterialBase(props)}
+        texture={hasTextureLayer(props)}
+        tinted={hasTint(props)}
+        gradient={hasGradientLayer(props)}
+      />
       <Show when={contentLayer() === 'under-glass'}>
         {content('under-glass')}
       </Show>
-      <SurfaceOverlayLayers glass={hasGlass(props)} glowing={hasGlow(props)} emitting={shouldRenderEmission(props)} />
+      <SurfaceOverlayLayers
+        glass={hasGlass(props)}
+        glowing={hasGlow(props)}
+        emitting={shouldRenderEmission(props)}
+        border={hasBorderLayer(props)}
+        edgeWear={hasEdgeWearLayer(props)}
+      />
       <Show when={contentLayer() === 'over-glass'}>
         {content('over-glass')}
       </Show>
@@ -532,6 +583,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'emissionBlipSize',
     'stateScale',
     'stateTranslateY',
+    'stateful',
     'stateVars',
     'visualState',
   ]);
@@ -619,6 +671,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'emissionBlipSize',
     'stateScale',
     'stateTranslateY',
+    'stateful',
     'stateVars',
     'visualState',
   ]);

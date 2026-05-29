@@ -3,15 +3,18 @@ import '../../src/styles/ui-material-lab.css';
 import '../../src/styles/main-material-preview.css';
 import {
   MaterialButton,
+  type MaterialEditorCapabilities,
   MaterialPanel,
   MaterialRecipeEditor,
   MaterialWorkbenchLayout,
   SectionLabel,
   cloneMaterialRecipe,
   createMaterialRecipe,
+  createMaterialStateOverlays,
   navTabMaterialRecipe,
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
+  materialRecipeToStaticSurfaceProps,
   sanitizeMaterialRecipe,
   type MaterialRecipe,
   type MaterialRecipeState,
@@ -55,10 +58,8 @@ interface TitleRecipe {
 
 interface FeedRecipe {
   contentY: number;
-  titleGap: number;
   cardGap: number;
   newsGap: number;
-  radius: number;
 }
 
 interface NavRecipe {
@@ -146,6 +147,17 @@ const interactionStateLabels: Record<InteractionRole, Partial<Record<MaterialRec
   disclosure: { rest: 'Rest', hover: 'Hover', active: 'Open', pressed: 'Pressed' },
 };
 
+const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabilities> = {
+  backdrop: { text: false, states: false },
+  topBar: { text: false, states: false },
+  profileButton: { states: true },
+  currencyButtons: { states: true },
+  titleBlock: { text: false, states: false },
+  feedCards: { text: false, states: false },
+  toolBar: { states: true },
+  navBar: { states: true },
+};
+
 const defaultPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
 const playerFacingPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
 const stateOptionsForPart = (part: MainPartId) => interactionStateOptions[interactionRoles[part]];
@@ -219,10 +231,8 @@ const defaultTitle: TitleRecipe = {
 
 const defaultFeed: FeedRecipe = {
   contentY: 0,
-  titleGap: 30,
   cardGap: 16,
   newsGap: 12,
-  radius: 7,
 };
 
 const defaultNav: NavRecipe = {
@@ -398,6 +408,40 @@ const materialRecipeItemProps = (
     : props;
 };
 
+const materialSurfacePropsForPart = (
+  part: MainPartId,
+  recipe: MaterialRecipe,
+  state: MaterialRecipeState,
+) => (
+  materialEditorCapabilitiesByPart[part].states === false
+    ? materialRecipeToStaticSurfaceProps(recipe)
+    : materialRecipeToSurfaceProps(recipe, state)
+);
+
+const pruneRecipeForPartCapabilities = (part: MainPartId, recipe: MaterialRecipe): MaterialRecipe => {
+  const capabilities = materialEditorCapabilitiesByPart[part];
+  if (capabilities.states !== false) return recipe;
+  return {
+    ...recipe,
+    states: createMaterialStateOverlays({
+      rest: { enabled: false },
+      hover: { enabled: false },
+      active: { enabled: false },
+      pressed: { enabled: false },
+    }),
+  };
+};
+
+const pruneSurfaceRecipesForCapabilities = (recipes: SurfaceRecipes): SurfaceRecipes => ({
+  backdrop: pruneRecipeForPartCapabilities('backdrop', recipes.backdrop),
+  topBar: pruneRecipeForPartCapabilities('topBar', recipes.topBar),
+  profile: pruneRecipeForPartCapabilities('profileButton', recipes.profile),
+  currencies: pruneRecipeForPartCapabilities('currencyButtons', recipes.currencies),
+  feed: pruneRecipeForPartCapabilities('feedCards', recipes.feed),
+  toolbar: pruneRecipeForPartCapabilities('toolBar', recipes.toolbar),
+  nav: pruneRecipeForPartCapabilities('navBar', recipes.nav),
+});
+
 const defaultSurfaces: SurfaceRecipes = {
   backdrop: defaultBackdropSurface,
   topBar: defaultTopBarSurface,
@@ -457,10 +501,8 @@ const sanitizeFeed = (value: unknown): FeedRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<FeedRecipe> : {};
   return {
     contentY: clamp(input.contentY, defaultFeed.contentY, -32, 48),
-    titleGap: clamp(input.titleGap, defaultFeed.titleGap, 10, 50),
     cardGap: clamp(input.cardGap, defaultFeed.cardGap, 8, 32),
     newsGap: clamp(input.newsGap, defaultFeed.newsGap, 6, 28),
-    radius: clamp(input.radius, defaultFeed.radius, 0, 12),
   };
 };
 
@@ -653,20 +695,12 @@ const FeedRecipeEditor = (props: { feed: FeedRecipe; onChange: (feed: FeedRecipe
         <Slider value={props.feed.contentY} min={-32} max={48} onInput={(value) => update('contentY', value)} />
       </div>
       <div class="ui-lab-control-row">
-        <span>Title Gap</span>
-        <Slider value={props.feed.titleGap} min={10} max={50} onInput={(value) => update('titleGap', value)} />
-      </div>
-      <div class="ui-lab-control-row">
         <span>Copy Lift</span>
         <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
       </div>
       <div class="ui-lab-control-row">
         <span>Dot Gap</span>
         <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
-      </div>
-      <div class="ui-lab-control-row">
-        <span>Radius</span>
-        <Slider value={props.feed.radius} min={0} max={12} onInput={(value) => update('radius', value)} />
       </div>
     </div>
   );
@@ -691,6 +725,7 @@ const SurfaceRecipeEditor = (props: {
   title: string;
   recipe: MaterialRecipe;
   interactionRole: InteractionRole;
+  capabilities: MaterialEditorCapabilities;
   stateOptions: readonly MaterialRecipeState[];
   stateLabels: Partial<Record<MaterialRecipeState, string>>;
   forcePreview: boolean;
@@ -738,6 +773,7 @@ const SurfaceRecipeEditor = (props: {
       forcePreview={props.forcePreview}
       onForcePreviewChange={props.onForcePreviewChange}
       onActiveStateChange={props.onActiveStateChange}
+      capabilities={props.capabilities}
       extraControls={props.extraControls}
     />
   </div>
@@ -782,16 +818,9 @@ const MainMaterialPreview = (props: {
     '--main-bg-y': `${props.backdrop.y}px`,
     '--main-bg-warm': `${props.backdrop.warm / 100}`,
     '--main-bg-dark': `${props.backdrop.dark / 100}`,
-    '--main-title-font': props.title.fontFamily,
-    '--main-title-size': `${props.title.titleSize}px`,
-    '--main-title-tracking': `${props.title.tracking / 100}em`,
-    '--main-title-x': `${props.title.x}px`,
-    '--main-title-y': `${props.title.y}px`,
     '--main-content-y': `${props.feed.contentY}px`,
-    '--main-title-gap': `${props.feed.titleGap}px`,
     '--main-card-gap': `${props.feed.cardGap}px`,
     '--main-news-gap': `${props.feed.newsGap}px`,
-    '--main-card-radius': `${props.feed.radius}px`,
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
     '--main-feed-slide-index': activeSlideIndex(),
     '--main-feed-drag-x': `${dragDeltaX()}px`,
@@ -836,7 +865,7 @@ const MainMaterialPreview = (props: {
     <div class="main-material-phone" style={style()}>
       <div class="main-material-screen">
         <MaterialPanel
-          {...materialRecipeToSurfaceProps(props.surfaces.backdrop, stateForPart('backdrop'))}
+          {...materialSurfacePropsForPart('backdrop', props.surfaces.backdrop, stateForPart('backdrop'))}
           padded={false}
           class={`main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
         >
@@ -846,12 +875,12 @@ const MainMaterialPreview = (props: {
 
         <div class="main-material-frame main-material-frame--editor">
           <MaterialPanel
-            {...materialRecipeToSurfaceProps(props.surfaces.topBar, stateForPart('topBar'))}
+            {...materialSurfacePropsForPart('topBar', props.surfaces.topBar, stateForPart('topBar'))}
             padded={false}
             class={`main-material-topbar ${props.selectedClass('topBar')}`}
           >
             <MaterialPanel
-              {...materialRecipeToSurfaceProps(props.surfaces.profile, stateForPart('profileButton'))}
+              {...materialSurfacePropsForPart('profileButton', props.surfaces.profile, stateForPart('profileButton'))}
               padded={false}
               class={`main-material-profile-slot ${props.selectedClass('profileButton')}`}
             >
@@ -898,9 +927,9 @@ const MainMaterialPreview = (props: {
             >
               <div class="main-material-feed-track">
                 <For each={feedSlides}>
-                  {(slide, index) => (
+                  {(slide) => (
                     <MaterialPanel
-                      {...materialRecipeToSurfaceProps(props.surfaces.feed, stateForPart('feedCards'))}
+                      {...materialSurfacePropsForPart('feedCards', props.surfaces.feed, stateForPart('feedCards'))}
                       padded={false}
                       class={`main-material-feed-slide main-material-feed-slide--${slide.tone}`}
                     >
@@ -909,10 +938,11 @@ const MainMaterialPreview = (props: {
                         <h2>{slide.title}</h2>
                         <p>{slide.body}</p>
                       </div>
-                      <div class="main-material-feed-meta">
-                        <span>{String(index() + 1).padStart(2, '0')}</span>
-                        <strong>{slide.meta}</strong>
-                      </div>
+                      <Show when={slide.meta}>
+                        <div class="main-material-feed-meta">
+                          <strong>{slide.meta}</strong>
+                        </div>
+                      </Show>
                     </MaterialPanel>
                   )}
                 </For>
@@ -1018,6 +1048,10 @@ export const MainMaterialPreviewScreen = () => {
     setSurfaces((current) => ({ ...current, [key]: recipe }));
   };
 
+  const updateSurfaceForPart = (part: MainPartId, key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
+    updateSurface(key, pruneRecipeForPartCapabilities(part, recipe));
+  };
+
   onMount(() => {
     try {
       obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
@@ -1034,14 +1068,14 @@ export const MainMaterialPreviewScreen = () => {
         setTitle(sanitizeTitle(parsed.title));
         setFeed(sanitizeFeed(parsed.feed));
         setNav(sanitizeNav(parsed.nav));
-        setSurfaces(sanitizeSurfaces(parsed.surfaces));
+        setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
       }
     } catch {
       setBackdrop(cloneBackdrop(defaultBackdrop));
       setTitle(cloneTitle(defaultTitle));
       setFeed(cloneFeed(defaultFeed));
       setNav(cloneNav(defaultNav));
-      setSurfaces(cloneSurfaceRecipes(defaultSurfaces));
+      setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
     }
 
     try {
@@ -1119,13 +1153,14 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
-    if (part === 'backdrop') updateSurface('backdrop', cloneMaterialRecipe(recipe));
-    if (part === 'topBar') updateSurface('topBar', cloneMaterialRecipe(recipe));
-    if (part === 'profileButton') updateSurface('profile', cloneMaterialRecipe(recipe));
-    if (part === 'currencyButtons') updateSurface('currencies', cloneMaterialRecipe(recipe));
-    if (part === 'feedCards') updateSurface('feed', cloneMaterialRecipe(recipe));
-    if (part === 'toolBar') updateSurface('toolbar', cloneMaterialRecipe(recipe));
-    if (part === 'navBar') updateSurface('nav', cloneMaterialRecipe(recipe));
+    const nextRecipe = pruneRecipeForPartCapabilities(part, cloneMaterialRecipe(recipe));
+    if (part === 'backdrop') updateSurface('backdrop', nextRecipe);
+    if (part === 'topBar') updateSurface('topBar', nextRecipe);
+    if (part === 'profileButton') updateSurface('profile', nextRecipe);
+    if (part === 'currencyButtons') updateSurface('currencies', nextRecipe);
+    if (part === 'feedCards') updateSurface('feed', nextRecipe);
+    if (part === 'toolBar') updateSurface('toolbar', nextRecipe);
+    if (part === 'navBar') updateSurface('nav', nextRecipe);
   };
 
   const selectedMaterialPresets = () => materialPresets()[selectedPart()];
@@ -1191,20 +1226,20 @@ export const MainMaterialPreviewScreen = () => {
     const part = selectedPart();
     if (part === 'backdrop') {
       setBackdrop(cloneBackdrop(defaultBackdrop));
-      updateSurface('backdrop', cloneMaterialRecipe(defaultBackdropSurface));
+      updateSurfaceForPart('backdrop', 'backdrop', cloneMaterialRecipe(defaultBackdropSurface));
     }
-    if (part === 'topBar') updateSurface('topBar', cloneMaterialRecipe(defaultTopBarSurface));
-    if (part === 'profileButton') updateSurface('profile', cloneMaterialRecipe(defaultProfileSurface));
-    if (part === 'currencyButtons') updateSurface('currencies', cloneMaterialRecipe(defaultCurrencySurface));
+    if (part === 'topBar') updateSurfaceForPart('topBar', 'topBar', cloneMaterialRecipe(defaultTopBarSurface));
+    if (part === 'profileButton') updateSurfaceForPart('profileButton', 'profile', cloneMaterialRecipe(defaultProfileSurface));
+    if (part === 'currencyButtons') updateSurfaceForPart('currencyButtons', 'currencies', cloneMaterialRecipe(defaultCurrencySurface));
     if (part === 'titleBlock') setTitle(cloneTitle(defaultTitle));
     if (part === 'feedCards') {
       setFeed(cloneFeed(defaultFeed));
-      updateSurface('feed', cloneMaterialRecipe(defaultFeedSurface));
+      updateSurfaceForPart('feedCards', 'feed', cloneMaterialRecipe(defaultFeedSurface));
     }
-    if (part === 'toolBar') updateSurface('toolbar', cloneMaterialRecipe(defaultToolbarSurface));
+    if (part === 'toolBar') updateSurfaceForPart('toolBar', 'toolbar', cloneMaterialRecipe(defaultToolbarSurface));
     if (part === 'navBar') {
       setNav(cloneNav(defaultNav));
-      updateSurface('nav', cloneMaterialRecipe(defaultNavSurface));
+      updateSurfaceForPart('navBar', 'nav', cloneMaterialRecipe(defaultNavSurface));
     }
   };
 
@@ -1213,7 +1248,7 @@ export const MainMaterialPreviewScreen = () => {
     setTitle(cloneTitle(defaultTitle));
     setFeed(cloneFeed(defaultFeed));
     setNav(cloneNav(defaultNav));
-    setSurfaces(cloneSurfaceRecipes(defaultSurfaces));
+    setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
 
   const exportJson = () => {
@@ -1279,6 +1314,7 @@ export const MainMaterialPreviewScreen = () => {
                                     title="Nav Bar Material"
                                     recipe={surfaces().nav}
                                     interactionRole={selectedInteractionRole()}
+                                    capabilities={materialEditorCapabilitiesByPart.navBar}
                                     stateOptions={selectedStateOptions()}
                                     stateLabels={selectedStateLabels()}
                                     forcePreview={forcePreview()}
@@ -1289,7 +1325,7 @@ export const MainMaterialPreviewScreen = () => {
                                     onSavePreset={() => saveMaterialPreset('navBar')}
                                     onSaveNewPreset={() => saveNewMaterialPreset('navBar')}
                                     onDeletePreset={() => deleteMaterialPreset('navBar')}
-                                    onChange={(recipe) => updateSurface('nav', recipe)}
+                                    onChange={(recipe) => updateSurfaceForPart('navBar', 'nav', recipe)}
                                     activeState={selectedPreviewState()}
                                     onActiveStateChange={setSelectedPreviewState}
                                     extraControls={<NavRecipeEditor nav={nav()} onChange={setNav} />}
@@ -1301,6 +1337,7 @@ export const MainMaterialPreviewScreen = () => {
                                 title="Tool Bar Material"
                                 recipe={surfaces().toolbar}
                                 interactionRole={selectedInteractionRole()}
+                                capabilities={materialEditorCapabilitiesByPart.toolBar}
                                 stateOptions={selectedStateOptions()}
                                 stateLabels={selectedStateLabels()}
                                 forcePreview={forcePreview()}
@@ -1311,7 +1348,7 @@ export const MainMaterialPreviewScreen = () => {
                                 onSavePreset={() => saveMaterialPreset('toolBar')}
                                 onSaveNewPreset={() => saveNewMaterialPreset('toolBar')}
                                 onDeletePreset={() => deleteMaterialPreset('toolBar')}
-                                onChange={(recipe) => updateSurface('toolbar', recipe)}
+                                onChange={(recipe) => updateSurfaceForPart('toolBar', 'toolbar', recipe)}
                                 activeState={selectedPreviewState()}
                                 onActiveStateChange={setSelectedPreviewState}
                               />
@@ -1322,6 +1359,7 @@ export const MainMaterialPreviewScreen = () => {
                             title="Feed Material"
                             recipe={surfaces().feed}
                             interactionRole={selectedInteractionRole()}
+                            capabilities={materialEditorCapabilitiesByPart.feedCards}
                             stateOptions={selectedStateOptions()}
                             stateLabels={selectedStateLabels()}
                             forcePreview={forcePreview()}
@@ -1332,7 +1370,7 @@ export const MainMaterialPreviewScreen = () => {
                             onSavePreset={() => saveMaterialPreset('feedCards')}
                             onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
                             onDeletePreset={() => deleteMaterialPreset('feedCards')}
-                            onChange={(recipe) => updateSurface('feed', recipe)}
+                            onChange={(recipe) => updateSurfaceForPart('feedCards', 'feed', recipe)}
                             activeState={selectedPreviewState()}
                             onActiveStateChange={setSelectedPreviewState}
                             extraControls={<FeedRecipeEditor feed={feed()} onChange={setFeed} />}
@@ -1348,6 +1386,7 @@ export const MainMaterialPreviewScreen = () => {
                     title="Wallet Chip Material"
                     recipe={surfaces().currencies}
                     interactionRole={selectedInteractionRole()}
+                    capabilities={materialEditorCapabilitiesByPart.currencyButtons}
                     stateOptions={selectedStateOptions()}
                     stateLabels={selectedStateLabels()}
                     forcePreview={forcePreview()}
@@ -1358,7 +1397,7 @@ export const MainMaterialPreviewScreen = () => {
                     onSavePreset={() => saveMaterialPreset('currencyButtons')}
                     onSaveNewPreset={() => saveNewMaterialPreset('currencyButtons')}
                     onDeletePreset={() => deleteMaterialPreset('currencyButtons')}
-                    onChange={(recipe) => updateSurface('currencies', recipe)}
+                    onChange={(recipe) => updateSurfaceForPart('currencyButtons', 'currencies', recipe)}
                     activeState={selectedPreviewState()}
                     onActiveStateChange={setSelectedPreviewState}
                   />
@@ -1369,6 +1408,7 @@ export const MainMaterialPreviewScreen = () => {
                 title="Profile Button Material"
                 recipe={surfaces().profile}
                 interactionRole={selectedInteractionRole()}
+                capabilities={materialEditorCapabilitiesByPart.profileButton}
                 stateOptions={selectedStateOptions()}
                 stateLabels={selectedStateLabels()}
                 forcePreview={forcePreview()}
@@ -1379,7 +1419,7 @@ export const MainMaterialPreviewScreen = () => {
                 onSavePreset={() => saveMaterialPreset('profileButton')}
                 onSaveNewPreset={() => saveNewMaterialPreset('profileButton')}
                 onDeletePreset={() => deleteMaterialPreset('profileButton')}
-                onChange={(recipe) => updateSurface('profile', recipe)}
+                onChange={(recipe) => updateSurfaceForPart('profileButton', 'profile', recipe)}
                 activeState={selectedPreviewState()}
                 onActiveStateChange={setSelectedPreviewState}
               />
@@ -1390,6 +1430,7 @@ export const MainMaterialPreviewScreen = () => {
             title="Top Bar Material"
             recipe={surfaces().topBar}
             interactionRole={selectedInteractionRole()}
+            capabilities={materialEditorCapabilitiesByPart.topBar}
             stateOptions={selectedStateOptions()}
             stateLabels={selectedStateLabels()}
             forcePreview={forcePreview()}
@@ -1400,7 +1441,7 @@ export const MainMaterialPreviewScreen = () => {
             onSavePreset={() => saveMaterialPreset('topBar')}
             onSaveNewPreset={() => saveNewMaterialPreset('topBar')}
             onDeletePreset={() => deleteMaterialPreset('topBar')}
-            onChange={(recipe) => updateSurface('topBar', recipe)}
+            onChange={(recipe) => updateSurfaceForPart('topBar', 'topBar', recipe)}
             activeState={selectedPreviewState()}
             onActiveStateChange={setSelectedPreviewState}
           />
@@ -1411,6 +1452,7 @@ export const MainMaterialPreviewScreen = () => {
         title="Backdrop Material"
         recipe={surfaces().backdrop}
         interactionRole={selectedInteractionRole()}
+        capabilities={materialEditorCapabilitiesByPart.backdrop}
         stateOptions={selectedStateOptions()}
         stateLabels={selectedStateLabels()}
         forcePreview={forcePreview()}
@@ -1421,7 +1463,7 @@ export const MainMaterialPreviewScreen = () => {
         onSavePreset={() => saveMaterialPreset('backdrop')}
         onSaveNewPreset={() => saveNewMaterialPreset('backdrop')}
         onDeletePreset={() => deleteMaterialPreset('backdrop')}
-        onChange={(recipe) => updateSurface('backdrop', recipe)}
+        onChange={(recipe) => updateSurfaceForPart('backdrop', 'backdrop', recipe)}
         activeState={selectedPreviewState()}
         onActiveStateChange={setSelectedPreviewState}
         extraControls={<BackdropRecipeEditor backdrop={backdrop()} onChange={setBackdrop} />}

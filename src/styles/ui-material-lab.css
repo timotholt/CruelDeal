@@ -185,6 +185,10 @@
   opacity: 0.42;
 }
 
+.ui-lab-control-group--disabled {
+  opacity: 0.58;
+}
+
 .ui-lab-control-row--disabled input {
   cursor: not-allowed;
 }
