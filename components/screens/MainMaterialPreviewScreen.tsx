@@ -11,14 +11,26 @@ import {
   cloneMaterialRecipe,
   createMaterialRecipe,
   createMaterialStateOverlays,
+  fontWeightTokenValue,
+  materialRecipeContentTones,
+  materialRecipeFontStyles,
+  materialRecipeFontWeights,
+  materialRecipeTextAligns,
+  materialRecipeTextFonts,
+  materialRecipeTextTransforms,
   navTabMaterialRecipe,
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
   materialRecipeToStaticSurfaceProps,
+  type ContentAlign,
+  type FontStyleToken,
+  type FontWeightToken,
   sanitizeMaterialRecipe,
+  type MaterialTone,
   type MaterialRecipe,
   type MaterialRecipeState,
   type MaterialWorkbenchPart,
+  type TextTransformToken,
 } from '../ui/material-lab';
 import { MaterialNavItem } from '../navigation/MaterialNavItem';
 
@@ -76,13 +88,42 @@ interface SurfaceRecipes {
   nav: MaterialRecipe;
 }
 
-interface FeedSlide {
+type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03';
+type FeedTextSlotId = 'eyebrow' | 'title' | 'body' | 'meta';
+
+interface FeedStory {
+  id: string;
+  label: string;
+  cardTypeId: FeedCardTypeId;
   eyebrow: string;
   title: string;
   body: string;
   meta: string;
-  tone: 'gold' | 'white' | 'dark';
 }
+
+interface FeedTextSlotStyle {
+  inherit: boolean;
+  textFontFamily: string;
+  textSizeRem: number;
+  contentTone: MaterialTone;
+  fontWeight: FontWeightToken;
+  fontStyle: FontStyleToken;
+  textTransform: TextTransformToken;
+  letterSpacing: number;
+  textAlign: ContentAlign;
+  textX: number;
+  textY: number;
+}
+
+interface FeedCardTypeRecipe {
+  id: FeedCardTypeId;
+  name: string;
+  description: string;
+  surface: MaterialRecipe;
+  slots: Record<FeedTextSlotId, FeedTextSlotStyle>;
+}
+
+type FeedCardTypes = Record<FeedCardTypeId, FeedCardTypeRecipe>;
 
 const storageKey = 'cruel-deal.main-material-preview.v12';
 const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
@@ -153,7 +194,7 @@ const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabil
   profileButton: { states: true },
   currencyButtons: { states: true },
   titleBlock: { text: false, states: false },
-  feedCards: { text: false, states: false },
+  feedCards: { text: true, textContent: false, states: false },
   toolBar: { states: true },
   navBar: { states: true },
 };
@@ -239,27 +280,41 @@ const defaultNav: NavRecipe = {
   bottomReserve: 146,
 };
 
-const feedSlides: FeedSlide[] = [
+const feedTextSlotIds: FeedTextSlotId[] = ['eyebrow', 'title', 'body', 'meta'];
+const feedTextSlotLabels: Record<FeedTextSlotId, string> = {
+  eyebrow: 'Header',
+  title: 'Title',
+  body: 'Body',
+  meta: 'Meta',
+};
+
+const mockFeedStories: FeedStory[] = [
   {
+    id: 'season-pass-cosmic-eclipse',
+    label: 'Season Pass',
+    cardTypeId: 'card_type_01',
     eyebrow: 'Season Pass',
     title: 'Cosmic Eclipse',
     body: 'Unlock the Titan variant and double credits before the weekend window closes.',
     meta: '03 days left',
-    tone: 'gold',
   },
   {
+    id: 'patch-spatial-ui',
+    label: 'Patch Notes',
+    cardTypeId: 'card_type_02',
     eyebrow: 'Patch Notes',
     title: 'Spatial UI',
     body: 'Navigation has been rebuilt around faster command choices and thumb-first play.',
     meta: 'Update 1.4.0',
-    tone: 'white',
   },
   {
+    id: 'community-top-decks',
+    label: 'Community',
+    cardTypeId: 'card_type_03',
     eyebrow: 'Community',
     title: 'Top Decks',
     body: 'See the ladder lists gaining ground across the company circuit this week.',
     meta: '12 decks live',
-    tone: 'dark',
   },
 ];
 
@@ -352,6 +407,106 @@ const defaultFeedSurface = createMaterialRecipe({
   radius: 7,
 });
 
+const feedFontCondensed = materialRecipeTextFonts[1]?.value || 'inherit';
+const feedFontSystem = materialRecipeTextFonts[6]?.value || 'ui-sans-serif, system-ui, sans-serif';
+
+const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTextSlotStyle => ({
+  inherit: false,
+  textFontFamily: feedFontCondensed,
+  textSizeRem: 1,
+  contentTone: 'black',
+  fontWeight: 'bold',
+  fontStyle: 'normal',
+  textTransform: 'uppercase',
+  letterSpacing: 0,
+  textAlign: 'center',
+  textX: 0,
+  textY: 0,
+  ...overrides,
+});
+
+const cloneFeedSlotStyle = (style: FeedTextSlotStyle): FeedTextSlotStyle => ({ ...style });
+
+const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
+  ...cloneMaterialRecipe(defaultFeedSurface),
+  ...overrides,
+});
+
+const createDefaultFeedCardTypes = (): FeedCardTypes => ({
+  card_type_01: {
+    id: 'card_type_01',
+    name: 'card_type_01',
+    description: 'Promo and limited-time event cards.',
+    surface: createFeedSurfaceVariant({
+      tint: 'gold',
+      tintStrength: 12,
+      lightStrength: 24,
+      darkStrength: 16,
+      contentTone: 'white',
+      textFontFamily: feedFontCondensed,
+      textSizeRem: 1,
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      textTransform: 'uppercase',
+    }),
+    slots: {
+      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
+      title: createFeedSlotStyle({ textSizeRem: 3.25, contentTone: 'white', fontWeight: 'black' }),
+      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.86, contentTone: 'white', fontWeight: 'medium', textTransform: 'none' }),
+      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.1, textAlign: 'right' }),
+    },
+  },
+  card_type_02: {
+    id: 'card_type_02',
+    name: 'card_type_02',
+    description: 'Clean system update and patch-note cards.',
+    surface: createFeedSurfaceVariant({
+      tint: 'white',
+      tintStrength: 8,
+      lightStrength: 18,
+      darkStrength: 10,
+      contentTone: 'black',
+      textFontFamily: feedFontCondensed,
+      textSizeRem: 1,
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      textTransform: 'uppercase',
+    }),
+    slots: {
+      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
+      title: createFeedSlotStyle({ textSizeRem: 3.45, contentTone: 'white', fontWeight: 'black' }),
+      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.86, contentTone: 'black', fontWeight: 'medium', textTransform: 'none' }),
+      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'black', letterSpacing: 0.1, textAlign: 'right' }),
+    },
+  },
+  card_type_03: {
+    id: 'card_type_03',
+    name: 'card_type_03',
+    description: 'Dark community and competitive cards.',
+    surface: createFeedSurfaceVariant({
+      tint: 'black',
+      tintStrength: 18,
+      lightStrength: 10,
+      darkStrength: 34,
+      contentTone: 'white',
+      textFontFamily: feedFontCondensed,
+      textSizeRem: 1,
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      textTransform: 'uppercase',
+    }),
+    slots: {
+      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
+      title: createFeedSlotStyle({ textSizeRem: 3.1, contentTone: 'white', fontWeight: 'black' }),
+      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.82, contentTone: 'white', fontWeight: 'medium', textTransform: 'none' }),
+      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'white', letterSpacing: 0.1, textAlign: 'right' }),
+    },
+  },
+});
+
+const defaultFeedCardTypes = createDefaultFeedCardTypes();
+const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];
+
 const defaultToolbarSurface = createMaterialRecipe({
   material: 'raw',
   texture: 'stone03',
@@ -385,6 +540,23 @@ const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
   feed: cloneMaterialRecipe(value.feed),
   toolbar: cloneMaterialRecipe(value.toolbar),
   nav: cloneMaterialRecipe(value.nav),
+});
+
+const cloneFeedCardType = (cardType: FeedCardTypeRecipe): FeedCardTypeRecipe => ({
+  ...cardType,
+  surface: cloneMaterialRecipe(cardType.surface),
+  slots: {
+    eyebrow: cloneFeedSlotStyle(cardType.slots.eyebrow),
+    title: cloneFeedSlotStyle(cardType.slots.title),
+    body: cloneFeedSlotStyle(cardType.slots.body),
+    meta: cloneFeedSlotStyle(cardType.slots.meta),
+  },
+});
+
+const cloneFeedCardTypes = (cardTypes: FeedCardTypes): FeedCardTypes => ({
+  card_type_01: cloneFeedCardType(cardTypes.card_type_01),
+  card_type_02: cloneFeedCardType(cardTypes.card_type_02),
+  card_type_03: cloneFeedCardType(cardTypes.card_type_03),
 });
 
 const recipeTextItems = (recipe: MaterialRecipe) => (
@@ -468,6 +640,10 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   return Math.min(max, Math.max(min, value));
 };
 
+const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value is T => (
+  typeof value === 'string' && (options as readonly string[]).includes(value)
+);
+
 const sanitizeBackdrop = (value: unknown): BackdropRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<BackdropRecipe> : {};
   return {
@@ -504,6 +680,47 @@ const sanitizeFeed = (value: unknown): FeedRecipe => {
     cardGap: clamp(input.cardGap, defaultFeed.cardGap, 8, 32),
     newsGap: clamp(input.newsGap, defaultFeed.newsGap, 6, 28),
   };
+};
+
+const sanitizeFeedTextSlotStyle = (value: unknown, fallback: FeedTextSlotStyle): FeedTextSlotStyle => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedTextSlotStyle> : {};
+  return {
+    inherit: typeof input.inherit === 'boolean' ? input.inherit : fallback.inherit,
+    textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
+      ? input.textFontFamily
+      : fallback.textFontFamily,
+    textSizeRem: clamp(input.textSizeRem, fallback.textSizeRem, 0.5, 4),
+    contentTone: isOneOf(input.contentTone, materialRecipeContentTones) ? input.contentTone : fallback.contentTone,
+    fontWeight: isOneOf(input.fontWeight, materialRecipeFontWeights) ? input.fontWeight : fallback.fontWeight,
+    fontStyle: isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
+    textTransform: isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
+    letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
+    textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
+    textX: clamp(input.textX, fallback.textX, -80, 80),
+    textY: clamp(input.textY, fallback.textY, -80, 80),
+  };
+};
+
+const sanitizeFeedCardTypes = (value: unknown): FeedCardTypes => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<Record<FeedCardTypeId, unknown>> : {};
+  const next = cloneFeedCardTypes(defaultFeedCardTypes);
+  feedCardTypeIds.forEach((id) => {
+    const raw = typeof input[id] === 'object' && input[id] !== null ? input[id] as Partial<FeedCardTypeRecipe> : {};
+    const fallback = defaultFeedCardTypes[id];
+    next[id] = {
+      ...fallback,
+      name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name,
+      description: typeof raw.description === 'string' && raw.description.trim() ? raw.description.trim() : fallback.description,
+      surface: sanitizeMaterialRecipe(raw.surface, fallback.surface),
+      slots: {
+        eyebrow: sanitizeFeedTextSlotStyle(raw.slots?.eyebrow, fallback.slots.eyebrow),
+        title: sanitizeFeedTextSlotStyle(raw.slots?.title, fallback.slots.title),
+        body: sanitizeFeedTextSlotStyle(raw.slots?.body, fallback.slots.body),
+        meta: sanitizeFeedTextSlotStyle(raw.slots?.meta, fallback.slots.meta),
+      },
+    };
+  });
+  return next;
 };
 
 const sanitizeNav = (value: unknown): NavRecipe => {
@@ -548,12 +765,13 @@ const sanitizeMaterialPresets = (value: unknown): MaterialPresetsByPart => {
   return empty;
 };
 
-const Slider = (props: { value: number; min?: number; max?: number; onInput: (value: number) => void }) => (
+const Slider = (props: { value: number; min?: number; max?: number; step?: number; onInput: (value: number) => void }) => (
   <label class="ui-lab-slider">
     <input
       type="range"
       min={props.min ?? 0}
       max={props.max ?? 100}
+      step={props.step ?? 1}
       value={props.value}
       onInput={(event) => props.onInput(Number(event.currentTarget.value))}
     />
@@ -682,27 +900,201 @@ const TitleRecipeEditor = (props: { title: TitleRecipe; onChange: (title: TitleR
   );
 };
 
-const FeedRecipeEditor = (props: { feed: FeedRecipe; onChange: (feed: FeedRecipe) => void }) => {
+const FeedRecipeEditor = (props: {
+  feed: FeedRecipe;
+  onChange: (feed: FeedRecipe) => void;
+  stories: FeedStory[];
+  selectedStoryId: string;
+  onSelectedStoryIdChange: (storyId: string) => void;
+  cardTypes: FeedCardTypes;
+  editingCardTypeId: FeedCardTypeId;
+  onEditingCardTypeIdChange: (id: FeedCardTypeId) => void;
+  onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
+}) => {
+  const [selectedSlot, setSelectedSlot] = createSignal<FeedTextSlotId>('title');
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
     props.onChange({ ...props.feed, [key]: value });
   };
+  const selectedStory = () => props.stories.find((story) => story.id === props.selectedStoryId) || props.stories[0];
+  const editingCardType = () => props.cardTypes[props.editingCardTypeId];
+  const selectedSlotStyle = () => editingCardType().slots[selectedSlot()];
+  const updateEditingCardType = (updates: Partial<FeedCardTypeRecipe>) => {
+    props.onCardTypeChange({ ...editingCardType(), ...updates });
+  };
+  const updateSlot = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
+    const cardType = editingCardType();
+    props.onCardTypeChange({
+      ...cardType,
+      slots: {
+        ...cardType.slots,
+        [selectedSlot()]: {
+          ...cardType.slots[selectedSlot()],
+          [key]: value,
+        },
+      },
+    });
+  };
 
   return (
-    <div class="ui-lab-control-group">
-      <SectionLabel size="xs">Feed Layout</SectionLabel>
-      <div class="ui-lab-control-row">
-        <span>Content Y</span>
-        <Slider value={props.feed.contentY} min={-32} max={48} onInput={(value) => update('contentY', value)} />
+    <>
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">Fake Server</SectionLabel>
+        <div class="ui-lab-control-row">
+          <span>Story</span>
+          <select class="ui-lab-select" value={props.selectedStoryId} onChange={(event) => props.onSelectedStoryIdChange(event.currentTarget.value)}>
+            <For each={props.stories}>
+              {(story) => <option value={story.id}>{story.label}</option>}
+            </For>
+          </select>
+        </div>
+        <div class="ui-lab-control-row">
+          <span>Story Uses</span>
+          <span>{selectedStory().cardTypeId}</span>
+        </div>
       </div>
-      <div class="ui-lab-control-row">
-        <span>Copy Lift</span>
-        <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
+
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">Card Type</SectionLabel>
+        <div class="ui-lab-control-row">
+          <span>Editing</span>
+          <select class="ui-lab-select" value={props.editingCardTypeId} onChange={(event) => props.onEditingCardTypeIdChange(event.currentTarget.value as FeedCardTypeId)}>
+            <For each={feedCardTypeIds}>
+              {(id) => <option value={id}>{props.cardTypes[id].name}</option>}
+            </For>
+          </select>
+        </div>
+        <div class="ui-lab-control-row">
+          <span>Name</span>
+          <input class="ui-lab-input main-material-text-input" value={editingCardType().name} onInput={(event) => updateEditingCardType({ name: event.currentTarget.value })} />
+        </div>
       </div>
-      <div class="ui-lab-control-row">
-        <span>Dot Gap</span>
-        <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
+
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">Feed Text Slots</SectionLabel>
+        <div class="ui-lab-control-row">
+          <span>Slot</span>
+          <div class="ui-lab-toggles">
+            <For each={feedTextSlotIds}>
+              {(slot) => (
+                <MiniButton active={selectedSlot() === slot} onClick={() => setSelectedSlot(slot)}>
+                  {feedTextSlotLabels[slot]}
+                </MiniButton>
+              )}
+            </For>
+          </div>
+        </div>
+        <div class="ui-lab-control-row">
+          <span>Inherit</span>
+          <div class="ui-lab-toggles">
+            <MiniButton active={selectedSlotStyle().inherit} onClick={() => updateSlot('inherit', !selectedSlotStyle().inherit)}>
+              on
+            </MiniButton>
+          </div>
+        </div>
+        <Show when={!selectedSlotStyle().inherit}>
+          <div class="ui-lab-control-row">
+            <span>Font</span>
+            <select class="ui-lab-select" value={selectedSlotStyle().textFontFamily} onChange={(event) => updateSlot('textFontFamily', event.currentTarget.value)}>
+              <For each={materialRecipeTextFonts}>
+                {(font) => <option value={font.value}>{font.label}</option>}
+              </For>
+            </select>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Size</span>
+            <Slider value={selectedSlotStyle().textSizeRem} min={0.5} max={4} step={0.05} onInput={(value) => updateSlot('textSizeRem', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Color</span>
+            <div class="ui-lab-toggles">
+              <For each={materialRecipeContentTones}>
+                {(tone) => (
+                  <MiniButton active={selectedSlotStyle().contentTone === tone} onClick={() => updateSlot('contentTone', tone)}>
+                    {tone}
+                  </MiniButton>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Weight</span>
+            <div class="ui-lab-toggles">
+              <For each={materialRecipeFontWeights}>
+                {(weight) => (
+                  <MiniButton active={selectedSlotStyle().fontWeight === weight} onClick={() => updateSlot('fontWeight', weight)}>
+                    {weight}
+                  </MiniButton>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Style</span>
+            <div class="ui-lab-toggles">
+              <For each={materialRecipeFontStyles}>
+                {(style) => (
+                  <MiniButton active={selectedSlotStyle().fontStyle === style} onClick={() => updateSlot('fontStyle', style)}>
+                    {style}
+                  </MiniButton>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Case</span>
+            <div class="ui-lab-toggles">
+              <For each={materialRecipeTextTransforms}>
+                {(textCase) => (
+                  <MiniButton active={selectedSlotStyle().textTransform === textCase} onClick={() => updateSlot('textTransform', textCase)}>
+                    {textCase}
+                  </MiniButton>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Align</span>
+            <div class="ui-lab-toggles">
+              <For each={materialRecipeTextAligns}>
+                {(align) => (
+                  <MiniButton active={selectedSlotStyle().textAlign === align} onClick={() => updateSlot('textAlign', align)}>
+                    {align}
+                  </MiniButton>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Track</span>
+            <Slider value={selectedSlotStyle().letterSpacing} min={-0.08} max={0.24} step={0.005} onInput={(value) => updateSlot('letterSpacing', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>X</span>
+            <Slider value={selectedSlotStyle().textX} min={-80} max={80} onInput={(value) => updateSlot('textX', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Y</span>
+            <Slider value={selectedSlotStyle().textY} min={-80} max={80} onInput={(value) => updateSlot('textY', value)} />
+          </div>
+        </Show>
       </div>
-    </div>
+
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">Feed Layout</SectionLabel>
+        <div class="ui-lab-control-row">
+          <span>Content Y</span>
+          <Slider value={props.feed.contentY} min={-32} max={48} onInput={(value) => update('contentY', value)} />
+        </div>
+        <div class="ui-lab-control-row">
+          <span>Copy Lift</span>
+          <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
+        </div>
+        <div class="ui-lab-control-row">
+          <span>Dot Gap</span>
+          <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -788,19 +1180,68 @@ const FakeProfileIcon = () => (
   </div>
 );
 
+const feedToneColors: Record<MaterialTone, string> = {
+  none: 'currentColor',
+  inherit: 'currentColor',
+  black: 'rgb(23 20 15)',
+  white: 'rgb(255 244 213)',
+  muted: 'rgb(143 137 124)',
+  gold: 'rgb(239 200 93)',
+  cyan: 'rgb(77 220 255)',
+  red: 'rgb(255 92 83)',
+  green: 'rgb(86 218 142)',
+};
+
+const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle => createFeedSlotStyle({
+  inherit: false,
+  textFontFamily: recipe.textFontFamily,
+  textSizeRem: recipe.textSizeRem,
+  contentTone: recipe.contentTone,
+  fontWeight: recipe.fontWeight,
+  fontStyle: recipe.fontStyle,
+  textTransform: recipe.textTransform,
+  letterSpacing: recipe.letterSpacing,
+  textAlign: recipe.textAlign,
+  textX: recipe.textX,
+  textY: recipe.textY,
+});
+
+const resolveFeedTextStyle = (cardType: FeedCardTypeRecipe, slot: FeedTextSlotId) => (
+  cardType.slots[slot].inherit ? feedBaseTextStyleFromRecipe(cardType.surface) : cardType.slots[slot]
+);
+
+const feedTextCss = (style: FeedTextSlotStyle): JSX.CSSProperties => ({
+  'font-family': style.textFontFamily,
+  'font-size': `${style.textSizeRem}rem`,
+  'font-weight': fontWeightTokenValue(style.fontWeight),
+  'font-style': style.fontStyle,
+  'text-transform': style.textTransform,
+  'letter-spacing': `${style.letterSpacing}em`,
+  'text-align': style.textAlign,
+  color: feedToneColors[style.contentTone] || feedToneColors.white,
+  transform: `translate(${style.textX}px, ${style.textY}px)`,
+});
+
 const clampSlideIndex = (index: number, slideCount: number) => Math.max(0, Math.min(slideCount - 1, index));
 
 const FeedCarousel = (props: {
-  slides: FeedSlide[];
+  stories: FeedStory[];
+  cardTypes: FeedCardTypes;
+  activeStoryId: string;
+  onActiveStoryChange: (storyId: string) => void;
   class: string;
   feed: FeedRecipe;
-  surfaceRecipe: MaterialRecipe;
   surfaceState: MaterialRecipeState;
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
   const [dragStartX, setDragStartX] = createSignal<number | null>(null);
   const [dragDeltaX, setDragDeltaX] = createSignal(0);
-  const lastSlideIndex = () => props.slides.length - 1;
+  createEffect(() => {
+    const index = props.stories.findIndex((story) => story.id === props.activeStoryId);
+    if (index >= 0 && index !== activeSlideIndex()) setActiveSlideIndex(index);
+  });
+
+  const lastSlideIndex = () => props.stories.length - 1;
   const canGoPrevious = () => activeSlideIndex() > 0;
   const canGoNext = () => activeSlideIndex() < lastSlideIndex();
   const feedStyle = () => ({
@@ -810,7 +1251,9 @@ const FeedCarousel = (props: {
     '--main-feed-drag-x': `${dragDeltaX()}px`,
   }) as JSX.CSSProperties;
   const showSlide = (index: number) => {
-    setActiveSlideIndex(clampSlideIndex(index, props.slides.length));
+    const nextIndex = clampSlideIndex(index, props.stories.length);
+    setActiveSlideIndex(nextIndex);
+    props.onActiveStoryChange(props.stories[nextIndex]?.id || props.stories[0].id);
   };
   const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLElement }) => {
     setDragStartX(event.clientX);
@@ -848,29 +1291,32 @@ const FeedCarousel = (props: {
       onPointerLeave={finishFeedDrag}
     >
       <div class="main-material-feed-track">
-        <For each={props.slides}>
-          {(slide) => (
-            <MaterialPanel
-              {...materialSurfacePropsForPart('feedCards', props.surfaceRecipe, props.surfaceState)}
-              padded={false}
-              class={`main-material-feed-slide main-material-feed-slide--${slide.tone}`}
-            >
-              <div class="main-material-feed-content">
-                <div class="main-material-tag">{slide.eyebrow}</div>
-                <h2>{slide.title}</h2>
-                <p>{slide.body}</p>
-              </div>
-              <Show when={slide.meta}>
-                <div class="main-material-feed-meta">
-                  <strong>{slide.meta}</strong>
+        <For each={props.stories}>
+          {(story) => {
+            const cardType = () => props.cardTypes[story.cardTypeId] || props.cardTypes.card_type_01;
+            return (
+              <MaterialPanel
+                {...materialSurfacePropsForPart('feedCards', cardType().surface, props.surfaceState)}
+                padded={false}
+                class="main-material-feed-slide"
+              >
+                <div class="main-material-feed-content">
+                  <div class="main-material-tag" style={feedTextCss(resolveFeedTextStyle(cardType(), 'eyebrow'))}>{story.eyebrow}</div>
+                  <h2 style={feedTextCss(resolveFeedTextStyle(cardType(), 'title'))}>{story.title}</h2>
+                  <p style={feedTextCss(resolveFeedTextStyle(cardType(), 'body'))}>{story.body}</p>
                 </div>
-              </Show>
-            </MaterialPanel>
-          )}
+                <Show when={story.meta}>
+                  <div class="main-material-feed-meta" style={feedTextCss(resolveFeedTextStyle(cardType(), 'meta'))}>
+                    <strong>{story.meta}</strong>
+                  </div>
+                </Show>
+              </MaterialPanel>
+            );
+          }}
         </For>
       </div>
       <div class="main-material-feed-dots" aria-label="Feed slides">
-        <For each={props.slides}>
+        <For each={props.stories}>
           {(_, index) => (
             <button
               type="button"
@@ -896,6 +1342,10 @@ const MainMaterialPreview = (props: {
   backdrop: BackdropRecipe;
   title: TitleRecipe;
   feed: FeedRecipe;
+  feedStories: FeedStory[];
+  feedCardTypes: FeedCardTypes;
+  activeFeedStoryId: string;
+  onActiveFeedStoryChange: (storyId: string) => void;
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
@@ -985,10 +1435,12 @@ const MainMaterialPreview = (props: {
 
           <main class="main-material-scroll">
             <FeedCarousel
-              slides={feedSlides}
+              stories={props.feedStories}
+              cardTypes={props.feedCardTypes}
+              activeStoryId={props.activeFeedStoryId}
+              onActiveStoryChange={props.onActiveFeedStoryChange}
               class={props.selectedClass('feedCards')}
               feed={props.feed}
-              surfaceRecipe={props.surfaces.feed}
               surfaceState={stateForPart('feedCards')}
             />
           </main>
@@ -1069,6 +1521,9 @@ export const MainMaterialPreviewScreen = () => {
   const [backdrop, setBackdrop] = createSignal<BackdropRecipe>(cloneBackdrop(defaultBackdrop));
   const [title, setTitle] = createSignal<TitleRecipe>(cloneTitle(defaultTitle));
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
+  const [feedCardTypes, setFeedCardTypes] = createSignal<FeedCardTypes>(cloneFeedCardTypes(defaultFeedCardTypes));
+  const [selectedFeedStoryId, setSelectedFeedStoryId] = createSignal(mockFeedStories[0].id);
+  const [editingFeedCardTypeId, setEditingFeedCardTypeId] = createSignal<FeedCardTypeId>('card_type_01');
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
   const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
   const [materialPresets, setMaterialPresets] = createSignal<MaterialPresetsByPart>(createEmptyMaterialPresets());
@@ -1083,6 +1538,21 @@ export const MainMaterialPreviewScreen = () => {
     updateSurface(key, pruneRecipeForPartCapabilities(part, recipe));
   };
 
+  const updateFeedCardType = (cardType: FeedCardTypeRecipe) => {
+    setFeedCardTypes((current) => ({
+      ...current,
+      [cardType.id]: {
+        ...cardType,
+        surface: pruneRecipeForPartCapabilities('feedCards', cardType.surface),
+      },
+    }));
+  };
+
+  const updateFeedCardTypeSurface = (recipe: MaterialRecipe) => {
+    const cardType = feedCardTypes()[editingFeedCardTypeId()];
+    updateFeedCardType({ ...cardType, surface: recipe });
+  };
+
   onMount(() => {
     try {
       obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
@@ -1092,12 +1562,22 @@ export const MainMaterialPreviewScreen = () => {
           backdrop?: unknown;
           title?: unknown;
           feed?: unknown;
+          feedCardTypes?: unknown;
+          selectedFeedStoryId?: unknown;
+          editingFeedCardTypeId?: unknown;
           nav?: unknown;
           surfaces?: unknown;
         };
         setBackdrop(sanitizeBackdrop(parsed.backdrop));
         setTitle(sanitizeTitle(parsed.title));
         setFeed(sanitizeFeed(parsed.feed));
+        setFeedCardTypes(sanitizeFeedCardTypes(parsed.feedCardTypes));
+        setSelectedFeedStoryId(
+          typeof parsed.selectedFeedStoryId === 'string' && mockFeedStories.some((story) => story.id === parsed.selectedFeedStoryId)
+            ? parsed.selectedFeedStoryId
+            : mockFeedStories[0].id,
+        );
+        setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
         setNav(sanitizeNav(parsed.nav));
         setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
       }
@@ -1105,6 +1585,9 @@ export const MainMaterialPreviewScreen = () => {
       setBackdrop(cloneBackdrop(defaultBackdrop));
       setTitle(cloneTitle(defaultTitle));
       setFeed(cloneFeed(defaultFeed));
+      setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
+      setSelectedFeedStoryId(mockFeedStories[0].id);
+      setEditingFeedCardTypeId('card_type_01');
       setNav(cloneNav(defaultNav));
       setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
     }
@@ -1124,6 +1607,9 @@ export const MainMaterialPreviewScreen = () => {
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
+      feedCardTypes: feedCardTypes(),
+      selectedFeedStoryId: selectedFeedStoryId(),
+      editingFeedCardTypeId: editingFeedCardTypeId(),
       nav: nav(),
       surfaces: surfaces(),
     }));
@@ -1177,7 +1663,7 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'topBar') return current.topBar;
     if (part === 'profileButton') return current.profile;
     if (part === 'currencyButtons') return current.currencies;
-    if (part === 'feedCards') return current.feed;
+    if (part === 'feedCards') return feedCardTypes()[editingFeedCardTypeId()].surface;
     if (part === 'toolBar') return current.toolbar;
     if (part === 'navBar') return current.nav;
     return current.feed;
@@ -1189,7 +1675,7 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'topBar') updateSurface('topBar', nextRecipe);
     if (part === 'profileButton') updateSurface('profile', nextRecipe);
     if (part === 'currencyButtons') updateSurface('currencies', nextRecipe);
-    if (part === 'feedCards') updateSurface('feed', nextRecipe);
+    if (part === 'feedCards') updateFeedCardTypeSurface(nextRecipe);
     if (part === 'toolBar') updateSurface('toolbar', nextRecipe);
     if (part === 'navBar') updateSurface('nav', nextRecipe);
   };
@@ -1265,7 +1751,9 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'titleBlock') setTitle(cloneTitle(defaultTitle));
     if (part === 'feedCards') {
       setFeed(cloneFeed(defaultFeed));
-      updateSurfaceForPart('feedCards', 'feed', cloneMaterialRecipe(defaultFeedSurface));
+      setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
+      setSelectedFeedStoryId(mockFeedStories[0].id);
+      setEditingFeedCardTypeId('card_type_01');
     }
     if (part === 'toolBar') updateSurfaceForPart('toolBar', 'toolbar', cloneMaterialRecipe(defaultToolbarSurface));
     if (part === 'navBar') {
@@ -1278,6 +1766,9 @@ export const MainMaterialPreviewScreen = () => {
     setBackdrop(cloneBackdrop(defaultBackdrop));
     setTitle(cloneTitle(defaultTitle));
     setFeed(cloneFeed(defaultFeed));
+    setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
+    setSelectedFeedStoryId(mockFeedStories[0].id);
+    setEditingFeedCardTypeId('card_type_01');
     setNav(cloneNav(defaultNav));
     setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
@@ -1287,6 +1778,9 @@ export const MainMaterialPreviewScreen = () => {
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
+      feedCardTypes: feedCardTypes(),
+      selectedFeedStoryId: selectedFeedStoryId(),
+      editingFeedCardTypeId: editingFeedCardTypeId(),
       nav: nav(),
       surfaces: surfaces(),
     }, null, 2));
@@ -1387,8 +1881,8 @@ export const MainMaterialPreviewScreen = () => {
                           )}
                         >
                           <SurfaceRecipeEditor
-                            title="Feed Material"
-                            recipe={surfaces().feed}
+                            title="Feed Card Type"
+                            recipe={feedCardTypes()[editingFeedCardTypeId()].surface}
                             interactionRole={selectedInteractionRole()}
                             capabilities={materialEditorCapabilitiesByPart.feedCards}
                             stateOptions={selectedStateOptions()}
@@ -1401,10 +1895,22 @@ export const MainMaterialPreviewScreen = () => {
                             onSavePreset={() => saveMaterialPreset('feedCards')}
                             onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
                             onDeletePreset={() => deleteMaterialPreset('feedCards')}
-                            onChange={(recipe) => updateSurfaceForPart('feedCards', 'feed', recipe)}
+                            onChange={updateFeedCardTypeSurface}
                             activeState={selectedPreviewState()}
                             onActiveStateChange={setSelectedPreviewState}
-                            extraControls={<FeedRecipeEditor feed={feed()} onChange={setFeed} />}
+                            extraControls={(
+                              <FeedRecipeEditor
+                                feed={feed()}
+                                onChange={setFeed}
+                                stories={mockFeedStories}
+                                selectedStoryId={selectedFeedStoryId()}
+                                onSelectedStoryIdChange={setSelectedFeedStoryId}
+                                cardTypes={feedCardTypes()}
+                                editingCardTypeId={editingFeedCardTypeId()}
+                                onEditingCardTypeIdChange={setEditingFeedCardTypeId}
+                                onCardTypeChange={updateFeedCardType}
+                              />
+                            )}
                           />
                         </Show>
                       )}
@@ -1520,6 +2026,10 @@ export const MainMaterialPreviewScreen = () => {
           backdrop={backdrop()}
           title={title()}
           feed={feed()}
+          feedStories={mockFeedStories}
+          feedCardTypes={feedCardTypes()}
+          activeFeedStoryId={selectedFeedStoryId()}
+          onActiveFeedStoryChange={setSelectedFeedStoryId}
           nav={nav()}
           surfaces={surfaces()}
         />

@@ -313,33 +313,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   padding: 0;
 }
 
-.main-material-feed-slide::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.28), transparent 28%),
-    linear-gradient(0deg, rgb(12 10 8 / 0.34), transparent 45%);
-  pointer-events: none;
-}
-
-.main-material-feed-slide--white::before {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.34), transparent 30%),
-    linear-gradient(0deg, rgb(25 23 18 / 0.42), transparent 52%);
-}
-
-.main-material-feed-slide--dark {
-  color: #fff4d5;
-}
-
-.main-material-feed-slide--dark::before {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 28%),
-    linear-gradient(0deg, rgb(0 0 0 / 0.62), transparent 58%);
-}
-
 .main-material-feed-content {
   position: absolute;
   inset: auto 20px calc(30px + var(--main-card-gap, 16px));
@@ -362,12 +335,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-transform: uppercase;
 }
 
-.main-material-feed-slide--dark .main-material-tag {
-  border-color: rgb(239 200 93 / 0.48);
-  background: rgb(18 16 12 / 0.58);
-  color: #f3d58a;
-}
-
 .main-material-feed-content h2 {
   margin: 14px 0 8px;
   color: currentColor;
@@ -379,10 +346,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-shadow: 0 1px 0 rgb(255 255 255 / 0.72), 0 9px 20px rgb(255 255 255 / 0.28);
 }
 
-.main-material-feed-slide--dark .main-material-feed-content h2 {
-  text-shadow: 0 1px 0 rgb(0 0 0 / 0.6), 0 13px 26px rgb(0 0 0 / 0.42);
-}
-
 .main-material-feed-content p {
   margin: 0;
   color: rgb(23 20 15 / 0.72);
@@ -390,10 +353,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.36;
-}
-
-.main-material-feed-slide--dark .main-material-feed-content p {
-  color: rgb(255 244 213 / 0.78);
 }
 
 .main-material-feed-meta {
@@ -410,10 +369,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   letter-spacing: 0.1em;
   line-height: 1;
   text-transform: uppercase;
-}
-
-.main-material-feed-slide--dark .main-material-feed-meta {
-  color: rgb(255 244 213 / 0.62);
 }
 
 .main-material-feed-meta strong {

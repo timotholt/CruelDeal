@@ -72,6 +72,7 @@ export interface MaterialEditorCapabilities {
   border?: boolean;
   edgeWear?: boolean;
   text?: boolean;
+  textContent?: boolean;
   states?: boolean;
 }
 
@@ -84,6 +85,7 @@ const defaultCapabilities: Required<MaterialEditorCapabilities> = {
   border: true,
   edgeWear: true,
   text: true,
+  textContent: true,
   states: true,
 };
 
@@ -640,13 +642,15 @@ const MotionSection = (props: {
   </div>
 );
 
-const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
+const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; contentEnabled: boolean; update: RecipeUpdate }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
     <SectionLabel size="xs">Base Text</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Content</ControlLabel>
-      <TextInput value={props.recipe.textContent} disabled={!props.enabled} onInput={(value) => props.update('textContent', value)} />
-    </div>
+    <Show when={props.contentEnabled}>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Content</ControlLabel>
+        <TextInput value={props.recipe.textContent} disabled={!props.enabled} onInput={(value) => props.update('textContent', value)} />
+      </div>
+    </Show>
     <div class="ui-lab-control-row">
       <ControlLabel>Font</ControlLabel>
       <Select
@@ -889,7 +893,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
-      <TextSection recipe={props.recipe} enabled={capabilities().text} update={update} />
+      <TextSection recipe={props.recipe} enabled={capabilities().text} contentEnabled={capabilities().textContent} update={update} />
       <Show when={capabilities().states}>
         <StateSelectorSection
           activeState={activeState()}
