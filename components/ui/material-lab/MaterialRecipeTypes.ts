@@ -697,65 +697,89 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
   };
 };
 
-export const materialRecipeToSurfaceStateVars = (
-  recipe: MaterialRecipe,
-  state: MaterialRecipeState,
-): MaterialSurfaceStateVars => {
-  const resolved = resolveSurfaceState(recipe, state);
+type ResolvedSurfaceState = ReturnType<typeof resolveSurfaceState>;
+
+const stateValueChanged = (next: string | number, base: string | number | undefined) => (
+  base === undefined || String(next) !== String(base)
+);
+
+const diffStateVars = (
+  nextVars: Record<string, string | number>,
+  baseVars: Record<string, string | number>,
+) => (
+  Object.fromEntries(
+    Object.entries(nextVars).filter(([key, value]) => stateValueChanged(value, baseVars[key])),
+  ) as Record<string, string | number>
+);
+
+const resolvedSurfaceStateCssVars = (resolved: ResolvedSurfaceState): Record<string, string | number> => {
   const contentRgb = toneRgb[resolved.contentTone as MaterialTone] || toneRgb.white;
   const iconRgb = toneRgb[resolved.iconTone as MaterialTone] || contentRgb;
   const glowRgb = toneRgb[resolved.glow as MaterialTone] || toneRgb.none;
   const emissionRgb = toneRgb[resolved.emissionTone as MaterialTone] || toneRgb.none;
   const glowPower = Math.max(0, Math.min(100, resolved.glowStrength ?? 0)) / 100;
   const glowIntensity = resolved.glow !== 'none' ? Math.pow(glowPower, 0.58) : 0;
+  const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
   const glowWashAlpha = glowIntensity > 0 ? Math.min(0.9, 0.18 + glowIntensity * 0.62) : 0;
   const glowWash = `rgb(${glowRgb} / ${glowWashAlpha})`;
   const corners = resolved.corners as CornerName[];
   const edges = Array.isArray(resolved.edgeHighlight) ? resolved.edgeHighlight as EdgeName[] : [];
 
   return {
-    cssVars: {
-      '--tint-rgb': toneRgb[resolved.tint as MaterialTone] || toneRgb.none,
-      '--tint-alpha': resolved.tint !== 'none' ? (resolved.tintStrength ?? 0) / 100 : 0,
-      '--border-alpha': (resolved.borderOpacity ?? 34) / 100,
-      '--light-alpha': (resolved.lightStrength ?? 20) / 100,
-      '--dark-alpha': (resolved.darkStrength ?? 32) / 100,
-      '--glow-rgb': glowRgb,
-      '--glow-alpha': glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0,
-      '--glow-top-wash': edges.includes('top') ? glowWash : 'transparent',
-      '--glow-right-wash': edges.includes('right') ? glowWash : 'transparent',
-      '--glow-bottom-wash': edges.includes('bottom') ? glowWash : 'transparent',
-      '--glow-left-wash': edges.includes('left') ? glowWash : 'transparent',
-      '--glow-tl-wash': corners.includes('top-left') ? glowWash : 'transparent',
-      '--glow-tr-wash': corners.includes('top-right') ? glowWash : 'transparent',
-      '--glow-br-wash': corners.includes('bottom-right') ? glowWash : 'transparent',
-      '--glow-bl-wash': corners.includes('bottom-left') ? glowWash : 'transparent',
-      '--corner-shadow': `rgb(${glowRgb} / ${glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0})`,
-      '--corner-tl': corners.includes('top-left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--corner-tr': corners.includes('top-right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--corner-br': corners.includes('bottom-right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--corner-bl': corners.includes('bottom-left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--edge-top': edges.includes('top') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--edge-right': edges.includes('right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--edge-bottom': edges.includes('bottom') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--edge-left': edges.includes('left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
-      '--content-rgb': contentRgb,
-      '--content-alpha': (resolved.contentOpacity ?? 100) / 100,
-      '--icon-rgb': iconRgb,
-      '--content-glow-alpha': (resolved.contentGlowStrength ?? 0) / 100,
-      '--icon-glow-alpha': (resolved.iconGlowStrength ?? 0) / 100,
-      '--content-font-weight': fontWeightTokenValue(resolved.fontWeight as FontWeightToken),
-      '--content-font-style': resolved.fontStyle,
-      '--content-text-transform': resolved.textTransform,
-      '--content-letter-spacing': `${resolved.letterSpacing ?? 0}em`,
-      '--emission-rgb': emissionRgb,
-      '--emission-alpha': resolved.emission !== 'none' ? (resolved.emissionStrength ?? 0) / 100 : 0,
-      '--emission-length': `${resolved.emissionLength}%`,
-      '--emission-thickness': `${resolved.emissionThickness}px`,
-      '--emission-blip-size': `${resolved.emissionBlipSize}px`,
-      '--state-scale': resolved.stateScale,
-      '--state-translate-y': `${resolved.stateTranslateY}px`,
-    },
+    '--tint-rgb': toneRgb[resolved.tint as MaterialTone] || toneRgb.none,
+    '--tint-alpha': resolved.tint !== 'none' ? (resolved.tintStrength ?? 0) / 100 : 0,
+    '--border-alpha': (resolved.borderOpacity ?? 34) / 100,
+    '--light-alpha': (resolved.lightStrength ?? 20) / 100,
+    '--dark-alpha': (resolved.darkStrength ?? 32) / 100,
+    '--glow-rgb': glowRgb,
+    '--glow-alpha': glowAlpha,
+    '--glow-top-wash': edges.includes('top') ? glowWash : 'transparent',
+    '--glow-right-wash': edges.includes('right') ? glowWash : 'transparent',
+    '--glow-bottom-wash': edges.includes('bottom') ? glowWash : 'transparent',
+    '--glow-left-wash': edges.includes('left') ? glowWash : 'transparent',
+    '--glow-tl-wash': corners.includes('top-left') ? glowWash : 'transparent',
+    '--glow-tr-wash': corners.includes('top-right') ? glowWash : 'transparent',
+    '--glow-br-wash': corners.includes('bottom-right') ? glowWash : 'transparent',
+    '--glow-bl-wash': corners.includes('bottom-left') ? glowWash : 'transparent',
+    '--corner-shadow': `rgb(${glowRgb} / ${glowAlpha})`,
+    '--corner-tl': corners.includes('top-left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--corner-tr': corners.includes('top-right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--corner-br': corners.includes('bottom-right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--corner-bl': corners.includes('bottom-left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--edge-top': edges.includes('top') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--edge-right': edges.includes('right') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--edge-bottom': edges.includes('bottom') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--edge-left': edges.includes('left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
+    '--content-rgb': contentRgb,
+    '--content-alpha': (resolved.contentOpacity ?? 100) / 100,
+    '--icon-rgb': iconRgb,
+    '--content-glow-alpha': (resolved.contentGlowStrength ?? 0) / 100,
+    '--icon-glow-alpha': (resolved.iconGlowStrength ?? 0) / 100,
+    '--content-font-weight': fontWeightTokenValue(resolved.fontWeight as FontWeightToken),
+    '--content-font-style': resolved.fontStyle,
+    '--content-text-transform': resolved.textTransform,
+    '--content-letter-spacing': `${resolved.letterSpacing ?? 0}em`,
+    '--emission-rgb': emissionRgb,
+    '--emission-alpha': resolved.emission !== 'none' ? (resolved.emissionStrength ?? 0) / 100 : 0,
+    '--emission-length': `${resolved.emissionLength}%`,
+    '--emission-thickness': `${resolved.emissionThickness}px`,
+    '--emission-blip-size': `${resolved.emissionBlipSize}px`,
+    '--state-scale': resolved.stateScale,
+    '--state-translate-y': `${resolved.stateTranslateY}px`,
+  };
+};
+
+export const materialRecipeToSurfaceStateVars = (
+  recipe: MaterialRecipe,
+  state: MaterialRecipeState,
+  baseState?: MaterialRecipeState,
+): MaterialSurfaceStateVars => {
+  const resolved = resolveSurfaceState(recipe, state);
+  const nextVars = resolvedSurfaceStateCssVars(resolved);
+  const baseVars = baseState ? resolvedSurfaceStateCssVars(resolveSurfaceState(recipe, baseState)) : null;
+
+  return {
+    cssVars: baseVars ? diffStateVars(nextVars, baseVars) : nextVars,
   };
 };
 
@@ -764,7 +788,7 @@ export const materialRecipeToSurfaceProps = (recipe: MaterialRecipe, state: Mate
   return {
     ...resolved,
     stateVars: {
-      [state]: materialRecipeToSurfaceStateVars(recipe, state),
+      [state]: materialRecipeToSurfaceStateVars(recipe, state, state),
     },
   };
 };
@@ -781,9 +805,9 @@ export const materialRecipeToInteractiveSurfaceProps = (
   ...materialRecipeToSurfaceProps(recipe, visualState),
   visualState,
   stateVars: {
-    rest: materialRecipeToSurfaceStateVars(recipe, 'rest'),
-    hover: materialRecipeToSurfaceStateVars(recipe, 'hover'),
-    active: materialRecipeToSurfaceStateVars(recipe, 'active'),
-    pressed: materialRecipeToSurfaceStateVars(recipe, 'pressed'),
+    rest: materialRecipeToSurfaceStateVars(recipe, 'rest', visualState),
+    hover: materialRecipeToSurfaceStateVars(recipe, 'hover', visualState),
+    active: materialRecipeToSurfaceStateVars(recipe, 'active', visualState),
+    pressed: materialRecipeToSurfaceStateVars(recipe, 'pressed', visualState),
   },
 });

@@ -253,6 +253,14 @@ const stateHasEmission = (vars?: MaterialSurfaceStateVars) => (
   Number(vars?.cssVars['--emission-alpha'] || 0) > 0
 );
 
+const stateHasGlow = (vars?: MaterialSurfaceStateVars) => (
+  Number(vars?.cssVars['--glow-alpha'] || 0) > 0
+);
+
+const shouldRenderGlow = (options: SurfaceOptions) => (
+  hasGlow(options) || stateHasGlow(options.stateVars?.hover) || stateHasGlow(options.stateVars?.pressed)
+);
+
 const shouldRenderEmission = (options: SurfaceOptions) => (
   hasEmission(options) || stateHasEmission(options.stateVars?.hover) || stateHasEmission(options.stateVars?.pressed)
 );
@@ -262,6 +270,14 @@ const surfaceEmissionKind = (options: SurfaceOptions): EdgeEmissionKind => {
   if (stateHasEmission(options.stateVars?.pressed)) return 'center-blip';
   return 'none';
 };
+
+type CssVarValue = string | number | undefined | null | false;
+
+const cssVars = (vars: Record<string, CssVarValue>): JSX.CSSProperties => (
+  Object.fromEntries(
+    Object.entries(vars).filter(([, value]) => value !== undefined && value !== null && value !== false),
+  ) as JSX.CSSProperties
+);
 
 const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
   if (!vars) return {};
@@ -273,62 +289,14 @@ const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
   );
 };
 
-const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
-  const corners = resolveCorners(options.corners);
-  const bevelCorners = resolveCorners(options.bevelCorners || 'all');
-  const edges = resolveEdges(options.edgeHighlight);
-  const borderEdges = resolveBorder(options.border);
-  const glow = glowColors[options.glow || 'gold'];
-  const activeCornerColor = hasGlow(options) ? glow.color : 'transparent';
-  const activeEdgeColor = hasGlow(options) ? glow.color : 'transparent';
-  const textureId = options.texture || 'road012a';
-  const textureActive = hasTextureLayer(options);
-  const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
-  const glowIntensity = hasGlow(options) ? Math.pow(glowPower, 0.58) : 0;
-  const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
-  const glowCore = 2 + Math.round(glowIntensity * 8);
-  const glowMid = 8 + Math.round(glowIntensity * 24);
-  const glowWide = 18 + Math.round(glowIntensity * 54);
-  const glowWashAlpha = glowIntensity > 0 ? Math.min(0.9, 0.18 + glowIntensity * 0.62) : 0;
-  const glowSpread = 12 + Math.round(glowIntensity * 34);
-  const glowCornerSpread = 22 + Math.round(glowIntensity * 54);
-  const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
-  const tint = tintColors[options.tint || 'none'];
-  const contentAlign = options.textAlign || 'center';
-  const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
-  const contentTone = options.contentTone && options.contentTone !== 'inherit'
-    ? options.contentTone
-    : options.textTone || 'white';
-  const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
-  const contentRgb = tintColors[contentTone].rgb;
-  const iconRgb = tintColors[iconTone].rgb;
-  const contentAlpha = (options.contentOpacity ?? 100) / 100;
-  const textColor = `rgb(${contentRgb} / ${contentAlpha})`;
-  const textEmboss = options.textEmboss !== false;
-  const textShadow = textEmboss
-    ? contentTone === 'black'
-      ? '0 1px 0 rgb(255 255 255 / 0.38)'
-      : '0 2px 6px rgb(0 0 0 / 0.64)'
-    : 'none';
-  const emissionTone = options.emissionTone || 'none';
-  const emissionRgb = tintColors[emissionTone].rgb;
-  const stateVars = options.stateVars || {};
-  const currentVars = stateVars[options.visualState || 'rest']?.cssVars || {};
-  const textureVars: JSX.CSSProperties = textureActive
-    ? {
-      '--texture-strength': `${(options.textureStrength ?? 100) / 100}`,
-      '--texture-scale': `${options.textureScale ?? 512}px`,
-      '--texture-image': `url("${getTextureOption(textureId).url}")`,
-    } as JSX.CSSProperties
-    : {};
-
-  return {
-    ...currentVars,
-    ...prefixedVars('hover', stateVars.hover),
-    ...prefixedVars('pressed', stateVars.pressed),
-    ...textureVars,
-    '--corner-size': `${options.cornerSize ?? 18}px`,
+const shapeVars = (options: SurfaceOptions, bevelCorners: CornerName[]) => {
+  const baseVars: Record<string, CssVarValue> = {
     '--surface-radius': `${options.radius ?? 7}px`,
+  };
+  if (!bevelCorners.length) return cssVars(baseVars);
+
+  return cssVars({
+    ...baseVars,
     '--bevel-size': `${options.bevelSize ?? 11}px`,
     '--corner-radius-tl': bevelCorners.includes('top-left') ? 'var(--bevel-size)' : 'var(--surface-radius)',
     '--corner-radius-tr': bevelCorners.includes('top-right') ? 'var(--bevel-size)' : 'var(--surface-radius)',
@@ -342,23 +310,87 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--bevel-shape-tr': bevelCorners.includes('top-right') ? 'bevel' : 'round',
     '--bevel-shape-br': bevelCorners.includes('bottom-right') ? 'bevel' : 'round',
     '--bevel-shape-bl': bevelCorners.includes('bottom-left') ? 'bevel' : 'round',
+  });
+};
+
+const textureVars = (options: SurfaceOptions) => {
+  if (!hasTextureLayer(options)) return {};
+  const textureId = options.texture || 'road012a';
+  return cssVars({
+    '--texture-strength': `${(options.textureStrength ?? 100) / 100}`,
+    '--texture-scale': `${options.textureScale ?? 512}px`,
+    '--texture-image': `url("${getTextureOption(textureId).url}")`,
+  });
+};
+
+const tintVars = (options: SurfaceOptions) => {
+  if (!hasTint(options)) return {};
+  const tint = tintColors[options.tint || 'none'];
+  return cssVars({
     '--tint-rgb': tint.rgb,
-    '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
-    '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
-    '--glass-blur': `${hasGlass(options) ? options.glassBlur ?? 10 : 0}px`,
-    '--glass-blur-scale': `${hasGlass(options) ? (options.glassBlur ?? 10) / 240 : 0}`,
-    '--glass-highlight-width': `${hasGlass(options) ? options.glassHighlightWidth ?? 100 : 100}%`,
-    '--glass-highlight-height': `${hasGlass(options) ? options.glassHighlightHeight ?? 34 : 34}%`,
-    '--glass-highlight-y': `${hasGlass(options) ? options.glassHighlightY ?? 10 : 10}%`,
-    '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
+    '--tint-alpha': `${(options.tintStrength ?? 32) / 100}`,
+  });
+};
+
+const glassVars = (options: SurfaceOptions) => {
+  if (!hasGlass(options)) return {};
+  return cssVars({
+    '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
+    '--glass-blur': `${options.glassBlur ?? 10}px`,
+    '--glass-blur-scale': `${(options.glassBlur ?? 10) / 240}`,
+    '--glass-highlight-width': `${options.glassHighlightWidth ?? 100}%`,
+    '--glass-highlight-height': `${options.glassHighlightHeight ?? 34}%`,
+    '--glass-highlight-y': `${options.glassHighlightY ?? 10}%`,
+  });
+};
+
+const gradientVars = (options: SurfaceOptions) => {
+  if (!hasGradientLayer(options)) return {};
+  return cssVars({
     '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
-    '--edge-wear-alpha': `${options.edgeWearTexture && options.edgeWearTexture !== 'none' ? (options.edgeWearOpacity ?? 0) / 100 : 0}`,
+  });
+};
+
+const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
+  if (!hasBorderLayer(options)) return {};
+  return cssVars({
+    '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
+    '--border-top': borderEdges.includes('top') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-right': borderEdges.includes('right') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-bottom': borderEdges.includes('bottom') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-left': borderEdges.includes('left') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+    '--border-top-shadow': borderEdges.includes('top') ? 'rgb(255 255 255 / calc(var(--border-alpha) * 0.58))' : 'transparent',
+    '--border-bottom-shadow': borderEdges.includes('bottom') ? 'rgb(0 0 0 / calc(var(--border-alpha) + 0.18))' : 'transparent',
+  });
+};
+
+const edgeWearVars = (options: SurfaceOptions) => {
+  if (!hasEdgeWearLayer(options)) return {};
+  return cssVars({
+    '--edge-wear-alpha': `${(options.edgeWearOpacity ?? 0) / 100}`,
     '--edge-wear-width': `${options.edgeWearWidth ?? 5}px`,
     '--edge-wear-scale': `${options.edgeWearScale ?? 256}px`,
-    '--edge-wear-image': options.edgeWearTexture && options.edgeWearTexture !== 'none'
-      ? `url("${getEdgeTextureOption(options.edgeWearTexture).url}")`
-      : 'none',
+    '--edge-wear-image': `url("${getEdgeTextureOption(options.edgeWearTexture as EdgeTextureKind).url}")`,
+  });
+};
+
+const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeName[]) => {
+  if (!hasGlow(options)) return {};
+  const glow = glowColors[options.glow || 'gold'];
+  const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
+  const glowIntensity = Math.pow(glowPower, 0.58);
+  const glowAlpha = Math.min(1, 0.18 + glowIntensity * 0.92);
+  const glowCore = 2 + Math.round(glowIntensity * 8);
+  const glowMid = 8 + Math.round(glowIntensity * 24);
+  const glowWide = 18 + Math.round(glowIntensity * 54);
+  const glowWashAlpha = Math.min(0.9, 0.18 + glowIntensity * 0.62);
+  const glowSpread = 12 + Math.round(glowIntensity * 34);
+  const glowCornerSpread = 22 + Math.round(glowIntensity * 54);
+  const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
+
+  return cssVars({
+    '--corner-size': `${options.cornerSize ?? 18}px`,
     '--glow-alpha': `${glowAlpha}`,
     '--glow-core': `${glowCore}px`,
     '--glow-mid': `${glowMid}px`,
@@ -375,31 +407,48 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--glow-br-wash': corners.includes('bottom-right') ? glowWash : 'transparent',
     '--glow-bl-wash': corners.includes('bottom-left') ? glowWash : 'transparent',
     '--corner-shadow': `rgb(${glow.rgb} / ${glowAlpha})`,
-    '--border-top': borderEdges.includes('top') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-right': borderEdges.includes('right') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-bottom': borderEdges.includes('bottom') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-left': borderEdges.includes('left') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-top-shadow': borderEdges.includes('top') ? 'rgb(255 255 255 / calc(var(--border-alpha) * 0.58))' : 'transparent',
-    '--border-bottom-shadow': borderEdges.includes('bottom') ? 'rgb(0 0 0 / calc(var(--border-alpha) + 0.18))' : 'transparent',
-    '--corner-tl': corners.includes('top-left') ? activeCornerColor : 'transparent',
-    '--corner-tr': corners.includes('top-right') ? activeCornerColor : 'transparent',
-    '--corner-br': corners.includes('bottom-right') ? activeCornerColor : 'transparent',
-    '--corner-bl': corners.includes('bottom-left') ? activeCornerColor : 'transparent',
-    '--edge-top': edges.includes('top') ? activeEdgeColor : 'transparent',
-    '--edge-right': edges.includes('right') ? activeEdgeColor : 'transparent',
-    '--edge-bottom': edges.includes('bottom') ? activeEdgeColor : 'transparent',
-    '--edge-left': edges.includes('left') ? activeEdgeColor : 'transparent',
+    '--corner-tl': corners.includes('top-left') ? glow.color : 'transparent',
+    '--corner-tr': corners.includes('top-right') ? glow.color : 'transparent',
+    '--corner-br': corners.includes('bottom-right') ? glow.color : 'transparent',
+    '--corner-bl': corners.includes('bottom-left') ? glow.color : 'transparent',
+    '--edge-top': edges.includes('top') ? glow.color : 'transparent',
+    '--edge-right': edges.includes('right') ? glow.color : 'transparent',
+    '--edge-bottom': edges.includes('bottom') ? glow.color : 'transparent',
+    '--edge-left': edges.includes('left') ? glow.color : 'transparent',
+  });
+};
+
+const contentVars = (options: SurfaceOptions) => {
+  const contentAlign = options.textAlign || 'center';
+  const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
+  const contentTone = options.contentTone && options.contentTone !== 'inherit'
+    ? options.contentTone
+    : options.textTone || 'white';
+  const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
+  const contentRgb = tintColors[contentTone].rgb;
+  const iconRgb = tintColors[iconTone].rgb;
+  const contentAlpha = (options.contentOpacity ?? 100) / 100;
+  const textEmboss = options.textEmboss !== false;
+  const contentGlowStrength = options.contentGlowStrength ?? 0;
+  const iconGlowStrength = options.iconGlowStrength ?? 0;
+  const textShadow = textEmboss
+    ? contentTone === 'black'
+      ? '0 1px 0 rgb(255 255 255 / 0.38)'
+      : '0 2px 6px rgb(0 0 0 / 0.64)'
+    : 'none';
+
+  return cssVars({
     '--content-font-family': options.textFontFamily || 'inherit',
     '--content-size': `${options.textSizeRem ?? 0.8125}rem`,
     '--content-alpha': `${contentAlpha}`,
     '--content-rgb': contentRgb,
     '--icon-rgb': iconRgb,
-    '--content-color': textColor,
+    '--content-color': `rgb(${contentRgb} / ${contentAlpha})`,
     '--content-shadow': textShadow,
-    '--content-glow-alpha': `${(options.contentGlowStrength ?? 0) / 100}`,
-    '--icon-glow-alpha': `${(options.iconGlowStrength ?? 0) / 100}`,
-    '--content-glow-shadow': '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))',
-    '--icon-glow-shadow': 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))',
+    '--content-glow-alpha': contentGlowStrength > 0 ? `${contentGlowStrength / 100}` : undefined,
+    '--icon-glow-alpha': iconGlowStrength > 0 ? `${iconGlowStrength / 100}` : undefined,
+    '--content-glow-shadow': contentGlowStrength > 0 ? '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))' : undefined,
+    '--icon-glow-shadow': iconGlowStrength > 0 ? 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))' : undefined,
     '--icon-color': `rgb(${iconRgb} / ${contentAlpha})`,
     '--content-font-weight': `${options.fontWeight ?? 700}`,
     '--content-font-style': options.fontStyle || 'italic',
@@ -409,15 +458,52 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--content-justify': contentJustify,
     '--content-x': `${options.textX ?? 0}px`,
     '--content-y': `${options.textY ?? 0}px`,
+  });
+};
+
+const emissionVars = (options: SurfaceOptions) => {
+  if (!hasEmission(options)) return {};
+  const emissionRgb = tintColors[options.emissionTone || 'none'].rgb;
+  return cssVars({
     '--emission-rgb': emissionRgb,
-    '--emission-alpha': `${hasEmission(options) ? (options.emissionStrength ?? 0) / 100 : 0}`,
+    '--emission-alpha': `${(options.emissionStrength ?? 0) / 100}`,
     '--emission-length': `${options.emissionLength ?? 42}%`,
     '--emission-thickness': `${options.emissionThickness ?? 1}px`,
     '--emission-blip-size': `${options.emissionBlipSize ?? 12}px`,
-    ...(options.stateful === false ? {} : {
-      '--state-scale': `${options.stateScale ?? 1}`,
-      '--state-translate-y': `${options.stateTranslateY ?? 0}px`,
-    }),
+  });
+};
+
+const motionVars = (options: SurfaceOptions) => {
+  if (options.stateful === false) return {};
+  return cssVars({
+    '--state-scale': options.stateScale !== undefined && options.stateScale !== 1 ? `${options.stateScale}` : undefined,
+    '--state-translate-y': options.stateTranslateY !== undefined && options.stateTranslateY !== 0 ? `${options.stateTranslateY}px` : undefined,
+  });
+};
+
+const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
+  const corners = resolveCorners(options.corners);
+  const bevelCorners = resolveCorners(options.bevelCorners);
+  const edges = resolveEdges(options.edgeHighlight);
+  const borderEdges = resolveBorder(options.border);
+  const stateVars = options.stateVars || {};
+  const currentVars = stateVars[options.visualState || 'rest']?.cssVars || {};
+
+  return {
+    ...currentVars,
+    ...prefixedVars('hover', stateVars.hover),
+    ...prefixedVars('pressed', stateVars.pressed),
+    ...shapeVars(options, bevelCorners),
+    ...textureVars(options),
+    ...tintVars(options),
+    ...glassVars(options),
+    ...gradientVars(options),
+    ...borderVars(options, borderEdges),
+    ...edgeWearVars(options),
+    ...glowVars(options, corners, edges),
+    ...contentVars(options),
+    ...emissionVars(options),
+    ...motionVars(options),
   } as JSX.CSSProperties;
 };
 
@@ -546,7 +632,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       </Show>
       <SurfaceOverlayLayers
         glass={hasGlass(props)}
-        glowing={hasGlow(props)}
+        glowing={shouldRenderGlow(props)}
         emitting={shouldRenderEmission(props)}
         border={hasBorderLayer(props)}
         edgeWear={hasEdgeWearLayer(props)}
