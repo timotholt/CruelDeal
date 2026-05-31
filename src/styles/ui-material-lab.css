@@ -979,11 +979,15 @@
   border: 1px solid transparent;
   border-radius: var(--surface-radius);
   color: #f4eee0;
+  box-shadow: var(--surface-drop-shadow);
+  transform: translateY(var(--state-translate-y)) scale(var(--state-scale));
+}
+
+.cd-surface--bordered {
   box-shadow:
     var(--surface-drop-shadow),
     inset 0 1px 0 var(--border-top-shadow),
     inset 0 -1px 0 var(--border-bottom-shadow);
-  transform: translateY(var(--state-translate-y)) scale(var(--state-scale));
 }
 
 .cd-surface--glass-blur {

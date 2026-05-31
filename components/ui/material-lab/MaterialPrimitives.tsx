@@ -1,4 +1,4 @@
-import { For, JSX, Show, splitProps } from 'solid-js';
+import { createMemo, For, JSX, Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 import type {
@@ -518,54 +518,193 @@ const motionVars = (options: SurfaceOptions) => {
   });
 };
 
-const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
-  const corners = resolveCorners(options.corners);
-  const bevelCorners = resolveCorners(options.bevelCorners);
-  const edges = resolveEdges(options.edgeHighlight);
-  const borderEdges = resolveBorder(options.border);
-  const stateVars = options.stateVars || {};
-  const currentVars = stateVars[options.visualState || 'rest']?.cssVars || {};
+type SurfaceFeatureId =
+  | 'root'
+  | 'state'
+  | 'shape'
+  | 'texture'
+  | 'tint'
+  | 'glass'
+  | 'blur'
+  | 'shadow'
+  | 'gradient'
+  | 'border'
+  | 'edgeWear'
+  | 'glow'
+  | 'content'
+  | 'emission'
+  | 'motion';
 
+interface SurfaceFeatureContext {
+  options: SurfaceOptions;
+  corners: CornerName[];
+  bevelCorners: CornerName[];
+  edges: EdgeName[];
+  borderEdges: EdgeName[];
+  stateVars: Partial<Record<MaterialRecipeState, MaterialSurfaceStateVars>>;
+  currentVars: MaterialSurfaceStateVars['cssVars'];
+}
+
+interface SurfaceFeature {
+  id: SurfaceFeatureId;
+  classes?: (context: SurfaceFeatureContext) => string[];
+  vars?: (context: SurfaceFeatureContext) => JSX.CSSProperties;
+}
+
+interface SurfaceLayerFlags {
+  material: boolean;
+  texture: boolean;
+  tinted: boolean;
+  gradient: boolean;
+  glass: boolean;
+  glowing: boolean;
+  emitting: boolean;
+  border: boolean;
+  edgeWear: boolean;
+}
+
+const createSurfaceFeatureContext = (options: SurfaceOptions): SurfaceFeatureContext => {
+  const stateVars = options.stateVars || {};
   return {
-    ...currentVars,
-    ...prefixedVars('hover', stateVars.hover),
-    ...prefixedVars('pressed', stateVars.pressed),
-    ...shapeVars(options, bevelCorners),
-    ...textureVars(options),
-    ...tintVars(options),
-    ...glassVars(options),
-    ...blurVars(options),
-    ...shadowVars(options),
-    ...gradientVars(options),
-    ...borderVars(options, borderEdges),
-    ...edgeWearVars(options),
-    ...glowVars(options, corners, edges),
-    ...contentVars(options),
-    ...emissionVars(options),
-    ...motionVars(options),
-  } as JSX.CSSProperties;
+    options,
+    corners: resolveCorners(options.corners),
+    bevelCorners: resolveCorners(options.bevelCorners),
+    edges: resolveEdges(options.edgeHighlight),
+    borderEdges: resolveBorder(options.border),
+    stateVars,
+    currentVars: stateVars[options.visualState || 'rest']?.cssVars || {},
+  };
+};
+
+const surfaceFeatures: SurfaceFeature[] = [
+  {
+    id: 'root',
+    classes: ({ options }) => [
+      'cd-surface',
+      `cd-surface--${options.material || 'raw'}`,
+      options.selected ? 'is-selected' : '',
+      options.interactive ? 'is-interactive' : '',
+      options.hoverPreview ? 'is-hover-preview' : '',
+      options.visualState ? `is-visual-${options.visualState}` : '',
+    ],
+  },
+  {
+    id: 'state',
+    vars: ({ currentVars, stateVars }) => ({
+      ...currentVars,
+      ...prefixedVars('hover', stateVars.hover),
+      ...prefixedVars('pressed', stateVars.pressed),
+    }) as JSX.CSSProperties,
+  },
+  {
+    id: 'shape',
+    classes: ({ bevelCorners }) => [
+      `cd-surface--${bevelCorners.length ? 'bevel' : 'rect'}`,
+    ],
+    vars: ({ options, bevelCorners }) => shapeVars(options, bevelCorners),
+  },
+  {
+    id: 'texture',
+    classes: ({ options }) => (
+      hasTextureLayer(options) ? [`cd-surface--texture-${options.texture || 'road012a'}`] : []
+    ),
+    vars: ({ options }) => textureVars(options),
+  },
+  {
+    id: 'tint',
+    classes: ({ options }) => (
+      hasTint(options) ? ['cd-surface--tinted', `cd-surface--tint-${options.tint}`] : []
+    ),
+    vars: ({ options }) => tintVars(options),
+  },
+  {
+    id: 'glass',
+    classes: ({ options }) => [
+      hasGlassWash(options) ? 'cd-surface--glass' : '',
+      hasGlassShine(options) ? 'cd-surface--glass-shine' : '',
+    ],
+    vars: ({ options }) => glassVars(options),
+  },
+  {
+    id: 'blur',
+    classes: ({ options }) => (
+      hasGlassBlur(options) ? ['cd-surface--glass-blur'] : []
+    ),
+    vars: ({ options }) => blurVars(options),
+  },
+  {
+    id: 'shadow',
+    classes: ({ options }) => (
+      hasDropShadow(options) ? ['cd-surface--shadow'] : []
+    ),
+    vars: ({ options }) => shadowVars(options),
+  },
+  {
+    id: 'gradient',
+    classes: ({ options }) => [
+      options.sheen === false && (hasGradientLayer(options) || hasGlassShine(options)) ? 'cd-surface--sheen-off' : '',
+      hasGradientLayer(options) ? `cd-surface--gradient-${options.gradient || 'both'}` : '',
+    ],
+    vars: ({ options }) => gradientVars(options),
+  },
+  {
+    id: 'border',
+    classes: ({ options }) => (
+      hasBorderLayer(options) ? ['cd-surface--bordered'] : []
+    ),
+    vars: ({ options, borderEdges }) => borderVars(options, borderEdges),
+  },
+  {
+    id: 'edgeWear',
+    classes: ({ options }) => (
+      hasEdgeWearLayer(options) && options.edgeWearLayer === 'above-highlights'
+        ? ['cd-surface--edge-wear-above']
+        : []
+    ),
+    vars: ({ options }) => edgeWearVars(options),
+  },
+  {
+    id: 'glow',
+    vars: ({ options, corners, edges }) => glowVars(options, corners, edges),
+  },
+  {
+    id: 'content',
+    vars: ({ options }) => contentVars(options),
+  },
+  {
+    id: 'emission',
+    vars: ({ options }) => emissionVars(options),
+  },
+  {
+    id: 'motion',
+    vars: ({ options }) => motionVars(options),
+  },
+];
+
+const surfaceLayerFlags = (options: SurfaceOptions): SurfaceLayerFlags => ({
+  material: hasMaterialBase(options),
+  texture: hasTextureLayer(options),
+  tinted: hasTint(options),
+  gradient: hasGradientLayer(options),
+  glass: hasGlassWash(options),
+  glowing: shouldRenderGlow(options),
+  emitting: shouldRenderEmission(options),
+  border: hasBorderLayer(options),
+  edgeWear: hasEdgeWearLayer(options),
+});
+
+const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
+  const context = createSurfaceFeatureContext(options);
+  return surfaceFeatures.reduce<JSX.CSSProperties>((style, feature) => ({
+    ...style,
+    ...(feature.vars?.(context) || {}),
+  }), {});
 };
 
 const surfaceClass = (options: SurfaceOptions, extra = '') => {
-  const shape = options.bevelCorners?.length ? 'bevel' : 'rect';
+  const context = createSurfaceFeatureContext(options);
   return [
-    'cd-surface',
-    `cd-surface--${options.material || 'raw'}`,
-    hasTextureLayer(options) ? `cd-surface--texture-${options.texture || 'road012a'}` : '',
-    `cd-surface--${shape}`,
-    options.sheen === false ? 'cd-surface--sheen-off' : '',
-    options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
-    hasGlassWash(options) ? 'cd-surface--glass' : '',
-    hasGlassBlur(options) ? 'cd-surface--glass-blur' : '',
-    hasGlassShine(options) ? 'cd-surface--glass-shine' : '',
-    hasDropShadow(options) ? 'cd-surface--shadow' : '',
-    options.selected ? 'is-selected' : '',
-    options.interactive ? 'is-interactive' : '',
-    options.hoverPreview ? 'is-hover-preview' : '',
-    options.visualState ? `is-visual-${options.visualState}` : '',
-    hasTint(options) ? 'cd-surface--tinted' : '',
-    hasTint(options) ? `cd-surface--tint-${options.tint}` : '',
-    options.edgeWearLayer === 'above-highlights' ? 'cd-surface--edge-wear-above' : '',
+    ...surfaceFeatures.flatMap((feature) => feature.classes?.(context) || []),
     extra,
   ].filter(Boolean).join(' ');
 };
@@ -624,6 +763,7 @@ export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean
 );
 
 const MaterialSurface = (props: MaterialSurfaceProps) => {
+  const layers = createMemo(() => surfaceLayerFlags(props));
   const contentLayer = () => props.contentLayer || 'over-glass';
   const content = (layer: ContentLayer) => (
     <Dynamic
@@ -654,30 +794,30 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       disabled={props.disabled}
     >
       <SurfaceBaseLayers
-        material={hasMaterialBase(props)}
-        texture={!props.underGlass && hasTextureLayer(props)}
-        tinted={!props.underGlass && hasTint(props)}
-        gradient={!props.underGlass && hasGradientLayer(props)}
+        material={layers().material}
+        texture={!props.underGlass && layers().texture}
+        tinted={!props.underGlass && layers().tinted}
+        gradient={!props.underGlass && layers().gradient}
       />
       <Show when={props.underGlass}>
         {underGlassContent()}
       </Show>
       <Show when={props.underGlass}>
         <SurfaceBaseLayers
-          texture={hasTextureLayer(props)}
-          tinted={hasTint(props)}
-          gradient={hasGradientLayer(props)}
+          texture={layers().texture}
+          tinted={layers().tinted}
+          gradient={layers().gradient}
         />
       </Show>
       <Show when={!props.underGlass && contentLayer() === 'under-glass'}>
         {content('under-glass')}
       </Show>
       <SurfaceOverlayLayers
-        glass={hasGlassWash(props)}
-        glowing={shouldRenderGlow(props)}
-        emitting={shouldRenderEmission(props)}
-        border={hasBorderLayer(props)}
-        edgeWear={hasEdgeWearLayer(props)}
+        glass={layers().glass}
+        glowing={layers().glowing}
+        emitting={layers().emitting}
+        border={layers().border}
+        edgeWear={layers().edgeWear}
       />
       <Show when={props.underGlass || contentLayer() === 'over-glass'}>
         {content('over-glass')}
