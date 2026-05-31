@@ -566,6 +566,8 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-family: var(--feed-rich-small-font);
   font-size: var(--feed-rich-small-size, 0.72em);
   font-weight: var(--feed-rich-small-weight, inherit);
+  letter-spacing: var(--feed-rich-small-track, inherit);
+  line-height: var(--feed-rich-small-line, inherit);
   opacity: var(--feed-rich-small-opacity, 1);
   text-shadow: var(--feed-rich-small-shadow);
   text-transform: var(--feed-rich-small-transform);
@@ -631,19 +633,24 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 .main-material-rich-token--acc3,
 .main-material-rich-token--acc4 {
   display: inline;
-  font-family: var(--feed-rich-acc1-font);
-  font-weight: var(--feed-rich-acc1-weight, inherit);
-  line-height: 1;
-  text-shadow: var(--feed-rich-acc1-shadow);
-  text-transform: var(--feed-rich-acc1-transform);
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-shadow: inherit;
+  text-transform: inherit;
   vertical-align: baseline;
 }
 
 .main-material-rich-token--acc1 {
   color: var(--feed-rich-acc1);
+  font-family: var(--feed-rich-acc1-font);
   font-size: var(--feed-rich-acc1-size, 1em);
+  font-weight: var(--feed-rich-acc1-weight, inherit);
   letter-spacing: var(--feed-rich-acc1-track, inherit);
+  line-height: var(--feed-rich-acc1-line, inherit);
   opacity: var(--feed-rich-acc1-opacity, 1);
+  text-shadow: var(--feed-rich-acc1-shadow);
+  text-transform: var(--feed-rich-acc1-transform);
 }
 
 .main-material-rich-token--acc2 {
@@ -652,6 +659,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-size: var(--feed-rich-acc2-size, 1em);
   font-weight: var(--feed-rich-acc2-weight, inherit);
   letter-spacing: var(--feed-rich-acc2-track, inherit);
+  line-height: var(--feed-rich-acc2-line, inherit);
   opacity: var(--feed-rich-acc2-opacity, 1);
   text-shadow: var(--feed-rich-acc2-shadow);
   text-transform: var(--feed-rich-acc2-transform);
@@ -663,6 +671,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-size: var(--feed-rich-acc3-size, 1em);
   font-weight: var(--feed-rich-acc3-weight, inherit);
   letter-spacing: var(--feed-rich-acc3-track, inherit);
+  line-height: var(--feed-rich-acc3-line, inherit);
   opacity: var(--feed-rich-acc3-opacity, 1);
   text-shadow: var(--feed-rich-acc3-shadow);
   text-transform: var(--feed-rich-acc3-transform);
@@ -674,9 +683,18 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-size: var(--feed-rich-acc4-size, 1em);
   font-weight: var(--feed-rich-acc4-weight, inherit);
   letter-spacing: var(--feed-rich-acc4-track, inherit);
+  line-height: var(--feed-rich-acc4-line, inherit);
   opacity: var(--feed-rich-acc4-opacity, 1);
   text-shadow: var(--feed-rich-acc4-shadow);
   text-transform: var(--feed-rich-acc4-transform);
+}
+
+.main-material-rich-text > .main-material-rich-token:not(.main-material-rich-token--opacity-override) {
+  opacity: var(--feed-rich-normal-opacity, 1);
+}
+
+.main-material-rich-text > .main-material-rich-token--dim:not(.main-material-rich-token--opacity-override) {
+  opacity: calc(var(--feed-rich-normal-opacity, 1) * 0.72);
 }
 
 .main-material-rich-token .main-material-rich-token:not(.main-material-rich-token--opacity-override) {

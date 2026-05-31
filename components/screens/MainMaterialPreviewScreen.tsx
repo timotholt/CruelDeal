@@ -2687,7 +2687,7 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
     '--feed-rich-base-line': `${style.lineHeight}`,
     '--feed-rich-paragraph-gap': `${style.paragraphGap}px`,
     '--feed-rich-accent': feedToneColors[accent.contentTone] || feedToneColors[feedAccentTone(cardType)] || feedToneColors.gold,
-    '--feed-rich-accent-opacity': `${accent.textOpacity / 100}`,
+    '--feed-rich-accent-opacity': `${(accent.overrideOpacity ? accent.textOpacity : style.textOpacity) / 100}`,
     '--feed-rich-accent-weight': accent.overrideWeight ? `${fontWeightTokenValue(accent.fontWeight)}` : 'inherit',
     '--feed-rich-bright': feedToneColors.white,
     '--feed-rich-normal': feedToneColors[style.contentTone] || feedToneColors.white,
@@ -2697,14 +2697,9 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
     '--feed-rich-dim': feedToneColors.muted,
     '--feed-rich-dark': feedToneColors.black,
     '--feed-rich-small': feedToneColors[small.contentTone] || feedToneColors.muted,
-    '--feed-rich-small-opacity': `${small.textOpacity / 100}`,
-    '--feed-rich-small-size': `${small.textSizeRem / Math.max(style.textSizeRem, 0.1)}em`,
-    '--feed-rich-small-weight': small.overrideWeight ? `${fontWeightTokenValue(small.fontWeight)}` : 'inherit',
-    '--feed-rich-small-font': small.textFontFamily,
-    '--feed-rich-small-transform': small.textTransform,
-    '--feed-rich-small-shadow': richTextEmbossShadow(small),
     '--feed-rich-rule': feedToneColors[rule.contentTone] || feedToneColors.gold,
     '--feed-rich-rule-opacity': `${rule.textOpacity / 100}`,
+    ...feedRichTextStyleVars('small', small, style),
     ...feedRichTextStyleVars('title', h1, style),
     ...feedRichTextStyleVars('alt-title', h2, style),
     ...feedRichTextStyleVars('h3', h3, style),
@@ -2731,7 +2726,7 @@ const richTextTagSlot = (tag: FeedRichTextTag): FeedTextSlotId | undefined => ({
 
 const richTextTagOverridesOpacity = (cardType: FeedCardTypeRecipe, tag: FeedRichTextTag) => {
   const slot = richTextTagSlot(tag);
-  return slot ? cardType.slots[slot]?.overrideOpacity !== false : true;
+  return slot ? cardType.slots[slot]?.overrideOpacity !== false : false;
 };
 
 const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; style: FeedTextSlotStyle }) => {
