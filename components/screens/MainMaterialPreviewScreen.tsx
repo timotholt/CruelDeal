@@ -54,6 +54,7 @@ interface MaterialEditableTarget {
   label: string;
   recipe: MaterialRecipe;
   capabilities: MaterialEditorCapabilities;
+  interactionRole?: InteractionRole;
   onChange: (recipe: MaterialRecipe) => void;
   children?: MaterialEditableTarget[];
 }
@@ -335,6 +336,24 @@ const interactionStateLabels: Record<InteractionRole, Partial<Record<MaterialRec
   selectable: { rest: 'Rest', hover: 'Hover', active: 'Active', pressed: 'Pressed' },
   disclosure: { rest: 'Rest', hover: 'Hover', active: 'Open', pressed: 'Pressed' },
 };
+
+const ctaInteractionStates = () => createMaterialStateOverlays({
+  hover: {
+    enabled: true,
+    surface: { tint: 'gold', tintStrength: 14, borderOpacityBoost: 22, lightStrengthBoost: 16, darkStrengthBoost: -4 },
+    glow: { tone: 'gold', glowStrength: 34, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'], cornerSize: 14 },
+    content: { contentTone: 'black', iconTone: 'black', contentGlowStrength: 8 },
+    motion: { translateY: -1, scale: 1.01 },
+  },
+  pressed: {
+    enabled: true,
+    surface: { tint: 'gold', tintStrength: 28, borderOpacityBoost: 26, lightStrengthBoost: 6, darkStrengthBoost: 18 },
+    glow: { tone: 'gold', glowStrength: 42, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'], cornerSize: 14 },
+    emission: { emission: 'center-blip', emissionTone: 'gold', emissionStrength: 58, emissionLength: 34, emissionThickness: 2, emissionBlipSize: 16 },
+    content: { contentTone: 'black', iconTone: 'black', fontWeight: 700 },
+    motion: { translateY: 1, scale: 0.985 },
+  },
+});
 
 const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabilities> = {
   backdrop: { text: false, states: false },
@@ -714,6 +733,7 @@ const createFeedCtaSurface = () => createMaterialRecipe({
   radius: 4,
   contentTone: 'black',
   contentOpacity: 82,
+  states: ctaInteractionStates(),
 });
 
 const feedFontCondensed = materialRecipeTextFonts[1]?.value || 'inherit';
@@ -961,6 +981,7 @@ const createMissionBriefingCtaSurface = () => createMaterialRecipe({
   radius: 5,
   contentTone: 'black',
   contentOpacity: 90,
+  states: ctaInteractionStates(),
 });
 
 const createMissionBriefingLeftNodes = () => [
@@ -1402,13 +1423,26 @@ const sanitizeFeedCardNode = (value: unknown, fallback: FeedCardNode): FeedCardN
   const input = typeof value === 'object' && value !== null ? value as Partial<FeedCardNode> : {};
   const type = isOneOf(input.type, ['container', 'text', 'button'] as const) ? input.type : fallback.type;
   const childrenInput = Array.isArray(input.children) ? input.children : [];
+  const surface = input.surface ? sanitizeMaterialRecipe(input.surface, fallback.surface || createFeedRegionSurface()) : fallback.surface ? cloneMaterialRecipe(fallback.surface) : undefined;
+  const buttonSurface = (() => {
+    if (type !== 'button' || !surface || surface.states.hover.enabled || surface.states.pressed.enabled) return surface;
+    const states = ctaInteractionStates();
+    return {
+      ...surface,
+      states: {
+        ...surface.states,
+        hover: states.hover,
+        pressed: states.pressed,
+      },
+    };
+  })();
   return {
     id: typeof input.id === 'string' && input.id.trim() ? input.id : fallback.id,
     label: typeof input.label === 'string' && input.label.trim() ? input.label : fallback.label,
     type,
     binding: isOneOf(input.binding, feedTextSlotIds) ? input.binding : fallback.binding,
     layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
-    surface: input.surface ? sanitizeMaterialRecipe(input.surface, fallback.surface || createFeedRegionSurface()) : fallback.surface ? cloneMaterialRecipe(fallback.surface) : undefined,
+    surface: buttonSurface,
     text: input.text ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle()) : fallback.text ? cloneFeedSlotStyle(fallback.text) : undefined,
     children: (fallback.children || []).map((childFallback, index) => sanitizeFeedCardNode(childrenInput[index], childFallback)),
   };
@@ -2893,7 +2927,7 @@ const FeedCardTreeNode = (props: {
         >
           <FeedNodeFrame node={props.node} targetClass={targetClass()}>
             <MaterialButton
-              {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+              {...materialRecipeItemProps(surfaceRecipe(), 0, props.surfaceState)}
               size="sm"
               fullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
@@ -3369,7 +3403,7 @@ export const MainMaterialPreviewScreen = () => {
       ...cardType,
       children: updateFeedNodeById(cardType.children, nodeId, (current) => ({
         ...current,
-        surface: pruneRecipeForPartCapabilities('feedCards', recipe),
+        surface: current.type === 'button' ? recipe : pruneRecipeForPartCapabilities('feedCards', recipe),
         text: shouldUpdateNodeText ? feedBaseTextStyleFromRecipe(recipe) : current.text,
       })),
     }, false);
@@ -3383,8 +3417,9 @@ export const MainMaterialPreviewScreen = () => {
       ? recipeWithFeedTextStyle(node.surface || createFeedRegionSurface(), resolveFeedNodeTextStyle(cardType, node))
       : node.surface || createFeedRegionSurface(),
     capabilities: node.binding
-      ? { ...materialEditorCapabilitiesByPart.feedCards, text: !!node.text && !node.text.inherit }
+      ? { ...materialEditorCapabilitiesByPart.feedCards, states: node.type === 'button', text: !!node.text && !node.text.inherit }
       : { ...materialEditorCapabilitiesByPart.feedCards, text: false },
+    interactionRole: node.type === 'button' ? 'momentary' : 'static',
     onChange: (recipe) => updateFeedNodeSurface(cardType.id, node.id, recipe),
     children: node.children?.map((child) => feedNodeMaterialTarget(cardType, child)) || [],
   });
@@ -3604,13 +3639,24 @@ export const MainMaterialPreviewScreen = () => {
     selectPart(part as MainPartId);
   };
 
-  const selectedInteractionRole = () => interactionRoles[selectedPart()];
-  const selectedStateOptions = () => stateOptionsForPart(selectedPart());
+  const selectedInteractionRole = () => (
+    selectedPart() === 'feedCards'
+      ? selectedFeedMaterialTarget().interactionRole || interactionRoles.feedCards
+      : interactionRoles[selectedPart()]
+  );
+  const selectedStateOptions = () => interactionStateOptions[selectedInteractionRole()];
   const selectedStateLabels = () => interactionStateLabels[selectedInteractionRole()];
-  const selectedPreviewState = () => coercePreviewStateForPart(selectedPart(), previewStates()[selectedPart()]);
+  const selectedPreviewState = () => {
+    const options = selectedStateOptions();
+    const state = previewStates()[selectedPart()];
+    return options.includes(state) ? state : defaultPreviewStateForRole(selectedInteractionRole());
+  };
   const setSelectedPreviewState = (state: MaterialRecipeState) => {
     const part = selectedPart();
-    setPreviewStates((current) => ({ ...current, [part]: coercePreviewStateForPart(part, state) }));
+    setPreviewStates((current) => ({
+      ...current,
+      [part]: selectedStateOptions().includes(state) ? state : defaultPreviewStateForRole(selectedInteractionRole()),
+    }));
   };
 
   const currentRecipeForPart = (part: MainPartId): MaterialRecipe => {

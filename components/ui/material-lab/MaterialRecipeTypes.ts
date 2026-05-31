@@ -99,7 +99,9 @@ export interface MaterialRecipe {
   bevelSize: number;
   glass: boolean;
   glassOpacity: number;
+  glassBlurEnabled: boolean;
   glassBlur: number;
+  glassShine: boolean;
   glassHighlightWidth: number;
   glassHighlightHeight: number;
   glassHighlightY: number;
@@ -119,6 +121,12 @@ export interface MaterialRecipe {
   edgeWearWidth: number;
   edgeWearScale: number;
   edgeWearLayer: EdgeWearLayer;
+  dropShadow: boolean;
+  shadowOpacity: number;
+  shadowBlur: number;
+  shadowX: number;
+  shadowY: number;
+  shadowSpread: number;
   radius: number;
   textContent: string;
   contentLayer: ContentLayer;
@@ -349,15 +357,18 @@ export const createMaterialStateOverlays = (
 
 export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): MaterialRecipe => {
   const legacyTextTone = overrides.textTone;
+  const defaultGlass = overrides.glass ?? false;
   return {
     material: 'raw',
     texture: 'stone04',
     shape: 'rect',
     bevelCorners: [],
     bevelSize: 11,
-    glass: false,
+    glass: defaultGlass,
     glassOpacity: 34,
+    glassBlurEnabled: overrides.glassBlurEnabled ?? defaultGlass,
     glassBlur: 8,
+    glassShine: true,
     glassHighlightWidth: 100,
     glassHighlightHeight: 34,
     glassHighlightY: 10,
@@ -377,6 +388,12 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     edgeWearWidth: 5,
     edgeWearScale: 256,
     edgeWearLayer: 'below-highlights',
+    dropShadow: false,
+    shadowOpacity: 42,
+    shadowBlur: 24,
+    shadowX: 8,
+    shadowY: 12,
+    shadowSpread: 0,
     radius: 6,
     textContent: '',
     contentLayer: 'over-glass',
@@ -537,7 +554,9 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     bevelSize: clamp(input.bevelSize, fallback.bevelSize ?? 11, 0, 30),
     glass: typeof input.glass === 'boolean' ? input.glass : fallback.glass,
     glassOpacity: clamp(input.glassOpacity, fallback.glassOpacity, 0, 100),
+    glassBlurEnabled: typeof input.glassBlurEnabled === 'boolean' ? input.glassBlurEnabled : fallback.glassBlurEnabled,
     glassBlur: clamp(input.glassBlur, fallback.glassBlur, 0, 24),
+    glassShine: typeof input.glassShine === 'boolean' ? input.glassShine : fallback.glassShine,
     glassHighlightWidth: clamp(input.glassHighlightWidth, fallback.glassHighlightWidth, 0, 100),
     glassHighlightHeight: clamp(input.glassHighlightHeight, fallback.glassHighlightHeight, 0, 100),
     glassHighlightY: clamp(input.glassHighlightY, fallback.glassHighlightY, 0, 100),
@@ -561,6 +580,12 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
       ? input.edgeWearScale as typeof materialRecipeTextureScales[number]
       : fallback.edgeWearScale,
     edgeWearLayer: isOneOf(input.edgeWearLayer, materialRecipeEdgeWearLayers) ? input.edgeWearLayer : fallback.edgeWearLayer,
+    dropShadow: typeof input.dropShadow === 'boolean' ? input.dropShadow : fallback.dropShadow,
+    shadowOpacity: clamp(input.shadowOpacity, fallback.shadowOpacity, 0, 100),
+    shadowBlur: clamp(input.shadowBlur, fallback.shadowBlur, 0, 80),
+    shadowX: clamp(input.shadowX, fallback.shadowX, -60, 60),
+    shadowY: clamp(input.shadowY, fallback.shadowY, -20, 60),
+    shadowSpread: clamp(input.shadowSpread, fallback.shadowSpread, -20, 40),
     radius: clamp(input.radius, fallback.radius, 0, 30),
     textContent: typeof input.textContent === 'string' ? input.textContent : fallback.textContent,
     contentLayer: isOneOf(input.contentLayer, materialRecipeContentLayers) ? input.contentLayer : fallback.contentLayer,
@@ -642,7 +667,9 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     bevelSize: recipe.bevelSize,
     glass: recipe.glass,
     glassOpacity: recipe.glassOpacity,
+    glassBlurEnabled: recipe.glassBlurEnabled,
     glassBlur: recipe.glassBlur,
+    glassShine: recipe.glassShine,
     glassHighlightWidth: recipe.glassHighlightWidth,
     glassHighlightHeight: recipe.glassHighlightHeight,
     glassHighlightY: recipe.glassHighlightY,
@@ -666,6 +693,12 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     edgeWearWidth: recipe.edgeWearWidth,
     edgeWearScale: recipe.edgeWearScale,
     edgeWearLayer: recipe.edgeWearLayer,
+    dropShadow: recipe.dropShadow,
+    shadowOpacity: recipe.shadowOpacity,
+    shadowBlur: recipe.shadowBlur,
+    shadowX: recipe.shadowX,
+    shadowY: recipe.shadowY,
+    shadowSpread: recipe.shadowSpread,
     cornerSize: glowActive ? glow.cornerSize : 16,
     radius: recipe.radius,
     textContent: recipe.textContent,

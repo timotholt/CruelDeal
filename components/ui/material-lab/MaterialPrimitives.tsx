@@ -48,7 +48,9 @@ interface SurfaceOptions {
   glowStrength?: number;
   tintStrength?: number;
   glassOpacity?: number;
+  glassBlurEnabled?: boolean;
   glassBlur?: number;
+  glassShine?: boolean;
   glassHighlightWidth?: number;
   glassHighlightHeight?: number;
   glassHighlightY?: number;
@@ -60,6 +62,12 @@ interface SurfaceOptions {
   edgeWearWidth?: number;
   edgeWearScale?: number;
   edgeWearLayer?: EdgeWearLayer;
+  dropShadow?: boolean;
+  shadowOpacity?: number;
+  shadowBlur?: number;
+  shadowX?: number;
+  shadowY?: number;
+  shadowSpread?: number;
   cornerSize?: number;
   radius?: number;
   textContent?: string;
@@ -187,6 +195,22 @@ const hasTint = (options: SurfaceOptions) => (
 
 const hasGlass = (options: SurfaceOptions) => (
   options.glass === true
+);
+
+const hasGlassWash = (options: SurfaceOptions) => (
+  hasGlass(options) && (options.glassOpacity ?? 42) > 0
+);
+
+const hasGlassBlur = (options: SurfaceOptions) => (
+  options.glassBlurEnabled === true && (options.glassBlur ?? 0) > 0
+);
+
+const hasGlassShine = (options: SurfaceOptions) => (
+  hasGlassWash(options) && options.glassShine !== false
+);
+
+const hasDropShadow = (options: SurfaceOptions) => (
+  options.dropShadow === true && (options.shadowOpacity ?? 0) > 0 && ((options.shadowBlur ?? 0) > 0 || (options.shadowX ?? 0) !== 0 || (options.shadowY ?? 0) !== 0 || (options.shadowSpread ?? 0) !== 0)
 );
 
 const hasMaterialBase = (options: SurfaceOptions) => (
@@ -333,14 +357,27 @@ const tintVars = (options: SurfaceOptions) => {
 };
 
 const glassVars = (options: SurfaceOptions) => {
-  if (!hasGlass(options)) return {};
+  if (!hasGlassWash(options)) return {};
   return cssVars({
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
+    '--glass-highlight-width': hasGlassShine(options) ? `${options.glassHighlightWidth ?? 100}%` : undefined,
+    '--glass-highlight-height': hasGlassShine(options) ? `${options.glassHighlightHeight ?? 34}%` : undefined,
+    '--glass-highlight-y': hasGlassShine(options) ? `${options.glassHighlightY ?? 10}%` : undefined,
+  });
+};
+
+const blurVars = (options: SurfaceOptions) => {
+  if (!hasGlassBlur(options)) return {};
+  return cssVars({
     '--glass-blur': `${options.glassBlur ?? 10}px`,
     '--glass-blur-scale': `${(options.glassBlur ?? 10) / 240}`,
-    '--glass-highlight-width': `${options.glassHighlightWidth ?? 100}%`,
-    '--glass-highlight-height': `${options.glassHighlightHeight ?? 34}%`,
-    '--glass-highlight-y': `${options.glassHighlightY ?? 10}%`,
+  });
+};
+
+const shadowVars = (options: SurfaceOptions) => {
+  if (!hasDropShadow(options)) return {};
+  return cssVars({
+    '--surface-drop-shadow': `${options.shadowX ?? 8}px ${options.shadowY ?? 12}px ${options.shadowBlur ?? 24}px ${options.shadowSpread ?? 0}px rgb(0 0 0 / ${(options.shadowOpacity ?? 42) / 100})`,
   });
 };
 
@@ -497,6 +534,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     ...textureVars(options),
     ...tintVars(options),
     ...glassVars(options),
+    ...blurVars(options),
+    ...shadowVars(options),
     ...gradientVars(options),
     ...borderVars(options, borderEdges),
     ...edgeWearVars(options),
@@ -516,7 +555,10 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     `cd-surface--${shape}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
-    hasGlass(options) ? 'cd-surface--glass' : '',
+    hasGlassWash(options) ? 'cd-surface--glass' : '',
+    hasGlassBlur(options) ? 'cd-surface--glass-blur' : '',
+    hasGlassShine(options) ? 'cd-surface--glass-shine' : '',
+    hasDropShadow(options) ? 'cd-surface--shadow' : '',
     options.selected ? 'is-selected' : '',
     options.interactive ? 'is-interactive' : '',
     options.hoverPreview ? 'is-hover-preview' : '',
@@ -631,7 +673,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
         {content('under-glass')}
       </Show>
       <SurfaceOverlayLayers
-        glass={hasGlass(props)}
+        glass={hasGlassWash(props)}
         glowing={shouldRenderGlow(props)}
         emitting={shouldRenderEmission(props)}
         border={hasBorderLayer(props)}
@@ -672,7 +714,9 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassBlurEnabled',
     'glassBlur',
+    'glassShine',
     'glassHighlightWidth',
     'glassHighlightHeight',
     'glassHighlightY',
@@ -684,6 +728,12 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'edgeWearWidth',
     'edgeWearScale',
     'edgeWearLayer',
+    'dropShadow',
+    'shadowOpacity',
+    'shadowBlur',
+    'shadowX',
+    'shadowY',
+    'shadowSpread',
     'cornerSize',
     'radius',
     'textContent',
@@ -756,7 +806,9 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassBlurEnabled',
     'glassBlur',
+    'glassShine',
     'glassHighlightWidth',
     'glassHighlightHeight',
     'glassHighlightY',
@@ -768,6 +820,12 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'edgeWearWidth',
     'edgeWearScale',
     'edgeWearLayer',
+    'dropShadow',
+    'shadowOpacity',
+    'shadowBlur',
+    'shadowX',
+    'shadowY',
+    'shadowSpread',
     'cornerSize',
     'radius',
     'size',

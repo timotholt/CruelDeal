@@ -64,6 +64,8 @@ export interface MaterialEditorCapabilities {
   tint?: boolean;
   gradient?: boolean;
   glass?: boolean;
+  blur?: boolean;
+  shadow?: boolean;
   border?: boolean;
   edgeWear?: boolean;
   text?: boolean;
@@ -77,6 +79,8 @@ const defaultCapabilities: Required<MaterialEditorCapabilities> = {
   tint: true,
   gradient: true,
   glass: true,
+  blur: true,
+  shadow: true,
   border: true,
   edgeWear: true,
   text: true,
@@ -306,20 +310,70 @@ const GlassSection = (props: { recipe: MaterialRecipe; enabled: boolean; update:
       <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassOpacity} onInput={(value) => props.update('glassOpacity', value)} />
     </div>
     <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Blur</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassBlur} min={0} max={24} step={0.25} onInput={(value) => props.update('glassBlur', value)} />
+      <ControlLabel>Shine</ControlLabel>
+      <div class="ui-lab-toggles">
+        <ToggleButton active={props.recipe.glassShine} disabled={!props.enabled || !props.recipe.glass} onClick={() => props.update('glassShine', !props.recipe.glassShine)}>on</ToggleButton>
+      </div>
     </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Shine Width</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassHighlightWidth} onInput={(value) => props.update('glassHighlightWidth', value)} />
+      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightWidth} onInput={(value) => props.update('glassHighlightWidth', value)} />
     </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Shine Height</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassHighlightHeight} onInput={(value) => props.update('glassHighlightHeight', value)} />
+      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightHeight} onInput={(value) => props.update('glassHighlightHeight', value)} />
     </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Shine Y</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassHighlightY} onInput={(value) => props.update('glassHighlightY', value)} />
+      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightY} onInput={(value) => props.update('glassHighlightY', value)} />
+    </div>
+  </div>
+);
+
+const BlurSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
+  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
+    <SectionLabel size="xs">Blur</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Enabled</ControlLabel>
+      <div class="ui-lab-toggles">
+        <ToggleButton active={props.recipe.glassBlurEnabled} disabled={!props.enabled} onClick={() => props.update('glassBlurEnabled', !props.recipe.glassBlurEnabled)}>on</ToggleButton>
+      </div>
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glassBlurEnabled ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Amount</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.glassBlurEnabled} value={props.recipe.glassBlur} min={0} max={24} step={0.25} onInput={(value) => props.update('glassBlur', value)} />
+    </div>
+  </div>
+);
+
+const ShadowSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
+  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
+    <SectionLabel size="xs">Shadow</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Enabled</ControlLabel>
+      <div class="ui-lab-toggles">
+        <ToggleButton active={props.recipe.dropShadow} disabled={!props.enabled} onClick={() => props.update('dropShadow', !props.recipe.dropShadow)}>on</ToggleButton>
+      </div>
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Cast X</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowX} min={-60} max={60} onInput={(value) => props.update('shadowX', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Cast Y</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowY} min={-20} max={60} onInput={(value) => props.update('shadowY', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Blur</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowBlur} min={0} max={80} onInput={(value) => props.update('shadowBlur', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Spread</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowSpread} min={-20} max={40} onInput={(value) => props.update('shadowSpread', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Opacity</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowOpacity} onInput={(value) => props.update('shadowOpacity', value)} />
     </div>
   </div>
 );
@@ -928,6 +982,8 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />
       <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
+      <BlurSection recipe={props.recipe} enabled={capabilities().blur} update={update} />
+      <ShadowSection recipe={props.recipe} enabled={capabilities().shadow} update={update} />
       <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
       <TextSection recipe={props.recipe} enabled={capabilities().text} contentEnabled={capabilities().textContent} update={update} />
