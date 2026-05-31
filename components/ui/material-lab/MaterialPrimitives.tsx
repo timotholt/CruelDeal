@@ -282,8 +282,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const activeCornerColor = hasGlow(options) ? glow.color : 'transparent';
   const activeEdgeColor = hasGlow(options) ? glow.color : 'transparent';
   const textureId = options.texture || 'road012a';
-  const material = options.material || 'raw';
-  const suppressMaterialTexture = material === 'none' || textureId === 'none';
+  const textureActive = hasTextureLayer(options);
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
   const glowIntensity = hasGlow(options) ? Math.pow(glowPower, 0.58) : 0;
   const glowAlpha = glowIntensity > 0 ? Math.min(1, 0.18 + glowIntensity * 0.92) : 0;
@@ -315,11 +314,19 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const emissionRgb = tintColors[emissionTone].rgb;
   const stateVars = options.stateVars || {};
   const currentVars = stateVars[options.visualState || 'rest']?.cssVars || {};
+  const textureVars: JSX.CSSProperties = textureActive
+    ? {
+      '--texture-strength': `${(options.textureStrength ?? 100) / 100}`,
+      '--texture-scale': `${options.textureScale ?? 512}px`,
+      '--texture-image': `url("${getTextureOption(textureId).url}")`,
+    } as JSX.CSSProperties
+    : {};
 
   return {
     ...currentVars,
     ...prefixedVars('hover', stateVars.hover),
     ...prefixedVars('pressed', stateVars.pressed),
+    ...textureVars,
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
     '--bevel-size': `${options.bevelSize ?? 11}px`,
@@ -335,11 +342,6 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--bevel-shape-tr': bevelCorners.includes('top-right') ? 'bevel' : 'round',
     '--bevel-shape-br': bevelCorners.includes('bottom-right') ? 'bevel' : 'round',
     '--bevel-shape-bl': bevelCorners.includes('bottom-left') ? 'bevel' : 'round',
-    '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? 100) / 100}`,
-    '--texture-scale': `${options.textureScale ?? 512}px`,
-    '--texture-image': !suppressMaterialTexture
-      ? `url("${getTextureOption(textureId).url}")`
-      : 'none',
     '--tint-rgb': tint.rgb,
     '--tint-alpha': `${hasTint(options) ? (options.tintStrength ?? 32) / 100 : 0}`,
     '--glass-alpha': `${hasGlass(options) ? (options.glassOpacity ?? 42) / 100 : 0}`,
@@ -424,7 +426,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   return [
     'cd-surface',
     `cd-surface--${options.material || 'raw'}`,
-    `cd-surface--texture-${options.texture || 'road012a'}`,
+    hasTextureLayer(options) ? `cd-surface--texture-${options.texture || 'road012a'}` : '',
     `cd-surface--${shape}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',

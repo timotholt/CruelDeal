@@ -124,6 +124,7 @@ type FeedTextSlotId =
   | 'contractAcc3'
   | 'contractAcc4'
   | 'contractRule'
+  | 'contractDivider'
   | 'contractCtaLabel'
   | 'seasonBadge'
   | 'seasonBriefing'
@@ -142,6 +143,7 @@ type FeedRichTextToken =
   | { type: 'text'; text: string }
   | { type: 'break' }
   | { type: 'rule' }
+  | { type: 'divider' }
   | { type: 'tag'; tag: FeedRichTextTag; children: FeedRichTextToken[] };
 
 interface FeedStory {
@@ -457,6 +459,7 @@ const feedTextSlotIds: FeedTextSlotId[] = [
   'contractAcc3',
   'contractAcc4',
   'contractRule',
+  'contractDivider',
   'contractCtaLabel',
   'seasonBadge',
   'seasonBriefing',
@@ -482,6 +485,7 @@ const feedTextSlotLabels: Record<FeedTextSlotId, string> = {
   contractAcc3: 'Acc 3',
   contractAcc4: 'Acc 4',
   contractRule: 'Rule',
+  contractDivider: 'Divider',
   contractCtaLabel: 'Contract Button',
   seasonBadge: 'Season Badge',
   seasonBriefing: 'Season Briefing',
@@ -1085,6 +1089,7 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
       contractAcc3: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'red', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
       contractAcc4: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'green', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
       contractRule: { textSizeRem: 0.52, contentTone: 'gold', fontWeight: 600, letterSpacing: 0, textAlign: 'left', textOpacity: 90 },
+      contractDivider: { textSizeRem: 1, lineHeight: 0.9, paragraphGap: 0.78, contentTone: 'white', fontWeight: 400, letterSpacing: 0, textAlign: 'left', textOpacity: 22, textEmbossMode: 'light', textEmbossStrength: 45 },
       contractCtaLabel: { textSizeRem: 0.7, contentTone: 'black', fontWeight: 600, letterSpacing: 0.04, textOpacity: 90 },
       seasonBadge: { textSizeRem: 0.5, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'center', textOpacity: 80 },
       seasonBriefing: { textFontFamily: feedFontSystem, textSizeRem: 0.68, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 94 },
@@ -2140,7 +2145,7 @@ const FeedTextGlobalsEditor = (props: {
   onSlotChange: <K extends keyof FeedTextSlotStyle>(slot: FeedTextSlotId, key: K, value: FeedTextSlotStyle[K]) => void;
 }) => {
   const slot = (slotId: FeedTextSlotId) => props.cardType.slots[slotId];
-  const typeRows: Array<{ label: string; slot: FeedTextSlotId; paragraph?: boolean; line?: boolean; track?: boolean }> = [
+  const typeRows: Array<{ label: string; slot: FeedTextSlotId; paragraph?: boolean; line?: boolean; track?: boolean; divider?: boolean }> = [
     { label: 'Body', slot: 'contractBriefing', paragraph: true, line: true, track: true },
     { label: 'H1', slot: 'contractEyebrow', line: true },
     { label: 'H2', slot: 'contractTitle', line: true },
@@ -2151,6 +2156,7 @@ const FeedTextGlobalsEditor = (props: {
     { label: 'Acc 3', slot: 'contractAcc3' },
     { label: 'Acc 4', slot: 'contractAcc4' },
     { label: 'Rule', slot: 'contractRule' },
+    { label: 'Divider', slot: 'contractDivider', paragraph: true, line: true, divider: true },
     { label: 'Button', slot: 'contractCtaLabel', track: true },
   ];
   const overridableSlots = new Set<FeedTextSlotId>([
@@ -2217,77 +2223,85 @@ const FeedTextGlobalsEditor = (props: {
               {controlLabel(row.slot, 'Opacity', 'overrideOpacity')}
               <Slider value={slot(row.slot).textOpacity} min={0} max={100} disabled={!opacityEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textOpacity', value)} />
             </div>
-            <div class={`ui-lab-control-row ${fontEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              {controlLabel(row.slot, 'Font', 'overrideFont')}
-              <select
-                class="ui-lab-select"
-                value={slot(row.slot).textFontFamily}
-                disabled={!fontEnabled()}
-                onChange={(event) => props.onSlotChange(row.slot, 'textFontFamily', event.currentTarget.value)}
-              >
-                <For each={materialRecipeTextFonts}>
-                  {(font) => <option value={font.value}>{font.label}</option>}
-                </For>
-              </select>
-            </div>
+            <Show when={!row.divider}>
+              <div class={`ui-lab-control-row ${fontEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Font', 'overrideFont')}
+                <select
+                  class="ui-lab-select"
+                  value={slot(row.slot).textFontFamily}
+                  disabled={!fontEnabled()}
+                  onChange={(event) => props.onSlotChange(row.slot, 'textFontFamily', event.currentTarget.value)}
+                >
+                  <For each={materialRecipeTextFonts}>
+                    {(font) => <option value={font.value}>{font.label}</option>}
+                  </For>
+                </select>
+              </div>
+            </Show>
             <div class={`ui-lab-control-row ${sizeEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              {controlLabel(row.slot, 'Size', 'overrideSize')}
-              <Slider value={slot(row.slot).textSizeRem} min={0.4} max={2.4} step={0.05} disabled={!sizeEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textSizeRem', value)} />
+              {controlLabel(row.slot, row.divider ? 'Thick' : 'Size', 'overrideSize')}
+              <Slider value={slot(row.slot).textSizeRem} min={row.divider ? 0.5 : 0.4} max={row.divider ? 4 : 2.4} step={row.divider ? 0.1 : 0.05} disabled={!sizeEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textSizeRem', value)} />
             </div>
-            <div class={`ui-lab-control-row ${weightEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              {controlLabel(row.slot, 'Weight', 'overrideWeight')}
-              <Slider
-                value={slot(row.slot).fontWeight}
-                min={100}
-                max={900}
-                step={100}
-                disabled={!weightEnabled()}
-                onInput={(value) => props.onSlotChange(row.slot, 'fontWeight', value as FontWeightToken)}
-              />
-            </div>
-            <Show when={row.paragraph}>
-              <div class="ui-lab-control-row">
-                <span>Para Gap</span>
-                <Slider value={slot(row.slot).paragraphGap} min={-24} max={48} step={1} onInput={(value) => props.onSlotChange(row.slot, 'paragraphGap', value)} />
+            <Show when={!row.divider}>
+              <div class={`ui-lab-control-row ${weightEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Weight', 'overrideWeight')}
+                <Slider
+                  value={slot(row.slot).fontWeight}
+                  min={100}
+                  max={900}
+                  step={100}
+                  disabled={!weightEnabled()}
+                  onInput={(value) => props.onSlotChange(row.slot, 'fontWeight', value as FontWeightToken)}
+                />
               </div>
             </Show>
             <Show when={row.line}>
               <div class={`ui-lab-control-row ${lineEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-                {controlLabel(row.slot, 'Line', 'overrideLineHeight')}
-                <Slider value={slot(row.slot).lineHeight} min={0.7} max={1.8} step={0.02} disabled={!lineEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'lineHeight', value)} />
+                {controlLabel(row.slot, row.divider ? 'Gap Above' : 'Line', 'overrideLineHeight')}
+                <Slider value={slot(row.slot).lineHeight} min={row.divider ? 0 : 0.7} max={row.divider ? 3 : 1.8} step={row.divider ? 0.05 : 0.02} disabled={!lineEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'lineHeight', value)} />
               </div>
             </Show>
-            <Show when={row.track || row.line}>
+            <Show when={row.paragraph}>
+              <div class="ui-lab-control-row">
+                <span>{row.divider ? 'Gap Below' : 'Para Gap'}</span>
+                <Slider value={slot(row.slot).paragraphGap} min={row.divider ? 0 : -24} max={row.divider ? 3 : 48} step={row.divider ? 0.05 : 1} onInput={(value) => props.onSlotChange(row.slot, 'paragraphGap', value)} />
+              </div>
+            </Show>
+            <Show when={(row.track || row.line) && !row.divider}>
               <div class={`ui-lab-control-row ${trackEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
                 {controlLabel(row.slot, 'Track', 'overrideLetterSpacing')}
                 <Slider value={slot(row.slot).letterSpacing} min={-0.08} max={0.24} step={0.01} disabled={!trackEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'letterSpacing', value)} />
               </div>
             </Show>
-            <div class={`ui-lab-control-row ${caseEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              {controlLabel(row.slot, 'Case', 'overrideCase')}
-              <select
-                class="ui-lab-select"
-                value={slot(row.slot).textTransform}
-                disabled={!caseEnabled()}
-                onChange={(event) => props.onSlotChange(row.slot, 'textTransform', event.currentTarget.value as FeedTextTransformToken)}
-              >
-                <For each={['inherit', ...materialRecipeTextTransforms] as FeedTextTransformToken[]}>
-                  {(transform) => <option value={transform}>{transform}</option>}
-                </For>
-              </select>
-            </div>
-            <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              {controlLabel(row.slot, 'Emboss', 'overrideEmboss')}
-              <div class="ui-lab-toggles">
-                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'dark'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'dark')}>dark</MiniButton>
-                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'light'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'light')}>light</MiniButton>
-                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'none'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'none')}>none</MiniButton>
+            <Show when={!row.divider}>
+              <div class={`ui-lab-control-row ${caseEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Case', 'overrideCase')}
+                <select
+                  class="ui-lab-select"
+                  value={slot(row.slot).textTransform}
+                  disabled={!caseEnabled()}
+                  onChange={(event) => props.onSlotChange(row.slot, 'textTransform', event.currentTarget.value as FeedTextTransformToken)}
+                >
+                  <For each={['inherit', ...materialRecipeTextTransforms] as FeedTextTransformToken[]}>
+                    {(transform) => <option value={transform}>{transform}</option>}
+                  </For>
+                </select>
               </div>
-            </div>
-            <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-              <span>Power</span>
-              <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
-            </div>
+            </Show>
+            <Show when={!row.divider}>
+              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Emboss', 'overrideEmboss')}
+                <div class="ui-lab-toggles">
+                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'dark'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'dark')}>dark</MiniButton>
+                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'light'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'light')}>light</MiniButton>
+                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'none'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'none')}>none</MiniButton>
+                </div>
+              </div>
+              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                <span>Power</span>
+                <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
+              </div>
+            </Show>
           </div>
           );
         }}
@@ -2547,7 +2561,7 @@ const feedTextCss = (style: FeedTextSlotStyle): JSX.CSSProperties => ({
   transform: `translate(${style.textX}px, ${style.textY}px)`,
 });
 
-const richTextTagAliases: Record<string, FeedRichTextTag | 'rule' | 'br' | undefined> = {
+const richTextTagAliases: Record<string, FeedRichTextTag | 'rule' | 'divider' | 'br' | undefined> = {
   accent: 'accent',
   accentcolor: 'accent',
   acc1: 'acc1',
@@ -2575,6 +2589,8 @@ const richTextTagAliases: Record<string, FeedRichTextTag | 'rule' | 'br' | undef
   h4: 'h4',
   rule: 'rule',
   hr: 'rule',
+  divider: 'divider',
+  line: 'divider',
   br: 'br',
 };
 
@@ -2608,6 +2624,10 @@ const parseFeedRichText = (value: string): FeedRichTextToken[] => {
     }
     if (tag === 'rule') {
       stack[stack.length - 1].children.push({ type: 'rule' });
+      continue;
+    }
+    if (tag === 'divider') {
+      stack[stack.length - 1].children.push({ type: 'divider' });
       continue;
     }
     if (tag === 'br') {
@@ -2683,6 +2703,7 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
   const acc4 = resolveFeedRichTagStyle(cardType, style, 'contractAcc4');
   const small = resolveFeedRichTagStyle(cardType, style, 'contractRewardLabel');
   const rule = resolveFeedRichTagStyle(cardType, style, 'contractRule');
+  const divider = resolveFeedRichTagStyle(cardType, style, 'contractDivider');
   return {
     '--feed-rich-base-line': `${style.lineHeight}`,
     '--feed-rich-paragraph-gap': `${style.paragraphGap}px`,
@@ -2699,6 +2720,11 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
     '--feed-rich-small': feedToneColors[small.contentTone] || feedToneColors.muted,
     '--feed-rich-rule': feedToneColors[rule.contentTone] || feedToneColors.gold,
     '--feed-rich-rule-opacity': `${rule.textOpacity / 100}`,
+    '--feed-rich-divider': feedToneColors[divider.contentTone] || feedToneColors.white,
+    '--feed-rich-divider-opacity': `${divider.textOpacity / 100}`,
+    '--feed-rich-divider-thickness': `${divider.textSizeRem}px`,
+    '--feed-rich-divider-gap-top': `${divider.lineHeight}em`,
+    '--feed-rich-divider-gap-bottom': `${divider.paragraphGap}em`,
     ...feedRichTextStyleVars('small', small, style),
     ...feedRichTextStyleVars('title', h1, style),
     ...feedRichTextStyleVars('alt-title', h2, style),
@@ -2740,11 +2766,18 @@ const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; styl
             <Show
               when={token.type === 'rule'}
               fallback={(
-                token.type === 'break'
-                  ? <span class="main-material-rich-break" aria-hidden="true" />
-                  : token.type === 'text'
-                    ? insideTag ? token.text : <span class="main-material-rich-token main-material-rich-token--normal">{token.text}</span>
-                    : null
+                <Show
+                  when={token.type === 'divider'}
+                  fallback={(
+                    token.type === 'break'
+                      ? <span class="main-material-rich-break" aria-hidden="true" />
+                      : token.type === 'text'
+                        ? insideTag ? token.text : <span class="main-material-rich-token main-material-rich-token--normal">{token.text}</span>
+                        : null
+                  )}
+                >
+                  <span class="main-material-rich-divider" aria-hidden="true" />
+                </Show>
               )}
             >
               <span class="main-material-rich-rule" aria-hidden="true" />
@@ -3256,7 +3289,7 @@ export const MainMaterialPreviewScreen = () => {
     if (dirty) markPresetDirty(part);
   };
 
-  const updateFeedCardType = (cardType: FeedCardTypeRecipe) => {
+  const updateFeedCardType = (cardType: FeedCardTypeRecipe, dirty = true) => {
     setFeedCardTypes((current) => ({
       ...current,
       [cardType.id]: {
@@ -3264,11 +3297,12 @@ export const MainMaterialPreviewScreen = () => {
         surface: pruneRecipeForPartCapabilities('feedCards', cardType.surface),
       },
     }));
+    if (dirty) markPresetDirty('feedCards');
   };
 
   const updateFeedCardTypeSurface = (cardTypeId: FeedCardTypeId, recipe: MaterialRecipe, dirty = true) => {
     const cardType = feedCardTypes()[cardTypeId];
-    updateFeedCardType({ ...cardType, surface: recipe });
+    updateFeedCardType({ ...cardType, surface: recipe }, false);
     if (dirty) markPresetDirty('feedCards');
   };
 
@@ -3338,7 +3372,7 @@ export const MainMaterialPreviewScreen = () => {
         surface: pruneRecipeForPartCapabilities('feedCards', recipe),
         text: shouldUpdateNodeText ? feedBaseTextStyleFromRecipe(recipe) : current.text,
       })),
-    });
+    }, false);
     if (dirty) markPresetDirty('feedCards');
   };
 
@@ -3424,6 +3458,7 @@ export const MainMaterialPreviewScreen = () => {
     setFeedStories((current) => current.map((story) => (
       story.id === storyId ? { ...story, [slotId]: value } : story
     )));
+    markPresetDirty('feedCards');
   };
 
   const updateFeedStoryImageOverride = (storyId: string, image: string | null) => {
@@ -3436,6 +3471,7 @@ export const MainMaterialPreviewScreen = () => {
       }
       return next;
     });
+    markPresetDirty('feedCards');
   };
 
   onMount(() => {

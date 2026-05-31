@@ -8,7 +8,6 @@ import {
 import type {
   CornerName,
   EdgeName,
-  MaterialKind,
   SurfaceGradient,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
@@ -23,7 +22,6 @@ import {
   materialRecipeFontStyles,
   materialRecipeGlows,
   materialRecipeGradients,
-  materialRecipeMaterials,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
@@ -173,20 +171,9 @@ const MaterialSection = (props: {
   recipe: MaterialRecipe;
   enabled: boolean;
   update: RecipeUpdate;
-  updateMaterial: (material: MaterialKind) => void;
 }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Material</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Base</ControlLabel>
-      <Segments
-        value={props.recipe.material}
-        options={materialRecipeMaterials}
-        disabled={!props.enabled}
-        labels={{ raw: 'texture' }}
-        onChange={props.updateMaterial}
-      />
-    </div>
+    <SectionLabel size="xs">Shape</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Bevel</ControlLabel>
       <div class="ui-lab-toggles">
@@ -820,14 +807,6 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     props.onChange({ ...props.recipe, [key]: value });
   };
 
-  const updateMaterial = (material: MaterialKind) => {
-    props.onChange({
-      ...props.recipe,
-      material,
-      textureStrength: material === 'none' ? 0 : props.recipe.textureStrength || 100,
-    });
-  };
-
   const updateTexture = (texture: TextureKind) => {
     props.onChange({
       ...props.recipe,
@@ -944,7 +923,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   return (
     <>
-      <MaterialSection recipe={props.recipe} enabled={capabilities().material} update={update} updateMaterial={updateMaterial} />
+      <MaterialSection recipe={props.recipe} enabled={capabilities().material} update={update} />
       <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />

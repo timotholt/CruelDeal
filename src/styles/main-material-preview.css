@@ -711,6 +711,24 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   opacity: var(--feed-rich-rule-opacity, 1);
 }
 
+.main-material-rich-divider {
+  display: block;
+  width: 100%;
+  height: var(--feed-rich-divider-thickness, 1px);
+  margin: var(--feed-rich-divider-gap-top, 0.9em) 0 var(--feed-rich-divider-gap-bottom, 0.78em);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--feed-rich-divider, white) 36%, transparent),
+    color-mix(in srgb, var(--feed-rich-divider, white) 86%, transparent) 12%,
+    color-mix(in srgb, var(--feed-rich-divider, white) 68%, transparent) 82%,
+    color-mix(in srgb, var(--feed-rich-divider, white) 18%, transparent)
+  );
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 0.45),
+    0 -1px 0 rgb(255 255 255 / 0.06);
+  opacity: var(--feed-rich-divider-opacity, var(--feed-rich-normal-opacity, 1));
+}
+
 .main-material-card-node--body .main-material-card-node-text {
   line-height: 1.36;
 }
