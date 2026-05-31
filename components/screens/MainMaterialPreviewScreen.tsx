@@ -14,7 +14,6 @@ import {
   fontWeightTokenValue,
   materialRecipeContentTones,
   materialRecipeFontStyles,
-  materialRecipeFontWeights,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
   materialRecipeTextTransforms,
@@ -22,6 +21,7 @@ import {
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
   materialRecipeToStaticSurfaceProps,
+  sanitizeFontWeight,
   type ContentAlign,
   type FontStyleToken,
   type FontWeightToken,
@@ -35,6 +35,8 @@ import {
 import { MaterialNavItem } from '../navigation/MaterialNavItem';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar';
+type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
+type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
 type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
@@ -45,6 +47,20 @@ interface MaterialPreset {
   id: string;
   name: string;
   recipe: MaterialRecipe;
+}
+
+interface MaterialEditableTarget {
+  id: string;
+  label: string;
+  recipe: MaterialRecipe;
+  capabilities: MaterialEditorCapabilities;
+  onChange: (recipe: MaterialRecipe) => void;
+  children?: MaterialEditableTarget[];
+}
+
+interface FlatMaterialEditableTarget {
+  target: MaterialEditableTarget;
+  depth: number;
 }
 
 interface BackdropRecipe {
@@ -89,30 +105,134 @@ interface SurfaceRecipes {
 }
 
 type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03';
-type FeedTextSlotId = 'eyebrow' | 'title' | 'body' | 'meta';
+type FeedTextSlotId =
+  | 'eyebrow'
+  | 'title'
+  | 'body'
+  | 'meta'
+  | 'ctaLabel'
+  | 'contractBadge'
+  | 'contractBriefing'
+  | 'contractEyebrow'
+  | 'contractTitle'
+  | 'contractBody'
+  | 'contractRewardLabel'
+  | 'contractRewardValue'
+  | 'contractH4'
+  | 'contractAcc1'
+  | 'contractAcc2'
+  | 'contractAcc3'
+  | 'contractAcc4'
+  | 'contractRule'
+  | 'contractCtaLabel'
+  | 'seasonBadge'
+  | 'seasonBriefing'
+  | 'seasonEyebrow'
+  | 'sectorLabel';
+type FeedBackgroundFit = 'cover' | 'contain';
+type FeedMediaFadeMode = 'none' | 'top-dark' | 'bottom-dark' | 'left-dark' | 'right-dark' | 'left-bottom-dark' | 'top-bottom-dark' | 'vignette-dark' | 'left-light' | 'top-light' | 'bottom-light';
+type FeedCardNodeType = 'container' | 'text' | 'button';
+type FeedNodeAlign = 'left' | 'center' | 'right';
+type FeedNodeJustify = 'start' | 'center' | 'end';
+type FeedTextEmbossMode = 'none' | 'dark' | 'light';
+type FeedTextTransformToken = TextTransformToken | 'inherit';
+type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
+
+type FeedRichTextToken =
+  | { type: 'text'; text: string }
+  | { type: 'break' }
+  | { type: 'rule' }
+  | { type: 'tag'; tag: FeedRichTextTag; children: FeedRichTextToken[] };
 
 interface FeedStory {
   id: string;
   label: string;
   cardTypeId: FeedCardTypeId;
+  image: string;
   eyebrow: string;
   title: string;
   body: string;
   meta: string;
+  ctaLabel: string;
+  contractBadge?: string;
+  contractBriefing?: string;
+  contractEyebrow?: string;
+  contractTitle?: string;
+  contractBody?: string;
+  contractRewardLabel?: string;
+  contractRewardValue?: string;
+  contractRule?: string;
+  contractCtaLabel?: string;
+  seasonBadge?: string;
+  seasonBriefing?: string;
+  seasonEyebrow?: string;
+  sectorLabel?: string;
 }
 
 interface FeedTextSlotStyle {
   inherit: boolean;
+  overrideColor: boolean;
+  overrideOpacity: boolean;
+  overrideFont: boolean;
+  overrideSize: boolean;
+  overrideWeight: boolean;
+  overrideStyle: boolean;
+  overrideCase: boolean;
+  overrideEmboss: boolean;
+  overrideLineHeight: boolean;
+  overrideParagraphGap: boolean;
+  overrideLetterSpacing: boolean;
+  overrideAlign: boolean;
+  overridePosition: boolean;
   textFontFamily: string;
   textSizeRem: number;
+  lineHeight: number;
+  paragraphGap: number;
   contentTone: MaterialTone;
   fontWeight: FontWeightToken;
   fontStyle: FontStyleToken;
-  textTransform: TextTransformToken;
+  textTransform: FeedTextTransformToken;
+  textEmbossMode: FeedTextEmbossMode;
+  textEmbossStrength: number;
   letterSpacing: number;
+  textOpacity: number;
   textAlign: ContentAlign;
   textX: number;
   textY: number;
+}
+
+interface FeedBackgroundImageRecipe {
+  binding: 'image';
+  enabled: boolean;
+  fit: FeedBackgroundFit;
+  x: number;
+  y: number;
+  scale: number;
+  fadeMode: FeedMediaFadeMode;
+  fadeStrength: number;
+  fadeSize: number;
+}
+
+interface FeedNodeLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  padding: number;
+  gap: number;
+  align: FeedNodeAlign;
+  justify: FeedNodeJustify;
+}
+
+interface FeedCardNode {
+  id: string;
+  label: string;
+  type: FeedCardNodeType;
+  binding?: FeedTextSlotId;
+  layout: FeedNodeLayout;
+  surface?: MaterialRecipe;
+  text?: FeedTextSlotStyle;
+  children?: FeedCardNode[];
 }
 
 interface FeedCardTypeRecipe {
@@ -120,12 +240,14 @@ interface FeedCardTypeRecipe {
   name: string;
   description: string;
   surface: MaterialRecipe;
+  backgroundImage: FeedBackgroundImageRecipe;
+  children: FeedCardNode[];
   slots: Record<FeedTextSlotId, FeedTextSlotStyle>;
 }
 
 type FeedCardTypes = Record<FeedCardTypeId, FeedCardTypeRecipe>;
 
-const storageKey = 'cruel-deal.main-material-preview.v12';
+const storageKey = 'cruel-deal.main-material-preview.v23';
 const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
 const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v5',
@@ -135,6 +257,17 @@ const obsoleteStorageKeys = [
   'cruel-deal.main-material-preview.v9',
   'cruel-deal.main-material-preview.v10',
   'cruel-deal.main-material-preview.v11',
+  'cruel-deal.main-material-preview.v12',
+  'cruel-deal.main-material-preview.v13',
+  'cruel-deal.main-material-preview.v14',
+  'cruel-deal.main-material-preview.v15',
+  'cruel-deal.main-material-preview.v16',
+  'cruel-deal.main-material-preview.v17',
+  'cruel-deal.main-material-preview.v18',
+  'cruel-deal.main-material-preview.v19',
+  'cruel-deal.main-material-preview.v20',
+  'cruel-deal.main-material-preview.v21',
+  'cruel-deal.main-material-preview.v22',
 ];
 
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -148,6 +281,19 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
 ];
 
 const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part.label])) as Record<MainPartId, string>;
+const feedCardMaterialTargetPrefix = 'feed:card:';
+const feedCardMaterialTargetId = (cardTypeId: FeedCardTypeId): FeedMaterialTargetId => `feed:card:${cardTypeId}`;
+const feedMaterialTargetIdForNode = (cardTypeId: FeedCardTypeId, nodeId: string): FeedMaterialTargetId => `feed:card:${cardTypeId}:node:${nodeId}`;
+const parseFeedMaterialTargetId = (targetId: string) => {
+  if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
+  const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
+  const nodeSeparator = ':node:';
+  const nodeIndex = rest.indexOf(nodeSeparator);
+  return {
+    cardTypeId: (nodeIndex >= 0 ? rest.slice(0, nodeIndex) : rest) as FeedCardTypeId,
+    nodeId: nodeIndex >= 0 ? rest.slice(nodeIndex + nodeSeparator.length) : undefined,
+  };
+};
 
 const selectionOverlayModes: readonly SelectionOverlayMode[] = ['off', 'flash', 'persistent'];
 const selectionOverlayLabels: Record<SelectionOverlayMode, string> = {
@@ -240,6 +386,17 @@ const createEmptySelectedPresetIds = (): Record<MainPartId, string> => ({
   navBar: '',
 });
 
+const createEmptyPresetDirty = (): Record<MainPartId, boolean> => ({
+  backdrop: false,
+  topBar: false,
+  profileButton: false,
+  currencyButtons: false,
+  titleBlock: false,
+  feedCards: false,
+  toolBar: false,
+  navBar: false,
+});
+
 const fontOptions = [
   { label: 'Condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
   { label: 'Tech Mono', value: '"JetBrains Mono", "IBM Plex Sans Condensed", ui-monospace, monospace' },
@@ -248,6 +405,7 @@ const fontOptions = [
   { label: 'Wide', value: '"Arial Black", "Impact", ui-sans-serif, system-ui, sans-serif' },
   { label: 'System', value: 'ui-sans-serif, system-ui, sans-serif' },
 ] as const;
+
 
 const defaultBackdrop: BackdropRecipe = {
   fit: 'cover',
@@ -280,43 +438,168 @@ const defaultNav: NavRecipe = {
   bottomReserve: 146,
 };
 
-const feedTextSlotIds: FeedTextSlotId[] = ['eyebrow', 'title', 'body', 'meta'];
+const feedTextSlotIds: FeedTextSlotId[] = [
+  'eyebrow',
+  'title',
+  'body',
+  'meta',
+  'ctaLabel',
+  'contractBadge',
+  'contractBriefing',
+  'contractEyebrow',
+  'contractTitle',
+  'contractBody',
+  'contractRewardLabel',
+  'contractRewardValue',
+  'contractH4',
+  'contractAcc1',
+  'contractAcc2',
+  'contractAcc3',
+  'contractAcc4',
+  'contractRule',
+  'contractCtaLabel',
+  'seasonBadge',
+  'seasonBriefing',
+  'seasonEyebrow',
+  'sectorLabel',
+];
 const feedTextSlotLabels: Record<FeedTextSlotId, string> = {
   eyebrow: 'Header',
   title: 'Title',
   body: 'Body',
   meta: 'Meta',
+  ctaLabel: 'Button',
+  contractBadge: 'Contract Badge',
+  contractBriefing: 'Mission Briefing',
+  contractEyebrow: 'Contract Header',
+  contractTitle: 'Contract Title',
+  contractBody: 'Contract Body',
+  contractRewardLabel: 'Reward Label',
+  contractRewardValue: 'Reward Value',
+  contractH4: 'H4',
+  contractAcc1: 'Acc 1',
+  contractAcc2: 'Acc 2',
+  contractAcc3: 'Acc 3',
+  contractAcc4: 'Acc 4',
+  contractRule: 'Rule',
+  contractCtaLabel: 'Contract Button',
+  seasonBadge: 'Season Badge',
+  seasonBriefing: 'Season Briefing',
+  seasonEyebrow: 'Season Header',
+  sectorLabel: 'Sector Label',
+};
+const feedSlotsInheritingBodyWeight = new Set<FeedTextSlotId>([
+  'contractEyebrow',
+  'contractTitle',
+  'contractRewardValue',
+  'contractH4',
+  'contractAcc1',
+  'contractAcc2',
+  'contractAcc3',
+  'contractAcc4',
+  'contractRewardLabel',
+  'contractRule',
+  'seasonEyebrow',
+]);
+const feedMediaFadeModes: FeedMediaFadeMode[] = ['none', 'top-dark', 'bottom-dark', 'left-dark', 'right-dark', 'left-bottom-dark', 'top-bottom-dark', 'vignette-dark', 'left-light', 'top-light', 'bottom-light'];
+const feedMediaFadeLabels: Record<FeedMediaFadeMode, string> = {
+  none: 'none',
+  'top-dark': 'top dark',
+  'bottom-dark': 'bottom dark',
+  'left-dark': 'left dark',
+  'right-dark': 'right dark',
+  'left-bottom-dark': 'left + bottom',
+  'top-bottom-dark': 'top + bottom',
+  'vignette-dark': 'vignette',
+  'left-light': 'left light',
+  'top-light': 'top light',
+  'bottom-light': 'bottom light',
 };
 
 const mockFeedStories: FeedStory[] = [
   {
     id: 'season-pass-cosmic-eclipse',
-    label: 'Season Pass',
+    label: 'Mission Briefing',
     cardTypeId: 'card_type_01',
-    eyebrow: 'Season Pass',
-    title: 'Cosmic Eclipse',
-    body: 'Unlock the Titan variant and double credits before the weekend window closes.',
+    image: '/art/login/main-menu-contract-reference.png',
+    eyebrow: '[accent]//[/accent] Active Contract',
+    title: '[h1]Cosmic\nEclipse[/h1]',
+    body: 'A new era of power. Claim the darkness.',
     meta: '03 days left',
+    ctaLabel: 'View Season',
+    contractBadge: '03 Days Left',
+    contractBriefing: '[h1][acc1]//[/acc1] Active Contract[/h1]\n\n[h2]Data [acc2]Extraction[/acc2][/h2]\n\nExtract encrypted data from Solace Corp mainframe cluster.\n[rule]\n[h1]Reward[/h1]\n[h3]1,800 [acc1]CR[/acc1][/h3]',
+    contractEyebrow: '[accent]//[/accent] Active Contract',
+    contractTitle: '[h1]Data\nExtraction[/h1]',
+    contractBody: '[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.',
+    contractRewardLabel: 'Reward',
+    contractRewardValue: '1,850 [accent]CR[/accent]',
+    contractRule: '',
+    contractCtaLabel: 'View Contract  >',
+    seasonBadge: '03 Days Left',
+    seasonBriefing: '[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.',
+    seasonEyebrow: '[accent]//[/accent] Season Pass',
+    sectorLabel: 'Sector\n[black]07[/black]',
   },
   {
     id: 'patch-spatial-ui',
     label: 'Patch Notes',
     cardTypeId: 'card_type_02',
+    image: '/art/login/material-preview-bg.jpeg',
     eyebrow: 'Patch Notes',
     title: 'Spatial UI',
     body: 'Navigation has been rebuilt around faster command choices and thumb-first play.',
     meta: 'Update 1.4.0',
+    ctaLabel: 'View Details',
   },
   {
     id: 'community-top-decks',
     label: 'Community',
     cardTypeId: 'card_type_03',
+    image: '/art/login/cruel-company-final-login.png',
     eyebrow: 'Community',
     title: 'Top Decks',
     body: 'See the ladder lists gaining ground across the company circuit this week.',
     meta: '12 decks live',
+    ctaLabel: 'Read More',
   },
 ];
+
+const cloneFeedStories = (stories: FeedStory[]): FeedStory[] => stories.map((story) => ({ ...story }));
+
+const sanitizeFeedStories = (value: unknown): FeedStory[] => {
+  if (!Array.isArray(value)) return cloneFeedStories(mockFeedStories);
+  const byDefaultId = new Map(mockFeedStories.map((story) => [story.id, story]));
+  const stories = value
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) return null;
+      const input = item as Partial<FeedStory>;
+      const fallback = typeof input.id === 'string' ? byDefaultId.get(input.id) : undefined;
+      if (!fallback) return null;
+      return {
+        ...fallback,
+        ...Object.fromEntries(
+          Object.entries(input).filter(([, entryValue]) => typeof entryValue === 'string'),
+        ),
+        cardTypeId: isOneOf(input.cardTypeId, feedCardTypeIds) ? input.cardTypeId : fallback.cardTypeId,
+      } as FeedStory;
+    })
+    .filter((story): story is FeedStory => Boolean(story));
+  return stories.length ? stories : cloneFeedStories(mockFeedStories);
+};
+
+const sanitizeStoryImageOverrides = (value: unknown): Record<string, string> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([storyId, image]) => (
+        mockFeedStories.some((story) => story.id === storyId)
+        && typeof image === 'string'
+        && image.trim()
+      ))
+      .map(([storyId, image]) => [storyId, (image as string).trim()]),
+  );
+};
 
 const defaultBackdropSurface = createMaterialRecipe({
   material: 'raw',
@@ -389,7 +672,7 @@ const defaultCurrencySurface = createMaterialRecipe({
 
 const defaultFeedSurface = createMaterialRecipe({
   material: 'raw',
-  texture: 'stone04',
+  texture: 'stoneGray01',
   textureStrength: 46,
   textureScale: 256,
   glass: true,
@@ -407,18 +690,58 @@ const defaultFeedSurface = createMaterialRecipe({
   radius: 7,
 });
 
+const createFeedCtaSurface = () => createMaterialRecipe({
+  material: 'raw',
+  texture: 'stoneGray01',
+  textureStrength: 54,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 18,
+  glassBlur: 2,
+  tint: 'white',
+  tintStrength: 6,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 36,
+  lightStrength: 28,
+  darkStrength: 14,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 4,
+  contentTone: 'black',
+  contentOpacity: 82,
+});
+
 const feedFontCondensed = materialRecipeTextFonts[1]?.value || 'inherit';
 const feedFontSystem = materialRecipeTextFonts[6]?.value || 'ui-sans-serif, system-ui, sans-serif';
 
 const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTextSlotStyle => ({
   inherit: false,
+  overrideColor: true,
+  overrideOpacity: true,
+  overrideFont: true,
+  overrideSize: true,
+  overrideWeight: true,
+  overrideStyle: true,
+  overrideCase: true,
+  overrideEmboss: true,
+  overrideLineHeight: true,
+  overrideParagraphGap: true,
+  overrideLetterSpacing: true,
+  overrideAlign: true,
+  overridePosition: true,
   textFontFamily: feedFontCondensed,
   textSizeRem: 1,
+  lineHeight: 1,
+  paragraphGap: 0,
   contentTone: 'black',
-  fontWeight: 'bold',
+  fontWeight: 600,
   fontStyle: 'normal',
   textTransform: 'uppercase',
+  textEmbossMode: 'dark',
+  textEmbossStrength: 100,
   letterSpacing: 0,
+  textOpacity: 90,
   textAlign: 'center',
   textX: 0,
   textY: 0,
@@ -427,34 +750,347 @@ const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTe
 
 const cloneFeedSlotStyle = (style: FeedTextSlotStyle): FeedTextSlotStyle => ({ ...style });
 
+const createFeedBackgroundImage = (overrides: Partial<FeedBackgroundImageRecipe> = {}): FeedBackgroundImageRecipe => ({
+  binding: 'image',
+  enabled: true,
+  fit: 'cover',
+  x: 0,
+  y: 0,
+  scale: 100,
+  fadeMode: 'left-bottom-dark',
+  fadeStrength: 58,
+  fadeSize: 52,
+  ...overrides,
+});
+
+const createFeedNodeLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => ({
+  x: 8,
+  y: 44,
+  width: 44,
+  height: 38,
+  padding: 14,
+  gap: 10,
+  align: 'left',
+  justify: 'center',
+  ...overrides,
+});
+
+const createFeedNode = (overrides: Omit<Partial<FeedCardNode>, 'children'> & { children?: FeedCardNode[] }): FeedCardNode => ({
+  id: overrides.id || `node-${Math.random().toString(36).slice(2, 8)}`,
+  label: overrides.label || 'Node',
+  type: overrides.type || 'container',
+  binding: overrides.binding,
+  layout: createFeedNodeLayout(overrides.layout),
+  surface: overrides.surface ? cloneMaterialRecipe(overrides.surface) : undefined,
+  text: overrides.text ? cloneFeedSlotStyle(overrides.text) : undefined,
+  children: overrides.children?.map((child) => cloneFeedCardNode(child)) || [],
+});
+
+const cloneFeedCardNode = (node: FeedCardNode): FeedCardNode => ({
+  ...node,
+  layout: { ...node.layout },
+  surface: node.surface ? cloneMaterialRecipe(node.surface) : undefined,
+  text: node.text ? cloneFeedSlotStyle(node.text) : undefined,
+  children: node.children?.map((child) => cloneFeedCardNode(child)) || [],
+});
+
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
   ...cloneMaterialRecipe(defaultFeedSurface),
   ...overrides,
 });
 
+const createFeedRegionSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: false,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'none',
+  border: [],
+  borderOpacity: 0,
+  lightStrength: 0,
+  darkStrength: 0,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 0,
+});
+
+const createFeedGlassRegionSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: true,
+  glassOpacity: 34,
+  glassBlur: 7,
+  tint: 'white',
+  tintStrength: 5,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 22,
+  lightStrength: 18,
+  darkStrength: 6,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 5,
+});
+
+const createMissionBriefingCardSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  textureScale: 512,
+  glass: false,
+  glassOpacity: 0,
+  glassBlur: 0,
+  tint: 'white',
+  tintStrength: 0,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 88,
+  lightStrength: 18,
+  darkStrength: 6,
+  sheen: true,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 100,
+  edgeWearWidth: 1,
+  edgeWearScale: 256,
+  edgeWearLayer: 'above-highlights',
+  radius: 5,
+  contentTone: 'white',
+  textFontFamily: feedFontCondensed,
+  textSizeRem: 0.8125,
+  contentOpacity: 100,
+  fontWeight: 700,
+  fontStyle: 'italic',
+  textTransform: 'uppercase',
+});
+
+const createMissionBriefingPanelSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 40,
+  glassBlur: 8,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 34,
+  glassHighlightY: 10,
+  tint: 'black',
+  tintStrength: 45,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 22,
+  lightStrength: 18,
+  darkStrength: 6,
+  sheen: true,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 5,
+  contentTone: 'white',
+  contentOpacity: 100,
+});
+
+const createMissionBriefingTextSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: true,
+  glassOpacity: 34,
+  glassBlur: 7,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'none',
+  border: [],
+  borderOpacity: 0,
+  lightStrength: 0,
+  darkStrength: 0,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 0,
+});
+
+const createMissionBriefingBadgeSurface = () => createMaterialRecipe({
+  material: 'raw',
+  texture: 'stoneGray01',
+  textureStrength: 70,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 36,
+  glassBlur: 5,
+  tint: 'white',
+  tintStrength: 5,
+  gradient: 'top-light',
+  border: ['top', 'bottom'],
+  borderOpacity: 24,
+  lightStrength: 22,
+  darkStrength: 8,
+  sheen: true,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 4,
+  contentTone: 'gold',
+  contentOpacity: 90,
+});
+
+const createMissionBriefingCtaSurface = () => createMaterialRecipe({
+  material: 'raw',
+  texture: 'stoneGray01',
+  textureStrength: 100,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 34,
+  glassBlur: 7,
+  tint: 'white',
+  tintStrength: 5,
+  gradient: 'top-light',
+  border: ['top'],
+  borderOpacity: 22,
+  lightStrength: 18,
+  darkStrength: 6,
+  sheen: true,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 0,
+  edgeWearWidth: 5,
+  edgeWearScale: 256,
+  radius: 5,
+  contentTone: 'black',
+  contentOpacity: 90,
+});
+
+const createMissionBriefingLeftNodes = () => [
+  createFeedNode({
+    id: 'deadline-badge',
+    label: 'Deadline Badge',
+    type: 'text',
+    binding: 'contractBadge',
+    surface: createMissionBriefingBadgeSurface(),
+    layout: createFeedNodeLayout({ x: 9, y: 27, width: 38, height: 6, padding: 0, gap: 0, align: 'center', justify: 'start' }),
+  }),
+  createFeedNode({
+    id: 'mission-briefing',
+    label: 'Mission Briefing',
+    type: 'container',
+    binding: 'contractBriefing',
+    surface: createMissionBriefingPanelSurface(),
+    layout: createFeedNodeLayout({ x: 7, y: 32, width: 42, height: 52, padding: 16, gap: 0, align: 'left', justify: 'start' }),
+    children: [
+      createFeedNode({
+        id: 'contract-cta',
+        label: 'Contract CTA',
+        type: 'button',
+        binding: 'contractCtaLabel',
+        surface: createMissionBriefingCtaSurface(),
+        layout: createFeedNodeLayout({ x: 8, y: 83, width: 84, height: 15, padding: 0, gap: 0, align: 'center', justify: 'center' }),
+      }),
+    ],
+  }),
+  createFeedNode({
+    id: 'sector-mark',
+    label: 'Sector Mark',
+    type: 'text',
+    binding: 'sectorLabel',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({ x: 73, y: 20, width: 18, height: 14, padding: 0, gap: 0, align: 'center', justify: 'start' }),
+  }),
+];
+
+const createHeroFeedNodes = () => [
+  createFeedNode({
+    id: 'primary-copy',
+    label: 'Primary Copy',
+    type: 'container',
+    surface: createFeedGlassRegionSurface(),
+    layout: createFeedNodeLayout({ x: 7, y: 26, width: 42, height: 55, padding: 16, gap: 14, align: 'left', justify: 'center' }),
+    children: [
+      createFeedNode({ id: 'eyebrow', label: 'Header', type: 'text', binding: 'eyebrow', surface: createFeedGlassRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 7, width: 100, height: 8, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'title', label: 'Title', type: 'text', binding: 'title', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 22, width: 100, height: 28, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'body', label: 'Body', type: 'text', binding: 'body', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 57, width: 100, height: 18, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'cta', label: 'CTA Button', type: 'button', binding: 'ctaLabel', surface: createFeedCtaSurface(), layout: createFeedNodeLayout({ x: 0, y: 82, width: 72, height: 13, padding: 0, gap: 0, align: 'left' }) }),
+    ],
+  }),
+  createFeedNode({
+    id: 'meta-top-right',
+    label: 'Meta',
+    type: 'text',
+    binding: 'meta',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({ x: 68, y: 7, width: 26, height: 8, padding: 0, gap: 0, align: 'right', justify: 'start' }),
+  }),
+];
+
+const createSimpleFeedNodes = () => [
+  createFeedNode({
+    id: 'center-copy',
+    label: 'Center Copy',
+    type: 'container',
+    surface: createFeedGlassRegionSurface(),
+    layout: createFeedNodeLayout({ x: 12, y: 36, width: 76, height: 42, padding: 16, gap: 10, align: 'center', justify: 'center' }),
+    children: [
+      createFeedNode({ id: 'eyebrow', label: 'Header', type: 'text', binding: 'eyebrow', surface: createFeedGlassRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 8, width: 100, height: 8, padding: 0, gap: 0, align: 'center' }) }),
+      createFeedNode({ id: 'title', label: 'Title', type: 'text', binding: 'title', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 24, width: 100, height: 24, padding: 0, gap: 0, align: 'center' }) }),
+      createFeedNode({ id: 'body', label: 'Body', type: 'text', binding: 'body', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 60, width: 100, height: 16, padding: 0, gap: 0, align: 'center' }) }),
+    ],
+  }),
+  createFeedNode({
+    id: 'meta-top-right',
+    label: 'Meta',
+    type: 'text',
+    binding: 'meta',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({ x: 66, y: 7, width: 28, height: 8, padding: 0, gap: 0, align: 'right', justify: 'start' }),
+  }),
+];
+
+const createFeedSlots = (
+  overrides: Partial<Record<FeedTextSlotId, Partial<FeedTextSlotStyle>>> = {},
+): Record<FeedTextSlotId, FeedTextSlotStyle> => Object.fromEntries(
+  feedTextSlotIds.map((slot) => {
+    const slotOverrides = overrides[slot] || {};
+    return [
+      slot,
+      createFeedSlotStyle({
+        ...slotOverrides,
+        overrideWeight: slotOverrides.overrideWeight ?? !feedSlotsInheritingBodyWeight.has(slot),
+      }),
+    ];
+  }),
+) as Record<FeedTextSlotId, FeedTextSlotStyle>;
+
 const createDefaultFeedCardTypes = (): FeedCardTypes => ({
   card_type_01: {
     id: 'card_type_01',
-    name: 'card_type_01',
-    description: 'Promo and limited-time event cards.',
-    surface: createFeedSurfaceVariant({
-      tint: 'gold',
-      tintStrength: 12,
-      lightStrength: 24,
-      darkStrength: 16,
-      contentTone: 'white',
-      textFontFamily: feedFontCondensed,
-      textSizeRem: 1,
-      fontWeight: 'bold',
-      fontStyle: 'normal',
-      textTransform: 'uppercase',
+    name: 'mission_briefing_left_01',
+    description: 'Mission briefing layout with a left contract card and right season card.',
+    surface: createMissionBriefingCardSurface(),
+    backgroundImage: createFeedBackgroundImage({ fit: 'cover', x: 0, y: 0, scale: 100, fadeMode: 'none', fadeStrength: 70, fadeSize: 58 }),
+    children: createMissionBriefingLeftNodes(),
+    slots: createFeedSlots({
+      eyebrow: { textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08, textAlign: 'left', textOpacity: 50 },
+      title: { textSizeRem: 1.48, contentTone: 'white', fontWeight: 500, textAlign: 'left', textOpacity: 70 },
+      body: { textFontFamily: feedFontSystem, textSizeRem: 0.72, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'right', textOpacity: 90 },
+      meta: { textSizeRem: 0.68, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.1, textAlign: 'right', textOpacity: 100 },
+      ctaLabel: { textSizeRem: 0.7, contentTone: 'black', fontWeight: 600, letterSpacing: 0.04, textOpacity: 90 },
+      contractBadge: { textSizeRem: 0.5, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'center', textOpacity: 80 },
+      contractBriefing: { textFontFamily: feedFontSystem, textSizeRem: 0.68, lineHeight: 1.08, paragraphGap: 0, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 94 },
+      contractEyebrow: { textSizeRem: 0.5, lineHeight: 1, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 70 },
+      contractTitle: { textSizeRem: 1.48, lineHeight: 0.92, contentTone: 'white', fontWeight: 700, textAlign: 'left', textOpacity: 100 },
+      contractBody: { textFontFamily: feedFontSystem, textSizeRem: 0.72, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 90 },
+      contractRewardLabel: { textSizeRem: 0.52, contentTone: 'muted', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 84 },
+      contractRewardValue: { textSizeRem: 1.02, lineHeight: 1, contentTone: 'white', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
+      contractH4: { textSizeRem: 0.82, lineHeight: 1.04, contentTone: 'white', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 92 },
+      contractAcc1: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 90 },
+      contractAcc2: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'cyan', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
+      contractAcc3: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'red', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
+      contractAcc4: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'green', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
+      contractRule: { textSizeRem: 0.52, contentTone: 'gold', fontWeight: 600, letterSpacing: 0, textAlign: 'left', textOpacity: 90 },
+      contractCtaLabel: { textSizeRem: 0.7, contentTone: 'black', fontWeight: 600, letterSpacing: 0.04, textOpacity: 90 },
+      seasonBadge: { textSizeRem: 0.5, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'center', textOpacity: 80 },
+      seasonBriefing: { textFontFamily: feedFontSystem, textSizeRem: 0.68, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 94 },
+      seasonEyebrow: { textSizeRem: 0.5, contentTone: 'gold', letterSpacing: 0.08, textAlign: 'center', textOpacity: 50 },
+      sectorLabel: { textSizeRem: 0.78, contentTone: 'muted', fontWeight: 700, letterSpacing: 0.02, textAlign: 'center', textOpacity: 34 },
     }),
-    slots: {
-      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
-      title: createFeedSlotStyle({ textSizeRem: 3.25, contentTone: 'white', fontWeight: 'black' }),
-      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.86, contentTone: 'white', fontWeight: 'medium', textTransform: 'none' }),
-      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.1, textAlign: 'right' }),
-    },
   },
   card_type_02: {
     id: 'card_type_02',
@@ -468,16 +1104,19 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
       contentTone: 'black',
       textFontFamily: feedFontCondensed,
       textSizeRem: 1,
-      fontWeight: 'bold',
+      fontWeight: 600,
       fontStyle: 'normal',
       textTransform: 'uppercase',
     }),
-    slots: {
-      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
-      title: createFeedSlotStyle({ textSizeRem: 3.45, contentTone: 'white', fontWeight: 'black' }),
-      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.86, contentTone: 'black', fontWeight: 'medium', textTransform: 'none' }),
-      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'black', letterSpacing: 0.1, textAlign: 'right' }),
-    },
+    backgroundImage: createFeedBackgroundImage({ fit: 'cover', x: 0, y: 0, scale: 104, fadeMode: 'top-bottom-dark', fadeStrength: 54, fadeSize: 44 }),
+    children: createSimpleFeedNodes(),
+    slots: createFeedSlots({
+      eyebrow: { textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 },
+      title: { textSizeRem: 3.45, contentTone: 'white', fontWeight: 700 },
+      body: { textFontFamily: feedFontSystem, textSizeRem: 0.86, contentTone: 'black', fontWeight: 500, textTransform: 'none' },
+      meta: { textSizeRem: 0.68, contentTone: 'black', letterSpacing: 0.1, textAlign: 'right' },
+      ctaLabel: { textSizeRem: 0.78, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.04 },
+    }),
   },
   card_type_03: {
     id: 'card_type_03',
@@ -491,16 +1130,19 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
       contentTone: 'white',
       textFontFamily: feedFontCondensed,
       textSizeRem: 1,
-      fontWeight: 'bold',
+      fontWeight: 600,
       fontStyle: 'normal',
       textTransform: 'uppercase',
     }),
-    slots: {
-      eyebrow: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 }),
-      title: createFeedSlotStyle({ textSizeRem: 3.1, contentTone: 'white', fontWeight: 'black' }),
-      body: createFeedSlotStyle({ textFontFamily: feedFontSystem, textSizeRem: 0.82, contentTone: 'white', fontWeight: 'medium', textTransform: 'none' }),
-      meta: createFeedSlotStyle({ textSizeRem: 0.68, contentTone: 'white', letterSpacing: 0.1, textAlign: 'right' }),
-    },
+    backgroundImage: createFeedBackgroundImage({ fit: 'cover', x: -12, y: 0, scale: 112, fadeMode: 'bottom-dark', fadeStrength: 60, fadeSize: 50 }),
+    children: createSimpleFeedNodes(),
+    slots: createFeedSlots({
+      eyebrow: { textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08 },
+      title: { textSizeRem: 3.1, contentTone: 'white', fontWeight: 700 },
+      body: { textFontFamily: feedFontSystem, textSizeRem: 0.82, contentTone: 'white', fontWeight: 500, textTransform: 'none' },
+      meta: { textSizeRem: 0.68, contentTone: 'white', letterSpacing: 0.1, textAlign: 'right' },
+      ctaLabel: { textSizeRem: 0.78, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.04 },
+    }),
   },
 });
 
@@ -545,12 +1187,11 @@ const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
 const cloneFeedCardType = (cardType: FeedCardTypeRecipe): FeedCardTypeRecipe => ({
   ...cardType,
   surface: cloneMaterialRecipe(cardType.surface),
-  slots: {
-    eyebrow: cloneFeedSlotStyle(cardType.slots.eyebrow),
-    title: cloneFeedSlotStyle(cardType.slots.title),
-    body: cloneFeedSlotStyle(cardType.slots.body),
-    meta: cloneFeedSlotStyle(cardType.slots.meta),
-  },
+  backgroundImage: { ...cardType.backgroundImage },
+  children: cardType.children.map((child) => cloneFeedCardNode(child)),
+  slots: Object.fromEntries(
+    feedTextSlotIds.map((slot) => [slot, cloneFeedSlotStyle(cardType.slots[slot])]),
+  ) as Record<FeedTextSlotId, FeedTextSlotStyle>,
 });
 
 const cloneFeedCardTypes = (cardTypes: FeedCardTypes): FeedCardTypes => ({
@@ -640,8 +1281,8 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   return Math.min(max, Math.max(min, value));
 };
 
-const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value is T => (
-  typeof value === 'string' && (options as readonly string[]).includes(value)
+const isOneOf = <T extends readonly unknown[]>(value: unknown, options: T): value is T[number] => (
+  options.includes(value)
 );
 
 const sanitizeBackdrop = (value: unknown): BackdropRecipe => {
@@ -686,18 +1327,85 @@ const sanitizeFeedTextSlotStyle = (value: unknown, fallback: FeedTextSlotStyle):
   const input = typeof value === 'object' && value !== null ? value as Partial<FeedTextSlotStyle> : {};
   return {
     inherit: typeof input.inherit === 'boolean' ? input.inherit : fallback.inherit,
+    overrideColor: typeof input.overrideColor === 'boolean' ? input.overrideColor : fallback.overrideColor,
+    overrideOpacity: typeof input.overrideOpacity === 'boolean' ? input.overrideOpacity : fallback.overrideOpacity,
+    overrideFont: typeof input.overrideFont === 'boolean' ? input.overrideFont : fallback.overrideFont,
+    overrideSize: typeof input.overrideSize === 'boolean' ? input.overrideSize : fallback.overrideSize,
+    overrideWeight: typeof input.overrideWeight === 'boolean' ? input.overrideWeight : fallback.overrideWeight,
+    overrideStyle: typeof input.overrideStyle === 'boolean' ? input.overrideStyle : fallback.overrideStyle,
+    overrideCase: typeof input.overrideCase === 'boolean' ? input.overrideCase : fallback.overrideCase,
+    overrideEmboss: typeof input.overrideEmboss === 'boolean' ? input.overrideEmboss : fallback.overrideEmboss,
+    overrideLineHeight: typeof input.overrideLineHeight === 'boolean' ? input.overrideLineHeight : fallback.overrideLineHeight,
+    overrideParagraphGap: typeof input.overrideParagraphGap === 'boolean' ? input.overrideParagraphGap : fallback.overrideParagraphGap,
+    overrideLetterSpacing: typeof input.overrideLetterSpacing === 'boolean' ? input.overrideLetterSpacing : fallback.overrideLetterSpacing,
+    overrideAlign: typeof input.overrideAlign === 'boolean' ? input.overrideAlign : fallback.overrideAlign,
+    overridePosition: typeof input.overridePosition === 'boolean' ? input.overridePosition : fallback.overridePosition,
     textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
       ? input.textFontFamily
       : fallback.textFontFamily,
     textSizeRem: clamp(input.textSizeRem, fallback.textSizeRem, 0.5, 4),
+    lineHeight: clamp(input.lineHeight, fallback.lineHeight ?? 1, 0.7, 1.8),
+    paragraphGap: clamp(input.paragraphGap, fallback.paragraphGap ?? 0, -24, 48),
     contentTone: isOneOf(input.contentTone, materialRecipeContentTones) ? input.contentTone : fallback.contentTone,
-    fontWeight: isOneOf(input.fontWeight, materialRecipeFontWeights) ? input.fontWeight : fallback.fontWeight,
+    fontWeight: sanitizeFontWeight(input.fontWeight, fallback.fontWeight),
     fontStyle: isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
-    textTransform: isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
+    textTransform: input.textTransform === 'inherit' || isOneOf(input.textTransform, materialRecipeTextTransforms)
+      ? input.textTransform
+      : fallback.textTransform,
+    textEmbossMode: isOneOf(input.textEmbossMode, ['none', 'dark', 'light'] as const)
+      ? input.textEmbossMode
+      : fallback.textEmbossMode,
+    textEmbossStrength: clamp(input.textEmbossStrength, fallback.textEmbossStrength ?? 100, 0, 100),
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
+    textOpacity: clamp(input.textOpacity, fallback.textOpacity ?? 90, 0, 100),
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
     textX: clamp(input.textX, fallback.textX, -80, 80),
     textY: clamp(input.textY, fallback.textY, -80, 80),
+  };
+};
+
+const sanitizeFeedBackgroundImage = (value: unknown, fallback: FeedBackgroundImageRecipe): FeedBackgroundImageRecipe => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedBackgroundImageRecipe> : {};
+  return {
+    binding: 'image',
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
+    fit: input.fit === 'contain' || input.fit === 'cover' ? input.fit : fallback.fit,
+    x: clamp(input.x, fallback.x, -100, 100),
+    y: clamp(input.y, fallback.y, -100, 100),
+    scale: clamp(input.scale, fallback.scale, 50, 180),
+    fadeMode: isOneOf(input.fadeMode, feedMediaFadeModes) ? input.fadeMode : fallback.fadeMode,
+    fadeStrength: clamp(input.fadeStrength, fallback.fadeStrength, 0, 100),
+    fadeSize: clamp(input.fadeSize, fallback.fadeSize, 0, 100),
+  };
+};
+
+const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout): FeedNodeLayout => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedNodeLayout> : {};
+  return {
+    x: clamp(input.x, fallback.x, -50, 150),
+    y: clamp(input.y, fallback.y, -50, 150),
+    width: clamp(input.width, fallback.width, 4, 140),
+    height: clamp(input.height, fallback.height, 4, 140),
+    padding: clamp(input.padding, fallback.padding, 0, 40),
+    gap: clamp(input.gap, fallback.gap, 0, 40),
+    align: isOneOf(input.align, ['left', 'center', 'right'] as const) ? input.align : fallback.align,
+    justify: isOneOf(input.justify, ['start', 'center', 'end'] as const) ? input.justify : fallback.justify,
+  };
+};
+
+const sanitizeFeedCardNode = (value: unknown, fallback: FeedCardNode): FeedCardNode => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedCardNode> : {};
+  const type = isOneOf(input.type, ['container', 'text', 'button'] as const) ? input.type : fallback.type;
+  const childrenInput = Array.isArray(input.children) ? input.children : [];
+  return {
+    id: typeof input.id === 'string' && input.id.trim() ? input.id : fallback.id,
+    label: typeof input.label === 'string' && input.label.trim() ? input.label : fallback.label,
+    type,
+    binding: isOneOf(input.binding, feedTextSlotIds) ? input.binding : fallback.binding,
+    layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
+    surface: input.surface ? sanitizeMaterialRecipe(input.surface, fallback.surface || createFeedRegionSurface()) : fallback.surface ? cloneMaterialRecipe(fallback.surface) : undefined,
+    text: input.text ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle()) : fallback.text ? cloneFeedSlotStyle(fallback.text) : undefined,
+    children: (fallback.children || []).map((childFallback, index) => sanitizeFeedCardNode(childrenInput[index], childFallback)),
   };
 };
 
@@ -707,17 +1415,35 @@ const sanitizeFeedCardTypes = (value: unknown): FeedCardTypes => {
   feedCardTypeIds.forEach((id) => {
     const raw = typeof input[id] === 'object' && input[id] !== null ? input[id] as Partial<FeedCardTypeRecipe> : {};
     const fallback = defaultFeedCardTypes[id];
+    const rawSlots = typeof raw.slots === 'object' && raw.slots !== null ? raw.slots : undefined;
+    const usesLegacyTextOverrideSchema = !rawSlots || !Object.values(rawSlots).some((rawSlot) => (
+      typeof rawSlot === 'object'
+      && rawSlot !== null
+      && 'overrideStyle' in rawSlot
+      && 'overrideParagraphGap' in rawSlot
+    ));
     next[id] = {
       ...fallback,
       name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name,
       description: typeof raw.description === 'string' && raw.description.trim() ? raw.description.trim() : fallback.description,
       surface: sanitizeMaterialRecipe(raw.surface, fallback.surface),
-      slots: {
-        eyebrow: sanitizeFeedTextSlotStyle(raw.slots?.eyebrow, fallback.slots.eyebrow),
-        title: sanitizeFeedTextSlotStyle(raw.slots?.title, fallback.slots.title),
-        body: sanitizeFeedTextSlotStyle(raw.slots?.body, fallback.slots.body),
-        meta: sanitizeFeedTextSlotStyle(raw.slots?.meta, fallback.slots.meta),
-      },
+      backgroundImage: sanitizeFeedBackgroundImage(raw.backgroundImage, fallback.backgroundImage),
+      children: fallback.children.map((childFallback, index) => sanitizeFeedCardNode(Array.isArray(raw.children) ? raw.children[index] : undefined, childFallback)),
+      slots: Object.fromEntries(
+        feedTextSlotIds.map((slot) => {
+          const sanitized = sanitizeFeedTextSlotStyle(rawSlots?.[slot], fallback.slots[slot]);
+          const shouldInheritBodyWeight = (
+            feedSlotsInheritingBodyWeight.has(slot)
+            && (usesLegacyTextOverrideSchema || sanitized.fontWeight === fallback.slots[slot].fontWeight)
+          );
+          return [
+            slot,
+            shouldInheritBodyWeight
+              ? { ...sanitized, overrideWeight: false }
+              : sanitized,
+          ];
+        }),
+      ) as Record<FeedTextSlotId, FeedTextSlotStyle>,
     };
   });
   return next;
@@ -765,7 +1491,7 @@ const sanitizeMaterialPresets = (value: unknown): MaterialPresetsByPart => {
   return empty;
 };
 
-const Slider = (props: { value: number; min?: number; max?: number; step?: number; onInput: (value: number) => void }) => (
+const Slider = (props: { value: number; min?: number; max?: number; step?: number; disabled?: boolean; onInput: (value: number) => void }) => (
   <label class="ui-lab-slider">
     <input
       type="range"
@@ -773,16 +1499,18 @@ const Slider = (props: { value: number; min?: number; max?: number; step?: numbe
       max={props.max ?? 100}
       step={props.step ?? 1}
       value={props.value}
+      disabled={props.disabled}
       onInput={(event) => props.onInput(Number(event.currentTarget.value))}
     />
     <output>{props.value}</output>
   </label>
 );
 
-const MiniButton = (props: { active?: boolean; children: JSX.Element; onClick: () => void }) => (
+const MiniButton = (props: { active?: boolean; disabled?: boolean; children: JSX.Element; onClick: () => void }) => (
   <button
     type="button"
     class={`ui-lab-mini-button ${props.active ? 'is-active' : ''}`}
+    disabled={props.disabled}
     onClick={props.onClick}
   >
     {props.children}
@@ -900,201 +1628,671 @@ const TitleRecipeEditor = (props: { title: TitleRecipe; onChange: (title: TitleR
   );
 };
 
+const flattenMaterialTargets = (targets: MaterialEditableTarget[], depth = 0): FlatMaterialEditableTarget[] => (
+  targets.flatMap((target) => [
+    { target, depth },
+    ...flattenMaterialTargets(target.children || [], depth + 1),
+  ])
+);
+
+const updateFeedNodeById = (nodes: FeedCardNode[], nodeId: string, updateNode: (node: FeedCardNode) => FeedCardNode): FeedCardNode[] => (
+  nodes.map((node) => (
+    node.id === nodeId
+      ? updateNode(node)
+      : { ...node, children: updateFeedNodeById(node.children || [], nodeId, updateNode) }
+  ))
+);
+
+const findFeedNodeById = (nodes: FeedCardNode[], nodeId: string): FeedCardNode | undefined => {
+  for (const node of nodes) {
+    if (node.id === nodeId) return node;
+    const child = findFeedNodeById(node.children || [], nodeId);
+    if (child) return child;
+  }
+  return undefined;
+};
+
 const FeedRecipeEditor = (props: {
   feed: FeedRecipe;
   onChange: (feed: FeedRecipe) => void;
   stories: FeedStory[];
   selectedStoryId: string;
   onSelectedStoryIdChange: (storyId: string) => void;
+  onStoryTextChange: (storyId: string, slotId: FeedTextSlotId, value: string) => void;
   cardTypes: FeedCardTypes;
   editingCardTypeId: FeedCardTypeId;
-  onEditingCardTypeIdChange: (id: FeedCardTypeId) => void;
+  selectedMaterialTargetId: string;
+  storyImageOverrides: Record<string, string>;
+  onStoryImageOverrideChange: (storyId: string, image: string | null) => void;
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
-  const [selectedSlot, setSelectedSlot] = createSignal<FeedTextSlotId>('title');
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
     props.onChange({ ...props.feed, [key]: value });
   };
   const selectedStory = () => props.stories.find((story) => story.id === props.selectedStoryId) || props.stories[0];
+  const selectedStoryImage = () => props.storyImageOverrides[selectedStory().id] || selectedStory().image;
+  const selectedNodeStoryText = () => {
+    const binding = selectedTargetNode()?.binding;
+    return binding ? selectedStory()[binding] || '' : '';
+  };
   const editingCardType = () => props.cardTypes[props.editingCardTypeId];
-  const selectedSlotStyle = () => editingCardType().slots[selectedSlot()];
+  const selectedTargetNode = () => {
+    const target = parseFeedMaterialTargetId(props.selectedMaterialTargetId);
+    return target?.nodeId ? findFeedNodeById(editingCardType().children, target.nodeId) : undefined;
+  };
+  const isEditingChildNode = () => Boolean(selectedTargetNode());
+  const isEditingCardRoot = () => !isEditingChildNode();
   const updateEditingCardType = (updates: Partial<FeedCardTypeRecipe>) => {
     props.onCardTypeChange({ ...editingCardType(), ...updates });
   };
-  const updateSlot = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
-    const cardType = editingCardType();
-    props.onCardTypeChange({
-      ...cardType,
-      slots: {
-        ...cardType.slots,
-        [selectedSlot()]: {
-          ...cardType.slots[selectedSlot()],
-          [key]: value,
-        },
+  const updateBackground = <K extends keyof FeedBackgroundImageRecipe>(key: K, value: FeedBackgroundImageRecipe[K]) => {
+    updateEditingCardType({
+      backgroundImage: {
+        ...editingCardType().backgroundImage,
+        [key]: value,
       },
     });
+  };
+  const updateSelectedNode = (updates: Partial<FeedCardNode>) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    updateEditingCardType({
+      children: updateFeedNodeById(editingCardType().children, node.id, (current) => ({ ...current, ...updates })),
+    });
+  };
+  const updateSelectedNodeLayout = <K extends keyof FeedNodeLayout>(key: K, value: FeedNodeLayout[K]) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    updateSelectedNode({
+      layout: {
+        ...node.layout,
+        [key]: value,
+      },
+    });
+  };
+  const selectedNodeCanEditText = () => {
+    const node = selectedTargetNode();
+    return Boolean(node?.binding) && (node?.type === 'text' || node?.type === 'button' || node?.type === 'container');
+  };
+  const selectedNodeTextMode = () => {
+    const node = selectedTargetNode();
+    return node && selectedNodeCanEditText() && node.text && !node.text.inherit ? 'custom' : 'inherit';
+  };
+  const updateSelectedNodeTextMode = (mode: 'inherit' | 'custom') => {
+    const node = selectedTargetNode();
+    if (!node || !selectedNodeCanEditText()) return;
+    updateSelectedNode({
+      text: mode === 'inherit'
+        ? undefined
+        : createLocalTextOverrideStyle(resolveFeedNodeTextStyle(editingCardType(), node)),
+    });
+  };
+  const selectedNodeTextStyle = () => {
+    const node = selectedTargetNode();
+    return node && selectedNodeCanEditText() ? resolveFeedNodeTextEditorStyle(editingCardType(), node) : undefined;
+  };
+  const selectedNodeTextCustom = () => selectedNodeCanEditText() && selectedNodeTextMode() === 'custom';
+  const updateSelectedNodeTextStyle = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
+    const node = selectedTargetNode();
+    if (!node || !selectedNodeCanEditText()) return;
+    updateSelectedNode({
+      text: {
+        ...resolveFeedNodeTextEditorStyle(editingCardType(), node),
+        inherit: false,
+        [key]: value,
+      },
+    });
+  };
+  const nodeTextControlLabel = (
+    text: string,
+    key: keyof FeedTextSlotStyle,
+  ) => (
+    <span class="ui-lab-control-label ui-lab-control-label--compact">
+      <input
+        type="checkbox"
+        checked={Boolean(selectedNodeTextStyle()?.[key])}
+        disabled={!selectedNodeTextCustom()}
+        onChange={(event) => updateSelectedNodeTextStyle(key, event.currentTarget.checked as FeedTextSlotStyle[keyof FeedTextSlotStyle])}
+      />
+      {text}
+    </span>
+  );
+  const handleImageFileChange = (event: Event & { currentTarget: HTMLInputElement }) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') props.onStoryImageOverrideChange(selectedStory().id, reader.result);
+    });
+    reader.readAsDataURL(file);
+    event.currentTarget.value = '';
   };
 
   return (
     <>
-      <div class="ui-lab-control-group">
-        <SectionLabel size="xs">Fake Server</SectionLabel>
-        <div class="ui-lab-control-row">
-          <span>Story</span>
-          <select class="ui-lab-select" value={props.selectedStoryId} onChange={(event) => props.onSelectedStoryIdChange(event.currentTarget.value)}>
-            <For each={props.stories}>
-              {(story) => <option value={story.id}>{story.label}</option>}
-            </For>
-          </select>
-        </div>
-        <div class="ui-lab-control-row">
-          <span>Story Uses</span>
-          <span>{selectedStory().cardTypeId}</span>
-        </div>
-      </div>
-
-      <div class="ui-lab-control-group">
-        <SectionLabel size="xs">Card Type</SectionLabel>
-        <div class="ui-lab-control-row">
-          <span>Editing</span>
-          <select class="ui-lab-select" value={props.editingCardTypeId} onChange={(event) => props.onEditingCardTypeIdChange(event.currentTarget.value as FeedCardTypeId)}>
-            <For each={feedCardTypeIds}>
-              {(id) => <option value={id}>{props.cardTypes[id].name}</option>}
-            </For>
-          </select>
-        </div>
-        <div class="ui-lab-control-row">
-          <span>Name</span>
-          <input class="ui-lab-input main-material-text-input" value={editingCardType().name} onInput={(event) => updateEditingCardType({ name: event.currentTarget.value })} />
-        </div>
-      </div>
-
-      <div class="ui-lab-control-group">
-        <SectionLabel size="xs">Feed Text Slots</SectionLabel>
-        <div class="ui-lab-control-row">
-          <span>Slot</span>
-          <div class="ui-lab-toggles">
-            <For each={feedTextSlotIds}>
-              {(slot) => (
-                <MiniButton active={selectedSlot() === slot} onClick={() => setSelectedSlot(slot)}>
-                  {feedTextSlotLabels[slot]}
-                </MiniButton>
-              )}
-            </For>
-          </div>
-        </div>
-        <div class="ui-lab-control-row">
-          <span>Inherit</span>
-          <div class="ui-lab-toggles">
-            <MiniButton active={selectedSlotStyle().inherit} onClick={() => updateSlot('inherit', !selectedSlotStyle().inherit)}>
-              on
-            </MiniButton>
-          </div>
-        </div>
-        <Show when={!selectedSlotStyle().inherit}>
+      <Show when={isEditingCardRoot()}>
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Fake Server</SectionLabel>
           <div class="ui-lab-control-row">
-            <span>Font</span>
-            <select class="ui-lab-select" value={selectedSlotStyle().textFontFamily} onChange={(event) => updateSlot('textFontFamily', event.currentTarget.value)}>
-              <For each={materialRecipeTextFonts}>
-                {(font) => <option value={font.value}>{font.label}</option>}
+            <span>Story</span>
+            <select class="ui-lab-select" value={props.selectedStoryId} onChange={(event) => props.onSelectedStoryIdChange(event.currentTarget.value)}>
+              <For each={props.stories}>
+                {(story) => <option value={story.id}>{story.label}</option>}
               </For>
             </select>
           </div>
           <div class="ui-lab-control-row">
-            <span>Size</span>
-            <Slider value={selectedSlotStyle().textSizeRem} min={0.5} max={4} step={0.05} onInput={(value) => updateSlot('textSizeRem', value)} />
+            <span>Story Uses</span>
+            <span>{selectedStory().cardTypeId}</span>
+          </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Card Type</SectionLabel>
+          <div class="ui-lab-control-row">
+            <span>Editing</span>
+            <span>{props.editingCardTypeId}</span>
           </div>
           <div class="ui-lab-control-row">
-            <span>Color</span>
+            <span>Name</span>
+            <input class="ui-lab-input main-material-text-input" value={editingCardType().name} onInput={(event) => updateEditingCardType({ name: event.currentTarget.value })} />
+          </div>
+        </div>
+
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Card Image</SectionLabel>
+          <div class="ui-lab-control-row">
+            <span>Enabled</span>
             <div class="ui-lab-toggles">
-              <For each={materialRecipeContentTones}>
-                {(tone) => (
-                  <MiniButton active={selectedSlotStyle().contentTone === tone} onClick={() => updateSlot('contentTone', tone)}>
-                    {tone}
-                  </MiniButton>
-                )}
-              </For>
+              <MiniButton active={editingCardType().backgroundImage.enabled} onClick={() => updateBackground('enabled', true)}>on</MiniButton>
+              <MiniButton active={!editingCardType().backgroundImage.enabled} onClick={() => updateBackground('enabled', false)}>off</MiniButton>
             </div>
           </div>
           <div class="ui-lab-control-row">
-            <span>Weight</span>
+            <span>Image URL</span>
+            <input
+              class="ui-lab-input main-material-text-input"
+              value={selectedStoryImage()}
+              onInput={(event) => props.onStoryImageOverrideChange(selectedStory().id, event.currentTarget.value)}
+            />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>File</span>
+            <input class="ui-lab-input main-material-file-input" type="file" accept="image/*" onChange={handleImageFileChange} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Override</span>
             <div class="ui-lab-toggles">
-              <For each={materialRecipeFontWeights}>
-                {(weight) => (
-                  <MiniButton active={selectedSlotStyle().fontWeight === weight} onClick={() => updateSlot('fontWeight', weight)}>
-                    {weight}
-                  </MiniButton>
-                )}
-              </For>
+              <MiniButton active={Boolean(props.storyImageOverrides[selectedStory().id])} onClick={() => props.onStoryImageOverrideChange(selectedStory().id, null)}>clear</MiniButton>
             </div>
           </div>
           <div class="ui-lab-control-row">
-            <span>Style</span>
+            <span>Fit</span>
             <div class="ui-lab-toggles">
-              <For each={materialRecipeFontStyles}>
-                {(style) => (
-                  <MiniButton active={selectedSlotStyle().fontStyle === style} onClick={() => updateSlot('fontStyle', style)}>
-                    {style}
-                  </MiniButton>
-                )}
-              </For>
+              <MiniButton active={editingCardType().backgroundImage.fit === 'cover'} onClick={() => updateBackground('fit', 'cover')}>cover</MiniButton>
+              <MiniButton active={editingCardType().backgroundImage.fit === 'contain'} onClick={() => updateBackground('fit', 'contain')}>contain</MiniButton>
             </div>
           </div>
           <div class="ui-lab-control-row">
-            <span>Case</span>
-            <div class="ui-lab-toggles">
-              <For each={materialRecipeTextTransforms}>
-                {(textCase) => (
-                  <MiniButton active={selectedSlotStyle().textTransform === textCase} onClick={() => updateSlot('textTransform', textCase)}>
-                    {textCase}
-                  </MiniButton>
-                )}
-              </For>
-            </div>
-          </div>
-          <div class="ui-lab-control-row">
-            <span>Align</span>
-            <div class="ui-lab-toggles">
-              <For each={materialRecipeTextAligns}>
-                {(align) => (
-                  <MiniButton active={selectedSlotStyle().textAlign === align} onClick={() => updateSlot('textAlign', align)}>
-                    {align}
-                  </MiniButton>
-                )}
-              </For>
-            </div>
-          </div>
-          <div class="ui-lab-control-row">
-            <span>Track</span>
-            <Slider value={selectedSlotStyle().letterSpacing} min={-0.08} max={0.24} step={0.005} onInput={(value) => updateSlot('letterSpacing', value)} />
+            <span>Scale</span>
+            <Slider value={editingCardType().backgroundImage.scale} min={50} max={180} onInput={(value) => updateBackground('scale', value)} />
           </div>
           <div class="ui-lab-control-row">
             <span>X</span>
-            <Slider value={selectedSlotStyle().textX} min={-80} max={80} onInput={(value) => updateSlot('textX', value)} />
+            <Slider value={editingCardType().backgroundImage.x} min={-100} max={100} onInput={(value) => updateBackground('x', value)} />
           </div>
           <div class="ui-lab-control-row">
             <span>Y</span>
-            <Slider value={selectedSlotStyle().textY} min={-80} max={80} onInput={(value) => updateSlot('textY', value)} />
+            <Slider value={editingCardType().backgroundImage.y} min={-100} max={100} onInput={(value) => updateBackground('y', value)} />
           </div>
+          <div class="ui-lab-control-row">
+            <span>Fade</span>
+            <select class="ui-lab-select" value={editingCardType().backgroundImage.fadeMode} onChange={(event) => updateBackground('fadeMode', event.currentTarget.value as FeedMediaFadeMode)}>
+              <For each={feedMediaFadeModes}>
+                {(mode) => <option value={mode}>{feedMediaFadeLabels[mode]}</option>}
+              </For>
+            </select>
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Fade Power</span>
+            <Slider value={editingCardType().backgroundImage.fadeStrength} min={0} max={100} onInput={(value) => updateBackground('fadeStrength', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Fade Size</span>
+            <Slider value={editingCardType().backgroundImage.fadeSize} min={0} max={100} onInput={(value) => updateBackground('fadeSize', value)} />
+          </div>
+        </div>
+      </Show>
+
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">Selected Node</SectionLabel>
+        <Show when={selectedTargetNode()}>
+          {(node) => (
+            <>
+              <div class="ui-lab-control-row">
+                <span>Node</span>
+                <span>{node().label}</span>
+              </div>
+              <Show when={node().binding}>
+                {(binding) => (
+                  <div class="ui-lab-control-row ui-lab-control-row--stacked">
+                    <span>Markup</span>
+                    <textarea
+                      class="ui-lab-input main-material-text-input main-material-markup-input"
+                      value={selectedNodeStoryText()}
+                      onInput={(event) => props.onStoryTextChange(selectedStory().id, binding(), event.currentTarget.value)}
+                    />
+                  </div>
+                )}
+              </Show>
+              <Show when={selectedNodeCanEditText()}>
+                <div class="ui-lab-control-row">
+                  <span>Text</span>
+                  <div class="ui-lab-toggles">
+                    <MiniButton active={selectedNodeTextMode() === 'inherit'} onClick={() => updateSelectedNodeTextMode('inherit')}>inherit</MiniButton>
+                    <MiniButton active={selectedNodeTextMode() === 'custom'} onClick={() => updateSelectedNodeTextMode('custom')}>custom</MiniButton>
+                  </div>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideColor ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Color', 'overrideColor')}
+                  <select
+                    class="ui-lab-select"
+                    value={selectedNodeTextStyle()?.contentTone ?? 'white'}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideColor}
+                    onChange={(event) => updateSelectedNodeTextStyle('contentTone', event.currentTarget.value as MaterialTone)}
+                  >
+                    <For each={materialRecipeContentTones}>
+                      {(tone) => <option value={tone}>{tone}</option>}
+                    </For>
+                  </select>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideOpacity ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Opacity', 'overrideOpacity')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.textOpacity ?? 90}
+                    min={0}
+                    max={100}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideOpacity}
+                    onInput={(value) => updateSelectedNodeTextStyle('textOpacity', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideFont ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Font', 'overrideFont')}
+                  <select
+                    class="ui-lab-select"
+                    value={selectedNodeTextStyle()?.textFontFamily ?? feedFontCondensed}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideFont}
+                    onChange={(event) => updateSelectedNodeTextStyle('textFontFamily', event.currentTarget.value)}
+                  >
+                    <For each={materialRecipeTextFonts}>
+                      {(font) => <option value={font.value}>{font.label}</option>}
+                    </For>
+                  </select>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideSize ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Size', 'overrideSize')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.textSizeRem ?? 1}
+                    min={0.4}
+                    max={2.4}
+                    step={0.05}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideSize}
+                    onInput={(value) => updateSelectedNodeTextStyle('textSizeRem', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideWeight ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Weight', 'overrideWeight')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.fontWeight ?? 600}
+                    min={100}
+                    max={900}
+                    step={100}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideWeight}
+                    onInput={(value) => updateSelectedNodeTextStyle('fontWeight', value as FontWeightToken)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideStyle ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Style', 'overrideStyle')}
+                  <select
+                    class="ui-lab-select"
+                    value={selectedNodeTextStyle()?.fontStyle ?? 'normal'}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideStyle}
+                    onChange={(event) => updateSelectedNodeTextStyle('fontStyle', event.currentTarget.value as FontStyleToken)}
+                  >
+                    <For each={materialRecipeFontStyles}>
+                      {(style) => <option value={style}>{style}</option>}
+                    </For>
+                  </select>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideCase ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Case', 'overrideCase')}
+                  <select
+                    class="ui-lab-select"
+                    value={selectedNodeTextStyle()?.textTransform ?? 'inherit'}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideCase}
+                    onChange={(event) => updateSelectedNodeTextStyle('textTransform', event.currentTarget.value as FeedTextTransformToken)}
+                  >
+                    <For each={['inherit', ...materialRecipeTextTransforms] as FeedTextTransformToken[]}>
+                      {(transform) => <option value={transform}>{transform}</option>}
+                    </For>
+                  </select>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideLineHeight ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Line', 'overrideLineHeight')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.lineHeight ?? 1}
+                    min={0.7}
+                    max={1.8}
+                    step={0.02}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideLineHeight}
+                    onInput={(value) => updateSelectedNodeTextStyle('lineHeight', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideParagraphGap ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Para Gap', 'overrideParagraphGap')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.paragraphGap ?? 0}
+                    min={-24}
+                    max={48}
+                    step={1}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideParagraphGap}
+                    onInput={(value) => updateSelectedNodeTextStyle('paragraphGap', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideLetterSpacing ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Track', 'overrideLetterSpacing')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.letterSpacing ?? 0}
+                    min={-0.08}
+                    max={0.24}
+                    step={0.01}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideLetterSpacing}
+                    onInput={(value) => updateSelectedNodeTextStyle('letterSpacing', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Emboss', 'overrideEmboss')}
+                  <div class="ui-lab-toggles">
+                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'dark'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'dark')}>dark</MiniButton>
+                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'light'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'light')}>light</MiniButton>
+                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'none'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'none')}>none</MiniButton>
+                  </div>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
+                  <span>Power</span>
+                  <Slider
+                    value={selectedNodeTextStyle()?.textEmbossStrength ?? 100}
+                    min={0}
+                    max={100}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss}
+                    onInput={(value) => updateSelectedNodeTextStyle('textEmbossStrength', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideAlign ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Align', 'overrideAlign')}
+                  <div class="ui-lab-toggles">
+                    <For each={materialRecipeTextAligns}>
+                      {(align) => (
+                        <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideAlign} active={selectedNodeTextStyle()?.textAlign === align} onClick={() => updateSelectedNodeTextStyle('textAlign', align)}>
+                          {align}
+                        </MiniButton>
+                      )}
+                    </For>
+                  </div>
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overridePosition ? '' : 'ui-lab-control-row--disabled'}`}>
+                  {nodeTextControlLabel('Text X', 'overridePosition')}
+                  <Slider
+                    value={selectedNodeTextStyle()?.textX ?? 0}
+                    min={-80}
+                    max={80}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overridePosition}
+                    onInput={(value) => updateSelectedNodeTextStyle('textX', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overridePosition ? '' : 'ui-lab-control-row--disabled'}`}>
+                  <span>Text Y</span>
+                  <Slider
+                    value={selectedNodeTextStyle()?.textY ?? 0}
+                    min={-80}
+                    max={80}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overridePosition}
+                    onInput={(value) => updateSelectedNodeTextStyle('textY', value)}
+                  />
+                </div>
+              </Show>
+              <div class="ui-lab-control-row">
+                <span>X</span>
+                <Slider value={node().layout.x} min={-50} max={150} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>Y</span>
+                <Slider value={node().layout.y} min={-50} max={150} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>W</span>
+                <Slider value={node().layout.width} min={4} max={140} onInput={(value) => updateSelectedNodeLayout('width', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>H</span>
+                <Slider value={node().layout.height} min={4} max={140} onInput={(value) => updateSelectedNodeLayout('height', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>Pad</span>
+                <Slider value={node().layout.padding} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('padding', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>{selectedNodeCanEditText() ? 'Line Gap' : 'Gap'}</span>
+                <Slider value={node().layout.gap} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('gap', value)} />
+              </div>
+              <div class="ui-lab-control-row">
+                <span>Align</span>
+                <div class="ui-lab-toggles">
+                  <For each={['left', 'center', 'right'] as const}>
+                    {(align) => (
+                      <MiniButton active={node().layout.align === align} onClick={() => updateSelectedNodeLayout('align', align)}>
+                        {align}
+                      </MiniButton>
+                    )}
+                  </For>
+                </div>
+              </div>
+              <div class="ui-lab-control-row">
+                <span>Justify</span>
+                <div class="ui-lab-toggles">
+                  <For each={['start', 'center', 'end'] as const}>
+                    {(justify) => (
+                      <MiniButton active={node().layout.justify === justify} onClick={() => updateSelectedNodeLayout('justify', justify)}>
+                        {justify}
+                      </MiniButton>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </>
+          )}
         </Show>
       </div>
 
-      <div class="ui-lab-control-group">
-        <SectionLabel size="xs">Feed Layout</SectionLabel>
-        <div class="ui-lab-control-row">
-          <span>Content Y</span>
-          <Slider value={props.feed.contentY} min={-32} max={48} onInput={(value) => update('contentY', value)} />
+      <Show when={isEditingCardRoot()}>
+        <div class="ui-lab-control-group">
+          <SectionLabel size="xs">Feed Layout</SectionLabel>
+          <div class="ui-lab-control-row">
+            <span>Content Y</span>
+            <Slider value={props.feed.contentY} min={-32} max={48} onInput={(value) => update('contentY', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Copy Lift</span>
+            <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
+          </div>
+          <div class="ui-lab-control-row">
+            <span>Dot Gap</span>
+            <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
+          </div>
         </div>
-        <div class="ui-lab-control-row">
-          <span>Copy Lift</span>
-          <Slider value={props.feed.cardGap} min={8} max={32} onInput={(value) => update('cardGap', value)} />
-        </div>
-        <div class="ui-lab-control-row">
-          <span>Dot Gap</span>
-          <Slider value={props.feed.newsGap} min={6} max={28} onInput={(value) => update('newsGap', value)} />
-        </div>
-      </div>
+      </Show>
     </>
+  );
+};
+
+const FeedTextGlobalsEditor = (props: {
+  cardType: FeedCardTypeRecipe;
+  onSlotChange: <K extends keyof FeedTextSlotStyle>(slot: FeedTextSlotId, key: K, value: FeedTextSlotStyle[K]) => void;
+}) => {
+  const slot = (slotId: FeedTextSlotId) => props.cardType.slots[slotId];
+  const typeRows: Array<{ label: string; slot: FeedTextSlotId; paragraph?: boolean; line?: boolean; track?: boolean }> = [
+    { label: 'Body', slot: 'contractBriefing', paragraph: true, line: true, track: true },
+    { label: 'H1', slot: 'contractEyebrow', line: true },
+    { label: 'H2', slot: 'contractTitle', line: true },
+    { label: 'H3', slot: 'contractRewardValue', line: true },
+    { label: 'H4', slot: 'contractH4', line: true },
+    { label: 'Acc 1', slot: 'contractAcc1' },
+    { label: 'Acc 2', slot: 'contractAcc2' },
+    { label: 'Acc 3', slot: 'contractAcc3' },
+    { label: 'Acc 4', slot: 'contractAcc4' },
+    { label: 'Rule', slot: 'contractRule' },
+    { label: 'Button', slot: 'contractCtaLabel', track: true },
+  ];
+  const overridableSlots = new Set<FeedTextSlotId>([
+    'contractBriefing',
+    'contractEyebrow',
+    'contractTitle',
+    'contractRewardValue',
+    'contractH4',
+    'contractAcc1',
+    'contractAcc2',
+    'contractAcc3',
+    'contractAcc4',
+    'contractCtaLabel',
+  ]);
+  const canToggle = (slotId: FeedTextSlotId) => overridableSlots.has(slotId);
+  const overrideFor = (slotId: FeedTextSlotId, key: keyof FeedTextSlotStyle) => !canToggle(slotId) || Boolean(slot(slotId)[key]);
+  const controlLabel = (
+    slotId: FeedTextSlotId,
+    text: string,
+    key?: keyof FeedTextSlotStyle,
+  ) => (
+    <span class="ui-lab-control-label ui-lab-control-label--compact">
+      <Show when={key && canToggle(slotId)}>
+        <input
+          type="checkbox"
+          checked={Boolean(slot(slotId)[key as keyof FeedTextSlotStyle])}
+          onChange={(event) => props.onSlotChange(slotId, key as keyof FeedTextSlotStyle, event.currentTarget.checked as FeedTextSlotStyle[keyof FeedTextSlotStyle])}
+        />
+      </Show>
+      {text}
+    </span>
+  );
+
+  return (
+    <div class="ui-lab-control-grid">
+      <For each={typeRows}>
+        {(row) => {
+          const colorEnabled = () => overrideFor(row.slot, 'overrideColor');
+          const opacityEnabled = () => overrideFor(row.slot, 'overrideOpacity');
+          const fontEnabled = () => overrideFor(row.slot, 'overrideFont');
+          const sizeEnabled = () => overrideFor(row.slot, 'overrideSize');
+          const weightEnabled = () => overrideFor(row.slot, 'overrideWeight');
+          const caseEnabled = () => overrideFor(row.slot, 'overrideCase');
+          const embossEnabled = () => overrideFor(row.slot, 'overrideEmboss');
+          const lineEnabled = () => overrideFor(row.slot, 'overrideLineHeight');
+          const trackEnabled = () => overrideFor(row.slot, 'overrideLetterSpacing');
+          return (
+          <div class="ui-lab-control-group">
+            <SectionLabel size="xs">{row.label}</SectionLabel>
+            <div class={`ui-lab-control-row ${colorEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Color', 'overrideColor')}
+              <select
+                class="ui-lab-select"
+                value={slot(row.slot).contentTone}
+                disabled={!colorEnabled()}
+                onChange={(event) => props.onSlotChange(row.slot, 'contentTone', event.currentTarget.value as MaterialTone)}
+              >
+                <For each={materialRecipeContentTones}>
+                  {(tone) => <option value={tone}>{tone}</option>}
+                </For>
+              </select>
+            </div>
+            <div class={`ui-lab-control-row ${opacityEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Opacity', 'overrideOpacity')}
+              <Slider value={slot(row.slot).textOpacity} min={0} max={100} disabled={!opacityEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textOpacity', value)} />
+            </div>
+            <div class={`ui-lab-control-row ${fontEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Font', 'overrideFont')}
+              <select
+                class="ui-lab-select"
+                value={slot(row.slot).textFontFamily}
+                disabled={!fontEnabled()}
+                onChange={(event) => props.onSlotChange(row.slot, 'textFontFamily', event.currentTarget.value)}
+              >
+                <For each={materialRecipeTextFonts}>
+                  {(font) => <option value={font.value}>{font.label}</option>}
+                </For>
+              </select>
+            </div>
+            <div class={`ui-lab-control-row ${sizeEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Size', 'overrideSize')}
+              <Slider value={slot(row.slot).textSizeRem} min={0.4} max={2.4} step={0.05} disabled={!sizeEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textSizeRem', value)} />
+            </div>
+            <div class={`ui-lab-control-row ${weightEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Weight', 'overrideWeight')}
+              <Slider
+                value={slot(row.slot).fontWeight}
+                min={100}
+                max={900}
+                step={100}
+                disabled={!weightEnabled()}
+                onInput={(value) => props.onSlotChange(row.slot, 'fontWeight', value as FontWeightToken)}
+              />
+            </div>
+            <Show when={row.paragraph}>
+              <div class="ui-lab-control-row">
+                <span>Para Gap</span>
+                <Slider value={slot(row.slot).paragraphGap} min={-24} max={48} step={1} onInput={(value) => props.onSlotChange(row.slot, 'paragraphGap', value)} />
+              </div>
+            </Show>
+            <Show when={row.line}>
+              <div class={`ui-lab-control-row ${lineEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Line', 'overrideLineHeight')}
+                <Slider value={slot(row.slot).lineHeight} min={0.7} max={1.8} step={0.02} disabled={!lineEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'lineHeight', value)} />
+              </div>
+            </Show>
+            <Show when={row.track || row.line}>
+              <div class={`ui-lab-control-row ${trackEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                {controlLabel(row.slot, 'Track', 'overrideLetterSpacing')}
+                <Slider value={slot(row.slot).letterSpacing} min={-0.08} max={0.24} step={0.01} disabled={!trackEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'letterSpacing', value)} />
+              </div>
+            </Show>
+            <div class={`ui-lab-control-row ${caseEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Case', 'overrideCase')}
+              <select
+                class="ui-lab-select"
+                value={slot(row.slot).textTransform}
+                disabled={!caseEnabled()}
+                onChange={(event) => props.onSlotChange(row.slot, 'textTransform', event.currentTarget.value as FeedTextTransformToken)}
+              >
+                <For each={['inherit', ...materialRecipeTextTransforms] as FeedTextTransformToken[]}>
+                  {(transform) => <option value={transform}>{transform}</option>}
+                </For>
+              </select>
+            </div>
+            <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              {controlLabel(row.slot, 'Emboss', 'overrideEmboss')}
+              <div class="ui-lab-toggles">
+                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'dark'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'dark')}>dark</MiniButton>
+                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'light'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'light')}>light</MiniButton>
+                <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'none'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'none')}>none</MiniButton>
+              </div>
+            </div>
+            <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              <span>Power</span>
+              <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
+            </div>
+          </div>
+          );
+        }}
+      </For>
+    </div>
   );
 };
 
@@ -1124,6 +2322,7 @@ const SurfaceRecipeEditor = (props: {
   onForcePreviewChange: (forcePreview: boolean) => void;
   presets: MaterialPreset[];
   selectedPresetId: string;
+  presetDirty: boolean;
   onSelectPreset: (id: string) => void;
   onSavePreset: () => void;
   onSaveNewPreset: () => void;
@@ -1154,6 +2353,9 @@ const SurfaceRecipeEditor = (props: {
         <button type="button" class="ui-lab-mini-button" onClick={props.onSaveNewPreset}>Save New</button>
         <button type="button" class="ui-lab-mini-button" disabled={!props.selectedPresetId} onClick={props.onDeletePreset}>Delete</button>
       </div>
+      <Show when={props.presetDirty}>
+        <p class="main-material-preset-dirty">Changes not saved</p>
+      </Show>
     </div>
     <MaterialRecipeEditor
       recipe={props.recipe}
@@ -1184,12 +2386,29 @@ const feedToneColors: Record<MaterialTone, string> = {
   none: 'currentColor',
   inherit: 'currentColor',
   black: 'rgb(23 20 15)',
-  white: 'rgb(255 244 213)',
+  white: 'rgb(255 255 255)',
   muted: 'rgb(143 137 124)',
-  gold: 'rgb(239 200 93)',
+  gray: 'rgb(188 184 174)',
+  brass: 'rgb(239 200 93)',
+  gold: 'rgb(248 215 112)',
   cyan: 'rgb(77 220 255)',
   red: 'rgb(255 92 83)',
   green: 'rgb(86 218 142)',
+};
+
+const feedTextEmbossShadow = (style: FeedTextSlotStyle) => {
+  if (style.textEmbossMode === 'none' || style.textEmbossStrength <= 0) return 'none';
+  const strength = Math.max(0, Math.min(100, style.textEmbossStrength)) / 100;
+  if (style.textEmbossMode === 'light') {
+    return [
+      `0 1px 0 rgb(255 255 255 / ${0.48 * strength})`,
+      `0 -1px 0 rgb(0 0 0 / ${0.16 * strength})`,
+    ].join(', ');
+  }
+  return [
+    `0 1px 0 rgb(0 0 0 / ${0.72 * strength})`,
+    `0 0 ${Math.max(1, Math.round(8 * strength))}px rgb(0 0 0 / ${0.34 * strength})`,
+  ].join(', ');
 };
 
 const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle => createFeedSlotStyle({
@@ -1199,28 +2418,491 @@ const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle 
   contentTone: recipe.contentTone,
   fontWeight: recipe.fontWeight,
   fontStyle: recipe.fontStyle,
-  textTransform: recipe.textTransform,
+  textTransform: recipe.textTransform || 'uppercase',
+  textEmbossMode: recipe.textEmboss ? (recipe.contentTone === 'black' ? 'light' : 'dark') : 'none',
+  textEmbossStrength: 100,
   letterSpacing: recipe.letterSpacing,
+  textOpacity: recipe.contentOpacity ?? 90,
   textAlign: recipe.textAlign,
   textX: recipe.textX,
   textY: recipe.textY,
 });
 
-const resolveFeedTextStyle = (cardType: FeedCardTypeRecipe, slot: FeedTextSlotId) => (
-  cardType.slots[slot].inherit ? feedBaseTextStyleFromRecipe(cardType.surface) : cardType.slots[slot]
-);
+const recipeWithFeedTextStyle = (recipe: MaterialRecipe, style: FeedTextSlotStyle): MaterialRecipe => ({
+  ...recipe,
+  textFontFamily: style.overrideFont ? style.textFontFamily : recipe.textFontFamily,
+  textSizeRem: style.overrideSize ? style.textSizeRem : recipe.textSizeRem,
+  contentTone: style.overrideColor ? style.contentTone : recipe.contentTone,
+  fontWeight: style.overrideWeight ? style.fontWeight : recipe.fontWeight,
+  fontStyle: style.fontStyle,
+  textTransform: style.overrideCase && style.textTransform !== 'inherit' ? style.textTransform : recipe.textTransform,
+  textEmboss: style.overrideEmboss ? style.textEmbossMode !== 'none' && style.textEmbossStrength > 0 : recipe.textEmboss,
+  letterSpacing: style.overrideLetterSpacing ? style.letterSpacing : recipe.letterSpacing,
+  contentOpacity: style.overrideOpacity ? style.textOpacity : recipe.contentOpacity,
+  textAlign: style.textAlign,
+  textX: style.textX,
+  textY: style.textY,
+});
+
+const mergeFeedTextStyle = (base: FeedTextSlotStyle, style: FeedTextSlotStyle): FeedTextSlotStyle => ({
+  ...style,
+  inherit: false,
+  overrideColor: true,
+  overrideOpacity: true,
+  overrideFont: true,
+  overrideSize: true,
+  overrideWeight: true,
+  overrideStyle: true,
+  overrideCase: true,
+  overrideEmboss: true,
+  overrideLineHeight: true,
+  overrideParagraphGap: true,
+  overrideLetterSpacing: true,
+  overrideAlign: true,
+  overridePosition: true,
+  textFontFamily: style.overrideFont ? style.textFontFamily : base.textFontFamily,
+  textSizeRem: style.overrideSize ? style.textSizeRem : base.textSizeRem,
+  lineHeight: style.overrideLineHeight ? style.lineHeight : base.lineHeight,
+  paragraphGap: style.overrideParagraphGap ? style.paragraphGap : base.paragraphGap,
+  contentTone: style.overrideColor ? style.contentTone : base.contentTone,
+  fontWeight: style.overrideWeight ? style.fontWeight : base.fontWeight,
+  fontStyle: style.overrideStyle ? style.fontStyle : base.fontStyle,
+  textTransform: style.overrideCase ? style.textTransform : base.textTransform,
+  textEmbossMode: style.overrideEmboss ? style.textEmbossMode : base.textEmbossMode,
+  textEmbossStrength: style.overrideEmboss ? style.textEmbossStrength : base.textEmbossStrength,
+  letterSpacing: style.overrideLetterSpacing ? style.letterSpacing : base.letterSpacing,
+  textOpacity: style.overrideOpacity ? style.textOpacity : base.textOpacity,
+  textAlign: style.overrideAlign ? style.textAlign : base.textAlign,
+  textX: style.overridePosition ? style.textX : base.textX,
+  textY: style.overridePosition ? style.textY : base.textY,
+});
+
+const preserveFeedTextOverrideFlags = (resolved: FeedTextSlotStyle, style: FeedTextSlotStyle): FeedTextSlotStyle => ({
+  ...resolved,
+  overrideColor: style.overrideColor,
+  overrideOpacity: style.overrideOpacity,
+  overrideFont: style.overrideFont,
+  overrideSize: style.overrideSize,
+  overrideWeight: style.overrideWeight,
+  overrideStyle: style.overrideStyle,
+  overrideCase: style.overrideCase,
+  overrideEmboss: style.overrideEmboss,
+  overrideLineHeight: style.overrideLineHeight,
+  overrideParagraphGap: style.overrideParagraphGap,
+  overrideLetterSpacing: style.overrideLetterSpacing,
+  overrideAlign: style.overrideAlign,
+  overridePosition: style.overridePosition,
+});
+
+const createLocalTextOverrideStyle = (resolved: FeedTextSlotStyle): FeedTextSlotStyle => ({
+  ...resolved,
+  inherit: false,
+  overrideColor: false,
+  overrideOpacity: false,
+  overrideFont: false,
+  overrideSize: false,
+  overrideWeight: false,
+  overrideStyle: false,
+  overrideCase: false,
+  overrideEmboss: false,
+  overrideLineHeight: false,
+  overrideParagraphGap: false,
+  overrideLetterSpacing: false,
+  overrideAlign: false,
+  overridePosition: false,
+});
+
+const resolveFeedTextStyle = (cardType: FeedCardTypeRecipe, slot: FeedTextSlotId) => {
+  const base = feedBaseTextStyleFromRecipe(cardType.surface);
+  const style = cardType.slots[slot];
+  return style.inherit ? base : mergeFeedTextStyle(base, style);
+};
+
+const resolveFeedNodeTextStyle = (cardType: FeedCardTypeRecipe, node: FeedCardNode) => {
+  const slot = node.binding || 'body';
+  const base = resolveFeedTextStyle(cardType, slot);
+  const style = node.text || cardType.slots[slot];
+  return style.inherit ? base : mergeFeedTextStyle(base, style);
+};
+
+const resolveFeedNodeTextEditorStyle = (cardType: FeedCardTypeRecipe, node: FeedCardNode) => {
+  const slot = node.binding || 'body';
+  const base = resolveFeedTextStyle(cardType, slot);
+  if (!node.text || node.text.inherit) return createLocalTextOverrideStyle(base);
+  return preserveFeedTextOverrideFlags(mergeFeedTextStyle(base, node.text), node.text);
+};
 
 const feedTextCss = (style: FeedTextSlotStyle): JSX.CSSProperties => ({
-  'font-family': style.textFontFamily,
-  'font-size': `${style.textSizeRem}rem`,
-  'font-weight': fontWeightTokenValue(style.fontWeight),
+  'font-family': style.overrideFont ? style.textFontFamily : 'inherit',
+  'font-size': style.overrideSize ? `${style.textSizeRem}rem` : 'inherit',
+  'font-weight': style.overrideWeight ? fontWeightTokenValue(style.fontWeight) : 'inherit',
   'font-style': style.fontStyle,
-  'text-transform': style.textTransform,
-  'letter-spacing': `${style.letterSpacing}em`,
+  'line-height': style.overrideLineHeight ? style.lineHeight : 'inherit',
+  'text-transform': style.overrideCase ? feedRichTextTransform(style) : 'inherit',
+  'letter-spacing': style.overrideLetterSpacing ? `${style.letterSpacing}em` : 'inherit',
   'text-align': style.textAlign,
-  color: feedToneColors[style.contentTone] || feedToneColors.white,
+  opacity: '1',
+  color: style.overrideColor ? feedToneColors[style.contentTone] || feedToneColors.white : 'inherit',
+  'text-shadow': style.overrideEmboss ? feedTextEmbossShadow(style) : 'inherit',
   transform: `translate(${style.textX}px, ${style.textY}px)`,
 });
+
+const richTextTagAliases: Record<string, FeedRichTextTag | 'rule' | 'br' | undefined> = {
+  accent: 'accent',
+  accentcolor: 'accent',
+  acc1: 'acc1',
+  accent1: 'acc1',
+  acc2: 'acc2',
+  accent2: 'acc2',
+  acc3: 'acc3',
+  accent3: 'acc3',
+  acc4: 'acc4',
+  accent4: 'acc4',
+  bright: 'bright',
+  normal: 'normal',
+  muted: 'muted',
+  dim: 'dim',
+  dark: 'dark',
+  black: 'black',
+  white: 'white',
+  red: 'red',
+  cyan: 'cyan',
+  green: 'green',
+  small: 'small',
+  h1: 'h1',
+  h2: 'h2',
+  h3: 'h3',
+  h4: 'h4',
+  rule: 'rule',
+  hr: 'rule',
+  br: 'br',
+};
+
+const normalizeRichTextTag = (value: string) => richTextTagAliases[value.trim().toLowerCase()];
+
+const parseFeedRichText = (value: string): FeedRichTextToken[] => {
+  const root: FeedRichTextToken[] = [];
+  const stack: Array<{ tag?: FeedRichTextTag; children: FeedRichTextToken[] }> = [{ children: root }];
+  const appendText = (text: string) => {
+    if (!text) return;
+    const parts = text.split('\n');
+    parts.forEach((part, index) => {
+      if (index > 0) stack[stack.length - 1].children.push({ type: 'break' });
+      if (part) stack[stack.length - 1].children.push({ type: 'text', text: part });
+    });
+  };
+
+  let cursor = 0;
+  const tagPattern = /\[([/a-zA-Z0-9_-]+)\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(value))) {
+    appendText(value.slice(cursor, match.index));
+    cursor = match.index + match[0].length;
+
+    const rawTag = match[1];
+    const isClose = rawTag.startsWith('/');
+    const tag = normalizeRichTextTag(isClose ? rawTag.slice(1) : rawTag);
+    if (!tag) {
+      appendText(match[0]);
+      continue;
+    }
+    if (tag === 'rule') {
+      stack[stack.length - 1].children.push({ type: 'rule' });
+      continue;
+    }
+    if (tag === 'br') {
+      stack[stack.length - 1].children.push({ type: 'break' });
+      continue;
+    }
+
+    const top = stack[stack.length - 1];
+    if ((isClose || top.tag === tag) && stack.length > 1) {
+      const closingIndex = stack.map((entry) => entry.tag).lastIndexOf(tag);
+      if (closingIndex > 0) {
+        while (stack.length - 1 >= closingIndex) {
+          const frame = stack.pop();
+          if (!frame?.tag) break;
+          stack[stack.length - 1].children.push({ type: 'tag', tag: frame.tag, children: frame.children });
+        }
+      }
+      continue;
+    }
+
+    stack.push({ tag, children: [] });
+  }
+  appendText(value.slice(cursor));
+  while (stack.length > 1) {
+    const frame = stack.pop();
+    if (!frame?.tag) break;
+    stack[stack.length - 1].children.push({ type: 'tag', tag: frame.tag, children: frame.children });
+  }
+  return root;
+};
+
+const feedAccentTone = (cardType: FeedCardTypeRecipe): MaterialTone => {
+  const tint = cardType.surface.tint;
+  return tint && tint !== 'none' && tint !== 'inherit' && tint !== 'white' && tint !== 'black' ? tint : 'gold';
+};
+
+const richTextEmbossShadow = (style: FeedTextSlotStyle) => feedTextEmbossShadow(style);
+
+const feedRichTextTransform = (style: FeedTextSlotStyle) => (
+  style.textTransform === 'inherit' ? 'inherit' : style.textTransform
+);
+
+const feedRichTextStyleVars = (prefix: string, slotStyle: FeedTextSlotStyle, baseStyle: FeedTextSlotStyle): JSX.CSSProperties => ({
+  [`--feed-rich-${prefix}`]: slotStyle.overrideColor ? feedToneColors[slotStyle.contentTone] || feedToneColors.white : 'inherit',
+  [`--feed-rich-${prefix}-opacity`]: `${(slotStyle.overrideOpacity ? slotStyle.textOpacity : baseStyle.textOpacity) / 100}`,
+  [`--feed-rich-${prefix}-size`]: slotStyle.overrideSize ? `${slotStyle.textSizeRem / Math.max(baseStyle.textSizeRem, 0.1)}em` : '1em',
+  [`--feed-rich-${prefix}-weight`]: slotStyle.overrideWeight ? `${fontWeightTokenValue(slotStyle.fontWeight)}` : 'inherit',
+  [`--feed-rich-${prefix}-font`]: slotStyle.overrideFont ? slotStyle.textFontFamily : 'inherit',
+  [`--feed-rich-${prefix}-transform`]: slotStyle.overrideCase ? feedRichTextTransform(slotStyle) : 'inherit',
+  [`--feed-rich-${prefix}-shadow`]: slotStyle.overrideEmboss ? richTextEmbossShadow(slotStyle) : 'inherit',
+  [`--feed-rich-${prefix}-line`]: slotStyle.overrideLineHeight ? `${slotStyle.lineHeight}` : 'inherit',
+  [`--feed-rich-${prefix}-track`]: slotStyle.overrideLetterSpacing ? `${slotStyle.letterSpacing}em` : 'inherit',
+} as JSX.CSSProperties);
+
+const resolveFeedRichTagStyle = (
+  cardType: FeedCardTypeRecipe,
+  bodyStyle: FeedTextSlotStyle,
+  slot: FeedTextSlotId,
+) => {
+  const style = cardType.slots[slot];
+  return style.inherit ? bodyStyle : preserveFeedTextOverrideFlags(mergeFeedTextStyle(bodyStyle, style), style);
+};
+
+const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle): JSX.CSSProperties => {
+  const accent = resolveFeedRichTagStyle(cardType, style, 'contractEyebrow');
+  const h1 = resolveFeedRichTagStyle(cardType, style, 'contractEyebrow');
+  const h2 = resolveFeedRichTagStyle(cardType, style, 'contractTitle');
+  const h3 = resolveFeedRichTagStyle(cardType, style, 'contractRewardValue');
+  const h4 = resolveFeedRichTagStyle(cardType, style, 'contractH4');
+  const acc1 = resolveFeedRichTagStyle(cardType, style, 'contractAcc1');
+  const acc2 = resolveFeedRichTagStyle(cardType, style, 'contractAcc2');
+  const acc3 = resolveFeedRichTagStyle(cardType, style, 'contractAcc3');
+  const acc4 = resolveFeedRichTagStyle(cardType, style, 'contractAcc4');
+  const small = resolveFeedRichTagStyle(cardType, style, 'contractRewardLabel');
+  const rule = resolveFeedRichTagStyle(cardType, style, 'contractRule');
+  return {
+    '--feed-rich-base-line': `${style.lineHeight}`,
+    '--feed-rich-paragraph-gap': `${style.paragraphGap}px`,
+    '--feed-rich-accent': feedToneColors[accent.contentTone] || feedToneColors[feedAccentTone(cardType)] || feedToneColors.gold,
+    '--feed-rich-accent-opacity': `${accent.textOpacity / 100}`,
+    '--feed-rich-accent-weight': accent.overrideWeight ? `${fontWeightTokenValue(accent.fontWeight)}` : 'inherit',
+    '--feed-rich-bright': feedToneColors.white,
+    '--feed-rich-normal': feedToneColors[style.contentTone] || feedToneColors.white,
+    '--feed-rich-normal-opacity': `${style.textOpacity / 100}`,
+    '--feed-rich-normal-weight': style.overrideWeight ? `${fontWeightTokenValue(style.fontWeight)}` : 'inherit',
+    '--feed-rich-muted': feedToneColors.muted,
+    '--feed-rich-dim': feedToneColors.muted,
+    '--feed-rich-dark': feedToneColors.black,
+    '--feed-rich-small': feedToneColors[small.contentTone] || feedToneColors.muted,
+    '--feed-rich-small-opacity': `${small.textOpacity / 100}`,
+    '--feed-rich-small-size': `${small.textSizeRem / Math.max(style.textSizeRem, 0.1)}em`,
+    '--feed-rich-small-weight': small.overrideWeight ? `${fontWeightTokenValue(small.fontWeight)}` : 'inherit',
+    '--feed-rich-small-font': small.textFontFamily,
+    '--feed-rich-small-transform': small.textTransform,
+    '--feed-rich-small-shadow': richTextEmbossShadow(small),
+    '--feed-rich-rule': feedToneColors[rule.contentTone] || feedToneColors.gold,
+    '--feed-rich-rule-opacity': `${rule.textOpacity / 100}`,
+    ...feedRichTextStyleVars('title', h1, style),
+    ...feedRichTextStyleVars('alt-title', h2, style),
+    ...feedRichTextStyleVars('h3', h3, style),
+    ...feedRichTextStyleVars('h4', h4, style),
+    ...feedRichTextStyleVars('acc1', acc1, style),
+    ...feedRichTextStyleVars('acc2', acc2, style),
+    ...feedRichTextStyleVars('acc3', acc3, style),
+    ...feedRichTextStyleVars('acc4', acc4, style),
+  } as JSX.CSSProperties;
+};
+
+const richTextTagSlot = (tag: FeedRichTextTag): FeedTextSlotId | undefined => ({
+  accent: 'contractEyebrow',
+  acc1: 'contractAcc1',
+  acc2: 'contractAcc2',
+  acc3: 'contractAcc3',
+  acc4: 'contractAcc4',
+  small: 'contractRewardLabel',
+  h1: 'contractEyebrow',
+  h2: 'contractTitle',
+  h3: 'contractRewardValue',
+  h4: 'contractH4',
+}[tag] as FeedTextSlotId | undefined);
+
+const richTextTagOverridesOpacity = (cardType: FeedCardTypeRecipe, tag: FeedRichTextTag) => {
+  const slot = richTextTagSlot(tag);
+  return slot ? cardType.slots[slot]?.overrideOpacity !== false : true;
+};
+
+const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; style: FeedTextSlotStyle }) => {
+  const tokens = () => parseFeedRichText(props.value);
+  const renderTokens = (items: FeedRichTextToken[], insideTag = false): JSX.Element => (
+    <For each={items}>
+      {(token) => (
+        <Show
+          when={token.type === 'tag'}
+          fallback={(
+            <Show
+              when={token.type === 'rule'}
+              fallback={(
+                token.type === 'break'
+                  ? <span class="main-material-rich-break" aria-hidden="true" />
+                  : token.type === 'text'
+                    ? insideTag ? token.text : <span class="main-material-rich-token main-material-rich-token--normal">{token.text}</span>
+                    : null
+              )}
+            >
+              <span class="main-material-rich-rule" aria-hidden="true" />
+            </Show>
+          )}
+        >
+          {(() => {
+            const tag = (token as { tag: FeedRichTextTag }).tag;
+            return (
+              <span
+                class={`main-material-rich-token main-material-rich-token--${tag}`}
+                classList={{ 'main-material-rich-token--opacity-override': richTextTagOverridesOpacity(props.cardType, tag) }}
+              >
+                {renderTokens((token as { children: FeedRichTextToken[] }).children, true)}
+              </span>
+            );
+          })()}
+        </Show>
+      )}
+    </For>
+  );
+  return (
+    <span class="main-material-rich-text" style={feedRichTextVars(props.cardType, props.style)}>
+      {renderTokens(tokens())}
+    </span>
+  );
+};
+
+const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => ({
+  left: `${layout.x}%`,
+  top: `${layout.y}%`,
+  width: `${layout.width}%`,
+  height: `${layout.height}%`,
+  gap: `${layout.gap}px`,
+  '--feed-node-padding': `${layout.padding}px`,
+  '--feed-node-gap': `${layout.gap}px`,
+  '--feed-node-gap-scale': `${layout.gap / 100}`,
+  'text-align': layout.align,
+  'align-items': layout.align === 'left' ? 'flex-start' : layout.align === 'right' ? 'flex-end' : 'center',
+  'justify-content': layout.justify === 'start' ? 'flex-start' : layout.justify === 'end' ? 'flex-end' : 'center',
+});
+
+const feedNodeSurfaceRecipe = (cardType: FeedCardTypeRecipe, node: FeedCardNode): MaterialRecipe => {
+  const surface = node.surface || createFeedRegionSurface();
+  return node.type === 'text' || node.type === 'button' || Boolean(node.binding)
+    ? recipeWithFeedTextStyle(surface, resolveFeedNodeTextStyle(cardType, node))
+    : surface;
+};
+
+const feedBackgroundImageCss = (background: FeedBackgroundImageRecipe): JSX.CSSProperties => ({
+  width: '100%',
+  height: '100%',
+  left: '50%',
+  top: '50%',
+  transform: `translate(calc(-50% + ${background.x}%), calc(-50% + ${background.y}%)) scale(${background.scale / 100})`,
+  'object-fit': background.fit,
+});
+
+const feedMediaFadeCss = (background: FeedBackgroundImageRecipe): JSX.CSSProperties => ({
+  '--feed-media-fade-alpha': `${background.fadeStrength / 100}`,
+  '--feed-media-fade-size': `${background.fadeSize}%`,
+} as JSX.CSSProperties);
+
+const feedStoryValue = (story: FeedStory, binding: FeedTextSlotId | undefined) => {
+  if (!binding) return '';
+  return story[binding] || '';
+};
+
+const FeedNodeFrame = (props: {
+  node: FeedCardNode;
+  targetClass: string;
+  children: JSX.Element;
+}) => (
+  <div
+    class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
+    data-feed-node-kind={props.node.type}
+    style={feedNodeLayoutCss(props.node.layout)}
+  >
+    {props.children}
+  </div>
+);
+
+const FeedCardTreeNode = (props: {
+  node: FeedCardNode;
+  story: FeedStory;
+  cardType: FeedCardTypeRecipe;
+  surfaceState: MaterialRecipeState;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+}) => {
+  const textStyle = () => feedTextCss(resolveFeedNodeTextStyle(props.cardType, props.node));
+  const content = () => feedStoryValue(props.story, props.node.binding);
+  const surfaceRecipe = () => feedNodeSurfaceRecipe(props.cardType, props.node);
+  const targetClass = () => props.selectedFeedTargetClass(feedMaterialTargetIdForNode(props.cardType.id, props.node.id));
+  return (
+    <Show
+      when={props.node.type === 'container'}
+      fallback={(
+        <Show
+          when={props.node.type === 'button'}
+          fallback={(
+            <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+              <MaterialPanel
+                {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+                padded={false}
+                class={`main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${props.node.binding || 'unbound'}`}
+              >
+                <span class="main-material-card-node-text" style={textStyle()}>
+                  <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
+                </span>
+              </MaterialPanel>
+            </FeedNodeFrame>
+          )}
+        >
+          <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+            <MaterialButton
+              {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+              size="sm"
+              fullWidth
+              class="main-material-card-node-surface main-material-card-node-surface--button"
+            >
+              {content()}
+            </MaterialButton>
+          </FeedNodeFrame>
+        </Show>
+      )}
+    >
+      <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+        <MaterialPanel
+          {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+          padded={false}
+          class={`main-material-card-node-surface ${props.node.binding ? 'main-material-card-node-surface--markup' : ''} ${props.node.binding && props.node.children?.length ? 'main-material-card-node-surface--flow' : ''}`}
+        >
+          <Show when={props.node.binding}>
+            <span class="main-material-card-node-text" style={textStyle()}>
+              <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
+            </span>
+          </Show>
+        </MaterialPanel>
+        <For each={props.node.children || []}>
+          {(child) => (
+            <FeedCardTreeNode
+              node={child}
+              story={props.story}
+              cardType={props.cardType}
+              surfaceState={props.surfaceState}
+              selectedFeedTargetClass={props.selectedFeedTargetClass}
+            />
+          )}
+        </For>
+      </FeedNodeFrame>
+    </Show>
+  );
+};
 
 const clampSlideIndex = (index: number, slideCount: number) => Math.max(0, Math.min(slideCount - 1, index));
 
@@ -1232,6 +2914,8 @@ const FeedCarousel = (props: {
   class: string;
   feed: FeedRecipe;
   surfaceState: MaterialRecipeState;
+  storyImageOverrides: Record<string, string>;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
   const [dragStartX, setDragStartX] = createSignal<number | null>(null);
@@ -1294,23 +2978,43 @@ const FeedCarousel = (props: {
         <For each={props.stories}>
           {(story) => {
             const cardType = () => props.cardTypes[story.cardTypeId] || props.cardTypes.card_type_01;
+            const imageSource = () => props.storyImageOverrides[story.id] || story.image;
             return (
-              <MaterialPanel
-                {...materialSurfacePropsForPart('feedCards', cardType().surface, props.surfaceState)}
-                padded={false}
-                class="main-material-feed-slide"
-              >
-                <div class="main-material-feed-content">
-                  <div class="main-material-tag" style={feedTextCss(resolveFeedTextStyle(cardType(), 'eyebrow'))}>{story.eyebrow}</div>
-                  <h2 style={feedTextCss(resolveFeedTextStyle(cardType(), 'title'))}>{story.title}</h2>
-                  <p style={feedTextCss(resolveFeedTextStyle(cardType(), 'body'))}>{story.body}</p>
-                </div>
-                <Show when={story.meta}>
-                  <div class="main-material-feed-meta" style={feedTextCss(resolveFeedTextStyle(cardType(), 'meta'))}>
-                    <strong>{story.meta}</strong>
+              <div class="main-material-feed-slide">
+                <div
+                  class={`main-material-feed-slide-material ${props.selectedFeedTargetClass(feedCardMaterialTargetId(cardType().id))}`}
+                >
+                  <Show when={cardType().backgroundImage.enabled}>
+                    <img
+                      class="main-material-feed-background-image"
+                      src={imageSource()}
+                      alt=""
+                      draggable={false}
+                      style={feedBackgroundImageCss(cardType().backgroundImage)}
+                    />
+                    <Show when={cardType().backgroundImage.fadeMode !== 'none'}>
+                      <span
+                        class={`main-material-feed-media-fade main-material-feed-media-fade--${cardType().backgroundImage.fadeMode}`}
+                        aria-hidden="true"
+                        style={feedMediaFadeCss(cardType().backgroundImage)}
+                      />
+                    </Show>
+                  </Show>
+                  <div class="main-material-card-tree">
+                    <For each={cardType().children}>
+                      {(node) => (
+                        <FeedCardTreeNode
+                          node={node}
+                          story={story}
+                          cardType={cardType()}
+                          surfaceState={props.surfaceState}
+                          selectedFeedTargetClass={props.selectedFeedTargetClass}
+                        />
+                      )}
+                    </For>
                   </div>
-                </Show>
-              </MaterialPanel>
+                </div>
+              </div>
             );
           }}
         </For>
@@ -1344,6 +3048,8 @@ const MainMaterialPreview = (props: {
   feed: FeedRecipe;
   feedStories: FeedStory[];
   feedCardTypes: FeedCardTypes;
+  feedStoryImageOverrides: Record<string, string>;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
   activeFeedStoryId: string;
   onActiveFeedStoryChange: (storyId: string) => void;
   nav: NavRecipe;
@@ -1442,6 +3148,8 @@ const MainMaterialPreview = (props: {
               class={props.selectedClass('feedCards')}
               feed={props.feed}
               surfaceState={stateForPart('feedCards')}
+              storyImageOverrides={props.feedStoryImageOverrides}
+              selectedFeedTargetClass={props.selectedFeedTargetClass}
             />
           </main>
 
@@ -1512,6 +3220,7 @@ const MainMaterialPreview = (props: {
 
 export const MainMaterialPreviewScreen = () => {
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
+  const [sidebarTab, setSidebarTab] = createSignal<'parts' | 'text'>('parts');
   const [previewStates, setPreviewStates] = createSignal<PreviewStatesByPart>(createDefaultPreviewStates());
   const [forcePreview, setForcePreview] = createSignal(false);
   const [activeNavIndex, setActiveNavIndex] = createSignal(2);
@@ -1521,21 +3230,35 @@ export const MainMaterialPreviewScreen = () => {
   const [backdrop, setBackdrop] = createSignal<BackdropRecipe>(cloneBackdrop(defaultBackdrop));
   const [title, setTitle] = createSignal<TitleRecipe>(cloneTitle(defaultTitle));
   const [feed, setFeed] = createSignal<FeedRecipe>(cloneFeed(defaultFeed));
+  const [feedStories, setFeedStories] = createSignal<FeedStory[]>(cloneFeedStories(mockFeedStories));
   const [feedCardTypes, setFeedCardTypes] = createSignal<FeedCardTypes>(cloneFeedCardTypes(defaultFeedCardTypes));
   const [selectedFeedStoryId, setSelectedFeedStoryId] = createSignal(mockFeedStories[0].id);
   const [editingFeedCardTypeId, setEditingFeedCardTypeId] = createSignal<FeedCardTypeId>('card_type_01');
+  const [selectedFeedTargetId, setSelectedFeedTargetId] = createSignal<FeedMaterialTargetId>(feedCardMaterialTargetId('card_type_01'));
+  const [feedStoryImageOverrides, setFeedStoryImageOverrides] = createSignal<Record<string, string>>({});
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
   const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
   const [materialPresets, setMaterialPresets] = createSignal<MaterialPresetsByPart>(createEmptyMaterialPresets());
   const [selectedPresetIds, setSelectedPresetIds] = createSignal<Record<MainPartId, string>>(createEmptySelectedPresetIds());
+  const [presetDirty, setPresetDirty] = createSignal<Record<MainPartId, boolean>>(createEmptyPresetDirty());
   const [materialPresetsLoaded, setMaterialPresetsLoaded] = createSignal(false);
+
+  const markPresetDirty = (part: MainPartId) => {
+    if (!selectedPresetIds()[part]) return;
+    setPresetDirty((current) => ({ ...current, [part]: true }));
+  };
+
+  const clearPresetDirty = (part: MainPartId) => {
+    setPresetDirty((current) => ({ ...current, [part]: false }));
+  };
 
   const updateSurface = (key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
     setSurfaces((current) => ({ ...current, [key]: recipe }));
   };
 
-  const updateSurfaceForPart = (part: MainPartId, key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
+  const updateSurfaceForPart = (part: MainPartId, key: keyof SurfaceRecipes, recipe: MaterialRecipe, dirty = true) => {
     updateSurface(key, pruneRecipeForPartCapabilities(part, recipe));
+    if (dirty) markPresetDirty(part);
   };
 
   const updateFeedCardType = (cardType: FeedCardTypeRecipe) => {
@@ -1548,9 +3271,176 @@ export const MainMaterialPreviewScreen = () => {
     }));
   };
 
-  const updateFeedCardTypeSurface = (recipe: MaterialRecipe) => {
-    const cardType = feedCardTypes()[editingFeedCardTypeId()];
+  const updateFeedCardTypeSurface = (cardTypeId: FeedCardTypeId, recipe: MaterialRecipe, dirty = true) => {
+    const cardType = feedCardTypes()[cardTypeId];
     updateFeedCardType({ ...cardType, surface: recipe });
+    if (dirty) markPresetDirty('feedCards');
+  };
+
+  const updateFeedCardTypeSlot = <K extends keyof FeedTextSlotStyle>(
+    cardTypeId: FeedCardTypeId,
+    slotId: FeedTextSlotId,
+    key: K,
+    value: FeedTextSlotStyle[K],
+  ) => {
+    const cardType = feedCardTypes()[cardTypeId];
+    updateFeedCardType({
+      ...cardType,
+      slots: {
+        ...cardType.slots,
+        [slotId]: {
+          ...cardType.slots[slotId],
+          inherit: false,
+          [key]: value,
+        },
+      },
+    });
+  };
+
+  const updateGlobalFeedTypeSlot = <K extends keyof FeedTextSlotStyle>(
+    slotId: FeedTextSlotId,
+    key: K,
+    value: FeedTextSlotStyle[K],
+  ) => {
+    setFeedCardTypes((current) => (
+      Object.fromEntries(
+        feedCardTypeIds.map((cardTypeId) => {
+          const cardType = current[cardTypeId];
+          return [cardTypeId, {
+            ...cardType,
+            slots: {
+              ...cardType.slots,
+              [slotId]: {
+                ...cardType.slots[slotId],
+                inherit: false,
+                [key]: value,
+              },
+            },
+          }];
+        }),
+      ) as FeedCardTypes
+    ));
+    markPresetDirty('feedCards');
+  };
+
+  const updateFeedNodeSurface = (cardTypeId: FeedCardTypeId, nodeId: string, recipe: MaterialRecipe, dirty = true) => {
+    const cardType = feedCardTypes()[cardTypeId];
+    const currentNode = findFeedNodeById(cardType.children, nodeId);
+    const currentNodeHasText = Boolean(currentNode?.binding) && (
+      currentNode?.type === 'text'
+      || currentNode?.type === 'button'
+      || currentNode?.type === 'container'
+    );
+    const shouldUpdateNodeText = (
+      currentNodeHasText
+      && currentNode.text
+      && !currentNode.text.inherit
+    );
+    updateFeedCardType({
+      ...cardType,
+      children: updateFeedNodeById(cardType.children, nodeId, (current) => ({
+        ...current,
+        surface: pruneRecipeForPartCapabilities('feedCards', recipe),
+        text: shouldUpdateNodeText ? feedBaseTextStyleFromRecipe(recipe) : current.text,
+      })),
+    });
+    if (dirty) markPresetDirty('feedCards');
+  };
+
+  const feedNodeMaterialTarget = (cardType: FeedCardTypeRecipe, node: FeedCardNode): MaterialEditableTarget => ({
+    id: feedMaterialTargetIdForNode(cardType.id, node.id),
+    label: node.label,
+    recipe: node.binding
+      ? recipeWithFeedTextStyle(node.surface || createFeedRegionSurface(), resolveFeedNodeTextStyle(cardType, node))
+      : node.surface || createFeedRegionSurface(),
+    capabilities: node.binding
+      ? { ...materialEditorCapabilitiesByPart.feedCards, text: !!node.text && !node.text.inherit }
+      : { ...materialEditorCapabilitiesByPart.feedCards, text: false },
+    onChange: (recipe) => updateFeedNodeSurface(cardType.id, node.id, recipe),
+    children: node.children?.map((child) => feedNodeMaterialTarget(cardType, child)) || [],
+  });
+
+  const feedMaterialTargets = (): MaterialEditableTarget[] => {
+    const cardTypes = feedCardTypes();
+    return feedCardTypeIds.map((cardTypeId, index) => {
+      const cardType = cardTypes[cardTypeId];
+      return {
+        id: feedCardMaterialTargetId(cardTypeId),
+        label: `Feed Card ${index + 1}`,
+        recipe: cardType.surface,
+        capabilities: materialEditorCapabilitiesByPart.feedCards,
+        onChange: (recipe) => updateFeedCardTypeSurface(cardTypeId, recipe),
+        children: cardType.children.map((node) => feedNodeMaterialTarget(cardType, node)),
+      };
+    });
+  };
+
+  const flatFeedMaterialTargets = () => flattenMaterialTargets(feedMaterialTargets());
+  const selectedFeedMaterialTarget = () => (
+    flatFeedMaterialTargets().find((entry) => entry.target.id === selectedFeedTargetId())?.target
+    || feedMaterialTargets()[0]
+  );
+  const selectedFeedMaterialTitle = () => `Feed: ${selectedFeedMaterialTarget().label}`;
+  const selectedFeedMaterialRecipe = () => selectedFeedMaterialTarget().recipe;
+  const selectedFeedMaterialCapabilities = () => selectedFeedMaterialTarget().capabilities;
+  const updateSelectedFeedMaterialRecipe = (recipe: MaterialRecipe) => {
+    selectedFeedMaterialTarget().onChange(pruneRecipeForPartCapabilities('feedCards', recipe));
+  };
+
+  createEffect(() => {
+    const targetExists = flatFeedMaterialTargets().some((entry) => entry.target.id === selectedFeedTargetId());
+    if (!targetExists) setSelectedFeedTargetId(feedCardMaterialTargetId(editingFeedCardTypeId()));
+  });
+
+  const feedWorkbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
+    flatFeedMaterialTargets().map((entry) => ({
+      id: entry.target.id as MainWorkbenchPartId,
+      label: entry.target.label,
+      detail: entry.depth === 0 ? 'card type material' : 'child material',
+      depth: entry.depth,
+    }))
+  );
+
+  const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
+    partLabels.flatMap((part) => (
+      part.id === 'feedCards'
+        ? feedWorkbenchParts()
+        : [{ ...part, id: part.id as MainWorkbenchPartId }]
+    ))
+  );
+
+  const selectFeedStory = (storyId: string) => {
+    const story = feedStories().find((item) => item.id === storyId) || feedStories()[0] || mockFeedStories[0];
+    setSelectedFeedStoryId(story.id);
+    setEditingFeedCardTypeId(story.cardTypeId);
+    setSelectedFeedTargetId(feedCardMaterialTargetId(story.cardTypeId));
+  };
+
+  const selectFeedTarget = (targetId: FeedMaterialTargetId) => {
+    const target = parseFeedMaterialTargetId(targetId);
+    if (!target || !isOneOf(target.cardTypeId, feedCardTypeIds)) return;
+    setSelectedFeedTargetId(targetId);
+    setEditingFeedCardTypeId(target.cardTypeId);
+    const story = feedStories().find((item) => item.cardTypeId === target.cardTypeId);
+    if (story) setSelectedFeedStoryId(story.id);
+  };
+
+  const updateFeedStoryText = (storyId: string, slotId: FeedTextSlotId, value: string) => {
+    setFeedStories((current) => current.map((story) => (
+      story.id === storyId ? { ...story, [slotId]: value } : story
+    )));
+  };
+
+  const updateFeedStoryImageOverride = (storyId: string, image: string | null) => {
+    setFeedStoryImageOverrides((current) => {
+      const next = { ...current };
+      if (image && image.trim()) {
+        next[storyId] = image.trim();
+      } else {
+        delete next[storyId];
+      }
+      return next;
+    });
   };
 
   onMount(() => {
@@ -1562,22 +3452,39 @@ export const MainMaterialPreviewScreen = () => {
           backdrop?: unknown;
           title?: unknown;
           feed?: unknown;
+          feedStories?: unknown;
           feedCardTypes?: unknown;
+          feedStoryImageOverrides?: unknown;
           selectedFeedStoryId?: unknown;
           editingFeedCardTypeId?: unknown;
+          editingFeedNodeId?: unknown;
+          selectedFeedTargetId?: unknown;
           nav?: unknown;
           surfaces?: unknown;
         };
         setBackdrop(sanitizeBackdrop(parsed.backdrop));
         setTitle(sanitizeTitle(parsed.title));
         setFeed(sanitizeFeed(parsed.feed));
+        setFeedStories(sanitizeFeedStories(parsed.feedStories));
         setFeedCardTypes(sanitizeFeedCardTypes(parsed.feedCardTypes));
+        setFeedStoryImageOverrides(sanitizeStoryImageOverrides(parsed.feedStoryImageOverrides));
         setSelectedFeedStoryId(
-          typeof parsed.selectedFeedStoryId === 'string' && mockFeedStories.some((story) => story.id === parsed.selectedFeedStoryId)
+          typeof parsed.selectedFeedStoryId === 'string' && feedStories().some((story) => story.id === parsed.selectedFeedStoryId)
             ? parsed.selectedFeedStoryId
             : mockFeedStories[0].id,
         );
         setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
+        if (
+          typeof parsed.selectedFeedTargetId === 'string'
+          && parsed.selectedFeedTargetId.startsWith(feedCardMaterialTargetPrefix)
+          && parseFeedMaterialTargetId(parsed.selectedFeedTargetId)
+        ) {
+          setSelectedFeedTargetId(parsed.selectedFeedTargetId as FeedMaterialTargetId);
+        } else if (typeof parsed.editingFeedNodeId === 'string' && parsed.editingFeedNodeId.trim()) {
+          setSelectedFeedTargetId(feedMaterialTargetIdForNode('card_type_01', parsed.editingFeedNodeId));
+        } else {
+          setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
+        }
         setNav(sanitizeNav(parsed.nav));
         setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
       }
@@ -1585,9 +3492,11 @@ export const MainMaterialPreviewScreen = () => {
       setBackdrop(cloneBackdrop(defaultBackdrop));
       setTitle(cloneTitle(defaultTitle));
       setFeed(cloneFeed(defaultFeed));
+      setFeedStories(cloneFeedStories(mockFeedStories));
       setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
       setSelectedFeedStoryId(mockFeedStories[0].id);
       setEditingFeedCardTypeId('card_type_01');
+      setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
       setNav(cloneNav(defaultNav));
       setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
     }
@@ -1607,9 +3516,12 @@ export const MainMaterialPreviewScreen = () => {
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
+      feedStories: feedStories(),
       feedCardTypes: feedCardTypes(),
+      feedStoryImageOverrides: feedStoryImageOverrides(),
       selectedFeedStoryId: selectedFeedStoryId(),
       editingFeedCardTypeId: editingFeedCardTypeId(),
+      selectedFeedTargetId: selectedFeedTargetId(),
       nav: nav(),
       surfaces: surfaces(),
     }));
@@ -1648,6 +3560,19 @@ export const MainMaterialPreviewScreen = () => {
     setSelectionFlashTick((tick) => tick + 1);
   };
 
+  const selectedWorkbenchPartId = (): MainWorkbenchPartId => (
+    selectedPart() === 'feedCards' ? selectedFeedTargetId() : selectedPart()
+  );
+
+  const selectWorkbenchPart = (part: MainWorkbenchPartId) => {
+    if (part.startsWith(feedCardMaterialTargetPrefix)) {
+      selectFeedTarget(part as FeedMaterialTargetId);
+      selectPart('feedCards');
+      return;
+    }
+    selectPart(part as MainPartId);
+  };
+
   const selectedInteractionRole = () => interactionRoles[selectedPart()];
   const selectedStateOptions = () => stateOptionsForPart(selectedPart());
   const selectedStateLabels = () => interactionStateLabels[selectedInteractionRole()];
@@ -1663,7 +3588,7 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'topBar') return current.topBar;
     if (part === 'profileButton') return current.profile;
     if (part === 'currencyButtons') return current.currencies;
-    if (part === 'feedCards') return feedCardTypes()[editingFeedCardTypeId()].surface;
+    if (part === 'feedCards') return selectedFeedMaterialRecipe();
     if (part === 'toolBar') return current.toolbar;
     if (part === 'navBar') return current.nav;
     return current.feed;
@@ -1675,13 +3600,14 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'topBar') updateSurface('topBar', nextRecipe);
     if (part === 'profileButton') updateSurface('profile', nextRecipe);
     if (part === 'currencyButtons') updateSurface('currencies', nextRecipe);
-    if (part === 'feedCards') updateFeedCardTypeSurface(nextRecipe);
+    if (part === 'feedCards') selectedFeedMaterialTarget().onChange(nextRecipe);
     if (part === 'toolBar') updateSurface('toolbar', nextRecipe);
     if (part === 'navBar') updateSurface('nav', nextRecipe);
   };
 
   const selectedMaterialPresets = () => materialPresets()[selectedPart()];
   const selectedPresetId = () => selectedPresetIds()[selectedPart()];
+  const selectedPresetDirty = () => Boolean(selectedPresetId() && presetDirty()[selectedPart()]);
   const setSelectedPresetId = (part: MainPartId, id: string) => {
     setSelectedPresetIds((current) => ({ ...current, [part]: id }));
   };
@@ -1690,6 +3616,7 @@ export const MainMaterialPreviewScreen = () => {
     setSelectedPresetId(part, id);
     const preset = materialPresets()[part].find((item) => item.id === id);
     if (preset) applyRecipeForPart(part, preset.recipe);
+    clearPresetDirty(part);
   };
 
   const createPresetId = (part: MainPartId) => `${part}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1705,6 +3632,7 @@ export const MainMaterialPreviewScreen = () => {
     };
     setMaterialPresets((current) => ({ ...current, [part]: [...current[part], preset] }));
     setSelectedPresetId(part, id);
+    clearPresetDirty(part);
   };
 
   const saveMaterialPreset = (part: MainPartId) => {
@@ -1721,6 +3649,8 @@ export const MainMaterialPreviewScreen = () => {
           : preset
       )),
     }));
+    setSelectedPresetId(part, id);
+    clearPresetDirty(part);
   };
 
   const deleteMaterialPreset = (part: MainPartId) => {
@@ -1751,9 +3681,12 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'titleBlock') setTitle(cloneTitle(defaultTitle));
     if (part === 'feedCards') {
       setFeed(cloneFeed(defaultFeed));
+      setFeedStories(cloneFeedStories(mockFeedStories));
       setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
       setSelectedFeedStoryId(mockFeedStories[0].id);
       setEditingFeedCardTypeId('card_type_01');
+      setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
+      setFeedStoryImageOverrides({});
     }
     if (part === 'toolBar') updateSurfaceForPart('toolBar', 'toolbar', cloneMaterialRecipe(defaultToolbarSurface));
     if (part === 'navBar') {
@@ -1766,9 +3699,12 @@ export const MainMaterialPreviewScreen = () => {
     setBackdrop(cloneBackdrop(defaultBackdrop));
     setTitle(cloneTitle(defaultTitle));
     setFeed(cloneFeed(defaultFeed));
+    setFeedStories(cloneFeedStories(mockFeedStories));
     setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
     setSelectedFeedStoryId(mockFeedStories[0].id);
     setEditingFeedCardTypeId('card_type_01');
+    setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
+    setFeedStoryImageOverrides({});
     setNav(cloneNav(defaultNav));
     setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
@@ -1779,8 +3715,10 @@ export const MainMaterialPreviewScreen = () => {
       title: title(),
       feed: feed(),
       feedCardTypes: feedCardTypes(),
+      feedStoryImageOverrides: feedStoryImageOverrides(),
       selectedFeedStoryId: selectedFeedStoryId(),
       editingFeedCardTypeId: editingFeedCardTypeId(),
+      selectedFeedTargetId: selectedFeedTargetId(),
       nav: nav(),
       surfaces: surfaces(),
     }, null, 2));
@@ -1789,6 +3727,15 @@ export const MainMaterialPreviewScreen = () => {
   const selectedClass = (part: MainPartId) => {
     if (selectionOverlayMode() === 'persistent' && selectedPart() === part) return 'is-editing-persistent';
     if (selectionOverlayMode() === 'flash' && selectionFlashPart() === part) {
+      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
+    }
+    return '';
+  };
+
+  const selectedFeedTargetClass = (targetId: FeedMaterialTargetId) => {
+    if (selectedPart() !== 'feedCards' || selectedFeedTargetId() !== targetId) return '';
+    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
+    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'feedCards') {
       return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
     }
     return '';
@@ -1846,6 +3793,7 @@ export const MainMaterialPreviewScreen = () => {
                                     onForcePreviewChange={setForcePreview}
                                     presets={selectedMaterialPresets()}
                                     selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
                                     onSelectPreset={(id) => selectMaterialPreset('navBar', id)}
                                     onSavePreset={() => saveMaterialPreset('navBar')}
                                     onSaveNewPreset={() => saveNewMaterialPreset('navBar')}
@@ -1869,6 +3817,7 @@ export const MainMaterialPreviewScreen = () => {
                                 onForcePreviewChange={setForcePreview}
                                 presets={selectedMaterialPresets()}
                                 selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
                                 onSelectPreset={(id) => selectMaterialPreset('toolBar', id)}
                                 onSavePreset={() => saveMaterialPreset('toolBar')}
                                 onSaveNewPreset={() => saveNewMaterialPreset('toolBar')}
@@ -1881,33 +3830,37 @@ export const MainMaterialPreviewScreen = () => {
                           )}
                         >
                           <SurfaceRecipeEditor
-                            title="Feed Card Type"
-                            recipe={feedCardTypes()[editingFeedCardTypeId()].surface}
+                            title={selectedFeedMaterialTitle()}
+                            recipe={selectedFeedMaterialRecipe()}
                             interactionRole={selectedInteractionRole()}
-                            capabilities={materialEditorCapabilitiesByPart.feedCards}
+                            capabilities={selectedFeedMaterialCapabilities()}
                             stateOptions={selectedStateOptions()}
                             stateLabels={selectedStateLabels()}
                             forcePreview={forcePreview()}
                             onForcePreviewChange={setForcePreview}
                             presets={selectedMaterialPresets()}
                             selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
                             onSelectPreset={(id) => selectMaterialPreset('feedCards', id)}
                             onSavePreset={() => saveMaterialPreset('feedCards')}
                             onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
                             onDeletePreset={() => deleteMaterialPreset('feedCards')}
-                            onChange={updateFeedCardTypeSurface}
+                            onChange={updateSelectedFeedMaterialRecipe}
                             activeState={selectedPreviewState()}
                             onActiveStateChange={setSelectedPreviewState}
                             extraControls={(
                               <FeedRecipeEditor
                                 feed={feed()}
                                 onChange={setFeed}
-                                stories={mockFeedStories}
+                                stories={feedStories()}
                                 selectedStoryId={selectedFeedStoryId()}
-                                onSelectedStoryIdChange={setSelectedFeedStoryId}
+                                onSelectedStoryIdChange={selectFeedStory}
+                                onStoryTextChange={updateFeedStoryText}
                                 cardTypes={feedCardTypes()}
                                 editingCardTypeId={editingFeedCardTypeId()}
-                                onEditingCardTypeIdChange={setEditingFeedCardTypeId}
+                                selectedMaterialTargetId={selectedFeedTargetId()}
+                                storyImageOverrides={feedStoryImageOverrides()}
+                                onStoryImageOverrideChange={updateFeedStoryImageOverride}
                                 onCardTypeChange={updateFeedCardType}
                               />
                             )}
@@ -1930,6 +3883,7 @@ export const MainMaterialPreviewScreen = () => {
                     onForcePreviewChange={setForcePreview}
                     presets={selectedMaterialPresets()}
                     selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
                     onSelectPreset={(id) => selectMaterialPreset('currencyButtons', id)}
                     onSavePreset={() => saveMaterialPreset('currencyButtons')}
                     onSaveNewPreset={() => saveNewMaterialPreset('currencyButtons')}
@@ -1952,6 +3906,7 @@ export const MainMaterialPreviewScreen = () => {
                 onForcePreviewChange={setForcePreview}
                 presets={selectedMaterialPresets()}
                 selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
                 onSelectPreset={(id) => selectMaterialPreset('profileButton', id)}
                 onSavePreset={() => saveMaterialPreset('profileButton')}
                 onSaveNewPreset={() => saveNewMaterialPreset('profileButton')}
@@ -1974,6 +3929,7 @@ export const MainMaterialPreviewScreen = () => {
             onForcePreviewChange={setForcePreview}
             presets={selectedMaterialPresets()}
             selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
             onSelectPreset={(id) => selectMaterialPreset('topBar', id)}
             onSavePreset={() => saveMaterialPreset('topBar')}
             onSaveNewPreset={() => saveNewMaterialPreset('topBar')}
@@ -1996,6 +3952,7 @@ export const MainMaterialPreviewScreen = () => {
         onForcePreviewChange={setForcePreview}
         presets={selectedMaterialPresets()}
         selectedPresetId={selectedPresetId()}
+                                    presetDirty={selectedPresetDirty()}
         onSelectPreset={(id) => selectMaterialPreset('backdrop', id)}
         onSavePreset={() => saveMaterialPreset('backdrop')}
         onSaveNewPreset={() => saveNewMaterialPreset('backdrop')}
@@ -2012,9 +3969,23 @@ export const MainMaterialPreviewScreen = () => {
     <MaterialWorkbenchLayout
       title="Main Skin"
       subtitle="Material Preview"
-      parts={partLabels}
-      selectedPartId={selectedPart()}
-      onSelectPart={selectPart}
+      sidebarTabs={[
+        { id: 'parts', label: 'UI Tree' },
+        { id: 'text', label: 'Type' },
+      ]}
+      selectedSidebarTabId={sidebarTab()}
+      onSelectSidebarTab={(id) => setSidebarTab(id === 'text' ? 'text' : 'parts')}
+      sidebarAlt={(
+        <FeedTextGlobalsEditor
+          cardType={feedCardTypes()[editingFeedCardTypeId()]}
+          onSlotChange={updateGlobalFeedTypeSlot}
+        />
+      )}
+      parts={workbenchParts()}
+      selectedPartId={selectedWorkbenchPartId()}
+      onSelectPart={selectWorkbenchPart}
+      selectionPulseTick={selectionFlashTick()}
+      selectionPulseEnabled={selectionOverlayMode() === 'flash'}
       preview={(
         <MainMaterialPreview
           previewStates={previewStates()}
@@ -2026,10 +3997,12 @@ export const MainMaterialPreviewScreen = () => {
           backdrop={backdrop()}
           title={title()}
           feed={feed()}
-          feedStories={mockFeedStories}
+          feedStories={feedStories()}
           feedCardTypes={feedCardTypes()}
+          feedStoryImageOverrides={feedStoryImageOverrides()}
+          selectedFeedTargetClass={selectedFeedTargetClass}
           activeFeedStoryId={selectedFeedStoryId()}
-          onActiveFeedStoryChange={setSelectedFeedStoryId}
+          onActiveFeedStoryChange={selectFeedStory}
           nav={nav()}
           surfaces={surfaces()}
         />

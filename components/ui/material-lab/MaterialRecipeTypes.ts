@@ -21,6 +21,8 @@ export type MaterialTone =
   | 'black'
   | 'white'
   | 'muted'
+  | 'gray'
+  | 'brass'
   | 'gold'
   | 'cyan'
   | 'red'
@@ -29,9 +31,9 @@ export type MaterialTone =
 export type EdgeEmissionKind = 'none' | 'line' | 'center-blip' | 'rail-and-blip';
 export type EdgeEmissionEdge = 'bottom';
 export type MaterialRecipeState = 'rest' | 'hover' | 'active' | 'pressed';
-export type FontWeightToken = 'regular' | 'medium' | 'bold' | 'black';
+export type FontWeightToken = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 export type FontStyleToken = 'normal' | 'italic';
-export type TextTransformToken = 'none' | 'uppercase';
+export type TextTransformToken = 'none' | 'uppercase' | 'lowercase' | 'capitalize';
 
 export interface SurfaceStateOverlay {
   tint: MaterialTone;
@@ -93,6 +95,8 @@ export interface MaterialRecipe {
   material: MaterialKind;
   texture: TextureKind;
   shape: ShapeKind;
+  bevelCorners: CornerName[];
+  bevelSize: number;
   glass: boolean;
   glassOpacity: number;
   glassBlur: number;
@@ -120,6 +124,7 @@ export interface MaterialRecipe {
   contentLayer: ContentLayer;
   textFontFamily: string;
   textSizeRem: number;
+  contentOpacity: number;
   fontWeight: FontWeightToken;
   fontStyle: FontStyleToken;
   textTransform: TextTransformToken;
@@ -142,17 +147,17 @@ export const materialRecipeEdges: EdgeName[] = ['top', 'right', 'bottom', 'left'
 export const materialRecipeCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 export const materialRecipeStates: MaterialRecipeState[] = ['rest', 'hover', 'active', 'pressed'];
 export const materialRecipeMaterials: MaterialKind[] = ['none', 'raw'];
-export const materialRecipeShapes: ShapeKind[] = ['rect', 'beveled'];
-export const materialRecipeTones: MaterialTone[] = ['none', 'inherit', 'black', 'white', 'muted', 'gold', 'cyan', 'red', 'green'];
-export const materialRecipeSurfaceTones: MaterialTone[] = ['none', 'inherit', 'gold', 'cyan', 'white', 'red', 'green'];
-export const materialRecipeContentTones: MaterialTone[] = ['inherit', 'muted', 'black', 'white', 'gold', 'cyan', 'red', 'green'];
+export const materialRecipeShapes: ShapeKind[] = ['rect', 'bevel'];
+export const materialRecipeTones: MaterialTone[] = ['none', 'inherit', 'black', 'white', 'muted', 'gray', 'brass', 'gold', 'cyan', 'red', 'green'];
+export const materialRecipeSurfaceTones: MaterialTone[] = ['none', 'inherit', 'brass', 'gold', 'cyan', 'white', 'gray', 'red', 'green'];
+export const materialRecipeContentTones: MaterialTone[] = ['inherit', 'muted', 'gray', 'black', 'white', 'brass', 'gold', 'cyan', 'red', 'green'];
 export const materialRecipeEmissionKinds: EdgeEmissionKind[] = ['none', 'line', 'center-blip', 'rail-and-blip'];
 export const materialRecipeEmissionEdges: EdgeEmissionEdge[] = ['bottom'];
-export const materialRecipeFontWeights: FontWeightToken[] = ['regular', 'medium', 'bold', 'black'];
+export const materialRecipeFontWeights: FontWeightToken[] = [100, 200, 300, 400, 500, 600, 700, 800, 900];
 export const materialRecipeFontStyles: FontStyleToken[] = ['normal', 'italic'];
-export const materialRecipeTextTransforms: TextTransformToken[] = ['none', 'uppercase'];
+export const materialRecipeTextTransforms: TextTransformToken[] = ['none', 'uppercase', 'lowercase', 'capitalize'];
 export const materialRecipeGlows = materialRecipeSurfaceTones;
-export const materialRecipeTints = materialRecipeSurfaceTones;
+export const materialRecipeTints: MaterialTone[] = ['none', 'inherit', 'black', 'brass', 'gold', 'cyan', 'white', 'gray', 'red', 'green'];
 export const materialRecipeGradients: SurfaceGradient[] = ['none', 'top-light', 'bottom-dark', 'both'];
 export const materialRecipeTextureScales = [128, 256, 512, 1024] as const;
 export const materialRecipeEdgeWearLayers = ['below-highlights', 'above-highlights'] as const;
@@ -169,12 +174,24 @@ export const materialRecipeTextFonts = [
   { label: 'system', value: 'ui-sans-serif, system-ui, sans-serif' },
 ] as const;
 
-export const fontWeightTokenValue = (token: FontWeightToken) => ({
+const legacyFontWeightValues = {
   regular: 400,
-  medium: 600,
-  bold: 800,
-  black: 900,
-}[token]);
+  medium: 500,
+  bold: 600,
+  black: 700,
+} as const;
+
+export const fontWeightTokenValue = (token: FontWeightToken) => token;
+
+export const sanitizeFontWeight = (value: unknown, fallback: FontWeightToken): FontWeightToken => {
+  if (typeof value === 'number' && materialRecipeFontWeights.includes(value as FontWeightToken)) {
+    return value as FontWeightToken;
+  }
+  if (typeof value === 'string' && value in legacyFontWeightValues) {
+    return legacyFontWeightValues[value as keyof typeof legacyFontWeightValues];
+  }
+  return fallback;
+};
 
 export const createMaterialStateOverlay = (overrides: DeepPartial<MaterialStateOverlay> = {}): MaterialStateOverlay => ({
   enabled: overrides.enabled ?? false,
@@ -282,7 +299,7 @@ export const createMaterialStateOverlays = (
     content: {
       contentTone: 'black',
       iconTone: 'black',
-      fontWeight: 'black',
+      fontWeight: 700,
       fontStyle: 'italic',
       textTransform: 'uppercase',
       letterSpacing: 0,
@@ -317,7 +334,7 @@ export const createMaterialStateOverlays = (
     content: {
       contentTone: 'black',
       iconTone: 'inherit',
-      fontWeight: 'black',
+      fontWeight: 700,
       fontStyle: 'italic',
       textTransform: 'uppercase',
       letterSpacing: 0,
@@ -336,6 +353,8 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     material: 'raw',
     texture: 'stone04',
     shape: 'rect',
+    bevelCorners: [],
+    bevelSize: 11,
     glass: false,
     glassOpacity: 34,
     glassBlur: 8,
@@ -363,7 +382,8 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     contentLayer: 'over-glass',
     textFontFamily: 'inherit',
     textSizeRem: 0.8125,
-    fontWeight: 'black',
+    contentOpacity: 100,
+    fontWeight: 700,
     fontStyle: 'italic',
     textTransform: 'uppercase',
     letterSpacing: 0,
@@ -387,8 +407,8 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   return Math.min(max, Math.max(min, value));
 };
 
-const isOneOf = <T extends readonly string[]>(value: unknown, options: T): value is T[number] => (
-  typeof value === 'string' && options.includes(value)
+const isOneOf = <T extends readonly unknown[]>(value: unknown, options: T): value is T[number] => (
+  options.includes(value)
 );
 
 const uniqueEdges = (value: unknown, fallback: EdgeName[]) => (
@@ -406,7 +426,7 @@ const sanitizeTone = (value: unknown, fallback: MaterialTone, options = material
 const sanitizeSurfaceOverlay = (value: unknown, fallback: SurfaceStateOverlay): SurfaceStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<SurfaceStateOverlay> : {};
   return {
-    tint: sanitizeTone(input.tint, fallback.tint, materialRecipeSurfaceTones),
+    tint: sanitizeTone(input.tint, fallback.tint, materialRecipeTints),
     tintStrength: input.tintStrength === null ? null : clamp(input.tintStrength, fallback.tintStrength ?? 0, 0, 100),
     borderOpacityBoost: clamp(input.borderOpacityBoost, fallback.borderOpacityBoost, -100, 100),
     lightStrengthBoost: clamp(input.lightStrengthBoost, fallback.lightStrengthBoost, -100, 100),
@@ -442,13 +462,19 @@ const sanitizeEmissionOverlay = (value: unknown, fallback: EdgeEmissionOverlay):
 const sanitizeContentOverlay = (value: unknown, fallback: ContentStateOverlay): ContentStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<ContentStateOverlay> : {};
   const emboss = input.contentEmboss;
+  const fallbackWeight = fallback.fontWeight === 'inherit' ? 700 : fallback.fontWeight;
+  const fontWeight = input.fontWeight === 'inherit'
+    ? 'inherit'
+    : input.fontWeight === undefined
+      ? fallback.fontWeight
+      : sanitizeFontWeight(input.fontWeight, fallbackWeight);
   return {
     contentTone: sanitizeTone(input.contentTone, fallback.contentTone, materialRecipeContentTones),
     iconTone: sanitizeTone(input.iconTone, fallback.iconTone, materialRecipeContentTones),
     contentGlowStrength: clamp(input.contentGlowStrength, fallback.contentGlowStrength, 0, 100),
     iconGlowStrength: clamp(input.iconGlowStrength, fallback.iconGlowStrength, 0, 100),
     contentEmboss: emboss === 'inherit' || typeof emboss === 'boolean' ? emboss : fallback.contentEmboss,
-    fontWeight: input.fontWeight === 'inherit' || isOneOf(input.fontWeight, materialRecipeFontWeights) ? input.fontWeight : fallback.fontWeight,
+    fontWeight,
     fontStyle: input.fontStyle === 'inherit' || isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
     textTransform: input.textTransform === 'inherit' || isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
     letterSpacing: input.letterSpacing === null ? null : clamp(input.letterSpacing, fallback.letterSpacing ?? 0, -0.08, 0.24),
@@ -498,17 +524,24 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
   const input = typeof value === 'object' && value !== null ? value as Partial<MaterialRecipe> : {};
   const fallbackStates = fallback.states || createMaterialStateOverlays();
   const legacyTextTone = isOneOf(input.textTone, materialRecipeTextTones) ? input.textTone : undefined;
+  const legacyBevelShape = input.shape === 'beveled' || input.shape === 'css-bevel';
+  const shape = legacyBevelShape ? 'bevel' : isOneOf(input.shape, materialRecipeShapes) ? input.shape : fallback.shape;
+  const bevelCorners = Array.isArray(input.bevelCorners)
+    ? uniqueCorners(input.bevelCorners, fallback.bevelCorners || [])
+    : legacyBevelShape ? materialRecipeCorners : fallback.bevelCorners || [];
   return {
     material: isOneOf(input.material, materialRecipeMaterials) ? input.material : fallback.material,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : fallback.texture,
-    shape: isOneOf(input.shape, materialRecipeShapes) ? input.shape : fallback.shape,
+    shape,
+    bevelCorners,
+    bevelSize: clamp(input.bevelSize, fallback.bevelSize ?? 11, 0, 30),
     glass: typeof input.glass === 'boolean' ? input.glass : fallback.glass,
     glassOpacity: clamp(input.glassOpacity, fallback.glassOpacity, 0, 100),
     glassBlur: clamp(input.glassBlur, fallback.glassBlur, 0, 24),
     glassHighlightWidth: clamp(input.glassHighlightWidth, fallback.glassHighlightWidth, 0, 100),
     glassHighlightHeight: clamp(input.glassHighlightHeight, fallback.glassHighlightHeight, 0, 100),
     glassHighlightY: clamp(input.glassHighlightY, fallback.glassHighlightY, 0, 100),
-    tint: sanitizeTone(input.tint, fallback.tint, materialRecipeSurfaceTones),
+    tint: sanitizeTone(input.tint, fallback.tint, materialRecipeTints),
     tintStrength: clamp(input.tintStrength, fallback.tintStrength, 0, 100),
     gradient: isOneOf(input.gradient, materialRecipeGradients) ? input.gradient : fallback.gradient,
     sheen: typeof input.sheen === 'boolean' ? input.sheen : fallback.sheen,
@@ -528,14 +561,15 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
       ? input.edgeWearScale as typeof materialRecipeTextureScales[number]
       : fallback.edgeWearScale,
     edgeWearLayer: isOneOf(input.edgeWearLayer, materialRecipeEdgeWearLayers) ? input.edgeWearLayer : fallback.edgeWearLayer,
-    radius: clamp(input.radius, fallback.radius, 0, 8),
+    radius: clamp(input.radius, fallback.radius, 0, 30),
     textContent: typeof input.textContent === 'string' ? input.textContent : fallback.textContent,
     contentLayer: isOneOf(input.contentLayer, materialRecipeContentLayers) ? input.contentLayer : fallback.contentLayer,
     textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
       ? input.textFontFamily
       : fallback.textFontFamily,
     textSizeRem: clamp(input.textSizeRem, fallback.textSizeRem, 0.5, 3),
-    fontWeight: isOneOf(input.fontWeight, materialRecipeFontWeights) ? input.fontWeight : fallback.fontWeight,
+    contentOpacity: clamp(input.contentOpacity, fallback.contentOpacity ?? 100, 0, 100),
+    fontWeight: sanitizeFontWeight(input.fontWeight, fallback.fontWeight),
     fontStyle: isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
     textTransform: isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
@@ -554,9 +588,11 @@ const toneRgb: Record<MaterialTone, string> = {
   none: '0 0 0',
   inherit: '244 238 224',
   black: '23 20 15',
-  white: '244 238 224',
+  white: '255 255 255',
   muted: '143 137 124',
-  gold: '255 188 72',
+  gray: '188 184 174',
+  brass: '255 188 72',
+  gold: '248 215 112',
   cyan: '55 190 255',
   red: '255 75 64',
   green: '86 218 142',
@@ -592,7 +628,7 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
       : recipe.iconTone && recipe.iconTone !== 'inherit'
         ? recipe.iconTone
         : contentTone;
-  const fontWeight = content?.fontWeight && content.fontWeight !== 'inherit' ? content.fontWeight : recipe.fontWeight || 'black';
+  const fontWeight = content?.fontWeight && content.fontWeight !== 'inherit' ? content.fontWeight : recipe.fontWeight || 700;
   const fontStyle = content?.fontStyle && content.fontStyle !== 'inherit' ? content.fontStyle : recipe.fontStyle || 'italic';
   const textTransform = content?.textTransform && content.textTransform !== 'inherit' ? content.textTransform : recipe.textTransform || 'uppercase';
   const letterSpacing = content?.letterSpacing !== null && content?.letterSpacing !== undefined ? content.letterSpacing : recipe.letterSpacing ?? 0;
@@ -602,6 +638,8 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     material: recipe.material,
     texture: recipe.texture,
     shape: recipe.shape,
+    bevelCorners: recipe.bevelCorners,
+    bevelSize: recipe.bevelSize,
     glass: recipe.glass,
     glassOpacity: recipe.glassOpacity,
     glassBlur: recipe.glassBlur,
@@ -634,6 +672,7 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     contentLayer: recipe.contentLayer,
     textFontFamily: recipe.textFontFamily,
     textSizeRem: recipe.textSizeRem,
+    contentOpacity: recipe.contentOpacity,
     contentTone,
     iconTone,
     contentGlowStrength: content?.contentGlowStrength || 0,
@@ -701,6 +740,7 @@ export const materialRecipeToSurfaceStateVars = (
       '--edge-bottom': edges.includes('bottom') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
       '--edge-left': edges.includes('left') ? `rgba(${glowRgb.replaceAll(' ', ', ')}, 0.98)` : 'transparent',
       '--content-rgb': contentRgb,
+      '--content-alpha': (resolved.contentOpacity ?? 100) / 100,
       '--icon-rgb': iconRgb,
       '--content-glow-alpha': (resolved.contentGlowStrength ?? 0) / 100,
       '--icon-glow-alpha': (resolved.iconGlowStrength ?? 0) / 100,

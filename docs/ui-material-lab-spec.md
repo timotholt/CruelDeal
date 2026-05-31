@@ -117,6 +117,37 @@ host element
 
 Cards and buttons differ by host semantics and layout, not by duplicating material logic.
 
+For composed/editor-authored UI, layout is owned by a wrapper node frame, not by the material primitive itself:
+
+```txt
+NodeFrame: position, size, padding, gap, align, justify
+MaterialSurface / MaterialButton: visual material layers and text recipe
+NodeContent: bound copy, icon, or media content
+```
+
+This keeps buttons, text panels, and containers behaviorally identical in the editor. Moving a CTA button uses the same node-frame `x/y` path as moving a text chip or glass container.
+
+## Editable Target Model
+
+The Material Lab editor should be reusable through a small target API instead of being coupled to a specific screen part. Any screen can expose editable material targets:
+
+```ts
+interface MaterialEditableTarget {
+  id: string;
+  label: string;
+  recipe: MaterialRecipe;
+  capabilities: MaterialEditorCapabilities;
+  onChange: (recipe: MaterialRecipe) => void;
+  children?: MaterialEditableTarget[];
+}
+```
+
+The left workbench pane is the selection tree for those targets. Parent surfaces and child surfaces appear together there, indented by depth. The right pane always renders the same material editor against the selected target.
+
+Feature-specific editors can add extra controls beside the shared material controls, but they should not duplicate material sliders. For example, the feed card type editor owns story selection, card image placement, and node layout controls, while glass copy containers, text nodes, and CTA buttons all remain normal material targets. The feed-card root is a neutral media canvas, so it shows image/fade/layout controls instead of inactive material controls. Parent-only extras should only appear for parent/root selections; child selections should show child layout/content extras only.
+
+Root media controls belong beside the feature editor, not inside the shared material surface vocabulary. A feed/home carousel card can expose full-bleed image placement and media fade options so the server image can be cropped and made readable without baking fades into the bitmap.
+
 ### Stone
 
 Stone should feel opaque, textured, heavy, and slightly weathered.

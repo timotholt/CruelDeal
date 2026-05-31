@@ -30,6 +30,11 @@ export const textureOptions = [
     url: '/art/textures/stone-local/Stone04.png',
   },
   {
+    id: 'stoneGray01',
+    label: 'Stone Gray 01',
+    url: '/art/textures/stone-local/StoneGray01.png',
+  },
+  {
     id: 'background01',
     label: 'Background 01',
     url: '/art/textures/stone-local/Background01.png',

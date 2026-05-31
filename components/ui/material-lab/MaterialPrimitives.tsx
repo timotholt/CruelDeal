@@ -13,7 +13,7 @@ import type {
 } from './MaterialRecipeTypes';
 
 export type MaterialKind = 'none' | 'raw';
-export type ShapeKind = 'rect' | 'beveled';
+export type ShapeKind = 'rect' | 'bevel';
 export type GlowTone = MaterialTone;
 export type TintTone = MaterialTone;
 export type EdgeName = 'top' | 'right' | 'bottom' | 'left';
@@ -31,6 +31,8 @@ interface SurfaceOptions {
   glass?: boolean;
   texture?: TextureKind;
   shape?: ShapeKind;
+  bevelCorners?: CornerName[];
+  bevelSize?: number;
   corners?: CornerSpec;
   edgeHighlight?: EdgeName | EdgeName[] | 'none';
   border?: BorderSpec;
@@ -64,6 +66,7 @@ interface SurfaceOptions {
   contentLayer?: ContentLayer;
   textFontFamily?: string;
   textSizeRem?: number;
+  contentOpacity?: number;
   textTone?: TextTone;
   contentTone?: MaterialTone;
   iconTone?: MaterialTone;
@@ -95,6 +98,7 @@ export interface MaterialPanelProps extends SurfaceOptions {
   padded?: boolean;
   compact?: boolean;
   class?: string;
+  underGlass?: JSX.Element;
   children: JSX.Element;
 }
 
@@ -141,6 +145,7 @@ interface MaterialSurfaceProps extends SurfaceOptions {
   class: string;
   contentAs: MaterialSurfaceContent;
   contentClass: string;
+  underGlass?: JSX.Element;
   children: JSX.Element;
   disabled?: boolean;
   rootProps?: JSX.HTMLAttributes<HTMLElement>;
@@ -152,10 +157,12 @@ const glowColors: Record<MaterialTone, { color: string; rgb: string }> = {
   none: { color: 'transparent', rgb: '0 0 0' },
   inherit: { color: 'rgba(244, 238, 224, 0.92)', rgb: '244 238 224' },
   black: { color: 'rgba(23, 20, 15, 0.98)', rgb: '23 20 15' },
-  gold: { color: 'rgba(255, 210, 105, 0.98)', rgb: '255 188 72' },
+  brass: { color: 'rgba(255, 210, 105, 0.98)', rgb: '255 188 72' },
+  gold: { color: 'rgba(248, 215, 112, 0.98)', rgb: '248 215 112' },
   cyan: { color: 'rgba(77, 220, 255, 0.95)', rgb: '55 190 255' },
-  white: { color: 'rgba(255, 250, 232, 0.92)', rgb: '255 255 240' },
+  white: { color: 'rgba(255, 255, 255, 0.92)', rgb: '255 255 255' },
   muted: { color: 'rgba(143, 137, 124, 0.92)', rgb: '143 137 124' },
+  gray: { color: 'rgba(188, 184, 174, 0.94)', rgb: '188 184 174' },
   red: { color: 'rgba(255, 92, 83, 0.96)', rgb: '255 75 64' },
   green: { color: 'rgba(86, 218, 142, 0.96)', rgb: '86 218 142' },
 };
@@ -164,19 +171,14 @@ const tintColors: Record<MaterialTone, { rgb: string }> = {
   none: { rgb: '0 0 0' },
   inherit: { rgb: '244 238 224' },
   black: { rgb: '23 20 15' },
-  gold: { rgb: '255 188 72' },
+  brass: { rgb: '255 188 72' },
+  gold: { rgb: '248 215 112' },
   cyan: { rgb: '55 190 255' },
-  white: { rgb: '255 250 232' },
+  white: { rgb: '255 255 255' },
   muted: { rgb: '143 137 124' },
+  gray: { rgb: '188 184 174' },
   red: { rgb: '255 75 64' },
   green: { rgb: '86 218 142' },
-};
-
-const fontWeights: Record<FontWeightToken, number> = {
-  regular: 400,
-  medium: 600,
-  bold: 800,
-  black: 900,
 };
 
 const hasTint = (options: SurfaceOptions) => (
@@ -273,6 +275,7 @@ const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
 
 const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const corners = resolveCorners(options.corners);
+  const bevelCorners = resolveCorners(options.bevelCorners || 'all');
   const edges = resolveEdges(options.edgeHighlight);
   const borderEdges = resolveBorder(options.border);
   const glow = glowColors[options.glow || 'gold'];
@@ -300,7 +303,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
   const contentRgb = tintColors[contentTone].rgb;
   const iconRgb = tintColors[iconTone].rgb;
-  const textColor = `rgb(${contentRgb} / 1)`;
+  const contentAlpha = (options.contentOpacity ?? 100) / 100;
+  const textColor = `rgb(${contentRgb} / ${contentAlpha})`;
   const textEmboss = options.textEmboss !== false;
   const textShadow = textEmboss
     ? contentTone === 'black'
@@ -318,6 +322,19 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     ...prefixedVars('pressed', stateVars.pressed),
     '--corner-size': `${options.cornerSize ?? 18}px`,
     '--surface-radius': `${options.radius ?? 7}px`,
+    '--bevel-size': `${options.bevelSize ?? 11}px`,
+    '--corner-radius-tl': bevelCorners.includes('top-left') ? 'var(--bevel-size)' : 'var(--surface-radius)',
+    '--corner-radius-tr': bevelCorners.includes('top-right') ? 'var(--bevel-size)' : 'var(--surface-radius)',
+    '--corner-radius-br': bevelCorners.includes('bottom-right') ? 'var(--bevel-size)' : 'var(--surface-radius)',
+    '--corner-radius-bl': bevelCorners.includes('bottom-left') ? 'var(--bevel-size)' : 'var(--surface-radius)',
+    '--bevel-cut-tl': bevelCorners.includes('top-left') ? 'var(--bevel-size)' : '0px',
+    '--bevel-cut-tr': bevelCorners.includes('top-right') ? 'var(--bevel-size)' : '0px',
+    '--bevel-cut-br': bevelCorners.includes('bottom-right') ? 'var(--bevel-size)' : '0px',
+    '--bevel-cut-bl': bevelCorners.includes('bottom-left') ? 'var(--bevel-size)' : '0px',
+    '--bevel-shape-tl': bevelCorners.includes('top-left') ? 'bevel' : 'round',
+    '--bevel-shape-tr': bevelCorners.includes('top-right') ? 'bevel' : 'round',
+    '--bevel-shape-br': bevelCorners.includes('bottom-right') ? 'bevel' : 'round',
+    '--bevel-shape-bl': bevelCorners.includes('bottom-left') ? 'bevel' : 'round',
     '--texture-strength': `${suppressMaterialTexture ? 0 : (options.textureStrength ?? 100) / 100}`,
     '--texture-scale': `${options.textureScale ?? 512}px`,
     '--texture-image': !suppressMaterialTexture
@@ -372,6 +389,7 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--edge-left': edges.includes('left') ? activeEdgeColor : 'transparent',
     '--content-font-family': options.textFontFamily || 'inherit',
     '--content-size': `${options.textSizeRem ?? 0.8125}rem`,
+    '--content-alpha': `${contentAlpha}`,
     '--content-rgb': contentRgb,
     '--icon-rgb': iconRgb,
     '--content-color': textColor,
@@ -380,8 +398,8 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
     '--icon-glow-alpha': `${(options.iconGlowStrength ?? 0) / 100}`,
     '--content-glow-shadow': '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))',
     '--icon-glow-shadow': 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))',
-    '--icon-color': `rgb(${iconRgb} / 1)`,
-    '--content-font-weight': `${fontWeights[options.fontWeight || 'black']}`,
+    '--icon-color': `rgb(${iconRgb} / ${contentAlpha})`,
+    '--content-font-weight': `${options.fontWeight ?? 700}`,
     '--content-font-style': options.fontStyle || 'italic',
     '--content-text-transform': options.textTransform || 'uppercase',
     '--content-letter-spacing': `${options.letterSpacing ?? 0}em`,
@@ -402,11 +420,12 @@ const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
 };
 
 const surfaceClass = (options: SurfaceOptions, extra = '') => {
+  const shape = options.bevelCorners?.length ? 'bevel' : 'rect';
   return [
     'cd-surface',
     `cd-surface--${options.material || 'raw'}`,
     `cd-surface--texture-${options.texture || 'road012a'}`,
-    `cd-surface--${options.shape || 'rect'}`,
+    `cd-surface--${shape}`,
     options.sheen === false ? 'cd-surface--sheen-off' : '',
     options.gradient ? `cd-surface--gradient-${options.gradient}` : 'cd-surface--gradient-both',
     hasGlass(options) ? 'cd-surface--glass' : '',
@@ -415,6 +434,7 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
     options.hoverPreview ? 'is-hover-preview' : '',
     options.visualState ? `is-visual-${options.visualState}` : '',
     hasTint(options) ? 'cd-surface--tinted' : '',
+    hasTint(options) ? `cd-surface--tint-${options.tint}` : '',
     options.edgeWearLayer === 'above-highlights' ? 'cd-surface--edge-wear-above' : '',
     extra,
   ].filter(Boolean).join(' ');
@@ -483,6 +503,14 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       {props.children}
     </Dynamic>
   );
+  const underGlassContent = () => (
+    <Dynamic
+      component={props.contentAs}
+      class={`cd-surface__content cd-surface__content--under-glass ${props.contentClass}`}
+    >
+      {props.underGlass}
+    </Dynamic>
+  );
 
   return (
     <Dynamic
@@ -497,11 +525,21 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
     >
       <SurfaceBaseLayers
         material={hasMaterialBase(props)}
-        texture={hasTextureLayer(props)}
-        tinted={hasTint(props)}
-        gradient={hasGradientLayer(props)}
+        texture={!props.underGlass && hasTextureLayer(props)}
+        tinted={!props.underGlass && hasTint(props)}
+        gradient={!props.underGlass && hasGradientLayer(props)}
       />
-      <Show when={contentLayer() === 'under-glass'}>
+      <Show when={props.underGlass}>
+        {underGlassContent()}
+      </Show>
+      <Show when={props.underGlass}>
+        <SurfaceBaseLayers
+          texture={hasTextureLayer(props)}
+          tinted={hasTint(props)}
+          gradient={hasGradientLayer(props)}
+        />
+      </Show>
+      <Show when={!props.underGlass && contentLayer() === 'under-glass'}>
         {content('under-glass')}
       </Show>
       <SurfaceOverlayLayers
@@ -511,7 +549,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
         border={hasBorderLayer(props)}
         edgeWear={hasEdgeWearLayer(props)}
       />
-      <Show when={contentLayer() === 'over-glass'}>
+      <Show when={props.underGlass || contentLayer() === 'over-glass'}>
         {content('over-glass')}
       </Show>
     </Dynamic>
@@ -522,12 +560,15 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
   const [local] = splitProps(props, [
     'children',
     'class',
+    'underGlass',
     'padded',
     'compact',
     'material',
     'glass',
     'texture',
     'shape',
+    'bevelCorners',
+    'bevelSize',
     'corners',
     'edgeHighlight',
     'border',
@@ -561,6 +602,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'contentLayer',
     'textFontFamily',
     'textSizeRem',
+    'contentOpacity',
     'textTone',
     'contentTone',
     'iconTone',
@@ -609,6 +651,8 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glass',
     'texture',
     'shape',
+    'bevelCorners',
+    'bevelSize',
     'corners',
     'edgeHighlight',
     'border',
@@ -649,6 +693,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'contentLayer',
     'textFontFamily',
     'textSizeRem',
+    'contentOpacity',
     'textTone',
     'contentTone',
     'iconTone',

@@ -68,6 +68,8 @@ interface LabControls {
   glass: boolean;
   texture: TextureKind;
   shape: ShapeKind;
+  bevelCorners: CornerName[];
+  bevelSize: number;
   borderEdges: EdgeName[];
   edgeWearTexture: EdgeTextureKind;
   edgeWearOpacity: number;
@@ -114,11 +116,11 @@ const presetStorageVersion = 6;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
 const materialOptions: MaterialKind[] = ['none', 'raw'];
-const shapeOptions = ['rect', 'beveled'] as const;
+const shapeOptions = ['rect', 'bevel'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
-const glowOptions = ['none', 'gold', 'cyan', 'white', 'red'] as const;
-const tintOptions = ['none', 'gold', 'cyan', 'white', 'red', 'green'] as const;
+const glowOptions = ['none', 'brass', 'gold', 'cyan', 'white', 'gray', 'red'] as const;
+const tintOptions = ['none', 'black', 'brass', 'gold', 'cyan', 'white', 'gray', 'red', 'green'] as const;
 const gradientOptions = ['none', 'top-light', 'bottom-dark', 'both'] as const;
 const textureScaleStops = [128, 256, 512, 1024] as const;
 const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
@@ -130,6 +132,8 @@ const controlDefaults: LabControls = {
   glass: false,
   texture: 'stone04',
   shape: 'rect',
+  bevelCorners: [],
+  bevelSize: 11,
   borderEdges: ['top', 'right', 'bottom', 'left'],
   edgeWearTexture: 'none',
   edgeWearOpacity: 0,
@@ -179,6 +183,8 @@ const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMateri
   material: controls.material,
   texture: controls.texture,
   shape: controls.shape,
+  bevelCorners: controls.bevelCorners,
+  bevelSize: controls.bevelSize,
   glass: controls.glass,
   glassOpacity: controls.glassOpacity,
   glassBlur: controls.glassBlur,
@@ -219,6 +225,8 @@ const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabCont
   material: recipe.material,
   texture: recipe.texture,
   shape: recipe.shape,
+  bevelCorners: recipe.bevelCorners,
+  bevelSize: recipe.bevelSize,
   glass: recipe.glass,
   glassOpacity: recipe.glassOpacity,
   glassBlur: recipe.glassBlur,
@@ -326,6 +334,8 @@ const sanitizeControls = (value: unknown): LabControls => {
     glass: typeof input.glass === 'boolean' ? input.glass : controlDefaults.glass,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
     shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
+    bevelCorners: uniqueCorners(input.bevelCorners, controlDefaults.bevelCorners),
+    bevelSize: clamp(input.bevelSize, controlDefaults.bevelSize, 0, 30),
     borderEdges: uniqueEdges(input.borderEdges, controlDefaults.borderEdges),
     edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
     edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
@@ -352,7 +362,7 @@ const sanitizeControls = (value: unknown): LabControls => {
     borderOpacity: clamp(input.borderOpacity, controlDefaults.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, controlDefaults.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, controlDefaults.darkStrength, 0, 100),
-    radius: clamp(input.radius, controlDefaults.radius, 0, 8),
+    radius: clamp(input.radius, controlDefaults.radius, 0, 30),
     textContent: typeof input.textContent === 'string' ? input.textContent : controlDefaults.textContent,
     contentLayer: isOneOf(input.contentLayer, materialRecipeContentLayers) ? input.contentLayer : controlDefaults.contentLayer,
     textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
@@ -853,7 +863,7 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <SectionLabel>Typography</SectionLabel>
-                <MaterialPanel material="raw" shape="beveled" corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
+                <MaterialPanel material="raw" shape="bevel" bevelCorners={['top-left', 'top-right']} corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
                   <div class="ui-lab-typography">
                     <SectionLabel>Active Contract</SectionLabel>
                     <h2 class="ui-lab-display-title">Data <span>Extraction</span></h2>

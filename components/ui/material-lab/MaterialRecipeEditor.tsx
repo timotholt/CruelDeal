@@ -9,7 +9,6 @@ import type {
   CornerName,
   EdgeName,
   MaterialKind,
-  ShapeKind,
   SurfaceGradient,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
@@ -22,11 +21,9 @@ import {
   materialRecipeEmissionEdges,
   materialRecipeEmissionKinds,
   materialRecipeFontStyles,
-  materialRecipeFontWeights,
   materialRecipeGlows,
   materialRecipeGradients,
   materialRecipeMaterials,
-  materialRecipeShapes,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
@@ -191,12 +188,44 @@ const MaterialSection = (props: {
       />
     </div>
     <div class="ui-lab-control-row">
-      <ControlLabel>Shape</ControlLabel>
-      <Segments disabled={!props.enabled} value={props.recipe.shape} options={materialRecipeShapes} onChange={(value: ShapeKind) => props.update('shape', value)} />
+      <ControlLabel>Bevel</ControlLabel>
+      <div class="ui-lab-toggles">
+        <For each={materialRecipeCorners}>
+          {(corner) => (
+            <ToggleButton
+              active={props.recipe.bevelCorners.includes(corner)}
+              disabled={!props.enabled}
+              onClick={() => props.update(
+                'bevelCorners',
+                props.recipe.bevelCorners.includes(corner)
+                  ? props.recipe.bevelCorners.filter((item) => item !== corner)
+                  : [...props.recipe.bevelCorners, corner],
+              )}
+            >
+              {{
+                'top-left': 'TL',
+                'top-right': 'TR',
+                'bottom-left': 'BL',
+                'bottom-right': 'BR',
+              }[corner]}
+            </ToggleButton>
+          )}
+        </For>
+      </div>
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Radius</ControlLabel>
-      <Slider disabled={!props.enabled} value={props.recipe.radius} min={0} max={8} onInput={(value) => props.update('radius', value)} />
+      <Slider disabled={!props.enabled} value={props.recipe.radius} min={0} max={30} onInput={(value) => props.update('radius', value)} />
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.bevelCorners.length ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Bevel Size</ControlLabel>
+      <Slider
+        disabled={!props.enabled || props.recipe.bevelCorners.length === 0}
+        value={props.recipe.bevelSize}
+        min={0}
+        max={30}
+        onInput={(value) => props.update('bevelSize', value)}
+      />
     </div>
   </div>
 );
@@ -568,10 +597,10 @@ const ContentStateSection = (props: {
   updateStateGroup: StateGroupUpdate;
 }) => {
   const embossOptions = ['inherit', 'on', 'off'] as const;
-  const fontWeightOptions = ['inherit', ...materialRecipeFontWeights] as const;
   const fontStyleOptions = ['inherit', ...materialRecipeFontStyles] as const;
   const transformOptions = ['inherit', ...materialRecipeTextTransforms] as const;
   const letterInherited = () => props.stateOverlay.content.letterSpacing === null;
+  const weightInherited = () => props.stateOverlay.content.fontWeight === 'inherit';
 
   return (
     <div class="ui-lab-control-group">
@@ -602,7 +631,19 @@ const ContentStateSection = (props: {
       </div>
       <div class="ui-lab-control-row">
         <ControlLabel>Weight</ControlLabel>
-        <Segments value={props.stateOverlay.content.fontWeight} options={fontWeightOptions} onChange={(value) => props.updateStateGroup('content', 'fontWeight', value as FontWeightToken | 'inherit')} />
+        <div class="ui-lab-stack">
+          <ToggleButton active={weightInherited()} onClick={() => props.updateStateGroup('content', 'fontWeight', weightInherited() ? 700 : 'inherit')}>
+            inherit
+          </ToggleButton>
+          <Slider
+            disabled={weightInherited()}
+            value={weightInherited() ? 700 : props.stateOverlay.content.fontWeight as FontWeightToken}
+            min={100}
+            max={900}
+            step={100}
+            onInput={(value) => props.updateStateGroup('content', 'fontWeight', value as FontWeightToken)}
+          />
+        </div>
       </div>
       <div class="ui-lab-control-row">
         <ControlLabel>Style</ControlLabel>
@@ -673,6 +714,16 @@ const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; contentE
       />
     </div>
     <div class="ui-lab-control-row">
+      <ControlLabel>Opacity</ControlLabel>
+      <Slider
+        value={props.recipe.contentOpacity}
+        disabled={!props.enabled}
+        min={0}
+        max={100}
+        onInput={(value) => props.update('contentOpacity', value)}
+      />
+    </div>
+    <div class="ui-lab-control-row">
       <ControlLabel>Label Color</ControlLabel>
       <Segments
         value={props.recipe.contentTone}
@@ -692,7 +743,14 @@ const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; contentE
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Weight</ControlLabel>
-      <Segments disabled={!props.enabled} value={props.recipe.fontWeight} options={materialRecipeFontWeights} onChange={(value: FontWeightToken) => props.update('fontWeight', value)} />
+      <Slider
+        disabled={!props.enabled}
+        value={props.recipe.fontWeight}
+        min={100}
+        max={900}
+        step={100}
+        onInput={(value) => props.update('fontWeight', value as FontWeightToken)}
+      />
     </div>
     <div class="ui-lab-control-row">
       <ControlLabel>Style</ControlLabel>
@@ -859,7 +917,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           surface: { tint: 'gold', tintStrength: 42, borderOpacityBoost: 28, lightStrengthBoost: 16 },
           glow: { tone: 'gold', glowStrength: 72, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'] },
           emission: { emission: 'rail-and-blip', emissionTone: 'gold', emissionStrength: 82, emissionLength: 62, emissionThickness: 2, emissionBlipSize: 22 },
-          content: { contentTone: 'black', iconTone: 'black', fontWeight: 'black', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
+          content: { contentTone: 'black', iconTone: 'black', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
         });
       }
       return createMaterialStateOverlay({
@@ -867,7 +925,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         surface: { tint: 'gold', tintStrength: preset === 'nav-tab' ? 34 : 34, borderOpacityBoost: 24, lightStrengthBoost: 18, darkStrengthBoost: 8 },
         glow: { tone: 'gold', glowStrength: 56, corners: materialRecipeCorners, edgeHighlight: ['top', 'bottom'], cornerSize: 18 },
         emission: { emission: 'rail-and-blip', emissionTone: 'gold', emissionStrength: 70, emissionLength: 54, emissionThickness: 2, emissionBlipSize: 18 },
-        content: { contentTone: 'black', iconTone: 'black', fontWeight: 'black', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
+        content: { contentTone: 'black', iconTone: 'black', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: 0 },
         motion: { translateY: 0, scale: 1 },
       });
     })();

@@ -1,34 +1,45 @@
-import { For, JSX } from 'solid-js';
+import { For, JSX, Show } from 'solid-js';
 import { MaterialPanel, SectionLabel } from './MaterialPrimitives';
 
 export interface MaterialWorkbenchPart<T extends string = string> {
   id: T;
   label: string;
   detail?: string;
+  depth?: number;
 }
 
 interface MaterialPartSelectorProps<T extends string> {
   parts: MaterialWorkbenchPart<T>[];
   selectedPartId: T;
   onSelect: (id: T) => void;
+  selectionPulseTick?: number;
+  selectionPulseEnabled?: boolean;
 }
 
 export const MaterialPartSelector = <T extends string>(props: MaterialPartSelectorProps<T>) => (
   <div class="ui-lab-control-grid">
     <div class="ui-lab-control-group">
-      <SectionLabel size="xs">Parts</SectionLabel>
+      <SectionLabel size="xs">UI Tree</SectionLabel>
       <div class="material-workbench-parts">
         <For each={props.parts}>
-          {(part) => (
-            <button
-              type="button"
-              class={`ui-lab-mini-button ${props.selectedPartId === part.id ? 'is-active' : ''}`}
-              onClick={() => props.onSelect(part.id)}
-            >
-              <strong>{part.label}</strong>
-              <span>{part.detail}</span>
-            </button>
-          )}
+          {(part) => {
+            const isSelected = () => props.selectedPartId === part.id;
+            const pulseClass = () => (
+              props.selectionPulseEnabled && isSelected()
+                ? `is-selection-flash is-selection-flash-${(props.selectionPulseTick || 0) % 2 === 0 ? 'a' : 'b'}`
+                : ''
+            );
+            return (
+              <button
+                type="button"
+                class={`ui-lab-mini-button material-workbench-part-button material-workbench-part-button--depth-${part.depth ?? 0} ${isSelected() ? 'is-active' : ''} ${pulseClass()}`}
+                onClick={() => props.onSelect(part.id)}
+              >
+                <strong>{part.label}</strong>
+                <span>{part.detail}</span>
+              </button>
+            );
+          }}
         </For>
       </div>
     </div>
@@ -38,9 +49,15 @@ export const MaterialPartSelector = <T extends string>(props: MaterialPartSelect
 interface MaterialWorkbenchLayoutProps<T extends string> {
   title: string;
   subtitle?: string;
+  sidebarTabs?: Array<{ id: string; label: string }>;
+  selectedSidebarTabId?: string;
+  onSelectSidebarTab?: (id: string) => void;
+  sidebarAlt?: JSX.Element;
   parts: MaterialWorkbenchPart<T>[];
   selectedPartId: T;
   onSelectPart: (id: T) => void;
+  selectionPulseTick?: number;
+  selectionPulseEnabled?: boolean;
   preview: JSX.Element;
   editor: JSX.Element;
   footer?: JSX.Element;
@@ -65,11 +82,33 @@ export const MaterialWorkbenchLayout = <T extends string>(props: MaterialWorkben
           <span>{props.title}</span>
           <span>Select</span>
         </div>
-        <MaterialPartSelector
-          parts={props.parts}
-          selectedPartId={props.selectedPartId}
-          onSelect={props.onSelectPart}
-        />
+        <Show when={props.sidebarTabs?.length}>
+          <div class="ui-lab-state-tabs material-workbench-sidebar-tabs">
+            <For each={props.sidebarTabs}>
+              {(tab) => (
+                <button
+                  type="button"
+                  class={`ui-lab-state-tab ${props.selectedSidebarTabId === tab.id ? 'is-active' : ''}`}
+                  onClick={() => props.onSelectSidebarTab?.(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+        <Show
+          when={!props.sidebarTabs?.length || !props.selectedSidebarTabId || props.selectedSidebarTabId === 'parts'}
+          fallback={props.sidebarAlt}
+        >
+          <MaterialPartSelector
+            parts={props.parts}
+            selectedPartId={props.selectedPartId}
+            onSelect={props.onSelectPart}
+            selectionPulseTick={props.selectionPulseTick}
+            selectionPulseEnabled={props.selectionPulseEnabled}
+          />
+        </Show>
         <div class="material-workbench-footer">
           {props.actions}
           {props.footer}

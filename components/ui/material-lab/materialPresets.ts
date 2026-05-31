@@ -18,7 +18,7 @@ export const navTabMaterialRecipe = createMaterialRecipe({
   contentTone: 'muted',
   iconTone: 'inherit',
   textSizeRem: 0.5,
-  fontWeight: 'black',
+  fontWeight: 700,
   fontStyle: 'italic',
   textTransform: 'uppercase',
   letterSpacing: 0,
@@ -73,7 +73,7 @@ export const navTabMaterialRecipe = createMaterialRecipe({
       content: {
         contentTone: 'black',
         iconTone: 'black',
-        fontWeight: 'black',
+        fontWeight: 700,
         fontStyle: 'italic',
         textTransform: 'uppercase',
         letterSpacing: 0,
@@ -107,7 +107,7 @@ export const navTabMaterialRecipe = createMaterialRecipe({
       content: {
         contentTone: 'black',
         iconTone: 'inherit',
-        fontWeight: 'black',
+        fontWeight: 700,
         fontStyle: 'italic',
         textTransform: 'uppercase',
         letterSpacing: 0,
