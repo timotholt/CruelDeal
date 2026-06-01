@@ -10,6 +10,7 @@ import type {
   CornerName,
   EdgeName,
   EdgeWearLayer,
+  BorderColorKind,
   MaterialKind,
   ShapeKind,
   SurfaceGradient,
@@ -111,6 +112,10 @@ export interface MaterialRecipe {
   gradient: SurfaceGradient;
   sheen: boolean;
   disabled: boolean;
+  borderEnabled: boolean;
+  borderColor: BorderColorKind;
+  borderCustomColor: string;
+  borderLit: boolean;
   border: EdgeName[];
   textureStrength: number;
   textureScale: number;
@@ -155,6 +160,7 @@ export const materialRecipeEdges: EdgeName[] = ['top', 'right', 'bottom', 'left'
 export const materialRecipeCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 export const materialRecipeStates: MaterialRecipeState[] = ['rest', 'hover', 'active', 'pressed'];
 export const materialRecipeMaterials: MaterialKind[] = ['none', 'black', 'white', 'gray', 'custom'];
+export const materialRecipeBorderColors: BorderColorKind[] = ['inherit', 'black', 'white', 'gray', 'custom'];
 export const materialRecipeShapes: ShapeKind[] = ['rect', 'bevel'];
 export const materialRecipeTones: MaterialTone[] = ['none', 'inherit', 'black', 'white', 'muted', 'gray', 'brass', 'gold', 'cyan', 'red', 'green'];
 export const materialRecipeSurfaceTones: MaterialTone[] = ['none', 'inherit', 'brass', 'gold', 'cyan', 'white', 'gray', 'red', 'green'];
@@ -366,6 +372,10 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     gradient: 'both',
     sheen: true,
     disabled: false,
+    borderEnabled: true,
+    borderColor: 'inherit',
+    borderCustomColor: '#808080',
+    borderLit: true,
     border: ['top', 'right', 'bottom', 'left'],
     textureStrength: 72,
     textureScale: 512,
@@ -556,6 +566,10 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     gradient: isOneOf(input.gradient, materialRecipeGradients) ? input.gradient : fallback.gradient,
     sheen: typeof input.sheen === 'boolean' ? input.sheen : fallback.sheen,
     disabled: typeof input.disabled === 'boolean' ? input.disabled : fallback.disabled,
+    borderEnabled: typeof input.borderEnabled === 'boolean' ? input.borderEnabled : fallback.borderEnabled,
+    borderColor: isOneOf(input.borderColor, materialRecipeBorderColors) ? input.borderColor : fallback.borderColor,
+    borderCustomColor: sanitizeHexColor(input.borderCustomColor, fallback.borderCustomColor || '#808080'),
+    borderLit: typeof input.borderLit === 'boolean' ? input.borderLit : fallback.borderLit,
     border: uniqueEdges(input.border, fallback.border),
     textureStrength: clamp(input.textureStrength, fallback.textureStrength, 0, 100),
     textureScale: materialRecipeTextureScales.includes(input.textureScale as typeof materialRecipeTextureScales[number])
@@ -648,6 +662,10 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
   const textTransform = content?.textTransform && content.textTransform !== 'inherit' ? content.textTransform : recipe.textTransform || 'uppercase';
   const letterSpacing = content?.letterSpacing !== null && content?.letterSpacing !== undefined ? content.letterSpacing : recipe.letterSpacing ?? 0;
   const emboss = content?.contentEmboss === 'inherit' || content?.contentEmboss === undefined ? recipe.textEmboss : content.contentEmboss;
+  const resolvedBorderEnabled = recipe.borderEnabled && recipe.border.length > 0 && recipe.borderOpacity > 0;
+  const borderOpacity = resolvedBorderEnabled
+    ? clamp(recipe.borderOpacity + (surface?.borderOpacityBoost || 0), recipe.borderOpacity, 0, 100)
+    : 0;
 
   return {
     material: recipe.material,
@@ -671,12 +689,16 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     glow: glowActive ? glow.tone : 'none',
     glowStrength: glowActive ? glow.glowStrength : 0,
     disabled: recipe.disabled,
+    borderEnabled: recipe.borderEnabled,
+    borderColor: recipe.borderColor,
+    borderCustomColor: recipe.borderCustomColor,
+    borderLit: recipe.borderLit,
     border: recipe.border,
     corners: glowActive ? glow.corners : [],
     edgeHighlight: glowActive ? glow.edgeHighlight : [],
     textureStrength: recipe.textureStrength,
     textureScale: recipe.textureScale,
-    borderOpacity: clamp(recipe.borderOpacity + (surface?.borderOpacityBoost || 0), recipe.borderOpacity, 0, 100),
+    borderOpacity,
     lightStrength: clamp(recipe.lightStrength + (surface?.lightStrengthBoost || 0), recipe.lightStrength, 0, 100),
     darkStrength: clamp(recipe.darkStrength + (surface?.darkStrengthBoost || 0), recipe.darkStrength, 0, 100),
     edgeWearTexture: recipe.edgeWearTexture,
@@ -752,7 +774,9 @@ const resolvedSurfaceStateCssVars = (resolved: ResolvedSurfaceState): Record<str
   return {
     '--tint-rgb': toneRgb[resolved.tint as MaterialTone] || toneRgb.none,
     '--tint-alpha': resolved.tint !== 'none' ? (resolved.tintStrength ?? 0) / 100 : 0,
-    '--border-alpha': (resolved.borderOpacity ?? 34) / 100,
+    ...(resolved.borderEnabled && resolved.border.length > 0 && resolved.borderOpacity > 0
+      ? { '--border-alpha': (resolved.borderOpacity ?? 34) / 100 }
+      : {}),
     '--light-alpha': (resolved.lightStrength ?? 20) / 100,
     '--dark-alpha': (resolved.darkStrength ?? 32) / 100,
     '--glow-rgb': glowRgb,

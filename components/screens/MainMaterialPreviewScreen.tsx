@@ -1403,25 +1403,13 @@ const sanitizeFeedCardNode = (value: unknown, fallback: FeedCardNode): FeedCardN
   const type = isOneOf(input.type, ['container', 'text', 'button'] as const) ? input.type : fallback.type;
   const childrenInput = Array.isArray(input.children) ? input.children : [];
   const surface = input.surface ? sanitizeMaterialRecipe(input.surface, fallback.surface || createFeedRegionSurface()) : fallback.surface ? cloneMaterialRecipe(fallback.surface) : undefined;
-  const buttonSurface = (() => {
-    if (type !== 'button' || !surface || surface.states.hover.enabled || surface.states.pressed.enabled) return surface;
-    const states = ctaInteractionStates();
-    return {
-      ...surface,
-      states: {
-        ...surface.states,
-        hover: states.hover,
-        pressed: states.pressed,
-      },
-    };
-  })();
   return {
     id: typeof input.id === 'string' && input.id.trim() ? input.id : fallback.id,
     label: typeof input.label === 'string' && input.label.trim() ? input.label : fallback.label,
     type,
     binding: isOneOf(input.binding, feedTextSlotIds) ? input.binding : fallback.binding,
     layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
-    surface: buttonSurface,
+    surface,
     text: input.text ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle()) : fallback.text ? cloneFeedSlotStyle(fallback.text) : undefined,
     children: (fallback.children || []).map((childFallback, index) => sanitizeFeedCardNode(childrenInput[index], childFallback)),
   };
@@ -3074,6 +3062,7 @@ const FeedCarousel = (props: {
 const MainMaterialPreview = (props: {
   previewStates: PreviewStatesByPart;
   selectedPart: MainPartId;
+  selectedFeedPreviewState: MaterialRecipeState;
   forcePreview: boolean;
   activeNavIndex: number;
   onActiveNavIndexChange: (index: number) => void;
@@ -3110,6 +3099,7 @@ const MainMaterialPreview = (props: {
 
   const stateForPart = (part: MainPartId) => {
     if (props.forcePreview && props.selectedPart === part) {
+      if (part === 'feedCards') return props.selectedFeedPreviewState;
       return coercePreviewStateForPart(part, props.previewStates[part]);
     }
     return playerFacingPreviewStateForRole(interactionRoles[part]);
@@ -4039,6 +4029,7 @@ export const MainMaterialPreviewScreen = () => {
         <MainMaterialPreview
           previewStates={previewStates()}
           selectedPart={selectedPart()}
+          selectedFeedPreviewState={selectedPreviewState()}
           forcePreview={forcePreview()}
           activeNavIndex={activeNavIndex()}
           onActiveNavIndexChange={setActiveNavIndex}

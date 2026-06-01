@@ -13,6 +13,7 @@ import type {
 } from './MaterialRecipeTypes';
 
 export type MaterialKind = 'none' | 'black' | 'white' | 'gray' | 'custom';
+export type BorderColorKind = 'inherit' | 'black' | 'white' | 'gray' | 'custom';
 export type ShapeKind = 'rect' | 'bevel';
 export type GlowTone = MaterialTone;
 export type TintTone = MaterialTone;
@@ -54,6 +55,10 @@ interface SurfaceOptions {
   glassHighlightWidth?: number;
   glassHighlightHeight?: number;
   glassHighlightY?: number;
+  borderEnabled?: boolean;
+  borderColor?: BorderColorKind;
+  borderCustomColor?: string;
+  borderLit?: boolean;
   borderOpacity?: number;
   lightStrength?: number;
   darkStrength?: number;
@@ -194,9 +199,22 @@ const baseColors: Record<Exclude<MaterialKind, 'none' | 'custom'>, string> = {
   gray: '#808080',
 };
 
+const borderColorRgb: Record<Exclude<BorderColorKind, 'custom'>, string> = {
+  inherit: '235 226 205',
+  black: '0 0 0',
+  white: '255 255 255',
+  gray: '128 128 128',
+};
+
 const normalizeHexColor = (value: string | undefined) => (
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#808080'
 );
+
+const hexToRgb = (value: string | undefined) => {
+  const hex = normalizeHexColor(value).slice(1);
+  const channels = hex.match(/.{2}/g)?.map((channel) => parseInt(channel, 16)) || [128, 128, 128];
+  return channels.join(' ');
+};
 
 const hasTint = (options: SurfaceOptions) => (
   !!options.tint && options.tint !== 'none' && (options.tintStrength ?? 32) > 0
@@ -238,7 +256,7 @@ const hasGradientLayer = (options: SurfaceOptions) => (
 );
 
 const hasBorderLayer = (options: SurfaceOptions) => (
-  resolveBorder(options.border).length > 0 && (options.borderOpacity ?? 34) > 0
+  (options.borderEnabled ?? true) && resolveBorder(options.border).length > 0 && (options.borderOpacity ?? 34) > 0
 );
 
 const hasEdgeWearLayer = (options: SurfaceOptions) => (
@@ -410,14 +428,21 @@ const gradientVars = (options: SurfaceOptions) => {
 
 const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
   if (!hasBorderLayer(options)) return {};
-  return cssVars({
-    '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
-    '--border-top': borderEdges.includes('top') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-right': borderEdges.includes('right') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-bottom': borderEdges.includes('bottom') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
-    '--border-left': borderEdges.includes('left') ? 'rgba(235, 226, 205, var(--border-alpha))' : 'transparent',
+  const borderRgb = options.borderColor === 'custom'
+    ? hexToRgb(options.borderCustomColor)
+    : borderColorRgb[options.borderColor || 'inherit'];
+  const litVars = options.borderLit === false ? {} : {
     '--border-top-shadow': borderEdges.includes('top') ? 'rgb(255 255 255 / calc(var(--border-alpha) * 0.58))' : 'transparent',
     '--border-bottom-shadow': borderEdges.includes('bottom') ? 'rgb(0 0 0 / calc(var(--border-alpha) + 0.18))' : 'transparent',
+  };
+  return cssVars({
+    '--border-rgb': borderRgb,
+    '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
+    '--border-top': borderEdges.includes('top') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
+    '--border-right': borderEdges.includes('right') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
+    '--border-bottom': borderEdges.includes('bottom') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
+    '--border-left': borderEdges.includes('left') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
+    ...litVars,
   });
 };
 
@@ -676,7 +701,9 @@ const surfaceFeatures: SurfaceFeature[] = [
   {
     id: 'border',
     classes: ({ options }) => (
-      hasBorderLayer(options) ? ['cd-surface--bordered'] : []
+      hasBorderLayer(options)
+        ? ['cd-surface--bordered', options.borderLit === false ? '' : 'cd-surface--border-lit']
+        : []
     ),
     vars: ({ options, borderEdges }) => borderVars(options, borderEdges),
   },
@@ -887,6 +914,10 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'glassHighlightWidth',
     'glassHighlightHeight',
     'glassHighlightY',
+    'borderEnabled',
+    'borderColor',
+    'borderCustomColor',
+    'borderLit',
     'borderOpacity',
     'lightStrength',
     'darkStrength',
@@ -979,6 +1010,10 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glassHighlightWidth',
     'glassHighlightHeight',
     'glassHighlightY',
+    'borderEnabled',
+    'borderColor',
+    'borderCustomColor',
+    'borderLit',
     'borderOpacity',
     'lightStrength',
     'darkStrength',

@@ -14,6 +14,7 @@ import type {
 import { SectionLabel } from './MaterialPrimitives';
 import {
   materialRecipeCorners,
+  materialRecipeBorderColors,
   materialRecipeEdges,
   materialRecipeEdgeWearLayers,
   materialRecipeContentLayers,
@@ -32,6 +33,7 @@ import {
   materialRecipeTints,
   createMaterialStateOverlay,
   type EdgeEmissionKind,
+  type BorderColorKind,
   type FontStyleToken,
   type FontWeightToken,
   type MaterialRecipeState,
@@ -175,6 +177,14 @@ type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialSt
 
 const baseLabels: Record<MaterialKind, string> = {
   none: 'none',
+  black: 'pure black',
+  white: 'pure white',
+  gray: '50% gray',
+  custom: 'color',
+};
+
+const borderColorLabels: Record<BorderColorKind, string> = {
+  inherit: 'inherit',
   black: 'pure black',
   white: 'pure white',
   gray: '50% gray',
@@ -430,24 +440,66 @@ const BorderSection = (props: {
   recipe: MaterialRecipe;
   enabled: boolean;
   update: RecipeUpdate;
+  toggleEnabled: () => void;
   toggleBorder: (edge: EdgeName) => void;
-}) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Border</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Sides</ControlLabel>
-      <div class="ui-lab-toggles">
-        <For each={materialRecipeEdges}>
-          {(edge) => <ToggleButton active={props.recipe.border.includes(edge)} disabled={!props.enabled} onClick={() => props.toggleBorder(edge)}>{edge}</ToggleButton>}
-        </For>
+}) => {
+  const borderActive = () => props.enabled && props.recipe.borderEnabled;
+  const hasBorderSides = () => borderActive() && props.recipe.border.length > 0;
+
+  return (
+    <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
+      <SectionLabel size="xs">Border</SectionLabel>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Enabled</ControlLabel>
+        <div class="ui-lab-toggles">
+          <ToggleButton active={props.recipe.borderEnabled} disabled={!props.enabled} onClick={props.toggleEnabled}>on</ToggleButton>
+        </div>
+      </div>
+      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Color</ControlLabel>
+        <div class="ui-lab-toggles ui-lab-toggles--wrap">
+          <For each={materialRecipeBorderColors}>
+            {(color) => (
+              <ToggleButton active={props.recipe.borderColor === color} disabled={!borderActive()} onClick={() => props.update('borderColor', color)}>
+                {borderColorLabels[color]}
+              </ToggleButton>
+            )}
+          </For>
+        </div>
+      </div>
+      <Show when={props.recipe.borderColor === 'custom'}>
+        <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
+          <ControlLabel>Color Pick</ControlLabel>
+          <input
+            class="ui-lab-color-input"
+            type="color"
+            value={props.recipe.borderCustomColor}
+            disabled={!borderActive()}
+            onInput={(event) => props.update('borderCustomColor', event.currentTarget.value)}
+          />
+        </div>
+      </Show>
+      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Lit</ControlLabel>
+        <div class="ui-lab-toggles">
+          <ToggleButton active={props.recipe.borderLit} disabled={!borderActive()} onClick={() => props.update('borderLit', !props.recipe.borderLit)}>on</ToggleButton>
+        </div>
+      </div>
+      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Sides</ControlLabel>
+        <div class="ui-lab-toggles">
+          <For each={materialRecipeEdges}>
+            {(edge) => <ToggleButton active={props.recipe.border.includes(edge)} disabled={!borderActive()} onClick={() => props.toggleBorder(edge)}>{edge}</ToggleButton>}
+          </For>
+        </div>
+      </div>
+      <div class={`ui-lab-control-row ${hasBorderSides() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Alpha</ControlLabel>
+        <Slider disabled={!hasBorderSides()} value={props.recipe.borderOpacity} onInput={(value) => props.update('borderOpacity', value)} />
       </div>
     </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.border.length > 0 ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Alpha</ControlLabel>
-      <Slider disabled={!props.enabled || props.recipe.border.length === 0} value={props.recipe.borderOpacity} onInput={(value) => props.update('borderOpacity', value)} />
-    </div>
-  </div>
-);
+  );
+};
 
 const EdgeWearSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => {
   const hasEdgeWear = () => props.enabled && props.recipe.edgeWearTexture !== 'none';
@@ -569,117 +621,129 @@ const StateSurfaceSection = (props: {
   stateOverlay: MaterialStateOverlay;
   updateEnabled: (enabled: boolean) => void;
   updateStateGroup: StateGroupUpdate;
-}) => (
-  <div class="ui-lab-control-group">
-    <SectionLabel size="xs">State Surface</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.stateOverlay.enabled} onClick={() => props.updateEnabled(!props.stateOverlay.enabled)}>on</ToggleButton>
+}) => {
+  const active = () => props.stateOverlay.enabled;
+  const tintPowerEnabled = () => active() && props.stateOverlay.surface.tintStrength !== null;
+
+  return (
+    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
+      <SectionLabel size="xs">State Surface</SectionLabel>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Enabled</ControlLabel>
+        <div class="ui-lab-toggles">
+          <ToggleButton active={!props.stateOverlay.enabled} onClick={() => props.updateEnabled(false)}>off</ToggleButton>
+          <ToggleButton active={props.stateOverlay.enabled} onClick={() => props.updateEnabled(true)}>on</ToggleButton>
+        </div>
+      </div>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Tint</ControlLabel>
+        <Segments disabled={!active()} value={props.stateOverlay.surface.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('surface', 'tint', value)} />
+      </div>
+      <div class={`ui-lab-control-row ${tintPowerEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Tint Power</ControlLabel>
+        <div class="ui-lab-stack">
+          <ToggleButton active={props.stateOverlay.surface.tintStrength === null} disabled={!active()} onClick={() => props.updateStateGroup('surface', 'tintStrength', props.stateOverlay.surface.tintStrength === null ? 8 : null)}>
+            inherit
+          </ToggleButton>
+          <Slider disabled={!tintPowerEnabled()} value={props.stateOverlay.surface.tintStrength ?? 0} onInput={(value) => props.updateStateGroup('surface', 'tintStrength', value)} />
+        </div>
+      </div>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Border +</ControlLabel>
+        <Slider disabled={!active()} value={props.stateOverlay.surface.borderOpacityBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'borderOpacityBoost', value)} />
+      </div>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Light +</ControlLabel>
+        <Slider disabled={!active()} value={props.stateOverlay.surface.lightStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'lightStrengthBoost', value)} />
+      </div>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Dark +</ControlLabel>
+        <Slider disabled={!active()} value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
       </div>
     </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Tint</ControlLabel>
-      <Segments value={props.stateOverlay.surface.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('surface', 'tint', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.stateOverlay.surface.tintStrength === null ? 'ui-lab-control-row--disabled' : ''}`}>
-      <ControlLabel>Tint Power</ControlLabel>
-      <div class="ui-lab-stack">
-        <ToggleButton active={props.stateOverlay.surface.tintStrength === null} onClick={() => props.updateStateGroup('surface', 'tintStrength', props.stateOverlay.surface.tintStrength === null ? 8 : null)}>
-          inherit
-        </ToggleButton>
-        <Slider disabled={props.stateOverlay.surface.tintStrength === null} value={props.stateOverlay.surface.tintStrength ?? 0} onInput={(value) => props.updateStateGroup('surface', 'tintStrength', value)} />
-      </div>
-    </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Border +</ControlLabel>
-      <Slider value={props.stateOverlay.surface.borderOpacityBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'borderOpacityBoost', value)} />
-    </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Light +</ControlLabel>
-      <Slider value={props.stateOverlay.surface.lightStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'lightStrengthBoost', value)} />
-    </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Dark +</ControlLabel>
-      <Slider value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
-    </div>
-  </div>
-);
+  );
+};
 
 const GlowSection = (props: {
   stateOverlay: MaterialStateOverlay;
   updateStateGroup: StateGroupUpdate;
   toggleStateList: (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => void;
-}) => (
-  <div class="ui-lab-control-group">
+}) => {
+  const active = () => props.stateOverlay.enabled;
+  return (
+  <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
     <SectionLabel size="xs">State Glow</SectionLabel>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Corners</ControlLabel>
       <div class="ui-lab-toggles">
         <For each={materialRecipeCorners}>
-          {(corner) => <ToggleButton active={props.stateOverlay.glow.corners.includes(corner)} onClick={() => props.toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
+          {(corner) => <ToggleButton active={props.stateOverlay.glow.corners.includes(corner)} disabled={!active()} onClick={() => props.toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
         </For>
       </div>
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Edges</ControlLabel>
       <div class="ui-lab-toggles">
         <For each={materialRecipeEdges}>
-          {(edge) => <ToggleButton active={props.stateOverlay.glow.edgeHighlight.includes(edge)} onClick={() => props.toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
+          {(edge) => <ToggleButton active={props.stateOverlay.glow.edgeHighlight.includes(edge)} disabled={!active()} onClick={() => props.toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
         </For>
       </div>
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Glow</ControlLabel>
-      <Segments value={props.stateOverlay.glow.tone} options={materialRecipeGlows} onChange={(value: MaterialTone) => props.updateStateGroup('glow', 'tone', value)} />
+      <Segments disabled={!active()} value={props.stateOverlay.glow.tone} options={materialRecipeGlows} onChange={(value: MaterialTone) => props.updateStateGroup('glow', 'tone', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Glow Power</ControlLabel>
-      <Slider value={props.stateOverlay.glow.glowStrength} onInput={(value) => props.updateStateGroup('glow', 'glowStrength', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.glow.glowStrength} onInput={(value) => props.updateStateGroup('glow', 'glowStrength', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Bracket Size</ControlLabel>
-      <Slider value={props.stateOverlay.glow.cornerSize} min={8} max={34} onInput={(value) => props.updateStateGroup('glow', 'cornerSize', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.glow.cornerSize} min={8} max={34} onInput={(value) => props.updateStateGroup('glow', 'cornerSize', value)} />
     </div>
   </div>
-);
+  );
+};
 
 const EdgeEmissionSection = (props: {
   stateOverlay: MaterialStateOverlay;
   updateStateGroup: StateGroupUpdate;
-}) => (
-  <div class="ui-lab-control-group">
+}) => {
+  const active = () => props.stateOverlay.enabled;
+  return (
+  <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
     <SectionLabel size="xs">Edge Emission</SectionLabel>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Type</ControlLabel>
-      <Segments value={props.stateOverlay.emission.emission} options={materialRecipeEmissionKinds} labels={{ 'center-blip': 'blip', 'rail-and-blip': 'rail + blip' }} onChange={(value: EdgeEmissionKind) => props.updateStateGroup('emission', 'emission', value)} />
+      <Segments disabled={!active()} value={props.stateOverlay.emission.emission} options={materialRecipeEmissionKinds} labels={{ 'center-blip': 'blip', 'rail-and-blip': 'rail + blip' }} onChange={(value: EdgeEmissionKind) => props.updateStateGroup('emission', 'emission', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Edge</ControlLabel>
-      <Segments value={props.stateOverlay.emission.emissionEdge} options={materialRecipeEmissionEdges} onChange={(value) => props.updateStateGroup('emission', 'emissionEdge', value)} />
+      <Segments disabled={!active()} value={props.stateOverlay.emission.emissionEdge} options={materialRecipeEmissionEdges} onChange={(value) => props.updateStateGroup('emission', 'emissionEdge', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Tone</ControlLabel>
-      <Segments value={props.stateOverlay.emission.emissionTone} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('emission', 'emissionTone', value)} />
+      <Segments disabled={!active()} value={props.stateOverlay.emission.emissionTone} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('emission', 'emissionTone', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Power</ControlLabel>
-      <Slider value={props.stateOverlay.emission.emissionStrength} onInput={(value) => props.updateStateGroup('emission', 'emissionStrength', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionStrength} onInput={(value) => props.updateStateGroup('emission', 'emissionStrength', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Length</ControlLabel>
-      <Slider value={props.stateOverlay.emission.emissionLength} min={10} max={100} onInput={(value) => props.updateStateGroup('emission', 'emissionLength', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionLength} min={10} max={100} onInput={(value) => props.updateStateGroup('emission', 'emissionLength', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Thick</ControlLabel>
-      <Slider value={props.stateOverlay.emission.emissionThickness} min={1} max={8} onInput={(value) => props.updateStateGroup('emission', 'emissionThickness', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionThickness} min={1} max={8} onInput={(value) => props.updateStateGroup('emission', 'emissionThickness', value)} />
     </div>
-    <div class="ui-lab-control-row">
+    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Blip</ControlLabel>
-      <Slider value={props.stateOverlay.emission.emissionBlipSize} min={8} max={44} onInput={(value) => props.updateStateGroup('emission', 'emissionBlipSize', value)} />
+      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionBlipSize} min={8} max={44} onInput={(value) => props.updateStateGroup('emission', 'emissionBlipSize', value)} />
     </div>
   </div>
-);
+  );
+};
 
 const ContentStateSection = (props: {
   stateOverlay: MaterialStateOverlay;
@@ -901,6 +965,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     if (!activeStateOptions().includes(state)) return;
     setLocalActiveState(state);
     props.onActiveStateChange?.(state);
+    if (state !== 'rest') props.onForcePreviewChange?.(true);
   };
   const hasTexture = () => props.recipe.texture !== 'none';
   const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
@@ -924,7 +989,15 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     update('border', next);
   };
 
+  const toggleBorderEnabled = () => {
+    props.onChange({
+      ...props.recipe,
+      borderEnabled: !props.recipe.borderEnabled,
+    });
+  };
+
   const updateEnabled = (enabled: boolean) => {
+    if (enabled) props.onForcePreviewChange?.(true);
     props.onChange({
       ...props.recipe,
       states: {
@@ -939,12 +1012,14 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   const updateStateGroup: StateGroupUpdate = (group, key, value) => {
     const overlay = stateOverlay();
+    props.onForcePreviewChange?.(true);
     props.onChange({
       ...props.recipe,
       states: {
         ...props.recipe.states,
         [activeState()]: {
           ...overlay,
+          enabled: true,
           [group]: {
             ...overlay[group],
             [key]: value,
@@ -1032,7 +1107,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BlurSection recipe={props.recipe} enabled={capabilities().blur} update={update} />
       <ShadowSection recipe={props.recipe} enabled={capabilities().shadow} update={update} />
-      <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleBorder={toggleBorder} />
+      <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleEnabled={toggleBorderEnabled} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
       <TextSection recipe={props.recipe} enabled={capabilities().text} contentEnabled={capabilities().textContent} update={update} />
       <Show when={capabilities().states}>

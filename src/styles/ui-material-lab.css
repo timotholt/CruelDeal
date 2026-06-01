@@ -944,6 +944,7 @@
   --content-justify: center;
   --content-x: 0px;
   --content-y: 0px;
+  --border-rgb: 235 226 205;
   --border-alpha: 0.34;
   --edge-wear-alpha: 0;
   --edge-wear-width: 5px;
@@ -998,7 +999,7 @@
   transform: translateY(var(--state-translate-y)) scale(var(--state-scale));
 }
 
-.cd-surface--bordered {
+.cd-surface--border-lit {
   box-shadow:
     var(--surface-drop-shadow),
     inset 0 1px 0 var(--border-top-shadow),
@@ -1405,7 +1406,6 @@
 }
 
 .cd-surface.is-hover-preview {
-  border-color: rgba(255, 223, 152, 0.48);
   filter: brightness(1.08);
 }
 
@@ -1495,7 +1495,6 @@
     --emission-length: var(--hover-emission-length, var(--emission-length));
     --emission-thickness: var(--hover-emission-thickness, var(--emission-thickness));
     --emission-blip-size: var(--hover-emission-blip-size, var(--emission-blip-size));
-    border-color: rgba(255, 223, 152, 0.48);
     filter: brightness(1.08);
     transform:
       translateY(var(--hover-state-translate-y, var(--hover-translate-y, 0px)))
@@ -1557,7 +1556,7 @@
   background: transparent;
   min-width: 0;
   padding: 0;
-  border: 1px solid rgba(235, 226, 205, var(--border-alpha));
+  border: 1px solid transparent;
   font-family: inherit;
   text-transform: uppercase;
 }
