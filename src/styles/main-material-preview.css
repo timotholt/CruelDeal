@@ -1096,54 +1096,10 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   display: contents;
 }
 
-.cruel-company-commandbar .skew-x-\[-9deg\],
-.cruel-company-nav .skew-x-\[-9deg\] {
+.cruel-company-commandbar .skew-x-\[-9deg\] {
   transform: none !important;
 }
 
-.cruel-company-nav > .relative:first-child {
-  height: 64px;
-}
-
-.cruel-company-nav > .relative:first-child > .absolute:first-child {
-  background: linear-gradient(to top, rgb(255 255 250 / 0.86), rgb(238 223 185 / 0.58), transparent) !important;
-}
-
-.cruel-company-nav > .pointer-events-auto {
-  border-top: 1px solid rgb(245 228 184 / 0.22);
-  background:
-    linear-gradient(180deg, rgb(255 255 250 / 0.88), rgb(31 28 22 / 0.96)),
-    url("/art/textures/stone-local/Stone04.png");
-  background-size: auto, 260px 260px;
-  box-shadow: 0 -15px 34px rgb(92 73 35 / 0.24);
-}
-
-.cruel-company-nav > .pointer-events-auto > .absolute:first-child,
-.cruel-company-nav > .pointer-events-auto > .absolute:nth-child(3),
-.cruel-company-nav > .pointer-events-auto > .absolute:nth-child(4) {
-  display: none;
-}
-
-.cruel-company-nav > .pointer-events-auto > .absolute:nth-child(2) {
-  background: linear-gradient(90deg, transparent, rgb(239 200 93 / 0.68), transparent) !important;
-}
-
-.cruel-company-nav .flex.items-start > button > div:first-child {
-  border-color: rgb(246 230 188 / 0.34) !important;
-  background: rgb(255 255 250 / 0.18) !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18) !important;
-}
-
-.cruel-company-nav .flex.items-start > button:hover > div:first-child {
-  border-color: rgb(246 230 188 / 0.42) !important;
-}
-
-.cruel-company-nav .flex.items-start > button:has(.text-white) > div:first-child {
-  border-color: rgb(239 200 93 / 0.56) !important;
-  background:
-    linear-gradient(180deg, rgb(255 255 250 / 0.96), rgb(190 148 57 / 0.96)) !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 0 15px rgb(239 200 93 / 0.16) !important;
-}
 
 .cruel-company-commandbar .group > button > div:first-child {
   border-color: rgb(246 230 188 / 0.34) !important;

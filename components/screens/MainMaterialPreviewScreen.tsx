@@ -18,6 +18,7 @@ import {
   materialRecipeTextFonts,
   materialRecipeTextTransforms,
   navTabMaterialRecipe,
+  navBarContainerRecipe,
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
   materialRecipeToStaticSurfaceProps,
@@ -34,7 +35,7 @@ import {
 } from '../ui/material-lab';
 import { MaterialNavItem } from '../navigation/MaterialNavItem';
 
-type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar';
+type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
 type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
@@ -116,6 +117,7 @@ interface SurfaceRecipes {
   feed: MaterialRecipe;
   toolbar: MaterialRecipe;
   nav: MaterialRecipe;
+  navContainer: MaterialRecipe;
 }
 
 type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03';
@@ -274,7 +276,8 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'currencyButtons', label: 'Wallet', detail: 'chip material' },
   { id: 'feedCards', label: 'Feed', detail: 'glass cards' },
   { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
-  { id: 'navBar', label: 'Nav Bar', detail: 'bottom tabs' },
+  { id: 'navBar', label: 'Nav Tabs', detail: 'bottom tab items' },
+  { id: 'navBarContainer', label: 'Nav Container', detail: 'bottom bar panel' },
 ];
 
 const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part.label])) as Record<MainPartId, string>;
@@ -310,6 +313,7 @@ const interactionRoles: Record<MainPartId, InteractionRole> = {
   feedCards: 'static',
   toolBar: 'momentary',
   navBar: 'selectable',
+  navBarContainer: 'static',
 };
 
 const interactionRoleLabels: Record<InteractionRole, string> = {
@@ -360,6 +364,7 @@ const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabil
   feedCards: { text: true, textContent: false, states: false },
   toolBar: { states: true },
   navBar: { states: true },
+  navBarContainer: { text: false, states: false },
 };
 
 const resolvePreviewVisualState = (args: {
@@ -398,6 +403,7 @@ const createDefaultPreviewStates = (): PreviewStatesByPart => ({
   feedCards: defaultPreviewStateForRole(interactionRoles.feedCards),
   toolBar: defaultPreviewStateForRole(interactionRoles.toolBar),
   navBar: defaultPreviewStateForRole(interactionRoles.navBar),
+  navBarContainer: defaultPreviewStateForRole(interactionRoles.navBarContainer),
 });
 
 const createEmptyMaterialPresets = (): MaterialPresetsByPart => ({
@@ -409,6 +415,7 @@ const createEmptyMaterialPresets = (): MaterialPresetsByPart => ({
   feedCards: [],
   toolBar: [],
   navBar: [],
+  navBarContainer: [],
 });
 
 const createEmptySelectedPresetIds = (): Record<MainPartId, string> => ({
@@ -420,6 +427,7 @@ const createEmptySelectedPresetIds = (): Record<MainPartId, string> => ({
   feedCards: '',
   toolBar: '',
   navBar: '',
+  navBarContainer: '',
 });
 
 const createEmptyPresetDirty = (): Record<MainPartId, boolean> => ({
@@ -431,6 +439,7 @@ const createEmptyPresetDirty = (): Record<MainPartId, boolean> => ({
   feedCards: false,
   toolBar: false,
   navBar: false,
+  navBarContainer: false,
 });
 
 const fontOptions = [
@@ -9853,6 +9862,8 @@ const defaultNavSurface = createMaterialRecipe({
   },
 });
 
+const defaultNavContainerSurface = cloneMaterialRecipe(navBarContainerRecipe);
+
 const cloneBackdrop = (value: BackdropRecipe): BackdropRecipe => ({ ...value });
 const cloneTitle = (value: TitleRecipe): TitleRecipe => ({ ...value });
 const cloneFeed = (value: FeedRecipe): FeedRecipe => ({ ...value });
@@ -9865,6 +9876,7 @@ const cloneSurfaceRecipes = (value: SurfaceRecipes): SurfaceRecipes => ({
   feed: cloneMaterialRecipe(value.feed),
   toolbar: cloneMaterialRecipe(value.toolbar),
   nav: cloneMaterialRecipe(value.nav),
+  navContainer: cloneMaterialRecipe(value.navContainer),
 });
 
 const cloneFeedCardType = (cardType: FeedCardTypeRecipe): FeedCardTypeRecipe => ({
@@ -9943,6 +9955,7 @@ const pruneSurfaceRecipesForCapabilities = (recipes: SurfaceRecipes): SurfaceRec
   feed: pruneRecipeForPartCapabilities('feedCards', recipes.feed),
   toolbar: pruneRecipeForPartCapabilities('toolBar', recipes.toolbar),
   nav: pruneRecipeForPartCapabilities('navBar', recipes.nav),
+  navContainer: pruneRecipeForPartCapabilities('navBarContainer', recipes.navContainer),
 });
 
 const defaultSurfaces: SurfaceRecipes = {
@@ -9953,6 +9966,7 @@ const defaultSurfaces: SurfaceRecipes = {
   feed: defaultFeedSurface,
   toolbar: defaultToolbarSurface,
   nav: defaultNavSurface,
+  navContainer: defaultNavContainerSurface,
 };
 
 const defaultSurfaceForPart = (part: MainPartId): MaterialRecipe => {
@@ -9963,6 +9977,7 @@ const defaultSurfaceForPart = (part: MainPartId): MaterialRecipe => {
   if (part === 'feedCards') return defaultFeedSurface;
   if (part === 'toolBar') return defaultToolbarSurface;
   if (part === 'navBar') return defaultNavSurface;
+  if (part === 'navBarContainer') return defaultNavContainerSurface;
   return defaultFeedSurface;
 };
 
@@ -10153,6 +10168,7 @@ const sanitizeSurfaces = (value: unknown): SurfaceRecipes => {
     feed: sanitizeMaterialRecipe(input.feed, defaultFeedSurface),
     toolbar: sanitizeMaterialRecipe(input.toolbar, defaultToolbarSurface),
     nav: sanitizeMaterialRecipe(input.nav, defaultNavSurface),
+    navContainer: sanitizeMaterialRecipe(input.navContainer, defaultNavContainerSurface),
   };
 };
 
@@ -12107,7 +12123,11 @@ const MainMaterialPreview = (props: {
             <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 4, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
           </div>
 
-          <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
+          <MaterialPanel
+            recipe={props.surfaces.navContainer}
+            padded={false}
+            class={`main-material-fake-nav ${props.selectedClass('navBarContainer')}`}
+          >
             <div class="main-material-fake-nav-grid">
               <For each={[
                 { label: 'Battle Pass', icon: '*' },
@@ -12120,6 +12140,7 @@ const MainMaterialPreview = (props: {
                   <div
                     data-material-target-id={navItemTargetId(getIndex())}
                     data-material-role="selectable"
+                    class={props.selectedClass('navBar')}
                   >
                     <MaterialNavItem
                       label={item.label}
@@ -12134,7 +12155,7 @@ const MainMaterialPreview = (props: {
                 )}
               </For>
             </div>
-          </div>
+          </MaterialPanel>
           </footer>
         </div>
       </div>
@@ -12329,11 +12350,25 @@ export const MainMaterialPreviewScreen = () => {
   );
 
   const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
-    partLabels.flatMap((part) => (
-      part.id === 'feedCards'
-        ? feedWorkbenchParts()
-        : [{ ...part, id: part.id as MainWorkbenchPartId }]
-    ))
+    partLabels.flatMap((part) => {
+      if (part.id === 'feedCards') {
+        return feedWorkbenchParts();
+      }
+      if (part.id === 'navBarContainer') {
+        return [
+          { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 0 },
+          { id: 'navBar' as MainWorkbenchPartId, label: 'Battle Pass (Shared Style)', detail: 'edits all 5 tabs', depth: 1 },
+          { id: 'navBar' as MainWorkbenchPartId, label: 'Comms (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
+          { id: 'navBar' as MainWorkbenchPartId, label: 'Main (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
+          { id: 'navBar' as MainWorkbenchPartId, label: 'Assets (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
+          { id: 'navBar' as MainWorkbenchPartId, label: 'Exchange (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
+        ];
+      }
+      if (part.id === 'navBar') {
+        return [];
+      }
+      return [{ ...part, id: part.id as MainWorkbenchPartId }];
+    })
   );
 
   const selectFeedStory = (storyId: string) => {
@@ -12533,6 +12568,7 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'feedCards') return selectedFeedMaterialRecipe();
     if (part === 'toolBar') return current.toolbar;
     if (part === 'navBar') return current.nav;
+    if (part === 'navBarContainer') return current.navContainer;
     return current.feed;
   };
 
@@ -12547,6 +12583,7 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'feedCards') selectedFeedMaterialTarget().onChange(nextRecipe);
     if (part === 'toolBar') updateSurface('toolbar', nextRecipe);
     if (part === 'navBar') updateSurface('nav', nextRecipe);
+    if (part === 'navBarContainer') updateSurface('navContainer', nextRecipe);
   };
 
   const selectedMaterialPresets = () => materialPresets()[selectedPart()];
@@ -12636,6 +12673,9 @@ export const MainMaterialPreviewScreen = () => {
     if (part === 'navBar') {
       setNav(cloneNav(defaultNav));
       updateSurfaceForPart('navBar', 'nav', cloneMaterialRecipe(defaultNavSurface));
+    }
+    if (part === 'navBarContainer') {
+      updateSurfaceForPart('navBarContainer', 'navContainer', cloneMaterialRecipe(defaultNavContainerSurface));
     }
   };
 
@@ -12793,7 +12833,33 @@ export const MainMaterialPreviewScreen = () => {
                             <Show
                               when={selectedPart() === 'toolBar'}
                               fallback={(
-                                <Show when={selectedPart() === 'navBar'} fallback={null}>
+                                <Show
+                                  when={selectedPart() === 'navBar'}
+                                  fallback={(
+                                    <Show when={selectedPart() === 'navBarContainer'} fallback={null}>
+                                      <SurfaceRecipeEditor
+                                        title="Nav Container Material"
+                                        recipe={surfaces().navContainer}
+                                        interactionRole={selectedInteractionRole()}
+                                        capabilities={materialEditorCapabilitiesByPart.navBarContainer}
+                                        stateOptions={selectedStateOptions()}
+                                        stateLabels={selectedStateLabels()}
+                                        forcePreview={forcePreview()}
+                                        onForcePreviewChange={setForcePreview}
+                                        presets={selectedMaterialPresets()}
+                                        selectedPresetId={selectedPresetId()}
+                                        presetDirty={selectedPresetDirty()}
+                                        onSelectPreset={(id) => selectMaterialPreset('navBarContainer', id)}
+                                        onSavePreset={() => saveMaterialPreset('navBarContainer')}
+                                        onSaveNewPreset={() => saveNewMaterialPreset('navBarContainer')}
+                                        onDeletePreset={() => deleteMaterialPreset('navBarContainer')}
+                                        onChange={(recipe) => updateSurfaceForPart('navBarContainer', 'navContainer', recipe)}
+                                        activeState={selectedPreviewState()}
+                                        onActiveStateChange={setSelectedPreviewState}
+                                      />
+                                    </Show>
+                                  )}
+                                >
                                   <SurfaceRecipeEditor
                                     title="Nav Bar Material"
                                     recipe={surfaces().nav}

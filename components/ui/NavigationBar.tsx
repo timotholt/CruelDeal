@@ -5,6 +5,7 @@ import { HomeCommandBar } from '../navigation/HomeCommandBar';
 import { DeckCommandBar } from '../navigation/DeckCommandBar';
 import { NavItem } from '../navigation/NavItem';
 import { t } from '../../services/localization';
+import { MaterialPanel, navBarContainerRecipe } from './material-lab';
 
 interface NavigationBarProps {
     activeScreen: ScreenKey;
@@ -33,17 +34,11 @@ export const NavigationBar = (props: NavigationBarProps) => {
                 </div>
             </div>
 
-            <div class="pointer-events-auto relative z-[60] overflow-visible">
-                <div class="absolute inset-0 bg-gradient-to-b from-indigo-900/60 via-slate-950/98 to-black backdrop-blur-xl shadow-[0_-15px_40px_rgba(0,0,0,0.9)]" />
-                <div class="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 via-indigo-500 via-fuchsia-500 to-transparent opacity-80 z-20" />
-
-                <div class="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden z-10">
-                    <div class="w-48 h-12 bg-indigo-500/25 blur-3xl rounded-full" />
-                    <div class="w-24 h-6 bg-fuchsia-500/15 blur-2xl rounded-full translate-x-12" />
-                </div>
-
-                <div class="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none z-10" />
-
+            <MaterialPanel
+                recipe={navBarContainerRecipe}
+                padded={false}
+                class="pointer-events-auto relative z-[60] overflow-visible"
+            >
                 <div class="flex items-start justify-between px-2 pt-1.5 pb-2 gap-1.5 relative z-30">
                     <NavItem 
                         label={t('NAV_SEASON')} 
@@ -85,7 +80,8 @@ export const NavigationBar = (props: NavigationBarProps) => {
                         icon={<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width={2.5} d="M16 11V7a4 4 0 11-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}
                     />
                 </div>
-            </div>
+            </MaterialPanel>
         </div>
     );
 };
+
