@@ -210,6 +210,7 @@ interface FeedTextSlotStyle {
   textTransform: FeedTextTransformToken;
   textEmbossMode: FeedTextEmbossMode;
   textEmbossStrength: number;
+  textEmbossOffset: number;
   textEmbossBlur: number;
   letterSpacing: number;
   textOpacity: number;
@@ -779,6 +780,7 @@ const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTe
   textTransform: 'uppercase',
   textEmbossMode: 'dark',
   textEmbossStrength: 100,
+  textEmbossOffset: 50,
   textEmbossBlur: 50,
   letterSpacing: 0,
   textOpacity: 90,
@@ -1455,6 +1457,7 @@ const sanitizeFeedTextSlotStyle = (value: unknown, fallback: FeedTextSlotStyle):
       ? input.textEmbossMode
       : fallback.textEmbossMode,
     textEmbossStrength: clamp(input.textEmbossStrength, fallback.textEmbossStrength ?? 100, 0, 100),
+    textEmbossOffset: clamp(input.textEmbossOffset, fallback.textEmbossOffset ?? 50, 0, 100),
     textEmbossBlur: clamp(input.textEmbossBlur, fallback.textEmbossBlur ?? 50, 0, 100),
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
     textOpacity: clamp(input.textOpacity, fallback.textOpacity ?? 90, 0, 100),
@@ -1852,6 +1855,38 @@ const FeedRecipeEditor = (props: {
       {text}
     </span>
   );
+  // Emboss UI model: checkbox off = no emboss (override, mode none);
+  // checkbox on = dropdown inherit/dark/light/shadow (inherit = don't override base).
+  const nodeEmbossOn = () => {
+    const s = selectedNodeTextStyle();
+    return !!s && !(s.overrideEmboss && s.textEmbossMode === 'none');
+  };
+  const nodeEmbossTunable = () => {
+    const s = selectedNodeTextStyle();
+    return !!selectedNodeTextCustom() && !!s && s.overrideEmboss && s.textEmbossMode !== 'none';
+  };
+  const nodeEmbossChoice = (): 'inherit' | 'dark' | 'light' | 'shadow' => {
+    const s = selectedNodeTextStyle();
+    if (!s || !s.overrideEmboss) return 'inherit';
+    return s.textEmbossMode === 'none' ? 'inherit' : s.textEmbossMode as 'dark' | 'light' | 'shadow';
+  };
+  const setNodeEmbossOn = (on: boolean) => {
+    if (on) {
+      updateSelectedNodeTextStyle('overrideEmboss', false);
+    } else {
+      updateSelectedNodeTextStyle('overrideEmboss', true);
+      updateSelectedNodeTextStyle('textEmbossMode', 'none');
+    }
+  };
+  const setNodeEmbossChoice = (choice: 'inherit' | 'dark' | 'light' | 'shadow') => {
+    if (choice === 'inherit') {
+      updateSelectedNodeTextStyle('overrideEmboss', false);
+    } else {
+      updateSelectedNodeTextStyle('overrideEmboss', true);
+      updateSelectedNodeTextStyle('textEmbossMode', choice);
+    }
+  };
+
   const handleImageFileChange = (event: Event & { currentTarget: HTMLInputElement }) => {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
@@ -2105,31 +2140,55 @@ const FeedRecipeEditor = (props: {
                     onInput={(value) => updateSelectedNodeTextStyle('letterSpacing', value)}
                   />
                 </div>
-                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
-                  {nodeTextControlLabel('Emboss', 'overrideEmboss')}
-                  <div class="ui-lab-toggles">
-                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'dark'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'dark')}>dark</MiniButton>
-                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'light'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'light')}>light</MiniButton>
-                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'shadow'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'shadow')}>shadow</MiniButton>
-                  </div>
+                <div class={`ui-lab-control-row ${nodeEmbossOn() ? '' : 'ui-lab-control-row--disabled'}`}>
+                  <span class="ui-lab-control-label ui-lab-control-label--compact">
+                    <input
+                      type="checkbox"
+                      checked={nodeEmbossOn()}
+                      disabled={!selectedNodeTextCustom()}
+                      onChange={(event) => setNodeEmbossOn(event.currentTarget.checked)}
+                    />
+                    Emboss
+                  </span>
+                  <select
+                    class="ui-lab-select"
+                    value={nodeEmbossChoice()}
+                    disabled={!selectedNodeTextCustom() || !nodeEmbossOn()}
+                    onChange={(event) => setNodeEmbossChoice(event.currentTarget.value as 'inherit' | 'dark' | 'light' | 'shadow')}
+                  >
+                    <option value="inherit">inherit</option>
+                    <option value="dark">dark</option>
+                    <option value="light">light</option>
+                    <option value="shadow">shadow</option>
+                  </select>
                 </div>
-                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
+                <div class={`ui-lab-control-row ${nodeEmbossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
                   <span>Power</span>
                   <Slider
                     value={selectedNodeTextStyle()?.textEmbossStrength ?? 100}
                     min={0}
                     max={100}
-                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss}
+                    disabled={!nodeEmbossTunable()}
                     onInput={(value) => updateSelectedNodeTextStyle('textEmbossStrength', value)}
                   />
                 </div>
-                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
+                <div class={`ui-lab-control-row ${nodeEmbossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
+                  <span>Offset</span>
+                  <Slider
+                    value={selectedNodeTextStyle()?.textEmbossOffset ?? 50}
+                    min={0}
+                    max={100}
+                    disabled={!nodeEmbossTunable()}
+                    onInput={(value) => updateSelectedNodeTextStyle('textEmbossOffset', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${nodeEmbossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
                   <span>Blur</span>
                   <Slider
                     value={selectedNodeTextStyle()?.textEmbossBlur ?? 50}
                     min={0}
                     max={100}
-                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss}
+                    disabled={!nodeEmbossTunable()}
                     onInput={(value) => updateSelectedNodeTextStyle('textEmbossBlur', value)}
                   />
                 </div>
@@ -2300,7 +2359,35 @@ const FeedTextGlobalsEditor = (props: {
           const sizeEnabled = () => overrideFor(row.slot, 'overrideSize');
           const weightEnabled = () => overrideFor(row.slot, 'overrideWeight');
           const caseEnabled = () => overrideFor(row.slot, 'overrideCase');
-          const embossEnabled = () => overrideFor(row.slot, 'overrideEmboss');
+          const embossOn = () => {
+            const sv = slot(row.slot);
+            return !(sv.overrideEmboss && sv.textEmbossMode === 'none');
+          };
+          const embossTunable = () => {
+            const sv = slot(row.slot);
+            return sv.overrideEmboss && sv.textEmbossMode !== 'none';
+          };
+          const embossChoice = (): 'inherit' | 'dark' | 'light' | 'shadow' => {
+            const sv = slot(row.slot);
+            if (!sv.overrideEmboss) return 'inherit';
+            return sv.textEmbossMode === 'none' ? 'inherit' : sv.textEmbossMode as 'dark' | 'light' | 'shadow';
+          };
+          const setEmbossOn = (on: boolean) => {
+            if (on) {
+              props.onSlotChange(row.slot, 'overrideEmboss', false);
+            } else {
+              props.onSlotChange(row.slot, 'overrideEmboss', true);
+              props.onSlotChange(row.slot, 'textEmbossMode', 'none');
+            }
+          };
+          const setEmbossChoice = (choice: 'inherit' | 'dark' | 'light' | 'shadow') => {
+            if (choice === 'inherit') {
+              props.onSlotChange(row.slot, 'overrideEmboss', false);
+            } else {
+              props.onSlotChange(row.slot, 'overrideEmboss', true);
+              props.onSlotChange(row.slot, 'textEmbossMode', choice);
+            }
+          };
           const lineEnabled = () => overrideFor(row.slot, 'overrideLineHeight');
           const trackEnabled = () => overrideFor(row.slot, 'overrideLetterSpacing');
           return (
@@ -2389,21 +2476,34 @@ const FeedTextGlobalsEditor = (props: {
               </div>
             </Show>
             <Show when={!row.divider}>
-              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-                {controlLabel(row.slot, 'Emboss', 'overrideEmboss')}
-                <div class="ui-lab-toggles">
-                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'dark'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'dark')}>dark</MiniButton>
-                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'light'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'light')}>light</MiniButton>
-                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'shadow'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'shadow')}>shadow</MiniButton>
-                </div>
+              <div class={`ui-lab-control-row ${embossOn() ? '' : 'ui-lab-control-row--disabled'}`}>
+                <span class="ui-lab-control-label ui-lab-control-label--compact">
+                  <input type="checkbox" checked={embossOn()} onChange={(event) => setEmbossOn(event.currentTarget.checked)} />
+                  Emboss
+                </span>
+                <select
+                  class="ui-lab-select"
+                  value={embossChoice()}
+                  disabled={!embossOn()}
+                  onChange={(event) => setEmbossChoice(event.currentTarget.value as 'inherit' | 'dark' | 'light' | 'shadow')}
+                >
+                  <option value="inherit">inherit</option>
+                  <option value="dark">dark</option>
+                  <option value="light">light</option>
+                  <option value="shadow">shadow</option>
+                </select>
               </div>
-              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              <div class={`ui-lab-control-row ${embossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
                 <span>Power</span>
-                <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
+                <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossTunable()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
               </div>
-              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              <div class={`ui-lab-control-row ${embossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
+                <span>Offset</span>
+                <Slider value={slot(row.slot).textEmbossOffset} min={0} max={100} disabled={!embossTunable()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossOffset', value)} />
+              </div>
+              <div class={`ui-lab-control-row ${embossTunable() ? '' : 'ui-lab-control-row--disabled'}`}>
                 <span>Blur</span>
-                <Slider value={slot(row.slot).textEmbossBlur} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossBlur', value)} />
+                <Slider value={slot(row.slot).textEmbossBlur} min={0} max={100} disabled={!embossTunable()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossBlur', value)} />
               </div>
             </Show>
           </div>
@@ -2521,9 +2621,9 @@ const feedTextEmbossShadow = (style: FeedTextSlotStyle) => {
   const off = 1 + Math.round(2 * s); // 1px..3px
   const blur = Math.round(6 * s); // 0px..6px
   if (style.textEmbossMode === 'shadow') {
-    // Directional cast shadow, down-right. Power = cast distance + darkness,
-    // Blur = separate softness control.
-    const dist = 1 + Math.round(9 * s); // 1px..10px cast distance
+    // Directional cast shadow, down-right. Independent controls:
+    //   Power  = darkness (opacity)   Offset = cast distance   Blur = softness
+    const dist = Math.round((style.textEmbossOffset ?? 50) / 100 * 16); // 0px..16px
     const dx = Math.round(dist * 0.7);
     const dy = dist;
     const blurAmt = Math.round((style.textEmbossBlur ?? 50) / 100 * 16); // 0px..16px
@@ -2558,6 +2658,7 @@ const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle 
   textTransform: recipe.textTransform || 'uppercase',
   textEmbossMode: recipe.textEmboss ? (recipe.contentTone === 'black' ? 'light' : 'dark') : 'none',
   textEmbossStrength: 100,
+  textEmbossOffset: 50,
   textEmbossBlur: 50,
   letterSpacing: recipe.letterSpacing,
   textOpacity: recipe.contentOpacity ?? 90,
