@@ -49,6 +49,7 @@ interface SurfaceOptions {
   glowStrength?: number;
   tintStrength?: number;
   glassOpacity?: number;
+  glassReflectionOpacity?: number;
   glassBlurEnabled?: boolean;
   glassBlur?: number;
   glassShine?: boolean;
@@ -397,6 +398,7 @@ const glassVars = (options: SurfaceOptions) => {
   if (!hasGlassWash(options)) return {};
   return cssVars({
     '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
+    '--glass-reflection-alpha': `${(options.glassReflectionOpacity ?? 100) / 100}`,
     '--glass-highlight-width': hasGlassShine(options) ? `${options.glassHighlightWidth ?? 100}%` : undefined,
     '--glass-highlight-height': hasGlassShine(options) ? `${options.glassHighlightHeight ?? 34}%` : undefined,
     '--glass-highlight-y': hasGlassShine(options) ? `${options.glassHighlightY ?? 10}%` : undefined,
@@ -908,6 +910,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassReflectionOpacity',
     'glassBlurEnabled',
     'glassBlur',
     'glassShine',
@@ -1004,6 +1007,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'glowStrength',
     'tintStrength',
     'glassOpacity',
+    'glassReflectionOpacity',
     'glassBlurEnabled',
     'glassBlur',
     'glassShine',

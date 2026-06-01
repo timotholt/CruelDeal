@@ -101,6 +101,7 @@ export interface MaterialRecipe {
   bevelSize: number;
   glass: boolean;
   glassOpacity: number;
+  glassReflectionOpacity: number;
   glassBlurEnabled: boolean;
   glassBlur: number;
   glassShine: boolean;
@@ -361,6 +362,7 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     bevelSize: 11,
     glass: defaultGlass,
     glassOpacity: 34,
+    glassReflectionOpacity: 100,
     glassBlurEnabled: overrides.glassBlurEnabled ?? defaultGlass,
     glassBlur: 8,
     glassShine: true,
@@ -555,6 +557,7 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     bevelSize: clamp(input.bevelSize, fallback.bevelSize ?? 11, 0, 30),
     glass: typeof input.glass === 'boolean' ? input.glass : fallback.glass,
     glassOpacity: clamp(input.glassOpacity, fallback.glassOpacity, 0, 100),
+    glassReflectionOpacity: clamp(input.glassReflectionOpacity, fallback.glassReflectionOpacity ?? 100, 0, 100),
     glassBlurEnabled: typeof input.glassBlurEnabled === 'boolean' ? input.glassBlurEnabled : fallback.glassBlurEnabled,
     glassBlur: clamp(input.glassBlur, fallback.glassBlur, 0, 24),
     glassShine: typeof input.glassShine === 'boolean' ? input.glassShine : fallback.glassShine,
@@ -676,6 +679,7 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
     bevelSize: recipe.bevelSize,
     glass: recipe.glass,
     glassOpacity: recipe.glassOpacity,
+    glassReflectionOpacity: recipe.glassReflectionOpacity,
     glassBlurEnabled: recipe.glassBlurEnabled,
     glassBlur: recipe.glassBlur,
     glassShine: recipe.glassShine,

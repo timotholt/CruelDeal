@@ -356,7 +356,7 @@ const GradientSection = (props: { recipe: MaterialRecipe; enabled: boolean; upda
 
 const GlassSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Glass</SectionLabel>
+    <SectionLabel size="xs">Frosted Glass</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Enabled</ControlLabel>
       <div class="ui-lab-toggles">
@@ -365,13 +365,17 @@ const GlassSection = (props: { recipe: MaterialRecipe; enabled: boolean; update:
     </div>
     <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Alpha</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} value={props.recipe.glassOpacity} onInput={(value) => props.update('glassOpacity', value)} />
+      <Slider disabled={!props.enabled || !props.recipe.glass} min={1} value={props.recipe.glassOpacity} onInput={(value) => props.update('glassOpacity', value)} />
     </div>
     <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Shine</ControlLabel>
       <div class="ui-lab-toggles">
         <ToggleButton active={props.recipe.glassShine} disabled={!props.enabled || !props.recipe.glass} onClick={() => props.update('glassShine', !props.recipe.glassShine)}>on</ToggleButton>
       </div>
+    </div>
+    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
+      <ControlLabel>Reflection</ControlLabel>
+      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} min={1} value={props.recipe.glassReflectionOpacity} onInput={(value) => props.update('glassReflectionOpacity', value)} />
     </div>
     <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Shine Width</ControlLabel>

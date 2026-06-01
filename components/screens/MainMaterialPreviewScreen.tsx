@@ -40,7 +40,20 @@ type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
 type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
+type PreviewInteractionMode = 'selected-only' | 'all-on-screen';
+type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'container' | 'text';
 type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
+
+interface PreviewInteractionSnapshot {
+  mode: PreviewInteractionMode;
+  selectedTargetId: string;
+  forcePreview: boolean;
+  forcedState: MaterialRecipeState;
+  hoveredTargetId: string | null;
+  pressedTargetId: string | null;
+  focusedTargetId: string | null;
+  activeTargetIds: ReadonlySet<string>;
+}
 type MaterialPresetsByPart = Record<MainPartId, MaterialPreset[]>;
 
 interface MaterialPreset {
@@ -266,6 +279,8 @@ const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part
 const feedCardMaterialTargetPrefix = 'feed:card:';
 const feedCardMaterialTargetId = (cardTypeId: FeedCardTypeId): FeedMaterialTargetId => `feed:card:${cardTypeId}`;
 const feedMaterialTargetIdForNode = (cardTypeId: FeedCardTypeId, nodeId: string): FeedMaterialTargetId => `feed:card:${cardTypeId}:node:${nodeId}`;
+const navItemTargetId = (index: number) => `nav:item:${index}`;
+
 const parseFeedMaterialTargetId = (targetId: string) => {
   if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
   const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
@@ -343,6 +358,25 @@ const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabil
   feedCards: { text: true, textContent: false, states: false },
   toolBar: { states: true },
   navBar: { states: true },
+};
+
+const resolvePreviewVisualState = (args: {
+  targetId: string;
+  role: PreviewTargetRole;
+  snapshot: PreviewInteractionSnapshot;
+  fallbackState: MaterialRecipeState;
+}): MaterialRecipeState => {
+  const { targetId, role, snapshot, fallbackState } = args;
+  const isSelected = snapshot.selectedTargetId === targetId;
+  const isEligible = snapshot.mode === 'all-on-screen' || isSelected;
+  if (snapshot.forcePreview && isSelected) return snapshot.forcedState;
+  if (!isEligible) return fallbackState;
+  if (role === 'static' || role === 'container' || role === 'text') return fallbackState;
+  if (snapshot.pressedTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'pressed';
+  if (snapshot.activeTargetIds.has(targetId) && role === 'selectable') return 'active';
+  if (snapshot.hoveredTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'hover';
+  if (snapshot.focusedTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'hover';
+  return fallbackState;
 };
 
 const defaultPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
@@ -716,6 +750,7 @@ const createFeedCtaSurface = () => createMaterialRecipe({
 });
 
 const feedFontCondensed = materialRecipeTextFonts[1]?.value || 'inherit';
+const feedFontDin = '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif';
 const feedFontSystem = materialRecipeTextFonts[6]?.value || 'ui-sans-serif, system-ui, sans-serif';
 
 const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTextSlotStyle => ({
@@ -843,30 +878,33 @@ const createMissionBriefingCardSurface = () => createMaterialRecipe({
   texture: 'none',
   textureStrength: 0,
   textureScale: 512,
-  glass: false,
+  glass: true,
   glassOpacity: 0,
-  glassBlur: 0,
-  tint: 'white',
-  tintStrength: 0,
-  gradient: 'top-light',
-  border: ['top', 'right', 'bottom', 'left'],
-  borderOpacity: 88,
-  lightStrength: 18,
-  darkStrength: 6,
-  sheen: true,
+  glassBlur: 3,
+  bevelCorners: ['top-right'],
+  bevelSize: 18,
+  tint: 'black',
+  tintStrength: 50,
+  gradient: 'both',
+  border: ['top'],
+  borderOpacity: 22,
+  lightStrength: 10,
+  darkStrength: 10,
+  sheen: false,
   edgeWearTexture: 'edge-bw-noise-dense',
-  edgeWearOpacity: 100,
+  edgeWearOpacity: 0,
   edgeWearWidth: 1,
   edgeWearScale: 256,
   edgeWearLayer: 'above-highlights',
-  radius: 5,
+  radius: 8,
   contentTone: 'white',
   textFontFamily: feedFontCondensed,
-  textSizeRem: 0.8125,
-  contentOpacity: 100,
-  fontWeight: 700,
-  fontStyle: 'italic',
-  textTransform: 'uppercase',
+  textSizeRem: 0.65,
+  contentOpacity: 80,
+  fontWeight: 100,
+  fontStyle: 'normal',
+  textTransform: 'none',
+  letterSpacing: 0.05,
 });
 
 const createMissionBriefingPanelSurface = () => createMaterialRecipe({
@@ -874,25 +912,44 @@ const createMissionBriefingPanelSurface = () => createMaterialRecipe({
   texture: 'none',
   textureStrength: 0,
   textureScale: 512,
-  glass: true,
-  glassOpacity: 40,
-  glassBlur: 8,
-  glassHighlightWidth: 100,
-  glassHighlightHeight: 34,
-  glassHighlightY: 10,
+  glass: false,
+  glassOpacity: 0,
+  glassBlur: 3,
+  glassHighlightWidth: 0,
+  glassHighlightHeight: 0,
+  glassHighlightY: 0,
+  bevelCorners: ['top-right'],
+  bevelSize: 18,
   tint: 'black',
-  tintStrength: 45,
-  gradient: 'top-light',
-  border: ['top', 'right', 'bottom', 'left'],
-  borderOpacity: 22,
-  lightStrength: 18,
-  darkStrength: 6,
-  sheen: true,
-  edgeWearTexture: 'none',
-  edgeWearOpacity: 0,
-  radius: 5,
+  tintStrength: 42,
+  gradient: 'none',
+  border: ['top', 'left'],
+  borderColor: 'custom',
+  borderCustomColor: '#c2c2c2',
+  borderOpacity: 49,
+  lightStrength: 10,
+  darkStrength: 10,
+  sheen: false,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 45,
+  edgeWearWidth: 1,
+  edgeWearScale: 1024,
+  edgeWearLayer: 'above-highlights',
+  dropShadow: true,
+  shadowOpacity: 69,
+  shadowBlur: 22,
+  shadowX: 11,
+  shadowY: 10,
+  shadowSpread: -1,
+  radius: 8,
   contentTone: 'white',
-  contentOpacity: 100,
+  textFontFamily: feedFontCondensed,
+  textSizeRem: 0.65,
+  contentOpacity: 90,
+  fontWeight: 100,
+  fontStyle: 'normal',
+  textTransform: 'none',
+  letterSpacing: 0.05,
 });
 
 const createMissionBriefingTextSurface = () => createMaterialRecipe({
@@ -915,52 +972,79 @@ const createMissionBriefingTextSurface = () => createMaterialRecipe({
 });
 
 const createMissionBriefingBadgeSurface = () => createMaterialRecipe({
-  material: 'white',
+  material: 'none',
   texture: 'stoneGray01',
-  textureStrength: 70,
+  textureStrength: 0,
   textureScale: 512,
-  glass: true,
-  glassOpacity: 36,
+  glass: false,
+  glassOpacity: 35,
   glassBlur: 5,
   tint: 'white',
-  tintStrength: 5,
+  tintStrength: 9,
   gradient: 'top-light',
-  border: ['top', 'bottom'],
+  border: ['top', 'right', 'bottom', 'left'],
   borderOpacity: 24,
   lightStrength: 22,
   darkStrength: 8,
   sheen: true,
   edgeWearTexture: 'none',
   edgeWearOpacity: 0,
+  edgeWearLayer: 'below-highlights',
   radius: 4,
   contentTone: 'gold',
-  contentOpacity: 90,
+  contentOpacity: 80,
 });
 
 const createMissionBriefingCtaSurface = () => createMaterialRecipe({
-  material: 'white',
-  texture: 'stoneGray01',
+  material: 'none',
+  texture: 'stone01',
   textureStrength: 100,
   textureScale: 512,
-  glass: true,
-  glassOpacity: 34,
-  glassBlur: 7,
+  glass: false,
+  glassOpacity: 0,
+  glassBlur: 3,
+  glassHighlightWidth: 0,
+  glassHighlightHeight: 0,
+  glassHighlightY: 0,
   tint: 'white',
-  tintStrength: 5,
-  gradient: 'top-light',
-  border: ['top'],
-  borderOpacity: 22,
-  lightStrength: 18,
-  darkStrength: 6,
-  sheen: true,
+  tintStrength: 19,
+  gradient: 'none',
+  border: ['top', 'left'],
+  borderColor: 'custom',
+  borderCustomColor: '#c2c2c2',
+  borderOpacity: 49,
+  lightStrength: 10,
+  darkStrength: 10,
+  sheen: false,
   edgeWearTexture: 'edge-bw-noise-dense',
-  edgeWearOpacity: 0,
-  edgeWearWidth: 5,
-  edgeWearScale: 256,
-  radius: 5,
+  edgeWearOpacity: 45,
+  edgeWearWidth: 1,
+  edgeWearScale: 1024,
+  edgeWearLayer: 'above-highlights',
+  dropShadow: true,
+  shadowOpacity: 69,
+  shadowBlur: 22,
+  shadowX: 11,
+  shadowY: 10,
+  shadowSpread: -1,
+  radius: 8,
   contentTone: 'black',
+  textFontFamily: feedFontDin,
+  textSizeRem: 0.8,
   contentOpacity: 90,
-  states: ctaInteractionStates(),
+  fontWeight: 100,
+  fontStyle: 'normal',
+  textTransform: 'uppercase',
+  letterSpacing: 0.05,
+  states: createMaterialStateOverlays({
+    hover: {
+      enabled: true,
+      surface: { tint: 'gold', tintStrength: 8, borderOpacityBoost: 8, lightStrengthBoost: 8, darkStrengthBoost: 0 },
+      glow: { tone: 'gold', glowStrength: 1, corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'], edgeHighlight: ['top'], cornerSize: 17 },
+      content: { contentTone: 'inherit', iconTone: 'inherit', contentGlowStrength: 16, iconGlowStrength: 20 },
+      motion: { translateY: 0, scale: 1 },
+    },
+  }),
 });
 
 const createMissionBriefingLeftNodes = () => [
@@ -970,7 +1054,7 @@ const createMissionBriefingLeftNodes = () => [
     type: 'text',
     binding: 'contractBadge',
     surface: createMissionBriefingBadgeSurface(),
-    layout: createFeedNodeLayout({ x: 9, y: 27, width: 38, height: 6, padding: 0, gap: 0, align: 'center', justify: 'start' }),
+    layout: createFeedNodeLayout({ x: 51, y: 10, width: 38, height: 6, padding: 0, gap: 0, align: 'center', justify: 'center' }),
   }),
   createFeedNode({
     id: 'mission-briefing',
@@ -978,7 +1062,7 @@ const createMissionBriefingLeftNodes = () => [
     type: 'container',
     binding: 'contractBriefing',
     surface: createMissionBriefingPanelSurface(),
-    layout: createFeedNodeLayout({ x: 7, y: 32, width: 42, height: 52, padding: 16, gap: 0, align: 'left', justify: 'start' }),
+    layout: createFeedNodeLayout({ x: 47, y: 29, width: 39, height: 55, padding: 16, gap: 0, align: 'center', justify: 'start' }),
     children: [
       createFeedNode({
         id: 'contract-cta',
@@ -986,7 +1070,7 @@ const createMissionBriefingLeftNodes = () => [
         type: 'button',
         binding: 'contractCtaLabel',
         surface: createMissionBriefingCtaSurface(),
-        layout: createFeedNodeLayout({ x: 8, y: 83, width: 84, height: 15, padding: 0, gap: 0, align: 'center', justify: 'center' }),
+        layout: createFeedNodeLayout({ x: 10, y: 84, width: 83, height: 11, padding: 21, gap: 0, align: 'center', justify: 'center' }),
       }),
     ],
   }),
@@ -996,7 +1080,7 @@ const createMissionBriefingLeftNodes = () => [
     type: 'text',
     binding: 'sectorLabel',
     surface: createFeedRegionSurface(),
-    layout: createFeedNodeLayout({ x: 73, y: 20, width: 18, height: 14, padding: 0, gap: 0, align: 'center', justify: 'start' }),
+    layout: createFeedNodeLayout({ x: 7, y: 11, width: 18, height: 14, padding: 0, gap: 0, align: 'center', justify: 'start' }),
   }),
 ];
 
@@ -1068,7 +1152,7 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
     name: 'mission_briefing_left_01',
     description: 'Mission briefing layout with a left contract card and right season card.',
     surface: createMissionBriefingCardSurface(),
-    backgroundImage: createFeedBackgroundImage({ fit: 'cover', x: 0, y: 0, scale: 100, fadeMode: 'none', fadeStrength: 70, fadeSize: 58 }),
+    backgroundImage: createFeedBackgroundImage({ fit: 'cover', x: 0, y: 0, scale: 100, fadeMode: 'none', fadeStrength: 71, fadeSize: 58 }),
     children: createMissionBriefingLeftNodes(),
     slots: createFeedSlots({
       eyebrow: { textSizeRem: 0.68, contentTone: 'gold', letterSpacing: 0.08, textAlign: 'left', textOpacity: 50 },
@@ -1077,20 +1161,20 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
       meta: { textSizeRem: 0.68, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.1, textAlign: 'right', textOpacity: 100 },
       ctaLabel: { textSizeRem: 0.7, contentTone: 'black', fontWeight: 600, letterSpacing: 0.04, textOpacity: 90 },
       contractBadge: { textSizeRem: 0.5, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'center', textOpacity: 80 },
-      contractBriefing: { textFontFamily: feedFontSystem, textSizeRem: 0.68, lineHeight: 1.08, paragraphGap: 0, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 94 },
-      contractEyebrow: { textSizeRem: 0.5, lineHeight: 1, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 70 },
-      contractTitle: { textSizeRem: 1.48, lineHeight: 0.92, contentTone: 'white', fontWeight: 700, textAlign: 'left', textOpacity: 100 },
+      contractBriefing: { textFontFamily: feedFontCondensed, textSizeRem: 0.65, lineHeight: 1.4, paragraphGap: -3, contentTone: 'white', fontWeight: 100, textTransform: 'none', textAlign: 'left', letterSpacing: 0.05, textOpacity: 90, overrideCase: false },
+      contractEyebrow: { textFontFamily: feedFontDin, textSizeRem: 0.65, overrideColor: false, overrideOpacity: false, overrideWeight: false, letterSpacing: 0.07, textAlign: 'left', textOpacity: 70 },
+      contractTitle: { textFontFamily: feedFontDin, textSizeRem: 1.7, overrideColor: false, overrideOpacity: false, overrideWeight: false, lineHeight: 1, letterSpacing: 0.02, textAlign: 'left', textOpacity: 100 },
       contractBody: { textFontFamily: feedFontSystem, textSizeRem: 0.72, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 90 },
       contractRewardLabel: { textSizeRem: 0.52, contentTone: 'muted', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 84 },
-      contractRewardValue: { textSizeRem: 1.02, lineHeight: 1, contentTone: 'white', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
+      contractRewardValue: { textFontFamily: feedFontDin, textSizeRem: 1.2, overrideColor: false, overrideOpacity: false, overrideWeight: false, overrideCase: false, overrideLetterSpacing: false, lineHeight: 1.5, textAlign: 'left', textOpacity: 94 },
       contractH4: { textSizeRem: 0.82, lineHeight: 1.04, contentTone: 'white', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 92 },
-      contractAcc1: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'left', textOpacity: 90 },
-      contractAcc2: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'cyan', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
-      contractAcc3: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'red', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
-      contractAcc4: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 0.68, contentTone: 'green', fontWeight: 600, letterSpacing: 0.02, textAlign: 'left', textOpacity: 94 },
-      contractRule: { textSizeRem: 0.52, contentTone: 'gold', fontWeight: 600, letterSpacing: 0, textAlign: 'left', textOpacity: 90 },
-      contractDivider: { textSizeRem: 1, lineHeight: 0.9, paragraphGap: 0.78, contentTone: 'white', fontWeight: 400, letterSpacing: 0, textAlign: 'left', textOpacity: 22, textEmbossMode: 'light', textEmbossStrength: 45 },
-      contractCtaLabel: { textSizeRem: 0.7, contentTone: 'black', fontWeight: 600, letterSpacing: 0.04, textOpacity: 90 },
+      contractAcc1: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 1, contentTone: 'gold', textAlign: 'left', textOpacity: 90 },
+      contractAcc2: { overrideOpacity: false, overrideFont: false, overrideWeight: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, overrideCase: false, textFontFamily: feedFontDin, textSizeRem: 1, contentTone: 'gray', textTransform: 'uppercase', textAlign: 'left', textOpacity: 94 },
+      contractAcc3: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 1, contentTone: 'red', textAlign: 'left', textOpacity: 94 },
+      contractAcc4: { overrideOpacity: false, overrideFont: false, overrideSize: false, overrideWeight: false, overrideCase: false, overrideEmboss: false, overrideLineHeight: false, overrideLetterSpacing: false, textTransform: 'inherit', textSizeRem: 1, contentTone: 'green', textAlign: 'left', textOpacity: 94 },
+      contractRule: { textSizeRem: 2.05, contentTone: 'gold', letterSpacing: 0, textAlign: 'left', textOpacity: 76, textEmbossMode: 'none' },
+      contractDivider: { textSizeRem: 1, lineHeight: 0.8, paragraphGap: 0.5, contentTone: 'muted', fontWeight: 600, letterSpacing: 0, textAlign: 'center', textOpacity: 51 },
+      contractCtaLabel: { textFontFamily: feedFontDin, textSizeRem: 0.8, overrideWeight: false, letterSpacing: 0.05, textOpacity: 90, textAlign: 'center' },
       seasonBadge: { textSizeRem: 0.5, contentTone: 'gold', fontWeight: 600, letterSpacing: 0.08, textAlign: 'center', textOpacity: 80 },
       seasonBriefing: { textFontFamily: feedFontSystem, textSizeRem: 0.68, contentTone: 'white', fontWeight: 500, textTransform: 'none', textAlign: 'left', textOpacity: 94 },
       seasonEyebrow: { textSizeRem: 0.5, contentTone: 'gold', letterSpacing: 0.08, textAlign: 'center', textOpacity: 50 },
@@ -2850,12 +2934,16 @@ const feedStoryValue = (story: FeedStory, binding: FeedTextSlotId | undefined) =
 
 const FeedNodeFrame = (props: {
   node: FeedCardNode;
+  targetId: FeedMaterialTargetId;
+  role: PreviewTargetRole;
   targetClass: string;
   children: JSX.Element;
 }) => (
   <div
     class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
     data-feed-node-kind={props.node.type}
+    data-material-target-id={props.targetId}
+    data-material-role={props.role}
     style={feedNodeLayoutCss(props.node.layout)}
   >
     {props.children}
@@ -2866,13 +2954,16 @@ const FeedCardTreeNode = (props: {
   node: FeedCardNode;
   story: FeedStory;
   cardType: FeedCardTypeRecipe;
-  surfaceState: MaterialRecipeState;
+  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
 }) => {
   const textStyle = () => feedTextCss(resolveFeedNodeTextStyle(props.cardType, props.node));
   const content = () => feedStoryValue(props.story, props.node.binding);
   const surfaceRecipe = () => feedNodeSurfaceRecipe(props.cardType, props.node);
-  const targetClass = () => props.selectedFeedTargetClass(feedMaterialTargetIdForNode(props.cardType.id, props.node.id));
+  const targetId = () => feedMaterialTargetIdForNode(props.cardType.id, props.node.id);
+  const nodeRole = (): PreviewTargetRole => props.node.type === 'button' ? 'momentary' : props.node.type === 'container' ? 'container' : 'text';
+  const visualState = () => props.surfaceStateForTarget(targetId(), nodeRole());
+  const targetClass = () => props.selectedFeedTargetClass(targetId());
   return (
     <Show
       when={props.node.type === 'container'}
@@ -2880,9 +2971,9 @@ const FeedCardTreeNode = (props: {
         <Show
           when={props.node.type === 'button'}
           fallback={(
-            <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
               <MaterialPanel
-                {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+                {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
                 padded={false}
                 class={`main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${props.node.binding || 'unbound'}`}
               >
@@ -2893,9 +2984,9 @@ const FeedCardTreeNode = (props: {
             </FeedNodeFrame>
           )}
         >
-          <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
             <MaterialButton
-              {...materialRecipeItemProps(surfaceRecipe(), 0, props.surfaceState)}
+              {...materialRecipeItemProps(surfaceRecipe(), 0, visualState())}
               size="sm"
               fullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
@@ -2906,9 +2997,9 @@ const FeedCardTreeNode = (props: {
         </Show>
       )}
     >
-      <FeedNodeFrame node={props.node} targetClass={targetClass()}>
+      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
         <MaterialPanel
-          {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), props.surfaceState)}
+          {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
           padded={false}
           class={`main-material-card-node-surface ${props.node.binding ? 'main-material-card-node-surface--markup' : ''} ${props.node.binding && props.node.children?.length ? 'main-material-card-node-surface--flow' : ''}`}
         >
@@ -2924,7 +3015,7 @@ const FeedCardTreeNode = (props: {
               node={child}
               story={props.story}
               cardType={props.cardType}
-              surfaceState={props.surfaceState}
+              surfaceStateForTarget={props.surfaceStateForTarget}
               selectedFeedTargetClass={props.selectedFeedTargetClass}
             />
           )}
@@ -2943,9 +3034,10 @@ const FeedCarousel = (props: {
   onActiveStoryChange: (storyId: string) => void;
   class: string;
   feed: FeedRecipe;
-  surfaceState: MaterialRecipeState;
+  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   storyImageOverrides: Record<string, string>;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  onInteractiveDragStart?: () => void;
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
   const [dragStartX, setDragStartX] = createSignal<number | null>(null);
@@ -2978,6 +3070,7 @@ const FeedCarousel = (props: {
     const startX = dragStartX();
     if (startX === null) return;
     const rawDeltaX = event.clientX - startX;
+    if (Math.abs(rawDeltaX) > 8) props.onInteractiveDragStart?.();
     const isPullingPastStart = rawDeltaX > 0 && !canGoPrevious();
     const isPullingPastEnd = rawDeltaX < 0 && !canGoNext();
     const resistance = isPullingPastStart || isPullingPastEnd ? 0.28 : 1;
@@ -3037,7 +3130,7 @@ const FeedCarousel = (props: {
                           node={node}
                           story={story}
                           cardType={cardType()}
-                          surfaceState={props.surfaceState}
+                          surfaceStateForTarget={props.surfaceStateForTarget}
                           selectedFeedTargetClass={props.selectedFeedTargetClass}
                         />
                       )}
@@ -3070,6 +3163,8 @@ const MainMaterialPreview = (props: {
   previewStates: PreviewStatesByPart;
   selectedPart: MainPartId;
   selectedFeedPreviewState: MaterialRecipeState;
+  selectedFeedTargetId: FeedMaterialTargetId;
+  previewInteractionMode: PreviewInteractionMode;
   forcePreview: boolean;
   activeNavIndex: number;
   onActiveNavIndexChange: (index: number) => void;
@@ -3086,6 +3181,73 @@ const MainMaterialPreview = (props: {
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
 }) => {
+  const [hoveredTargetId, setHoveredTargetId] = createSignal<string | null>(null);
+  const [pressedTargetId, setPressedTargetId] = createSignal<string | null>(null);
+  const [focusedTargetId, setFocusedTargetId] = createSignal<string | null>(null);
+
+  const interactionSnapshot = (): PreviewInteractionSnapshot => ({
+    mode: props.previewInteractionMode,
+    selectedTargetId: props.selectedPart === 'navBar'
+      ? navItemTargetId(props.activeNavIndex)
+      : props.selectedPart === 'feedCards'
+      ? props.selectedFeedTargetId
+      : '',
+    forcePreview: props.forcePreview,
+    forcedState: props.selectedPart === 'navBar'
+      ? coercePreviewStateForPart('navBar', props.previewStates.navBar)
+      : props.selectedFeedPreviewState,
+    hoveredTargetId: hoveredTargetId(),
+    pressedTargetId: pressedTargetId(),
+    focusedTargetId: focusedTargetId(),
+    activeTargetIds: new Set<string>(),
+  });
+
+  const targetFromEvent = (event: Event): HTMLElement | null => (
+    event.target instanceof HTMLElement
+      ? event.target.closest<HTMLElement>('[data-material-target-id]')
+      : null
+  );
+  const roleFromTarget = (target: HTMLElement): PreviewTargetRole => (
+    (target.dataset.materialRole as PreviewTargetRole) || 'static'
+  );
+
+  const onPhonePointerMove = (event: PointerEvent) => {
+    const target = targetFromEvent(event);
+    const id = target?.dataset.materialTargetId ?? null;
+    if (id !== hoveredTargetId()) setHoveredTargetId(id);
+  };
+  const onPhonePointerLeave = () => setHoveredTargetId(null);
+  const onPhonePointerDown = (event: PointerEvent) => {
+    const target = targetFromEvent(event);
+    if (!target) return;
+    const role = roleFromTarget(target);
+    if (role === 'momentary' || role === 'selectable') {
+      setPressedTargetId(target.dataset.materialTargetId ?? null);
+    }
+  };
+  const onPhonePointerUp = () => setPressedTargetId(null);
+  const onPhoneFocusIn = (event: FocusEvent) => {
+    const target = targetFromEvent(event);
+    const role = target ? roleFromTarget(target) : null;
+    // Only selectable targets (nav items) hold focus state.
+    // Momentary targets (CTA, toolbar buttons) never hold focus — they're transient actions.
+    // Also require keyboard-driven focus (:focus-visible) to avoid mouse-click stickiness.
+    const el = event.target instanceof HTMLElement ? event.target : null;
+    if (role !== 'selectable' || !el?.matches(':focus-visible')) {
+      setFocusedTargetId(null);
+      return;
+    }
+    setFocusedTargetId(target?.dataset.materialTargetId ?? null);
+  };
+  const onPhoneFocusOut = (event: FocusEvent) => {
+    const target = targetFromEvent(event);
+    const id = target?.dataset.materialTargetId;
+    if (id && id === focusedTargetId()) setFocusedTargetId(null);
+  };
+
+  const feedSurfaceStateForTarget = (targetId: FeedMaterialTargetId, role: PreviewTargetRole): MaterialRecipeState => (
+    resolvePreviewVisualState({ targetId, role, snapshot: interactionSnapshot(), fallbackState: 'rest' })
+  );
   const backdropTextureScale = () => props.surfaces.backdrop.textureScale;
   const style = () => ({
     '--main-bg-texture-size': props.backdrop.fit === 'cover'
@@ -3111,14 +3273,26 @@ const MainMaterialPreview = (props: {
     }
     return playerFacingPreviewStateForRole(interactionRoles[part]);
   };
-  const navItemState = (index: number) => {
-    if (index !== props.activeNavIndex) return 'rest';
-    return stateForPart('navBar');
-  };
+  const navVisualState = (index: number): MaterialRecipeState => resolvePreviewVisualState({
+    targetId: navItemTargetId(index),
+    role: 'selectable',
+    snapshot: interactionSnapshot(),
+    fallbackState: index === props.activeNavIndex ? 'active' : 'rest',
+  });
   const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
 
   return (
-    <div class="main-material-phone" style={style()}>
+    <div
+      class="main-material-phone"
+      style={style()}
+      onPointerMove={onPhonePointerMove}
+      onPointerLeave={onPhonePointerLeave}
+      onPointerDown={onPhonePointerDown}
+      onPointerUp={onPhonePointerUp}
+      onPointerCancel={onPhonePointerUp}
+      onFocusIn={onPhoneFocusIn}
+      onFocusOut={onPhoneFocusOut}
+    >
       <div class="main-material-screen">
         <MaterialPanel
           {...materialSurfacePropsForPart('backdrop', props.surfaces.backdrop, stateForPart('backdrop'))}
@@ -3179,9 +3353,10 @@ const MainMaterialPreview = (props: {
               onActiveStoryChange={props.onActiveFeedStoryChange}
               class={props.selectedClass('feedCards')}
               feed={props.feed}
-              surfaceState={stateForPart('feedCards')}
+              surfaceStateForTarget={feedSurfaceStateForTarget}
               storyImageOverrides={props.feedStoryImageOverrides}
               selectedFeedTargetClass={props.selectedFeedTargetClass}
+              onInteractiveDragStart={onPhonePointerUp}
             />
           </main>
 
@@ -3196,51 +3371,30 @@ const MainMaterialPreview = (props: {
 
           <div class={`main-material-fake-nav ${props.selectedClass('navBar')}`}>
             <div class="main-material-fake-nav-grid">
-              <MaterialNavItem
-                label="Battle Pass"
-                icon={<span class="main-material-nav-icon">*</span>}
-                active={0 === props.activeNavIndex}
-                recipe={props.surfaces.nav}
-                visualState={navItemState(0)}
-                class={navItemClass(0)}
-                onClick={() => props.onActiveNavIndexChange(0)}
-              />
-              <MaterialNavItem
-                label="Comms"
-                icon={<span class="main-material-nav-icon">M</span>}
-                active={1 === props.activeNavIndex}
-                recipe={props.surfaces.nav}
-                visualState={navItemState(1)}
-                class={navItemClass(1)}
-                onClick={() => props.onActiveNavIndexChange(1)}
-              />
-              <MaterialNavItem
-                label="Main"
-                icon={<span class="main-material-nav-icon">V</span>}
-                active={2 === props.activeNavIndex}
-                recipe={props.surfaces.nav}
-                visualState={navItemState(2)}
-                class={navItemClass(2)}
-                onClick={() => props.onActiveNavIndexChange(2)}
-              />
-              <MaterialNavItem
-                label="Assets"
-                icon={<span class="main-material-nav-icon">B</span>}
-                active={3 === props.activeNavIndex}
-                recipe={props.surfaces.nav}
-                visualState={navItemState(3)}
-                class={navItemClass(3)}
-                onClick={() => props.onActiveNavIndexChange(3)}
-              />
-              <MaterialNavItem
-                label="Exchange"
-                icon={<span class="main-material-nav-icon">$</span>}
-                active={4 === props.activeNavIndex}
-                recipe={props.surfaces.nav}
-                visualState={navItemState(4)}
-                class={navItemClass(4)}
-                onClick={() => props.onActiveNavIndexChange(4)}
-              />
+              <For each={[
+                { label: 'Battle Pass', icon: '*' },
+                { label: 'Comms', icon: 'M' },
+                { label: 'Main', icon: 'V' },
+                { label: 'Assets', icon: 'B' },
+                { label: 'Exchange', icon: '$' },
+              ]}>
+                {(item, getIndex) => (
+                  <div
+                    data-material-target-id={navItemTargetId(getIndex())}
+                    data-material-role="selectable"
+                  >
+                    <MaterialNavItem
+                      label={item.label}
+                      icon={<span class="main-material-nav-icon">{item.icon}</span>}
+                      active={getIndex() === props.activeNavIndex}
+                      recipe={props.surfaces.nav}
+                      visualState={navVisualState(getIndex())}
+                      class={navItemClass(getIndex())}
+                      onClick={() => props.onActiveNavIndexChange(getIndex())}
+                    />
+                  </div>
+                )}
+              </For>
             </div>
           </div>
           </footer>
@@ -3254,6 +3408,7 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
   const [sidebarTab, setSidebarTab] = createSignal<'parts' | 'text'>('parts');
   const [previewStates, setPreviewStates] = createSignal<PreviewStatesByPart>(createDefaultPreviewStates());
+  const [previewInteractionMode, setPreviewInteractionMode] = createSignal<PreviewInteractionMode>('selected-only');
   const [forcePreview, setForcePreview] = createSignal(false);
   const [activeNavIndex, setActiveNavIndex] = createSignal(2);
   const [selectionOverlayMode, setSelectionOverlayMode] = createSignal<SelectionOverlayMode>('flash');
@@ -3807,6 +3962,26 @@ export const MainMaterialPreviewScreen = () => {
     </div>
   );
 
+  const interactionModeControl = (
+    <div class="main-material-selection-overlay-control">
+      <SectionLabel size="xs">Interact</SectionLabel>
+      <div class="ui-lab-segments" aria-label="Preview interaction mode">
+        <MiniButton
+          active={previewInteractionMode() === 'selected-only'}
+          onClick={() => setPreviewInteractionMode('selected-only')}
+        >
+          Selected
+        </MiniButton>
+        <MiniButton
+          active={previewInteractionMode() === 'all-on-screen'}
+          onClick={() => setPreviewInteractionMode('all-on-screen')}
+        >
+          All
+        </MiniButton>
+      </div>
+    </div>
+  );
+
   const editor = (
     <Show
       when={selectedPart() === 'backdrop'}
@@ -4039,6 +4214,8 @@ export const MainMaterialPreviewScreen = () => {
           previewStates={previewStates()}
           selectedPart={selectedPart()}
           selectedFeedPreviewState={selectedPreviewState()}
+          selectedFeedTargetId={selectedFeedTargetId()}
+          previewInteractionMode={previewInteractionMode()}
           forcePreview={forcePreview()}
           activeNavIndex={activeNavIndex()}
           onActiveNavIndexChange={setActiveNavIndex}
@@ -4060,6 +4237,7 @@ export const MainMaterialPreviewScreen = () => {
       actions={(
         <>
           {selectionOverlayControl}
+          {interactionModeControl}
           <button type="button" class="ui-lab-mini-button" onClick={exportJson}>Export</button>
         </>
       )}

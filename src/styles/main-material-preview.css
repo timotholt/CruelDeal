@@ -395,6 +395,14 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   padding: 0;
 }
 
+/* Re-enable pointer events on interactive preview targets inside feed cards.
+   The slide-material wrapper has pointer-events:none so the card surface doesn't
+   eat drag events, but momentary/selectable nodes (buttons) need live hover/press. */
+.main-material-feed-stage [data-material-role="momentary"],
+.main-material-feed-stage [data-material-role="selectable"] {
+  pointer-events: auto;
+}
+
 .main-material-feed-slide > .main-material-feed-slide-material > .cd-surface__content--under-glass {
   z-index: 0;
 }
