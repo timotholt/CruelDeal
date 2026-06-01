@@ -1238,6 +1238,13 @@ const materialSurfacePropsForPart = (
 
 const pruneRecipeForPartCapabilities = (part: MainPartId, recipe: MaterialRecipe): MaterialRecipe => {
   const capabilities = materialEditorCapabilitiesByPart[part];
+  return pruneRecipeForCapabilities(recipe, capabilities);
+};
+
+const pruneRecipeForCapabilities = (
+  recipe: MaterialRecipe,
+  capabilities: MaterialEditorCapabilities,
+): MaterialRecipe => {
   if (capabilities.states !== false) return recipe;
   return {
     ...recipe,
@@ -3411,7 +3418,7 @@ export const MainMaterialPreviewScreen = () => {
   const selectedFeedMaterialRecipe = () => selectedFeedMaterialTarget().recipe;
   const selectedFeedMaterialCapabilities = () => selectedFeedMaterialTarget().capabilities;
   const updateSelectedFeedMaterialRecipe = (recipe: MaterialRecipe) => {
-    selectedFeedMaterialTarget().onChange(pruneRecipeForPartCapabilities('feedCards', recipe));
+    selectedFeedMaterialTarget().onChange(pruneRecipeForCapabilities(recipe, selectedFeedMaterialCapabilities()));
   };
 
   createEffect(() => {
@@ -3634,7 +3641,9 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
-    const nextRecipe = pruneRecipeForPartCapabilities(part, cloneMaterialRecipe(recipe));
+    const nextRecipe = part === 'feedCards'
+      ? pruneRecipeForCapabilities(cloneMaterialRecipe(recipe), selectedFeedMaterialCapabilities())
+      : pruneRecipeForPartCapabilities(part, cloneMaterialRecipe(recipe));
     if (part === 'backdrop') updateSurface('backdrop', nextRecipe);
     if (part === 'topBar') updateSurface('topBar', nextRecipe);
     if (part === 'profileButton') updateSurface('profile', nextRecipe);

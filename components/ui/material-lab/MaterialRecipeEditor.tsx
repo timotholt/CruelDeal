@@ -749,6 +749,7 @@ const ContentStateSection = (props: {
   stateOverlay: MaterialStateOverlay;
   updateStateGroup: StateGroupUpdate;
 }) => {
+  const active = () => props.stateOverlay.enabled;
   const embossOptions = ['inherit', 'on', 'off'] as const;
   const fontStyleOptions = ['inherit', ...materialRecipeFontStyles] as const;
   const transformOptions = ['inherit', ...materialRecipeTextTransforms] as const;
@@ -756,40 +757,41 @@ const ContentStateSection = (props: {
   const weightInherited = () => props.stateOverlay.content.fontWeight === 'inherit';
 
   return (
-    <div class="ui-lab-control-group">
+    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
       <SectionLabel size="xs">State Text</SectionLabel>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Label Color</ControlLabel>
-        <Segments value={props.stateOverlay.content.contentTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'contentTone', value)} />
+        <Segments disabled={!active()} value={props.stateOverlay.content.contentTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'contentTone', value)} />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Icon Color</ControlLabel>
-        <Segments value={props.stateOverlay.content.iconTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'iconTone', value)} />
+        <Segments disabled={!active()} value={props.stateOverlay.content.iconTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'iconTone', value)} />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Label Glow</ControlLabel>
-        <Slider value={props.stateOverlay.content.contentGlowStrength} onInput={(value) => props.updateStateGroup('content', 'contentGlowStrength', value)} />
+        <Slider disabled={!active()} value={props.stateOverlay.content.contentGlowStrength} onInput={(value) => props.updateStateGroup('content', 'contentGlowStrength', value)} />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Icon Glow</ControlLabel>
-        <Slider value={props.stateOverlay.content.iconGlowStrength} onInput={(value) => props.updateStateGroup('content', 'iconGlowStrength', value)} />
+        <Slider disabled={!active()} value={props.stateOverlay.content.iconGlowStrength} onInput={(value) => props.updateStateGroup('content', 'iconGlowStrength', value)} />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Emboss</ControlLabel>
         <Segments
+          disabled={!active()}
           value={props.stateOverlay.content.contentEmboss === true ? 'on' : props.stateOverlay.content.contentEmboss === false ? 'off' : 'inherit'}
           options={embossOptions}
           onChange={(value) => props.updateStateGroup('content', 'contentEmboss', value === 'inherit' ? 'inherit' : value === 'on')}
         />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() && !weightInherited() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Weight</ControlLabel>
         <div class="ui-lab-stack">
-          <ToggleButton active={weightInherited()} onClick={() => props.updateStateGroup('content', 'fontWeight', weightInherited() ? 700 : 'inherit')}>
+          <ToggleButton active={weightInherited()} disabled={!active()} onClick={() => props.updateStateGroup('content', 'fontWeight', weightInherited() ? 700 : 'inherit')}>
             inherit
           </ToggleButton>
           <Slider
-            disabled={weightInherited()}
+            disabled={!active() || weightInherited()}
             value={weightInherited() ? 700 : props.stateOverlay.content.fontWeight as FontWeightToken}
             min={100}
             max={900}
@@ -798,21 +800,21 @@ const ContentStateSection = (props: {
           />
         </div>
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Style</ControlLabel>
-        <Segments value={props.stateOverlay.content.fontStyle} options={fontStyleOptions} onChange={(value) => props.updateStateGroup('content', 'fontStyle', value as FontStyleToken | 'inherit')} />
+        <Segments disabled={!active()} value={props.stateOverlay.content.fontStyle} options={fontStyleOptions} onChange={(value) => props.updateStateGroup('content', 'fontStyle', value as FontStyleToken | 'inherit')} />
       </div>
-      <div class="ui-lab-control-row">
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Case</ControlLabel>
-        <Segments value={props.stateOverlay.content.textTransform} options={transformOptions} onChange={(value) => props.updateStateGroup('content', 'textTransform', value as TextTransformToken | 'inherit')} />
+        <Segments disabled={!active()} value={props.stateOverlay.content.textTransform} options={transformOptions} onChange={(value) => props.updateStateGroup('content', 'textTransform', value as TextTransformToken | 'inherit')} />
       </div>
-      <div class={`ui-lab-control-row ${letterInherited() ? 'ui-lab-control-row--disabled' : ''}`}>
+      <div class={`ui-lab-control-row ${active() && !letterInherited() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Track</ControlLabel>
         <div class="ui-lab-stack">
-          <ToggleButton active={letterInherited()} onClick={() => props.updateStateGroup('content', 'letterSpacing', letterInherited() ? 0 : null)}>
+          <ToggleButton active={letterInherited()} disabled={!active()} onClick={() => props.updateStateGroup('content', 'letterSpacing', letterInherited() ? 0 : null)}>
             inherit
           </ToggleButton>
-          <Slider disabled={letterInherited()} value={props.stateOverlay.content.letterSpacing ?? 0} min={-0.08} max={0.24} step={0.005} onInput={(value) => props.updateStateGroup('content', 'letterSpacing', value)} />
+          <Slider disabled={!active() || letterInherited()} value={props.stateOverlay.content.letterSpacing ?? 0} min={-0.08} max={0.24} step={0.005} onInput={(value) => props.updateStateGroup('content', 'letterSpacing', value)} />
         </div>
       </div>
     </div>
@@ -822,19 +824,22 @@ const ContentStateSection = (props: {
 const MotionSection = (props: {
   stateOverlay: MaterialStateOverlay;
   updateStateGroup: StateGroupUpdate;
-}) => (
-  <div class="ui-lab-control-group">
-    <SectionLabel size="xs">State Motion</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Scale</ControlLabel>
-      <Slider value={props.stateOverlay.motion.scale} min={0.94} max={1.04} step={0.005} onInput={(value) => props.updateStateGroup('motion', 'scale', value)} />
+}) => {
+  const active = () => props.stateOverlay.enabled;
+  return (
+    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
+      <SectionLabel size="xs">State Motion</SectionLabel>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Scale</ControlLabel>
+        <Slider disabled={!active()} value={props.stateOverlay.motion.scale} min={0.94} max={1.04} step={0.005} onInput={(value) => props.updateStateGroup('motion', 'scale', value)} />
+      </div>
+      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
+        <ControlLabel>Y</ControlLabel>
+        <Slider disabled={!active()} value={props.stateOverlay.motion.translateY} min={-4} max={4} onInput={(value) => props.updateStateGroup('motion', 'translateY', value)} />
+      </div>
     </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Y</ControlLabel>
-      <Slider value={props.stateOverlay.motion.translateY} min={-4} max={4} onInput={(value) => props.updateStateGroup('motion', 'translateY', value)} />
-    </div>
-  </div>
-);
+  );
+};
 
 const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; contentEnabled: boolean; update: RecipeUpdate }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
