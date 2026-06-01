@@ -1047,8 +1047,20 @@ const createMissionBriefingCtaSurface = () => createMaterialRecipe({
       enabled: true,
       surface: { tint: 'gold', tintStrength: 8, borderOpacityBoost: 8, lightStrengthBoost: 8, darkStrengthBoost: 0 },
       glow: { tone: 'gold', glowStrength: 1, corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'], edgeHighlight: ['top'], cornerSize: 17 },
-      content: { contentTone: 'inherit', iconTone: 'inherit', contentGlowStrength: 16, iconGlowStrength: 20 },
+      content: { contentTone: 'inherit', iconTone: 'inherit', contentGlowStrength: 0, iconGlowStrength: 20 },
       motion: { translateY: 0, scale: 1 },
+    },
+    pressed: {
+      enabled: true,
+      content: {
+        contentTone: 'black',
+        iconTone: 'inherit',
+        fontWeight: 800,
+        fontStyle: 'normal',
+        textTransform: 'uppercase',
+        letterSpacing: 0.05,
+        contentGlowStrength: 0,
+      },
     },
   }),
 });
@@ -2628,9 +2640,17 @@ const feedTextEmbossShadow = (style: FeedTextSlotStyle) => {
     const dx = Math.round(dist * 0.7);
     const dy = dist;
     const blurAmt = Math.round((style.textEmbossBlur ?? 50) / 100 * 16); // 0px..16px
+    
+    // Choose shadow color based on text tone:
+    // White/bright/gold/etc. text gets a dark cast shadow.
+    // Dark/black/muted text gets a light cast shadow (creates a gorgeous letterpress drop-glow effect).
+    const isDarkText = style.contentTone === 'black' || style.contentTone === 'muted' || style.contentTone === 'none' || style.contentTone === 'inherit';
+    const shadowRgb = isDarkText ? '255 255 255' : '0 0 0';
+    const opacityMultiplier = isDarkText ? 0.65 : 0.9;
+    
     return [
-      `${dx}px ${dy}px ${blurAmt}px rgb(0 0 0 / ${0.9 * s})`,
-      `${Math.round(dx * 0.55)}px ${Math.round(dy * 0.55)}px ${Math.max(1, Math.round(blurAmt * 0.6))}px rgb(0 0 0 / ${0.7 * s})`,
+      `${dx}px ${dy}px ${blurAmt}px rgb(${shadowRgb} / ${opacityMultiplier * s})`,
+      `${Math.round(dx * 0.55)}px ${Math.round(dy * 0.55)}px ${Math.max(1, Math.round(blurAmt * 0.6))}px rgb(${shadowRgb} / ${opacityMultiplier * 0.7 * s})`,
     ].join(', ');
   }
   if (style.textEmbossMode === 'light') {
@@ -2784,6 +2804,7 @@ const feedTextCss = (style: FeedTextSlotStyle): JSX.CSSProperties => ({
   opacity: '1',
   color: style.overrideColor ? feedToneColors[style.contentTone] || feedToneColors.white : 'inherit',
   'text-shadow': style.overrideEmboss ? feedTextEmbossShadow(style) : 'inherit',
+  '--content-shadow': style.overrideEmboss ? feedTextEmbossShadow(style) : 'inherit',
   transform: `translate(${style.textX}px, ${style.textY}px)`,
 });
 
@@ -3130,6 +3151,7 @@ const FeedCardTreeNode = (props: {
               size="sm"
               fullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
+              style={{ ...textStyle(), transform: undefined }}
             >
               {content()}
             </MaterialButton>

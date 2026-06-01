@@ -845,7 +845,10 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       data-emission={surfaceEmissionKind(props)}
       data-emission-edge={props.emissionEdge || 'bottom'}
       class={surfaceClass(props, props.class)}
-      style={surfaceStyle(props)}
+      style={{
+        ...surfaceStyle(props),
+        ...(typeof props.rootProps?.style === 'object' ? props.rootProps.style : {}),
+      }}
       disabled={props.disabled}
     >
       <SurfaceBaseLayers
