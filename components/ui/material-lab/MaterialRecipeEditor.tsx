@@ -8,6 +8,7 @@ import {
 import type {
   CornerName,
   EdgeName,
+  MaterialKind,
   SurfaceGradient,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
@@ -22,6 +23,7 @@ import {
   materialRecipeFontStyles,
   materialRecipeGlows,
   materialRecipeGradients,
+  materialRecipeMaterials,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
@@ -93,7 +95,7 @@ const ToggleButton = (props: { active: boolean; disabled?: boolean; children: JS
     type="button"
     class={`ui-lab-mini-button ${props.active ? 'is-active' : ''}`}
     disabled={props.disabled}
-    onClick={props.onClick}
+    onClick={() => props.onClick()}
   >
     {props.children}
   </button>
@@ -171,7 +173,53 @@ type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialSt
   value: MaterialStateOverlay[G][K],
 ) => void;
 
-const MaterialSection = (props: {
+const baseLabels: Record<MaterialKind, string> = {
+  none: 'none',
+  black: 'pure black',
+  white: 'pure white',
+  gray: '50% gray',
+  custom: 'color',
+};
+
+const BaseSection = (props: {
+  recipe: MaterialRecipe;
+  enabled: boolean;
+  update: RecipeUpdate;
+}) => (
+  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
+    <SectionLabel size="xs">Base</SectionLabel>
+    <div class="ui-lab-control-row">
+      <ControlLabel>Base</ControlLabel>
+      <div class="ui-lab-toggles ui-lab-toggles--wrap">
+        <For each={materialRecipeMaterials}>
+          {(material) => (
+            <ToggleButton
+              active={props.recipe.material === material}
+              disabled={!props.enabled}
+              onClick={() => props.update('material', material)}
+            >
+              {baseLabels[material]}
+            </ToggleButton>
+          )}
+        </For>
+      </div>
+    </div>
+    <Show when={props.recipe.material === 'custom'}>
+      <div class="ui-lab-control-row">
+        <ControlLabel>Color</ControlLabel>
+        <input
+          class="ui-lab-color-input"
+          type="color"
+          value={props.recipe.materialColor}
+          disabled={!props.enabled}
+          onInput={(event) => props.update('materialColor', event.currentTarget.value)}
+        />
+      </div>
+    </Show>
+  </div>
+);
+
+const ShapeSection = (props: {
   recipe: MaterialRecipe;
   enabled: boolean;
   update: RecipeUpdate;
@@ -865,7 +913,6 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     props.onChange({
       ...props.recipe,
       texture,
-      material: texture === 'none' ? 'none' : props.recipe.material === 'none' ? 'raw' : props.recipe.material,
       textureStrength: texture === 'none' ? 0 : props.recipe.textureStrength || 100,
     });
   };
@@ -977,7 +1024,8 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   return (
     <>
-      <MaterialSection recipe={props.recipe} enabled={capabilities().material} update={update} />
+      <BaseSection recipe={props.recipe} enabled={capabilities().material} update={update} />
+      <ShapeSection recipe={props.recipe} enabled={capabilities().material} update={update} />
       <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />

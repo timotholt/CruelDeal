@@ -33,7 +33,6 @@ import {
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
-  materialRecipeTextTones,
   type CornerName,
   type ContentAlign,
   type ContentLayer,
@@ -44,11 +43,11 @@ import {
   type MaterialStateOverlay,
   type MaterialKind,
   type MaterialRecipe,
+  type MaterialTone,
   type ShapeKind,
   type SurfaceGradient,
   type TintTone,
   type TextureKind,
-  type TextTone,
   edgeTextureOptions,
   textureOptions,
 } from '../ui/material-lab';
@@ -65,6 +64,7 @@ interface LabControls {
   target: PreviewTarget;
   applyToControlPanel: boolean;
   material: MaterialKind;
+  materialColor: string;
   glass: boolean;
   texture: TextureKind;
   shape: ShapeKind;
@@ -97,7 +97,7 @@ interface LabControls {
   contentLayer: ContentLayer;
   textFontFamily: string;
   textSizeRem: number;
-  textTone: TextTone;
+  contentTone: MaterialTone;
   textEmboss: boolean;
   textAlign: ContentAlign;
   textX: number;
@@ -105,17 +105,10 @@ interface LabControls {
 }
 
 const presetStorageKey = 'cruel-deal.ui-material-lab.presets.v6';
-const obsoletePresetStorageKeys = [
-  'cruel-deal.ui-material-lab.presets.v1',
-  'cruel-deal.ui-material-lab.presets.v2',
-  'cruel-deal.ui-material-lab.presets.v3',
-  'cruel-deal.ui-material-lab.presets.v4',
-  'cruel-deal.ui-material-lab.presets.v5',
-];
 const presetStorageVersion = 6;
 const defaultPresetId = 'default';
 const previewTargetOptions = ['panel', 'button', 'tile', 'cta'] as const;
-const materialOptions: MaterialKind[] = ['none', 'raw'];
+const materialOptions: MaterialKind[] = ['none', 'black', 'white', 'gray', 'custom'];
 const shapeOptions = ['rect', 'bevel'] as const;
 const borderEdgeOptions: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 const edgeWearLayerOptions = ['below-highlights', 'above-highlights'] as const;
@@ -128,7 +121,8 @@ const cornerOptions: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'b
 const controlDefaults: LabControls = {
   target: 'panel',
   applyToControlPanel: true,
-  material: 'raw',
+  material: 'white',
+  materialColor: '#808080',
   glass: false,
   texture: 'stone04',
   shape: 'rect',
@@ -172,7 +166,7 @@ const controlDefaults: LabControls = {
   contentLayer: 'over-glass',
   textFontFamily: 'inherit',
   textSizeRem: 0.8125,
-  textTone: 'white',
+  contentTone: 'white',
   textEmboss: true,
   textAlign: 'center',
   textX: 0,
@@ -181,6 +175,7 @@ const controlDefaults: LabControls = {
 
 const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMaterialRecipe({
   material: controls.material,
+  materialColor: controls.materialColor,
   texture: controls.texture,
   shape: controls.shape,
   bevelCorners: controls.bevelCorners,
@@ -212,7 +207,7 @@ const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMateri
   contentLayer: controls.contentLayer,
   textFontFamily: controls.textFontFamily,
   textSizeRem: controls.textSizeRem,
-  textTone: controls.textTone,
+  contentTone: controls.contentTone,
   textEmboss: controls.textEmboss,
   textAlign: controls.textAlign,
   textX: controls.textX,
@@ -223,6 +218,7 @@ const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMateri
 const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabControls => ({
   ...current,
   material: recipe.material,
+  materialColor: recipe.materialColor,
   texture: recipe.texture,
   shape: recipe.shape,
   bevelCorners: recipe.bevelCorners,
@@ -254,7 +250,7 @@ const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabCont
   contentLayer: recipe.contentLayer,
   textFontFamily: recipe.textFontFamily,
   textSizeRem: recipe.textSizeRem,
-  textTone: recipe.textTone || (recipe.contentTone === 'black' ? 'black' : 'white'),
+  contentTone: recipe.contentTone,
   textEmboss: recipe.textEmboss,
   textAlign: recipe.textAlign,
   textX: recipe.textX,
@@ -292,19 +288,18 @@ const uniqueCorners = (value: unknown, fallback: CornerName[]): CornerName[] => 
 
 const sanitizeStateOverlay = (value: unknown, fallback: MaterialStateOverlay): MaterialStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<MaterialStateOverlay> : {};
-  const legacy = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
   return {
     enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
     surface: fallback.surface,
     glow: {
       ...fallback.glow,
-      tone: isOneOf((input.glow as { tone?: unknown } | undefined)?.tone ?? legacy.glow, glowOptions)
-        ? ((input.glow as { tone?: unknown } | undefined)?.tone ?? legacy.glow) as MaterialStateOverlay['glow']['tone']
+      tone: isOneOf((input.glow as { tone?: unknown } | undefined)?.tone, glowOptions)
+        ? (input.glow as { tone?: MaterialStateOverlay['glow']['tone'] }).tone
         : fallback.glow.tone,
-      glowStrength: clamp((input.glow as { glowStrength?: unknown } | undefined)?.glowStrength ?? legacy.glowStrength, fallback.glow.glowStrength, 0, 100),
-      corners: uniqueCorners((input.glow as { corners?: unknown } | undefined)?.corners ?? legacy.corners, fallback.glow.corners),
-      edgeHighlight: uniqueEdges((input.glow as { edgeHighlight?: unknown } | undefined)?.edgeHighlight ?? legacy.edgeHighlight, fallback.glow.edgeHighlight),
-      cornerSize: clamp((input.glow as { cornerSize?: unknown } | undefined)?.cornerSize ?? legacy.cornerSize, fallback.glow.cornerSize, 8, 34),
+      glowStrength: clamp((input.glow as { glowStrength?: unknown } | undefined)?.glowStrength, fallback.glow.glowStrength, 0, 100),
+      corners: uniqueCorners((input.glow as { corners?: unknown } | undefined)?.corners, fallback.glow.corners),
+      edgeHighlight: uniqueEdges((input.glow as { edgeHighlight?: unknown } | undefined)?.edgeHighlight, fallback.glow.edgeHighlight),
+      cornerSize: clamp((input.glow as { cornerSize?: unknown } | undefined)?.cornerSize, fallback.glow.cornerSize, 8, 34),
     },
     emission: fallback.emission,
     content: fallback.content,
@@ -331,6 +326,7 @@ const sanitizeControls = (value: unknown): LabControls => {
     target: isOneOf(input.target, previewTargetOptions) ? input.target : controlDefaults.target,
     applyToControlPanel: typeof input.applyToControlPanel === 'boolean' ? input.applyToControlPanel : controlDefaults.applyToControlPanel,
     material: isOneOf(input.material, materialOptions) ? input.material : controlDefaults.material,
+    materialColor: typeof input.materialColor === 'string' && /^#[0-9a-f]{6}$/i.test(input.materialColor) ? input.materialColor : controlDefaults.materialColor,
     glass: typeof input.glass === 'boolean' ? input.glass : controlDefaults.glass,
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : controlDefaults.texture,
     shape: isOneOf(input.shape, shapeOptions) ? input.shape : controlDefaults.shape,
@@ -369,7 +365,7 @@ const sanitizeControls = (value: unknown): LabControls => {
       ? input.textFontFamily
       : controlDefaults.textFontFamily,
     textSizeRem: clamp(input.textSizeRem, controlDefaults.textSizeRem, 0.5, 3),
-    textTone: isOneOf(input.textTone, materialRecipeTextTones) ? input.textTone : controlDefaults.textTone,
+    contentTone: isOneOf(input.contentTone, ['inherit', 'muted', 'gray', 'black', 'white', 'brass', 'gold', 'cyan', 'red', 'green'] as const) ? input.contentTone : controlDefaults.contentTone,
     textEmboss: typeof input.textEmboss === 'boolean' ? input.textEmboss : controlDefaults.textEmboss,
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : controlDefaults.textAlign,
     textX: clamp(input.textX, controlDefaults.textX, -80, 80),
@@ -382,7 +378,6 @@ const storageAvailable = () => typeof window !== 'undefined' && !!window.localSt
 const loadStoredPresets = (): SavedPreset[] => {
   if (!storageAvailable()) return [];
   try {
-    obsoletePresetStorageKeys.forEach((key) => window.localStorage.removeItem(key));
     const raw = window.localStorage.getItem(presetStorageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as { version?: unknown; presets?: unknown };
@@ -645,7 +640,7 @@ export const UiMaterialLabScreen = () => {
     controls().applyToControlPanel
       ? surfaceProps()
       : {
-        material: 'raw' as const,
+        material: 'white' as const,
         glass: true,
         corners: 'top' as const,
         edgeHighlight: 'bottom' as const,
@@ -679,7 +674,7 @@ export const UiMaterialLabScreen = () => {
       return (
         <MaterialPanel {...surfaceProps()} padded>
           <div class="ui-lab-cta">
-            <MaterialPanel material="raw" selected corners="all" glow="gold" edgeHighlight="bottom" padded={false} class="h-[64px]">
+            <MaterialPanel material="white" selected corners="all" glow="gold" edgeHighlight="bottom" padded={false} class="h-[64px]">
               <div class="h-full flex items-center justify-center text-black/75">
                 <DataDiamondIcon class="w-10 h-10" />
               </div>
@@ -863,7 +858,7 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <SectionLabel>Typography</SectionLabel>
-                <MaterialPanel material="raw" shape="bevel" bevelCorners={['top-left', 'top-right']} corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
+                <MaterialPanel material="white" shape="bevel" bevelCorners={['top-left', 'top-right']} corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
                   <div class="ui-lab-typography">
                     <SectionLabel>Active Contract</SectionLabel>
                     <h2 class="ui-lab-display-title">Data <span>Extraction</span></h2>
@@ -877,24 +872,24 @@ export const UiMaterialLabScreen = () => {
               <section class="ui-lab-section">
                 <SectionLabel>Buttons</SectionLabel>
                 <div class="ui-lab-row">
-                  <MaterialButton material="raw" selected corners="all" edgeHighlight="bottom" glow="gold" icon={<SettingsIcon class="w-5 h-5" />}>
+                  <MaterialButton material="white" selected corners="all" edgeHighlight="bottom" glow="gold" icon={<SettingsIcon class="w-5 h-5" />}>
                     Edit Loadout
                   </MaterialButton>
-                  <MaterialButton material="raw" glass hoverPreview corners={['top-left', 'bottom-right']} edgeHighlight="bottom" glow="cyan" iconRight={<ArrowRightIcon class="w-5 h-5" />}>
+                  <MaterialButton material="white" glass hoverPreview corners={['top-left', 'bottom-right']} edgeHighlight="bottom" glow="cyan" iconRight={<ArrowRightIcon class="w-5 h-5" />}>
                     View Intel
                   </MaterialButton>
                 </div>
                 <div class="ui-lab-row">
-                  <MaterialButton material="raw" size="tile" icon={<HomeIcon class="w-8 h-8" />} iconPosition="top" selected corners="all" glow="gold">
+                  <MaterialButton material="white" size="tile" icon={<HomeIcon class="w-8 h-8" />} iconPosition="top" selected corners="all" glow="gold">
                     Home
                   </MaterialButton>
-                  <MaterialButton material="raw" glass size="tile" icon={<PlusIcon class="w-9 h-9" />} corners="all" edgeHighlight={['bottom', 'right']} glow="white" hoverPreview />
+                  <MaterialButton material="white" glass size="tile" icon={<PlusIcon class="w-9 h-9" />} corners="all" edgeHighlight={['bottom', 'right']} glow="white" hoverPreview />
                 </div>
               </section>
 
               <section class="ui-lab-section">
                 <SectionLabel>Currency</SectionLabel>
-                <MaterialPanel material="raw" glass corners="top" edgeHighlight="bottom" glow="white" hoverPreview compact>
+                <MaterialPanel material="white" glass corners="top" edgeHighlight="bottom" glow="white" hoverPreview compact>
                   <div class="ui-lab-currency-bar">
                     <div class="ui-lab-currency-item">
                       <CreditHexIcon class="w-9 h-9 text-[#efc85d]" />
@@ -904,7 +899,7 @@ export const UiMaterialLabScreen = () => {
                       <DataDiamondIcon class="w-9 h-9 text-[#52d7ff]" />
                       <span class="ui-lab-currency-value"><strong>870</strong><span>Data</span></span>
                     </div>
-                    <MaterialButton material="raw" size="tile" icon={<PlusIcon class="w-7 h-7" />} corners="top" />
+                    <MaterialButton material="white" size="tile" icon={<PlusIcon class="w-7 h-7" />} corners="top" />
                   </div>
                 </MaterialPanel>
               </section>
@@ -920,7 +915,7 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <SectionLabel>Target Card</SectionLabel>
-                <MaterialPanel material="raw" glass shape="rect" corners="all" edgeHighlight="bottom" glow="white" hoverPreview padded>
+                <MaterialPanel material="white" glass shape="rect" corners="all" edgeHighlight="bottom" glow="white" hoverPreview padded>
                   <SectionLabel size="sm">Target</SectionLabel>
                   <div class="ui-lab-target-art">
                     <div class="ui-lab-target-title">
@@ -944,17 +939,17 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <div class="ui-lab-row">
-                  <MaterialPanel material="raw" corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
+                  <MaterialPanel material="white" corners="top" edgeHighlight="bottom" glow="gold" hoverPreview padded>
                     <div class="ui-lab-typography">
                       <SectionLabel>Intel Brief</SectionLabel>
                       <p class="ui-lab-small-copy">Solace Corp has recently acquired a valuable AI development asset. High security. Expect heavy ICE resistance.</p>
-                      <MaterialButton material="raw" glass fullWidth iconRight={<DocumentIcon class="w-5 h-5" />} corners="bottom" edgeHighlight="bottom" glow="white">
+                      <MaterialButton material="white" glass fullWidth iconRight={<DocumentIcon class="w-5 h-5" />} corners="bottom" edgeHighlight="bottom" glow="white">
                         View Intel
                       </MaterialButton>
                     </div>
                   </MaterialPanel>
 
-                  <MaterialPanel material="raw" glass corners="top" edgeHighlight="bottom" glow="cyan" hoverPreview padded>
+                  <MaterialPanel material="white" glass corners="top" edgeHighlight="bottom" glow="cyan" hoverPreview padded>
                     <div class="ui-lab-typography">
                       <SectionLabel>Icon Set</SectionLabel>
                       <div class="grid grid-cols-3 gap-2 text-white/80">
@@ -972,20 +967,20 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <SectionLabel>Loadout</SectionLabel>
-                <MaterialPanel material="raw" shape="rect" corners="top" edgeHighlight="bottom" glow="white" hoverPreview padded>
+                <MaterialPanel material="white" shape="rect" corners="top" edgeHighlight="bottom" glow="white" hoverPreview padded>
                   <SectionLabel>Loadout</SectionLabel>
                   <div class="ui-lab-loadout-grid">
                     <For each={loadoutItems}>
                       {(item) => (
-                      <MaterialPanel material="raw" glass compact corners="top" glow="white" class="ui-lab-loadout-item">
+                      <MaterialPanel material="white" glass compact corners="top" glow="white" class="ui-lab-loadout-item">
                         <span class="ui-lab-loadout-icon">{item.icon()}</span>
                         <span class="ui-lab-loadout-name">{item.name}<br />{item.detail}</span>
                       </MaterialPanel>
                       )}
                     </For>
-                    <MaterialButton material="raw" glass size="tile" icon={<PlusIcon class="w-8 h-8" />} corners="all" />
+                    <MaterialButton material="white" glass size="tile" icon={<PlusIcon class="w-8 h-8" />} corners="all" />
                   </div>
-                  <MaterialButton material="raw" fullWidth edgeHighlight="bottom" glow="gold" iconRight={<SettingsIcon class="w-5 h-5" />} class="mt-3">
+                  <MaterialButton material="white" fullWidth edgeHighlight="bottom" glow="gold" iconRight={<SettingsIcon class="w-5 h-5" />} class="mt-3">
                     Edit Loadout
                   </MaterialButton>
                 </MaterialPanel>
@@ -993,9 +988,9 @@ export const UiMaterialLabScreen = () => {
 
               <section class="ui-lab-section">
                 <SectionLabel>CTA</SectionLabel>
-                <MaterialPanel material="raw" shape="rect" selected corners="all" edgeHighlight="bottom" glow="gold" padded>
+                <MaterialPanel material="white" shape="rect" selected corners="all" edgeHighlight="bottom" glow="gold" padded>
                   <div class="ui-lab-cta">
-                    <MaterialPanel material="raw" selected corners="all" glow="gold" padded={false} class="h-[64px]">
+                    <MaterialPanel material="white" selected corners="all" glow="gold" padded={false} class="h-[64px]">
                       <div class="h-full flex items-center justify-center text-black/70">
                         <DataDiamondIcon class="w-10 h-10" />
                       </div>
@@ -1004,27 +999,27 @@ export const UiMaterialLabScreen = () => {
                       <strong>Initiate Extraction</strong>
                       <SectionLabel size="sm">Prepare. Breach. Extract.</SectionLabel>
                     </div>
-                    <MaterialButton material="raw" glass selected corners="all" edgeHighlight="bottom" glow="gold" size="tile" icon={<ArrowRightIcon class="w-9 h-9" />} />
+                    <MaterialButton material="white" glass selected corners="all" edgeHighlight="bottom" glow="gold" size="tile" icon={<ArrowRightIcon class="w-9 h-9" />} />
                   </div>
                 </MaterialPanel>
               </section>
 
               <section class="ui-lab-section">
                 <SectionLabel>Navigation</SectionLabel>
-                <MaterialPanel material="raw" glass compact edgeHighlight="bottom" glow="white" hoverPreview>
+                <MaterialPanel material="white" glass compact edgeHighlight="bottom" glow="white" hoverPreview>
                   <div class="ui-lab-tab-row">
-                    <MaterialButton material="raw" glass selected edgeHighlight="bottom" glow="gold" icon={<ShieldHexIcon class="w-4 h-4" />}>Overview</MaterialButton>
-                    <MaterialButton material="raw" glass icon={<CalendarIcon class="w-4 h-4" />}>Objectives</MaterialButton>
-                    <MaterialButton material="raw" glass icon={<CubeIcon class="w-4 h-4" />}>Rewards</MaterialButton>
-                    <MaterialButton material="raw" glass icon={<HistoryIcon class="w-4 h-4" />}>History</MaterialButton>
+                    <MaterialButton material="white" glass selected edgeHighlight="bottom" glow="gold" icon={<ShieldHexIcon class="w-4 h-4" />}>Overview</MaterialButton>
+                    <MaterialButton material="white" glass icon={<CalendarIcon class="w-4 h-4" />}>Objectives</MaterialButton>
+                    <MaterialButton material="white" glass icon={<CubeIcon class="w-4 h-4" />}>Rewards</MaterialButton>
+                    <MaterialButton material="white" glass icon={<HistoryIcon class="w-4 h-4" />}>History</MaterialButton>
                   </div>
                 </MaterialPanel>
                 <div class="ui-lab-nav-row">
-                  <MaterialButton material="raw" size="tile" icon={<CollectionIcon class="w-7 h-7" />} iconPosition="top">Collection</MaterialButton>
-                  <MaterialButton material="raw" size="tile" icon={<OperationsIcon class="w-7 h-7" />} iconPosition="top">Operations</MaterialButton>
-                  <MaterialButton material="raw" size="tile" icon={<HomeIcon class="w-7 h-7" />} iconPosition="top" selected corners="all" glow="gold">Home</MaterialButton>
-                  <MaterialButton material="raw" size="tile" icon={<MarketIcon class="w-7 h-7" />} iconPosition="top">Market</MaterialButton>
-                  <MaterialButton material="raw" size="tile" icon={<UserIcon class="w-7 h-7" />} iconPosition="top">Profile</MaterialButton>
+                  <MaterialButton material="white" size="tile" icon={<CollectionIcon class="w-7 h-7" />} iconPosition="top">Collection</MaterialButton>
+                  <MaterialButton material="white" size="tile" icon={<OperationsIcon class="w-7 h-7" />} iconPosition="top">Operations</MaterialButton>
+                  <MaterialButton material="white" size="tile" icon={<HomeIcon class="w-7 h-7" />} iconPosition="top" selected corners="all" glow="gold">Home</MaterialButton>
+                  <MaterialButton material="white" size="tile" icon={<MarketIcon class="w-7 h-7" />} iconPosition="top">Market</MaterialButton>
+                  <MaterialButton material="white" size="tile" icon={<UserIcon class="w-7 h-7" />} iconPosition="top">Profile</MaterialButton>
                 </div>
               </section>
             </div>

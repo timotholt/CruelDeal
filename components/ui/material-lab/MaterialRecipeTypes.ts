@@ -93,6 +93,7 @@ export interface MaterialSurfaceStateVars {
 
 export interface MaterialRecipe {
   material: MaterialKind;
+  materialColor: string;
   texture: TextureKind;
   shape: ShapeKind;
   bevelCorners: CornerName[];
@@ -144,7 +145,6 @@ export interface MaterialRecipe {
   textX: number;
   textY: number;
   states: Record<MaterialRecipeState, MaterialStateOverlay>;
-  textTone?: 'black' | 'white';
 }
 
 type DeepPartial<T> = {
@@ -154,7 +154,7 @@ type DeepPartial<T> = {
 export const materialRecipeEdges: EdgeName[] = ['top', 'right', 'bottom', 'left'];
 export const materialRecipeCorners: CornerName[] = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 export const materialRecipeStates: MaterialRecipeState[] = ['rest', 'hover', 'active', 'pressed'];
-export const materialRecipeMaterials: MaterialKind[] = ['none', 'raw'];
+export const materialRecipeMaterials: MaterialKind[] = ['none', 'black', 'white', 'gray', 'custom'];
 export const materialRecipeShapes: ShapeKind[] = ['rect', 'bevel'];
 export const materialRecipeTones: MaterialTone[] = ['none', 'inherit', 'black', 'white', 'muted', 'gray', 'brass', 'gold', 'cyan', 'red', 'green'];
 export const materialRecipeSurfaceTones: MaterialTone[] = ['none', 'inherit', 'brass', 'gold', 'cyan', 'white', 'gray', 'red', 'green'];
@@ -171,7 +171,6 @@ export const materialRecipeTextureScales = [128, 256, 512, 1024] as const;
 export const materialRecipeEdgeWearLayers = ['below-highlights', 'above-highlights'] as const;
 export const materialRecipeContentLayers: ContentLayer[] = ['over-glass', 'under-glass'];
 export const materialRecipeTextAligns: ContentAlign[] = ['left', 'center', 'right'];
-export const materialRecipeTextTones: Array<'black' | 'white'> = ['black', 'white'];
 export const materialRecipeTextFonts = [
   { label: 'inherit', value: 'inherit' },
   { label: 'condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
@@ -182,21 +181,11 @@ export const materialRecipeTextFonts = [
   { label: 'system', value: 'ui-sans-serif, system-ui, sans-serif' },
 ] as const;
 
-const legacyFontWeightValues = {
-  regular: 400,
-  medium: 500,
-  bold: 600,
-  black: 700,
-} as const;
-
 export const fontWeightTokenValue = (token: FontWeightToken) => token;
 
 export const sanitizeFontWeight = (value: unknown, fallback: FontWeightToken): FontWeightToken => {
   if (typeof value === 'number' && materialRecipeFontWeights.includes(value as FontWeightToken)) {
     return value as FontWeightToken;
-  }
-  if (typeof value === 'string' && value in legacyFontWeightValues) {
-    return legacyFontWeightValues[value as keyof typeof legacyFontWeightValues];
   }
   return fallback;
 };
@@ -356,10 +345,10 @@ export const createMaterialStateOverlays = (
 });
 
 export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): MaterialRecipe => {
-  const legacyTextTone = overrides.textTone;
   const defaultGlass = overrides.glass ?? false;
   return {
-    material: 'raw',
+    material: 'white',
+    materialColor: '#808080',
     texture: 'stone04',
     shape: 'rect',
     bevelCorners: [],
@@ -404,7 +393,7 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     fontStyle: 'italic',
     textTransform: 'uppercase',
     letterSpacing: 0,
-    contentTone: legacyTextTone || 'white',
+    contentTone: 'white',
     iconTone: 'inherit',
     textEmboss: true,
     textAlign: 'center',
@@ -440,6 +429,10 @@ const sanitizeTone = (value: unknown, fallback: MaterialTone, options = material
   isOneOf(value, options) ? value : fallback
 );
 
+const sanitizeHexColor = (value: unknown, fallback: string) => (
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
+);
+
 const sanitizeSurfaceOverlay = (value: unknown, fallback: SurfaceStateOverlay): SurfaceStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<SurfaceStateOverlay> : {};
   return {
@@ -453,13 +446,12 @@ const sanitizeSurfaceOverlay = (value: unknown, fallback: SurfaceStateOverlay): 
 
 const sanitizeGlowOverlay = (value: unknown, fallback: GlowStateOverlay): GlowStateOverlay => {
   const input = typeof value === 'object' && value !== null ? value as Partial<GlowStateOverlay> : {};
-  const legacy = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
   return {
-    tone: sanitizeTone(input.tone ?? legacy.glow, fallback.tone, materialRecipeSurfaceTones),
-    glowStrength: clamp(input.glowStrength ?? legacy.glowStrength, fallback.glowStrength, 0, 100),
-    corners: uniqueCorners(input.corners ?? legacy.corners, fallback.corners),
-    edgeHighlight: uniqueEdges(input.edgeHighlight ?? legacy.edgeHighlight, fallback.edgeHighlight),
-    cornerSize: clamp(input.cornerSize ?? legacy.cornerSize, fallback.cornerSize, 8, 34),
+    tone: sanitizeTone(input.tone, fallback.tone, materialRecipeSurfaceTones),
+    glowStrength: clamp(input.glowStrength, fallback.glowStrength, 0, 100),
+    corners: uniqueCorners(input.corners, fallback.corners),
+    edgeHighlight: uniqueEdges(input.edgeHighlight, fallback.edgeHighlight),
+    cornerSize: clamp(input.cornerSize, fallback.cornerSize, 8, 34),
   };
 };
 
@@ -540,14 +532,13 @@ const sanitizeMaterialStateOverlays = (
 export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe): MaterialRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<MaterialRecipe> : {};
   const fallbackStates = fallback.states || createMaterialStateOverlays();
-  const legacyTextTone = isOneOf(input.textTone, materialRecipeTextTones) ? input.textTone : undefined;
-  const legacyBevelShape = input.shape === 'beveled' || input.shape === 'css-bevel';
-  const shape = legacyBevelShape ? 'bevel' : isOneOf(input.shape, materialRecipeShapes) ? input.shape : fallback.shape;
+  const shape = isOneOf(input.shape, materialRecipeShapes) ? input.shape : fallback.shape;
   const bevelCorners = Array.isArray(input.bevelCorners)
     ? uniqueCorners(input.bevelCorners, fallback.bevelCorners || [])
-    : legacyBevelShape ? materialRecipeCorners : fallback.bevelCorners || [];
+    : fallback.bevelCorners || [];
   return {
     material: isOneOf(input.material, materialRecipeMaterials) ? input.material : fallback.material,
+    materialColor: sanitizeHexColor(input.materialColor, fallback.materialColor || '#808080'),
     texture: isOneOf(input.texture, textureOptions.map((option) => option.id)) ? input.texture : fallback.texture,
     shape,
     bevelCorners,
@@ -598,9 +589,8 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     fontStyle: isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
     textTransform: isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
-    contentTone: sanitizeTone(input.contentTone ?? legacyTextTone, fallback.contentTone, materialRecipeContentTones),
+    contentTone: sanitizeTone(input.contentTone, fallback.contentTone, materialRecipeContentTones),
     iconTone: sanitizeTone(input.iconTone, fallback.iconTone, materialRecipeContentTones),
-    textTone: legacyTextTone,
     textEmboss: typeof input.textEmboss === 'boolean' ? input.textEmboss : fallback.textEmboss,
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
     textX: clamp(input.textX, fallback.textX, -80, 80),
@@ -661,6 +651,7 @@ const resolveSurfaceState = (recipe: MaterialRecipe, state: MaterialRecipeState)
 
   return {
     material: recipe.material,
+    materialColor: recipe.materialColor,
     texture: recipe.texture,
     shape: recipe.shape,
     bevelCorners: recipe.bevelCorners,

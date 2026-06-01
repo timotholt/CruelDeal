@@ -19,7 +19,7 @@ interface MainMenuScreenProps {
 }
 
 const mainBackdropSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'background01',
   textureStrength: 100,
   textureScale: 512,
@@ -37,7 +37,7 @@ const mainBackdropSurface = createMaterialRecipe({
 });
 
 const mainTopBarSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 38,
   textureScale: 512,
@@ -54,7 +54,7 @@ const mainTopBarSurface = createMaterialRecipe({
 });
 
 const mainProfileSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone03',
   textureStrength: 44,
   textureScale: 256,
@@ -69,7 +69,7 @@ const mainProfileSurface = createMaterialRecipe({
 });
 
 const mainCurrencySurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 26,
   textureScale: 256,
@@ -83,12 +83,12 @@ const mainCurrencySurface = createMaterialRecipe({
   lightStrength: 34,
   darkStrength: 14,
   radius: 4,
-  textTone: 'black',
+  contentTone: 'black',
   textSizeRem: 0.6875,
 });
 
 const mainFeedSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 46,
   textureScale: 256,

@@ -46,7 +46,6 @@ interface AuthLayoutRecipe {
 }
 
 const storageKey = 'cruel-deal.login-material-preview.v10';
-const obsoleteStorageKeys = ['cruel-deal.login-material-preview.v9'];
 
 const partLabels: Array<MaterialWorkbenchPart<LoginPartId>> = [
   { id: 'backdrop', label: 'Backdrop', detail: 'image tone' },
@@ -371,7 +370,6 @@ export const LoginMaterialPreviewScreen = () => {
 
   onMount(() => {
     try {
-      obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {

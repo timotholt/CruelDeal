@@ -69,7 +69,7 @@ export const MaterialWorkbenchLayout = <T extends string>(props: MaterialWorkben
   <main class={`material-workbench ${props.class || ''}`}>
     <aside class="material-workbench-sidebar material-workbench-sidebar--parts">
       <MaterialPanel
-        material="raw"
+        material="white"
         texture="stone04"
         textureStrength={100}
         textureScale={512}
@@ -122,7 +122,7 @@ export const MaterialWorkbenchLayout = <T extends string>(props: MaterialWorkben
 
     <aside class="material-workbench-sidebar material-workbench-sidebar--editor">
       <MaterialPanel
-        material="raw"
+        material="white"
         texture="stone04"
         textureStrength={100}
         textureScale={512}

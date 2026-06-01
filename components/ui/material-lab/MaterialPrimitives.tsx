@@ -12,7 +12,7 @@ import type {
   TextTransformToken,
 } from './MaterialRecipeTypes';
 
-export type MaterialKind = 'none' | 'raw';
+export type MaterialKind = 'none' | 'black' | 'white' | 'gray' | 'custom';
 export type ShapeKind = 'rect' | 'bevel';
 export type GlowTone = MaterialTone;
 export type TintTone = MaterialTone;
@@ -24,10 +24,10 @@ export type SurfaceGradient = 'none' | 'top-light' | 'bottom-dark' | 'both';
 export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
 export type ContentLayer = 'over-glass' | 'under-glass';
 export type ContentAlign = 'left' | 'center' | 'right';
-export type TextTone = 'black' | 'white';
 
 interface SurfaceOptions {
   material?: MaterialKind;
+  materialColor?: string;
   glass?: boolean;
   texture?: TextureKind;
   shape?: ShapeKind;
@@ -75,7 +75,6 @@ interface SurfaceOptions {
   textFontFamily?: string;
   textSizeRem?: number;
   contentOpacity?: number;
-  textTone?: TextTone;
   contentTone?: MaterialTone;
   iconTone?: MaterialTone;
   contentGlowStrength?: number;
@@ -189,6 +188,16 @@ const tintColors: Record<MaterialTone, { rgb: string }> = {
   green: { rgb: '86 218 142' },
 };
 
+const baseColors: Record<Exclude<MaterialKind, 'none' | 'custom'>, string> = {
+  black: '#000000',
+  white: '#ffffff',
+  gray: '#808080',
+};
+
+const normalizeHexColor = (value: string | undefined) => (
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#808080'
+);
+
 const hasTint = (options: SurfaceOptions) => (
   !!options.tint && options.tint !== 'none' && (options.tintStrength ?? 32) > 0
 );
@@ -213,14 +222,14 @@ const hasDropShadow = (options: SurfaceOptions) => (
   options.dropShadow === true && (options.shadowOpacity ?? 0) > 0 && ((options.shadowBlur ?? 0) > 0 || (options.shadowX ?? 0) !== 0 || (options.shadowY ?? 0) !== 0 || (options.shadowSpread ?? 0) !== 0)
 );
 
-const hasMaterialBase = (options: SurfaceOptions) => (
-  (options.material || 'raw') !== 'none'
+const hasTextureLayer = (options: SurfaceOptions) => (
+  (options.texture || 'road012a') !== 'none'
+  && (options.textureStrength ?? 100) > 0
 );
 
-const hasTextureLayer = (options: SurfaceOptions) => (
-  hasMaterialBase(options)
-  && (options.texture || 'road012a') !== 'none'
-  && (options.textureStrength ?? 100) > 0
+const hasMaterialBase = (options: SurfaceOptions) => (
+  (options.material || 'white') !== 'none'
+  && !((options.texture || 'road012a') !== 'none' && (options.textureStrength ?? 100) >= 100)
 );
 
 const hasGradientLayer = (options: SurfaceOptions) => (
@@ -347,6 +356,16 @@ const textureVars = (options: SurfaceOptions) => {
   });
 };
 
+const materialVars = (options: SurfaceOptions) => {
+  if (!hasMaterialBase(options)) return {};
+  const material = options.material || 'white';
+  return cssVars({
+    '--material-base-color': material === 'custom'
+      ? normalizeHexColor(options.materialColor)
+      : baseColors[material] || baseColors.white,
+  });
+};
+
 const tintVars = (options: SurfaceOptions) => {
   if (!hasTint(options)) return {};
   const tint = tintColors[options.tint || 'none'];
@@ -460,7 +479,7 @@ const contentVars = (options: SurfaceOptions) => {
   const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
   const contentTone = options.contentTone && options.contentTone !== 'inherit'
     ? options.contentTone
-    : options.textTone || 'white';
+    : 'white';
   const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
   const contentRgb = tintColors[contentTone].rgb;
   const iconRgb = tintColors[iconTone].rgb;
@@ -521,6 +540,7 @@ const motionVars = (options: SurfaceOptions) => {
 type SurfaceFeatureId =
   | 'root'
   | 'state'
+  | 'base'
   | 'shape'
   | 'texture'
   | 'tint'
@@ -581,12 +601,18 @@ const surfaceFeatures: SurfaceFeature[] = [
     id: 'root',
     classes: ({ options }) => [
       'cd-surface',
-      `cd-surface--${options.material || 'raw'}`,
       options.selected ? 'is-selected' : '',
       options.interactive ? 'is-interactive' : '',
       options.hoverPreview ? 'is-hover-preview' : '',
       options.visualState ? `is-visual-${options.visualState}` : '',
     ],
+  },
+  {
+    id: 'base',
+    classes: ({ options }) => (
+      hasMaterialBase(options) ? [`cd-surface--base-${options.material || 'white'}`] : []
+    ),
+    vars: ({ options }) => materialVars(options),
   },
   {
     id: 'state',
@@ -834,6 +860,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'padded',
     'compact',
     'material',
+    'materialColor',
     'glass',
     'texture',
     'shape',
@@ -881,7 +908,6 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'textFontFamily',
     'textSizeRem',
     'contentOpacity',
-    'textTone',
     'contentTone',
     'iconTone',
     'contentGlowStrength',
@@ -926,6 +952,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'children',
     'class',
     'material',
+    'materialColor',
     'glass',
     'texture',
     'shape',
@@ -980,7 +1007,6 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'textFontFamily',
     'textSizeRem',
     'contentOpacity',
-    'textTone',
     'contentTone',
     'iconTone',
     'contentGlowStrength',

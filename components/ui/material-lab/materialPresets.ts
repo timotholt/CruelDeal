@@ -1,7 +1,7 @@
 import { createMaterialRecipe, createMaterialStateOverlays } from './MaterialRecipeTypes';
 
 export const navTabMaterialRecipe = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 48,
   textureScale: 256,

@@ -252,27 +252,6 @@ type FeedCardTypes = Record<FeedCardTypeId, FeedCardTypeRecipe>;
 
 const storageKey = 'cruel-deal.main-material-preview.v23';
 const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
-const obsoleteStorageKeys = [
-  'cruel-deal.main-material-preview.v5',
-  'cruel-deal.main-material-preview.v6',
-  'cruel-deal.main-material-preview.v7',
-  'cruel-deal.main-material-preview.v8',
-  'cruel-deal.main-material-preview.v9',
-  'cruel-deal.main-material-preview.v10',
-  'cruel-deal.main-material-preview.v11',
-  'cruel-deal.main-material-preview.v12',
-  'cruel-deal.main-material-preview.v13',
-  'cruel-deal.main-material-preview.v14',
-  'cruel-deal.main-material-preview.v15',
-  'cruel-deal.main-material-preview.v16',
-  'cruel-deal.main-material-preview.v17',
-  'cruel-deal.main-material-preview.v18',
-  'cruel-deal.main-material-preview.v19',
-  'cruel-deal.main-material-preview.v20',
-  'cruel-deal.main-material-preview.v21',
-  'cruel-deal.main-material-preview.v22',
-];
-
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'backdrop', label: 'Backdrop', detail: 'second layer' },
   { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
@@ -625,7 +604,7 @@ const sanitizeStoryImageOverrides = (value: unknown): Record<string, string> => 
 };
 
 const defaultBackdropSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'background01',
   textureStrength: 100,
   textureScale: 512,
@@ -643,7 +622,7 @@ const defaultBackdropSurface = createMaterialRecipe({
 });
 
 const defaultTopBarSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 38,
   textureScale: 512,
@@ -660,7 +639,7 @@ const defaultTopBarSurface = createMaterialRecipe({
 });
 
 const defaultProfileSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone03',
   textureStrength: 44,
   textureScale: 256,
@@ -675,7 +654,7 @@ const defaultProfileSurface = createMaterialRecipe({
 });
 
 const defaultCurrencySurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone04',
   textureStrength: 26,
   textureScale: 256,
@@ -689,12 +668,12 @@ const defaultCurrencySurface = createMaterialRecipe({
   lightStrength: 34,
   darkStrength: 14,
   radius: 4,
-  textTone: 'black',
+  contentTone: 'black',
   textSizeRem: 0.6875,
 });
 
 const defaultFeedSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stoneGray01',
   textureStrength: 46,
   textureScale: 256,
@@ -714,7 +693,7 @@ const defaultFeedSurface = createMaterialRecipe({
 });
 
 const createFeedCtaSurface = () => createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stoneGray01',
   textureStrength: 54,
   textureScale: 256,
@@ -936,7 +915,7 @@ const createMissionBriefingTextSurface = () => createMaterialRecipe({
 });
 
 const createMissionBriefingBadgeSurface = () => createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stoneGray01',
   textureStrength: 70,
   textureScale: 512,
@@ -959,7 +938,7 @@ const createMissionBriefingBadgeSurface = () => createMaterialRecipe({
 });
 
 const createMissionBriefingCtaSurface = () => createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stoneGray01',
   textureStrength: 100,
   textureScale: 512,
@@ -1176,7 +1155,7 @@ const defaultFeedCardTypes = createDefaultFeedCardTypes();
 const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];
 
 const defaultToolbarSurface = createMaterialRecipe({
-  material: 'raw',
+  material: 'white',
   texture: 'stone03',
   textureStrength: 58,
   textureScale: 256,
@@ -1190,7 +1169,7 @@ const defaultToolbarSurface = createMaterialRecipe({
   lightStrength: 42,
   darkStrength: 28,
   radius: 6,
-  textTone: 'black',
+  contentTone: 'black',
   textSizeRem: 0.6875,
 });
 
@@ -1455,12 +1434,6 @@ const sanitizeFeedCardTypes = (value: unknown): FeedCardTypes => {
     const raw = typeof input[id] === 'object' && input[id] !== null ? input[id] as Partial<FeedCardTypeRecipe> : {};
     const fallback = defaultFeedCardTypes[id];
     const rawSlots = typeof raw.slots === 'object' && raw.slots !== null ? raw.slots : undefined;
-    const usesLegacyTextOverrideSchema = !rawSlots || !Object.values(rawSlots).some((rawSlot) => (
-      typeof rawSlot === 'object'
-      && rawSlot !== null
-      && 'overrideStyle' in rawSlot
-      && 'overrideParagraphGap' in rawSlot
-    ));
     next[id] = {
       ...fallback,
       name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name,
@@ -1473,7 +1446,7 @@ const sanitizeFeedCardTypes = (value: unknown): FeedCardTypes => {
           const sanitized = sanitizeFeedTextSlotStyle(rawSlots?.[slot], fallback.slots[slot]);
           const shouldInheritBodyWeight = (
             feedSlotsInheritingBodyWeight.has(slot)
-            && (usesLegacyTextOverrideSchema || sanitized.fontWeight === fallback.slots[slot].fontWeight)
+            && sanitized.fontWeight === fallback.slots[slot].fontWeight
           );
           return [
             slot,
@@ -3511,7 +3484,6 @@ export const MainMaterialPreviewScreen = () => {
 
   onMount(() => {
     try {
-      obsoleteStorageKeys.forEach((key) => window.localStorage.removeItem(key));
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw) as {
