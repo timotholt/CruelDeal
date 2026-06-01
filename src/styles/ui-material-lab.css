@@ -1000,8 +1000,11 @@
 }
 
 .cd-surface--border-lit {
+  box-shadow: var(--surface-drop-shadow);
+}
+
+.cd-surface--border-lit > .cd-surface__border {
   box-shadow:
-    var(--surface-drop-shadow),
     inset 0 1px 0 var(--border-top-shadow),
     inset 0 -1px 0 var(--border-bottom-shadow);
 }
