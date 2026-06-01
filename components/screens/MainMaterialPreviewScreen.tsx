@@ -149,7 +149,7 @@ type FeedMediaFadeMode = 'none' | 'top-dark' | 'bottom-dark' | 'left-dark' | 'ri
 type FeedCardNodeType = 'container' | 'text' | 'button';
 type FeedNodeAlign = 'left' | 'center' | 'right';
 type FeedNodeJustify = 'start' | 'center' | 'end';
-type FeedTextEmbossMode = 'none' | 'dark' | 'light';
+type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
 type FeedTextTransformToken = TextTransformToken | 'inherit';
 type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
 
@@ -210,6 +210,7 @@ interface FeedTextSlotStyle {
   textTransform: FeedTextTransformToken;
   textEmbossMode: FeedTextEmbossMode;
   textEmbossStrength: number;
+  textEmbossBlur: number;
   letterSpacing: number;
   textOpacity: number;
   textAlign: ContentAlign;
@@ -778,6 +779,7 @@ const createFeedSlotStyle = (overrides: Partial<FeedTextSlotStyle> = {}): FeedTe
   textTransform: 'uppercase',
   textEmbossMode: 'dark',
   textEmbossStrength: 100,
+  textEmbossBlur: 50,
   letterSpacing: 0,
   textOpacity: 90,
   textAlign: 'center',
@@ -912,23 +914,24 @@ const createMissionBriefingPanelSurface = () => createMaterialRecipe({
   texture: 'none',
   textureStrength: 0,
   textureScale: 512,
-  glass: false,
-  glassOpacity: 0,
+  glass: true,
+  glassOpacity: 41,
+  glassReflectionOpacity: 52,
   glassBlur: 3,
-  glassHighlightWidth: 0,
-  glassHighlightHeight: 0,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 2,
   glassHighlightY: 0,
   bevelCorners: ['top-right'],
   bevelSize: 18,
-  tint: 'black',
+  tint: 'none',
   tintStrength: 42,
   gradient: 'none',
   border: ['top', 'left'],
   borderColor: 'custom',
   borderCustomColor: '#c2c2c2',
   borderOpacity: 49,
-  lightStrength: 10,
-  darkStrength: 10,
+  lightStrength: 5,
+  darkStrength: 0,
   sheen: false,
   edgeWearTexture: 'edge-bw-noise-dense',
   edgeWearOpacity: 45,
@@ -1448,10 +1451,11 @@ const sanitizeFeedTextSlotStyle = (value: unknown, fallback: FeedTextSlotStyle):
     textTransform: input.textTransform === 'inherit' || isOneOf(input.textTransform, materialRecipeTextTransforms)
       ? input.textTransform
       : fallback.textTransform,
-    textEmbossMode: isOneOf(input.textEmbossMode, ['none', 'dark', 'light'] as const)
+    textEmbossMode: isOneOf(input.textEmbossMode, ['none', 'dark', 'light', 'shadow'] as const)
       ? input.textEmbossMode
       : fallback.textEmbossMode,
     textEmbossStrength: clamp(input.textEmbossStrength, fallback.textEmbossStrength ?? 100, 0, 100),
+    textEmbossBlur: clamp(input.textEmbossBlur, fallback.textEmbossBlur ?? 50, 0, 100),
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
     textOpacity: clamp(input.textOpacity, fallback.textOpacity ?? 90, 0, 100),
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
@@ -2106,7 +2110,7 @@ const FeedRecipeEditor = (props: {
                   <div class="ui-lab-toggles">
                     <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'dark'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'dark')}>dark</MiniButton>
                     <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'light'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'light')}>light</MiniButton>
-                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'none'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'none')}>none</MiniButton>
+                    <MiniButton disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss} active={selectedNodeTextStyle()?.textEmbossMode === 'shadow'} onClick={() => updateSelectedNodeTextStyle('textEmbossMode', 'shadow')}>shadow</MiniButton>
                   </div>
                 </div>
                 <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
@@ -2117,6 +2121,16 @@ const FeedRecipeEditor = (props: {
                     max={100}
                     disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss}
                     onInput={(value) => updateSelectedNodeTextStyle('textEmbossStrength', value)}
+                  />
+                </div>
+                <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideEmboss ? '' : 'ui-lab-control-row--disabled'}`}>
+                  <span>Blur</span>
+                  <Slider
+                    value={selectedNodeTextStyle()?.textEmbossBlur ?? 50}
+                    min={0}
+                    max={100}
+                    disabled={!selectedNodeTextCustom() || !selectedNodeTextStyle()?.overrideEmboss}
+                    onInput={(value) => updateSelectedNodeTextStyle('textEmbossBlur', value)}
                   />
                 </div>
                 <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideAlign ? '' : 'ui-lab-control-row--disabled'}`}>
@@ -2380,12 +2394,16 @@ const FeedTextGlobalsEditor = (props: {
                 <div class="ui-lab-toggles">
                   <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'dark'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'dark')}>dark</MiniButton>
                   <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'light'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'light')}>light</MiniButton>
-                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'none'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'none')}>none</MiniButton>
+                  <MiniButton disabled={!embossEnabled()} active={slot(row.slot).textEmbossMode === 'shadow'} onClick={() => props.onSlotChange(row.slot, 'textEmbossMode', 'shadow')}>shadow</MiniButton>
                 </div>
               </div>
               <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
                 <span>Power</span>
                 <Slider value={slot(row.slot).textEmbossStrength} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossStrength', value)} />
+              </div>
+              <div class={`ui-lab-control-row ${embossEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+                <span>Blur</span>
+                <Slider value={slot(row.slot).textEmbossBlur} min={0} max={100} disabled={!embossEnabled()} onInput={(value) => props.onSlotChange(row.slot, 'textEmbossBlur', value)} />
               </div>
             </Show>
           </div>
@@ -2498,16 +2516,35 @@ const feedToneColors: Record<MaterialTone, string> = {
 
 const feedTextEmbossShadow = (style: FeedTextSlotStyle) => {
   if (style.textEmbossMode === 'none' || style.textEmbossStrength <= 0) return 'none';
-  const strength = Math.max(0, Math.min(100, style.textEmbossStrength)) / 100;
-  if (style.textEmbossMode === 'light') {
+  const s = Math.max(0, Math.min(100, style.textEmbossStrength)) / 100;
+  // Offset and blur grow with strength so the Power slider has a visible range.
+  const off = 1 + Math.round(2 * s); // 1px..3px
+  const blur = Math.round(6 * s); // 0px..6px
+  if (style.textEmbossMode === 'shadow') {
+    // Directional cast shadow, down-right. Power = cast distance + darkness,
+    // Blur = separate softness control.
+    const dist = 1 + Math.round(9 * s); // 1px..10px cast distance
+    const dx = Math.round(dist * 0.7);
+    const dy = dist;
+    const blurAmt = Math.round((style.textEmbossBlur ?? 50) / 100 * 16); // 0px..16px
     return [
-      `0 1px 0 rgb(255 255 255 / ${0.48 * strength})`,
-      `0 -1px 0 rgb(0 0 0 / ${0.16 * strength})`,
+      `${dx}px ${dy}px ${blurAmt}px rgb(0 0 0 / ${0.9 * s})`,
+      `${Math.round(dx * 0.55)}px ${Math.round(dy * 0.55)}px ${Math.max(1, Math.round(blurAmt * 0.6))}px rgb(0 0 0 / ${0.7 * s})`,
     ].join(', ');
   }
+  if (style.textEmbossMode === 'light') {
+    // Raised/letterpress-light: bright highlight up top, dark relief below.
+    return [
+      `0 -${off}px 0 rgb(255 255 255 / ${0.85 * s})`,
+      `0 ${off}px 0 rgb(0 0 0 / ${0.55 * s})`,
+      `0 ${off}px ${blur + 1}px rgb(0 0 0 / ${0.4 * s})`,
+    ].join(', ');
+  }
+  // Raised/engraved-dark: hard dark relief below, subtle highlight up top for the bevel edge.
   return [
-    `0 1px 0 rgb(0 0 0 / ${0.72 * strength})`,
-    `0 0 ${Math.max(1, Math.round(8 * strength))}px rgb(0 0 0 / ${0.34 * strength})`,
+    `0 ${off}px 0 rgb(0 0 0 / ${0.9 * s})`,
+    `0 ${off}px ${blur + 2}px rgb(0 0 0 / ${0.5 * s})`,
+    `0 -1px 0 rgb(255 255 255 / ${0.3 * s})`,
   ].join(', ');
 };
 
@@ -2521,6 +2558,7 @@ const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle 
   textTransform: recipe.textTransform || 'uppercase',
   textEmbossMode: recipe.textEmboss ? (recipe.contentTone === 'black' ? 'light' : 'dark') : 'none',
   textEmbossStrength: 100,
+  textEmbossBlur: 50,
   letterSpacing: recipe.letterSpacing,
   textOpacity: recipe.contentOpacity ?? 90,
   textAlign: recipe.textAlign,
@@ -3912,11 +3950,59 @@ export const MainMaterialPreviewScreen = () => {
     setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
 
+  const applyParsedState = (parsed: Record<string, unknown>) => {
+    setBackdrop(sanitizeBackdrop(parsed.backdrop));
+    setTitle(sanitizeTitle(parsed.title));
+    setFeed(sanitizeFeed(parsed.feed));
+    setFeedStories(sanitizeFeedStories(parsed.feedStories));
+    setFeedCardTypes(sanitizeFeedCardTypes(parsed.feedCardTypes));
+    setFeedStoryImageOverrides(sanitizeStoryImageOverrides(parsed.feedStoryImageOverrides));
+    setSelectedFeedStoryId(
+      typeof parsed.selectedFeedStoryId === 'string' && feedStories().some((story) => story.id === parsed.selectedFeedStoryId)
+        ? parsed.selectedFeedStoryId
+        : mockFeedStories[0].id,
+    );
+    setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
+    if (
+      typeof parsed.selectedFeedTargetId === 'string'
+      && parsed.selectedFeedTargetId.startsWith(feedCardMaterialTargetPrefix)
+      && parseFeedMaterialTargetId(parsed.selectedFeedTargetId)
+    ) {
+      setSelectedFeedTargetId(parsed.selectedFeedTargetId as FeedMaterialTargetId);
+    } else {
+      setSelectedFeedTargetId(feedCardMaterialTargetId(editingFeedCardTypeId()));
+    }
+    setNav(sanitizeNav(parsed.nav));
+    setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
+  };
+
+  const importJson = async () => {
+    let text: string;
+    try {
+      text = (await navigator.clipboard?.readText()) || '';
+    } catch {
+      text = '';
+    }
+    if (!text.trim()) {
+      text = window.prompt('Paste exported material JSON') || '';
+    }
+    if (!text.trim()) return;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      window.alert('Import failed: clipboard does not contain valid JSON.');
+      return;
+    }
+    applyParsedState(parsed);
+  };
+
   const exportJson = () => {
     void navigator.clipboard?.writeText(JSON.stringify({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
+      feedStories: feedStories(),
       feedCardTypes: feedCardTypes(),
       feedStoryImageOverrides: feedStoryImageOverrides(),
       selectedFeedStoryId: selectedFeedStoryId(),
@@ -4238,7 +4324,10 @@ export const MainMaterialPreviewScreen = () => {
         <>
           {selectionOverlayControl}
           {interactionModeControl}
-          <button type="button" class="ui-lab-mini-button" onClick={exportJson}>Export</button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={exportJson}>Export</button>
+            <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={() => void importJson()}>Import</button>
+          </div>
         </>
       )}
       footer={(
