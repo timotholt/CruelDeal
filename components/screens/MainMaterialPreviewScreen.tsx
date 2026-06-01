@@ -120,7 +120,7 @@ interface SurfaceRecipes {
   navContainer: MaterialRecipe;
 }
 
-type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03';
+type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03' | 'card_type_04';
 type FeedTextSlotId =
   | 'eyebrow'
   | 'title'
@@ -566,8 +566,32 @@ const feedMediaFadeLabels: Record<FeedMediaFadeMode, string> = {
 const mockFeedStories: FeedStory[] = [
   {
     id: "season-pass-cosmic-eclipse",
-    label: "Mission Briefing",
+    label: "Mission Briefing V1",
     cardTypeId: "card_type_01",
+    image: "/art/login/main-menu-contract-reference.png",
+    eyebrow: "[accent]//[/accent] Active Contract",
+    title: "[h1]Cosmic\nEclipse[/h1]",
+    body: "A new era of power. Claim the darkness.",
+    meta: "03 days left",
+    ctaLabel: "View Season",
+    contractBadge: "03 Days Left",
+    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,800 [acc1]K[/acc1][/h3]",
+    contractEyebrow: "[accent]//[/accent] Active Contract",
+    contractTitle: "[h1]Data\nExtraction[/h1]",
+    contractBody: "[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.",
+    contractRewardLabel: "Reward",
+    contractRewardValue: "1,850 [accent]CR[/accent]",
+    contractRule: "",
+    contractCtaLabel: "View Contract ",
+    seasonBadge: "03 Days Left",
+    seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
+    seasonEyebrow: "[accent]//[/accent] Season Pass",
+    sectorLabel: "Sector\n[black]07[/black]",
+  },
+  {
+    id: "season-pass-cosmic-eclipse-v2",
+    label: "Mission Briefing V2",
+    cardTypeId: "card_type_04",
     image: "/art/login/main-menu-contract-reference.png",
     eyebrow: "[accent]//[/accent] Active Contract",
     title: "[h1]Cosmic\nEclipse[/h1]",
@@ -2359,10 +2383,10 @@ const createFeedSlots = (
   }),
 ) as Record<FeedTextSlotId, FeedTextSlotStyle>;
 
-const createDefaultFeedCardTypes = (): FeedCardTypes => ({
+const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'> => ({
   card_type_01: {
     id: "card_type_01",
-    name: "mission_briefing_left_01",
+    name: "Mission Briefing V1",
     description: "Mission briefing layout with a left contract card and right season card.",
     surface: {
       material: "none",
@@ -9349,9 +9373,6 @@ const createDefaultFeedCardTypes = (): FeedCardTypes => ({
   },
 });
 
-const defaultFeedCardTypes = createDefaultFeedCardTypes();
-const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];
-
 const defaultToolbarSurface = createMaterialRecipe({
   material: "white",
   materialColor: "#808080",
@@ -9641,7 +9662,22 @@ const cloneFeedCardTypes = (cardTypes: FeedCardTypes): FeedCardTypes => ({
   card_type_01: cloneFeedCardType(cardTypes.card_type_01),
   card_type_02: cloneFeedCardType(cardTypes.card_type_02),
   card_type_03: cloneFeedCardType(cardTypes.card_type_03),
+  card_type_04: cloneFeedCardType(cardTypes.card_type_04),
 });
+
+const defaultFeedCardTypes = (() => {
+  const cardTypes = createDefaultFeedCardTypes();
+  return {
+    ...cardTypes,
+    card_type_04: {
+      ...cloneFeedCardType(cardTypes.card_type_01),
+      id: 'card_type_04',
+      name: 'Mission Briefing V2',
+      description: 'Duplicate mission briefing layout for v2 experimentation.',
+    },
+  };
+})();
+const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];
 
 const recipeTextItems = (recipe: MaterialRecipe) => (
   recipe.textContent
@@ -12056,13 +12092,19 @@ export const MainMaterialPreviewScreen = () => {
     children: node.children?.map((child) => feedNodeMaterialTarget(cardType, child)) || [],
   });
 
+  const feedCardMaterialTargetLabel = (cardType: FeedCardTypeRecipe, index: number) => (
+    cardType.name && !cardType.name.startsWith('card_type_')
+      ? cardType.name
+      : `Feed Card ${index + 1}`
+  );
+
   const feedMaterialTargets = (): MaterialEditableTarget[] => {
     const cardTypes = feedCardTypes();
     return feedCardTypeIds.map((cardTypeId, index) => {
       const cardType = cardTypes[cardTypeId];
       return {
         id: feedCardMaterialTargetId(cardTypeId),
-        label: `Feed Card ${index + 1}`,
+        label: feedCardMaterialTargetLabel(cardType, index),
         recipe: cardType.surface,
         capabilities: materialEditorCapabilitiesByPart.feedCards,
         onChange: (recipe) => updateFeedCardTypeSurface(cardTypeId, recipe),
