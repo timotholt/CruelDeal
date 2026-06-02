@@ -1,7 +1,6 @@
 import { children, JSX, Match, Switch } from 'solid-js';
 import {
-  MaterialButton,
-  MaterialPanel,
+  MaterialSurfaceHost,
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToStaticSurfaceProps,
   materialRecipeToSurfaceProps,
@@ -46,11 +45,12 @@ export const MaterialNodeSurface = (props: {
   return (
     <Switch>
       <Match when={props.node.kind === 'button'}>
-        <MaterialButton
-          {...buttonProps()}
-          type="button"
-          size={props.context.buttonSizeForNode?.(props.node)}
-          fullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
+        <MaterialSurfaceHost
+          kind="button"
+          surfaceProps={buttonProps()}
+          buttonType="button"
+          buttonSize={props.context.buttonSizeForNode?.(props.node)}
+          buttonFullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
           class={props.class}
           onClick={() => props.context.onNodeAction?.(props.node)}
           label={resolvedChildren()}
@@ -66,13 +66,14 @@ export const MaterialNodeSurface = (props: {
         {resolvedChildren()}
       </Match>
       <Match when={props.node.kind !== 'slot'}>
-        <MaterialPanel
-          {...surfaceProps()}
+        <MaterialSurfaceHost
+          kind="panel"
+          surfaceProps={surfaceProps()}
           padded={false}
           class={props.class}
         >
           {resolvedChildren()}
-        </MaterialPanel>
+        </MaterialSurfaceHost>
       </Match>
       <Match when={true}>
         {null}

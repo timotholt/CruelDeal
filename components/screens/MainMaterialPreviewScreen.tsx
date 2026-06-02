@@ -2,10 +2,10 @@ import { createEffect, createSignal, For, JSX, onCleanup, onMount, Show } from '
 import '../../src/styles/ui-material-lab.css';
 import '../../src/styles/main-material-preview.css';
 import {
-  MaterialButton,
   type MaterialEditorCapabilities,
   MaterialPanel,
   MaterialRecipeEditor,
+  MaterialSurfaceHost,
   MaterialWorkbenchLayout,
   SectionLabel,
   cloneMaterialRecipe,
@@ -11612,23 +11612,25 @@ const FeedCardTreeNode = (props: {
           when={props.node.type === 'button'}
           fallback={(
             <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
-              <MaterialPanel
-                {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
+              <MaterialSurfaceHost
+                kind="panel"
+                surfaceProps={materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
                 padded={false}
                 class={`main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${props.node.binding || 'unbound'}`}
               >
                 <span class="main-material-card-node-text" style={textStyle()}>
                   <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
                 </span>
-              </MaterialPanel>
+              </MaterialSurfaceHost>
             </FeedNodeFrame>
           )}
         >
           <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
-            <MaterialButton
-              {...materialRecipeItemProps(surfaceRecipe(), 0, visualState())}
-              size="sm"
-              fullWidth
+            <MaterialSurfaceHost
+              kind="button"
+              surfaceProps={materialRecipeItemProps(surfaceRecipe(), 0, visualState())}
+              buttonSize="sm"
+              buttonFullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
               label={(
                 <MaterialTextContent
@@ -11652,8 +11654,9 @@ const FeedCardTreeNode = (props: {
       )}
     >
       <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
-        <MaterialPanel
-          {...materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
+        <MaterialSurfaceHost
+          kind="panel"
+          surfaceProps={materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
           padded={false}
           class={`main-material-card-node-surface ${props.node.binding ? 'main-material-card-node-surface--markup' : ''} ${props.node.binding && props.node.children?.length ? 'main-material-card-node-surface--flow' : ''}`}
         >
@@ -11662,7 +11665,7 @@ const FeedCardTreeNode = (props: {
               <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
             </span>
           </Show>
-        </MaterialPanel>
+        </MaterialSurfaceHost>
         <For each={props.node.children || []}>
           {(child) => (
             <FeedCardTreeNode
@@ -11758,7 +11761,14 @@ const FeedCarousel = (props: {
             const imageSource = () => props.storyImageOverrides[story.id] || story.image;
             return (
               <div class="main-material-feed-slide">
-                <div
+                <MaterialSurfaceHost
+                  kind="panel"
+                  surfaceProps={materialSurfacePropsForPart(
+                    'feedCards',
+                    cardType().surface,
+                    props.surfaceStateForTarget(feedCardMaterialTargetId(cardType().id), 'container'),
+                  )}
+                  padded={false}
                   class={`main-material-feed-slide-material ${props.selectedFeedTargetClass(feedCardMaterialTargetId(cardType().id))}`}
                 >
                   <Show when={cardType().backgroundImage.enabled}>
@@ -11790,7 +11800,7 @@ const FeedCarousel = (props: {
                       )}
                     </For>
                   </div>
-                </div>
+                </MaterialSurfaceHost>
               </div>
             );
           }}
