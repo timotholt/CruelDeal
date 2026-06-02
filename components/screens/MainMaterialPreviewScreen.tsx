@@ -320,6 +320,62 @@ const feedCardMaterialTargetPrefix = 'feed:card:';
 const feedCardMaterialTargetId = (cardTypeId: FeedCardTypeId): FeedMaterialTargetId => `feed:card:${cardTypeId}`;
 const feedMaterialTargetIdForNode = (cardTypeId: FeedCardTypeId, nodeId: string): FeedMaterialTargetId => `feed:card:${cardTypeId}:node:${nodeId}`;
 
+const topBarTextFit = {
+  baseFontSize: 0.82,
+  minScale: 0.05,
+  maxScale: 1,
+  textStyle: {
+    fontFamily: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif',
+    fontWeight: 900,
+    fontStyle: 'italic',
+    letterSpacing: '-0.03em',
+    lineHeight: 0.95,
+    textTransform: 'uppercase',
+  },
+} as const;
+
+const currencyTextFit = {
+  baseFontSize: 0.62,
+  minScale: 0.35,
+  maxScale: 1,
+  textStyle: {
+    fontFamily: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif',
+    fontWeight: 900,
+    fontStyle: 'italic',
+    letterSpacing: '-0.04em',
+    lineHeight: 0.95,
+    textTransform: 'uppercase',
+  },
+} as const;
+
+const navTextFit = {
+  baseFontSize: 0.58,
+  minScale: 0.34,
+  maxScale: 1,
+  textStyle: {
+    fontFamily: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif',
+    fontWeight: 900,
+    fontStyle: 'normal',
+    letterSpacing: '-0.02em',
+    lineHeight: 0.95,
+    textTransform: 'uppercase',
+  },
+} as const;
+
+const toolbarTextFit = {
+  baseFontSize: 0.66,
+  minScale: 0.35,
+  maxScale: 1,
+  textStyle: {
+    fontFamily: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif',
+    fontWeight: 900,
+    fontStyle: 'italic',
+    letterSpacing: '-0.04em',
+    lineHeight: 0.9,
+    textTransform: 'uppercase',
+  },
+} as const;
+
 const parseFeedMaterialTargetId = (targetId: string) => {
   if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
   const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
@@ -11528,7 +11584,20 @@ const FeedCardTreeNode = (props: {
   surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
 }) => {
-  const textStyle = () => feedTextCss(resolveFeedNodeTextStyle(props.cardType, props.node));
+  const resolvedTextStyle = () => resolveFeedNodeTextStyle(props.cardType, props.node);
+  const textStyle = () => feedTextCss(resolvedTextStyle());
+  const fitTextTransform = () => {
+    const transform = feedRichTextTransform(resolvedTextStyle());
+    return transform === 'inherit' ? 'uppercase' : transform;
+  };
+  const fitTextStyle = () => ({
+    fontFamily: resolvedTextStyle().textFontFamily === 'inherit' ? feedFontDin : resolvedTextStyle().textFontFamily,
+    fontWeight: fontWeightTokenValue(resolvedTextStyle().fontWeight),
+    fontStyle: resolvedTextStyle().fontStyle,
+    letterSpacing: `${resolvedTextStyle().letterSpacing}em`,
+    lineHeight: resolvedTextStyle().lineHeight,
+    textTransform: fitTextTransform(),
+  });
   const content = () => feedStoryValue(props.story, props.node.binding);
   const surfaceRecipe = () => feedNodeSurfaceRecipe(props.cardType, props.node);
   const targetId = () => feedMaterialTargetIdForNode(props.cardType.id, props.node.id);
@@ -11564,9 +11633,16 @@ const FeedCardTreeNode = (props: {
               label={(
                 <MaterialTextContent
                   text={content()}
-                  renderMode="raw"
+                  renderMode="fit"
                   fitMode={(props.node.layout.height <= 14 ? 'single-line' : 'paragraph')}
                   maxLines={props.node.layout.height <= 14 ? 1 : 2}
+                  fit={{
+                    baseFontSize: Math.max(0.35, resolvedTextStyle().textSizeRem),
+                    minScale: 0.26,
+                    maxScale: 1,
+                    align: props.node.layout.align === 'right' ? 'right' : props.node.layout.align === 'center' ? 'center' : 'left',
+                    textStyle: fitTextStyle(),
+                  }}
                   style={textStyle()}
                 />
               )}
@@ -11868,7 +11944,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'momentary',
-    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
+    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: currencyTextFit },
   }));
   const topBarNode: MaterialNodeRecipe = {
     id: 'topbar-root',
@@ -11888,7 +11964,7 @@ const MainMaterialPreview = (props: {
         label: 'Commander',
         kind: 'text',
         role: 'text',
-        content: { mode: 'plain', text: 'COMMANDER', textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
+        content: { mode: 'plain', text: 'COMMANDER', textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: topBarTextFit },
       },
       {
         id: 'topbar-currencies',
@@ -11986,7 +12062,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'selectable',
-    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
+    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: navTextFit },
   }));
   const navNodeIndex = (node: MaterialNodeRecipe) => navNodes.findIndex((item) => item.id === node.id);
   const navNodeTargetId = (node: MaterialNodeRecipe) => navItemTargetId(Math.max(0, navNodeIndex(node)));
@@ -12023,7 +12099,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'momentary',
-    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: item.text.includes('\n') ? 'fixed-lines' : 'single-line', maxLines: item.text.includes('\n') ? 2 : 1 },
+    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: item.text.includes('\n') ? 'fixed-lines' : 'single-line', maxLines: item.text.includes('\n') ? 2 : 1, fit: toolbarTextFit },
   }));
   const toolbarNodeIndex = (node: MaterialNodeRecipe) => toolbarNodes.findIndex((item) => item.id === node.id);
   const toolbarNodeClass = (index: number) => [

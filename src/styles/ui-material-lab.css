@@ -1576,6 +1576,7 @@
 
 .cd-button__label {
   min-width: 0;
+  flex: 1 1 auto;
   color: rgb(var(--content-rgb) / var(--content-alpha));
   font-size: var(--content-size);
   font-weight: var(--content-font-weight);
@@ -1585,6 +1586,16 @@
   text-align: center;
   text-shadow: var(--content-shadow), var(--content-glow-shadow);
   text-transform: var(--content-text-transform);
+}
+
+.material-text-content {
+  min-width: 0;
+}
+
+.material-text-content--fit {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .cd-button__icon {

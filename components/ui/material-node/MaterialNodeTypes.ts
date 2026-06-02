@@ -5,6 +5,7 @@ import type {
   MaterialRecipe,
   MaterialRecipeState,
 } from '../material-lab';
+import type { MaterialTextFitOptions } from './MaterialTextContent';
 
 export type MaterialNodeKind = 'container' | 'button' | 'text' | 'media' | 'slot';
 
@@ -46,6 +47,7 @@ export interface MaterialNodeContent {
   textRender?: MaterialNodeTextRenderMode;
   fitMode?: MaterialNodeTextFitMode;
   maxLines?: number;
+  fit?: MaterialTextFitOptions;
   className?: string;
   style?: JSX.CSSProperties;
   richText?: (value: string) => JSX.Element;

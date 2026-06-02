@@ -28,6 +28,7 @@ export const MaterialNodeContentRenderer = (props: {
           renderMode="rich"
           fitMode={props.node.content?.fitMode}
           maxLines={props.node.content?.maxLines}
+          fit={props.node.content?.fit}
           class={props.node.content?.className}
           style={props.node.content?.style}
           richText={props.node.content?.richText}
@@ -39,6 +40,7 @@ export const MaterialNodeContentRenderer = (props: {
           renderMode={props.node.content?.textRender ?? 'raw'}
           fitMode={props.node.content?.fitMode}
           maxLines={props.node.content?.maxLines}
+          fit={props.node.content?.fit}
           class={props.node.content?.className}
           style={props.node.content?.style}
         />
