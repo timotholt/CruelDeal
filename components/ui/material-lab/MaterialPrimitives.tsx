@@ -1,4 +1,4 @@
-import { createMemo, For, JSX, Show, splitProps } from 'solid-js';
+import { children, createMemo, For, JSX, Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
 import type {
@@ -123,6 +123,7 @@ export interface MaterialButtonProps extends SurfaceOptions, Omit<JSX.ButtonHTML
   icon?: JSX.Element;
   iconRight?: JSX.Element;
   iconPosition?: IconPosition;
+  label?: JSX.Element;
   fullWidth?: boolean;
   pressed?: boolean;
   visualState?: Exclude<MaterialRecipeState, 'hover'>;
@@ -1041,6 +1042,7 @@ export const MaterialButton = (props: MaterialButtonProps) => {
     'icon',
     'iconRight',
     'iconPosition',
+    'label',
     'fullWidth',
     'pressed',
     'disabled',
@@ -1078,7 +1080,8 @@ export const MaterialButton = (props: MaterialButtonProps) => {
   const size = () => local.size || 'md';
   const iconPosition = () => local.iconPosition || 'left';
   const hasTopIcon = () => iconPosition() === 'top';
-  const label = () => local.textContent || local.children;
+  const resolvedChildren = children(() => local.children);
+  const label = () => local.label ?? local.textContent ?? resolvedChildren();
 
   return (
     <MaterialSurface

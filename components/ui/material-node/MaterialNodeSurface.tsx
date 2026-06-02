@@ -1,4 +1,4 @@
-import { JSX, Match, Switch } from 'solid-js';
+import { children, JSX, Match, Switch } from 'solid-js';
 import {
   MaterialButton,
   MaterialPanel,
@@ -41,6 +41,7 @@ export const MaterialNodeSurface = (props: {
     ?? materialNodeSurfaceProps(props.node, props.role, props.visualState);
   const buttonProps = () => props.context.buttonPropsForNode?.(props.node, props.role, props.visualState)
     ?? materialNodeButtonProps(props.node, props.role, props.visualState === 'hover' ? 'rest' : props.visualState);
+  const resolvedChildren = children(() => props.children);
 
   return (
     <Switch>
@@ -52,18 +53,17 @@ export const MaterialNodeSurface = (props: {
           fullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
           class={props.class}
           onClick={() => props.context.onNodeAction?.(props.node)}
-        >
-          {props.children}
-        </MaterialButton>
+          label={resolvedChildren()}
+        />
       </Match>
       <Match when={props.node.kind === 'text' && !props.node.surface}>
-        {props.children}
+        {resolvedChildren()}
       </Match>
       <Match when={props.node.kind === 'media' && !props.node.surface}>
-        {props.children}
+        {resolvedChildren()}
       </Match>
       <Match when={props.node.kind === 'slot'}>
-        {props.children}
+        {resolvedChildren()}
       </Match>
       <Match when={props.node.kind !== 'slot'}>
         <MaterialPanel
@@ -71,7 +71,7 @@ export const MaterialNodeSurface = (props: {
           padded={false}
           class={props.class}
         >
-          {props.children}
+          {resolvedChildren()}
         </MaterialPanel>
       </Match>
       <Match when={true}>

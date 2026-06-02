@@ -1,5 +1,6 @@
 import { Match, Show, Switch } from 'solid-js';
 import { resolveMaterialNodeContent } from './MaterialNodeBindings';
+import { MaterialTextContent } from './MaterialTextContent';
 import type { MaterialNodeRecipe, MaterialNodeRenderContext } from './MaterialNodeTypes';
 
 export const MaterialNodeContentRenderer = (props: {
@@ -22,10 +23,25 @@ export const MaterialNodeContentRenderer = (props: {
         </Show>
       </Match>
       <Match when={mode() === 'rich'}>
-        {props.node.content?.richText?.(text()) ?? text()}
+        <MaterialTextContent
+          text={text()}
+          renderMode="rich"
+          fitMode={props.node.content?.fitMode}
+          maxLines={props.node.content?.maxLines}
+          class={props.node.content?.className}
+          style={props.node.content?.style}
+          richText={props.node.content?.richText}
+        />
       </Match>
       <Match when={true}>
-        {text()}
+        <MaterialTextContent
+          text={text()}
+          renderMode={props.node.content?.textRender ?? 'raw'}
+          fitMode={props.node.content?.fitMode}
+          maxLines={props.node.content?.maxLines}
+          class={props.node.content?.className}
+          style={props.node.content?.style}
+        />
       </Match>
     </Switch>
   );

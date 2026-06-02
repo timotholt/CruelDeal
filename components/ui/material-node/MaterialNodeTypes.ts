@@ -11,6 +11,8 @@ export type MaterialNodeKind = 'container' | 'button' | 'text' | 'media' | 'slot
 export type MaterialNodeRole = 'static' | 'container' | 'text' | 'momentary' | 'selectable' | 'disclosure';
 
 export type MaterialNodeContentMode = 'plain' | 'rich' | 'icon' | 'media' | 'none';
+export type MaterialNodeTextRenderMode = 'raw' | 'rich' | 'fit';
+export type MaterialNodeTextFitMode = 'single-line' | 'fixed-lines' | 'paragraph';
 
 export interface MaterialNodeLayout {
   className?: string;
@@ -41,6 +43,9 @@ export interface MaterialNodeContent {
   mediaSrc?: string;
   mediaAlt?: string;
   iconKey?: string;
+  textRender?: MaterialNodeTextRenderMode;
+  fitMode?: MaterialNodeTextFitMode;
+  maxLines?: number;
   className?: string;
   style?: JSX.CSSProperties;
   richText?: (value: string) => JSX.Element;

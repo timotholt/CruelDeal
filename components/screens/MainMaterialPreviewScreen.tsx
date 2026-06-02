@@ -36,6 +36,7 @@ import {
 import {
   MaterialNodeButtonBar,
   MaterialNodeRenderer,
+  MaterialTextContent,
   type MaterialNodeRecipe,
   type MaterialNodeRenderContext,
 } from '../ui/material-node';
@@ -11560,10 +11561,16 @@ const FeedCardTreeNode = (props: {
               size="sm"
               fullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
-              style={{ ...textStyle(), transform: undefined }}
-            >
-              {content()}
-            </MaterialButton>
+              label={(
+                <MaterialTextContent
+                  text={content()}
+                  renderMode="raw"
+                  fitMode={(props.node.layout.height <= 14 ? 'single-line' : 'paragraph')}
+                  maxLines={props.node.layout.height <= 14 ? 1 : 2}
+                  style={textStyle()}
+                />
+              )}
+            />
           </FeedNodeFrame>
         </Show>
       )}
@@ -11861,7 +11868,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'momentary',
-    content: { mode: 'plain', text: item.text },
+    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
   }));
   const topBarNode: MaterialNodeRecipe = {
     id: 'topbar-root',
@@ -11881,7 +11888,7 @@ const MainMaterialPreview = (props: {
         label: 'Commander',
         kind: 'text',
         role: 'text',
-        content: { mode: 'plain', text: 'COMMANDER' },
+        content: { mode: 'plain', text: 'COMMANDER', textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
       },
       {
         id: 'topbar-currencies',
@@ -11979,7 +11986,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'selectable',
-    content: { mode: 'plain', text: item.text },
+    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: 'single-line', maxLines: 1 },
   }));
   const navNodeIndex = (node: MaterialNodeRecipe) => navNodes.findIndex((item) => item.id === node.id);
   const navNodeTargetId = (node: MaterialNodeRecipe) => navItemTargetId(Math.max(0, navNodeIndex(node)));
@@ -12016,7 +12023,7 @@ const MainMaterialPreview = (props: {
     label: item.label,
     kind: 'button',
     role: 'momentary',
-    content: { mode: 'plain', text: item.text },
+    content: { mode: 'plain', text: item.text, textRender: 'raw', fitMode: item.text.includes('\n') ? 'fixed-lines' : 'single-line', maxLines: item.text.includes('\n') ? 2 : 1 },
   }));
   const toolbarNodeIndex = (node: MaterialNodeRecipe) => toolbarNodes.findIndex((item) => item.id === node.id);
   const toolbarNodeClass = (index: number) => [
