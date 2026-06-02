@@ -71,6 +71,58 @@
   text-transform: uppercase;
 }
 
+.game-text-test-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.24);
+}
+
+.game-text-test-filter-group {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.game-text-test-filter-group strong {
+  flex: 0 0 100%;
+  color: #efc85d;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.game-text-test-filter-group label {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.045);
+  color: rgb(244 238 224 / 0.74);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.game-text-test-filter-group input {
+  width: 13px;
+  height: 13px;
+  accent-color: #efc85d;
+}
+
 .game-text-test-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

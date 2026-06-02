@@ -35,6 +35,53 @@ function AppContent() {
   );
 }
 
+const devLinks = [
+  {
+    href: '/gametext-test',
+    title: 'GameText V1 Test',
+    detail: 'Legacy fit-text lab',
+  },
+  {
+    href: '/gametextv2-test',
+    title: 'GameText V2 Test',
+    detail: 'Fit modes, style matrix, and script stress tests',
+  },
+  {
+    href: '/uitest',
+    title: 'Material UI Editor',
+    detail: 'Material primitives and recipe editor',
+  },
+  {
+    href: '/main-material',
+    title: 'Main Material Editor',
+    detail: 'Main screen skin and node editor',
+  },
+];
+
+const DevIndexScreen = () => (
+  <main class="min-h-full overflow-auto bg-[#080908] text-[#f4eee0]">
+    <div class="mx-auto grid w-[min(920px,calc(100vw-32px))] gap-5 py-8">
+      <header class="grid gap-2">
+        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-[#efc85d]">// DEV INDEX</div>
+        <h1 class="m-0 text-4xl font-black italic leading-none text-[#fff7dd]">Cruel Deal Dev</h1>
+      </header>
+
+      <section class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {devLinks.map((link) => (
+          <a
+            href={link.href}
+            class="grid min-h-28 gap-2 rounded-md border border-white/15 bg-white/[0.055] p-4 text-[#f4eee0] no-underline shadow-[inset_0_1px_0_rgb(255_255_255_/_0.08)] transition hover:border-[#efc85d]/60 hover:bg-[#efc85d]/10"
+          >
+            <strong class="text-lg font-black uppercase leading-none">{link.title}</strong>
+            <span class="text-sm font-semibold leading-snug text-[#f4eee0]/65">{link.detail}</span>
+            <span class="mt-auto text-xs font-black uppercase tracking-[0.08em] text-[#efc85d]">{link.href}</span>
+          </a>
+        ))}
+      </section>
+    </div>
+  </main>
+);
+
 /**
  * App Entry Component
  * Handles the initial data fetching and provider initialization.
@@ -43,10 +90,15 @@ export default function App() {
   const [profile, setProfile] = createSignal<UserProfile | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
+  const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
   const isMainMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/main-material');
   const isGameTextTestPath = () => window.location.pathname.toLowerCase().startsWith('/gametext-test');
+  const isGameTextV2TestPath = () => {
+    const path = window.location.pathname.toLowerCase();
+    return path.startsWith('/gametextv2-test') || path.startsWith('/gametext-v2-test');
+  };
 
   const performLogin = async () => {
     setIsAuthenticating(true);
@@ -83,7 +135,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isGameTextTestPath()}
+          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isGameTextTestPath() || isGameTextV2TestPath()}
           fallback={
             <AppViewport>
               <Show
@@ -115,16 +167,20 @@ export default function App() {
           }
         >
           <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
-            <Show when={isGameTextTestPath()} fallback={(
-              <Show when={isLoginMaterialPath()} fallback={(
-                <Show when={isMainMaterialPath()} fallback={<UiMaterialLabScreen />}>
-                  <MainMaterialPreviewScreen />
+            <Show when={isDevPath()} fallback={(
+              <Show when={isGameTextTestPath() || isGameTextV2TestPath()} fallback={(
+                <Show when={isLoginMaterialPath()} fallback={(
+                  <Show when={isMainMaterialPath()} fallback={<UiMaterialLabScreen />}>
+                    <MainMaterialPreviewScreen />
+                  </Show>
+                )}>
+                  <LoginMaterialPreviewScreen />
                 </Show>
               )}>
-                <LoginMaterialPreviewScreen />
+                <GameTextTestScreen version={isGameTextV2TestPath() ? 'v2' : 'v1'} />
               </Show>
             )}>
-              <GameTextTestScreen />
+              <DevIndexScreen />
             </Show>
           </div>
         </Show>
