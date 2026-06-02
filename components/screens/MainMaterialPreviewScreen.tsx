@@ -33,11 +33,18 @@ import {
   type MaterialWorkbenchPart,
   type TextTransformToken,
 } from '../ui/material-lab';
-import { MaterialNavItem } from '../navigation/MaterialNavItem';
+import {
+  MaterialNodeButtonBar,
+  MaterialNodeRenderer,
+  type MaterialNodeRecipe,
+  type MaterialNodeRenderContext,
+} from '../ui/material-node';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
-type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId;
+type ToolbarMaterialTargetId = `toolbar:${string}`;
+type NavMaterialTargetId = `nav:item:${number}`;
+type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId | ToolbarMaterialTargetId | NavMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
 type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
@@ -281,10 +288,27 @@ const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
 ];
 
 const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part.label])) as Record<MainPartId, string>;
+const toolbarNodeSpecs = [
+  { id: 'toolbar-log', label: 'Log', text: 'LOG', variant: 'dark' },
+  { id: 'toolbar-play-conquest', label: 'Play Conquest', text: 'PLAY\nCONQUEST', variant: 'default' },
+  { id: 'toolbar-deck-assault', label: 'Deck Assault', text: 'DECK\nASSAULT', variant: 'red' },
+  { id: 'toolbar-play-ladder', label: 'Play Ladder', text: 'PLAY\nLADDER', variant: 'default' },
+  { id: 'toolbar-count', label: 'Count', text: '10', variant: 'dark' },
+] as const;
+const navNodeSpecs = [
+  { id: 'nav-battle-pass', label: 'Battle Pass', text: 'Battle Pass', icon: '*' },
+  { id: 'nav-comms', label: 'Comms', text: 'Comms', icon: 'M' },
+  { id: 'nav-main', label: 'Main', text: 'Main', icon: 'V' },
+  { id: 'nav-assets', label: 'Assets', text: 'Assets', icon: 'B' },
+  { id: 'nav-exchange', label: 'Exchange', text: 'Exchange', icon: '$' },
+] as const;
+const toolbarMaterialTargetPrefix = 'toolbar:';
+const toolbarMaterialTargetId = (nodeId: string): ToolbarMaterialTargetId => `${toolbarMaterialTargetPrefix}${nodeId}`;
+const navMaterialTargetPrefix = 'nav:item:';
+const navItemTargetId = (index: number): NavMaterialTargetId => `${navMaterialTargetPrefix}${index}`;
 const feedCardMaterialTargetPrefix = 'feed:card:';
 const feedCardMaterialTargetId = (cardTypeId: FeedCardTypeId): FeedMaterialTargetId => `feed:card:${cardTypeId}`;
 const feedMaterialTargetIdForNode = (cardTypeId: FeedCardTypeId, nodeId: string): FeedMaterialTargetId => `feed:card:${cardTypeId}:node:${nodeId}`;
-const navItemTargetId = (index: number) => `nav:item:${index}`;
 
 const parseFeedMaterialTargetId = (targetId: string) => {
   if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
@@ -11702,6 +11726,8 @@ const MainMaterialPreview = (props: {
   selectedPart: MainPartId;
   selectedFeedPreviewState: MaterialRecipeState;
   selectedFeedTargetId: FeedMaterialTargetId;
+  selectedToolbarTargetId: ToolbarMaterialTargetId | null;
+  selectedNavTargetId: NavMaterialTargetId | null;
   previewInteractionMode: PreviewInteractionMode;
   forcePreview: boolean;
   activeNavIndex: number;
@@ -11714,6 +11740,8 @@ const MainMaterialPreview = (props: {
   feedCardTypes: FeedCardTypes;
   feedStoryImageOverrides: Record<string, string>;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  selectedToolbarTargetClass: (targetId: ToolbarMaterialTargetId) => string;
+  selectedNavTargetClass: (targetId: NavMaterialTargetId) => string;
   activeFeedStoryId: string;
   onActiveFeedStoryChange: (storyId: string) => void;
   nav: NavRecipe;
@@ -11726,9 +11754,11 @@ const MainMaterialPreview = (props: {
   const interactionSnapshot = (): PreviewInteractionSnapshot => ({
     mode: props.previewInteractionMode,
     selectedTargetId: props.selectedPart === 'navBar'
-      ? navItemTargetId(props.activeNavIndex)
+      ? props.selectedNavTargetId ?? navItemTargetId(props.activeNavIndex)
       : props.selectedPart === 'feedCards'
       ? props.selectedFeedTargetId
+      : props.selectedPart === 'toolBar' && props.selectedToolbarTargetId
+      ? props.selectedToolbarTargetId
       : '',
     forcePreview: props.forcePreview,
     forcedState: props.selectedPart === 'navBar'
@@ -11817,7 +11847,68 @@ const MainMaterialPreview = (props: {
     snapshot: interactionSnapshot(),
     fallbackState: index === props.activeNavIndex ? 'active' : 'rest',
   });
-  const navItemClass = (index: number) => `main-material-nav-item ${index === props.activeNavIndex ? 'is-active' : ''}`;
+  const navNodes: MaterialNodeRecipe[] = navNodeSpecs.map((item) => ({
+    id: item.id,
+    label: item.label,
+    kind: 'button',
+    role: 'selectable',
+    content: { mode: 'plain', text: item.text },
+  }));
+  const navNodeIndex = (node: MaterialNodeRecipe) => navNodes.findIndex((item) => item.id === node.id);
+  const navNodeTargetId = (node: MaterialNodeRecipe) => navItemTargetId(Math.max(0, navNodeIndex(node)));
+  const navNodeClass = (index: number) => [
+    'main-material-button-bar__item',
+    'main-material-button-bar__item--nav',
+    index === props.activeNavIndex ? 'is-active' : '',
+  ].filter(Boolean).join(' ');
+  const navNodeContext: MaterialNodeRenderContext = {
+    treeId: 'main-material-nav',
+    targetIdForNode: navNodeTargetId,
+    previewStateForNode: (node) => navVisualState(Math.max(0, navNodeIndex(node))),
+    buttonPropsForNode: (node, _role, visualState) => {
+      const index = Math.max(0, navNodeIndex(node));
+      const item = navNodeSpecs[index];
+      return {
+        ...materialRecipeItemProps(props.surfaces.nav, index, visualState),
+        icon: <span class="main-material-nav-icon">{item?.icon}</span>,
+        iconPosition: 'top',
+      };
+    },
+    buttonSizeForNode: () => 'sm',
+    buttonFullWidthForNode: () => true,
+    classForNode: () => 'main-material-button-bar__node',
+    surfaceClassForNode: (node) => navNodeClass(Math.max(0, navNodeIndex(node))),
+    selectedClassForNode: (node) => props.selectedNavTargetClass(navNodeTargetId(node)),
+    onNodeAction: (node) => {
+      const index = navNodeIndex(node);
+      if (index >= 0) props.onActiveNavIndexChange(index);
+    },
+  };
+  const toolbarNodes: MaterialNodeRecipe[] = toolbarNodeSpecs.map((item) => ({
+    id: item.id,
+    label: item.label,
+    kind: 'button',
+    role: 'momentary',
+    content: { mode: 'plain', text: item.text },
+  }));
+  const toolbarNodeIndex = (node: MaterialNodeRecipe) => toolbarNodes.findIndex((item) => item.id === node.id);
+  const toolbarNodeClass = (index: number) => [
+    'main-material-button-bar__item',
+    'main-material-button-bar__item--toolbar',
+    index === 0 || index === 4 ? 'main-material-button-bar__item--dark' : '',
+    index === 2 ? 'main-material-button-bar__item--red' : '',
+  ].filter(Boolean).join(' ');
+  const toolbarNodeContext: MaterialNodeRenderContext = {
+    treeId: 'main-material-toolbar',
+    targetIdForNode: (node) => toolbarMaterialTargetId(node.id),
+    previewStateForNode: () => stateForPart('toolBar'),
+    buttonPropsForNode: (node, _role, visualState) => materialRecipeItemProps(props.surfaces.toolbar, Math.max(0, toolbarNodeIndex(node)), visualState),
+    buttonSizeForNode: () => 'sm',
+    buttonFullWidthForNode: () => true,
+    classForNode: () => 'main-material-button-bar__node',
+    surfaceClassForNode: (node) => toolbarNodeClass(toolbarNodeIndex(node)),
+    selectedClassForNode: (node) => props.selectedToolbarTargetClass(toolbarMaterialTargetId(node.id)),
+  };
 
   return (
     <div
@@ -11899,46 +11990,22 @@ const MainMaterialPreview = (props: {
           </main>
 
           <footer class="main-material-bottom-stack">
-          <div class={`main-material-fake-command ${props.selectedClass('toolBar')}`}>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 0, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--dark">LOG</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 1, stateForPart('toolBar'))} size="sm" class="main-material-action">PLAY{'\n'}CONQUEST</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 2, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--red">DECK{'\n'}ASSAULT</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 3, stateForPart('toolBar'))} size="sm" class="main-material-action">PLAY{'\n'}LADDER</MaterialButton>
-            <MaterialButton {...materialRecipeItemProps(props.surfaces.toolbar, 4, stateForPart('toolBar'))} size="sm" class="main-material-action main-material-action--dark">10</MaterialButton>
-          </div>
+          <MaterialNodeButtonBar
+            nodes={toolbarNodes}
+            context={toolbarNodeContext}
+            class={`main-material-button-bar main-material-button-bar--toolbar ${props.selectedClass('toolBar')}`}
+          />
 
           <MaterialPanel
             recipe={props.surfaces.navContainer}
             padded={false}
-            class={`main-material-fake-nav ${props.selectedClass('navBarContainer')}`}
+            class={`main-material-nav-shell ${props.selectedClass('navBarContainer')}`}
           >
-            <div class="main-material-fake-nav-grid">
-              <For each={[
-                { label: 'Battle Pass', icon: '*' },
-                { label: 'Comms', icon: 'M' },
-                { label: 'Main', icon: 'V' },
-                { label: 'Assets', icon: 'B' },
-                { label: 'Exchange', icon: '$' },
-              ]}>
-                {(item, getIndex) => (
-                  <div
-                    data-material-target-id={navItemTargetId(getIndex())}
-                    data-material-role="selectable"
-                    class={props.selectedClass('navBar')}
-                  >
-                    <MaterialNavItem
-                      label={item.label}
-                      icon={<span class="main-material-nav-icon">{item.icon}</span>}
-                      active={getIndex() === props.activeNavIndex}
-                      recipe={props.surfaces.nav}
-                      visualState={navVisualState(getIndex())}
-                      class={navItemClass(getIndex())}
-                      onClick={() => props.onActiveNavIndexChange(getIndex())}
-                    />
-                  </div>
-                )}
-              </For>
-            </div>
+            <MaterialNodeButtonBar
+              nodes={navNodes}
+              context={navNodeContext}
+              class="main-material-button-bar main-material-button-bar--nav"
+            />
           </MaterialPanel>
           </footer>
         </div>
@@ -11965,6 +12032,8 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedFeedStoryId, setSelectedFeedStoryId] = createSignal(mockFeedStories[0].id);
   const [editingFeedCardTypeId, setEditingFeedCardTypeId] = createSignal<FeedCardTypeId>('card_type_01');
   const [selectedFeedTargetId, setSelectedFeedTargetId] = createSignal<FeedMaterialTargetId>(feedCardMaterialTargetId('card_type_01'));
+  const [selectedToolbarTargetId, setSelectedToolbarTargetId] = createSignal<ToolbarMaterialTargetId | null>(null);
+  const [selectedNavTargetId, setSelectedNavTargetId] = createSignal<NavMaterialTargetId | null>(null);
   const [feedStoryImageOverrides, setFeedStoryImageOverrides] = createSignal<Record<string, string>>({});
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
   const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
@@ -12138,21 +12207,35 @@ export const MainMaterialPreviewScreen = () => {
       depth: entry.depth,
     }))
   );
+  const toolbarWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
+    { ...part, id: 'toolBar' as MainWorkbenchPartId, depth: 0 },
+    ...toolbarNodeSpecs.map((node) => ({
+      id: toolbarMaterialTargetId(node.id) as MainWorkbenchPartId,
+      label: node.label,
+      detail: 'shared command style',
+      depth: 1,
+    })),
+  ];
+  const navWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
+    { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 0 },
+    ...navNodeSpecs.map((node, index) => ({
+      id: navItemTargetId(index) as MainWorkbenchPartId,
+      label: node.label,
+      detail: 'shared tab style',
+      depth: 1,
+    })),
+  ];
 
   const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
     partLabels.flatMap((part) => {
       if (part.id === 'feedCards') {
         return feedWorkbenchParts();
       }
+      if (part.id === 'toolBar') {
+        return toolbarWorkbenchParts(part);
+      }
       if (part.id === 'navBarContainer') {
-        return [
-          { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 0 },
-          { id: 'navBar' as MainWorkbenchPartId, label: 'Battle Pass (Shared Style)', detail: 'edits all 5 tabs', depth: 1 },
-          { id: 'navBar' as MainWorkbenchPartId, label: 'Comms (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
-          { id: 'navBar' as MainWorkbenchPartId, label: 'Main (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
-          { id: 'navBar' as MainWorkbenchPartId, label: 'Assets (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
-          { id: 'navBar' as MainWorkbenchPartId, label: 'Exchange (Shadow Copy)', detail: 'edits all 5 tabs', depth: 1 },
-        ];
+        return navWorkbenchParts(part);
       }
       if (part.id === 'navBar') {
         return [];
@@ -12198,9 +12281,6 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   onMount(() => {
-    // Clear localStorage to force reloading using the new premium defaults
-    window.localStorage.removeItem(storageKey);
-    window.localStorage.removeItem(materialPresetStorageKey);
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
@@ -12309,6 +12389,8 @@ export const MainMaterialPreviewScreen = () => {
 
   const selectPart = (part: MainPartId) => {
     setSelectedPart(part);
+    if (part !== 'toolBar') setSelectedToolbarTargetId(null);
+    if (part !== 'navBar') setSelectedNavTargetId(null);
     setPreviewStates((current) => {
       const nextState = coercePreviewStateForPart(part, current[part]);
       return nextState === current[part] ? current : { ...current, [part]: nextState };
@@ -12317,7 +12399,13 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const selectedWorkbenchPartId = (): MainWorkbenchPartId => (
-    selectedPart() === 'feedCards' ? selectedFeedTargetId() : selectedPart()
+    selectedPart() === 'feedCards'
+      ? selectedFeedTargetId()
+      : selectedPart() === 'toolBar' && selectedToolbarTargetId()
+      ? selectedToolbarTargetId() as ToolbarMaterialTargetId
+      : selectedPart() === 'navBar' && selectedNavTargetId()
+      ? selectedNavTargetId() as NavMaterialTargetId
+      : selectedPart()
   );
 
   const selectWorkbenchPart = (part: MainWorkbenchPartId) => {
@@ -12325,6 +12413,22 @@ export const MainMaterialPreviewScreen = () => {
       selectFeedTarget(part as FeedMaterialTargetId);
       selectPart('feedCards');
       return;
+    }
+    if (part.startsWith(toolbarMaterialTargetPrefix)) {
+      setSelectedToolbarTargetId(part as ToolbarMaterialTargetId);
+      selectPart('toolBar');
+      return;
+    }
+    if (part.startsWith(navMaterialTargetPrefix)) {
+      setSelectedNavTargetId(part as NavMaterialTargetId);
+      selectPart('navBar');
+      return;
+    }
+    if (part === 'toolBar') {
+      setSelectedToolbarTargetId(null);
+    }
+    if (part === 'navBarContainer') {
+      setSelectedNavTargetId(null);
     }
     selectPart(part as MainPartId);
   };
@@ -12558,6 +12662,22 @@ export const MainMaterialPreviewScreen = () => {
     if (selectedPart() !== 'feedCards' || selectedFeedTargetId() !== targetId) return '';
     if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
     if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'feedCards') {
+      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
+    }
+    return '';
+  };
+  const selectedToolbarTargetClass = (targetId: ToolbarMaterialTargetId) => {
+    if (selectedPart() !== 'toolBar' || selectedToolbarTargetId() !== targetId) return '';
+    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
+    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'toolBar') {
+      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
+    }
+    return '';
+  };
+  const selectedNavTargetClass = (targetId: NavMaterialTargetId) => {
+    if (selectedPart() !== 'navBar' || selectedNavTargetId() !== targetId) return '';
+    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
+    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'navBar') {
       return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
     }
     return '';
@@ -12860,6 +12980,8 @@ export const MainMaterialPreviewScreen = () => {
           selectedPart={selectedPart()}
           selectedFeedPreviewState={selectedPreviewState()}
           selectedFeedTargetId={selectedFeedTargetId()}
+          selectedToolbarTargetId={selectedToolbarTargetId()}
+          selectedNavTargetId={selectedNavTargetId()}
           previewInteractionMode={previewInteractionMode()}
           forcePreview={forcePreview()}
           activeNavIndex={activeNavIndex()}
@@ -12872,6 +12994,8 @@ export const MainMaterialPreviewScreen = () => {
           feedCardTypes={feedCardTypes()}
           feedStoryImageOverrides={feedStoryImageOverrides()}
           selectedFeedTargetClass={selectedFeedTargetClass}
+          selectedToolbarTargetClass={selectedToolbarTargetClass}
+          selectedNavTargetClass={selectedNavTargetClass}
           activeFeedStoryId={selectedFeedStoryId()}
           onActiveFeedStoryChange={selectFeedStory}
           nav={nav()}

@@ -1,0 +1,76 @@
+import { JSX, Match, Switch } from 'solid-js';
+import {
+  MaterialButton,
+  MaterialPanel,
+  materialRecipeToInteractiveSurfaceProps,
+  materialRecipeToStaticSurfaceProps,
+  materialRecipeToSurfaceProps,
+  type MaterialRecipeState,
+} from '../material-lab';
+import type { MaterialNodeRecipe, MaterialNodeRenderContext, MaterialNodeRole } from './MaterialNodeTypes';
+
+export const materialNodeSurfaceProps = (
+  node: MaterialNodeRecipe,
+  role: MaterialNodeRole,
+  visualState: MaterialRecipeState = 'rest',
+) => {
+  if (!node.surface) return {};
+  return role === 'static' || role === 'container' || role === 'text'
+    ? materialRecipeToStaticSurfaceProps(node.surface)
+    : materialRecipeToSurfaceProps(node.surface, visualState);
+};
+
+export const materialNodeButtonProps = (
+  node: MaterialNodeRecipe,
+  _role: MaterialNodeRole,
+  visualState: Exclude<MaterialRecipeState, 'hover'> = 'rest',
+) => {
+  if (!node.surface) return {};
+  return materialRecipeToInteractiveSurfaceProps(node.surface, visualState);
+};
+
+export const MaterialNodeSurface = (props: {
+  node: MaterialNodeRecipe;
+  role: MaterialNodeRole;
+  visualState: MaterialRecipeState;
+  context: MaterialNodeRenderContext;
+  class?: string;
+  children?: JSX.Element;
+}) => {
+  const surfaceProps = () => props.context.surfacePropsForNode?.(props.node, props.role, props.visualState)
+    ?? materialNodeSurfaceProps(props.node, props.role, props.visualState);
+  const buttonProps = () => props.context.buttonPropsForNode?.(props.node, props.role, props.visualState)
+    ?? materialNodeButtonProps(props.node, props.role, props.visualState === 'hover' ? 'rest' : props.visualState);
+
+  return (
+    <Switch>
+      <Match when={props.node.kind === 'button'}>
+        <MaterialButton
+          {...buttonProps()}
+          type="button"
+          size={props.context.buttonSizeForNode?.(props.node)}
+          fullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
+          class={props.class}
+          onClick={() => props.context.onNodeAction?.(props.node)}
+        >
+          {props.children}
+        </MaterialButton>
+      </Match>
+      <Match when={props.node.kind === 'media' && !props.node.surface}>
+        {props.children}
+      </Match>
+      <Match when={props.node.kind !== 'slot'}>
+        <MaterialPanel
+          {...surfaceProps()}
+          padded={false}
+          class={props.class}
+        >
+          {props.children}
+        </MaterialPanel>
+      </Match>
+      <Match when={true}>
+        {null}
+      </Match>
+    </Switch>
+  );
+};

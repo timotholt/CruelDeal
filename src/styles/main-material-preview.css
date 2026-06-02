@@ -859,41 +859,59 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   position: relative;
   z-index: auto;
   display: grid;
-  grid-template-rows: 40px 68px;
+  grid-template-rows: auto auto;
   gap: 4px;
-  min-height: 112px;
   padding: 0;
 }
 
-.main-material-fake-command {
+.main-material-button-bar {
+  --main-material-bar-button-height: 2.5rem;
+  --main-material-bar-padding-y: 0.25rem;
+  --main-material-bar-padding-x: 8px;
+  --main-material-bar-gap: 6px;
+  --main-material-bar-columns: repeat(5, 1fr);
   position: relative;
   z-index: auto;
   display: grid;
-  grid-template-columns: 0.55fr repeat(3, 1fr) 0.55fr;
-  gap: 6px;
-  height: 40px;
-  padding: 0 8px;
+  grid-template-columns: var(--main-material-bar-columns);
+  align-items: center;
+  gap: var(--main-material-bar-gap);
+  min-height: calc(var(--main-material-bar-button-height) + (var(--main-material-bar-padding-y) * 2));
+  padding: var(--main-material-bar-padding-y) var(--main-material-bar-padding-x);
 }
 
-.main-material-fake-nav {
+.main-material-button-bar--toolbar {
+  --main-material-bar-button-height: 2.5rem;
+  --main-material-bar-padding-y: 0.25rem;
+  --main-material-bar-gap: 6px;
+  --main-material-bar-columns: 0.55fr repeat(3, 1fr) 0.55fr;
+}
+
+.main-material-nav-shell {
   position: relative;
   z-index: auto;
-  height: 68px;
   overflow: hidden;
 }
 
-.main-material-fake-nav-grid {
-  position: absolute;
-  inset: 7px 8px;
-  z-index: auto;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1px;
+.main-material-button-bar--nav {
+  --main-material-bar-button-height: 3.25rem;
+  --main-material-bar-padding-y: 0.4375rem;
+  --main-material-bar-gap: 1px;
+  --main-material-bar-columns: repeat(5, 1fr);
   container-type: inline-size;
 }
 
-.main-material-action,
-.main-material-nav-item {
+.main-material-button-bar__node {
+  min-width: 0;
+  height: var(--main-material-bar-button-height);
+}
+
+.main-material-button-bar__item {
+  display: flex;
+  min-width: 0;
+  height: var(--main-material-bar-button-height);
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
   color: #15130f;
   font-family: inherit;
@@ -901,12 +919,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-transform: uppercase;
 }
 
-.main-material-action {
-  display: flex;
-  min-width: 0;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
+.main-material-button-bar__item--toolbar {
   padding: 0 7px;
   font-size: 11px;
   font-style: italic;
@@ -914,11 +927,11 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   white-space: pre-line;
 }
 
-.main-material-action .cd-button__content {
+.main-material-button-bar__item--toolbar .cd-button__content {
   padding: 0 7px;
 }
 
-.main-material-action .cd-button__label {
+.main-material-button-bar__item--toolbar .cd-button__label {
   color: var(--content-color);
   font-size: var(--content-size, 11px);
   font-style: italic;
@@ -927,21 +940,19 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-shadow: var(--content-shadow);
 }
 
-.main-material-action--dark .cd-button__label {
+.main-material-button-bar__item--dark .cd-button__label {
   color: var(--content-color);
 }
 
-.main-material-action--red .cd-button__label {
+.main-material-button-bar__item--red .cd-button__label {
   color: var(--content-color);
 }
 
-.main-material-nav-item {
-  min-width: 0;
-  height: 52px;
+.main-material-button-bar__item--nav {
   color: #17140f;
 }
 
-.main-material-nav-item.is-active {
+.main-material-button-bar__item--nav.is-active {
   color: #17140f;
 }
 
@@ -955,12 +966,12 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   line-height: 1;
 }
 
-.main-material-nav-item .cd-button__content {
+.main-material-button-bar__item--nav .cd-button__content {
   gap: 2px;
   padding: 6px 2px;
 }
 
-.main-material-nav-item .cd-button__icon {
+.main-material-button-bar__item--nav .cd-button__icon {
   color: rgb(var(--icon-rgb) / 1);
 }
 
