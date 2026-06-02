@@ -42,14 +42,15 @@ import {
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
+type TopBarMaterialTargetId = `topbar:${string}`;
 type ToolbarMaterialTargetId = `toolbar:${string}`;
 type NavMaterialTargetId = `nav:item:${number}`;
-type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId | ToolbarMaterialTargetId | NavMaterialTargetId;
+type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId | TopBarMaterialTargetId | ToolbarMaterialTargetId | NavMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
 type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
 type PreviewInteractionMode = 'selected-only' | 'all-on-screen';
-type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'container' | 'text';
+type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'disclosure' | 'container' | 'text';
 type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
 
 interface PreviewInteractionSnapshot {
@@ -302,6 +303,14 @@ const navNodeSpecs = [
   { id: 'nav-assets', label: 'Assets', text: 'Assets', icon: 'B' },
   { id: 'nav-exchange', label: 'Exchange', text: 'Exchange', icon: '$' },
 ] as const;
+const topBarCurrencySpecs = [
+  { id: 'credits', label: 'Credits', text: '500', iconClass: 'main-material-currency-icon--credits' },
+  { id: 'gold', label: 'Gold', text: '5400', iconClass: 'main-material-currency-icon--gold' },
+  { id: 'tokens', label: 'Tokens', text: '3050', iconClass: 'main-material-currency-icon--tokens' },
+] as const;
+const topBarMaterialTargetPrefix = 'topbar:';
+const topBarProfileTargetId: TopBarMaterialTargetId = `${topBarMaterialTargetPrefix}profile`;
+const topBarCurrencyTargetId = (id: string): TopBarMaterialTargetId => `${topBarMaterialTargetPrefix}currency:${id}`;
 const toolbarMaterialTargetPrefix = 'toolbar:';
 const toolbarMaterialTargetId = (nodeId: string): ToolbarMaterialTargetId => `${toolbarMaterialTargetPrefix}${nodeId}`;
 const navMaterialTargetPrefix = 'nav:item:';
@@ -11726,6 +11735,7 @@ const MainMaterialPreview = (props: {
   selectedPart: MainPartId;
   selectedFeedPreviewState: MaterialRecipeState;
   selectedFeedTargetId: FeedMaterialTargetId;
+  selectedTopBarTargetId: TopBarMaterialTargetId | null;
   selectedToolbarTargetId: ToolbarMaterialTargetId | null;
   selectedNavTargetId: NavMaterialTargetId | null;
   previewInteractionMode: PreviewInteractionMode;
@@ -11740,6 +11750,7 @@ const MainMaterialPreview = (props: {
   feedCardTypes: FeedCardTypes;
   feedStoryImageOverrides: Record<string, string>;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  selectedTopBarTargetClass: (targetId: TopBarMaterialTargetId) => string;
   selectedToolbarTargetClass: (targetId: ToolbarMaterialTargetId) => string;
   selectedNavTargetClass: (targetId: NavMaterialTargetId) => string;
   activeFeedStoryId: string;
@@ -11753,7 +11764,11 @@ const MainMaterialPreview = (props: {
 
   const interactionSnapshot = (): PreviewInteractionSnapshot => ({
     mode: props.previewInteractionMode,
-    selectedTargetId: props.selectedPart === 'navBar'
+    selectedTargetId: props.selectedPart === 'profileButton'
+      ? props.selectedTopBarTargetId ?? topBarProfileTargetId
+      : props.selectedPart === 'currencyButtons'
+      ? props.selectedTopBarTargetId ?? topBarCurrencyTargetId(topBarCurrencySpecs[0].id)
+      : props.selectedPart === 'navBar'
       ? props.selectedNavTargetId ?? navItemTargetId(props.activeNavIndex)
       : props.selectedPart === 'feedCards'
       ? props.selectedFeedTargetId
@@ -11761,9 +11776,9 @@ const MainMaterialPreview = (props: {
       ? props.selectedToolbarTargetId
       : '',
     forcePreview: props.forcePreview,
-    forcedState: props.selectedPart === 'navBar'
-      ? coercePreviewStateForPart('navBar', props.previewStates.navBar)
-      : props.selectedFeedPreviewState,
+    forcedState: props.selectedPart === 'feedCards'
+      ? props.selectedFeedPreviewState
+      : coercePreviewStateForPart(props.selectedPart, props.previewStates[props.selectedPart]),
     hoveredTargetId: hoveredTargetId(),
     pressedTargetId: pressedTargetId(),
     focusedTargetId: focusedTargetId(),
@@ -11789,7 +11804,7 @@ const MainMaterialPreview = (props: {
     const target = targetFromEvent(event);
     if (!target) return;
     const role = roleFromTarget(target);
-    if (role === 'momentary' || role === 'selectable') {
+    if (role === 'momentary' || role === 'selectable' || role === 'disclosure') {
       setPressedTargetId(target.dataset.materialTargetId ?? null);
     }
   };
@@ -11840,6 +11855,118 @@ const MainMaterialPreview = (props: {
       return coercePreviewStateForPart(part, props.previewStates[part]);
     }
     return playerFacingPreviewStateForRole(interactionRoles[part]);
+  };
+  const topBarCurrencyNodes: MaterialNodeRecipe[] = topBarCurrencySpecs.map((item) => ({
+    id: `topbar-currency-${item.id}`,
+    label: item.label,
+    kind: 'button',
+    role: 'momentary',
+    content: { mode: 'plain', text: item.text },
+  }));
+  const topBarNode: MaterialNodeRecipe = {
+    id: 'topbar-root',
+    label: 'Top Bar',
+    kind: 'container',
+    role: 'container',
+    children: [
+      {
+        id: 'topbar-profile',
+        label: 'Profile',
+        kind: 'button',
+        role: 'disclosure',
+        content: { mode: 'icon', iconKey: 'profile' },
+      },
+      {
+        id: 'topbar-commander',
+        label: 'Commander',
+        kind: 'text',
+        role: 'text',
+        content: { mode: 'plain', text: 'COMMANDER' },
+      },
+      {
+        id: 'topbar-currencies',
+        label: 'Wallet',
+        kind: 'slot',
+        role: 'static',
+        children: topBarCurrencyNodes,
+      },
+    ],
+  };
+  const topBarCurrencyNodeIndex = (node: MaterialNodeRecipe) => topBarCurrencyNodes.findIndex((item) => item.id === node.id);
+  const topBarTargetIdForNode = (node: MaterialNodeRecipe) => {
+    if (node.id === 'topbar-root') return 'topBar';
+    if (node.id === 'topbar-profile') return topBarProfileTargetId;
+    const currencyIndex = topBarCurrencyNodeIndex(node);
+    if (currencyIndex >= 0) return topBarCurrencyTargetId(topBarCurrencySpecs[currencyIndex].id);
+    return `${topBarMaterialTargetPrefix}${node.id}`;
+  };
+  const topBarPreviewStateForNode = (node: MaterialNodeRecipe, role: PreviewTargetRole): MaterialRecipeState => {
+    if (node.id === 'topbar-root') return stateForPart('topBar');
+    if (node.id === 'topbar-profile') {
+      return resolvePreviewVisualState({
+        targetId: topBarProfileTargetId,
+        role,
+        snapshot: interactionSnapshot(),
+        fallbackState: stateForPart('profileButton'),
+      });
+    }
+    const currencyIndex = topBarCurrencyNodeIndex(node);
+    if (currencyIndex >= 0) {
+      return resolvePreviewVisualState({
+        targetId: topBarCurrencyTargetId(topBarCurrencySpecs[currencyIndex].id),
+        role,
+        snapshot: interactionSnapshot(),
+        fallbackState: stateForPart('currencyButtons'),
+      });
+    }
+    return 'rest';
+  };
+  const topBarNodeContext: MaterialNodeRenderContext = {
+    treeId: 'main-material-topbar',
+    targetIdForNode: topBarTargetIdForNode,
+    resolveIcon: (iconKey) => (iconKey === 'profile' ? <FakeProfileIcon /> : undefined),
+    previewStateForNode: (node, role) => topBarPreviewStateForNode(node, role as PreviewTargetRole),
+    surfacePropsForNode: (node, _role, visualState) => (
+      node.id === 'topbar-root'
+        ? materialSurfacePropsForPart('topBar', props.surfaces.topBar, visualState)
+        : {}
+    ),
+    buttonPropsForNode: (node, _role, visualState) => {
+      if (node.id === 'topbar-profile') {
+        return materialRecipeItemProps(props.surfaces.profile, 0, visualState);
+      }
+      const currencyIndex = topBarCurrencyNodeIndex(node);
+      if (currencyIndex >= 0) {
+        return {
+          ...materialRecipeItemProps(props.surfaces.currencies, currencyIndex, visualState),
+          icon: <span class={`main-material-currency-icon ${topBarCurrencySpecs[currencyIndex].iconClass}`} />,
+        };
+      }
+      return {};
+    },
+    buttonSizeForNode: () => 'sm',
+    buttonFullWidthForNode: () => true,
+    classForNode: (node) => {
+      if (node.id === 'topbar-root') return 'main-material-topbar-node';
+      if (node.id === 'topbar-profile') return 'main-material-profile-node';
+      if (node.id === 'topbar-commander') return 'main-material-commander';
+      if (node.id === 'topbar-currencies') return 'main-material-currencies';
+      return 'main-material-currency-node';
+    },
+    surfaceClassForNode: (node) => {
+      if (node.id === 'topbar-root') return 'main-material-topbar';
+      if (node.id === 'topbar-profile') return 'main-material-profile-slot';
+      const currencyIndex = topBarCurrencyNodeIndex(node);
+      if (currencyIndex >= 0) return 'main-material-currency-chip';
+      return '';
+    },
+    selectedClassForNode: (node) => {
+      if (node.id === 'topbar-root') return props.selectedClass('topBar');
+      if (node.id === 'topbar-profile') return props.selectedTopBarTargetClass(topBarProfileTargetId);
+      const currencyIndex = topBarCurrencyNodeIndex(node);
+      if (currencyIndex >= 0) return props.selectedTopBarTargetClass(topBarCurrencyTargetId(topBarCurrencySpecs[currencyIndex].id));
+      return '';
+    },
   };
   const navVisualState = (index: number): MaterialRecipeState => resolvePreviewVisualState({
     targetId: navItemTargetId(index),
@@ -11933,46 +12060,7 @@ const MainMaterialPreview = (props: {
         </MaterialPanel>
 
         <div class="main-material-frame main-material-frame--editor">
-          <MaterialPanel
-            {...materialSurfacePropsForPart('topBar', props.surfaces.topBar, stateForPart('topBar'))}
-            padded={false}
-            class={`main-material-topbar ${props.selectedClass('topBar')}`}
-          >
-            <MaterialPanel
-              {...materialSurfacePropsForPart('profileButton', props.surfaces.profile, stateForPart('profileButton'))}
-              padded={false}
-              class={`main-material-profile-slot ${props.selectedClass('profileButton')}`}
-            >
-              <FakeProfileIcon />
-            </MaterialPanel>
-            <div class="main-material-commander">COMMANDER</div>
-            <div class={`main-material-currencies ${props.selectedClass('currencyButtons')}`}>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 0, stateForPart('currencyButtons'))}
-                size="sm"
-                class="main-material-currency-chip main-material-currency-chip--credits"
-                icon={<span class="main-material-currency-icon main-material-currency-icon--credits" />}
-              >
-                500
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 1, stateForPart('currencyButtons'))}
-                size="sm"
-                class="main-material-currency-chip main-material-currency-chip--gold"
-                icon={<span class="main-material-currency-icon main-material-currency-icon--gold" />}
-              >
-                5400
-              </MaterialButton>
-              <MaterialButton
-                {...materialRecipeItemProps(props.surfaces.currencies, 2, stateForPart('currencyButtons'))}
-                size="sm"
-                class="main-material-currency-chip main-material-currency-chip--tokens"
-                icon={<span class="main-material-currency-icon main-material-currency-icon--tokens" />}
-              >
-                3050
-              </MaterialButton>
-            </div>
-          </MaterialPanel>
+          <MaterialNodeRenderer node={topBarNode} context={topBarNodeContext} />
 
           <main class="main-material-scroll">
             <FeedCarousel
@@ -12032,6 +12120,7 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedFeedStoryId, setSelectedFeedStoryId] = createSignal(mockFeedStories[0].id);
   const [editingFeedCardTypeId, setEditingFeedCardTypeId] = createSignal<FeedCardTypeId>('card_type_01');
   const [selectedFeedTargetId, setSelectedFeedTargetId] = createSignal<FeedMaterialTargetId>(feedCardMaterialTargetId('card_type_01'));
+  const [selectedTopBarTargetId, setSelectedTopBarTargetId] = createSignal<TopBarMaterialTargetId | null>(null);
   const [selectedToolbarTargetId, setSelectedToolbarTargetId] = createSignal<ToolbarMaterialTargetId | null>(null);
   const [selectedNavTargetId, setSelectedNavTargetId] = createSignal<NavMaterialTargetId | null>(null);
   const [feedStoryImageOverrides, setFeedStoryImageOverrides] = createSignal<Record<string, string>>({});
@@ -12207,6 +12296,16 @@ export const MainMaterialPreviewScreen = () => {
       depth: entry.depth,
     }))
   );
+  const topBarWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
+    { ...part, id: 'topBar' as MainWorkbenchPartId, depth: 0 },
+    { id: topBarProfileTargetId as MainWorkbenchPartId, label: 'Profile', detail: 'button material', depth: 1 },
+    ...topBarCurrencySpecs.map((node) => ({
+      id: topBarCurrencyTargetId(node.id) as MainWorkbenchPartId,
+      label: node.label,
+      detail: 'shared wallet style',
+      depth: 1,
+    })),
+  ];
   const toolbarWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
     { ...part, id: 'toolBar' as MainWorkbenchPartId, depth: 0 },
     ...toolbarNodeSpecs.map((node) => ({
@@ -12230,6 +12329,12 @@ export const MainMaterialPreviewScreen = () => {
     partLabels.flatMap((part) => {
       if (part.id === 'feedCards') {
         return feedWorkbenchParts();
+      }
+      if (part.id === 'topBar') {
+        return topBarWorkbenchParts(part);
+      }
+      if (part.id === 'profileButton' || part.id === 'currencyButtons') {
+        return [];
       }
       if (part.id === 'toolBar') {
         return toolbarWorkbenchParts(part);
@@ -12389,6 +12494,7 @@ export const MainMaterialPreviewScreen = () => {
 
   const selectPart = (part: MainPartId) => {
     setSelectedPart(part);
+    if (part !== 'topBar' && part !== 'profileButton' && part !== 'currencyButtons') setSelectedTopBarTargetId(null);
     if (part !== 'toolBar') setSelectedToolbarTargetId(null);
     if (part !== 'navBar') setSelectedNavTargetId(null);
     setPreviewStates((current) => {
@@ -12401,6 +12507,8 @@ export const MainMaterialPreviewScreen = () => {
   const selectedWorkbenchPartId = (): MainWorkbenchPartId => (
     selectedPart() === 'feedCards'
       ? selectedFeedTargetId()
+      : (selectedPart() === 'profileButton' || selectedPart() === 'currencyButtons') && selectedTopBarTargetId()
+      ? selectedTopBarTargetId() as TopBarMaterialTargetId
       : selectedPart() === 'toolBar' && selectedToolbarTargetId()
       ? selectedToolbarTargetId() as ToolbarMaterialTargetId
       : selectedPart() === 'navBar' && selectedNavTargetId()
@@ -12412,6 +12520,16 @@ export const MainMaterialPreviewScreen = () => {
     if (part.startsWith(feedCardMaterialTargetPrefix)) {
       selectFeedTarget(part as FeedMaterialTargetId);
       selectPart('feedCards');
+      return;
+    }
+    if (part === topBarProfileTargetId) {
+      setSelectedTopBarTargetId(part);
+      selectPart('profileButton');
+      return;
+    }
+    if (part.startsWith(`${topBarMaterialTargetPrefix}currency:`)) {
+      setSelectedTopBarTargetId(part as TopBarMaterialTargetId);
+      selectPart('currencyButtons');
       return;
     }
     if (part.startsWith(toolbarMaterialTargetPrefix)) {
@@ -12426,6 +12544,9 @@ export const MainMaterialPreviewScreen = () => {
     }
     if (part === 'toolBar') {
       setSelectedToolbarTargetId(null);
+    }
+    if (part === 'topBar') {
+      setSelectedTopBarTargetId(null);
     }
     if (part === 'navBarContainer') {
       setSelectedNavTargetId(null);
@@ -12662,6 +12783,18 @@ export const MainMaterialPreviewScreen = () => {
     if (selectedPart() !== 'feedCards' || selectedFeedTargetId() !== targetId) return '';
     if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
     if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'feedCards') {
+      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
+    }
+    return '';
+  };
+  const selectedTopBarTargetClass = (targetId: TopBarMaterialTargetId) => {
+    const selectedChild = selectedPart() === 'profileButton' || selectedPart() === 'currencyButtons';
+    if (!selectedChild || selectedTopBarTargetId() !== targetId) return '';
+    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
+    if (selectionOverlayMode() === 'flash' && (
+      selectionFlashPart() === 'profileButton'
+      || selectionFlashPart() === 'currencyButtons'
+    )) {
       return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
     }
     return '';
@@ -12980,6 +13113,7 @@ export const MainMaterialPreviewScreen = () => {
           selectedPart={selectedPart()}
           selectedFeedPreviewState={selectedPreviewState()}
           selectedFeedTargetId={selectedFeedTargetId()}
+          selectedTopBarTargetId={selectedTopBarTargetId()}
           selectedToolbarTargetId={selectedToolbarTargetId()}
           selectedNavTargetId={selectedNavTargetId()}
           previewInteractionMode={previewInteractionMode()}
@@ -12994,6 +13128,7 @@ export const MainMaterialPreviewScreen = () => {
           feedCardTypes={feedCardTypes()}
           feedStoryImageOverrides={feedStoryImageOverrides()}
           selectedFeedTargetClass={selectedFeedTargetClass}
+          selectedTopBarTargetClass={selectedTopBarTargetClass}
           selectedToolbarTargetClass={selectedToolbarTargetClass}
           selectedNavTargetClass={selectedNavTargetClass}
           activeFeedStoryId={selectedFeedStoryId()}

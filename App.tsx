@@ -10,6 +10,7 @@ import { LoginScreen } from './components/screens/LoginScreen';
 import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
 import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPreviewScreen';
 import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPreviewScreen';
+import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 
 const queryClient = new QueryClient({
@@ -45,6 +46,7 @@ export default function App() {
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
   const isMainMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/main-material');
+  const isGameTextTestPath = () => window.location.pathname.toLowerCase().startsWith('/gametext-test');
 
   const performLogin = async () => {
     setIsAuthenticating(true);
@@ -81,7 +83,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath()}
+          when={isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isGameTextTestPath()}
           fallback={
             <AppViewport>
               <Show
@@ -113,12 +115,16 @@ export default function App() {
           }
         >
           <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
-            <Show when={isLoginMaterialPath()} fallback={(
-              <Show when={isMainMaterialPath()} fallback={<UiMaterialLabScreen />}>
-                <MainMaterialPreviewScreen />
+            <Show when={isGameTextTestPath()} fallback={(
+              <Show when={isLoginMaterialPath()} fallback={(
+                <Show when={isMainMaterialPath()} fallback={<UiMaterialLabScreen />}>
+                  <MainMaterialPreviewScreen />
+                </Show>
+              )}>
+                <LoginMaterialPreviewScreen />
               </Show>
             )}>
-              <LoginMaterialPreviewScreen />
+              <GameTextTestScreen />
             </Show>
           </div>
         </Show>

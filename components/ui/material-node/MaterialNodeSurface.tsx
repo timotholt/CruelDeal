@@ -56,7 +56,13 @@ export const MaterialNodeSurface = (props: {
           {props.children}
         </MaterialButton>
       </Match>
+      <Match when={props.node.kind === 'text' && !props.node.surface}>
+        {props.children}
+      </Match>
       <Match when={props.node.kind === 'media' && !props.node.surface}>
+        {props.children}
+      </Match>
+      <Match when={props.node.kind === 'slot'}>
         {props.children}
       </Match>
       <Match when={props.node.kind !== 'slot'}>

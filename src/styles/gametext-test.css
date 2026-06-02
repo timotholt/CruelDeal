@@ -1,0 +1,213 @@
+.game-text-test-page {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgb(255 255 255 / 0.03) 1px, transparent 1px),
+    radial-gradient(circle at 78% 12%, rgb(239 200 93 / 0.18), transparent 28%),
+    linear-gradient(180deg, #151513 0%, #050606 100%);
+  background-size: 28px 28px, 28px 28px, auto, auto;
+  color: #f4eee0;
+  font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.game-text-test-shell {
+  display: grid;
+  gap: 18px;
+  width: min(1440px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 22px 0 34px;
+}
+
+.game-text-test-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+}
+
+.game-text-test-header h1 {
+  margin: 0;
+  color: #fff7dd;
+  font-size: 38px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.game-text-test-header p {
+  margin: 8px 0 0;
+  max-width: 74ch;
+  color: rgb(244 238 224 / 0.68);
+  font: 600 13px/1.35 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.game-text-test-summary {
+  display: grid;
+  min-width: 178px;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.28);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  text-align: right;
+}
+
+.game-text-test-summary strong {
+  color: #efc85d;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.game-text-test-summary span {
+  color: rgb(244 238 224 / 0.62);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.game-text-test-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.game-text-test-case {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  min-height: 178px;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 80% 0%, rgb(239 200 93 / 0.08), transparent 32%),
+    rgb(0 0 0 / 0.28);
+}
+
+.game-text-test-case.is-pass {
+  border-color: rgb(86 218 142 / 0.28);
+}
+
+.game-text-test-case.is-fail {
+  border-color: rgb(255 92 83 / 0.72);
+  box-shadow: 0 0 0 1px rgb(255 92 83 / 0.2), 0 0 24px rgb(255 92 83 / 0.12);
+}
+
+.game-text-test-meta {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.game-text-test-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.game-text-test-title strong {
+  overflow: hidden;
+  color: #fff7dd;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.game-text-test-title span,
+.game-text-test-result {
+  color: rgb(244 238 224 / 0.56);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.game-text-test-result {
+  color: #efc85d;
+  text-align: right;
+}
+
+.game-text-test-case.is-pass .game-text-test-result {
+  color: #56da8e;
+}
+
+.game-text-test-case.is-fail .game-text-test-result {
+  color: #ff5c53;
+}
+
+.game-text-test-stage {
+  display: grid;
+  min-height: 86px;
+  place-items: center;
+}
+
+.game-text-test-frame {
+  position: relative;
+  width: var(--gt-box-width);
+  height: var(--gt-box-height);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.02)),
+    rgb(10 11 10 / 0.86);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 4px 18px rgb(0 0 0 / 0.28);
+}
+
+.game-text-test-frame--button {
+  border-color: rgb(239 200 93 / 0.34);
+  background:
+    linear-gradient(180deg, rgb(255 255 245 / 0.9), rgb(196 192 180 / 0.86)),
+    #d8d3c4;
+  color: #17140f;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.82),
+    inset 0 -2px 0 rgb(0 0 0 / 0.18),
+    0 2px 0 rgb(0 0 0 / 0.35);
+}
+
+.game-text-test-frame--badge {
+  border-color: rgb(239 200 93 / 0.42);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgb(239 200 93 / 0.92), rgb(121 86 24 / 0.9)),
+    #a77a2d;
+  color: #110f0c;
+}
+
+.game-text-test-frame--danger {
+  border-color: rgb(255 92 83 / 0.42);
+  background:
+    linear-gradient(180deg, rgb(255 92 83 / 0.22), rgb(255 92 83 / 0.05)),
+    rgb(10 11 10 / 0.9);
+}
+
+.game-text-test-label-box {
+  position: absolute;
+  inset: var(--gt-inset-top) var(--gt-inset-right) var(--gt-inset-bottom) var(--gt-inset-left);
+  overflow: hidden;
+}
+
+.game-text-test-json {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.32);
+  color: rgb(244 238 224 / 0.72);
+  font: 11px/1.4 "JetBrains Mono", ui-monospace, monospace;
+}

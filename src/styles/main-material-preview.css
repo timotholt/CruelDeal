@@ -106,14 +106,11 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-topbar {
-  position: relative;
-  z-index: auto;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  min-height: 48px;
-  padding: 7px 8px 8px;
+  --main-topbar-item-height: 1.8125rem;
+  --main-topbar-padding-y: 0.4375rem;
+  --main-topbar-padding-x: 0.5rem;
+  width: 100%;
+  min-height: calc(var(--main-topbar-item-height) + (var(--main-topbar-padding-y) * 2));
 }
 
 .main-material-topbar > .cd-panel__content {
@@ -122,52 +119,51 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   align-items: center;
   gap: 5px;
   width: 100%;
-  min-height: 48px;
-  padding: 7px 8px 8px;
+  min-height: calc(var(--main-topbar-item-height) + (var(--main-topbar-padding-y) * 2));
+  padding: var(--main-topbar-padding-y) var(--main-topbar-padding-x);
+}
+
+.main-material-topbar-node {
+  position: relative;
+  z-index: auto;
+  min-width: 0;
+}
+
+.main-material-profile-node {
+  width: 35px;
+  height: var(--main-topbar-item-height);
+  min-width: 0;
 }
 
 .main-material-profile-slot {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  height: var(--main-topbar-item-height);
+  min-height: 0;
   align-items: center;
   justify-content: center;
-  min-width: 0;
 }
 
-.main-material-profile-slot.cd-panel {
-  width: 35px;
-  height: 29px;
+.main-material-profile-slot.cd-button--sm {
+  min-height: 0;
 }
 
-.main-material-profile-slot > .cd-panel__content {
+.main-material-profile-slot > .cd-button__content {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.main-material-profile-slot .cd-button__label {
   display: grid;
   width: 100%;
   height: 100%;
   place-items: center;
-  padding: 0;
 }
 
-.main-material-profile-slot > .relative {
-  z-index: 12;
-}
-
-.main-material-profile-slot .group > button + div,
 .main-material-profile-button {
   border-radius: 4px;
-}
-
-.main-material-profile-slot .group {
-  width: 35px !important;
-  max-width: 35px !important;
-}
-
-.main-material-profile-slot .group > button > div:first-child {
-  border-color: rgb(33 30 24 / 0.42) !important;
-  background: linear-gradient(180deg, #24221d, #0b0b09) !important;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 2px 0 rgb(0 0 0 / 0.35) !important;
-}
-
-.main-material-profile-slot .group svg {
-  color: #f7ecd0 !important;
 }
 
 .main-material-profile-button {
@@ -199,14 +195,22 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-currencies {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 3px;
 }
 
+.main-material-currency-node {
+  min-width: 43px;
+  height: var(--main-topbar-item-height);
+}
+
 .main-material-currency-chip {
   display: inline-flex;
+  width: 100%;
   min-width: 43px;
-  height: 29px;
+  height: var(--main-topbar-item-height);
+  min-height: 0;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -218,6 +222,10 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   font-weight: 800;
   font-style: italic;
   line-height: 1;
+}
+
+.main-material-currency-chip.cd-button--sm {
+  min-height: 0;
 }
 
 .main-material-currency-chip .cd-button__content {

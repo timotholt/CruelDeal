@@ -10,6 +10,12 @@ interface GameTextProps {
   maxLines?: number;
   italic?: boolean;
   letterSpacing?: string; // e.g. "0.1em" or "-0.02em"
+  align?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'center' | 'bottom';
+  fontFamily?: string;
+  fontWeight?: number | string;
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  lineHeight?: number;
 }
 
 const MEASUREMENT_CACHE: Record<string, { w: number, h: number }> = {};
@@ -29,9 +35,28 @@ export const GameText = (props: GameTextProps) => {
   const maxLines = () => props.maxLines ?? 1;
   const italic = () => props.italic ?? true;
   const letterSpacing = () => props.letterSpacing ?? "-0.05em";
+  const align = () => props.align ?? ((props.class?.includes('justify-start') ?? false) ? 'left' : 'center');
+  const verticalAlign = () => props.verticalAlign ?? 'center';
+  const fontFamily = () => props.fontFamily ?? '"IBM Plex Sans Condensed", sans-serif';
+  const fontWeight = () => props.fontWeight ?? 900;
+  const textTransform = () => props.textTransform ?? 'uppercase';
+  const lineHeight = () => props.lineHeight ?? 0.95;
 
   const isMultiLine = () => maxLines() > 1;
-  const isLeftAligned = () => props.class?.includes('justify-start') ?? false;
+  const hasExplicitLineBreaks = () => props.text.includes('\n');
+  const usesPreformattedLines = () => isMultiLine() && hasExplicitLineBreaks();
+  const whiteSpace = () => usesPreformattedLines() ? 'pre' : isMultiLine() ? 'pre-line' : 'pre';
+  const horizontalClass = () => align() === 'left'
+    ? 'justify-start text-left'
+    : align() === 'right'
+    ? 'justify-end text-right'
+    : 'justify-center text-center';
+  const verticalClass = () => verticalAlign() === 'top'
+    ? 'items-start'
+    : verticalAlign() === 'bottom'
+    ? 'items-end'
+    : 'items-center';
+  const transformOrigin = () => `${align()} ${verticalAlign()}`;
 
   createEffect(() => {
     const container = containerRef;
@@ -44,21 +69,33 @@ export const GameText = (props: GameTextProps) => {
 
       if (containerW <= 0 || containerH <= 0) return;
 
-      const cacheKey = `${props.text}_${props.baseFontSize}_${skewFactor()}_${maxLines()}_${italic()}_${letterSpacing()}_${containerW}`;
+      const cacheKey = [
+        props.text,
+        props.baseFontSize,
+        skewFactor(),
+        maxLines(),
+        italic(),
+        letterSpacing(),
+        containerW,
+        fontFamily(),
+        fontWeight(),
+        textTransform(),
+        lineHeight(),
+      ].join('_');
       let dims = MEASUREMENT_CACHE[cacheKey];
 
       if (!dims) {
         const clone = document.createElement('div');
         clone.style.cssText = `
             position: absolute; visibility: hidden; left: -9999px; top: -9999px;
-            font-size: ${props.baseFontSize}rem; line-height: 0.95;
-            white-space: ${isMultiLine() ? 'pre-line' : 'pre'};
+            font-size: ${props.baseFontSize}rem; line-height: ${lineHeight()};
+            white-space: ${whiteSpace()};
             width: auto;
-            max-width: ${isMultiLine() ? `${containerW}px` : 'none'};
-            font-family: "IBM Plex Sans Condensed", sans-serif; 
-            font-weight: 900; 
+            max-width: ${isMultiLine() && !usesPreformattedLines() ? `${containerW}px` : 'none'};
+            font-family: ${fontFamily()};
+            font-weight: ${fontWeight()};
             font-style: ${italic() ? 'italic' : 'normal'};
-            text-transform: uppercase; 
+            text-transform: ${textTransform()};
             letter-spacing: ${letterSpacing()};
             padding-left: ${italic() ? '0.15rem' : '0'};
             padding-right: ${italic() ? '0.25rem' : '0'};
@@ -81,6 +118,7 @@ export const GameText = (props: GameTextProps) => {
       if (Math.abs(currentScale - targetScale) > 0.005) {
           currentScale = targetScale;
           textEl.style.transform = targetScale < 0.995 ? `scale(${targetScale})` : 'none';
+          textEl.dataset.gameTextScale = targetScale.toFixed(4);
       }
     };
 
@@ -94,22 +132,27 @@ export const GameText = (props: GameTextProps) => {
   return (
     <div 
         ref={(el) => containerRef = el}
-        class={`w-full h-full flex items-center overflow-hidden pointer-events-none select-none ${isLeftAligned() ? 'justify-start text-left' : 'justify-center text-center'} ${props.class ?? ''}`}
+        data-game-text="container"
+        class={`w-full h-full flex overflow-hidden pointer-events-none select-none ${verticalClass()} ${horizontalClass()} ${props.class ?? ''}`}
         style={{ "font-size": `${props.baseFontSize}rem` }}
     >
       <div 
         ref={(el) => textRef = el}
+        data-game-text="inner"
+        data-game-text-scale="1.0000"
         style={{ 
           transform: 'none',
-          "transform-origin": isLeftAligned() ? 'left center' : 'center center',
-          display: isMultiLine() ? '-webkit-box' : 'block', 
-          width: isMultiLine() ? '100%' : 'max-content',
-          "line-height": "0.95",
-          "text-align": isLeftAligned() ? 'left' : 'center',
-          "white-space": isMultiLine() ? 'pre-line' : 'pre',
+          "transform-origin": transformOrigin(),
+          display: isMultiLine() && !usesPreformattedLines() ? '-webkit-box' : 'block',
+          width: isMultiLine() && !usesPreformattedLines() ? '100%' : 'max-content',
+          "line-height": lineHeight(),
+          "text-align": align(),
+          "white-space": whiteSpace(),
           "font-style": italic() ? 'italic' : 'normal',
-          "font-weight": 900,
+          "font-family": fontFamily(),
+          "font-weight": fontWeight(),
           "letter-spacing": letterSpacing(),
+          "text-transform": textTransform(),
           "will-change": 'transform',
           "-webkit-box-orient": 'vertical',
           "-webkit-line-clamp": maxLines(),
