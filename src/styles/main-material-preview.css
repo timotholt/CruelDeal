@@ -543,6 +543,23 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   pointer-events: none;
 }
 
+/* --- Hug sizing (Stage B) ---
+   A Hug box shrinks to its content. The content (flow-stack) must be in normal flow
+   so it gives the frame intrinsic size; the surface drops to an absolute background
+   layer behind it. Scoped to [data-*-mode="hug"] so Fixed/Fill nodes are untouched.
+   `overflow: visible` lets the content define the height instead of being clipped. */
+.main-material-card-node[data-h-mode="hug"] > .main-material-card-node-flow-stack,
+.main-material-card-node[data-w-mode="hug"] > .main-material-card-node-flow-stack {
+  position: relative;
+  inset: auto;
+  overflow: visible;
+}
+.main-material-card-node[data-h-mode="hug"] > .main-material-card-node-surface,
+.main-material-card-node[data-w-mode="hug"] > .main-material-card-node-surface {
+  position: absolute;
+  inset: 0;
+}
+
 .main-material-card-node-flow-stack > .main-material-card-node {
   pointer-events: auto;
 }
@@ -571,8 +588,8 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-card-node-flow-text {
-  /* Natural height (don't grow) so the parent's distribute/justify can position a
-     short text block top/center/bottom. Grows only via Fill sizing, not by default. */
+  /* Flow text: natural height (don't grow) so the parent's distribute/justify can
+     position a short block top/center/bottom. Fit modes override below. */
   flex: 0 1 auto;
   min-height: 0;
   /* Tight heading line-heights (<1) let the first row's caps overshoot the line-box
@@ -582,6 +599,13 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   overflow: clip;
   overflow-clip-margin: 4px;
   padding: 0;
+}
+
+/* Fit modes (glyph-fit / box-fit) scale content INTO the box, so the text element
+   must fill the box to give the fitter a definite height. (Flow stays natural above.) */
+.main-material-card-node-flow-text[data-material-text-render="fit"],
+.main-material-card-node-flow-text[data-material-text-render="rich-fit"] {
+  flex: 1 1 0;
 }
 
 .main-material-card-node-button-label {

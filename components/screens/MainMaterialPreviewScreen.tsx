@@ -10888,11 +10888,35 @@ const FeedRecipeEditor = (props: {
               </div>
               <div class="ui-lab-control-row">
                 <span>W</span>
-                <Slider value={node().layout.width} min={4} max={140} onInput={(value) => updateSelectedNodeLayout('width', value)} />
+                <div class="ui-lab-toggles">
+                  <For each={['fixed', 'hug', 'fill'] as const}>
+                    {(m) => (
+                      <MiniButton active={(node().layout.wMode ?? 'fixed') === m} onClick={() => updateSelectedNodeLayout('wMode', m)}>
+                        {m}
+                      </MiniButton>
+                    )}
+                  </For>
+                </div>
+              </div>
+              <div class="ui-lab-control-row">
+                <span>W size</span>
+                <Slider value={node().layout.width} min={4} max={140} disabled={(node().layout.wMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('width', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>H</span>
-                <Slider value={node().layout.height} min={4} max={140} onInput={(value) => updateSelectedNodeLayout('height', value)} />
+                <div class="ui-lab-toggles">
+                  <For each={['fixed', 'hug', 'fill'] as const}>
+                    {(m) => (
+                      <MiniButton active={(node().layout.hMode ?? 'fixed') === m} onClick={() => updateSelectedNodeLayout('hMode', m)}>
+                        {m}
+                      </MiniButton>
+                    )}
+                  </For>
+                </div>
+              </div>
+              <div class="ui-lab-control-row">
+                <span>H size</span>
+                <Slider value={node().layout.height} min={4} max={140} disabled={(node().layout.hMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('height', value)} />
               </div>
               <Show when={node().layout.mode === 'flow'}>
                 <div class="ui-lab-control-row">
@@ -11844,6 +11868,10 @@ const FeedNodeFrame = (props: {
     data-feed-node-kind={props.node.type}
     data-feed-layout-mode={props.node.layout.mode}
     data-feed-layout-slot={props.node.layout.slot}
+    data-w-mode={resolveLayoutWMode(props.node.layout)}
+    data-h-mode={resolveLayoutHMode(props.node.layout)}
+    data-self-pos={resolveLayoutSelfPosition(props.node.layout)}
+    data-direction={resolveLayoutDirection(props.node.layout)}
     data-material-target-id={props.targetId}
     data-material-role={props.role}
     style={feedNodeLayoutCss(props.node.layout)}
