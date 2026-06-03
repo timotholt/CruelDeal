@@ -560,6 +560,36 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   inset: 0;
 }
 
+/* --- Direction (Stage C) ---
+   The flow-stack is the flex container; its main axis follows the node's direction.
+   align-items/justify-content are inherited from the frame (set by feedNodeLayoutCss),
+   so alignment is axis-relative automatically. */
+.main-material-card-node[data-direction="row"] > .main-material-card-node-flow-stack {
+  flex-direction: row;
+}
+.main-material-card-node[data-wrap="true"] > .main-material-card-node-flow-stack {
+  flex-wrap: wrap;
+}
+
+/* --- Fill (Stage C) ---
+   A Fill child grows along the parent's MAIN axis and stretches on the CROSS axis. */
+.main-material-card-node[data-direction="column"] > .main-material-card-node-flow-stack > [data-h-mode="fill"] {
+  flex: 1 1 0;
+  height: auto;
+}
+.main-material-card-node[data-direction="column"] > .main-material-card-node-flow-stack > [data-w-mode="fill"] {
+  align-self: stretch;
+  width: auto;
+}
+.main-material-card-node[data-direction="row"] > .main-material-card-node-flow-stack > [data-w-mode="fill"] {
+  flex: 1 1 0;
+  width: auto;
+}
+.main-material-card-node[data-direction="row"] > .main-material-card-node-flow-stack > [data-h-mode="fill"] {
+  align-self: stretch;
+  height: auto;
+}
+
 .main-material-card-node-flow-stack > .main-material-card-node {
   pointer-events: auto;
 }

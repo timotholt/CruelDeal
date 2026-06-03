@@ -10864,6 +10864,21 @@ const FeedRecipeEditor = (props: {
                   </MiniButton>
                 </div>
               </div>
+              <div class="ui-lab-control-row">
+                <span>Direction</span>
+                <div class="ui-lab-toggles">
+                  <For each={['column', 'row'] as const}>
+                    {(d) => (
+                      <MiniButton active={(node().layout.direction ?? 'column') === d} onClick={() => updateSelectedNodeLayout('direction', d)}>
+                        {d}
+                      </MiniButton>
+                    )}
+                  </For>
+                  <MiniButton active={!!node().layout.wrap} onClick={() => updateSelectedNodeLayout('wrap', !node().layout.wrap)}>
+                    wrap
+                  </MiniButton>
+                </div>
+              </div>
               <Show when={node().layout.mode === 'flow'}>
                 <div class="ui-lab-control-row">
                   <span>Slot</span>
@@ -11767,8 +11782,10 @@ const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => {
     top: inFlow ? undefined : `${layout.y}%`,
     'flex-direction': direction === 'row' ? (layout.reverse ? 'row-reverse' : 'row') : (layout.reverse ? 'column-reverse' : 'column'),
     'flex-wrap': layout.wrap ? 'wrap' : undefined,
-    width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? '100%' : `${layout.width}%`,
-    height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? '100%' : `${layout.height}%`,
+    // Fill: in-flow children grow/stretch via the direction-aware CSS (size auto here);
+    // absolute nodes fill their parent box directly (100%).
+    width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? (inFlow ? 'auto' : '100%') : `${layout.width}%`,
+    height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? (inFlow ? 'auto' : '100%') : `${layout.height}%`,
     'margin-top': resolveLayoutPushToEnd(layout) && direction === 'column' ? 'auto' : undefined,
     'margin-left': resolveLayoutPushToEnd(layout) && direction === 'row' ? 'auto' : undefined,
     transform: legacyFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
@@ -11872,6 +11889,7 @@ const FeedNodeFrame = (props: {
     data-h-mode={resolveLayoutHMode(props.node.layout)}
     data-self-pos={resolveLayoutSelfPosition(props.node.layout)}
     data-direction={resolveLayoutDirection(props.node.layout)}
+    data-wrap={props.node.layout.wrap ? 'true' : undefined}
     data-material-target-id={props.targetId}
     data-material-role={props.role}
     style={feedNodeLayoutCss(props.node.layout)}
