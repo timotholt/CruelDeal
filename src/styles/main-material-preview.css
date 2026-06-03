@@ -113,16 +113,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   min-height: calc(var(--main-topbar-item-height) + (var(--main-topbar-padding-y) * 2));
 }
 
-.main-material-topbar > .cd-panel__content {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  min-height: calc(var(--main-topbar-item-height) + (var(--main-topbar-padding-y) * 2));
-  padding: var(--main-topbar-padding-y) var(--main-topbar-padding-x);
-}
-
 .main-material-topbar-node {
   position: relative;
   z-index: auto;
@@ -163,10 +153,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-profile-button {
-  border-radius: 4px;
-}
-
-.main-material-profile-button {
   display: inline-flex;
   width: 100%;
   height: 100%;
@@ -179,10 +165,8 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-commander {
-  display: flex;
   height: var(--main-topbar-item-height);
   min-height: 0;
-  align-items: center;
   min-width: 0;
   color: #1a1814;
   font-size: 17px;
@@ -204,10 +188,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-currencies {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 3px;
 }
 
 .main-material-currency-node {
@@ -1013,17 +994,10 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-feed-dots {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 18px;
   z-index: 4;
-  display: flex;
-  justify-content: center;
-  gap: var(--main-news-gap, 12px);
 }
 
-.main-material-feed-dots button {
+.main-material-feed-dot-button {
   width: 22px;
   height: 4px;
   border: 0;
@@ -1033,7 +1007,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   transition: width 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.main-material-feed-dots button.is-active {
+.main-material-feed-dot-button.is-active {
   width: 36px;
   background: rgb(239 200 93 / 0.92);
   box-shadow: 0 0 12px rgb(239 200 93 / 0.34);

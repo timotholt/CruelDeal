@@ -2386,6 +2386,31 @@ const createFeedSlideFrameNode = (cardTypeId: FeedCardTypeId): FeedCardNode => c
   ],
 });
 
+const createFeedDotsNode = (gap: number): FeedCardNode => createFeedNode({
+  id: 'feed-dots',
+  label: 'Feed Slides',
+  type: 'container',
+  layout: createFeedNodeLayout({
+    mode: 'absolute',
+    selfPosition: 'absolute',
+    x: 0,
+    y: 3.5,
+    width: 100,
+    height: 4,
+    padding: 0,
+    gap,
+    align: 'center',
+    justify: 'center',
+    direction: 'row',
+    distribute: 'center',
+    crossAlign: 'center',
+    wMode: 'fixed',
+    hMode: 'fixed',
+    constraintH: 'left-right',
+    constraintV: 'bottom',
+  }),
+});
+
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
   ...cloneMaterialRecipe(defaultFeedSurface),
   ...overrides,
@@ -12576,6 +12601,37 @@ const FeedSlideFrame = (props: {
   );
 };
 
+const FeedDots = (props: {
+  count: number;
+  activeIndex: number;
+  gap: number;
+  onSelect: (index: number) => void;
+}) => {
+  const node = () => createFeedDotsNode(props.gap);
+  return (
+    <FeedNodeFrame
+      node={node()}
+      targetId="feed:dots"
+      role="static"
+      targetClass="main-material-feed-dots"
+    >
+      <div class="main-material-card-node-flow-stack">
+        <For each={Array.from({ length: props.count })}>
+          {(_, index) => (
+            <button
+              type="button"
+              class={`main-material-feed-dot-button ${index() === props.activeIndex ? 'is-active' : ''}`}
+              aria-label={`Show feed slide ${index() + 1}`}
+              aria-current={index() === props.activeIndex ? 'true' : undefined}
+              onClick={() => props.onSelect(index())}
+            />
+          )}
+        </For>
+      </div>
+    </FeedNodeFrame>
+  );
+};
+
 const FeedCarousel = (props: {
   stories: FeedStory[];
   cardTypes: FeedCardTypes;
@@ -12665,19 +12721,12 @@ const FeedCarousel = (props: {
           }}
         </For>
       </div>
-      <div class="main-material-feed-dots" aria-label="Feed slides">
-        <For each={props.stories}>
-          {(_, index) => (
-            <button
-              type="button"
-              class={index() === activeSlideIndex() ? 'is-active' : ''}
-              aria-label={`Show feed slide ${index() + 1}`}
-              aria-current={index() === activeSlideIndex() ? 'true' : undefined}
-              onClick={() => showSlide(index())}
-            />
-          )}
-        </For>
-      </div>
+      <FeedDots
+        count={props.stories.length}
+        activeIndex={activeSlideIndex()}
+        gap={props.feed.newsGap}
+        onSelect={showSlide}
+      />
     </section>
   );
 };
