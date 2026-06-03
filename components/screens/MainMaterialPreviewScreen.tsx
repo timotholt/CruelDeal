@@ -2345,6 +2345,47 @@ const createBottomChromeFeedNode = (): FeedCardNode => createFeedNode({
   ],
 });
 
+const createFeedSlideLayerLayout = (): FeedNodeLayout => createFeedNodeLayout({
+  mode: 'absolute',
+  selfPosition: 'absolute',
+  x: 0,
+  y: 0,
+  width: 100,
+  height: 100,
+  padding: 0,
+  gap: 0,
+  align: 'left',
+  justify: 'start',
+  direction: 'column',
+  distribute: 'start',
+  crossAlign: 'stretch',
+  wMode: 'fixed',
+  hMode: 'fixed',
+  constraintH: 'left-right',
+  constraintV: 'top-bottom',
+});
+
+const createFeedSlideFrameNode = (cardTypeId: FeedCardTypeId): FeedCardNode => createFeedNode({
+  id: `feed-slide-${cardTypeId}`,
+  label: 'Feed Slide',
+  type: 'container',
+  layout: createFeedSlideLayerLayout(),
+  children: [
+    createFeedNode({
+      id: `feed-slide-${cardTypeId}-media`,
+      label: 'Feed Media',
+      type: 'container',
+      layout: createFeedSlideLayerLayout(),
+    }),
+    createFeedNode({
+      id: `feed-slide-${cardTypeId}-content`,
+      label: 'Feed Content',
+      type: 'container',
+      layout: createFeedSlideLayerLayout(),
+    }),
+  ],
+});
+
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
   ...cloneMaterialRecipe(defaultFeedSurface),
   ...overrides,
@@ -12464,6 +12505,77 @@ const FeedCardTreeNode = (props: {
 
 const clampSlideIndex = (index: number, slideCount: number) => Math.max(0, Math.min(slideCount - 1, index));
 
+const FeedSlideFrame = (props: {
+  story: FeedStory;
+  cardType: FeedCardTypeRecipe;
+  imageSource: string;
+  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+}) => {
+  const slideNode = createFeedSlideFrameNode(props.cardType.id);
+  const mediaNode = slideNode.children?.[0] || createFeedNode({ id: `feed-slide-${props.cardType.id}-media`, label: 'Feed Media', type: 'container', layout: createFeedSlideLayerLayout() });
+  const contentNode = slideNode.children?.[1] || createFeedNode({ id: `feed-slide-${props.cardType.id}-content`, label: 'Feed Content', type: 'container', layout: createFeedSlideLayerLayout() });
+  const cardTargetId = () => feedCardMaterialTargetId(props.cardType.id);
+  const visualState = () => props.surfaceStateForTarget(cardTargetId(), 'container');
+
+  return (
+    <FeedNodeFrame
+      node={slideNode}
+      targetId={cardTargetId()}
+      role="container"
+      targetClass={`main-material-feed-slide-frame ${props.selectedFeedTargetClass(cardTargetId())}`}
+    >
+      <MaterialSurfaceHost
+        kind="panel"
+        surfaceProps={materialSurfacePropsForPart('feedCards', props.cardType.surface, visualState())}
+        padded={false}
+        class="main-material-card-node-surface main-material-card-node-surface--background main-material-card-node-surface--slide"
+      />
+      <FeedNodeFrame
+        node={mediaNode}
+        targetId={`${cardTargetId()}:media`}
+        role="static"
+        targetClass="main-material-feed-media-layer"
+      >
+        <Show when={props.cardType.backgroundImage.enabled}>
+          <img
+            class="main-material-feed-background-image"
+            src={props.imageSource}
+            alt=""
+            draggable={false}
+            style={feedBackgroundImageCss(props.cardType.backgroundImage)}
+          />
+          <Show when={props.cardType.backgroundImage.fadeMode !== 'none'}>
+            <span
+              class={`main-material-feed-media-fade main-material-feed-media-fade--${props.cardType.backgroundImage.fadeMode}`}
+              aria-hidden="true"
+              style={feedMediaFadeCss(props.cardType.backgroundImage)}
+            />
+          </Show>
+        </Show>
+      </FeedNodeFrame>
+      <FeedNodeFrame
+        node={contentNode}
+        targetId={`${cardTargetId()}:content`}
+        role="static"
+        targetClass="main-material-card-tree"
+      >
+        <For each={props.cardType.children}>
+          {(node) => (
+            <FeedCardTreeNode
+              node={node}
+              story={props.story}
+              cardType={props.cardType}
+              surfaceStateForTarget={props.surfaceStateForTarget}
+              selectedFeedTargetClass={props.selectedFeedTargetClass}
+            />
+          )}
+        </For>
+      </FeedNodeFrame>
+    </FeedNodeFrame>
+  );
+};
+
 const FeedCarousel = (props: {
   stories: FeedStory[];
   cardTypes: FeedCardTypes;
@@ -12541,46 +12653,13 @@ const FeedCarousel = (props: {
             const imageSource = () => props.storyImageOverrides[story.id] || story.image;
             return (
               <div class="main-material-feed-slide">
-                <MaterialSurfaceHost
-                  kind="panel"
-                  surfaceProps={materialSurfacePropsForPart(
-                    'feedCards',
-                    cardType().surface,
-                    props.surfaceStateForTarget(feedCardMaterialTargetId(cardType().id), 'container'),
-                  )}
-                  padded={false}
-                  class={`main-material-feed-slide-material ${props.selectedFeedTargetClass(feedCardMaterialTargetId(cardType().id))}`}
-                >
-                  <Show when={cardType().backgroundImage.enabled}>
-                    <img
-                      class="main-material-feed-background-image"
-                      src={imageSource()}
-                      alt=""
-                      draggable={false}
-                      style={feedBackgroundImageCss(cardType().backgroundImage)}
-                    />
-                    <Show when={cardType().backgroundImage.fadeMode !== 'none'}>
-                      <span
-                        class={`main-material-feed-media-fade main-material-feed-media-fade--${cardType().backgroundImage.fadeMode}`}
-                        aria-hidden="true"
-                        style={feedMediaFadeCss(cardType().backgroundImage)}
-                      />
-                    </Show>
-                  </Show>
-                  <div class="main-material-card-tree">
-                    <For each={cardType().children}>
-                      {(node) => (
-                        <FeedCardTreeNode
-                          node={node}
-                          story={story}
-                          cardType={cardType()}
-                          surfaceStateForTarget={props.surfaceStateForTarget}
-                          selectedFeedTargetClass={props.selectedFeedTargetClass}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </MaterialSurfaceHost>
+                <FeedSlideFrame
+                  story={story}
+                  cardType={cardType()}
+                  imageSource={imageSource()}
+                  surfaceStateForTarget={props.surfaceStateForTarget}
+                  selectedFeedTargetClass={props.selectedFeedTargetClass}
+                />
               </div>
             );
           }}
