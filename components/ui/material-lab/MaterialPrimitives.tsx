@@ -231,7 +231,7 @@ const hasGlassWash = (options: SurfaceOptions) => (
 );
 
 const hasGlassBlur = (options: SurfaceOptions) => (
-  options.glassBlurEnabled === true && (options.glassBlur ?? 0) > 0
+  hasGlassWash(options) && options.glassBlurEnabled === true && (options.glassBlur ?? 0) > 0
 );
 
 const hasGlassShine = (options: SurfaceOptions) => (
@@ -322,6 +322,16 @@ const surfaceEmissionKind = (options: SurfaceOptions): EdgeEmissionKind => {
   if (options.emission && options.emission !== 'none') return options.emission;
   if (stateHasEmission(options.stateVars?.pressed)) return 'center-blip';
   return 'none';
+};
+
+const surfaceEmissionAttrs = (options: SurfaceOptions) => {
+  const emission = surfaceEmissionKind(options);
+  return emission === 'none'
+    ? {}
+    : {
+      'data-emission': emission,
+      'data-emission-edge': options.emissionEdge || 'bottom',
+    };
 };
 
 type CssVarValue = string | number | undefined | null | false;
@@ -644,11 +654,15 @@ const surfaceFeatures: SurfaceFeature[] = [
   },
   {
     id: 'state',
-    vars: ({ currentVars, stateVars }) => ({
-      ...currentVars,
-      ...prefixedVars('hover', stateVars.hover),
-      ...prefixedVars('pressed', stateVars.pressed),
-    }) as JSX.CSSProperties,
+    vars: ({ options, currentVars, stateVars }) => (
+      options.stateful === false
+        ? currentVars as JSX.CSSProperties
+        : {
+          ...currentVars,
+          ...prefixedVars('hover', stateVars.hover),
+          ...prefixedVars('pressed', stateVars.pressed),
+        } as JSX.CSSProperties
+    ),
   },
   {
     id: 'shape',
@@ -843,8 +857,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       component={props.as}
       {...(props.rootProps || {})}
       data-material-surface={props.as}
-      data-emission={surfaceEmissionKind(props)}
-      data-emission-edge={props.emissionEdge || 'bottom'}
+      {...surfaceEmissionAttrs(props)}
       class={surfaceClass(props, props.class)}
       style={{
         ...surfaceStyle(props),

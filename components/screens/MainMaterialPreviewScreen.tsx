@@ -39,6 +39,30 @@ import {
   type MaterialTextFitMode,
   type MaterialTextRenderMode,
 } from '../ui/material-node';
+import {
+  feedNodeLayoutCss,
+  resolveLayoutConstraintH,
+  resolveLayoutConstraintV,
+  resolveLayoutCrossAlign,
+  resolveLayoutDirection,
+  resolveLayoutDistribute,
+  resolveLayoutHMode,
+  resolveLayoutPushToEnd,
+  resolveLayoutSelfPosition,
+  resolveLayoutWMode,
+  type FeedNodeConstraintH,
+  type FeedNodeConstraintV,
+  type FeedNodeAlign,
+  type FeedNodeCrossAlign,
+  type FeedNodeDirection,
+  type FeedNodeDistribute,
+  type FeedNodeJustify,
+  type FeedNodeLayout,
+  type FeedNodeLayoutMode,
+  type FeedNodeLayoutSlot,
+  type FeedNodeSizeMode,
+  type FeedNodeSelfPosition,
+} from './main-material/feedNodeLayoutCss';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
@@ -52,8 +76,6 @@ type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
 type PreviewInteractionMode = 'selected-only' | 'all-on-screen';
 type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'disclosure' | 'container' | 'text';
 type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
-type FeedNodeLayoutMode = 'absolute' | 'flow';
-type FeedNodeLayoutSlot = 'auto' | 'body' | 'footer' | 'overlay';
 type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
 // Two orthogonal axes (legacy textRender is derived into these when absent):
 //   markup: parse [..] markup into styled tokens, or treat literally
@@ -165,17 +187,6 @@ type FeedTextSlotId =
 type FeedBackgroundFit = 'cover' | 'contain';
 type FeedMediaFadeMode = 'none' | 'top-dark' | 'bottom-dark' | 'left-dark' | 'right-dark' | 'left-bottom-dark' | 'top-bottom-dark' | 'vignette-dark' | 'left-light' | 'top-light' | 'bottom-light';
 type FeedCardNodeType = 'container' | 'text' | 'button';
-type FeedNodeAlign = 'left' | 'center' | 'right';
-type FeedNodeJustify = 'start' | 'center' | 'end';
-// Unified box model (Figma auto-layout). Optional on FeedNodeLayout; when absent they
-// derive from the legacy fields (mode/slot/align/justify) so existing data is unchanged.
-type FeedNodeDirection = 'row' | 'column';
-type FeedNodeDistribute = 'start' | 'center' | 'end' | 'between' | 'around' | 'evenly';
-type FeedNodeCrossAlign = 'start' | 'center' | 'end' | 'stretch';
-type FeedNodeSizeMode = 'fixed' | 'hug' | 'fill';
-type FeedNodeSelfPosition = 'in-flow' | 'absolute';
-type FeedNodeConstraintH = 'left' | 'right' | 'left-right' | 'center' | 'scale';
-type FeedNodeConstraintV = 'top' | 'bottom' | 'top-bottom' | 'center' | 'scale';
 type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
 type FeedTextTransformToken = TextTransformToken | 'inherit';
 type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
@@ -261,33 +272,6 @@ interface FeedBackgroundImageRecipe {
   fadeMode: FeedMediaFadeMode;
   fadeStrength: number;
   fadeSize: number;
-}
-
-interface FeedNodeLayout {
-  mode: FeedNodeLayoutMode;
-  slot: FeedNodeLayoutSlot;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  nudgeX: number;
-  nudgeY: number;
-  padding: number;
-  gap: number;
-  align: FeedNodeAlign;
-  justify: FeedNodeJustify;
-  // --- unified box model (optional; derived from the legacy fields above when unset) ---
-  direction?: FeedNodeDirection;     // main axis for child stacking
-  reverse?: boolean;                 // row-reverse / column-reverse
-  wrap?: boolean;                    // flex-wrap
-  distribute?: FeedNodeDistribute;   // main-axis distribution (justify-content)
-  crossAlign?: FeedNodeCrossAlign;   // cross-axis alignment (align-items)
-  wMode?: FeedNodeSizeMode;          // width sizing: fixed / hug / fill
-  hMode?: FeedNodeSizeMode;          // height sizing: fixed / hug / fill
-  selfPosition?: FeedNodeSelfPosition; // in-flow (flex child) vs absolute (escape)
-  pushToEnd?: boolean;               // margin-auto before: pin to far end (footer)
-  constraintH?: FeedNodeConstraintH; // absolute-child horizontal pin
-  constraintV?: FeedNodeConstraintV; // absolute-child vertical pin
 }
 
 interface FeedCardNode {
@@ -12163,111 +12147,6 @@ const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; styl
   );
 };
 
-// --- unified box-model resolvers ---
-// Each returns the explicit new field if set, else derives the legacy behavior, so
-// existing nodes compile to byte-identical CSS until they opt into the new fields.
-const resolveLayoutDirection = (l: FeedNodeLayout): FeedNodeDirection => l.direction ?? 'column';
-const resolveLayoutDistribute = (l: FeedNodeLayout): FeedNodeDistribute =>
-  l.distribute ?? (l.justify === 'start' ? 'start' : l.justify === 'end' ? 'end' : 'center');
-const resolveLayoutCrossAlign = (l: FeedNodeLayout): FeedNodeCrossAlign =>
-  l.crossAlign ?? (l.align === 'left' ? 'start' : l.align === 'right' ? 'end' : 'center');
-const resolveLayoutWMode = (l: FeedNodeLayout): FeedNodeSizeMode => l.wMode ?? 'fixed';
-const resolveLayoutHMode = (l: FeedNodeLayout): FeedNodeSizeMode => l.hMode ?? 'fixed';
-const resolveLayoutSelfPosition = (l: FeedNodeLayout): FeedNodeSelfPosition =>
-  l.selfPosition ?? (l.mode === 'flow' && l.slot !== 'overlay' ? 'in-flow' : 'absolute');
-const resolveLayoutPushToEnd = (l: FeedNodeLayout): boolean => l.pushToEnd ?? l.slot === 'footer';
-
-const distributeToJustifyContent = (d: FeedNodeDistribute): string =>
-  d === 'start' ? 'flex-start'
-    : d === 'end' ? 'flex-end'
-    : d === 'between' ? 'space-between'
-    : d === 'around' ? 'space-around'
-    : d === 'evenly' ? 'space-evenly'
-    : 'center';
-const crossAlignToAlignItems = (c: FeedNodeCrossAlign): string =>
-  c === 'start' ? 'flex-start' : c === 'end' ? 'flex-end' : c === 'stretch' ? 'stretch' : 'center';
-
-const resolveLayoutConstraintH = (l: FeedNodeLayout): FeedNodeConstraintH => l.constraintH ?? 'left';
-const resolveLayoutConstraintV = (l: FeedNodeLayout): FeedNodeConstraintV => l.constraintV ?? 'top';
-
-const absoluteConstraintCss = (layout: FeedNodeLayout, wMode: FeedNodeSizeMode, hMode: FeedNodeSizeMode) => {
-  const h = resolveLayoutConstraintH(layout);
-  const v = resolveLayoutConstraintV(layout);
-  const rightFromLegacyBox = 100 - layout.x - layout.width;
-  const bottomFromLegacyBox = 100 - layout.y - layout.height;
-  const css: JSX.CSSProperties = {};
-  const transforms: string[] = [];
-
-  if (h === 'right') {
-    css.right = `${layout.x}%`;
-  } else if (h === 'left-right') {
-    css.left = `${layout.x}%`;
-    css.right = `${rightFromLegacyBox}%`;
-  } else if (h === 'center') {
-    css.left = `calc(50% + ${layout.x - 50}%)`;
-    transforms.push('translateX(-50%)');
-  } else {
-    css.left = `${layout.x}%`;
-  }
-
-  if (v === 'bottom') {
-    css.bottom = `${layout.y}%`;
-  } else if (v === 'top-bottom') {
-    css.top = `${layout.y}%`;
-    css.bottom = `${bottomFromLegacyBox}%`;
-  } else if (v === 'center') {
-    css.top = `calc(50% + ${layout.y - 50}%)`;
-    transforms.push('translateY(-50%)');
-  } else {
-    css.top = `${layout.y}%`;
-  }
-
-  if (h !== 'left-right') {
-    css.width = wMode === 'hug' ? 'max-content' : `${layout.width}%`;
-  }
-  if (v !== 'top-bottom') {
-    css.height = hMode === 'hug' ? 'auto' : `${layout.height}%`;
-  }
-
-  return { css, transforms };
-};
-
-const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => {
-  const inFlow = resolveLayoutSelfPosition(layout) === 'in-flow';
-  const legacyFlow = layout.mode === 'flow'; // preserves the original nudge-transform condition
-  const direction = resolveLayoutDirection(layout);
-  const wMode = resolveLayoutWMode(layout);
-  const hMode = resolveLayoutHMode(layout);
-  const absolute = inFlow ? undefined : absoluteConstraintCss(layout, wMode, hMode);
-  const transforms = [
-    ...(absolute?.transforms ?? []),
-    legacyFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
-  ].filter(Boolean).join(' ');
-  // At legacy defaults (direction column, sizing fixed, pushToEnd from footer) this
-  // compiles to the exact same CSS as before; the new fields only change output when set.
-  return {
-    position: inFlow ? 'relative' : 'absolute',
-    ...(absolute?.css ?? {}),
-    'flex-direction': direction === 'row' ? (layout.reverse ? 'row-reverse' : 'row') : (layout.reverse ? 'column-reverse' : 'column'),
-    'flex-wrap': layout.wrap ? 'wrap' : undefined,
-    // Fill: in-flow children grow/stretch via the direction-aware CSS (size auto here).
-    ...(inFlow ? {
-      width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? 'auto' : `${layout.width}%`,
-      height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? 'auto' : `${layout.height}%`,
-    } : {}),
-    'margin-top': resolveLayoutPushToEnd(layout) && direction === 'column' ? 'auto' : undefined,
-    'margin-left': resolveLayoutPushToEnd(layout) && direction === 'row' ? 'auto' : undefined,
-    transform: transforms || undefined,
-    gap: `${layout.gap}px`,
-    '--feed-node-padding': `${layout.padding}px`,
-    '--feed-node-gap': `${layout.gap}px`,
-    '--feed-node-gap-scale': `${layout.gap / 100}`,
-    'text-align': layout.align,
-    'align-items': crossAlignToAlignItems(resolveLayoutCrossAlign(layout)),
-    'justify-content': distributeToJustifyContent(resolveLayoutDistribute(layout)),
-  };
-};
-
 const feedNodeSurfaceRecipe = (cardType: FeedCardTypeRecipe, node: FeedCardNode): MaterialRecipe => {
   const surface = node.surface || createFeedRegionSurface();
   return node.type === 'text' || node.type === 'button' || Boolean(node.binding)
@@ -12359,17 +12238,15 @@ const FeedNodeFrame = (props: {
   <div
     class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
     aria-label={props.ariaLabel}
-    data-feed-node-kind={props.node.type}
     data-feed-layout-mode={props.node.layout.mode}
     data-feed-layout-slot={props.node.layout.slot}
     data-w-mode={resolveLayoutWMode(props.node.layout)}
     data-h-mode={resolveLayoutHMode(props.node.layout)}
-    data-self-pos={resolveLayoutSelfPosition(props.node.layout)}
     data-direction={resolveLayoutDirection(props.node.layout)}
     data-wrap={props.node.layout.wrap ? 'true' : undefined}
     data-material-target-id={props.targetId}
     data-material-role={props.role}
-    style={{ ...feedNodeLayoutCss(props.node.layout), ...props.style }}
+    style={{ ...feedNodeLayoutCss(props.node.layout, { forcePaddingVar: props.node.type === 'button' }), ...props.style }}
     onPointerDown={props.onPointerDown}
     onPointerMove={props.onPointerMove}
     onPointerUp={props.onPointerUp}

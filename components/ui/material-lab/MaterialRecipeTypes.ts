@@ -15,6 +15,7 @@ import type {
   ShapeKind,
   SurfaceGradient,
 } from './MaterialPrimitives';
+export type { BorderColorKind } from './MaterialPrimitives';
 
 export type MaterialTone =
   | 'none'

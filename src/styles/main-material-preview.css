@@ -538,6 +538,19 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   inset: 0;
 }
 
+.main-material-card-node--button-frame[data-h-mode="hug"],
+.main-material-card-node--button-frame[data-w-mode="hug"] {
+  overflow: visible;
+}
+
+.main-material-card-node--button-frame[data-h-mode="hug"] > .main-material-card-node-surface--button,
+.main-material-card-node--button-frame[data-w-mode="hug"] > .main-material-card-node-surface--button {
+  position: relative;
+  inset: auto;
+  width: max-content;
+  height: auto;
+}
+
 /* --- Direction (Stage C) ---
    The flow-stack is the flex container; its main axis follows the node's direction.
    align-items/justify-content are inherited from the frame (set by feedNodeLayoutCss),
@@ -901,6 +914,12 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-align: center;
 }
 
+.main-material-card-node--button-frame[data-h-mode="hug"] > .main-material-card-node-surface--button > .cd-button__content,
+.main-material-card-node--button-frame[data-w-mode="hug"] > .main-material-card-node-surface--button > .cd-button__content {
+  position: relative;
+  inset: auto;
+}
+
 .main-material-card-node-surface--button .cd-button__label {
   display: flex;
   flex-direction: column;
@@ -911,6 +930,12 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+.main-material-card-node-surface--button .material-text-content--fit,
+.main-material-card-node-surface--button .material-text-content--rich-fit {
+  min-width: 1px;
+  min-height: 1px;
 }
 
 .main-material-card-node-button-label[data-material-text-render="fit"] {

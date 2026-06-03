@@ -197,7 +197,7 @@ const BaseSection = (props: {
   update: RecipeUpdate;
 }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Base</SectionLabel>
+    <SectionLabel size="xs">Base Color</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Base</ControlLabel>
       <div class="ui-lab-toggles ui-lab-toggles--wrap">
@@ -235,7 +235,7 @@ const ShapeSection = (props: {
   update: RecipeUpdate;
 }) => (
   <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Shape</SectionLabel>
+    <SectionLabel size="xs">Base Shape</SectionLabel>
     <div class="ui-lab-control-row">
       <ControlLabel>Bevel</ControlLabel>
       <div class="ui-lab-toggles">
@@ -1108,16 +1108,16 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   return (
     <>
-      <BaseSection recipe={props.recipe} enabled={capabilities().material} update={update} />
       <ShapeSection recipe={props.recipe} enabled={capabilities().material} update={update} />
+      <BaseSection recipe={props.recipe} enabled={capabilities().material} update={update} />
       <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />
-      <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BlurSection recipe={props.recipe} enabled={capabilities().blur} update={update} />
-      <ShadowSection recipe={props.recipe} enabled={capabilities().shadow} update={update} />
+      <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleEnabled={toggleBorderEnabled} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
+      <ShadowSection recipe={props.recipe} enabled={capabilities().shadow} update={update} />
       <TextSection recipe={props.recipe} enabled={capabilities().text} contentEnabled={capabilities().textContent} update={update} />
       <Show when={capabilities().states}>
         <StateSelectorSection
