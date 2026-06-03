@@ -38,6 +38,11 @@
   font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
+.main-material-preview-audit-target {
+  position: absolute;
+  inset: 0;
+}
+
 section.main-material-backdrop-surface.cd-surface {
   position: absolute;
   inset: 0;
@@ -1239,6 +1244,341 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   padding-block: 8px;
   line-height: 1.35;
   resize: vertical;
+}
+
+.main-material-emission-inspector {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(74vh, 720px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(239 200 93 / 0.42);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgb(48 48 43 / 0.96), rgb(21 22 21 / 0.96)),
+    var(--main-material-panel-texture, none);
+  background-blend-mode: normal, overlay;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.46);
+  color: rgb(244 232 198 / 0.92);
+}
+
+.main-material-emission-inspector.is-collapsed {
+  width: 210px;
+}
+
+.main-material-emission-inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 9px 8px 11px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  cursor: move;
+  user-select: none;
+}
+
+.main-material-emission-inspector__title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-family: var(--font-display, sans-serif);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.main-material-emission-inspector__title small {
+  overflow: hidden;
+  color: rgb(229 213 172 / 0.66);
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-material-emission-inspector__body {
+  display: grid;
+  min-height: 0;
+  gap: 9px;
+  padding: 9px;
+}
+
+.main-material-emission-inspector__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.main-material-emission-inspector__tabs button {
+  min-height: 28px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(244 232 198 / 0.72);
+  font: 800 10px/1 var(--font-display, sans-serif);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.main-material-emission-inspector__tabs button.is-active {
+  border-color: rgb(239 200 93 / 0.72);
+  color: rgb(255 231 146 / 0.98);
+}
+
+.main-material-emission-inspector__target {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.26);
+}
+
+.main-material-emission-inspector__target code {
+  display: block;
+  overflow: hidden;
+  font: 10px/1.25 var(--font-mono, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-material-emission-inspector__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 2px;
+  background:
+    linear-gradient(180deg, rgb(31 32 29 / 0.98), rgb(31 32 29 / 0.9));
+}
+
+.main-material-emission-inspector__panel {
+  display: grid;
+  min-height: 0;
+  max-height: min(54vh, 540px);
+  gap: 8px;
+  overflow: auto;
+  margin-top: 2px;
+  padding-right: 2px;
+}
+
+.main-material-emission-inspector__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: rgb(244 232 198 / 0.7);
+  font: 800 10px/1 var(--font-display, sans-serif);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.main-material-emission-inspector__panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.main-material-emission-inspector__status {
+  min-height: 24px;
+  padding: 6px 7px;
+  border: 1px solid rgb(239 200 93 / 0.22);
+  border-radius: 5px;
+  background: rgb(239 200 93 / 0.08);
+  color: rgb(255 231 146 / 0.86);
+  font: 800 9px/1.25 var(--font-display, sans-serif);
+  text-transform: uppercase;
+}
+
+.main-material-emission-inspector__status.is-idle {
+  border-color: rgb(255 255 255 / 0.08);
+  background: rgb(0 0 0 / 0.16);
+  color: rgb(244 232 198 / 0.42);
+}
+
+.main-material-emission-help {
+  margin: 0;
+  color: rgb(244 232 198 / 0.54);
+  font: 700 10px/1.35 var(--font-display, sans-serif);
+}
+
+.main-material-emission-rows {
+  display: grid;
+  gap: 3px;
+}
+
+.main-material-emission-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 0;
+  color: rgb(244 232 198 / 0.9);
+}
+
+.main-material-emission-row.is-disabled {
+  opacity: 0.42;
+  text-decoration: line-through;
+}
+
+.main-material-emission-row input {
+  margin: 0;
+}
+
+.main-material-emission-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-material-emission-empty {
+  margin: 0;
+  color: rgb(244 232 198 / 0.55);
+  font: 700 10px/1.4 var(--font-display, sans-serif);
+  text-transform: uppercase;
+}
+
+.main-material-dom-node {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding-left: 12px;
+  border-left: 1px solid rgb(255 255 255 / 0.08);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.main-material-dom-line {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(206 220 232 / 0.9);
+}
+
+.main-material-dom-line--close {
+  color: rgb(206 220 232 / 0.55);
+}
+
+.main-material-dom-punct {
+  color: rgb(128 147 161 / 0.8);
+}
+
+.main-material-dom-tag {
+  color: rgb(115 184 255 / 0.96);
+}
+
+.main-material-dom-attr {
+  display: inline;
+}
+
+.main-material-dom-attr__name {
+  color: rgb(159 216 255 / 0.94);
+}
+
+.main-material-dom-attr__equals,
+.main-material-dom-attr__quote {
+  color: rgb(128 147 161 / 0.82);
+}
+
+.main-material-dom-attr__value,
+.main-material-dom-style-token__value {
+  color: rgb(255 203 128 / 0.94);
+}
+
+.main-material-dom-attr__value.is-unknown,
+.main-material-dom-style-token__value.is-unknown {
+  color: rgb(255 153 133 / 0.96);
+}
+
+.main-material-dom-attr__value.is-toggleable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 203 128 / 0.28);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.main-material-dom-attr__value.is-toggleable:hover {
+  background: rgb(239 200 93 / 0.14);
+  color: rgb(255 232 169 / 0.98);
+}
+
+.main-material-dom-node__text {
+  margin-left: 5px;
+  color: rgb(244 232 198 / 0.58);
+  font-family: var(--font-mono, monospace);
+}
+
+.main-material-dom-style-list {
+  display: inline;
+}
+
+.main-material-dom-style-token {
+  display: inline;
+}
+
+.main-material-dom-style-token + .main-material-dom-style-token::before {
+  content: " ";
+}
+
+.main-material-dom-style-token__name {
+  color: rgb(183 226 164 / 0.94);
+}
+
+.main-material-dom-style-token__punct {
+  color: rgb(128 147 161 / 0.8);
+}
+
+.main-material-dom-source {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 3px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(244 232 198 / 0.58);
+  font: 800 8px/1.45 var(--font-display, sans-serif);
+  vertical-align: 1px;
+  text-transform: uppercase;
+}
+
+.main-material-dom-source--layout { color: rgb(155 209 255 / 0.86); }
+.main-material-dom-source--base { color: rgb(246 229 178 / 0.86); }
+.main-material-dom-source--texture { color: rgb(197 218 170 / 0.86); }
+.main-material-dom-source--gradient { color: rgb(255 198 144 / 0.86); }
+.main-material-dom-source--frosted { color: rgb(178 232 242 / 0.86); }
+.main-material-dom-source--border { color: rgb(220 202 255 / 0.86); }
+.main-material-dom-source--edge { color: rgb(255 176 139 / 0.86); }
+.main-material-dom-source--shadow { color: rgb(204 190 232 / 0.86); }
+.main-material-dom-source--state { color: rgb(255 217 123 / 0.9); }
+.main-material-dom-source--selected { color: rgb(255 230 137 / 0.94); }
+.main-material-dom-source--text { color: rgb(218 236 255 / 0.86); }
+.main-material-dom-source--skin { color: rgb(185 205 220 / 0.74); }
+.main-material-dom-source--a11y,
+.main-material-dom-source--native { color: rgb(172 214 188 / 0.78); }
+
+.main-material-dom-source.is-unknown,
+.main-material-dom-source--unknown {
+  border-color: rgb(229 83 83 / 0.56);
+  color: rgb(255 153 133 / 0.96);
+}
+
+.main-material-dom-node__children {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .main-material-file-input {

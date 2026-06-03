@@ -302,6 +302,33 @@ interface FeedCardTypeRecipe {
 
 type FeedCardTypes = Record<FeedCardTypeId, FeedCardTypeRecipe>;
 
+interface CssEmissionProbe {
+  targetId: string | null;
+  disabledKeys: ReadonlySet<string>;
+}
+
+type EmissionInspectorTab = 'css' | 'html';
+
+interface DomAuditToken {
+  key: string;
+  name: string;
+  value: string;
+  kind: 'known' | 'unknown';
+  reason: string;
+  source: string;
+  cssRules?: string[];
+}
+
+interface DomAuditNode {
+  path: string;
+  tag: string;
+  text: string;
+  classes: DomAuditToken[];
+  attrs: DomAuditToken[];
+  styles: DomAuditToken[];
+  children: DomAuditNode[];
+}
+
 const storageKey = 'cruel-deal.main-material-preview.v23';
 const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
@@ -2330,6 +2357,37 @@ const createBottomChromeFeedNode = (): FeedCardNode => createFeedNode({
     }),
   ],
 });
+
+const topBarTargetIdForChromeNode = (node: FeedCardNode): string => {
+  if (node.id === 'topbar-root') return 'topBar';
+  if (node.id === 'topbar-profile') return topBarProfileTargetId;
+  const currency = topBarCurrencySpecs.find((item) => node.id === `topbar-currency-${item.id}`);
+  if (currency) return topBarCurrencyTargetId(currency.id);
+  return `${topBarMaterialTargetPrefix}${node.id}`;
+};
+
+const bottomChromeTargetIdForChromeNode = (node: FeedCardNode): string => {
+  if (node.id === 'bottom-chrome') return 'bottomChrome';
+  if (node.id === 'toolbar-root') return 'toolBar';
+  if (node.id === 'nav-shell') return 'navBarContainer';
+  if (node.id === 'nav-root') return 'navBar';
+  const navIndex = navNodeSpecs.findIndex((item) => item.id === node.id);
+  if (navIndex >= 0) return navItemTargetId(navIndex);
+  return toolbarMaterialTargetId(node.id);
+};
+
+const findFeedNodeByTargetId = (
+  node: FeedCardNode,
+  targetId: string,
+  targetIdForNode: (node: FeedCardNode) => string,
+): FeedCardNode | undefined => {
+  if (targetIdForNode(node) === targetId) return node;
+  for (const child of node.children || []) {
+    const match = findFeedNodeByTargetId(child, targetId, targetIdForNode);
+    if (match) return match;
+  }
+  return undefined;
+};
 
 const createFeedSlideLayerLayout = (): FeedNodeLayout => createFeedNodeLayout({
   mode: 'absolute',
@@ -12221,6 +12279,429 @@ const feedNodeMaxLines = (node: FeedCardNode, value = '') => (
   node.maxLines ?? (feedNodeFitMode(node, value) === 'single-line' ? 1 : value.includes('\n') ? 2 : 2)
 );
 
+const cssDeclarationLines = (style: JSX.CSSProperties) => (
+  Object.entries(style as Record<string, string | number>)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+);
+
+const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
+const createEmptyCssProbeKeys = (): ReadonlySet<string> => new Set<string>();
+
+const provenance = (source: string, reason: string) => ({ source, reason });
+
+const classProvenance = (className: string): { source: string; reason: string } | null => {
+  if (className === 'main-material-card-node') return provenance('layout', 'unified layout frame');
+  if (className.startsWith('main-material-card-node--')) return provenance('layout', 'node kind frame');
+  if (className.startsWith('main-material-card-node-surface')) return provenance('base', 'material surface slot');
+  if (className.startsWith('cd-surface--texture') || className.includes('texture')) return provenance('texture', 'texture material class');
+  if (className.startsWith('cd-surface--gradient') || className.includes('gradient')) return provenance('gradient', 'gradient material class');
+  if (className.startsWith('cd-surface--glass') || className.includes('glass')) return provenance('frosted', 'glass material class');
+  if (className.startsWith('cd-surface--border') || className.includes('border')) return provenance('border', 'border material class');
+  if (className.startsWith('cd-surface--edge') || className.includes('edge')) return provenance('edge', 'edge wear material class');
+  if (className.includes('shadow') || className.includes('glow')) return provenance('shadow', 'shadow/glow material class');
+  if (className.startsWith('cd-surface') || className.startsWith('cd-button') || className.startsWith('cd-panel')) return provenance('base', 'material primitive');
+  if (className.startsWith('material-text-content')) return provenance('text', 'text renderer');
+  if (className.startsWith('is-editing')) return provenance('selected', 'selection overlay');
+  if (className.startsWith('is-visual') || className === 'is-selected' || className === 'is-interactive' || className === 'is-active') return provenance('state', 'interactive state');
+  if (className.startsWith('main-material-')) return provenance('skin', 'preview skin/layout');
+  return null;
+};
+
+const attrProvenance = (name: string): { source: string; reason: string } | null => {
+  if (name === 'data-material-target-id') return provenance('selected', 'selection/interaction lookup');
+  if (name === 'data-material-role') return provenance('state', 'preview state resolution');
+  if (name === 'data-feed-layout-mode' || name === 'data-feed-layout-slot') return provenance('layout', 'layout compatibility selector');
+  if (name === 'data-w-mode' || name === 'data-h-mode' || name === 'data-direction' || name === 'data-wrap') return provenance('layout', 'layout selector');
+  if (name === 'data-css-probe-target') return provenance('selected', 'emission inspector marker');
+  if (name === 'data-material-surface') return provenance('base', 'material primitive marker');
+  if (name === 'data-emission') return provenance('base', 'emission layer selector');
+  if (name === 'data-emission-edge') return provenance('edge', 'edge emission selector');
+  if (name.startsWith('data-game-text') || name.startsWith('data-material-text')) return provenance('text', 'text renderer instrumentation');
+  if (name === 'aria-label' || name === 'aria-hidden' || name === 'aria-current') return provenance('a11y', 'accessibility');
+  if (name === 'role' || name === 'type' || name === 'disabled') return provenance('native', 'native behavior');
+  return null;
+};
+
+const styleProvenance = (name: string): { source: string; reason: string } | null => {
+  if (name.startsWith('--feed-node')) return provenance('layout', 'layout custom property');
+  if (name.startsWith('--material') || name.startsWith('--surface')) return provenance('base', 'material base variable');
+  if (name.startsWith('--content') || name.startsWith('--icon')) return provenance('text', 'content/text variable');
+  if (name.startsWith('--texture')) return provenance('texture', 'texture variable');
+  if (name.startsWith('--border')) return provenance('border', 'border variable');
+  if (name.startsWith('--edge')) return provenance('edge', 'edge wear variable');
+  if (name.startsWith('--light') || name.startsWith('--dark')) return provenance('gradient', 'highlight/shade variable');
+  if (name === 'inset' || name === 'position' || name === 'left' || name === 'right' || name === 'top' || name === 'bottom') return provenance('layout', 'position emission');
+  if (name === 'width' || name === 'height' || name === 'min-width' || name === 'min-height' || name === 'flex' || name === 'display') return provenance('layout', 'box sizing emission');
+  if (name === 'margin' || name.startsWith('margin-') || name === 'padding' || name.startsWith('padding-') || name === 'gap' || name === 'row-gap' || name === 'column-gap') return provenance('layout', 'spacing emission');
+  if (name === 'align-items' || name === 'justify-content' || name === 'text-align' || name === 'flex-direction' || name === 'flex-wrap') return provenance('layout', 'alignment emission');
+  if (name.includes('background') || name.includes('color')) return provenance('base', 'base color emission');
+  if (name.includes('texture')) return provenance('texture', 'texture variable');
+  if (name.includes('gradient')) return provenance('gradient', 'gradient variable');
+  if (name.includes('blur') || name.includes('glass')) return provenance('frosted', 'glass/blur variable');
+  if (name.includes('border')) return provenance('border', 'border variable');
+  if (name.includes('edge')) return provenance('edge', 'edge wear variable');
+  if (name.includes('shadow') || name.includes('glow')) return provenance('shadow', 'shadow/glow variable');
+  if (name.includes('font') || name.includes('text') || name.includes('line-height') || name.includes('letter-spacing')) return provenance('text', 'text variable');
+  return null;
+};
+
+const auditToken = (
+  key: string,
+  name: string,
+  value: string,
+  info: { source: string; reason: string } | null,
+  cssRules?: string[],
+): DomAuditToken => ({
+  key,
+  name,
+  value,
+  kind: info ? 'known' : 'unknown',
+  reason: info?.reason || 'unclassified',
+  source: info?.source || 'unknown',
+  cssRules,
+});
+
+const parseStyleTokens = (style: string): DomAuditToken[] => (
+  style
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const separator = part.indexOf(':');
+      const name = separator >= 0 ? part.slice(0, separator).trim() : part;
+      const value = separator >= 0 ? part.slice(separator + 1).trim() : '';
+      return auditToken(`style:${name}`, name, value, styleProvenance(name));
+    })
+);
+
+const transientDomClass = (className: string) => (
+  className.startsWith('is-editing')
+);
+
+const transientDomAttr = (name: string) => (
+  name === 'data-css-probe-target'
+);
+
+interface MaterialDomRegistryEntry {
+  targetId: string;
+  instanceId: string;
+  element: HTMLElement;
+}
+
+let materialDomInstanceCounter = 0;
+const materialDomRegistry = new Map<string, MaterialDomRegistryEntry>();
+const [materialDomRegistryVersion, setMaterialDomRegistryVersion] = createSignal(0);
+
+const createMaterialDomInstanceId = () => `material_${(materialDomInstanceCounter += 1).toString().padStart(5, '0')}`;
+
+const unregisterMaterialDomElement = (instanceId: string) => {
+  if (materialDomRegistry.delete(instanceId)) {
+    setMaterialDomRegistryVersion((version) => version + 1);
+  }
+};
+
+const registerMaterialDomElement = (targetId: string, instanceId: string, element: HTMLElement) => {
+  const current = materialDomRegistry.get(instanceId);
+  if (current?.targetId === targetId && current.element === element) return;
+  materialDomRegistry.set(instanceId, { targetId, instanceId, element });
+  setMaterialDomRegistryVersion((version) => version + 1);
+};
+
+const liveMaterialDomEntries = () => (
+  Array.from(materialDomRegistry.values()).filter((entry) => entry.element.isConnected)
+);
+
+const findRegisteredDomAuditTarget = (targetId: string): { entry: MaterialDomRegistryEntry; exact: boolean } | null => {
+  const entries = liveMaterialDomEntries();
+  const exact = entries.find((entry) => entry.targetId === targetId);
+  if (exact) return { entry: exact, exact: true };
+  const feedTarget = parseFeedMaterialTargetId(targetId);
+  if (!feedTarget?.nodeId) return null;
+  const sameNode = entries.find((entry) => entry.targetId.endsWith(`:node:${feedTarget.nodeId}`));
+  return sameNode
+    ? { entry: sameNode, exact: false }
+    : null;
+};
+
+const cssEscapeIdent = (value: string) => (
+  typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+);
+
+const collectClassCssRules = (className: string): string[] => {
+  const needle = `.${cssEscapeIdent(className)}`;
+  const matches: string[] = [];
+  const visit = (rules: CSSRuleList) => {
+    Array.from(rules).forEach((rule) => {
+      if ('cssRules' in rule) {
+        try {
+          visit((rule as CSSGroupingRule).cssRules);
+        } catch {
+          // Ignore inaccessible nested rules.
+        }
+        return;
+      }
+      const styleRule = rule as CSSStyleRule;
+      if (!styleRule.selectorText || !styleRule.selectorText.includes(needle)) return;
+      matches.push(`${styleRule.selectorText} { ${styleRule.style.cssText} }`);
+    });
+  };
+  Array.from(document.styleSheets).forEach((sheet) => {
+    try {
+      if (sheet.cssRules) visit(sheet.cssRules);
+    } catch {
+      // Ignore cross-origin or unavailable sheets.
+    }
+  });
+  return matches.slice(0, 8);
+};
+
+const serializeDomAuditNode = (element: Element, path = '0', hiddenClasses: ReadonlySet<string> = new Set()): DomAuditNode => {
+  const text = Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent?.trim() || '')
+    .filter(Boolean)
+    .join(' ');
+  return {
+    path,
+    tag: element.tagName.toLowerCase(),
+    text,
+    classes: Array.from(element.classList)
+      .filter((className) => !transientDomClass(className))
+      .map((className) => auditToken(`${path}:class:${className}`, 'class', className, classProvenance(className), collectClassCssRules(className)))
+      .filter((token) => !hiddenClasses.has(token.key)),
+    attrs: Array.from(element.attributes)
+      .filter((attr) => attr.name !== 'class' && attr.name !== 'style' && !transientDomAttr(attr.name))
+      .map((attr) => auditToken(`${path}:attr:${attr.name}`, attr.name, attr.value, attrProvenance(attr.name))),
+    styles: parseStyleTokens(element.getAttribute('style') || ''),
+    children: Array.from(element.children).map((child, index) => serializeDomAuditNode(child, `${path}.${index}`, hiddenClasses)),
+  };
+};
+
+const escapeHtml = (value: string) => (
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+);
+
+const escapeAttribute = (value: string) => (
+  escapeHtml(value).replace(/"/g, '&quot;')
+);
+
+const domAuditNodeToHtml = (node: DomAuditNode, depth = 0): string => {
+  const indent = '  '.repeat(depth);
+  const attrs = [
+    node.classes.length ? `class="${escapeAttribute(node.classes.map((token) => token.value).join(' '))}"` : '',
+    ...node.attrs.map((token) => `${token.name}="${escapeAttribute(token.value)}"`),
+    node.styles.length
+      ? `style="${escapeAttribute(node.styles.map((token) => `${token.name}: ${token.value};`).join(' '))}"`
+      : '',
+  ].filter(Boolean);
+  const open = `${indent}<${node.tag}${attrs.length ? ` ${attrs.join(' ')}` : ''}>`;
+  const text = node.text ? escapeHtml(node.text) : '';
+  if (!node.children.length) return `${open}${text}</${node.tag}>`;
+  return [
+    `${open}${text}`,
+    ...node.children.map((child) => domAuditNodeToHtml(child, depth + 1)),
+    `${indent}</${node.tag}>`,
+  ].join('\n');
+};
+
+const DomProvenanceChip = (props: { token: DomAuditToken }) => (
+  <span
+    class={`main-material-dom-source main-material-dom-source--${props.token.source} ${props.token.kind === 'unknown' ? 'is-unknown' : ''}`}
+    title={props.token.reason}
+  >
+    {props.token.source}
+  </span>
+);
+
+const DomAttributeToken = (props: { name: string; tokens: DomAuditToken[]; onToggleClass?: (key: string, className: string) => void }) => (
+  <span class="main-material-dom-attr">
+    <span class="main-material-dom-attr__name">{props.name}</span>
+    <span class="main-material-dom-attr__equals">=</span>
+    <span class="main-material-dom-attr__quote">"</span>
+    <For each={props.tokens}>
+      {(token, index) => (
+        <>
+          <span
+            class={`main-material-dom-attr__value ${token.kind === 'unknown' ? 'is-unknown' : ''} ${props.name === 'class' ? 'is-toggleable' : ''}`}
+            title={props.name === 'class'
+              ? `${token.reason}. ${token.cssRules?.length ? `CSS rules:\n${token.cssRules.join('\n')}` : 'No matching CSS rules found in loaded stylesheets.'}\nClick to hide this class in the inspector.`
+              : token.reason}
+            onClick={() => props.name === 'class' && props.onToggleClass?.(token.key, token.value)}
+          >
+            {index() > 0 ? ' ' : ''}{token.value}
+          </span>
+          <DomProvenanceChip token={token} />
+        </>
+      )}
+    </For>
+    <span class="main-material-dom-attr__quote">"</span>
+  </span>
+);
+
+const DomStyleToken = (props: { token: DomAuditToken }) => (
+  <span class="main-material-dom-style-token">
+    <span class="main-material-dom-style-token__name">{props.token.name}</span>
+    <span class="main-material-dom-style-token__punct">: </span>
+    <span class={`main-material-dom-style-token__value ${props.token.kind === 'unknown' ? 'is-unknown' : ''}`} title={props.token.reason}>
+      {props.token.value}
+    </span>
+    <span class="main-material-dom-style-token__punct">;</span>
+    <DomProvenanceChip token={props.token} />
+  </span>
+);
+
+const DomAuditTree = (props: { node: DomAuditNode; onToggleClass: (key: string, className: string) => void }) => (
+  <div class="main-material-dom-node">
+    <div class="main-material-dom-line">
+      <span class="main-material-dom-punct">&lt;</span>
+      <span class="main-material-dom-tag">{props.node.tag}</span>
+      <Show when={props.node.classes.length}>
+        <span> </span>
+        <DomAttributeToken name="class" tokens={props.node.classes} onToggleClass={props.onToggleClass} />
+      </Show>
+      <For each={props.node.attrs}>
+        {(token) => (
+          <>
+            <span> </span>
+            <DomAttributeToken name={token.name} tokens={[token]} />
+          </>
+        )}
+      </For>
+      <Show when={props.node.styles.length}>
+        <span> </span>
+        <span class="main-material-dom-attr">
+          <span class="main-material-dom-attr__name">style</span>
+          <span class="main-material-dom-attr__equals">=</span>
+          <span class="main-material-dom-attr__quote">"</span>
+          <span class="main-material-dom-style-list">
+            <For each={props.node.styles}>{(token) => <DomStyleToken token={token} />}</For>
+          </span>
+          <span class="main-material-dom-attr__quote">"</span>
+        </span>
+      </Show>
+      <span class="main-material-dom-punct">&gt;</span>
+      <Show when={props.node.text}>
+        {(text) => <span class="main-material-dom-node__text">{text()}</span>}
+      </Show>
+    </div>
+    <Show when={props.node.children.length}>
+      <div class="main-material-dom-node__children">
+        <For each={props.node.children}>{(child) => <DomAuditTree node={child} onToggleClass={props.onToggleClass} />}</For>
+      </div>
+    </Show>
+    <Show when={props.node.children.length}>
+      <div class="main-material-dom-line main-material-dom-line--close">
+        <span class="main-material-dom-punct">&lt;/</span>
+        <span class="main-material-dom-tag">{props.node.tag}</span>
+        <span class="main-material-dom-punct">&gt;</span>
+      </div>
+    </Show>
+  </div>
+);
+
+const EmissionInspector = (props: {
+  open: boolean;
+  tab: EmissionInspectorTab;
+  position: { x: number; y: number };
+  targetLabel: string;
+  targetId: string;
+  cssLines: Array<[string, string | number]>;
+  disabledKeys: ReadonlySet<string>;
+  domSnapshot: DomAuditNode | null;
+  status: string;
+  onToggleOpen: () => void;
+  onTabChange: (tab: EmissionInspectorTab) => void;
+  onToggleCssKey: (key: string) => void;
+  onResetCss: () => void;
+  onRefreshDom: () => void;
+  onCopyHtml: () => void;
+  onToggleDomClass: (key: string, className: string) => void;
+  onDragStart: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
+}) => (
+  <div
+    class={`main-material-emission-inspector ${props.open ? 'is-open' : 'is-collapsed'}`}
+    style={{ left: `${props.position.x}px`, top: `${props.position.y}px` }}
+  >
+    <div class="main-material-emission-inspector__header" onPointerDown={props.onDragStart}>
+      <div class="main-material-emission-inspector__title">
+        <span>Emission</span>
+        <small>{props.targetLabel}</small>
+      </div>
+      <button type="button" class="ui-lab-mini-button" onPointerDown={(event) => event.stopPropagation()} onClick={props.onToggleOpen}>
+        {props.open ? 'hide' : 'show'}
+      </button>
+    </div>
+    <Show when={props.open}>
+      <div class="main-material-emission-inspector__body">
+        <div class="main-material-emission-inspector__tabs">
+          <button type="button" class={props.tab === 'css' ? 'is-active' : ''} onClick={() => props.onTabChange('css')}>Frame CSS</button>
+          <button type="button" class={props.tab === 'html' ? 'is-active' : ''} onClick={() => props.onTabChange('html')}>DOM HTML</button>
+        </div>
+        <div class="main-material-emission-inspector__target">
+          <code>{props.targetId}</code>
+        </div>
+        <div class="main-material-emission-inspector__toolbar">
+          <div class={`main-material-emission-inspector__status ${props.status ? '' : 'is-idle'}`}>
+            {props.status || 'Ready'}
+          </div>
+          <Show when={props.tab === 'html'}>
+            <div class="main-material-emission-inspector__panel-actions">
+              <button type="button" class="ui-lab-mini-button" onClick={props.onCopyHtml}>copy</button>
+              <button type="button" class="ui-lab-mini-button" onClick={props.onRefreshDom}>refresh</button>
+            </div>
+          </Show>
+        </div>
+        <Show when={props.tab === 'css'} fallback={(
+          <div class="main-material-emission-inspector__panel">
+            <div class="main-material-emission-inspector__panel-head">
+              <span>DOM Payload</span>
+            </div>
+            <p class="main-material-emission-help">
+              Actual selected DOM subtree, cleaned of editor flash. Click class values to hide/show them in this inspector; refresh restores the live emitted DOM.
+            </p>
+            <Show when={props.domSnapshot} fallback={<p class="main-material-emission-empty">No matching DOM node.</p>}>
+              {(node) => <DomAuditTree node={node()} onToggleClass={props.onToggleDomClass} />}
+            </Show>
+          </div>
+        )}>
+          <div class="main-material-emission-inspector__panel">
+            <div class="main-material-emission-inspector__panel-head">
+              <span>Unified Frame CSS</span>
+              <button type="button" class="ui-lab-mini-button" onClick={props.onResetCss}>reset</button>
+            </div>
+            <p class="main-material-emission-help">
+              Inline layout declarations emitted by this selected layout frame. Material classes, layer spans, and CSS variables live in DOM HTML.
+            </p>
+            <div class="main-material-emission-rows">
+              <For each={props.cssLines}>
+                {([key, value]) => {
+                  const disabled = () => props.disabledKeys.has(key);
+                  return (
+                    <label class={`main-material-emission-row ${disabled() ? 'is-disabled' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={!disabled()}
+                        onChange={() => props.onToggleCssKey(key)}
+                      />
+                      <code>{cssDeclarationText(key, value)}</code>
+                    </label>
+                  );
+                }}
+              </For>
+              <Show when={!props.cssLines.length}>
+                <p class="main-material-emission-empty">Select a feed child node to inspect emitted layout CSS.</p>
+              </Show>
+            </div>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  </div>
+);
+
 const FeedNodeFrame = (props: {
   node: FeedCardNode;
   targetId: string;
@@ -12228,34 +12709,91 @@ const FeedNodeFrame = (props: {
   targetClass: string;
   children: JSX.Element;
   ariaLabel?: string;
+  cssProbe?: CssEmissionProbe;
   style?: JSX.CSSProperties;
   onPointerDown?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
   onPointerMove?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
   onPointerUp?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
   onPointerCancel?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
   onPointerLeave?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-}) => (
-  <div
-    class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
-    aria-label={props.ariaLabel}
-    data-feed-layout-mode={props.node.layout.mode}
-    data-feed-layout-slot={props.node.layout.slot}
-    data-w-mode={resolveLayoutWMode(props.node.layout)}
-    data-h-mode={resolveLayoutHMode(props.node.layout)}
-    data-direction={resolveLayoutDirection(props.node.layout)}
-    data-wrap={props.node.layout.wrap ? 'true' : undefined}
-    data-material-target-id={props.targetId}
-    data-material-role={props.role}
-    style={{ ...feedNodeLayoutCss(props.node.layout, { forcePaddingVar: props.node.type === 'button' }), ...props.style }}
-    onPointerDown={props.onPointerDown}
-    onPointerMove={props.onPointerMove}
-    onPointerUp={props.onPointerUp}
-    onPointerCancel={props.onPointerCancel}
-    onPointerLeave={props.onPointerLeave}
-  >
-    {props.children}
-  </div>
-);
+}) => {
+  const materialInstanceId = createMaterialDomInstanceId();
+  let frameElement: HTMLDivElement | undefined;
+  createEffect(() => {
+    const targetId = props.targetId;
+    if (frameElement) registerMaterialDomElement(targetId, materialInstanceId, frameElement);
+  });
+  onCleanup(() => unregisterMaterialDomElement(materialInstanceId));
+  const layoutStyle = () => {
+    const css = {
+      ...feedNodeLayoutCss(props.node.layout, { forcePaddingVar: props.node.type === 'button' }),
+    };
+    if (props.cssProbe?.targetId === props.targetId) {
+      props.cssProbe.disabledKeys.forEach((key) => {
+        delete (css as Record<string, unknown>)[key];
+      });
+    }
+    return { ...css, ...props.style };
+  };
+  return (
+    <div
+      ref={(element) => {
+        frameElement = element;
+        registerMaterialDomElement(props.targetId, materialInstanceId, element);
+      }}
+      class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
+      aria-label={props.ariaLabel}
+      data-feed-layout-mode={props.node.layout.mode}
+      data-feed-layout-slot={props.node.layout.slot}
+      data-w-mode={resolveLayoutWMode(props.node.layout)}
+      data-h-mode={resolveLayoutHMode(props.node.layout)}
+      data-direction={resolveLayoutDirection(props.node.layout)}
+      data-wrap={props.node.layout.wrap ? 'true' : undefined}
+      data-material-target-id={props.targetId}
+      data-material-instance-id={materialInstanceId}
+      data-material-role={props.role}
+      data-css-probe-target={props.cssProbe?.targetId === props.targetId ? 'true' : undefined}
+      style={layoutStyle()}
+      onPointerDown={props.onPointerDown}
+      onPointerMove={props.onPointerMove}
+      onPointerUp={props.onPointerUp}
+      onPointerCancel={props.onPointerCancel}
+      onPointerLeave={props.onPointerLeave}
+    >
+      {props.children}
+    </div>
+  );
+};
+
+const MaterialDomRegistryTarget = (props: {
+  targetId: string;
+  role: PreviewTargetRole;
+  class?: string;
+  children: JSX.Element;
+}) => {
+  const materialInstanceId = createMaterialDomInstanceId();
+  let elementRef: HTMLDivElement | undefined;
+  createEffect(() => {
+    const targetId = props.targetId;
+    if (elementRef) registerMaterialDomElement(targetId, materialInstanceId, elementRef);
+  });
+  onCleanup(() => unregisterMaterialDomElement(materialInstanceId));
+
+  return (
+    <div
+      ref={(element) => {
+        elementRef = element;
+        registerMaterialDomElement(props.targetId, materialInstanceId, element);
+      }}
+      class={props.class}
+      data-material-target-id={props.targetId}
+      data-material-instance-id={materialInstanceId}
+      data-material-role={props.role}
+    >
+      {props.children}
+    </div>
+  );
+};
 
 interface ChromeFeedNodeRenderContext {
   targetIdForNode: (node: FeedCardNode) => string;
@@ -12277,6 +12815,7 @@ interface ChromeFeedNodeRenderContext {
 const ChromeFeedNodeTree = (props: {
   node: FeedCardNode;
   context: ChromeFeedNodeRenderContext;
+  cssProbe?: CssEmissionProbe;
 }) => {
   const nodeRole = (): PreviewTargetRole => props.context.roleForNode?.(props.node) ?? (props.node.type === 'button' ? 'momentary' : props.node.type === 'container' ? 'container' : 'text');
   const targetId = () => props.context.targetIdForNode(props.node);
@@ -12306,7 +12845,7 @@ const ChromeFeedNodeTree = (props: {
         <Show
           when={props.node.type === 'text'}
           fallback={(
-            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
               <Show when={props.context.surfacePropsForNode?.(props.node, nodeRole(), visualState())}>
                 {(surfaceProps) => (
                   <MaterialSurfaceHost
@@ -12319,19 +12858,19 @@ const ChromeFeedNodeTree = (props: {
               </Show>
               <div class="main-material-card-node-flow-stack">
                 <For each={props.node.children || []}>
-                  {(child) => <ChromeFeedNodeTree node={child} context={props.context} />}
+                  {(child) => <ChromeFeedNodeTree node={child} context={props.context} cssProbe={props.cssProbe} />}
                 </For>
               </div>
             </FeedNodeFrame>
           )}
         >
-          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
             {fittedChromeText()}
           </FeedNodeFrame>
         </Show>
       )}
     >
-      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
         <MaterialSurfaceHost
           kind="button"
           surfaceProps={props.context.buttonPropsForNode?.(props.node, nodeRole(), visualState())}
@@ -12352,6 +12891,7 @@ const FeedCardTreeNode = (props: {
   cardType: FeedCardTypeRecipe;
   surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  cssProbe?: CssEmissionProbe;
 }) => {
   const resolvedTextStyle = () => resolveFeedNodeTextStyle(props.cardType, props.node);
   const textStyle = () => feedTextCss(resolvedTextStyle());
@@ -12411,7 +12951,7 @@ const FeedCardTreeNode = (props: {
         <Show
           when={props.node.type === 'button'}
           fallback={(
-            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
               <MaterialSurfaceHost
                 kind="panel"
                 surfaceProps={materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
@@ -12423,7 +12963,7 @@ const FeedCardTreeNode = (props: {
             </FeedNodeFrame>
           )}
         >
-          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
             <MaterialSurfaceHost
               kind="button"
               surfaceProps={materialRecipeItemProps(surfaceRecipe(), 0, visualState())}
@@ -12436,7 +12976,7 @@ const FeedCardTreeNode = (props: {
         </Show>
       )}
     >
-      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
         <MaterialSurfaceHost
           kind="panel"
           surfaceProps={materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
@@ -12454,6 +12994,7 @@ const FeedCardTreeNode = (props: {
                   cardType={props.cardType}
                   surfaceStateForTarget={props.surfaceStateForTarget}
                   selectedFeedTargetClass={props.selectedFeedTargetClass}
+                  cssProbe={props.cssProbe}
                 />
               )}
             </For>
@@ -12471,6 +13012,7 @@ const FeedCardTreeNode = (props: {
                   cardType={props.cardType}
                   surfaceStateForTarget={props.surfaceStateForTarget}
                   selectedFeedTargetClass={props.selectedFeedTargetClass}
+                  cssProbe={props.cssProbe}
                 />
               )}
             </For>
@@ -12489,6 +13031,7 @@ const FeedSlideFrame = (props: {
   imageSource: string;
   surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  cssProbe?: CssEmissionProbe;
 }) => {
   const slideNode = createFeedSlideFrameNode(props.cardType.id);
   const mediaNode = slideNode.children?.[0] || createFeedNode({ id: `feed-slide-${props.cardType.id}-media`, label: 'Feed Media', type: 'container', layout: createFeedSlideLayerLayout() });
@@ -12502,6 +13045,7 @@ const FeedSlideFrame = (props: {
       targetId={cardTargetId()}
       role="container"
       targetClass={`main-material-feed-slide-frame ${props.selectedFeedTargetClass(cardTargetId())}`}
+      cssProbe={props.cssProbe}
     >
       <MaterialSurfaceHost
         kind="panel"
@@ -12514,6 +13058,7 @@ const FeedSlideFrame = (props: {
         targetId={`${cardTargetId()}:media`}
         role="static"
         targetClass="main-material-feed-media-layer"
+        cssProbe={props.cssProbe}
       >
         <Show when={props.cardType.backgroundImage.enabled}>
           <img
@@ -12537,6 +13082,7 @@ const FeedSlideFrame = (props: {
         targetId={`${cardTargetId()}:content`}
         role="static"
         targetClass="main-material-card-tree"
+        cssProbe={props.cssProbe}
       >
         <For each={props.cardType.children}>
           {(node) => (
@@ -12546,6 +13092,7 @@ const FeedSlideFrame = (props: {
               cardType={props.cardType}
               surfaceStateForTarget={props.surfaceStateForTarget}
               selectedFeedTargetClass={props.selectedFeedTargetClass}
+              cssProbe={props.cssProbe}
             />
           )}
         </For>
@@ -12591,6 +13138,7 @@ const FeedTrackSlide = (props: {
   imageSource: string;
   surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  cssProbe?: CssEmissionProbe;
 }) => {
   const node = createFeedTrackSlideNode(props.story.id);
   return (
@@ -12599,6 +13147,7 @@ const FeedTrackSlide = (props: {
       targetId={`feed:track:slide:${props.story.id}`}
       role="static"
       targetClass="main-material-feed-slide"
+      cssProbe={props.cssProbe}
     >
       <div class="main-material-card-node-flow-stack">
         <FeedSlideFrame
@@ -12607,6 +13156,7 @@ const FeedTrackSlide = (props: {
           imageSource={props.imageSource}
           surfaceStateForTarget={props.surfaceStateForTarget}
           selectedFeedTargetClass={props.selectedFeedTargetClass}
+          cssProbe={props.cssProbe}
         />
       </div>
     </FeedNodeFrame>
@@ -12623,6 +13173,7 @@ const FeedCarousel = (props: {
   surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
   storyImageOverrides: Record<string, string>;
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  cssProbe?: CssEmissionProbe;
   onInteractiveDragStart?: () => void;
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
@@ -12706,6 +13257,7 @@ const FeedCarousel = (props: {
                   imageSource={imageSource()}
                   surfaceStateForTarget={props.surfaceStateForTarget}
                   selectedFeedTargetClass={props.selectedFeedTargetClass}
+                  cssProbe={props.cssProbe}
                 />
               );
             }}
@@ -12749,6 +13301,7 @@ const MainMaterialPreview = (props: {
   onActiveFeedStoryChange: (storyId: string) => void;
   nav: NavRecipe;
   surfaces: SurfaceRecipes;
+  cssProbe?: CssEmissionProbe;
 }) => {
   const [hoveredTargetId, setHoveredTargetId] = createSignal<string | null>(null);
   const [pressedTargetId, setPressedTargetId] = createSignal<string | null>(null);
@@ -12851,13 +13404,6 @@ const MainMaterialPreview = (props: {
   const topBarNode = createTopBarFeedNode();
   const bottomChromeNode = createBottomChromeFeedNode();
   const topBarCurrencyNodeIndex = (node: FeedCardNode) => topBarCurrencySpecs.findIndex((item) => `topbar-currency-${item.id}` === node.id);
-  const topBarTargetIdForNode = (node: FeedCardNode) => {
-    if (node.id === 'topbar-root') return 'topBar';
-    if (node.id === 'topbar-profile') return topBarProfileTargetId;
-    const currencyIndex = topBarCurrencyNodeIndex(node);
-    if (currencyIndex >= 0) return topBarCurrencyTargetId(topBarCurrencySpecs[currencyIndex].id);
-    return `${topBarMaterialTargetPrefix}${node.id}`;
-  };
   const topBarPreviewStateForNode = (node: FeedCardNode, role: PreviewTargetRole): MaterialRecipeState => {
     if (node.id === 'topbar-root') return stateForPart('topBar');
     if (node.id === 'topbar-profile') {
@@ -12880,7 +13426,7 @@ const MainMaterialPreview = (props: {
     return 'rest';
   };
   const topBarNodeContext: ChromeFeedNodeRenderContext = {
-    targetIdForNode: topBarTargetIdForNode,
+    targetIdForNode: topBarTargetIdForChromeNode,
     roleForNode: (node) => node.id === 'topbar-profile' ? 'disclosure' : node.type === 'button' ? 'momentary' : node.type === 'container' ? 'container' : 'text',
     previewStateForNode: topBarPreviewStateForNode,
     surfacePropsForNode: (node, _role, visualState) => (
@@ -12948,14 +13494,6 @@ const MainMaterialPreview = (props: {
     index === 0 || index === 4 ? 'main-material-button-bar__item--dark' : '',
     index === 2 ? 'main-material-button-bar__item--red' : '',
   ].filter(Boolean).join(' ');
-  const bottomChromeTargetIdForNode = (node: FeedCardNode) => {
-    if (node.id === 'bottom-chrome') return 'bottomChrome';
-    if (node.id === 'toolbar-root') return 'toolBar';
-    if (node.id === 'nav-shell') return 'navBarContainer';
-    if (node.id === 'nav-root') return 'navBar';
-    if (navNodeIndex(node) >= 0) return navNodeTargetId(node);
-    return toolbarMaterialTargetId(node.id);
-  };
   const bottomChromeRoleForNode = (node: FeedCardNode): PreviewTargetRole => {
     if (node.id === 'bottom-chrome' || node.id === 'toolbar-root' || node.id === 'nav-shell' || node.id === 'nav-root') return 'container';
     if (navNodeIndex(node) >= 0) return 'selectable';
@@ -12969,7 +13507,7 @@ const MainMaterialPreview = (props: {
     return 'rest';
   };
   const bottomChromeNodeContext: ChromeFeedNodeRenderContext = {
-    targetIdForNode: bottomChromeTargetIdForNode,
+    targetIdForNode: bottomChromeTargetIdForChromeNode,
     roleForNode: bottomChromeRoleForNode,
     previewStateForNode: bottomChromePreviewStateForNode,
     surfacePropsForNode: (node, _role, visualState) => (
@@ -13032,17 +13570,27 @@ const MainMaterialPreview = (props: {
       onFocusOut={onPhoneFocusOut}
     >
       <div class="main-material-screen">
-        <MaterialPanel
-          {...materialSurfacePropsForPart('backdrop', props.surfaces.backdrop, stateForPart('backdrop'))}
-          padded={false}
-          class={`main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
+        <MaterialDomRegistryTarget
+          targetId="backdrop"
+          role="static"
+          class="main-material-preview-audit-target"
         >
-          <div class="main-material-wash" />
-          <div class="main-material-grain" />
-        </MaterialPanel>
+          <MaterialPanel
+            {...materialSurfacePropsForPart('backdrop', props.surfaces.backdrop, stateForPart('backdrop'))}
+            padded={false}
+            class={`main-material-backdrop-surface ${props.selectedClass('backdrop')}`}
+          >
+            <div class="main-material-wash" />
+            <div class="main-material-grain" />
+          </MaterialPanel>
+        </MaterialDomRegistryTarget>
 
-        <div class="main-material-frame main-material-frame--editor">
-          <ChromeFeedNodeTree node={topBarNode} context={topBarNodeContext} />
+        <MaterialDomRegistryTarget
+          targetId="titleBlock"
+          role="static"
+          class="main-material-frame main-material-frame--editor"
+        >
+          <ChromeFeedNodeTree node={topBarNode} context={topBarNodeContext} cssProbe={props.cssProbe} />
 
           <main class="main-material-scroll">
             <FeedCarousel
@@ -13055,12 +13603,13 @@ const MainMaterialPreview = (props: {
               surfaceStateForTarget={feedSurfaceStateForTarget}
               storyImageOverrides={props.feedStoryImageOverrides}
               selectedFeedTargetClass={props.selectedFeedTargetClass}
+              cssProbe={props.cssProbe}
               onInteractiveDragStart={onPhonePointerUp}
             />
           </main>
 
-          <ChromeFeedNodeTree node={bottomChromeNode} context={bottomChromeNodeContext} />
-        </div>
+          <ChromeFeedNodeTree node={bottomChromeNode} context={bottomChromeNodeContext} cssProbe={props.cssProbe} />
+        </MaterialDomRegistryTarget>
       </div>
     </div>
   );
@@ -13084,6 +13633,14 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedFeedStoryId, setSelectedFeedStoryId] = createSignal(mockFeedStories[0].id);
   const [editingFeedCardTypeId, setEditingFeedCardTypeId] = createSignal<FeedCardTypeId>('card_type_01');
   const [selectedFeedTargetId, setSelectedFeedTargetId] = createSignal<FeedMaterialTargetId>(feedCardMaterialTargetId('card_type_01'));
+  const [cssProbeDisabledKeys, setCssProbeDisabledKeys] = createSignal<ReadonlySet<string>>(createEmptyCssProbeKeys());
+  const [emissionInspectorOpen, setEmissionInspectorOpen] = createSignal(true);
+  const [emissionInspectorTab, setEmissionInspectorTab] = createSignal<EmissionInspectorTab>('css');
+  const [emissionInspectorPosition, setEmissionInspectorPosition] = createSignal({ x: 206, y: 112 });
+  const [emissionInspectorStatus, setEmissionInspectorStatus] = createSignal('');
+  const [domAuditSnapshot, setDomAuditSnapshot] = createSignal<DomAuditNode | null>(null);
+  const [hiddenDomClassKeys, setHiddenDomClassKeys] = createSignal<ReadonlySet<string>>(new Set());
+  let emissionInspectorStatusTimeout: number | undefined;
   const [selectedTopBarTargetId, setSelectedTopBarTargetId] = createSignal<TopBarMaterialTargetId | null>(null);
   const [selectedToolbarTargetId, setSelectedToolbarTargetId] = createSignal<ToolbarMaterialTargetId | null>(null);
   const [selectedNavTargetId, setSelectedNavTargetId] = createSignal<NavMaterialTargetId | null>(null);
@@ -13246,10 +13803,47 @@ export const MainMaterialPreviewScreen = () => {
   const updateSelectedFeedMaterialRecipe = (recipe: MaterialRecipe) => {
     selectedFeedMaterialTarget().onChange(pruneRecipeForCapabilities(recipe, selectedFeedMaterialCapabilities()));
   };
+  const toggleCssProbeKey = (key: string) => {
+    setCssProbeDisabledKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+        setInspectorStatus(`Restored ${key}`);
+      } else {
+        next.add(key);
+        setInspectorStatus(`Removed ${key}`);
+      }
+      return next;
+    });
+  };
+  const resetCssProbe = () => {
+    setCssProbeDisabledKeys(createEmptyCssProbeKeys());
+    setInspectorStatus('Frame CSS toggles reset');
+  };
+  const setInspectorStatus = (message: string) => {
+    if (emissionInspectorStatusTimeout) window.clearTimeout(emissionInspectorStatusTimeout);
+    setEmissionInspectorStatus(message);
+    emissionInspectorStatusTimeout = window.setTimeout(() => {
+      setEmissionInspectorStatus((current) => current === message ? '' : current);
+    }, 1800);
+  };
+  onCleanup(() => {
+    if (emissionInspectorStatusTimeout) window.clearTimeout(emissionInspectorStatusTimeout);
+  });
 
   createEffect(() => {
     const targetExists = flatFeedMaterialTargets().some((entry) => entry.target.id === selectedFeedTargetId());
     if (!targetExists) setSelectedFeedTargetId(feedCardMaterialTargetId(editingFeedCardTypeId()));
+  });
+
+  createEffect(() => {
+    selectedPart();
+    selectedFeedTargetId();
+    selectedTopBarTargetId();
+    selectedToolbarTargetId();
+    selectedNavTargetId();
+    setCssProbeDisabledKeys(createEmptyCssProbeKeys());
+    setHiddenDomClassKeys(new Set());
   });
 
   const feedWorkbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
@@ -13479,6 +14073,139 @@ export const MainMaterialPreviewScreen = () => {
       ? selectedNavTargetId() as NavMaterialTargetId
       : selectedPart()
   );
+
+  const selectedEmissionTargetId = () => String(selectedWorkbenchPartId());
+  const selectedEmissionTargetLabel = () => (
+    workbenchParts().find((part) => part.id === selectedWorkbenchPartId())?.label || selectedEmissionTargetId()
+  );
+  const selectedCssProbeNode = () => {
+    const targetId = selectedEmissionTargetId();
+    if (targetId === 'topBar' || targetId.startsWith(topBarMaterialTargetPrefix)) {
+      return findFeedNodeByTargetId(createTopBarFeedNode(), targetId, topBarTargetIdForChromeNode);
+    }
+    if (
+      targetId === 'toolBar'
+      || targetId === 'navBar'
+      || targetId === 'navBarContainer'
+      || targetId.startsWith(toolbarMaterialTargetPrefix)
+      || targetId.startsWith(navMaterialTargetPrefix)
+    ) {
+      return findFeedNodeByTargetId(createBottomChromeFeedNode(), targetId, bottomChromeTargetIdForChromeNode);
+    }
+    if (selectedPart() !== 'feedCards') return undefined;
+    const target = parseFeedMaterialTargetId(selectedFeedTargetId());
+    if (!target?.nodeId) return undefined;
+    const cardType = feedCardTypes()[target.cardTypeId];
+    return cardType ? findFeedNodeById(cardType.children, target.nodeId) : undefined;
+  };
+  const selectedCssProbeTargetId = () => selectedCssProbeNode() ? selectedEmissionTargetId() : null;
+  const selectedCssProbeLines = () => {
+    const node = selectedCssProbeNode();
+    return node
+      ? cssDeclarationLines(feedNodeLayoutCss(node.layout, { forcePaddingVar: node.type === 'button' }))
+      : [];
+  };
+  const refreshDomAudit = (
+    targetId = selectedEmissionTargetId(),
+    hiddenClasses = hiddenDomClassKeys(),
+    reportMissing = true,
+  ) => {
+    const match = findRegisteredDomAuditTarget(targetId);
+    if (match) {
+      setDomAuditSnapshot(serializeDomAuditNode(match.entry.element, '0', hiddenClasses));
+      if (!match.exact) {
+        setInspectorStatus(`Showing ${match.entry.instanceId} (${match.entry.targetId}) for selected ${targetId}`);
+      } else {
+        setEmissionInspectorStatus((current) => current.startsWith('No live DOM node') ? '' : current);
+      }
+      return true;
+    }
+    if (reportMissing) {
+      setDomAuditSnapshot(null);
+      setInspectorStatus(`No live DOM node for ${targetId}`);
+    }
+    return false;
+  };
+  const queueDomAuditRefresh = (targetId: string, hiddenClasses: ReadonlySet<string>, maxAttempts = 6) => {
+    let attempt = 0;
+    let frame = 0;
+    const run = () => {
+      if (selectedEmissionTargetId() !== targetId) return;
+      const isLastAttempt = attempt >= maxAttempts - 1;
+      const matched = refreshDomAudit(targetId, hiddenClasses, isLastAttempt);
+      if (matched || isLastAttempt) return;
+      attempt += 1;
+      frame = window.requestAnimationFrame(run);
+    };
+    frame = window.requestAnimationFrame(run);
+    return () => window.cancelAnimationFrame(frame);
+  };
+  const refreshDomAuditWithStatus = () => {
+    const reset = new Set<string>();
+    setHiddenDomClassKeys(reset);
+    const matched = refreshDomAudit(selectedEmissionTargetId(), reset);
+    setInspectorStatus(matched
+      ? 'DOM refreshed from live selected element; class pokes cleared'
+      : `No live DOM node for ${selectedEmissionTargetId()}`);
+  };
+  const toggleDomClassProbe = (key: string, className: string) => {
+    setHiddenDomClassKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+        setInspectorStatus(`Restored class ${className}`);
+      } else {
+        next.add(key);
+        setInspectorStatus(`Hid class ${className} in inspector`);
+      }
+      return next;
+    });
+  };
+  const copyDomAuditHtml = async () => {
+    const snapshot = domAuditSnapshot();
+    const html = snapshot ? domAuditNodeToHtml(snapshot) : '';
+    await navigator.clipboard?.writeText(html);
+    setInspectorStatus(html ? 'Copied cleaned DOM HTML' : 'Nothing to copy');
+  };
+  const startEmissionInspectorDrag = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
+    const start = emissionInspectorPosition();
+    const offset = { x: event.clientX - start.x, y: event.clientY - start.y };
+    const move = (moveEvent: PointerEvent) => {
+      const inspectorWidth = emissionInspectorOpen() ? 420 : 210;
+      const maxX = Math.max(8, window.innerWidth - inspectorWidth - 8);
+      const maxY = Math.max(8, window.innerHeight - 72);
+      setEmissionInspectorPosition({
+        x: Math.min(maxX, Math.max(8, moveEvent.clientX - offset.x)),
+        y: Math.min(maxY, Math.max(8, moveEvent.clientY - offset.y)),
+      });
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop, { once: true });
+    event.preventDefault();
+  };
+
+  createEffect(() => {
+    const targetId = selectedEmissionTargetId();
+    selectedPart();
+    selectedFeedTargetId();
+    selectedTopBarTargetId();
+    selectedToolbarTargetId();
+    selectedNavTargetId();
+    feedCardTypes();
+    surfaces();
+    nav();
+    title();
+    feed();
+    cssProbeDisabledKeys();
+    const hiddenClasses = hiddenDomClassKeys();
+    materialDomRegistryVersion();
+    const cancel = queueDomAuditRefresh(targetId, hiddenClasses);
+    onCleanup(cancel);
+  });
 
   const selectWorkbenchPart = (part: MainWorkbenchPartId) => {
     if (part.startsWith(feedCardMaterialTargetPrefix)) {
@@ -14051,76 +14778,104 @@ export const MainMaterialPreviewScreen = () => {
   );
 
   return (
-    <MaterialWorkbenchLayout
-      title="Main Skin"
-      subtitle="Material Preview"
-      sidebarTabs={[
-        { id: 'parts', label: 'UI Tree' },
-        { id: 'text', label: 'Type' },
-      ]}
-      selectedSidebarTabId={sidebarTab()}
-      onSelectSidebarTab={(id) => setSidebarTab(id === 'text' ? 'text' : 'parts')}
-      sidebarAlt={(
-        <FeedTextGlobalsEditor
-          cardType={feedCardTypes()[editingFeedCardTypeId()]}
-          onSlotChange={updateGlobalFeedTypeSlot}
-        />
-      )}
-      parts={workbenchParts()}
-      selectedPartId={selectedWorkbenchPartId()}
-      onSelectPart={selectWorkbenchPart}
-      selectionPulseTick={selectionFlashTick()}
-      selectionPulseEnabled={selectionOverlayMode() === 'flash'}
-      preview={(
-        <MainMaterialPreview
-          previewStates={previewStates()}
-          selectedPart={selectedPart()}
-          selectedFeedPreviewState={selectedPreviewState()}
-          selectedFeedTargetId={selectedFeedTargetId()}
-          selectedTopBarTargetId={selectedTopBarTargetId()}
-          selectedToolbarTargetId={selectedToolbarTargetId()}
-          selectedNavTargetId={selectedNavTargetId()}
-          previewInteractionMode={previewInteractionMode()}
-          forcePreview={forcePreview()}
-          activeNavIndex={activeNavIndex()}
-          onActiveNavIndexChange={setActiveNavIndex}
-          selectedClass={selectedClass}
-          backdrop={backdrop()}
-          title={title()}
-          feed={feed()}
-          feedStories={feedStories()}
-          feedCardTypes={feedCardTypes()}
-          feedStoryImageOverrides={feedStoryImageOverrides()}
-          selectedFeedTargetClass={selectedFeedTargetClass}
-          selectedTopBarTargetClass={selectedTopBarTargetClass}
-          selectedToolbarTargetClass={selectedToolbarTargetClass}
-          selectedNavTargetClass={selectedNavTargetClass}
-          activeFeedStoryId={selectedFeedStoryId()}
-          onActiveFeedStoryChange={selectFeedStory}
-          nav={nav()}
-          surfaces={surfaces()}
-        />
-      )}
-      editor={editor}
-      actions={(
-        <>
-          {selectionOverlayControl}
-          {interactionModeControl}
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={exportJson}>Export</button>
-            <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={() => void importJson()}>Import</button>
-          </div>
-        </>
-      )}
-      footer={(
-        <>
-          <button type="button" class="ui-lab-mini-button" onClick={resetSelected}>Reset Selected</button>
-          <button type="button" class="ui-lab-mini-button" onClick={resetAll}>Reset All</button>
-          <button type="button" class="ui-lab-mini-button" onClick={clearMaterialPresets}>Clear Material Presets</button>
-        </>
-      )}
-      class="main-material-page"
-    />
+    <>
+      <MaterialWorkbenchLayout
+        title="Main Skin"
+        subtitle="Material Preview"
+        sidebarTabs={[
+          { id: 'parts', label: 'UI Tree' },
+          { id: 'text', label: 'Type' },
+        ]}
+        selectedSidebarTabId={sidebarTab()}
+        onSelectSidebarTab={(id) => setSidebarTab(id === 'text' ? 'text' : 'parts')}
+        sidebarAlt={(
+          <FeedTextGlobalsEditor
+            cardType={feedCardTypes()[editingFeedCardTypeId()]}
+            onSlotChange={updateGlobalFeedTypeSlot}
+          />
+        )}
+        parts={workbenchParts()}
+        selectedPartId={selectedWorkbenchPartId()}
+        onSelectPart={selectWorkbenchPart}
+        selectionPulseTick={selectionFlashTick()}
+        selectionPulseEnabled={selectionOverlayMode() === 'flash'}
+        preview={(
+          <MainMaterialPreview
+            previewStates={previewStates()}
+            selectedPart={selectedPart()}
+            selectedFeedPreviewState={selectedPreviewState()}
+            selectedFeedTargetId={selectedFeedTargetId()}
+            selectedTopBarTargetId={selectedTopBarTargetId()}
+            selectedToolbarTargetId={selectedToolbarTargetId()}
+            selectedNavTargetId={selectedNavTargetId()}
+            previewInteractionMode={previewInteractionMode()}
+            forcePreview={forcePreview()}
+            activeNavIndex={activeNavIndex()}
+            onActiveNavIndexChange={setActiveNavIndex}
+            selectedClass={selectedClass}
+            backdrop={backdrop()}
+            title={title()}
+            feed={feed()}
+            feedStories={feedStories()}
+            feedCardTypes={feedCardTypes()}
+            feedStoryImageOverrides={feedStoryImageOverrides()}
+            selectedFeedTargetClass={selectedFeedTargetClass}
+            selectedTopBarTargetClass={selectedTopBarTargetClass}
+            selectedToolbarTargetClass={selectedToolbarTargetClass}
+            selectedNavTargetClass={selectedNavTargetClass}
+            cssProbe={{
+              targetId: selectedCssProbeTargetId(),
+              disabledKeys: cssProbeDisabledKeys(),
+            }}
+            activeFeedStoryId={selectedFeedStoryId()}
+            onActiveFeedStoryChange={selectFeedStory}
+            nav={nav()}
+            surfaces={surfaces()}
+          />
+        )}
+        editor={editor}
+        actions={(
+          <>
+            {selectionOverlayControl}
+            {interactionModeControl}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={exportJson}>Export</button>
+              <button type="button" class="ui-lab-mini-button" style={{ flex: '1' }} onClick={() => void importJson()}>Import</button>
+            </div>
+          </>
+        )}
+        footer={(
+          <>
+            <button type="button" class="ui-lab-mini-button" onClick={resetSelected}>Reset Selected</button>
+            <button type="button" class="ui-lab-mini-button" onClick={resetAll}>Reset All</button>
+            <button type="button" class="ui-lab-mini-button" onClick={clearMaterialPresets}>Clear Material Presets</button>
+          </>
+        )}
+        class="main-material-page"
+      />
+      <EmissionInspector
+        open={emissionInspectorOpen()}
+        tab={emissionInspectorTab()}
+        position={emissionInspectorPosition()}
+        targetLabel={selectedEmissionTargetLabel()}
+        targetId={selectedEmissionTargetId()}
+        cssLines={selectedCssProbeLines()}
+        disabledKeys={cssProbeDisabledKeys()}
+        domSnapshot={domAuditSnapshot()}
+        status={emissionInspectorStatus()}
+        onToggleOpen={() => setEmissionInspectorOpen((open) => !open)}
+        onTabChange={(tab) => {
+          setEmissionInspectorTab(tab);
+          setInspectorStatus(tab === 'css' ? 'Showing frame layout CSS only' : 'Showing cleaned live DOM subtree');
+        }}
+        onToggleCssKey={toggleCssProbeKey}
+        onResetCss={resetCssProbe}
+        onRefreshDom={refreshDomAuditWithStatus}
+        onCopyHtml={copyDomAuditHtml}
+        onToggleDomClass={toggleDomClassProbe}
+        onDragStart={startEmissionInspectorDrag}
+      />
+    </>
   );
 };
 
