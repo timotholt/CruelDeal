@@ -10,10 +10,8 @@ import {
   SectionLabel,
   cloneMaterialRecipe,
   createMaterialRecipe,
-  createMaterialButtonEmissionPlan,
   createMaterialStateOverlays,
   fontWeightTokenValue,
-  measureEmissionPlan,
   materialRecipeContentTones,
   materialRecipeFontStyles,
   materialRecipeTextAligns,
@@ -29,9 +27,8 @@ import {
   type FontStyleToken,
   type FontWeightToken,
   sanitizeMaterialRecipe,
-  serializeEmissionPlanCss,
-  serializeEmissionPlanHtml,
   type MaterialTone,
+  type EmittedLayer,
   type MaterialEmissionPlan,
   type EmissionMetrics,
   type MaterialRecipe,
@@ -69,6 +66,10 @@ import {
   type FeedNodeSizeMode,
   type FeedNodeSelfPosition,
 } from './main-material/feedNodeLayoutCss';
+import {
+  createMainMaterialExportPlan,
+  type MainMaterialExportResult,
+} from './main-material/mainMaterialExportPlanner';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
@@ -12567,7 +12568,12 @@ const DomProvenanceChip = (props: { token: DomAuditToken }) => (
   </span>
 );
 
-const DomAttributeToken = (props: { name: string; tokens: DomAuditToken[]; onToggleClass?: (key: string, className: string) => void }) => (
+const DomAttributeToken = (props: {
+  name: string;
+  tokens: DomAuditToken[];
+  showBadges: boolean;
+  onToggleClass?: (key: string, className: string) => void;
+}) => (
   <span class="main-material-dom-attr">
     <span class="main-material-dom-attr__name">{props.name}</span>
     <span class="main-material-dom-attr__equals">=</span>
@@ -12576,15 +12582,17 @@ const DomAttributeToken = (props: { name: string; tokens: DomAuditToken[]; onTog
       {(token, index) => (
         <>
           <span
-            class={`main-material-dom-attr__value ${token.kind === 'unknown' ? 'is-unknown' : ''} ${props.name === 'class' ? 'is-toggleable' : ''}`}
-            title={props.name === 'class'
+            class={`main-material-dom-attr__value ${token.kind === 'unknown' ? 'is-unknown' : ''} ${props.name === 'class' && props.onToggleClass ? 'is-toggleable' : ''}`}
+            title={props.name === 'class' && props.onToggleClass
               ? `${token.reason}. ${token.cssRules?.length ? `CSS rules:\n${token.cssRules.join('\n')}` : 'No matching CSS rules found in loaded stylesheets.'}\nClick to hide this class in the inspector.`
               : token.reason}
             onClick={() => props.name === 'class' && props.onToggleClass?.(token.key, token.value)}
           >
             {index() > 0 ? ' ' : ''}{token.value}
           </span>
-          <DomProvenanceChip token={token} />
+          <Show when={props.showBadges}>
+            <DomProvenanceChip token={token} />
+          </Show>
         </>
       )}
     </For>
@@ -12592,7 +12600,7 @@ const DomAttributeToken = (props: { name: string; tokens: DomAuditToken[]; onTog
   </span>
 );
 
-const DomStyleToken = (props: { token: DomAuditToken }) => (
+const DomStyleToken = (props: { token: DomAuditToken; showBadges: boolean }) => (
   <span class="main-material-dom-style-token">
     <span class="main-material-dom-style-token__name">{props.token.name}</span>
     <span class="main-material-dom-style-token__punct">: </span>
@@ -12600,24 +12608,30 @@ const DomStyleToken = (props: { token: DomAuditToken }) => (
       {props.token.value}
     </span>
     <span class="main-material-dom-style-token__punct">;</span>
-    <DomProvenanceChip token={props.token} />
+    <Show when={props.showBadges}>
+      <DomProvenanceChip token={props.token} />
+    </Show>
   </span>
 );
 
-const DomAuditTree = (props: { node: DomAuditNode; onToggleClass: (key: string, className: string) => void }) => (
+const DomAuditTree = (props: {
+  node: DomAuditNode;
+  showBadges: boolean;
+  onToggleClass?: (key: string, className: string) => void;
+}) => (
   <div class="main-material-dom-node">
     <div class="main-material-dom-line">
       <span class="main-material-dom-punct">&lt;</span>
       <span class="main-material-dom-tag">{props.node.tag}</span>
       <Show when={props.node.classes.length}>
         <span> </span>
-        <DomAttributeToken name="class" tokens={props.node.classes} onToggleClass={props.onToggleClass} />
+        <DomAttributeToken name="class" tokens={props.node.classes} showBadges={props.showBadges} onToggleClass={props.onToggleClass} />
       </Show>
       <For each={props.node.attrs}>
         {(token) => (
           <>
             <span> </span>
-            <DomAttributeToken name={token.name} tokens={[token]} />
+            <DomAttributeToken name={token.name} tokens={[token]} showBadges={props.showBadges} />
           </>
         )}
       </For>
@@ -12628,7 +12642,7 @@ const DomAuditTree = (props: { node: DomAuditNode; onToggleClass: (key: string, 
           <span class="main-material-dom-attr__equals">=</span>
           <span class="main-material-dom-attr__quote">"</span>
           <span class="main-material-dom-style-list">
-            <For each={props.node.styles}>{(token) => <DomStyleToken token={token} />}</For>
+            <For each={props.node.styles}>{(token) => <DomStyleToken token={token} showBadges={props.showBadges} />}</For>
           </span>
           <span class="main-material-dom-attr__quote">"</span>
         </span>
@@ -12640,7 +12654,7 @@ const DomAuditTree = (props: { node: DomAuditNode; onToggleClass: (key: string, 
     </div>
     <Show when={props.node.children.length}>
       <div class="main-material-dom-node__children">
-        <For each={props.node.children}>{(child) => <DomAuditTree node={child} onToggleClass={props.onToggleClass} />}</For>
+        <For each={props.node.children}>{(child) => <DomAuditTree node={child} showBadges={props.showBadges} onToggleClass={props.onToggleClass} />}</For>
       </div>
     </Show>
     <Show when={props.node.children.length}>
@@ -12651,6 +12665,90 @@ const DomAuditTree = (props: { node: DomAuditNode; onToggleClass: (key: string, 
       </div>
     </Show>
   </div>
+);
+
+const emittedLayerToDomAuditNode = (layer: EmittedLayer, path = '0'): DomAuditNode => {
+  const tag = layer.tag || 'span';
+  const classNames = (layer.classNames || []).filter(Boolean);
+  const attrs = Object.entries(layer.attrs || {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== false && value !== '')
+    .map(([name, value]) => auditToken(`${path}:attr:${name}`, name, value === true ? '' : String(value), attrProvenance(name)));
+  const styles = Object.entries(layer.style || {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== false && value !== '')
+    .map(([name, value]) => auditToken(`${path}:style:${name}`, name, String(value), styleProvenance(name)));
+  return {
+    path,
+    tag,
+    text: layer.text || '',
+    classes: classNames.map((className) => auditToken(`${path}:class:${className}`, 'class', className, classProvenance(className))),
+    attrs,
+    styles,
+    children: (layer.children || []).map((child, index) => emittedLayerToDomAuditNode(child, `${path}.${index}`)),
+  };
+};
+
+const exportPlanToDomAuditNode = (plan: MaterialEmissionPlan | null): DomAuditNode | null => {
+  if (!plan) return null;
+  return emittedLayerToDomAuditNode({
+    ...plan.host,
+    children: [
+      ...plan.layers.flatMap((layer) => layer.emission ? [layer.emission] : []),
+      ...(plan.host.children || []),
+    ],
+  });
+};
+
+const ExportCssAudit = (props: { css: string; showBadges: boolean }) => {
+  const rules = () => props.css
+    .split('\n')
+    .map((rule) => rule.trim())
+    .filter(Boolean)
+    .map((rule, ruleIndex) => {
+      const open = rule.indexOf('{');
+      const close = rule.lastIndexOf('}');
+      const selector = open >= 0 ? rule.slice(0, open).trim() : rule;
+      const body = open >= 0 && close > open ? rule.slice(open + 1, close).trim() : '';
+      const declarations = body
+        .split(';')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => {
+          const separator = part.indexOf(':');
+          const name = separator >= 0 ? part.slice(0, separator).trim() : part;
+          const value = separator >= 0 ? part.slice(separator + 1).trim() : '';
+          return auditToken(`export-css:${ruleIndex}:${name}`, name, value, styleProvenance(name));
+        });
+      return { selector, declarations };
+    });
+
+  return (
+    <div class="main-material-css-audit">
+      <For each={rules()}>
+        {(rule) => (
+          <div class="main-material-css-rule">
+            <div class="main-material-dom-line">
+              <span class="main-material-dom-tag">{rule.selector}</span>
+              <span class="main-material-dom-punct"> {'{'}</span>
+            </div>
+            <div class="main-material-css-rule__body">
+              <For each={rule.declarations}>
+                {(token) => <DomStyleToken token={token} showBadges={props.showBadges} />}
+              </For>
+            </div>
+            <div class="main-material-dom-line">
+              <span class="main-material-dom-punct">{'}'}</span>
+            </div>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+};
+
+const BadgeToggle = (props: { showBadges: boolean; onToggle: () => void }) => (
+  <button type="button" class={`ui-lab-mini-button ${props.showBadges ? 'is-active' : ''}`} onClick={props.onToggle}>
+    badges {props.showBadges ? 'on' : 'off'}
+  </button>
 );
 
 const EmissionInspector = (props: {
@@ -12664,6 +12762,7 @@ const EmissionInspector = (props: {
   domSnapshot: DomAuditNode | null;
   editorMetrics: EmissionMetrics;
   exportPlan: MaterialEmissionPlan | null;
+  exportDomSnapshot: DomAuditNode | null;
   exportMetrics: EmissionMetrics;
   exportHtml: string;
   exportCss: string;
@@ -12674,6 +12773,8 @@ const EmissionInspector = (props: {
   onResetCss: () => void;
   onRefreshActive: () => void;
   onCopyActive: () => void;
+  showBadges: boolean;
+  onToggleBadges: () => void;
   onToggleDomClass: (key: string, className: string) => void;
   onDragStart: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
 }) => (
@@ -12714,13 +12815,14 @@ const EmissionInspector = (props: {
           <div class="main-material-emission-inspector__panel">
             <div class="main-material-emission-inspector__panel-head">
               <span>Editor DOM Payload</span>
+              <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
             <EmissionMetricsSummary metrics={props.editorMetrics} />
             <p class="main-material-emission-help">
               Live selected editor subtree, cleaned of editor flash. Click class values to hide/show them in this inspector; refresh restores the live emitted DOM.
             </p>
             <Show when={props.domSnapshot} fallback={<p class="main-material-emission-empty">No matching DOM node.</p>}>
-              {(node) => <DomAuditTree node={node()} onToggleClass={props.onToggleDomClass} />}
+              {(node) => <DomAuditTree node={node()} showBadges={props.showBadges} onToggleClass={props.onToggleDomClass} />}
             </Show>
           </div>
         </Show>
@@ -12728,10 +12830,13 @@ const EmissionInspector = (props: {
           <div class="main-material-emission-inspector__panel">
             <div class="main-material-emission-inspector__panel-head">
               <span>Export DOM Payload</span>
+              <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
             <EmissionMetricsSummary metrics={props.exportMetrics} />
             <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">Export emission is currently implemented for selected feed CTA/button nodes only.</p>}>
-              <pre class="main-material-emission-code">{props.exportHtml}</pre>
+              <Show when={props.showBadges && props.exportDomSnapshot} fallback={<pre class="main-material-emission-code">{props.exportHtml}</pre>}>
+                {(node) => <DomAuditTree node={node()} showBadges={props.showBadges} />}
+              </Show>
             </Show>
           </div>
         </Show>
@@ -12739,9 +12844,12 @@ const EmissionInspector = (props: {
           <div class="main-material-emission-inspector__panel">
             <div class="main-material-emission-inspector__panel-head">
               <span>Export CSS</span>
+              <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
             <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">No export CSS plan for this target yet.</p>}>
-              <pre class="main-material-emission-code">{props.exportCss || '/* no export CSS emitted */'}</pre>
+              <Show when={props.showBadges} fallback={<pre class="main-material-emission-code">{props.exportCss || '/* no export CSS emitted */'}</pre>}>
+                <ExportCssAudit css={props.exportCss || '/* no export CSS emitted */'} showBadges={props.showBadges} />
+              </Show>
             </Show>
           </div>
         </Show>
@@ -13717,6 +13825,7 @@ export const MainMaterialPreviewScreen = () => {
   const [emissionInspectorTab, setEmissionInspectorTab] = createSignal<EmissionInspectorTab>('export-dom');
   const [emissionInspectorPosition, setEmissionInspectorPosition] = createSignal({ x: 206, y: 112 });
   const [emissionInspectorStatus, setEmissionInspectorStatus] = createSignal('');
+  const [emissionInspectorBadges, setEmissionInspectorBadges] = createSignal(true);
   const [domAuditSnapshot, setDomAuditSnapshot] = createSignal<DomAuditNode | null>(null);
   const [hiddenDomClassKeys, setHiddenDomClassKeys] = createSignal<ReadonlySet<string>>(new Set());
   let emissionInspectorStatusTimeout: number | undefined;
@@ -14184,53 +14293,32 @@ export const MainMaterialPreviewScreen = () => {
       ? cssDeclarationLines(feedNodeLayoutCss(node.layout, { forcePaddingVar: node.type === 'button' }))
       : [];
   };
-  const selectedCtaExportPlan = (): MaterialEmissionPlan | null => {
-    if (selectedPart() !== 'feedCards') return null;
-    const target = parseFeedMaterialTargetId(selectedFeedTargetId());
-    if (!target?.nodeId) return null;
-    const cardType = feedCardTypes()[target.cardTypeId];
-    const node = cardType ? findFeedNodeById(cardType.children, target.nodeId) : undefined;
-    if (!cardType || !node || node.type !== 'button') return null;
-    const story = feedStories().find((item) => item.id === selectedFeedStoryId())
-      || feedStories().find((item) => item.cardTypeId === target.cardTypeId)
-      || feedStories()[0]
-      || mockFeedStories[0];
-    const content = feedNodeContentValue(story, node);
-    const explicitFitting = node.sizing === 'fit' || node.textRender === 'fit';
-    const surfaceRecipe = feedNodeSurfaceRecipe(cardType, node);
-    const surfaceProps = materialRecipeItemProps(surfaceRecipe, 0, selectedPreviewState());
-    const plan = createMaterialButtonEmissionPlan({
-      ...surfaceProps,
-      size: 'sm',
-      fullWidth: true,
-      exportVariant: 'contract',
-      renderMode: 'export',
-    }, content, 'export');
-    return explicitFitting
-      ? {
-        ...plan,
-        host: {
-          ...plan.host,
-          children: plan.host.children?.map((child) => (
-            child.text === content
-              ? { ...child, classNames: [...(child.classNames || []), 'material-text-content--fit'] }
-              : child
-          )),
-        },
-      }
-      : plan;
-  };
+  const selectedExportResult = (): MainMaterialExportResult | null => createMainMaterialExportPlan(
+    selectedEmissionTargetId(),
+    {
+      selectedFeedStoryId: selectedFeedStoryId(),
+      feedStories: feedStories(),
+      feedCardTypes: feedCardTypes(),
+      fallbackStory: mockFeedStories[0],
+      selectedState: selectedPreviewState(),
+      surfaceRecipeForNode: feedNodeSurfaceRecipe,
+      surfacePropsForRecipe: (recipe, state) => materialRecipeItemProps(recipe, 0, state),
+      textForNode: feedNodeContentValue,
+    },
+  );
+  const selectedExportPlan = () => selectedExportResult()?.plan ?? null;
+  const selectedExportDomSnapshot = () => exportPlanToDomAuditNode(selectedExportPlan());
   const selectedExportHtml = () => {
-    const plan = selectedCtaExportPlan();
-    return plan ? serializeEmissionPlanHtml(plan) : '';
+    const result = selectedExportResult();
+    return result ? result.html : '';
   };
   const selectedExportCss = () => {
-    const plan = selectedCtaExportPlan();
-    return plan ? serializeEmissionPlanCss(plan) : '';
+    const result = selectedExportResult();
+    return result ? result.css : '';
   };
   const selectedExportMetrics = () => {
-    const plan = selectedCtaExportPlan();
-    return plan ? measureEmissionPlan(plan) : emptyEmissionMetrics();
+    const result = selectedExportResult();
+    return result ? result.metrics : emptyEmissionMetrics();
   };
   const refreshDomAudit = (
     targetId = selectedEmissionTargetId(),
@@ -14310,7 +14398,7 @@ export const MainMaterialPreviewScreen = () => {
       return;
     }
     refreshDomAudit(selectedEmissionTargetId(), hiddenDomClassKeys(), false);
-    setInspectorStatus(selectedCtaExportPlan()
+    setInspectorStatus(selectedExportPlan()
       ? `Refreshed ${tabLabel(emissionInspectorTab())}`
       : 'No CTA export plan for this target');
   };
@@ -15010,7 +15098,8 @@ export const MainMaterialPreviewScreen = () => {
         disabledKeys={cssProbeDisabledKeys()}
         domSnapshot={domAuditSnapshot()}
         editorMetrics={domAuditMetrics(domAuditSnapshot())}
-        exportPlan={selectedCtaExportPlan()}
+        exportPlan={selectedExportPlan()}
+        exportDomSnapshot={selectedExportDomSnapshot()}
         exportMetrics={selectedExportMetrics()}
         exportHtml={selectedExportHtml()}
         exportCss={selectedExportCss()}
@@ -15032,6 +15121,8 @@ export const MainMaterialPreviewScreen = () => {
         onResetCss={resetCssProbe}
         onRefreshActive={refreshActiveEmissionPayload}
         onCopyActive={copyActiveEmissionPayload}
+        showBadges={emissionInspectorBadges()}
+        onToggleBadges={() => setEmissionInspectorBadges((show) => !show)}
         onToggleDomClass={toggleDomClassProbe}
         onDragStart={startEmissionInspectorDrag}
       />

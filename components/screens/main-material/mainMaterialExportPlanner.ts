@@ -1,0 +1,135 @@
+import {
+  createMaterialButtonEmissionPlan,
+  measureEmissionPlan,
+  serializeEmissionPlanCss,
+  serializeEmissionPlanHtml,
+  type EmissionMetrics,
+  type MaterialEmissionPlan,
+  type MaterialRecipe,
+  type MaterialRecipeState,
+} from '../../ui/material-lab';
+
+export type MainMaterialExportTargetKind = 'feed-button';
+
+export interface MainMaterialExportNode {
+  id: string;
+  type: string;
+  sizing?: 'auto' | 'fit' | 'flow';
+  textRender?: 'auto' | 'rich' | 'fit' | 'raw';
+  children?: MainMaterialExportNode[];
+}
+
+export interface MainMaterialExportFeedCardType<TNode extends MainMaterialExportNode = MainMaterialExportNode> {
+  id: string;
+  children: TNode[];
+}
+
+export interface MainMaterialExportFeedStory {
+  id: string;
+  cardTypeId: string;
+}
+
+export interface MainMaterialExportPlannerContext<
+  TNode extends MainMaterialExportNode = MainMaterialExportNode,
+  TCardType extends MainMaterialExportFeedCardType<TNode> = MainMaterialExportFeedCardType<TNode>,
+  TStory extends MainMaterialExportFeedStory = MainMaterialExportFeedStory,
+> {
+  selectedFeedStoryId: string;
+  feedStories: TStory[];
+  feedCardTypes: Record<string, TCardType | undefined>;
+  fallbackStory: TStory;
+  selectedState: MaterialRecipeState;
+  surfaceRecipeForNode: (cardType: TCardType, node: TNode) => MaterialRecipe;
+  surfacePropsForRecipe: (recipe: MaterialRecipe, state: MaterialRecipeState) => Record<string, unknown>;
+  textForNode: (story: TStory, node: TNode) => string;
+}
+
+export interface MainMaterialExportResult {
+  kind: MainMaterialExportTargetKind;
+  plan: MaterialEmissionPlan;
+  html: string;
+  css: string;
+  metrics: EmissionMetrics;
+}
+
+const feedCardMaterialTargetPrefix = 'feed:card:';
+
+const parseFeedMaterialTargetId = (targetId: string) => {
+  if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
+  const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
+  const nodeSeparator = ':node:';
+  const nodeIndex = rest.indexOf(nodeSeparator);
+  return {
+    cardTypeId: nodeIndex >= 0 ? rest.slice(0, nodeIndex) : rest,
+    nodeId: nodeIndex >= 0 ? rest.slice(nodeIndex + nodeSeparator.length) : undefined,
+  };
+};
+
+const findExportNodeById = <TNode extends MainMaterialExportNode>(
+  nodes: TNode[],
+  nodeId: string,
+): TNode | undefined => {
+  for (const node of nodes) {
+    if (node.id === nodeId) return node;
+    const child = findExportNodeById((node.children || []) as TNode[], nodeId);
+    if (child) return child;
+  }
+  return undefined;
+};
+
+const createExportResult = (
+  kind: MainMaterialExportTargetKind,
+  plan: MaterialEmissionPlan,
+): MainMaterialExportResult => ({
+  kind,
+  plan,
+  html: serializeEmissionPlanHtml(plan),
+  css: serializeEmissionPlanCss(plan),
+  metrics: measureEmissionPlan(plan),
+});
+
+export const createMainMaterialExportPlan = <
+  TNode extends MainMaterialExportNode,
+  TCardType extends MainMaterialExportFeedCardType<TNode>,
+  TStory extends MainMaterialExportFeedStory,
+>(
+  targetId: string,
+  context: MainMaterialExportPlannerContext<TNode, TCardType, TStory>,
+): MainMaterialExportResult | null => {
+  const target = parseFeedMaterialTargetId(targetId);
+  if (!target?.nodeId) return null;
+
+  const cardType = context.feedCardTypes[target.cardTypeId];
+  const node = cardType ? findExportNodeById(cardType.children, target.nodeId) : undefined;
+  if (!cardType || !node || node.type !== 'button') return null;
+
+  const story = context.feedStories.find((item) => item.id === context.selectedFeedStoryId)
+    || context.feedStories.find((item) => item.cardTypeId === target.cardTypeId)
+    || context.feedStories[0]
+    || context.fallbackStory;
+  const content = context.textForNode(story, node);
+  const explicitFitting = node.sizing === 'fit' || node.textRender === 'fit';
+  const surfaceRecipe = context.surfaceRecipeForNode(cardType, node);
+  const surfaceProps = context.surfacePropsForRecipe(surfaceRecipe, context.selectedState);
+  const plan = createMaterialButtonEmissionPlan({
+    ...surfaceProps,
+    size: 'sm',
+    fullWidth: true,
+    exportVariant: 'contract',
+    renderMode: 'export',
+  }, content, 'export');
+  const fittedPlan = explicitFitting
+    ? {
+      ...plan,
+      host: {
+        ...plan.host,
+        children: plan.host.children?.map((child) => (
+          child.text === content
+            ? { ...child, classNames: [...(child.classNames || []), 'material-text-content--fit'] }
+            : child
+        )),
+      },
+    }
+    : plan;
+  return createExportResult('feed-button', fittedPlan);
+};

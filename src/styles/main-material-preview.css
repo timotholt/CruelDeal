@@ -1379,6 +1379,10 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-transform: uppercase;
 }
 
+.main-material-emission-inspector__panel-head .ui-lab-mini-button {
+  flex: 0 0 auto;
+}
+
 .main-material-emission-inspector__panel-actions {
   display: flex;
   align-items: center;
@@ -1618,6 +1622,29 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   display: grid;
   min-width: 0;
   gap: 2px;
+}
+
+.main-material-css-audit {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.main-material-css-rule {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding-left: 12px;
+  border-left: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.main-material-css-rule__body {
+  display: grid;
+  gap: 2px;
+  padding-left: 12px;
 }
 
 .main-material-file-input {
