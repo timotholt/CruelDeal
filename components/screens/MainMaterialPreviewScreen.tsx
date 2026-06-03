@@ -10,8 +10,10 @@ import {
   SectionLabel,
   cloneMaterialRecipe,
   createMaterialRecipe,
+  createMaterialButtonEmissionPlan,
   createMaterialStateOverlays,
   fontWeightTokenValue,
+  measureEmissionPlan,
   materialRecipeContentTones,
   materialRecipeFontStyles,
   materialRecipeTextAligns,
@@ -27,7 +29,11 @@ import {
   type FontStyleToken,
   type FontWeightToken,
   sanitizeMaterialRecipe,
+  serializeEmissionPlanCss,
+  serializeEmissionPlanHtml,
   type MaterialTone,
+  type MaterialEmissionPlan,
+  type EmissionMetrics,
   type MaterialRecipe,
   type MaterialRecipeState,
   type MaterialWorkbenchPart,
@@ -307,7 +313,14 @@ interface CssEmissionProbe {
   disabledKeys: ReadonlySet<string>;
 }
 
-type EmissionInspectorTab = 'css' | 'html';
+type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
+
+const tabLabel = (tab: EmissionInspectorTab) => ({
+  'frame-css': 'Frame CSS',
+  'editor-dom': 'Editor DOM',
+  'export-dom': 'Export DOM',
+  'export-css': 'Export CSS',
+}[tab]);
 
 interface DomAuditToken {
   key: string;
@@ -12507,6 +12520,44 @@ const domAuditNodeToHtml = (node: DomAuditNode, depth = 0): string => {
   ].join('\n');
 };
 
+const emptyEmissionMetrics = (): EmissionMetrics => ({
+  nodeCount: 0,
+  classCount: 0,
+  attrCount: 0,
+  styleCount: 0,
+  cssVariableCount: 0,
+});
+
+const domAuditMetrics = (node: DomAuditNode | null): EmissionMetrics => {
+  if (!node) return emptyEmissionMetrics();
+  return node.children.reduce<EmissionMetrics>((metrics, child) => {
+    const childMetrics = domAuditMetrics(child);
+    return {
+      nodeCount: metrics.nodeCount + childMetrics.nodeCount,
+      classCount: metrics.classCount + childMetrics.classCount,
+      attrCount: metrics.attrCount + childMetrics.attrCount,
+      styleCount: metrics.styleCount + childMetrics.styleCount,
+      cssVariableCount: metrics.cssVariableCount + childMetrics.cssVariableCount,
+    };
+  }, {
+    nodeCount: 1,
+    classCount: node.classes.length,
+    attrCount: node.attrs.length,
+    styleCount: node.styles.length,
+    cssVariableCount: node.styles.filter((token) => token.name.startsWith('--')).length,
+  });
+};
+
+const EmissionMetricsSummary = (props: { metrics: EmissionMetrics }) => (
+  <div class="main-material-emission-metrics">
+    <span>nodes <strong>{props.metrics.nodeCount}</strong></span>
+    <span>classes <strong>{props.metrics.classCount}</strong></span>
+    <span>attrs <strong>{props.metrics.attrCount}</strong></span>
+    <span>styles <strong>{props.metrics.styleCount}</strong></span>
+    <span>vars <strong>{props.metrics.cssVariableCount}</strong></span>
+  </div>
+);
+
 const DomProvenanceChip = (props: { token: DomAuditToken }) => (
   <span
     class={`main-material-dom-source main-material-dom-source--${props.token.source} ${props.token.kind === 'unknown' ? 'is-unknown' : ''}`}
@@ -12611,13 +12662,18 @@ const EmissionInspector = (props: {
   cssLines: Array<[string, string | number]>;
   disabledKeys: ReadonlySet<string>;
   domSnapshot: DomAuditNode | null;
+  editorMetrics: EmissionMetrics;
+  exportPlan: MaterialEmissionPlan | null;
+  exportMetrics: EmissionMetrics;
+  exportHtml: string;
+  exportCss: string;
   status: string;
   onToggleOpen: () => void;
   onTabChange: (tab: EmissionInspectorTab) => void;
   onToggleCssKey: (key: string) => void;
   onResetCss: () => void;
-  onRefreshDom: () => void;
-  onCopyHtml: () => void;
+  onRefreshActive: () => void;
+  onCopyActive: () => void;
   onToggleDomClass: (key: string, className: string) => void;
   onDragStart: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
 }) => (
@@ -12637,8 +12693,10 @@ const EmissionInspector = (props: {
     <Show when={props.open}>
       <div class="main-material-emission-inspector__body">
         <div class="main-material-emission-inspector__tabs">
-          <button type="button" class={props.tab === 'css' ? 'is-active' : ''} onClick={() => props.onTabChange('css')}>Frame CSS</button>
-          <button type="button" class={props.tab === 'html' ? 'is-active' : ''} onClick={() => props.onTabChange('html')}>DOM HTML</button>
+          <button type="button" class={props.tab === 'export-dom' ? 'is-active' : ''} onClick={() => props.onTabChange('export-dom')}>Export DOM</button>
+          <button type="button" class={props.tab === 'export-css' ? 'is-active' : ''} onClick={() => props.onTabChange('export-css')}>Export CSS</button>
+          <button type="button" class={props.tab === 'editor-dom' ? 'is-active' : ''} onClick={() => props.onTabChange('editor-dom')}>Editor DOM</button>
+          <button type="button" class={props.tab === 'frame-css' ? 'is-active' : ''} onClick={() => props.onTabChange('frame-css')}>Frame CSS</button>
         </div>
         <div class="main-material-emission-inspector__target">
           <code>{props.targetId}</code>
@@ -12647,26 +12705,47 @@ const EmissionInspector = (props: {
           <div class={`main-material-emission-inspector__status ${props.status ? '' : 'is-idle'}`}>
             {props.status || 'Ready'}
           </div>
-          <Show when={props.tab === 'html'}>
-            <div class="main-material-emission-inspector__panel-actions">
-              <button type="button" class="ui-lab-mini-button" onClick={props.onCopyHtml}>copy</button>
-              <button type="button" class="ui-lab-mini-button" onClick={props.onRefreshDom}>refresh</button>
-            </div>
-          </Show>
+          <div class="main-material-emission-inspector__panel-actions">
+            <button type="button" class="ui-lab-mini-button" onClick={props.onCopyActive}>copy</button>
+            <button type="button" class="ui-lab-mini-button" onClick={props.onRefreshActive}>refresh</button>
+          </div>
         </div>
-        <Show when={props.tab === 'css'} fallback={(
+        <Show when={props.tab === 'editor-dom'}>
           <div class="main-material-emission-inspector__panel">
             <div class="main-material-emission-inspector__panel-head">
-              <span>DOM Payload</span>
+              <span>Editor DOM Payload</span>
             </div>
+            <EmissionMetricsSummary metrics={props.editorMetrics} />
             <p class="main-material-emission-help">
-              Actual selected DOM subtree, cleaned of editor flash. Click class values to hide/show them in this inspector; refresh restores the live emitted DOM.
+              Live selected editor subtree, cleaned of editor flash. Click class values to hide/show them in this inspector; refresh restores the live emitted DOM.
             </p>
             <Show when={props.domSnapshot} fallback={<p class="main-material-emission-empty">No matching DOM node.</p>}>
               {(node) => <DomAuditTree node={node()} onToggleClass={props.onToggleDomClass} />}
             </Show>
           </div>
-        )}>
+        </Show>
+        <Show when={props.tab === 'export-dom'}>
+          <div class="main-material-emission-inspector__panel">
+            <div class="main-material-emission-inspector__panel-head">
+              <span>Export DOM Payload</span>
+            </div>
+            <EmissionMetricsSummary metrics={props.exportMetrics} />
+            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">Export emission is currently implemented for selected feed CTA/button nodes only.</p>}>
+              <pre class="main-material-emission-code">{props.exportHtml}</pre>
+            </Show>
+          </div>
+        </Show>
+        <Show when={props.tab === 'export-css'}>
+          <div class="main-material-emission-inspector__panel">
+            <div class="main-material-emission-inspector__panel-head">
+              <span>Export CSS</span>
+            </div>
+            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">No export CSS plan for this target yet.</p>}>
+              <pre class="main-material-emission-code">{props.exportCss || '/* no export CSS emitted */'}</pre>
+            </Show>
+          </div>
+        </Show>
+        <Show when={props.tab === 'frame-css'}>
           <div class="main-material-emission-inspector__panel">
             <div class="main-material-emission-inspector__panel-head">
               <span>Unified Frame CSS</span>
@@ -13635,7 +13714,7 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedFeedTargetId, setSelectedFeedTargetId] = createSignal<FeedMaterialTargetId>(feedCardMaterialTargetId('card_type_01'));
   const [cssProbeDisabledKeys, setCssProbeDisabledKeys] = createSignal<ReadonlySet<string>>(createEmptyCssProbeKeys());
   const [emissionInspectorOpen, setEmissionInspectorOpen] = createSignal(true);
-  const [emissionInspectorTab, setEmissionInspectorTab] = createSignal<EmissionInspectorTab>('css');
+  const [emissionInspectorTab, setEmissionInspectorTab] = createSignal<EmissionInspectorTab>('export-dom');
   const [emissionInspectorPosition, setEmissionInspectorPosition] = createSignal({ x: 206, y: 112 });
   const [emissionInspectorStatus, setEmissionInspectorStatus] = createSignal('');
   const [domAuditSnapshot, setDomAuditSnapshot] = createSignal<DomAuditNode | null>(null);
@@ -14105,6 +14184,54 @@ export const MainMaterialPreviewScreen = () => {
       ? cssDeclarationLines(feedNodeLayoutCss(node.layout, { forcePaddingVar: node.type === 'button' }))
       : [];
   };
+  const selectedCtaExportPlan = (): MaterialEmissionPlan | null => {
+    if (selectedPart() !== 'feedCards') return null;
+    const target = parseFeedMaterialTargetId(selectedFeedTargetId());
+    if (!target?.nodeId) return null;
+    const cardType = feedCardTypes()[target.cardTypeId];
+    const node = cardType ? findFeedNodeById(cardType.children, target.nodeId) : undefined;
+    if (!cardType || !node || node.type !== 'button') return null;
+    const story = feedStories().find((item) => item.id === selectedFeedStoryId())
+      || feedStories().find((item) => item.cardTypeId === target.cardTypeId)
+      || feedStories()[0]
+      || mockFeedStories[0];
+    const content = feedNodeContentValue(story, node);
+    const explicitFitting = node.sizing === 'fit' || node.textRender === 'fit';
+    const surfaceRecipe = feedNodeSurfaceRecipe(cardType, node);
+    const surfaceProps = materialRecipeItemProps(surfaceRecipe, 0, selectedPreviewState());
+    const plan = createMaterialButtonEmissionPlan({
+      ...surfaceProps,
+      size: 'sm',
+      fullWidth: true,
+      exportVariant: 'contract',
+      renderMode: 'export',
+    }, content, 'export');
+    return explicitFitting
+      ? {
+        ...plan,
+        host: {
+          ...plan.host,
+          children: plan.host.children?.map((child) => (
+            child.text === content
+              ? { ...child, classNames: [...(child.classNames || []), 'material-text-content--fit'] }
+              : child
+          )),
+        },
+      }
+      : plan;
+  };
+  const selectedExportHtml = () => {
+    const plan = selectedCtaExportPlan();
+    return plan ? serializeEmissionPlanHtml(plan) : '';
+  };
+  const selectedExportCss = () => {
+    const plan = selectedCtaExportPlan();
+    return plan ? serializeEmissionPlanCss(plan) : '';
+  };
+  const selectedExportMetrics = () => {
+    const plan = selectedCtaExportPlan();
+    return plan ? measureEmissionPlan(plan) : emptyEmissionMetrics();
+  };
   const refreshDomAudit = (
     targetId = selectedEmissionTargetId(),
     hiddenClasses = hiddenDomClassKeys(),
@@ -14161,11 +14288,31 @@ export const MainMaterialPreviewScreen = () => {
       return next;
     });
   };
-  const copyDomAuditHtml = async () => {
-    const snapshot = domAuditSnapshot();
-    const html = snapshot ? domAuditNodeToHtml(snapshot) : '';
-    await navigator.clipboard?.writeText(html);
-    setInspectorStatus(html ? 'Copied cleaned DOM HTML' : 'Nothing to copy');
+  const copyActiveEmissionPayload = async () => {
+    const tab = emissionInspectorTab();
+    const payload = tab === 'editor-dom'
+      ? domAuditSnapshot() ? domAuditNodeToHtml(domAuditSnapshot() as DomAuditNode) : ''
+      : tab === 'export-dom'
+      ? selectedExportHtml()
+      : tab === 'export-css'
+      ? selectedExportCss()
+      : selectedCssProbeLines().map(([key, value]) => cssDeclarationText(key, value)).join('\n');
+    await navigator.clipboard?.writeText(payload);
+    setInspectorStatus(payload ? `Copied ${tabLabel(tab)}` : `Nothing to copy for ${tabLabel(tab)}`);
+  };
+  const refreshActiveEmissionPayload = () => {
+    if (emissionInspectorTab() === 'editor-dom') {
+      refreshDomAuditWithStatus();
+      return;
+    }
+    if (emissionInspectorTab() === 'frame-css') {
+      resetCssProbe();
+      return;
+    }
+    refreshDomAudit(selectedEmissionTargetId(), hiddenDomClassKeys(), false);
+    setInspectorStatus(selectedCtaExportPlan()
+      ? `Refreshed ${tabLabel(emissionInspectorTab())}`
+      : 'No CTA export plan for this target');
   };
   const startEmissionInspectorDrag = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     const start = emissionInspectorPosition();
@@ -14862,16 +15009,29 @@ export const MainMaterialPreviewScreen = () => {
         cssLines={selectedCssProbeLines()}
         disabledKeys={cssProbeDisabledKeys()}
         domSnapshot={domAuditSnapshot()}
+        editorMetrics={domAuditMetrics(domAuditSnapshot())}
+        exportPlan={selectedCtaExportPlan()}
+        exportMetrics={selectedExportMetrics()}
+        exportHtml={selectedExportHtml()}
+        exportCss={selectedExportCss()}
         status={emissionInspectorStatus()}
         onToggleOpen={() => setEmissionInspectorOpen((open) => !open)}
         onTabChange={(tab) => {
           setEmissionInspectorTab(tab);
-          setInspectorStatus(tab === 'css' ? 'Showing frame layout CSS only' : 'Showing cleaned live DOM subtree');
+          setInspectorStatus(
+            tab === 'frame-css'
+              ? 'Showing frame layout CSS only'
+              : tab === 'editor-dom'
+              ? 'Showing cleaned live editor DOM subtree'
+              : tab === 'export-css'
+              ? 'Showing CTA pilot export CSS plan'
+              : 'Showing CTA pilot export DOM plan',
+          );
         }}
         onToggleCssKey={toggleCssProbeKey}
         onResetCss={resetCssProbe}
-        onRefreshDom={refreshDomAuditWithStatus}
-        onCopyHtml={copyDomAuditHtml}
+        onRefreshActive={refreshActiveEmissionPayload}
+        onCopyActive={copyActiveEmissionPayload}
         onToggleDomClass={toggleDomClassProbe}
         onDragStart={startEmissionInspectorDrag}
       />

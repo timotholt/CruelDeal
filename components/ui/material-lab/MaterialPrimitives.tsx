@@ -1,6 +1,13 @@
 import { children, createMemo, For, JSX, Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind, type TextureKind } from './TextureOptions';
+import {
+  compactStyle,
+  type EmittedLayer,
+  type MaterialEmissionPlan,
+  type MaterialLayerPlan,
+  type MaterialRenderMode,
+} from './MaterialEmission';
 import type {
   EdgeEmissionEdge,
   EdgeEmissionKind,
@@ -26,7 +33,8 @@ export type EdgeWearLayer = 'below-highlights' | 'above-highlights';
 export type ContentLayer = 'over-glass' | 'under-glass';
 export type ContentAlign = 'left' | 'center' | 'right';
 
-interface SurfaceOptions {
+export interface SurfaceOptions {
+  renderMode?: MaterialRenderMode;
   material?: MaterialKind;
   materialColor?: string;
   glass?: boolean;
@@ -127,6 +135,7 @@ export interface MaterialButtonProps extends SurfaceOptions, Omit<JSX.ButtonHTML
   fullWidth?: boolean;
   pressed?: boolean;
   visualState?: Exclude<MaterialRecipeState, 'hover'>;
+  exportVariant?: string;
 }
 
 export interface SectionLabelProps {
@@ -779,6 +788,122 @@ const surfaceClass = (options: SurfaceOptions, extra = '') => {
   ].filter(Boolean).join(' ');
 };
 
+const materialLayer = (
+  id: string,
+  label: string,
+  active: boolean,
+  reason: string,
+  emission: EmittedLayer | null,
+): MaterialLayerPlan => ({
+  id,
+  label,
+  active,
+  reason,
+  emission: active ? emission : null,
+});
+
+const createButtonLayerPlans = (options: SurfaceOptions): MaterialLayerPlan[] => {
+  const layers = surfaceLayerFlags(options);
+  return [
+    materialLayer('base', 'Base shape/color', layers.material, 'base material changes button pixels', null),
+    materialLayer('texture', 'Texture', layers.texture, 'texture is active and emits as host background CSS', null),
+    materialLayer('tint', 'Tint', layers.tinted, 'tint is active and emits as host background CSS', null),
+    materialLayer('gradient', 'Gradient', layers.gradient, 'gradient is active and emits as host background CSS', null),
+    materialLayer('glass', 'Frosted glass', layers.glass, 'glass wash is active and emits as host backdrop CSS', null),
+    materialLayer('border', 'Border', layers.border, 'border is enabled and emits as host border CSS', null),
+    materialLayer('edgeWear', 'Edge wear', layers.edgeWear, 'edge wear texture is active and emits as pseudo-element CSS', null),
+    materialLayer('shadow', 'Shadow/glow', layers.glowing || layers.emitting || hasDropShadow(options), 'shadow, glow, or edge emission changes pixels', null),
+    materialLayer('content', 'Content', true, 'button label is visible content', null),
+  ];
+};
+
+const buttonExportCssRules = (plan: MaterialEmissionPlan) => {
+  const activeLayer = (id: string) => plan.layers.some((layer) => layer.id === id && layer.active);
+  const backgroundLayers = [
+    activeLayer('gradient') ? 'linear-gradient(180deg, rgb(255 255 255 / var(--light-alpha, 0)) 0%, rgb(255 255 255 / 0) 42%, rgb(0 0 0 / var(--dark-alpha, 0)) 100%)' : '',
+    activeLayer('tint') ? 'rgb(var(--tint-rgb) / var(--tint-alpha))' : '',
+    activeLayer('base') ? 'var(--material-base-color, #ffffff)' : '',
+  ].filter(Boolean);
+  const backgroundSizes = [
+    activeLayer('gradient') ? '100% 100%' : '',
+    activeLayer('tint') ? '100% 100%' : '',
+    activeLayer('base') ? 'auto' : '',
+  ].filter(Boolean);
+  const backgroundBlendModes = [
+    activeLayer('gradient') ? 'normal' : '',
+    activeLayer('tint') ? 'normal' : '',
+    activeLayer('base') ? 'normal' : '',
+  ].filter(Boolean);
+  const boxShadowParts = [
+    activeLayer('border') ? 'inset 0 1px 0 var(--border-top-shadow, transparent)' : '',
+    activeLayer('border') ? 'inset 0 -1px 0 var(--border-bottom-shadow, transparent)' : '',
+    activeLayer('shadow') ? 'var(--surface-drop-shadow, none)' : '',
+  ].filter(Boolean);
+  return [
+    `.cd-button { position: relative; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--surface-radius, 7px); color: var(--content-color, currentColor); font: var(--content-font-style, inherit) var(--content-font-weight, 700) var(--content-size, 0.8125rem) var(--content-font-family, inherit); letter-spacing: var(--content-letter-spacing, 0); text-transform: var(--content-text-transform, none); text-shadow: var(--content-shadow, none); overflow: hidden; }`,
+    `.cd-button--contract { min-height: 100%; width: 100%; }`,
+    backgroundLayers.length ? `.cd-button { background: ${backgroundLayers.join(', ')}; background-size: ${backgroundSizes.join(', ')}; background-blend-mode: ${backgroundBlendModes.join(', ')}; }` : '',
+    activeLayer('glass') ? `.cd-button { backdrop-filter: blur(var(--glass-blur, 0)); }` : '',
+    activeLayer('border') ? `.cd-button { border-color: var(--border-top, transparent) var(--border-right, transparent) var(--border-bottom, transparent) var(--border-left, transparent); border-style: solid; border-width: 1px; }` : '',
+    boxShadowParts.length ? `.cd-button { box-shadow: ${boxShadowParts.join(', ')}; }` : '',
+    activeLayer('texture') ? `.cd-button::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: var(--texture-strength, 1); background-image: var(--texture-image); background-size: var(--texture-scale, 256px); mix-blend-mode: multiply; }` : '',
+    activeLayer('edgeWear') ? `.cd-button::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: var(--edge-wear-alpha, 0); background-image: var(--edge-wear-image); background-size: var(--edge-wear-scale, 256px); mask: linear-gradient(#000, transparent var(--edge-wear-width, 5px), transparent calc(100% - var(--edge-wear-width, 5px)), #000); }` : '',
+    `.cd-button > span { position: relative; z-index: 1; }`,
+  ].filter(Boolean);
+};
+
+const buttonExportStyle = (options: SurfaceOptions) => {
+  const style = compactStyle(surfaceStyle(options) as Record<string, string | number>);
+  [
+    '--icon-rgb',
+    '--icon-color',
+    '--icon-glow-alpha',
+    '--icon-glow-shadow',
+    '--content-font-style',
+    '--content-align',
+    '--content-justify',
+    '--content-x',
+    '--content-y',
+  ].forEach((key) => {
+    delete style[key];
+  });
+  return style;
+};
+
+export const createMaterialButtonEmissionPlan = (
+  options: SurfaceOptions & { size?: ButtonSize; fullWidth?: boolean; disabled?: boolean; exportVariant?: string },
+  label: string,
+  mode: MaterialRenderMode = options.renderMode || 'export',
+): MaterialEmissionPlan => {
+  const variant = options.exportVariant || (options.size === 'cta' ? 'cta' : options.size || 'md');
+  const classNames = mode === 'export'
+    ? ['cd-button', `cd-button--${variant}`]
+    : surfaceClass(options, `cd-button cd-button--${options.size || 'md'} ${options.fullWidth ? 'cd-button--full' : ''}`).split(/\s+/);
+  const hostStyle = mode === 'export'
+    ? buttonExportStyle(options)
+    : surfaceStyle(options) as Record<string, string | number>;
+  const layers = createButtonLayerPlans(options);
+  const host: MaterialEmissionPlan['host'] = {
+    tag: 'button',
+    classNames,
+    attrs: {
+      type: 'button',
+      disabled: options.disabled || undefined,
+    },
+    style: hostStyle,
+    children: label ? [{
+      tag: 'span',
+      classNames: mode === 'export' ? ['cd-button__label'] : ['cd-button__label', 'material-text-content'],
+      text: label,
+    }] : [],
+  };
+  const plan = { mode, host, layers } satisfies MaterialEmissionPlan;
+  return {
+    ...plan,
+    cssRules: mode === 'export' ? buttonExportCssRules(plan) : [],
+  };
+};
+
 export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowing?: boolean }) => (
   <>
     <SurfaceBaseLayers material texture tinted={props.tinted} gradient />
@@ -905,6 +1030,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'underGlass',
     'padded',
     'compact',
+    'renderMode',
     'material',
     'materialColor',
     'glass',
@@ -1002,6 +1128,8 @@ export const MaterialButton = (props: MaterialButtonProps) => {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
+    'renderMode',
+    'exportVariant',
     'material',
     'materialColor',
     'glass',

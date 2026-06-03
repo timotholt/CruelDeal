@@ -1309,7 +1309,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-emission-inspector__tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
 }
 
@@ -1406,6 +1406,45 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   margin: 0;
   color: rgb(244 232 198 / 0.54);
   font: 700 10px/1.35 var(--font-display, sans-serif);
+}
+
+.main-material-emission-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.main-material-emission-metrics span {
+  min-width: 0;
+  padding: 5px 4px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.18);
+  color: rgb(244 232 198 / 0.54);
+  font: 800 8px/1.1 var(--font-display, sans-serif);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.main-material-emission-metrics strong {
+  display: block;
+  margin-top: 2px;
+  color: rgb(255 231 146 / 0.94);
+  font-size: 12px;
+}
+
+.main-material-emission-code {
+  min-width: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.28);
+  color: rgb(244 232 198 / 0.86);
+  font: 10px/1.45 var(--font-mono, monospace);
+  white-space: pre-wrap;
 }
 
 .main-material-emission-rows {

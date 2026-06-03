@@ -1,4 +1,5 @@
 export * from './MaterialIcons';
+export * from './MaterialEmission';
 export * from './MaterialPrimitives';
 export * from './MaterialRecipeEditor';
 export * from './MaterialRecipeTypes';
