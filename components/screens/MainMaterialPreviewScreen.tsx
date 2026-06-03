@@ -37,6 +37,8 @@ import {
   MaterialNodeButtonBar,
   MaterialNodeRenderer,
   MaterialTextContent,
+  type MaterialTextFitMode,
+  type MaterialTextRenderMode,
   type MaterialNodeRecipe,
   type MaterialNodeRenderContext,
 } from '../ui/material-node';
@@ -53,6 +55,14 @@ type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
 type PreviewInteractionMode = 'selected-only' | 'all-on-screen';
 type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'disclosure' | 'container' | 'text';
 type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
+type FeedNodeLayoutMode = 'absolute' | 'flow';
+type FeedNodeLayoutSlot = 'auto' | 'body' | 'footer' | 'overlay';
+type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
+// Two orthogonal axes (legacy textRender is derived into these when absent):
+//   markup: parse [..] markup into styled tokens, or treat literally
+//   sizing: autoscale-to-fit the box, or use normal browser flow
+type FeedNodeMarkupMode = 'auto' | 'on' | 'off';
+type FeedNodeSizingMode = 'auto' | 'fit' | 'flow';
 
 interface PreviewInteractionSnapshot {
   mode: PreviewInteractionMode;
@@ -243,10 +253,14 @@ interface FeedBackgroundImageRecipe {
 }
 
 interface FeedNodeLayout {
+  mode: FeedNodeLayoutMode;
+  slot: FeedNodeLayoutSlot;
   x: number;
   y: number;
   width: number;
   height: number;
+  nudgeX: number;
+  nudgeY: number;
   padding: number;
   gap: number;
   align: FeedNodeAlign;
@@ -261,6 +275,11 @@ interface FeedCardNode {
   layout: FeedNodeLayout;
   surface?: MaterialRecipe;
   text?: FeedTextSlotStyle;
+  textRender?: FeedNodeTextRender;
+  markup?: FeedNodeMarkupMode;
+  sizing?: FeedNodeSizingMode;
+  fitMode?: MaterialTextFitMode;
+  maxLines?: number;
   children?: FeedCardNode[];
 }
 
@@ -672,7 +691,7 @@ const mockFeedStories: FeedStory[] = [
     contractRewardLabel: "Reward",
     contractRewardValue: "1,850 [accent]CR[/accent]",
     contractRule: "",
-    contractCtaLabel: "View Contract ",
+    contractCtaLabel: "View Contract",
     seasonBadge: "03 Days Left",
     seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
     seasonEyebrow: "[accent]//[/accent] Season Pass",
@@ -696,7 +715,7 @@ const mockFeedStories: FeedStory[] = [
     contractRewardLabel: "Reward",
     contractRewardValue: "1,850 [accent]CR[/accent]",
     contractRule: "",
-    contractCtaLabel: "View Contract ",
+    contractCtaLabel: "View Contract",
     seasonBadge: "03 Days Left",
     seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
     seasonEyebrow: "[accent]//[/accent] Season Pass",
@@ -2115,10 +2134,14 @@ const createFeedBackgroundImage = (overrides: Partial<FeedBackgroundImageRecipe>
 });
 
 const createFeedNodeLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => ({
+  mode: 'absolute',
+  slot: 'auto',
   x: 8,
   y: 44,
   width: 44,
   height: 38,
+  nudgeX: 0,
+  nudgeY: 0,
   padding: 14,
   gap: 10,
   align: 'left',
@@ -2134,6 +2157,11 @@ const createFeedNode = (overrides: Omit<Partial<FeedCardNode>, 'children'> & { c
   layout: createFeedNodeLayout(overrides.layout),
   surface: overrides.surface ? cloneMaterialRecipe(overrides.surface) : undefined,
   text: overrides.text ? cloneFeedSlotStyle(overrides.text) : undefined,
+  textRender: overrides.textRender,
+  markup: overrides.markup,
+  sizing: overrides.sizing,
+  fitMode: overrides.fitMode,
+  maxLines: overrides.maxLines,
   children: overrides.children?.map((child) => cloneFeedCardNode(child)) || [],
 });
 
@@ -2142,6 +2170,11 @@ const cloneFeedCardNode = (node: FeedCardNode): FeedCardNode => ({
   layout: { ...node.layout },
   surface: node.surface ? cloneMaterialRecipe(node.surface) : undefined,
   text: node.text ? cloneFeedSlotStyle(node.text) : undefined,
+  textRender: node.textRender,
+  markup: node.markup,
+  sizing: node.sizing,
+  fitMode: node.fitMode,
+  maxLines: node.maxLines,
   children: node.children?.map((child) => cloneFeedCardNode(child)) || [],
 });
 
@@ -2381,6 +2414,9 @@ const createMissionBriefingLeftNodes = () => [
     type: 'text',
     binding: 'contractBadge',
     surface: createMissionBriefingBadgeSurface(),
+    textRender: 'fit',
+    fitMode: 'single-line',
+    maxLines: 1,
     layout: createFeedNodeLayout({ x: 51, y: 10, width: 38, height: 6, padding: 0, gap: 0, align: 'center', justify: 'center' }),
   }),
   createFeedNode({
@@ -2389,7 +2425,8 @@ const createMissionBriefingLeftNodes = () => [
     type: 'container',
     binding: 'contractBriefing',
     surface: createMissionBriefingPanelSurface(),
-    layout: createFeedNodeLayout({ x: 47, y: 29, width: 39, height: 55, padding: 16, gap: 0, align: 'center', justify: 'start' }),
+    textRender: 'rich',
+    layout: createFeedNodeLayout({ x: 47, y: 29, width: 39, height: 55, padding: 16, gap: 12, align: 'center', justify: 'start' }),
     children: [
       createFeedNode({
         id: 'contract-cta',
@@ -2397,7 +2434,10 @@ const createMissionBriefingLeftNodes = () => [
         type: 'button',
         binding: 'contractCtaLabel',
         surface: createMissionBriefingCtaSurface(),
-        layout: createFeedNodeLayout({ x: 10, y: 84, width: 83, height: 11, padding: 21, gap: 0, align: 'center', justify: 'center' }),
+        textRender: 'fit',
+        fitMode: 'single-line',
+        maxLines: 1,
+        layout: createFeedNodeLayout({ mode: 'flow', slot: 'footer', x: 10, y: 84, width: 83, height: 11, padding: 0, gap: 0, align: 'center', justify: 'center' }),
       }),
     ],
   }),
@@ -2407,6 +2447,7 @@ const createMissionBriefingLeftNodes = () => [
     type: 'text',
     binding: 'sectorLabel',
     surface: createFeedRegionSurface(),
+    textRender: 'rich',
     layout: createFeedNodeLayout({ x: 7, y: 11, width: 18, height: 14, padding: 0, gap: 0, align: 'center', justify: 'start' }),
   }),
 ];
@@ -2746,11 +2787,18 @@ const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'> => ({
         label: "Deadline Badge",
         type: "text",
         binding: "contractBadge",
+        textRender: "fit",
+        fitMode: "single-line",
+        maxLines: 1,
         layout: {
+          mode: "absolute",
+          slot: "auto",
           x: 51,
           y: 10,
           width: 38,
           height: 6,
+          nudgeX: 0,
+          nudgeY: 0,
           padding: 0,
           gap: 0,
           align: "center",
@@ -3019,13 +3067,18 @@ const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'> => ({
         label: "Mission Briefing",
         type: "container",
         binding: "contractBriefing",
+        textRender: "rich",
         layout: {
+          mode: "absolute",
+          slot: "auto",
           x: 47,
           y: 29,
           width: 39,
           height: 55,
+          nudgeX: 0,
+          nudgeY: 0,
           padding: 16,
-          gap: 0,
+          gap: 12,
           align: "center",
           justify: "start",
         },
@@ -3287,12 +3340,19 @@ const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'> => ({
             label: "Contract CTA",
             type: "button",
             binding: "contractCtaLabel",
+            textRender: "fit",
+            fitMode: "single-line",
+            maxLines: 1,
             layout: {
+              mode: "flow",
+              slot: "footer",
               x: 10,
               y: 84,
               width: 83,
               height: 11,
-              padding: 21,
+              nudgeX: 0,
+              nudgeY: 0,
+              padding: 0,
               gap: 0,
               align: "center",
               justify: "center",
@@ -3560,11 +3620,16 @@ const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'> => ({
         label: "Sector Mark",
         type: "text",
         binding: "sectorLabel",
+        textRender: "rich",
         layout: {
+          mode: "absolute",
+          slot: "auto",
           x: 7,
           y: 11,
           width: 18,
           height: 14,
+          nudgeX: 0,
+          nudgeY: 0,
           padding: 0,
           gap: 0,
           align: "center",
@@ -9963,10 +10028,14 @@ const sanitizeFeedBackgroundImage = (value: unknown, fallback: FeedBackgroundIma
 const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout): FeedNodeLayout => {
   const input = typeof value === 'object' && value !== null ? value as Partial<FeedNodeLayout> : {};
   return {
+    mode: isOneOf(input.mode, ['absolute', 'flow'] as const) ? input.mode : fallback.mode,
+    slot: isOneOf(input.slot, ['auto', 'body', 'footer', 'overlay'] as const) ? input.slot : fallback.slot,
     x: clamp(input.x, fallback.x, -50, 150),
     y: clamp(input.y, fallback.y, -50, 150),
     width: clamp(input.width, fallback.width, 4, 140),
     height: clamp(input.height, fallback.height, 4, 140),
+    nudgeX: clamp(input.nudgeX, fallback.nudgeX, -80, 80),
+    nudgeY: clamp(input.nudgeY, fallback.nudgeY, -80, 80),
     padding: clamp(input.padding, fallback.padding, 0, 40),
     gap: clamp(input.gap, fallback.gap, 0, 40),
     align: isOneOf(input.align, ['left', 'center', 'right'] as const) ? input.align : fallback.align,
@@ -9987,6 +10056,11 @@ const sanitizeFeedCardNode = (value: unknown, fallback: FeedCardNode): FeedCardN
     layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
     surface,
     text: input.text ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle()) : fallback.text ? cloneFeedSlotStyle(fallback.text) : undefined,
+    textRender: isOneOf(input.textRender, ['auto', 'rich', 'fit', 'raw'] as const) ? input.textRender : fallback.textRender,
+    markup: isOneOf(input.markup, ['auto', 'on', 'off'] as const) ? input.markup : fallback.markup,
+    sizing: isOneOf(input.sizing, ['auto', 'fit', 'flow'] as const) ? input.sizing : fallback.sizing,
+    fitMode: isOneOf(input.fitMode, ['single-line', 'fixed-lines', 'paragraph'] as const) ? input.fitMode : fallback.fitMode,
+    maxLines: clamp(input.maxLines, fallback.maxLines ?? 1, 1, 8),
     children: (fallback.children || []).map((childFallback, index) => sanitizeFeedCardNode(childrenInput[index], childFallback)),
   };
 };
@@ -10502,6 +10576,48 @@ const FeedRecipeEditor = (props: {
                     <MiniButton active={selectedNodeTextMode() === 'custom'} onClick={() => updateSelectedNodeTextMode('custom')}>custom</MiniButton>
                   </div>
                 </div>
+                <div class="ui-lab-control-row">
+                  <span>Markup</span>
+                  <div class="ui-lab-toggles">
+                    <For each={['auto', 'on', 'off'] as const}>
+                      {(mode) => (
+                        <MiniButton active={(node().markup ?? legacyMarkupMode(node().textRender)) === mode} onClick={() => updateSelectedNode({ markup: mode })}>
+                          {mode}
+                        </MiniButton>
+                      )}
+                    </For>
+                  </div>
+                </div>
+                <div class="ui-lab-control-row">
+                  <span>Render</span>
+                  <div class="ui-lab-toggles">
+                    <For each={['auto', 'fit', 'flow'] as const}>
+                      {(mode) => (
+                        <MiniButton active={(node().sizing ?? legacySizingMode(node().textRender)) === mode} onClick={() => updateSelectedNode({ sizing: mode })}>
+                          {mode}
+                        </MiniButton>
+                      )}
+                    </For>
+                  </div>
+                </div>
+                <Show when={resolveFeedNodeFit(node())}>
+                  <div class="ui-lab-control-row">
+                    <span>Fit</span>
+                    <div class="ui-lab-toggles">
+                      <For each={['single-line', 'fixed-lines', 'paragraph'] as const}>
+                        {(mode) => (
+                          <MiniButton active={(node().fitMode ?? 'single-line') === mode} onClick={() => updateSelectedNode({ fitMode: mode })}>
+                            {mode}
+                          </MiniButton>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                  <div class="ui-lab-control-row">
+                    <span>Lines</span>
+                    <Slider value={node().maxLines ?? 1} min={1} max={8} onInput={(value) => updateSelectedNode({ maxLines: value })} />
+                  </div>
+                </Show>
                 <div class={`ui-lab-control-row ${selectedNodeTextCustom() && selectedNodeTextStyle()?.overrideColor ? '' : 'ui-lab-control-row--disabled'}`}>
                   {nodeTextControlLabel('Color', 'overrideColor')}
                   <select
@@ -10704,13 +10820,39 @@ const FeedRecipeEditor = (props: {
                   />
                 </div>
               </Show>
+              <SectionLabel size="xs">Layout</SectionLabel>
               <div class="ui-lab-control-row">
-                <span>X</span>
-                <Slider value={node().layout.x} min={-50} max={150} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+                <span>Mode</span>
+                <div class="ui-lab-toggles">
+                  <MiniButton active={node().layout.mode === 'absolute'} onClick={() => updateSelectedNodeLayout('mode', 'absolute')}>
+                    absolute
+                  </MiniButton>
+                  <MiniButton active={node().layout.mode === 'flow'} onClick={() => updateSelectedNodeLayout('mode', 'flow')}>
+                    flow
+                  </MiniButton>
+                </div>
+              </div>
+              <Show when={node().layout.mode === 'flow'}>
+                <div class="ui-lab-control-row">
+                  <span>Slot</span>
+                  <div class="ui-lab-toggles">
+                    <For each={['auto', 'body', 'footer', 'overlay'] as const}>
+                      {(slot) => (
+                        <MiniButton active={node().layout.slot === slot} onClick={() => updateSelectedNodeLayout('slot', slot)}>
+                          {slot}
+                        </MiniButton>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <div class="ui-lab-control-row">
+                <span>{node().layout.mode === 'flow' ? 'Old X' : 'X'}</span>
+                <Slider value={node().layout.x} min={-50} max={150} disabled={node().layout.mode === 'flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>Y</span>
-                <Slider value={node().layout.y} min={-50} max={150} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+                <span>{node().layout.mode === 'flow' ? 'Old Y' : 'Y'}</span>
+                <Slider value={node().layout.y} min={-50} max={150} disabled={node().layout.mode === 'flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>W</span>
@@ -10720,6 +10862,16 @@ const FeedRecipeEditor = (props: {
                 <span>H</span>
                 <Slider value={node().layout.height} min={4} max={140} onInput={(value) => updateSelectedNodeLayout('height', value)} />
               </div>
+              <Show when={node().layout.mode === 'flow'}>
+                <div class="ui-lab-control-row">
+                  <span>Nudge X</span>
+                  <Slider value={node().layout.nudgeX} min={-80} max={80} onInput={(value) => updateSelectedNodeLayout('nudgeX', value)} />
+                </div>
+                <div class="ui-lab-control-row">
+                  <span>Nudge Y</span>
+                  <Slider value={node().layout.nudgeY} min={-80} max={80} onInput={(value) => updateSelectedNodeLayout('nudgeY', value)} />
+                </div>
+              </Show>
               <div class="ui-lab-control-row">
                 <span>Pad</span>
                 <Slider value={node().layout.padding} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('padding', value)} />
@@ -10746,7 +10898,7 @@ const FeedRecipeEditor = (props: {
                   <For each={['start', 'center', 'end'] as const}>
                     {(justify) => (
                       <MiniButton active={node().layout.justify === justify} onClick={() => updateSelectedNodeLayout('justify', justify)}>
-                        {justify}
+                        {justify === 'start' ? 'top' : justify === 'end' ? 'bottom' : 'center'}
                       </MiniButton>
                     )}
                   </For>
@@ -11266,7 +11418,9 @@ const feedTextCss = (style: FeedTextSlotStyle): JSX.CSSProperties => ({
   'line-height': style.overrideLineHeight ? style.lineHeight : 'inherit',
   'text-transform': style.overrideCase ? feedRichTextTransform(style) : 'inherit',
   'letter-spacing': style.overrideLetterSpacing ? `${style.letterSpacing}em` : 'inherit',
-  'text-align': style.textAlign,
+  // Inherit the frame's text-align (= node.layout.align) so the single ALIGN control
+  // drives horizontal alignment in every render mode (flow text, and fit via fit.align).
+  'text-align': 'inherit',
   opacity: '1',
   color: style.overrideColor ? feedToneColors[style.contentTone] || feedToneColors.white : 'inherit',
   'text-shadow': style.overrideEmboss ? feedTextEmbossShadow(style) : 'inherit',
@@ -11519,19 +11673,25 @@ const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; styl
   );
 };
 
-const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => ({
-  left: `${layout.x}%`,
-  top: `${layout.y}%`,
-  width: `${layout.width}%`,
-  height: `${layout.height}%`,
-  gap: `${layout.gap}px`,
-  '--feed-node-padding': `${layout.padding}px`,
-  '--feed-node-gap': `${layout.gap}px`,
-  '--feed-node-gap-scale': `${layout.gap / 100}`,
-  'text-align': layout.align,
-  'align-items': layout.align === 'left' ? 'flex-start' : layout.align === 'right' ? 'flex-end' : 'center',
-  'justify-content': layout.justify === 'start' ? 'flex-start' : layout.justify === 'end' ? 'flex-end' : 'center',
-});
+const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => {
+  const isFlow = layout.mode === 'flow';
+  const isOverlay = isFlow && layout.slot === 'overlay';
+  return {
+    position: isFlow && !isOverlay ? 'relative' : 'absolute',
+    left: isFlow && !isOverlay ? undefined : `${layout.x}%`,
+    top: isFlow && !isOverlay ? undefined : `${layout.y}%`,
+    width: `${layout.width}%`,
+    height: `${layout.height}%`,
+    transform: isFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
+    gap: `${layout.gap}px`,
+    '--feed-node-padding': `${layout.padding}px`,
+    '--feed-node-gap': `${layout.gap}px`,
+    '--feed-node-gap-scale': `${layout.gap / 100}`,
+    'text-align': layout.align,
+    'align-items': layout.align === 'left' ? 'flex-start' : layout.align === 'right' ? 'flex-end' : 'center',
+    'justify-content': layout.justify === 'start' ? 'flex-start' : layout.justify === 'end' ? 'flex-end' : 'center',
+  };
+};
 
 const feedNodeSurfaceRecipe = (cardType: FeedCardTypeRecipe, node: FeedCardNode): MaterialRecipe => {
   const surface = node.surface || createFeedRegionSurface();
@@ -11559,6 +11719,54 @@ const feedStoryValue = (story: FeedStory, binding: FeedTextSlotId | undefined) =
   return story[binding] || '';
 };
 
+const feedNodeContentValue = (story: FeedStory, node: FeedCardNode) => {
+  const value = feedStoryValue(story, node.binding);
+  return node.type === 'button' ? value.trim() : value;
+};
+
+const feedTextHasMarkup = (value: string) => /\[[a-z0-9/]+\]|\[(?:RULE|DIVIDER)\]/i.test(value);
+
+// Legacy textRender → the two axes, used as the default when markup/sizing unset.
+const legacyMarkupMode = (textRender?: FeedNodeTextRender): FeedNodeMarkupMode =>
+  textRender === 'raw' ? 'off' : textRender === 'rich' ? 'on' : 'auto';
+const legacySizingMode = (textRender?: FeedNodeTextRender): FeedNodeSizingMode =>
+  textRender === 'fit' ? 'fit' : textRender === 'raw' || textRender === 'rich' ? 'flow' : 'auto';
+
+// Axis A — markup: parse [..] into styled tokens (cooked) or treat literally (raw).
+const resolveFeedNodeMarkupOn = (node: FeedCardNode, value: string): boolean => {
+  const mode = node.markup ?? legacyMarkupMode(node.textRender);
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return feedTextHasMarkup(value); // auto: cook only when markup is present
+};
+
+// Axis B — sizing: autoscale-to-fit the box, or normal browser flow.
+const resolveFeedNodeFit = (node: FeedCardNode): boolean => {
+  const mode = node.sizing ?? legacySizingMode(node.textRender);
+  if (mode === 'fit') return true;
+  if (mode === 'flow') return false;
+  // auto: labels/short regions fit, taller blocks flow.
+  if (node.type === 'button') return true;
+  return node.layout.height <= 14;
+};
+
+// Combine the two axes into the concrete renderer.
+const resolveFeedNodeRenderMode = (node: FeedCardNode, value: string): MaterialTextRenderMode => {
+  const cooked = resolveFeedNodeMarkupOn(node, value);
+  return resolveFeedNodeFit(node)
+    ? (cooked ? 'rich-fit' : 'fit')
+    : (cooked ? 'rich' : 'raw');
+};
+
+const feedNodeFitMode = (node: FeedCardNode, value = ''): MaterialTextFitMode => {
+  if (node.type === 'button') return value.includes('\n') ? 'fixed-lines' : 'single-line';
+  return node.fitMode ?? (node.layout.height <= 14 ? 'single-line' : 'paragraph');
+};
+
+const feedNodeMaxLines = (node: FeedCardNode, value = '') => (
+  node.maxLines ?? (feedNodeFitMode(node, value) === 'single-line' ? 1 : value.includes('\n') ? 2 : 2)
+);
+
 const FeedNodeFrame = (props: {
   node: FeedCardNode;
   targetId: FeedMaterialTargetId;
@@ -11569,6 +11777,8 @@ const FeedNodeFrame = (props: {
   <div
     class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
     data-feed-node-kind={props.node.type}
+    data-feed-layout-mode={props.node.layout.mode}
+    data-feed-layout-slot={props.node.layout.slot}
     data-material-target-id={props.targetId}
     data-material-role={props.role}
     style={feedNodeLayoutCss(props.node.layout)}
@@ -11598,12 +11808,43 @@ const FeedCardTreeNode = (props: {
     lineHeight: resolvedTextStyle().lineHeight,
     textTransform: fitTextTransform(),
   });
-  const content = () => feedStoryValue(props.story, props.node.binding);
+  // A button has no flow children for LINE GAP to space, so for buttons repurpose
+  // layout.gap as extra line spacing between multi-line label rows (em delta on the
+  // line-height the autoscaler measures and renders with).
+  const fitTextStyleResolved = () => {
+    const base = fitTextStyle();
+    if (props.node.type !== 'button') return base;
+    return { ...base, lineHeight: base.lineHeight + props.node.layout.gap / 100 };
+  };
+  const content = () => feedNodeContentValue(props.story, props.node);
   const surfaceRecipe = () => feedNodeSurfaceRecipe(props.cardType, props.node);
   const targetId = () => feedMaterialTargetIdForNode(props.cardType.id, props.node.id);
   const nodeRole = (): PreviewTargetRole => props.node.type === 'button' ? 'momentary' : props.node.type === 'container' ? 'container' : 'text';
   const visualState = () => props.surfaceStateForTarget(targetId(), nodeRole());
   const targetClass = () => props.selectedFeedTargetClass(targetId());
+  const materialTextRenderMode = () => resolveFeedNodeRenderMode(props.node, content());
+  const fittedText = (className = 'main-material-card-node-text') => (
+    <MaterialTextContent
+      text={content()}
+      renderMode={materialTextRenderMode()}
+      fitMode={feedNodeFitMode(props.node, content())}
+      maxLines={feedNodeMaxLines(props.node, content())}
+      fit={{
+        baseFontSize: Math.max(0.35, resolvedTextStyle().textSizeRem),
+        minScale: 0.26,
+        maxScale: 1,
+        align: props.node.layout.align === 'right' ? 'right' : props.node.layout.align === 'center' ? 'center' : 'left',
+        verticalAlign: props.node.layout.justify === 'end' ? 'bottom' : props.node.layout.justify === 'center' ? 'center' : 'top',
+        verticalMetric: props.node.type === 'button' ? 'cap' : 'ink',
+        textStyle: fitTextStyleResolved(),
+      }}
+      class={className}
+      style={textStyle()}
+      richText={(value) => <FeedRichText value={value} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />}
+    />
+  );
+  const hasFlowChildren = () => Boolean((props.node.children || []).some((child) => child.layout.mode === 'flow'));
+  const useFlowStack = () => Boolean(props.node.binding) || hasFlowChildren();
   return (
     <Show
       when={props.node.type === 'container'}
@@ -11618,9 +11859,7 @@ const FeedCardTreeNode = (props: {
                 padded={false}
                 class={`main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${props.node.binding || 'unbound'}`}
               >
-                <span class="main-material-card-node-text" style={textStyle()}>
-                  <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
-                </span>
+                {fittedText()}
               </MaterialSurfaceHost>
             </FeedNodeFrame>
           )}
@@ -11632,22 +11871,7 @@ const FeedCardTreeNode = (props: {
               buttonSize="sm"
               buttonFullWidth
               class="main-material-card-node-surface main-material-card-node-surface--button"
-              label={(
-                <MaterialTextContent
-                  text={content()}
-                  renderMode="fit"
-                  fitMode={(props.node.layout.height <= 14 ? 'single-line' : 'paragraph')}
-                  maxLines={props.node.layout.height <= 14 ? 1 : 2}
-                  fit={{
-                    baseFontSize: Math.max(0.35, resolvedTextStyle().textSizeRem),
-                    minScale: 0.26,
-                    maxScale: 1,
-                    align: props.node.layout.align === 'right' ? 'right' : props.node.layout.align === 'center' ? 'center' : 'left',
-                    textStyle: fitTextStyle(),
-                  }}
-                  style={textStyle()}
-                />
-              )}
+              label={fittedText('main-material-card-node-button-label')}
             />
           </FeedNodeFrame>
         </Show>
@@ -11658,25 +11882,41 @@ const FeedCardTreeNode = (props: {
           kind="panel"
           surfaceProps={materialSurfacePropsForPart('feedCards', surfaceRecipe(), visualState())}
           padded={false}
-          class={`main-material-card-node-surface ${props.node.binding ? 'main-material-card-node-surface--markup' : ''} ${props.node.binding && props.node.children?.length ? 'main-material-card-node-surface--flow' : ''}`}
-        >
-          <Show when={props.node.binding}>
-            <span class="main-material-card-node-text" style={textStyle()}>
-              <FeedRichText value={content()} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />
-            </span>
-          </Show>
-        </MaterialSurfaceHost>
-        <For each={props.node.children || []}>
-          {(child) => (
-            <FeedCardTreeNode
-              node={child}
-              story={props.story}
-              cardType={props.cardType}
-              surfaceStateForTarget={props.surfaceStateForTarget}
-              selectedFeedTargetClass={props.selectedFeedTargetClass}
-            />
+          class="main-material-card-node-surface main-material-card-node-surface--background"
+        />
+        <Show
+          when={useFlowStack()}
+          fallback={(
+            <For each={props.node.children || []}>
+              {(child) => (
+                <FeedCardTreeNode
+                  node={child}
+                  story={props.story}
+                  cardType={props.cardType}
+                  surfaceStateForTarget={props.surfaceStateForTarget}
+                  selectedFeedTargetClass={props.selectedFeedTargetClass}
+                />
+              )}
+            </For>
           )}
-        </For>
+        >
+          <div class="main-material-card-node-flow-stack">
+            <Show when={props.node.binding}>
+              {fittedText('main-material-card-node-text main-material-card-node-flow-text')}
+            </Show>
+            <For each={props.node.children || []}>
+              {(child) => (
+                <FeedCardTreeNode
+                  node={child}
+                  story={props.story}
+                  cardType={props.cardType}
+                  surfaceStateForTarget={props.surfaceStateForTarget}
+                  selectedFeedTargetClass={props.selectedFeedTargetClass}
+                />
+              )}
+            </For>
+          </div>
+        </Show>
       </FeedNodeFrame>
     </Show>
   );

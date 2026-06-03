@@ -4,9 +4,16 @@ import {
   type GameTextV2Align,
   type GameTextV2Style,
   type GameTextV2VerticalAlign,
+  type GameTextV2VerticalMetric,
 } from '../GameTextV2';
+import { ScaleToFit } from '../ScaleToFit';
 
-export type MaterialTextRenderMode = 'raw' | 'rich' | 'fit';
+// Two orthogonal axes folded into one enum:
+//   markup: raw (literal) vs cooked (parsed via richText)
+//   sizing: flow (browser line box) vs fit (autoscale)
+// raw      = literal + flow      rich     = cooked + flow
+// fit      = literal + glyph-fit rich-fit = cooked + box-fit (ScaleToFit)
+export type MaterialTextRenderMode = 'raw' | 'rich' | 'fit' | 'rich-fit';
 export type MaterialTextFitMode = 'single-line' | 'fixed-lines' | 'paragraph';
 
 export interface MaterialTextFitOptions {
@@ -15,6 +22,7 @@ export interface MaterialTextFitOptions {
   maxScale?: number;
   align?: GameTextV2Align;
   verticalAlign?: GameTextV2VerticalAlign;
+  verticalMetric?: GameTextV2VerticalMetric;
   textStyle?: GameTextV2Style;
   lang?: string;
   dir?: 'ltr' | 'rtl' | 'auto';
@@ -54,12 +62,23 @@ export const MaterialTextContent = (props: {
               maxLines={props.maxLines}
               align={fit().align}
               verticalAlign={fit().verticalAlign}
+              verticalMetric={fit().verticalMetric}
               textStyle={fit().textStyle}
               lang={fit().lang}
               dir={fit().dir}
               safetyScale={fit().safetyScale}
             />
           )}
+        </Match>
+        <Match when={renderMode() === 'rich-fit'}>
+          <ScaleToFit
+            align={props.fit?.align ?? 'center'}
+            verticalAlign={props.fit?.verticalAlign ?? 'center'}
+            maxScale={props.fit?.maxScale}
+            minScale={props.fit?.minScale}
+          >
+            {props.richText?.(props.text) ?? props.text}
+          </ScaleToFit>
         </Match>
         <Match when={renderMode() === 'rich'}>
           {props.richText?.(props.text) ?? props.text}
