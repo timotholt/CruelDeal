@@ -170,6 +170,15 @@ type FeedMediaFadeMode = 'none' | 'top-dark' | 'bottom-dark' | 'left-dark' | 'ri
 type FeedCardNodeType = 'container' | 'text' | 'button';
 type FeedNodeAlign = 'left' | 'center' | 'right';
 type FeedNodeJustify = 'start' | 'center' | 'end';
+// Unified box model (Figma auto-layout). Optional on FeedNodeLayout; when absent they
+// derive from the legacy fields (mode/slot/align/justify) so existing data is unchanged.
+type FeedNodeDirection = 'row' | 'column';
+type FeedNodeDistribute = 'start' | 'center' | 'end' | 'between' | 'around' | 'evenly';
+type FeedNodeCrossAlign = 'start' | 'center' | 'end' | 'stretch';
+type FeedNodeSizeMode = 'fixed' | 'hug' | 'fill';
+type FeedNodeSelfPosition = 'in-flow' | 'absolute';
+type FeedNodeConstraintH = 'left' | 'right' | 'left-right' | 'center' | 'scale';
+type FeedNodeConstraintV = 'top' | 'bottom' | 'top-bottom' | 'center' | 'scale';
 type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
 type FeedTextTransformToken = TextTransformToken | 'inherit';
 type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
@@ -265,6 +274,18 @@ interface FeedNodeLayout {
   gap: number;
   align: FeedNodeAlign;
   justify: FeedNodeJustify;
+  // --- unified box model (optional; derived from the legacy fields above when unset) ---
+  direction?: FeedNodeDirection;     // main axis for child stacking
+  reverse?: boolean;                 // row-reverse / column-reverse
+  wrap?: boolean;                    // flex-wrap
+  distribute?: FeedNodeDistribute;   // main-axis distribution (justify-content)
+  crossAlign?: FeedNodeCrossAlign;   // cross-axis alignment (align-items)
+  wMode?: FeedNodeSizeMode;          // width sizing: fixed / hug / fill
+  hMode?: FeedNodeSizeMode;          // height sizing: fixed / hug / fill
+  selfPosition?: FeedNodeSelfPosition; // in-flow (flex child) vs absolute (escape)
+  pushToEnd?: boolean;               // margin-auto before → pin to far end (footer)
+  constraintH?: FeedNodeConstraintH; // absolute-child horizontal pin
+  constraintV?: FeedNodeConstraintV; // absolute-child vertical pin
 }
 
 interface FeedCardNode {
@@ -10040,6 +10061,17 @@ const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout): FeedN
     gap: clamp(input.gap, fallback.gap, 0, 40),
     align: isOneOf(input.align, ['left', 'center', 'right'] as const) ? input.align : fallback.align,
     justify: isOneOf(input.justify, ['start', 'center', 'end'] as const) ? input.justify : fallback.justify,
+    direction: isOneOf(input.direction, ['row', 'column'] as const) ? input.direction : fallback.direction,
+    reverse: typeof input.reverse === 'boolean' ? input.reverse : fallback.reverse,
+    wrap: typeof input.wrap === 'boolean' ? input.wrap : fallback.wrap,
+    distribute: isOneOf(input.distribute, ['start', 'center', 'end', 'between', 'around', 'evenly'] as const) ? input.distribute : fallback.distribute,
+    crossAlign: isOneOf(input.crossAlign, ['start', 'center', 'end', 'stretch'] as const) ? input.crossAlign : fallback.crossAlign,
+    wMode: isOneOf(input.wMode, ['fixed', 'hug', 'fill'] as const) ? input.wMode : fallback.wMode,
+    hMode: isOneOf(input.hMode, ['fixed', 'hug', 'fill'] as const) ? input.hMode : fallback.hMode,
+    selfPosition: isOneOf(input.selfPosition, ['in-flow', 'absolute'] as const) ? input.selfPosition : fallback.selfPosition,
+    pushToEnd: typeof input.pushToEnd === 'boolean' ? input.pushToEnd : fallback.pushToEnd,
+    constraintH: isOneOf(input.constraintH, ['left', 'right', 'left-right', 'center', 'scale'] as const) ? input.constraintH : fallback.constraintH,
+    constraintV: isOneOf(input.constraintV, ['top', 'bottom', 'top-bottom', 'center', 'scale'] as const) ? input.constraintV : fallback.constraintV,
   };
 };
 
@@ -11673,23 +11705,56 @@ const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; styl
   );
 };
 
+// --- unified box-model resolvers ---
+// Each returns the explicit new field if set, else derives the legacy behavior, so
+// existing nodes compile to byte-identical CSS until they opt into the new fields.
+const resolveLayoutDirection = (l: FeedNodeLayout): FeedNodeDirection => l.direction ?? 'column';
+const resolveLayoutDistribute = (l: FeedNodeLayout): FeedNodeDistribute =>
+  l.distribute ?? (l.justify === 'start' ? 'start' : l.justify === 'end' ? 'end' : 'center');
+const resolveLayoutCrossAlign = (l: FeedNodeLayout): FeedNodeCrossAlign =>
+  l.crossAlign ?? (l.align === 'left' ? 'start' : l.align === 'right' ? 'end' : 'center');
+const resolveLayoutWMode = (l: FeedNodeLayout): FeedNodeSizeMode => l.wMode ?? 'fixed';
+const resolveLayoutHMode = (l: FeedNodeLayout): FeedNodeSizeMode => l.hMode ?? 'fixed';
+const resolveLayoutSelfPosition = (l: FeedNodeLayout): FeedNodeSelfPosition =>
+  l.selfPosition ?? (l.mode === 'flow' && l.slot !== 'overlay' ? 'in-flow' : 'absolute');
+const resolveLayoutPushToEnd = (l: FeedNodeLayout): boolean => l.pushToEnd ?? l.slot === 'footer';
+
+const distributeToJustifyContent = (d: FeedNodeDistribute): string =>
+  d === 'start' ? 'flex-start'
+    : d === 'end' ? 'flex-end'
+    : d === 'between' ? 'space-between'
+    : d === 'around' ? 'space-around'
+    : d === 'evenly' ? 'space-evenly'
+    : 'center';
+const crossAlignToAlignItems = (c: FeedNodeCrossAlign): string =>
+  c === 'start' ? 'flex-start' : c === 'end' ? 'flex-end' : c === 'stretch' ? 'stretch' : 'center';
+
 const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => {
-  const isFlow = layout.mode === 'flow';
-  const isOverlay = isFlow && layout.slot === 'overlay';
+  const inFlow = resolveLayoutSelfPosition(layout) === 'in-flow';
+  const legacyFlow = layout.mode === 'flow'; // preserves the original nudge-transform condition
+  const direction = resolveLayoutDirection(layout);
+  const wMode = resolveLayoutWMode(layout);
+  const hMode = resolveLayoutHMode(layout);
+  // At legacy defaults (direction column, sizing fixed, pushToEnd from footer) this
+  // compiles to the exact same CSS as before; the new fields only change output when set.
   return {
-    position: isFlow && !isOverlay ? 'relative' : 'absolute',
-    left: isFlow && !isOverlay ? undefined : `${layout.x}%`,
-    top: isFlow && !isOverlay ? undefined : `${layout.y}%`,
-    width: `${layout.width}%`,
-    height: `${layout.height}%`,
-    transform: isFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
+    position: inFlow ? 'relative' : 'absolute',
+    left: inFlow ? undefined : `${layout.x}%`,
+    top: inFlow ? undefined : `${layout.y}%`,
+    'flex-direction': direction === 'row' ? (layout.reverse ? 'row-reverse' : 'row') : (layout.reverse ? 'column-reverse' : 'column'),
+    'flex-wrap': layout.wrap ? 'wrap' : undefined,
+    width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? '100%' : `${layout.width}%`,
+    height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? '100%' : `${layout.height}%`,
+    'margin-top': resolveLayoutPushToEnd(layout) && direction === 'column' ? 'auto' : undefined,
+    'margin-left': resolveLayoutPushToEnd(layout) && direction === 'row' ? 'auto' : undefined,
+    transform: legacyFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
     gap: `${layout.gap}px`,
     '--feed-node-padding': `${layout.padding}px`,
     '--feed-node-gap': `${layout.gap}px`,
     '--feed-node-gap-scale': `${layout.gap / 100}`,
     'text-align': layout.align,
-    'align-items': layout.align === 'left' ? 'flex-start' : layout.align === 'right' ? 'flex-end' : 'center',
-    'justify-content': layout.justify === 'start' ? 'flex-start' : layout.justify === 'end' ? 'flex-end' : 'center',
+    'align-items': crossAlignToAlignItems(resolveLayoutCrossAlign(layout)),
+    'justify-content': distributeToJustifyContent(resolveLayoutDistribute(layout)),
   };
 };
 

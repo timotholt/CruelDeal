@@ -571,7 +571,9 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-card-node-flow-text {
-  flex: 1 1 auto;
+  /* Natural height (don't grow) so the parent's distribute/justify can position a
+     short text block top/center/bottom. Grows only via Fill sizing, not by default. */
+  flex: 0 1 auto;
   min-height: 0;
   /* Tight heading line-heights (<1) let the first row's caps overshoot the line-box
      top; a hard clip at padding 0 shaves them. `clip` + a small clip-margin pushes the
