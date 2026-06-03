@@ -28,7 +28,6 @@ import {
   type FontWeightToken,
   sanitizeMaterialRecipe,
   type MaterialTone,
-  type EmittedLayer,
   type MaterialEmissionPlan,
   type EmissionMetrics,
   type MaterialRecipe,
