@@ -2411,6 +2411,67 @@ const createFeedDotsNode = (gap: number): FeedCardNode => createFeedNode({
   }),
 });
 
+const createFeedTrackNode = (): FeedCardNode => createFeedNode({
+  id: 'feed-track',
+  label: 'Feed Track',
+  type: 'container',
+  layout: createFeedNodeLayout({
+    mode: 'absolute',
+    selfPosition: 'absolute',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    padding: 0,
+    gap: 0,
+    align: 'left',
+    justify: 'start',
+    direction: 'row',
+    distribute: 'start',
+    crossAlign: 'stretch',
+    wMode: 'fixed',
+    hMode: 'fixed',
+    constraintH: 'left-right',
+    constraintV: 'top-bottom',
+  }),
+});
+
+const createFeedTrackSlideNode = (storyId: string): FeedCardNode => createFeedNode({
+  id: `feed-track-slide-${storyId}`,
+  label: 'Feed Track Slide',
+  type: 'container',
+  layout: createChromeColumnLayout({
+    width: 100,
+    height: 100,
+    wMode: 'fixed',
+    hMode: 'fill',
+    crossAlign: 'stretch',
+  }),
+});
+
+const createFeedStageNode = (): FeedCardNode => createFeedNode({
+  id: 'feed-stage',
+  label: 'Briefing Feed',
+  type: 'container',
+  layout: createFeedNodeLayout({
+    mode: 'flow',
+    selfPosition: 'in-flow',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    padding: 0,
+    gap: 0,
+    align: 'left',
+    justify: 'start',
+    direction: 'column',
+    distribute: 'start',
+    crossAlign: 'stretch',
+    wMode: 'fixed',
+    hMode: 'fixed',
+  }),
+});
+
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
   ...cloneMaterialRecipe(defaultFeedSurface),
   ...overrides,
@@ -12285,9 +12346,17 @@ const FeedNodeFrame = (props: {
   role: PreviewTargetRole;
   targetClass: string;
   children: JSX.Element;
+  ariaLabel?: string;
+  style?: JSX.CSSProperties;
+  onPointerDown?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
+  onPointerMove?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
+  onPointerUp?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
+  onPointerCancel?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
+  onPointerLeave?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
 }) => (
   <div
     class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
+    aria-label={props.ariaLabel}
     data-feed-node-kind={props.node.type}
     data-feed-layout-mode={props.node.layout.mode}
     data-feed-layout-slot={props.node.layout.slot}
@@ -12298,7 +12367,12 @@ const FeedNodeFrame = (props: {
     data-wrap={props.node.layout.wrap ? 'true' : undefined}
     data-material-target-id={props.targetId}
     data-material-role={props.role}
-    style={feedNodeLayoutCss(props.node.layout)}
+    style={{ ...feedNodeLayoutCss(props.node.layout), ...props.style }}
+    onPointerDown={props.onPointerDown}
+    onPointerMove={props.onPointerMove}
+    onPointerUp={props.onPointerUp}
+    onPointerCancel={props.onPointerCancel}
+    onPointerLeave={props.onPointerLeave}
   >
     {props.children}
   </div>
@@ -12632,6 +12706,34 @@ const FeedDots = (props: {
   );
 };
 
+const FeedTrackSlide = (props: {
+  story: FeedStory;
+  cardType: FeedCardTypeRecipe;
+  imageSource: string;
+  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+}) => {
+  const node = createFeedTrackSlideNode(props.story.id);
+  return (
+    <FeedNodeFrame
+      node={node}
+      targetId={`feed:track:slide:${props.story.id}`}
+      role="static"
+      targetClass="main-material-feed-slide"
+    >
+      <div class="main-material-card-node-flow-stack">
+        <FeedSlideFrame
+          story={props.story}
+          cardType={props.cardType}
+          imageSource={props.imageSource}
+          surfaceStateForTarget={props.surfaceStateForTarget}
+          selectedFeedTargetClass={props.selectedFeedTargetClass}
+        />
+      </div>
+    </FeedNodeFrame>
+  );
+};
+
 const FeedCarousel = (props: {
   stories: FeedStory[];
   cardTypes: FeedCardTypes;
@@ -12661,12 +12763,14 @@ const FeedCarousel = (props: {
     '--main-feed-slide-index': activeSlideIndex(),
     '--main-feed-drag-x': `${dragDeltaX()}px`,
   }) as JSX.CSSProperties;
+  const stageNode = createFeedStageNode();
+  const trackNode = createFeedTrackNode();
   const showSlide = (index: number) => {
     const nextIndex = clampSlideIndex(index, props.stories.length);
     setActiveSlideIndex(nextIndex);
     props.onActiveStoryChange(props.stories[nextIndex]?.id || props.stories[0].id);
   };
-  const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLElement }) => {
+  const handleFeedPointerDown = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     setDragStartX(event.clientX);
     setDragDeltaX(0);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -12692,42 +12796,50 @@ const FeedCarousel = (props: {
   };
 
   return (
-    <section
-      class={`main-material-feed-stage ${props.class} ${dragStartX() !== null ? 'is-dragging' : ''}`}
+    <FeedNodeFrame
+      node={stageNode}
+      targetId="feed:stage"
+      role="static"
+      targetClass={`main-material-feed-stage ${props.class} ${dragStartX() !== null ? 'is-dragging' : ''}`}
       style={feedStyle()}
-      aria-label="Briefing feed"
+      ariaLabel="Briefing feed"
       onPointerDown={handleFeedPointerDown}
       onPointerMove={handleFeedPointerMove}
       onPointerUp={finishFeedDrag}
       onPointerCancel={finishFeedDrag}
       onPointerLeave={finishFeedDrag}
     >
-      <div class="main-material-feed-track">
-        <For each={props.stories}>
-          {(story) => {
-            const cardType = () => props.cardTypes[story.cardTypeId] || props.cardTypes.card_type_01;
-            const imageSource = () => props.storyImageOverrides[story.id] || story.image;
-            return (
-              <div class="main-material-feed-slide">
-                <FeedSlideFrame
+      <FeedNodeFrame
+        node={trackNode}
+        targetId="feed:track"
+        role="static"
+      targetClass="main-material-feed-track"
+    >
+      <div class="main-material-card-node-flow-stack">
+          <For each={props.stories}>
+            {(story) => {
+              const cardType = () => props.cardTypes[story.cardTypeId] || props.cardTypes.card_type_01;
+              const imageSource = () => props.storyImageOverrides[story.id] || story.image;
+              return (
+                <FeedTrackSlide
                   story={story}
                   cardType={cardType()}
                   imageSource={imageSource()}
                   surfaceStateForTarget={props.surfaceStateForTarget}
                   selectedFeedTargetClass={props.selectedFeedTargetClass}
                 />
-              </div>
-            );
-          }}
-        </For>
-      </div>
+              );
+            }}
+          </For>
+        </div>
+      </FeedNodeFrame>
       <FeedDots
         count={props.stories.length}
         activeIndex={activeSlideIndex()}
         gap={props.feed.newsGap}
         onSelect={showSlide}
       />
-    </section>
+    </FeedNodeFrame>
   );
 };
 
