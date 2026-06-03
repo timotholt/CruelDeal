@@ -1,3 +1,9 @@
+/* Unified layout boundary:
+   Feed/card/chrome boxes are positioned and aligned by FeedNodeLayout via
+   feedNodeLayoutCss(). CSS in this file should only own app shell framing,
+   interaction behavior (drag/transition/pointer affordances), or visual skin
+   such as icon shape, typography, shadows, and texture treatment. */
+
 .main-material-phone {
   position: relative;
   width: 100%;
@@ -114,8 +120,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-topbar-node {
-  position: relative;
-  z-index: auto;
   min-width: 0;
 }
 
@@ -280,7 +284,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-feed-stage {
-  position: relative;
   min-height: 0;
   overflow: hidden;
   border-radius: 0;
@@ -420,8 +423,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-card-tree {
-  position: absolute;
-  inset: 0;
   z-index: 3;
 }
 
@@ -1012,13 +1013,11 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-bottom-stack {
-  position: relative;
   z-index: auto;
 }
 
 .main-material-button-bar {
   --main-material-bar-button-height: 2.5rem;
-  position: relative;
   z-index: auto;
   min-height: var(--main-material-bar-button-height);
 }
@@ -1028,7 +1027,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 }
 
 .main-material-nav-shell {
-  position: relative;
   z-index: auto;
   overflow: hidden;
 }

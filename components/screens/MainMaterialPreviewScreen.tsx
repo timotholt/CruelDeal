@@ -2201,6 +2201,8 @@ const cloneFeedCardNode = (node: FeedCardNode): FeedCardNode => ({
   children: node.children?.map((child) => cloneFeedCardNode(child)) || [],
 });
 
+// Unified layout nodes own box structure for preview chrome and feed content.
+// Keep visual skin in CSS classes; keep behavior such as carousel drag in code.
 const createChromeRowLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => createFeedNodeLayout({
   mode: 'flow',
   selfPosition: 'in-flow',
