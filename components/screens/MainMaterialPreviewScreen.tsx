@@ -2220,6 +2220,25 @@ const createChromeRowLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNod
   ...overrides,
 });
 
+const createChromeColumnLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => createFeedNodeLayout({
+  mode: 'flow',
+  selfPosition: 'in-flow',
+  x: 0,
+  y: 0,
+  width: 100,
+  height: 100,
+  padding: 0,
+  gap: 0,
+  align: 'center',
+  justify: 'start',
+  direction: 'column',
+  distribute: 'start',
+  crossAlign: 'stretch',
+  wMode: 'fill',
+  hMode: 'hug',
+  ...overrides,
+});
+
 const createTopBarFeedNode = (): FeedCardNode => createFeedNode({
   id: 'topbar-root',
   label: 'Top Bar',
@@ -2303,6 +2322,27 @@ const createNavFeedNode = (): FeedCardNode => createFeedNode({
     type: 'button',
     layout: createChromeRowLayout({ wMode: 'fill' }),
   })),
+});
+
+const createBottomChromeFeedNode = (): FeedCardNode => createFeedNode({
+  id: 'bottom-chrome',
+  label: 'Bottom Chrome',
+  type: 'container',
+  layout: createChromeColumnLayout({
+    gap: 4,
+  }),
+  children: [
+    createToolbarFeedNode(),
+    createFeedNode({
+      id: 'nav-shell',
+      label: 'Nav Container',
+      type: 'container',
+      layout: createChromeColumnLayout({
+        hMode: 'hug',
+      }),
+      children: [createNavFeedNode()],
+    }),
+  ],
 });
 
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
@@ -12690,8 +12730,7 @@ const MainMaterialPreview = (props: {
     return playerFacingPreviewStateForRole(interactionRoles[part]);
   };
   const topBarNode = createTopBarFeedNode();
-  const toolbarNode = createToolbarFeedNode();
-  const navNode = createNavFeedNode();
+  const bottomChromeNode = createBottomChromeFeedNode();
   const topBarCurrencyNodeIndex = (node: FeedCardNode) => topBarCurrencySpecs.findIndex((item) => `topbar-currency-${item.id}` === node.id);
   const topBarTargetIdForNode = (node: FeedCardNode) => {
     if (node.id === 'topbar-root') return 'topBar';
@@ -12783,11 +12822,46 @@ const MainMaterialPreview = (props: {
     'main-material-button-bar__item--nav',
     index === props.activeNavIndex ? 'is-active' : '',
   ].filter(Boolean).join(' ');
-  const navNodeContext: ChromeFeedNodeRenderContext = {
-    targetIdForNode: (node) => node.id === 'nav-root' ? 'navBar' : navNodeTargetId(node),
-    roleForNode: (node) => node.id === 'nav-root' ? 'container' : 'selectable',
-    previewStateForNode: (node) => navVisualState(Math.max(0, navNodeIndex(node))),
+  const toolbarNodeIndex = (node: FeedCardNode) => toolbarNodeSpecs.findIndex((item) => item.id === node.id);
+  const toolbarNodeClass = (index: number) => [
+    'main-material-button-bar__item',
+    'main-material-button-bar__item--toolbar',
+    index === 0 || index === 4 ? 'main-material-button-bar__item--dark' : '',
+    index === 2 ? 'main-material-button-bar__item--red' : '',
+  ].filter(Boolean).join(' ');
+  const bottomChromeTargetIdForNode = (node: FeedCardNode) => {
+    if (node.id === 'bottom-chrome') return 'bottomChrome';
+    if (node.id === 'toolbar-root') return 'toolBar';
+    if (node.id === 'nav-shell') return 'navBarContainer';
+    if (node.id === 'nav-root') return 'navBar';
+    if (navNodeIndex(node) >= 0) return navNodeTargetId(node);
+    return toolbarMaterialTargetId(node.id);
+  };
+  const bottomChromeRoleForNode = (node: FeedCardNode): PreviewTargetRole => {
+    if (node.id === 'bottom-chrome' || node.id === 'toolbar-root' || node.id === 'nav-shell' || node.id === 'nav-root') return 'container';
+    if (navNodeIndex(node) >= 0) return 'selectable';
+    return 'momentary';
+  };
+  const bottomChromePreviewStateForNode = (node: FeedCardNode, _role: PreviewTargetRole): MaterialRecipeState => {
+    if (node.id === 'nav-shell') return stateForPart('navBarContainer');
+    if (node.id === 'nav-root') return stateForPart('navBar');
+    if (navNodeIndex(node) >= 0) return navVisualState(Math.max(0, navNodeIndex(node)));
+    if (node.id === 'toolbar-root' || toolbarNodeIndex(node) >= 0) return stateForPart('toolBar');
+    return 'rest';
+  };
+  const bottomChromeNodeContext: ChromeFeedNodeRenderContext = {
+    targetIdForNode: bottomChromeTargetIdForNode,
+    roleForNode: bottomChromeRoleForNode,
+    previewStateForNode: bottomChromePreviewStateForNode,
+    surfacePropsForNode: (node, _role, visualState) => (
+      node.id === 'nav-shell'
+        ? materialSurfacePropsForPart('navBarContainer', props.surfaces.navContainer, visualState)
+        : undefined
+    ),
     buttonPropsForNode: (node, _role, visualState) => {
+      if (toolbarNodeIndex(node) >= 0) {
+        return materialRecipeItemProps(props.surfaces.toolbar, Math.max(0, toolbarNodeIndex(node)), visualState);
+      }
       const index = Math.max(0, navNodeIndex(node));
       const item = navNodeSpecs[index];
       return {
@@ -12796,37 +12870,36 @@ const MainMaterialPreview = (props: {
         iconPosition: 'top',
       };
     },
-    textForNode: (node) => navNodeSpecs[Math.max(0, navNodeIndex(node))]?.text || '',
-    textFitForNode: () => navTextFit,
-    classForNode: (node) => node.id === 'nav-root' ? 'main-material-button-bar main-material-button-bar--nav' : 'main-material-button-bar__node',
-    surfaceClassForNode: (node) => navNodeClass(Math.max(0, navNodeIndex(node))),
-    selectedClassForNode: (node) => node.id === 'nav-root' ? '' : props.selectedNavTargetClass(navNodeTargetId(node)),
+    textForNode: (node) => navNodeIndex(node) >= 0
+      ? navNodeSpecs[Math.max(0, navNodeIndex(node))]?.text || ''
+      : toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text || '',
+    textFitForNode: (node) => navNodeIndex(node) >= 0 ? navTextFit : toolbarTextFit,
+    fitModeForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 'fixed-lines' : 'single-line',
+    maxLinesForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 2 : 1,
+    classForNode: (node) => {
+      if (node.id === 'bottom-chrome') return 'main-material-bottom-stack';
+      if (node.id === 'nav-shell') return 'main-material-nav-shell';
+      if (node.id === 'nav-root') return 'main-material-button-bar main-material-button-bar--nav';
+      if (node.id === 'toolbar-root') return `main-material-button-bar main-material-button-bar--toolbar ${props.selectedClass('toolBar')}`;
+      return 'main-material-button-bar__node';
+    },
+    surfaceClassForNode: (node) => {
+      if (node.id === 'bottom-chrome' || node.id === 'toolbar-root' || node.id === 'nav-shell' || node.id === 'nav-root') return '';
+      const navIndex = navNodeIndex(node);
+      if (navIndex >= 0) return navNodeClass(navIndex);
+      return toolbarNodeClass(toolbarNodeIndex(node));
+    },
+    selectedClassForNode: (node) => {
+      if (node.id === 'nav-shell') return props.selectedClass('navBarContainer');
+      if (navNodeIndex(node) >= 0) return props.selectedNavTargetClass(navNodeTargetId(node));
+      if (toolbarNodeIndex(node) >= 0) return props.selectedToolbarTargetClass(toolbarMaterialTargetId(node.id));
+      return '';
+    },
     onNodeAction: (node) => {
       const index = navNodeIndex(node);
       if (index >= 0) props.onActiveNavIndexChange(index);
     },
   };
-  const toolbarNodeIndex = (node: FeedCardNode) => toolbarNodeSpecs.findIndex((item) => item.id === node.id);
-  const toolbarNodeClass = (index: number) => [
-    'main-material-button-bar__item',
-    'main-material-button-bar__item--toolbar',
-    index === 0 || index === 4 ? 'main-material-button-bar__item--dark' : '',
-    index === 2 ? 'main-material-button-bar__item--red' : '',
-  ].filter(Boolean).join(' ');
-  const toolbarNodeContext: ChromeFeedNodeRenderContext = {
-    targetIdForNode: (node) => node.id === 'toolbar-root' ? 'toolBar' : toolbarMaterialTargetId(node.id),
-    roleForNode: (node) => node.id === 'toolbar-root' ? 'container' : 'momentary',
-    previewStateForNode: () => stateForPart('toolBar'),
-    buttonPropsForNode: (node, _role, visualState) => materialRecipeItemProps(props.surfaces.toolbar, Math.max(0, toolbarNodeIndex(node)), visualState),
-    textForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text || '',
-    textFitForNode: () => toolbarTextFit,
-    fitModeForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 'fixed-lines' : 'single-line',
-    maxLinesForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 2 : 1,
-    classForNode: (node) => node.id === 'toolbar-root' ? `main-material-button-bar main-material-button-bar--toolbar ${props.selectedClass('toolBar')}` : 'main-material-button-bar__node',
-    surfaceClassForNode: (node) => toolbarNodeClass(toolbarNodeIndex(node)),
-    selectedClassForNode: (node) => node.id === 'toolbar-root' ? '' : props.selectedToolbarTargetClass(toolbarMaterialTargetId(node.id)),
-  };
-
   return (
     <div
       class="main-material-phone"
@@ -12867,17 +12940,7 @@ const MainMaterialPreview = (props: {
             />
           </main>
 
-          <footer class="main-material-bottom-stack">
-          <ChromeFeedNodeTree node={toolbarNode} context={toolbarNodeContext} />
-
-          <MaterialPanel
-            recipe={props.surfaces.navContainer}
-            padded={false}
-            class={`main-material-nav-shell ${props.selectedClass('navBarContainer')}`}
-          >
-            <ChromeFeedNodeTree node={navNode} context={navNodeContext} />
-          </MaterialPanel>
-          </footer>
+          <ChromeFeedNodeTree node={bottomChromeNode} context={bottomChromeNodeContext} />
         </div>
       </div>
     </div>
