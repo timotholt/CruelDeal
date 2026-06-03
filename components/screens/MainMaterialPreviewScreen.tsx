@@ -34,13 +34,10 @@ import {
   type TextTransformToken,
 } from '../ui/material-lab';
 import {
-  MaterialNodeButtonBar,
-  MaterialNodeRenderer,
   MaterialTextContent,
+  type MaterialTextFitOptions,
   type MaterialTextFitMode,
   type MaterialTextRenderMode,
-  type MaterialNodeRecipe,
-  type MaterialNodeRenderContext,
 } from '../ui/material-node';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
@@ -183,6 +180,11 @@ type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
 type FeedTextTransformToken = TextTransformToken | 'inherit';
 type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
 
+const layoutPackedDistributes = ['start', 'center', 'end'] as const;
+const layoutDistributeModes = ['packed', 'between', 'around', 'evenly'] as const;
+const layoutCrossPositions = ['start', 'center', 'end'] as const;
+type LayoutDistributeMode = typeof layoutDistributeModes[number];
+
 type FeedRichTextToken =
   | { type: 'text'; text: string }
   | { type: 'break' }
@@ -283,7 +285,7 @@ interface FeedNodeLayout {
   wMode?: FeedNodeSizeMode;          // width sizing: fixed / hug / fill
   hMode?: FeedNodeSizeMode;          // height sizing: fixed / hug / fill
   selfPosition?: FeedNodeSelfPosition; // in-flow (flex child) vs absolute (escape)
-  pushToEnd?: boolean;               // margin-auto before → pin to far end (footer)
+  pushToEnd?: boolean;               // margin-auto before: pin to far end (footer)
   constraintH?: FeedNodeConstraintH; // absolute-child horizontal pin
   constraintV?: FeedNodeConstraintV; // absolute-child vertical pin
 }
@@ -2197,6 +2199,110 @@ const cloneFeedCardNode = (node: FeedCardNode): FeedCardNode => ({
   fitMode: node.fitMode,
   maxLines: node.maxLines,
   children: node.children?.map((child) => cloneFeedCardNode(child)) || [],
+});
+
+const createChromeRowLayout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => createFeedNodeLayout({
+  mode: 'flow',
+  selfPosition: 'in-flow',
+  x: 0,
+  y: 0,
+  width: 100,
+  height: 100,
+  padding: 0,
+  gap: 0,
+  align: 'center',
+  justify: 'center',
+  direction: 'row',
+  distribute: 'start',
+  crossAlign: 'center',
+  wMode: 'fill',
+  hMode: 'fill',
+  ...overrides,
+});
+
+const createTopBarFeedNode = (): FeedCardNode => createFeedNode({
+  id: 'topbar-root',
+  label: 'Top Bar',
+  type: 'container',
+  layout: createChromeRowLayout({
+    height: 6.5,
+    padding: 7,
+    gap: 5,
+    hMode: 'fixed',
+    crossAlign: 'stretch',
+  }),
+  children: [
+    createFeedNode({
+      id: 'topbar-profile',
+      label: 'Profile',
+      type: 'button',
+      layout: createChromeRowLayout({ width: 10, wMode: 'fixed' }),
+    }),
+    createFeedNode({
+      id: 'topbar-commander',
+      label: 'Commander',
+      type: 'text',
+      layout: createChromeRowLayout({ wMode: 'fill', align: 'left', crossAlign: 'center' }),
+    }),
+    createFeedNode({
+      id: 'topbar-currencies',
+      label: 'Wallet',
+      type: 'container',
+      layout: createChromeRowLayout({
+        width: 54,
+        wMode: 'fixed',
+        gap: 3,
+        crossAlign: 'stretch',
+      }),
+      children: topBarCurrencySpecs.map((item) => createFeedNode({
+        id: `topbar-currency-${item.id}`,
+        label: item.label,
+        type: 'button',
+        layout: createChromeRowLayout({ wMode: 'fill' }),
+      })),
+    }),
+  ],
+});
+
+const createToolbarFeedNode = (): FeedCardNode => createFeedNode({
+  id: 'toolbar-root',
+  label: 'Tool Bar',
+  type: 'container',
+  layout: createChromeRowLayout({
+    height: 7.5,
+    padding: 4,
+    gap: 6,
+    hMode: 'fixed',
+    crossAlign: 'stretch',
+  }),
+  children: toolbarNodeSpecs.map((item, index) => createFeedNode({
+    id: item.id,
+    label: item.label,
+    type: 'button',
+    layout: createChromeRowLayout({
+      width: index === 0 || index === toolbarNodeSpecs.length - 1 ? 14 : 100,
+      wMode: index === 0 || index === toolbarNodeSpecs.length - 1 ? 'fixed' : 'fill',
+    }),
+  })),
+});
+
+const createNavFeedNode = (): FeedCardNode => createFeedNode({
+  id: 'nav-root',
+  label: 'Nav Tabs',
+  type: 'container',
+  layout: createChromeRowLayout({
+    height: 10.4,
+    padding: 7,
+    gap: 1,
+    hMode: 'fixed',
+    crossAlign: 'stretch',
+  }),
+  children: navNodeSpecs.map((item) => createFeedNode({
+    id: item.id,
+    label: item.label,
+    type: 'button',
+    layout: createChromeRowLayout({ wMode: 'fill' }),
+  })),
 });
 
 const createFeedSurfaceVariant = (overrides: Partial<MaterialRecipe> = {}) => ({
@@ -10393,6 +10499,16 @@ const FeedRecipeEditor = (props: {
       },
     });
   };
+  const updateSelectedNodeLayoutFields = (updates: Partial<FeedNodeLayout>) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    updateSelectedNode({
+      layout: {
+        ...node.layout,
+        ...updates,
+      },
+    });
+  };
   const selectedNodeCanEditText = () => {
     const node = selectedTargetNode();
     return Boolean(node?.binding) && (node?.type === 'text' || node?.type === 'button' || node?.type === 'container');
@@ -10415,6 +10531,71 @@ const FeedRecipeEditor = (props: {
     return node && selectedNodeCanEditText() ? resolveFeedNodeTextEditorStyle(editingCardType(), node) : undefined;
   };
   const selectedNodeTextCustom = () => selectedNodeCanEditText() && selectedNodeTextMode() === 'custom';
+  const selectedNodeRenderFitDisabled = () => {
+    const node = selectedTargetNode();
+    return Boolean(node && (resolveLayoutWMode(node.layout) === 'hug' || resolveLayoutHMode(node.layout) === 'hug'));
+  };
+  const layoutCrossToAlign = (cross: FeedNodeCrossAlign): FeedNodeAlign => (
+    cross === 'end' ? 'right' : cross === 'center' || cross === 'stretch' ? 'center' : 'left'
+  );
+  const layoutCrossToJustify = (cross: FeedNodeCrossAlign): FeedNodeJustify => (
+    cross === 'end' ? 'end' : cross === 'center' || cross === 'stretch' ? 'center' : 'start'
+  );
+  const layoutDistributeToAlign = (distribute: FeedNodeDistribute): FeedNodeAlign => (
+    distribute === 'end' ? 'right' : distribute === 'center' ? 'center' : 'left'
+  );
+  const layoutDistributeToJustify = (distribute: FeedNodeDistribute): FeedNodeJustify => (
+    distribute === 'end' ? 'end' : distribute === 'center' ? 'center' : 'start'
+  );
+  const layoutGridCell = (
+    direction: FeedNodeDirection,
+    visualRow: typeof layoutCrossPositions[number],
+    visualColumn: typeof layoutCrossPositions[number],
+  ): { cross: FeedNodeCrossAlign; distribute: FeedNodeDistribute } => (
+    direction === 'column'
+      ? { cross: visualColumn, distribute: visualRow }
+      : { cross: visualRow, distribute: visualColumn }
+  );
+  const layoutGridCellLabel = (
+    visualRow: typeof layoutCrossPositions[number],
+    visualColumn: typeof layoutCrossPositions[number],
+  ) => `${visualRow === 'start' ? 'T' : visualRow === 'center' ? 'M' : 'B'}${visualColumn === 'start' ? 'L' : visualColumn === 'center' ? 'C' : 'R'}`;
+  const layoutDistributeMode = (distribute: FeedNodeDistribute): LayoutDistributeMode => (
+    distribute === 'between' || distribute === 'around' || distribute === 'evenly' ? distribute : 'packed'
+  );
+  const legacyScreenAlignment = (
+    direction: FeedNodeDirection,
+    cross: FeedNodeCrossAlign,
+    distribute: FeedNodeDistribute,
+  ): Pick<FeedNodeLayout, 'align' | 'justify'> => (
+    direction === 'column'
+      ? { align: layoutCrossToAlign(cross), justify: layoutDistributeToJustify(distribute) }
+      : { align: layoutDistributeToAlign(distribute), justify: layoutCrossToJustify(cross) }
+  );
+  const updateSelectedNodePackedAlignment = (cross: FeedNodeCrossAlign, distribute: FeedNodeDistribute) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    const direction = resolveLayoutDirection(node.layout);
+    updateSelectedNodeLayoutFields({
+      crossAlign: cross,
+      distribute,
+      ...legacyScreenAlignment(direction, cross, distribute),
+    });
+  };
+  const updateSelectedNodeDistributeMode = (mode: LayoutDistributeMode) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    const direction = resolveLayoutDirection(node.layout);
+    const cross = resolveLayoutCrossAlign(node.layout);
+    const current = resolveLayoutDistribute(node.layout);
+    const distribute: FeedNodeDistribute = mode === 'packed'
+      ? (layoutPackedDistributes.some((item) => item === current) ? current : 'center')
+      : mode;
+    updateSelectedNodeLayoutFields({
+      distribute,
+      ...(mode === 'packed' ? legacyScreenAlignment(direction, cross, distribute) : {}),
+    });
+  };
   const updateSelectedNodeTextStyle = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
     const node = selectedTargetNode();
     if (!node || !selectedNodeCanEditText()) return;
@@ -10625,14 +10806,18 @@ const FeedRecipeEditor = (props: {
                   <div class="ui-lab-toggles">
                     <For each={['auto', 'fit', 'flow'] as const}>
                       {(mode) => (
-                        <MiniButton active={(node().sizing ?? legacySizingMode(node().textRender)) === mode} onClick={() => updateSelectedNode({ sizing: mode })}>
+                        <MiniButton
+                          disabled={mode === 'fit' && selectedNodeRenderFitDisabled()}
+                          active={(node().sizing ?? legacySizingMode(node().textRender)) === mode}
+                          onClick={() => updateSelectedNode({ sizing: mode })}
+                        >
                           {mode}
                         </MiniButton>
                       )}
                     </For>
                   </div>
                 </div>
-                <Show when={resolveFeedNodeFit(node())}>
+                <Show when={resolveFeedNodeFit(node()) && !selectedNodeRenderFitDisabled()}>
                   <div class="ui-lab-control-row">
                     <span>Fit</span>
                     <div class="ui-lab-toggles">
@@ -10879,6 +11064,52 @@ const FeedRecipeEditor = (props: {
                   </MiniButton>
                 </div>
               </div>
+              <div class="ui-lab-control-row">
+                <span>Self</span>
+                <div class="ui-lab-toggles">
+                  <For each={['in-flow', 'absolute'] as const}>
+                    {(position) => (
+                      <MiniButton active={resolveLayoutSelfPosition(node().layout) === position} onClick={() => updateSelectedNodeLayout('selfPosition', position)}>
+                        {position}
+                      </MiniButton>
+                    )}
+                  </For>
+                </div>
+              </div>
+              <Show when={resolveLayoutSelfPosition(node().layout) === 'absolute'}>
+                <div class="ui-lab-control-row">
+                  <span>Pin H</span>
+                  <select
+                    class="ui-lab-select"
+                    value={resolveLayoutConstraintH(node().layout)}
+                    onChange={(event) => updateSelectedNodeLayout('constraintH', event.currentTarget.value as FeedNodeConstraintH)}
+                  >
+                    <For each={['left', 'right', 'left-right', 'center', 'scale'] as const}>
+                      {(constraint) => <option value={constraint}>{constraint}</option>}
+                    </For>
+                  </select>
+                </div>
+                <div class="ui-lab-control-row">
+                  <span>Pin V</span>
+                  <select
+                    class="ui-lab-select"
+                    value={resolveLayoutConstraintV(node().layout)}
+                    onChange={(event) => updateSelectedNodeLayout('constraintV', event.currentTarget.value as FeedNodeConstraintV)}
+                  >
+                    <For each={['top', 'bottom', 'top-bottom', 'center', 'scale'] as const}>
+                      {(constraint) => <option value={constraint}>{constraint}</option>}
+                    </For>
+                  </select>
+                </div>
+              </Show>
+              <div class="ui-lab-control-row">
+                <span>Pin End</span>
+                <div class="ui-lab-toggles">
+                  <MiniButton active={resolveLayoutPushToEnd(node().layout)} onClick={() => updateSelectedNodeLayout('pushToEnd', !resolveLayoutPushToEnd(node().layout))}>
+                    end
+                  </MiniButton>
+                </div>
+              </div>
               <Show when={node().layout.mode === 'flow'}>
                 <div class="ui-lab-control-row">
                   <span>Slot</span>
@@ -10894,12 +11125,12 @@ const FeedRecipeEditor = (props: {
                 </div>
               </Show>
               <div class="ui-lab-control-row">
-                <span>{node().layout.mode === 'flow' ? 'Old X' : 'X'}</span>
-                <Slider value={node().layout.x} min={-50} max={150} disabled={node().layout.mode === 'flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+                <span>{resolveLayoutSelfPosition(node().layout) === 'in-flow' ? 'Old X' : 'X'}</span>
+                <Slider value={node().layout.x} min={-50} max={150} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>{node().layout.mode === 'flow' ? 'Old Y' : 'Y'}</span>
-                <Slider value={node().layout.y} min={-50} max={150} disabled={node().layout.mode === 'flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+                <span>{resolveLayoutSelfPosition(node().layout) === 'in-flow' ? 'Old Y' : 'Y'}</span>
+                <Slider value={node().layout.y} min={-50} max={150} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>W</span>
@@ -10952,24 +11183,43 @@ const FeedRecipeEditor = (props: {
                 <Slider value={node().layout.gap} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('gap', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>Align</span>
-                <div class="ui-lab-toggles">
-                  <For each={['left', 'center', 'right'] as const}>
-                    {(align) => (
-                      <MiniButton active={node().layout.align === align} onClick={() => updateSelectedNodeLayout('align', align)}>
-                        {align}
-                      </MiniButton>
+                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Align X' : 'Align Y'}</span>
+                <div
+                  class="ui-lab-toggles"
+                  style={{ display: 'grid', 'grid-template-columns': 'repeat(3, minmax(0, 1fr))', gap: '4px' }}
+                >
+                  <For each={layoutCrossPositions}>
+                    {(visualRow) => (
+                      <For each={layoutCrossPositions}>
+                        {(visualColumn) => {
+                          const cell = () => layoutGridCell(resolveLayoutDirection(node().layout), visualRow, visualColumn);
+                          const active = () => {
+                            const current = cell();
+                            return layoutDistributeMode(resolveLayoutDistribute(node().layout)) === 'packed'
+                              && resolveLayoutCrossAlign(node().layout) === current.cross
+                              && resolveLayoutDistribute(node().layout) === current.distribute;
+                          };
+                          return (
+                            <MiniButton active={active()} onClick={() => updateSelectedNodePackedAlignment(cell().cross, cell().distribute)}>
+                              {layoutGridCellLabel(visualRow, visualColumn)}
+                            </MiniButton>
+                          );
+                        }}
+                      </For>
                     )}
                   </For>
                 </div>
               </div>
               <div class="ui-lab-control-row">
-                <span>Justify</span>
+                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Distribute Y' : 'Distribute X'}</span>
                 <div class="ui-lab-toggles">
-                  <For each={['start', 'center', 'end'] as const}>
-                    {(justify) => (
-                      <MiniButton active={node().layout.justify === justify} onClick={() => updateSelectedNodeLayout('justify', justify)}>
-                        {justify === 'start' ? 'top' : justify === 'end' ? 'bottom' : 'center'}
+                  <For each={layoutDistributeModes}>
+                    {(mode) => (
+                      <MiniButton
+                        active={layoutDistributeMode(resolveLayoutDistribute(node().layout)) === mode}
+                        onClick={() => updateSelectedNodeDistributeMode(mode)}
+                      >
+                        {mode}
                       </MiniButton>
                     )}
                   </For>
@@ -11768,27 +12018,77 @@ const distributeToJustifyContent = (d: FeedNodeDistribute): string =>
 const crossAlignToAlignItems = (c: FeedNodeCrossAlign): string =>
   c === 'start' ? 'flex-start' : c === 'end' ? 'flex-end' : c === 'stretch' ? 'stretch' : 'center';
 
+const resolveLayoutConstraintH = (l: FeedNodeLayout): FeedNodeConstraintH => l.constraintH ?? 'left';
+const resolveLayoutConstraintV = (l: FeedNodeLayout): FeedNodeConstraintV => l.constraintV ?? 'top';
+
+const absoluteConstraintCss = (layout: FeedNodeLayout, wMode: FeedNodeSizeMode, hMode: FeedNodeSizeMode) => {
+  const h = resolveLayoutConstraintH(layout);
+  const v = resolveLayoutConstraintV(layout);
+  const rightFromLegacyBox = 100 - layout.x - layout.width;
+  const bottomFromLegacyBox = 100 - layout.y - layout.height;
+  const css: JSX.CSSProperties = {};
+  const transforms: string[] = [];
+
+  if (h === 'right') {
+    css.right = `${layout.x}%`;
+  } else if (h === 'left-right') {
+    css.left = `${layout.x}%`;
+    css.right = `${rightFromLegacyBox}%`;
+  } else if (h === 'center') {
+    css.left = `calc(50% + ${layout.x - 50}%)`;
+    transforms.push('translateX(-50%)');
+  } else {
+    css.left = `${layout.x}%`;
+  }
+
+  if (v === 'bottom') {
+    css.bottom = `${layout.y}%`;
+  } else if (v === 'top-bottom') {
+    css.top = `${layout.y}%`;
+    css.bottom = `${bottomFromLegacyBox}%`;
+  } else if (v === 'center') {
+    css.top = `calc(50% + ${layout.y - 50}%)`;
+    transforms.push('translateY(-50%)');
+  } else {
+    css.top = `${layout.y}%`;
+  }
+
+  if (h !== 'left-right') {
+    css.width = wMode === 'hug' ? 'max-content' : `${layout.width}%`;
+  }
+  if (v !== 'top-bottom') {
+    css.height = hMode === 'hug' ? 'auto' : `${layout.height}%`;
+  }
+
+  return { css, transforms };
+};
+
 const feedNodeLayoutCss = (layout: FeedNodeLayout): JSX.CSSProperties => {
   const inFlow = resolveLayoutSelfPosition(layout) === 'in-flow';
   const legacyFlow = layout.mode === 'flow'; // preserves the original nudge-transform condition
   const direction = resolveLayoutDirection(layout);
   const wMode = resolveLayoutWMode(layout);
   const hMode = resolveLayoutHMode(layout);
+  const absolute = inFlow ? undefined : absoluteConstraintCss(layout, wMode, hMode);
+  const transforms = [
+    ...(absolute?.transforms ?? []),
+    legacyFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
+  ].filter(Boolean).join(' ');
   // At legacy defaults (direction column, sizing fixed, pushToEnd from footer) this
   // compiles to the exact same CSS as before; the new fields only change output when set.
   return {
     position: inFlow ? 'relative' : 'absolute',
-    left: inFlow ? undefined : `${layout.x}%`,
-    top: inFlow ? undefined : `${layout.y}%`,
+    ...(absolute?.css ?? {}),
     'flex-direction': direction === 'row' ? (layout.reverse ? 'row-reverse' : 'row') : (layout.reverse ? 'column-reverse' : 'column'),
     'flex-wrap': layout.wrap ? 'wrap' : undefined,
-    // Fill: in-flow children grow/stretch via the direction-aware CSS (size auto here);
-    // absolute nodes fill their parent box directly (100%).
-    width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? (inFlow ? 'auto' : '100%') : `${layout.width}%`,
-    height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? (inFlow ? 'auto' : '100%') : `${layout.height}%`,
+    // Fill: in-flow children grow/stretch via the direction-aware CSS (size auto here).
+    ...(inFlow ? {
+      width: wMode === 'hug' ? 'max-content' : wMode === 'fill' ? 'auto' : `${layout.width}%`,
+      height: hMode === 'hug' ? 'auto' : hMode === 'fill' ? 'auto' : `${layout.height}%`,
+    } : {}),
     'margin-top': resolveLayoutPushToEnd(layout) && direction === 'column' ? 'auto' : undefined,
     'margin-left': resolveLayoutPushToEnd(layout) && direction === 'row' ? 'auto' : undefined,
-    transform: legacyFlow && (layout.nudgeX || layout.nudgeY) ? `translate(${layout.nudgeX}px, ${layout.nudgeY}px)` : undefined,
+    transform: transforms || undefined,
     gap: `${layout.gap}px`,
     '--feed-node-padding': `${layout.padding}px`,
     '--feed-node-gap': `${layout.gap}px`,
@@ -11832,13 +12132,13 @@ const feedNodeContentValue = (story: FeedStory, node: FeedCardNode) => {
 
 const feedTextHasMarkup = (value: string) => /\[[a-z0-9/]+\]|\[(?:RULE|DIVIDER)\]/i.test(value);
 
-// Legacy textRender → the two axes, used as the default when markup/sizing unset.
+// Legacy textRender maps to the two axes, used as the default when markup/sizing unset.
 const legacyMarkupMode = (textRender?: FeedNodeTextRender): FeedNodeMarkupMode =>
   textRender === 'raw' ? 'off' : textRender === 'rich' ? 'on' : 'auto';
 const legacySizingMode = (textRender?: FeedNodeTextRender): FeedNodeSizingMode =>
   textRender === 'fit' ? 'fit' : textRender === 'raw' || textRender === 'rich' ? 'flow' : 'auto';
 
-// Axis A — markup: parse [..] into styled tokens (cooked) or treat literally (raw).
+// Axis A: markup parses [..] into styled tokens (cooked) or treats literally (raw).
 const resolveFeedNodeMarkupOn = (node: FeedCardNode, value: string): boolean => {
   const mode = node.markup ?? legacyMarkupMode(node.textRender);
   if (mode === 'on') return true;
@@ -11846,7 +12146,7 @@ const resolveFeedNodeMarkupOn = (node: FeedCardNode, value: string): boolean => 
   return feedTextHasMarkup(value); // auto: cook only when markup is present
 };
 
-// Axis B — sizing: autoscale-to-fit the box, or normal browser flow.
+// Axis B: sizing autoscales to fit the box, or uses normal browser flow.
 const resolveFeedNodeFit = (node: FeedCardNode): boolean => {
   const mode = node.sizing ?? legacySizingMode(node.textRender);
   if (mode === 'fit') return true;
@@ -11875,7 +12175,7 @@ const feedNodeMaxLines = (node: FeedCardNode, value = '') => (
 
 const FeedNodeFrame = (props: {
   node: FeedCardNode;
-  targetId: FeedMaterialTargetId;
+  targetId: string;
   role: PreviewTargetRole;
   targetClass: string;
   children: JSX.Element;
@@ -11897,6 +12197,95 @@ const FeedNodeFrame = (props: {
     {props.children}
   </div>
 );
+
+interface ChromeFeedNodeRenderContext {
+  targetIdForNode: (node: FeedCardNode) => string;
+  previewStateForNode: (node: FeedCardNode, role: PreviewTargetRole) => MaterialRecipeState;
+  roleForNode?: (node: FeedCardNode) => PreviewTargetRole;
+  surfacePropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => Record<string, unknown> | undefined;
+  buttonPropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => Record<string, unknown>;
+  classForNode?: (node: FeedCardNode, role: PreviewTargetRole) => string;
+  surfaceClassForNode?: (node: FeedCardNode, role: PreviewTargetRole) => string;
+  selectedClassForNode?: (node: FeedCardNode) => string;
+  textForNode?: (node: FeedCardNode) => string;
+  labelForNode?: (node: FeedCardNode) => JSX.Element | undefined;
+  textFitForNode?: (node: FeedCardNode) => MaterialTextFitOptions | undefined;
+  fitModeForNode?: (node: FeedCardNode) => MaterialTextFitMode;
+  maxLinesForNode?: (node: FeedCardNode) => number;
+  onNodeAction?: (node: FeedCardNode) => void;
+}
+
+const ChromeFeedNodeTree = (props: {
+  node: FeedCardNode;
+  context: ChromeFeedNodeRenderContext;
+}) => {
+  const nodeRole = (): PreviewTargetRole => props.context.roleForNode?.(props.node) ?? (props.node.type === 'button' ? 'momentary' : props.node.type === 'container' ? 'container' : 'text');
+  const targetId = () => props.context.targetIdForNode(props.node);
+  const visualState = () => props.context.previewStateForNode(props.node, nodeRole());
+  const targetClass = () => [
+    props.context.classForNode?.(props.node, nodeRole()),
+    props.context.selectedClassForNode?.(props.node),
+  ].filter(Boolean).join(' ');
+  const surfaceClass = () => props.context.surfaceClassForNode?.(props.node, nodeRole()) || '';
+  const text = () => props.context.textForNode?.(props.node) || '';
+  const fittedChromeText = () => (
+    <MaterialTextContent
+      text={text()}
+      renderMode="fit"
+      fitMode={props.context.fitModeForNode?.(props.node) || 'single-line'}
+      maxLines={props.context.maxLinesForNode?.(props.node) || 1}
+      fit={props.context.textFitForNode?.(props.node)}
+      class="main-material-chrome-node-label"
+    />
+  );
+  const label = () => props.context.labelForNode?.(props.node) ?? fittedChromeText();
+
+  return (
+    <Show
+      when={props.node.type === 'button'}
+      fallback={(
+        <Show
+          when={props.node.type === 'text'}
+          fallback={(
+            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+              <Show when={props.context.surfacePropsForNode?.(props.node, nodeRole(), visualState())}>
+                {(surfaceProps) => (
+                  <MaterialSurfaceHost
+                    kind="panel"
+                    surfaceProps={surfaceProps()}
+                    padded={false}
+                    class={`main-material-card-node-surface main-material-card-node-surface--background ${surfaceClass()}`}
+                  />
+                )}
+              </Show>
+              <div class="main-material-card-node-flow-stack">
+                <For each={props.node.children || []}>
+                  {(child) => <ChromeFeedNodeTree node={child} context={props.context} />}
+                </For>
+              </div>
+            </FeedNodeFrame>
+          )}
+        >
+          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+            {fittedChromeText()}
+          </FeedNodeFrame>
+        </Show>
+      )}
+    >
+      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()}>
+        <MaterialSurfaceHost
+          kind="button"
+          surfaceProps={props.context.buttonPropsForNode?.(props.node, nodeRole(), visualState())}
+          buttonSize="sm"
+          buttonFullWidth
+          class={`main-material-card-node-surface main-material-card-node-surface--button ${surfaceClass()}`}
+          label={label()}
+          onClick={() => props.context.onNodeAction?.(props.node)}
+        />
+      </FeedNodeFrame>
+    </Show>
+  );
+};
 
 const FeedCardTreeNode = (props: {
   node: FeedCardNode;
@@ -12257,7 +12646,7 @@ const MainMaterialPreview = (props: {
     const target = targetFromEvent(event);
     const role = target ? roleFromTarget(target) : null;
     // Only selectable targets (nav items) hold focus state.
-    // Momentary targets (CTA, toolbar buttons) never hold focus — they're transient actions.
+    // Momentary targets (CTA, toolbar buttons) never hold focus; they're transient actions.
     // Also require keyboard-driven focus (:focus-visible) to avoid mouse-click stickiness.
     const el = event.target instanceof HTMLElement ? event.target : null;
     if (role !== 'selectable' || !el?.matches(':focus-visible')) {
@@ -12300,51 +12689,18 @@ const MainMaterialPreview = (props: {
     }
     return playerFacingPreviewStateForRole(interactionRoles[part]);
   };
-  const topBarCurrencyNodes: MaterialNodeRecipe[] = topBarCurrencySpecs.map((item) => ({
-    id: `topbar-currency-${item.id}`,
-    label: item.label,
-    kind: 'button',
-    role: 'momentary',
-    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: currencyTextFit },
-  }));
-  const topBarNode: MaterialNodeRecipe = {
-    id: 'topbar-root',
-    label: 'Top Bar',
-    kind: 'container',
-    role: 'container',
-    children: [
-      {
-        id: 'topbar-profile',
-        label: 'Profile',
-        kind: 'button',
-        role: 'disclosure',
-        content: { mode: 'icon', iconKey: 'profile' },
-      },
-      {
-        id: 'topbar-commander',
-        label: 'Commander',
-        kind: 'text',
-        role: 'text',
-        content: { mode: 'plain', text: 'COMMANDER', textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: topBarTextFit },
-      },
-      {
-        id: 'topbar-currencies',
-        label: 'Wallet',
-        kind: 'slot',
-        role: 'static',
-        children: topBarCurrencyNodes,
-      },
-    ],
-  };
-  const topBarCurrencyNodeIndex = (node: MaterialNodeRecipe) => topBarCurrencyNodes.findIndex((item) => item.id === node.id);
-  const topBarTargetIdForNode = (node: MaterialNodeRecipe) => {
+  const topBarNode = createTopBarFeedNode();
+  const toolbarNode = createToolbarFeedNode();
+  const navNode = createNavFeedNode();
+  const topBarCurrencyNodeIndex = (node: FeedCardNode) => topBarCurrencySpecs.findIndex((item) => `topbar-currency-${item.id}` === node.id);
+  const topBarTargetIdForNode = (node: FeedCardNode) => {
     if (node.id === 'topbar-root') return 'topBar';
     if (node.id === 'topbar-profile') return topBarProfileTargetId;
     const currencyIndex = topBarCurrencyNodeIndex(node);
     if (currencyIndex >= 0) return topBarCurrencyTargetId(topBarCurrencySpecs[currencyIndex].id);
     return `${topBarMaterialTargetPrefix}${node.id}`;
   };
-  const topBarPreviewStateForNode = (node: MaterialNodeRecipe, role: PreviewTargetRole): MaterialRecipeState => {
+  const topBarPreviewStateForNode = (node: FeedCardNode, role: PreviewTargetRole): MaterialRecipeState => {
     if (node.id === 'topbar-root') return stateForPart('topBar');
     if (node.id === 'topbar-profile') {
       return resolvePreviewVisualState({
@@ -12365,15 +12721,14 @@ const MainMaterialPreview = (props: {
     }
     return 'rest';
   };
-  const topBarNodeContext: MaterialNodeRenderContext = {
-    treeId: 'main-material-topbar',
+  const topBarNodeContext: ChromeFeedNodeRenderContext = {
     targetIdForNode: topBarTargetIdForNode,
-    resolveIcon: (iconKey) => (iconKey === 'profile' ? <FakeProfileIcon /> : undefined),
-    previewStateForNode: (node, role) => topBarPreviewStateForNode(node, role as PreviewTargetRole),
+    roleForNode: (node) => node.id === 'topbar-profile' ? 'disclosure' : node.type === 'button' ? 'momentary' : node.type === 'container' ? 'container' : 'text',
+    previewStateForNode: topBarPreviewStateForNode,
     surfacePropsForNode: (node, _role, visualState) => (
       node.id === 'topbar-root'
         ? materialSurfacePropsForPart('topBar', props.surfaces.topBar, visualState)
-        : {}
+        : undefined
     ),
     buttonPropsForNode: (node, _role, visualState) => {
       if (node.id === 'topbar-profile') {
@@ -12388,10 +12743,13 @@ const MainMaterialPreview = (props: {
       }
       return {};
     },
-    buttonSizeForNode: () => 'sm',
-    buttonFullWidthForNode: () => true,
+    labelForNode: (node) => node.id === 'topbar-profile' ? <FakeProfileIcon /> : undefined,
+    textForNode: (node) => node.id === 'topbar-commander'
+      ? 'COMMANDER'
+      : topBarCurrencySpecs[topBarCurrencyNodeIndex(node)]?.text || '',
+    textFitForNode: (node) => node.id === 'topbar-commander' ? topBarTextFit : currencyTextFit,
     classForNode: (node) => {
-      if (node.id === 'topbar-root') return 'main-material-topbar-node';
+      if (node.id === 'topbar-root') return 'main-material-topbar main-material-topbar-node';
       if (node.id === 'topbar-profile') return 'main-material-profile-node';
       if (node.id === 'topbar-commander') return 'main-material-commander';
       if (node.id === 'topbar-currencies') return 'main-material-currencies';
@@ -12418,23 +12776,16 @@ const MainMaterialPreview = (props: {
     snapshot: interactionSnapshot(),
     fallbackState: index === props.activeNavIndex ? 'active' : 'rest',
   });
-  const navNodes: MaterialNodeRecipe[] = navNodeSpecs.map((item) => ({
-    id: item.id,
-    label: item.label,
-    kind: 'button',
-    role: 'selectable',
-    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: 'single-line', maxLines: 1, fit: navTextFit },
-  }));
-  const navNodeIndex = (node: MaterialNodeRecipe) => navNodes.findIndex((item) => item.id === node.id);
-  const navNodeTargetId = (node: MaterialNodeRecipe) => navItemTargetId(Math.max(0, navNodeIndex(node)));
+  const navNodeIndex = (node: FeedCardNode) => navNodeSpecs.findIndex((item) => item.id === node.id);
+  const navNodeTargetId = (node: FeedCardNode) => navItemTargetId(Math.max(0, navNodeIndex(node)));
   const navNodeClass = (index: number) => [
     'main-material-button-bar__item',
     'main-material-button-bar__item--nav',
     index === props.activeNavIndex ? 'is-active' : '',
   ].filter(Boolean).join(' ');
-  const navNodeContext: MaterialNodeRenderContext = {
-    treeId: 'main-material-nav',
-    targetIdForNode: navNodeTargetId,
+  const navNodeContext: ChromeFeedNodeRenderContext = {
+    targetIdForNode: (node) => node.id === 'nav-root' ? 'navBar' : navNodeTargetId(node),
+    roleForNode: (node) => node.id === 'nav-root' ? 'container' : 'selectable',
     previewStateForNode: (node) => navVisualState(Math.max(0, navNodeIndex(node))),
     buttonPropsForNode: (node, _role, visualState) => {
       const index = Math.max(0, navNodeIndex(node));
@@ -12445,40 +12796,35 @@ const MainMaterialPreview = (props: {
         iconPosition: 'top',
       };
     },
-    buttonSizeForNode: () => 'sm',
-    buttonFullWidthForNode: () => true,
-    classForNode: () => 'main-material-button-bar__node',
+    textForNode: (node) => navNodeSpecs[Math.max(0, navNodeIndex(node))]?.text || '',
+    textFitForNode: () => navTextFit,
+    classForNode: (node) => node.id === 'nav-root' ? 'main-material-button-bar main-material-button-bar--nav' : 'main-material-button-bar__node',
     surfaceClassForNode: (node) => navNodeClass(Math.max(0, navNodeIndex(node))),
-    selectedClassForNode: (node) => props.selectedNavTargetClass(navNodeTargetId(node)),
+    selectedClassForNode: (node) => node.id === 'nav-root' ? '' : props.selectedNavTargetClass(navNodeTargetId(node)),
     onNodeAction: (node) => {
       const index = navNodeIndex(node);
       if (index >= 0) props.onActiveNavIndexChange(index);
     },
   };
-  const toolbarNodes: MaterialNodeRecipe[] = toolbarNodeSpecs.map((item) => ({
-    id: item.id,
-    label: item.label,
-    kind: 'button',
-    role: 'momentary',
-    content: { mode: 'plain', text: item.text, textRender: 'fit', fitMode: item.text.includes('\n') ? 'fixed-lines' : 'single-line', maxLines: item.text.includes('\n') ? 2 : 1, fit: toolbarTextFit },
-  }));
-  const toolbarNodeIndex = (node: MaterialNodeRecipe) => toolbarNodes.findIndex((item) => item.id === node.id);
+  const toolbarNodeIndex = (node: FeedCardNode) => toolbarNodeSpecs.findIndex((item) => item.id === node.id);
   const toolbarNodeClass = (index: number) => [
     'main-material-button-bar__item',
     'main-material-button-bar__item--toolbar',
     index === 0 || index === 4 ? 'main-material-button-bar__item--dark' : '',
     index === 2 ? 'main-material-button-bar__item--red' : '',
   ].filter(Boolean).join(' ');
-  const toolbarNodeContext: MaterialNodeRenderContext = {
-    treeId: 'main-material-toolbar',
-    targetIdForNode: (node) => toolbarMaterialTargetId(node.id),
+  const toolbarNodeContext: ChromeFeedNodeRenderContext = {
+    targetIdForNode: (node) => node.id === 'toolbar-root' ? 'toolBar' : toolbarMaterialTargetId(node.id),
+    roleForNode: (node) => node.id === 'toolbar-root' ? 'container' : 'momentary',
     previewStateForNode: () => stateForPart('toolBar'),
     buttonPropsForNode: (node, _role, visualState) => materialRecipeItemProps(props.surfaces.toolbar, Math.max(0, toolbarNodeIndex(node)), visualState),
-    buttonSizeForNode: () => 'sm',
-    buttonFullWidthForNode: () => true,
-    classForNode: () => 'main-material-button-bar__node',
+    textForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text || '',
+    textFitForNode: () => toolbarTextFit,
+    fitModeForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 'fixed-lines' : 'single-line',
+    maxLinesForNode: (node) => toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text.includes('\n') ? 2 : 1,
+    classForNode: (node) => node.id === 'toolbar-root' ? `main-material-button-bar main-material-button-bar--toolbar ${props.selectedClass('toolBar')}` : 'main-material-button-bar__node',
     surfaceClassForNode: (node) => toolbarNodeClass(toolbarNodeIndex(node)),
-    selectedClassForNode: (node) => props.selectedToolbarTargetClass(toolbarMaterialTargetId(node.id)),
+    selectedClassForNode: (node) => node.id === 'toolbar-root' ? '' : props.selectedToolbarTargetClass(toolbarMaterialTargetId(node.id)),
   };
 
   return (
@@ -12504,7 +12850,7 @@ const MainMaterialPreview = (props: {
         </MaterialPanel>
 
         <div class="main-material-frame main-material-frame--editor">
-          <MaterialNodeRenderer node={topBarNode} context={topBarNodeContext} />
+          <ChromeFeedNodeTree node={topBarNode} context={topBarNodeContext} />
 
           <main class="main-material-scroll">
             <FeedCarousel
@@ -12522,22 +12868,14 @@ const MainMaterialPreview = (props: {
           </main>
 
           <footer class="main-material-bottom-stack">
-          <MaterialNodeButtonBar
-            nodes={toolbarNodes}
-            context={toolbarNodeContext}
-            class={`main-material-button-bar main-material-button-bar--toolbar ${props.selectedClass('toolBar')}`}
-          />
+          <ChromeFeedNodeTree node={toolbarNode} context={toolbarNodeContext} />
 
           <MaterialPanel
             recipe={props.surfaces.navContainer}
             padded={false}
             class={`main-material-nav-shell ${props.selectedClass('navBarContainer')}`}
           >
-            <MaterialNodeButtonBar
-              nodes={navNodes}
-              context={navNodeContext}
-              class="main-material-button-bar main-material-button-bar--nav"
-            />
+            <ChromeFeedNodeTree node={navNode} context={navNodeContext} />
           </MaterialPanel>
           </footer>
         </div>

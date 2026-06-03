@@ -455,12 +455,12 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   box-sizing: border-box;
 }
 
-.main-material-card-node[data-feed-layout-mode="flow"] {
-  flex: 0 0 auto;
+.main-material-card-node.main-material-topbar {
+  min-height: calc(var(--main-topbar-item-height) + (var(--main-topbar-padding-y) * 2));
 }
 
-.main-material-card-node[data-feed-layout-slot="footer"] {
-  margin-top: auto;
+.main-material-card-node[data-feed-layout-mode="flow"] {
+  flex: 0 0 auto;
 }
 
 .main-material-card-node[data-feed-layout-slot="overlay"] {
@@ -1051,25 +1051,13 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-button-bar {
   --main-material-bar-button-height: 2.5rem;
-  --main-material-bar-padding-y: 0.25rem;
-  --main-material-bar-padding-x: 8px;
-  --main-material-bar-gap: 6px;
-  --main-material-bar-columns: repeat(5, 1fr);
   position: relative;
   z-index: auto;
-  display: grid;
-  grid-template-columns: var(--main-material-bar-columns);
-  align-items: center;
-  gap: var(--main-material-bar-gap);
-  min-height: calc(var(--main-material-bar-button-height) + (var(--main-material-bar-padding-y) * 2));
-  padding: var(--main-material-bar-padding-y) var(--main-material-bar-padding-x);
+  min-height: var(--main-material-bar-button-height);
 }
 
 .main-material-button-bar--toolbar {
   --main-material-bar-button-height: 2.5rem;
-  --main-material-bar-padding-y: 0.25rem;
-  --main-material-bar-gap: 6px;
-  --main-material-bar-columns: 0.55fr repeat(3, 1fr) 0.55fr;
 }
 
 .main-material-nav-shell {
@@ -1080,9 +1068,6 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-button-bar--nav {
   --main-material-bar-button-height: 3.25rem;
-  --main-material-bar-padding-y: 0.4375rem;
-  --main-material-bar-gap: 1px;
-  --main-material-bar-columns: repeat(5, 1fr);
   container-type: inline-size;
 }
 
