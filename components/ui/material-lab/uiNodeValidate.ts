@@ -15,6 +15,7 @@ import { summarizeValibotIssues, surfaceOptionsLenientSchema, surfaceStatesSchem
 
 export type UiNodeType = 'button' | 'panel' | 'text' | 'image' | 'slot';
 export type UiStateModel = 'static' | 'momentary' | 'selectable' | 'disclosure';
+export type UiContentMode = 'plain' | 'rich' | 'auto';
 
 export interface UiLayoutPayload {
   display?: 'block' | 'flex' | 'grid' | 'absolute';
@@ -60,6 +61,7 @@ export interface UiNodePayload {
   surfaceStates?: UiSurfaceStatesPayload;
   layout?: UiLayoutPayload;
   contentBinding?: string;
+  contentMode?: UiContentMode;
   text?: string;
   stateModel?: UiStateModel;
   action?: UiActionPayload;
@@ -123,6 +125,7 @@ export const uiNodeSchema: v.GenericSchema<UiNodePayload> = v.lazy(() => v.stric
   surfaceStates: surfaceStatesSchema,
   layout: v.optional(uiLayoutSchema),
   contentBinding: v.optional(v.string()),
+  contentMode: v.optional(v.picklist(['plain', 'rich', 'auto'])),
   text: v.optional(v.string()),
   stateModel: v.optional(v.picklist(['static', 'momentary', 'selectable', 'disclosure'])),
   action: v.optional(uiActionSchema),

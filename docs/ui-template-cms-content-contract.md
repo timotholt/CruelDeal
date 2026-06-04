@@ -21,6 +21,7 @@ UI template owns:
 - fixed UI copy such as `View Contract`
 - action ids such as `viewContract`
 - content binding names such as `mission.body`
+- content render mode such as `plain`, `rich`, or `auto`
 - action binding names such as `mission.viewTarget`
 
 CMS content owns:
@@ -34,6 +35,25 @@ CMS content owns:
 The CMS never sends functions, HTML, CSS, or executable action names outside the
 client allowlist.
 
+CMS strings may use the approved material rich-text markup grammar already used
+by the editor, e.g. `[h1]`, `[h2]`, `[accent]`, `[RULE]`, and `[DIVIDER]`.
+The UI template must opt a binding into rich rendering via `contentMode:
+"rich"` or `"auto"`; otherwise CMS text is rendered literally.
+
+## Theme / Global Defaults
+
+The next contract layer should be a host-owned theme block, not per-CMS styles.
+That block can define approved global defaults for a template family:
+
+- base text font
+- rich text tag tones/sizes/weights
+- default material skin id
+- spacing scale
+
+For now, `/ui-node` demonstrates this as client-owned CSS variables applied to
+the mission briefing template. The important rule is the same: CMS supplies
+content and safe targets; the client/template owns fonts, colors, and styling.
+
 ## Example
 
 Template:
@@ -45,6 +65,12 @@ Template:
   "materialId": "mission-panel",
   "children": [
     { "id": "mission-title", "type": "text", "contentBinding": "mission.title" },
+    {
+      "id": "mission-copy",
+      "type": "text",
+      "contentBinding": "mission.briefing",
+      "contentMode": "rich"
+    },
     {
       "id": "mission-cta",
       "type": "button",

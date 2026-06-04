@@ -9,6 +9,7 @@ export * from './surfaceValidate';
 export * from './surfaceStateVars';
 export * from './skinManifest';
 export * from './skinRegistry';
+export * from './uiNodeRichTextTheme';
 export * from './uiNodeValidate';
 export * from './uiNodePresenter';
 export * from './UiNode';

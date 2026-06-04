@@ -16,6 +16,7 @@ const valid = {
   surfaceStates: { hover: { tint: 'gold', tintStrength: 28 } },
   layout: { display: 'flex', direction: 'row', gap: 8, width: '100%', position: { inset: '0' } },
   contentBinding: 'contractCtaLabel',
+  contentMode: 'rich',
   stateModel: 'momentary',
   action: { id: 'openContract', params: { urgent: true }, paramsBinding: 'contract.params', targetBinding: 'contract.target' },
   children: [{ id: 'label', type: 'text', text: 'View Contract' }],
@@ -24,6 +25,7 @@ const parsed = validateUiNode(valid);
 assert.ok(parsed);
 assert.equal(parsed?.type, 'button');
 assert.equal(parsed?.children?.[0]?.text, 'View Contract');
+assert.equal(parsed?.contentMode, 'rich');
 assert.equal(parsed?.action?.params?.urgent, true);
 assert.equal(parsed?.action?.paramsBinding, 'contract.params');
 assert.equal(parsed?.action?.targetBinding, 'contract.target');

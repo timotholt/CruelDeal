@@ -1920,7 +1920,6 @@
 .ui-node-preview__json-stack {
   display: grid;
   min-width: 0;
-  gap: 18px;
 }
 
 .ui-node-preview__json-card {
@@ -1944,14 +1943,45 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
+.ui-node-preview__json-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 6px;
+  border-bottom: 1px solid rgba(239, 200, 93, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.ui-node-preview__json-tab {
+  min-width: 0;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(239, 200, 93, 0.14);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(231, 227, 214, 0.58);
+  cursor: pointer;
+  font: 800 0.64rem ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ui-node-preview__json-tab.is-active {
+  border-color: rgba(239, 200, 93, 0.42);
+  background: rgba(239, 200, 93, 0.12);
+  color: rgba(239, 200, 93, 0.84);
+}
+
 .ui-node-preview__json-head span:last-child {
   color: rgba(239, 200, 93, 0.68);
 }
 
 .ui-node-preview__payload {
   width: 100%;
-  max-height: min(42vh, 420px);
-  min-height: 330px;
+  height: min(67vh, 710px);
+  min-height: 560px;
   overflow: scroll;
   box-sizing: border-box;
   margin: 0;
@@ -1983,19 +2013,22 @@
   background: rgba(239, 200, 93, 0.72);
 }
 
-.ui-node-preview__payload--cms {
-  min-height: 210px;
-  max-height: 260px;
-}
-
 .ui-node-preview [data-ui-node-id='mission-card'] {
   max-width: 100%;
 }
 
 .ui-node-preview [data-ui-node-id='mission-card'] > .cd-panel {
+  width: 100%;
+  height: 100%;
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.18), transparent 42%),
-    url("/art/login/main-menu-contract-reference.png") center / cover no-repeat;
+    linear-gradient(90deg, rgba(0, 0, 0, 0.38), transparent 46%, rgba(0, 0, 0, 0.34)),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.62)),
+    url("/art/login/login-social-bg-dark.png") center top / cover no-repeat;
+}
+
+.ui-node-preview [data-ui-node-id='mission-card'] > .cd-panel > .cd-panel__content {
+  position: absolute;
+  inset: 0;
 }
 
 .ui-node-preview [data-ui-node-id='mission-card'] > .cd-panel::after {
@@ -2025,76 +2058,67 @@
 }
 
 .ui-node-preview [data-ui-node-id='sector-mark'] .cd-surface__content {
-  color: #efc85d;
-  font-size: 0.68rem;
-  line-height: 0.92;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.78);
 }
 
-.ui-node-preview [data-ui-node-id='sector-mark'] .cd-surface__content::first-line {
-  color: rgba(239, 200, 93, 0.78);
-  font-size: 0.58rem;
+.ui-node-preview [data-ui-node-id='mission-briefing'] > .cd-panel {
+  width: 100%;
+  height: 100%;
 }
 
 .ui-node-preview [data-ui-node-id='mission-briefing'] > .cd-panel > .cd-panel__content {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
-  gap: 5px;
+  position: absolute;
+  inset: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
-.ui-node-preview [data-ui-node-id='mission-eyebrow'],
-.ui-node-preview [data-ui-node-id='mission-title'],
-.ui-node-preview [data-ui-node-id='mission-body'],
-.ui-node-preview [data-ui-node-id='mission-reward-label'],
-.ui-node-preview [data-ui-node-id='mission-reward-value'] {
+.ui-node-preview [data-ui-node-id='mission-briefing'] .main-material-rich-text {
   min-width: 0;
-  color: rgba(244, 238, 224, 0.9);
-  font-family: "IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
-  line-height: 1;
-  white-space: pre-line;
+  overflow: hidden;
 }
 
-.ui-node-preview [data-ui-node-id='mission-eyebrow'] {
-  color: #efc85d;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ui-node-preview [data-ui-node-id='mission-title'] {
-  color: #f8f0df;
-  font-size: 1.42rem;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.78);
-}
-
-.ui-node-preview [data-ui-node-id='mission-body'] {
-  color: rgba(244, 238, 224, 0.76);
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1.16;
-}
-
-.ui-node-preview [data-ui-node-id='mission-reward-label'] {
-  color: rgba(244, 238, 224, 0.58);
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ui-node-preview [data-ui-node-id='mission-reward-value'] {
-  color: #efc85d;
-  font-size: 1.1rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+.ui-node-preview [data-ui-node-id='mission-briefing'] .main-material-rich-token--h2 .main-material-rich-break {
+  height: 0;
+  margin-top: 0;
 }
 
 .ui-node-preview [data-ui-node-id='mission-cta'] {
   align-self: end;
+  justify-self: center;
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] .cd-button__content {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] .cd-button__label {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 @media (max-width: 920px) {
