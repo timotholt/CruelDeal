@@ -53,7 +53,7 @@ const missionTemplate: UiNodePayload = {
           id: 'mission-cta',
           type: 'button',
           materialId: 'mission-cta',
-          text: 'View Contract',
+          contentBinding: 'mission.ctaLabel',
           action: { id: 'viewContract', targetBinding: 'mission.viewTarget' },
           surfaceStates: {
             hover: {
@@ -85,7 +85,8 @@ const missionTemplate: UiNodePayload = {
 const cmsContent: Record<string, CmsContentValue> = {
   'mission.deadline': '03 Days Left',
   'mission.sector': 'Sector\n[black]07[/black]',
-  'mission.briefing': '[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data\n[acc2]Extraction[/acc2][/h2][RULE]Extract encrypted corporate data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,850 [acc1]CR[/acc1][/h3]',
+  'mission.briefing': '[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data\n[acc2]Extraction[/acc2][/h2][RULE][body]Extract encrypted corporate data from Solace Corp mainframe cluster.[/body][DIVIDER]\n[h4]Reward[/h4][h3]1,850 [acc1]CR[/acc1][/h3]',
+  'mission.ctaLabel': 'View Contract',
   'mission.viewTarget': { kind: 'contract', id: 'contract_solace_mainframe' },
 };
 
@@ -111,6 +112,16 @@ const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
         embossStrength: 50,
       },
       normal: {
+        tone: 'white',
+        fontFamily: feedFontSystem,
+        sizeEm: 1.1,
+        lineHeight: 1,
+        weight: 500,
+        transform: 'none',
+        embossMode: 'dark',
+        embossStrength: 100,
+      },
+      body: {
         tone: 'white',
         fontFamily: feedFontSystem,
         sizeEm: 1.1,
@@ -148,6 +159,18 @@ const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
         letterSpacing: 0.02,
         transform: 'uppercase',
         opacity: 94,
+      },
+      h4: {
+        tone: 'muted',
+        fontFamily: feedFontCondensed,
+        sizeEm: 0.8,
+        lineHeight: 1,
+        weight: 600,
+        letterSpacing: 0.08,
+        transform: 'uppercase',
+        opacity: 84,
+        embossMode: 'dark',
+        embossStrength: 100,
       },
       acc1: { tone: 'gold', letterSpacing: 0.08, transform: 'inherit', opacity: 90 },
       acc2: { tone: 'gray', letterSpacing: 0.02, transform: 'uppercase', opacity: 94 },

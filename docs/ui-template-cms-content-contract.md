@@ -18,7 +18,7 @@ UI template owns:
 
 - node tree and component type
 - layout and surface/material ids
-- fixed UI copy such as `View Contract`
+- fixed UI copy and fallback labels
 - action ids such as `viewContract`
 - content binding names such as `mission.body`
 - content render mode such as `plain`, `rich`, or `auto`
@@ -27,7 +27,7 @@ UI template owns:
 CMS content owns:
 
 - mission-specific copy
-- localized strings
+- localized strings, including template-approved CTA labels
 - badges, sector labels, reward values
 - game entity ids and safe action targets
 - content version/provenance
@@ -36,9 +36,15 @@ The CMS never sends functions, HTML, CSS, or executable action names outside the
 client allowlist.
 
 CMS strings may use the approved material rich-text markup grammar already used
-by the editor, e.g. `[h1]`, `[h2]`, `[accent]`, `[RULE]`, and `[DIVIDER]`.
+by the editor, e.g. `[body]`, `[h1]`, `[h2]`, `[h3]`, `[h4]`, `[acc1]`,
+`[acc2]`, `[RULE]`, and `[DIVIDER]`.
 The UI template must opt a binding into rich rendering via `contentMode:
 "rich"` or `"auto"`; otherwise CMS text is rendered literally.
+
+Buttons and CTAs are structural UI template nodes, not rich-text tags. The CMS
+may provide a button label and destination through bindings such as
+`contentBinding` and `action.targetBinding`, but it should not create a CTA by
+embedding button markup in body copy.
 
 ## Theme / Global Defaults
 
@@ -74,7 +80,7 @@ Template:
     {
       "id": "mission-cta",
       "type": "button",
-      "text": "View Contract",
+      "contentBinding": "mission.ctaLabel",
       "action": {
         "id": "viewContract",
         "targetBinding": "mission.viewTarget"
@@ -89,6 +95,7 @@ CMS content:
 ```json
 {
   "mission.title": "Data Extraction",
+  "mission.ctaLabel": "View Contract",
   "mission.viewTarget": { "kind": "contract", "id": "contract_solace_mainframe" }
 }
 ```

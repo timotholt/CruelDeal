@@ -1,7 +1,8 @@
 import type { JSX } from 'solid-js';
+import { materialTextEmbossShadow, type MaterialTextEmbossMode, type MaterialTextTone } from '../material-node/materialTextEmboss';
 
-export type UiNodeRichTextTone = 'black' | 'white' | 'muted' | 'gray' | 'gold';
-export type UiNodeTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
+export type UiNodeRichTextTone = Extract<MaterialTextTone, 'black' | 'white' | 'muted' | 'gray' | 'gold'>;
+export type UiNodeTextEmbossMode = MaterialTextEmbossMode;
 
 export interface UiNodeTextStyle {
   tone?: UiNodeRichTextTone;
@@ -15,12 +16,15 @@ export interface UiNodeTextStyle {
   opacity?: number;
   embossMode?: UiNodeTextEmbossMode;
   embossStrength?: number;
+  embossOffset?: number;
+  embossBlur?: number;
 }
 
 export interface UiNodeRichTextTheme {
   align?: 'left' | 'center' | 'right';
   base?: UiNodeTextStyle & { paragraphGap?: number };
   normal?: UiNodeTextStyle;
+  body?: UiNodeTextStyle;
   accent?: UiNodeTextStyle;
   small?: UiNodeTextStyle;
   h1?: UiNodeTextStyle;
@@ -44,30 +48,13 @@ const toneColors: Record<UiNodeRichTextTone, string> = {
 };
 
 export const uiNodeTextEmbossShadow = (style: UiNodeTextStyle): string => {
-  const mode = style.embossMode ?? 'none';
-  const strength = Math.max(0, Math.min(100, style.embossStrength ?? 0)) / 100;
-  if (mode === 'none' || strength <= 0) return 'none';
-  if (mode === 'shadow') {
-    const isDarkText = style.tone === 'black' || style.tone === 'muted';
-    const rgb = isDarkText ? '255 255 255' : '0 0 0';
-    const opacity = isDarkText ? 0.65 : 0.9;
-    return [
-      `2px 3px 2px rgb(${rgb} / ${opacity * strength})`,
-      `1px 2px 1px rgb(${rgb} / ${opacity * 0.7 * strength})`,
-    ].join(', ');
-  }
-  if (mode === 'light') {
-    return [
-      `0 -2px 0 rgb(255 255 255 / ${0.85 * strength})`,
-      `0 2px 0 rgb(0 0 0 / ${0.55 * strength})`,
-      `0 2px 4px rgb(0 0 0 / ${0.4 * strength})`,
-    ].join(', ');
-  }
-  return [
-    `0 2px 0 rgb(0 0 0 / ${0.9 * strength})`,
-    `0 2px 5px rgb(0 0 0 / ${0.5 * strength})`,
-    `0 -1px 0 rgb(255 255 255 / ${0.3 * strength})`,
-  ].join(', ');
+  return materialTextEmbossShadow({
+    contentTone: style.tone,
+    textEmbossMode: style.embossMode ?? 'none',
+    textEmbossStrength: style.embossStrength ?? 0,
+    textEmbossOffset: style.embossOffset ?? 50,
+    textEmbossBlur: style.embossBlur ?? 50,
+  });
 };
 
 const percentOpacity = (value: number | undefined, fallback = 100) => `${(value ?? fallback) / 100}`;
@@ -122,6 +109,7 @@ export const uiNodeRichTextThemeVars = (theme: UiNodeRichTextTheme): JSX.CSSProp
     '--feed-rich-divider-thickness': `${theme.divider?.thicknessPx ?? 1}px`,
     '--feed-rich-divider-gap-top': `${theme.divider?.gapTopEm ?? 0.9}em`,
     '--feed-rich-divider-gap-bottom': `${theme.divider?.gapBottomEm ?? 0.78}em`,
+    ...styleVars('body', theme.body ?? theme.normal, baseTone),
     ...styleVars('small', theme.small, 'muted'),
     ...styleVars('title', theme.h1, baseTone),
     ...styleVars('alt-title', theme.h2, baseTone),

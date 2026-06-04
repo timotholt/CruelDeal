@@ -731,6 +731,18 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   text-transform: var(--feed-rich-small-transform);
 }
 
+.main-material-rich-token--body {
+  color: var(--feed-rich-body);
+  font-family: var(--feed-rich-body-font);
+  font-size: var(--feed-rich-body-size, 1em);
+  font-weight: var(--feed-rich-body-weight, inherit);
+  letter-spacing: var(--feed-rich-body-track, inherit);
+  line-height: var(--feed-rich-body-line, inherit);
+  opacity: var(--feed-rich-body-opacity, 1);
+  text-shadow: var(--feed-rich-body-shadow);
+  text-transform: var(--feed-rich-body-transform);
+}
+
 .main-material-rich-token--h1,
 .main-material-rich-token--h2,
 .main-material-rich-token--h3,

@@ -2078,7 +2078,8 @@
 
 .ui-node-preview [data-ui-node-id='mission-briefing'] .main-material-rich-text {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+  overflow-clip-margin: 5px;
 }
 
 .ui-node-preview [data-ui-node-id='mission-briefing'] .main-material-rich-token--h2 .main-material-rich-break {

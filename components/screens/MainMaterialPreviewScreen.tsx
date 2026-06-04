@@ -37,6 +37,7 @@ import {
 } from '../ui/material-lab';
 import {
   MaterialTextContent,
+  materialTextEmbossShadow,
   type MaterialTextFitOptions,
   type MaterialTextFitMode,
   type MaterialTextRenderMode,
@@ -195,7 +196,7 @@ type FeedMediaFadeMode = 'none' | 'top-dark' | 'bottom-dark' | 'left-dark' | 'ri
 type FeedCardNodeType = 'container' | 'text' | 'button';
 type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
 type FeedTextTransformToken = TextTransformToken | 'inherit';
-type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
+type FeedRichTextTag = 'accent' | 'acc1' | 'acc2' | 'acc3' | 'acc4' | 'bright' | 'normal' | 'muted' | 'dim' | 'dark' | 'black' | 'white' | 'red' | 'cyan' | 'green' | 'body' | 'small' | 'h1' | 'h2' | 'h3' | 'h4';
 
 const layoutPackedDistributes = ['start', 'center', 'end'] as const;
 const layoutDistributeModes = ['packed', 'between', 'around', 'evenly'] as const;
@@ -11790,47 +11791,7 @@ const feedToneColors: Record<MaterialTone, string> = {
   green: 'rgb(86 218 142)',
 };
 
-const feedTextEmbossShadow = (style: FeedTextSlotStyle) => {
-  if (style.textEmbossMode === 'none' || style.textEmbossStrength <= 0) return 'none';
-  const s = Math.max(0, Math.min(100, style.textEmbossStrength)) / 100;
-  // Offset and blur grow with strength so the Power slider has a visible range.
-  const off = 1 + Math.round(2 * s); // 1px..3px
-  const blur = Math.round(6 * s); // 0px..6px
-  if (style.textEmbossMode === 'shadow') {
-    // Directional cast shadow, down-right. Independent controls:
-    //   Power  = darkness (opacity)   Offset = cast distance   Blur = softness
-    const dist = Math.round((style.textEmbossOffset ?? 50) / 100 * 16); // 0px..16px
-    const dx = Math.round(dist * 0.7);
-    const dy = dist;
-    const blurAmt = Math.round((style.textEmbossBlur ?? 50) / 100 * 16); // 0px..16px
-    
-    // Choose shadow color based on text tone:
-    // White/bright/gold/etc. text gets a dark cast shadow.
-    // Dark/black/muted text gets a light cast shadow (creates a gorgeous letterpress drop-glow effect).
-    const isDarkText = style.contentTone === 'black' || style.contentTone === 'muted' || style.contentTone === 'none' || style.contentTone === 'inherit';
-    const shadowRgb = isDarkText ? '255 255 255' : '0 0 0';
-    const opacityMultiplier = isDarkText ? 0.65 : 0.9;
-    
-    return [
-      `${dx}px ${dy}px ${blurAmt}px rgb(${shadowRgb} / ${opacityMultiplier * s})`,
-      `${Math.round(dx * 0.55)}px ${Math.round(dy * 0.55)}px ${Math.max(1, Math.round(blurAmt * 0.6))}px rgb(${shadowRgb} / ${opacityMultiplier * 0.7 * s})`,
-    ].join(', ');
-  }
-  if (style.textEmbossMode === 'light') {
-    // Raised/letterpress-light: bright highlight up top, dark relief below.
-    return [
-      `0 -${off}px 0 rgb(255 255 255 / ${0.85 * s})`,
-      `0 ${off}px 0 rgb(0 0 0 / ${0.55 * s})`,
-      `0 ${off}px ${blur + 1}px rgb(0 0 0 / ${0.4 * s})`,
-    ].join(', ');
-  }
-  // Raised/engraved-dark: hard dark relief below, subtle highlight up top for the bevel edge.
-  return [
-    `0 ${off}px 0 rgb(0 0 0 / ${0.9 * s})`,
-    `0 ${off}px ${blur + 2}px rgb(0 0 0 / ${0.5 * s})`,
-    `0 -1px 0 rgb(255 255 255 / ${0.3 * s})`,
-  ].join(', ');
-};
+const feedTextEmbossShadow = (style: FeedTextSlotStyle) => materialTextEmbossShadow(style);
 
 const feedBaseTextStyleFromRecipe = (recipe: MaterialRecipe): FeedTextSlotStyle => createFeedSlotStyle({
   inherit: false,
@@ -11994,6 +11955,7 @@ const richTextTagAliases: Record<string, FeedRichTextTag | 'rule' | 'divider' | 
   red: 'red',
   cyan: 'cyan',
   green: 'green',
+  body: 'body',
   small: 'small',
   h1: 'h1',
   h2: 'h2',
@@ -12109,6 +12071,7 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
   const h2 = resolveFeedRichTagStyle(cardType, style, 'contractTitle');
   const h3 = resolveFeedRichTagStyle(cardType, style, 'contractRewardValue');
   const h4 = resolveFeedRichTagStyle(cardType, style, 'contractH4');
+  const body = resolveFeedRichTagStyle(cardType, style, 'contractBody');
   const acc1 = resolveFeedRichTagStyle(cardType, style, 'contractAcc1');
   const acc2 = resolveFeedRichTagStyle(cardType, style, 'contractAcc2');
   const acc3 = resolveFeedRichTagStyle(cardType, style, 'contractAcc3');
@@ -12137,6 +12100,7 @@ const feedRichTextVars = (cardType: FeedCardTypeRecipe, style: FeedTextSlotStyle
     '--feed-rich-divider-thickness': `${divider.textSizeRem}px`,
     '--feed-rich-divider-gap-top': `${divider.lineHeight}em`,
     '--feed-rich-divider-gap-bottom': `${divider.paragraphGap}em`,
+    ...feedRichTextStyleVars('body', body, style),
     ...feedRichTextStyleVars('small', small, style),
     ...feedRichTextStyleVars('title', h1, style),
     ...feedRichTextStyleVars('alt-title', h2, style),
@@ -12155,6 +12119,7 @@ const richTextTagSlot = (tag: FeedRichTextTag): FeedTextSlotId | undefined => ({
   acc2: 'contractAcc2',
   acc3: 'contractAcc3',
   acc4: 'contractAcc4',
+  body: 'contractBody',
   small: 'contractRewardLabel',
   h1: 'contractEyebrow',
   h2: 'contractTitle',

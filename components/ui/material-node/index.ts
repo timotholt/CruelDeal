@@ -10,3 +10,4 @@ export * from './MaterialNodeTraversal';
 export * from './MaterialNodeTypes';
 export * from './MaterialTextContent';
 export * from './MaterialRichText';
+export * from './materialTextEmboss';

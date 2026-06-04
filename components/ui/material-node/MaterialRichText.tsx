@@ -16,6 +16,7 @@ export type MaterialRichTextTag =
   | 'red'
   | 'cyan'
   | 'green'
+  | 'body'
   | 'small'
   | 'h1'
   | 'h2'
@@ -50,6 +51,7 @@ const richTextTagAliases: Record<string, MaterialRichTextTag | 'rule' | 'divider
   red: 'red',
   cyan: 'cyan',
   green: 'green',
+  body: 'body',
   small: 'small',
   h1: 'h1',
   h2: 'h2',
