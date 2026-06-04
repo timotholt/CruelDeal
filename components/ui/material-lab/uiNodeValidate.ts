@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { fault } from '../../../utils/logger';
 import type { SurfaceOptions } from './surfaceSchema';
-import { summarizeValibotIssues, surfaceOptionsLenientSchema } from './surfaceValidate';
+import { summarizeValibotIssues, surfaceOptionsLenientSchema, surfaceStatesSchema } from './surfaceValidate';
 
 // The trusted server/wire UI contract (server-driven UI plan, Phase 1).
 //
@@ -41,12 +41,17 @@ export interface UiActionPayload {
   params?: Record<string, string | number | boolean>;
 }
 
+export type UiSurfaceState = 'hover' | 'pressed' | 'active';
+export type UiSurfaceStatesPayload = Partial<Record<UiSurfaceState, Partial<SurfaceOptions>>>;
+
 export interface UiNodePayload {
   id: string;
   type: UiNodeType;
   variant?: string;
   materialId?: string;
+  skinId?: string;
   surface?: SurfaceOptions;
+  surfaceStates?: UiSurfaceStatesPayload;
   layout?: UiLayoutPayload;
   contentBinding?: string;
   text?: string;
@@ -101,7 +106,9 @@ export const uiNodeSchema: v.GenericSchema<UiNodePayload> = v.lazy(() => v.stric
   type: v.picklist(['button', 'panel', 'text', 'image', 'slot']),
   variant: v.optional(v.string()),
   materialId: v.optional(v.string()),
+  skinId: v.optional(v.string()),
   surface: v.optional(surfaceOptionsLenientSchema),
+  surfaceStates: surfaceStatesSchema,
   layout: v.optional(uiLayoutSchema),
   contentBinding: v.optional(v.string()),
   text: v.optional(v.string()),

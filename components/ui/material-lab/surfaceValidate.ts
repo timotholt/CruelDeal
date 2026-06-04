@@ -171,8 +171,23 @@ const fields: Record<keyof SurfaceOptions, Pair> = {
 const entries = (key: 'strict' | 'lenient') =>
   Object.fromEntries(Object.entries(fields).map(([name, pair]) => [name, pair[key]]));
 
+const dropUndefined = (input: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+
 export const surfaceOptionsStrictSchema = v.strictObject(entries('strict'));
 export const surfaceOptionsLenientSchema = v.object(entries('lenient'));
+export const surfaceOptionsLenientStrictSchema = v.pipe(
+  v.strictObject(entries('lenient')),
+  v.transform((input) => dropUndefined(input as Record<string, unknown>)),
+);
+
+const stateSurfaceOverlay = () => v.optional(surfaceOptionsLenientStrictSchema);
+
+export const surfaceStatesSchema = v.optional(v.strictObject({
+  hover: stateSurfaceOverlay(),
+  pressed: stateSurfaceOverlay(),
+  active: stateSurfaceOverlay(),
+}));
 
 export const summarizeValibotIssues = (issues: readonly v.BaseIssue<unknown>[]) =>
   issues.map((issue) => ({
@@ -180,9 +195,6 @@ export const summarizeValibotIssues = (issues: readonly v.BaseIssue<unknown>[]) 
     message: issue.message,
     received: issue.received,
   }));
-
-const dropUndefined = (input: Record<string, unknown>): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
 
 /**
  * Validate authored/wire surface data. Strict-parses for detection; on any

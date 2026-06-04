@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import * as v from 'valibot';
 import { AppFault, configureLogging } from '../../../utils/logger';
-import { validateSurfaceOptions } from './surfaceValidate';
+import { surfaceStatesSchema, validateSurfaceOptions } from './surfaceValidate';
 
 configureLogging({ level: 'silent' });
 
@@ -37,6 +38,17 @@ assert.equal('texture' in validateSurfaceOptions({ texture: 'definitely-not-a-te
 
 // Non-object input yields an empty surface, no throw.
 assert.deepEqual(validateSurfaceOptions(null), {});
+
+// State overlays use strict keys with lenient surface values.
+assert.deepEqual(
+  v.parse(surfaceStatesSchema, { hover: { tint: 'gold', tintStrength: 28 } }),
+  { hover: { tint: 'gold', tintStrength: 28 } },
+);
+assert.deepEqual(
+  v.parse(surfaceStatesSchema, { hover: { tint: 'banana', tintStrength: 200 } }),
+  { hover: { tintStrength: 100 } },
+);
+assert.throws(() => v.parse(surfaceStatesSchema, { hover: { tintStrength: 10, madeUp: 1 } }));
 
 // --- throw mode: any issue faults -------------------------------------------
 configureLogging({ policy: 'throw' });

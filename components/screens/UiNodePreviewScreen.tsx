@@ -42,25 +42,8 @@ const samplePayload: UiNodePayload = {
     {
       id: 'body',
       type: 'text',
+      materialId: 'body-panel',
       text: 'Rendered from validated JSON through one surface component. The server sends intent; the client owns the pixels.',
-      surface: {
-        material: 'custom',
-        materialColor: '#0f1216',
-        texture: 'none',
-        gradient: 'none',
-        border: ['top', 'right', 'bottom', 'left'],
-        borderColor: 'custom',
-        borderCustomColor: '#262b33',
-        borderOpacity: 70,
-        radius: 10,
-        textSizeRem: 0.95,
-        contentTone: 'white',
-        contentOpacity: 78,
-        textTransform: 'none',
-        fontStyle: 'normal',
-        textAlign: 'left',
-        textEmboss: false,
-      },
       layout: { padding: 16 },
     },
     {
@@ -94,6 +77,32 @@ const samplePayload: UiNodePayload = {
         fontWeight: 800,
         letterSpacing: 0.05,
       },
+      surfaceStates: {
+        hover: {
+          tint: 'gold',
+          tintStrength: 28,
+          borderOpacity: 82,
+          lightStrength: 76,
+        },
+        pressed: {
+          glow: 'gold',
+          glowStrength: 48,
+          corners: 'all',
+          emission: 'center-blip',
+          emissionTone: 'gold',
+          emissionStrength: 44,
+          stateScale: 0.97,
+          stateTranslateY: 2,
+        },
+      },
+      layout: { width: '100%' },
+    },
+    {
+      id: 'skin-cta',
+      type: 'button',
+      materialId: 'cta-secondary',
+      contentBinding: 'skinCtaLabel',
+      action: { id: 'inspectSkin', params: { materialId: 'cta-secondary' } },
       layout: { width: '100%' },
     },
   ],
@@ -102,6 +111,7 @@ const samplePayload: UiNodePayload = {
 const bindings: Record<string, string> = {
   title: 'Contract Briefing',
   ctaLabel: 'Accept Contract',
+  skinCtaLabel: 'Skin Registry CTA',
 };
 
 export const UiNodePreviewScreen = () => {

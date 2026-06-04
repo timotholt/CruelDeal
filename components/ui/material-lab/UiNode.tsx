@@ -1,5 +1,7 @@
-import { For, JSX, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, JSX, Match, Show, Switch } from 'solid-js';
 import { MaterialSurfaceHost } from './MaterialSurfaceHost';
+import { resolveSurfaceForMaterial } from './skinRegistry';
+import { computeSurfaceStateVars } from './surfaceStateVars';
 import { surfaceKindForType, uiLayoutToStyle } from './uiNodePresenter';
 import type { UiActionPayload, UiNodePayload } from './uiNodeValidate';
 
@@ -27,10 +29,28 @@ const nodeContent = (node: UiNodePayload, context?: UiNodeRenderContext): JSX.El
  * Assumes the payload was already validated by validateUiNode().
  */
 export const UiNode = (props: { node: UiNodePayload; context?: UiNodeRenderContext }) => {
+  const [stateOpen, setStateOpen] = createSignal(false);
   const node = () => props.node;
-  const kind = () => surfaceKindForType(node().type, !!node().surface);
   const style = () => uiLayoutToStyle(node().layout);
   const content = () => nodeContent(node(), props.context);
+  const togglesActiveState = () => node().stateModel === 'selectable' || node().stateModel === 'disclosure';
+  const surfaceProps = createMemo(() => {
+    const resolved = resolveSurfaceForMaterial({ materialId: node().materialId, skinId: node().skinId });
+    const base = resolved || node().surface
+      ? { ...(resolved || {}), ...(node().surface || {}) }
+      : undefined;
+    if (!base) return undefined;
+    const active = togglesActiveState() && stateOpen();
+    const stateVars = computeSurfaceStateVars(base, node().surfaceStates);
+    const mergedStateVars = { ...(base.stateVars || {}), ...stateVars };
+    return {
+      ...base,
+      stateVars: Object.keys(mergedStateVars).length > 0 ? mergedStateVars : undefined,
+      selected: active || base.selected,
+      visualState: active ? 'active' : base.visualState,
+    };
+  });
+  const kind = () => surfaceKindForType(node().type, !!surfaceProps());
   const children = () => (
     <For each={node().children ?? []}>
       {(child) => <UiNode node={child} context={props.context} />}
@@ -49,16 +69,17 @@ export const UiNode = (props: { node: UiNodePayload; context?: UiNodeRenderConte
         <Match when={kind() === 'button'}>
           <MaterialSurfaceHost
             kind="button"
-            surfaceProps={node().surface}
+            surfaceProps={surfaceProps()}
             label={content()}
             onClick={() => {
+              if (togglesActiveState()) setStateOpen((open) => !open);
               const action = node().action;
               if (action) props.context?.onAction?.(action, node());
             }}
           />
         </Match>
         <Match when={kind() === 'panel'}>
-          <MaterialSurfaceHost kind="panel" surfaceProps={node().surface} padded={false}>
+          <MaterialSurfaceHost kind="panel" surfaceProps={surfaceProps()} padded={false}>
             {content()}
             {children()}
           </MaterialSurfaceHost>
