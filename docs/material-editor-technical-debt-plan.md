@@ -5,12 +5,12 @@ Date: 2026-06-03
 
 ## Goal
 
-Reduce editor DOM/CSS pollution while preserving editor usefulness, export correctness, and the path to server-driven SolidJS runtime UI.
+Remove editor DOM/CSS pollution while preserving editor usefulness, export correctness, and the path to server-driven SolidJS runtime UI.
 
 This plan follows:
 
 ```txt
-Render the product. Store the editor. Overlay the tools. Export what renders.
+Render the product. Store the editor in RAM. Export what renders.
 ```
 
 See also:
@@ -24,25 +24,27 @@ See also:
 
 The editor preview DOM currently stores too much information directly in DOM attributes, class stacks, layer spans, and CSS variables.
 
-The CTA export path is smaller, but the live editor still renders a heavier editor-specific material primitive. That is acceptable temporarily, but it creates verification risk unless export/runtime are separately render-proved.
+The CTA export path is smaller, but the live editor still renders a heavier editor-specific material primitive. That is not acceptable as a final architecture. It is temporary migration debt only.
+
+If a current editor feature depends on permanent DOM garbage, rewrite that feature to store its information internally in RAM. Do not keep polluted DOM to avoid breaking the current feature.
 
 ## Target Architecture
 
 ```txt
 Product Render DOM
-  minimal runtime-like render surface
+  exact runtime/export render surface
 
-Inspector Registry
-  rich editor diagnostics keyed by target id / element ref
+Editor RAM Store
+  selection, provenance, layout intent, diagnostics, layer status
 
-Overlay Layer
-  selection outlines, flashes, handles, probes, deletion proof
+Inspector
+  reads RAM/emission plans/computed product DOM
 
 Emission Planner
-  editor/runtime/export/proof output plans
+  canonical product output plan
 
 Proof Harness
-  visual and computed-style verification
+  DOM cleanliness, computed-style, and pixel verification
 ```
 
 ## Technical Debt Buckets
@@ -63,8 +65,9 @@ Examples:
 Plan:
 
 - Move diagnostics into an inspector registry.
-- Keep only a stable target hook in DOM where needed.
-- Make temporary probe attrs exist only while a probe is active.
+- Prefer Solid refs/closures/component ids over permanent DOM ids.
+- Treat any stable `data-*` hook as a temporary migration compromise.
+- Make temporary attrs exist only while a visible current feature is active.
 
 ### 2. Permanent Editor Classes
 
@@ -76,8 +79,8 @@ Examples:
 
 Plan:
 
-- Move selection and flash affordances to overlay-first rendering.
-- Use DOM classes only for active temporary states.
+- Move selection and flash affordances out of product DOM where practical.
+- Use DOM classes only for active temporary visible states.
 - Remove them immediately after the effect ends.
 
 ### 3. Editor Layer DOM
@@ -90,9 +93,9 @@ Examples:
 
 Plan:
 
-- Keep editor layer DOM only where it is needed for editor rendering.
-- For migrated families, prefer product-like DOM plus overlay/registry diagnostics.
-- Do not replace editor rendering until render proof passes.
+- Remove editor-only layer DOM for migrated families.
+- Use the same product render as export/runtime.
+- If a diagnostic needs layer information, read it from the emission plan/RAM store.
 
 ### 4. Main Material Screen Size
 
@@ -110,20 +113,21 @@ Plan:
 
 - Extract export planner. Started with `components/screens/main-material/mainMaterialExportPlanner.ts`.
 - Extract proof harness.
-- Extract inspector registry.
+- Extract editor RAM/inspector registry.
 - Extract DOM/CSS audit renderers.
 - Extract feed render adapters.
 
 ### 5. Export Is Not Yet Render-Proved
 
-The inspector shows export DOM/CSS, but that does not prove it renders correctly.
+The inspector shows export DOM/CSS, but that does not prove it renders correctly or that the live preview is using the same DOM/CSS.
 
 Plan:
 
 - Add Render Proof tab.
 - Mount exact export HTML/CSS.
 - Mount Solid runtime render.
-- Compare against editor render.
+- Compare against live preview product render.
+- Fail when live preview has permanent editor-only DOM/CSS.
 - Add pixel diff and failure classification.
 
 ## Refactor Phases
@@ -137,14 +141,14 @@ Status: started.
 
 ### Phase 2: Keep Live Editor Stable
 
-Do not alter authored CTA visuals or interaction behavior while building exporter/proof infrastructure.
+Do not alter authored CTA recipe values while moving the live CTA preview onto product DOM/CSS.
 
 Rules:
 
 - Do not tune material sliders.
 - Do not tune recipe font/rem/pixel values.
 - Do not patch export proof by changing authored recipe values.
-- Any visual mismatch is an emitter/proof/runtime bug until proven otherwise.
+- Any visual mismatch is a preview/emitter/proof/runtime bug until proven otherwise.
 
 ### Phase 3: Build Inspector Registry
 
@@ -162,7 +166,7 @@ interface MaterialInspectorEntry {
 }
 ```
 
-Move diagnostics out of DOM into the registry in this order:
+Move diagnostics out of DOM into RAM in this order:
 
 1. layout mode and sizing mode
 2. direction/wrap
@@ -170,32 +174,30 @@ Move diagnostics out of DOM into the registry in this order:
 4. active material layers
 5. recipe/control provenance
 
-### Phase 4: Overlay-First Selection
+### Phase 4: Remove Permanent Editor Affordance DOM
 
-Move selection visuals away from component DOM.
+Remove permanent editor-only affordances from component DOM. Add temporary visible affordances only for current, real features.
 
-Overlay should support:
+Allowed first-pass affordances:
 
 - selected outline
 - flash pulse
-- hover target
-- drag handles
-- deletion proof markers
-- measurement labels
 
 Acceptance:
 
 - selected target can be highlighted without adding classes to product DOM
 - flash class does not persist on material elements
+- no speculative editor affordance nodes exist unless a current feature actually uses them
 
-### Phase 5: Render Proof Before Live Replacement
+### Phase 5: Render Proof During Live Replacement
 
-Before replacing any live editor render with export/runtime-like render:
+For CTA, replacing the live editor render with product DOM/CSS is the prototype. Render proof must run during and after the replacement:
 
 - proof tab exists
 - rest/hover/pressed comparison passes
 - text/fitter behavior is verified
 - no authored recipe values were changed to pass proof
+- no permanent editor-only DOM/CSS remains in preview
 
 CTA should be the first family.
 
@@ -215,7 +217,7 @@ For each family:
 - add export planner
 - add Solid runtime renderer
 - add proof harness cases
-- move diagnostics to registry
+- move diagnostics to RAM
 - remove unnecessary DOM attrs/classes
 - keep editor visuals stable
 
@@ -223,23 +225,22 @@ For each family:
 
 A component family is considered editor-debt-clean only when:
 
-- live editor visuals remain stable
-- export DOM/CSS is generated from emission plan
+- live editor visuals remain stable without authored value tuning
+- preview/export/runtime DOM/CSS is generated from the same product emission plan
 - Solid runtime render is generated from same plan
 - proof harness passes or reports actionable failures
 - diagnostics no longer require extra DOM attrs/classes
 - temporary editor effects are removed after use
-- no editor-only attrs/classes appear in export/runtime
+- no permanent editor-only attrs/classes/nodes appear in preview/export/runtime
 
 ## First Concrete Slice
 
-Do not swap CTA live render yet.
-
-Build proof infrastructure first:
+Use CTA as the prototype for sacred product DOM:
 
 1. Add Render Proof tab for CTA.
 2. Mount exact export HTML/CSS.
 3. Add Solid runtime render from the same emission plan.
-4. Compare both against current editor CTA.
-5. Use proof output to fix emitter/runtime bugs.
-6. Only then consider moving CTA live editor render closer to product DOM.
+4. Move live CTA preview onto the same product DOM/CSS without changing authored recipe values.
+5. Move CTA editor diagnostics into RAM.
+6. Compare preview/export/runtime.
+7. Use proof output to fix preview/emitter/runtime bugs.

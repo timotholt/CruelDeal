@@ -4,6 +4,8 @@
 
 Refactor the main material preview so any rendered material target can be tested in place with the same generic interaction system: hover, pressed, active/selectable, and focus preview. This should work for the Contract CTA child material, nav items, toolbar buttons, currency buttons, feed child surfaces, and future editable targets without adding bespoke handlers for every component.
 
+This plan is subordinate to `docs/material-preview-emission-rules.md`: preview DOM/CSS is sacred product output. Interaction state must be stored in RAM and passed into product renderers. Do not add permanent `data-*` attributes, wrapper frames, debug classes, or hidden nodes to the material DOM to make interaction tracking easier.
+
 The end state is:
 
 - The selected editable target can be hovered, pressed, and focused directly in the phone preview.
@@ -79,6 +81,8 @@ interface PreviewTargetFrameProps {
 }
 ```
 
+These types represent RAM state and component props. They are not permission to add permanent editor metadata to product DOM.
+
 Use existing interaction role values where possible:
 
 - `static` -> no live hover/press unless force preview is active.
@@ -103,6 +107,13 @@ const PreviewTargetFrame = (props: PreviewTargetFrameProps) => (
   </div>
 );
 ```
+
+Updated architecture rule:
+
+- Do not wrap migrated product components in `PreviewTargetFrame` if the wrapper exists only to carry editor metadata.
+- Prefer passing `targetId`, role, and selection handlers through Solid props/closures.
+- If a wrapper is temporarily needed during migration, treat it as legacy debt and remove it when the target family moves to product DOM.
+- If a target id is temporarily emitted as `data-material-target-id`, document it as a migration compromise and do not export it.
 
 Then gradually replace ad hoc wrappers:
 
@@ -173,7 +184,9 @@ const [focusedTargetId, setFocusedTargetId] = createSignal<string | null>(null);
 const [activeTargetIds, setActiveTargetIds] = createSignal<ReadonlySet<string>>(new Set());
 ```
 
-Add delegated handlers to the phone preview root:
+Prefer component-bound handlers because they do not require permanent DOM metadata. Delegated handlers are allowed only as a migration step for legacy components that have not moved to product render yet.
+
+Legacy delegated handler shape:
 
 ```ts
 const targetFromEvent = (event: Event): HTMLElement | null => (
@@ -202,6 +215,7 @@ Important:
 - Do not execute real app actions from preview clicks.
 - Do not make static panels clickable.
 - Do not stop propagation globally. Feed carousel drag still needs pointer events.
+- Do not add permanent product DOM attributes just to support delegated lookup.
 
 ## Phase 5: Resolve Feed Carousel Drag Conflicts
 
@@ -326,7 +340,8 @@ Manual/browser flow:
 
 Programmatic checks:
 
-- Inspect rendered target elements and confirm they have `data-material-target-id`.
+- Inspect migrated rendered target elements and confirm they do not need permanent editor-only `data-*` ids for interaction.
+- If a legacy target still uses `data-material-target-id`, record it as migration debt and confirm it is not emitted by product export/runtime.
 - Confirm selected CTA state edits persist in exported/local recipe state.
 - Confirm no hidden sanitizer reintroduces default hover/pressed CTA states.
 - Confirm static targets do not enter pressed state on click.
@@ -345,8 +360,8 @@ If `MainMaterialPreviewScreen.tsx` lint fails on existing warnings, report the w
 
 1. Inspect `git status --short` and current diffs first. Do not revert user changes.
 2. Add shared preview interaction types and resolver.
-3. Add `PreviewTargetFrame` or extend existing frames with the same data attributes.
-4. Add delegated interaction signals/handlers at the preview root.
+3. Prefer component-bound interaction props/closures for migrated targets.
+4. Use `PreviewTargetFrame`/data attributes only for legacy targets that have not moved to product DOM, and mark them as migration debt.
 5. Refactor feed node rendering to ask `surfaceStateForTarget`.
 6. Wire CTA child target through the resolver.
 7. Migrate nav visual state to the resolver while preserving `activeNavIndex`.
@@ -362,4 +377,3 @@ If `MainMaterialPreviewScreen.tsx` lint fails on existing warnings, report the w
 - Do not remove existing nav active selection behavior until the generic active-target model is proven.
 - Do not make preview clicks execute real navigation or app actions.
 - Do not refactor production game components yet; this plan is for the material preview.
-

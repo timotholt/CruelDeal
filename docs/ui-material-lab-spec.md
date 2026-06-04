@@ -8,6 +8,8 @@ The lab should recreate the visual language shown in the mock reference `Full UI
 
 This route is a living styleboard, not a final player-facing screen. Its job is to make the primitive system concrete enough that future game screens can be rebuilt with shared components instead of one-off CSS.
 
+The lab/editor must not invent a separate editor-only material DOM. Any primitive promoted from this lab should render the same product DOM/CSS in the editor preview, game runtime, and export path. Editor diagnostics, selection, provenance, and control state belong in RAM.
+
 ## Reference Observations
 
 The mock UI has several repeated visual rules:
@@ -115,6 +117,8 @@ host element
 └── content layer
 ```
 
+This is a conceptual material model, not a mandate to emit empty span layers. A product renderer should use host styles and pseudo-elements when they produce the same pixels with less DOM. Real child layers are allowed only when they change pixels, behavior, accessibility, or layout and cannot be represented cleanly in CSS.
+
 Cards and buttons differ by host semantics and layout, not by duplicating material logic.
 
 For composed/editor-authored UI, layout is owned by a wrapper node frame, not by the material primitive itself:
@@ -124,6 +128,8 @@ NodeFrame: position, size, padding, gap, align, justify
 MaterialSurface / MaterialButton: visual material layers and text recipe
 NodeContent: bound copy, icon, or media content
 ```
+
+For migrated runtime/export components, the node frame must be product layout, not editor bookkeeping. Editor-only ids, diagnostics, and inspector state should be held in RAM and passed through component props/refs.
 
 This keeps buttons, text panels, and containers behaviorally identical in the editor. Moving a CTA button uses the same node-frame `x/y` path as moving a text chip or glass container.
 

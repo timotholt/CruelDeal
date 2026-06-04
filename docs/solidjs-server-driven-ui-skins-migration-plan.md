@@ -9,6 +9,8 @@ Move the game UI toward trusted SolidJS runtime rendering that can be driven by 
 
 The server sends validated data. The client owns rendering, actions, accessibility, and safety.
 
+The material editor preview, game runtime, and export serializer must all use the same product DOM/CSS for migrated UI families. Server-driven skins do not get a separate editor-only render path.
+
 ```txt
 Server skin/node payload
   -> client validation
@@ -23,6 +25,7 @@ Server skin/node payload
 - Do not send raw Solid components, executable JavaScript, or arbitrary CSS from the server.
 - Do not replace working legacy UI until a component family has runtime proof.
 - Do not make the material editor the runtime renderer.
+- Do not keep editor-only DOM/CSS as a compatibility layer for migrated runtime UI.
 
 ## Core Contracts
 
@@ -79,6 +82,8 @@ UiNodePayload
   -> render SolidJS runtime component
 ```
 
+For migrated families, the material editor preview renders the same SolidJS product component/emission plan. Editor state such as selection, diagnostics, provenance, and active inspector data lives in RAM and is not encoded into the product DOM.
+
 ## Migration Phases
 
 ### Phase 1: Define And Validate Payloads
@@ -120,11 +125,13 @@ Acceptance:
 - Use material emission plans as the runtime rendering contract.
 - Do not render from editor DOM.
 - Do not render from untrusted server markup.
+- Make editor preview, runtime, and export share the same product emission plan.
 
 Acceptance:
 
 - CTA button payload renders through a trusted Solid component.
 - Runtime DOM matches the emission plan contract.
+- Editor preview DOM matches the runtime/export product contract.
 - Runtime component supports label, disabled state, click action, and skin id.
 
 ### Phase 4: Component Family Migration
@@ -148,6 +155,7 @@ Each family must have:
 - skin/material resolver
 - Solid runtime renderer
 - export HTML/CSS renderer
+- editor preview renderer using the same product output
 - render proof
 - golden tests
 
@@ -168,7 +176,7 @@ Rollout order:
 
 1. Render hidden proof only.
 2. Render side-by-side proof in editor.
-3. Enable runtime Solid for one component family.
+3. Move editor preview for one component family onto the product renderer.
 4. Enable server-driven payloads for that family.
 5. Remove legacy only after proof and gameplay are stable.
 
@@ -190,5 +198,6 @@ CTA button runtime skin slice:
 2. Define CTA skin manifest entry.
 3. Resolve `UiNodePayload + SkinManifest` into a material emission plan.
 4. Render that plan as SolidJS.
-5. Add proof harness comparison against editor and export HTML/CSS.
-6. Add tests for base, textured, disabled, simple label, fitted label, and invalid skin fallback.
+5. Use that same product render in the material editor preview.
+6. Add proof harness comparison against exact export HTML/CSS.
+7. Add tests for base, textured, disabled, simple label, fitted label, invalid skin fallback, and no editor DOM pollution.

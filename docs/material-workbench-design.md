@@ -20,6 +20,8 @@ Use a consistent three-column workbench:
 
 The workbench shell owns the design-tool chrome. The screen preview owns only the game UI being tuned.
 
+The preview DOM/CSS is sacred product output. The workbench may store selection, diagnostics, provenance, part metadata, and control state internally, but it must not permanently write that information into the preview DOM/CSS. If a workbench feature needs metadata, rewrite the feature to use RAM, refs, or component props instead of DOM garbage.
+
 ## Component Contract
 
 ### `MaterialWorkbenchLayout`
@@ -105,6 +107,9 @@ interface MaterialRecipe {
 - Do not duplicate material controls per screen.
 - Let each screen keep custom non-material controls when needed, such as Login backdrop image tone.
 - Store workbench recipes in localStorage for iteration, then export JSON when a direction is worth promoting.
+- Preview uses the same product DOM/CSS that runtime/export would use for migrated families.
+- Workbench diagnostics live in RAM, not permanent DOM attributes/classes/wrappers.
+- Temporary visible editor affordances must be removed when inactive.
 
 ## Migration Path
 
