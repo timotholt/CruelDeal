@@ -23,6 +23,7 @@ import { CardFrameLabScreen } from "./components/screens/CardFrameLabScreen";
 import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
 import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
 import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPreviewScreen";
+import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -38,6 +39,7 @@ const RootComponent = () => {
         if (path.includes("/uitest")) return "GAME";
         if (path.includes("/login-material")) return "GAME";
         if (path.includes("/main-material")) return "GAME";
+        if (path.includes("/ui-node")) return "GAME";
         if (path.includes("/dev")) return "GAME";
         if (path.includes("/citymap")) return "GAME";
         if (path.includes("/play")) return "PLAY";
@@ -221,6 +223,12 @@ const mainMaterialRoute = createRoute({
     component: () => <MainMaterialPreviewScreen />,
 });
 
+const uiNodeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/ui-node",
+    component: () => <UiNodePreviewScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -240,6 +248,7 @@ const routeTree = rootRoute.addChildren([
     uiTestRoute,
     loginMaterialRoute,
     mainMaterialRoute,
+    uiNodeRoute,
     devCardFrameRoute,
     devTensorRoute,
     devTensorPlayRoute,

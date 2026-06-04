@@ -7,5 +7,7 @@ export * from './MaterialSurfaceHost';
 export * from './MaterialWorkbenchLayout';
 export * from './surfaceValidate';
 export * from './uiNodeValidate';
+export * from './uiNodePresenter';
+export * from './UiNode';
 export * from './materialPresets';
 export * from './TextureOptions';

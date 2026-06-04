@@ -10,6 +10,7 @@ import { LoginScreen } from './components/screens/LoginScreen';
 import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
 import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPreviewScreen';
 import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPreviewScreen';
+import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 
@@ -94,6 +95,7 @@ export default function App() {
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
   const isMainMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/main-material');
+  const isUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/ui-node');
   const isGameTextTestPath = () => window.location.pathname.toLowerCase().startsWith('/gametext-test');
   const isGameTextV2TestPath = () => {
     const path = window.location.pathname.toLowerCase();
@@ -135,7 +137,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isGameTextTestPath() || isGameTextV2TestPath()}
+          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isUiNodePath() || isGameTextTestPath() || isGameTextV2TestPath()}
           fallback={
             <AppViewport>
               <Show
@@ -170,7 +172,11 @@ export default function App() {
             <Show when={isDevPath()} fallback={(
               <Show when={isGameTextTestPath() || isGameTextV2TestPath()} fallback={(
                 <Show when={isLoginMaterialPath()} fallback={(
-                  <Show when={isMainMaterialPath()} fallback={<UiMaterialLabScreen />}>
+                  <Show when={isMainMaterialPath()} fallback={(
+                    <Show when={isUiNodePath()} fallback={<UiMaterialLabScreen />}>
+                      <UiNodePreviewScreen />
+                    </Show>
+                  )}>
                     <MainMaterialPreviewScreen />
                   </Show>
                 )}>
