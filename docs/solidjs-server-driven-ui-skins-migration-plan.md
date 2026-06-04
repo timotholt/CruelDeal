@@ -122,16 +122,17 @@ Acceptance:
 ### Phase 3: Build The SolidJS Runtime Renderer
 
 - Add `renderUiNodeToSolid(node, context)`.
-- Use material emission plans as the runtime rendering contract.
+- Use classified/pruned material output as the first runtime rendering contract.
 - Do not render from editor DOM.
 - Do not render from untrusted server markup.
-- Make editor preview, runtime, and export share the same product emission plan.
+- Do not invent a separate runtime/export structure before truthful pruned export is proven.
+- After proof, converge editor preview, runtime, and export on the same optimized product emission plan.
 
 Acceptance:
 
 - CTA button payload renders through a trusted Solid component.
-- Runtime DOM matches the emission plan contract.
-- Editor preview DOM matches the runtime/export product contract.
+- Runtime DOM matches the proven pruned-export contract.
+- Editor preview and runtime/export differ only by editor-owned metadata that has been moved to RAM.
 - Runtime component supports label, disabled state, click action, and skin id.
 
 ### Phase 4: Component Family Migration

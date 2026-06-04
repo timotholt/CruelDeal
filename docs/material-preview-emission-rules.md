@@ -37,4 +37,4 @@ Allowed editor additions are only temporary visual affordances that are visible 
 
 ## Working Doctrine
 
-Render the product. Store the editor in RAM. Export what renders.
+Render what works. Classify it. Store editor knowledge in RAM. Export the same visual DOM with only editor garbage pruned. Minimize only after proof.

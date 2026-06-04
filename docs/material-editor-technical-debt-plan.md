@@ -10,7 +10,7 @@ Remove editor DOM/CSS pollution while preserving editor usefulness, export corre
 This plan follows:
 
 ```txt
-Render the product. Store the editor in RAM. Export what renders.
+Render what works. Store editor knowledge in RAM. Export the same visual DOM after pruning editor garbage.
 ```
 
 See also:
@@ -31,8 +31,8 @@ If a current editor feature depends on permanent DOM garbage, rewrite that featu
 ## Target Architecture
 
 ```txt
-Product Render DOM
-  exact runtime/export render surface
+Current Editor Visual DOM
+  current working visual structure
 
 Editor RAM Store
   selection, provenance, layout intent, diagnostics, layer status
@@ -40,8 +40,8 @@ Editor RAM Store
 Inspector
   reads RAM/emission plans/computed product DOM
 
-Emission Planner
-  canonical product output plan
+Classifier / Pruner
+  product vs editor-owned DOM/CSS classification
 
 Proof Harness
   DOM cleanliness, computed-style, and pixel verification
@@ -93,8 +93,9 @@ Examples:
 
 Plan:
 
-- Remove editor-only layer DOM for migrated families.
-- Use the same product render as export/runtime.
+- Classify layer DOM before removing it.
+- Keep active visual layer DOM in the first truthful export if it changes pixels.
+- Remove only editor-only layer DOM, inactive/no-op layers, or layers proven equivalent by deletion proof.
 - If a diagnostic needs layer information, read it from the emission plan/RAM store.
 
 ### 4. Main Material Screen Size
@@ -191,13 +192,13 @@ Acceptance:
 
 ### Phase 5: Render Proof During Live Replacement
 
-For CTA, replacing the live editor render with product DOM/CSS is the prototype. Render proof must run during and after the replacement:
+For CTA, the prototype is truthful export from classified/pruned editor visual DOM. Do not replace the live editor render until the pruned export proves parity.
 
 - proof tab exists
 - rest/hover/pressed comparison passes
 - text/fitter behavior is verified
 - no authored recipe values were changed to pass proof
-- no permanent editor-only DOM/CSS remains in preview
+- no permanent editor-only DOM/CSS remains in export
 
 CTA should be the first family.
 
@@ -226,7 +227,7 @@ For each family:
 A component family is considered editor-debt-clean only when:
 
 - live editor visuals remain stable without authored value tuning
-- preview/export/runtime DOM/CSS is generated from the same product emission plan
+- export/runtime DOM/CSS is derived from the same visual structure as preview
 - Solid runtime render is generated from same plan
 - proof harness passes or reports actionable failures
 - diagnostics no longer require extra DOM attrs/classes
@@ -235,12 +236,12 @@ A component family is considered editor-debt-clean only when:
 
 ## First Concrete Slice
 
-Use CTA as the prototype for sacred product DOM:
+Use CTA as the prototype for truthful pruned export:
 
 1. Add Render Proof tab for CTA.
-2. Mount exact export HTML/CSS.
-3. Add Solid runtime render from the same emission plan.
-4. Move live CTA preview onto the same product DOM/CSS without changing authored recipe values.
-5. Move CTA editor diagnostics into RAM.
+2. Classify current CTA editor visual DOM/CSS.
+3. Move CTA editor diagnostics into RAM.
+4. Export by pruning editor-only metadata from the classified visual DOM/CSS.
+5. Mount exact pruned export HTML/CSS.
 6. Compare preview/export/runtime.
-7. Use proof output to fix preview/emitter/runtime bugs.
+7. Use proof output to fix classifier/pruner/runtime bugs.
