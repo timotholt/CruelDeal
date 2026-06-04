@@ -30,8 +30,44 @@ import {
   tintColors,
 } from './surfaceTokens';
 
+// Default look values — the single source for the numbers that define a
+// surface's rest appearance. Fields whose "unset" default is plain 0 are left
+// as literal `?? 0` at their sites (0 is self-documenting and several act as
+// enable sentinels, e.g. drop-shadow geometry and glass blur gate on an
+// explicit non-zero opt-in before their value default applies).
+const SURFACE_DEFAULTS = {
+  radius: 7,
+  bevelSize: 11,
+  textureStrength: 100,
+  textureScale: 512,
+  tintStrength: 32,
+  glassOpacity: 42,
+  glassReflectionOpacity: 100,
+  glassBlur: 10,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 34,
+  glassHighlightY: 10,
+  shadowOpacity: 42,
+  shadowBlur: 24,
+  shadowX: 8,
+  shadowY: 12,
+  lightStrength: 20,
+  darkStrength: 32,
+  borderOpacity: 34,
+  edgeWearWidth: 5,
+  edgeWearScale: 256,
+  glowStrength: 42,
+  cornerSize: 18,
+  contentOpacity: 100,
+  textSizeRem: 0.8125,
+  fontWeight: 700,
+  emissionLength: 42,
+  emissionThickness: 1,
+  emissionBlipSize: 12,
+} as const;
+
 const hasTint = (options: SurfaceOptions) => (
-  !!options.tint && options.tint !== 'none' && (options.tintStrength ?? 32) > 0
+  !!options.tint && options.tint !== 'none' && (options.tintStrength ?? SURFACE_DEFAULTS.tintStrength) > 0
 );
 
 const hasGlass = (options: SurfaceOptions) => (
@@ -39,7 +75,7 @@ const hasGlass = (options: SurfaceOptions) => (
 );
 
 const hasGlassWash = (options: SurfaceOptions) => (
-  hasGlass(options) && (options.glassOpacity ?? 42) > 0
+  hasGlass(options) && (options.glassOpacity ?? SURFACE_DEFAULTS.glassOpacity) > 0
 );
 
 const hasGlassBlur = (options: SurfaceOptions) => (
@@ -56,21 +92,21 @@ const hasDropShadow = (options: SurfaceOptions) => (
 
 const hasTextureLayer = (options: SurfaceOptions) => (
   (options.texture || 'road012a') !== 'none'
-  && (options.textureStrength ?? 100) > 0
+  && (options.textureStrength ?? SURFACE_DEFAULTS.textureStrength) > 0
 );
 
 const hasMaterialBase = (options: SurfaceOptions) => (
   (options.material || 'white') !== 'none'
-  && !((options.texture || 'road012a') !== 'none' && (options.textureStrength ?? 100) >= 100)
+  && !((options.texture || 'road012a') !== 'none' && (options.textureStrength ?? SURFACE_DEFAULTS.textureStrength) >= 100)
 );
 
 const hasGradientLayer = (options: SurfaceOptions) => (
   (options.gradient || 'both') !== 'none'
-  && ((options.lightStrength ?? 20) > 0 || (options.darkStrength ?? 32) > 0)
+  && ((options.lightStrength ?? SURFACE_DEFAULTS.lightStrength) > 0 || (options.darkStrength ?? SURFACE_DEFAULTS.darkStrength) > 0)
 );
 
 const hasBorderLayer = (options: SurfaceOptions) => (
-  (options.borderEnabled ?? true) && resolveBorder(options.border).length > 0 && (options.borderOpacity ?? 34) > 0
+  (options.borderEnabled ?? true) && resolveBorder(options.border).length > 0 && (options.borderOpacity ?? SURFACE_DEFAULTS.borderOpacity) > 0
 );
 
 const hasEdgeWearLayer = (options: SurfaceOptions) => (
@@ -106,7 +142,7 @@ const resolveBorder = (border: BorderSpec | undefined): EdgeName[] => {
 
 const hasGlow = (options: SurfaceOptions) => {
   if (!options.glow || options.glow === 'none') return false;
-  if ((options.glowStrength ?? 42) <= 0) return false;
+  if ((options.glowStrength ?? SURFACE_DEFAULTS.glowStrength) <= 0) return false;
   return resolveCorners(options.corners).length > 0 || resolveEdges(options.edgeHighlight).length > 0;
 };
 
@@ -166,13 +202,13 @@ const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
 
 const shapeVars = (options: SurfaceOptions, bevelCorners: CornerName[]) => {
   const baseVars: Record<string, CssVarValue> = {
-    '--surface-radius': `${options.radius ?? 7}px`,
+    '--surface-radius': `${options.radius ?? SURFACE_DEFAULTS.radius}px`,
   };
   if (!bevelCorners.length) return cssVars(baseVars);
 
   return cssVars({
     ...baseVars,
-    '--bevel-size': `${options.bevelSize ?? 11}px`,
+    '--bevel-size': `${options.bevelSize ?? SURFACE_DEFAULTS.bevelSize}px`,
     '--corner-radius-tl': bevelCorners.includes('top-left') ? 'var(--bevel-size)' : 'var(--surface-radius)',
     '--corner-radius-tr': bevelCorners.includes('top-right') ? 'var(--bevel-size)' : 'var(--surface-radius)',
     '--corner-radius-br': bevelCorners.includes('bottom-right') ? 'var(--bevel-size)' : 'var(--surface-radius)',
@@ -192,8 +228,8 @@ const textureVars = (options: SurfaceOptions) => {
   if (!hasTextureLayer(options)) return {};
   const textureId = options.texture || 'road012a';
   return cssVars({
-    '--texture-strength': `${(options.textureStrength ?? 100) / 100}`,
-    '--texture-scale': `${options.textureScale ?? 512}px`,
+    '--texture-strength': `${(options.textureStrength ?? SURFACE_DEFAULTS.textureStrength) / 100}`,
+    '--texture-scale': `${options.textureScale ?? SURFACE_DEFAULTS.textureScale}px`,
     '--texture-image': `url("${getTextureOption(textureId).url}")`,
   });
 };
@@ -213,41 +249,41 @@ const tintVars = (options: SurfaceOptions) => {
   const tint = tintColors[options.tint || 'none'];
   return cssVars({
     '--tint-rgb': tint.rgb,
-    '--tint-alpha': `${(options.tintStrength ?? 32) / 100}`,
+    '--tint-alpha': `${(options.tintStrength ?? SURFACE_DEFAULTS.tintStrength) / 100}`,
   });
 };
 
 const glassVars = (options: SurfaceOptions) => {
   if (!hasGlassWash(options)) return {};
   return cssVars({
-    '--glass-alpha': `${(options.glassOpacity ?? 42) / 100}`,
-    '--glass-reflection-alpha': `${(options.glassReflectionOpacity ?? 100) / 100}`,
-    '--glass-highlight-width': hasGlassShine(options) ? `${options.glassHighlightWidth ?? 100}%` : undefined,
-    '--glass-highlight-height': hasGlassShine(options) ? `${options.glassHighlightHeight ?? 34}%` : undefined,
-    '--glass-highlight-y': hasGlassShine(options) ? `${options.glassHighlightY ?? 10}%` : undefined,
+    '--glass-alpha': `${(options.glassOpacity ?? SURFACE_DEFAULTS.glassOpacity) / 100}`,
+    '--glass-reflection-alpha': `${(options.glassReflectionOpacity ?? SURFACE_DEFAULTS.glassReflectionOpacity) / 100}`,
+    '--glass-highlight-width': hasGlassShine(options) ? `${options.glassHighlightWidth ?? SURFACE_DEFAULTS.glassHighlightWidth}%` : undefined,
+    '--glass-highlight-height': hasGlassShine(options) ? `${options.glassHighlightHeight ?? SURFACE_DEFAULTS.glassHighlightHeight}%` : undefined,
+    '--glass-highlight-y': hasGlassShine(options) ? `${options.glassHighlightY ?? SURFACE_DEFAULTS.glassHighlightY}%` : undefined,
   });
 };
 
 const blurVars = (options: SurfaceOptions) => {
   if (!hasGlassBlur(options)) return {};
   return cssVars({
-    '--glass-blur': `${options.glassBlur ?? 10}px`,
-    '--glass-blur-scale': `${(options.glassBlur ?? 10) / 240}`,
+    '--glass-blur': `${options.glassBlur ?? SURFACE_DEFAULTS.glassBlur}px`,
+    '--glass-blur-scale': `${(options.glassBlur ?? SURFACE_DEFAULTS.glassBlur) / 240}`,
   });
 };
 
 const shadowVars = (options: SurfaceOptions) => {
   if (!hasDropShadow(options)) return {};
   return cssVars({
-    '--surface-drop-shadow': `${options.shadowX ?? 8}px ${options.shadowY ?? 12}px ${options.shadowBlur ?? 24}px ${options.shadowSpread ?? 0}px rgb(0 0 0 / ${(options.shadowOpacity ?? 42) / 100})`,
+    '--surface-drop-shadow': `${options.shadowX ?? SURFACE_DEFAULTS.shadowX}px ${options.shadowY ?? SURFACE_DEFAULTS.shadowY}px ${options.shadowBlur ?? SURFACE_DEFAULTS.shadowBlur}px ${options.shadowSpread ?? 0}px rgb(0 0 0 / ${(options.shadowOpacity ?? SURFACE_DEFAULTS.shadowOpacity) / 100})`,
   });
 };
 
 const gradientVars = (options: SurfaceOptions) => {
   if (!hasGradientLayer(options)) return {};
   return cssVars({
-    '--light-alpha': `${(options.lightStrength ?? 20) / 100}`,
-    '--dark-alpha': `${(options.darkStrength ?? 32) / 100}`,
+    '--light-alpha': `${(options.lightStrength ?? SURFACE_DEFAULTS.lightStrength) / 100}`,
+    '--dark-alpha': `${(options.darkStrength ?? SURFACE_DEFAULTS.darkStrength) / 100}`,
   });
 };
 
@@ -262,7 +298,7 @@ const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
   };
   return cssVars({
     '--border-rgb': borderRgb,
-    '--border-alpha': `${(options.borderOpacity ?? 34) / 100}`,
+    '--border-alpha': `${(options.borderOpacity ?? SURFACE_DEFAULTS.borderOpacity) / 100}`,
     '--border-top': borderEdges.includes('top') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
     '--border-right': borderEdges.includes('right') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
     '--border-bottom': borderEdges.includes('bottom') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
@@ -275,8 +311,8 @@ const edgeWearVars = (options: SurfaceOptions) => {
   if (!hasEdgeWearLayer(options)) return {};
   return cssVars({
     '--edge-wear-alpha': `${(options.edgeWearOpacity ?? 0) / 100}`,
-    '--edge-wear-width': `${options.edgeWearWidth ?? 5}px`,
-    '--edge-wear-scale': `${options.edgeWearScale ?? 256}px`,
+    '--edge-wear-width': `${options.edgeWearWidth ?? SURFACE_DEFAULTS.edgeWearWidth}px`,
+    '--edge-wear-scale': `${options.edgeWearScale ?? SURFACE_DEFAULTS.edgeWearScale}px`,
     '--edge-wear-image': `url("${getEdgeTextureOption(options.edgeWearTexture as EdgeTextureKind).url}")`,
   });
 };
@@ -284,7 +320,7 @@ const edgeWearVars = (options: SurfaceOptions) => {
 const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeName[]) => {
   if (!hasGlow(options)) return {};
   const glow = glowColors[options.glow || 'gold'];
-  const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? 42)) / 100;
+  const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? SURFACE_DEFAULTS.glowStrength)) / 100;
   const glowIntensity = Math.pow(glowPower, 0.58);
   const glowAlpha = Math.min(1, 0.18 + glowIntensity * 0.92);
   const glowCore = 2 + Math.round(glowIntensity * 8);
@@ -296,7 +332,7 @@ const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeNam
   const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
 
   return cssVars({
-    '--corner-size': `${options.cornerSize ?? 18}px`,
+    '--corner-size': `${options.cornerSize ?? SURFACE_DEFAULTS.cornerSize}px`,
     '--glow-alpha': `${glowAlpha}`,
     '--glow-core': `${glowCore}px`,
     '--glow-mid': `${glowMid}px`,
@@ -333,7 +369,7 @@ const contentVars = (options: SurfaceOptions) => {
   const iconTone = options.iconTone && options.iconTone !== 'inherit' ? options.iconTone : contentTone;
   const contentRgb = tintColors[contentTone].rgb;
   const iconRgb = tintColors[iconTone].rgb;
-  const contentAlpha = (options.contentOpacity ?? 100) / 100;
+  const contentAlpha = (options.contentOpacity ?? SURFACE_DEFAULTS.contentOpacity) / 100;
   const textEmboss = options.textEmboss !== false;
   const contentGlowStrength = options.contentGlowStrength ?? 0;
   const iconGlowStrength = options.iconGlowStrength ?? 0;
@@ -345,7 +381,7 @@ const contentVars = (options: SurfaceOptions) => {
 
   return cssVars({
     '--content-font-family': options.textFontFamily || 'inherit',
-    '--content-size': `${options.textSizeRem ?? 0.8125}rem`,
+    '--content-size': `${options.textSizeRem ?? SURFACE_DEFAULTS.textSizeRem}rem`,
     '--content-alpha': `${contentAlpha}`,
     '--content-rgb': contentRgb,
     '--icon-rgb': iconRgb,
@@ -356,7 +392,7 @@ const contentVars = (options: SurfaceOptions) => {
     '--content-glow-shadow': contentGlowStrength > 0 ? '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))' : undefined,
     '--icon-glow-shadow': iconGlowStrength > 0 ? 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))' : undefined,
     '--icon-color': `rgb(${iconRgb} / ${contentAlpha})`,
-    '--content-font-weight': `${options.fontWeight ?? 700}`,
+    '--content-font-weight': `${options.fontWeight ?? SURFACE_DEFAULTS.fontWeight}`,
     '--content-font-style': options.fontStyle || 'italic',
     '--content-text-transform': options.textTransform || 'uppercase',
     '--content-letter-spacing': `${options.letterSpacing ?? 0}em`,
@@ -373,9 +409,9 @@ const emissionVars = (options: SurfaceOptions) => {
   return cssVars({
     '--emission-rgb': emissionRgb,
     '--emission-alpha': `${(options.emissionStrength ?? 0) / 100}`,
-    '--emission-length': `${options.emissionLength ?? 42}%`,
-    '--emission-thickness': `${options.emissionThickness ?? 1}px`,
-    '--emission-blip-size': `${options.emissionBlipSize ?? 12}px`,
+    '--emission-length': `${options.emissionLength ?? SURFACE_DEFAULTS.emissionLength}%`,
+    '--emission-thickness': `${options.emissionThickness ?? SURFACE_DEFAULTS.emissionThickness}px`,
+    '--emission-blip-size': `${options.emissionBlipSize ?? SURFACE_DEFAULTS.emissionBlipSize}px`,
   });
 };
 

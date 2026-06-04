@@ -1,3 +1,4 @@
+import { fault } from '../../../utils/logger';
 import type { MaterialTone } from './MaterialRecipeTypes';
 import type { BorderColorKind, CornerName, MaterialKind } from './surfaceSchema';
 
@@ -83,9 +84,16 @@ export const borderColorRgb: Record<Exclude<BorderColorKind, 'custom'>, string> 
   gray: rgb.pureGray,
 };
 
-export const normalizeHexColor = (value: string | undefined) => (
-  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#808080'
-);
+const FALLBACK_HEX = '#808080';
+
+// undefined means "no custom color set" -> use the fallback silently.
+// A present-but-malformed string is a real authoring/wire error -> fault.
+export const normalizeHexColor = (value: string | undefined) => {
+  if (value === undefined) return FALLBACK_HEX;
+  if (/^#[0-9a-f]{6}$/i.test(value)) return value;
+  fault('surface.color.invalidHex', { value });
+  return FALLBACK_HEX;
+};
 
 export const hexToRgb = (value: string | undefined) => {
   const hex = normalizeHexColor(value).slice(1);

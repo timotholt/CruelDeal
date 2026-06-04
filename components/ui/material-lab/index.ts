@@ -5,5 +5,6 @@ export * from './MaterialRecipeEditor';
 export * from './MaterialRecipeTypes';
 export * from './MaterialSurfaceHost';
 export * from './MaterialWorkbenchLayout';
+export * from './surfaceValidate';
 export * from './materialPresets';
 export * from './TextureOptions';

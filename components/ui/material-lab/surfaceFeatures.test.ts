@@ -81,4 +81,98 @@ assert.equal(surfaceLayerFlags({ dropShadow: true }).edgeWear, false);
 assert.equal((surfaceStyle({ dropShadow: true }) as Record<string, string>)['--surface-drop-shadow'], undefined);
 assert.ok((surfaceStyle({ dropShadow: true, shadowOpacity: 50, shadowBlur: 6 }) as Record<string, string>)['--surface-drop-shadow']);
 
+// --- Default value lock ------------------------------------------------------
+// Pins every default-driven CSS variable so a future defaults refactor is
+// provably behavior-preserving. Each block enables one feature and leaves its
+// numeric fields unset, forcing the built-in defaults to surface.
+const styleOf = (options: SurfaceOptions) => surfaceStyle(options) as Record<string, string>;
+
+// shape
+assert.equal(styleOf({})['--surface-radius'], '7px');
+assert.equal(styleOf({ bevelCorners: ['top-left'] })['--bevel-size'], '11px');
+
+// texture
+const tex = styleOf({});
+assert.equal(tex['--texture-strength'], '1');
+assert.equal(tex['--texture-scale'], '512px');
+
+// material base
+assert.equal(styleOf({ texture: 'none', material: 'white' })['--material-base-color'], '#ffffff');
+assert.equal(styleOf({ texture: 'none', material: 'custom' })['--material-base-color'], '#808080');
+
+// tint
+const tint = styleOf({ tint: 'gold' });
+assert.equal(tint['--tint-rgb'], '248 215 112');
+assert.equal(tint['--tint-alpha'], '0.32');
+
+// glass
+const glass = styleOf({ glass: true });
+assert.equal(glass['--glass-alpha'], '0.42');
+assert.equal(glass['--glass-reflection-alpha'], '1');
+assert.equal(glass['--glass-highlight-width'], '100%');
+assert.equal(glass['--glass-highlight-height'], '34%');
+assert.equal(glass['--glass-highlight-y'], '10%');
+
+// drop shadow: opacity AND >=1 non-zero geometry field are explicit opt-ins;
+// the remaining geometry fields then fall back to their defaults.
+// blur=6 set -> locks X=8, Y=12, spread=0 defaults.
+assert.equal(
+  styleOf({ dropShadow: true, shadowOpacity: 50, shadowBlur: 6 })['--surface-drop-shadow'],
+  '8px 12px 6px 0px rgb(0 0 0 / 0.5)',
+);
+// x=1 set -> locks Y=12, blur=24, spread=0 defaults.
+assert.equal(
+  styleOf({ dropShadow: true, shadowOpacity: 50, shadowX: 1 })['--surface-drop-shadow'],
+  '1px 12px 24px 0px rgb(0 0 0 / 0.5)',
+);
+
+// gradient
+const grad = styleOf({});
+assert.equal(grad['--light-alpha'], '0.2');
+assert.equal(grad['--dark-alpha'], '0.32');
+
+// border
+const border = styleOf({});
+assert.equal(border['--border-alpha'], '0.34');
+assert.equal(border['--border-rgb'], '235 226 205');
+
+// edge wear (width/scale defaults; opacity is an explicit opt-in)
+const wear = styleOf({ edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 50 });
+assert.equal(wear['--edge-wear-alpha'], '0.5');
+assert.equal(wear['--edge-wear-width'], '5px');
+assert.equal(wear['--edge-wear-scale'], '256px');
+
+// glow (cornerSize default; glowStrength defaults to 42 so glow is reachable unset)
+const glow = styleOf({ glow: 'gold', corners: 'all' });
+assert.equal(glow['--corner-size'], '18px');
+assert.ok(glow['--glow-alpha']);
+
+// content
+const content = styleOf({});
+assert.equal(content['--content-size'], '0.8125rem');
+assert.equal(content['--content-alpha'], '1');
+assert.equal(content['--content-rgb'], '255 255 255');
+assert.equal(content['--content-color'], 'rgb(255 255 255 / 1)');
+assert.equal(content['--content-shadow'], '0 2px 6px rgb(0 0 0 / 0.64)');
+assert.equal(content['--content-font-weight'], '700');
+assert.equal(content['--content-font-style'], 'italic');
+assert.equal(content['--content-text-transform'], 'uppercase');
+assert.equal(content['--content-letter-spacing'], '0em');
+assert.equal(content['--content-align'], 'center');
+assert.equal(content['--content-justify'], 'center');
+assert.equal(content['--content-x'], '0px');
+assert.equal(content['--content-y'], '0px');
+
+// emission
+const emission = styleOf({ emission: 'line', emissionStrength: 50 });
+assert.equal(emission['--emission-rgb'], '0 0 0');
+assert.equal(emission['--emission-alpha'], '0.5');
+assert.equal(emission['--emission-length'], '42%');
+assert.equal(emission['--emission-thickness'], '1px');
+assert.equal(emission['--emission-blip-size'], '12px');
+
+// motion (no vars unless explicitly non-identity)
+assert.equal(styleOf({})['--state-scale'], undefined);
+assert.equal(styleOf({})['--state-translate-y'], undefined);
+
 console.log('Surface feature pipeline tests passed');
