@@ -90,7 +90,7 @@ Use existing interaction role values where possible:
 - `selectable` -> hover, pressed, and active.
 - `container` and `text` -> normally hover/focus only if the editor mode allows it, but no pressed feedback by default.
 
-## Phase 2: Add One Generic Target Frame
+## Phase 2: Add One Generic Target Shell
 
 Add a component in `MainMaterialPreviewScreen.tsx`:
 
@@ -110,10 +110,10 @@ const PreviewTargetFrame = (props: PreviewTargetFrameProps) => (
 
 Updated architecture rule:
 
-- Do not wrap migrated product components in `PreviewTargetFrame` if the wrapper exists only to carry editor metadata.
+- If a migrated target needs an editor wrapper, that wrapper must be an outside editor shell, not a product-internal node.
 - Prefer passing `targetId`, role, and selection handlers through Solid props/closures.
-- If a wrapper is temporarily needed during migration, treat it as legacy debt and remove it when the target family moves to product DOM.
-- If a target id is temporarily emitted as `data-material-target-id`, document it as a migration compromise and do not export it.
+- If a wrapper is temporarily needed inside the product subtree during migration, treat it as legacy debt and remove it when the target family moves to product DOM.
+- If a target id is temporarily emitted as `data-material-target-id` inside product DOM, document it as a migration compromise and do not export it.
 
 Then gradually replace ad hoc wrappers:
 

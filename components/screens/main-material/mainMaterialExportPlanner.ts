@@ -4,6 +4,7 @@ import {
   serializeEmissionPlanCss,
   serializeEmissionPlanHtml,
   type EmissionMetrics,
+  type EmittedLayer,
   type MaterialEmissionPlan,
   type MaterialRecipe,
   type MaterialRecipeState,
@@ -115,21 +116,15 @@ export const createMainMaterialExportPlan = <
     ...surfaceProps,
     size: 'sm',
     fullWidth: true,
-    exportVariant: 'contract',
     renderMode: 'export',
   }, content, 'export');
+  const tagFitLabel = (layer: EmittedLayer): EmittedLayer => (
+    layer.text === content
+      ? { ...layer, classNames: [...(layer.classNames || []), 'material-text-content--fit'] }
+      : { ...layer, children: layer.children?.map(tagFitLabel) }
+  );
   const fittedPlan = explicitFitting
-    ? {
-      ...plan,
-      host: {
-        ...plan.host,
-        children: plan.host.children?.map((child) => (
-          child.text === content
-            ? { ...child, classNames: [...(child.classNames || []), 'material-text-content--fit'] }
-            : child
-        )),
-      },
-    }
+    ? { ...plan, host: { ...plan.host, children: plan.host.children?.map(tagFitLabel) } }
     : plan;
   return createExportResult('feed-button', fittedPlan);
 };

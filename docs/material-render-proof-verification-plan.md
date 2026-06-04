@@ -5,7 +5,7 @@ Date: 2026-06-03
 
 ## Goal
 
-Build a verification framework that proves export/runtime material UI is derived from the same visual DOM/CSS as the editor preview, instead of merely serializing plausible alternate DOM/CSS.
+Build a verification framework that proves export/runtime material UI uses the same product DOM/CSS subtree as the editor preview, instead of merely serializing plausible alternate DOM/CSS.
 
 The framework must let both a human and Codex inspect failures efficiently.
 
@@ -21,9 +21,9 @@ Preview product render
 
 ## Problem
 
-The inspector currently shows export DOM/CSS, but the live editor can still render legacy editor DOM. That means export output is inspectable, but not proven and not trusted.
+The inspector currently shows export DOM/CSS, but the live editor can still render legacy editor DOM around or inside the product target. That means export output is inspectable, but not proven and not trusted.
 
-Export is accepted only when it can be mounted and compared against the live preview render. For the first migration pass, export should be a pruned version of the current editor visual DOM/CSS, not an unrelated minimal structure.
+Export is accepted only when it can be mounted and compared against the live preview product subtree. For the first migration pass, export should serialize that product subtree directly after editor-owned metadata has been moved outside the boundary. It must not be an unrelated minimal structure.
 
 ## Proof Surfaces
 
@@ -35,8 +35,8 @@ Render Proof
 
 For the selected target, render:
 
-- **Preview Render:** current live preview target.
-- **Pruned Export Render:** exact serialized export HTML/CSS mounted in a proof container. Its structure should be recognizable as the preview visual DOM minus editor-owned garbage.
+- **Preview Product Render:** current live preview product subtree, excluding editor shell UI.
+- **Export Render:** exact serialized export HTML/CSS mounted in a proof container. Its structure should be recognizable as the preview product subtree.
 - **Solid Runtime Render:** trusted SolidJS runtime renderer output from the same emission plan.
 - **Diff:** measurement and pixel comparison output.
 
@@ -53,7 +53,7 @@ Export proof must mount the exact serialized export output:
 
 The proof harness may provide sizing and isolation containers, but it must not patch the exported button's look to make the test pass.
 
-The proof harness must audit both preview and export. If export contains editor-only storage/diagnostic nodes/classes/attrs, proof fails. If export removes active visual layers before equivalence is proven, proof fails.
+The proof harness must audit both preview product subtree and export. If either contains editor-only storage/diagnostic nodes/classes/attrs, proof fails. If export removes active visual layers before equivalence is proven, proof fails.
 
 ## Proof Container
 
@@ -173,9 +173,9 @@ The verifier should classify likely causes:
 - **border/shadow:** border sides, opacity, inset highlight, drop shadow
 - **state:** hover, pressed, active, disabled missing or wrong
 - **runtime:** Solid render differs from export HTML render
-- **preview pollution:** live preview still stores editor knowledge in permanent attrs/classes/nodes that should be moved to RAM
+- **preview pollution:** live preview product subtree still stores editor knowledge in permanent attrs/classes/nodes that should be moved to RAM or an external editor shell
 - **export pollution:** export/runtime contains editor-only attrs/classes/nodes
-- **false minimization:** export structure differs from preview because active visual layers were optimized away without proof
+- **false minimization:** export structure differs from preview product subtree because active visual layers were optimized away without proof
 
 ## Inspector Output
 
@@ -204,7 +204,7 @@ It should also expose:
 
 1. Run proof for selected target.
 2. Read failure category.
-3. Fix classifier, pruner, or runtime serializer, not the authored recipe, unless the recipe is invalid.
+3. Fix product boundary, editor shell, export serializer, or runtime renderer, not the authored recipe, unless the recipe is invalid.
 4. Rerun proof.
 5. Add or update golden test.
 6. Repeat until accepted.
@@ -223,7 +223,7 @@ CTA export/runtime is accepted when:
 
 - exact export HTML/CSS mounts in proof surface
 - Solid runtime render mounts in proof surface
-- export is a pruned version of the current editor visual DOM/CSS
+- export is the same product subtree/emission plan used by the editor preview
 - rest pixel diff is below threshold
 - hover state is verified
 - pressed state is verified
@@ -238,9 +238,9 @@ CTA export/runtime is accepted when:
 Build `Render Proof` for selected CTA only:
 
 1. Add proof tab.
-2. Classify the live preview CTA DOM/CSS.
-3. Mount exact pruned export HTML/CSS in a same-sized proof pane.
-4. Mount Solid runtime renderer from the same pruned artifact/plan when available.
+2. Locate the live preview CTA product subtree and separately audit the editor shell.
+3. Mount exact export HTML/CSS in a same-sized proof pane.
+4. Mount Solid runtime renderer from the same product component/emission plan when available.
 5. Compare bounding boxes and computed styles.
 6. Add screenshot crop and pixel diff.
 7. Show diagnostic summary in inspector.

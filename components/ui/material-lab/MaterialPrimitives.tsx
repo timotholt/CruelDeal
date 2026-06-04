@@ -772,6 +772,47 @@ const surfaceLayerFlags = (options: SurfaceOptions): SurfaceLayerFlags => ({
   edgeWear: hasEdgeWearLayer(options),
 });
 
+const surfaceLayerSpan = (className: string, children?: EmittedLayer[]): EmittedLayer => ({
+  tag: 'span',
+  classNames: [className],
+  attrs: { 'aria-hidden': 'true' },
+  ...(children ? { children } : {}),
+});
+
+// Single source of truth for the decorative surface layer spans.
+// MaterialSurface renders this list (common over-glass path) and the button
+// emission plan serializes the same list, so editor preview, runtime, and
+// export share one DOM structure. Keep ordering in sync with the
+// SurfaceBaseLayers/SurfaceOverlayLayers fallback in MaterialSurface.
+export const surfaceLayerEmissions = (options: SurfaceOptions): EmittedLayer[] => {
+  const flags = surfaceLayerFlags(options);
+  const layers: EmittedLayer[] = [];
+  if (flags.material) layers.push(surfaceLayerSpan('cd-surface__material'));
+  if (flags.texture) layers.push(surfaceLayerSpan('cd-surface__texture'));
+  if (flags.tinted) layers.push(surfaceLayerSpan('cd-surface__tint'));
+  if (flags.gradient) layers.push(surfaceLayerSpan('cd-surface__gradient'));
+  if (flags.glass) layers.push(surfaceLayerSpan('cd-surface__glass'));
+  if (flags.glowing) layers.push(surfaceLayerSpan('cd-surface__glow'));
+  if (flags.emitting) layers.push(surfaceLayerSpan('cd-surface__emission'));
+  if (flags.border) layers.push(surfaceLayerSpan('cd-surface__border'));
+  if (flags.edgeWear) layers.push(surfaceLayerSpan('cd-surface__edge-wear'));
+  if (flags.glowing) {
+    layers.push(surfaceLayerSpan('cd-surface__edge'));
+    layers.push({
+      tag: 'span',
+      classNames: ['cd-surface__corners'],
+      attrs: { 'aria-hidden': 'true' },
+      children: [
+        { tag: 'span', classNames: ['cd-surface__corner-arc', 'cd-surface__corner-arc--tl'] },
+        { tag: 'span', classNames: ['cd-surface__corner-arc', 'cd-surface__corner-arc--tr'] },
+        { tag: 'span', classNames: ['cd-surface__corner-arc', 'cd-surface__corner-arc--br'] },
+        { tag: 'span', classNames: ['cd-surface__corner-arc', 'cd-surface__corner-arc--bl'] },
+      ],
+    });
+  }
+  return layers;
+};
+
 const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
   const context = createSurfaceFeatureContext(options);
   return surfaceFeatures.reduce<JSX.CSSProperties>((style, feature) => ({
@@ -817,91 +858,53 @@ const createButtonLayerPlans = (options: SurfaceOptions): MaterialLayerPlan[] =>
   ];
 };
 
-const buttonExportCssRules = (plan: MaterialEmissionPlan) => {
-  const activeLayer = (id: string) => plan.layers.some((layer) => layer.id === id && layer.active);
-  const backgroundLayers = [
-    activeLayer('gradient') ? 'linear-gradient(180deg, rgb(255 255 255 / var(--light-alpha, 0)) 0%, rgb(255 255 255 / 0) 42%, rgb(0 0 0 / var(--dark-alpha, 0)) 100%)' : '',
-    activeLayer('tint') ? 'rgb(var(--tint-rgb) / var(--tint-alpha))' : '',
-    activeLayer('base') ? 'var(--material-base-color, #ffffff)' : '',
-  ].filter(Boolean);
-  const backgroundSizes = [
-    activeLayer('gradient') ? '100% 100%' : '',
-    activeLayer('tint') ? '100% 100%' : '',
-    activeLayer('base') ? 'auto' : '',
-  ].filter(Boolean);
-  const backgroundBlendModes = [
-    activeLayer('gradient') ? 'normal' : '',
-    activeLayer('tint') ? 'normal' : '',
-    activeLayer('base') ? 'normal' : '',
-  ].filter(Boolean);
-  const boxShadowParts = [
-    activeLayer('border') ? 'inset 0 1px 0 var(--border-top-shadow, transparent)' : '',
-    activeLayer('border') ? 'inset 0 -1px 0 var(--border-bottom-shadow, transparent)' : '',
-    activeLayer('shadow') ? 'var(--surface-drop-shadow, none)' : '',
-  ].filter(Boolean);
-  return [
-    `.cd-button { position: relative; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--surface-radius, 7px); color: var(--content-color, currentColor); font: var(--content-font-style, inherit) var(--content-font-weight, 700) var(--content-size, 0.8125rem) var(--content-font-family, inherit); letter-spacing: var(--content-letter-spacing, 0); text-transform: var(--content-text-transform, none); text-shadow: var(--content-shadow, none); overflow: hidden; }`,
-    `.cd-button--contract { min-height: 100%; width: 100%; }`,
-    backgroundLayers.length ? `.cd-button { background: ${backgroundLayers.join(', ')}; background-size: ${backgroundSizes.join(', ')}; background-blend-mode: ${backgroundBlendModes.join(', ')}; }` : '',
-    activeLayer('glass') ? `.cd-button { backdrop-filter: blur(var(--glass-blur, 0)); }` : '',
-    activeLayer('border') ? `.cd-button { border-color: var(--border-top, transparent) var(--border-right, transparent) var(--border-bottom, transparent) var(--border-left, transparent); border-style: solid; border-width: 1px; }` : '',
-    boxShadowParts.length ? `.cd-button { box-shadow: ${boxShadowParts.join(', ')}; }` : '',
-    activeLayer('texture') ? `.cd-button::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: var(--texture-strength, 1); background-image: var(--texture-image); background-size: var(--texture-scale, 256px); mix-blend-mode: multiply; }` : '',
-    activeLayer('edgeWear') ? `.cd-button::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: var(--edge-wear-alpha, 0); background-image: var(--edge-wear-image); background-size: var(--edge-wear-scale, 256px); mask: linear-gradient(#000, transparent var(--edge-wear-width, 5px), transparent calc(100% - var(--edge-wear-width, 5px)), #000); }` : '',
-    `.cd-button > span { position: relative; z-index: 1; }`,
-  ].filter(Boolean);
-};
-
-const buttonExportStyle = (options: SurfaceOptions) => {
-  const style = compactStyle(surfaceStyle(options) as Record<string, string | number>);
-  [
-    '--icon-rgb',
-    '--icon-color',
-    '--icon-glow-alpha',
-    '--icon-glow-shadow',
-    '--content-font-style',
-    '--content-align',
-    '--content-justify',
-    '--content-x',
-    '--content-y',
-  ].forEach((key) => {
-    delete style[key];
-  });
-  return style;
-};
+// Mirror the surface massaging MaterialButton applies before MaterialSurface so
+// the emitted plan and the live button derive identical classes/style/state.
+const buttonSurfaceOptions = (
+  options: SurfaceOptions & { fullWidth?: boolean; pressed?: boolean },
+): SurfaceOptions => ({
+  ...options,
+  interactive: true,
+  selected: options.selected || options.pressed,
+  visualState: options.visualState
+    || (options.pressed ? 'pressed' : options.selected ? 'active' : 'rest'),
+});
 
 export const createMaterialButtonEmissionPlan = (
-  options: SurfaceOptions & { size?: ButtonSize; fullWidth?: boolean; disabled?: boolean; exportVariant?: string },
+  options: SurfaceOptions & { size?: ButtonSize; fullWidth?: boolean; pressed?: boolean; disabled?: boolean; exportVariant?: string },
   label: string,
   mode: MaterialRenderMode = options.renderMode || 'export',
 ): MaterialEmissionPlan => {
-  const variant = options.exportVariant || (options.size === 'cta' ? 'cta' : options.size || 'md');
-  const classNames = mode === 'export'
-    ? ['cd-button', `cd-button--${variant}`]
-    : surfaceClass(options, `cd-button cd-button--${options.size || 'md'} ${options.fullWidth ? 'cd-button--full' : ''}`).split(/\s+/);
-  const hostStyle = mode === 'export'
-    ? buttonExportStyle(options)
-    : surfaceStyle(options) as Record<string, string | number>;
-  const layers = createButtonLayerPlans(options);
+  const size = options.size || 'md';
+  const surfaceOptions = buttonSurfaceOptions(options);
+  const buttonClass = `cd-button cd-button--${size}${options.fullWidth ? ' cd-button--full' : ''}`;
+  const classNames = surfaceClass(surfaceOptions, buttonClass).split(/\s+/).filter(Boolean);
+  const hostStyle = compactStyle(surfaceStyle(surfaceOptions) as Record<string, string | number>);
+  const contentWrapper: EmittedLayer = {
+    tag: 'span',
+    classNames: ['cd-surface__content', 'cd-surface__content--over-glass', 'cd-button__content'],
+    children: label ? [{ tag: 'span', classNames: ['cd-button__label'], text: label }] : [],
+  };
   const host: MaterialEmissionPlan['host'] = {
     tag: 'button',
     classNames,
     attrs: {
       type: 'button',
       disabled: options.disabled || undefined,
+      'data-material-surface': 'button',
+      ...surfaceEmissionAttrs(surfaceOptions),
     },
     style: hostStyle,
-    children: label ? [{
-      tag: 'span',
-      classNames: mode === 'export' ? ['cd-button__label'] : ['cd-button__label', 'material-text-content'],
-      text: label,
-    }] : [],
+    children: [...surfaceLayerEmissions(surfaceOptions), contentWrapper],
   };
-  const plan = { mode, host, layers } satisfies MaterialEmissionPlan;
+  // Layers carry no per-layer emission DOM: the host children above are the
+  // product subtree, and the visual CSS is the shared cd-surface stylesheet.
   return {
-    ...plan,
-    cssRules: mode === 'export' ? buttonExportCssRules(plan) : [],
-  };
+    mode,
+    host,
+    layers: createButtonLayerPlans(surfaceOptions),
+    cssRules: [],
+  } satisfies MaterialEmissionPlan;
 };
 
 export const SurfaceLayers = (props: { tinted?: boolean; glass?: boolean; glowing?: boolean }) => (
@@ -957,6 +960,17 @@ export const SurfaceOverlayLayers = (props: { glass?: boolean; glowing?: boolean
   </>
 );
 
+const EmittedSurfaceSpan = (props: { layer: EmittedLayer }) => (
+  <span
+    class={(props.layer.classNames || []).join(' ')}
+    {...(props.layer.attrs as Record<string, string> | undefined)}
+  >
+    <For each={props.layer.children || []}>
+      {(child) => <EmittedSurfaceSpan layer={child} />}
+    </For>
+  </span>
+);
+
 const MaterialSurface = (props: MaterialSurfaceProps) => {
   const layers = createMemo(() => surfaceLayerFlags(props));
   const contentLayer = () => props.contentLayer || 'over-glass';
@@ -990,33 +1004,45 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
       }}
       disabled={props.disabled}
     >
-      <SurfaceBaseLayers
-        material={layers().material}
-        texture={!props.underGlass && layers().texture}
-        tinted={!props.underGlass && layers().tinted}
-        gradient={!props.underGlass && layers().gradient}
-      />
-      <Show when={props.underGlass}>
-        {underGlassContent()}
-      </Show>
-      <Show when={props.underGlass}>
-        <SurfaceBaseLayers
-          texture={layers().texture}
-          tinted={layers().tinted}
-          gradient={layers().gradient}
-        />
-      </Show>
-      <Show when={!props.underGlass && contentLayer() === 'under-glass'}>
-        {content('under-glass')}
-      </Show>
-      <SurfaceOverlayLayers
-        glass={layers().glass}
-        glowing={layers().glowing}
-        emitting={layers().emitting}
-        border={layers().border}
-        edgeWear={layers().edgeWear}
-      />
-      <Show when={props.underGlass || contentLayer() === 'over-glass'}>
+      <Show
+        when={!props.underGlass && contentLayer() === 'over-glass'}
+        fallback={(
+          <>
+            <SurfaceBaseLayers
+              material={layers().material}
+              texture={!props.underGlass && layers().texture}
+              tinted={!props.underGlass && layers().tinted}
+              gradient={!props.underGlass && layers().gradient}
+            />
+            <Show when={props.underGlass}>
+              {underGlassContent()}
+            </Show>
+            <Show when={props.underGlass}>
+              <SurfaceBaseLayers
+                texture={layers().texture}
+                tinted={layers().tinted}
+                gradient={layers().gradient}
+              />
+            </Show>
+            <Show when={!props.underGlass && contentLayer() === 'under-glass'}>
+              {content('under-glass')}
+            </Show>
+            <SurfaceOverlayLayers
+              glass={layers().glass}
+              glowing={layers().glowing}
+              emitting={layers().emitting}
+              border={layers().border}
+              edgeWear={layers().edgeWear}
+            />
+            <Show when={props.underGlass || contentLayer() === 'over-glass'}>
+              {content('over-glass')}
+            </Show>
+          </>
+        )}
+      >
+        <For each={surfaceLayerEmissions(props)}>
+          {(layer) => <EmittedSurfaceSpan layer={layer} />}
+        </For>
         {content('over-glass')}
       </Show>
     </Dynamic>

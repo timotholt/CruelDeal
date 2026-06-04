@@ -7,6 +7,10 @@ import {
   createMaterialButtonEmissionPlan,
 } from './MaterialPrimitives';
 
+// The button emission plan is the unified product subtree: the same cd-surface
+// classes, layer spans, and content wrapper that MaterialSurface renders live.
+// There is no separate flat/standalone export structure or hand-written CSS.
+
 const simplePlan = createMaterialButtonEmissionPlan({
   material: 'white',
   texture: 'none',
@@ -16,16 +20,16 @@ const simplePlan = createMaterialButtonEmissionPlan({
   edgeWearTexture: 'none',
   dropShadow: false,
   size: 'sm',
-  exportVariant: 'contract',
 }, 'View Contract', 'export');
 
 const simpleHtml = serializeEmissionPlanHtml(simplePlan);
-assert.match(simpleHtml, /<button class="cd-button cd-button--contract"/);
+// Host carries the shared cd-surface + cd-button classes, not a flat variant.
+assert.match(simpleHtml, /<button class="[^"]*\bcd-surface\b[^"]*\bcd-button\b[^"]*\bcd-button--sm\b/);
+// Label lives inside the cd-surface content wrapper.
+assert.match(simpleHtml, /<span class="cd-surface__content cd-surface__content--over-glass cd-button__content">/);
 assert.match(simpleHtml, /<span class="cd-button__label">View Contract<\/span>/);
-assert.doesNotMatch(simpleHtml, /cd-layer/);
-assert.doesNotMatch(simpleHtml, /material-text-content/);
-assert.equal(simplePlan.layers.find((layer) => layer.id === 'texture')?.emission, null);
-assert.equal(simplePlan.layers.find((layer) => layer.id === 'border')?.emission, null);
+// No standalone export CSS is emitted; the shared stylesheet owns the visuals.
+assert.deepEqual(simplePlan.cssRules, []);
 
 const activePlan = createMaterialButtonEmissionPlan({
   material: 'white',
@@ -39,13 +43,16 @@ const activePlan = createMaterialButtonEmissionPlan({
   borderOpacity: 36,
   edgeWearTexture: 'none',
   size: 'sm',
-  exportVariant: 'contract',
 }, 'View Contract', 'export');
 
 const activeHtml = serializeEmissionPlanHtml(activePlan);
-assert.doesNotMatch(activeHtml, /cd-layer/);
-assert.match(activePlan.cssRules?.join('\n') || '', /cd-button::before/);
-assert.match(activePlan.cssRules?.join('\n') || '', /border-color/);
-assert.ok(measureEmissionPlan(activePlan).nodeCount <= 2);
+// Active visual layers emit real layer spans in the product subtree.
+assert.match(activeHtml, /<span class="cd-surface__texture" aria-hidden="true">/);
+assert.match(activeHtml, /<span class="cd-surface__gradient" aria-hidden="true">/);
+assert.match(activeHtml, /<span class="cd-surface__border" aria-hidden="true">/);
+assert.deepEqual(activePlan.cssRules, []);
+// Layer spans + content wrapper mean the node count is well above the old
+// 2-node flat button.
+assert.ok(measureEmissionPlan(activePlan).nodeCount >= 5);
 
 console.log('Material CTA emission tests passed');

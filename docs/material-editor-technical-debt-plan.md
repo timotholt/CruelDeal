@@ -10,7 +10,7 @@ Remove editor DOM/CSS pollution while preserving editor usefulness, export corre
 This plan follows:
 
 ```txt
-Render what works. Store editor knowledge in RAM. Export the same visual DOM after pruning editor garbage.
+Render the product subtree. Store editor knowledge in RAM or an external editor shell. Export the product subtree directly.
 ```
 
 See also:
@@ -26,13 +26,16 @@ The editor preview DOM currently stores too much information directly in DOM att
 
 The CTA export path is smaller, but the live editor still renders a heavier editor-specific material primitive. That is not acceptable as a final architecture. It is temporary migration debt only.
 
-If a current editor feature depends on permanent DOM garbage, rewrite that feature to store its information internally in RAM. Do not keep polluted DOM to avoid breaking the current feature.
+If a current editor feature depends on permanent DOM garbage inside the product subtree, rewrite that feature to store its information internally in RAM or in an editor shell outside the product boundary. Do not keep polluted DOM to avoid breaking the current feature.
 
 ## Target Architecture
 
 ```txt
-Current Editor Visual DOM
-  current working visual structure
+Editor Target Shell
+  selection, refs, inspector registration, temporary affordance UI
+
+Product DOM/CSS Subtree
+  current working visual structure used by preview/runtime/export
 
 Editor RAM Store
   selection, provenance, layout intent, diagnostics, layer status
@@ -40,8 +43,8 @@ Editor RAM Store
 Inspector
   reads RAM/emission plans/computed product DOM
 
-Classifier / Pruner
-  product vs editor-owned DOM/CSS classification
+Boundary Audit
+  product vs editor-owned DOM/CSS classification during migration
 
 Proof Harness
   DOM cleanliness, computed-style, and pixel verification
@@ -79,7 +82,7 @@ Examples:
 
 Plan:
 
-- Move selection and flash affordances out of product DOM where practical.
+- Move selection and flash affordances out of product DOM.
 - Use DOM classes only for active temporary visible states.
 - Remove them immediately after the effect ends.
 
@@ -93,7 +96,7 @@ Examples:
 
 Plan:
 
-- Classify layer DOM before removing it.
+- Audit layer DOM before moving or removing it.
 - Keep active visual layer DOM in the first truthful export if it changes pixels.
 - Remove only editor-only layer DOM, inactive/no-op layers, or layers proven equivalent by deletion proof.
 - If a diagnostic needs layer information, read it from the emission plan/RAM store.
@@ -192,13 +195,14 @@ Acceptance:
 
 ### Phase 5: Render Proof During Live Replacement
 
-For CTA, the prototype is truthful export from classified/pruned editor visual DOM. Do not replace the live editor render until the pruned export proves parity.
+For CTA, the prototype is truthful export from the live product subtree. Do not replace the live visual renderer until product-subtree export proves parity.
 
 - proof tab exists
 - rest/hover/pressed comparison passes
 - text/fitter behavior is verified
 - no authored recipe values were changed to pass proof
 - no permanent editor-only DOM/CSS remains in export
+- no permanent editor-only DOM/CSS remains inside the preview product subtree
 
 CTA should be the first family.
 
@@ -236,12 +240,12 @@ A component family is considered editor-debt-clean only when:
 
 ## First Concrete Slice
 
-Use CTA as the prototype for truthful pruned export:
+Use CTA as the prototype for truthful product-subtree export:
 
 1. Add Render Proof tab for CTA.
-2. Classify current CTA editor visual DOM/CSS.
+2. Identify the CTA product subtree and wrap it with an editor shell.
 3. Move CTA editor diagnostics into RAM.
-4. Export by pruning editor-only metadata from the classified visual DOM/CSS.
-5. Mount exact pruned export HTML/CSS.
+4. Export the product subtree directly, excluding the editor shell.
+5. Mount exact export HTML/CSS.
 6. Compare preview/export/runtime.
-7. Use proof output to fix classifier/pruner/runtime bugs.
+7. Use proof output to fix boundary/shell/export/runtime bugs.

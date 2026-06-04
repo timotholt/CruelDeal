@@ -44,7 +44,9 @@ Mode meanings:
 - `runtime`: the product DOM/CSS rendered by the game client.
 - `export`: serialization of that same product DOM/CSS.
 
-The live editor preview, runtime renderer, and export serializer must converge on the same visual structure. During migration, the first trusted export is derived by classifying and pruning the current working editor visual DOM/CSS, not by inventing a separate minimal renderer. If editor preview and export differ permanently, the architecture is wrong.
+The live editor preview, runtime renderer, and export serializer must converge on the same visual structure. During migration, the first trusted export is the product subtree inside the current working editor preview, after editor-owned facts have been moved outside that subtree. If editor preview and export differ permanently, the architecture is wrong.
+
+Pruning legacy editor-owned nodes/attrs/classes is only a migration audit tactic. The steady-state exporter must serialize the product subtree or the same product emission plan directly, not prune a polluted editor DOM forever.
 
 Editor state may include rich metadata, provenance, diagnostics, selection state, layout intent, fitter state, and audit results. That information is held in Solid signals/stores, registries, maps, and planner output, not in product DOM.
 
@@ -56,9 +58,9 @@ Resolvers answer:
 
 > What visual, layout, text, and interaction intent does this component have?
 
-Emitters/classifiers answer:
+Boundary audits/emitters answer:
 
-> Which parts of the current visual DOM/CSS are product output, and which parts are editor storage/diagnostics/no-op?
+> Which parts of the current render are the product subtree, and which parts are editor shell/storage/diagnostics/no-op?
 
 Only after truthful export is proven should emitters answer:
 
@@ -85,7 +87,7 @@ The material pipeline has five stages.
 Recipe / Node Model
   -> Resolved Material Intent
   -> Layer Plan
-  -> Product Classification / Emission Plan
+  -> Product Boundary / Emission Plan
   -> DOM + CSS Output
 ```
 
@@ -143,9 +145,9 @@ Notes:
 - `shadow` may emit as host style instead of a child layer.
 - A layer may emit CSS-only, DOM-only, both, or nothing.
 
-### 4. Product Classification / Emission Plan
+### 4. Product Boundary / Emission Plan
 
-The first migration plan classifies the current working visual DOM/CSS into product and editor-owned output. It does not replace the working visual renderer.
+The first migration plan draws a clean product boundary inside the current working visual render. It moves editor-owned output to an external editor shell or RAM. It does not replace the working visual renderer.
 
 After proof passes, the emission plan may optimize the product output into a smaller equivalent structure.
 
@@ -180,7 +182,7 @@ The output layer creates either:
 - serialized export CSS
 - inspector snapshots
 
-The serializer must use the same classified product structure as the live editor renderer. Do not maintain a separate string-only export path that can drift from preview/runtime behavior.
+The serializer must use the same product subtree or product emission plan as the live editor renderer. Do not maintain a separate string-only export path that can drift from preview/runtime behavior.
 
 ## Surface Emission Rules
 
@@ -195,6 +197,8 @@ Use native elements when behavior calls for them:
 - `section`, `article`, or `div` for static panels depending on semantics
 
 Do not wrap a host only to carry editor ids, diagnostics, layout metadata, or inspector state.
+
+If the editor needs selection, refs, inspector registration, drag handles, labels, hover flash, or diagnostic UI, that wrapper belongs outside the product boundary and is excluded from export/runtime output.
 
 ### Material Layers
 
@@ -433,7 +437,7 @@ For the first CTA pass, active texture/gradient/border/edge wear layers should r
 
 ## Implementation Plan
 
-### Stage 1: Classification Types And Plans
+### Stage 1: Boundary Types And Plans
 
 - Add `MaterialRenderMode`, with `editor` defined as current visual render plus temporary editor affordances only.
 - Add `DomEmissionRole`.
@@ -443,10 +447,11 @@ For the first CTA pass, active texture/gradient/border/edge wear layers should r
 - Add `compactStyle()`.
 - Add layer plan debug output to an inspector RAM registry, not product DOM.
 
-### Stage 2: Surface Classifier
+### Stage 2: Product Boundary And Editor Shell
 
-- Classify `MaterialPanel` / `MaterialButton` live DOM/CSS for the migrated family.
-- Export by classifying and pruning the current editor visual DOM/CSS for the migrated family.
+- Identify the product subtree for `MaterialPanel` / `MaterialButton` in the migrated family.
+- Wrap that subtree with an editor shell for selection, refs, inspector registration, and temporary highlight UI.
+- Export the product subtree directly, excluding the editor shell.
 - Preserve authored visuals and interactions without tuning recipe values.
 - Move diagnostic classes/attrs into RAM-backed inspector data.
 
@@ -458,14 +463,14 @@ For the first CTA pass, active texture/gradient/border/edge wear layers should r
 
 ### Stage 4: Export Serializer
 
-- Add export DOM/CSS serializer driven by the classified/pruned current visual DOM.
+- Add export DOM/CSS serializer driven by the product subtree or matching product emission plan.
 - Add inspector tabs for Preview Product DOM, Runtime DOM, Export DOM, Export CSS, Render Proof.
 - Add copy buttons per mode.
 
 ### Stage 5: CTA Pilot
 
 - Migrate CTA button export path.
-- Migrate CTA export to a classified/pruned version of the current editor visual DOM.
+- Migrate CTA export to the current CTA product subtree, excluding the editor shell.
 - Add golden emission tests.
 - Add visual equivalence check proving preview CTA and export CTA are the same rendered product.
 - Use deletion proof to remove no-op classes/styles/attrs.
