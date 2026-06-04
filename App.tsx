@@ -57,6 +57,11 @@ const devLinks = [
     title: 'Main Material Editor',
     detail: 'Main screen skin and node editor',
   },
+  {
+    href: '/dev/ui-node',
+    title: 'UiNode Surface Preview',
+    detail: 'Server-driven node payload, state overlays, and skin registry proof',
+  },
 ];
 
 const DevIndexScreen = () => (
@@ -92,6 +97,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
   const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
+  const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
   const isMainMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/main-material');
@@ -186,7 +192,9 @@ export default function App() {
                 <GameTextTestScreen version={isGameTextV2TestPath() ? 'v2' : 'v1'} />
               </Show>
             )}>
-              <DevIndexScreen />
+              <Show when={isDevUiNodePath()} fallback={<DevIndexScreen />}>
+                <UiNodePreviewScreen />
+              </Show>
             </Show>
           </div>
         </Show>

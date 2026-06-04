@@ -4,144 +4,139 @@ import {
   renderUiNodeToSolid,
   validateUiNode,
   type UiNodePayload,
+  type UiActionPayload,
   type UiNodeRenderContext,
 } from '../ui/material-lab';
 
-// A server-style UI payload: pure JSON intent. No markup, no CSS strings.
-// This is the shape a server (or downloadable skin) would deliver.
-const samplePayload: UiNodePayload = {
-  id: 'briefing-card',
+type CmsContentValue =
+  | string
+  | number
+  | UiActionPayload['target']
+  | Record<string, string | number | boolean>;
+
+const missionTemplate: UiNodePayload = {
+  id: 'mission-card',
   type: 'panel',
-  surface: {
-    material: 'custom',
-    materialColor: '#1b1e24',
-    texture: 'none',
-    glass: true,
-    glassOpacity: 28,
-    gradient: 'both',
-    lightStrength: 14,
-    darkStrength: 30,
-    border: ['top', 'right', 'bottom', 'left'],
-    borderColor: 'custom',
-    borderCustomColor: '#3a4049',
-    borderOpacity: 60,
-    radius: 16,
-    dropShadow: true,
-    shadowOpacity: 55,
-    shadowBlur: 28,
-    shadowY: 10,
-  },
-  layout: { display: 'flex', direction: 'column', gap: 16, padding: 24, width: '420px' },
+  materialId: 'mission-card',
+  layout: { width: '460px', height: '268px' },
   children: [
     {
-      id: 'title',
+      id: 'deadline-badge',
       type: 'text',
-      contentBinding: 'title',
-      layout: { padding: 0 },
+      materialId: 'mission-badge',
+      contentBinding: 'mission.deadline',
+      layout: { display: 'flex', align: 'center', justify: 'center', width: '104px', height: '22px', position: { top: '22px', right: '50px' } },
     },
     {
-      id: 'body',
+      id: 'sector-mark',
       type: 'text',
-      materialId: 'body-panel',
-      text: 'Rendered from validated JSON through one surface component. The server sends intent; the client owns the pixels.',
-      layout: { padding: 16 },
+      materialId: 'mission-sector',
+      contentBinding: 'mission.sector',
+      layout: { width: '78px', height: '50px', position: { top: '35px', left: '28px' } },
     },
     {
-      id: 'cta',
-      type: 'button',
-      stateModel: 'momentary',
-      contentBinding: 'ctaLabel',
-      action: { id: 'accept', params: { contractId: 'c-001' } },
-      surface: {
-        material: 'custom',
-        materialColor: '#707275',
-        texture: 'stone04',
-        textureStrength: 80,
-        glass: true,
-        glassOpacity: 15,
-        gradient: 'both',
-        lightStrength: 60,
-        darkStrength: 36,
-        border: ['top', 'right', 'bottom', 'left'],
-        borderColor: 'custom',
-        borderCustomColor: '#eaeaea',
-        borderOpacity: 54,
-        dropShadow: true,
-        shadowOpacity: 55,
-        shadowBlur: 6,
-        shadowY: 3,
-        radius: 6,
-        contentTone: 'black',
-        textTransform: 'uppercase',
-        fontStyle: 'normal',
-        fontWeight: 800,
-        letterSpacing: 0.05,
-      },
-      surfaceStates: {
-        hover: {
-          tint: 'gold',
-          tintStrength: 28,
-          borderOpacity: 82,
-          lightStrength: 76,
+      id: 'mission-briefing',
+      type: 'panel',
+      materialId: 'mission-panel',
+      layout: { display: 'flex', direction: 'column', gap: 6, padding: 14, width: '236px', height: '168px', position: { top: '72px', right: '46px' } },
+      children: [
+        { id: 'mission-eyebrow', type: 'text', contentBinding: 'mission.eyebrow' },
+        { id: 'mission-title', type: 'text', contentBinding: 'mission.title' },
+        { id: 'mission-body', type: 'text', contentBinding: 'mission.body' },
+        { id: 'mission-reward-label', type: 'text', contentBinding: 'mission.rewardLabel' },
+        { id: 'mission-reward-value', type: 'text', contentBinding: 'mission.rewardValue' },
+        {
+          id: 'mission-cta',
+          type: 'button',
+          materialId: 'mission-cta',
+          text: 'View Contract',
+          action: { id: 'viewContract', targetBinding: 'mission.viewTarget' },
+          surfaceStates: {
+            hover: {
+              tint: 'gold',
+              tintStrength: 8,
+              borderOpacity: 62,
+              lightStrength: 70,
+            },
+            pressed: {
+              tint: 'gold',
+              tintStrength: 24,
+              glow: 'gold',
+              glowStrength: 48,
+              corners: 'bottom',
+              emission: 'center-blip',
+              emissionTone: 'gold',
+              emissionStrength: 58,
+              stateScale: 0.985,
+              stateTranslateY: 1,
+            },
+          },
+          layout: { width: '100%', height: '30px' },
         },
-        pressed: {
-          glow: 'gold',
-          glowStrength: 48,
-          corners: 'all',
-          emission: 'center-blip',
-          emissionTone: 'gold',
-          emissionStrength: 44,
-          stateScale: 0.97,
-          stateTranslateY: 2,
-        },
-      },
-      layout: { width: '100%' },
-    },
-    {
-      id: 'skin-cta',
-      type: 'button',
-      materialId: 'cta-secondary',
-      contentBinding: 'skinCtaLabel',
-      action: { id: 'inspectSkin', params: { materialId: 'cta-secondary' } },
-      layout: { width: '100%' },
+      ],
     },
   ],
 };
 
-const bindings: Record<string, string> = {
-  title: 'Contract Briefing',
-  ctaLabel: 'Accept Contract',
-  skinCtaLabel: 'Skin Registry CTA',
+const cmsContent: Record<string, CmsContentValue> = {
+  'mission.deadline': '03 Days Left',
+  'mission.sector': 'Sector\n07',
+  'mission.eyebrow': '// Active Contract',
+  'mission.title': 'Data\nExtraction',
+  'mission.body': 'Extract encrypted corporate data from Solace Corp mainframe cluster.',
+  'mission.rewardLabel': 'Reward',
+  'mission.rewardValue': '1,850 CR',
+  'mission.viewTarget': { kind: 'contract', id: 'contract_solace_mainframe' },
 };
 
 export const UiNodePreviewScreen = () => {
   const [lastAction, setLastAction] = createSignal<string>('(none)');
 
   const context: UiNodeRenderContext = {
-    resolveBinding: (binding) => bindings[binding],
-    onAction: (action) => setLastAction(`${action.id} ${JSON.stringify(action.params ?? {})}`),
+    resolveBinding: (binding) => cmsContent[binding] as string | number | undefined,
+    resolveActionTarget: (binding) => cmsContent[binding] as UiActionPayload['target'] | undefined,
+    onAction: (action) => setLastAction(`${action.id} ${JSON.stringify(action.target ?? action.params ?? {})}`),
   };
 
   // Fail-closed: a malformed payload validates to null and we render nothing.
-  const node = validateUiNode(samplePayload, 'ui-node-preview');
+  const node = validateUiNode(missionTemplate, 'ui-node-preview');
 
   return (
-    <div style={{ 'min-height': '100%', width: '100%', display: 'flex', 'flex-direction': 'column', 'align-items': 'center', gap: '20px', padding: '40px', background: 'radial-gradient(circle at 50% 0%, #1a1d22, #0a0c0f 70%)', 'box-sizing': 'border-box', overflow: 'auto' }}>
-      <h1 style={{ color: '#e7e3d6', font: "700 1.1rem 'DIN Condensed', system-ui, sans-serif", 'letter-spacing': '0.1em', 'text-transform': 'uppercase', margin: '0' }}>
-        UiNodePayload → Surface
-      </h1>
+    <div class="ui-node-preview">
+      <header class="ui-node-preview__header">
+        <p>Server-driven surface proof</p>
+        <h1>UiNodePayload → Surface</h1>
+      </header>
 
-      <Show when={node} fallback={<p style={{ color: '#ff7a6e' }}>Payload failed validation (rendered nothing — fail closed).</p>}>
-        {(valid) => renderUiNodeToSolid(valid(), context)}
-      </Show>
+      <section class="ui-node-preview__grid">
+        <div class="ui-node-preview__render">
+          <div class="ui-node-preview__section-label">Rendered node</div>
+          <Show when={node} fallback={<p class="ui-node-preview__error">Payload failed validation (rendered nothing - fail closed).</p>}>
+            {(valid) => renderUiNodeToSolid(valid(), context)}
+          </Show>
+          <p class="ui-node-preview__last-action">
+            last action: {lastAction()}
+          </p>
+        </div>
 
-      <p style={{ color: '#8f897c', font: "400 0.8rem ui-monospace, monospace", margin: '0' }}>
-        last action: {lastAction()}
-      </p>
+        <div class="ui-node-preview__json-stack">
+          <section class="ui-node-preview__json-card" aria-label="UiNode payload JSON">
+            <div class="ui-node-preview__json-head">
+              <span>UI Template JSON</span>
+              <span>{missionTemplate.children?.length ?? 0} child nodes</span>
+            </div>
+            <pre class="ui-node-preview__payload">{JSON.stringify(missionTemplate, null, 2)}</pre>
+          </section>
 
-      <pre style={{ color: '#6f7681', font: '0.72rem ui-monospace, monospace', background: 'rgba(0,0,0,0.4)', padding: '16px', 'border-radius': '8px', 'max-width': '560px', overflow: 'auto', margin: '0' }}>
-        {JSON.stringify(samplePayload, null, 2)}
-      </pre>
+          <section class="ui-node-preview__json-card" aria-label="CMS content JSON">
+            <div class="ui-node-preview__json-head">
+              <span>CMS Content JSON</span>
+              <span>copy + target</span>
+            </div>
+            <pre class="ui-node-preview__payload ui-node-preview__payload--cms">{JSON.stringify(cmsContent, null, 2)}</pre>
+          </section>
+        </div>
+      </section>
     </div>
   );
 };

@@ -229,6 +229,12 @@ const uiNodeRoute = createRoute({
     component: () => <UiNodePreviewScreen />,
 });
 
+const devUiNodeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/ui-node",
+    component: () => <UiNodePreviewScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -249,6 +255,7 @@ const routeTree = rootRoute.addChildren([
     loginMaterialRoute,
     mainMaterialRoute,
     uiNodeRoute,
+    devUiNodeRoute,
     devCardFrameRoute,
     devTensorRoute,
     devTensorPlayRoute,

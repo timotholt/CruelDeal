@@ -10,6 +10,8 @@ import type { UiActionPayload, UiNodePayload } from './uiNodeValidate';
 // and handlers. Everything optional so a bare tree still renders structurally.
 export interface UiNodeRenderContext {
   resolveBinding?: (binding: string, node: UiNodePayload) => JSX.Element | string | number | undefined;
+  resolveActionParams?: (binding: string, node: UiNodePayload) => Record<string, string | number | boolean> | undefined;
+  resolveActionTarget?: (binding: string, node: UiNodePayload) => UiActionPayload['target'] | undefined;
   resolveImageSrc?: (node: UiNodePayload) => string | undefined;
   resolveImageAlt?: (node: UiNodePayload) => string | undefined;
   onAction?: (action: UiActionPayload, node: UiNodePayload) => void;
@@ -22,6 +24,23 @@ const nodeContent = (node: UiNodePayload, context?: UiNodeRenderContext): JSX.El
   }
   return node.text ?? null;
 };
+
+const resolveAction = (
+  action: UiActionPayload,
+  node: UiNodePayload,
+  context?: UiNodeRenderContext,
+): UiActionPayload => ({
+  ...action,
+  params: {
+    ...(action.params || {}),
+    ...(action.paramsBinding && context?.resolveActionParams
+      ? context.resolveActionParams(action.paramsBinding, node) || {}
+      : {}),
+  },
+  target: action.targetBinding && context?.resolveActionTarget
+    ? context.resolveActionTarget(action.targetBinding, node) || action.target
+    : action.target,
+});
 
 /**
  * Render a validated UiNodePayload tree into the unified surface. Pure
@@ -74,7 +93,7 @@ export const UiNode = (props: { node: UiNodePayload; context?: UiNodeRenderConte
             onClick={() => {
               if (togglesActiveState()) setStateOpen((open) => !open);
               const action = node().action;
-              if (action) props.context?.onAction?.(action, node());
+              if (action) props.context?.onAction?.(resolveAction(action, node(), props.context), node());
             }}
           />
         </Match>

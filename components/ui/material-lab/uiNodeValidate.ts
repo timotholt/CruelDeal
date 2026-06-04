@@ -39,6 +39,12 @@ export interface UiLayoutPayload {
 export interface UiActionPayload {
   id: string;
   params?: Record<string, string | number | boolean>;
+  paramsBinding?: string;
+  target?: {
+    kind: string;
+    id: string;
+  };
+  targetBinding?: string;
 }
 
 export type UiSurfaceState = 'hover' | 'pressed' | 'active';
@@ -96,6 +102,12 @@ const uiLayoutSchema = v.strictObject({
 const uiActionSchema = v.strictObject({
   id: v.string(),
   params: v.optional(v.record(v.string(), v.union([v.string(), v.number(), v.boolean()]))),
+  paramsBinding: v.optional(v.string()),
+  target: v.optional(v.strictObject({
+    kind: v.string(),
+    id: v.string(),
+  })),
+  targetBinding: v.optional(v.string()),
 });
 
 // Recursive node schema. Structure is strict (reject unknown keys, bad types,
