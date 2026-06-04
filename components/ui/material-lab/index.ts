@@ -6,5 +6,6 @@ export * from './MaterialRecipeTypes';
 export * from './MaterialSurfaceHost';
 export * from './MaterialWorkbenchLayout';
 export * from './surfaceValidate';
+export * from './uiNodeValidate';
 export * from './materialPresets';
 export * from './TextureOptions';

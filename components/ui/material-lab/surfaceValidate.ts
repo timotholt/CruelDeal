@@ -174,7 +174,7 @@ const entries = (key: 'strict' | 'lenient') =>
 export const surfaceOptionsStrictSchema = v.strictObject(entries('strict'));
 export const surfaceOptionsLenientSchema = v.object(entries('lenient'));
 
-const summarizeIssues = (issues: readonly v.BaseIssue<unknown>[]) =>
+export const summarizeValibotIssues = (issues: readonly v.BaseIssue<unknown>[]) =>
   issues.map((issue) => ({
     path: (issue.path ?? []).map((item) => (item as { key?: unknown }).key).filter((k) => k !== undefined).join('.') || '(root)',
     message: issue.message,
@@ -196,7 +196,7 @@ export const validateSurfaceOptions = (input: unknown, label = 'surface'): Surfa
   if (strict.success) {
     return dropUndefined(strict.output as Record<string, unknown>) as SurfaceOptions;
   }
-  fault('surface.validate.invalid', { label, issues: summarizeIssues(strict.issues) });
+  fault('surface.validate.invalid', { label, issues: summarizeValibotIssues(strict.issues) });
   const lenient = v.parse(surfaceOptionsLenientSchema, source);
   return dropUndefined(lenient as Record<string, unknown>) as SurfaceOptions;
 };
