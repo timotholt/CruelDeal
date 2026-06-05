@@ -155,7 +155,7 @@ const styleVars = (
   [`--feed-rich-${prefix}-track`]: style?.letterSpacing !== undefined ? `${style.letterSpacing}em` : 'inherit',
   [`--feed-rich-${prefix}-transform`]: style?.transform ?? 'inherit',
   [`--feed-rich-${prefix}-opacity`]: percentOpacity(style?.opacity),
-  [`--feed-rich-${prefix}-shadow`]: uiNodeTextEmbossShadow(style ?? {}),
+  [`--feed-rich-${prefix}-shadow`]: style?.embossMode === undefined ? 'inherit' : uiNodeTextEmbossShadow(style),
 });
 
 export const uiNodeRichTextThemeVars = (theme: UiNodeRichTextTheme): JSX.CSSProperties => {

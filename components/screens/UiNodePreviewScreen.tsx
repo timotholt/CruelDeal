@@ -98,7 +98,6 @@ const cmsContent: Record<string, CmsContentValue> = {
 
 const feedFontCondensed = '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif';
 const feedFontDin = '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif';
-const feedFontSystem = 'ui-sans-serif, system-ui, sans-serif';
 
 const uiNodeTheme: UiNodeTheme = {
   richText: {
@@ -119,26 +118,6 @@ const uiNodeTheme: UiNodeTheme = {
         embossOffset: 20,
         embossBlur: 10,
       },
-      normal: {
-        tone: 'white',
-        fontFamily: feedFontSystem,
-        sizeEm: 1.1,
-        lineHeight: 1,
-        weight: 500,
-        transform: 'none',
-        embossMode: 'dark',
-        embossStrength: 100,
-      },
-      body: {
-        tone: 'white',
-        fontFamily: feedFontSystem,
-        sizeEm: 1.1,
-        lineHeight: 1,
-        weight: 500,
-        transform: 'none',
-        embossMode: 'dark',
-        embossStrength: 100,
-      },
       h1: {
         tone: 'white',
         fontFamily: feedFontDin,
@@ -148,6 +127,7 @@ const uiNodeTheme: UiNodeTheme = {
         letterSpacing: 0.07,
         transform: 'uppercase',
         opacity: 70,
+        embossMode: 'none',
       },
       h2: {
         tone: 'white',
@@ -157,6 +137,7 @@ const uiNodeTheme: UiNodeTheme = {
         weight: 700,
         letterSpacing: 0.02,
         transform: 'uppercase',
+        embossMode: 'none',
       },
       h3: {
         tone: 'white',
@@ -167,6 +148,7 @@ const uiNodeTheme: UiNodeTheme = {
         letterSpacing: 0.02,
         transform: 'uppercase',
         opacity: 94,
+        embossMode: 'none',
       },
       h4: {
         tone: 'muted',
@@ -180,10 +162,10 @@ const uiNodeTheme: UiNodeTheme = {
         embossMode: 'dark',
         embossStrength: 100,
       },
-      acc1: { tone: 'gold', letterSpacing: 0.08, transform: 'inherit', opacity: 90 },
-      acc2: { tone: 'gray', fontFamily: feedFontDin, sizeEm: 0.68, weight: 600, letterSpacing: 0.02, transform: 'uppercase', opacity: 94 },
-      acc3: { tone: 'red', letterSpacing: 0.02, transform: 'inherit' },
-      acc4: { tone: 'green', letterSpacing: 0.02, transform: 'inherit' },
+      acc1: { tone: 'gold' },
+      acc2: { tone: 'gray' },
+      acc3: { tone: 'red' },
+      acc4: { tone: 'green' },
       rule: { tone: 'gold', opacity: 100 },
       divider: { tone: 'white', opacity: 34, thicknessPx: 1, gapTopEm: 0.9, gapBottomEm: 0.78 },
     },

@@ -20,6 +20,13 @@ assert.equal(vars['--feed-rich-alt-title-size'], '1.7em');
 assert.equal(vars['--feed-rich-alt-title-track'], '0.02em');
 assert.equal(vars['--feed-rich-divider-opacity'], '0.34');
 assert.match(String(vars['--feed-rich-alt-title-shadow']), /rgb\(0 0 0/);
+assert.equal(vars['--feed-rich-body-size'], '1em');
+assert.equal(vars['--feed-rich-body-font'], 'inherit');
+assert.equal(vars['--feed-rich-body-shadow'], 'inherit');
+assert.equal(vars['--feed-rich-acc1'], 'rgb(248 215 112)');
+assert.equal(vars['--feed-rich-acc1-track'], 'inherit');
+assert.equal(vars['--feed-rich-acc1-transform'], 'inherit');
+assert.equal(vars['--feed-rich-acc1-shadow'], 'inherit');
 assert.equal(uiNodeTextEmbossShadow({ embossMode: 'none', embossStrength: 100 }), 'none');
 
 const validTheme = {
