@@ -48,17 +48,27 @@ embedding button markup in body copy.
 
 ## Theme / Global Defaults
 
-The next contract layer should be a host-owned theme block, not per-CMS styles.
-That block can define approved global defaults for a template family:
+The theme block is host-owned, validated, and separate from CMS content. It
+defines approved global defaults for a template family:
 
 - base text font
 - rich text tag tones/sizes/weights
 - default material skin id
 - spacing scale
 
-For now, `/ui-node` demonstrates this as client-owned CSS variables applied to
-the mission briefing template. The important rule is the same: CMS supplies
-content and safe targets; the client/template owns fonts, colors, and styling.
+`validateUiNodeTheme()` currently accepts a `richText` map whose entries define
+`body`, `h1`-`h4`, `acc1`-`acc4`, `rule`, and `divider` styles. `/ui-node`
+then turns those styles into the same material rich-text CSS variables used by
+the preview renderer. The important rule is the same: CMS supplies content and
+safe targets; the client/template owns fonts, colors, embossing, and styling.
+
+The current editor export is useful source material, especially its renderer
+settings, but it is not the final wire contract. The editor should migrate
+toward this three-document shape:
+
+- UI template JSON: `UiNodePayload`, validated by `validateUiNode()`
+- CMS content JSON: copy and safe target values, resolved by host bindings
+- Theme defaults JSON: `UiNodeTheme`, validated by `validateUiNodeTheme()`
 
 ## Example
 

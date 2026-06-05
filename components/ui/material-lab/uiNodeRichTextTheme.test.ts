@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
-import { uiNodeRichTextThemeVars, uiNodeTextEmbossShadow } from './uiNodeRichTextTheme';
+import { configureLogging } from '../../../utils/logger';
+import { uiNodeRichTextThemeVars, uiNodeTextEmbossShadow, validateUiNodeTheme } from './uiNodeRichTextTheme';
 
 const vars = uiNodeRichTextThemeVars({
   align: 'center',
@@ -20,3 +21,26 @@ assert.equal(vars['--feed-rich-alt-title-track'], '0.02em');
 assert.equal(vars['--feed-rich-divider-opacity'], '0.34');
 assert.match(String(vars['--feed-rich-alt-title-shadow']), /rgb\(0 0 0/);
 assert.equal(uiNodeTextEmbossShadow({ embossMode: 'none', embossStrength: 100 }), 'none');
+
+const validTheme = {
+  richText: {
+    missionPanel: {
+      align: 'left',
+      base: { tone: 'white', lineHeight: 1.4, paragraphGap: -3, embossMode: 'shadow', embossStrength: 50, embossOffset: 20, embossBlur: 10 },
+      h2: { tone: 'gray', fontFamily: '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif', sizeEm: 1.7, weight: 700 },
+      acc3: { tone: 'red' },
+      acc4: { tone: 'green' },
+    },
+  },
+};
+
+assert.equal(validateUiNodeTheme(validTheme)?.richText.missionPanel.base?.paragraphGap, -3);
+assert.equal(validateUiNodeTheme({ richText: { missionPanel: { acc3: { tone: 'red' } } } })?.richText.missionPanel.acc3?.tone, 'red');
+
+configureLogging({ policy: 'continue', level: 'silent' });
+assert.equal(validateUiNodeTheme({ richText: { missionPanel: { base: { tone: 'banana' } } } }), null);
+assert.equal(validateUiNodeTheme({ richText: { missionPanel: { madeUp: 1 } } }), null);
+configureLogging({ policy: 'throw', level: 'silent' });
+assert.throws(() => validateUiNodeTheme({ richText: { missionPanel: { base: { tone: 'banana' } } } }), (err: unknown) => {
+  return err instanceof Error && err.message === 'ui.node.theme.invalid';
+});

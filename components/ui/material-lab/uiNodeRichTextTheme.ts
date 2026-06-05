@@ -1,7 +1,10 @@
 import type { JSX } from 'solid-js';
+import * as v from 'valibot';
+import { fault } from '../../../utils/logger';
 import { materialTextEmbossShadow, type MaterialTextEmbossMode, type MaterialTextTone } from '../material-node/materialTextEmboss';
+import { summarizeValibotIssues } from './surfaceValidate';
 
-export type UiNodeRichTextTone = Extract<MaterialTextTone, 'black' | 'white' | 'muted' | 'gray' | 'gold'>;
+export type UiNodeRichTextTone = MaterialTextTone;
 export type UiNodeTextEmbossMode = MaterialTextEmbossMode;
 
 export interface UiNodeTextStyle {
@@ -39,12 +42,91 @@ export interface UiNodeRichTextTheme {
   divider?: { tone?: UiNodeRichTextTone; opacity?: number; thicknessPx?: number; gapTopEm?: number; gapBottomEm?: number };
 }
 
+export interface UiNodeTheme {
+  richText: Record<string, UiNodeRichTextTheme>;
+}
+
+const richTextTones = ['none', 'inherit', 'black', 'white', 'muted', 'gray', 'brass', 'gold', 'cyan', 'red', 'green'] as const;
+const embossModes = ['none', 'dark', 'light', 'shadow'] as const;
+const transforms = ['none', 'uppercase', 'lowercase', 'capitalize', 'inherit'] as const;
+const aligns = ['left', 'center', 'right'] as const;
+const fontWeights = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+const FONT_FAMILY_RE = /^[\w '",-]+$/;
+
+const percent = () => v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100)));
+const scaled = (lo: number, hi: number) => v.optional(v.pipe(v.number(), v.minValue(lo), v.maxValue(hi)));
+const fontFamily = () => v.optional(v.pipe(v.string(), v.regex(FONT_FAMILY_RE)));
+
+const textStyleEntries = {
+  tone: v.optional(v.picklist(richTextTones)),
+  fontFamily: fontFamily(),
+  sizeEm: scaled(0, 20),
+  sizeRem: scaled(0, 20),
+  weight: v.optional(v.picklist(fontWeights)),
+  lineHeight: scaled(0, 8),
+  letterSpacing: scaled(-5, 5),
+  transform: v.optional(v.picklist(transforms)),
+  opacity: percent(),
+  embossMode: v.optional(v.picklist(embossModes)),
+  embossStrength: percent(),
+  embossOffset: percent(),
+  embossBlur: percent(),
+};
+
+const uiNodeTextStyleSchema = v.strictObject(textStyleEntries) as v.GenericSchema<UiNodeTextStyle>;
+const uiNodeBaseTextStyleSchema = v.strictObject({
+  ...textStyleEntries,
+  paragraphGap: scaled(-200, 200),
+}) as v.GenericSchema<UiNodeTextStyle & { paragraphGap?: number }>;
+
+const uiNodeRuleThemeSchema = v.strictObject({
+  tone: v.optional(v.picklist(richTextTones)),
+  opacity: percent(),
+});
+
+const uiNodeDividerThemeSchema = v.strictObject({
+  tone: v.optional(v.picklist(richTextTones)),
+  opacity: percent(),
+  thicknessPx: scaled(0, 64),
+  gapTopEm: scaled(-20, 20),
+  gapBottomEm: scaled(-20, 20),
+});
+
+export const uiNodeRichTextThemeSchema: v.GenericSchema<UiNodeRichTextTheme> = v.strictObject({
+  align: v.optional(v.picklist(aligns)),
+  base: v.optional(uiNodeBaseTextStyleSchema),
+  normal: v.optional(uiNodeTextStyleSchema),
+  body: v.optional(uiNodeTextStyleSchema),
+  accent: v.optional(uiNodeTextStyleSchema),
+  small: v.optional(uiNodeTextStyleSchema),
+  h1: v.optional(uiNodeTextStyleSchema),
+  h2: v.optional(uiNodeTextStyleSchema),
+  h3: v.optional(uiNodeTextStyleSchema),
+  h4: v.optional(uiNodeTextStyleSchema),
+  acc1: v.optional(uiNodeTextStyleSchema),
+  acc2: v.optional(uiNodeTextStyleSchema),
+  acc3: v.optional(uiNodeTextStyleSchema),
+  acc4: v.optional(uiNodeTextStyleSchema),
+  rule: v.optional(uiNodeRuleThemeSchema),
+  divider: v.optional(uiNodeDividerThemeSchema),
+}) as v.GenericSchema<UiNodeRichTextTheme>;
+
+export const uiNodeThemeSchema: v.GenericSchema<UiNodeTheme> = v.strictObject({
+  richText: v.record(v.string(), uiNodeRichTextThemeSchema),
+}) as v.GenericSchema<UiNodeTheme>;
+
 const toneColors: Record<UiNodeRichTextTone, string> = {
+  none: 'currentColor',
+  inherit: 'currentColor',
   black: 'rgb(23 20 15)',
   white: 'rgb(255 255 255)',
   muted: 'rgb(143 137 124)',
   gray: 'rgb(188 184 174)',
+  brass: 'rgb(203 170 106)',
   gold: 'rgb(248 215 112)',
+  cyan: 'rgb(77 220 255)',
+  red: 'rgb(255 92 83)',
+  green: 'rgb(86 218 142)',
 };
 
 export const uiNodeTextEmbossShadow = (style: UiNodeTextStyle): string => {
@@ -120,4 +202,11 @@ export const uiNodeRichTextThemeVars = (theme: UiNodeRichTextTheme): JSX.CSSProp
     ...styleVars('acc3', theme.acc3, 'gold'),
     ...styleVars('acc4', theme.acc4, 'gold'),
   } as JSX.CSSProperties;
+};
+
+export const validateUiNodeTheme = (input: unknown, label = 'ui-node-theme'): UiNodeTheme | null => {
+  const result = v.safeParse(uiNodeThemeSchema, input);
+  if (result.success) return result.output;
+  fault('ui.node.theme.invalid', { label, issues: summarizeValibotIssues(result.issues) });
+  return null;
 };

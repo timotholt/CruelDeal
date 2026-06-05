@@ -5,10 +5,11 @@ import {
   renderUiNodeToSolid,
   uiNodeRichTextThemeVars,
   validateUiNode,
+  validateUiNodeTheme,
   type UiNodePayload,
   type UiActionPayload,
   type UiNodeRenderContext,
-  type UiNodeRichTextTheme,
+  type UiNodeTheme,
 } from '../ui/material-lab';
 import { MaterialRichText } from '../ui/material-node';
 
@@ -31,7 +32,7 @@ const missionTemplate: UiNodePayload = {
       type: 'text',
       materialId: 'mission-badge',
       contentBinding: 'mission.deadline',
-      layout: { display: 'absolute', align: 'center', justify: 'center', width: '140px', height: '28px', position: { top: '96px', right: '42px' } },
+      layout: { display: 'absolute', align: 'center', justify: 'center', width: '148px', height: '36px', position: { top: '60px', left: '199px' } },
     },
     {
       id: 'sector-mark',
@@ -39,13 +40,13 @@ const missionTemplate: UiNodePayload = {
       materialId: 'mission-sector',
       contentBinding: 'mission.sector',
       contentMode: 'rich',
-      layout: { display: 'absolute', width: '92px', height: '70px', position: { top: '124px', left: '36px' } },
+      layout: { display: 'absolute', width: '70px', height: '84px', position: { top: '66px', left: '27px' } },
     },
     {
       id: 'mission-briefing',
       type: 'panel',
       materialId: 'mission-panel',
-      layout: { display: 'absolute', align: 'start', justify: 'start', width: '202px', height: '350px', padding: 16, position: { top: '166px', right: '34px' } },
+      layout: { display: 'absolute', align: 'start', justify: 'start', width: '156px', height: '378px', padding: 16, position: { top: '168px', left: '183px' } },
       contentBinding: 'mission.briefing',
       contentMode: 'rich',
       children: [
@@ -68,14 +69,19 @@ const missionTemplate: UiNodePayload = {
               cornerSize: 17,
             },
             pressed: {
+              tintStrength: 4,
+              lightStrength: 8,
+              darkStrength: 34,
               contentTone: 'black',
               fontWeight: 800,
               fontStyle: 'normal',
               textTransform: 'uppercase',
               letterSpacing: 0.05,
+              stateScale: 0.985,
+              stateTranslateY: 2,
             },
           },
-          layout: { width: '142px', height: '36px' },
+          layout: { width: '100%', height: '45px' },
         },
       ],
     },
@@ -94,7 +100,7 @@ const feedFontCondensed = '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-se
 const feedFontDin = '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif';
 const feedFontSystem = 'ui-sans-serif, system-ui, sans-serif';
 
-const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
+const uiNodeTheme: UiNodeTheme = {
   richText: {
     missionPanel: {
       align: 'left',
@@ -110,6 +116,8 @@ const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
         opacity: 90,
         embossMode: 'shadow',
         embossStrength: 50,
+        embossOffset: 20,
+        embossBlur: 10,
       },
       normal: {
         tone: 'white',
@@ -173,7 +181,9 @@ const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
         embossStrength: 100,
       },
       acc1: { tone: 'gold', letterSpacing: 0.08, transform: 'inherit', opacity: 90 },
-      acc2: { tone: 'gray', letterSpacing: 0.02, transform: 'uppercase', opacity: 94 },
+      acc2: { tone: 'gray', fontFamily: feedFontDin, sizeEm: 0.68, weight: 600, letterSpacing: 0.02, transform: 'uppercase', opacity: 94 },
+      acc3: { tone: 'red', letterSpacing: 0.02, transform: 'inherit' },
+      acc4: { tone: 'green', letterSpacing: 0.02, transform: 'inherit' },
       rule: { tone: 'gold', opacity: 100 },
       divider: { tone: 'white', opacity: 34, thicknessPx: 1, gapTopEm: 0.9, gapBottomEm: 0.78 },
     },
@@ -197,6 +207,7 @@ const uiNodeTheme: { richText: Record<string, UiNodeRichTextTheme> } = {
     },
   },
 };
+const validUiNodeTheme = validateUiNodeTheme(uiNodeTheme, 'ui-node-preview-theme') ?? uiNodeTheme;
 
 export const UiNodePreviewScreen = () => {
   const [lastAction, setLastAction] = createSignal<string>('(none)');
@@ -213,7 +224,7 @@ export const UiNodePreviewScreen = () => {
     renderRichText: (value, node) => (
       <MaterialRichText
         value={value}
-        style={uiNodeRichTextThemeVars(node.id === 'sector-mark' ? uiNodeTheme.richText.sectorMark : uiNodeTheme.richText.missionPanel)}
+        style={uiNodeRichTextThemeVars(node.id === 'sector-mark' ? validUiNodeTheme.richText.sectorMark : validUiNodeTheme.richText.missionPanel)}
       />
     ),
     resolveActionTarget: (binding) => cmsContent[binding] as UiActionPayload['target'] | undefined,
