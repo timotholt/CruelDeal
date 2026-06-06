@@ -6,6 +6,41 @@ import type { UiSurfaceStatesPayload } from './uiNodeValidate';
 type ComputableSurfaceState = Extract<MaterialRecipeState, 'hover' | 'pressed' | 'active'>;
 
 const states: ComputableSurfaceState[] = ['hover', 'pressed', 'active'];
+const contentOptionKeys = new Set<keyof SurfaceOptions>([
+  'contentTone',
+  'contentOpacity',
+  'iconTone',
+  'textFontFamily',
+  'textSizeRem',
+  'fontWeight',
+  'fontStyle',
+  'textTransform',
+  'letterSpacing',
+  'textAlign',
+  'textX',
+  'textY',
+  'textEmboss',
+  'contentGlowStrength',
+  'iconGlowStrength',
+]);
+
+const contentCssVarPrefixes = [
+  '--content-',
+  '--icon-',
+];
+
+const hasContentOverlay = (overlay: Partial<SurfaceOptions>) => (
+  Object.keys(overlay).some((key) => contentOptionKeys.has(key as keyof SurfaceOptions))
+);
+
+const preserveBaseContentVars = (vars: MaterialSurfaceStateVars['cssVars']) => {
+  for (const key of Object.keys(vars)) {
+    if (contentCssVarPrefixes.some((prefix) => key.startsWith(prefix))) {
+      delete vars[key];
+    }
+  }
+  return vars;
+};
 
 const diffCssVars = (
   base: Record<string, unknown>,
@@ -41,6 +76,7 @@ export const computeSurfaceStateVars = (
       baseVars,
       surfaceStyle({ ...base, ...overlay }) as Record<string, unknown>,
     );
+    if (!hasContentOverlay(overlay)) preserveBaseContentVars(stateVars);
     if (Object.keys(stateVars).length > 0) {
       computed[state] = { cssVars: stateVars };
     }

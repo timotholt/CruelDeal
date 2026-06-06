@@ -39,4 +39,26 @@ const active = computeSurfaceStateVars(base, {
 assert.equal(active.active?.cssVars['--glow-rgb'], '248 215 112');
 assert.ok(active.active?.cssVars['--glow-alpha']);
 
+const lightingOnly = computeSurfaceStateVars({
+  ...base,
+  contentTone: 'black',
+  contentOpacity: 90,
+  textEmboss: true,
+}, {
+  hover: { lightStrength: 76, darkStrength: 22 },
+});
+
+assert.equal(lightingOnly.hover?.cssVars['--light-alpha'], '0.76');
+assert.equal(lightingOnly.hover?.cssVars['--dark-alpha'], '0.22');
+assert.equal(lightingOnly.hover?.cssVars['--content-shadow'], undefined);
+assert.equal(lightingOnly.hover?.cssVars['--content-rgb'], undefined);
+assert.equal(lightingOnly.hover?.cssVars['--content-glow-alpha'], undefined);
+
+const contentOverlay = computeSurfaceStateVars(base, {
+  hover: { contentTone: 'black' },
+});
+
+assert.equal(contentOverlay.hover?.cssVars['--content-rgb'], '23 20 15');
+assert.equal(contentOverlay.hover?.cssVars['--content-shadow'], '0 1px 0 rgb(255 255 255 / 0.38)');
+
 console.log('Surface state var tests passed');

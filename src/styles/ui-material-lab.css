@@ -1450,7 +1450,7 @@
   --emission-blip-size: var(--pressed-emission-blip-size, var(--emission-blip-size));
   transform:
     translateY(var(--pressed-state-translate-y, var(--pressed-translate-y, 1px)))
-    scale(var(--pressed-state-scale, var(--pressed-scale, 0.985)));
+    scale(var(--pressed-state-scale, var(--pressed-scale, 1)));
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1499,6 +1499,37 @@
       translateY(var(--hover-state-translate-y, var(--hover-translate-y, 0px)))
       scale(var(--hover-state-scale, var(--hover-scale, 1)));
   }
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active {
+  filter: none !important;
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__material,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__texture,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__tint,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__glass,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__gradient,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__edge-wear,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__border,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__material,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__texture,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__tint,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__glass,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__gradient,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__edge-wear,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__border {
+  filter: brightness(1.18);
+}
+
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover .cd-button__content,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover .cd-button__label,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active .cd-button__content,
+.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active .cd-button__label {
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 0.38),
+    0 0 10px rgb(23 20 15 / 0) !important;
 }
 
 .cd-surface:disabled {
@@ -2136,6 +2167,8 @@
   justify-content: center;
   overflow: hidden;
   line-height: 1;
+  padding-top: 0;
+  transform: translateY(0.14em);
   white-space: nowrap;
 }
 
