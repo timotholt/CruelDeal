@@ -5,16 +5,15 @@ import { createMemo, createSignal, For } from 'solid-js';
 import {
   GameScreenShell,
   PromoSlot,
-  darkStoneGameUiThemeFixture,
+  createGameUiRuntime,
   gameCmsFixture,
-  homePlacementFixtureA,
-  homePlacementFixtureB,
-  lightMarbleGameUiThemeFixture,
+  gameUiPlacementFixtureForId,
+  gameUiThemeFixtureForId,
   type GameUiRuntime,
+  type GameUiPlacementFixtureId,
+  type GameUiThemeFixtureId,
 } from '../ui/game-ui';
 
-type ThemeFixtureId = 'dark' | 'light';
-type PlacementFixtureId = 'a' | 'b';
 type JsonTabId = 'theme' | 'cms' | 'placements';
 
 const ToggleButton = (props: {
@@ -33,23 +32,21 @@ const ToggleButton = (props: {
 );
 
 export const GameUiSkinProofScreen = () => {
-  const [themeId, setThemeId] = createSignal<ThemeFixtureId>('dark');
-  const [placementId, setPlacementId] = createSignal<PlacementFixtureId>('a');
+  const [themeId, setThemeId] = createSignal<GameUiThemeFixtureId>('dark');
+  const [placementId, setPlacementId] = createSignal<GameUiPlacementFixtureId>('a');
   const [activeRouteId, setActiveRouteId] = createSignal('home');
   const [lastAction, setLastAction] = createSignal('(none)');
   const [jsonTab, setJsonTab] = createSignal<JsonTabId>('theme');
 
   const theme = createMemo(() => (
-    themeId() === 'dark' ? darkStoneGameUiThemeFixture : lightMarbleGameUiThemeFixture
+    gameUiThemeFixtureForId(themeId())
   ));
   const placements = createMemo(() => (
-    placementId() === 'a' ? homePlacementFixtureA : homePlacementFixtureB
+    gameUiPlacementFixtureForId(placementId())
   ));
-  const runtime = createMemo<GameUiRuntime>(() => ({
-    theme: theme(),
-    cms: gameCmsFixture,
-    placements: placements(),
-  }));
+  const runtime = createMemo<GameUiRuntime>(() => (
+    createGameUiRuntime({ themeFixture: themeId(), placementFixture: placementId() })
+  ));
   const activeJson = createMemo(() => {
     if (jsonTab() === 'cms') return gameCmsFixture;
     if (jsonTab() === 'placements') return placements();

@@ -1,7 +1,7 @@
 # Game UI Skinning/CMS Checkpoint
 
-Last Updated: 2026-06-05 20:54 PDT
-Current Packet: Complete through P7
+Last Updated: 2026-06-05 21:09 PDT
+Current Packet: Complete through P7 plus runtime assembly cleanup
 Objective: Create a restartable, agent-runnable implementation spec for game UI skinning, CMS content, promo placements, goal seeking, and verification.
 
 ## Completed
@@ -15,6 +15,7 @@ Objective: Create a restartable, agent-runnable implementation spec for game UI 
 - [x] P5 proof route and fixture toggles
 - [x] P6 editor/schema metadata follow-up
 - [x] P7 cleanup and stale-doc updates
+- [x] Runtime assembly helper extracted so proof screens and future bespoke screens can share the same validated theme/CMS/placement handoff
 
 ## In Progress
 
@@ -26,7 +27,7 @@ Objective: Create a restartable, agent-runnable implementation spec for game UI 
 
 ## Next Action
 
-Next lane: P5 proof is usable at `/game-ui-skin-proof`; future work can migrate one real screen to `GameScreenShell` or build editor controls from `gameThemeFieldMetadata.ts`.
+Next lane: migrate one real/prototype screen slice to `createGameUiRuntime` + `GameScreenShell`, or build material editor controls from `gameThemeFieldMetadata.ts`.
 
 ## Files Touched By This Lane
 
@@ -59,6 +60,8 @@ Next lane: P5 proof is usable at `/game-ui-skin-proof`; future work can migrate 
 - `App.tsx`
 - `components/ui/game-ui/gameThemeFieldMetadata.ts`
 - `components/ui/game-ui/gameThemeFieldMetadata.test.ts`
+- `components/ui/game-ui/createGameUiRuntime.ts`
+- `components/ui/game-ui/createGameUiRuntime.test.ts`
 - `docs/ui-template-cms-content-contract.md`
 
 ## Verification Evidence
@@ -85,6 +88,10 @@ Next lane: P5 proof is usable at `/game-ui-skin-proof`; future work can migrate 
 - PASS stale-doc scan found only the active spec, superseded doc pointer, and checkpoint references
 - PASS scoped `git diff --check -- components/ui/game-ui components/screens/GameUiSkinProofScreen.tsx src/styles/game-ui-skin-proof.css docs/game-ui-skinning-cms-agent-spec.md docs/agent-checkpoints/game-ui-skinning-cms.md docs/ui-template-cms-content-contract.md App.tsx router.tsx`
 - NOTE full `git diff --check` is blocked by unrelated trailing whitespace in `components/screens/IconsPreviewScreen.tsx`
+- PASS `npx tsx components/ui/game-ui/createGameUiRuntime.test.ts`
+- PASS `npx tsx components/ui/game-ui/gameUiComponents.test.ts`
+- PASS `npx tsx components/ui/game-ui/gameUiPromo.test.ts`
+- PASS `npm run build`
 
 ## Known Constraints
 

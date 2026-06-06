@@ -10,7 +10,7 @@ export const IconsPreviewScreen = () => {
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
   const [kScale, setKScale] = createSignal(0.8);
-  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'>('G');
+  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'Custom'>('I');
   const [kDiag2X, setKDiag2X] = createSignal(-1);
   const [kDiag1Slope, setKDiag1Slope] = createSignal(0.86);
   const [kDiag2Slope, setKDiag2Slope] = createSignal(0.60);
@@ -30,6 +30,52 @@ export const IconsPreviewScreen = () => {
   const [bevelOffset, setBevelOffset] = createSignal(0.6);
   const [bevelOpacity, setBevelOpacity] = createSignal(0.6);
   const [kBlockMode, setKBlockMode] = createSignal(false);
+
+  // Interactive Gradient Stop Editor State
+  const [gradientAngle, setGradientAngle] = createSignal<number>(45);
+  const [gradientScale, setGradientScale] = createSignal<number>(1.0);
+  const [gradientShift, setGradientShift] = createSignal<number>(0);
+
+  const [customStops, setCustomStops] = createSignal<Array<{ id: number, offset: number, color: string }>>([
+    { id: 1, offset: 0, color: '#55411B' },
+    { id: 2, offset: 8, color: '#997E47' },
+    { id: 3, offset: 26, color: '#B8A269' },
+    { id: 4, offset: 30, color: '#55411B' },
+    { id: 5, offset: 34, color: '#FFFDDA' },
+    { id: 6, offset: 60, color: '#D5BB8A' },
+    { id: 7, offset: 81, color: '#B8A269' },
+    { id: 8, offset: 85, color: '#55411B' },
+    { id: 9, offset: 89, color: '#FBECA9' },
+    { id: 10, offset: 100, color: '#D5BB8A' }
+  ]);
+
+  const gradCoords = () => {
+    const rad = (gradientAngle() * Math.PI) / 180;
+    const cx = 50;
+    const cy = 50;
+    const r = 50 * Math.sqrt(2) * gradientScale();
+    
+    const baseX1 = cx - r * Math.cos(rad);
+    const baseY1 = cy - r * Math.sin(rad);
+    const baseX2 = cx + r * Math.cos(rad);
+    const baseY2 = cy + r * Math.sin(rad);
+    
+    const shiftX = gradientShift() * Math.cos(rad);
+    const shiftY = gradientShift() * Math.sin(rad);
+    
+    return {
+      x1: baseX1 + shiftX,
+      y1: baseY1 + shiftY,
+      x2: baseX2 + shiftX,
+      y2: baseY2 + shiftY
+    };
+  };
+
+  const stopsCssString = () => {
+    const sorted = [...customStops()].sort((a, b) => a.offset - b.offset);
+    if (sorted.length === 0) return '#55411B 0%, #D5BB8A 100%';
+    return sorted.map(s => `${s.color} ${s.offset}%`).join(', ');
+  };
 
 
   const textureFiles = Array.from({ length: 25 }, (_, i) => {
@@ -163,11 +209,11 @@ export const IconsPreviewScreen = () => {
     const c = getKCoords(kScale(), currentKStrokeWidth(), linecap());
     const fillSourceStr = fillMode() === 'gradient' ? 'url(#gold)' : 'url(#gold-texture)';
     const paintDef = fillMode() === 'gradient'
-      ? `    <linearGradient id="gold" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      ? `    <linearGradient id="gold" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
       : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
 
     const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
-      ? `\n    <linearGradient id="gold-grad-overlay" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      ? `\n    <linearGradient id="gold-grad-overlay" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
       : '';
 
     // 1. Polygons - Shadow
@@ -477,6 +523,22 @@ ${paintDef}${overlayGradDef}
       <stop offset="89%" stop-color="#FBECA9" />
       <stop offset="100%" stop-color="#D5BB8A" />`;
     }
+    if (gradientProfile() === 'I') {
+      return `      <stop offset="0%" stop-color="#7C6535" />
+      <stop offset="8%" stop-color="#997E47" />
+      <stop offset="26%" stop-color="#B8A269" />
+      <stop offset="30%" stop-color="#7C6535" />
+      <stop offset="34%" stop-color="#FFFDDA" />
+      <stop offset="60%" stop-color="#D5BB8A" />
+      <stop offset="81%" stop-color="#B8A269" />
+      <stop offset="85%" stop-color="#7C6535" />
+      <stop offset="89%" stop-color="#FBECA9" />
+      <stop offset="100%" stop-color="#D5BB8A" />`;
+    }
+    if (gradientProfile() === 'Custom') {
+      const sorted = [...customStops()].sort((a, b) => a.offset - b.offset);
+      return sorted.map(stop => `      <stop offset="${stop.offset}%" stop-color="${stop.color}" />`).join('\n');
+    }
     return `      <stop offset="0%" stop-color="#9CA3AF" />
       <stop offset="25%" stop-color="#4B5563" />
       <stop offset="50%" stop-color="#1F2937" />
@@ -589,6 +651,13 @@ ${paintDef}${overlayGradDef}
                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#55411B] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
                         </button>
                         <button 
+                          onClick={() => setGradientProfile('I')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'I' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt I: Soft Horizon Au (Subtle)</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#7C6535] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
+                        </button>
+                        <button 
                           onClick={() => setGradientProfile('A')}
                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                         >
@@ -624,15 +693,224 @@ ${paintDef}${overlayGradDef}
                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#D1D5DB] via-[#6B7280] to-[#374151] shrink-0"></span>
                         </button>
                         <button 
-                          onClick={() => setGradientProfile('F')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt F: Obsidian Ag</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
-                        </button>
-                      </div>
+                           onClick={() => setGradientProfile('F')}
+                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                         >
+                           <span>Opt F: Obsidian Ag</span>
+                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
+                         </button>
+                         <button 
+                           onClick={() => setGradientProfile('Custom')}
+                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'Custom' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                         >
+                           <span>Opt H: Custom (Interactive Editor)</span>
+                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#55411B] via-[#FFFDDA] to-[#D5BB8A] shrink-0"></span>
+                         </button>
+                       </div>
                    </div>
                  </Show>
+
+                  {/* Dynamic Gradient stop editor (Opt H Custom only) */}
+                  <Show when={fillMode() === 'gradient' && gradientProfile() === 'Custom'}>
+                    <div class="mt-4 border-t border-white/10 pt-4">
+                      <h4 class="text-[10.5px] font-semibold tracking-wider uppercase text-amber-400 mb-3 flex justify-between items-center">
+                        <span>Gradient stop editor</span>
+                        <span class="text-[9px] font-mono text-white/40 uppercase">Opt H active</span>
+                      </h4>
+
+                      {/* Visual gradient bar preview */}
+                      <div 
+                        style={{ background: `linear-gradient(to right, ${stopsCssString()})` }} 
+                        class="w-full h-5 rounded border border-white/20 mb-3 shadow-inner relative"
+                      />
+
+                      {/* Preset Template Selector */}
+                      <div class="mb-3 flex items-center justify-between gap-2 bg-black/40 p-1.5 rounded border border-white/5">
+                        <span class="text-[10px] text-white/50 uppercase tracking-wider">Load Preset template</span>
+                        <select 
+                          onChange={(e) => {
+                            const val = e.currentTarget.value;
+                            if (val === 'A') setCustomStops([
+                              { id: 1, offset: 0, color: '#FFF3C2' },
+                              { id: 2, offset: 25, color: '#E2B857' },
+                              { id: 3, offset: 50, color: '#FCF6BA' },
+                              { id: 4, offset: 75, color: '#B28424' },
+                              { id: 5, offset: 100, color: '#FCD267' }
+                            ]);
+                            else if (val === 'B') setCustomStops([
+                              { id: 1, offset: 0, color: '#251502' },
+                              { id: 2, offset: 25, color: '#E5B842' },
+                              { id: 3, offset: 50, color: '#FFF7C7' },
+                              { id: 4, offset: 75, color: '#E5B842' },
+                              { id: 5, offset: 100, color: '#251502' }
+                            ]);
+                            else if (val === 'C') setCustomStops([
+                              { id: 1, offset: 0, color: '#FFF2C2' },
+                              { id: 2, offset: 30, color: '#C5A44E' },
+                              { id: 3, offset: 50, color: '#A48748' },
+                              { id: 4, offset: 70, color: '#EDCD75' },
+                              { id: 5, offset: 100, color: '#B7984A' }
+                            ]);
+                            else if (val === 'D') setCustomStops([
+                              { id: 1, offset: 0, color: '#EBEFF5' },
+                              { id: 2, offset: 25, color: '#B5B9BF' },
+                              { id: 3, offset: 50, color: '#EDF1F7' },
+                              { id: 4, offset: 75, color: '#83878D' },
+                              { id: 5, offset: 100, color: '#CED2D8' }
+                            ]);
+                            else if (val === 'E') setCustomStops([
+                              { id: 1, offset: 0, color: '#D1D5DB' },
+                              { id: 2, offset: 30, color: '#6B7280' },
+                              { id: 3, offset: 50, color: '#374151' },
+                              { id: 4, offset: 70, color: '#9CA3AF' },
+                              { id: 5, offset: 100, color: '#4B5563' }
+                            ]);
+                            else if (val === 'G') setCustomStops([
+                              { id: 1, offset: 0, color: '#55411B' },
+                              { id: 2, offset: 8, color: '#997E47' },
+                              { id: 3, offset: 26, color: '#B8A269' },
+                              { id: 4, offset: 30, color: '#55411B' },
+                              { id: 5, offset: 34, color: '#FFFDDA' },
+                              { id: 6, offset: 60, color: '#D5BB8A' },
+                              { id: 7, offset: 81, color: '#B8A269' },
+                              { id: 8, offset: 85, color: '#55411B' },
+                              { id: 9, offset: 89, color: '#FBECA9' },
+                              { id: 10, offset: 100, color: '#D5BB8A' }
+                            ]);
+                            else if (val === 'I') setCustomStops([
+                              { id: 1, offset: 0, color: '#7C6535' },
+                              { id: 2, offset: 8, color: '#997E47' },
+                              { id: 3, offset: 26, color: '#B8A269' },
+                              { id: 4, offset: 30, color: '#7C6535' },
+                              { id: 5, offset: 34, color: '#FFFDDA' },
+                              { id: 6, offset: 60, color: '#D5BB8A' },
+                              { id: 7, offset: 81, color: '#B8A269' },
+                              { id: 8, offset: 85, color: '#7C6535' },
+                              { id: 9, offset: 89, color: '#FBECA9' },
+                              { id: 10, offset: 100, color: '#D5BB8A' }
+                            ]);
+                            e.currentTarget.value = ""; // Reset
+                          }}
+                          class="bg-[#12131a] border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                        >
+                          <option value="">-- Choose Preset --</option>
+                          <option value="G">Opt G: Horizon Au</option>
+                          <option value="I">Opt I: Soft Horizon Au</option>
+                          <option value="A">Opt A: Shiny Au</option>
+                          <option value="B">Opt B: Contrast Au</option>
+                          <option value="C">Opt C: Antique Au</option>
+                          <option value="D">Opt D: Platinum Ag</option>
+                          <option value="E">Opt E: Steel Ag</option>
+                        </select>
+                      </div>
+
+                      {/* Coordinates Section */}
+                      <div class="mb-4 space-y-2.5 bg-black/20 p-2 rounded border border-white/5">
+                        {/* Angle Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Angle / Rotation</span>
+                            <span class="font-mono text-amber-400 font-semibold">{gradientAngle()}°</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="360" 
+                            value={gradientAngle()}
+                            onInput={(e) => setGradientAngle(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Scale / Width Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Width / Scale</span>
+                            <span class="font-mono text-amber-400 font-semibold">{Math.round(gradientScale() * 100)}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0.2" 
+                            max="3.0" 
+                            step="0.05"
+                            value={gradientScale()}
+                            onInput={(e) => setGradientScale(parseFloat(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Shift / Offset Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Shift / Position</span>
+                            <span class="font-mono text-amber-400 font-semibold">{gradientShift()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="-100" 
+                            max="100" 
+                            value={gradientShift()}
+                            onInput={(e) => setGradientShift(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Stop Manager List */}
+                      <div class="max-h-48 overflow-y-auto pr-1 mb-2.5 custom-scrollbar flex flex-col gap-1.5">
+                        <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                          {(stop) => (
+                            <div class="flex items-center gap-2 bg-black/40 p-1.5 rounded border border-white/5 justify-between">
+                              <div class="flex items-center gap-1.5 shrink-0">
+                                <input 
+                                  type="color" 
+                                  value={stop.color} 
+                                  onInput={(e) => {
+                                    const val = e.currentTarget.value;
+                                    setCustomStops(customStops().map(s => s.id === stop.id ? { ...s, color: val } : s));
+                                  }}
+                                  class="w-5 h-5 rounded cursor-pointer border border-white/15 bg-transparent p-0 shrink-0" 
+                                />
+                                <span class="text-[9.5px] font-mono text-white/50 w-8">{stop.offset}%</span>
+                              </div>
+                              <input 
+                                  type="range" 
+                                  min="0" 
+                                  max="100" 
+                                  value={stop.offset} 
+                                  onInput={(e) => {
+                                    const val = parseInt(e.currentTarget.value);
+                                    setCustomStops(customStops().map(s => s.id === stop.id ? { ...s, offset: val } : s));
+                                  }}
+                                  class="flex-1 min-w-0 accent-amber-500 h-1 cursor-ew-resize" 
+                              />
+                              <button 
+                                onClick={() => {
+                                  if (customStops().length > 2) {
+                                    setCustomStops(customStops().filter(s => s.id !== stop.id));
+                                  }
+                                }}
+                                disabled={customStops().length <= 2}
+                                class="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:text-white/30 text-[10px] font-mono font-bold px-1 transition-colors hover:bg-white/5 rounded"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          const nextId = customStops().reduce((max, s) => Math.max(max, s.id), 0) + 1;
+                          setCustomStops([...customStops(), { id: nextId, offset: 50, color: '#D5BB8A' }]);
+                        }}
+                        class="w-full py-1 text-[9.5px] font-mono text-amber-300 hover:text-amber-200 border border-dashed border-amber-500/30 hover:border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10 rounded transition-all uppercase tracking-wider"
+                      >
+                        ＋ Add Gradient Stop
+                      </button>
+                    </div>
+                  </Show>
 
                  <Show when={fillMode() === 'texture'}>
                     <div class="mb-2.5">
@@ -812,6 +1090,7 @@ ${paintDef}${overlayGradDef}
                      <button 
                        onClick={() => {
                          setKBlockMode(false);
+                         setKThickness(6.5);
                        }}
                        class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${!kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                      >
@@ -1133,10 +1412,17 @@ ${paintDef}${overlayGradDef}
                         <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
                            <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                             <defs>
-                              <linearGradient id={`gold-grad-${type}-${size.replace('.', '_')}`} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                              <linearGradient 
+                                id={`gold-grad-${type}-${size.replace('.', '_')}`} 
+                                x1={gradCoords().x1} 
+                                y1={gradCoords().y1} 
+                                x2={gradCoords().x2} 
+                                y2={gradCoords().y2} 
+                                gradientUnits="userSpaceOnUse"
+                              >
                                 <Show when={['1rem', '1.5rem', '2rem', '2.5rem'].includes(size)}>
                                   {/* OPTICAL SIZING: Smooth, high-contrast, double-ended gradients for small scales to prevent pixelation/dark reflection banding */}
-                                  <Show when={['A', 'B', 'C', 'G'].includes(gradientProfile())}>
+                                  <Show when={['A', 'B', 'C', 'G', 'Custom'].includes(gradientProfile())}>
                                     {/* Smooth Gold */}
                                     <stop offset="0%" stop-color="#78581E" />
                                     <stop offset="30%" stop-color="#E2B857" />
@@ -1208,6 +1494,25 @@ ${paintDef}${overlayGradDef}
                                     <stop offset="85%" stop-color="#55411B" />
                                     <stop offset="89%" stop-color="#FBECA9" />
                                     <stop offset="100%" stop-color="#D5BB8A" />
+                                  </Show>
+                                  <Show when={gradientProfile() === 'I'}>
+                                    <stop offset="0%" stop-color="#7C6535" />
+                                    <stop offset="8%" stop-color="#997E47" />
+                                    <stop offset="26%" stop-color="#B8A269" />
+                                    <stop offset="30%" stop-color="#7C6535" />
+                                    <stop offset="34%" stop-color="#FFFDDA" />
+                                    <stop offset="60%" stop-color="#D5BB8A" />
+                                    <stop offset="81%" stop-color="#B8A269" />
+                                    <stop offset="85%" stop-color="#7C6535" />
+                                    <stop offset="89%" stop-color="#FBECA9" />
+                                    <stop offset="100%" stop-color="#D5BB8A" />
+                                  </Show>
+                                  <Show when={gradientProfile() === 'Custom'}>
+                                    <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                      {(stop) => (
+                                        <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                      )}
+                                    </For>
                                   </Show>
                                 </Show>
                               </linearGradient>
@@ -1445,7 +1750,14 @@ ${paintDef}${overlayGradDef}
                         <svg viewBox="0 0 100 100" class="w-28 h-28" style={{ filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                           <defs>
                             {/* Linear Gradient with userSpaceOnUse to resolve zero-width bounding box bugs */}
-                            <linearGradient id={`gold-grad-${type}`} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                            <linearGradient 
+                              id={`gold-grad-${type}`} 
+                              x1={gradCoords().x1} 
+                              y1={gradCoords().y1} 
+                              x2={gradCoords().x2} 
+                              y2={gradCoords().y2} 
+                              gradientUnits="userSpaceOnUse"
+                            >
                               <Show when={gradientProfile() === 'A'}>
                                 <stop offset="0%" stop-color="#FFF3C2" />
                                 <stop offset="25%" stop-color="#E2B857" />
@@ -1497,6 +1809,23 @@ ${paintDef}${overlayGradDef}
                                 <stop offset="75%" stop-color="#B8A269" />
                                 <stop offset="85%" stop-color="#55411B" />
                                 <stop offset="100%" stop-color="#FBECA9" />
+                              </Show>
+                              <Show when={gradientProfile() === 'I'}>
+                                <stop offset="0%" stop-color="#7C6535" />
+                                <stop offset="15%" stop-color="#997E47" />
+                                <stop offset="30%" stop-color="#7C6535" />
+                                <stop offset="45%" stop-color="#FFFDDA" />
+                                <stop offset="60%" stop-color="#D5BB8A" />
+                                <stop offset="75%" stop-color="#B8A269" />
+                                <stop offset="85%" stop-color="#7C6535" />
+                                <stop offset="100%" stop-color="#FBECA9" />
+                              </Show>
+                              <Show when={gradientProfile() === 'Custom'}>
+                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                  {(stop) => (
+                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                  )}
+                                </For>
                               </Show>
                             </linearGradient>
 

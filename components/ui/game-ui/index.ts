@@ -4,6 +4,7 @@ export * from './GameTopBar';
 export * from './PromoCard';
 export * from './PromoSlot';
 export * from './ResourceChip';
+export * from './createGameUiRuntime';
 export * from './gameCmsSchema';
 export * from './gameUiComponentModels';
 export * from './gamePlacementSchema';
