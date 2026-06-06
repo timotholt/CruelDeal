@@ -42,6 +42,9 @@ import {
   type TextTransformToken,
 } from './MaterialRecipeTypes';
 import { createMaterialStateOverlay } from './MaterialRecipeDefaults';
+import { SurfaceGeneratedEditor } from './SurfaceGeneratedEditor';
+import type { SurfaceOptions } from './surfaceSchema';
+import type { SurfaceEditorPatch } from './surfaceEditorFilters';
 
 const ControlLabel = (props: { children: JSX.Element }) => (
   <span class="ui-lab-control-label">{props.children}</span>
@@ -404,38 +407,6 @@ const BlurSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: 
     <div class={`ui-lab-control-row ${props.enabled && props.recipe.glassBlurEnabled ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Amount</ControlLabel>
       <Slider disabled={!props.enabled || !props.recipe.glassBlurEnabled} value={props.recipe.glassBlur} min={0} max={24} step={0.25} onInput={(value) => props.update('glassBlur', value)} />
-    </div>
-  </div>
-);
-
-const ShadowSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Shadow</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.dropShadow} disabled={!props.enabled} onClick={() => props.update('dropShadow', !props.recipe.dropShadow)}>on</ToggleButton>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Cast X</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowX} min={-60} max={60} onInput={(value) => props.update('shadowX', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Cast Y</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowY} min={-20} max={60} onInput={(value) => props.update('shadowY', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Blur</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowBlur} min={0} max={80} onInput={(value) => props.update('shadowBlur', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Spread</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowSpread} min={-20} max={40} onInput={(value) => props.update('shadowSpread', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.dropShadow ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Opacity</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.dropShadow} value={props.recipe.shadowOpacity} onInput={(value) => props.update('shadowOpacity', value)} />
     </div>
   </div>
 );
@@ -826,22 +797,21 @@ const ContentStateSection = (props: {
 };
 
 const MotionSection = (props: {
-  stateOverlay: MaterialStateOverlay;
-  updateStateGroup: StateGroupUpdate;
+  enabled: boolean;
+  value: Partial<SurfaceOptions>;
+  inheritedValue: Partial<SurfaceOptions>;
+  onPatch: (patch: SurfaceEditorPatch) => void;
 }) => {
-  const active = () => props.stateOverlay.enabled;
   return (
-    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
-      <SectionLabel size="xs">State Motion</SectionLabel>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Scale</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.motion.scale} min={0.94} max={1.04} step={0.005} onInput={(value) => props.updateStateGroup('motion', 'scale', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Y</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.motion.translateY} min={-4} max={4} onInput={(value) => props.updateStateGroup('motion', 'translateY', value)} />
-      </div>
-    </div>
+    <SurfaceGeneratedEditor
+      title="State Motion"
+      mode="state"
+      groups={['motion']}
+      value={props.value}
+      inheritedValue={props.inheritedValue}
+      enabled={props.enabled}
+      onPatch={props.onPatch}
+    />
   );
 };
 
@@ -1038,6 +1008,43 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     });
   };
 
+  const restSurfaceValue = (): Partial<SurfaceOptions> => props.recipe;
+
+  const patchRestSurface = (patch: SurfaceEditorPatch) => {
+    const next = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    );
+    props.onChange({ ...props.recipe, ...next });
+  };
+
+  const motionSurfaceValue = (): Partial<SurfaceOptions> => ({
+    ...(stateOverlay().motion.scale !== 1 ? { stateScale: stateOverlay().motion.scale } : {}),
+    ...(stateOverlay().motion.translateY !== 0 ? { stateTranslateY: stateOverlay().motion.translateY } : {}),
+  });
+
+  const patchMotionSurface = (patch: SurfaceEditorPatch) => {
+    const overlay = stateOverlay();
+    const hasScale = Object.prototype.hasOwnProperty.call(patch, 'stateScale');
+    const hasTranslateY = Object.prototype.hasOwnProperty.call(patch, 'stateTranslateY');
+
+    props.onForcePreviewChange?.(true);
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: {
+          ...overlay,
+          enabled: true,
+          motion: {
+            ...overlay.motion,
+            ...(hasScale ? { scale: patch.stateScale ?? 1 } : {}),
+            ...(hasTranslateY ? { translateY: patch.stateTranslateY ?? 0 } : {}),
+          },
+        },
+      },
+    });
+  };
+
   const toggleStateList = (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
     const current = stateOverlay().glow[key] as Array<EdgeName | CornerName>;
     const next = current.includes(value)
@@ -1117,7 +1124,14 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleEnabled={toggleBorderEnabled} toggleBorder={toggleBorder} />
       <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
-      <ShadowSection recipe={props.recipe} enabled={capabilities().shadow} update={update} />
+      <SurfaceGeneratedEditor
+        title="Shadow"
+        mode="rest"
+        groups={['shadow']}
+        value={restSurfaceValue()}
+        enabled={capabilities().shadow}
+        onPatch={patchRestSurface}
+      />
       <TextSection recipe={props.recipe} enabled={capabilities().text} contentEnabled={capabilities().textContent} update={update} />
       <Show when={capabilities().states}>
         <StateSelectorSection
@@ -1138,7 +1152,12 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         />
         <EdgeEmissionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
         <ContentStateSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
-        <MotionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
+        <MotionSection
+          enabled={stateOverlay().enabled}
+          value={motionSurfaceValue()}
+          inheritedValue={{ stateScale: 1, stateTranslateY: 0 }}
+          onPatch={patchMotionSurface}
+        />
       </Show>
       {props.extraControls}
     </>
