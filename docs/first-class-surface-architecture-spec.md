@@ -286,8 +286,9 @@ Acceptance:
 - Replace `surfaceProps?: Record<string, any>` with typed `SurfaceOptions`.
 - Split button-only and panel-only host props as needed.
 - Keep UI node and material-node call sites compiling.
-- Use `docs/typed-surface-host-and-field-metadata-spec.md` as the detailed
-  implementation contract for this phase and the metadata registry phase.
+- Use `docs/schema-driven-surface-editor-spec.md` as the detailed
+  implementation contract for this phase, the metadata registry phase, and the
+  generated editor bridge.
 
 Acceptance:
 
@@ -300,6 +301,8 @@ Acceptance:
 - Cover every renderer-supported editable field.
 - Mark whether each field is rest-only, state-editable, or renderer-internal.
 - Add a test that every validated/editor-visible field is classified.
+- Generate editor controls from `surfaceValidate.ts` plus
+  `surfaceFieldMetadata.ts`; do not hand-maintain duplicate slider lists.
 
 Acceptance:
 
