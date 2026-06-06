@@ -314,19 +314,18 @@ ${getGradientStopsString()}
       <stop offset="100%" stop-color="#FCD267" />`;
     }
     if (gradientProfile() === 'B') {
-      return `      <stop offset="0%" stop-color="#FFF3C2" />
-      <stop offset="20%" stop-color="#E2B857" />
-      <stop offset="40%" stop-color="#78581e" />
-      <stop offset="60%" stop-color="#FCF6BA" />
-      <stop offset="80%" stop-color="#9c721c" />
-      <stop offset="100%" stop-color="#FCD267" />`;
+      return `      <stop offset="0%" stop-color="#251502" />
+      <stop offset="25%" stop-color="#E5B842" />
+      <stop offset="50%" stop-color="#FFF7C7" />
+      <stop offset="75%" stop-color="#E5B842" />
+      <stop offset="100%" stop-color="#251502" />`;
     }
     if (gradientProfile() === 'C') {
-      return `      <stop offset="0%" stop-color="#FFE596" />
-      <stop offset="30%" stop-color="#A67C1E" />
-      <stop offset="50%" stop-color="#593c0f" />
-      <stop offset="70%" stop-color="#D9A736" />
-      <stop offset="100%" stop-color="#855F0E" />`;
+      return `      <stop offset="0%" stop-color="#FFF2C2" />
+      <stop offset="30%" stop-color="#C5A44E" />
+      <stop offset="50%" stop-color="#A48748" />
+      <stop offset="70%" stop-color="#EDCD75" />
+      <stop offset="100%" stop-color="#B7984A" />`;
     }
     if (gradientProfile() === 'D') {
       return `      <stop offset="0%" stop-color="#EBEFF5" />
@@ -435,18 +434,18 @@ ${getGradientStopsString()}
                        <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424] shrink-0"></span>
                      </button>
                      <button 
-                       onClick={() => setGradientProfile('B')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       <span>Opt B: Contrast Au</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] via-[#78581e] to-[#9c721c] shrink-0"></span>
-                     </button>
+                         onClick={() => setGradientProfile('B')}
+                         class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                       >
+                         <span>Opt B: Contrast Au</span>
+                         <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#251502] via-[#FFF7C7] to-[#251502] shrink-0"></span>
+                       </button>
                      <button 
                        onClick={() => setGradientProfile('C')}
                        class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                      >
                        <span>Opt C: Antique Au</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFE596] via-[#593c0f] to-[#855F0E] shrink-0"></span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF2C2] via-[#A48748] to-[#EDCD75] shrink-0"></span>
                      </button>
                      <button 
                        onClick={() => setGradientProfile('D')}
@@ -766,19 +765,18 @@ ${getGradientStopsString()}
                                   <stop offset="100%" stop-color="#FCD267" />
                                 </Show>
                                 <Show when={gradientProfile() === 'B'}>
-                                  <stop offset="0%" stop-color="#FFF3C2" />
-                                  <stop offset="20%" stop-color="#E2B857" />
-                                  <stop offset="40%" stop-color="#78581e" />
-                                  <stop offset="60%" stop-color="#FCF6BA" />
-                                  <stop offset="80%" stop-color="#9c721c" />
-                                  <stop offset="100%" stop-color="#FCD267" />
+                                  <stop offset="0%" stop-color="#251502" />
+                                  <stop offset="25%" stop-color="#E5B842" />
+                                  <stop offset="50%" stop-color="#FFF7C7" />
+                                  <stop offset="75%" stop-color="#E5B842" />
+                                  <stop offset="100%" stop-color="#251502" />
                                 </Show>
                                 <Show when={gradientProfile() === 'C'}>
-                                  <stop offset="0%" stop-color="#FFE596" />
-                                  <stop offset="30%" stop-color="#A67C1E" />
-                                  <stop offset="50%" stop-color="#593c0f" />
-                                  <stop offset="70%" stop-color="#D9A736" />
-                                  <stop offset="100%" stop-color="#855F0E" />
+                                  <stop offset="0%" stop-color="#FFF2C2" />
+                                  <stop offset="30%" stop-color="#C5A44E" />
+                                  <stop offset="50%" stop-color="#A48748" />
+                                  <stop offset="70%" stop-color="#EDCD75" />
+                                  <stop offset="100%" stop-color="#B7984A" />
                                 </Show>
                                 <Show when={gradientProfile() === 'D'}>
                                   <stop offset="0%" stop-color="#EBEFF5" />
@@ -880,19 +878,18 @@ ${getGradientStopsString()}
                                 <stop offset="100%" stop-color="#FCD267" />
                               </Show>
                               <Show when={gradientProfile() === 'B'}>
-                                <stop offset="0%" stop-color="#FFF3C2" />
-                                <stop offset="20%" stop-color="#E2B857" />
-                                <stop offset="40%" stop-color="#78581e" />
-                                <stop offset="60%" stop-color="#FCF6BA" />
-                                <stop offset="80%" stop-color="#9c721c" />
-                                <stop offset="100%" stop-color="#FCD267" />
+                                <stop offset="0%" stop-color="#251502" />
+                                <stop offset="25%" stop-color="#E5B842" />
+                                <stop offset="50%" stop-color="#FFF7C7" />
+                                <stop offset="75%" stop-color="#E5B842" />
+                                <stop offset="100%" stop-color="#251502" />
                               </Show>
                               <Show when={gradientProfile() === 'C'}>
-                                <stop offset="0%" stop-color="#FFE596" />
-                                <stop offset="30%" stop-color="#A67C1E" />
-                                <stop offset="50%" stop-color="#593c0f" />
-                                <stop offset="70%" stop-color="#D9A736" />
-                                <stop offset="100%" stop-color="#855F0E" />
+                                <stop offset="0%" stop-color="#FFF2C2" />
+                                <stop offset="30%" stop-color="#C5A44E" />
+                                <stop offset="50%" stop-color="#A48748" />
+                                <stop offset="70%" stop-color="#EDCD75" />
+                                <stop offset="100%" stop-color="#B7984A" />
                               </Show>
                               <Show when={gradientProfile() === 'D'}>
                                 <stop offset="0%" stop-color="#EBEFF5" />

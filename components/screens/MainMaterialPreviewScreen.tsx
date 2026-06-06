@@ -32,6 +32,7 @@ import {
   type EmissionMetrics,
   type MaterialRecipe,
   type MaterialRecipeState,
+  type SurfaceOptions,
   type MaterialWorkbenchPart,
   type TextTransformToken,
 } from '../ui/material-lab';
@@ -12950,8 +12951,10 @@ interface ChromeFeedNodeRenderContext {
   targetIdForNode: (node: FeedCardNode) => string;
   previewStateForNode: (node: FeedCardNode, role: PreviewTargetRole) => MaterialRecipeState;
   roleForNode?: (node: FeedCardNode) => PreviewTargetRole;
-  surfacePropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => Record<string, unknown> | undefined;
-  buttonPropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => Record<string, unknown>;
+  surfacePropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => SurfaceOptions | undefined;
+  buttonPropsForNode?: (node: FeedCardNode, role: PreviewTargetRole, visualState: MaterialRecipeState) => SurfaceOptions;
+  iconForNode?: (node: FeedCardNode, role: PreviewTargetRole) => JSX.Element | undefined;
+  iconPositionForNode?: (node: FeedCardNode, role: PreviewTargetRole) => 'left' | 'right' | 'top' | undefined;
   classForNode?: (node: FeedCardNode, role: PreviewTargetRole) => string;
   surfaceClassForNode?: (node: FeedCardNode, role: PreviewTargetRole) => string;
   selectedClassForNode?: (node: FeedCardNode) => string;
@@ -13027,6 +13030,8 @@ const ChromeFeedNodeTree = (props: {
           surfaceProps={props.context.buttonPropsForNode?.(props.node, nodeRole(), visualState())}
           buttonSize="sm"
           buttonFullWidth
+          icon={props.context.iconForNode?.(props.node, nodeRole())}
+          iconPosition={props.context.iconPositionForNode?.(props.node, nodeRole())}
           class={`main-material-card-node-surface main-material-card-node-surface--button ${surfaceClass()}`}
           label={label()}
           onClick={() => props.context.onNodeAction?.(props.node)}
@@ -13591,12 +13596,15 @@ const MainMaterialPreview = (props: {
       }
       const currencyIndex = topBarCurrencyNodeIndex(node);
       if (currencyIndex >= 0) {
-        return {
-          ...materialRecipeItemProps(props.surfaces.currencies, currencyIndex, visualState),
-          icon: <span class={`main-material-currency-icon ${topBarCurrencySpecs[currencyIndex].iconClass}`} />,
-        };
+        return materialRecipeItemProps(props.surfaces.currencies, currencyIndex, visualState);
       }
       return {};
+    },
+    iconForNode: (node) => {
+      const currencyIndex = topBarCurrencyNodeIndex(node);
+      return currencyIndex >= 0
+        ? <span class={`main-material-currency-icon ${topBarCurrencySpecs[currencyIndex].iconClass}`} />
+        : undefined;
     },
     labelForNode: (node) => node.id === 'topbar-profile' ? <FakeProfileIcon /> : undefined,
     textForNode: (node) => node.id === 'topbar-commander'
@@ -13671,13 +13679,14 @@ const MainMaterialPreview = (props: {
         return materialRecipeItemProps(props.surfaces.toolbar, Math.max(0, toolbarNodeIndex(node)), visualState);
       }
       const index = Math.max(0, navNodeIndex(node));
-      const item = navNodeSpecs[index];
-      return {
-        ...materialRecipeItemProps(props.surfaces.nav, index, visualState),
-        icon: <span class="main-material-nav-icon">{item?.icon}</span>,
-        iconPosition: 'top',
-      };
+      return materialRecipeItemProps(props.surfaces.nav, index, visualState);
     },
+    iconForNode: (node) => {
+      const index = Math.max(0, navNodeIndex(node));
+      const item = navNodeSpecs[index];
+      return navNodeIndex(node) >= 0 ? <span class="main-material-nav-icon">{item?.icon}</span> : undefined;
+    },
+    iconPositionForNode: (node) => navNodeIndex(node) >= 0 ? 'top' : undefined,
     textForNode: (node) => navNodeIndex(node) >= 0
       ? navNodeSpecs[Math.max(0, navNodeIndex(node))]?.text || ''
       : toolbarNodeSpecs[Math.max(0, toolbarNodeIndex(node))]?.text || '',

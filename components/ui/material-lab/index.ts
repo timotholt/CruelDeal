@@ -10,6 +10,7 @@ export * from './MaterialSurfaceHost';
 export * from './MaterialWorkbenchLayout';
 export * from './surfaceValidate';
 export * from './surfaceStateVars';
+export * from './surfaceFieldMetadata';
 export * from './skinManifest';
 export * from './skinRegistry';
 export * from './uiNodeRichTextTheme';

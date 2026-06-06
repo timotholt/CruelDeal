@@ -286,6 +286,8 @@ Acceptance:
 - Replace `surfaceProps?: Record<string, any>` with typed `SurfaceOptions`.
 - Split button-only and panel-only host props as needed.
 - Keep UI node and material-node call sites compiling.
+- Use `docs/typed-surface-host-and-field-metadata-spec.md` as the detailed
+  implementation contract for this phase and the metadata registry phase.
 
 Acceptance:
 

@@ -8,6 +8,7 @@ import {
   type MaterialEmissionPlan,
   type MaterialRecipe,
   type MaterialRecipeState,
+  type SurfaceOptions,
 } from '../../ui/material-lab';
 
 export type MainMaterialExportTargetKind = 'feed-button';
@@ -41,7 +42,7 @@ export interface MainMaterialExportPlannerContext<
   fallbackStory: TStory;
   selectedState: MaterialRecipeState;
   surfaceRecipeForNode: (cardType: TCardType, node: TNode) => MaterialRecipe;
-  surfacePropsForRecipe: (recipe: MaterialRecipe, state: MaterialRecipeState) => Record<string, unknown>;
+  surfacePropsForRecipe: (recipe: MaterialRecipe, state: MaterialRecipeState) => SurfaceOptions;
   textForNode: (story: TStory, node: TNode) => string;
 }
 

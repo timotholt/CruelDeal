@@ -170,6 +170,8 @@ const fields: Record<keyof SurfaceOptions, Pair> = {
   visualState: pick(VISUAL_STATES),
 };
 
+export const surfaceOptionFieldKeys = Object.keys(fields) as (keyof SurfaceOptions)[];
+
 const entries = (key: 'strict' | 'lenient') =>
   Object.fromEntries(Object.entries(fields).map(([name, pair]) => [name, pair[key]]));
 

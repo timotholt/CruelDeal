@@ -4,6 +4,7 @@ import type {
   MaterialEditorCapabilities,
   MaterialRecipe,
   MaterialRecipeState,
+  SurfaceOptions,
 } from '../material-lab';
 import type { MaterialTextFitOptions } from './MaterialTextContent';
 
@@ -99,12 +100,12 @@ export interface MaterialNodeRenderContext {
     node: MaterialNodeRecipe,
     role: MaterialNodeRole,
     visualState: MaterialRecipeState,
-  ) => Record<string, unknown>;
+  ) => SurfaceOptions;
   buttonPropsForNode?: (
     node: MaterialNodeRecipe,
     role: MaterialNodeRole,
     visualState: MaterialRecipeState,
-  ) => Record<string, unknown>;
+  ) => SurfaceOptions;
   buttonSizeForNode?: (node: MaterialNodeRecipe) => ButtonSize | undefined;
   buttonFullWidthForNode?: (node: MaterialNodeRecipe) => boolean;
   onNodeAction?: (node: MaterialNodeRecipe) => void;
