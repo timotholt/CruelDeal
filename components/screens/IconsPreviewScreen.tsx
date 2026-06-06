@@ -1,4 +1,104 @@
-import { createSignal, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, For, Show, onMount, onCleanup, createEffect } from 'solid-js';
+
+// Color Conversion Helpers
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let c = hex.trim().replace(/^#/, '');
+  if (c.length === 3) {
+    c = c.split('').map(x => x + x).join('');
+  }
+  if (c.length !== 6) {
+    return { r: 213, g: 187, b: 138 }; // Default neutral gold (#D5BB8A)
+  }
+  const num = parseInt(c, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (val: number) => Math.max(0, Math.min(255, Math.round(val)));
+  const hex = ((clamp(r) << 16) | (clamp(g) << 8) | clamp(b)).toString(16).padStart(6, '0');
+  return `#${hex}`.toUpperCase();
+}
+
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100)
+  };
+}
+
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  h /= 360;
+  s /= 100;
+  l /= 100;
+  let r = l;
+  let g = l;
+  let b = l;
+
+  if (s !== 0) {
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+
+  return {
+    r: Math.round(r * 255),
+    g: Math.round(g * 255),
+    b: Math.round(b * 255)
+  };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const rgb = hslToRgb(h, s, l);
+  return rgbToHex(rgb.r, rgb.g, rgb.b);
+}
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const rgb = hexToRgb(hex);
+  return rgbToHsl(rgb.r, rgb.g, rgb.b);
+}
+
 
 export const IconsPreviewScreen = () => {
   // Signals for interactive SVG controls
@@ -16,7 +116,7 @@ export const IconsPreviewScreen = () => {
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
   const [kScale, setKScale] = createSignal(0.8);
-  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'R1' | 'R2' | 'Custom'>('J');
+  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'K' | 'R1' | 'R2' | 'Custom'>('J');
   const [kDiag2X, setKDiag2X] = createSignal(-1);
   const [kDiag1Slope, setKDiag1Slope] = createSignal(0.86);
   const [kDiag2Slope, setKDiag2Slope] = createSignal(0.60);
@@ -37,11 +137,22 @@ export const IconsPreviewScreen = () => {
   const [bevelOpacity, setBevelOpacity] = createSignal(0.6);
   const [kBlockMode, setKBlockMode] = createSignal(false);
 
+  let containerRef: HTMLDivElement | undefined;
+
   // Mouse and Gyroscope orientation event listeners for Holo-Reflex effect
   const handleMouseMove = (e: MouseEvent) => {
     if (!interactiveSheen()) return;
-    const dx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-    const dy = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+    let centerX = window.innerWidth / 2;
+    let centerY = window.innerHeight / 2;
+    
+    if (containerRef) {
+      const rect = containerRef.getBoundingClientRect();
+      centerX = rect.left + rect.width / 2;
+      centerY = rect.top + rect.height / 2;
+    }
+    
+    const dx = (e.clientX - centerX) / (window.innerWidth / 2);
+    const dy = (e.clientY - centerY) / (window.innerHeight / 2);
     setInteractiveShiftX(dx * 45);
     setInteractiveShiftY(dy * 45);
   };
@@ -107,6 +218,181 @@ export const IconsPreviewScreen = () => {
   const [gradientAngle, setGradientAngle] = createSignal<number>(45);
   const [gradientScale, setGradientScale] = createSignal<number>(1.0);
   const [gradientShift, setGradientShift] = createSignal<number>(0);
+  const [customType, setCustomType] = createSignal<'linear' | 'radial'>('linear');
+  const [hoveredStopId, setHoveredStopId] = createSignal<number | null>(null);
+  const [activeColorPickerStopId, setActiveColorPickerStopId] = createSignal<number | null>(null);
+  const [colorMode, setColorMode] = createSignal<'HEX' | 'HSL' | 'RGB'>('HSL');
+  
+  // Custom picker local states
+  const [pickerH, setPickerH] = createSignal(0);
+  const [pickerS, setPickerS] = createSignal(0);
+  const [pickerL, setPickerL] = createSignal(0);
+  const [pickerR, setPickerR] = createSignal(0);
+  const [pickerG, setPickerG] = createSignal(0);
+  const [pickerB, setPickerB] = createSignal(0);
+  const [pickerHex, setPickerHex] = createSignal('');
+  const [colorCopiedFeedback, setColorCopiedFeedback] = createSignal(false);
+
+  const copyColor = async () => {
+    const hex = pickerHex();
+    try {
+      await navigator.clipboard.writeText(hex);
+      setColorCopiedFeedback(true);
+      setTimeout(() => setColorCopiedFeedback(false), 1500);
+    } catch (err) {
+      alert(`Clipboard write failed. Here is the color code: ${hex}`);
+    }
+  };
+
+  const pasteColor = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        let cleanHex = text.trim();
+        if (!cleanHex.startsWith('#')) {
+          cleanHex = '#' + cleanHex;
+        }
+        if (cleanHex.match(/^#[0-9A-Fa-f]{6}$/)) {
+          handleHexChange(cleanHex);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Clipboard read permission denied or failed, falling back to prompt:', err);
+    }
+    const input = prompt('Please paste a hex color code (e.g. #FFCC00):', pickerHex());
+    if (input) {
+      let cleanHex = input.trim();
+      if (!cleanHex.startsWith('#')) {
+        cleanHex = '#' + cleanHex;
+      }
+      if (cleanHex.match(/^#[0-9A-Fa-f]{6}$/)) {
+        handleHexChange(cleanHex);
+      } else {
+        alert('Invalid HEX format. Please use #RRGGBB or RRGGBB.');
+      }
+    }
+  };
+
+  let padRef: HTMLDivElement | undefined;
+
+  // Auto-default active editing stop to first stop
+  createEffect(() => {
+    const stops = customStops();
+    if (stops.length > 0) {
+      const activeId = activeColorPickerStopId();
+      if (activeId === null || !stops.some(s => s.id === activeId)) {
+        setActiveColorPickerStopId(stops[0].id);
+      }
+    }
+  });
+
+  // Sync color picker values when selected stop changes
+  createEffect(() => {
+    const stopId = activeColorPickerStopId();
+    if (stopId !== null) {
+      const stop = customStops().find(s => s.id === stopId);
+      if (stop) {
+        const hex = stop.color;
+        setPickerHex(hex);
+        const rgb = hexToRgb(hex);
+        setPickerR(rgb.r);
+        setPickerG(rgb.g);
+        setPickerB(rgb.b);
+        const hsl = hexToHsl(hex);
+        setPickerH(hsl.h);
+        setPickerS(hsl.s);
+        setPickerL(hsl.l);
+      }
+    }
+  });
+
+  const updateStopColor = (hex: string) => {
+    const stopId = activeColorPickerStopId();
+    if (stopId !== null) {
+      setCustomStops(customStops().map(s => s.id === stopId ? { ...s, color: hex } : s));
+    }
+  };
+
+  const handleHslChange = (h: number, s: number, l: number) => {
+    setPickerH(h);
+    setPickerS(s);
+    setPickerL(l);
+    const hex = hslToHex(h, s, l);
+    setPickerHex(hex);
+    const rgb = hslToRgb(h, s, l);
+    setPickerR(rgb.r);
+    setPickerG(rgb.g);
+    setPickerB(rgb.b);
+    updateStopColor(hex);
+  };
+
+  const handleRgbChange = (r: number, g: number, b: number) => {
+    setPickerR(r);
+    setPickerG(g);
+    setPickerB(b);
+    const hex = rgbToHex(r, g, b);
+    setPickerHex(hex);
+    const hsl = rgbToHsl(r, g, b);
+    setPickerH(hsl.h);
+    setPickerS(hsl.s);
+    setPickerL(hsl.l);
+    updateStopColor(hex);
+  };
+
+  const handleHexChange = (hex: string) => {
+    setPickerHex(hex);
+    if (hex.match(/^#[0-9A-Fa-f]{6}$/)) {
+      const rgb = hexToRgb(hex);
+      setPickerR(rgb.r);
+      setPickerG(rgb.g);
+      setPickerB(rgb.b);
+      const hsl = hexToHsl(hex);
+      setPickerH(hsl.h);
+      setPickerS(hsl.s);
+      setPickerL(hsl.l);
+      updateStopColor(hex);
+    }
+  };
+
+  const updateColorMode = (mode: 'HEX' | 'HSL' | 'RGB') => {
+    setColorMode(mode);
+    localStorage.setItem('crueldeal-color-picker-mode', mode);
+  };
+
+  const handlePadMouseDown = (e: MouseEvent) => {
+    const padEl = e.currentTarget as HTMLDivElement;
+    if (!padEl) return;
+    e.preventDefault();
+    
+    const updateFromEvent = (clientX: number, clientY: number) => {
+      const rect = padEl.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (rect.bottom - clientY) / rect.height));
+      
+      const s = Math.round(x * 100);
+      const l = Math.round(y * 100);
+      handleHslChange(pickerH(), s, l);
+    };
+
+    updateFromEvent(e.clientX, e.clientY);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      updateFromEvent(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const isRadialActive = () => {
+    return ['R1', 'R2'].includes(gradientProfile()) || (gradientProfile() === 'Custom' && customType() === 'radial');
+  };
 
   const [customStops, setCustomStops] = createSignal<Array<{ id: number, offset: number, color: string }>>([
     { id: 1, offset: 0, color: '#7C6535' },
@@ -121,7 +407,7 @@ export const IconsPreviewScreen = () => {
     { id: 10, offset: 100, color: '#7C6535' }
   ]);
 
-  const gradCoords = () => {
+  const gradCoords = (customX?: number, customY?: number) => {
     const rad = (gradientAngle() * Math.PI) / 180;
     const cx = 50;
     const cy = 50;
@@ -135,19 +421,24 @@ export const IconsPreviewScreen = () => {
     const shiftX = gradientShift() * Math.cos(rad);
     const shiftY = gradientShift() * Math.sin(rad);
     
+    const activeX = customX !== undefined ? customX : (interactiveSheen() ? interactiveShiftX() : 0);
+    const activeY = customY !== undefined ? customY : (interactiveSheen() ? interactiveShiftY() : 0);
+    
     return {
-      x1: baseX1 + shiftX + (interactiveSheen() ? interactiveShiftX() : 0),
-      y1: baseY1 + shiftY + (interactiveSheen() ? interactiveShiftY() : 0),
-      x2: baseX2 + shiftX + (interactiveSheen() ? interactiveShiftX() : 0),
-      y2: baseY2 + shiftY + (interactiveSheen() ? interactiveShiftY() : 0)
+      x1: baseX1 + shiftX + activeX,
+      y1: baseY1 + shiftY + activeY,
+      x2: baseX2 + shiftX + activeX,
+      y2: baseY2 + shiftY + activeY
     };
   };
 
-  const radialCoords = () => {
+  const radialCoords = (customX?: number, customY?: number) => {
     const rad = (gradientAngle() * Math.PI) / 180;
     const r = 50 * gradientScale();
-    const fx = 50 + (interactiveSheen() ? interactiveShiftX() : 0) + (gradientShift() * Math.cos(rad));
-    const fy = 50 + (interactiveSheen() ? interactiveShiftY() : 0) + (gradientShift() * Math.sin(rad));
+    const activeX = customX !== undefined ? customX : (interactiveSheen() ? interactiveShiftX() : 0);
+    const activeY = customY !== undefined ? customY : (interactiveSheen() ? interactiveShiftY() : 0);
+    const fx = 50 + activeX + (gradientShift() * Math.cos(rad));
+    const fy = 50 + activeY + (gradientShift() * Math.sin(rad));
     return { cx: 50, cy: 50, r, fx, fy };
   };
 
@@ -289,13 +580,13 @@ export const IconsPreviewScreen = () => {
     const c = getKCoords(kScale(), currentKStrokeWidth(), linecap());
     const fillSourceStr = fillMode() === 'gradient' ? 'url(#gold)' : 'url(#gold-texture)';
     const paintDef = fillMode() === 'gradient'
-      ? (['R1', 'R2'].includes(gradientProfile())
+      ? (isRadialActive()
         ? `    <radialGradient id="gold" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
         : `    <linearGradient id="gold" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`)
       : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
 
     const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
-      ? (['R1', 'R2'].includes(gradientProfile())
+      ? (isRadialActive()
         ? `\n    <radialGradient id="gold-grad-overlay" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
         : `\n    <linearGradient id="gold-grad-overlay" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`)
       : '';
@@ -631,6 +922,12 @@ ${paintDef}${overlayGradDef}
       <stop offset="93%" stop-color="#FBECA9" />
       <stop offset="100%" stop-color="#7C6535" />`;
     }
+    if (gradientProfile() === 'K') {
+      return `      <stop offset="0%" stop-color="#FFFDDA" />
+      <stop offset="31%" stop-color="#D5BB8A" />
+      <stop offset="44%" stop-color="#7C6535" />
+      <stop offset="100%" stop-color="#55411B" />`;
+    }
     if (gradientProfile() === 'R1') {
       return `      <stop offset="0%" stop-color="#FFFDDA" />
       <stop offset="15%" stop-color="#D5BB8A" />
@@ -679,10 +976,30 @@ ${paintDef}${overlayGradDef}
             <p class="text-white/50 text-sm mt-1">Design playground for the flat-bottomed hexagon "Kit" (K) currency coin.</p>
           </div>
           
-          <div class="flex gap-2">
+          <div class="flex gap-2 items-center">
+            <Show when={interactiveSheen() && !gyroEnabled()}>
+              <button
+                onClick={requestGyroPermission}
+                class="px-3 py-2 text-xs font-mono bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 hover:border-amber-500/40 rounded transition-all flex items-center gap-1 uppercase"
+              >
+                📱 Link Gyro (Mobile)
+              </button>
+            </Show>
+
+            <button 
+              onClick={() => setInteractiveSheen(!interactiveSheen())}
+              class={`px-4 py-2 text-xs font-mono border rounded transition-all flex items-center gap-1.5 ${interactiveSheen() ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'}`}
+            >
+              <span class={`relative flex h-2 w-2 ${interactiveSheen() ? 'inline-flex' : 'hidden'}`}>
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              HOLO-REFLEX: {interactiveSheen() ? 'ON' : 'OFF'}
+            </button>
+
             <button 
               onClick={() => window.history.back()}
-              class="px-4 py-2 text-xs font-mono border border-white/10 rounded bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-white/80"
+              class="px-4 py-2 text-xs font-mono border border-white/10 rounded bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-white/80 shrink-0"
             >
               &larr; BACK TO NAVIGATION
             </button>
@@ -731,50 +1048,6 @@ ${paintDef}${overlayGradDef}
                   SVG Geometry Tweaker
                 </h3>
 
-                 {/* Interactive Holo-Reflex Mode Widget */}
-                 <div class="mb-4 bg-amber-500/5 border border-amber-500/15 p-2.5 rounded-lg">
-                   <div class="flex items-center justify-between mb-1.5">
-                     <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                       <span class="relative flex h-2 w-2">
-                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                         <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                       </span>
-                       Holo-Reflex Mode
-                     </span>
-                     <button
-                       onClick={() => setInteractiveSheen(!interactiveSheen())}
-                       class={`px-2 py-0.5 text-[9px] font-mono rounded border transition-all ${interactiveSheen() ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-black/30 border-white/10 text-white/40'}`}
-                     >
-                       {interactiveSheen() ? 'ACTIVE' : 'MUTED'}
-                     </button>
-                   </div>
-                   <p class="text-[9.5px] text-white/50 leading-relaxed mb-2.5">
-                     Parallax specular sheen that slides based on mouse cursor coordinates or mobile gyroscope/tilt angles.
-                   </p>
-                   
-                   <Show when={interactiveSheen()}>
-                     <div class="flex flex-col gap-1.5 pt-1 border-t border-white/5">
-                       <div class="flex justify-between text-[8.5px] font-mono text-white/40">
-                         <span>Parallax X: {interactiveShiftX().toFixed(1)}px</span>
-                         <span>Parallax Y: {interactiveShiftY().toFixed(1)}px</span>
-                       </div>
-                       
-                       <Show when={!gyroEnabled()}>
-                         <button
-                           onClick={requestGyroPermission}
-                           class="w-full py-1 text-[9px] font-mono bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 hover:border-amber-500/40 rounded transition-all flex items-center justify-center gap-1 uppercase"
-                         >
-                           📱 Link Gyro Tilt (Mobile)
-                         </button>
-                       </Show>
-                       <Show when={gyroEnabled()}>
-                         <div class="text-[8.5px] font-mono text-green-400/80 bg-green-500/5 border border-green-500/10 rounded py-0.5 text-center">
-                           ✓ Gyroscope Connected (Tilt Device)
-                         </div>
-                       </Show>
-                     </div>
-                   </Show>
-                 </div>
 
                  {/* Fill Mode Switcher */}
                  <div class="mb-2.5">
@@ -799,92 +1072,25 @@ ${paintDef}${overlayGradDef}
                  <Show when={fillMode() === 'gradient'}>
                    <div class="mb-2.5">
                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
-                     <div class="grid grid-cols-2 gap-1 bg-black/40 p-1 rounded border border-white/5">
-                        <button 
-                          onClick={() => setGradientProfile('G')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'G' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt G: Horizon Au (Reference match)</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#55411B] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
-                        </button>
-                        <button 
-                          onClick={() => setGradientProfile('I')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'I' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt I: Soft Horizon Au (Subtle)</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#7C6535] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
-                        </button>
-                        <button 
-                          onClick={() => setGradientProfile('J')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'J' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt J: Tiling Soft Au (Seamless)</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#7C6535] via-[#FFFDDA] to-[#7C6535] shrink-0"></span>
-                        </button>
-                        <button 
-                          onClick={() => setGradientProfile('A')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt A: Shiny Au</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424] shrink-0"></span>
-                        </button>
-                        <button 
-                           onClick={() => setGradientProfile('B')}
-                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                         >
-                           <span>Opt B: Contrast Au</span>
-                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#251502] via-[#FFF7C7] to-[#251502] shrink-0"></span>
-                         </button>
-                        <button 
-                          onClick={() => setGradientProfile('C')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt C: Antique Au</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF2C2] via-[#A48748] to-[#EDCD75] shrink-0"></span>
-                        </button>
-                        <button 
-                          onClick={() => setGradientProfile('D')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'D' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt D: Platinum Ag</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#EBEFF5] to-[#83878D] shrink-0"></span>
-                        </button>
-                        <button 
-                          onClick={() => setGradientProfile('E')}
-                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'E' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          <span>Opt E: Steel Ag</span>
-                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#D1D5DB] via-[#6B7280] to-[#374151] shrink-0"></span>
-                        </button>
-                        <button 
-                           onClick={() => setGradientProfile('F')}
-                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                         >
-                           <span>Opt F: Obsidian Ag</span>
-                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
-                         </button>
-                         <button 
-                            onClick={() => setGradientProfile('R1')}
-                            class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'R1' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                          >
-                            <span>Opt R1: Radial Chrome (Dome Reflect)</span>
-                            <span class="w-1.5 h-1.5 rounded-full bg-[radial-gradient(circle,_#FFFDDA,_#7C6535,_#55411B)] shrink-0"></span>
-                          </button>
-                          <button 
-                            onClick={() => setGradientProfile('R2')}
-                            class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'R2' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                          >
-                            <span>Opt R2: Radial Soft (Smooth Dome)</span>
-                            <span class="w-1.5 h-1.5 rounded-full bg-[radial-gradient(circle,_#FFFDDA,_#D5BB8A,_#55411B)] shrink-0"></span>
-                          </button>
-                         <button 
-                           onClick={() => setGradientProfile('Custom')}
-                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'Custom' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                         >
-                           <span>Opt H: Custom (Interactive Editor)</span>
-                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#55411B] via-[#FFFDDA] to-[#D5BB8A] shrink-0"></span>
-                         </button>
-                       </div>
+                     <select
+                       value={gradientProfile()}
+                       onChange={(e) => setGradientProfile(e.currentTarget.value as any)}
+                       class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1.5 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                     >
+                       <option value="G">Opt G: Horizon Au (Reference match)</option>
+                       <option value="I">Opt I: Soft Horizon Au (Subtle)</option>
+                       <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
+                       <option value="K">Opt K: Soft Chrome II (Linear Preset)</option>
+                       <option value="A">Opt A: Shiny Au</option>
+                       <option value="B">Opt B: Contrast Au</option>
+                       <option value="C">Opt C: Antique Au</option>
+                       <option value="D">Opt D: Platinum Ag</option>
+                       <option value="E">Opt E: Steel Ag</option>
+                       <option value="F">Opt F: Obsidian Ag</option>
+                       <option value="R1">Opt R1: Radial Chrome (Dome Reflect)</option>
+                       <option value="R2">Opt R2: Radial Soft (Smooth Dome)</option>
+                       <option value="Custom">Opt H: Custom (Interactive Editor)</option>
+                     </select>
                    </div>
                  </Show>
 
@@ -896,11 +1102,96 @@ ${paintDef}${overlayGradDef}
                         <span class="text-[9px] font-mono text-white/40 uppercase">Opt H active</span>
                       </h4>
 
-                      {/* Visual gradient bar preview */}
-                      <div 
-                        style={{ background: `linear-gradient(to right, ${stopsCssString()})` }} 
-                        class="w-full h-5 rounded border border-white/20 mb-3 shadow-inner relative"
-                      />
+                      {/* Gradient Type Selector */}
+                      <div class="mb-3 flex items-center justify-between bg-black/40 p-1.5 rounded border border-white/5">
+                        <span class="text-[10px] text-white/50 uppercase tracking-wider font-semibold">Gradient Style</span>
+                        <div class="flex gap-1">
+                          <button 
+                            type="button"
+                            onClick={() => setCustomType('linear')}
+                            class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'linear' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                          >
+                            Linear
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setCustomType('radial')}
+                            class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'radial' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                          >
+                            Radial
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Visual preview (Linear Bar vs Radial Sphere) */}
+                      <Show when={customType() === 'linear'}>
+                        <div class="text-[9px] text-white/40 mb-1.5 font-mono uppercase tracking-wider">Linear Specular Bar</div>
+                        <div 
+                          style={{ background: `linear-gradient(to right, ${stopsCssString()})` }} 
+                          class="w-full h-5 rounded border border-white/20 mb-3.5 shadow-inner relative"
+                        />
+                      </Show>
+                      <Show when={customType() === 'radial'}>
+                        <div class="text-[9px] text-white/40 mb-1.5 font-mono uppercase tracking-wider text-center">Concentric Rings Visualizer</div>
+                        <div class="flex justify-center mb-4">
+                          <div 
+                            style={{ background: `radial-gradient(circle at 50% 50%, ${stopsCssString()})` }} 
+                            class="w-32 h-32 rounded-full border border-white/20 shadow-2xl relative overflow-hidden transition-all duration-300"
+                          >
+                            {/* Inner volumetric shading layer for 3D metallic feel */}
+                            <div class="absolute inset-0 bg-gradient-to-tr from-black/25 via-transparent to-white/15 pointer-events-none" />
+                            
+                            {/* SVG Overlay representing the stops visually */}
+                            <svg viewBox="0 0 100 100" class="absolute inset-0 w-full h-full pointer-events-none">
+                              {/* Center marker */}
+                              <circle cx="50" cy="50" r="1.5" fill="#fff" opacity="0.8" />
+                              
+                              {/* Radius line */}
+                              <line x1="50" y1="50" x2="95" y2="50" stroke="rgba(255,255,255,0.4)" stroke-width="0.75" stroke-dasharray="2 1.5" />
+                              
+                              {/* Outer boundary ring (100%) */}
+                              <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.25)" stroke-width="0.75" stroke-dasharray="1 1" fill="none" />
+                              
+                              {/* Concentric rings for each stop */}
+                              <For each={customStops()}>
+                                {(stop) => {
+                                  const radius = () => stop.offset * 0.45; // map 0-100% to 0-45px radius
+                                  const isHovered = () => hoveredStopId() === stop.id;
+                                  return (
+                                    <g>
+                                      {/* Ring */}
+                                      <circle 
+                                        cx="50" 
+                                        cy="50" 
+                                        r={radius()} 
+                                        stroke={isHovered() ? "#fbbf24" : "rgba(255,255,255,0.2)"} 
+                                        stroke-width={isHovered() ? 1.5 : 0.5} 
+                                        stroke-dasharray={isHovered() ? "3 1" : "none"} 
+                                        fill="none" 
+                                        class="transition-all duration-150"
+                                      />
+                                      {/* Stop marker on radius line */}
+                                      <circle 
+                                        cx={50 + stop.offset * 0.45} 
+                                        cy="50" 
+                                        r={isHovered() ? 4 : 2.5} 
+                                        fill={stop.color} 
+                                        stroke={isHovered() ? "#fbbf24" : "rgba(255,255,255,0.7)"} 
+                                        stroke-width={isHovered() ? 1.5 : 0.75} 
+                                        class="transition-all duration-150"
+                                      />
+                                    </g>
+                                  );
+                                }}
+                              </For>
+                              
+                              {/* Labels */}
+                              <text x="50" y="44" font-size="4.5" fill="rgba(255,255,255,0.7)" font-family="monospace" text-anchor="middle" font-weight="bold">Center (0%)</text>
+                              <text x="95" y="44" font-size="4.5" fill="rgba(255,255,255,0.7)" font-family="monospace" text-anchor="end" font-weight="bold">Edge (100%)</text>
+                            </svg>
+                          </div>
+                        </div>
+                      </Show>
 
                       {/* Preset Template Selector */}
                       <div class="mb-3 flex items-center justify-between gap-2 bg-black/40 p-1.5 rounded border border-white/5">
@@ -979,6 +1270,12 @@ ${paintDef}${overlayGradDef}
                               { id: 9, offset: 93, color: '#FBECA9' },
                               { id: 10, offset: 100, color: '#7C6535' }
                             ]);
+                            else if (val === 'K') setCustomStops([
+                              { id: 1, offset: 0, color: '#FFFDDA' },
+                              { id: 2, offset: 31, color: '#D5BB8A' },
+                              { id: 3, offset: 44, color: '#7C6535' },
+                              { id: 4, offset: 100, color: '#55411B' }
+                            ]);
                             else if (val === 'R1') setCustomStops([
                               { id: 1, offset: 0, color: '#FFFDDA' },
                               { id: 2, offset: 15, color: '#D5BB8A' },
@@ -1002,6 +1299,7 @@ ${paintDef}${overlayGradDef}
                           <option value="G">Opt G: Horizon Au</option>
                           <option value="I">Opt I: Soft Horizon Au</option>
                           <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
+                          <option value="K">Opt K: Soft Chrome II</option>
                           <option value="R1">Opt R1: Radial Chrome</option>
                           <option value="R2">Opt R2: Radial Soft</option>
                           <option value="A">Opt A: Shiny Au</option>
@@ -1017,7 +1315,7 @@ ${paintDef}${overlayGradDef}
                         {/* Angle Slider */}
                         <div>
                           <div class="flex justify-between text-[11px] mb-0.5">
-                            <span class="text-white/60">Angle / Rotation</span>
+                            <span class="text-white/60">{customType() === 'radial' ? 'Highlight Angle (Direction)' : 'Angle / Rotation'}</span>
                             <span class="font-mono text-amber-400 font-semibold">{gradientAngle()}°</span>
                           </div>
                           <input 
@@ -1033,7 +1331,7 @@ ${paintDef}${overlayGradDef}
                         {/* Scale / Width Slider */}
                         <div>
                           <div class="flex justify-between text-[11px] mb-0.5">
-                            <span class="text-white/60">Width / Scale</span>
+                            <span class="text-white/60">{customType() === 'radial' ? 'Dome Size (Radius)' : 'Width / Scale'}</span>
                             <span class="font-mono text-amber-400 font-semibold">{Math.round(gradientScale() * 100)}%</span>
                           </div>
                           <input 
@@ -1050,7 +1348,7 @@ ${paintDef}${overlayGradDef}
                         {/* Shift / Offset Slider */}
                         <div>
                           <div class="flex justify-between text-[11px] mb-0.5">
-                            <span class="text-white/60">Shift / Position</span>
+                            <span class="text-white/60">{customType() === 'radial' ? 'Highlight Shift (Offset)' : 'Shift / Position'}</span>
                             <span class="font-mono text-amber-400 font-semibold">{gradientShift()}px</span>
                           </div>
                           <input 
@@ -1065,46 +1363,246 @@ ${paintDef}${overlayGradDef}
                       </div>
 
                       {/* Stop Manager List */}
-                      <div class="max-h-48 overflow-y-auto pr-1 mb-2.5 custom-scrollbar flex flex-col gap-1.5">
+                      <div class="max-h-[500px] overflow-y-auto pr-1 mb-2.5 custom-scrollbar flex flex-col gap-1.5">
                         <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                          {(stop) => (
-                            <div class="flex items-center gap-2 bg-black/40 p-1.5 rounded border border-white/5 justify-between">
-                              <div class="flex items-center gap-1.5 shrink-0">
-                                <input 
-                                  type="color" 
-                                  value={stop.color} 
-                                  onInput={(e) => {
-                                    const val = e.currentTarget.value;
-                                    setCustomStops(customStops().map(s => s.id === stop.id ? { ...s, color: val } : s));
-                                  }}
-                                  class="w-5 h-5 rounded cursor-pointer border border-white/15 bg-transparent p-0 shrink-0" 
-                                />
-                                <span class="text-[9.5px] font-mono text-white/50 w-8">{stop.offset}%</span>
+                          {(stop) => {
+                            const isActive = () => activeColorPickerStopId() === stop.id;
+                            return (
+                              <div class="flex flex-col gap-1">
+                                <div 
+                                  onMouseEnter={() => setHoveredStopId(stop.id)}
+                                  onMouseLeave={() => setHoveredStopId(null)}
+                                  onClick={() => setActiveColorPickerStopId(isActive() ? null : stop.id)}
+                                  class={`flex items-center gap-2 bg-black/40 p-1.5 rounded border transition-all justify-between cursor-pointer ${isActive() ? 'border-amber-500/50 bg-amber-500/5 shadow-inner' : (hoveredStopId() === stop.id ? 'border-amber-500/20 bg-amber-500/[0.02]' : 'border-white/5')}`}
+                                >
+                                  <div class="flex items-center gap-1.5 shrink-0">
+                                    <div 
+                                      style={{ "background-color": stop.color }}
+                                      class={`w-4 h-4 rounded border shadow-sm transition-all ${isActive() ? 'border-amber-400 scale-110 shadow-amber-500/20' : 'border-white/20'}`}
+                                    />
+                                    <span class="text-[9.5px] font-mono text-white/50 w-8">{stop.offset}%</span>
+                                  </div>
+                                  <input 
+                                      type="range" 
+                                      min="0" 
+                                      max="100" 
+                                      value={stop.offset} 
+                                      onInput={(e) => {
+                                        const val = parseInt(e.currentTarget.value);
+                                        setCustomStops(customStops().map(s => s.id === stop.id ? { ...s, offset: val } : s));
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      class="flex-1 min-w-0 accent-amber-500 h-1 cursor-ew-resize" 
+                                  />
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (customStops().length > 2) {
+                                        setCustomStops(customStops().filter(s => s.id !== stop.id));
+                                      }
+                                    }}
+                                    disabled={customStops().length <= 2}
+                                    class="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:text-white/30 text-[10px] font-mono font-bold px-1 transition-colors hover:bg-white/5 rounded"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+
+                                <Show when={isActive()}>
+                                  <div class="border border-amber-500/20 rounded-lg p-2.5 bg-[#12131a]/60 mt-1 mb-2 space-y-3 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                    <div class="flex items-center justify-between mb-2">
+                                      <span class="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                                        Stop #{customStops().findIndex(s => s.id === stop.id) + 1} Picker
+                                      </span>
+                                      
+                                      {/* Toolbar: Copy, Paste and Color Mode */}
+                                      <div class="flex items-center gap-1.5">
+                                        <div class="flex gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); copyColor(); }}
+                                            class="px-1.5 py-0.5 text-[8.5px] font-mono rounded bg-white/5 border border-white/10 text-white/60 hover:text-amber-300 hover:border-amber-500/30 transition-all flex items-center gap-1"
+                                            title="Copy hex code to clipboard"
+                                          >
+                                            {colorCopiedFeedback() ? '✓' : '⎘'} Copy
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); pasteColor(); }}
+                                            class="px-1.5 py-0.5 text-[8.5px] font-mono rounded bg-white/5 border border-white/10 text-white/60 hover:text-amber-300 hover:border-amber-500/30 transition-all flex items-center gap-1"
+                                            title="Paste hex code from clipboard"
+                                          >
+                                            📋 Paste
+                                          </button>
+                                        </div>
+                                        
+                                        <div class="h-3 w-[1px] bg-white/10"></div>
+                                        
+                                        <div class="flex gap-1">
+                                          <For each={['HSL', 'RGB', 'HEX'] as const}>
+                                            {(mode) => (
+                                              <button
+                                                type="button"
+                                                onClick={() => updateColorMode(mode)}
+                                                class={`px-1.5 py-0.5 text-[8.5px] font-mono rounded transition-all ${colorMode() === mode ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                              >
+                                                {mode}
+                                              </button>
+                                            )}
+                                          </For>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* 2D Drag Pad (Saturation-Lightness square) */}
+                                    <div 
+                                      onMouseDown={handlePadMouseDown}
+                                      style={{
+                                        background: `linear-gradient(to top, #000 0%, transparent 50%, #fff 100%), linear-gradient(to right, #808080 0%, transparent 100%), hsl(${pickerH()}, 100%, 50%)`
+                                      }}
+                                      class="w-full h-28 rounded-lg relative overflow-hidden cursor-crosshair border border-white/15 mb-2.5 shadow-inner"
+                                    >
+                                      {/* Volumetric shadow overlay to look premium */}
+                                      <div class="absolute inset-0 bg-gradient-to-tr from-black/25 via-transparent to-white/15 pointer-events-none" />
+                                      
+                                      {/* Draggable indicator dot */}
+                                      <div 
+                                        style={{
+                                          left: `${pickerS()}%`,
+                                          bottom: `${pickerL()}%`,
+                                          "background-color": hslToHex(pickerH(), pickerS(), pickerL())
+                                        }}
+                                        class="w-3.5 h-3.5 rounded-full absolute -translate-x-1/2 translate-y-1/2 border-2 border-white shadow-lg pointer-events-none cursor-pointer"
+                                      />
+                                    </div>
+
+                                    {/* 1. Hue Slider */}
+                                    <div class="mb-3">
+                                      <div class="flex justify-between text-[9px] text-white/50 mb-1 font-mono uppercase">
+                                        <span>Hue (Color Tone)</span>
+                                        <span class="text-amber-400 font-semibold">{pickerH()}°</span>
+                                      </div>
+                                      <input 
+                                        type="range" 
+                                        min="0" 
+                                        max="360" 
+                                        value={pickerH()} 
+                                        onInput={(e) => handleHslChange(parseInt(e.currentTarget.value), pickerS(), pickerL())}
+                                        class="w-full h-2.5 rounded-lg appearance-none cursor-pointer outline-none border border-white/10 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-black/20 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-0" 
+                                        style={{
+                                          background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)',
+                                          "-webkit-appearance": "none"
+                                        }}
+                                      />
+                                    </div>
+
+                                    {/* Mode-specific Sliders / Inputs */}
+                                    <Show when={colorMode() === 'HSL'}>
+                                      <div class="space-y-2">
+                                        {/* Saturation */}
+                                        <div>
+                                          <div class="flex justify-between text-[9px] text-white/50 mb-0.5 font-mono uppercase">
+                                            <span>Saturation (Intensity)</span>
+                                            <span class="text-amber-400 font-semibold">{pickerS()}%</span>
+                                          </div>
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="100" 
+                                            value={pickerS()} 
+                                            onInput={(e) => handleHslChange(pickerH(), parseInt(e.currentTarget.value), pickerL())}
+                                            class="w-full accent-amber-500 h-1 cursor-ew-resize"
+                                          />
+                                        </div>
+                                        {/* Lightness */}
+                                        <div>
+                                          <div class="flex justify-between text-[9px] text-white/50 mb-0.5 font-mono uppercase">
+                                            <span>Lightness (Brightness)</span>
+                                            <span class="text-amber-400 font-semibold">{pickerL()}%</span>
+                                          </div>
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="100" 
+                                            value={pickerL()} 
+                                            onInput={(e) => handleHslChange(pickerH(), pickerS(), parseInt(e.currentTarget.value))}
+                                            class="w-full accent-amber-500 h-1 cursor-ew-resize"
+                                          />
+                                        </div>
+                                      </div>
+                                    </Show>
+
+                                    <Show when={colorMode() === 'RGB'}>
+                                      <div class="space-y-2">
+                                        {/* Red */}
+                                        <div>
+                                          <div class="flex justify-between text-[9px] text-white/50 mb-0.5 font-mono uppercase">
+                                            <span>Red</span>
+                                            <span class="text-red-400 font-semibold">{pickerR()}</span>
+                                          </div>
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="255" 
+                                            value={pickerR()} 
+                                            onInput={(e) => handleRgbChange(parseInt(e.currentTarget.value), pickerG(), pickerB())}
+                                            class="w-full accent-red-500 h-1 cursor-ew-resize"
+                                          />
+                                        </div>
+                                        {/* Green */}
+                                        <div>
+                                          <div class="flex justify-between text-[9px] text-white/50 mb-0.5 font-mono uppercase">
+                                            <span>Green</span>
+                                            <span class="text-green-400 font-semibold">{pickerG()}</span>
+                                          </div>
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="255" 
+                                            value={pickerG()} 
+                                            onInput={(e) => handleRgbChange(pickerR(), parseInt(e.currentTarget.value), pickerB())}
+                                            class="w-full accent-green-500 h-1 cursor-ew-resize"
+                                          />
+                                        </div>
+                                        {/* Blue */}
+                                        <div>
+                                          <div class="flex justify-between text-[9px] text-white/50 mb-0.5 font-mono uppercase">
+                                            <span>Blue</span>
+                                            <span class="text-blue-400 font-semibold">{pickerB()}</span>
+                                          </div>
+                                          <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="255" 
+                                            value={pickerB()} 
+                                            onInput={(e) => handleRgbChange(pickerR(), pickerG(), parseInt(e.currentTarget.value))}
+                                            class="w-full accent-blue-500 h-1 cursor-ew-resize"
+                                          />
+                                        </div>
+                                      </div>
+                                    </Show>
+
+                                    <Show when={colorMode() === 'HEX'}>
+                                      <div class="flex items-center gap-2">
+                                        <span class="text-[9.5px] font-mono text-white/50 uppercase">HEX Code:</span>
+                                        <input 
+                                          type="text"
+                                          value={pickerHex()}
+                                          onInput={(e) => handleHexChange(e.currentTarget.value)}
+                                          class="bg-[#12131a] border border-white/10 rounded px-2 py-0.5 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50 flex-1"
+                                          placeholder="#FFFFFF"
+                                        />
+                                        <div 
+                                          style={{ "background-color": pickerHex() }} 
+                                          class="w-5 h-5 rounded border border-white/20 shadow-md shrink-0"
+                                        />
+                                      </div>
+                                    </Show>
+                                  </div>
+                                </Show>
                               </div>
-                              <input 
-                                  type="range" 
-                                  min="0" 
-                                  max="100" 
-                                  value={stop.offset} 
-                                  onInput={(e) => {
-                                    const val = parseInt(e.currentTarget.value);
-                                    setCustomStops(customStops().map(s => s.id === stop.id ? { ...s, offset: val } : s));
-                                  }}
-                                  class="flex-1 min-w-0 accent-amber-500 h-1 cursor-ew-resize" 
-                              />
-                              <button 
-                                onClick={() => {
-                                  if (customStops().length > 2) {
-                                    setCustomStops(customStops().filter(s => s.id !== stop.id));
-                                  }
-                                }}
-                                disabled={customStops().length <= 2}
-                                class="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:text-white/30 text-[10px] font-mono font-bold px-1 transition-colors hover:bg-white/5 rounded"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )}
+                            );
+                          }}
                         </For>
                       </div>
 
@@ -1113,7 +1611,7 @@ ${paintDef}${overlayGradDef}
                           const nextId = customStops().reduce((max, s) => Math.max(max, s.id), 0) + 1;
                           setCustomStops([...customStops(), { id: nextId, offset: 50, color: '#D5BB8A' }]);
                         }}
-                        class="w-full py-1 text-[9.5px] font-mono text-amber-300 hover:text-amber-200 border border-dashed border-amber-500/30 hover:border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10 rounded transition-all uppercase tracking-wider"
+                        class="w-full py-1 text-[9.5px] font-mono text-amber-300 hover:text-amber-200 border border-dashed border-amber-500/30 hover:border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10 rounded transition-all uppercase tracking-wider mb-3"
                       >
                         ＋ Add Gradient Stop
                       </button>
@@ -1590,11 +2088,22 @@ ${paintDef}${overlayGradDef}
             </div>
 
             {/* SVG Visualizers */}
-            <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div ref={containerRef} class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* Presets Visual Representation */}
               <For each={['thin', 'medium', 'thick'] as const}>
                 {(type) => {
+                  const [localShiftX, setLocalShiftX] = createSignal(0);
+                  const [localShiftY, setLocalShiftY] = createSignal(0);
+                  const [isHovered, setIsHovered] = createSignal(false);
+                  let coinBoxRef: HTMLDivElement | undefined;
+
+                  const activeCardShiftX = () => isHovered() ? localShiftX() : interactiveShiftX();
+                  const activeCardShiftY = () => isHovered() ? localShiftY() : interactiveShiftY();
+
+                  const cardCoords = () => gradCoords(activeCardShiftX(), activeCardShiftY());
+                  const cardRadialCoords = () => radialCoords(activeCardShiftX(), activeCardShiftY());
+
                   const borderStrokeWidth = () => {
                     const base = thickness();
                     if (type === 'thin') return Math.max(1, base - 3);
@@ -1843,26 +2352,48 @@ ${paintDef}${overlayGradDef}
                   const mainGradientColor = () => `url(#gold-grad-${type})`;
 
                   return (
-                    <div class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center">
+                    <div 
+                      class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center"
+                      onMouseMove={(e) => {
+                        if (!interactiveSheen()) return;
+                        const rect = coinBoxRef ? coinBoxRef.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+                        const centerX = rect.left + rect.width / 2;
+                        const centerY = rect.top + rect.height / 2;
+                        const dx = e.clientX - centerX;
+                        const dy = e.clientY - centerY;
+                        
+                        // Normalize: moving to the boundary of the coin box gets max shift (45px)
+                        const maxDist = rect.width / 2 || 80;
+                        setLocalShiftX(Math.max(-45, Math.min(45, (dx / maxDist) * 45)));
+                        setLocalShiftY(Math.max(-45, Math.min(45, (dy / maxDist) * 45)));
+                        setIsHovered(true);
+                      }}
+                      onMouseLeave={() => {
+                        setIsHovered(false);
+                      }}
+                    >
                       <div class="text-center mb-3">
                         <span class="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase">{type === 'medium' ? 'Active Config' : `${type} view`}</span>
                         <span class="text-[10px] text-white/40 block mt-0.5">Border: {borderStrokeWidth()}px | K: {currentKStrokeWidth()}px</span>
                       </div>
                       
                       {/* SVG Render box */}
-                      <div class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative group overflow-hidden shadow-inner mb-3">
+                      <div 
+                        ref={coinBoxRef}
+                        class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative group overflow-hidden shadow-inner mb-3"
+                      >
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                         
                         <svg viewBox="0 0 100 100" class="w-28 h-28" style={{ filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                           <defs>
                             {/* Standard Gradient (Linear or Radial) */}
-                            <Show when={!['R1', 'R2'].includes(gradientProfile())}>
+                            <Show when={!isRadialActive()}>
                               <linearGradient 
                                 id={`gold-grad-${type}`} 
-                                x1={gradCoords().x1} 
-                                y1={gradCoords().y1} 
-                                x2={gradCoords().x2} 
-                                y2={gradCoords().y2} 
+                                x1={cardCoords().x1} 
+                                y1={cardCoords().y1} 
+                                x2={cardCoords().x2} 
+                                y2={cardCoords().y2} 
                                 gradientUnits="userSpaceOnUse"
                                 spreadMethod="reflect"
                               >
@@ -1940,6 +2471,12 @@ ${paintDef}${overlayGradDef}
                                   <stop offset="93%" stop-color="#FBECA9" />
                                   <stop offset="100%" stop-color="#7C6535" />
                                 </Show>
+                                <Show when={gradientProfile() === 'K'}>
+                                  <stop offset="0%" stop-color="#FFFDDA" />
+                                  <stop offset="31%" stop-color="#D5BB8A" />
+                                  <stop offset="44%" stop-color="#7C6535" />
+                                  <stop offset="100%" stop-color="#55411B" />
+                                </Show>
                                 <Show when={gradientProfile() === 'Custom'}>
                                   <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
                                     {(stop) => (
@@ -1949,14 +2486,14 @@ ${paintDef}${overlayGradDef}
                                 </Show>
                               </linearGradient>
                             </Show>
-                            <Show when={['R1', 'R2'].includes(gradientProfile())}>
+                            <Show when={isRadialActive()}>
                               <radialGradient
                                 id={`gold-grad-${type}`}
-                                cx={radialCoords().cx}
-                                cy={radialCoords().cy}
-                                r={radialCoords().r}
-                                fx={radialCoords().fx}
-                                fy={radialCoords().fy}
+                                cx={cardRadialCoords().cx}
+                                cy={cardRadialCoords().cy}
+                                r={cardRadialCoords().r}
+                                fx={cardRadialCoords().fx}
+                                fy={cardRadialCoords().fy}
                                 gradientUnits="userSpaceOnUse"
                               >
                                 <Show when={gradientProfile() === 'R1'}>
@@ -1974,21 +2511,28 @@ ${paintDef}${overlayGradDef}
                                   <stop offset="60%" stop-color="#7C6535" />
                                   <stop offset="100%" stop-color="#55411B" />
                                 </Show>
+                                <Show when={gradientProfile() === 'Custom'}>
+                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                    {(stop) => (
+                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                    )}
+                                  </For>
+                                </Show>
                               </radialGradient>
                             </Show>
 
                             {/* Optical Sizing Gradient for smaller cell views */}
-                            <Show when={!['R1', 'R2'].includes(gradientProfile())}>
+                            <Show when={!isRadialActive()}>
                               <linearGradient 
                                 id={`gold-grad-optical-${type}`} 
-                                x1={gradCoords().x1} 
-                                y1={gradCoords().y1} 
-                                x2={gradCoords().x2} 
-                                y2={gradCoords().y2} 
+                                x1={cardCoords().x1} 
+                                y1={cardCoords().y1} 
+                                x2={cardCoords().x2} 
+                                y2={cardCoords().y2} 
                                 gradientUnits="userSpaceOnUse"
                                 spreadMethod="reflect"
                               >
-                                <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'Custom'].includes(gradientProfile())}>
+                                <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(gradientProfile())}>
                                   {/* Smooth Gold */}
                                   <stop offset="0%" stop-color="#78581E" />
                                   <stop offset="30%" stop-color="#E2B857" />
@@ -2006,7 +2550,7 @@ ${paintDef}${overlayGradDef}
                                 </Show>
                               </linearGradient>
                             </Show>
-                            <Show when={['R1', 'R2'].includes(gradientProfile())}>
+                            <Show when={isRadialActive()}>
                               <radialGradient 
                                 id={`gold-grad-optical-${type}`} 
                                 cx={radialCoords().cx}

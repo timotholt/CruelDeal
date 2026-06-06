@@ -105,7 +105,7 @@ export interface KitCoinIconProps {
   kDiagWidth?: number; // Arm span width. Defaults to 25.5.
   
   // Material schemes
-  gradientProfile?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'Custom'; // Pre-packaged metal gradient profile. Defaults to 'J'.
+  gradientProfile?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'K' | 'R1' | 'R2' | 'Custom'; // Pre-packaged metal gradient profile. Defaults to 'J'.
   customStops?: Array<{ offset: number; color: string }>; // Custom stops (for 'Custom' profile).
   gradientAngle?: number; // Angle of the gradient. Defaults to 45.
   gradientScale?: number; // Scaling/width of gradient transitions. Defaults to 1.0.
@@ -122,6 +122,7 @@ export interface KitCoinIconProps {
   textureSaturation?: number;
   overlayOpacity?: number;
   overlayBlendMode?: 'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light';
+  customType?: 'linear' | 'radial';
   
   // Custom class for outer wrapper
   class?: string;
@@ -166,6 +167,7 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
     textureSaturation: 1.0,
     overlayOpacity: 0.4,
     overlayBlendMode: 'overlay' as const,
+    customType: 'linear' as const,
     class: '',
   }, rawProps);
 
@@ -184,9 +186,22 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
     }
   });
 
-  // Dynamic Shift Offsets
-  const activeShiftX = () => props.interactive ? globalShiftX() : 0;
-  const activeShiftY = () => props.interactive ? globalShiftY() : 0;
+  // Local cursor tracking signals
+  const [localShiftX, setLocalShiftX] = createSignal(0);
+  const [localShiftY, setLocalShiftY] = createSignal(0);
+  const [isHovered, setIsHovered] = createSignal(false);
+
+  // Dynamic Shift Offsets (transitions to local coordinates when hovered)
+  const activeShiftX = () => props.interactive 
+    ? (isHovered() ? localShiftX() : globalShiftX()) 
+    : 0;
+  const activeShiftY = () => props.interactive 
+    ? (isHovered() ? localShiftY() : globalShiftY()) 
+    : 0;
+
+  const isRadialActive = () => {
+    return ['R1', 'R2'].includes(props.gradientProfile) || (props.gradientProfile === 'Custom' && props.customType === 'radial');
+  };
 
   // Geometry math helpers
   const getHexagonPoints = (index: number, borderStroke: number) => {
@@ -262,6 +277,30 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
       x2: baseX2 + shiftX + activeShiftX(),
       y2: baseY2 + shiftY + activeShiftY()
     };
+  };
+
+  const radialCoords = () => {
+    const rad = (props.gradientAngle * Math.PI) / 180;
+    const r = 50 * props.gradientScale;
+    const fx = 50 + activeShiftX() + (props.gradientShift * Math.cos(rad));
+    const fy = 50 + activeShiftY() + (props.gradientShift * Math.sin(rad));
+    return { cx: 50, cy: 50, r, fx, fy };
+  };
+
+  const isOptical = () => {
+    if (typeof props.size === 'number') {
+      return props.size <= 40;
+    }
+    if (typeof props.size === 'string') {
+      const match = props.size.match(/^([\d.]+)(px|rem|em)?$/);
+      if (match) {
+        const val = parseFloat(match[1]);
+        const unit = match[2] || 'px';
+        if (unit === 'px') return val <= 40;
+        if (unit === 'rem' || unit === 'em') return val <= 2.5;
+      }
+    }
+    return false;
   };
 
   const getGradientStops = () => {
@@ -357,6 +396,33 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
         { offset: '100%', color: '#7C6535' }
       ];
     }
+    if (props.gradientProfile === 'K') {
+      return [
+        { offset: '0%', color: '#FFFDDA' },
+        { offset: '31%', color: '#D5BB8A' },
+        { offset: '44%', color: '#7C6535' },
+        { offset: '100%', color: '#55411B' }
+      ];
+    }
+    if (props.gradientProfile === 'R1') {
+      return [
+        { offset: '0%', color: '#FFFDDA' },
+        { offset: '15%', color: '#D5BB8A' },
+        { offset: '35%', color: '#7C6535' },
+        { offset: '55%', color: '#FFFDDA' },
+        { offset: '75%', color: '#D5BB8A' },
+        { offset: '90%', color: '#7C6535' },
+        { offset: '100%', color: '#55411B' }
+      ];
+    }
+    if (props.gradientProfile === 'R2') {
+      return [
+        { offset: '0%', color: '#FFFDDA' },
+        { offset: '25%', color: '#D5BB8A' },
+        { offset: '60%', color: '#7C6535' },
+        { offset: '100%', color: '#55411B' }
+      ];
+    }
     if (props.gradientProfile === 'Custom') {
       return [...(props.customStops || [])].sort((a, b) => a.offset - b.offset).map(stop => ({
         offset: `${stop.offset}%`,
@@ -367,10 +433,10 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
   };
 
   const finalColorUrl = () => props.fillMode === 'gradient' 
-    ? `url(#${uniqueId}-grad)` 
+    ? (isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad)`)
     : `url(#${uniqueId}-pattern)`;
 
-  const overlayGradUrl = () => `url(#${uniqueId}-grad-overlay)`;
+  const overlayGradUrl = () => isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad-overlay)`;
 
   // Geometric coordinates for active K line
   const c = () => getKCoords(props.kScale, props.kThickness, props.linecap);
@@ -390,6 +456,23 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
         width: typeof props.size === 'number' ? `${props.size}px` : props.size,
         height: typeof props.size === 'number' ? `${props.size}px` : props.size,
       }}
+      onMouseMove={(e) => {
+        if (!props.interactive) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - centerY;
+        
+        // Normalize: moving to the boundary of the coin gets max shift (45px)
+        const maxDist = rect.width / 2 || 24; 
+        setLocalShiftX(Math.max(-45, Math.min(45, (dx / maxDist) * 45)));
+        setLocalShiftY(Math.max(-45, Math.min(45, (dy / maxDist) * 45)));
+        setIsHovered(true);
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+      }}
     >
       <svg 
         viewBox="0 0 100 100" 
@@ -397,39 +480,123 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
         style={{ filter: glowFilter() }}
       >
         <defs>
-          {/* Base Material Linear Gradient */}
-          <linearGradient 
-            id={`${uniqueId}-grad`} 
-            x1={gradCoords().x1} 
-            y1={gradCoords().y1} 
-            x2={gradCoords().x2} 
-            y2={gradCoords().y2} 
-            gradientUnits="userSpaceOnUse"
-            spreadMethod="reflect"
-          >
-            <For each={getGradientStops()}>
-              {(stop) => (
-                <stop offset={stop.offset} stop-color={stop.color} />
-              )}
-            </For>
-          </linearGradient>
+          {/* Base Material Gradient (Linear or Radial) */}
+          <Show when={!isRadialActive()}>
+            <linearGradient 
+              id={`${uniqueId}-grad`} 
+              x1={gradCoords().x1} 
+              y1={gradCoords().y1} 
+              x2={gradCoords().x2} 
+              y2={gradCoords().y2} 
+              gradientUnits="userSpaceOnUse"
+              spreadMethod="reflect"
+            >
+              <For each={getGradientStops()}>
+                {(stop) => (
+                  <stop offset={stop.offset} stop-color={stop.color} />
+                )}
+              </For>
+            </linearGradient>
+          </Show>
+          <Show when={isRadialActive()}>
+            <radialGradient
+              id={`${uniqueId}-grad`}
+              cx={radialCoords().cx}
+              cy={radialCoords().cy}
+              r={radialCoords().r}
+              fx={radialCoords().fx}
+              fy={radialCoords().fy}
+              gradientUnits="userSpaceOnUse"
+            >
+              <For each={getGradientStops()}>
+                {(stop) => (
+                  <stop offset={stop.offset} stop-color={stop.color} />
+                )}
+              </For>
+            </radialGradient>
+          </Show>
 
           {/* Optional Texture Overlay Gradient Layer */}
-          <linearGradient 
-            id={`${uniqueId}-grad-overlay`} 
-            x1={gradCoords().x1} 
-            y1={gradCoords().y1} 
-            x2={gradCoords().x2} 
-            y2={gradCoords().y2} 
-            gradientUnits="userSpaceOnUse"
-            spreadMethod="reflect"
-          >
-            <For each={getGradientStops()}>
-              {(stop) => (
-                <stop offset={stop.offset} stop-color={stop.color} />
-              )}
-            </For>
-          </linearGradient>
+          <Show when={!isRadialActive()}>
+            <linearGradient 
+              id={`${uniqueId}-grad-overlay`} 
+              x1={gradCoords().x1} 
+              y1={gradCoords().y1} 
+              x2={gradCoords().x2} 
+              y2={gradCoords().y2} 
+              gradientUnits="userSpaceOnUse"
+              spreadMethod="reflect"
+            >
+              <For each={getGradientStops()}>
+                {(stop) => (
+                  <stop offset={stop.offset} stop-color={stop.color} />
+                )}
+              </For>
+            </linearGradient>
+          </Show>
+          <Show when={isRadialActive()}>
+            <radialGradient
+              id={`${uniqueId}-grad-overlay`}
+              cx={radialCoords().cx}
+              cy={radialCoords().cy}
+              r={radialCoords().r}
+              fx={radialCoords().fx}
+              fy={radialCoords().fy}
+              gradientUnits="userSpaceOnUse"
+            >
+              <For each={getGradientStops()}>
+                {(stop) => (
+                  <stop offset={stop.offset} stop-color={stop.color} />
+                )}
+              </For>
+            </radialGradient>
+          </Show>
+
+          {/* Optical Sizing Gradient (simplified stops for smaller rendering size cells) */}
+          <Show when={!isRadialActive()}>
+            <linearGradient
+              id={`${uniqueId}-grad-optical`}
+              x1={gradCoords().x1}
+              y1={gradCoords().y1}
+              x2={gradCoords().x2}
+              y2={gradCoords().y2}
+              gradientUnits="userSpaceOnUse"
+              spreadMethod="reflect"
+            >
+              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(props.gradientProfile)}>
+                {/* Smooth Gold */}
+                <stop offset="0%" stop-color="#78581E" />
+                <stop offset="30%" stop-color="#E2B857" />
+                <stop offset="55%" stop-color="#FFF3C2" />
+                <stop offset="80%" stop-color="#E2B857" />
+                <stop offset="100%" stop-color="#9E782F" />
+              </Show>
+              <Show when={['D', 'E', 'F'].includes(props.gradientProfile)}>
+                {/* Smooth Silver */}
+                <stop offset="0%" stop-color="#70757D" />
+                <stop offset="30%" stop-color="#CED2D8" />
+                <stop offset="55%" stop-color="#EBEFF5" />
+                <stop offset="80%" stop-color="#CED2D8" />
+                <stop offset="100%" stop-color="#5B5F66" />
+              </Show>
+            </linearGradient>
+          </Show>
+          <Show when={isRadialActive()}>
+            <radialGradient
+              id={`${uniqueId}-grad-optical`}
+              cx={radialCoords().cx}
+              cy={radialCoords().cy}
+              r={radialCoords().r}
+              fx={radialCoords().fx}
+              fy={radialCoords().fy}
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0%" stop-color="#FFFDDA" />
+              <stop offset="35%" stop-color="#D5BB8A" />
+              <stop offset="70%" stop-color="#78581E" />
+              <stop offset="100%" stop-color="#4E3D1E" />
+            </radialGradient>
+          </Show>
 
           {/* Photographic Texture Image Pattern */}
           <pattern 
