@@ -1,4 +1,4 @@
-import { createMaterialRecipe, createMaterialStateOverlays } from './MaterialRecipeTypes';
+import { createMaterialRecipe, createMaterialStateOverlays } from './MaterialRecipeDefaults';
 
 export const navTabMaterialRecipe = createMaterialRecipe({
   material: 'custom',
@@ -166,4 +166,3 @@ export const navBarContainerRecipe = createMaterialRecipe({
   shadowSpread: 0,
   radius: 0,
 });
-

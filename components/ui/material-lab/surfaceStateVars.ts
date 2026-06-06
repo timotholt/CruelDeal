@@ -22,6 +22,16 @@ const diffCssVars = (
   return diff;
 };
 
+export const compileSurfaceStateVars = (
+  base: SurfaceOptions,
+  state: SurfaceOptions,
+): MaterialSurfaceStateVars => ({
+  cssVars: diffCssVars(
+    surfaceStateStyle(base) as Record<string, unknown>,
+    surfaceStateStyle(state) as Record<string, unknown>,
+  ),
+});
+
 /**
  * Convert wire-level state overlays into the stateVars shape consumed by the
  * surface CSS. Overlays are authored as partial SurfaceOptions; this function

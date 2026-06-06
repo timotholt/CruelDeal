@@ -31,7 +31,6 @@ import {
   materialRecipeTextTransforms,
   materialRecipeTextureScales,
   materialRecipeTints,
-  createMaterialStateOverlay,
   type EdgeEmissionKind,
   type BorderColorKind,
   type FontStyleToken,
@@ -42,6 +41,7 @@ import {
   type MaterialRecipe,
   type TextTransformToken,
 } from './MaterialRecipeTypes';
+import { createMaterialStateOverlay } from './MaterialRecipeDefaults';
 
 const ControlLabel = (props: { children: JSX.Element }) => (
   <span class="ui-lab-control-label">{props.children}</span>
