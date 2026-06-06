@@ -1,7 +1,13 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, onMount, onCleanup } from 'solid-js';
 
 export const IconsPreviewScreen = () => {
   // Signals for interactive SVG controls
+  const [interactiveSheen, setInteractiveSheen] = createSignal(true);
+  const [interactiveShiftX, setInteractiveShiftX] = createSignal(0);
+  const [interactiveShiftY, setInteractiveShiftY] = createSignal(0);
+  const [gyroEnabled, setGyroEnabled] = createSignal(false);
+  const [hasGyroPermission, setHasGyroPermission] = createSignal(false);
+
   const [thickness, setThickness] = createSignal(3.5);
   const [kThickness, setKThickness] = createSignal(6.5);
   const [hexFillOpacity, setHexFillOpacity] = createSignal(0.12);
@@ -10,7 +16,7 @@ export const IconsPreviewScreen = () => {
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
   const [kScale, setKScale] = createSignal(0.8);
-  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'Custom'>('I');
+  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'R1' | 'R2' | 'Custom'>('J');
   const [kDiag2X, setKDiag2X] = createSignal(-1);
   const [kDiag1Slope, setKDiag1Slope] = createSignal(0.86);
   const [kDiag2Slope, setKDiag2Slope] = createSignal(0.60);
@@ -31,22 +37,88 @@ export const IconsPreviewScreen = () => {
   const [bevelOpacity, setBevelOpacity] = createSignal(0.6);
   const [kBlockMode, setKBlockMode] = createSignal(false);
 
+  // Mouse and Gyroscope orientation event listeners for Holo-Reflex effect
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!interactiveSheen()) return;
+    const dx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+    const dy = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+    setInteractiveShiftX(dx * 45);
+    setInteractiveShiftY(dy * 45);
+  };
+
+  const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+    if (!interactiveSheen()) return;
+    const gamma = e.gamma || 0; 
+    const beta = e.beta || 0;    
+    const dx = Math.max(-1, Math.min(1, gamma / 30));
+    const dy = Math.max(-1, Math.min(1, (beta - 45) / 30));
+    setInteractiveShiftX(dx * 45);
+    setInteractiveShiftY(dy * 45);
+  };
+
+  const requestGyroPermission = async () => {
+    if (
+      typeof window !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent.requestPermission === 'function'
+    ) {
+      try {
+        // @ts-ignore
+        const permissionState = await DeviceOrientationEvent.requestPermission();
+        if (permissionState === 'granted') {
+          setHasGyroPermission(true);
+          setGyroEnabled(true);
+          window.addEventListener('deviceorientation', handleDeviceOrientation);
+        } else {
+          alert('Gyroscope tilt permission was denied.');
+        }
+      } catch (err) {
+        console.error('Error requesting orientation permission:', err);
+      }
+    } else {
+      setHasGyroPermission(true);
+      setGyroEnabled(true);
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+    }
+  };
+
+  onMount(() => {
+    window.addEventListener('mousemove', handleMouseMove);
+    if (
+      typeof window !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent.requestPermission !== 'function'
+    ) {
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+      setGyroEnabled(true);
+    }
+  });
+
+  onCleanup(() => {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('deviceorientation', handleDeviceOrientation);
+  });
+
   // Interactive Gradient Stop Editor State
   const [gradientAngle, setGradientAngle] = createSignal<number>(45);
   const [gradientScale, setGradientScale] = createSignal<number>(1.0);
   const [gradientShift, setGradientShift] = createSignal<number>(0);
 
   const [customStops, setCustomStops] = createSignal<Array<{ id: number, offset: number, color: string }>>([
-    { id: 1, offset: 0, color: '#55411B' },
+    { id: 1, offset: 0, color: '#7C6535' },
     { id: 2, offset: 8, color: '#997E47' },
     { id: 3, offset: 26, color: '#B8A269' },
-    { id: 4, offset: 30, color: '#55411B' },
+    { id: 4, offset: 30, color: '#7C6535' },
     { id: 5, offset: 34, color: '#FFFDDA' },
     { id: 6, offset: 60, color: '#D5BB8A' },
     { id: 7, offset: 81, color: '#B8A269' },
-    { id: 8, offset: 85, color: '#55411B' },
-    { id: 9, offset: 89, color: '#FBECA9' },
-    { id: 10, offset: 100, color: '#D5BB8A' }
+    { id: 8, offset: 85, color: '#7C6535' },
+    { id: 9, offset: 93, color: '#FBECA9' },
+    { id: 10, offset: 100, color: '#7C6535' }
   ]);
 
   const gradCoords = () => {
@@ -64,11 +136,19 @@ export const IconsPreviewScreen = () => {
     const shiftY = gradientShift() * Math.sin(rad);
     
     return {
-      x1: baseX1 + shiftX,
-      y1: baseY1 + shiftY,
-      x2: baseX2 + shiftX,
-      y2: baseY2 + shiftY
+      x1: baseX1 + shiftX + (interactiveSheen() ? interactiveShiftX() : 0),
+      y1: baseY1 + shiftY + (interactiveSheen() ? interactiveShiftY() : 0),
+      x2: baseX2 + shiftX + (interactiveSheen() ? interactiveShiftX() : 0),
+      y2: baseY2 + shiftY + (interactiveSheen() ? interactiveShiftY() : 0)
     };
+  };
+
+  const radialCoords = () => {
+    const rad = (gradientAngle() * Math.PI) / 180;
+    const r = 50 * gradientScale();
+    const fx = 50 + (interactiveSheen() ? interactiveShiftX() : 0) + (gradientShift() * Math.cos(rad));
+    const fy = 50 + (interactiveSheen() ? interactiveShiftY() : 0) + (gradientShift() * Math.sin(rad));
+    return { cx: 50, cy: 50, r, fx, fy };
   };
 
   const stopsCssString = () => {
@@ -209,11 +289,15 @@ export const IconsPreviewScreen = () => {
     const c = getKCoords(kScale(), currentKStrokeWidth(), linecap());
     const fillSourceStr = fillMode() === 'gradient' ? 'url(#gold)' : 'url(#gold-texture)';
     const paintDef = fillMode() === 'gradient'
-      ? `    <linearGradient id="gold" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      ? (['R1', 'R2'].includes(gradientProfile())
+        ? `    <radialGradient id="gold" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
+        : `    <linearGradient id="gold" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`)
       : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
 
     const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
-      ? `\n    <linearGradient id="gold-grad-overlay" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      ? (['R1', 'R2'].includes(gradientProfile())
+        ? `\n    <radialGradient id="gold-grad-overlay" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
+        : `\n    <linearGradient id="gold-grad-overlay" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`)
       : '';
 
     // 1. Polygons - Shadow
@@ -520,8 +604,8 @@ ${paintDef}${overlayGradDef}
       <stop offset="60%" stop-color="#D5BB8A" />
       <stop offset="81%" stop-color="#B8A269" />
       <stop offset="85%" stop-color="#55411B" />
-      <stop offset="89%" stop-color="#FBECA9" />
-      <stop offset="100%" stop-color="#D5BB8A" />`;
+      <stop offset="93%" stop-color="#FBECA9" />
+      <stop offset="100%" stop-color="#55411B" />`;
     }
     if (gradientProfile() === 'I') {
       return `      <stop offset="0%" stop-color="#7C6535" />
@@ -534,6 +618,33 @@ ${paintDef}${overlayGradDef}
       <stop offset="85%" stop-color="#7C6535" />
       <stop offset="89%" stop-color="#FBECA9" />
       <stop offset="100%" stop-color="#D5BB8A" />`;
+    }
+    if (gradientProfile() === 'J') {
+      return `      <stop offset="0%" stop-color="#7C6535" />
+      <stop offset="8%" stop-color="#997E47" />
+      <stop offset="26%" stop-color="#B8A269" />
+      <stop offset="30%" stop-color="#7C6535" />
+      <stop offset="34%" stop-color="#FFFDDA" />
+      <stop offset="60%" stop-color="#D5BB8A" />
+      <stop offset="81%" stop-color="#B8A269" />
+      <stop offset="85%" stop-color="#7C6535" />
+      <stop offset="93%" stop-color="#FBECA9" />
+      <stop offset="100%" stop-color="#7C6535" />`;
+    }
+    if (gradientProfile() === 'R1') {
+      return `      <stop offset="0%" stop-color="#FFFDDA" />
+      <stop offset="15%" stop-color="#D5BB8A" />
+      <stop offset="35%" stop-color="#7C6535" />
+      <stop offset="55%" stop-color="#FFFDDA" />
+      <stop offset="75%" stop-color="#D5BB8A" />
+      <stop offset="90%" stop-color="#7C6535" />
+      <stop offset="100%" stop-color="#55411B" />`;
+    }
+    if (gradientProfile() === 'R2') {
+      return `      <stop offset="0%" stop-color="#FFFDDA" />
+      <stop offset="25%" stop-color="#D5BB8A" />
+      <stop offset="60%" stop-color="#7C6535" />
+      <stop offset="100%" stop-color="#55411B" />`;
     }
     if (gradientProfile() === 'Custom') {
       const sorted = [...customStops()].sort((a, b) => a.offset - b.offset);
@@ -619,6 +730,52 @@ ${paintDef}${overlayGradDef}
                 <h3 class="text-xs font-semibold tracking-wider uppercase text-white/80 mb-2.5 pb-1.5 border-b border-white/5">
                   SVG Geometry Tweaker
                 </h3>
+
+                 {/* Interactive Holo-Reflex Mode Widget */}
+                 <div class="mb-4 bg-amber-500/5 border border-amber-500/15 p-2.5 rounded-lg">
+                   <div class="flex items-center justify-between mb-1.5">
+                     <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                       <span class="relative flex h-2 w-2">
+                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                         <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                       </span>
+                       Holo-Reflex Mode
+                     </span>
+                     <button
+                       onClick={() => setInteractiveSheen(!interactiveSheen())}
+                       class={`px-2 py-0.5 text-[9px] font-mono rounded border transition-all ${interactiveSheen() ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-black/30 border-white/10 text-white/40'}`}
+                     >
+                       {interactiveSheen() ? 'ACTIVE' : 'MUTED'}
+                     </button>
+                   </div>
+                   <p class="text-[9.5px] text-white/50 leading-relaxed mb-2.5">
+                     Parallax specular sheen that slides based on mouse cursor coordinates or mobile gyroscope/tilt angles.
+                   </p>
+                   
+                   <Show when={interactiveSheen()}>
+                     <div class="flex flex-col gap-1.5 pt-1 border-t border-white/5">
+                       <div class="flex justify-between text-[8.5px] font-mono text-white/40">
+                         <span>Parallax X: {interactiveShiftX().toFixed(1)}px</span>
+                         <span>Parallax Y: {interactiveShiftY().toFixed(1)}px</span>
+                       </div>
+                       
+                       <Show when={!gyroEnabled()}>
+                         <button
+                           onClick={requestGyroPermission}
+                           class="w-full py-1 text-[9px] font-mono bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 hover:border-amber-500/40 rounded transition-all flex items-center justify-center gap-1 uppercase"
+                         >
+                           📱 Link Gyro Tilt (Mobile)
+                         </button>
+                       </Show>
+                       <Show when={gyroEnabled()}>
+                         <div class="text-[8.5px] font-mono text-green-400/80 bg-green-500/5 border border-green-500/10 rounded py-0.5 text-center">
+                           ✓ Gyroscope Connected (Tilt Device)
+                         </div>
+                       </Show>
+                     </div>
+                   </Show>
+                 </div>
+
                  {/* Fill Mode Switcher */}
                  <div class="mb-2.5">
                    <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Fill Mode</span>
@@ -656,6 +813,13 @@ ${paintDef}${overlayGradDef}
                         >
                           <span>Opt I: Soft Horizon Au (Subtle)</span>
                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#7C6535] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
+                        </button>
+                        <button 
+                          onClick={() => setGradientProfile('J')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'J' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt J: Tiling Soft Au (Seamless)</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#7C6535] via-[#FFFDDA] to-[#7C6535] shrink-0"></span>
                         </button>
                         <button 
                           onClick={() => setGradientProfile('A')}
@@ -699,6 +863,20 @@ ${paintDef}${overlayGradDef}
                            <span>Opt F: Obsidian Ag</span>
                            <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
                          </button>
+                         <button 
+                            onClick={() => setGradientProfile('R1')}
+                            class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'R1' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            <span>Opt R1: Radial Chrome (Dome Reflect)</span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-[radial-gradient(circle,_#FFFDDA,_#7C6535,_#55411B)] shrink-0"></span>
+                          </button>
+                          <button 
+                            onClick={() => setGradientProfile('R2')}
+                            class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'R2' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            <span>Opt R2: Radial Soft (Smooth Dome)</span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-[radial-gradient(circle,_#FFFDDA,_#D5BB8A,_#55411B)] shrink-0"></span>
+                          </button>
                          <button 
                            onClick={() => setGradientProfile('Custom')}
                            class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'Custom' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
@@ -789,6 +967,33 @@ ${paintDef}${overlayGradDef}
                               { id: 9, offset: 89, color: '#FBECA9' },
                               { id: 10, offset: 100, color: '#D5BB8A' }
                             ]);
+                            else if (val === 'J') setCustomStops([
+                              { id: 1, offset: 0, color: '#7C6535' },
+                              { id: 2, offset: 8, color: '#997E47' },
+                              { id: 3, offset: 26, color: '#B8A269' },
+                              { id: 4, offset: 30, color: '#7C6535' },
+                              { id: 5, offset: 34, color: '#FFFDDA' },
+                              { id: 6, offset: 60, color: '#D5BB8A' },
+                              { id: 7, offset: 81, color: '#B8A269' },
+                              { id: 8, offset: 85, color: '#7C6535' },
+                              { id: 9, offset: 93, color: '#FBECA9' },
+                              { id: 10, offset: 100, color: '#7C6535' }
+                            ]);
+                            else if (val === 'R1') setCustomStops([
+                              { id: 1, offset: 0, color: '#FFFDDA' },
+                              { id: 2, offset: 15, color: '#D5BB8A' },
+                              { id: 3, offset: 35, color: '#7C6535' },
+                              { id: 4, offset: 55, color: '#FFFDDA' },
+                              { id: 5, offset: 75, color: '#D5BB8A' },
+                              { id: 6, offset: 90, color: '#7C6535' },
+                              { id: 7, offset: 100, color: '#55411B' }
+                            ]);
+                            else if (val === 'R2') setCustomStops([
+                              { id: 1, offset: 0, color: '#FFFDDA' },
+                              { id: 2, offset: 25, color: '#D5BB8A' },
+                              { id: 3, offset: 60, color: '#7C6535' },
+                              { id: 4, offset: 100, color: '#55411B' }
+                            ]);
                             e.currentTarget.value = ""; // Reset
                           }}
                           class="bg-[#12131a] border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
@@ -796,6 +1001,9 @@ ${paintDef}${overlayGradDef}
                           <option value="">-- Choose Preset --</option>
                           <option value="G">Opt G: Horizon Au</option>
                           <option value="I">Opt I: Soft Horizon Au</option>
+                          <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
+                          <option value="R1">Opt R1: Radial Chrome</option>
+                          <option value="R2">Opt R2: Radial Soft</option>
                           <option value="A">Opt A: Shiny Au</option>
                           <option value="B">Opt B: Contrast Au</option>
                           <option value="C">Opt C: Antique Au</option>
@@ -1402,332 +1610,230 @@ ${paintDef}${overlayGradDef}
                   };
 
                   const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
-                                   const renderSizeCell = (size: string, px: string) => {
-                    const sizeColor = () => fillMode() === 'gradient' 
-                      ? `url(#gold-grad-${type}-${size.replace('.', '_')})` 
-                      : `url(#gold-pattern-${type}-${size.replace('.', '_')})`;
-                    const sizeGradientColor = () => `url(#gold-grad-${type}-${size.replace('.', '_')})`;
+                  const renderSizeCell = (size: string, px: string) => {
+                    const isOptical = ['1rem', '1.5rem', '2rem', '2.5rem'].includes(size);
+                    const sizeColor = () => {
+                      if (fillMode() === 'gradient') {
+                        return isOptical 
+                          ? `url(#gold-grad-optical-${type})` 
+                          : `url(#gold-grad-${type})`;
+                      } else {
+                        return `url(#gold-pattern-${type})`;
+                      }
+                    };
+                    const sizeGradientColor = () => isOptical 
+                      ? `url(#gold-grad-optical-${type})` 
+                      : `url(#gold-grad-${type})`;
+
                     return (
                       <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
                         <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
                            <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
-                            <defs>
-                              <linearGradient 
-                                id={`gold-grad-${type}-${size.replace('.', '_')}`} 
-                                x1={gradCoords().x1} 
-                                y1={gradCoords().y1} 
-                                x2={gradCoords().x2} 
-                                y2={gradCoords().y2} 
-                                gradientUnits="userSpaceOnUse"
-                              >
-                                <Show when={['1rem', '1.5rem', '2rem', '2.5rem'].includes(size)}>
-                                  {/* OPTICAL SIZING: Smooth, high-contrast, double-ended gradients for small scales to prevent pixelation/dark reflection banding */}
-                                  <Show when={['A', 'B', 'C', 'G', 'Custom'].includes(gradientProfile())}>
-                                    {/* Smooth Gold */}
-                                    <stop offset="0%" stop-color="#78581E" />
-                                    <stop offset="30%" stop-color="#E2B857" />
-                                    <stop offset="55%" stop-color="#FFF3C2" />
-                                    <stop offset="80%" stop-color="#E2B857" />
-                                    <stop offset="100%" stop-color="#9E782F" />
-                                  </Show>
-                                  <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
-                                    {/* Smooth Silver */}
-                                    <stop offset="0%" stop-color="#70757D" />
-                                    <stop offset="30%" stop-color="#CED2D8" />
-                                    <stop offset="55%" stop-color="#EBEFF5" />
-                                    <stop offset="80%" stop-color="#CED2D8" />
-                                    <stop offset="100%" stop-color="#5B5F66" />
-                                  </Show>
-                                </Show>
-                                <Show when={!['1rem', '1.5rem', '2rem', '2.5rem'].includes(size)}>
-                                  {/* STANDARD DETAILED GRADIENTS FOR LARGER SIZES */}
-                                  <Show when={gradientProfile() === 'A'}>
-                                    <stop offset="0%" stop-color="#FFF3C2" />
-                                    <stop offset="25%" stop-color="#E2B857" />
-                                    <stop offset="50%" stop-color="#FCF6BA" />
-                                    <stop offset="75%" stop-color="#B28424" />
-                                    <stop offset="100%" stop-color="#FCD267" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'B'}>
-                                    <stop offset="0%" stop-color="#251502" />
-                                    <stop offset="25%" stop-color="#E5B842" />
-                                    <stop offset="50%" stop-color="#FFF7C7" />
-                                    <stop offset="75%" stop-color="#E5B842" />
-                                    <stop offset="100%" stop-color="#251502" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'C'}>
-                                    <stop offset="0%" stop-color="#FFF2C2" />
-                                    <stop offset="30%" stop-color="#C5A44E" />
-                                    <stop offset="50%" stop-color="#A48748" />
-                                    <stop offset="70%" stop-color="#EDCD75" />
-                                    <stop offset="100%" stop-color="#B7984A" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'D'}>
-                                    <stop offset="0%" stop-color="#EBEFF5" />
-                                    <stop offset="25%" stop-color="#B5B9BF" />
-                                    <stop offset="50%" stop-color="#EDF1F7" />
-                                    <stop offset="75%" stop-color="#83878D" />
-                                    <stop offset="100%" stop-color="#CED2D8" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'E'}>
-                                    <stop offset="0%" stop-color="#D1D5DB" />
-                                    <stop offset="30%" stop-color="#6B7280" />
-                                    <stop offset="50%" stop-color="#374151" />
-                                    <stop offset="70%" stop-color="#9CA3AF" />
-                                    <stop offset="100%" stop-color="#4B5563" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'F'}>
-                                    <stop offset="0%" stop-color="#9CA3AF" />
-                                    <stop offset="25%" stop-color="#4B5563" />
-                                    <stop offset="50%" stop-color="#1F2937" />
-                                    <stop offset="75%" stop-color="#111827" />
-                                    <stop offset="100%" stop-color="#374151" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'G'}>
-                                    <stop offset="0%" stop-color="#55411B" />
-                                    <stop offset="8%" stop-color="#997E47" />
-                                    <stop offset="26%" stop-color="#B8A269" />
-                                    <stop offset="30%" stop-color="#55411B" />
-                                    <stop offset="34%" stop-color="#FFFDDA" />
-                                    <stop offset="60%" stop-color="#D5BB8A" />
-                                    <stop offset="81%" stop-color="#B8A269" />
-                                    <stop offset="85%" stop-color="#55411B" />
-                                    <stop offset="89%" stop-color="#FBECA9" />
-                                    <stop offset="100%" stop-color="#D5BB8A" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'I'}>
-                                    <stop offset="0%" stop-color="#7C6535" />
-                                    <stop offset="8%" stop-color="#997E47" />
-                                    <stop offset="26%" stop-color="#B8A269" />
-                                    <stop offset="30%" stop-color="#7C6535" />
-                                    <stop offset="34%" stop-color="#FFFDDA" />
-                                    <stop offset="60%" stop-color="#D5BB8A" />
-                                    <stop offset="81%" stop-color="#B8A269" />
-                                    <stop offset="85%" stop-color="#7C6535" />
-                                    <stop offset="89%" stop-color="#FBECA9" />
-                                    <stop offset="100%" stop-color="#D5BB8A" />
-                                  </Show>
-                                  <Show when={gradientProfile() === 'Custom'}>
-                                    <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                      {(stop) => (
-                                        <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                      )}
-                                    </For>
-                                  </Show>
-                                </Show>
-                              </linearGradient>
-                              <pattern id={`gold-pattern-${type}-${size.replace('.', '_')}`} patternUnits="userSpaceOnUse" x={textureOffsetX()} y={textureOffsetY()} width={100 * textureScale()} height={100 * textureScale()}>
-                                <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
-                              </pattern>
-                              <clipPath id={`k-horizontal-clip-${type}-${size.replace('.', '_')}`}>
-                                <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
-                              </clipPath>
-                            </defs>
-                            {/* Hexagon Shadow Outline */}
-                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                              {(index) => (
-                                <polygon 
-                                  points={getHexagonPoints(index, borderStrokeWidth())} 
-                                  fill={index === 0 ? sizeColor() : 'none'} 
-                                  fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                  stroke="#201A0A" 
-                                  stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
-                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                                />
-                              )}
-                            </For>
-                            {/* Hexagon Highlight Outline */}
-                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                              {(index) => (
-                                <polygon 
-                                  points={getHexagonPoints(index, borderStrokeWidth())} 
-                                  fill="none" 
-                                  stroke="#FFFDDA" 
-                                  stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
-                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                  opacity={bevelOpacity()}
-                                />
-                              )}
-                            </For>
-                            {/* Hexagon Main Face */}
-                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                              {(index) => (
-                                <polygon 
-                                  points={getHexagonPoints(index, borderStrokeWidth())} 
-                                  fill={index === 0 ? sizeColor() : 'none'} 
-                                  fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                  stroke={sizeColor()} 
-                                  stroke-width={borderStrokeWidth()}
-                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                />
-                              )}
-                            </For>
-                            <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                {(index) => (
-                                  <polygon 
-                                    points={getHexagonPoints(index, borderStrokeWidth())} 
-                                    fill={index === 0 ? sizeGradientColor() : 'none'} 
-                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                    stroke={sizeGradientColor()} 
-                                    stroke-width={borderStrokeWidth()}
-                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                    style={{
-                                      "mix-blend-mode": overlayBlendMode(),
-                                      opacity: overlayOpacity(),
-                                      "pointer-events": "none"
-                                    }}
-                                  />
-                                )}
-                              </For>
-                            </Show>
+                             {/* Hexagon Shadow Outline */}
+                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                               {(index) => (
+                                 <polygon 
+                                   points={getHexagonPoints(index, borderStrokeWidth())} 
+                                   fill={index === 0 ? sizeColor() : 'none'} 
+                                   fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                   stroke="#201A0A" 
+                                   stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
+                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                   transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                                 />
+                               )}
+                             </For>
+                             {/* Hexagon Highlight Outline */}
+                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                               {(index) => (
+                                 <polygon 
+                                   points={getHexagonPoints(index, borderStrokeWidth())} 
+                                   fill="none" 
+                                   stroke="#FFFDDA" 
+                                   stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
+                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                   transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                   opacity={bevelOpacity()}
+                                 />
+                               )}
+                             </For>
+                             {/* Hexagon Main Face */}
+                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                               {(index) => (
+                                 <polygon 
+                                   points={getHexagonPoints(index, borderStrokeWidth())} 
+                                   fill={index === 0 ? sizeColor() : 'none'} 
+                                   fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                   stroke={sizeColor()} 
+                                   stroke-width={borderStrokeWidth()}
+                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                 />
+                               )}
+                             </For>
+                             <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                               <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                 {(index) => (
+                                   <polygon 
+                                     points={getHexagonPoints(index, borderStrokeWidth())} 
+                                     fill={index === 0 ? sizeGradientColor() : 'none'} 
+                                     fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                     stroke={sizeGradientColor()} 
+                                     stroke-width={borderStrokeWidth()}
+                                     stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                     style={{
+                                       "mix-blend-mode": overlayBlendMode(),
+                                       opacity: overlayOpacity(),
+                                       "pointer-events": "none"
+                                     }}
+                                   />
+                                 )}
+                               </For>
+                             </Show>
 
-                            {/* 1. K SHADOWS */}
-                            <path 
-                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                              fill="none"
-                              stroke="#201A0A"
-                              stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                              stroke-linecap={linecap()}
-                              transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                            />
-                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
-                              <path 
-                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                fill="none"
-                                stroke="#201A0A"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                              />
-                              <path 
-                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                fill="none"
-                                stroke="#201A0A"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                              />
-                            </g>
+                             {/* 1. K SHADOWS */}
+                             <path 
+                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                               fill="none"
+                               stroke="#201A0A"
+                               stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                               stroke-linecap={linecap()}
+                               transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                             />
+                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                               <path 
+                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                 fill="none"
+                                 stroke="#201A0A"
+                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                                 transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                               />
+                               <path 
+                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                 fill="none"
+                                 stroke="#201A0A"
+                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                                 transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                               />
+                             </g>
 
-                            {/* 2. K HIGHLIGHTS */}
-                            <path 
-                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                              fill="none"
-                              stroke="#FFFDDA"
-                              stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                              stroke-linecap={linecap()}
-                              transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                              opacity={bevelOpacity()}
-                            />
-                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
-                              <path 
-                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                fill="none"
-                                stroke="#FFFDDA"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                opacity={bevelOpacity()}
-                              />
-                              <path 
-                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                fill="none"
-                                stroke="#FFFDDA"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                opacity={bevelOpacity()}
-                              />
-                            </g>
+                             {/* 2. K HIGHLIGHTS */}
+                             <path 
+                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                               fill="none"
+                               stroke="#FFFDDA"
+                               stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                               stroke-linecap={linecap()}
+                               transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                               opacity={bevelOpacity()}
+                             />
+                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                               <path 
+                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                 fill="none"
+                                 stroke="#FFFDDA"
+                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                                 transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                 opacity={bevelOpacity()}
+                               />
+                               <path 
+                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                 fill="none"
+                                 stroke="#FFFDDA"
+                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                                 transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                 opacity={bevelOpacity()}
+                               />
+                             </g>
 
-                            {/* 3. K MAINS */}
-                            <path 
-                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                              fill="none"
-                              stroke={sizeColor()}
-                              stroke-width={currentKStrokeWidth()}
-                              stroke-linecap={linecap()}
-                            />
-                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
-                              <path 
-                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                fill="none"
-                                stroke={sizeColor()}
-                                stroke-width={currentKStrokeWidth()}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                              />
-                              <path 
-                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                fill="none"
-                                stroke={sizeColor()}
-                                stroke-width={currentKStrokeWidth()}
-                                stroke-linecap={linecap()}
-                                stroke-linejoin="miter"
-                              />
-                            </g>
+                             {/* 3. K MAINS */}
+                             <path 
+                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                               fill="none"
+                               stroke={sizeColor()}
+                               stroke-width={currentKStrokeWidth()}
+                               stroke-linecap={linecap()}
+                             />
+                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                               <path 
+                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                 fill="none"
+                                 stroke={sizeColor()}
+                                 stroke-width={currentKStrokeWidth()}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                               />
+                               <path 
+                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                 fill="none"
+                                 stroke={sizeColor()}
+                                 stroke-width={currentKStrokeWidth()}
+                                 stroke-linecap={linecap()}
+                                 stroke-linejoin="miter"
+                               />
+                             </g>
 
-                            {/* 4. K TEXTURE OVERLAYS */}
-                            <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                              <path 
-                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                fill="none"
-                                stroke={sizeGradientColor()}
-                                stroke-width={currentKStrokeWidth()}
-                                stroke-linecap={linecap()}
-                                style={{
-                                  "mix-blend-mode": overlayBlendMode(),
-                                  opacity: overlayOpacity(),
-                                  "pointer-events": "none"
-                                }}
-                              />
-                              <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
-                                <path 
-                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                  fill="none"
-                                  stroke={sizeGradientColor()}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  style={{
-                                    "mix-blend-mode": overlayBlendMode(),
-                                    opacity: overlayOpacity(),
-                                    "pointer-events": "none"
-                                  }}
-                                />
-                                <path 
-                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                  fill="none"
-                                  stroke={sizeGradientColor()}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  style={{
-                                    "mix-blend-mode": overlayBlendMode(),
-                                    opacity: overlayOpacity(),
-                                    "pointer-events": "none"
-                                  }}
-                                />
-                              </g>
-                            </Show>
-                          </svg>
-                        </div>
-                        <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
-                        
-                        {/* Absolute Custom Tooltip */}
-                        <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 opacity-0 group-hover/size:opacity-100 transition-all duration-200 transform scale-95 group-hover/size:scale-100 bg-[#12131a] border border-amber-500/30 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-50 flex items-center gap-1">
-                          <span class="font-bold">{size}</span>
-                          <span class="text-white/40">|</span>
-                          <span class="text-white/70">{px}</span>
-                        </div>
-                      </div>
+                             {/* 4. K TEXTURE OVERLAYS */}
+                             <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                               <path 
+                                 d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                 fill="none"
+                                 stroke={sizeGradientColor()}
+                                 stroke-width={currentKStrokeWidth()}
+                                 stroke-linecap={linecap()}
+                                 style={{
+                                   "mix-blend-mode": overlayBlendMode(),
+                                   opacity: overlayOpacity(),
+                                   "pointer-events": "none"
+                                 }}
+                               />
+                               <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                 <path 
+                                   d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                   fill="none"
+                                   stroke={sizeGradientColor()}
+                                   stroke-width={currentKStrokeWidth()}
+                                   stroke-linecap={linecap()}
+                                   stroke-linejoin="miter"
+                                   style={{
+                                     "mix-blend-mode": overlayBlendMode(),
+                                     opacity: overlayOpacity(),
+                                     "pointer-events": "none"
+                                   }}
+                                 />
+                                 <path 
+                                   d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                   fill="none"
+                                   stroke={sizeGradientColor()}
+                                   stroke-width={currentKStrokeWidth()}
+                                   stroke-linecap={linecap()}
+                                   stroke-linejoin="miter"
+                                   style={{
+                                     "mix-blend-mode": overlayBlendMode(),
+                                     opacity: overlayOpacity(),
+                                     "pointer-events": "none"
+                                   }}
+                                 />
+                               </g>
+                             </Show>
+                           </svg>
+                         </div>
+                         <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
+                         
+                         {/* Absolute Custom Tooltip */}
+                         <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 opacity-0 group-hover/size:opacity-100 transition-all duration-200 transform scale-95 group-hover/size:scale-100 bg-[#12131a] border border-amber-500/30 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-50 flex items-center gap-1">
+                           <span class="font-bold">{size}</span>
+                           <span class="text-white/40">|</span>
+                           <span class="text-white/70">{px}</span>
+                         </div>
+                       </div>
                     );
                   };
 
@@ -1749,87 +1855,175 @@ ${paintDef}${overlayGradDef}
                         
                         <svg viewBox="0 0 100 100" class="w-28 h-28" style={{ filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                           <defs>
-                            {/* Linear Gradient with userSpaceOnUse to resolve zero-width bounding box bugs */}
-                            <linearGradient 
-                              id={`gold-grad-${type}`} 
-                              x1={gradCoords().x1} 
-                              y1={gradCoords().y1} 
-                              x2={gradCoords().x2} 
-                              y2={gradCoords().y2} 
-                              gradientUnits="userSpaceOnUse"
-                            >
-                              <Show when={gradientProfile() === 'A'}>
-                                <stop offset="0%" stop-color="#FFF3C2" />
-                                <stop offset="25%" stop-color="#E2B857" />
-                                <stop offset="50%" stop-color="#FCF6BA" />
-                                <stop offset="75%" stop-color="#B28424" />
-                                <stop offset="100%" stop-color="#FCD267" />
-                              </Show>
-                              <Show when={gradientProfile() === 'B'}>
-                                <stop offset="0%" stop-color="#251502" />
-                                <stop offset="25%" stop-color="#E5B842" />
-                                <stop offset="50%" stop-color="#FFF7C7" />
-                                <stop offset="75%" stop-color="#E5B842" />
-                                <stop offset="100%" stop-color="#251502" />
-                              </Show>
-                              <Show when={gradientProfile() === 'C'}>
-                                <stop offset="0%" stop-color="#FFF2C2" />
-                                <stop offset="30%" stop-color="#C5A44E" />
-                                <stop offset="50%" stop-color="#A48748" />
-                                <stop offset="70%" stop-color="#EDCD75" />
-                                <stop offset="100%" stop-color="#B7984A" />
-                              </Show>
-                              <Show when={gradientProfile() === 'D'}>
-                                <stop offset="0%" stop-color="#EBEFF5" />
-                                <stop offset="25%" stop-color="#B5B9BF" />
-                                <stop offset="50%" stop-color="#EDF1F7" />
-                                <stop offset="75%" stop-color="#83878D" />
-                                <stop offset="100%" stop-color="#CED2D8" />
-                              </Show>
-                              <Show when={gradientProfile() === 'E'}>
-                                <stop offset="0%" stop-color="#D1D5DB" />
-                                <stop offset="30%" stop-color="#6B7280" />
-                                <stop offset="50%" stop-color="#374151" />
-                                <stop offset="70%" stop-color="#9CA3AF" />
-                                <stop offset="100%" stop-color="#4B5563" />
-                              </Show>
-                              <Show when={gradientProfile() === 'F'}>
-                                <stop offset="0%" stop-color="#9CA3AF" />
-                                <stop offset="25%" stop-color="#4B5563" />
-                                <stop offset="50%" stop-color="#1F2937" />
-                                <stop offset="75%" stop-color="#111827" />
-                                <stop offset="100%" stop-color="#374151" />
-                              </Show>
-                              <Show when={gradientProfile() === 'G'}>
-                                <stop offset="0%" stop-color="#55411B" />
-                                <stop offset="15%" stop-color="#997E47" />
-                                <stop offset="30%" stop-color="#55411B" />
-                                <stop offset="45%" stop-color="#FFFDDA" />
-                                <stop offset="60%" stop-color="#D5BB8A" />
-                                <stop offset="75%" stop-color="#B8A269" />
-                                <stop offset="85%" stop-color="#55411B" />
-                                <stop offset="100%" stop-color="#FBECA9" />
-                              </Show>
-                              <Show when={gradientProfile() === 'I'}>
-                                <stop offset="0%" stop-color="#7C6535" />
-                                <stop offset="15%" stop-color="#997E47" />
-                                <stop offset="30%" stop-color="#7C6535" />
-                                <stop offset="45%" stop-color="#FFFDDA" />
-                                <stop offset="60%" stop-color="#D5BB8A" />
-                                <stop offset="75%" stop-color="#B8A269" />
-                                <stop offset="85%" stop-color="#7C6535" />
-                                <stop offset="100%" stop-color="#FBECA9" />
-                              </Show>
-                              <Show when={gradientProfile() === 'Custom'}>
-                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                  {(stop) => (
-                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                  )}
-                                </For>
-                              </Show>
-                            </linearGradient>
+                            {/* Standard Gradient (Linear or Radial) */}
+                            <Show when={!['R1', 'R2'].includes(gradientProfile())}>
+                              <linearGradient 
+                                id={`gold-grad-${type}`} 
+                                x1={gradCoords().x1} 
+                                y1={gradCoords().y1} 
+                                x2={gradCoords().x2} 
+                                y2={gradCoords().y2} 
+                                gradientUnits="userSpaceOnUse"
+                                spreadMethod="reflect"
+                              >
+                                <Show when={gradientProfile() === 'A'}>
+                                  <stop offset="0%" stop-color="#FFF3C2" />
+                                  <stop offset="25%" stop-color="#E2B857" />
+                                  <stop offset="50%" stop-color="#FCF6BA" />
+                                  <stop offset="75%" stop-color="#B28424" />
+                                  <stop offset="100%" stop-color="#FCD267" />
+                                </Show>
+                                <Show when={gradientProfile() === 'B'}>
+                                  <stop offset="0%" stop-color="#251502" />
+                                  <stop offset="25%" stop-color="#E5B842" />
+                                  <stop offset="50%" stop-color="#FFF7C7" />
+                                  <stop offset="75%" stop-color="#E5B842" />
+                                  <stop offset="100%" stop-color="#251502" />
+                                </Show>
+                                <Show when={gradientProfile() === 'C'}>
+                                  <stop offset="0%" stop-color="#FFF2C2" />
+                                  <stop offset="30%" stop-color="#C5A44E" />
+                                  <stop offset="50%" stop-color="#A48748" />
+                                  <stop offset="70%" stop-color="#EDCD75" />
+                                  <stop offset="100%" stop-color="#B7984A" />
+                                </Show>
+                                <Show when={gradientProfile() === 'D'}>
+                                  <stop offset="0%" stop-color="#EBEFF5" />
+                                  <stop offset="25%" stop-color="#B5B9BF" />
+                                  <stop offset="50%" stop-color="#EDF1F7" />
+                                  <stop offset="75%" stop-color="#83878D" />
+                                  <stop offset="100%" stop-color="#CED2D8" />
+                                </Show>
+                                <Show when={gradientProfile() === 'E'}>
+                                  <stop offset="0%" stop-color="#D1D5DB" />
+                                  <stop offset="30%" stop-color="#6B7280" />
+                                  <stop offset="50%" stop-color="#374151" />
+                                  <stop offset="70%" stop-color="#9CA3AF" />
+                                  <stop offset="100%" stop-color="#4B5563" />
+                                </Show>
+                                <Show when={gradientProfile() === 'F'}>
+                                  <stop offset="0%" stop-color="#9CA3AF" />
+                                  <stop offset="25%" stop-color="#4B5563" />
+                                  <stop offset="50%" stop-color="#1F2937" />
+                                  <stop offset="75%" stop-color="#111827" />
+                                  <stop offset="100%" stop-color="#374151" />
+                                </Show>
+                                <Show when={gradientProfile() === 'G'}>
+                                  <stop offset="0%" stop-color="#55411B" />
+                                  <stop offset="15%" stop-color="#997E47" />
+                                  <stop offset="30%" stop-color="#55411B" />
+                                  <stop offset="45%" stop-color="#FFFDDA" />
+                                  <stop offset="60%" stop-color="#D5BB8A" />
+                                  <stop offset="75%" stop-color="#B8A269" />
+                                  <stop offset="85%" stop-color="#55411B" />
+                                  <stop offset="100%" stop-color="#FBECA9" />
+                                </Show>
+                                <Show when={gradientProfile() === 'I'}>
+                                  <stop offset="0%" stop-color="#7C6535" />
+                                  <stop offset="15%" stop-color="#997E47" />
+                                  <stop offset="30%" stop-color="#7C6535" />
+                                  <stop offset="45%" stop-color="#FFFDDA" />
+                                  <stop offset="60%" stop-color="#D5BB8A" />
+                                  <stop offset="75%" stop-color="#B8A269" />
+                                  <stop offset="85%" stop-color="#7C6535" />
+                                  <stop offset="100%" stop-color="#FBECA9" />
+                                </Show>
+                                <Show when={gradientProfile() === 'J'}>
+                                  <stop offset="0%" stop-color="#7C6535" />
+                                  <stop offset="8%" stop-color="#997E47" />
+                                  <stop offset="26%" stop-color="#B8A269" />
+                                  <stop offset="30%" stop-color="#7C6535" />
+                                  <stop offset="34%" stop-color="#FFFDDA" />
+                                  <stop offset="60%" stop-color="#D5BB8A" />
+                                  <stop offset="81%" stop-color="#B8A269" />
+                                  <stop offset="85%" stop-color="#7C6535" />
+                                  <stop offset="93%" stop-color="#FBECA9" />
+                                  <stop offset="100%" stop-color="#7C6535" />
+                                </Show>
+                                <Show when={gradientProfile() === 'Custom'}>
+                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                    {(stop) => (
+                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                    )}
+                                  </For>
+                                </Show>
+                              </linearGradient>
+                            </Show>
+                            <Show when={['R1', 'R2'].includes(gradientProfile())}>
+                              <radialGradient
+                                id={`gold-grad-${type}`}
+                                cx={radialCoords().cx}
+                                cy={radialCoords().cy}
+                                r={radialCoords().r}
+                                fx={radialCoords().fx}
+                                fy={radialCoords().fy}
+                                gradientUnits="userSpaceOnUse"
+                              >
+                                <Show when={gradientProfile() === 'R1'}>
+                                  <stop offset="0%" stop-color="#FFFDDA" />
+                                  <stop offset="15%" stop-color="#D5BB8A" />
+                                  <stop offset="35%" stop-color="#7C6535" />
+                                  <stop offset="55%" stop-color="#FFFDDA" />
+                                  <stop offset="75%" stop-color="#D5BB8A" />
+                                  <stop offset="90%" stop-color="#7C6535" />
+                                  <stop offset="100%" stop-color="#55411B" />
+                                </Show>
+                                <Show when={gradientProfile() === 'R2'}>
+                                  <stop offset="0%" stop-color="#FFFDDA" />
+                                  <stop offset="25%" stop-color="#D5BB8A" />
+                                  <stop offset="60%" stop-color="#7C6535" />
+                                  <stop offset="100%" stop-color="#55411B" />
+                                </Show>
+                              </radialGradient>
+                            </Show>
 
-                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX()} y={textureOffsetY()} width={100 * textureScale()} height={100 * textureScale()}>
+                            {/* Optical Sizing Gradient for smaller cell views */}
+                            <Show when={!['R1', 'R2'].includes(gradientProfile())}>
+                              <linearGradient 
+                                id={`gold-grad-optical-${type}`} 
+                                x1={gradCoords().x1} 
+                                y1={gradCoords().y1} 
+                                x2={gradCoords().x2} 
+                                y2={gradCoords().y2} 
+                                gradientUnits="userSpaceOnUse"
+                                spreadMethod="reflect"
+                              >
+                                <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'Custom'].includes(gradientProfile())}>
+                                  {/* Smooth Gold */}
+                                  <stop offset="0%" stop-color="#78581E" />
+                                  <stop offset="30%" stop-color="#E2B857" />
+                                  <stop offset="55%" stop-color="#FFF3C2" />
+                                  <stop offset="80%" stop-color="#E2B857" />
+                                  <stop offset="100%" stop-color="#9E782F" />
+                                </Show>
+                                <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
+                                  {/* Smooth Silver */}
+                                  <stop offset="0%" stop-color="#70757D" />
+                                  <stop offset="30%" stop-color="#CED2D8" />
+                                  <stop offset="55%" stop-color="#EBEFF5" />
+                                  <stop offset="80%" stop-color="#CED2D8" />
+                                  <stop offset="100%" stop-color="#5B5F66" />
+                                </Show>
+                              </linearGradient>
+                            </Show>
+                            <Show when={['R1', 'R2'].includes(gradientProfile())}>
+                              <radialGradient 
+                                id={`gold-grad-optical-${type}`} 
+                                cx={radialCoords().cx}
+                                cy={radialCoords().cy}
+                                r={radialCoords().r}
+                                fx={radialCoords().fx}
+                                fy={radialCoords().fy}
+                                gradientUnits="userSpaceOnUse"
+                              >
+                                <stop offset="0%" stop-color="#FFFDDA" />
+                                <stop offset="35%" stop-color="#D5BB8A" />
+                                <stop offset="70%" stop-color="#78581E" />
+                                <stop offset="100%" stop-color="#4E3D1E" />
+                              </radialGradient>
+                            </Show>
+
+                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX() + (interactiveSheen() ? interactiveShiftX() : 0)} y={textureOffsetY() + (interactiveSheen() ? interactiveShiftY() : 0)} width={100 * textureScale()} height={100 * textureScale()}>
                               <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
                             </pattern>
 
