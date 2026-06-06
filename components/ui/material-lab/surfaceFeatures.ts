@@ -183,19 +183,26 @@ export const surfaceEmissionAttrs = (options: SurfaceOptions) => {
 };
 
 type CssVarValue = string | number | undefined | null | false;
+type CssVarMapper = (vars: Record<string, CssVarValue>) => JSX.CSSProperties;
 
 const baseVarName = (key: string) => `${key}-base`;
+const cleanCssVarEntries = (vars: Record<string, CssVarValue>) => (
+  Object.entries(vars).filter(([, value]) => value !== undefined && value !== null && value !== false)
+);
 
 const cssVars = (vars: Record<string, CssVarValue>): JSX.CSSProperties => (
   Object.fromEntries(
-    Object.entries(vars)
-      .filter(([, value]) => value !== undefined && value !== null && value !== false)
+    cleanCssVarEntries(vars)
       .flatMap(([key, value]) => (
         key.startsWith('--') && !key.endsWith('-base')
           ? [[key, value], [baseVarName(key), value]]
           : [[key, value]]
       )),
   ) as JSX.CSSProperties
+);
+
+const stateCssVars = (vars: Record<string, CssVarValue>): JSX.CSSProperties => (
+  Object.fromEntries(cleanCssVarEntries(vars)) as JSX.CSSProperties
 );
 
 const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
@@ -208,13 +215,13 @@ const prefixedVars = (prefix: string, vars?: MaterialSurfaceStateVars) => {
   );
 };
 
-const shapeVars = (options: SurfaceOptions, bevelCorners: CornerName[]) => {
+const shapeVars = (options: SurfaceOptions, bevelCorners: CornerName[], emit: CssVarMapper = cssVars) => {
   const baseVars: Record<string, CssVarValue> = {
     '--surface-radius': `${options.radius ?? SURFACE_DEFAULTS.radius}px`,
   };
-  if (!bevelCorners.length) return cssVars(baseVars);
+  if (!bevelCorners.length) return emit(baseVars);
 
-  return cssVars({
+  return emit({
     ...baseVars,
     '--bevel-size': `${options.bevelSize ?? SURFACE_DEFAULTS.bevelSize}px`,
     '--corner-radius-tl': bevelCorners.includes('top-left') ? 'var(--bevel-size)' : 'var(--surface-radius)',
@@ -232,43 +239,43 @@ const shapeVars = (options: SurfaceOptions, bevelCorners: CornerName[]) => {
   });
 };
 
-const visualVars = (options: SurfaceOptions) => cssVars({
+const visualVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => emit({
   '--surface-filter-brightness': options.surfaceFilterBrightness !== undefined ? `${options.surfaceFilterBrightness}` : undefined,
   '--surface-layer-brightness': options.surfaceLayerBrightness !== undefined ? `${options.surfaceLayerBrightness}` : undefined,
 });
 
-const textureVars = (options: SurfaceOptions) => {
+const textureVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasTextureLayer(options)) return {};
   const textureId = options.texture || 'road012a';
-  return cssVars({
+  return emit({
     '--texture-strength': `${(options.textureStrength ?? SURFACE_DEFAULTS.textureStrength) / 100}`,
     '--texture-scale': `${options.textureScale ?? SURFACE_DEFAULTS.textureScale}px`,
     '--texture-image': `url("${getTextureOption(textureId).url}")`,
   });
 };
 
-const materialVars = (options: SurfaceOptions) => {
+const materialVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasMaterialBase(options)) return {};
   const material = options.material || 'white';
-  return cssVars({
+  return emit({
     '--material-base-color': material === 'custom'
       ? normalizeHexColor(options.materialColor)
       : baseColors[material] || baseColors.white,
   });
 };
 
-const tintVars = (options: SurfaceOptions) => {
+const tintVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasTint(options)) return {};
   const tint = tintColors[options.tint || 'none'];
-  return cssVars({
+  return emit({
     '--tint-rgb': tint.rgb,
     '--tint-alpha': `${(options.tintStrength ?? SURFACE_DEFAULTS.tintStrength) / 100}`,
   });
 };
 
-const glassVars = (options: SurfaceOptions) => {
+const glassVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasGlassWash(options)) return {};
-  return cssVars({
+  return emit({
     '--glass-alpha': `${(options.glassOpacity ?? SURFACE_DEFAULTS.glassOpacity) / 100}`,
     '--glass-reflection-alpha': `${(options.glassReflectionOpacity ?? SURFACE_DEFAULTS.glassReflectionOpacity) / 100}`,
     '--glass-highlight-width': hasGlassShine(options) ? `${options.glassHighlightWidth ?? SURFACE_DEFAULTS.glassHighlightWidth}%` : undefined,
@@ -277,30 +284,30 @@ const glassVars = (options: SurfaceOptions) => {
   });
 };
 
-const blurVars = (options: SurfaceOptions) => {
+const blurVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasGlassBlur(options)) return {};
-  return cssVars({
+  return emit({
     '--glass-blur': `${options.glassBlur ?? SURFACE_DEFAULTS.glassBlur}px`,
     '--glass-blur-scale': `${(options.glassBlur ?? SURFACE_DEFAULTS.glassBlur) / 240}`,
   });
 };
 
-const shadowVars = (options: SurfaceOptions) => {
+const shadowVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasDropShadow(options)) return {};
-  return cssVars({
+  return emit({
     '--surface-drop-shadow': `${options.shadowX ?? SURFACE_DEFAULTS.shadowX}px ${options.shadowY ?? SURFACE_DEFAULTS.shadowY}px ${options.shadowBlur ?? SURFACE_DEFAULTS.shadowBlur}px ${options.shadowSpread ?? 0}px rgb(0 0 0 / ${(options.shadowOpacity ?? SURFACE_DEFAULTS.shadowOpacity) / 100})`,
   });
 };
 
-const gradientVars = (options: SurfaceOptions) => {
+const gradientVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasGradientLayer(options)) return {};
-  return cssVars({
+  return emit({
     '--light-alpha': `${(options.lightStrength ?? SURFACE_DEFAULTS.lightStrength) / 100}`,
     '--dark-alpha': `${(options.darkStrength ?? SURFACE_DEFAULTS.darkStrength) / 100}`,
   });
 };
 
-const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
+const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[], emit: CssVarMapper = cssVars) => {
   if (!hasBorderLayer(options)) return {};
   const borderRgb = options.borderColor === 'custom'
     ? hexToRgb(options.borderCustomColor)
@@ -309,7 +316,7 @@ const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
     '--border-top-shadow': borderEdges.includes('top') ? 'rgb(255 255 255 / calc(var(--border-alpha) * 0.58))' : 'transparent',
     '--border-bottom-shadow': borderEdges.includes('bottom') ? 'rgb(0 0 0 / calc(var(--border-alpha) + 0.18))' : 'transparent',
   };
-  return cssVars({
+  return emit({
     '--border-rgb': borderRgb,
     '--border-alpha': `${(options.borderOpacity ?? SURFACE_DEFAULTS.borderOpacity) / 100}`,
     '--border-top': borderEdges.includes('top') ? 'rgb(var(--border-rgb) / var(--border-alpha))' : 'transparent',
@@ -320,9 +327,9 @@ const borderVars = (options: SurfaceOptions, borderEdges: EdgeName[]) => {
   });
 };
 
-const edgeWearVars = (options: SurfaceOptions) => {
+const edgeWearVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasEdgeWearLayer(options)) return {};
-  return cssVars({
+  return emit({
     '--edge-wear-alpha': `${(options.edgeWearOpacity ?? 0) / 100}`,
     '--edge-wear-width': `${options.edgeWearWidth ?? SURFACE_DEFAULTS.edgeWearWidth}px`,
     '--edge-wear-scale': `${options.edgeWearScale ?? SURFACE_DEFAULTS.edgeWearScale}px`,
@@ -330,7 +337,12 @@ const edgeWearVars = (options: SurfaceOptions) => {
   });
 };
 
-const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeName[]) => {
+const glowVars = (
+  options: SurfaceOptions,
+  corners: CornerName[],
+  edges: EdgeName[],
+  emit: CssVarMapper = cssVars,
+) => {
   if (!hasGlow(options)) return {};
   const glow = glowColors[options.glow || 'gold'];
   const glowPower = Math.max(0, Math.min(100, options.glowStrength ?? SURFACE_DEFAULTS.glowStrength)) / 100;
@@ -344,7 +356,7 @@ const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeNam
   const glowCornerSpread = 22 + Math.round(glowIntensity * 54);
   const glowWash = `rgb(${glow.rgb} / ${glowWashAlpha})`;
 
-  return cssVars({
+  return emit({
     '--corner-size': `${options.cornerSize ?? SURFACE_DEFAULTS.cornerSize}px`,
     '--glow-alpha': `${glowAlpha}`,
     '--glow-core': `${glowCore}px`,
@@ -373,7 +385,7 @@ const glowVars = (options: SurfaceOptions, corners: CornerName[], edges: EdgeNam
   });
 };
 
-const contentVars = (options: SurfaceOptions) => {
+const contentVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   const contentAlign = options.textAlign || 'center';
   const contentJustify = contentAlign === 'left' ? 'flex-start' : contentAlign === 'right' ? 'flex-end' : 'center';
   const contentTone = options.contentTone && options.contentTone !== 'inherit'
@@ -392,7 +404,7 @@ const contentVars = (options: SurfaceOptions) => {
       : '0 2px 6px rgb(0 0 0 / 0.64)'
     : 'none';
 
-  return cssVars({
+  return emit({
     '--content-font-family': options.textFontFamily || 'inherit',
     '--content-size': `${options.textSizeRem ?? SURFACE_DEFAULTS.textSizeRem}rem`,
     '--content-alpha': `${contentAlpha}`,
@@ -416,10 +428,10 @@ const contentVars = (options: SurfaceOptions) => {
   });
 };
 
-const emissionVars = (options: SurfaceOptions) => {
+const emissionVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (!hasEmission(options)) return {};
   const emissionRgb = tintColors[options.emissionTone || 'none'].rgb;
-  return cssVars({
+  return emit({
     '--emission-rgb': emissionRgb,
     '--emission-alpha': `${(options.emissionStrength ?? 0) / 100}`,
     '--emission-length': `${options.emissionLength ?? SURFACE_DEFAULTS.emissionLength}%`,
@@ -428,9 +440,9 @@ const emissionVars = (options: SurfaceOptions) => {
   });
 };
 
-const motionVars = (options: SurfaceOptions) => {
+const motionVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (options.stateful === false) return {};
-  return cssVars({
+  return emit({
     '--state-scale': options.stateScale !== undefined && options.stateScale !== 1 ? `${options.stateScale}` : undefined,
     '--state-translate-y': options.stateTranslateY !== undefined && options.stateTranslateY !== 0 ? `${options.stateTranslateY}px` : undefined,
   });
@@ -468,7 +480,10 @@ interface SurfaceFeatureContext {
 interface SurfaceFeature {
   id: SurfaceFeatureId;
   classes?: (context: SurfaceFeatureContext) => string[];
-  vars?: (context: SurfaceFeatureContext) => JSX.CSSProperties;
+  vars?: (
+    context: SurfaceFeatureContext,
+    varMapper: CssVarMapper,
+  ) => JSX.CSSProperties;
 }
 
 export interface SurfaceLayerFlags {
@@ -496,6 +511,17 @@ const createSurfaceFeatureContext = (options: SurfaceOptions): SurfaceFeatureCon
   };
 };
 
+const surfaceStyleWith = (
+  options: SurfaceOptions,
+  varMapper: CssVarMapper,
+): JSX.CSSProperties => {
+  const context = createSurfaceFeatureContext(options);
+  return surfaceFeatures.reduce<JSX.CSSProperties>((style, feature) => ({
+    ...style,
+    ...(feature.vars?.(context, varMapper) || {}),
+  }), {});
+};
+
 const surfaceFeatures: SurfaceFeature[] = [
   {
     id: 'root',
@@ -512,7 +538,7 @@ const surfaceFeatures: SurfaceFeature[] = [
     classes: ({ options }) => (
       hasMaterialBase(options) ? [`cd-surface--base-${options.material || 'white'}`] : []
     ),
-    vars: ({ options }) => materialVars(options),
+    vars: ({ options }, emit) => materialVars(options, emit),
   },
   {
     id: 'state',
@@ -531,25 +557,25 @@ const surfaceFeatures: SurfaceFeature[] = [
     classes: ({ bevelCorners }) => [
       `cd-surface--${bevelCorners.length ? 'bevel' : 'rect'}`,
     ],
-    vars: ({ options, bevelCorners }) => shapeVars(options, bevelCorners),
+    vars: ({ options, bevelCorners }, emit) => shapeVars(options, bevelCorners, emit),
   },
   {
     id: 'visual',
-    vars: ({ options }) => visualVars(options),
+    vars: ({ options }, emit) => visualVars(options, emit),
   },
   {
     id: 'texture',
     classes: ({ options }) => (
       hasTextureLayer(options) ? [`cd-surface--texture-${options.texture || 'road012a'}`] : []
     ),
-    vars: ({ options }) => textureVars(options),
+    vars: ({ options }, emit) => textureVars(options, emit),
   },
   {
     id: 'tint',
     classes: ({ options }) => (
       hasTint(options) ? ['cd-surface--tinted', `cd-surface--tint-${options.tint}`] : []
     ),
-    vars: ({ options }) => tintVars(options),
+    vars: ({ options }, emit) => tintVars(options, emit),
   },
   {
     id: 'glass',
@@ -557,21 +583,21 @@ const surfaceFeatures: SurfaceFeature[] = [
       hasGlassWash(options) ? 'cd-surface--glass' : '',
       hasGlassShine(options) ? 'cd-surface--glass-shine' : '',
     ],
-    vars: ({ options }) => glassVars(options),
+    vars: ({ options }, emit) => glassVars(options, emit),
   },
   {
     id: 'blur',
     classes: ({ options }) => (
       hasGlassBlur(options) ? ['cd-surface--glass-blur'] : []
     ),
-    vars: ({ options }) => blurVars(options),
+    vars: ({ options }, emit) => blurVars(options, emit),
   },
   {
     id: 'shadow',
     classes: ({ options }) => (
       hasDropShadow(options) ? ['cd-surface--shadow'] : []
     ),
-    vars: ({ options }) => shadowVars(options),
+    vars: ({ options }, emit) => shadowVars(options, emit),
   },
   {
     id: 'gradient',
@@ -579,7 +605,7 @@ const surfaceFeatures: SurfaceFeature[] = [
       options.sheen === false && (hasGradientLayer(options) || hasGlassShine(options)) ? 'cd-surface--sheen-off' : '',
       hasGradientLayer(options) ? `cd-surface--gradient-${options.gradient || 'both'}` : '',
     ],
-    vars: ({ options }) => gradientVars(options),
+    vars: ({ options }, emit) => gradientVars(options, emit),
   },
   {
     id: 'border',
@@ -588,7 +614,7 @@ const surfaceFeatures: SurfaceFeature[] = [
         ? ['cd-surface--bordered', options.borderLit === false ? '' : 'cd-surface--border-lit']
         : []
     ),
-    vars: ({ options, borderEdges }) => borderVars(options, borderEdges),
+    vars: ({ options, borderEdges }, emit) => borderVars(options, borderEdges, emit),
   },
   {
     id: 'edgeWear',
@@ -597,23 +623,23 @@ const surfaceFeatures: SurfaceFeature[] = [
         ? ['cd-surface--edge-wear-above']
         : []
     ),
-    vars: ({ options }) => edgeWearVars(options),
+    vars: ({ options }, emit) => edgeWearVars(options, emit),
   },
   {
     id: 'glow',
-    vars: ({ options, corners, edges }) => glowVars(options, corners, edges),
+    vars: ({ options, corners, edges }, emit) => glowVars(options, corners, edges, emit),
   },
   {
     id: 'content',
-    vars: ({ options }) => contentVars(options),
+    vars: ({ options }, emit) => contentVars(options, emit),
   },
   {
     id: 'emission',
-    vars: ({ options }) => emissionVars(options),
+    vars: ({ options }, emit) => emissionVars(options, emit),
   },
   {
     id: 'motion',
-    vars: ({ options }) => motionVars(options),
+    vars: ({ options }, emit) => motionVars(options, emit),
   },
 ];
 
@@ -670,13 +696,13 @@ export const surfaceLayerEmissions = (options: SurfaceOptions): EmittedLayer[] =
   return layers;
 };
 
-export const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => {
-  const context = createSurfaceFeatureContext(options);
-  return surfaceFeatures.reduce<JSX.CSSProperties>((style, feature) => ({
-    ...style,
-    ...(feature.vars?.(context) || {}),
-  }), {});
-};
+export const surfaceStyle = (options: SurfaceOptions): JSX.CSSProperties => (
+  surfaceStyleWith(options, cssVars)
+);
+
+export const surfaceStateStyle = (options: SurfaceOptions): JSX.CSSProperties => (
+  surfaceStyleWith(options, stateCssVars)
+);
 
 export const surfaceClass = (options: SurfaceOptions, extra = '') => {
   const context = createSurfaceFeatureContext(options);

@@ -94,13 +94,28 @@ This means:
 
 ## Implementation Rules
 
-- `surfaceStyle()` is responsible for emitting base aliases for authored rest
-  CSS variables.
-- `computeSurfaceStateVars()` diffs rest vs state and removes `*-base` aliases.
+- `surfaceStyle()` is the rest-style API. It emits live vars and stable base
+  aliases.
+- State-var compilation uses a state-style API. It emits live vars only.
+- `computeSurfaceStateVars()` diffs rest live vars vs state live vars.
 - Recipe-derived state vars follow the same rule.
 - CSS state blocks must not use `--x: var(--hover-x, var(--x))`.
 - New editor controls should author sparse `surfaceStates`, not full resolved
   visual states.
+
+## Cleanup Plan
+
+1. Split CSS variable emission into explicit rest and state paths:
+   `surfaceStyle()` for rest plus base aliases, and `surfaceStateStyle()` for
+   state comparisons without base aliases.
+2. Remove defensive content stripping from `computeSurfaceStateVars()`. Sparse
+   diffing and base-backed CSS fallbacks should handle inheritance for every
+   feature family uniformly.
+3. Keep state overlay tests focused on absence of unrelated emitted vars:
+   lighting-only hover must not emit content/text vars, and content overlays
+   must still emit content/text vars.
+4. Keep a source scan proving no hover/pressed fallback points at the live var it
+   is defining.
 
 ## Verification
 
@@ -109,7 +124,10 @@ The required tests are:
 ```txt
 npx tsx components/ui/material-lab/surfaceFeatures.test.ts
 npx tsx components/ui/material-lab/surfaceStateVars.test.ts
+npx tsx components/ui/material-lab/surfaceValidate.test.ts
 npx tsx components/ui/material-lab/uiNodeValidate.test.ts
+npx tsx components/ui/material-lab/MaterialEmission.test.ts
+npx tsx components/ui/material-lab/uiNodePresenter.test.ts
 npm run build
 ```
 

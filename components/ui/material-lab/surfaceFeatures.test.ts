@@ -3,6 +3,7 @@ import {
   surfaceClass,
   surfaceLayerEmissions,
   surfaceLayerFlags,
+  surfaceStateStyle,
   surfaceStyle,
 } from './surfaceFeatures';
 import type { SurfaceOptions } from './surfaceSchema';
@@ -164,6 +165,13 @@ assert.equal(content['--content-align'], 'center');
 assert.equal(content['--content-justify'], 'center');
 assert.equal(content['--content-x'], '0px');
 assert.equal(content['--content-y'], '0px');
+
+// state style emission is intentionally live-vars only; base aliases are only
+// minted by rest style emission.
+const stateStyle = surfaceStateStyle({}) as Record<string, string>;
+assert.equal(stateStyle['--content-shadow'], '0 2px 6px rgb(0 0 0 / 0.64)');
+assert.equal(stateStyle['--content-shadow-base'], undefined);
+assert.equal(stateStyle['--content-font-weight-base'], undefined);
 
 // emission
 const emission = styleOf({ emission: 'line', emissionStrength: 50 });
