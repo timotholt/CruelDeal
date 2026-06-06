@@ -25,6 +25,7 @@ import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPr
 import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPreviewScreen";
 import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
 import { IconsPreviewScreen } from "./components/screens/IconsPreviewScreen";
+import { GameUiSkinProofScreen } from "./components/screens/GameUiSkinProofScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
 const RootComponent = () => {
@@ -41,6 +42,7 @@ const RootComponent = () => {
         if (path.includes("/login-material")) return "GAME";
         if (path.includes("/main-material")) return "GAME";
         if (path.includes("/ui-node")) return "GAME";
+        if (path.includes("/game-ui-skin-proof")) return "GAME";
         if (path.includes("/dev")) return "GAME";
         if (path.includes("/citymap")) return "GAME";
         if (path.includes("/play")) return "PLAY";
@@ -230,6 +232,12 @@ const uiNodeRoute = createRoute({
     component: () => <UiNodePreviewScreen />,
 });
 
+const gameUiSkinProofRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/game-ui-skin-proof",
+    component: () => <GameUiSkinProofScreen />,
+});
+
 const devUiNodeRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/dev/ui-node",
@@ -268,6 +276,7 @@ const routeTree = rootRoute.addChildren([
     loginMaterialRoute,
     mainMaterialRoute,
     uiNodeRoute,
+    gameUiSkinProofRoute,
     devUiNodeRoute,
     devCardFrameRoute,
     devTensorRoute,

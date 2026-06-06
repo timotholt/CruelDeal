@@ -14,6 +14,7 @@ import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 import { IconsPreviewScreen } from './components/screens/IconsPreviewScreen';
+import { GameUiSkinProofScreen } from './components/screens/GameUiSkinProofScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +65,11 @@ const devLinks = [
     detail: 'Server-driven node payload, state overlays, and skin registry proof',
   },
   {
+    href: '/game-ui-skin-proof',
+    title: 'Game UI Skin/CMS Proof',
+    detail: 'Theme tokens, component skins, CMS content, and promo placements',
+  },
+  {
     href: '/dev/icons',
     title: 'Kit Currency Icon Lab',
     detail: 'Flat-bottomed gold hexagon currency icon variations and SVG mask lab',
@@ -110,6 +116,7 @@ export default function App() {
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
   const isMainMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/main-material');
   const isUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/ui-node');
+  const isGameUiSkinProofPath = () => window.location.pathname.toLowerCase().startsWith('/game-ui-skin-proof');
   const isGameTextTestPath = () => window.location.pathname.toLowerCase().startsWith('/gametext-test');
   const isGameTextV2TestPath = () => {
     const path = window.location.pathname.toLowerCase();
@@ -151,7 +158,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isUiNodePath() || isGameTextTestPath() || isGameTextV2TestPath() || isIconsPath()}
+          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isUiNodePath() || isGameUiSkinProofPath() || isGameTextTestPath() || isGameTextV2TestPath() || isIconsPath()}
           fallback={
             <AppViewport>
               <Show
@@ -188,8 +195,12 @@ export default function App() {
                 <Show when={isLoginMaterialPath()} fallback={(
                   <Show when={isMainMaterialPath()} fallback={(
                     <Show when={isUiNodePath()} fallback={(
-                      <Show when={isIconsPath()} fallback={<UiMaterialLabScreen />}>
-                        <IconsPreviewScreen />
+                      <Show when={isGameUiSkinProofPath()} fallback={(
+                        <Show when={isIconsPath()} fallback={<UiMaterialLabScreen />}>
+                          <IconsPreviewScreen />
+                        </Show>
+                      )}>
+                        <GameUiSkinProofScreen />
                       </Show>
                     )}>
                       <UiNodePreviewScreen />

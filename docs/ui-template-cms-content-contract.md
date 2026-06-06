@@ -1,7 +1,17 @@
 # UI Template And CMS Content Contract
 
-Status: draft
+Status: superseded
 Date: 2026-06-04
+
+Superseded by:
+
+- `docs/game-ui-skinning-cms-agent-spec.md`
+
+This document remains useful historical context for the early `UiNodePayload`
+template/CMS proof. The active implementation plan for game UI skinning, CMS
+content objects, promo placements, component skin slots, goal-seeking execution,
+and restartable agent packets is now
+`docs/game-ui-skinning-cms-agent-spec.md`.
 
 ## Goal
 

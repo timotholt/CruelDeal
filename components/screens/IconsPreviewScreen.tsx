@@ -10,13 +10,32 @@ export const IconsPreviewScreen = () => {
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
   const [kScale, setKScale] = createSignal(0.8);
-  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F'>('A');
+  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'>('G');
   const [kDiag2X, setKDiag2X] = createSignal(-1);
   const [kDiag1Slope, setKDiag1Slope] = createSignal(0.86);
   const [kDiag2Slope, setKDiag2Slope] = createSignal(0.60);
   const [kDiagWidth, setKDiagWidth] = createSignal(25.5);
   const [kOffsetX, setKOffsetX] = createSignal(-0.5);
   const [kOffsetY, setKOffsetY] = createSignal(0);
+  const [fillMode, setFillMode] = createSignal<'gradient' | 'texture'>('gradient');
+  const [selectedTexture, setSelectedTexture] = createSignal('Gold01.png');
+  const [textureScale, setTextureScale] = createSignal(1.0);
+  const [textureOffsetX, setTextureOffsetX] = createSignal(0);
+  const [textureOffsetY, setTextureOffsetY] = createSignal(0);
+  const [textureBrightness, setTextureBrightness] = createSignal(1.0);
+  const [textureContrast, setTextureContrast] = createSignal(1.0);
+  const [textureSaturation, setTextureSaturation] = createSignal(1.0);
+  const [overlayOpacity, setOverlayOpacity] = createSignal(0.4);
+  const [overlayBlendMode, setOverlayBlendMode] = createSignal<'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light'>('overlay');
+  const [bevelOffset, setBevelOffset] = createSignal(0.6);
+  const [bevelOpacity, setBevelOpacity] = createSignal(0.6);
+  const [kBlockMode, setKBlockMode] = createSignal(false);
+
+
+  const textureFiles = Array.from({ length: 25 }, (_, i) => {
+    const num = String(i + 1).padStart(2, '0');
+    return `Gold${num}.png`;
+  });
 
   // Signals for clipboard & save/load system
   const [copiedType, setCopiedType] = createSignal<'thin' | 'medium' | 'thick' | null>(null);
@@ -84,6 +103,9 @@ export const IconsPreviewScreen = () => {
       setRings(1);
       setRingGap(6);
       setKScale(1.0);
+      setBevelOffset(0.3);
+      setBevelOpacity(0.4);
+      setKBlockMode(false);
     } else if (preset === 'medium') {
       setThickness(6);
       setKThickness(6);
@@ -93,15 +115,21 @@ export const IconsPreviewScreen = () => {
       setRings(1);
       setRingGap(8);
       setKScale(1.0);
+      setBevelOffset(0.6);
+      setBevelOpacity(0.6);
+      setKBlockMode(false);
     } else if (preset === 'thick') {
       setThickness(10);
-      setKThickness(10);
+      setKThickness(16);
       setHexFillOpacity(0.12);
       setGlowIntensity(12);
       setLinecap('butt');
       setRings(1);
       setRingGap(10);
-      setKScale(1.0);
+      setKScale(0.9);
+      setBevelOffset(1.2);
+      setBevelOpacity(0.8);
+      setKBlockMode(true);
     } else if (preset === 'triple') {
       setThickness(4);
       setKThickness(4);
@@ -111,6 +139,9 @@ export const IconsPreviewScreen = () => {
       setRings(3);
       setRingGap(5.5);
       setKScale(0.85); // Make K slightly smaller so it sits perfectly inside triple rings
+      setBevelOffset(0.4);
+      setBevelOpacity(0.5);
+      setKBlockMode(false);
     }
   };
 
@@ -130,23 +161,83 @@ export const IconsPreviewScreen = () => {
     };
 
     const c = getKCoords(kScale(), currentKStrokeWidth(), linecap());
-    const polygonTags = Array.from({ length: rings() }, (_, i) => i).map((index) => {
-      return `<polygon points="${getHexagonPoints(index, borderStrokeWidth())}" stroke="url(#gold)" stroke-width="${borderStrokeWidth()}" fill="none" stroke-linejoin="${linecap() === 'round' ? 'round' : 'miter'}"/>`;
+    const fillSourceStr = fillMode() === 'gradient' ? 'url(#gold)' : 'url(#gold-texture)';
+    const paintDef = fillMode() === 'gradient'
+      ? `    <linearGradient id="gold" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
+
+    const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
+      ? `\n    <linearGradient id="gold-grad-overlay" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>`
+      : '';
+
+    // 1. Polygons - Shadow
+    const polygonShadows = Array.from({ length: rings() }, (_, i) => i).map((index) => {
+      const fillAttr = index === 0 && hexFillOpacity() > 0 ? ` fill="#201A0A" fill-opacity="${hexFillOpacity()}"` : ' fill="none"';
+      return `<polygon points="${getHexagonPoints(index, borderStrokeWidth())}" stroke="#201A0A" stroke-width="${(borderStrokeWidth() + bevelOffset() * 1.5).toFixed(2)}" ${fillAttr} stroke-linejoin="${linecap() === 'round' ? 'round' : 'miter'}" transform="translate(${bevelOffset().toFixed(2)}, ${bevelOffset().toFixed(2)})"/>`;
     }).join('\n  ');
+
+    // 2. Polygons - Highlight
+    const polygonHighlights = Array.from({ length: rings() }, (_, i) => i).map((index) => {
+      return `<polygon points="${getHexagonPoints(index, borderStrokeWidth())}" stroke="#FFFDDA" stroke-width="${(borderStrokeWidth() + bevelOffset() * 0.5).toFixed(2)}" fill="none" stroke-linejoin="${linecap() === 'round' ? 'round' : 'miter'}" transform="translate(${-bevelOffset().toFixed(2)}, ${-bevelOffset().toFixed(2)})" opacity="${bevelOpacity().toFixed(2)}"/>`;
+    }).join('\n  ');
+
+    // 3. Polygons - Main Face
+    const polygonMains = Array.from({ length: rings() }, (_, i) => i).map((index) => {
+      const fillAttr = index === 0 && hexFillOpacity() > 0 ? ` fill="${fillSourceStr}" fill-opacity="${hexFillOpacity()}"` : ' fill="none"';
+      return `<polygon points="${getHexagonPoints(index, borderStrokeWidth())}" stroke="${fillSourceStr}" stroke-width="${borderStrokeWidth().toFixed(2)}" ${fillAttr} stroke-linejoin="${linecap() === 'round' ? 'round' : 'miter'}"/>`;
+    }).join('\n  ');
+
+    // 4. K Shadows
+    const stemShadow = `<path d="M ${c.stemX1},${c.stemY1} L ${c.stemX2},${c.stemY2}" fill="none" stroke="#201A0A" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 1.5).toFixed(2)}" stroke-linecap="${linecap()}" transform="translate(${bevelOffset().toFixed(2)}, ${bevelOffset().toFixed(2)})"/>`;
+    const diagShadow = `<g clip-path="url(#k-clip)">
+    <path d="M ${c.diag1X1},${c.diag1Y1} L ${c.diag1X2},${c.diag1Y2}" fill="none" stroke="#201A0A" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 1.5).toFixed(2)}" stroke-linecap="${linecap()}" stroke-linejoin="miter" transform="translate(${bevelOffset().toFixed(2)}, ${bevelOffset().toFixed(2)})"/>
+    <path d="M ${c.diag2X1},${c.diag2Y1} L ${c.diag2X2},${c.diag2Y2}" fill="none" stroke="#201A0A" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 1.5).toFixed(2)}" stroke-linecap="${linecap()}" stroke-linejoin="miter" transform="translate(${bevelOffset().toFixed(2)}, ${bevelOffset().toFixed(2)})"/>
+  </g>`;
+
+    // 5. K Highlights
+    const stemHighlight = `<path d="M ${c.stemX1},${c.stemY1} L ${c.stemX2},${c.stemY2}" fill="none" stroke="#FFFDDA" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 0.5).toFixed(2)}" stroke-linecap="${linecap()}" transform="translate(${-bevelOffset().toFixed(2)}, ${-bevelOffset().toFixed(2)})" opacity="${bevelOpacity().toFixed(2)}"/>`;
+    const diagHighlight = `<g clip-path="url(#k-clip)">
+    <path d="M ${c.diag1X1},${c.diag1Y1} L ${c.diag1X2},${c.diag1Y2}" fill="none" stroke="#FFFDDA" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 0.5).toFixed(2)}" stroke-linecap="${linecap()}" stroke-linejoin="miter" transform="translate(${-bevelOffset().toFixed(2)}, ${-bevelOffset().toFixed(2)})" opacity="${bevelOpacity().toFixed(2)}"/>
+    <path d="M ${c.diag2X1},${c.diag2Y1} L ${c.diag2X2},${c.diag2Y2}" fill="none" stroke="#FFFDDA" stroke-width="${(currentKStrokeWidth() + bevelOffset() * 0.5).toFixed(2)}" stroke-linecap="${linecap()}" stroke-linejoin="miter" transform="translate(${-bevelOffset().toFixed(2)}, ${-bevelOffset().toFixed(2)})" opacity="${bevelOpacity().toFixed(2)}"/>
+  </g>`;
+
+    // 6. K Mains
+    const stemMain = `<path d="M ${c.stemX1},${c.stemY1} L ${c.stemX2},${c.stemY2}" fill="none" stroke="${fillSourceStr}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}"/>`;
+    const diagMain = `<g clip-path="url(#k-clip)">
+    <path d="M ${c.diag1X1},${c.diag1Y1} L ${c.diag1X2},${c.diag1Y2}" fill="none" stroke="${fillSourceStr}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}" stroke-linejoin="miter"/>
+    <path d="M ${c.diag2X1},${c.diag2Y1} L ${c.diag2X2},${c.diag2Y2}" fill="none" stroke="${fillSourceStr}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}" stroke-linejoin="miter"/>
+  </g>`;
+
+    // 7. Texture Overlay
+    let textureOverlay = '';
+    if (fillMode() === 'texture' && overlayOpacity() > 0) {
+      const overlayColor = `url(#gold-grad-overlay)`;
+      const overlayPolys = Array.from({ length: rings() }, (_, i) => i).map((index) => {
+        const fillAttr = index === 0 && hexFillOpacity() > 0 ? ` fill="${overlayColor}" fill-opacity="${hexFillOpacity()}"` : ' fill="none"';
+        return `<polygon points="${getHexagonPoints(index, borderStrokeWidth())}" stroke="${overlayColor}" stroke-width="${borderStrokeWidth().toFixed(2)}" ${fillAttr} stroke-linejoin="${linecap() === 'round' ? 'round' : 'miter'}" style="mix-blend-mode: ${overlayBlendMode()}; opacity: ${overlayOpacity()}; pointer-events: none;"/>`;
+      }).join('\n  ');
+      const overlayStem = `<path d="M ${c.stemX1},${c.stemY1} L ${c.stemX2},${c.stemY2}" fill="none" stroke="${overlayColor}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}" style="mix-blend-mode: ${overlayBlendMode()}; opacity: ${overlayOpacity()}; pointer-events: none;"/>`;
+      const overlayDiag = `<g clip-path="url(#k-clip)">
+    <path d="M ${c.diag1X1},${c.diag1Y1} L ${c.diag1X2},${c.diag1Y2}" fill="none" stroke="${overlayColor}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}" stroke-linejoin="miter" style="mix-blend-mode: ${overlayBlendMode()}; opacity: ${overlayOpacity()}; pointer-events: none;"/>
+    <path d="M ${c.diag2X1},${c.diag2Y1} L ${c.diag2X2},${c.diag2Y2}" fill="none" stroke="${overlayColor}" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}" stroke-linejoin="miter" style="mix-blend-mode: ${overlayBlendMode()}; opacity: ${overlayOpacity()}; pointer-events: none;"/>
+  </g>`;
+      textureOverlay = `\n  ${overlayPolys}\n  ${overlayStem}\n  ${overlayDiag}`;
+    }
 
     return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="gold" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-${getGradientStopsString()}
-    </linearGradient>
+${paintDef}${overlayGradDef}
     <clipPath id="k-clip"><rect x="10" y="${c.clipY}" width="80" height="${c.clipHeight}" /></clipPath>
   </defs>
-  ${polygonTags}
-  <path d="M ${c.stemX1},${c.stemY1} L ${c.stemX2},${c.stemY2}" fill="none" stroke="url(#gold)" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}"/>
-  <g clip-path="url(#k-clip)">
-    <path d="M ${c.diag1X1},${c.diag1Y1} L ${c.diag1X2},${c.diag1Y2}" fill="none" stroke="url(#gold)" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}"/>
-    <path d="M ${c.diag2X1},${c.diag2Y1} L ${c.diag2X2},${c.diag2Y2}" fill="none" stroke="url(#gold)" stroke-width="${currentKStrokeWidth()}" stroke-linecap="${linecap()}"/>
-  </g>
+  ${polygonShadows}
+  ${polygonHighlights}
+  ${polygonMains}
+  ${stemShadow}
+  ${diagShadow}
+  ${stemHighlight}
+  ${diagHighlight}
+  ${stemMain}
+  ${diagMain}${textureOverlay}
 </svg>`;
   };
 
@@ -189,6 +280,17 @@ ${getGradientStopsString()}
       kDiag2X: kDiag2X(),
       kDiag1Slope: kDiag1Slope(),
       kDiag2Slope: kDiag2Slope(),
+      textureScale: textureScale(),
+      textureOffsetX: textureOffsetX(),
+      textureOffsetY: textureOffsetY(),
+      textureBrightness: textureBrightness(),
+      textureContrast: textureContrast(),
+      textureSaturation: textureSaturation(),
+      overlayOpacity: overlayOpacity(),
+      overlayBlendMode: overlayBlendMode(),
+      bevelOffset: bevelOffset(),
+      bevelOpacity: bevelOpacity(),
+      kBlockMode: kBlockMode(),
     };
     
     localStorage.setItem(`crueldeal_icon_preset_${slotNum}`, JSON.stringify(preset));
@@ -229,6 +331,28 @@ ${getGradientStopsString()}
       else setKDiag1Slope(1.08);
       if (preset.kDiag2Slope !== undefined) setKDiag2Slope(preset.kDiag2Slope);
       else setKDiag2Slope(0.71);
+      if (preset.textureScale !== undefined) setTextureScale(preset.textureScale);
+      else setTextureScale(1.0);
+      if (preset.textureOffsetX !== undefined) setTextureOffsetX(preset.textureOffsetX);
+      else setTextureOffsetX(0);
+      if (preset.textureOffsetY !== undefined) setTextureOffsetY(preset.textureOffsetY);
+      else setTextureOffsetY(0);
+      if (preset.textureBrightness !== undefined) setTextureBrightness(preset.textureBrightness);
+      else setTextureBrightness(1.0);
+      if (preset.textureContrast !== undefined) setTextureContrast(preset.textureContrast);
+      else setTextureContrast(1.0);
+      if (preset.textureSaturation !== undefined) setTextureSaturation(preset.textureSaturation);
+      else setTextureSaturation(1.0);
+      if (preset.overlayOpacity !== undefined) setOverlayOpacity(preset.overlayOpacity);
+      else setOverlayOpacity(0.4);
+      if (preset.overlayBlendMode !== undefined) setOverlayBlendMode(preset.overlayBlendMode);
+      else setOverlayBlendMode('overlay');
+      if (preset.bevelOffset !== undefined) setBevelOffset(preset.bevelOffset);
+      else setBevelOffset(0.6);
+      if (preset.bevelOpacity !== undefined) setBevelOpacity(preset.bevelOpacity);
+      else setBevelOpacity(0.6);
+      if (preset.kBlockMode !== undefined) setKBlockMode(preset.kBlockMode);
+      else setKBlockMode(false);
     } catch (e) {
       console.error("Error parsing preset", e);
     }
@@ -341,6 +465,18 @@ ${getGradientStopsString()}
       <stop offset="70%" stop-color="#9CA3AF" />
       <stop offset="100%" stop-color="#4B5563" />`;
     }
+    if (gradientProfile() === 'G') {
+      return `      <stop offset="0%" stop-color="#201A0A" />
+      <stop offset="8%" stop-color="#997E47" />
+      <stop offset="26%" stop-color="#B8A269" />
+      <stop offset="30%" stop-color="#201A0A" />
+      <stop offset="34%" stop-color="#FFFDDA" />
+      <stop offset="60%" stop-color="#D5BB8A" />
+      <stop offset="81%" stop-color="#B8A269" />
+      <stop offset="85%" stop-color="#201A0A" />
+      <stop offset="89%" stop-color="#FBECA9" />
+      <stop offset="100%" stop-color="#D5BB8A" />`;
+    }
     return `      <stop offset="0%" stop-color="#9CA3AF" />
       <stop offset="25%" stop-color="#4B5563" />
       <stop offset="50%" stop-color="#1F2937" />
@@ -421,55 +557,234 @@ ${getGradientStopsString()}
                 <h3 class="text-xs font-semibold tracking-wider uppercase text-white/80 mb-2.5 pb-1.5 border-b border-white/5">
                   SVG Geometry Tweaker
                 </h3>
-
-                {/* Material Gradient Profiles */}
+                 {/* Fill Mode Switcher */}
                  <div class="mb-2.5">
-                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
-                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-1 rounded border border-white/5">
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Fill Mode</span>
+                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
                      <button 
-                       onClick={() => setGradientProfile('A')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                       onClick={() => setFillMode('gradient')}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'gradient' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                      >
-                       <span>Opt A: Shiny Au</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424] shrink-0"></span>
+                       GRADIENT
                      </button>
                      <button 
-                         onClick={() => setGradientProfile('B')}
-                         class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                       >
-                         <span>Opt B: Contrast Au</span>
-                         <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#251502] via-[#FFF7C7] to-[#251502] shrink-0"></span>
-                       </button>
-                     <button 
-                       onClick={() => setGradientProfile('C')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                       onClick={() => setFillMode('texture')}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                      >
-                       <span>Opt C: Antique Au</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF2C2] via-[#A48748] to-[#EDCD75] shrink-0"></span>
-                     </button>
-                     <button 
-                       onClick={() => setGradientProfile('D')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'D' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       <span>Opt D: Platinum Ag</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#EBEFF5] to-[#83878D] shrink-0"></span>
-                     </button>
-                     <button 
-                       onClick={() => setGradientProfile('E')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'E' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       <span>Opt E: Steel Ag</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#D1D5DB] via-[#6B7280] to-[#374151] shrink-0"></span>
-                     </button>
-                     <button 
-                       onClick={() => setGradientProfile('F')}
-                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       <span>Opt F: Obsidian Ag</span>
-                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
+                       TEXTURE FILE
                      </button>
                    </div>
                  </div>
+
+                 {/* Material Gradient Profiles or Texture Dropdown */}
+                 <Show when={fillMode() === 'gradient'}>
+                   <div class="mb-2.5">
+                     <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
+                     <div class="grid grid-cols-2 gap-1 bg-black/40 p-1 rounded border border-white/5">
+                        <button 
+                          onClick={() => setGradientProfile('G')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 col-span-2 ${gradientProfile() === 'G' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt G: Horizon Au (Reference match)</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#201A0A] via-[#FFFDDA] to-[#FBECA9] shrink-0"></span>
+                        </button>
+                        <button 
+                          onClick={() => setGradientProfile('A')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt A: Shiny Au</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424] shrink-0"></span>
+                        </button>
+                        <button 
+                           onClick={() => setGradientProfile('B')}
+                           class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                         >
+                           <span>Opt B: Contrast Au</span>
+                           <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#251502] via-[#FFF7C7] to-[#251502] shrink-0"></span>
+                         </button>
+                        <button 
+                          onClick={() => setGradientProfile('C')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt C: Antique Au</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF2C2] via-[#A48748] to-[#EDCD75] shrink-0"></span>
+                        </button>
+                        <button 
+                          onClick={() => setGradientProfile('D')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'D' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt D: Platinum Ag</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#EBEFF5] to-[#83878D] shrink-0"></span>
+                        </button>
+                        <button 
+                          onClick={() => setGradientProfile('E')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'E' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt E: Steel Ag</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#D1D5DB] via-[#6B7280] to-[#374151] shrink-0"></span>
+                        </button>
+                        <button 
+                          onClick={() => setGradientProfile('F')}
+                          class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          <span>Opt F: Obsidian Ag</span>
+                          <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
+                        </button>
+                      </div>
+                   </div>
+                 </Show>
+
+                 <Show when={fillMode() === 'texture'}>
+                    <div class="mb-2.5">
+                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Active Texture File</span>
+                      <select
+                        value={selectedTexture()}
+                        onChange={(e) => setSelectedTexture(e.currentTarget.value)}
+                        class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                      >
+                        <For each={textureFiles}>
+                          {(file) => (
+                            <option value={file} class="bg-[#12131a] text-white/80">{file}</option>
+                          )}
+                        </For>
+                      </select>
+                    </div>
+
+                    {/* Texture Scale Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Scale</span>
+                        <span class="font-mono text-amber-400 font-semibold">{(textureScale() * 100).toFixed(0)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.2" 
+                        max="3.0" 
+                        step="0.05"
+                        value={textureScale()}
+                        onInput={(e) => setTextureScale(parseFloat(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Texture Brightness Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Brightness</span>
+                        <span class="font-mono text-amber-400 font-semibold">{(textureBrightness() * 100).toFixed(0)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.5" 
+                        max="2.5" 
+                        step="0.05"
+                        value={textureBrightness()}
+                        onInput={(e) => setTextureBrightness(parseFloat(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Texture Shift X Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Shift X</span>
+                        <span class="font-mono text-amber-400 font-semibold">{textureOffsetX()}px</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-100" 
+                        max="100" 
+                        step="1"
+                        value={textureOffsetX()}
+                        onInput={(e) => setTextureOffsetX(parseInt(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Texture Shift Y Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Shift Y</span>
+                        <span class="font-mono text-amber-400 font-semibold">{textureOffsetY()}px</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-100" 
+                        max="100" 
+                        step="1"
+                        value={textureOffsetY()}
+                        onInput={(e) => setTextureOffsetY(parseInt(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Texture Contrast Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Contrast</span>
+                        <span class="font-mono text-amber-400 font-semibold">{(textureContrast() * 100).toFixed(0)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.5" 
+                        max="2.5" 
+                        step="0.05"
+                        value={textureContrast()}
+                        onInput={(e) => setTextureContrast(parseFloat(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Texture Saturation Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Texture Saturation</span>
+                        <span class="font-mono text-amber-400 font-semibold">{(textureSaturation() * 100).toFixed(0)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.0" 
+                        max="2.0" 
+                        step="0.05"
+                        value={textureSaturation()}
+                        onInput={(e) => setTextureSaturation(parseFloat(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Overlay Gradient Opacity Slider */}
+                    <div class="mb-2.5">
+                      <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-white/60">Overlay Gradient Opacity</span>
+                        <span class="font-mono text-amber-400 font-semibold">{(overlayOpacity() * 100).toFixed(0)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.0" 
+                        max="1.0" 
+                        step="0.05"
+                        value={overlayOpacity()}
+                        onInput={(e) => setOverlayOpacity(parseFloat(e.currentTarget.value))}
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                      />
+                    </div>
+
+                    {/* Overlay Gradient Blend Mode Selector */}
+                    <div class="mb-2.5">
+                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider font-mono">Overlay Blend Mode</span>
+                      <select
+                        value={overlayBlendMode()}
+                        onChange={(e) => setOverlayBlendMode(e.currentTarget.value as any)}
+                        class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                      >
+                        <option value="overlay" class="bg-[#12131a] text-white/80">overlay</option>
+                        <option value="color-dodge" class="bg-[#12131a] text-white/80">color-dodge</option>
+                        <option value="soft-light" class="bg-[#12131a] text-white/80">soft-light</option>
+                        <option value="multiply" class="bg-[#12131a] text-white/80">multiply</option>
+                        <option value="screen" class="bg-[#12131a] text-white/80">screen</option>
+                      </select>
+                    </div>
+                  </Show>
 
                 {/* Stroke Cap Style Toggle */}
                  <div class="mb-2.5">
@@ -490,6 +805,31 @@ ${getGradientStopsString()}
                    </div>
                  </div>
  
+                 {/* K Block Mode Toggle */}
+                 <div class="mb-2.5">
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Rendering Mode</span>
+                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                     <button 
+                       onClick={() => {
+                         setKBlockMode(false);
+                       }}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${!kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       LINE/STROKE
+                     </button>
+                     <button 
+                       onClick={() => {
+                         setKBlockMode(true);
+                         setLinecap('butt'); // Enforce sharp caps for block mode
+                         if (kThickness() < 12) setKThickness(16); // Set a good default block thickness
+                       }}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       BLOCK MODE
+                     </button>
+                   </div>
+                 </div>
+
                  {/* Hexagon Border Rings Selector */}
                  <div class="mb-2.5">
                    <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Hexagon Border Count</span>
@@ -643,7 +983,7 @@ ${getGradientStopsString()}
                   <input 
                     type="range" 
                     min="1" 
-                    max="18" 
+                    max="24" 
                     step="0.5"
                     value={kThickness()}
                     onInput={(e) => setKThickness(parseFloat(e.currentTarget.value))}
@@ -679,10 +1019,44 @@ ${getGradientStopsString()}
                   <input 
                     type="range" 
                     min="1" 
-                    max="18" 
+                    max="24" 
                     step="0.5"
                     value={thickness()}
                     onInput={(e) => setThickness(parseFloat(e.currentTarget.value))}
+                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                  />
+                </div>
+
+                {/* Bevel Offset Slider */}
+                <div class="mb-2.5">
+                  <div class="flex justify-between text-[11px] mb-0.5">
+                    <span class="text-white/60">3D Bevel Offset</span>
+                    <span class="font-mono text-amber-400 font-semibold">{bevelOffset()}px</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="3" 
+                    step="0.1"
+                    value={bevelOffset()}
+                    onInput={(e) => setBevelOffset(parseFloat(e.currentTarget.value))}
+                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                  />
+                </div>
+
+                {/* Bevel Opacity Slider */}
+                <div class="mb-2.5">
+                  <div class="flex justify-between text-[11px] mb-0.5">
+                    <span class="text-white/60">3D Bevel Opacity</span>
+                    <span class="font-mono text-amber-400 font-semibold">{(bevelOpacity() * 100).toFixed(0)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.05"
+                    value={bevelOpacity()}
+                    onInput={(e) => setBevelOpacity(parseFloat(e.currentTarget.value))}
                     class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
                   />
                 </div>
@@ -749,12 +1123,15 @@ ${getGradientStopsString()}
                   };
 
                   const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
-                  
-                  const renderSizeCell = (size: string, px: string) => {
+                                   const renderSizeCell = (size: string, px: string) => {
+                    const sizeColor = () => fillMode() === 'gradient' 
+                      ? `url(#gold-grad-${type}-${size.replace('.', '_')})` 
+                      : `url(#gold-pattern-${type}-${size.replace('.', '_')})`;
+                    const sizeGradientColor = () => `url(#gold-grad-${type}-${size.replace('.', '_')})`;
                     return (
                       <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
                         <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
-                          <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
+                           <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                             <defs>
                               <linearGradient id={`gold-grad-${type}-${size.replace('.', '_')}`} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
                                 <Show when={gradientProfile() === 'A'}>
@@ -799,27 +1176,155 @@ ${getGradientStopsString()}
                                   <stop offset="75%" stop-color="#111827" />
                                   <stop offset="100%" stop-color="#374151" />
                                 </Show>
+                                <Show when={gradientProfile() === 'G'}>
+                                  <stop offset="0%" stop-color="#201A0A" />
+                                  <stop offset="8%" stop-color="#997E47" />
+                                  <stop offset="26%" stop-color="#B8A269" />
+                                  <stop offset="30%" stop-color="#201A0A" />
+                                  <stop offset="34%" stop-color="#FFFDDA" />
+                                  <stop offset="60%" stop-color="#D5BB8A" />
+                                  <stop offset="81%" stop-color="#B8A269" />
+                                  <stop offset="85%" stop-color="#201A0A" />
+                                  <stop offset="89%" stop-color="#FBECA9" />
+                                  <stop offset="100%" stop-color="#D5BB8A" />
+                                </Show>
                               </linearGradient>
+                              <pattern id={`gold-pattern-${type}-${size.replace('.', '_')}`} patternUnits="userSpaceOnUse" x={textureOffsetX()} y={textureOffsetY()} width={100 * textureScale()} height={100 * textureScale()}>
+                                <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
+                              </pattern>
                               <clipPath id={`k-horizontal-clip-${type}-${size.replace('.', '_')}`}>
                                 <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
                               </clipPath>
                             </defs>
+                            {/* Hexagon Shadow Outline */}
                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
                               {(index) => (
                                 <polygon 
                                   points={getHexagonPoints(index, borderStrokeWidth())} 
-                                  fill={index === 0 ? `url(#gold-grad-${type}-${size.replace('.', '_')})` : 'none'} 
+                                  fill={index === 0 ? sizeColor() : 'none'} 
                                   fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                  stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`} 
+                                  stroke="#201A0A" 
+                                  stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
+                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                                />
+                              )}
+                            </For>
+                            {/* Hexagon Highlight Outline */}
+                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                              {(index) => (
+                                <polygon 
+                                  points={getHexagonPoints(index, borderStrokeWidth())} 
+                                  fill="none" 
+                                  stroke="#FFFDDA" 
+                                  stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
+                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                  opacity={bevelOpacity()}
+                                />
+                              )}
+                            </For>
+                            {/* Hexagon Main Face */}
+                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                              {(index) => (
+                                <polygon 
+                                  points={getHexagonPoints(index, borderStrokeWidth())} 
+                                  fill={index === 0 ? sizeColor() : 'none'} 
+                                  fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                  stroke={sizeColor()} 
                                   stroke-width={borderStrokeWidth()}
                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
                                 />
                               )}
                             </For>
+                            <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                {(index) => (
+                                  <polygon 
+                                    points={getHexagonPoints(index, borderStrokeWidth())} 
+                                    fill={index === 0 ? sizeGradientColor() : 'none'} 
+                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                    stroke={sizeGradientColor()} 
+                                    stroke-width={borderStrokeWidth()}
+                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                    style={{
+                                      "mix-blend-mode": overlayBlendMode(),
+                                      opacity: overlayOpacity(),
+                                      "pointer-events": "none"
+                                    }}
+                                  />
+                                )}
+                              </For>
+                            </Show>
+
+                            {/* 1. K SHADOWS */}
                             <path 
                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
                               fill="none"
-                              stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                              stroke="#201A0A"
+                              stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                              stroke-linecap={linecap()}
+                              transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                            />
+                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
+                              <path 
+                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                fill="none"
+                                stroke="#201A0A"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                              />
+                              <path 
+                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                fill="none"
+                                stroke="#201A0A"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                              />
+                            </g>
+
+                            {/* 2. K HIGHLIGHTS */}
+                            <path 
+                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                              fill="none"
+                              stroke="#FFFDDA"
+                              stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                              stroke-linecap={linecap()}
+                              transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                              opacity={bevelOpacity()}
+                            />
+                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
+                              <path 
+                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                fill="none"
+                                stroke="#FFFDDA"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                opacity={bevelOpacity()}
+                              />
+                              <path 
+                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                fill="none"
+                                stroke="#FFFDDA"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                opacity={bevelOpacity()}
+                              />
+                            </g>
+
+                            {/* 3. K MAINS */}
+                            <path 
+                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                              fill="none"
+                              stroke={sizeColor()}
                               stroke-width={currentKStrokeWidth()}
                               stroke-linecap={linecap()}
                             />
@@ -827,7 +1332,7 @@ ${getGradientStopsString()}
                               <path 
                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
                                 fill="none"
-                                stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                                stroke={sizeColor()}
                                 stroke-width={currentKStrokeWidth()}
                                 stroke-linecap={linecap()}
                                 stroke-linejoin="miter"
@@ -835,12 +1340,56 @@ ${getGradientStopsString()}
                               <path 
                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
                                 fill="none"
-                                stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                                stroke={sizeColor()}
                                 stroke-width={currentKStrokeWidth()}
                                 stroke-linecap={linecap()}
                                 stroke-linejoin="miter"
                               />
                             </g>
+
+                            {/* 4. K TEXTURE OVERLAYS */}
+                            <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                              <path 
+                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                fill="none"
+                                stroke={sizeGradientColor()}
+                                stroke-width={currentKStrokeWidth()}
+                                stroke-linecap={linecap()}
+                                style={{
+                                  "mix-blend-mode": overlayBlendMode(),
+                                  opacity: overlayOpacity(),
+                                  "pointer-events": "none"
+                                }}
+                              />
+                              <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
+                                <path 
+                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                  fill="none"
+                                  stroke={sizeGradientColor()}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  style={{
+                                    "mix-blend-mode": overlayBlendMode(),
+                                    opacity: overlayOpacity(),
+                                    "pointer-events": "none"
+                                  }}
+                                />
+                                <path 
+                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                  fill="none"
+                                  stroke={sizeGradientColor()}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  style={{
+                                    "mix-blend-mode": overlayBlendMode(),
+                                    opacity: overlayOpacity(),
+                                    "pointer-events": "none"
+                                  }}
+                                />
+                              </g>
+                            </Show>
                           </svg>
                         </div>
                         <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
@@ -854,6 +1403,11 @@ ${getGradientStopsString()}
                       </div>
                     );
                   };
+
+                  const mainColor = () => fillMode() === 'gradient' 
+                    ? `url(#gold-grad-${type})` 
+                    : `url(#gold-pattern-${type})`;
+                  const mainGradientColor = () => `url(#gold-grad-${type})`;
 
                   return (
                     <div class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center">
@@ -912,7 +1466,21 @@ ${getGradientStopsString()}
                                 <stop offset="75%" stop-color="#111827" />
                                 <stop offset="100%" stop-color="#374151" />
                               </Show>
+                              <Show when={gradientProfile() === 'G'}>
+                                <stop offset="0%" stop-color="#201A0A" />
+                                <stop offset="15%" stop-color="#997E47" />
+                                <stop offset="30%" stop-color="#201A0A" />
+                                <stop offset="45%" stop-color="#FFFDDA" />
+                                <stop offset="60%" stop-color="#D5BB8A" />
+                                <stop offset="75%" stop-color="#B8A269" />
+                                <stop offset="85%" stop-color="#201A0A" />
+                                <stop offset="100%" stop-color="#FBECA9" />
+                              </Show>
                             </linearGradient>
+
+                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX()} y={textureOffsetY()} width={100 * textureScale()} height={100 * textureScale()}>
+                              <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
+                            </pattern>
 
                             {/* Horizontal clip path to cut diagonal stroke extensions perfectly flat */}
                             <clipPath id={`k-horizontal-clip-${type}`}>
@@ -920,49 +1488,200 @@ ${getGradientStopsString()}
                             </clipPath>
                           </defs>
 
-                          {/* Render concentric hexagons with identical stroke weights and uniform gaps */}
-                          <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                            {(index) => (
-                              <polygon 
-                                points={getHexagonPoints(index, borderStrokeWidth())} 
-                                fill={index === 0 ? `url(#gold-grad-${type})` : 'none'} 
-                                fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                stroke={`url(#gold-grad-${type})`} 
-                                stroke-width={borderStrokeWidth()}
-                                stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                              {/* Hexagon Shadow Outline */}
+                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                {(index) => (
+                                  <polygon 
+                                    points={getHexagonPoints(index, borderStrokeWidth())} 
+                                    fill={index === 0 ? mainColor() : 'none'} 
+                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                    stroke="#201A0A" 
+                                    stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
+                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                    transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                                  />
+                                )}
+                              </For>
+                              {/* Hexagon Highlight Outline */}
+                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                {(index) => (
+                                  <polygon 
+                                    points={getHexagonPoints(index, borderStrokeWidth())} 
+                                    fill="none" 
+                                    stroke="#FFFDDA" 
+                                    stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
+                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                    transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                    opacity={bevelOpacity()}
+                                  />
+                                )}
+                              </For>
+                              {/* Hexagon Main Face */}
+                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                {(index) => (
+                                  <polygon 
+                                    points={getHexagonPoints(index, borderStrokeWidth())} 
+                                    fill={index === 0 ? mainColor() : 'none'} 
+                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                    stroke={mainColor()} 
+                                    stroke-width={borderStrokeWidth()}
+                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                  />
+                                )}
+                              </For>
+                              <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                                <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                  {(index) => (
+                                    <polygon 
+                                      points={getHexagonPoints(index, borderStrokeWidth())} 
+                                      fill={index === 0 ? mainGradientColor() : 'none'} 
+                                      fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                      stroke={mainGradientColor()} 
+                                      stroke-width={borderStrokeWidth()}
+                                      stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                      style={{
+                                        "mix-blend-mode": overlayBlendMode(),
+                                        opacity: overlayOpacity(),
+                                        "pointer-events": "none"
+                                      }}
+                                    />
+                                  )}
+                                </For>
+                              </Show>
+
+                              {/* 1. K SHADOWS */}
+                              <path 
+                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                fill="none"
+                                stroke="#201A0A"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                stroke-linecap={linecap()}
+                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
                               />
-                            )}
-                          </For>
+                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                <path 
+                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                  fill="none"
+                                  stroke="#201A0A"
+                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                                />
+                                <path 
+                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                  fill="none"
+                                  stroke="#201A0A"
+                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
+                                />
+                              </g>
 
-                          {/* Vertical stem (drawn outside the clip-path. Has a 0.01px width offset & uses userSpaceOnUse gradient) */}
-                          <path 
-                            d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                            fill="none"
-                            stroke={`url(#gold-grad-${type})`}
-                            stroke-width={currentKStrokeWidth()}
-                            stroke-linecap={linecap()}
-                          />
+                              {/* 2. K HIGHLIGHTS */}
+                              <path 
+                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                fill="none"
+                                stroke="#FFFDDA"
+                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                stroke-linecap={linecap()}
+                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                opacity={bevelOpacity()}
+                              />
+                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                <path 
+                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                  fill="none"
+                                  stroke="#FFFDDA"
+                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                  opacity={bevelOpacity()}
+                                />
+                                <path 
+                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                  fill="none"
+                                  stroke="#FFFDDA"
+                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
+                                  opacity={bevelOpacity()}
+                                />
+                              </g>
 
-                          {/* Clipped Letter K Group to achieve equal baseline and topline on diagonals */}
-                          <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                            {/* Diagonals extending past boundary to ensure clean horizontal shear clip */}
-                            <path 
-                              d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                              fill="none"
-                              stroke={`url(#gold-grad-${type})`}
-                              stroke-width={currentKStrokeWidth()}
-                              stroke-linecap={linecap()}
-                              stroke-linejoin="miter"
-                            />
-                            <path 
-                              d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                              fill="none"
-                              stroke={`url(#gold-grad-${type})`}
-                              stroke-width={currentKStrokeWidth()}
-                              stroke-linecap={linecap()}
-                              stroke-linejoin="miter"
-                            />
-                          </g>
+                              {/* 3. K MAINS */}
+                              <path 
+                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                fill="none"
+                                stroke={mainColor()}
+                                stroke-width={currentKStrokeWidth()}
+                                stroke-linecap={linecap()}
+                              />
+                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                <path 
+                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                  fill="none"
+                                  stroke={mainColor()}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                />
+                                <path 
+                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                  fill="none"
+                                  stroke={mainColor()}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  stroke-linejoin="miter"
+                                />
+                              </g>
+
+                              {/* 4. K TEXTURE OVERLAYS */}
+                              <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
+                                <path 
+                                  d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                  fill="none"
+                                  stroke={mainGradientColor()}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  style={{
+                                    "mix-blend-mode": overlayBlendMode(),
+                                    opacity: overlayOpacity(),
+                                    "pointer-events": "none"
+                                  }}
+                                />
+                                <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                  <path 
+                                    d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                    fill="none"
+                                    stroke={mainGradientColor()}
+                                    stroke-width={currentKStrokeWidth()}
+                                    stroke-linecap={linecap()}
+                                    stroke-linejoin="miter"
+                                    style={{
+                                      "mix-blend-mode": overlayBlendMode(),
+                                      opacity: overlayOpacity(),
+                                      "pointer-events": "none"
+                                    }}
+                                  />
+                                  <path 
+                                    d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                    fill="none"
+                                    stroke={mainGradientColor()}
+                                    stroke-width={currentKStrokeWidth()}
+                                    stroke-linecap={linecap()}
+                                    stroke-linejoin="miter"
+                                    style={{
+                                      "mix-blend-mode": overlayBlendMode(),
+                                      opacity: overlayOpacity(),
+                                      "pointer-events": "none"
+                                    }}
+                                  />
+                                </g>
+                              </Show>
                         </svg>
                       </div>
 

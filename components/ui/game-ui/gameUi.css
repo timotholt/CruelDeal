@@ -1,0 +1,165 @@
+.game-ui-shell {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 12px;
+  padding: 12px;
+}
+
+.game-ui-shell--comfortable {
+  gap: 16px;
+  padding: 16px;
+}
+
+.game-ui-shell--cinematic {
+  gap: 20px;
+  padding: 20px;
+}
+
+.game-ui-top-bar,
+.game-ui-bottom-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+}
+
+.game-ui-top-bar__profile,
+.game-ui-top-bar__resources,
+.game-ui-resource-chip,
+.game-ui-bottom-nav {
+  display: flex;
+  align-items: center;
+}
+
+.game-ui-top-bar__profile {
+  gap: 10px;
+}
+
+.game-ui-top-bar__resources {
+  gap: 8px;
+  margin-left: auto;
+}
+
+.game-ui-top-bar__avatar {
+  display: inline-block;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.game-ui-top-bar__avatar--sm {
+  width: 40px;
+  height: 40px;
+}
+
+.game-ui-top-bar__avatar--lg {
+  width: 60px;
+  height: 60px;
+}
+
+.game-ui-top-bar__profile-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.game-ui-top-bar__xp {
+  width: 96px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.36);
+  overflow: hidden;
+}
+
+.game-ui-top-bar__xp-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+
+.game-ui-resource-chip {
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.game-ui-resource-chip__copy {
+  display: grid;
+  gap: 1px;
+}
+
+.game-ui-resource-chip__icon,
+.game-ui-bottom-nav__icon {
+  width: 1.2em;
+  height: 1.2em;
+  display: inline-block;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.game-ui-resource-chip__add {
+  width: 28px;
+  height: 28px;
+}
+
+.game-ui-bottom-nav {
+  gap: 8px;
+}
+
+.game-ui-bottom-nav__item {
+  min-height: 64px;
+  min-width: 64px;
+}
+
+.game-ui-bottom-nav__content {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+}
+
+.game-ui-bottom-nav__badge {
+  min-width: 8px;
+  min-height: 8px;
+}
+
+.game-ui-promo-slot {
+  display: grid;
+  gap: 10px;
+}
+
+.game-ui-promo-slot--hero {
+  min-height: 220px;
+}
+
+.game-ui-promo-card {
+  position: relative;
+  display: grid;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.game-ui-promo-card--hero {
+  min-height: 220px;
+}
+
+.game-ui-promo-card__media {
+  position: absolute;
+  inset: 0;
+  opacity: 0.74;
+}
+
+.game-ui-promo-card__copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  padding: 18px;
+  max-width: 62%;
+}
+
+.game-ui-promo-card__cta {
+  width: max-content;
+  min-width: 128px;
+}
