@@ -20,6 +20,8 @@ import type {
   TopBarSkin,
 } from './gameUiThemeSchema';
 import { gameUiDiagnostic, type GameUiDiagnostic } from './gameUiDiagnostics';
+import type { UiSurfaceStatesPayload } from '../material-lab/uiNodeValidate';
+import type { SurfaceOptions } from '../material-lab/surfaceSchema';
 
 export interface GameUiRuntime {
   theme: GameUiTheme;
@@ -41,6 +43,12 @@ export interface ResolvedSurfaceRecipe {
 export interface ResolvedTextStyle {
   id: string;
   style: GameTextStyle;
+  diagnostics: GameUiDiagnostic[];
+}
+
+export interface ResolvedUiNodeSurface {
+  surface: SurfaceOptions;
+  surfaceStates?: UiSurfaceStatesPayload;
   diagnostics: GameUiDiagnostic[];
 }
 
@@ -139,6 +147,18 @@ export const resolveTextStyle = (
       `Missing text style "${textStyleId ?? '(none)'}" and theme has no fallback text styles.`,
       { severity: 'error', path, id: textStyleId, fallback: 'fallback.text' },
     )],
+  };
+};
+
+export const resolveUiNodeSurfaceFromGameTheme = (
+  theme: GameUiTheme,
+  surfaceId: string,
+): ResolvedUiNodeSurface => {
+  const resolved = resolveSurfaceRecipe(theme, surfaceId, 'theme.surfaces');
+  return {
+    surface: resolved.recipe.surface,
+    surfaceStates: resolved.recipe.states,
+    diagnostics: resolved.diagnostics,
   };
 };
 

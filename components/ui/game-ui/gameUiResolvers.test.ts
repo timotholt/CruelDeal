@@ -14,8 +14,10 @@ import {
   resolveSurfaceRecipe,
   resolveTextStyle,
   resolveTopBarSkin,
+  resolveUiNodeSurfaceFromGameTheme,
   type GameUiRuntime,
 } from './gameUiResolvers';
+import { validateUiNode } from '../material-lab/uiNodeValidate';
 
 const runtime: GameUiRuntime = {
   theme: darkStoneGameUiThemeFixture,
@@ -26,6 +28,21 @@ const runtime: GameUiRuntime = {
 const surface = resolveSurfaceRecipe(darkStoneGameUiThemeFixture, 'ctaPrimary');
 assert.equal(surface.id, 'ctaPrimary');
 assert.equal(surface.diagnostics.length, 0);
+
+const uiNodeSurface = resolveUiNodeSurfaceFromGameTheme(darkStoneGameUiThemeFixture, 'ctaPrimary');
+assert.equal(uiNodeSurface.surface.materialColor, '#c7a04d');
+assert.equal(uiNodeSurface.surfaceStates?.hover?.surfaceLayerBrightness, 1.16);
+assert.equal(uiNodeSurface.diagnostics.length, 0);
+
+const bridgedNode = validateUiNode({
+  id: 'theme-cta-node',
+  type: 'button',
+  surface: uiNodeSurface.surface,
+  surfaceStates: uiNodeSurface.surfaceStates,
+  text: 'View Season',
+});
+assert.equal(bridgedNode?.surface?.materialColor, '#c7a04d');
+assert.equal(bridgedNode?.surfaceStates?.pressed?.stateTranslateY, 2);
 
 const missingSurface = resolveSurfaceRecipe(darkStoneGameUiThemeFixture, 'missingSurface');
 assert.equal(missingSurface.recipe, darkStoneGameUiThemeFixture.surfaces.topBar);
