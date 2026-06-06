@@ -4,7 +4,7 @@
 
 Refactor the main material preview so any rendered material target can be tested in place with the same generic interaction system: hover, pressed, active/selectable, and focus preview. This should work for the Contract CTA child material, nav items, toolbar buttons, currency buttons, feed child surfaces, and future editable targets without adding bespoke handlers for every component.
 
-This plan is subordinate to `docs/material-preview-emission-rules.md`: preview DOM/CSS is sacred product output. Interaction state must be stored in RAM and passed into product renderers. Do not add permanent `data-*` attributes, wrapper frames, debug classes, or hidden nodes to the material DOM to make interaction tracking easier.
+This plan is subordinate to `docs/first-class-surface-architecture-spec.md`: preview DOM/CSS is sacred product output. Interaction state must be stored in RAM and passed into product renderers. Do not add permanent `data-*` attributes, wrapper frames, debug classes, or hidden nodes to the material DOM to make interaction tracking easier.
 
 The end state is:
 

@@ -85,8 +85,9 @@ UiNodePayload
 For migrated families, the material editor preview renders the same SolidJS product component/emission plan. Editor state such as selection, diagnostics, provenance, and active inspector data lives in RAM and is not encoded into the product DOM.
 
 Interactive surface states use the sparse patch contract in
-`docs/sparse-surface-state-model.md`: rest emits base aliases, hover/pressed
-JSON emits only changed vars, and missing state values inherit from rest.
+`docs/first-class-surface-architecture-spec.md`: rest emits base aliases,
+hover/pressed JSON emits only changed vars, and missing state values inherit
+from rest.
 
 ## Migration Phases
 
