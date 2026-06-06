@@ -759,7 +759,9 @@ const diffStateVars = (
   baseVars: Record<string, string | number>,
 ) => (
   Object.fromEntries(
-    Object.entries(nextVars).filter(([key, value]) => stateValueChanged(value, baseVars[key])),
+    Object.entries(nextVars).filter(([key, value]) => (
+      !key.endsWith('-base') && stateValueChanged(value, baseVars[key])
+    )),
   ) as Record<string, string | number>
 );
 

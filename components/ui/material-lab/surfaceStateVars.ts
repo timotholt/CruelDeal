@@ -51,6 +51,7 @@ const diffCssVars = (
     if (value === undefined || value === null || value === false) continue;
     if (base[key] === value) continue;
     if (!key.startsWith('--')) continue;
+    if (key.endsWith('-base')) continue;
     diff[key] = value as string | number;
   }
   return diff;

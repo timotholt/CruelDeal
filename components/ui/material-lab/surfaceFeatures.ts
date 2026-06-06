@@ -184,9 +184,17 @@ export const surfaceEmissionAttrs = (options: SurfaceOptions) => {
 
 type CssVarValue = string | number | undefined | null | false;
 
+const baseVarName = (key: string) => `${key}-base`;
+
 const cssVars = (vars: Record<string, CssVarValue>): JSX.CSSProperties => (
   Object.fromEntries(
-    Object.entries(vars).filter(([, value]) => value !== undefined && value !== null && value !== false),
+    Object.entries(vars)
+      .filter(([, value]) => value !== undefined && value !== null && value !== false)
+      .flatMap(([key, value]) => (
+        key.startsWith('--') && !key.endsWith('-base')
+          ? [[key, value], [baseVarName(key), value]]
+          : [[key, value]]
+      )),
   ) as JSX.CSSProperties
 );
 
@@ -388,29 +396,18 @@ const contentVars = (options: SurfaceOptions) => {
     '--content-font-family': options.textFontFamily || 'inherit',
     '--content-size': `${options.textSizeRem ?? SURFACE_DEFAULTS.textSizeRem}rem`,
     '--content-alpha': `${contentAlpha}`,
-    '--content-alpha-base': `${contentAlpha}`,
     '--content-rgb': contentRgb,
-    '--content-rgb-base': contentRgb,
     '--icon-rgb': iconRgb,
-    '--icon-rgb-base': iconRgb,
     '--content-color': `rgb(${contentRgb} / ${contentAlpha})`,
-    '--content-shadow-base': textShadow,
     '--content-shadow': textShadow,
-    '--content-glow-alpha-base': contentGlowStrength > 0 ? `${contentGlowStrength / 100}` : undefined,
     '--content-glow-alpha': contentGlowStrength > 0 ? `${contentGlowStrength / 100}` : undefined,
-    '--icon-glow-alpha-base': iconGlowStrength > 0 ? `${iconGlowStrength / 100}` : undefined,
     '--icon-glow-alpha': iconGlowStrength > 0 ? `${iconGlowStrength / 100}` : undefined,
-    '--content-glow-shadow-base': contentGlowStrength > 0 ? '0 0 10px rgb(var(--content-rgb-base) / var(--content-glow-alpha-base))' : undefined,
     '--content-glow-shadow': contentGlowStrength > 0 ? '0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha))' : undefined,
     '--icon-glow-shadow': iconGlowStrength > 0 ? 'drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)))' : undefined,
     '--icon-color': `rgb(${iconRgb} / ${contentAlpha})`,
-    '--content-font-weight-base': `${options.fontWeight ?? SURFACE_DEFAULTS.fontWeight}`,
     '--content-font-weight': `${options.fontWeight ?? SURFACE_DEFAULTS.fontWeight}`,
-    '--content-font-style-base': options.fontStyle || 'italic',
     '--content-font-style': options.fontStyle || 'italic',
-    '--content-text-transform-base': options.textTransform || 'uppercase',
     '--content-text-transform': options.textTransform || 'uppercase',
-    '--content-letter-spacing-base': `${options.letterSpacing ?? 0}em`,
     '--content-letter-spacing': `${options.letterSpacing ?? 0}em`,
     '--content-align': contentAlign,
     '--content-justify': contentJustify,

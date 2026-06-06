@@ -58,6 +58,7 @@ assert.equal(lightingOnly.hover?.cssVars['--dark-alpha'], '0.22');
 assert.equal(lightingOnly.hover?.cssVars['--surface-filter-brightness'], '1');
 assert.equal(lightingOnly.hover?.cssVars['--surface-layer-brightness'], '1.18');
 assert.equal(lightingOnly.hover?.cssVars['--content-shadow'], undefined);
+assert.equal(lightingOnly.hover?.cssVars['--content-shadow-base'], undefined);
 assert.equal(lightingOnly.hover?.cssVars['--content-rgb'], undefined);
 assert.equal(lightingOnly.hover?.cssVars['--content-glow-alpha'], undefined);
 
