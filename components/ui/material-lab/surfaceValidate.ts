@@ -124,6 +124,8 @@ const fields: Record<keyof SurfaceOptions, Pair> = {
   borderOpacity: ranged(0, 100),
   lightStrength: ranged(0, 100),
   darkStrength: ranged(0, 100),
+  surfaceFilterBrightness: ranged(0, 3),
+  surfaceLayerBrightness: ranged(0, 3),
   edgeWearTexture: pick(EDGE_TEXTURE_IDS),
   edgeWearOpacity: ranged(0, 100),
   edgeWearWidth: ranged(0, 200),

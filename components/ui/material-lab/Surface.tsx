@@ -211,6 +211,8 @@ const surfaceOptionKeys = [
   'borderOpacity',
   'lightStrength',
   'darkStrength',
+  'surfaceFilterBrightness',
+  'surfaceLayerBrightness',
   'edgeWearTexture',
   'edgeWearOpacity',
   'edgeWearWidth',

@@ -175,4 +175,9 @@ assert.equal(emission['--emission-blip-size'], '12px');
 assert.equal(styleOf({})['--state-scale'], undefined);
 assert.equal(styleOf({})['--state-translate-y'], undefined);
 
+// visual filtering (identity values are still emitted when authored so states
+// can disable host brightness while brightening paint layers only)
+assert.equal(styleOf({ surfaceFilterBrightness: 1 })['--surface-filter-brightness'], '1');
+assert.equal(styleOf({ surfaceLayerBrightness: 1.18 })['--surface-layer-brightness'], '1.18');
+
 console.log('Surface feature pipeline tests passed');

@@ -45,11 +45,18 @@ const lightingOnly = computeSurfaceStateVars({
   contentOpacity: 90,
   textEmboss: true,
 }, {
-  hover: { lightStrength: 76, darkStrength: 22 },
+  hover: {
+    lightStrength: 76,
+    darkStrength: 22,
+    surfaceFilterBrightness: 1,
+    surfaceLayerBrightness: 1.18,
+  },
 });
 
 assert.equal(lightingOnly.hover?.cssVars['--light-alpha'], '0.76');
 assert.equal(lightingOnly.hover?.cssVars['--dark-alpha'], '0.22');
+assert.equal(lightingOnly.hover?.cssVars['--surface-filter-brightness'], '1');
+assert.equal(lightingOnly.hover?.cssVars['--surface-layer-brightness'], '1.18');
 assert.equal(lightingOnly.hover?.cssVars['--content-shadow'], undefined);
 assert.equal(lightingOnly.hover?.cssVars['--content-rgb'], undefined);
 assert.equal(lightingOnly.hover?.cssVars['--content-glow-alpha'], undefined);

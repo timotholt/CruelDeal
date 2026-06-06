@@ -929,21 +929,34 @@
   --content-alpha: 1;
   --content-color: #f4eee0;
   --icon-color: #f4eee0;
+  --content-alpha-base: 1;
   --content-rgb: 244 238 224;
+  --content-rgb-base: 244 238 224;
   --icon-rgb: 244 238 224;
+  --icon-rgb-base: 244 238 224;
+  --content-glow-alpha-base: 0;
   --content-glow-alpha: 0;
+  --icon-glow-alpha-base: 0;
   --icon-glow-alpha: 0;
+  --content-glow-shadow-base: 0 0 10px rgb(var(--content-rgb-base) / var(--content-glow-alpha-base));
   --content-glow-shadow: 0 0 10px rgb(var(--content-rgb) / var(--content-glow-alpha));
   --icon-glow-shadow: drop-shadow(0 0 8px rgb(var(--icon-rgb) / var(--icon-glow-alpha)));
+  --content-font-weight-base: 900;
   --content-font-weight: 900;
+  --content-font-style-base: italic;
   --content-font-style: italic;
+  --content-text-transform-base: uppercase;
   --content-text-transform: uppercase;
+  --content-letter-spacing-base: 0em;
   --content-letter-spacing: 0em;
+  --content-shadow-base: 0 2px 6px rgba(0,0,0,0.64);
   --content-shadow: 0 2px 6px rgba(0,0,0,0.64);
   --content-align: center;
   --content-justify: center;
   --content-x: 0px;
   --content-y: 0px;
+  --surface-filter-brightness: 1;
+  --surface-layer-brightness: 1;
   --border-rgb: 235 226 205;
   --border-alpha: 0.34;
   --edge-wear-alpha: 0;
@@ -1067,6 +1080,16 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.cd-surface__material,
+.cd-surface__texture,
+.cd-surface__tint,
+.cd-surface__glass,
+.cd-surface__gradient,
+.cd-surface__edge-wear,
+.cd-surface__border {
+  filter: brightness(var(--surface-layer-brightness));
 }
 
 .cd-surface__material {
@@ -1409,14 +1432,16 @@
 }
 
 .cd-surface.is-interactive:active {
-  --content-rgb: var(--pressed-content-rgb, var(--content-rgb));
-  --icon-rgb: var(--pressed-icon-rgb, var(--icon-rgb));
-  --content-glow-alpha: var(--pressed-content-glow-alpha, var(--content-glow-alpha));
-  --icon-glow-alpha: var(--pressed-icon-glow-alpha, var(--icon-glow-alpha));
-  --content-font-weight: var(--pressed-content-font-weight, var(--content-font-weight));
-  --content-font-style: var(--pressed-content-font-style, var(--content-font-style));
-  --content-text-transform: var(--pressed-content-text-transform, var(--content-text-transform));
-  --content-letter-spacing: var(--pressed-content-letter-spacing, var(--content-letter-spacing));
+  --content-rgb: var(--pressed-content-rgb, var(--content-rgb-base));
+  --icon-rgb: var(--pressed-icon-rgb, var(--icon-rgb-base));
+  --content-glow-alpha: var(--pressed-content-glow-alpha, var(--content-glow-alpha-base));
+  --icon-glow-alpha: var(--pressed-icon-glow-alpha, var(--icon-glow-alpha-base));
+  --content-font-weight: var(--pressed-content-font-weight, var(--content-font-weight-base));
+  --content-font-style: var(--pressed-content-font-style, var(--content-font-style-base));
+  --content-text-transform: var(--pressed-content-text-transform, var(--content-text-transform-base));
+  --content-letter-spacing: var(--pressed-content-letter-spacing, var(--content-letter-spacing-base));
+  --content-shadow: var(--pressed-content-shadow, var(--content-shadow-base));
+  --content-glow-shadow: var(--pressed-content-glow-shadow, var(--content-glow-shadow-base));
   --content-color: rgb(var(--content-rgb) / var(--content-alpha));
   --icon-color: rgb(var(--icon-rgb) / var(--content-alpha));
   --tint-rgb: var(--pressed-tint-rgb, var(--tint-rgb));
@@ -1448,6 +1473,9 @@
   --emission-length: var(--pressed-emission-length, var(--emission-length));
   --emission-thickness: var(--pressed-emission-thickness, var(--emission-thickness));
   --emission-blip-size: var(--pressed-emission-blip-size, var(--emission-blip-size));
+  --surface-filter-brightness: var(--pressed-surface-filter-brightness, var(--surface-filter-brightness));
+  --surface-layer-brightness: var(--pressed-surface-layer-brightness, var(--surface-layer-brightness));
+  filter: brightness(var(--surface-filter-brightness));
   transform:
     translateY(var(--pressed-state-translate-y, var(--pressed-translate-y, 1px)))
     scale(var(--pressed-state-scale, var(--pressed-scale, 1)));
@@ -1455,14 +1483,16 @@
 
 @media (hover: hover) and (pointer: fine) {
   .cd-surface.is-interactive:hover:not(:active) {
-    --content-rgb: var(--hover-content-rgb, var(--content-rgb));
-    --icon-rgb: var(--hover-icon-rgb, var(--icon-rgb));
-    --content-glow-alpha: var(--hover-content-glow-alpha, var(--content-glow-alpha));
-    --icon-glow-alpha: var(--hover-icon-glow-alpha, var(--icon-glow-alpha));
-    --content-font-weight: var(--hover-content-font-weight, var(--content-font-weight));
-    --content-font-style: var(--hover-content-font-style, var(--content-font-style));
-    --content-text-transform: var(--hover-content-text-transform, var(--content-text-transform));
-    --content-letter-spacing: var(--hover-content-letter-spacing, var(--content-letter-spacing));
+    --content-rgb: var(--hover-content-rgb, var(--content-rgb-base));
+    --icon-rgb: var(--hover-icon-rgb, var(--icon-rgb-base));
+    --content-glow-alpha: var(--hover-content-glow-alpha, var(--content-glow-alpha-base));
+    --icon-glow-alpha: var(--hover-icon-glow-alpha, var(--icon-glow-alpha-base));
+    --content-font-weight: var(--hover-content-font-weight, var(--content-font-weight-base));
+    --content-font-style: var(--hover-content-font-style, var(--content-font-style-base));
+    --content-text-transform: var(--hover-content-text-transform, var(--content-text-transform-base));
+    --content-letter-spacing: var(--hover-content-letter-spacing, var(--content-letter-spacing-base));
+    --content-shadow: var(--hover-content-shadow, var(--content-shadow-base));
+    --content-glow-shadow: var(--hover-content-glow-shadow, var(--content-glow-shadow-base));
     --content-color: rgb(var(--content-rgb) / var(--content-alpha));
     --icon-color: rgb(var(--icon-rgb) / var(--content-alpha));
     --tint-rgb: var(--hover-tint-rgb, var(--tint-rgb));
@@ -1494,42 +1524,13 @@
     --emission-length: var(--hover-emission-length, var(--emission-length));
     --emission-thickness: var(--hover-emission-thickness, var(--emission-thickness));
     --emission-blip-size: var(--hover-emission-blip-size, var(--emission-blip-size));
-    filter: brightness(1.08);
+    --surface-filter-brightness: var(--hover-surface-filter-brightness, 1.08);
+    --surface-layer-brightness: var(--hover-surface-layer-brightness, var(--surface-layer-brightness));
+    filter: brightness(var(--surface-filter-brightness));
     transform:
       translateY(var(--hover-state-translate-y, var(--hover-translate-y, 0px)))
       scale(var(--hover-state-scale, var(--hover-scale, 1)));
   }
-}
-
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active {
-  filter: none !important;
-}
-
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__material,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__texture,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__tint,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__glass,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__gradient,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__edge-wear,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover > .cd-surface__border,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__material,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__texture,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__tint,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__glass,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__gradient,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__edge-wear,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active > .cd-surface__border {
-  filter: brightness(1.18);
-}
-
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover .cd-button__content,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:hover .cd-button__label,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active .cd-button__content,
-.ui-node-preview [data-ui-node-id='mission-cta'] > .cd-button:active .cd-button__label {
-  text-shadow:
-    0 1px 0 rgb(255 255 255 / 0.38),
-    0 0 10px rgb(23 20 15 / 0) !important;
 }
 
 .cd-surface:disabled {
@@ -2168,7 +2169,6 @@
   overflow: hidden;
   line-height: 1;
   padding-top: 0;
-  transform: translateY(0.14em);
   white-space: nowrap;
 }
 

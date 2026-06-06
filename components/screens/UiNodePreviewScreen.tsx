@@ -56,17 +56,23 @@ const missionTemplate: UiNodePayload = {
           materialId: 'mission-cta',
           contentBinding: 'mission.ctaLabel',
           action: { id: 'viewContract', targetBinding: 'mission.viewTarget' },
+          surface: {
+            textY: 2,
+          },
           surfaceStates: {
             hover: {
               tintStrength: 0,
               lightStrength: 76,
               darkStrength: 22,
+              surfaceFilterBrightness: 1,
+              surfaceLayerBrightness: 1.18,
             },
             pressed: {
               tintStrength: 0,
               lightStrength: 76,
               darkStrength: 22,
-              stateScale: 1,
+              surfaceFilterBrightness: 1,
+              surfaceLayerBrightness: 1.18,
               stateTranslateY: 2,
             },
           },

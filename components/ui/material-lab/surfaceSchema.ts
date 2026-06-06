@@ -69,6 +69,8 @@ export interface SurfaceOptions {
   borderOpacity?: number;
   lightStrength?: number;
   darkStrength?: number;
+  surfaceFilterBrightness?: number;
+  surfaceLayerBrightness?: number;
   edgeWearTexture?: EdgeTextureKind;
   edgeWearOpacity?: number;
   edgeWearWidth?: number;
