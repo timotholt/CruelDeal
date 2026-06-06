@@ -27,6 +27,7 @@ assert.equal(vars['--feed-rich-acc1'], 'rgb(248 215 112)');
 assert.equal(vars['--feed-rich-acc1-track'], 'inherit');
 assert.equal(vars['--feed-rich-acc1-transform'], 'inherit');
 assert.equal(vars['--feed-rich-acc1-shadow'], 'inherit');
+assert.equal(uiNodeTextEmbossShadow({ embossMode: 'inherit' }), 'inherit');
 assert.equal(uiNodeTextEmbossShadow({ embossMode: 'none', embossStrength: 100 }), 'none');
 
 const validTheme = {
@@ -43,6 +44,7 @@ const validTheme = {
 
 assert.equal(validateUiNodeTheme(validTheme)?.richText.missionPanel.base?.paragraphGap, -3);
 assert.equal(validateUiNodeTheme({ richText: { missionPanel: { acc3: { tone: 'red' } } } })?.richText.missionPanel.acc3?.tone, 'red');
+assert.equal(validateUiNodeTheme({ richText: { missionPanel: { h1: { embossMode: 'inherit' } } } })?.richText.missionPanel.h1?.embossMode, 'inherit');
 
 configureLogging({ policy: 'continue', level: 'silent' });
 assert.equal(validateUiNodeTheme({ richText: { missionPanel: { base: { tone: 'banana' } } } }), null);

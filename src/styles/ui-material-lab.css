@@ -2061,9 +2061,18 @@
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.78);
 }
 
-.ui-node-preview [data-ui-node-id='mission-briefing'] > .cd-panel {
+.ui-node-preview [data-ui-node-id='mission-briefing']:not([data-ui-node-h-mode='hug']) > .cd-panel {
   width: 100%;
   height: 100%;
+}
+
+.ui-node-preview [data-ui-node-id='mission-briefing'][data-ui-node-h-mode='hug'] > .cd-panel {
+  width: 100%;
+}
+
+.ui-node-preview [data-ui-node-id='mission-briefing'] {
+  box-sizing: border-box;
+  padding: 0 !important;
 }
 
 .ui-node-preview [data-ui-node-id='mission-briefing'] > .cd-panel > .cd-panel__content {
@@ -2074,6 +2083,14 @@
   gap: 12px;
   padding: 16px;
   box-sizing: border-box;
+}
+
+.ui-node-preview [data-ui-node-id='mission-briefing'][data-ui-node-h-mode='hug'] > .cd-panel > .cd-panel__content {
+  display: flex;
+  position: relative;
+  inset: auto;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ui-node-preview [data-ui-node-id='mission-briefing'] .main-material-rich-text {

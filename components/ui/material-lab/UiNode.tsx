@@ -88,7 +88,12 @@ export const UiNode = (props: { node: UiNodePayload; context?: UiNodeRenderConte
   );
 
   return (
-    <div class={`ui-node ui-node--${node().type}`} data-ui-node-id={node().id} style={style()}>
+    <div
+      class={`ui-node ui-node--${node().type}`}
+      data-ui-node-id={node().id}
+      data-ui-node-h-mode={node().layout?.hMode}
+      style={style()}
+    >
       <Switch>
         <Match when={node().type === 'image'}>
           <Show when={props.context?.resolveImageSrc?.(node())}>

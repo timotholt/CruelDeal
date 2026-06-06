@@ -32,7 +32,9 @@ export const uiLayoutToStyle = (layout?: UiLayoutPayload): JSX.CSSProperties | u
   if (layout.gap !== undefined) style.gap = `${layout.gap}px`;
   if (layout.padding !== undefined) style.padding = `${layout.padding}px`;
   if (layout.width) style.width = layout.width;
-  if (layout.height) style.height = layout.height;
+  if (layout.hMode === 'hug') style.height = 'auto';
+  else if (layout.hMode === 'fill') style.height = '100%';
+  else if (layout.height) style.height = layout.height;
   if (layout.minWidth) style['min-width'] = layout.minWidth;
   if (layout.minHeight) style['min-height'] = layout.minHeight;
   const p = layout.position;

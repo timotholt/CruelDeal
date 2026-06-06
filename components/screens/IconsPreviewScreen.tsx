@@ -10,7 +10,7 @@ export const IconsPreviewScreen = () => {
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
   const [kScale, setKScale] = createSignal(0.8);
-  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C'>('A');
+  const [gradientProfile, setGradientProfile] = createSignal<'A' | 'B' | 'C' | 'D' | 'E' | 'F'>('A');
   const [kDiag2X, setKDiag2X] = createSignal(-1);
   const [kDiag1Slope, setKDiag1Slope] = createSignal(0.86);
   const [kDiag2Slope, setKDiag2Slope] = createSignal(0.60);
@@ -321,11 +321,32 @@ ${getGradientStopsString()}
       <stop offset="80%" stop-color="#9c721c" />
       <stop offset="100%" stop-color="#FCD267" />`;
     }
-    return `      <stop offset="0%" stop-color="#FFE596" />
+    if (gradientProfile() === 'C') {
+      return `      <stop offset="0%" stop-color="#FFE596" />
       <stop offset="30%" stop-color="#A67C1E" />
       <stop offset="50%" stop-color="#593c0f" />
       <stop offset="70%" stop-color="#D9A736" />
       <stop offset="100%" stop-color="#855F0E" />`;
+    }
+    if (gradientProfile() === 'D') {
+      return `      <stop offset="0%" stop-color="#EBEFF5" />
+      <stop offset="25%" stop-color="#B5B9BF" />
+      <stop offset="50%" stop-color="#EDF1F7" />
+      <stop offset="75%" stop-color="#83878D" />
+      <stop offset="100%" stop-color="#CED2D8" />`;
+    }
+    if (gradientProfile() === 'E') {
+      return `      <stop offset="0%" stop-color="#D1D5DB" />
+      <stop offset="30%" stop-color="#6B7280" />
+      <stop offset="50%" stop-color="#374151" />
+      <stop offset="70%" stop-color="#9CA3AF" />
+      <stop offset="100%" stop-color="#4B5563" />`;
+    }
+    return `      <stop offset="0%" stop-color="#9CA3AF" />
+      <stop offset="25%" stop-color="#4B5563" />
+      <stop offset="50%" stop-color="#1F2937" />
+      <stop offset="75%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#374151" />`;
   };
 
   return (
@@ -366,28 +387,28 @@ ${getGradientStopsString()}
             <h2 class="text-xl font-bold tracking-wide text-white border-l-2 border-amber-500 pl-3">
               1. Real-Time Vector SVG Renderer
             </h2>
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-wrap gap-1.5">
               <button 
                 onClick={() => applyPreset('thin')}
-                class="px-3 py-1 text-[11px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
+                class="px-2 py-0.5 text-[10px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
               >
                 THIN (3px)
               </button>
               <button 
                 onClick={() => applyPreset('medium')}
-                class="px-3 py-1 text-[11px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
+                class="px-2 py-0.5 text-[10px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
               >
                 BOLD (6px)
               </button>
               <button 
                 onClick={() => applyPreset('thick')}
-                class="px-3 py-1 text-[11px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
+                class="px-2 py-0.5 text-[10px] font-mono rounded bg-white/5 border border-white/10 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-white/70 hover:text-amber-300"
               >
                 HEAVY (10px)
               </button>
               <button 
                 onClick={() => applyPreset('triple')}
-                class="px-3 py-1 text-[11px] font-mono rounded bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/20 transition-all text-amber-300"
+                class="px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/20 transition-all text-amber-300"
               >
                 ★ TRIPLE HEX (4px)
               </button>
@@ -402,77 +423,98 @@ ${getGradientStopsString()}
                   SVG Geometry Tweaker
                 </h3>
 
-                {/* Gold Gradient Profiles */}
-                <div class="mb-2.5">
-                  <span class="text-[11px] text-white/60 block mb-1">Gold Gradient Scheme</span>
-                  <div class="flex flex-col gap-1 bg-black/40 p-1 rounded border border-white/5">
-                    <button 
-                      onClick={() => setGradientProfile('A')}
-                      class={`py-1 px-2.5 text-left text-[10.5px] font-mono rounded transition-all flex justify-between items-center ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/50 hover:text-white/80 border border-transparent'}`}
-                    >
-                      <span>OPTION A: Shiny Gold</span>
-                      <span class="w-2 h-2 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424]"></span>
-                    </button>
-                    <button 
-                      onClick={() => setGradientProfile('B')}
-                      class={`py-1 px-2.5 text-left text-[10.5px] font-mono rounded transition-all flex justify-between items-center ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/50 hover:text-white/80 border border-transparent'}`}
-                    >
-                      <span>OPTION B: High-Contrast Gold</span>
-                      <span class="w-2 h-2 rounded-full bg-gradient-to-r from-[#FFF3C2] via-[#78581e] to-[#9c721c]"></span>
-                    </button>
-                    <button 
-                      onClick={() => setGradientProfile('C')}
-                      class={`py-1 px-2.5 text-left text-[10.5px] font-mono rounded transition-all flex justify-between items-center ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/50 hover:text-white/80 border border-transparent'}`}
-                    >
-                      <span>OPTION C: Antique Bronze & Copper</span>
-                      <span class="w-2 h-2 rounded-full bg-gradient-to-r from-[#FFE596] via-[#593c0f] to-[#855F0E]"></span>
-                    </button>
-                  </div>
-                </div>
+                {/* Material Gradient Profiles */}
+                 <div class="mb-2.5">
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
+                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-1 rounded border border-white/5">
+                     <button 
+                       onClick={() => setGradientProfile('A')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'A' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt A: Shiny Au</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] to-[#B28424] shrink-0"></span>
+                     </button>
+                     <button 
+                       onClick={() => setGradientProfile('B')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'B' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt B: Contrast Au</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFF3C2] via-[#78581e] to-[#9c721c] shrink-0"></span>
+                     </button>
+                     <button 
+                       onClick={() => setGradientProfile('C')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'C' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt C: Antique Au</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#FFE596] via-[#593c0f] to-[#855F0E] shrink-0"></span>
+                     </button>
+                     <button 
+                       onClick={() => setGradientProfile('D')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'D' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt D: Platinum Ag</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#EBEFF5] to-[#83878D] shrink-0"></span>
+                     </button>
+                     <button 
+                       onClick={() => setGradientProfile('E')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'E' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt E: Steel Ag</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#D1D5DB] via-[#6B7280] to-[#374151] shrink-0"></span>
+                     </button>
+                     <button 
+                       onClick={() => setGradientProfile('F')}
+                       class={`py-0.5 px-1.5 text-[9.5px] font-mono rounded transition-all flex justify-between items-center gap-1 ${gradientProfile() === 'F' ? 'bg-slate-500/20 text-slate-200 border border-slate-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       <span>Opt F: Obsidian Ag</span>
+                       <span class="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#9CA3AF] via-[#4B5563] to-[#111827] shrink-0"></span>
+                     </button>
+                   </div>
+                 </div>
 
                 {/* Stroke Cap Style Toggle */}
-                <div class="mb-2.5">
-                  <span class="text-[11px] text-white/60 block mb-1">K Stroke Cap Edges</span>
-                  <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                    <button 
-                      onClick={() => setLinecap('butt')}
-                      class={`py-0.5 text-[10.5px] font-mono rounded transition-all ${linecap() === 'butt' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                    >
-                      SHARP
-                    </button>
-                    <button 
-                      onClick={() => setLinecap('round')}
-                      class={`py-0.5 text-[10.5px] font-mono rounded transition-all ${linecap() === 'round' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                    >
-                      ROUNDED
-                    </button>
-                  </div>
-                </div>
-
-                {/* Hexagon Border Rings Selector */}
-                <div class="mb-2.5">
-                  <span class="text-[11px] text-white/60 block mb-1">Hexagon Border Count</span>
-                  <div class="grid grid-cols-3 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                    <button 
-                      onClick={() => setRings(1)}
-                      class={`py-0.5 text-[10.5px] font-mono rounded transition-all ${rings() === 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                    >
-                      1 RING
-                    </button>
-                    <button 
-                      onClick={() => setRings(2)}
-                      class={`py-0.5 text-[10.5px] font-mono rounded transition-all ${rings() === 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                    >
-                      2 RINGS
-                    </button>
-                    <button 
-                      onClick={() => setRings(3)}
-                      class={`py-0.5 text-[10.5px] font-mono rounded transition-all ${rings() === 3 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
-                    >
-                      3 RINGS
-                    </button>
-                  </div>
-                </div>
+                 <div class="mb-2.5">
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Stroke Cap Edges</span>
+                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                     <button 
+                       onClick={() => setLinecap('butt')}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'butt' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       SHARP
+                     </button>
+                     <button 
+                       onClick={() => setLinecap('round')}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'round' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       ROUNDED
+                     </button>
+                   </div>
+                 </div>
+ 
+                 {/* Hexagon Border Rings Selector */}
+                 <div class="mb-2.5">
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Hexagon Border Count</span>
+                   <div class="grid grid-cols-3 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                     <button 
+                       onClick={() => setRings(1)}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       1 RING
+                     </button>
+                     <button 
+                       onClick={() => setRings(2)}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       2 RINGS
+                     </button>
+                     <button 
+                       onClick={() => setRings(3)}
+                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 3 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                     >
+                       3 RINGS
+                     </button>
+                   </div>
+                 </div>
 
                 {/* K Scale Slider */}
                 <div class="mb-2.5">
@@ -709,8 +751,114 @@ ${getGradientStopsString()}
 
                   const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
                   
+                  const renderSizeCell = (size: string, px: string) => {
+                    return (
+                      <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
+                        <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
+                          <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
+                            <defs>
+                              <linearGradient id={`gold-grad-${type}-${size.replace('.', '_')}`} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                                <Show when={gradientProfile() === 'A'}>
+                                  <stop offset="0%" stop-color="#FFF3C2" />
+                                  <stop offset="25%" stop-color="#E2B857" />
+                                  <stop offset="50%" stop-color="#FCF6BA" />
+                                  <stop offset="75%" stop-color="#B28424" />
+                                  <stop offset="100%" stop-color="#FCD267" />
+                                </Show>
+                                <Show when={gradientProfile() === 'B'}>
+                                  <stop offset="0%" stop-color="#FFF3C2" />
+                                  <stop offset="20%" stop-color="#E2B857" />
+                                  <stop offset="40%" stop-color="#78581e" />
+                                  <stop offset="60%" stop-color="#FCF6BA" />
+                                  <stop offset="80%" stop-color="#9c721c" />
+                                  <stop offset="100%" stop-color="#FCD267" />
+                                </Show>
+                                <Show when={gradientProfile() === 'C'}>
+                                  <stop offset="0%" stop-color="#FFE596" />
+                                  <stop offset="30%" stop-color="#A67C1E" />
+                                  <stop offset="50%" stop-color="#593c0f" />
+                                  <stop offset="70%" stop-color="#D9A736" />
+                                  <stop offset="100%" stop-color="#855F0E" />
+                                </Show>
+                                <Show when={gradientProfile() === 'D'}>
+                                  <stop offset="0%" stop-color="#EBEFF5" />
+                                  <stop offset="25%" stop-color="#B5B9BF" />
+                                  <stop offset="50%" stop-color="#EDF1F7" />
+                                  <stop offset="75%" stop-color="#83878D" />
+                                  <stop offset="100%" stop-color="#CED2D8" />
+                                </Show>
+                                <Show when={gradientProfile() === 'E'}>
+                                  <stop offset="0%" stop-color="#D1D5DB" />
+                                  <stop offset="30%" stop-color="#6B7280" />
+                                  <stop offset="50%" stop-color="#374151" />
+                                  <stop offset="70%" stop-color="#9CA3AF" />
+                                  <stop offset="100%" stop-color="#4B5563" />
+                                </Show>
+                                <Show when={gradientProfile() === 'F'}>
+                                  <stop offset="0%" stop-color="#9CA3AF" />
+                                  <stop offset="25%" stop-color="#4B5563" />
+                                  <stop offset="50%" stop-color="#1F2937" />
+                                  <stop offset="75%" stop-color="#111827" />
+                                  <stop offset="100%" stop-color="#374151" />
+                                </Show>
+                              </linearGradient>
+                              <clipPath id={`k-horizontal-clip-${type}-${size.replace('.', '_')}`}>
+                                <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
+                              </clipPath>
+                            </defs>
+                            <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                              {(index) => (
+                                <polygon 
+                                  points={getHexagonPoints(index, borderStrokeWidth())} 
+                                  fill={index === 0 ? `url(#gold-grad-${type}-${size.replace('.', '_')})` : 'none'} 
+                                  fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                  stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`} 
+                                  stroke-width={borderStrokeWidth()}
+                                  stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                />
+                              )}
+                            </For>
+                            <path 
+                              d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                              fill="none"
+                              stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                              stroke-width={currentKStrokeWidth()}
+                              stroke-linecap={linecap()}
+                            />
+                            <g clip-path={`url(#k-horizontal-clip-${type}-${size.replace('.', '_')})`}>
+                              <path 
+                                d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                fill="none"
+                                stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                                stroke-width={currentKStrokeWidth()}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                              />
+                              <path 
+                                d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                fill="none"
+                                stroke={`url(#gold-grad-${type}-${size.replace('.', '_')})`}
+                                stroke-width={currentKStrokeWidth()}
+                                stroke-linecap={linecap()}
+                                stroke-linejoin="miter"
+                              />
+                            </g>
+                          </svg>
+                        </div>
+                        <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
+                        
+                        {/* Absolute Custom Tooltip */}
+                        <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 opacity-0 group-hover/size:opacity-100 transition-all duration-200 transform scale-95 group-hover/size:scale-100 bg-[#12131a] border border-amber-500/30 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-50 flex items-center gap-1">
+                          <span class="font-bold">{size}</span>
+                          <span class="text-white/40">|</span>
+                          <span class="text-white/70">{px}</span>
+                        </div>
+                      </div>
+                    );
+                  };
+
                   return (
-                    <div class="p-4 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center">
+                    <div class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center">
                       <div class="text-center mb-3">
                         <span class="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase">{type === 'medium' ? 'Active Config' : `${type} view`}</span>
                         <span class="text-[10px] text-white/40 block mt-0.5">Border: {borderStrokeWidth()}px | K: {currentKStrokeWidth()}px</span>
@@ -745,6 +893,27 @@ ${getGradientStopsString()}
                                 <stop offset="50%" stop-color="#593c0f" />
                                 <stop offset="70%" stop-color="#D9A736" />
                                 <stop offset="100%" stop-color="#855F0E" />
+                              </Show>
+                              <Show when={gradientProfile() === 'D'}>
+                                <stop offset="0%" stop-color="#EBEFF5" />
+                                <stop offset="25%" stop-color="#B5B9BF" />
+                                <stop offset="50%" stop-color="#EDF1F7" />
+                                <stop offset="75%" stop-color="#83878D" />
+                                <stop offset="100%" stop-color="#CED2D8" />
+                              </Show>
+                              <Show when={gradientProfile() === 'E'}>
+                                <stop offset="0%" stop-color="#D1D5DB" />
+                                <stop offset="30%" stop-color="#6B7280" />
+                                <stop offset="50%" stop-color="#374151" />
+                                <stop offset="70%" stop-color="#9CA3AF" />
+                                <stop offset="100%" stop-color="#4B5563" />
+                              </Show>
+                              <Show when={gradientProfile() === 'F'}>
+                                <stop offset="0%" stop-color="#9CA3AF" />
+                                <stop offset="25%" stop-color="#4B5563" />
+                                <stop offset="50%" stop-color="#1F2937" />
+                                <stop offset="75%" stop-color="#111827" />
+                                <stop offset="100%" stop-color="#374151" />
                               </Show>
                             </linearGradient>
 
@@ -798,6 +967,35 @@ ${getGradientStopsString()}
                             />
                           </g>
                         </svg>
+                      </div>
+
+                      {/* Scaling Preview Pyramid Grid */}
+                      <div class="w-full bg-black/40 border border-white/5 rounded-lg p-2 mb-3">
+                        <span class="text-[9px] text-white/40 block mb-1.5 font-mono text-center uppercase tracking-wider">Scale Preview</span>
+                        <div class="flex flex-col gap-2 bg-black/20 p-2 rounded border border-white/5">
+                          {/* Row 1: 4 items (1rem, 1.5rem, 2rem, 2.5rem) */}
+                          <div class="flex items-end justify-center gap-2">
+                            {renderSizeCell('1rem', '16px')}
+                            {renderSizeCell('1.5rem', '24px')}
+                            {renderSizeCell('2rem', '32px')}
+                            {renderSizeCell('2.5rem', '40px')}
+                          </div>
+                          {/* Row 2: 3 items (3rem, 4rem, 4.5rem) */}
+                          <div class="flex items-end justify-center gap-2">
+                            {renderSizeCell('3rem', '48px')}
+                            {renderSizeCell('4rem', '64px')}
+                            {renderSizeCell('4.5rem', '72px')}
+                          </div>
+                          {/* Row 3: 2 items (5rem, 5.5rem) */}
+                          <div class="flex items-end justify-center gap-2.5">
+                            {renderSizeCell('5rem', '80px')}
+                            {renderSizeCell('5.5rem', '88px')}
+                          </div>
+                          {/* Row 4: 1 item (6rem) */}
+                          <div class="flex items-end justify-center">
+                            {renderSizeCell('6rem', '96px')}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Dynamic Copy and Save/Load preset bar */}

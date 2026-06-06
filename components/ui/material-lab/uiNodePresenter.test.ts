@@ -31,6 +31,8 @@ assert.equal(uiLayoutToStyle({ justify: 'around' })?.['justify-content'], 'space
 // gap 0 still emits (explicit), absent fields omitted.
 assert.equal(uiLayoutToStyle({ gap: 0 })?.gap, '0px');
 assert.equal('height' in (uiLayoutToStyle({ width: '10px' }) ?? {}), false);
+assert.equal(uiLayoutToStyle({ hMode: 'hug', height: '23rem' })?.height, 'auto');
+assert.equal(uiLayoutToStyle({ hMode: 'fill', height: '23rem' })?.height, '100%');
 
 // --- surface kind by type ----------------------------------------------------
 assert.equal(surfaceKindForType('button', false), 'button');

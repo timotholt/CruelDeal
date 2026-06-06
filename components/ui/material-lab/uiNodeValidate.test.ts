@@ -35,6 +35,7 @@ assert.equal(parsed?.surfaceStates?.hover?.tint, 'gold');
 assert.equal(validateUiNode({ id: 'a', type: 'panel', surface: { glowStrength: 200 } })?.surface?.glowStrength, 100);
 assert.equal(validateUiNode({ id: 'a', type: 'button', surfaceStates: { hover: { tintStrength: 200 } } })?.surfaceStates?.hover?.tintStrength, 100);
 assert.equal('tint' in (validateUiNode({ id: 'a', type: 'button', surfaceStates: { hover: { tint: 'banana' } } })?.surfaceStates?.hover ?? {}), false);
+assert.equal(validateUiNode({ id: 'a', type: 'panel', layout: { hMode: 'hug' } })?.layout?.hMode, 'hug');
 
 // Structural failures fail closed -> null.
 assert.equal(validateUiNode({ id: 'a', type: 'not-a-type' }), null); // bad enum
@@ -42,6 +43,7 @@ assert.equal(validateUiNode({ type: 'panel' }), null);               // missing 
 assert.equal(validateUiNode({ id: 'a', type: 'panel', bogus: 1 }), null); // unknown key
 assert.equal(validateUiNode({ id: 'a', type: 'button', surfaceStates: { hover: { madeUp: 1 } } }), null); // unknown state overlay key
 assert.equal(validateUiNode({ id: 'a', type: 'panel', layout: { width: 'url(x)' } }), null); // bad dimension
+assert.equal(validateUiNode({ id: 'a', type: 'panel', layout: { hMode: 'squish' } }), null); // bad height mode
 assert.equal(validateUiNode('nope'), null);                          // not an object
 // Nested invalid child fails the whole tree.
 assert.equal(validateUiNode({ id: 'a', type: 'panel', children: [{ id: 'b', type: 'nope' }] }), null);

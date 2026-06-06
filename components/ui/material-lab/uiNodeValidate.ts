@@ -22,6 +22,7 @@ export interface UiLayoutPayload {
   direction?: 'row' | 'column';
   align?: 'start' | 'center' | 'end' | 'stretch';
   justify?: 'start' | 'center' | 'end' | 'between' | 'around';
+  hMode?: 'fixed' | 'hug' | 'fill';
   gap?: number;
   padding?: number;
   width?: string;
@@ -86,6 +87,7 @@ const uiLayoutSchema = v.strictObject({
   direction: v.optional(v.picklist(['row', 'column'])),
   align: v.optional(v.picklist(['start', 'center', 'end', 'stretch'])),
   justify: v.optional(v.picklist(['start', 'center', 'end', 'between', 'around'])),
+  hMode: v.optional(v.picklist(['fixed', 'hug', 'fill'])),
   gap: span(0, 512),
   padding: span(0, 512),
   width: dim(),

@@ -5,7 +5,7 @@ import { materialTextEmbossShadow, type MaterialTextEmbossMode, type MaterialTex
 import { summarizeValibotIssues } from './surfaceValidate';
 
 export type UiNodeRichTextTone = MaterialTextTone;
-export type UiNodeTextEmbossMode = MaterialTextEmbossMode;
+export type UiNodeTextEmbossMode = MaterialTextEmbossMode | 'inherit';
 
 export interface UiNodeTextStyle {
   tone?: UiNodeRichTextTone;
@@ -47,7 +47,7 @@ export interface UiNodeTheme {
 }
 
 const richTextTones = ['none', 'inherit', 'black', 'white', 'muted', 'gray', 'brass', 'gold', 'cyan', 'red', 'green'] as const;
-const embossModes = ['none', 'dark', 'light', 'shadow'] as const;
+const embossModes = ['inherit', 'none', 'dark', 'light', 'shadow'] as const;
 const transforms = ['none', 'uppercase', 'lowercase', 'capitalize', 'inherit'] as const;
 const aligns = ['left', 'center', 'right'] as const;
 const fontWeights = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
@@ -130,6 +130,7 @@ const toneColors: Record<UiNodeRichTextTone, string> = {
 };
 
 export const uiNodeTextEmbossShadow = (style: UiNodeTextStyle): string => {
+  if (style.embossMode === 'inherit') return 'inherit';
   return materialTextEmbossShadow({
     contentTone: style.tone,
     textEmbossMode: style.embossMode ?? 'none',
