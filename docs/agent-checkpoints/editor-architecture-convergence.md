@@ -142,6 +142,12 @@ authoring JSON
   card factories into `mainMaterialFeedModel.ts`. `/material-main` now consumes
   feed card defaults from the model layer instead of owning the 7k-line default
   card literal locally.
+- [x] Moved feed text/render policy into
+  `components/screens/main-material/mainMaterialFeedText.ts`. The extracted
+  contract now owns text style inheritance, local node text overrides, rich-text
+  token parsing, markup/fit render-mode resolution, feed story text lookup,
+  feed media CSS helpers, and material recipe text projection. The screen keeps
+  only the Solid `FeedRichText` rendering wrapper.
 
 ## Verification Evidence
 
@@ -160,6 +166,8 @@ authoring JSON
 - PASS `npx tsx components/screens/gameUiSkinProofJsonReadout.test.ts`
 - PASS `npx tsx components/screens/uiNodePreviewJsonReadout.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
+- PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPersistence.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
@@ -179,33 +187,28 @@ authoring JSON
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that feed document schema/defaults/sanitization/render
-policy are still private to `MainMaterialPreviewScreen.tsx`, so editor controls,
-preview rendering, persistence, target generation, and export planning all
-depend on hidden structures in the giant screen.
+next blocker family is that feed editor and preview component composition still
+live inside `MainMaterialPreviewScreen.tsx`, so the screen remains responsible
+for too much orchestration even though feed defaults, sanitization, targets, DOM
+audit, and text/render policy now have extracted contracts.
 
 Recommended finish plan, in order:
 
-1. Extract feed text/render policy into
-   `components/screens/main-material/mainMaterialFeedText.ts`.
-   Move text-style resolution, rich-text parsing, render-mode resolution, node
-   content mapping, and CSS variable helpers. Add tests for markup parsing,
-   legacy render-mode mapping, inheritance, and fit-vs-flow decisions.
-2. Extract feed editor components after the model is importable.
+1. Extract feed editor components after the model is importable.
    Move `FeedRecipeEditor` and `FeedTextGlobalsEditor` without changing state
    ownership. Keep callbacks identical and rely on the new pure model tests.
-3. Extract feed preview renderer.
+2. Extract feed preview renderer.
    Move `FeedNodeFrame`, `ChromeFeedNodeTree`, `FeedCardTreeNode`,
    `FeedCarousel`, and `MainMaterialPreview`. Keep DOM registry/audit injection
    explicit so current inspector behavior survives.
-4. Extract `/material-main` import/export as an explicit compatibility adapter.
+3. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
    where the payloads are real contracts.
-6. Extract the top-level controller last into a
+4. Extract the top-level controller last into a
    `createMainMaterialEditorController` orchestration helper. At that point the
    screen should mostly compose workbench, editor, preview, and inspector.
-7. Continue `MaterialRecipeEditor` generated-control migration in this order:
+5. Continue `MaterialRecipeEditor` generated-control migration in this order:
    Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
    Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
