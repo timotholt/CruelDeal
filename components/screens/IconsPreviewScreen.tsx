@@ -2437,22 +2437,32 @@ ${paintDef}${overlayGradDef}
                   };
 
                   const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
-                  const renderSizeCell = (size: string, px: string) => {
+const renderSizeCell = (size: string, px: string) => {
                     const isOptical = ['1rem', '1.5rem', '2rem', '2.5rem'].includes(size);
                     // Live gradients (mouse-driven) so every size cell reacts,
                     // not just the main coin.
                     const sizeColor = () => {
                       if (fillMode() === 'gradient') {
+                        if (customType() === 'box') {
+                          return `url(#gold-grad-base-${type})`;
+                        }
                         return isOptical
-                          ? `url(#gold-grad-optical-${type})`
-                          : `url(#gold-grad-${type})`;
+                          ? (isRadialActive() ? `url(#gold-grad-optical-radial-${type})` : `url(#gold-grad-optical-linear-${type})`)
+                          : (isRadialActive() ? `url(#gold-grad-radial-${type})` : `url(#gold-grad-linear-${type})`);
                       } else {
-                        return `url(#gold-pattern-${type})`;
+                        return customType() === 'box'
+                          ? `url(#gold-pattern-static-${type})`
+                          : `url(#gold-pattern-${type})`;
                       }
                     };
-                    const sizeGradientColor = () => isOptical
-                      ? `url(#gold-grad-optical-${type})`
-                      : `url(#gold-grad-${type})`;
+                    const sizeGradientColor = () => {
+                      if (customType() === 'box') {
+                        return `url(#gold-grad-base-${type})`;
+                      }
+                      return isOptical
+                        ? (isRadialActive() ? `url(#gold-grad-optical-radial-${type})` : `url(#gold-grad-optical-linear-${type})`)
+                        : (isRadialActive() ? `url(#gold-grad-radial-${type})` : `url(#gold-grad-linear-${type})`);
+                    };
 
                     return (
                       <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
@@ -2548,7 +2558,7 @@ ${paintDef}${overlayGradDef}
                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
                                stroke-linecap={linecap()}
                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                              />
+                             />
                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
                                <path 
                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
@@ -2728,10 +2738,26 @@ ${paintDef}${overlayGradDef}
                     );
                   };
 
-                  const mainColor = () => fillMode() === 'gradient' 
-                    ? `url(#gold-grad-${type})` 
-                    : `url(#gold-pattern-${type})`;
-                  const mainGradientColor = () => `url(#gold-grad-${type})`;
+                  const mainColor = () => {
+                    if (fillMode() === 'texture') {
+                      return `url(#gold-pattern-${type})`;
+                    }
+                    if (customType() === 'box') {
+                      return `url(#gold-grad-base-${type})`;
+                    }
+                    return isRadialActive() 
+                      ? `url(#gold-grad-radial-${type})` 
+                      : `url(#gold-grad-linear-${type})`;
+                  };
+
+                  const mainGradientColor = () => {
+                    if (customType() === 'box') {
+                      return `url(#gold-grad-base-${type})`;
+                    }
+                    return isRadialActive() 
+                      ? `url(#gold-grad-radial-${type})` 
+                      : `url(#gold-grad-linear-${type})`;
+                  };
 
                   return (
                     <div
@@ -2750,140 +2776,157 @@ ${paintDef}${overlayGradDef}
                         
                         <svg viewBox="0 0 100 100" class="w-28 h-28" style={glowIntensity() > 0 ? { filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` } : {}}>
                           <defs>
-                            {/* Standard Gradient (Linear or Radial) */}
-                            <Show when={!isRadialActive()}>
-                              <linearGradient 
-                                id={`gold-grad-${type}`} 
-                                x1={cardCoords().x1} 
-                                y1={cardCoords().y1} 
-                                x2={cardCoords().x2} 
-                                y2={cardCoords().y2} 
-                                gradientUnits="userSpaceOnUse"
-                                spreadMethod="reflect"
-                              >
-                                <Show when={gradientProfile() === 'A'}>
-                                  <stop offset="0%" stop-color="#FFF3C2" />
-                                  <stop offset="25%" stop-color="#E2B857" />
-                                  <stop offset="50%" stop-color="#FCF6BA" />
-                                  <stop offset="75%" stop-color="#B28424" />
-                                  <stop offset="100%" stop-color="#FCD267" />
-                                </Show>
-                                <Show when={gradientProfile() === 'B'}>
-                                  <stop offset="0%" stop-color="#251502" />
-                                  <stop offset="25%" stop-color="#E5B842" />
-                                  <stop offset="50%" stop-color="#FFF7C7" />
-                                  <stop offset="75%" stop-color="#E5B842" />
-                                  <stop offset="100%" stop-color="#251502" />
-                                </Show>
-                                <Show when={gradientProfile() === 'C'}>
-                                  <stop offset="0%" stop-color="#FFF2C2" />
-                                  <stop offset="30%" stop-color="#C5A44E" />
-                                  <stop offset="50%" stop-color="#A48748" />
-                                  <stop offset="70%" stop-color="#EDCD75" />
-                                  <stop offset="100%" stop-color="#B7984A" />
-                                </Show>
-                                <Show when={gradientProfile() === 'D'}>
-                                  <stop offset="0%" stop-color="#EBEFF5" />
-                                  <stop offset="25%" stop-color="#B5B9BF" />
-                                  <stop offset="50%" stop-color="#EDF1F7" />
-                                  <stop offset="75%" stop-color="#83878D" />
-                                  <stop offset="100%" stop-color="#CED2D8" />
-                                </Show>
-                                <Show when={gradientProfile() === 'E'}>
-                                  <stop offset="0%" stop-color="#D1D5DB" />
-                                  <stop offset="30%" stop-color="#6B7280" />
-                                  <stop offset="50%" stop-color="#374151" />
-                                  <stop offset="70%" stop-color="#9CA3AF" />
-                                  <stop offset="100%" stop-color="#4B5563" />
-                                </Show>
-                                <Show when={gradientProfile() === 'F'}>
-                                  <stop offset="0%" stop-color="#9CA3AF" />
-                                  <stop offset="25%" stop-color="#4B5563" />
-                                  <stop offset="50%" stop-color="#1F2937" />
-                                  <stop offset="75%" stop-color="#111827" />
-                                  <stop offset="100%" stop-color="#374151" />
-                                </Show>
-                                <Show when={gradientProfile() === 'G'}>
-                                  <stop offset="0%" stop-color="#55411B" />
-                                  <stop offset="15%" stop-color="#997E47" />
-                                  <stop offset="30%" stop-color="#55411B" />
-                                  <stop offset="45%" stop-color="#FFFDDA" />
-                                  <stop offset="60%" stop-color="#D5BB8A" />
-                                  <stop offset="75%" stop-color="#B8A269" />
-                                  <stop offset="85%" stop-color="#55411B" />
-                                  <stop offset="100%" stop-color="#FBECA9" />
-                                </Show>
-                                <Show when={gradientProfile() === 'I'}>
-                                  <stop offset="0%" stop-color="#7C6535" />
-                                  <stop offset="15%" stop-color="#997E47" />
-                                  <stop offset="30%" stop-color="#7C6535" />
-                                  <stop offset="45%" stop-color="#FFFDDA" />
-                                  <stop offset="60%" stop-color="#D5BB8A" />
-                                  <stop offset="75%" stop-color="#B8A269" />
-                                  <stop offset="85%" stop-color="#7C6535" />
-                                  <stop offset="100%" stop-color="#FBECA9" />
-                                </Show>
-                                <Show when={gradientProfile() === 'J'}>
-                                  <stop offset="0%" stop-color="#7C6535" />
-                                  <stop offset="8%" stop-color="#997E47" />
-                                  <stop offset="26%" stop-color="#B8A269" />
-                                  <stop offset="30%" stop-color="#7C6535" />
-                                  <stop offset="34%" stop-color="#FFFDDA" />
-                                  <stop offset="60%" stop-color="#D5BB8A" />
-                                  <stop offset="81%" stop-color="#B8A269" />
-                                  <stop offset="85%" stop-color="#7C6535" />
-                                  <stop offset="93%" stop-color="#FBECA9" />
-                                  <stop offset="100%" stop-color="#7C6535" />
-                                </Show>
-                                <Show when={gradientProfile() === 'K'}>
-                                  <stop offset="0%" stop-color="#FFFDDA" />
-                                  <stop offset="31%" stop-color="#D5BB8A" />
-                                  <stop offset="44%" stop-color="#7C6535" />
-                                  <stop offset="100%" stop-color="#55411B" />
-                                </Show>
-                                <Show when={gradientProfile() === 'Custom'}>
-                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                    {(stop) => (
-                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                    )}
-                                  </For>
-                                </Show>
-                              </linearGradient>
-                            </Show>
-                            <Show when={isRadialActive()}>
-                              <radialGradient
-                                id={`gold-grad-${type}`}
-                                cx={cardRadialCoords().cx}
-                                cy={cardRadialCoords().cy}
-                                r={cardRadialCoords().r}
-                                fx={cardRadialCoords().fx}
-                                fy={cardRadialCoords().fy}
-                                gradientUnits="userSpaceOnUse"
-                              >
-                                <Show when={gradientProfile() === 'R1'}>
-                                  <stop offset="0%" stop-color="#FFFDDA" />
-                                  <stop offset="15%" stop-color="#D5BB8A" />
-                                  <stop offset="35%" stop-color="#7C6535" />
-                                  <stop offset="55%" stop-color="#FFFDDA" />
-                                  <stop offset="75%" stop-color="#D5BB8A" />
-                                  <stop offset="90%" stop-color="#7C6535" />
-                                  <stop offset="100%" stop-color="#55411B" />
-                                </Show>
-                                <Show when={gradientProfile() === 'R2'}>
-                                  <stop offset="0%" stop-color="#FFFDDA" />
-                                  <stop offset="25%" stop-color="#D5BB8A" />
-                                  <stop offset="60%" stop-color="#7C6535" />
-                                  <stop offset="100%" stop-color="#55411B" />
-                                </Show>
-                                <Show when={gradientProfile() === 'Custom'}>
-                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                    {(stop) => (
-                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                    )}
-                                  </For>
-                                </Show>
-                              </radialGradient>
-                            </Show>
+                            {/* Base metal gradient for softbox mode (clean background without linear shiny bands) */}
+                            <linearGradient id={`gold-grad-base-${type}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'R1', 'R2', 'Custom'].includes(gradientProfile())}>
+                                <stop offset="0%" stop-color="#7C6535" />
+                                <stop offset="50%" stop-color="#D5BB8A" />
+                                <stop offset="100%" stop-color="#7C6535" />
+                              </Show>
+                              <Show when={['D', 'E'].includes(gradientProfile())}>
+                                <stop offset="0%" stop-color="#70757D" />
+                                <stop offset="50%" stop-color="#CED2D8" />
+                                <stop offset="100%" stop-color="#5B5F66" />
+                              </Show>
+                              <Show when={['F'].includes(gradientProfile())}>
+                                <stop offset="0%" stop-color="#4b5563" />
+                                <stop offset="50%" stop-color="#9ca3af" />
+                                <stop offset="100%" stop-color="#374151" />
+                              </Show>
+                            </linearGradient>
+
+                            {/* Base Linear Gradient */}
+                            <linearGradient 
+                              id={`gold-grad-linear-${type}`} 
+                              x1={cardCoords().x1} 
+                              y1={cardCoords().y1} 
+                              x2={cardCoords().x2} 
+                              y2={cardCoords().y2} 
+                              gradientUnits="userSpaceOnUse"
+                              spreadMethod="reflect"
+                            >
+                              <Show when={gradientProfile() === 'A'}>
+                                <stop offset="0%" stop-color="#FFF3C2" />
+                                <stop offset="25%" stop-color="#E2B857" />
+                                <stop offset="50%" stop-color="#FCF6BA" />
+                                <stop offset="75%" stop-color="#B28424" />
+                                <stop offset="100%" stop-color="#FCD267" />
+                              </Show>
+                              <Show when={gradientProfile() === 'B'}>
+                                <stop offset="0%" stop-color="#251502" />
+                                <stop offset="25%" stop-color="#E5B842" />
+                                <stop offset="50%" stop-color="#FFF7C7" />
+                                <stop offset="75%" stop-color="#E5B842" />
+                                <stop offset="100%" stop-color="#251502" />
+                              </Show>
+                              <Show when={gradientProfile() === 'C'}>
+                                <stop offset="0%" stop-color="#FFF2C2" />
+                                <stop offset="30%" stop-color="#C5A44E" />
+                                <stop offset="50%" stop-color="#A48748" />
+                                <stop offset="70%" stop-color="#EDCD75" />
+                                <stop offset="100%" stop-color="#B7984A" />
+                              </Show>
+                              <Show when={gradientProfile() === 'D'}>
+                                <stop offset="0%" stop-color="#EBEFF5" />
+                                <stop offset="25%" stop-color="#B5B9BF" />
+                                <stop offset="50%" stop-color="#EDF1F7" />
+                                <stop offset="75%" stop-color="#83878D" />
+                                <stop offset="100%" stop-color="#CED2D8" />
+                              </Show>
+                              <Show when={gradientProfile() === 'E'}>
+                                <stop offset="0%" stop-color="#D1D5DB" />
+                                <stop offset="30%" stop-color="#6B7280" />
+                                <stop offset="50%" stop-color="#374151" />
+                                <stop offset="70%" stop-color="#9CA3AF" />
+                                <stop offset="100%" stop-color="#4B5563" />
+                              </Show>
+                              <Show when={gradientProfile() === 'F'}>
+                                <stop offset="0%" stop-color="#9CA3AF" />
+                                <stop offset="25%" stop-color="#4B5563" />
+                                <stop offset="50%" stop-color="#1F2937" />
+                                <stop offset="75%" stop-color="#111827" />
+                                <stop offset="100%" stop-color="#374151" />
+                              </Show>
+                              <Show when={gradientProfile() === 'G'}>
+                                <stop offset="0%" stop-color="#55411B" />
+                                <stop offset="15%" stop-color="#997E47" />
+                                <stop offset="30%" stop-color="#55411B" />
+                                <stop offset="45%" stop-color="#FFFDDA" />
+                                <stop offset="60%" stop-color="#D5BB8A" />
+                                <stop offset="75%" stop-color="#B8A269" />
+                                <stop offset="85%" stop-color="#55411B" />
+                                <stop offset="100%" stop-color="#FBECA9" />
+                              </Show>
+                              <Show when={gradientProfile() === 'I'}>
+                                <stop offset="0%" stop-color="#7C6535" />
+                                <stop offset="15%" stop-color="#997E47" />
+                                <stop offset="30%" stop-color="#7C6535" />
+                                <stop offset="45%" stop-color="#FFFDDA" />
+                                <stop offset="60%" stop-color="#D5BB8A" />
+                                <stop offset="75%" stop-color="#B8A269" />
+                                <stop offset="85%" stop-color="#7C6535" />
+                                <stop offset="100%" stop-color="#FBECA9" />
+                              </Show>
+                              <Show when={gradientProfile() === 'J'}>
+                                <stop offset="0%" stop-color="#7C6535" />
+                                <stop offset="8%" stop-color="#997E47" />
+                                <stop offset="26%" stop-color="#B8A269" />
+                                <stop offset="30%" stop-color="#7C6535" />
+                                <stop offset="34%" stop-color="#FFFDDA" />
+                                <stop offset="60%" stop-color="#D5BB8A" />
+                                <stop offset="81%" stop-color="#B8A269" />
+                                <stop offset="85%" stop-color="#7C6535" />
+                                <stop offset="93%" stop-color="#FBECA9" />
+                                <stop offset="100%" stop-color="#7C6535" />
+                              </Show>
+                              <Show when={gradientProfile() === 'K'}>
+                                <stop offset="0%" stop-color="#FFFDDA" />
+                                <stop offset="31%" stop-color="#D5BB8A" />
+                                <stop offset="44%" stop-color="#7C6535" />
+                                <stop offset="100%" stop-color="#55411B" />
+                              </Show>
+                              <Show when={gradientProfile() === 'Custom'}>
+                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                  {(stop) => (
+                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                  )}
+                                </For>
+                              </Show>
+                            </linearGradient>
+
+                            {/* Base Radial Gradient */}
+                            <radialGradient
+                              id={`gold-grad-radial-${type}`}
+                              cx={cardRadialCoords().cx}
+                              cy={cardRadialCoords().cy}
+                              r={cardRadialCoords().r}
+                              fx={cardRadialCoords().fx}
+                              fy={cardRadialCoords().fy}
+                              gradientUnits="userSpaceOnUse"
+                            >
+                              <Show when={gradientProfile() === 'R1'}>
+                                <stop offset="0%" stop-color="#FFFDDA" />
+                                <stop offset="15%" stop-color="#D5BB8A" />
+                                <stop offset="35%" stop-color="#7C6535" />
+                                <stop offset="55%" stop-color="#FFFDDA" />
+                                <stop offset="75%" stop-color="#D5BB8A" />
+                                <stop offset="90%" stop-color="#7C6535" />
+                                <stop offset="100%" stop-color="#55411B" />
+                              </Show>
+                              <Show when={gradientProfile() === 'R2'}>
+                                <stop offset="0%" stop-color="#FFFDDA" />
+                                <stop offset="25%" stop-color="#D5BB8A" />
+                                <stop offset="60%" stop-color="#7C6535" />
+                                <stop offset="100%" stop-color="#55411B" />
+                              </Show>
+                              <Show when={gradientProfile() === 'Custom'}>
+                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
+                                  {(stop) => (
+                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
+                                  )}
+                                </For>
+                              </Show>
+                            </radialGradient>
 
                             {/* Softbox reflection box pattern & blur filter */}
                             <Show when={customType() === 'box'}>
@@ -2933,127 +2976,8 @@ ${paintDef}${overlayGradDef}
                                   filter={`url(#softbox-blur-${type}-${uniqueId})`}
                                 />
                               </pattern>
-                             </Show>
-                              
 
-
-                            {/* Optical Sizing Gradient for smaller cell views */}
-                            <Show when={!isRadialActive()}>
-                              <linearGradient 
-                                id={`gold-grad-optical-${type}`} 
-                                x1={cardCoords().x1} 
-                                y1={cardCoords().y1} 
-                                x2={cardCoords().x2} 
-                                y2={cardCoords().y2} 
-                                gradientUnits="userSpaceOnUse"
-                                spreadMethod="reflect"
-                              >
-                                <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K'].includes(gradientProfile())}>
-                                  {/* Smooth Gold */}
-                                  <stop offset="0%" stop-color="#78581E" />
-                                  <stop offset="30%" stop-color="#E2B857" />
-                                  <stop offset="55%" stop-color="#FFF3C2" />
-                                  <stop offset="80%" stop-color="#E2B857" />
-                                  <stop offset="100%" stop-color="#9E782F" />
-                                </Show>
-                                <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
-                                  {/* Smooth Silver */}
-                                  <stop offset="0%" stop-color="#70757D" />
-                                  <stop offset="30%" stop-color="#CED2D8" />
-                                  <stop offset="55%" stop-color="#EBEFF5" />
-                                  <stop offset="80%" stop-color="#CED2D8" />
-                                  <stop offset="100%" stop-color="#5B5F66" />
-                                </Show>
-                                <Show when={gradientProfile() === 'Custom'}>
-                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                    {(stop) => (
-                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                    )}
-                                  </For>
-                                </Show>
-                              </linearGradient>
-                            </Show>
-                            <Show when={isRadialActive()}>
-                              <radialGradient 
-                                id={`gold-grad-optical-${type}`} 
-                                cx={cardRadialCoords().cx}
-                                cy={cardRadialCoords().cy}
-                                r={cardRadialCoords().r}
-                                fx={cardRadialCoords().fx}
-                                fy={cardRadialCoords().fy}
-                                gradientUnits="userSpaceOnUse"
-                              >
-                                <Show when={gradientProfile() !== 'Custom'}>
-                                  <stop offset="0%" stop-color="#FFFDDA" />
-                                  <stop offset="35%" stop-color="#D5BB8A" />
-                                  <stop offset="70%" stop-color="#78581E" />
-                                  <stop offset="100%" stop-color="#4E3D1E" />
-                                </Show>
-                                <Show when={gradientProfile() === 'Custom'}>
-                                  <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                    {(stop) => (
-                                      <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                    )}
-                                  </For>
-                                </Show>
-                              </radialGradient>
-                            </Show>
-
-                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX() + (interactiveSheen() ? interactiveShiftX() : 0)} y={textureOffsetY() + (interactiveSheen() ? interactiveShiftY() : 0)} width={100 * textureScale()} height={100 * textureScale()}>
-                              <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
-                            </pattern>
-
-                            {/* Horizontal clip path to cut diagonal stroke extensions perfectly flat */}
-                            <clipPath id={`k-horizontal-clip-${type}`}>
-                              <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
-                            </clipPath>
-                            {/* Static definitions for size cells */}
-                            <Show when={!isRadialActive()}>
-                              <linearGradient 
-                                id={`gold-grad-static-${type}`} 
-                                href={`#gold-grad-${type}`}
-                                x1={cardCoordsStatic().x1} 
-                                y1={cardCoordsStatic().y1} 
-                                x2={cardCoordsStatic().x2} 
-                                y2={cardCoordsStatic().y2} 
-                                gradientUnits="userSpaceOnUse"
-                                spreadMethod="reflect"
-                              />
-                              <linearGradient 
-                                id={`gold-grad-optical-static-${type}`} 
-                                href={`#gold-grad-optical-${type}`}
-                                x1={cardCoordsStatic().x1} 
-                                y1={cardCoordsStatic().y1} 
-                                x2={cardCoordsStatic().x2} 
-                                y2={cardCoordsStatic().y2} 
-                                gradientUnits="userSpaceOnUse"
-                                spreadMethod="reflect"
-                              />
-                            </Show>
-                            <Show when={isRadialActive()}>
-                              <radialGradient
-                                id={`gold-grad-static-${type}`}
-                                href={`#gold-grad-${type}`}
-                                cx={cardRadialCoordsStatic().cx}
-                                cy={cardRadialCoordsStatic().cy}
-                                r={cardRadialCoordsStatic().r}
-                                fx={cardRadialCoordsStatic().fx}
-                                fy={cardRadialCoordsStatic().fy}
-                                gradientUnits="userSpaceOnUse"
-                              />
-                              <radialGradient
-                                id={`gold-grad-optical-static-${type}`}
-                                href={`#gold-grad-optical-${type}`}
-                                cx={cardRadialCoordsStatic().cx}
-                                cy={cardRadialCoordsStatic().cy}
-                                r={cardRadialCoordsStatic().r}
-                                fx={cardRadialCoordsStatic().fx}
-                                fy={cardRadialCoordsStatic().fy}
-                                gradientUnits="userSpaceOnUse"
-                              />
-                            </Show>
-
-                            <Show when={customType() === 'box'}>
+                              {/* Static versions */}
                               <pattern 
                                 id={`gold-box-pattern-static-${type}`} 
                                 href={`#gold-box-pattern-${type}`}
@@ -3069,6 +2993,66 @@ ${paintDef}${overlayGradDef}
                                 patternUnits="userSpaceOnUse" 
                               />
                             </Show>
+                              
+                            {/* Optical Sizing Gradient for smaller cell views */}
+                            <linearGradient 
+                              id={`gold-grad-optical-linear-${type}`} 
+                              x1={cardCoords().x1} 
+                              y1={cardCoords().y1} 
+                              x2={cardCoords().x2} 
+                              y2={cardCoords().y2} 
+                              gradientUnits="userSpaceOnUse"
+                              spreadMethod="reflect"
+                            >
+                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(gradientProfile())}>
+                                {/* Smooth Gold */}
+                                <stop offset="0%" stop-color="#78581E" />
+                                <stop offset="30%" stop-color="#E2B857" />
+                                <stop offset="55%" stop-color="#FFF3C2" />
+                                <stop offset="80%" stop-color="#E2B857" />
+                                <stop offset="100%" stop-color="#9E782F" />
+                              </Show>
+                              <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
+                                {/* Smooth Silver */}
+                                <stop offset="0%" stop-color="#70757D" />
+                                <stop offset="30%" stop-color="#CED2D8" />
+                                <stop offset="55%" stop-color="#EBEFF5" />
+                                <stop offset="80%" stop-color="#CED2D8" />
+                                <stop offset="100%" stop-color="#5B5F66" />
+                              </Show>
+                            </linearGradient>
+
+                            <radialGradient 
+                              id={`gold-grad-optical-radial-${type}`} 
+                              cx={cardRadialCoords().cx}
+                              cy={cardRadialCoords().cy}
+                              r={cardRadialCoords().r}
+                              fx={cardRadialCoords().fx}
+                              fy={cardRadialCoords().fy}
+                              gradientUnits="userSpaceOnUse"
+                            >
+                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(gradientProfile())}>
+                                <stop offset="0%" stop-color="#FFFDDA" />
+                                <stop offset="35%" stop-color="#D5BB8A" />
+                                <stop offset="70%" stop-color="#78581E" />
+                                <stop offset="100%" stop-color="#4E3D1E" />
+                              </Show>
+                              <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
+                                <stop offset="0%" stop-color="#EBEFF5" />
+                                <stop offset="35%" stop-color="#CED2D8" />
+                                <stop offset="70%" stop-color="#70757D" />
+                                <stop offset="100%" stop-color="#3A3D42" />
+                              </Show>
+                            </radialGradient>
+
+                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX() + (interactiveSheen() ? interactiveShiftX() : 0)} y={textureOffsetY() + (interactiveSheen() ? interactiveShiftY() : 0)} width={100 * textureScale()} height={100 * textureScale()}>
+                              <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
+                            </pattern>
+
+                            {/* Horizontal clip path to cut diagonal stroke extensions perfectly flat */}
+                            <clipPath id={`k-horizontal-clip-${type}`}>
+                              <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
+                            </clipPath>
 
                             <pattern 
                               id={`gold-pattern-static-${type}`} 
@@ -3080,7 +3064,7 @@ ${paintDef}${overlayGradDef}
                           </defs>
 
                           {/* Dummy element to force browser repaint of optical gradients */}
-                          <rect width="0" height="0" fill={`url(#gold-grad-optical-${type})`} />
+                          <rect width="0" height="0" fill={`url(#gold-grad-optical-linear-${type})`} />
 
                               {/* Hexagon Shadow Outline */}
                               <For each={Array.from({ length: rings() }, (_, i) => i)}>
