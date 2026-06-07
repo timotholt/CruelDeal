@@ -1,103 +1,16 @@
-import { createSignal, onMount, onCleanup, mergeProps, JSX, Show } from 'solid-js';
+import { mergeProps, JSX } from 'solid-js';
+import { enableGyro } from './reflex/ReflexController';
 
-// Global shared signals
-export const [globalShiftX, setGlobalShiftX] = createSignal(0);
-export const [globalShiftY, setGlobalShiftY] = createSignal(0);
-export const [gyroActive, setGyroActive] = createSignal(false);
-export const [sheenEnabled, setSheenEnabled] = createSignal(true);
-
-let listenerCount = 0;
-
-const handleGlobalMouseMove = (e: MouseEvent) => {
-  if (!sheenEnabled()) {
-    if (globalShiftX() !== 0 || globalShiftY() !== 0) {
-      setGlobalShiftX(0);
-      setGlobalShiftY(0);
-      updateRootVars(0, 0);
-    }
-    return;
-  }
-  const dx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-  const dy = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
-  const shiftX = dx * 45;
-  const shiftY = dy * 45;
-  setGlobalShiftX(shiftX);
-  setGlobalShiftY(shiftY);
-  updateRootVars(shiftX, shiftY);
-};
-
-const handleGlobalDeviceOrientation = (e: DeviceOrientationEvent) => {
-  if (!sheenEnabled()) return;
-  const gamma = e.gamma || 0; 
-  const beta = e.beta || 0;    
-  const dx = Math.max(-1, Math.min(1, gamma / 30));
-  const dy = Math.max(-1, Math.min(1, (beta - 45) / 30));
-  const shiftX = dx * 45;
-  const shiftY = dy * 45;
-  setGlobalShiftX(shiftX);
-  setGlobalShiftY(shiftY);
-  updateRootVars(shiftX, shiftY);
-};
-
-const updateRootVars = (x: number, y: number) => {
-  if (typeof document !== 'undefined') {
-    document.documentElement.style.setProperty('--sheen-x', x.toFixed(2));
-    document.documentElement.style.setProperty('--sheen-y', y.toFixed(2));
-  }
-};
-
-export const initGlobalListeners = () => {
-  if (typeof window === 'undefined') return;
-  listenerCount++;
-  if (listenerCount === 1) {
-    window.addEventListener('mousemove', handleGlobalMouseMove);
-    if (
-      // @ts-ignore
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-ignore
-      typeof DeviceOrientationEvent.requestPermission !== 'function'
-    ) {
-      window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-      setGyroActive(true);
-    }
-  }
-};
-
-export const removeGlobalListeners = () => {
-  if (typeof window === 'undefined') return;
-  listenerCount--;
-  if (listenerCount === 0) {
-    window.removeEventListener('mousemove', handleGlobalMouseMove);
-    window.removeEventListener('deviceorientation', handleGlobalDeviceOrientation);
-  }
-};
-
-export const enableMobileGyroscope = async (): Promise<boolean> => {
-  if (
-    typeof window !== 'undefined' &&
-    // @ts-ignore
-    typeof DeviceOrientationEvent !== 'undefined' &&
-    // @ts-ignore
-    typeof DeviceOrientationEvent.requestPermission === 'function'
-  ) {
-    try {
-      // @ts-ignore
-      const state = await DeviceOrientationEvent.requestPermission();
-      if (state === 'granted') {
-        window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-        setGyroActive(true);
-        return true;
-      }
-    } catch (e) {
-      console.error('Failed to request orientation permissions:', e);
-    }
-  } else if (typeof window !== 'undefined') {
-    window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-    setGyroActive(true);
-    return true;
-  }
-  return false;
-};
+/**
+ * MotionReflex now hosts only the reusable reflective DOM components. The
+ * pointer/tilt source lives in ./reflex/ReflexController, which writes the
+ * global direction to :root (--reflex-gx/gy). These components carry the sheen
+ * CSS classes and inherit that global var — no per-element JS at all.
+ *
+ * Controller signals are re-exported here for back-compat with existing imports.
+ */
+export { sheenEnabled, setSheenEnabled, gyroActive } from './reflex/ReflexController';
+export const enableMobileGyroscope = enableGyro;
 
 // Reusable Reflective Text Component
 export interface ReflectiveTextProps {
@@ -116,16 +29,8 @@ export const ReflectiveText = (rawProps: ReflectiveTextProps) => {
     style: {},
   }, rawProps);
 
-  onMount(() => {
-    initGlobalListeners();
-  });
-
-  onCleanup(() => {
-    removeGlobalListeners();
-  });
-
   return (
-    <span 
+    <span
       class={`sheen-text sheen-${props.type} metal-${props.profile} ${props.class}`}
       style={props.style}
     >
@@ -143,16 +48,8 @@ export const EmbossedReflectiveText = (rawProps: ReflectiveTextProps) => {
     style: {},
   }, rawProps);
 
-  onMount(() => {
-    initGlobalListeners();
-  });
-
-  onCleanup(() => {
-    removeGlobalListeners();
-  });
-
   return (
-    <span 
+    <span
       class={`sheen-text sheen-${props.type} metal-${props.profile} embossed-text ${props.class}`}
       style={props.style}
     >
@@ -176,18 +73,10 @@ export const ReflectiveProgressBar = (rawProps: ReflectiveProgressBarProps) => {
     class: '',
   }, rawProps);
 
-  onMount(() => {
-    initGlobalListeners();
-  });
-
-  onCleanup(() => {
-    removeGlobalListeners();
-  });
-
   return (
     <div class={`w-full h-4 bg-black/50 rounded-full border border-white/10 overflow-hidden relative shadow-inner ${props.class}`}>
       {/* Dynamic Sheen Bar fill */}
-      <div 
+      <div
         class={`h-full sheen-text sheen-${props.type} metal-${props.profile} rounded-full transition-all duration-300 relative`}
         style={{
           width: `${Math.max(0, Math.min(100, props.value))}%`,
@@ -223,14 +112,6 @@ export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
     disabled: false,
   }, rawProps);
 
-  onMount(() => {
-    initGlobalListeners();
-  });
-
-  onCleanup(() => {
-    removeGlobalListeners();
-  });
-
   return (
     <button
       onClick={() => !props.disabled && props.onClick?.()}
@@ -245,15 +126,15 @@ export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
       `}
       style={{
         background: 'none',
-        "box-shadow": props.profile === 'gold' || props.profile === 'kan' || props.profile === 'brass' 
-          ? '0 4px 14px 0 rgba(251, 191, 36, 0.3)' 
-          : props.profile === 'silver' 
+        "box-shadow": props.profile === 'gold' || props.profile === 'kan' || props.profile === 'brass'
+          ? '0 4px 14px 0 rgba(251, 191, 36, 0.3)'
+          : props.profile === 'silver'
             ? '0 4px 14px 0 rgba(148, 163, 184, 0.3)'
             : '0 4px 14px 0 rgba(59, 130, 246, 0.3)',
       }}
     >
       {/* Background with Sheen */}
-      <div 
+      <div
         class={`absolute inset-0 sheen-text sheen-${props.type} metal-${props.profile} rounded`}
         style={{
           "background-clip": "initial",

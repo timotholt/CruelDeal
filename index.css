@@ -212,35 +212,63 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 /* ==========================================================================
    UNIFIED MOTION REFLEX SYSTEM
    ========================================================================== */
-:root {
-  --sheen-x: 0;
-  --sheen-y: 0;
+/* Global tilt/pointer direction (-1..1) written to :root by ReflexController. */
+@property --reflex-gx {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --reflex-gy {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+/* Per-element local highlight (-1..1) written by attachReflexVars; defaults to
+   the inherited global direction so un-attached surfaces still react. */
+@property --reflex-x {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --reflex-y {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
 }
 
-/* Metallic Color Profiles */
+:root {
+  --reflex-gx: 0;
+  --reflex-gy: 0;
+  --reflex-x: var(--reflex-gx);
+  --reflex-y: var(--reflex-gy);
+}
+
+/* Metallic Color Profiles — all sourced from the canonical METALS registry
+   (components/ui/reflex/metals.ts), injected to :root as --metal-*-gradient /
+   --metal-*-highlight. Same stops the KanIcon hexes use. */
 .metal-gold {
-  --base-metal-gradient: linear-gradient(135deg, #7C6535 0%, #D5BB8A 50%, #7C6535 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-gold-gradient);
+  --highlight-color: var(--metal-gold-highlight);
 }
 .metal-silver {
-  --base-metal-gradient: linear-gradient(135deg, #70757D 0%, #CED2D8 50%, #5B5F66 100%);
-  --highlight-color: #EBEFF5;
+  --base-metal-gradient: var(--metal-silver-gradient);
+  --highlight-color: var(--metal-silver-highlight);
 }
 .metal-brass {
-  --base-metal-gradient: linear-gradient(135deg, #55411B 0%, #B8A269 50%, #55411B 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-brass-gradient);
+  --highlight-color: var(--metal-brass-highlight);
 }
 .metal-kan {
-  --base-metal-gradient: linear-gradient(135deg, #7C6535 0%, #D5BB8A 50%, #7C6535 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-kan-gradient);
+  --highlight-color: var(--metal-kan-highlight);
 }
 .metal-credit {
-  --base-metal-gradient: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1d4ed8 100%);
-  --highlight-color: #93c5fd;
+  --base-metal-gradient: var(--metal-credit-gradient);
+  --highlight-color: var(--metal-credit-highlight);
 }
 .metal-mark {
-  --base-metal-gradient: linear-gradient(135deg, #4b5563 0%, #9ca3af 50%, #374151 100%);
-  --highlight-color: #f3f4f6;
+  --base-metal-gradient: var(--metal-mark-gradient);
+  --highlight-color: var(--metal-mark-highlight);
 }
 
 /* Base Sheen text properties */
@@ -250,12 +278,13 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   color: transparent;
   -webkit-text-fill-color: transparent;
   background-size: 200% 200%;
-  transition: background-position 0.05s ease-out;
+  transition: background-position 0.08s ease-out;
   display: inline-block;
   font-weight: 800;
 }
 
-/* Sheen Styles */
+/* Sheen Styles — PLUS sign moves the highlight TOWARD the pointer, matching
+   the SVG icon convention. --reflex-x/y are element-local (-1..1). */
 .sheen-linear {
   background-image: linear-gradient(
     135deg,
@@ -263,13 +292,13 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
     var(--highlight-color) 50%,
     transparent 70%
   ), var(--base-metal-gradient);
-  background-position: calc(50% + var(--sheen-x) * 1%) calc(50% + var(--sheen-y) * 1%), center;
+  background-position: calc(50% + var(--reflex-x) * 40%) calc(50% + var(--reflex-y) * 40%), center;
   background-blend-mode: overlay;
 }
 
 .sheen-radial {
   background-image: radial-gradient(
-    circle at calc(50% + var(--sheen-x) * 0.8%) calc(50% + var(--sheen-y) * 0.8%),
+    circle at calc(50% + var(--reflex-x) * 30%) calc(50% + var(--reflex-y) * 30%),
     var(--highlight-color) 0%,
     transparent 60%
   ), var(--base-metal-gradient);
@@ -277,17 +306,18 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 }
 
 .sheen-box {
-  background-image: var(--box-bg-image, url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="15"/></filter></defs><rect x="25" y="25" width="50" height="50" rx="10" fill="white" filter="url(%23b)"/></svg>')), var(--base-metal-gradient);
-  background-position: calc(50% + var(--sheen-x) * 0.5%) calc(50% + var(--sheen-y) * 0.5%), center;
+  background-image: radial-gradient(
+    ellipse 60% 40% at calc(50% + var(--reflex-x) * 22%) calc(50% + var(--reflex-y) * 22%),
+    var(--highlight-color) 0%,
+    transparent 70%
+  ), var(--base-metal-gradient);
   background-blend-mode: var(--box-blend-mode, overlay);
-  background-size: contain, 200% 200%;
-  background-repeat: no-repeat, no-repeat;
 }
 
 /* 3D Embossed Chiseled Highlights */
 .embossed-text {
-  filter: drop-shadow(calc(var(--sheen-x) * -0.05px) calc(var(--sheen-y) * -0.05px) 0px rgba(255, 255, 255, 0.45))
-          drop-shadow(calc(var(--sheen-x) * 0.05px) calc(var(--sheen-y) * 0.05px) 0.5px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(calc(var(--reflex-x) * -2px) calc(var(--reflex-y) * -2px) 0px rgba(255, 255, 255, 0.45))
+          drop-shadow(calc(var(--reflex-x) * 2px) calc(var(--reflex-y) * 2px) 0.5px rgba(0, 0, 0, 0.6));
 }
 
 /* Rich Text Token Mappings */
@@ -302,13 +332,13 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   color: transparent;
   -webkit-text-fill-color: transparent;
   background-size: 200% 200%;
-  transition: background-position 0.05s ease-out;
+  transition: background-position 0.08s ease-out;
   display: inline-block;
   font-weight: 800;
-  
+
   /* Dynamic chiseled emboss shadow */
-  filter: drop-shadow(calc(var(--sheen-x) * -0.05px) calc(var(--sheen-y) * -0.05px) 0px rgba(255, 255, 255, 0.45))
-          drop-shadow(calc(var(--sheen-x) * 0.05px) calc(var(--sheen-y) * 0.05px) 0.5px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(calc(var(--reflex-x) * -2px) calc(var(--reflex-y) * -2px) 0px rgba(255, 255, 255, 0.45))
+          drop-shadow(calc(var(--reflex-x) * 2px) calc(var(--reflex-y) * 2px) 0.5px rgba(0, 0, 0, 0.6));
 }
 
 /* default to linear sheens on metallic tags, but allow custom override via variable */
@@ -324,31 +354,31 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
     var(--highlight-color) 50%,
     transparent 70%
   )), var(--base-metal-gradient);
-  background-position: calc(50% + var(--sheen-x) * 1%) calc(50% + var(--sheen-y) * 1%), center;
+  background-position: calc(50% + var(--reflex-x) * 40%) calc(50% + var(--reflex-y) * 40%), center;
   background-blend-mode: var(--rich-sheen-blend-mode, overlay);
 }
 
 .main-material-rich-token--gold {
-  --base-metal-gradient: linear-gradient(135deg, #7C6535 0%, #D5BB8A 50%, #7C6535 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-gold-gradient);
+  --highlight-color: var(--metal-gold-highlight);
 }
 .main-material-rich-token--silver {
-  --base-metal-gradient: linear-gradient(135deg, #70757D 0%, #CED2D8 50%, #5B5F66 100%);
-  --highlight-color: #EBEFF5;
+  --base-metal-gradient: var(--metal-silver-gradient);
+  --highlight-color: var(--metal-silver-highlight);
 }
 .main-material-rich-token--brass {
-  --base-metal-gradient: linear-gradient(135deg, #55411B 0%, #B8A269 50%, #55411B 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-brass-gradient);
+  --highlight-color: var(--metal-brass-highlight);
 }
 .main-material-rich-token--kan {
-  --base-metal-gradient: linear-gradient(135deg, #7C6535 0%, #D5BB8A 50%, #7C6535 100%);
-  --highlight-color: #FFFDDA;
+  --base-metal-gradient: var(--metal-kan-gradient);
+  --highlight-color: var(--metal-kan-highlight);
 }
 .main-material-rich-token--credit {
-  --base-metal-gradient: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1d4ed8 100%);
-  --highlight-color: #93c5fd;
+  --base-metal-gradient: var(--metal-credit-gradient);
+  --highlight-color: var(--metal-credit-highlight);
 }
 .main-material-rich-token--mark {
-  --base-metal-gradient: linear-gradient(135deg, #4b5563 0%, #9ca3af 50%, #374151 100%);
-  --highlight-color: #f3f4f6;
+  --base-metal-gradient: var(--metal-mark-gradient);
+  --highlight-color: var(--metal-mark-highlight);
 }

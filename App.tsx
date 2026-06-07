@@ -1,4 +1,6 @@
-import { createSignal, Show, ErrorBoundary } from 'solid-js';
+import { createSignal, onMount, Show, ErrorBoundary } from 'solid-js';
+import { initReflex } from './components/ui/reflex/ReflexController';
+import { injectMetalVars } from './components/ui/reflex/metals';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
@@ -108,6 +110,10 @@ export default function App() {
   const [profile, setProfile] = createSignal<UserProfile | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
+
+  // Single reflex input source + canonical metal gradients for the whole app.
+  injectMetalVars();
+  onMount(initReflex);
   const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
   const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');
   const isDevIconsPath = () => window.location.pathname.toLowerCase().startsWith('/dev/icons');

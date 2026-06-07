@@ -1,5 +1,8 @@
-import { createSignal, onMount, onCleanup, For, Show, mergeProps } from 'solid-js';
-import { globalShiftX, globalShiftY, sheenEnabled } from './MotionReflex';
+import { For, Show, mergeProps } from 'solid-js';
+import { sheenEnabled } from './reflex/ReflexController';
+import { createReflexShift, REFLEX_SVG_UNITS } from './reflex/useReflex';
+import { METALS, PROFILE_TO_METAL, metalSvgStops } from './reflex/metals';
+
 
 export interface KanIconProps {
   size?: number | string; // Width/Height. Defaults to '48px'.
@@ -53,9 +56,7 @@ export interface KanIconProps {
   overlayOpacity?: number;
   overlayBlendMode?: 'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light';
   customType?: 'linear' | 'radial' | 'box';
-  customShiftX?: number;
-  customShiftY?: number;
-  
+
   // Custom class for outer wrapper
   class?: string;
   // Unique ID prefix to prevent SVG defs collision when rendering multiple instances on the same page
@@ -113,30 +114,19 @@ export const KanIcon = (rawProps: KanIconProps) => {
   // Generate unique ID prefix to isolate gradients
   const uniqueId = props.idPrefix || `kan-${Math.random().toString(36).substring(2, 9)}`;
 
-  // Local hover tracking
-  const [isHovered, setIsHovered] = createSignal(false);
-  const [localShiftX, setLocalShiftX] = createSignal(0);
-  const [localShiftY, setLocalShiftY] = createSignal(0);
+  // Single unified reflex source — global tilt/pointer direction shared by every
+  // surface. No listeners, no rect reads, no hover/global swap, no per-mode
+  // damping: every mode and every icon reads the same nx/ny and moves 24/7.
+  const reflex = createReflexShift();
 
-  // Dynamic Shift Offsets (transitions to local coordinates when hovered)
   const activeShiftX = () => {
     if (!props.interactive || !sheenEnabled()) return 0;
-    if (props.customShiftX !== undefined) return props.customShiftX;
-    const baseShift = isHovered() ? localShiftX() : globalShiftX();
-    if (!isHovered() && (isRadialActive() || props.customType === 'box')) {
-      return baseShift * 0.35;
-    }
-    return baseShift;
+    return reflex().nx * REFLEX_SVG_UNITS;
   };
-  
+
   const activeShiftY = () => {
     if (!props.interactive || !sheenEnabled()) return 0;
-    if (props.customShiftY !== undefined) return props.customShiftY;
-    const baseShift = isHovered() ? localShiftY() : globalShiftY();
-    if (!isHovered() && (isRadialActive() || props.customType === 'box')) {
-      return baseShift * 0.35;
-    }
-    return baseShift;
+    return reflex().ny * REFLEX_SVG_UNITS;
   };
 
   const isRadialActive = () => {
@@ -244,6 +234,10 @@ export const KanIcon = (rawProps: KanIconProps) => {
   };
 
   const getGradientStops = () => {
+    // Canonical metals (gold=J, silver=D, brass=G, mark=F) come from the single
+    // shared registry so the hex matches the text/buttons exactly.
+    const metal = PROFILE_TO_METAL[props.gradientProfile];
+    if (metal) return metalSvgStops(METALS[metal]);
     if (props.gradientProfile === 'A') {
       return [
         { offset: '0%', color: '#FFF3C2' },
@@ -376,50 +370,43 @@ export const KanIcon = (rawProps: KanIconProps) => {
     if (props.fillMode === 'texture') {
       return `url(#${uniqueId}-pattern)`;
     }
-    return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad)`;
+    if (props.customType === 'box') {
+      return `url(#${uniqueId}-grad-base)`;
+    }
+    if (isOptical()) {
+      return isRadialActive() ? `url(#${uniqueId}-grad-optical-radial)` : `url(#${uniqueId}-grad-optical-linear)`;
+    }
+    return isRadialActive() ? `url(#${uniqueId}-grad-radial)` : `url(#${uniqueId}-grad-linear)`;
   };
 
   const overlayGradUrl = () => {
     if (props.customType === 'box') {
       return `url(#${uniqueId}-box-pattern)`;
     }
-    return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad-overlay)`;
+    if (isOptical()) {
+      return isRadialActive() ? `url(#${uniqueId}-grad-optical-radial)` : `url(#${uniqueId}-grad-optical-linear)`;
+    }
+    return isRadialActive() ? `url(#${uniqueId}-grad-radial)` : `url(#${uniqueId}-grad-linear)`;
   };
 
   // Geometric coordinates for active K line
   const c = () => getKCoords(props.kScale, props.kThickness, props.linecap);
 
-  // Dynamic inline filter glow string
+  // Dynamic inline filter glow string. Returns undefined when off so no filter
+  // CSS is emitted at all (no `filter: none` no-op).
   const glowFilter = () => {
     if (props.glowColor === 'none' || !props.glowColor || props.glowRadius <= 0) {
-      return 'none';
+      return undefined;
     }
     return `drop-shadow(0 0 ${props.glowRadius}px ${props.glowColor})`;
   };
 
   return (
-    <div 
-      class={`relative flex items-center justify-center ${props.class}`} 
+    <div
+      class={`relative flex items-center justify-center ${props.class}`}
       style={{
         width: typeof props.size === 'number' ? `${props.size}px` : props.size,
         height: typeof props.size === 'number' ? `${props.size}px` : props.size,
-      }}
-      onMouseMove={(e) => {
-        if (!props.interactive) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const dx = e.clientX - centerX;
-        const dy = e.clientY - centerY;
-        
-        // Normalize: moving to the boundary of the coin gets max shift (45px)
-        const maxDist = rect.width / 2 || 24; 
-        setLocalShiftX(Math.max(-45, Math.min(45, (dx / maxDist) * 45)));
-        setLocalShiftY(Math.max(-45, Math.min(45, (dy / maxDist) * 45)));
-        setIsHovered(true);
-      }}
-      onMouseLeave={() => {
-        setIsHovered(false);
       }}
     >
       <svg 
@@ -428,41 +415,63 @@ export const KanIcon = (rawProps: KanIconProps) => {
         style={{ filter: glowFilter() }}
       >
         <defs>
-          {/* Base Material Gradient (Linear or Radial) */}
-          <Show when={!isRadialActive()}>
-            <linearGradient 
-              id={`${uniqueId}-grad`} 
-              x1={gradCoords().x1} 
-              y1={gradCoords().y1} 
-              x2={gradCoords().x2} 
-              y2={gradCoords().y2} 
-              gradientUnits="userSpaceOnUse"
-              spreadMethod="reflect"
-            >
-              <For each={getGradientStops()}>
-                {(stop) => (
-                  <stop offset={stop.offset} stop-color={stop.color} />
-                )}
-              </For>
-            </linearGradient>
-          </Show>
-          <Show when={isRadialActive()}>
-            <radialGradient
-              id={`${uniqueId}-grad`}
-              cx={radialCoords().cx}
-              cy={radialCoords().cy}
-              r={radialCoords().r}
-              fx={radialCoords().fx}
-              fy={radialCoords().fy}
-              gradientUnits="userSpaceOnUse"
-            >
-              <For each={getGradientStops()}>
-                {(stop) => (
-                  <stop offset={stop.offset} stop-color={stop.color} />
-                )}
-              </For>
-            </radialGradient>
-          </Show>
+          {/* Base metal gradient for softbox mode (clean background without linear shiny bands) */}
+          <linearGradient id={`${uniqueId}-grad-base`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <Show when={['gold', 'kan', 'Custom', 'J', 'K', 'A', 'B', 'C', 'G', 'I', 'R1', 'R2'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#7C6535" />
+              <stop offset="50%" stop-color="#D5BB8A" />
+              <stop offset="100%" stop-color="#7C6535" />
+            </Show>
+            <Show when={['silver', 'D', 'E'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#70757D" />
+              <stop offset="50%" stop-color="#CED2D8" />
+              <stop offset="100%" stop-color="#5B5F66" />
+            </Show>
+            <Show when={['brass'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#55411B" />
+              <stop offset="50%" stop-color="#B8A269" />
+              <stop offset="100%" stop-color="#55411B" />
+            </Show>
+            <Show when={['mark', 'F'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#4b5563" />
+              <stop offset="50%" stop-color="#9ca3af" />
+              <stop offset="100%" stop-color="#374151" />
+            </Show>
+          </linearGradient>
+
+          {/* Base Linear Gradient */}
+          <linearGradient 
+            id={`${uniqueId}-grad-linear`} 
+            x1={gradCoords().x1} 
+            y1={gradCoords().y1} 
+            x2={gradCoords().x2} 
+            y2={gradCoords().y2} 
+            gradientUnits="userSpaceOnUse"
+            spreadMethod="reflect"
+          >
+            <For each={getGradientStops()}>
+              {(stop) => (
+                <stop offset={stop.offset} stop-color={stop.color} />
+              )}
+            </For>
+          </linearGradient>
+
+          {/* Base Radial Gradient */}
+          <radialGradient
+            id={`${uniqueId}-grad-radial`}
+            cx={radialCoords().cx}
+            cy={radialCoords().cy}
+            r={radialCoords().r}
+            fx={radialCoords().fx}
+            fy={radialCoords().fy}
+            gradientUnits="userSpaceOnUse"
+          >
+            <For each={getGradientStops()}>
+              {(stop) => (
+                <stop offset={stop.offset} stop-color={stop.color} />
+              )}
+            </For>
+          </radialGradient>
 
           {/* Softbox reflection box pattern & blur filter */}
           <Show when={props.customType === 'box'}>
@@ -493,85 +502,55 @@ export const KanIcon = (rawProps: KanIconProps) => {
             </pattern>
           </Show>
 
-          {/* Optional Texture Overlay Gradient Layer */}
-          <Show when={!isRadialActive() && props.customType !== 'box'}>
-            <linearGradient 
-              id={`${uniqueId}-grad-overlay`} 
-              x1={gradCoords().x1} 
-              y1={gradCoords().y1} 
-              x2={gradCoords().x2} 
-              y2={gradCoords().y2} 
-              gradientUnits="userSpaceOnUse"
-              spreadMethod="reflect"
-            >
-              <For each={getGradientStops()}>
-                {(stop) => (
-                  <stop offset={stop.offset} stop-color={stop.color} />
-                )}
-              </For>
-            </linearGradient>
-          </Show>
-          <Show when={isRadialActive() && props.customType !== 'box'}>
-            <radialGradient
-              id={`${uniqueId}-grad-overlay`}
-              cx={radialCoords().cx}
-              cy={radialCoords().cy}
-              r={radialCoords().r}
-              fx={radialCoords().fx}
-              fy={radialCoords().fy}
-              gradientUnits="userSpaceOnUse"
-            >
-              <For each={getGradientStops()}>
-                {(stop) => (
-                  <stop offset={stop.offset} stop-color={stop.color} />
-                )}
-              </For>
-            </radialGradient>
-          </Show>
+          {/* Optical Sizing Linear Gradient */}
+          <linearGradient
+            id={`${uniqueId}-grad-optical-linear`}
+            x1={gradCoords().x1}
+            y1={gradCoords().y1}
+            x2={gradCoords().x2}
+            y2={gradCoords().y2}
+            gradientUnits="userSpaceOnUse"
+            spreadMethod="reflect"
+          >
+            <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#78581E" />
+              <stop offset="30%" stop-color="#E2B857" />
+              <stop offset="55%" stop-color="#FFF3C2" />
+              <stop offset="80%" stop-color="#E2B857" />
+              <stop offset="100%" stop-color="#9E782F" />
+            </Show>
+            <Show when={['D', 'E', 'F'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#70757D" />
+              <stop offset="30%" stop-color="#CED2D8" />
+              <stop offset="55%" stop-color="#EBEFF5" />
+              <stop offset="80%" stop-color="#CED2D8" />
+              <stop offset="100%" stop-color="#5B5F66" />
+            </Show>
+          </linearGradient>
 
-          {/* Optical Sizing Gradient */}
-          <Show when={!isRadialActive()}>
-            <linearGradient
-              id={`${uniqueId}-grad-optical`}
-              x1={gradCoords().x1}
-              y1={gradCoords().y1}
-              x2={gradCoords().x2}
-              y2={gradCoords().y2}
-              gradientUnits="userSpaceOnUse"
-              spreadMethod="reflect"
-            >
-              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(props.gradientProfile)}>
-                <stop offset="0%" stop-color="#78581E" />
-                <stop offset="30%" stop-color="#E2B857" />
-                <stop offset="55%" stop-color="#FFF3C2" />
-                <stop offset="80%" stop-color="#E2B857" />
-                <stop offset="100%" stop-color="#9E782F" />
-              </Show>
-              <Show when={['D', 'E', 'F'].includes(props.gradientProfile)}>
-                <stop offset="0%" stop-color="#70757D" />
-                <stop offset="30%" stop-color="#CED2D8" />
-                <stop offset="55%" stop-color="#EBEFF5" />
-                <stop offset="80%" stop-color="#CED2D8" />
-                <stop offset="100%" stop-color="#5B5F66" />
-              </Show>
-            </linearGradient>
-          </Show>
-          <Show when={isRadialActive()}>
-            <radialGradient
-              id={`${uniqueId}-grad-optical`}
-              cx={radialCoords().cx}
-              cy={radialCoords().cy}
-              r={radialCoords().r}
-              fx={radialCoords().fx}
-              fy={radialCoords().fy}
-              gradientUnits="userSpaceOnUse"
-            >
+          {/* Optical Sizing Radial Gradient */}
+          <radialGradient
+            id={`${uniqueId}-grad-optical-radial`}
+            cx={radialCoords().cx}
+            cy={radialCoords().cy}
+            r={radialCoords().r}
+            fx={radialCoords().fx}
+            fy={radialCoords().fy}
+            gradientUnits="userSpaceOnUse"
+          >
+            <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(props.gradientProfile)}>
               <stop offset="0%" stop-color="#FFFDDA" />
               <stop offset="35%" stop-color="#D5BB8A" />
               <stop offset="70%" stop-color="#78581E" />
               <stop offset="100%" stop-color="#4E3D1E" />
-            </radialGradient>
-          </Show>
+            </Show>
+            <Show when={['D', 'E', 'F'].includes(props.gradientProfile)}>
+              <stop offset="0%" stop-color="#EBEFF5" />
+              <stop offset="35%" stop-color="#CED2D8" />
+              <stop offset="70%" stop-color="#70757D" />
+              <stop offset="100%" stop-color="#3A3D42" />
+            </Show>
+          </radialGradient>
 
           {/* Photographic Texture Image Pattern */}
           <pattern 

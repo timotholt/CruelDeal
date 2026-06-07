@@ -1,5 +1,6 @@
-import { createSignal, For, Show, onMount, onCleanup, createEffect } from 'solid-js';
+import { createSignal, For, Show, createEffect } from 'solid-js';
 import { KanIcon } from '../ui/KanIcon';
+import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/reflex/useReflex';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -189,8 +190,6 @@ export const IconsPreviewScreen = () => {
   // Signals for interactive SVG controls
   const interactiveSheen = sheenEnabled;
   const setInteractiveSheen = setSheenEnabled;
-  const [interactiveShiftX, setInteractiveShiftX] = createSignal(0);
-  const [interactiveShiftY, setInteractiveShiftY] = createSignal(0);
   const [gyroEnabled, setGyroEnabled] = createSignal(false);
   const [hasGyroPermission, setHasGyroPermission] = createSignal(false);
 
@@ -205,27 +204,10 @@ export const IconsPreviewScreen = () => {
   const [demoProgress, setDemoProgress] = createSignal(65);
   const [customInputText, setCustomInputText] = createSignal("You earned [gold]50 Gold[/gold], [silver]10 Silver[/silver], and [mark]3 Marks[/mark]!");
 
-  // Showcase Cards Hover Signals
-  const [goldHover, setGoldHover] = createSignal(false);
-  const [goldX, setGoldX] = createSignal(0);
-  const [goldY, setGoldY] = createSignal(0);
-
-  const [silverHover, setSilverHover] = createSignal(false);
-  const [silverX, setSilverX] = createSignal(0);
-  const [silverY, setSilverY] = createSignal(0);
-
-  const [brassHover, setBrassHover] = createSignal(false);
-  const [brassX, setBrassX] = createSignal(0);
-  const [brassY, setBrassY] = createSignal(0);
-
-  const [markHover, setMarkHover] = createSignal(false);
-  const [markX, setMarkX] = createSignal(0);
-  const [markY, setMarkY] = createSignal(0);
-
   const [thickness, setThickness] = createSignal(3.5);
   const [kThickness, setKThickness] = createSignal(6.5);
   const [hexFillOpacity, setHexFillOpacity] = createSignal(0.12);
-  const [glowIntensity, setGlowIntensity] = createSignal(8);
+  const [glowIntensity, setGlowIntensity] = createSignal(0);
   const [linecap, setLinecap] = createSignal<'butt' | 'round'>('butt');
   const [rings, setRings] = createSignal<1 | 2 | 3>(3);
   const [ringGap, setRingGap] = createSignal(6.5);
@@ -251,82 +233,21 @@ export const IconsPreviewScreen = () => {
   const [bevelOpacity, setBevelOpacity] = createSignal(0.6);
   const [kBlockMode, setKBlockMode] = createSignal(false);
 
-  let containerRef: HTMLDivElement | undefined;
-
-  // Mouse and Gyroscope orientation event listeners for Holo-Reflex effect
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!interactiveSheen()) return;
-    let centerX = window.innerWidth / 2;
-    let centerY = window.innerHeight / 2;
-    
-    if (containerRef) {
-      const rect = containerRef.getBoundingClientRect();
-      centerX = rect.left + rect.width / 2;
-      centerY = rect.top + rect.height / 2;
-    }
-    
-    const dx = (e.clientX - centerX) / (window.innerWidth / 2);
-    const dy = (e.clientY - centerY) / (window.innerHeight / 2);
-    setInteractiveShiftX(dx * 45);
-    setInteractiveShiftY(dy * 45);
-  };
-
-  const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
-    if (!interactiveSheen()) return;
-    const gamma = e.gamma || 0; 
-    const beta = e.beta || 0;    
-    const dx = Math.max(-1, Math.min(1, gamma / 30));
-    const dy = Math.max(-1, Math.min(1, (beta - 45) / 30));
-    setInteractiveShiftX(dx * 45);
-    setInteractiveShiftY(dy * 45);
-  };
+  // Single unified reflex source — global tilt/pointer direction, shared by the
+  // inline SVG preview math exactly like KanIcon.
+  const previewReflex = createReflexShift();
+  const interactiveShiftX = () => previewReflex().nx * REFLEX_SVG_UNITS;
+  const interactiveShiftY = () => previewReflex().ny * REFLEX_SVG_UNITS;
 
   const requestGyroPermission = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
-      typeof DeviceOrientationEvent.requestPermission === 'function'
-    ) {
-      try {
-        // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
-        const permissionState = await DeviceOrientationEvent.requestPermission();
-        if (permissionState === 'granted') {
-          setHasGyroPermission(true);
-          setGyroEnabled(true);
-          window.addEventListener('deviceorientation', handleDeviceOrientation);
-        } else {
-          alert('Gyroscope tilt permission was denied.');
-        }
-      } catch (err) {
-        console.error('Error requesting orientation permission:', err);
-      }
-    } else {
+    const ok = await enableMobileGyroscope();
+    if (ok) {
       setHasGyroPermission(true);
       setGyroEnabled(true);
-      window.addEventListener('deviceorientation', handleDeviceOrientation);
+    } else {
+      alert('Gyroscope tilt permission was denied.');
     }
   };
-
-  onMount(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    if (
-      typeof window !== 'undefined' &&
-      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
-      typeof DeviceOrientationEvent.requestPermission !== 'function'
-    ) {
-      window.addEventListener('deviceorientation', handleDeviceOrientation);
-      setGyroEnabled(true);
-    }
-  });
-
-  onCleanup(() => {
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('deviceorientation', handleDeviceOrientation);
-  });
 
   // Interactive Gradient Stop Editor State
   const [gradientAngle, setGradientAngle] = createSignal<number>(45);
@@ -445,7 +366,7 @@ export const IconsPreviewScreen = () => {
     if (type === 'radial') {
       document.documentElement.style.setProperty(
         '--rich-sheen-bg-image', 
-        `radial-gradient(circle at calc(50% + var(--sheen-x) * 1.5%) calc(50% + var(--sheen-y) * 1.5%), var(--highlight-color) 0%, transparent 60%)`
+        `radial-gradient(circle at calc(50% + var(--reflex-x) * 30%) calc(50% + var(--reflex-y) * 30%), var(--highlight-color) 0%, transparent 60%)`
       );
       document.documentElement.style.setProperty('--rich-sheen-blend-mode', 'overlay');
     } else if (type === 'box') {
@@ -666,7 +587,7 @@ export const IconsPreviewScreen = () => {
       setThickness(3);
       setKThickness(3);
       setHexFillOpacity(0);
-      setGlowIntensity(4);
+      setGlowIntensity(0);
       setLinecap('butt');
       setRings(1);
       setRingGap(6);
@@ -678,7 +599,7 @@ export const IconsPreviewScreen = () => {
       setThickness(6);
       setKThickness(6);
       setHexFillOpacity(0.08);
-      setGlowIntensity(8);
+      setGlowIntensity(0);
       setLinecap('butt');
       setRings(1);
       setRingGap(8);
@@ -690,7 +611,7 @@ export const IconsPreviewScreen = () => {
       setThickness(10);
       setKThickness(16);
       setHexFillOpacity(0.12);
-      setGlowIntensity(12);
+      setGlowIntensity(0);
       setLinecap('butt');
       setRings(1);
       setRingGap(10);
@@ -702,7 +623,7 @@ export const IconsPreviewScreen = () => {
       setThickness(4);
       setKThickness(4);
       setHexFillOpacity(0);
-      setGlowIntensity(10);
+      setGlowIntensity(0);
       setLinecap('butt');
       setRings(3);
       setRingGap(5.5);
@@ -2451,31 +2372,18 @@ ${paintDef}${overlayGradDef}
             </div>
 
             {/* SVG Visualizers */}
-            <div ref={(el) => { containerRef = el; }} class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* Presets Visual Representation */}
               <For each={['thin', 'medium', 'thick'] as const}>
                 {(type) => {
-                  const [localShiftX, setLocalShiftX] = createSignal(0);
-                  const [localShiftY, setLocalShiftY] = createSignal(0);
-                  const [isHovered, setIsHovered] = createSignal(false);
-                  let coinBoxRef: HTMLDivElement | undefined;
                   const uniqueId = `card-${type}`;
 
-                  const activeCardShiftX = () => {
-                    const baseShift = isHovered() ? localShiftX() : interactiveShiftX();
-                    if (!isHovered() && (isRadialActive() || customType() === 'box')) {
-                      return baseShift * 0.35;
-                    }
-                    return baseShift;
-                  };
-                  const activeCardShiftY = () => {
-                    const baseShift = isHovered() ? localShiftY() : interactiveShiftY();
-                    if (!isHovered() && (isRadialActive() || customType() === 'box')) {
-                      return baseShift * 0.35;
-                    }
-                    return baseShift;
-                  };
+                  // Global reflex from the single pointer source — same path as
+                  // KanIcon, no rect reads, no hover swap, no damping.
+                  const cardReflex = createReflexShift();
+                  const activeCardShiftX = () => cardReflex().nx * REFLEX_SVG_UNITS;
+                  const activeCardShiftY = () => cardReflex().ny * REFLEX_SVG_UNITS;
 
                   const cardCoords = () => gradCoords(activeCardShiftX(), activeCardShiftY());
                   const cardRadialCoords = () => radialCoords(activeCardShiftX(), activeCardShiftY());
@@ -2500,23 +2408,25 @@ ${paintDef}${overlayGradDef}
                   const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
                   const renderSizeCell = (size: string, px: string) => {
                     const isOptical = ['1rem', '1.5rem', '2rem', '2.5rem'].includes(size);
+                    // Live gradients (mouse-driven) so every size cell reacts,
+                    // not just the main coin.
                     const sizeColor = () => {
                       if (fillMode() === 'gradient') {
-                        return isOptical 
-                          ? `url(#gold-grad-optical-static-${type})` 
-                          : `url(#gold-grad-static-${type})`;
+                        return isOptical
+                          ? `url(#gold-grad-optical-${type})`
+                          : `url(#gold-grad-${type})`;
                       } else {
-                        return `url(#gold-pattern-static-${type})`;
+                        return `url(#gold-pattern-${type})`;
                       }
                     };
-                    const sizeGradientColor = () => isOptical 
-                      ? `url(#gold-grad-optical-static-${type})` 
-                      : `url(#gold-grad-static-${type})`;
+                    const sizeGradientColor = () => isOptical
+                      ? `url(#gold-grad-optical-${type})`
+                      : `url(#gold-grad-${type})`;
 
                     return (
                       <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
                         <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
-                           <svg viewBox="0 0 100 100" style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
+                           <svg viewBox="0 0 100 100" style={{ width: size, height: size, ...(glowIntensity() > 0 ? { filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` } : {}) }}>
                              {/* Hexagon Shadow Outline */}
                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
                                {(index) => (
@@ -2793,25 +2703,8 @@ ${paintDef}${overlayGradDef}
                   const mainGradientColor = () => `url(#gold-grad-${type})`;
 
                   return (
-                    <div 
+                    <div
                       class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center"
-                      onMouseMove={(e) => {
-                        if (!interactiveSheen()) return;
-                        const rect = coinBoxRef ? coinBoxRef.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
-                        const centerX = rect.left + rect.width / 2;
-                        const centerY = rect.top + rect.height / 2;
-                        const dx = e.clientX - centerX;
-                        const dy = e.clientY - centerY;
-                        
-                        // Normalize: moving to the boundary of the coin box gets max shift (45px)
-                        const maxDist = rect.width / 2 || 80;
-                        setLocalShiftX(Math.max(-45, Math.min(45, (dx / maxDist) * 45)));
-                        setLocalShiftY(Math.max(-45, Math.min(45, (dy / maxDist) * 45)));
-                        setIsHovered(true);
-                      }}
-                      onMouseLeave={() => {
-                        setIsHovered(false);
-                      }}
                     >
                       <div class="text-center mb-3">
                         <span class="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase">{type === 'medium' ? 'Active Config' : `${type} view`}</span>
@@ -2819,13 +2712,12 @@ ${paintDef}${overlayGradDef}
                       </div>
                       
                       {/* SVG Render box */}
-                      <div 
-                        ref={(el) => { coinBoxRef = el; }}
+                      <div
                         class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative group overflow-hidden shadow-inner mb-3"
                       >
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                         
-                        <svg viewBox="0 0 100 100" class="w-28 h-28" style={{ filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
+                        <svg viewBox="0 0 100 100" class="w-28 h-28" style={glowIntensity() > 0 ? { filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` } : {}}>
                           <defs>
                             {/* Standard Gradient (Linear or Radial) */}
                             <Show when={!isRadialActive()}>
@@ -3641,26 +3533,6 @@ ${paintDef}${overlayGradDef}
               {/* Gold Pack Card */}
               <div 
                 class="bg-black/60 border border-white/5 hover:border-amber-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
-                style={{
-                  "--sheen-x": goldHover() ? `${goldX().toFixed(2)}` : undefined,
-                  "--sheen-y": goldHover() ? `${goldY().toFixed(2)}` : undefined
-                }}
-                onMouseMove={(e) => {
-                  if (!interactiveSheen()) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const centerX = rect.left + rect.width / 2;
-                  const centerY = rect.top + rect.height / 2;
-                  const dx = e.clientX - centerX;
-                  const dy = e.clientY - centerY;
-                  const maxW = rect.width / 2 || 1;
-                  const maxH = rect.height / 2 || 1;
-                  setGoldX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
-                  setGoldY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
-                  setGoldHover(true);
-                }}
-                onMouseLeave={() => {
-                  setGoldHover(false);
-                }}
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
@@ -3686,8 +3558,6 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
-                    customShiftX={goldHover() ? goldX() : undefined}
-                    customShiftY={goldHover() ? goldY() : undefined}
                   />
                 </div>
                 
@@ -3719,26 +3589,6 @@ ${paintDef}${overlayGradDef}
               {/* Silver Pack Card */}
               <div 
                 class="bg-black/60 border border-white/5 hover:border-slate-400/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
-                style={{
-                  "--sheen-x": silverHover() ? `${silverX().toFixed(2)}` : undefined,
-                  "--sheen-y": silverHover() ? `${silverY().toFixed(2)}` : undefined
-                }}
-                onMouseMove={(e) => {
-                  if (!interactiveSheen()) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const centerX = rect.left + rect.width / 2;
-                  const centerY = rect.top + rect.height / 2;
-                  const dx = e.clientX - centerX;
-                  const dy = e.clientY - centerY;
-                  const maxW = rect.width / 2 || 1;
-                  const maxH = rect.height / 2 || 1;
-                  setSilverX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
-                  setSilverY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
-                  setSilverHover(true);
-                }}
-                onMouseLeave={() => {
-                  setSilverHover(false);
-                }}
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
@@ -3764,8 +3614,6 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
-                    customShiftX={silverHover() ? silverX() : undefined}
-                    customShiftY={silverHover() ? silverY() : undefined}
                   />
                 </div>
                 
@@ -3797,26 +3645,6 @@ ${paintDef}${overlayGradDef}
               {/* Brass Pack Card */}
               <div 
                 class="bg-black/60 border border-white/5 hover:border-amber-700/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
-                style={{
-                  "--sheen-x": brassHover() ? `${brassX().toFixed(2)}` : undefined,
-                  "--sheen-y": brassHover() ? `${brassY().toFixed(2)}` : undefined
-                }}
-                onMouseMove={(e) => {
-                  if (!interactiveSheen()) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const centerX = rect.left + rect.width / 2;
-                  const centerY = rect.top + rect.height / 2;
-                  const dx = e.clientX - centerX;
-                  const dy = e.clientY - centerY;
-                  const maxW = rect.width / 2 || 1;
-                  const maxH = rect.height / 2 || 1;
-                  setBrassX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
-                  setBrassY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
-                  setBrassHover(true);
-                }}
-                onMouseLeave={() => {
-                  setBrassHover(false);
-                }}
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
@@ -3842,8 +3670,6 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
-                    customShiftX={brassHover() ? brassX() : undefined}
-                    customShiftY={brassHover() ? brassY() : undefined}
                   />
                 </div>
                 
@@ -3875,26 +3701,6 @@ ${paintDef}${overlayGradDef}
               {/* Mark (Lore Spec) Pack Card */}
               <div 
                 class="bg-black/60 border border-white/5 hover:border-slate-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
-                style={{
-                  "--sheen-x": markHover() ? `${markX().toFixed(2)}` : undefined,
-                  "--sheen-y": markHover() ? `${markY().toFixed(2)}` : undefined
-                }}
-                onMouseMove={(e) => {
-                  if (!interactiveSheen()) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const centerX = rect.left + rect.width / 2;
-                  const centerY = rect.top + rect.height / 2;
-                  const dx = e.clientX - centerX;
-                  const dy = e.clientY - centerY;
-                  const maxW = rect.width / 2 || 1;
-                  const maxH = rect.height / 2 || 1;
-                  setMarkX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
-                  setMarkY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
-                  setMarkHover(true);
-                }}
-                onMouseLeave={() => {
-                  setMarkHover(false);
-                }}
               >
                 <div class="flex items-start justify-between mb-4">
                   <div>
@@ -3920,8 +3726,6 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
-                    customShiftX={markHover() ? markX() : undefined}
-                    customShiftY={markHover() ? markY() : undefined}
                   />
                 </div>
                 
