@@ -193,6 +193,19 @@ export const IconsPreviewScreen = () => {
   const [gyroEnabled, setGyroEnabled] = createSignal(false);
   const [hasGyroPermission, setHasGyroPermission] = createSignal(false);
 
+  // Gate for performance-heavy effects (blur / glow / texture filters) that lag
+  // on phones. Off by default; turning it off also forces those effects inactive
+  // so nothing heavy is emitted.
+  const [heavyFx, setHeavyFx] = createSignal(false);
+  const toggleHeavyFx = (on: boolean) => {
+    setHeavyFx(on);
+    if (!on) {
+      if (customType() === 'box') setCustomType('linear');
+      if (fillMode() === 'texture') setFillMode('gradient');
+      setGlowIntensity(0);
+    }
+  };
+
   // Softbox signals
   const [boxWidth, setBoxWidth] = createSignal(45);
   const [boxHeight, setBoxHeight] = createSignal(45);
@@ -1124,6 +1137,18 @@ ${paintDef}${overlayGradDef}
                   SVG Geometry Tweaker
                 </h3>
 
+                 {/* Performance gate: hide blur / glow / texture-filter effects */}
+                 <label class="mb-2.5 flex items-center gap-2 cursor-pointer select-none rounded border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5">
+                   <input
+                     type="checkbox"
+                     checked={heavyFx()}
+                     onChange={(e) => toggleHeavyFx(e.currentTarget.checked)}
+                     class="accent-amber-500 cursor-pointer"
+                   />
+                   <span class="text-[10px] leading-tight text-amber-200/90">
+                     Enable heavy effects <span class="text-white/40">(softbox blur · glow · texture filters — laggy on phones)</span>
+                   </span>
+                 </label>
 
                  {/* Fill Mode Switcher */}
                  <div class="mb-2.5">
@@ -1135,12 +1160,14 @@ ${paintDef}${overlayGradDef}
                      >
                        GRADIENT
                      </button>
-                     <button 
-                       onClick={() => setFillMode('texture')}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       TEXTURE FILE
-                     </button>
+                     <Show when={heavyFx()}>
+                       <button
+                         onClick={() => setFillMode('texture')}
+                         class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                       >
+                         TEXTURE FILE
+                       </button>
+                     </Show>
                    </div>
                  </div>
 
@@ -1196,13 +1223,15 @@ ${paintDef}${overlayGradDef}
                          >
                            Radial
                          </button>
-                         <button 
-                           type="button"
-                           onClick={() => setCustomType('box')}
-                           class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'box' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
-                         >
-                           Softbox
-                         </button>
+                         <Show when={heavyFx()}>
+                           <button
+                             type="button"
+                             onClick={() => setCustomType('box')}
+                             class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'box' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                           >
+                             Softbox
+                           </button>
+                         </Show>
                        </div>
                      </div>
                    </div>
@@ -2347,22 +2376,24 @@ ${paintDef}${overlayGradDef}
                   />
                 </div>
 
-                {/* Glow Intensity Slider */}
-                <div class="mb-1">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Specular Glow Blur</span>
-                    <span class="font-mono text-amber-400 font-semibold">{glowIntensity()}px</span>
+                {/* Glow Intensity Slider — drop-shadow filter, perf-gated */}
+                <Show when={heavyFx()}>
+                  <div class="mb-1">
+                    <div class="flex justify-between text-[11px] mb-0.5">
+                      <span class="text-white/60">Specular Glow Blur</span>
+                      <span class="font-mono text-amber-400 font-semibold">{glowIntensity()}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      step="1"
+                      value={glowIntensity()}
+                      onInput={(e) => setGlowIntensity(parseInt(e.currentTarget.value))}
+                      class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
                   </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="20" 
-                    step="1"
-                    value={glowIntensity()}
-                    onInput={(e) => setGlowIntensity(parseInt(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
+                </Show>
               </div>
 
               <div class="p-2.5 bg-amber-500/5 border border-amber-500/10 rounded text-[10px] text-amber-300/80 leading-snug space-y-0.5">

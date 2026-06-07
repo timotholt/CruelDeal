@@ -278,13 +278,14 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   color: transparent;
   -webkit-text-fill-color: transparent;
   background-size: 200% 200%;
-  transition: background-position 0.08s ease-out;
+  /* No transition: the position is rAF-driven by the reflex controller every
+     frame; a CSS transition on top double-animates and adds lag. */
   display: inline-block;
   font-weight: 800;
 }
 
 /* Sheen Styles — PLUS sign moves the highlight TOWARD the pointer, matching
-   the SVG icon convention. --reflex-x/y are element-local (-1..1). */
+   the SVG icon convention. --reflex-x/y carry the global direction (-1..1). */
 .sheen-linear {
   background-image: linear-gradient(
     135deg,
@@ -314,10 +315,11 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   background-blend-mode: var(--box-blend-mode, overlay);
 }
 
-/* 3D Embossed Chiseled Highlights */
+/* 3D Embossed Chiseled Highlights — static chisel (fixed light from top-left).
+   Kept off the --reflex-* vars so it isn't a per-frame filter repaint. */
 .embossed-text {
-  filter: drop-shadow(calc(var(--reflex-x) * -2px) calc(var(--reflex-y) * -2px) 0px rgba(255, 255, 255, 0.45))
-          drop-shadow(calc(var(--reflex-x) * 2px) calc(var(--reflex-y) * 2px) 0.5px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(-1px -1px 0px rgba(255, 255, 255, 0.45))
+          drop-shadow(1px 1px 0.5px rgba(0, 0, 0, 0.6));
 }
 
 /* Rich Text Token Mappings */
@@ -332,13 +334,13 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   color: transparent;
   -webkit-text-fill-color: transparent;
   background-size: 200% 200%;
-  transition: background-position 0.08s ease-out;
+  /* rAF-driven; no CSS transition (would double-animate + add lag). */
   display: inline-block;
   font-weight: 800;
 
-  /* Dynamic chiseled emboss shadow */
-  filter: drop-shadow(calc(var(--reflex-x) * -2px) calc(var(--reflex-y) * -2px) 0px rgba(255, 255, 255, 0.45))
-          drop-shadow(calc(var(--reflex-x) * 2px) calc(var(--reflex-y) * 2px) 0.5px rgba(0, 0, 0, 0.6));
+  /* Static chiseled emboss — fixed light, not a per-frame filter repaint. */
+  filter: drop-shadow(-1px -1px 0px rgba(255, 255, 255, 0.45))
+          drop-shadow(1px 1px 0.5px rgba(0, 0, 0, 0.6));
 }
 
 /* default to linear sheens on metallic tags, but allow custom override via variable */
