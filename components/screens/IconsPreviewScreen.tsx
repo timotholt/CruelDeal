@@ -1269,7 +1269,7 @@ ${paintDef}${overlayGradDef}
                         onClick={() => setFillMode('procedural')}
                         class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'procedural' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
                       >
-                        PROCEDURAL
+                        CANVAS METAL
                       </button>
                       <Show when={heavyFx()}>
                         <button

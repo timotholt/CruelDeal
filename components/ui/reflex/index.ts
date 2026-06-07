@@ -20,5 +20,8 @@ export {
   metalSvgStops,
   metalCssGradient,
   injectMetalVars,
+  makeMetalTexture,
+  setMetalTextureOptions,
+  metalSurfaceStyle,
 } from './metals';
-export type { MetalId, MetalSpec, MetalStop } from './metals';
+export type { MetalId, MetalSpec, MetalStop, MetalTextureOptions } from './metals';

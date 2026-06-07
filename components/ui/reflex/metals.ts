@@ -217,6 +217,103 @@ export function getBrushedNoiseTexture(): string {
   return noiseTextureCache;
 }
 
+// ---------------------------------------------------------------------------
+// BAKED METAL TEXTURE
+// One canvas-baked PNG per metal: the SAME METALS stops drawn as a gradient,
+// with subtle brushed grain composited in. This is the "canvas metal" method —
+// the single texture that text, buttons, and (optionally) icons all reveal
+// through their own mask, slid by the reflex direction. Tuned to look as close
+// as possible to the vector SVG gradient.
+// ---------------------------------------------------------------------------
+
+export interface MetalTextureOptions {
+  size?: number; // px, square. Default 512.
+  grain?: number; // 0 = none, ~8 = subtle brushed grain, higher = noisier.
+  angle?: number; // gradient angle in deg. Defaults to the metal's own angle.
+}
+
+let textureOpts: Required<Pick<MetalTextureOptions, 'size' | 'grain'>> = { size: 512, grain: 8 };
+const metalTextureCache = new Map<string, string>();
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** Bake (or return cached) a metal texture data-URL for a metal id. */
+export function makeMetalTexture(id: MetalId, opts: MetalTextureOptions = {}): string {
+  if (typeof document === 'undefined') return '';
+  const spec = METALS[id];
+  const size = opts.size ?? textureOpts.size;
+  const grain = opts.grain ?? textureOpts.grain;
+  const angle = opts.angle ?? spec.angle;
+  const key = `${id}:${size}:${grain}:${angle}`;
+  const cached = metalTextureCache.get(key);
+  if (cached) return cached;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  // Gradient spanning corner-to-corner through the centre at `angle` — same
+  // stop colours as the vector path so the metal reads identically.
+  const rad = (angle * Math.PI) / 180;
+  const half = size / 2;
+  const dx = Math.cos(rad) * half;
+  const dy = Math.sin(rad) * half;
+  const g = ctx.createLinearGradient(half - dx, half - dy, half + dx, half + dy);
+  spec.stops.forEach((s) => g.addColorStop(clamp01(s.offset / 100), s.color));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+
+  // Subtle brushed grain: per-row streak + per-pixel jitter. Kept low so the
+  // baked texture stays close to the clean vector gradient.
+  if (grain > 0) {
+    const imgData = ctx.getImageData(0, 0, size, size);
+    const data = imgData.data;
+    for (let y = 0; y < size; y++) {
+      const streak = (Math.random() - 0.5) * grain;
+      for (let x = 0; x < size; x++) {
+        const idx = (y * size + x) * 4;
+        const n = streak + (Math.random() - 0.5) * grain * 0.5;
+        data[idx] = Math.max(0, Math.min(255, data[idx] + n));
+        data[idx + 1] = Math.max(0, Math.min(255, data[idx + 1] + n));
+        data[idx + 2] = Math.max(0, Math.min(255, data[idx + 2] + n));
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  const url = canvas.toDataURL('image/png');
+  metalTextureCache.set(key, url);
+  return url;
+}
+
+/** Re-bake all metal textures with new tuning + republish the CSS vars. */
+export const setMetalTextureOptions = (opts: Partial<typeof textureOpts>) => {
+  textureOpts = { ...textureOpts, ...opts };
+  metalTextureCache.clear();
+  publishMetalTextureVars();
+};
+
+const publishMetalTextureVars = () => {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement.style;
+  (Object.keys(METALS) as MetalId[]).forEach((id) => {
+    root.setProperty(`--metal-${id}-texture`, `url(${makeMetalTexture(id)})`);
+  });
+};
+
+/**
+ * The single source of the reflex-driven texture formula. Reused by the test
+ * bed today and (later) by the material `cd-surface__metal` layer. `shiftPx` is
+ * how far the highlight travels at full tilt.
+ */
+export const metalSurfaceStyle = (id: MetalId, shiftPx = 60) => ({
+  'background-image': `var(--metal-${id}-texture)`,
+  'background-size': '180% 180%',
+  'background-position': `calc(50% + var(--reflex-gx) * ${shiftPx}px) calc(50% + var(--reflex-gy) * ${shiftPx}px)`,
+});
+
 let injected = false;
 
 /**
@@ -226,7 +323,7 @@ let injected = false;
 export const injectMetalVars = (enableNoise = false) => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement.style;
-  
+
   // Update the CSS noise layer URL
   root.setProperty('--brushed-noise-url', enableNoise ? `url(${getBrushedNoiseTexture()})` : 'none');
 
@@ -236,7 +333,7 @@ export const injectMetalVars = (enableNoise = false) => {
       root.setProperty(`--metal-${id}-gradient`, metalCssGradient(spec));
       root.setProperty(`--metal-${id}-highlight`, spec.highlight);
     }
-    
+
     // Set procedural background image variable to stack the noise overlay on top of the base gradient
     if (enableNoise) {
       root.setProperty(`--metal-${id}-procedural-texture`, `var(--brushed-noise-url), var(--metal-${id}-gradient)`);
@@ -245,6 +342,9 @@ export const injectMetalVars = (enableNoise = false) => {
     }
   });
   injected = true;
+
+  // Baked per-metal textures (the "canvas metal" method).
+  publishMetalTextureVars();
 };
 
 // Inject at module load (before any component renders) so CSS vars are ready.

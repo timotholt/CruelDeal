@@ -1,7 +1,7 @@
 import { For, Show, mergeProps } from 'solid-js';
 import { sheenEnabled } from './reflex/ReflexController';
 import { createReflexShift, REFLEX_SVG_UNITS } from './reflex/useReflex';
-import { METALS, PROFILE_TO_METAL, metalSvgStops, proceduralNoiseEnabled, PRESETS, getBrushedNoiseTexture } from './reflex/metals';
+import { METALS, PROFILE_TO_METAL, metalSvgStops, PRESETS, makeMetalTexture } from './reflex/metals';
 
 
 export interface KanIconProps {
@@ -436,61 +436,25 @@ export const KanIcon = (rawProps: KanIconProps) => {
             </Show>
           </radialGradient>
 
-          {/* Procedural Brushed Metal Pattern */}
+          {/* Baked Canvas Metal — the "canvas metal" method. ONE pre-baked
+              texture (same METALS stops + grain) revealed through the hex+K
+              shape, slid by the reflex direction. Pattern is 2x the viewBox and
+              centred so the reflex offset never reaches a tile seam. */}
           <Show when={props.fillMode === 'procedural'}>
-            {/* Brushed Noise Pattern */}
-            <pattern 
-              id={`${uniqueId}-brushed-noise-pattern`} 
-              width={128 * (props.textureScale ?? 1.0)} 
-              height={128 * (props.textureScale ?? 1.0)} 
-              x={(props.textureOffsetX ?? 0) + (props.interactive ? activeShiftX() : 0)} 
-              y={(props.textureOffsetY ?? 0) + (props.interactive ? activeShiftY() : 0)} 
+            <pattern
+              id={`${uniqueId}-procedural-pattern`}
               patternUnits="userSpaceOnUse"
+              x={-50 + (props.interactive ? activeShiftX() : 0)}
+              y={-50 + (props.interactive ? activeShiftY() : 0)}
+              width={200}
+              height={200}
             >
-              <image 
-                href={getBrushedNoiseTexture()} 
-                width={128 * (props.textureScale ?? 1.0)} 
-                height={128 * (props.textureScale ?? 1.0)} 
-                style={{
-                  filter: `brightness(${props.textureBrightness ?? 1.0}) contrast(${props.textureContrast ?? 1.0}) saturate(${props.textureSaturation ?? 1.0})`
-                }}
+              <image
+                href={makeMetalTexture(getCanonicalMetal())}
+                width={200}
+                height={200}
+                preserveAspectRatio="xMidYMid slice"
               />
-            </pattern>
-
-            <pattern 
-              id={`${uniqueId}-procedural-pattern`} 
-              patternUnits="userSpaceOnUse" 
-              x="0" 
-              y="0" 
-              width="100" 
-              height="100"
-            >
-              {/* Base Gradient matching Gradient Mode */}
-              <rect 
-                x="0" 
-                y="0" 
-                width="100" 
-                height="100" 
-                fill={
-                  props.customType === 'box'
-                    ? `url(#${uniqueId}-box-pattern)`
-                    : (isRadialActive() ? `url(#${uniqueId}-grad-radial)` : `url(#${uniqueId}-grad-linear)`)
-                } 
-              />
-              {/* Brushed Metal Grain overlay */}
-              <Show when={proceduralNoiseEnabled()}>
-                <rect 
-                  x="0" 
-                  y="0" 
-                  width="100" 
-                  height="100" 
-                  fill={`url(#${uniqueId}-brushed-noise-pattern)`} 
-                  style={{
-                    "mix-blend-mode": "overlay",
-                    opacity: 0.15
-                  }} 
-                />
-              </Show>
             </pattern>
           </Show>
 

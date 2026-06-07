@@ -385,50 +385,32 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   --highlight-color: var(--metal-mark-highlight);
 }
 
-/* Procedural method overrides */
-.method-procedural.metal-gold,
-.method-procedural .main-material-rich-token--gold,
-.main-material-rich-token--gold.method-procedural {
-  --base-metal-gradient: var(--metal-gold-procedural-texture);
-}
-.method-procedural.metal-silver,
-.method-procedural .main-material-rich-token--silver,
-.main-material-rich-token--silver.method-procedural {
-  --base-metal-gradient: var(--metal-silver-procedural-texture);
-}
-.method-procedural.metal-brass,
-.method-procedural .main-material-rich-token--brass,
-.main-material-rich-token--brass.method-procedural {
-  --base-metal-gradient: var(--metal-brass-procedural-texture);
-}
-.method-procedural.metal-kan,
-.method-procedural .main-material-rich-token--kan,
-.main-material-rich-token--kan.method-procedural {
-  --base-metal-gradient: var(--metal-kan-procedural-texture);
-}
-.method-procedural.metal-credit,
-.method-procedural .main-material-rich-token--credit,
-.main-material-rich-token--credit.method-procedural {
-  --base-metal-gradient: var(--metal-credit-procedural-texture);
-}
-.method-procedural.metal-mark,
-.method-procedural .main-material-rich-token--mark,
-.main-material-rich-token--mark.method-procedural {
-  --base-metal-gradient: var(--metal-mark-procedural-texture);
-}
+/* ==========================================================================
+   CANVAS METAL (baked texture) METHOD
+   `.method-procedural` = the "canvas metal" method: ONE baked PNG per metal
+   (same METALS stops + grain, built in metals.ts makeMetalTexture) revealed
+   through the text/token glyph mask and slid by the reflex direction. This is
+   literally the same texture the icon uses, so text/buttons/icon all match.
+   ========================================================================== */
+.method-procedural .metal-gold,   .method-procedural .main-material-rich-token--gold   { --metal-image: var(--metal-gold-texture); }
+.method-procedural .metal-silver, .method-procedural .main-material-rich-token--silver { --metal-image: var(--metal-silver-texture); }
+.method-procedural .metal-brass,  .method-procedural .main-material-rich-token--brass  { --metal-image: var(--metal-brass-texture); }
+.method-procedural .metal-kan,    .method-procedural .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture); }
+.method-procedural .metal-credit, .method-procedural .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture); }
+.method-procedural .metal-mark,   .method-procedural .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture); }
 
-/* When procedural noise is enabled, background-image will expand to 3 layers.
-   We override background-position and background-blend-mode to support the 3rd layer
-   while keeping the base gradient static at the center. */
-.method-procedural .sheen-linear {
-  background-position: calc(50% + var(--reflex-x) * 40%) calc(50% + var(--reflex-y) * 40%), center, center;
-  background-blend-mode: overlay, overlay, normal;
-}
-.method-procedural .sheen-radial {
-  background-position: center, center, center;
-  background-blend-mode: overlay, overlay, normal;
-}
-.method-procedural .sheen-box {
-  background-position: center, center, center;
-  background-blend-mode: var(--box-blend-mode, overlay), overlay, normal;
+/* Single baked-texture layer (replaces the vector gradient + highlight band),
+   positioned by the global reflex direction. background-clip:text is inherited
+   from .sheen-text / the token rules above. */
+.method-procedural .sheen-text,
+.method-procedural .main-material-rich-token--gold,
+.method-procedural .main-material-rich-token--silver,
+.method-procedural .main-material-rich-token--brass,
+.method-procedural .main-material-rich-token--kan,
+.method-procedural .main-material-rich-token--credit,
+.method-procedural .main-material-rich-token--mark {
+  background-image: var(--metal-image);
+  background-size: 180% 180%;
+  background-position: calc(50% + var(--reflex-gx) * 60px) calc(50% + var(--reflex-gy) * 60px);
+  background-blend-mode: normal;
 }
