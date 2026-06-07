@@ -53,6 +53,8 @@ export interface KanIconProps {
   overlayOpacity?: number;
   overlayBlendMode?: 'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light';
   customType?: 'linear' | 'radial' | 'box';
+  customShiftX?: number;
+  customShiftY?: number;
   
   // Custom class for outer wrapper
   class?: string;
@@ -119,12 +121,22 @@ export const KanIcon = (rawProps: KanIconProps) => {
   // Dynamic Shift Offsets (transitions to local coordinates when hovered)
   const activeShiftX = () => {
     if (!props.interactive || !sheenEnabled()) return 0;
-    return isHovered() ? localShiftX() : globalShiftX();
+    if (props.customShiftX !== undefined) return props.customShiftX;
+    const baseShift = isHovered() ? localShiftX() : globalShiftX();
+    if (!isHovered() && (isRadialActive() || props.customType === 'box')) {
+      return baseShift * 0.35;
+    }
+    return baseShift;
   };
   
   const activeShiftY = () => {
     if (!props.interactive || !sheenEnabled()) return 0;
-    return isHovered() ? localShiftY() : globalShiftY();
+    if (props.customShiftY !== undefined) return props.customShiftY;
+    const baseShift = isHovered() ? localShiftY() : globalShiftY();
+    if (!isHovered() && (isRadialActive() || props.customType === 'box')) {
+      return baseShift * 0.35;
+    }
+    return baseShift;
   };
 
   const isRadialActive = () => {

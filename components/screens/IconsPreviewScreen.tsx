@@ -2462,11 +2462,26 @@ ${paintDef}${overlayGradDef}
                   let coinBoxRef: HTMLDivElement | undefined;
                   const uniqueId = `card-${type}`;
 
-                  const activeCardShiftX = () => isHovered() ? localShiftX() : interactiveShiftX();
-                  const activeCardShiftY = () => isHovered() ? localShiftY() : interactiveShiftY();
+                  const activeCardShiftX = () => {
+                    const baseShift = isHovered() ? localShiftX() : interactiveShiftX();
+                    if (!isHovered() && (isRadialActive() || customType() === 'box')) {
+                      return baseShift * 0.35;
+                    }
+                    return baseShift;
+                  };
+                  const activeCardShiftY = () => {
+                    const baseShift = isHovered() ? localShiftY() : interactiveShiftY();
+                    if (!isHovered() && (isRadialActive() || customType() === 'box')) {
+                      return baseShift * 0.35;
+                    }
+                    return baseShift;
+                  };
 
                   const cardCoords = () => gradCoords(activeCardShiftX(), activeCardShiftY());
                   const cardRadialCoords = () => radialCoords(activeCardShiftX(), activeCardShiftY());
+
+                  const cardCoordsStatic = () => gradCoords(0, 0);
+                  const cardRadialCoordsStatic = () => radialCoords(0, 0);
 
                   const borderStrokeWidth = () => {
                     const base = thickness();
@@ -2488,15 +2503,15 @@ ${paintDef}${overlayGradDef}
                     const sizeColor = () => {
                       if (fillMode() === 'gradient') {
                         return isOptical 
-                          ? `url(#gold-grad-optical-${type})` 
-                          : `url(#gold-grad-${type})`;
+                          ? `url(#gold-grad-optical-static-${type})` 
+                          : `url(#gold-grad-static-${type})`;
                       } else {
-                        return `url(#gold-pattern-${type})`;
+                        return `url(#gold-pattern-static-${type})`;
                       }
                     };
                     const sizeGradientColor = () => isOptical 
-                      ? `url(#gold-grad-optical-${type})` 
-                      : `url(#gold-grad-${type})`;
+                      ? `url(#gold-grad-optical-static-${type})` 
+                      : `url(#gold-grad-static-${type})`;
 
                     return (
                       <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
@@ -2550,9 +2565,9 @@ ${paintDef}${overlayGradDef}
                                  {(index) => (
                                    <polygon 
                                      points={getHexagonPoints(index, borderStrokeWidth())} 
-                                     fill={index === 0 ? (isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`) : 'none'} 
+                                     fill={index === 0 ? (isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`) : 'none'} 
                                      fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                     stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`} 
+                                     stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`} 
                                      stroke-width={borderStrokeWidth()}
                                      stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
                                      style={{
@@ -2592,7 +2607,7 @@ ${paintDef}${overlayGradDef}
                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
                                stroke-linecap={linecap()}
                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                             />
+                              />
                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
                                <path 
                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
@@ -2723,7 +2738,7 @@ ${paintDef}${overlayGradDef}
                                <path 
                                  d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
                                  fill="none"
-                                 stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                 stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
                                  stroke-width={currentKStrokeWidth()}
                                  stroke-linecap={linecap()}
                                  style={{
@@ -2735,7 +2750,7 @@ ${paintDef}${overlayGradDef}
                                  <path 
                                    d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
                                    fill="none"
-                                   stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                   stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
                                    stroke-width={currentKStrokeWidth()}
                                    stroke-linecap={linecap()}
                                    stroke-linejoin="miter"
@@ -2747,7 +2762,7 @@ ${paintDef}${overlayGradDef}
                                  <path 
                                    d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
                                    fill="none"
-                                   stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                   stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
                                    stroke-width={currentKStrokeWidth()}
                                    stroke-linecap={linecap()}
                                    stroke-linejoin="miter"
@@ -3069,6 +3084,76 @@ ${paintDef}${overlayGradDef}
                             <clipPath id={`k-horizontal-clip-${type}`}>
                               <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
                             </clipPath>
+                            {/* Static definitions for size cells */}
+                            <Show when={!isRadialActive()}>
+                              <linearGradient 
+                                id={`gold-grad-static-${type}`} 
+                                href={`#gold-grad-${type}`}
+                                x1={cardCoordsStatic().x1} 
+                                y1={cardCoordsStatic().y1} 
+                                x2={cardCoordsStatic().x2} 
+                                y2={cardCoordsStatic().y2} 
+                                gradientUnits="userSpaceOnUse"
+                                spreadMethod="reflect"
+                              />
+                              <linearGradient 
+                                id={`gold-grad-optical-static-${type}`} 
+                                href={`#gold-grad-optical-${type}`}
+                                x1={cardCoordsStatic().x1} 
+                                y1={cardCoordsStatic().y1} 
+                                x2={cardCoordsStatic().x2} 
+                                y2={cardCoordsStatic().y2} 
+                                gradientUnits="userSpaceOnUse"
+                                spreadMethod="reflect"
+                              />
+                            </Show>
+                            <Show when={isRadialActive()}>
+                              <radialGradient
+                                id={`gold-grad-static-${type}`}
+                                href={`#gold-grad-${type}`}
+                                cx={cardRadialCoordsStatic().cx}
+                                cy={cardRadialCoordsStatic().cy}
+                                r={cardRadialCoordsStatic().r}
+                                fx={cardRadialCoordsStatic().fx}
+                                fy={cardRadialCoordsStatic().fy}
+                                gradientUnits="userSpaceOnUse"
+                              />
+                              <radialGradient
+                                id={`gold-grad-optical-static-${type}`}
+                                href={`#gold-grad-optical-${type}`}
+                                cx={cardRadialCoordsStatic().cx}
+                                cy={cardRadialCoordsStatic().cy}
+                                r={cardRadialCoordsStatic().r}
+                                fx={cardRadialCoordsStatic().fx}
+                                fy={cardRadialCoordsStatic().fy}
+                                gradientUnits="userSpaceOnUse"
+                              />
+                            </Show>
+
+                            <Show when={customType() === 'box'}>
+                              <pattern 
+                                id={`gold-box-pattern-static-${type}`} 
+                                href={`#gold-box-pattern-${type}`}
+                                x="0" 
+                                y="0"
+                                patternUnits="userSpaceOnUse" 
+                              />
+                              <pattern 
+                                id={`gold-box-pattern-optical-static-${type}`} 
+                                href={`#gold-box-pattern-optical-${type}`}
+                                x="0" 
+                                y="0"
+                                patternUnits="userSpaceOnUse" 
+                              />
+                            </Show>
+
+                            <pattern 
+                              id={`gold-pattern-static-${type}`} 
+                              href={`#gold-pattern-${type}`}
+                              x={textureOffsetX()} 
+                              y={textureOffsetY()}
+                              patternUnits="userSpaceOnUse" 
+                            />
                           </defs>
 
                           {/* Dummy element to force browser repaint of optical gradients */}
@@ -3554,7 +3639,29 @@ ${paintDef}${overlayGradDef}
             <div class="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
               
               {/* Gold Pack Card */}
-              <div class="bg-black/60 border border-white/5 hover:border-amber-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group">
+              <div 
+                class="bg-black/60 border border-white/5 hover:border-amber-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
+                style={{
+                  "--sheen-x": goldHover() ? `${goldX().toFixed(2)}` : undefined,
+                  "--sheen-y": goldHover() ? `${goldY().toFixed(2)}` : undefined
+                }}
+                onMouseMove={(e) => {
+                  if (!interactiveSheen()) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const centerX = rect.left + rect.width / 2;
+                  const centerY = rect.top + rect.height / 2;
+                  const dx = e.clientX - centerX;
+                  const dy = e.clientY - centerY;
+                  const maxW = rect.width / 2 || 1;
+                  const maxH = rect.height / 2 || 1;
+                  setGoldX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
+                  setGoldY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
+                  setGoldHover(true);
+                }}
+                onMouseLeave={() => {
+                  setGoldHover(false);
+                }}
+              >
                 <div class="flex items-start justify-between mb-4">
                   <div>
                     <span class="text-[10px] text-amber-500 font-mono tracking-wider uppercase block mb-1">Premium Tier</span>
@@ -3579,6 +3686,8 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    customShiftX={goldHover() ? goldX() : undefined}
+                    customShiftY={goldHover() ? goldY() : undefined}
                   />
                 </div>
                 
@@ -3608,7 +3717,29 @@ ${paintDef}${overlayGradDef}
               </div>
 
               {/* Silver Pack Card */}
-              <div class="bg-black/60 border border-white/5 hover:border-slate-400/30 p-5 rounded-lg transition-all flex flex-col justify-between group">
+              <div 
+                class="bg-black/60 border border-white/5 hover:border-slate-400/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
+                style={{
+                  "--sheen-x": silverHover() ? `${silverX().toFixed(2)}` : undefined,
+                  "--sheen-y": silverHover() ? `${silverY().toFixed(2)}` : undefined
+                }}
+                onMouseMove={(e) => {
+                  if (!interactiveSheen()) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const centerX = rect.left + rect.width / 2;
+                  const centerY = rect.top + rect.height / 2;
+                  const dx = e.clientX - centerX;
+                  const dy = e.clientY - centerY;
+                  const maxW = rect.width / 2 || 1;
+                  const maxH = rect.height / 2 || 1;
+                  setSilverX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
+                  setSilverY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
+                  setSilverHover(true);
+                }}
+                onMouseLeave={() => {
+                  setSilverHover(false);
+                }}
+              >
                 <div class="flex items-start justify-between mb-4">
                   <div>
                     <span class="text-[10px] text-slate-400 font-mono tracking-wider uppercase block mb-1">Standard Tier</span>
@@ -3633,6 +3764,8 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    customShiftX={silverHover() ? silverX() : undefined}
+                    customShiftY={silverHover() ? silverY() : undefined}
                   />
                 </div>
                 
@@ -3662,7 +3795,29 @@ ${paintDef}${overlayGradDef}
               </div>
 
               {/* Brass Pack Card */}
-              <div class="bg-black/60 border border-white/5 hover:border-amber-700/30 p-5 rounded-lg transition-all flex flex-col justify-between group">
+              <div 
+                class="bg-black/60 border border-white/5 hover:border-amber-700/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
+                style={{
+                  "--sheen-x": brassHover() ? `${brassX().toFixed(2)}` : undefined,
+                  "--sheen-y": brassHover() ? `${brassY().toFixed(2)}` : undefined
+                }}
+                onMouseMove={(e) => {
+                  if (!interactiveSheen()) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const centerX = rect.left + rect.width / 2;
+                  const centerY = rect.top + rect.height / 2;
+                  const dx = e.clientX - centerX;
+                  const dy = e.clientY - centerY;
+                  const maxW = rect.width / 2 || 1;
+                  const maxH = rect.height / 2 || 1;
+                  setBrassX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
+                  setBrassY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
+                  setBrassHover(true);
+                }}
+                onMouseLeave={() => {
+                  setBrassHover(false);
+                }}
+              >
                 <div class="flex items-start justify-between mb-4">
                   <div>
                     <span class="text-[10px] text-amber-700 font-mono tracking-wider uppercase block mb-1">Common Tier</span>
@@ -3687,6 +3842,8 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    customShiftX={brassHover() ? brassX() : undefined}
+                    customShiftY={brassHover() ? brassY() : undefined}
                   />
                 </div>
                 
@@ -3716,7 +3873,29 @@ ${paintDef}${overlayGradDef}
               </div>
 
               {/* Mark (Lore Spec) Pack Card */}
-              <div class="bg-black/60 border border-white/5 hover:border-slate-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group">
+              <div 
+                class="bg-black/60 border border-white/5 hover:border-slate-500/30 p-5 rounded-lg transition-all flex flex-col justify-between group"
+                style={{
+                  "--sheen-x": markHover() ? `${markX().toFixed(2)}` : undefined,
+                  "--sheen-y": markHover() ? `${markY().toFixed(2)}` : undefined
+                }}
+                onMouseMove={(e) => {
+                  if (!interactiveSheen()) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const centerX = rect.left + rect.width / 2;
+                  const centerY = rect.top + rect.height / 2;
+                  const dx = e.clientX - centerX;
+                  const dy = e.clientY - centerY;
+                  const maxW = rect.width / 2 || 1;
+                  const maxH = rect.height / 2 || 1;
+                  setMarkX(Math.max(-45, Math.min(45, (dx / maxW) * 45)));
+                  setMarkY(Math.max(-45, Math.min(45, (dy / maxH) * 45)));
+                  setMarkHover(true);
+                }}
+                onMouseLeave={() => {
+                  setMarkHover(false);
+                }}
+              >
                 <div class="flex items-start justify-between mb-4">
                   <div>
                     <span class="text-[10px] text-slate-500 font-mono tracking-wider uppercase block mb-1">Underworld Marker</span>
@@ -3741,6 +3920,8 @@ ${paintDef}${overlayGradDef}
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    customShiftX={markHover() ? markX() : undefined}
+                    customShiftY={markHover() ? markY() : undefined}
                   />
                 </div>
                 
