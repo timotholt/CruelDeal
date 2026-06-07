@@ -1,4 +1,5 @@
 import type { SurfaceOptions } from './surfaceSchema';
+import { edgeTextureOptions } from './TextureOptions';
 
 export type SurfaceFieldGroup =
   | 'renderer'
@@ -40,9 +41,16 @@ export interface SurfaceFieldDefinition<K extends keyof SurfaceOptions = keyof S
   max?: number;
   step?: number;
   options?: readonly string[];
+  optionLabels?: Partial<Record<string, string>>;
 }
 
 const field = <K extends keyof SurfaceOptions>(definition: SurfaceFieldDefinition<K>) => definition;
+const optionLabels = <T extends readonly { id: string; label: string }[]>(options: T) => Object.fromEntries(
+  options.map((option) => [option.id, option.label]),
+) as Partial<Record<T[number]['id'], string>>;
+
+const edgeTextureIds = edgeTextureOptions.map((option) => option.id);
+const edgeTextureLabels = optionLabels(edgeTextureOptions);
 
 export const surfaceFieldDefinitions = [
   field({ key: 'renderMode', group: 'renderer', label: 'Render Mode', control: 'select', editMode: 'renderer-internal', options: ['editor', 'runtime', 'export'] }),
@@ -70,7 +78,7 @@ export const surfaceFieldDefinitions = [
   field({ key: 'glassOpacity', group: 'glass', label: 'Glass Opacity', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
   field({ key: 'glassReflectionOpacity', group: 'glass', label: 'Glass Reflection', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
   field({ key: 'glassBlurEnabled', group: 'glass', label: 'Glass Blur Enabled', control: 'toggle', editMode: 'rest' }),
-  field({ key: 'glassBlur', group: 'glass', label: 'Glass Blur', control: 'slider', editMode: 'rest', min: 0, max: 240, step: 1 }),
+  field({ key: 'glassBlur', group: 'glass', label: 'Glass Blur', control: 'slider', editMode: 'rest', min: 0, max: 24, step: 0.25 }),
   field({ key: 'glassShine', group: 'glass', label: 'Glass Shine', control: 'toggle', editMode: 'rest' }),
   field({ key: 'glassHighlightWidth', group: 'glass', label: 'Glass Highlight Width', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
   field({ key: 'glassHighlightHeight', group: 'glass', label: 'Glass Highlight Height', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
@@ -84,7 +92,7 @@ export const surfaceFieldDefinitions = [
   field({ key: 'darkStrength', group: 'lighting', label: 'Dark Strength', control: 'slider', editMode: 'rest-and-state', min: 0, max: 100, step: 1 }),
   field({ key: 'surfaceFilterBrightness', group: 'lighting', label: 'Host Brightness', control: 'slider', editMode: 'rest-and-state', min: 0, max: 3, step: 0.01 }),
   field({ key: 'surfaceLayerBrightness', group: 'lighting', label: 'Layer Brightness', control: 'slider', editMode: 'rest-and-state', min: 0, max: 3, step: 0.01 }),
-  field({ key: 'edgeWearTexture', group: 'edgeWear', label: 'Edge Wear Texture', control: 'select', editMode: 'rest' }),
+  field({ key: 'edgeWearTexture', group: 'edgeWear', label: 'Edge Wear Texture', control: 'select', editMode: 'rest', options: edgeTextureIds, optionLabels: edgeTextureLabels }),
   field({ key: 'edgeWearOpacity', group: 'edgeWear', label: 'Edge Wear Opacity', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
   field({ key: 'edgeWearWidth', group: 'edgeWear', label: 'Edge Wear Width', control: 'slider', editMode: 'rest', min: 0, max: 200, step: 1 }),
   field({ key: 'edgeWearScale', group: 'edgeWear', label: 'Edge Wear Scale', control: 'slider', editMode: 'rest', min: 1, max: 4096, step: 1 }),

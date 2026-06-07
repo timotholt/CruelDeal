@@ -4,6 +4,7 @@ import type { SurfaceOptions } from './surfaceSchema';
 import type { SurfaceFieldGroup } from './surfaceFieldMetadata';
 import { SurfaceFieldControl } from './SurfaceFieldControl';
 import {
+  surfaceFieldDisabledByCapabilities,
   visibleSurfaceFieldDefinitions,
   type SurfaceEditorCapabilities,
   type SurfaceEditorMode,
@@ -40,7 +41,7 @@ export const SurfaceGeneratedEditor = (props: {
               mode={props.mode}
               value={props.value}
               inheritedValue={props.inheritedValue}
-              disabled={!enabled()}
+              disabled={!enabled() || surfaceFieldDisabledByCapabilities(definition, props.capabilities)}
               onPatch={props.onPatch}
             />
           )}

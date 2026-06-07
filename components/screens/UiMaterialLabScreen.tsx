@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import { Portal } from '../ui/Portal';
+import { createMaterialLabRecipeJsonReadout } from './materialLabJsonReadout';
 import {
   ArrowRightIcon,
   CalendarIcon,
@@ -615,9 +616,9 @@ export const UiMaterialLabScreen = () => {
     applyPreset(defaultPresetId);
   };
 
-  const copyPropsJson = async () => {
+  const copyRecipeJson = async () => {
     try {
-      await navigator.clipboard.writeText(propsReadout());
+      await navigator.clipboard.writeText(recipeReadout());
       setJsonCopied(true);
       window.setTimeout(() => setJsonCopied(false), 1400);
     } catch {
@@ -627,14 +628,7 @@ export const UiMaterialLabScreen = () => {
 
   const surfaceProps = createMemo(() => materialRecipeToSurfaceProps(activeRecipe(), activeState()));
 
-  const propsReadout = createMemo(() => JSON.stringify({
-    target: controls().target,
-    applyToControlPanel: controls().applyToControlPanel,
-    previewState: activeState(),
-    ...surfaceProps(),
-    states: controls().states,
-    disabled: controls().disabled,
-  }, null, 2));
+  const recipeReadout = createMemo(() => createMaterialLabRecipeJsonReadout(activeRecipe()));
 
   const controlPanelProps = createMemo(() => (
     controls().applyToControlPanel
@@ -849,11 +843,11 @@ export const UiMaterialLabScreen = () => {
                 <SectionLabel>Primary Preview</SectionLabel>
                 {renderPreview()}
                 <div class="ui-lab-row">
-                  <button type="button" class="ui-lab-mini-button" onClick={copyPropsJson}>
-                    {jsonCopied() ? 'Copied' : 'Copy JSON'}
+                  <button type="button" class="ui-lab-mini-button" onClick={copyRecipeJson}>
+                    {jsonCopied() ? 'Copied' : 'Copy Recipe JSON'}
                   </button>
                 </div>
-                <pre class="ui-lab-props">{propsReadout()}</pre>
+                <pre class="ui-lab-props">{recipeReadout()}</pre>
               </section>
 
               <section class="ui-lab-section">

@@ -1,8 +1,6 @@
 import { createSignal, For, JSX, Show } from 'solid-js';
 import {
-  edgeTextureOptions,
   textureOptions,
-  type EdgeTextureKind,
   type TextureKind,
 } from './TextureOptions';
 import type {
@@ -16,7 +14,6 @@ import {
   materialRecipeCorners,
   materialRecipeBorderColors,
   materialRecipeEdges,
-  materialRecipeEdgeWearLayers,
   materialRecipeContentLayers,
   materialRecipeContentTones,
   materialRecipeEmissionEdges,
@@ -177,6 +174,14 @@ type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialSt
   key: K,
   value: MaterialStateOverlay[G][K],
 ) => void;
+const edgeWearDependentFields = [
+  'edgeWearLayer',
+  'edgeWearOpacity',
+  'edgeWearWidth',
+  'edgeWearScale',
+] as const satisfies readonly (keyof SurfaceOptions)[];
+const blurFields = ['glassBlurEnabled', 'glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
+const blurDependentFields = ['glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
 
 const baseLabels: Record<MaterialKind, string> = {
   none: 'none',
@@ -395,22 +400,6 @@ const GlassSection = (props: { recipe: MaterialRecipe; enabled: boolean; update:
   </div>
 );
 
-const BlurSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Blur</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.glassBlurEnabled} disabled={!props.enabled} onClick={() => props.update('glassBlurEnabled', !props.recipe.glassBlurEnabled)}>on</ToggleButton>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glassBlurEnabled ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Amount</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glassBlurEnabled} value={props.recipe.glassBlur} min={0} max={24} step={0.25} onInput={(value) => props.update('glassBlur', value)} />
-    </div>
-  </div>
-);
-
 const BorderSection = (props: {
   recipe: MaterialRecipe;
   enabled: boolean;
@@ -473,54 +462,6 @@ const BorderSection = (props: {
         <Slider disabled={!hasBorderSides()} value={props.recipe.borderOpacity} onInput={(value) => props.update('borderOpacity', value)} />
       </div>
     </div>
-  );
-};
-
-const EdgeWearSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => {
-  const hasEdgeWear = () => props.enabled && props.recipe.edgeWearTexture !== 'none';
-  const toggleEdgeWear = () => {
-    props.update('edgeWearTexture', props.recipe.edgeWearTexture === 'none' ? edgeTextureOptions[1].id as EdgeTextureKind : 'none');
-  };
-  return (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Edge Wear</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.edgeWearTexture !== 'none'} disabled={!props.enabled} onClick={toggleEdgeWear}>on</ToggleButton>
-      </div>
-    </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Texture</ControlLabel>
-      <select class="ui-lab-select" value={props.recipe.edgeWearTexture} disabled={!props.enabled} onChange={(event) => props.update('edgeWearTexture', event.currentTarget.value as EdgeTextureKind)}>
-        <For each={edgeTextureOptions}>
-          {(texture) => <option value={texture.id}>{texture.label}</option>}
-        </For>
-      </select>
-    </div>
-    <div class={`ui-lab-control-row ${hasEdgeWear() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Layer</ControlLabel>
-      <Select
-        value={props.recipe.edgeWearLayer}
-        options={materialRecipeEdgeWearLayers}
-        disabled={!hasEdgeWear()}
-        labels={{ 'below-highlights': 'below', 'above-highlights': 'above' }}
-        onChange={(value) => props.update('edgeWearLayer', value)}
-      />
-    </div>
-    <div class={`ui-lab-control-row ${hasEdgeWear() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Alpha</ControlLabel>
-      <Slider disabled={!hasEdgeWear()} value={props.recipe.edgeWearOpacity} onInput={(value) => props.update('edgeWearOpacity', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${hasEdgeWear() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Width</ControlLabel>
-      <Slider disabled={!hasEdgeWear()} value={props.recipe.edgeWearWidth} min={1} max={24} onInput={(value) => props.update('edgeWearWidth', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${hasEdgeWear() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Scale</ControlLabel>
-      <TextureScaleSlider disabled={!hasEdgeWear()} value={props.recipe.edgeWearScale} onInput={(value) => props.update('edgeWearScale', value)} />
-    </div>
-  </div>
   );
 };
 
@@ -947,6 +888,8 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     if (state !== 'rest') props.onForcePreviewChange?.(true);
   };
   const hasTexture = () => props.recipe.texture !== 'none';
+  const hasEdgeWear = () => capabilities().edgeWear && props.recipe.edgeWearTexture !== 'none';
+  const hasBlur = () => capabilities().blur && props.recipe.glassBlurEnabled;
   const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
 
   const update: RecipeUpdate = (key, value) => {
@@ -1120,10 +1063,26 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
       <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />
-      <BlurSection recipe={props.recipe} enabled={capabilities().blur} update={update} />
+      <SurfaceGeneratedEditor
+        title="Blur"
+        mode="rest"
+        fields={blurFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().blur}
+        capabilities={{ disabledFields: hasBlur() ? [] : blurDependentFields }}
+        onPatch={patchRestSurface}
+      />
       <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
       <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleEnabled={toggleBorderEnabled} toggleBorder={toggleBorder} />
-      <EdgeWearSection recipe={props.recipe} enabled={capabilities().edgeWear} update={update} />
+      <SurfaceGeneratedEditor
+        title="Edge Wear"
+        mode="rest"
+        groups={['edgeWear']}
+        value={restSurfaceValue()}
+        enabled={capabilities().edgeWear}
+        capabilities={{ disabledFields: hasEdgeWear() ? [] : edgeWearDependentFields }}
+        onPatch={patchRestSurface}
+      />
       <SurfaceGeneratedEditor
         title="Shadow"
         mode="rest"

@@ -72,6 +72,63 @@ import {
   type MainMaterialExportResult,
 } from './main-material/mainMaterialExportPlanner';
 import {
+  coercePreviewStateForPart,
+  createDefaultPreviewStates,
+  defaultPreviewStateForRole,
+  interactionRoleLabels,
+  interactionRoles,
+  interactionStateLabels,
+  interactionStateOptions,
+  playerFacingPreviewStateForRole,
+  resolvePreviewVisualState,
+  type InteractionRole,
+  type MainPartId,
+  type PreviewInteractionMode,
+  type PreviewInteractionSnapshot,
+  type PreviewStatesByPart,
+  type PreviewTargetRole,
+} from './main-material/mainMaterialInteractionModel';
+import {
+  selectedWorkbenchPartId as resolveSelectedWorkbenchPartId,
+  selectionOverlayLabels,
+  selectionOverlayModes,
+  selectionTargetClass,
+  type MainWorkbenchPartId,
+  type SelectionOverlayMode,
+} from './main-material/mainMaterialSelectionModel';
+import {
+  coerceStoredFeedTargetId,
+  createMainMaterialStoredState,
+  readMainMaterialStoredPresets,
+  readMainMaterialStoredState,
+  removeMainMaterialStoredPresets,
+  writeMainMaterialStoredPresets,
+  writeMainMaterialStoredState,
+} from './main-material/mainMaterialPersistence';
+import {
+  findTreeNodeById,
+  flattenTargetTree,
+  updateTreeNodeById,
+} from './main-material/mainMaterialTargetTree';
+import {
+  createFeedMaterialTargets,
+  type MainMaterialEditableTarget,
+} from './main-material/mainMaterialFeedTargets';
+import {
+  createMainMaterialDomRegistry,
+} from './main-material/mainMaterialDomRegistry';
+import {
+  auditToken,
+  domAuditMetrics,
+  domAuditNodeToHtml,
+  emptyEmissionMetrics,
+  exportPlanToDomAuditNode,
+  serializeDomAuditNode,
+  styleProvenance,
+  type DomAuditNode,
+  type DomAuditToken,
+} from './main-material/mainMaterialDomAudit';
+import {
   feedCardMaterialTargetId,
   feedCardMaterialTargetPrefix,
   feedMaterialTargetIdForNode,
@@ -89,15 +146,8 @@ import {
   type TopBarMaterialTargetId,
 } from './main-material/materialTargetIds';
 
-type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
-type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId | TopBarMaterialTargetId | ToolbarMaterialTargetId | NavMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
-type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
-type InteractionRole = 'static' | 'momentary' | 'selectable' | 'disclosure';
-type PreviewInteractionMode = 'selected-only' | 'all-on-screen';
-type PreviewTargetRole = 'static' | 'momentary' | 'selectable' | 'disclosure' | 'container' | 'text';
-type PreviewStatesByPart = Record<MainPartId, MaterialRecipeState>;
 type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
 // Two orthogonal axes (legacy textRender is derived into these when absent):
 //   markup: parse [..] markup into styled tokens, or treat literally
@@ -105,16 +155,6 @@ type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
 type FeedNodeMarkupMode = 'auto' | 'on' | 'off';
 type FeedNodeSizingMode = 'auto' | 'fit' | 'flow';
 
-interface PreviewInteractionSnapshot {
-  mode: PreviewInteractionMode;
-  selectedTargetId: string;
-  forcePreview: boolean;
-  forcedState: MaterialRecipeState;
-  hoveredTargetId: string | null;
-  pressedTargetId: string | null;
-  focusedTargetId: string | null;
-  activeTargetIds: ReadonlySet<string>;
-}
 type MaterialPresetsByPart = Record<MainPartId, MaterialPreset[]>;
 
 interface MaterialPreset {
@@ -123,20 +163,7 @@ interface MaterialPreset {
   recipe: MaterialRecipe;
 }
 
-interface MaterialEditableTarget {
-  id: string;
-  label: string;
-  recipe: MaterialRecipe;
-  capabilities: MaterialEditorCapabilities;
-  interactionRole?: InteractionRole;
-  onChange: (recipe: MaterialRecipe) => void;
-  children?: MaterialEditableTarget[];
-}
-
-interface FlatMaterialEditableTarget {
-  target: MaterialEditableTarget;
-  depth: number;
-}
+type MaterialEditableTarget = MainMaterialEditableTarget;
 
 interface BackdropRecipe {
   fit: BackdropFit;
@@ -338,28 +365,6 @@ const tabLabel = (tab: EmissionInspectorTab) => ({
   'export-css': 'Export CSS',
 }[tab]);
 
-interface DomAuditToken {
-  key: string;
-  name: string;
-  value: string;
-  kind: 'known' | 'unknown';
-  reason: string;
-  source: string;
-  cssRules?: string[];
-}
-
-interface DomAuditNode {
-  path: string;
-  tag: string;
-  text: string;
-  classes: DomAuditToken[];
-  attrs: DomAuditToken[];
-  styles: DomAuditToken[];
-  children: DomAuditNode[];
-}
-
-const storageKey = 'cruel-deal.main-material-preview.v23';
-const materialPresetStorageKey = 'cruel-deal.main-material-preview.material-presets.v1';
 const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
   { id: 'backdrop', label: 'Backdrop', detail: 'second layer' },
   { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
@@ -447,46 +452,6 @@ const toolbarTextFit = {
   },
 } as const;
 
-const selectionOverlayModes: readonly SelectionOverlayMode[] = ['off', 'flash', 'persistent'];
-const selectionOverlayLabels: Record<SelectionOverlayMode, string> = {
-  off: 'Off',
-  flash: 'Flash',
-  persistent: 'Persistent',
-};
-
-const interactionRoles: Record<MainPartId, InteractionRole> = {
-  backdrop: 'static',
-  topBar: 'static',
-  profileButton: 'disclosure',
-  currencyButtons: 'momentary',
-  titleBlock: 'static',
-  feedCards: 'static',
-  toolBar: 'momentary',
-  navBar: 'selectable',
-  navBarContainer: 'static',
-};
-
-const interactionRoleLabels: Record<InteractionRole, string> = {
-  static: 'Static',
-  momentary: 'Momentary',
-  selectable: 'Selectable',
-  disclosure: 'Disclosure',
-};
-
-const interactionStateOptions: Record<InteractionRole, readonly MaterialRecipeState[]> = {
-  static: ['rest'],
-  momentary: ['rest', 'hover', 'pressed'],
-  selectable: ['rest', 'hover', 'active', 'pressed'],
-  disclosure: ['rest', 'hover', 'active', 'pressed'],
-};
-
-const interactionStateLabels: Record<InteractionRole, Partial<Record<MaterialRecipeState, string>>> = {
-  static: { rest: 'Rest' },
-  momentary: { rest: 'Rest', hover: 'Hover', pressed: 'Pressed' },
-  selectable: { rest: 'Rest', hover: 'Hover', active: 'Active', pressed: 'Pressed' },
-  disclosure: { rest: 'Rest', hover: 'Hover', active: 'Open', pressed: 'Pressed' },
-};
-
 const ctaInteractionStates = () => createMaterialStateOverlays({
   hover: {
     enabled: true,
@@ -516,45 +481,6 @@ const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabil
   navBar: { states: true },
   navBarContainer: { text: false, states: false },
 };
-
-const resolvePreviewVisualState = (args: {
-  targetId: string;
-  role: PreviewTargetRole;
-  snapshot: PreviewInteractionSnapshot;
-  fallbackState: MaterialRecipeState;
-}): MaterialRecipeState => {
-  const { targetId, role, snapshot, fallbackState } = args;
-  const isSelected = snapshot.selectedTargetId === targetId;
-  const isEligible = snapshot.mode === 'all-on-screen' || isSelected;
-  if (snapshot.forcePreview && isSelected) return snapshot.forcedState;
-  if (!isEligible) return fallbackState;
-  if (role === 'static' || role === 'container' || role === 'text') return fallbackState;
-  if (snapshot.pressedTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'pressed';
-  if (snapshot.activeTargetIds.has(targetId) && role === 'selectable') return 'active';
-  if (snapshot.hoveredTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'hover';
-  if (snapshot.focusedTargetId === targetId && (role === 'momentary' || role === 'selectable')) return 'hover';
-  return fallbackState;
-};
-
-const defaultPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
-const playerFacingPreviewStateForRole = (role: InteractionRole): MaterialRecipeState => role === 'selectable' ? 'active' : 'rest';
-const stateOptionsForPart = (part: MainPartId) => interactionStateOptions[interactionRoles[part]];
-const coercePreviewStateForPart = (part: MainPartId, state: MaterialRecipeState): MaterialRecipeState => {
-  const options = stateOptionsForPart(part);
-  return options.includes(state) ? state : defaultPreviewStateForRole(interactionRoles[part]);
-};
-
-const createDefaultPreviewStates = (): PreviewStatesByPart => ({
-  backdrop: defaultPreviewStateForRole(interactionRoles.backdrop),
-  topBar: defaultPreviewStateForRole(interactionRoles.topBar),
-  profileButton: defaultPreviewStateForRole(interactionRoles.profileButton),
-  currencyButtons: defaultPreviewStateForRole(interactionRoles.currencyButtons),
-  titleBlock: defaultPreviewStateForRole(interactionRoles.titleBlock),
-  feedCards: defaultPreviewStateForRole(interactionRoles.feedCards),
-  toolBar: defaultPreviewStateForRole(interactionRoles.toolBar),
-  navBar: defaultPreviewStateForRole(interactionRoles.navBar),
-  navBarContainer: defaultPreviewStateForRole(interactionRoles.navBarContainer),
-});
 
 const createEmptyMaterialPresets = (): MaterialPresetsByPart => ({
   backdrop: [],
@@ -10635,30 +10561,6 @@ const TitleRecipeEditor = (props: { title: TitleRecipe; onChange: (title: TitleR
   );
 };
 
-const flattenMaterialTargets = (targets: MaterialEditableTarget[], depth = 0): FlatMaterialEditableTarget[] => (
-  targets.flatMap((target) => [
-    { target, depth },
-    ...flattenMaterialTargets(target.children || [], depth + 1),
-  ])
-);
-
-const updateFeedNodeById = (nodes: FeedCardNode[], nodeId: string, updateNode: (node: FeedCardNode) => FeedCardNode): FeedCardNode[] => (
-  nodes.map((node) => (
-    node.id === nodeId
-      ? updateNode(node)
-      : { ...node, children: updateFeedNodeById(node.children || [], nodeId, updateNode) }
-  ))
-);
-
-const findFeedNodeById = (nodes: FeedCardNode[], nodeId: string): FeedCardNode | undefined => {
-  for (const node of nodes) {
-    if (node.id === nodeId) return node;
-    const child = findFeedNodeById(node.children || [], nodeId);
-    if (child) return child;
-  }
-  return undefined;
-};
-
 const FeedRecipeEditor = (props: {
   feed: FeedRecipe;
   onChange: (feed: FeedRecipe) => void;
@@ -10685,7 +10587,7 @@ const FeedRecipeEditor = (props: {
   const editingCardType = () => props.cardTypes[props.editingCardTypeId];
   const selectedTargetNode = () => {
     const target = parseFeedMaterialTargetId(props.selectedMaterialTargetId);
-    return target?.nodeId ? findFeedNodeById(editingCardType().children, target.nodeId) : undefined;
+    return target?.nodeId ? findTreeNodeById(editingCardType().children, target.nodeId) : undefined;
   };
   const isEditingChildNode = () => Boolean(selectedTargetNode());
   const isEditingCardRoot = () => !isEditingChildNode();
@@ -10704,7 +10606,7 @@ const FeedRecipeEditor = (props: {
     const node = selectedTargetNode();
     if (!node) return;
     updateEditingCardType({
-      children: updateFeedNodeById(editingCardType().children, node.id, (current) => ({ ...current, ...updates })),
+      children: updateTreeNodeById(editingCardType().children, node.id, (current) => ({ ...current, ...updates })),
     });
   };
   const updateSelectedNodeLayout = <K extends keyof FeedNodeLayout>(key: K, value: FeedNodeLayout[K]) => {
@@ -12258,141 +12160,17 @@ const cssDeclarationLines = (style: JSX.CSSProperties) => (
 const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
 const createEmptyCssProbeKeys = (): ReadonlySet<string> => new Set<string>();
 
-const provenance = (source: string, reason: string) => ({ source, reason });
-
-const classProvenance = (className: string): { source: string; reason: string } | null => {
-  if (className === 'main-material-card-node') return provenance('layout', 'unified layout frame');
-  if (className.startsWith('main-material-card-node--')) return provenance('layout', 'node kind frame');
-  if (className.startsWith('main-material-card-node-surface')) return provenance('base', 'material surface slot');
-  if (className.startsWith('cd-surface--texture') || className.includes('texture')) return provenance('texture', 'texture material class');
-  if (className.startsWith('cd-surface--gradient') || className.includes('gradient')) return provenance('gradient', 'gradient material class');
-  if (className.startsWith('cd-surface--glass') || className.includes('glass')) return provenance('frosted', 'glass material class');
-  if (className.startsWith('cd-surface--border') || className.includes('border')) return provenance('border', 'border material class');
-  if (className.startsWith('cd-surface--edge') || className.includes('edge')) return provenance('edge', 'edge wear material class');
-  if (className.includes('shadow') || className.includes('glow')) return provenance('shadow', 'shadow/glow material class');
-  if (className.startsWith('cd-surface') || className.startsWith('cd-button') || className.startsWith('cd-panel')) return provenance('base', 'material primitive');
-  if (className.startsWith('material-text-content')) return provenance('text', 'text renderer');
-  if (className.startsWith('is-editing')) return provenance('selected', 'selection overlay');
-  if (className.startsWith('is-visual') || className === 'is-selected' || className === 'is-interactive' || className === 'is-active') return provenance('state', 'interactive state');
-  if (className.startsWith('main-material-')) return provenance('skin', 'preview skin/layout');
-  return null;
-};
-
-const attrProvenance = (name: string): { source: string; reason: string } | null => {
-  if (name === 'data-material-target-id') return provenance('selected', 'selection/interaction lookup');
-  if (name === 'data-material-role') return provenance('state', 'preview state resolution');
-  if (name === 'data-feed-layout-mode' || name === 'data-feed-layout-slot') return provenance('layout', 'layout compatibility selector');
-  if (name === 'data-w-mode' || name === 'data-h-mode' || name === 'data-direction' || name === 'data-wrap') return provenance('layout', 'layout selector');
-  if (name === 'data-css-probe-target') return provenance('selected', 'emission inspector marker');
-  if (name === 'data-material-surface') return provenance('base', 'material primitive marker');
-  if (name === 'data-emission') return provenance('base', 'emission layer selector');
-  if (name === 'data-emission-edge') return provenance('edge', 'edge emission selector');
-  if (name.startsWith('data-game-text') || name.startsWith('data-material-text')) return provenance('text', 'text renderer instrumentation');
-  if (name === 'aria-label' || name === 'aria-hidden' || name === 'aria-current') return provenance('a11y', 'accessibility');
-  if (name === 'role' || name === 'type' || name === 'disabled') return provenance('native', 'native behavior');
-  return null;
-};
-
-const styleProvenance = (name: string): { source: string; reason: string } | null => {
-  if (name.startsWith('--feed-node')) return provenance('layout', 'layout custom property');
-  if (name.startsWith('--material') || name.startsWith('--surface')) return provenance('base', 'material base variable');
-  if (name.startsWith('--content') || name.startsWith('--icon')) return provenance('text', 'content/text variable');
-  if (name.startsWith('--texture')) return provenance('texture', 'texture variable');
-  if (name.startsWith('--border')) return provenance('border', 'border variable');
-  if (name.startsWith('--edge')) return provenance('edge', 'edge wear variable');
-  if (name.startsWith('--light') || name.startsWith('--dark')) return provenance('gradient', 'highlight/shade variable');
-  if (name === 'inset' || name === 'position' || name === 'left' || name === 'right' || name === 'top' || name === 'bottom') return provenance('layout', 'position emission');
-  if (name === 'width' || name === 'height' || name === 'min-width' || name === 'min-height' || name === 'flex' || name === 'display') return provenance('layout', 'box sizing emission');
-  if (name === 'margin' || name.startsWith('margin-') || name === 'padding' || name.startsWith('padding-') || name === 'gap' || name === 'row-gap' || name === 'column-gap') return provenance('layout', 'spacing emission');
-  if (name === 'align-items' || name === 'justify-content' || name === 'text-align' || name === 'flex-direction' || name === 'flex-wrap') return provenance('layout', 'alignment emission');
-  if (name.includes('background') || name.includes('color')) return provenance('base', 'base color emission');
-  if (name.includes('texture')) return provenance('texture', 'texture variable');
-  if (name.includes('gradient')) return provenance('gradient', 'gradient variable');
-  if (name.includes('blur') || name.includes('glass')) return provenance('frosted', 'glass/blur variable');
-  if (name.includes('border')) return provenance('border', 'border variable');
-  if (name.includes('edge')) return provenance('edge', 'edge wear variable');
-  if (name.includes('shadow') || name.includes('glow')) return provenance('shadow', 'shadow/glow variable');
-  if (name.includes('font') || name.includes('text') || name.includes('line-height') || name.includes('letter-spacing')) return provenance('text', 'text variable');
-  return null;
-};
-
-const auditToken = (
-  key: string,
-  name: string,
-  value: string,
-  info: { source: string; reason: string } | null,
-  cssRules?: string[],
-): DomAuditToken => ({
-  key,
-  name,
-  value,
-  kind: info ? 'known' : 'unknown',
-  reason: info?.reason || 'unclassified',
-  source: info?.source || 'unknown',
-  cssRules,
+const [materialDomRegistryVersion, setMaterialDomRegistryVersion] = createSignal(0);
+const materialDomRegistry = createMainMaterialDomRegistry(() => {
+  setMaterialDomRegistryVersion((version) => version + 1);
 });
 
-const parseStyleTokens = (style: string): DomAuditToken[] => (
-  style
-    .split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const separator = part.indexOf(':');
-      const name = separator >= 0 ? part.slice(0, separator).trim() : part;
-      const value = separator >= 0 ? part.slice(separator + 1).trim() : '';
-      return auditToken(`style:${name}`, name, value, styleProvenance(name));
-    })
-);
-
-const transientDomClass = (className: string) => (
-  className.startsWith('is-editing')
-);
-
-const transientDomAttr = (name: string) => (
-  name === 'data-css-probe-target'
-);
-
-interface MaterialDomRegistryEntry {
-  targetId: string;
-  instanceId: string;
-  element: HTMLElement;
-}
-
-let materialDomInstanceCounter = 0;
-const materialDomRegistry = new Map<string, MaterialDomRegistryEntry>();
-const [materialDomRegistryVersion, setMaterialDomRegistryVersion] = createSignal(0);
-
-const createMaterialDomInstanceId = () => `material_${(materialDomInstanceCounter += 1).toString().padStart(5, '0')}`;
-
-const unregisterMaterialDomElement = (instanceId: string) => {
-  if (materialDomRegistry.delete(instanceId)) {
-    setMaterialDomRegistryVersion((version) => version + 1);
-  }
-};
-
+const createMaterialDomInstanceId = () => materialDomRegistry.createInstanceId();
+const unregisterMaterialDomElement = (instanceId: string) => materialDomRegistry.unregister(instanceId);
 const registerMaterialDomElement = (targetId: string, instanceId: string, element: HTMLElement) => {
-  const current = materialDomRegistry.get(instanceId);
-  if (current?.targetId === targetId && current.element === element) return;
-  materialDomRegistry.set(instanceId, { targetId, instanceId, element });
-  setMaterialDomRegistryVersion((version) => version + 1);
+  materialDomRegistry.register(targetId, instanceId, element);
 };
-
-const liveMaterialDomEntries = () => (
-  Array.from(materialDomRegistry.values()).filter((entry) => entry.element.isConnected)
-);
-
-const findRegisteredDomAuditTarget = (targetId: string): { entry: MaterialDomRegistryEntry; exact: boolean } | null => {
-  const entries = liveMaterialDomEntries();
-  const exact = entries.find((entry) => entry.targetId === targetId);
-  if (exact) return { entry: exact, exact: true };
-  const feedTarget = parseFeedMaterialTargetId(targetId);
-  if (!feedTarget?.nodeId) return null;
-  const sameNode = entries.find((entry) => entry.targetId.endsWith(`:node:${feedTarget.nodeId}`));
-  return sameNode
-    ? { entry: sameNode, exact: false }
-    : null;
-};
+const findRegisteredDomAuditTarget = (targetId: string) => materialDomRegistry.findTarget(targetId);
 
 const cssEscapeIdent = (value: string) => (
   typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
@@ -12424,86 +12202,6 @@ const collectClassCssRules = (className: string): string[] => {
     }
   });
   return matches.slice(0, 8);
-};
-
-const serializeDomAuditNode = (element: Element, path = '0', hiddenClasses: ReadonlySet<string> = new Set()): DomAuditNode => {
-  const text = Array.from(element.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent?.trim() || '')
-    .filter(Boolean)
-    .join(' ');
-  return {
-    path,
-    tag: element.tagName.toLowerCase(),
-    text,
-    classes: Array.from(element.classList)
-      .filter((className) => !transientDomClass(className))
-      .map((className) => auditToken(`${path}:class:${className}`, 'class', className, classProvenance(className), collectClassCssRules(className)))
-      .filter((token) => !hiddenClasses.has(token.key)),
-    attrs: Array.from(element.attributes)
-      .filter((attr) => attr.name !== 'class' && attr.name !== 'style' && !transientDomAttr(attr.name))
-      .map((attr) => auditToken(`${path}:attr:${attr.name}`, attr.name, attr.value, attrProvenance(attr.name))),
-    styles: parseStyleTokens(element.getAttribute('style') || ''),
-    children: Array.from(element.children).map((child, index) => serializeDomAuditNode(child, `${path}.${index}`, hiddenClasses)),
-  };
-};
-
-const escapeHtml = (value: string) => (
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-);
-
-const escapeAttribute = (value: string) => (
-  escapeHtml(value).replace(/"/g, '&quot;')
-);
-
-const domAuditNodeToHtml = (node: DomAuditNode, depth = 0): string => {
-  const indent = '  '.repeat(depth);
-  const attrs = [
-    node.classes.length ? `class="${escapeAttribute(node.classes.map((token) => token.value).join(' '))}"` : '',
-    ...node.attrs.map((token) => `${token.name}="${escapeAttribute(token.value)}"`),
-    node.styles.length
-      ? `style="${escapeAttribute(node.styles.map((token) => `${token.name}: ${token.value};`).join(' '))}"`
-      : '',
-  ].filter(Boolean);
-  const open = `${indent}<${node.tag}${attrs.length ? ` ${attrs.join(' ')}` : ''}>`;
-  const text = node.text ? escapeHtml(node.text) : '';
-  if (!node.children.length) return `${open}${text}</${node.tag}>`;
-  return [
-    `${open}${text}`,
-    ...node.children.map((child) => domAuditNodeToHtml(child, depth + 1)),
-    `${indent}</${node.tag}>`,
-  ].join('\n');
-};
-
-const emptyEmissionMetrics = (): EmissionMetrics => ({
-  nodeCount: 0,
-  classCount: 0,
-  attrCount: 0,
-  styleCount: 0,
-  cssVariableCount: 0,
-});
-
-const domAuditMetrics = (node: DomAuditNode | null): EmissionMetrics => {
-  if (!node) return emptyEmissionMetrics();
-  return node.children.reduce<EmissionMetrics>((metrics, child) => {
-    const childMetrics = domAuditMetrics(child);
-    return {
-      nodeCount: metrics.nodeCount + childMetrics.nodeCount,
-      classCount: metrics.classCount + childMetrics.classCount,
-      attrCount: metrics.attrCount + childMetrics.attrCount,
-      styleCount: metrics.styleCount + childMetrics.styleCount,
-      cssVariableCount: metrics.cssVariableCount + childMetrics.cssVariableCount,
-    };
-  }, {
-    nodeCount: 1,
-    classCount: node.classes.length,
-    attrCount: node.attrs.length,
-    styleCount: node.styles.length,
-    cssVariableCount: node.styles.filter((token) => token.name.startsWith('--')).length,
-  });
 };
 
 const EmissionMetricsSummary = (props: { metrics: EmissionMetrics }) => (
@@ -12623,37 +12321,6 @@ const DomAuditTree = (props: {
     </Show>
   </div>
 );
-
-const emittedLayerToDomAuditNode = (layer: EmittedLayer, path = '0'): DomAuditNode => {
-  const tag = layer.tag || 'span';
-  const classNames = (layer.classNames || []).filter(Boolean);
-  const attrs = Object.entries(layer.attrs || {})
-    .filter(([, value]) => value !== undefined && value !== null && value !== false && value !== '')
-    .map(([name, value]) => auditToken(`${path}:attr:${name}`, name, value === true ? '' : String(value), attrProvenance(name)));
-  const styles = Object.entries(layer.style || {})
-    .filter(([, value]) => value !== undefined && value !== null && value !== false && value !== '')
-    .map(([name, value]) => auditToken(`${path}:style:${name}`, name, String(value), styleProvenance(name)));
-  return {
-    path,
-    tag,
-    text: layer.text || '',
-    classes: classNames.map((className) => auditToken(`${path}:class:${className}`, 'class', className, classProvenance(className))),
-    attrs,
-    styles,
-    children: (layer.children || []).map((child, index) => emittedLayerToDomAuditNode(child, `${path}.${index}`)),
-  };
-};
-
-const exportPlanToDomAuditNode = (plan: MaterialEmissionPlan | null): DomAuditNode | null => {
-  if (!plan) return null;
-  return emittedLayerToDomAuditNode({
-    ...plan.host,
-    children: [
-      ...plan.layers.flatMap((layer) => layer.emission ? [layer.emission] : []),
-      ...(plan.host.children || []),
-    ],
-  });
-};
 
 const ExportCssAudit = (props: { css: string; showBadges: boolean }) => {
   const rules = () => props.css
@@ -13888,7 +13555,7 @@ export const MainMaterialPreviewScreen = () => {
 
   const updateFeedNodeSurface = (cardTypeId: FeedCardTypeId, nodeId: string, recipe: MaterialRecipe, dirty = true) => {
     const cardType = feedCardTypes()[cardTypeId];
-    const currentNode = findFeedNodeById(cardType.children, nodeId);
+    const currentNode = findTreeNodeById(cardType.children, nodeId);
     const currentNodeHasText = Boolean(currentNode?.binding) && (
       currentNode?.type === 'text'
       || currentNode?.type === 'button'
@@ -13901,7 +13568,7 @@ export const MainMaterialPreviewScreen = () => {
     );
     updateFeedCardType({
       ...cardType,
-      children: updateFeedNodeById(cardType.children, nodeId, (current) => ({
+      children: updateTreeNodeById(cardType.children, nodeId, (current) => ({
         ...current,
         surface: current.type === 'button' ? recipe : pruneRecipeForPartCapabilities('feedCards', recipe),
         text: shouldUpdateNodeText ? feedBaseTextStyleFromRecipe(recipe) : current.text,
@@ -13910,42 +13577,28 @@ export const MainMaterialPreviewScreen = () => {
     if (dirty) markPresetDirty('feedCards');
   };
 
-  const feedNodeMaterialTarget = (cardType: FeedCardTypeRecipe, node: FeedCardNode): MaterialEditableTarget => ({
-    id: feedMaterialTargetIdForNode(cardType.id, node.id),
-    label: node.label,
-    recipe: node.binding
-      ? recipeWithFeedTextStyle(node.surface || createFeedRegionSurface(), resolveFeedNodeTextStyle(cardType, node))
-      : node.surface || createFeedRegionSurface(),
-    capabilities: node.binding
-      ? { ...materialEditorCapabilitiesByPart.feedCards, states: node.type === 'button', text: !!node.text && !node.text.inherit }
-      : { ...materialEditorCapabilitiesByPart.feedCards, text: false },
-    interactionRole: node.type === 'button' ? 'momentary' : 'static',
-    onChange: (recipe) => updateFeedNodeSurface(cardType.id, node.id, recipe),
-    children: node.children?.map((child) => feedNodeMaterialTarget(cardType, child)) || [],
-  });
-
-  const feedCardMaterialTargetLabel = (cardType: FeedCardTypeRecipe, index: number) => (
-    cardType.name && !cardType.name.startsWith('card_type_')
-      ? cardType.name
-      : `Feed Card ${index + 1}`
-  );
-
   const feedMaterialTargets = (): MaterialEditableTarget[] => {
-    const cardTypes = feedCardTypes();
-    return feedCardTypeIds.map((cardTypeId, index) => {
-      const cardType = cardTypes[cardTypeId];
-      return {
-        id: feedCardMaterialTargetId(cardTypeId),
-        label: feedCardMaterialTargetLabel(cardType, index),
-        recipe: cardType.surface,
-        capabilities: materialEditorCapabilitiesByPart.feedCards,
-        onChange: (recipe) => updateFeedCardTypeSurface(cardTypeId, recipe),
-        children: cardType.children.map((node) => feedNodeMaterialTarget(cardType, node)),
-      };
+    return createFeedMaterialTargets({
+      cardTypeIds: feedCardTypeIds,
+      cardTypes: feedCardTypes(),
+      rootCapabilities: materialEditorCapabilitiesByPart.feedCards,
+      nodeRecipe: (cardType, node) => (
+        node.binding
+          ? recipeWithFeedTextStyle(node.surface || createFeedRegionSurface(), resolveFeedNodeTextStyle(cardType, node))
+          : node.surface || createFeedRegionSurface()
+      ),
+      nodeCapabilities: (_cardType, node) => (
+        node.binding
+          ? { ...materialEditorCapabilitiesByPart.feedCards, states: node.type === 'button', text: !!node.text && !node.text.inherit }
+          : { ...materialEditorCapabilitiesByPart.feedCards, text: false }
+      ),
+      nodeInteractionRole: (_cardType, node) => (node.type === 'button' ? 'momentary' : 'static'),
+      onCardChange: updateFeedCardTypeSurface,
+      onNodeChange: updateFeedNodeSurface,
     });
   };
 
-  const flatFeedMaterialTargets = () => flattenMaterialTargets(feedMaterialTargets());
+  const flatFeedMaterialTargets = () => flattenTargetTree(feedMaterialTargets());
   const selectedFeedMaterialTarget = () => (
     flatFeedMaterialTargets().find((entry) => entry.target.id === selectedFeedTargetId())?.target
     || feedMaterialTargets()[0]
@@ -14098,22 +13751,8 @@ export const MainMaterialPreviewScreen = () => {
 
   onMount(() => {
     try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          backdrop?: unknown;
-          title?: unknown;
-          feed?: unknown;
-          feedStories?: unknown;
-          feedCardTypes?: unknown;
-          feedStoryImageOverrides?: unknown;
-          selectedFeedStoryId?: unknown;
-          editingFeedCardTypeId?: unknown;
-          editingFeedNodeId?: unknown;
-          selectedFeedTargetId?: unknown;
-          nav?: unknown;
-          surfaces?: unknown;
-        };
+      const parsed = readMainMaterialStoredState(window.localStorage);
+      if (parsed) {
         setBackdrop(sanitizeBackdrop(parsed.backdrop));
         setTitle(sanitizeTitle(parsed.title));
         setFeed(sanitizeFeed(parsed.feed));
@@ -14126,17 +13765,11 @@ export const MainMaterialPreviewScreen = () => {
             : mockFeedStories[0].id,
         );
         setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
-        if (
-          typeof parsed.selectedFeedTargetId === 'string'
-          && parsed.selectedFeedTargetId.startsWith(feedCardMaterialTargetPrefix)
-          && parseFeedMaterialTargetId(parsed.selectedFeedTargetId)
-        ) {
-          setSelectedFeedTargetId(parsed.selectedFeedTargetId as FeedMaterialTargetId);
-        } else if (typeof parsed.editingFeedNodeId === 'string' && parsed.editingFeedNodeId.trim()) {
-          setSelectedFeedTargetId(feedMaterialTargetIdForNode('card_type_01', parsed.editingFeedNodeId));
-        } else {
-          setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
-        }
+        setSelectedFeedTargetId(coerceStoredFeedTargetId(
+          parsed.selectedFeedTargetId,
+          parsed.editingFeedNodeId,
+          'card_type_01',
+        ));
         setNav(sanitizeNav(parsed.nav));
         setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
       }
@@ -14154,8 +13787,7 @@ export const MainMaterialPreviewScreen = () => {
     }
 
     try {
-      const rawPresets = window.localStorage.getItem(materialPresetStorageKey);
-      setMaterialPresets(sanitizeMaterialPresets(rawPresets ? JSON.parse(rawPresets) : null));
+      setMaterialPresets(sanitizeMaterialPresets(readMainMaterialStoredPresets(window.localStorage)));
     } catch {
       setMaterialPresets(createEmptyMaterialPresets());
     } finally {
@@ -14164,7 +13796,7 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   createEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify({
+    writeMainMaterialStoredState(window.localStorage, createMainMaterialStoredState({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
@@ -14181,7 +13813,7 @@ export const MainMaterialPreviewScreen = () => {
 
   createEffect(() => {
     if (!materialPresetsLoaded()) return;
-    window.localStorage.setItem(materialPresetStorageKey, JSON.stringify(materialPresets()));
+    writeMainMaterialStoredPresets(window.localStorage, materialPresets());
   });
 
   createEffect(() => {
@@ -14215,17 +13847,13 @@ export const MainMaterialPreviewScreen = () => {
     setSelectionFlashTick((tick) => tick + 1);
   };
 
-  const selectedWorkbenchPartId = (): MainWorkbenchPartId => (
-    selectedPart() === 'feedCards'
-      ? selectedFeedTargetId()
-      : (selectedPart() === 'profileButton' || selectedPart() === 'currencyButtons') && selectedTopBarTargetId()
-      ? selectedTopBarTargetId() as TopBarMaterialTargetId
-      : selectedPart() === 'toolBar' && selectedToolbarTargetId()
-      ? selectedToolbarTargetId() as ToolbarMaterialTargetId
-      : selectedPart() === 'navBar' && selectedNavTargetId()
-      ? selectedNavTargetId() as NavMaterialTargetId
-      : selectedPart()
-  );
+  const selectedWorkbenchPartId = (): MainWorkbenchPartId => resolveSelectedWorkbenchPartId({
+    selectedPart: selectedPart(),
+    selectedFeedTargetId: selectedFeedTargetId(),
+    selectedTopBarTargetId: selectedTopBarTargetId(),
+    selectedToolbarTargetId: selectedToolbarTargetId(),
+    selectedNavTargetId: selectedNavTargetId(),
+  });
 
   const selectedEmissionTargetId = () => String(selectedWorkbenchPartId());
   const selectedEmissionTargetLabel = () => (
@@ -14249,7 +13877,7 @@ export const MainMaterialPreviewScreen = () => {
     const target = parseFeedMaterialTargetId(selectedFeedTargetId());
     if (!target?.nodeId) return undefined;
     const cardType = feedCardTypes()[target.cardTypeId];
-    return cardType ? findFeedNodeById(cardType.children, target.nodeId) : undefined;
+    return cardType ? findTreeNodeById(cardType.children, target.nodeId) : undefined;
   };
   const selectedCssProbeTargetId = () => selectedCssProbeNode() ? selectedEmissionTargetId() : null;
   const selectedCssProbeLines = () => {
@@ -14292,7 +13920,7 @@ export const MainMaterialPreviewScreen = () => {
   ) => {
     const match = findRegisteredDomAuditTarget(targetId);
     if (match) {
-      setDomAuditSnapshot(serializeDomAuditNode(match.entry.element, '0', hiddenClasses));
+      setDomAuditSnapshot(serializeDomAuditNode(match.entry.element, '0', hiddenClasses, collectClassCssRules));
       if (!match.exact) {
         setInspectorStatus(`Showing ${match.entry.instanceId} (${match.entry.targetId}) for selected ${targetId}`);
       } else {
@@ -14553,7 +14181,7 @@ export const MainMaterialPreviewScreen = () => {
     if (!window.confirm('Delete all saved material presets? This will not affect the current working preview.')) return;
     setMaterialPresets(createEmptyMaterialPresets());
     setSelectedPresetIds(createEmptySelectedPresetIds());
-    window.localStorage.removeItem(materialPresetStorageKey);
+    removeMainMaterialStoredPresets(window.localStorage);
   };
 
   const resetSelected = () => {
@@ -14612,15 +14240,11 @@ export const MainMaterialPreviewScreen = () => {
         : mockFeedStories[0].id,
     );
     setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
-    if (
-      typeof parsed.selectedFeedTargetId === 'string'
-      && parsed.selectedFeedTargetId.startsWith(feedCardMaterialTargetPrefix)
-      && parseFeedMaterialTargetId(parsed.selectedFeedTargetId)
-    ) {
-      setSelectedFeedTargetId(parsed.selectedFeedTargetId as FeedMaterialTargetId);
-    } else {
-      setSelectedFeedTargetId(feedCardMaterialTargetId(editingFeedCardTypeId()));
-    }
+    setSelectedFeedTargetId(coerceStoredFeedTargetId(
+      parsed.selectedFeedTargetId,
+      undefined,
+      isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01',
+    ));
     setNav(sanitizeNav(parsed.nav));
     setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
   };
@@ -14647,7 +14271,7 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const exportJson = () => {
-    void navigator.clipboard?.writeText(JSON.stringify({
+    void navigator.clipboard?.writeText(JSON.stringify(createMainMaterialStoredState({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
@@ -14659,7 +14283,7 @@ export const MainMaterialPreviewScreen = () => {
       selectedFeedTargetId: selectedFeedTargetId(),
       nav: nav(),
       surfaces: surfaces(),
-    }, null, 2));
+    }), null, 2));
   };
 
   const selectedClass = (part: MainPartId) => {
@@ -14671,40 +14295,37 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const selectedFeedTargetClass = (targetId: FeedMaterialTargetId) => {
-    if (selectedPart() !== 'feedCards' || selectedFeedTargetId() !== targetId) return '';
-    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
-    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'feedCards') {
-      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
-    }
-    return '';
+    return selectionTargetClass({
+      selected: selectedPart() === 'feedCards' && selectedFeedTargetId() === targetId,
+      overlayMode: selectionOverlayMode(),
+      flashActive: selectionFlashPart() === 'feedCards',
+      flashTick: selectionFlashTick(),
+    });
   };
   const selectedTopBarTargetClass = (targetId: TopBarMaterialTargetId) => {
     const selectedChild = selectedPart() === 'profileButton' || selectedPart() === 'currencyButtons';
-    if (!selectedChild || selectedTopBarTargetId() !== targetId) return '';
-    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
-    if (selectionOverlayMode() === 'flash' && (
-      selectionFlashPart() === 'profileButton'
-      || selectionFlashPart() === 'currencyButtons'
-    )) {
-      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
-    }
-    return '';
+    return selectionTargetClass({
+      selected: selectedChild && selectedTopBarTargetId() === targetId,
+      overlayMode: selectionOverlayMode(),
+      flashActive: selectionFlashPart() === 'profileButton' || selectionFlashPart() === 'currencyButtons',
+      flashTick: selectionFlashTick(),
+    });
   };
   const selectedToolbarTargetClass = (targetId: ToolbarMaterialTargetId) => {
-    if (selectedPart() !== 'toolBar' || selectedToolbarTargetId() !== targetId) return '';
-    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
-    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'toolBar') {
-      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
-    }
-    return '';
+    return selectionTargetClass({
+      selected: selectedPart() === 'toolBar' && selectedToolbarTargetId() === targetId,
+      overlayMode: selectionOverlayMode(),
+      flashActive: selectionFlashPart() === 'toolBar',
+      flashTick: selectionFlashTick(),
+    });
   };
   const selectedNavTargetClass = (targetId: NavMaterialTargetId) => {
-    if (selectedPart() !== 'navBar' || selectedNavTargetId() !== targetId) return '';
-    if (selectionOverlayMode() === 'persistent') return 'is-editing-persistent';
-    if (selectionOverlayMode() === 'flash' && selectionFlashPart() === 'navBar') {
-      return `is-editing-flash is-editing-flash-${selectionFlashTick() % 2 === 0 ? 'a' : 'b'}`;
-    }
-    return '';
+    return selectionTargetClass({
+      selected: selectedPart() === 'navBar' && selectedNavTargetId() === targetId,
+      overlayMode: selectionOverlayMode(),
+      flashActive: selectionFlashPart() === 'navBar',
+      flashTick: selectionFlashTick(),
+    });
   };
 
   const selectionOverlayControl = (

@@ -17,5 +17,9 @@ assert.equal(surfaceFieldDefinitionByKey.surfaceFilterBrightness.editMode, 'rest
 assert.equal(surfaceFieldDefinitionByKey.textY.editMode, 'rest-and-state');
 assert.equal(surfaceFieldDefinitionByKey.stateVars.editMode, 'renderer-internal');
 assert.equal(surfaceFieldDefinitionByKey.visualState.editMode, 'renderer-internal');
+assert.equal(surfaceFieldDefinitionByKey.glassBlur.max, 24);
+assert.equal(surfaceFieldDefinitionByKey.glassBlur.step, 0.25);
+assert.ok(surfaceFieldDefinitionByKey.edgeWearTexture.options?.includes('edge-bw-noise-dense'));
+assert.equal(surfaceFieldDefinitionByKey.edgeWearTexture.optionLabels?.['edge-bw-noise-dense'], 'Edge B/W Noise Dense');
 
 console.log('Surface field metadata tests passed');

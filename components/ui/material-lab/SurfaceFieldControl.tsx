@@ -83,7 +83,7 @@ export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
           onChange={(event) => patch(event.currentTarget.value as SurfaceOptions[K])}
         >
           <For each={props.definition.options || []}>
-            {(option) => <option value={option}>{option}</option>}
+            {(option) => <option value={option}>{props.definition.optionLabels?.[option] || option}</option>}
           </For>
         </select>
       );

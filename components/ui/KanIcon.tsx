@@ -128,7 +128,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
   };
 
   const isRadialActive = () => {
-    return ['R1', 'R2'].includes(props.gradientProfile) || (props.gradientProfile === 'Custom' && props.customType === 'radial');
+    return props.customType === 'radial' || ['R1', 'R2'].includes(props.gradientProfile);
   };
 
   // Geometry math helpers
@@ -364,14 +364,11 @@ export const KanIcon = (rawProps: KanIconProps) => {
     if (props.fillMode === 'texture') {
       return `url(#${uniqueId}-pattern)`;
     }
-    if (props.gradientProfile === 'Custom' && props.customType === 'box') {
-      return `url(#${uniqueId}-box-pattern)`;
-    }
     return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad)`;
   };
 
   const overlayGradUrl = () => {
-    if (props.gradientProfile === 'Custom' && props.customType === 'box') {
+    if (props.customType === 'box') {
       return `url(#${uniqueId}-box-pattern)`;
     }
     return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad-overlay)`;
@@ -420,7 +417,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
       >
         <defs>
           {/* Base Material Gradient (Linear or Radial) */}
-          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
+          <Show when={!isRadialActive()}>
             <linearGradient 
               id={`${uniqueId}-grad`} 
               x1={gradCoords().x1} 
@@ -456,7 +453,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
           </Show>
 
           {/* Softbox reflection box pattern & blur filter */}
-          <Show when={props.gradientProfile === 'Custom' && props.customType === 'box'}>
+          <Show when={props.customType === 'box'}>
             <filter id={`${uniqueId}-softbox-blur`} x="-100%" y="-100%" width="300%" height="300%">
               <feGaussianBlur stdDeviation={props.boxBlur} />
             </filter>
@@ -464,16 +461,15 @@ export const KanIcon = (rawProps: KanIconProps) => {
             <pattern 
               id={`${uniqueId}-box-pattern`} 
               patternUnits="userSpaceOnUse" 
+              x={activeShiftX()}
+              y={activeShiftY()}
               width="100" 
               height="100"
             >
-              {/* Static Base Metal Gradient */}
-              <rect width="100" height="100" fill={`url(#${uniqueId}-box-base-grad)`} />
-              
-              {/* Sliding Blurred Softbox Rect */}
+              {/* Static Blurred Softbox Rect */}
               <rect 
-                x={50 - props.boxWidth / 2 + activeShiftX()} 
-                y={50 - props.boxHeight / 2 + activeShiftY()} 
+                x={50 - props.boxWidth / 2} 
+                y={50 - props.boxHeight / 2} 
                 width={props.boxWidth} 
                 height={props.boxHeight} 
                 rx={props.boxCornerRadius} 
@@ -481,27 +477,12 @@ export const KanIcon = (rawProps: KanIconProps) => {
                 fill={props.boxColor} 
                 opacity={props.boxOpacity}
                 filter={`url(#${uniqueId}-softbox-blur)`}
-                style={{
-                  "mix-blend-mode": props.boxMixBlendMode,
-                }}
               />
             </pattern>
-            
-            <linearGradient 
-              id={`${uniqueId}-box-base-grad`}
-              x1="0" y1="0" x2="100" y2="100"
-              gradientUnits="userSpaceOnUse"
-            >
-              <For each={getGradientStops()}>
-                {(stop) => (
-                  <stop offset={stop.offset} stop-color={stop.color} />
-                )}
-              </For>
-            </linearGradient>
           </Show>
 
           {/* Optional Texture Overlay Gradient Layer */}
-          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
+          <Show when={!isRadialActive() && props.customType !== 'box'}>
             <linearGradient 
               id={`${uniqueId}-grad-overlay`} 
               x1={gradCoords().x1} 
@@ -518,7 +499,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
               </For>
             </linearGradient>
           </Show>
-          <Show when={isRadialActive()}>
+          <Show when={isRadialActive() && props.customType !== 'box'}>
             <radialGradient
               id={`${uniqueId}-grad-overlay`}
               cx={radialCoords().cx}
@@ -537,7 +518,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
           </Show>
 
           {/* Optical Sizing Gradient */}
-          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
+          <Show when={!isRadialActive()}>
             <linearGradient
               id={`${uniqueId}-grad-optical`}
               x1={gradCoords().x1}
@@ -673,6 +654,26 @@ export const KanIcon = (rawProps: KanIconProps) => {
           </For>
         </Show>
 
+        {/* 4.5. Optional Softbox Specular Overlay Pass for Gradient Mode */}
+        <Show when={props.fillMode === 'gradient' && props.customType === 'box'}>
+          <For each={Array.from({ length: props.rings }, (_, i) => i)}>
+            {(index) => (
+              <polygon 
+                points={getHexagonPoints(index, props.thickness)} 
+                fill={index === 0 ? `url(#${uniqueId}-box-pattern)` : 'none'} 
+                fill-opacity={index === 0 ? props.hexFillOpacity : 0}
+                stroke={`url(#${uniqueId}-box-pattern)`} 
+                stroke-width={props.thickness}
+                stroke-linejoin={props.linecap === 'round' ? 'round' : 'miter'}
+                style={{
+                  "mix-blend-mode": props.boxMixBlendMode,
+                  "pointer-events": "none"
+                }}
+              />
+            )}
+          </For>
+        </Show>
+
         {/* 5. K Shadows Pass */}
         <path 
           d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
@@ -801,6 +802,47 @@ export const KanIcon = (rawProps: KanIconProps) => {
               style={{
                 "mix-blend-mode": props.overlayBlendMode,
                 opacity: props.overlayOpacity,
+                "pointer-events": "none"
+              }}
+            />
+          </g>
+        </Show>
+
+        {/* 8.5. K Softbox specular overlay Pass for Gradient Mode */}
+        <Show when={props.fillMode === 'gradient' && props.customType === 'box'}>
+          <path 
+            d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+            fill="none"
+            stroke={`url(#${uniqueId}-box-pattern)`}
+            stroke-width={props.kThickness}
+            stroke-linecap={props.linecap}
+            style={{
+              "mix-blend-mode": props.boxMixBlendMode,
+              "pointer-events": "none"
+            }}
+          />
+          <g clip-path={`url(#${uniqueId}-clip)`}>
+            <path 
+              d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+              fill="none"
+              stroke={`url(#${uniqueId}-box-pattern)`}
+              stroke-width={props.kThickness}
+              stroke-linecap={props.linecap}
+              stroke-linejoin="miter"
+              style={{
+                "mix-blend-mode": props.boxMixBlendMode,
+                "pointer-events": "none"
+              }}
+            />
+            <path 
+              d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+              fill="none"
+              stroke={`url(#${uniqueId}-box-pattern)`}
+              stroke-width={props.kThickness}
+              stroke-linecap={props.linecap}
+              stroke-linejoin="miter"
+              style={{
+                "mix-blend-mode": props.boxMixBlendMode,
                 "pointer-events": "none"
               }}
             />

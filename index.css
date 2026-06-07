@@ -269,7 +269,7 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 
 .sheen-radial {
   background-image: radial-gradient(
-    circle at calc(50% + var(--sheen-x) * 1.5%) calc(50% + var(--sheen-y) * 1.5%),
+    circle at calc(50% + var(--sheen-x) * 0.8%) calc(50% + var(--sheen-y) * 0.8%),
     var(--highlight-color) 0%,
     transparent 60%
   ), var(--base-metal-gradient);
@@ -277,9 +277,9 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 }
 
 .sheen-box {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="15"/></filter></defs><rect x="25" y="25" width="50" height="50" rx="10" fill="white" filter="url(%23b)"/></svg>'), var(--base-metal-gradient);
-  background-position: calc(50% + var(--sheen-x) * 1%) calc(50% + var(--sheen-y) * 1%), center;
-  background-blend-mode: overlay;
+  background-image: var(--box-bg-image, url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="15"/></filter></defs><rect x="25" y="25" width="50" height="50" rx="10" fill="white" filter="url(%23b)"/></svg>')), var(--base-metal-gradient);
+  background-position: calc(50% + var(--sheen-x) * 0.5%) calc(50% + var(--sheen-y) * 0.5%), center;
+  background-blend-mode: var(--box-blend-mode, overlay);
   background-size: contain, 200% 200%;
   background-repeat: no-repeat, no-repeat;
 }
@@ -311,21 +311,21 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
           drop-shadow(calc(var(--sheen-x) * 0.05px) calc(var(--sheen-y) * 0.05px) 0.5px rgba(0, 0, 0, 0.6));
 }
 
-/* default to linear sheens on metallic tags */
+/* default to linear sheens on metallic tags, but allow custom override via variable */
 .main-material-rich-token--gold,
 .main-material-rich-token--silver,
 .main-material-rich-token--brass,
 .main-material-rich-token--kan,
 .main-material-rich-token--credit,
 .main-material-rich-token--mark {
-  background-image: linear-gradient(
+  background-image: var(--rich-sheen-bg-image, linear-gradient(
     135deg,
     transparent 30%,
     var(--highlight-color) 50%,
     transparent 70%
-  ), var(--base-metal-gradient);
+  )), var(--base-metal-gradient);
   background-position: calc(50% + var(--sheen-x) * 1%) calc(50% + var(--sheen-y) * 1%), center;
-  background-blend-mode: overlay;
+  background-blend-mode: var(--rich-sheen-blend-mode, overlay);
 }
 
 .main-material-rich-token--gold {

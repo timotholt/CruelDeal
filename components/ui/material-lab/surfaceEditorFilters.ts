@@ -12,6 +12,8 @@ export interface SurfaceEditorCapabilities {
   fields?: readonly (keyof SurfaceOptions)[];
   hiddenGroups?: readonly SurfaceFieldGroup[];
   hiddenFields?: readonly (keyof SurfaceOptions)[];
+  disabledGroups?: readonly SurfaceFieldGroup[];
+  disabledFields?: readonly (keyof SurfaceOptions)[];
 }
 
 export type SurfaceEditorPatch = Partial<{
@@ -32,6 +34,15 @@ export const surfaceFieldAllowedByCapabilities = (
   if (capabilities.hiddenGroups?.includes(definition.group)) return false;
   return true;
 };
+
+export const surfaceFieldDisabledByCapabilities = (
+  definition: SurfaceFieldDefinition,
+  capabilities: SurfaceEditorCapabilities = {},
+) => (
+  capabilities.disabledFields?.includes(definition.key)
+  || capabilities.disabledGroups?.includes(definition.group)
+  || false
+);
 
 export const visibleSurfaceFieldDefinitions = (options: {
   mode: SurfaceEditorMode;

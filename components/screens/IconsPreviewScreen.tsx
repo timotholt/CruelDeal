@@ -111,6 +111,79 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
   return rgbToHsl(rgb.r, rgb.g, rgb.b);
 }
 
+interface SoftboxPreset {
+  name: string;
+  width: number;
+  height: number;
+  blur: number;
+  cornerRadius: number;
+  opacity: number;
+  color: string;
+  mixBlendMode: 'normal' | 'multiply' | 'screen' | 'overlay' | 'color-dodge' | 'soft-light';
+}
+
+const SOFTBOX_PRESETS: Record<string, SoftboxPreset> = {
+  classic: {
+    name: 'Classic Softbox',
+    width: 45,
+    height: 45,
+    blur: 12,
+    cornerRadius: 10,
+    opacity: 0.60,
+    color: '#FFFDDA',
+    mixBlendMode: 'color-dodge'
+  },
+  vertical: {
+    name: 'Vertical Stripbox',
+    width: 15,
+    height: 70,
+    blur: 8,
+    cornerRadius: 4,
+    opacity: 0.75,
+    color: '#FFFFFF',
+    mixBlendMode: 'color-dodge'
+  },
+  horizontal: {
+    name: 'Horizontal Skylight',
+    width: 80,
+    height: 20,
+    blur: 10,
+    cornerRadius: 6,
+    opacity: 0.65,
+    color: '#FFEFAA',
+    mixBlendMode: 'overlay'
+  },
+  ring: {
+    name: 'Overhead Ring Light',
+    width: 65,
+    height: 65,
+    blur: 16,
+    cornerRadius: 32,
+    opacity: 0.50,
+    color: '#FFFFFF',
+    mixBlendMode: 'screen'
+  },
+  diffuse: {
+    name: 'Diffuse Panel',
+    width: 85,
+    height: 85,
+    blur: 24,
+    cornerRadius: 15,
+    opacity: 0.40,
+    color: '#FFF3C2',
+    mixBlendMode: 'color-dodge'
+  },
+  spot: {
+    name: 'Spot Highlight',
+    width: 20,
+    height: 20,
+    blur: 4,
+    cornerRadius: 10,
+    opacity: 0.85,
+    color: '#FFFFFF',
+    mixBlendMode: 'color-dodge'
+  }
+};
 
 export const IconsPreviewScreen = () => {
   // Signals for interactive SVG controls
@@ -131,6 +204,23 @@ export const IconsPreviewScreen = () => {
   const [boxMixBlendMode, setBoxMixBlendMode] = createSignal<'normal' | 'multiply' | 'screen' | 'overlay' | 'color-dodge' | 'soft-light'>('color-dodge');
   const [demoProgress, setDemoProgress] = createSignal(65);
   const [customInputText, setCustomInputText] = createSignal("You earned [gold]50 Gold[/gold], [silver]10 Silver[/silver], and [mark]3 Marks[/mark]!");
+
+  // Showcase Cards Hover Signals
+  const [goldHover, setGoldHover] = createSignal(false);
+  const [goldX, setGoldX] = createSignal(0);
+  const [goldY, setGoldY] = createSignal(0);
+
+  const [silverHover, setSilverHover] = createSignal(false);
+  const [silverX, setSilverX] = createSignal(0);
+  const [silverY, setSilverY] = createSignal(0);
+
+  const [brassHover, setBrassHover] = createSignal(false);
+  const [brassX, setBrassX] = createSignal(0);
+  const [brassY, setBrassY] = createSignal(0);
+
+  const [markHover, setMarkHover] = createSignal(false);
+  const [markX, setMarkX] = createSignal(0);
+  const [markY, setMarkY] = createSignal(0);
 
   const [thickness, setThickness] = createSignal(3.5);
   const [kThickness, setKThickness] = createSignal(6.5);
@@ -194,13 +284,13 @@ export const IconsPreviewScreen = () => {
   const requestGyroPermission = async () => {
     if (
       typeof window !== 'undefined' &&
-      // @ts-ignore
+      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
       typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-ignore
+      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
       typeof DeviceOrientationEvent.requestPermission === 'function'
     ) {
       try {
-        // @ts-ignore
+        // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
         const permissionState = await DeviceOrientationEvent.requestPermission();
         if (permissionState === 'granted') {
           setHasGyroPermission(true);
@@ -223,9 +313,9 @@ export const IconsPreviewScreen = () => {
     window.addEventListener('mousemove', handleMouseMove);
     if (
       typeof window !== 'undefined' &&
-      // @ts-ignore
+      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
       typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-ignore
+      // @ts-expect-error - standard orientation event properties are missing in standard typescript dom declarations
       typeof DeviceOrientationEvent.requestPermission !== 'function'
     ) {
       window.addEventListener('deviceorientation', handleDeviceOrientation);
@@ -331,6 +421,43 @@ export const IconsPreviewScreen = () => {
     }
   });
 
+  // Sync softbox parameters to root CSS variables for dynamic HTML sheen elements
+  createEffect(() => {
+    if (typeof document === 'undefined') return;
+    
+    const w = boxWidth();
+    const h = boxHeight();
+    const blur = boxBlur();
+    const radius = boxCornerRadius();
+    const color = boxColor();
+    const opacity = boxOpacity();
+    const blendMode = boxMixBlendMode();
+    const type = customType();
+    
+    // 1. Compile box background SVG data-URI
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="b" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs><rect x="${50 - w/2}" y="${50 - h/2}" width="${w}" height="${h}" rx="${radius}" ry="${radius}" fill="${encodeURIComponent(color)}" opacity="${opacity}" filter="url(%23b)"/></svg>`;
+    const dataUri = `url('data:image/svg+xml;utf8,${svg}')`;
+    
+    document.documentElement.style.setProperty('--box-bg-image', dataUri);
+    document.documentElement.style.setProperty('--box-blend-mode', blendMode);
+    
+    // 2. Set dynamic rich-text background image based on customType()
+    if (type === 'radial') {
+      document.documentElement.style.setProperty(
+        '--rich-sheen-bg-image', 
+        `radial-gradient(circle at calc(50% + var(--sheen-x) * 1.5%) calc(50% + var(--sheen-y) * 1.5%), var(--highlight-color) 0%, transparent 60%)`
+      );
+      document.documentElement.style.setProperty('--rich-sheen-blend-mode', 'overlay');
+    } else if (type === 'box') {
+      document.documentElement.style.setProperty('--rich-sheen-bg-image', dataUri);
+      document.documentElement.style.setProperty('--rich-sheen-blend-mode', blendMode);
+    } else {
+      // Linear or default: remove variable values so it falls back to index.css defaults
+      document.documentElement.style.removeProperty('--rich-sheen-bg-image');
+      document.documentElement.style.removeProperty('--rich-sheen-blend-mode');
+    }
+  });
+
   const updateStopColor = (hex: string) => {
     const stopId = activeColorPickerStopId();
     if (stopId !== null) {
@@ -415,7 +542,7 @@ export const IconsPreviewScreen = () => {
   };
 
   const isRadialActive = () => {
-    return ['R1', 'R2'].includes(gradientProfile()) || (gradientProfile() === 'Custom' && customType() === 'radial');
+    return customType() === 'radial' || ['R1', 'R2'].includes(gradientProfile());
   };
 
   const [customStops, setCustomStops] = createSignal<Array<{ id: number, offset: number, color: string }>>([
@@ -604,7 +731,7 @@ export const IconsPreviewScreen = () => {
     const c = getKCoords(kScale(), currentKStrokeWidth(), linecap());
     const fillSourceStr = fillMode() === 'gradient' ? 'url(#gold)' : 'url(#gold-texture)';
     const paintDef = fillMode() === 'gradient'
-      ? (gradientProfile() === 'Custom' && customType() === 'box'
+      ? (customType() === 'box'
         ? `    <filter id="softbox-blur" x="-100%" y="-100%" width="300%" height="300%">\n      <feGaussianBlur stdDeviation="${boxBlur()}" />\n    </filter>\n    <linearGradient id="gold-box-base-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>\n    <pattern id="gold" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-box-base-grad)" />\n      <rect x="${(50 - boxWidth() / 2).toFixed(1)}" y="${(50 - boxHeight() / 2).toFixed(1)}" width="${boxWidth()}" height="${boxHeight()}" rx="${boxCornerRadius()}" ry="${boxCornerRadius()}" fill="${boxColor()}" opacity="${boxOpacity()}" filter="url(#softbox-blur)" style="mix-blend-mode: ${boxMixBlendMode()};" />\n    </pattern>`
         : (isRadialActive()
           ? `    <radialGradient id="gold" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
@@ -612,7 +739,7 @@ export const IconsPreviewScreen = () => {
       : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
 
     const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
-      ? (gradientProfile() === 'Custom' && customType() === 'box'
+      ? (customType() === 'box'
         ? `\n    <filter id="softbox-blur" x="-100%" y="-100%" width="300%" height="300%">\n      <feGaussianBlur stdDeviation="${boxBlur()}" />\n    </filter>\n    <linearGradient id="gold-box-base-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>\n    <pattern id="gold-grad-overlay" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-box-base-grad)" />\n      <rect x="${(50 - boxWidth() / 2).toFixed(1)}" y="${(50 - boxHeight() / 2).toFixed(1)}" width="${boxWidth()}" height="${boxHeight()}" rx="${boxCornerRadius()}" ry="${boxCornerRadius()}" fill="${boxColor()}" opacity="${boxOpacity()}" filter="url(#softbox-blur)" style="mix-blend-mode: ${boxMixBlendMode()};" />\n    </pattern>`
         : (isRadialActive()
           ? `\n    <radialGradient id="gold-grad-overlay" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
@@ -1102,7 +1229,15 @@ ${paintDef}${overlayGradDef}
                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
                      <select
                        value={gradientProfile()}
-                       onChange={(e) => setGradientProfile(e.currentTarget.value as any)}
+                       onChange={(e) => {
+                         const val = e.currentTarget.value as any;
+                         setGradientProfile(val);
+                         if (val === 'R1' || val === 'R2') {
+                           setCustomType('radial');
+                         } else if (val !== 'Custom') {
+                           setCustomType('linear');
+                         }
+                       }}
                        class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1.5 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
                      >
                        <option value="G">Opt G: Horizon Au (Reference match)</option>
@@ -1120,45 +1255,47 @@ ${paintDef}${overlayGradDef}
                        <option value="Custom">Opt H: Custom (Interactive Editor)</option>
                      </select>
                    </div>
+
+                   {/* Reflection Style Selector (Globally Visible for all profiles) */}
+                   <div class="mb-3.5 border-t border-white/5 pt-2.5">
+                     <div class="flex items-center justify-between">
+                       <span class="text-[10px] text-white/50 uppercase tracking-wider font-semibold">Reflection Style</span>
+                       <div class="flex gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                         <button 
+                           type="button"
+                           onClick={() => setCustomType('linear')}
+                           class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'linear' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                         >
+                           Linear
+                         </button>
+                         <button 
+                           type="button"
+                           onClick={() => setCustomType('radial')}
+                           class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'radial' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                         >
+                           Radial
+                         </button>
+                         <button 
+                           type="button"
+                           onClick={() => setCustomType('box')}
+                           class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'box' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
+                         >
+                           Softbox
+                         </button>
+                       </div>
+                     </div>
+                   </div>
                  </Show>
 
                   {/* Dynamic Gradient stop editor (Opt H Custom only) */}
-                  <Show when={fillMode() === 'gradient' && gradientProfile() === 'Custom'}>
+                  <Show when={fillMode() === 'gradient' && gradientProfile() === 'Custom' && customType() !== 'box'}>
                     <div class="mt-4 border-t border-white/10 pt-4">
                       <h4 class="text-[10.5px] font-semibold tracking-wider uppercase text-amber-400 mb-3 flex justify-between items-center">
                         <span>Gradient stop editor</span>
                         <span class="text-[9px] font-mono text-white/40 uppercase">Opt H active</span>
                       </h4>
 
-                      {/* Gradient Type Selector */}
-                      <div class="mb-3 flex items-center justify-between bg-black/40 p-1.5 rounded border border-white/5">
-                        <span class="text-[10px] text-white/50 uppercase tracking-wider font-semibold">Gradient Style</span>
-                        <div class="flex gap-1">
-                          <button 
-                            type="button"
-                            onClick={() => setCustomType('linear')}
-                            class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'linear' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
-                          >
-                            Linear
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setCustomType('radial')}
-                            class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'radial' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
-                          >
-                            Radial
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setCustomType('box')}
-                            class={`px-2 py-0.5 text-[9.5px] font-mono rounded transition-all ${customType() === 'box' ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'}`}
-                          >
-                            Box (Softbox)
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Visual preview (Linear Bar vs Radial Sphere vs Softbox) */}
+                      {/* Visual preview (Linear Bar vs Radial Sphere) */}
                       <Show when={customType() === 'linear'}>
                         <div class="text-[9px] text-white/40 mb-1.5 font-mono uppercase tracking-wider">Linear Specular Bar</div>
                         <div 
@@ -1224,35 +1361,6 @@ ${paintDef}${overlayGradDef}
                               <text x="50" y="44" font-size="4.5" fill="rgba(255,255,255,0.7)" font-family="monospace" text-anchor="middle" font-weight="bold">Center (0%)</text>
                               <text x="95" y="44" font-size="4.5" fill="rgba(255,255,255,0.7)" font-family="monospace" text-anchor="end" font-weight="bold">Edge (100%)</text>
                             </svg>
-                          </div>
-                        </div>
-                      </Show>
-                      <Show when={customType() === 'box'}>
-                        <div class="text-[9px] text-white/40 mb-1.5 font-mono uppercase tracking-wider text-center">Softbox Light Source Visualizer</div>
-                        <div class="flex justify-center mb-4">
-                          <div 
-                            class="w-32 h-32 rounded bg-[#0b0c10] border border-white/20 shadow-2xl relative overflow-hidden transition-all duration-300"
-                          >
-                            {/* Static base metal background gradient visual */}
-                            <div 
-                              class="absolute inset-0 opacity-40" 
-                              style={{ background: `linear-gradient(135deg, ${stopsCssString()})` }} 
-                            />
-                            
-                            {/* Sliding Blurred Softbox Visual */}
-                            <div 
-                              style={{
-                                width: `${boxWidth()}%`,
-                                height: `${boxHeight()}%`,
-                                "background-color": boxColor(),
-                                "border-radius": `${boxCornerRadius()}%`,
-                                opacity: boxOpacity(),
-                                filter: `blur(${boxBlur() / 2}px)`,
-                                transform: `translate(calc(-50% + ${interactiveShiftX()}px), calc(-50% + ${interactiveShiftY()}px))`,
-                                "mix-blend-mode": boxMixBlendMode() as any,
-                              }}
-                              class="absolute top-1/2 left-1/2 pointer-events-none transition-transform duration-75"
-                            />
                           </div>
                         </div>
                       </Show>
@@ -1374,182 +1482,57 @@ ${paintDef}${overlayGradDef}
                         </select>
                       </div>
 
-                      {/* Coordinates Section or Softbox Section */}
-                      <Show when={customType() !== 'box'} fallback={
-                        <div class="mb-4 space-y-2.5 bg-black/20 p-2 rounded border border-white/5">
-                          {/* Softbox Width Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Softbox Width</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxWidth()}px</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="10" 
-                              max="90" 
-                              value={boxWidth()}
-                              onInput={(e) => setBoxWidth(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
+                      {/* Coordinates Section */}
+                      <div class="mb-4 space-y-2.5 bg-black/20 p-2 rounded border border-white/5">
+                        {/* Angle Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">{customType() === 'radial' ? 'Highlight Angle (Direction)' : 'Angle / Rotation'}</span>
+                            <span class="font-mono text-amber-400 font-semibold">{gradientAngle()}°</span>
                           </div>
-
-                          {/* Softbox Height Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Softbox Height</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxHeight()}px</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="10" 
-                              max="90" 
-                              value={boxHeight()}
-                              onInput={(e) => setBoxHeight(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
-
-                          {/* Softbox Blur (stdDeviation) Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Edge Softness / Blur</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxBlur()}px</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="0" 
-                              max="30" 
-                              value={boxBlur()}
-                              onInput={(e) => setBoxBlur(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
-
-                          {/* Softbox Corner Radius Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Corner Rounding</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxCornerRadius()}px</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="0" 
-                              max="40" 
-                              value={boxCornerRadius()}
-                              onInput={(e) => setBoxCornerRadius(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
-
-                          {/* Softbox Opacity Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Reflection Opacity</span>
-                              <span class="font-mono text-amber-400 font-semibold">{Math.round(boxOpacity() * 100)}%</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="0.05" 
-                              max="1.0" 
-                              step="0.05"
-                              value={boxOpacity()}
-                              onInput={(e) => setBoxOpacity(parseFloat(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
-
-                          {/* Softbox Mix Blend Mode Select */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Mix Blend Mode</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxMixBlendMode()}</span>
-                            </div>
-                            <select
-                              value={boxMixBlendMode()}
-                              onChange={(e) => setBoxMixBlendMode(e.currentTarget.value as any)}
-                              class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
-                            >
-                              <option value="color-dodge">Color Dodge (Glossy glow)</option>
-                              <option value="screen">Screen (Bright light)</option>
-                              <option value="overlay">Overlay (Color tint)</option>
-                              <option value="normal">Normal (Solid white)</option>
-                            </select>
-                          </div>
-
-                          {/* Softbox Color Select */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">Softbox Specular Color</span>
-                              <span class="font-mono text-amber-400 font-semibold">{boxColor()}</span>
-                            </div>
-                            <div class="flex gap-2 items-center mt-1">
-                              <input 
-                                type="color" 
-                                value={boxColor()}
-                                onInput={(e) => setBoxColor(e.currentTarget.value)}
-                                class="w-8 h-8 rounded border border-white/20 bg-transparent cursor-pointer"
-                              />
-                              <input 
-                                type="text"
-                                value={boxColor()}
-                                onInput={(e) => setBoxColor(e.currentTarget.value)}
-                                class="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10.5px] text-white font-mono outline-none flex-1 focus:border-amber-500/30"
-                              />
-                            </div>
-                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="360" 
+                            value={gradientAngle()}
+                            onInput={(e) => setGradientAngle(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
                         </div>
-                      }>
-                        <div class="mb-4 space-y-2.5 bg-black/20 p-2 rounded border border-white/5">
-                          {/* Angle Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">{customType() === 'radial' ? 'Highlight Angle (Direction)' : 'Angle / Rotation'}</span>
-                              <span class="font-mono text-amber-400 font-semibold">{gradientAngle()}°</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="0" 
-                              max="360" 
-                              value={gradientAngle()}
-                              onInput={(e) => setGradientAngle(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
 
-                          {/* Scale / Width Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">{customType() === 'radial' ? 'Dome Size (Radius)' : 'Width / Scale'}</span>
-                              <span class="font-mono text-amber-400 font-semibold">{Math.round(gradientScale() * 100)}%</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="0.2" 
-                              max="3.0" 
-                              step="0.05"
-                              value={gradientScale()}
-                              onInput={(e) => setGradientScale(parseFloat(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
+                        {/* Scale / Width Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">{customType() === 'radial' ? 'Dome Size (Radius)' : 'Width / Scale'}</span>
+                            <span class="font-mono text-amber-400 font-semibold">{Math.round(gradientScale() * 100)}%</span>
                           </div>
-
-                          {/* Shift / Offset Slider */}
-                          <div>
-                            <div class="flex justify-between text-[11px] mb-0.5">
-                              <span class="text-white/60">{customType() === 'radial' ? 'Highlight Shift (Offset)' : 'Shift / Position'}</span>
-                              <span class="font-mono text-amber-400 font-semibold">{gradientShift()}px</span>
-                            </div>
-                            <input 
-                              type="range" 
-                              min="-100" 
-                              max="100" 
-                              value={gradientShift()}
-                              onInput={(e) => setGradientShift(parseInt(e.currentTarget.value))}
-                              class="w-full accent-amber-500 h-1 cursor-ew-resize" 
-                            />
-                          </div>
+                          <input 
+                            type="range" 
+                            min="0.2" 
+                            max="3.0" 
+                            step="0.05"
+                            value={gradientScale()}
+                            onInput={(e) => setGradientScale(parseFloat(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
                         </div>
-                      </Show>
+
+                        {/* Shift / Offset Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">{customType() === 'radial' ? 'Highlight Shift (Offset)' : 'Shift / Position'}</span>
+                            <span class="font-mono text-amber-400 font-semibold">{gradientShift()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="-100" 
+                            max="100" 
+                            value={gradientShift()}
+                            onInput={(e) => setGradientShift(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+                      </div>
 
                       {/* Stop Manager List */}
                       <div class="max-h-[500px] overflow-y-auto pr-1 mb-2.5 custom-scrollbar flex flex-col gap-1.5">
@@ -1804,6 +1787,197 @@ ${paintDef}${overlayGradDef}
                       >
                         ＋ Add Gradient Stop
                       </button>
+                    </div>
+                  </Show>
+
+                  {/* Softbox Reflection Editor Panel (Visible whenever Softbox style is active) */}
+                  <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                    <div class="mt-4 border-t border-white/10 pt-4">
+                      <h4 class="text-[10.5px] font-semibold tracking-wider uppercase text-amber-400 mb-3 flex justify-between items-center">
+                        <span>Softbox Reflection Editor</span>
+                        <span class="text-[9px] font-mono text-white/40 uppercase">Softbox active</span>
+                      </h4>
+
+                      {/* Softbox Presets Dropdown */}
+                      <div class="mb-3.5 flex items-center justify-between gap-2 bg-[#0b0c10] p-1.5 rounded border border-white/5">
+                        <span class="text-[10px] text-white/50 uppercase tracking-wider font-semibold">Load Softbox Preset</span>
+                        <select 
+                          onChange={(e) => {
+                            const presetName = e.currentTarget.value;
+                            if (presetName && SOFTBOX_PRESETS[presetName]) {
+                              const p = SOFTBOX_PRESETS[presetName];
+                              setBoxWidth(p.width);
+                              setBoxHeight(p.height);
+                              setBoxBlur(p.blur);
+                              setBoxCornerRadius(p.cornerRadius);
+                              setBoxOpacity(p.opacity);
+                              setBoxColor(p.color);
+                              setBoxMixBlendMode(p.mixBlendMode);
+                            }
+                          }}
+                          class="bg-[#12131a] border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                        >
+                          <option value="">-- Select Preset --</option>
+                          <option value="classic">Classic Softbox</option>
+                          <option value="vertical">Vertical Stripbox</option>
+                          <option value="horizontal">Horizontal Skylight</option>
+                          <option value="ring">Overhead Ring Light</option>
+                          <option value="diffuse">Diffuse Panel</option>
+                          <option value="spot">Spot Highlight</option>
+                        </select>
+                      </div>
+
+                      {/* Softbox Light Source Visualizer */}
+                      <div class="text-[9px] text-white/40 mb-1.5 font-mono uppercase tracking-wider text-center">Softbox Light Source Visualizer</div>
+                      <div class="flex justify-center mb-4">
+                        <div 
+                          class="w-32 h-32 rounded bg-[#0b0c10] border border-white/20 shadow-2xl relative overflow-hidden transition-all duration-300"
+                        >
+                          {/* Static base metal background gradient visual */}
+                          <div 
+                            class="absolute inset-0 opacity-40" 
+                            style={{ background: `linear-gradient(135deg, ${stopsCssString()})` }} 
+                          />
+                          
+                          {/* Sliding Blurred Softbox Visual */}
+                          <div 
+                            style={{
+                              width: `${boxWidth()}%`,
+                              height: `${boxHeight()}%`,
+                              "background-color": boxColor(),
+                              "border-radius": `${boxCornerRadius()}%`,
+                              opacity: boxOpacity(),
+                              filter: `blur(${boxBlur() / 2}px)`,
+                              transform: `translate(calc(-50% + ${interactiveShiftX()}px), calc(-50% + ${interactiveShiftY()}px))`,
+                              "mix-blend-mode": boxMixBlendMode() as any,
+                            }}
+                            class="absolute top-1/2 left-1/2 pointer-events-none transition-transform duration-75"
+                          />
+                        </div>
+                      </div>
+
+                      <div class="mb-4 space-y-2.5 bg-black/20 p-2 rounded border border-white/5">
+                        {/* Softbox Width Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Softbox Width</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxWidth()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="10" 
+                            max="90" 
+                            value={boxWidth()}
+                            onInput={(e) => setBoxWidth(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Softbox Height Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Softbox Height</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxHeight()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="10" 
+                            max="90" 
+                            value={boxHeight()}
+                            onInput={(e) => setBoxHeight(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Softbox Blur Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Edge Softness / Blur</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxBlur()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="30" 
+                            value={boxBlur()}
+                            onInput={(e) => setBoxBlur(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Softbox Corner Radius Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Corner Rounding</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxCornerRadius()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="40" 
+                            value={boxCornerRadius()}
+                            onInput={(e) => setBoxCornerRadius(parseInt(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Softbox Opacity Slider */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Reflection Opacity</span>
+                            <span class="font-mono text-amber-400 font-semibold">{Math.round(boxOpacity() * 100)}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0.05" 
+                            max="1.0" 
+                            step="0.05"
+                            value={boxOpacity()}
+                            onInput={(e) => setBoxOpacity(parseFloat(e.currentTarget.value))}
+                            class="w-full accent-amber-500 h-1 cursor-ew-resize" 
+                          />
+                        </div>
+
+                        {/* Softbox Mix Blend Mode Select */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Mix Blend Mode</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxMixBlendMode()}</span>
+                          </div>
+                          <select
+                            value={boxMixBlendMode()}
+                            onChange={(e) => setBoxMixBlendMode(e.currentTarget.value as any)}
+                            class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                          >
+                            <option value="color-dodge">Color Dodge (Glossy glow)</option>
+                            <option value="screen">Screen (Bright light)</option>
+                            <option value="overlay">Overlay (Color tint)</option>
+                            <option value="normal">Normal (Solid white)</option>
+                          </select>
+                        </div>
+
+                        {/* Softbox Color Select */}
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Softbox Specular Color</span>
+                            <span class="font-mono text-amber-400 font-semibold">{boxColor()}</span>
+                          </div>
+                          <div class="flex gap-2 items-center mt-1">
+                            <input 
+                              type="color" 
+                              value={boxColor()}
+                              onInput={(e) => setBoxColor(e.currentTarget.value)}
+                              class="w-8 h-8 rounded border border-white/20 bg-transparent cursor-pointer"
+                            />
+                            <input 
+                              type="text"
+                              value={boxColor()}
+                              onInput={(e) => setBoxColor(e.currentTarget.value)}
+                              class="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10.5px] text-white font-mono outline-none flex-1 focus:border-amber-500/30"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </Show>
 
@@ -2277,7 +2451,7 @@ ${paintDef}${overlayGradDef}
             </div>
 
             {/* SVG Visualizers */}
-            <div ref={containerRef} class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div ref={(el) => { containerRef = el; }} class="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* Presets Visual Representation */}
               <For each={['thin', 'medium', 'thick'] as const}>
@@ -2286,6 +2460,7 @@ ${paintDef}${overlayGradDef}
                   const [localShiftY, setLocalShiftY] = createSignal(0);
                   const [isHovered, setIsHovered] = createSignal(false);
                   let coinBoxRef: HTMLDivElement | undefined;
+                  const uniqueId = `card-${type}`;
 
                   const activeCardShiftX = () => isHovered() ? localShiftX() : interactiveShiftX();
                   const activeCardShiftY = () => isHovered() ? localShiftY() : interactiveShiftY();
@@ -2368,6 +2543,27 @@ ${paintDef}${overlayGradDef}
                                  />
                                )}
                              </For>
+                             
+                             {/* Hexagon Softbox Specular Overlay */}
+                             <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                               <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                 {(index) => (
+                                   <polygon 
+                                     points={getHexagonPoints(index, borderStrokeWidth())} 
+                                     fill={index === 0 ? (isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`) : 'none'} 
+                                     fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                     stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`} 
+                                     stroke-width={borderStrokeWidth()}
+                                     stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                     style={{
+                                       "mix-blend-mode": boxMixBlendMode(),
+                                       "pointer-events": "none"
+                                     }}
+                                   />
+                                 )}
+                               </For>
+                             </Show>
+
                              <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
                                <For each={Array.from({ length: rings() }, (_, i) => i)}>
                                  {(index) => (
@@ -2521,6 +2717,47 @@ ${paintDef}${overlayGradDef}
                                  />
                                </g>
                              </Show>
+
+                             {/* 4.5. K Softbox Specular Overlay */}
+                             <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                               <path 
+                                 d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                 fill="none"
+                                 stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                 stroke-width={currentKStrokeWidth()}
+                                 stroke-linecap={linecap()}
+                                 style={{
+                                   "mix-blend-mode": boxMixBlendMode(),
+                                   "pointer-events": "none"
+                                 }}
+                               />
+                               <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                 <path 
+                                   d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                   fill="none"
+                                   stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                   stroke-width={currentKStrokeWidth()}
+                                   stroke-linecap={linecap()}
+                                   stroke-linejoin="miter"
+                                   style={{
+                                     "mix-blend-mode": boxMixBlendMode(),
+                                     "pointer-events": "none"
+                                   }}
+                                 />
+                                 <path 
+                                   d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                   fill="none"
+                                   stroke={isOptical ? `url(#gold-box-pattern-optical-${type})` : `url(#gold-box-pattern-${type})`}
+                                   stroke-width={currentKStrokeWidth()}
+                                   stroke-linecap={linecap()}
+                                   stroke-linejoin="miter"
+                                   style={{
+                                     "mix-blend-mode": boxMixBlendMode(),
+                                     "pointer-events": "none"
+                                   }}
+                                 />
+                               </g>
+                             </Show>
                            </svg>
                          </div>
                          <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
@@ -2568,7 +2805,7 @@ ${paintDef}${overlayGradDef}
                       
                       {/* SVG Render box */}
                       <div 
-                        ref={coinBoxRef}
+                        ref={(el) => { coinBoxRef = el; }}
                         class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative group overflow-hidden shadow-inner mb-3"
                       >
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -2576,8 +2813,7 @@ ${paintDef}${overlayGradDef}
                         <svg viewBox="0 0 100 100" class="w-28 h-28" style={{ filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` }}>
                           <defs>
                             {/* Standard Gradient (Linear or Radial) */}
-                            {/* Standard Gradient (Linear or Radial) */}
-                            <Show when={!isRadialActive() && !(gradientProfile() === 'Custom' && customType() === 'box')}>
+                            <Show when={!isRadialActive()}>
                               <linearGradient 
                                 id={`gold-grad-${type}`} 
                                 x1={cardCoords().x1} 
@@ -2712,21 +2948,22 @@ ${paintDef}${overlayGradDef}
                             </Show>
 
                             {/* Softbox reflection box pattern & blur filter */}
-                            <Show when={gradientProfile() === 'Custom' && customType() === 'box'}>
+                            <Show when={customType() === 'box'}>
                               <filter id={`softbox-blur-${type}-${uniqueId}`} x="-100%" y="-100%" width="300%" height="300%">
                                 <feGaussianBlur stdDeviation={boxBlur()} />
                               </filter>
                               
                               <pattern 
-                                id={`gold-grad-${type}`} 
+                                id={`gold-box-pattern-${type}`} 
                                 patternUnits="userSpaceOnUse" 
+                                x={activeCardShiftX()}
+                                y={activeCardShiftY()}
                                 width="100" 
                                 height="100"
                               >
-                                <rect width="100" height="100" fill={`url(#gold-box-base-grad-${type}-${uniqueId})`} />
                                 <rect 
-                                  x={50 - boxWidth() / 2 + activeCardShiftX()} 
-                                  y={50 - boxHeight() / 2 + activeCardShiftY()} 
+                                  x={50 - boxWidth() / 2} 
+                                  y={50 - boxHeight() / 2} 
                                   width={boxWidth()} 
                                   height={boxHeight()} 
                                   rx={boxCornerRadius()} 
@@ -2734,23 +2971,21 @@ ${paintDef}${overlayGradDef}
                                   fill={boxColor()} 
                                   opacity={boxOpacity()}
                                   filter={`url(#softbox-blur-${type}-${uniqueId})`}
-                                  style={{
-                                    "mix-blend-mode": boxMixBlendMode(),
-                                  }}
                                 />
                               </pattern>
 
                               {/* Optical pattern version */}
                               <pattern 
-                                id={`gold-grad-optical-${type}`} 
+                                id={`gold-box-pattern-optical-${type}`} 
                                 patternUnits="userSpaceOnUse" 
+                                x={activeCardShiftX()}
+                                y={activeCardShiftY()}
                                 width="100" 
                                 height="100"
                               >
-                                <rect width="100" height="100" fill={`url(#gold-box-base-grad-${type}-${uniqueId})`} />
                                 <rect 
-                                  x={50 - boxWidth() / 2 + activeCardShiftX()} 
-                                  y={50 - boxHeight() / 2 + activeCardShiftY()} 
+                                  x={50 - boxWidth() / 2} 
+                                  y={50 - boxHeight() / 2} 
                                   width={boxWidth()} 
                                   height={boxHeight()} 
                                   rx={boxCornerRadius()} 
@@ -2758,27 +2993,14 @@ ${paintDef}${overlayGradDef}
                                   fill={boxColor()} 
                                   opacity={boxOpacity()}
                                   filter={`url(#softbox-blur-${type}-${uniqueId})`}
-                                  style={{
-                                    "mix-blend-mode": boxMixBlendMode(),
-                                  }}
                                 />
                               </pattern>
+                             </Show>
                               
-                              <linearGradient 
-                                id={`gold-box-base-grad-${type}-${uniqueId}`}
-                                x1="0" y1="0" x2="100" y2="100"
-                                gradientUnits="userSpaceOnUse"
-                              >
-                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                  {(stop) => (
-                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                  )}
-                                </For>
-                              </linearGradient>
-                            </Show>
+
 
                             {/* Optical Sizing Gradient for smaller cell views */}
-                            <Show when={!isRadialActive() && !(gradientProfile() === 'Custom' && customType() === 'box')}>
+                            <Show when={!isRadialActive()}>
                               <linearGradient 
                                 id={`gold-grad-optical-${type}`} 
                                 x1={cardCoords().x1} 
@@ -2893,6 +3115,27 @@ ${paintDef}${overlayGradDef}
                                   />
                                 )}
                               </For>
+                              
+                              {/* Hexagon Softbox Specular Overlay */}
+                              <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                                <For each={Array.from({ length: rings() }, (_, i) => i)}>
+                                  {(index) => (
+                                    <polygon 
+                                      points={getHexagonPoints(index, borderStrokeWidth())} 
+                                      fill={index === 0 ? `url(#gold-box-pattern-${type})` : 'none'} 
+                                      fill-opacity={index === 0 ? hexFillOpacity() : 0}
+                                      stroke={`url(#gold-box-pattern-${type})`} 
+                                      stroke-width={borderStrokeWidth()}
+                                      stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
+                                      style={{
+                                        "mix-blend-mode": boxMixBlendMode(),
+                                        "pointer-events": "none"
+                                      }}
+                                    />
+                                  )}
+                                </For>
+                              </Show>
+
                               <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
                                 <For each={Array.from({ length: rings() }, (_, i) => i)}>
                                   {(index) => (
@@ -3041,6 +3284,47 @@ ${paintDef}${overlayGradDef}
                                     style={{
                                       "mix-blend-mode": overlayBlendMode(),
                                       opacity: overlayOpacity(),
+                                      "pointer-events": "none"
+                                    }}
+                                  />
+                                </g>
+                              </Show>
+
+                              {/* 4.5. K Softbox Specular Overlay */}
+                              <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                                <path 
+                                  d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                                  fill="none"
+                                  stroke={`url(#gold-box-pattern-${type})`}
+                                  stroke-width={currentKStrokeWidth()}
+                                  stroke-linecap={linecap()}
+                                  style={{
+                                    "mix-blend-mode": boxMixBlendMode(),
+                                    "pointer-events": "none"
+                                  }}
+                                />
+                                <g clip-path={`url(#k-horizontal-clip-${type})`}>
+                                  <path 
+                                    d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+                                    fill="none"
+                                    stroke={`url(#gold-box-pattern-${type})`}
+                                    stroke-width={currentKStrokeWidth()}
+                                    stroke-linecap={linecap()}
+                                    stroke-linejoin="miter"
+                                    style={{
+                                      "mix-blend-mode": boxMixBlendMode(),
+                                      "pointer-events": "none"
+                                    }}
+                                  />
+                                  <path 
+                                    d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+                                    fill="none"
+                                    stroke={`url(#gold-box-pattern-${type})`}
+                                    stroke-width={currentKStrokeWidth()}
+                                    stroke-linecap={linecap()}
+                                    stroke-linejoin="miter"
+                                    style={{
+                                      "mix-blend-mode": boxMixBlendMode(),
                                       "pointer-events": "none"
                                     }}
                                   />
@@ -3275,7 +3559,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-amber-500 font-mono tracking-wider uppercase block mb-1">Premium Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="gold" type={gradientProfile() === 'Custom' ? customType() : 'linear'}>
+                      <ReflectiveText profile="gold" type={customType()}>
                         IMPERIAL GOLD
                       </ReflectiveText>
                     </h3>
@@ -3307,14 +3591,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={demoProgress()} 
                       profile="gold" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'} 
+                      type={customType()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 12.5 kg</span>
                     <ReflectiveButton 
                       profile="gold" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'}
+                      type={customType()}
                       onClick={() => alert('Purchasing Imperial Gold')}
                     >
                       ACQUIRE
@@ -3329,7 +3613,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-slate-400 font-mono tracking-wider uppercase block mb-1">Standard Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="silver" type={gradientProfile() === 'Custom' ? customType() : 'linear'}>
+                      <ReflectiveText profile="silver" type={customType()}>
                         REFINED SILVER
                       </ReflectiveText>
                     </h3>
@@ -3361,14 +3645,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.max(0, demoProgress() - 15)} 
                       profile="silver" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'} 
+                      type={customType()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 42.0 kg</span>
                     <ReflectiveButton 
                       profile="silver" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'}
+                      type={customType()}
                       onClick={() => alert('Purchasing Refined Silver')}
                     >
                       ACQUIRE
@@ -3383,7 +3667,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-amber-700 font-mono tracking-wider uppercase block mb-1">Common Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="brass" type={gradientProfile() === 'Custom' ? customType() : 'linear'}>
+                      <ReflectiveText profile="brass" type={customType()}>
                         COMMON BRASS
                       </ReflectiveText>
                     </h3>
@@ -3415,14 +3699,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.min(100, demoProgress() + 20)} 
                       profile="brass" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'} 
+                      type={customType()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 110.4 kg</span>
                     <ReflectiveButton 
                       profile="brass" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'}
+                      type={customType()}
                       onClick={() => alert('Purchasing Common Brass')}
                     >
                       ACQUIRE
@@ -3437,7 +3721,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-slate-500 font-mono tracking-wider uppercase block mb-1">Underworld Marker</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="mark" type={gradientProfile() === 'Custom' ? customType() : 'linear'}>
+                      <ReflectiveText profile="mark" type={customType()}>
                         UNDERWORLD MARK
                       </ReflectiveText>
                     </h3>
@@ -3469,14 +3753,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.max(0, 100 - demoProgress())} 
                       profile="mark" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'} 
+                      type={customType()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 5.2 kg</span>
                     <ReflectiveButton 
                       profile="mark" 
-                      type={gradientProfile() === 'Custom' ? customType() : 'linear'}
+                      type={customType()}
                       onClick={() => alert('Claiming Underworld Mark')}
                     >
                       CLAIM
@@ -3571,25 +3855,25 @@ ${paintDef}${overlayGradDef}
             <h3 class="text-xs font-mono font-bold text-white/40 uppercase mb-3 tracking-wider text-center">Embossed 3D Metallic Typography</h3>
             <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 py-2">
               <div class="text-center">
-                <EmbossedReflectiveText profile="gold" type={gradientProfile() === 'Custom' ? customType() : 'linear'} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="gold" type={customType()} class="text-xl uppercase tracking-widest font-black">
                   GOLD EMBOSS
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Double Shadow Offset</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="silver" type={gradientProfile() === 'Custom' ? customType() : 'linear'} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="silver" type={customType()} class="text-xl uppercase tracking-widest font-black">
                   SILVER CHISEL
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Reflective Metallic</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="brass" type={gradientProfile() === 'Custom' ? customType() : 'linear'} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="brass" type={customType()} class="text-xl uppercase tracking-widest font-black">
                   BRASS SHIELD
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Dark Specular</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="mark" type={gradientProfile() === 'Custom' ? customType() : 'linear'} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="mark" type={customType()} class="text-xl uppercase tracking-widest font-black">
                   MARK CONTRACT
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">John Wick Lore</span>
