@@ -392,12 +392,12 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
    through the text/token glyph mask and slid by the reflex direction. This is
    literally the same texture the icon uses, so text/buttons/icon all match.
    ========================================================================== */
-.method-procedural .metal-gold,   .method-procedural .main-material-rich-token--gold   { --metal-image: var(--metal-gold-texture); }
-.method-procedural .metal-silver, .method-procedural .main-material-rich-token--silver { --metal-image: var(--metal-silver-texture); }
-.method-procedural .metal-brass,  .method-procedural .main-material-rich-token--brass  { --metal-image: var(--metal-brass-texture); }
-.method-procedural .metal-kan,    .method-procedural .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture); }
-.method-procedural .metal-credit, .method-procedural .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture); }
-.method-procedural .metal-mark,   .method-procedural .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture); }
+.method-procedural .metal-gold,   .method-procedural .main-material-rich-token--gold   { --metal-image: var(--metal-gold-texture-sm); }
+.method-procedural .metal-silver, .method-procedural .main-material-rich-token--silver { --metal-image: var(--metal-silver-texture-sm); }
+.method-procedural .metal-brass,  .method-procedural .main-material-rich-token--brass  { --metal-image: var(--metal-brass-texture-sm); }
+.method-procedural .metal-kan,    .method-procedural .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture-sm); }
+.method-procedural .metal-credit, .method-procedural .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture-sm); }
+.method-procedural .metal-mark,   .method-procedural .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture-sm); }
 
 /* Single baked-texture layer (replaces the vector gradient + highlight band),
    positioned by the global reflex direction. background-clip:text is inherited

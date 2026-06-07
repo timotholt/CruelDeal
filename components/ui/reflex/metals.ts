@@ -300,6 +300,9 @@ const publishMetalTextureVars = () => {
   const root = document.documentElement.style;
   (Object.keys(METALS) as MetalId[]).forEach((id) => {
     root.setProperty(`--metal-${id}-texture`, `url(${makeMetalTexture(id)})`);
+    // Small variant for CSS background-clip:text — glyphs show little texture
+    // detail, and a 128px bitmap is ~16x cheaper to re-clip per frame than 512px.
+    root.setProperty(`--metal-${id}-texture-sm`, `url(${makeMetalTexture(id, { size: 128 })})`);
   });
 };
 
