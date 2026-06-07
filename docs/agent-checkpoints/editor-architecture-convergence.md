@@ -1,6 +1,6 @@
 # Editor Architecture Convergence Checkpoint
 
-Last Updated: 2026-06-06
+Last Updated: 2026-06-07
 Status: active
 
 ## Goal
@@ -148,6 +148,15 @@ authoring JSON
   token parsing, markup/fit render-mode resolution, feed story text lookup,
   feed media CSS helpers, and material recipe text projection. The screen keeps
   only the Solid `FeedRichText` rendering wrapper.
+- [x] Moved feed authoring controls into
+  `components/screens/main-material/mainMaterialFeedEditors.tsx`.
+  `FeedRecipeEditor` and `FeedTextGlobalsEditor` now consume the extracted feed
+  model/text/layout contracts through explicit props while
+  `MainMaterialPreviewScreen.tsx` keeps state ownership and persistence.
+- [x] Extracted shared `/material-main` editor primitives into
+  `components/screens/main-material/mainMaterialEditorPrimitives.tsx`, so the
+  screen shell and extracted feed editors use the same `Slider` and `MiniButton`
+  controls without duplicating local editor chrome.
 
 ## Verification Evidence
 
@@ -187,28 +196,26 @@ authoring JSON
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that feed editor and preview component composition still
-live inside `MainMaterialPreviewScreen.tsx`, so the screen remains responsible
-for too much orchestration even though feed defaults, sanitization, targets, DOM
-audit, and text/render policy now have extracted contracts.
+next blocker family is that feed preview component composition still lives
+inside `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for
+too much orchestration even though feed defaults, sanitization, targets, DOM
+audit, text/render policy, and feed authoring controls now have extracted
+contracts.
 
 Recommended finish plan, in order:
 
-1. Extract feed editor components after the model is importable.
-   Move `FeedRecipeEditor` and `FeedTextGlobalsEditor` without changing state
-   ownership. Keep callbacks identical and rely on the new pure model tests.
-2. Extract feed preview renderer.
+1. Extract feed preview renderer.
    Move `FeedNodeFrame`, `ChromeFeedNodeTree`, `FeedCardTreeNode`,
    `FeedCarousel`, and `MainMaterialPreview`. Keep DOM registry/audit injection
    explicit so current inspector behavior survives.
-3. Extract `/material-main` import/export as an explicit compatibility adapter.
+2. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
    where the payloads are real contracts.
-4. Extract the top-level controller last into a
+3. Extract the top-level controller last into a
    `createMainMaterialEditorController` orchestration helper. At that point the
    screen should mostly compose workbench, editor, preview, and inspector.
-5. Continue `MaterialRecipeEditor` generated-control migration in this order:
+4. Continue `MaterialRecipeEditor` generated-control migration in this order:
    Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
    Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
