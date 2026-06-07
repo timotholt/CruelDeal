@@ -21,7 +21,13 @@ export type MaterialRichTextTag =
   | 'h1'
   | 'h2'
   | 'h3'
-  | 'h4';
+  | 'h4'
+  | 'gold'
+  | 'silver'
+  | 'brass'
+  | 'kan'
+  | 'credit'
+  | 'mark';
 
 export type MaterialRichTextToken =
   | { type: 'text'; text: string }
@@ -57,6 +63,12 @@ const richTextTagAliases: Record<string, MaterialRichTextTag | 'rule' | 'divider
   h2: 'h2',
   h3: 'h3',
   h4: 'h4',
+  gold: 'gold',
+  silver: 'silver',
+  brass: 'brass',
+  kan: 'kan',
+  credit: 'credit',
+  mark: 'mark',
   rule: 'rule',
   hr: 'rule',
   divider: 'divider',

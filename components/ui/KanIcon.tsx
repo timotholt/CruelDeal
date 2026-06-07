@@ -1,86 +1,7 @@
 import { createSignal, onMount, onCleanup, For, Show, mergeProps } from 'solid-js';
+import { globalShiftX, globalShiftY, sheenEnabled } from './MotionReflex';
 
-// Global shared signals for all icon instances to prevent duplicate window listeners
-const [globalShiftX, setGlobalShiftX] = createSignal(0);
-const [globalShiftY, setGlobalShiftY] = createSignal(0);
-const [gyroActive, setGyroActive] = createSignal(false);
-
-let listenerCount = 0;
-
-const handleGlobalMouseMove = (e: MouseEvent) => {
-  const dx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-  const dy = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
-  setGlobalShiftX(dx * 45);
-  setGlobalShiftY(dy * 45);
-};
-
-const handleGlobalDeviceOrientation = (e: DeviceOrientationEvent) => {
-  const gamma = e.gamma || 0; 
-  const beta = e.beta || 0;    
-  const dx = Math.max(-1, Math.min(1, gamma / 30));
-  const dy = Math.max(-1, Math.min(1, (beta - 45) / 30));
-  setGlobalShiftX(dx * 45);
-  setGlobalShiftY(dy * 45);
-};
-
-const initGlobalListeners = () => {
-  if (typeof window === 'undefined') return;
-  listenerCount++;
-  if (listenerCount === 1) {
-    window.addEventListener('mousemove', handleGlobalMouseMove);
-    if (
-      // @ts-ignore
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-ignore
-      typeof DeviceOrientationEvent.requestPermission !== 'function'
-    ) {
-      window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-      setGyroActive(true);
-    }
-  }
-};
-
-const removeGlobalListeners = () => {
-  if (typeof window === 'undefined') return;
-  listenerCount--;
-  if (listenerCount === 0) {
-    window.removeEventListener('mousemove', handleGlobalMouseMove);
-    window.removeEventListener('deviceorientation', handleGlobalDeviceOrientation);
-  }
-};
-
-/**
- * Static utility function developers can trigger via click handlers on mobile device UI
- * to unlock Apple iOS WebKit deviceorientation tilt permissions.
- */
-export const enableMobileGyroscope = async (): Promise<boolean> => {
-  if (
-    typeof window !== 'undefined' &&
-    // @ts-ignore
-    typeof DeviceOrientationEvent !== 'undefined' &&
-    // @ts-ignore
-    typeof DeviceOrientationEvent.requestPermission === 'function'
-  ) {
-    try {
-      // @ts-ignore
-      const state = await DeviceOrientationEvent.requestPermission();
-      if (state === 'granted') {
-        window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-        setGyroActive(true);
-        return true;
-      }
-    } catch (e) {
-      console.error('Failed to request orientation permissions:', e);
-    }
-  } else if (typeof window !== 'undefined') {
-    window.addEventListener('deviceorientation', handleGlobalDeviceOrientation);
-    setGyroActive(true);
-    return true;
-  }
-  return false;
-};
-
-export interface KitCoinIconProps {
+export interface KanIconProps {
   size?: number | string; // Width/Height. Defaults to '48px'.
   interactive?: boolean; // Enable mouse/gyroscope parallax sheen. Defaults to true.
   glowColor?: string; // Glow color (default: rgba(251, 191, 36, 0.45)). Set to 'none' to disable.
@@ -111,6 +32,15 @@ export interface KitCoinIconProps {
   gradientScale?: number; // Scaling/width of gradient transitions. Defaults to 1.0.
   gradientShift?: number; // Static shift offset. Defaults to 0.
   
+  // Softbox settings
+  boxWidth?: number;
+  boxHeight?: number;
+  boxBlur?: number;
+  boxColor?: string;
+  boxOpacity?: number;
+  boxCornerRadius?: number;
+  boxMixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'color-dodge' | 'soft-light';
+
   // Texture schemes
   fillMode?: 'gradient' | 'texture'; // Defaults to 'gradient'.
   selectedTexture?: string; // Name of active image file (default: Gold01.png)
@@ -122,7 +52,7 @@ export interface KitCoinIconProps {
   textureSaturation?: number;
   overlayOpacity?: number;
   overlayBlendMode?: 'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light';
-  customType?: 'linear' | 'radial';
+  customType?: 'linear' | 'radial' | 'box';
   
   // Custom class for outer wrapper
   class?: string;
@@ -130,7 +60,7 @@ export interface KitCoinIconProps {
   idPrefix?: string;
 }
 
-export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
+export const KanIcon = (rawProps: KanIconProps) => {
   // Merge default values
   const props = mergeProps({
     size: '48px',
@@ -157,6 +87,13 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
     gradientAngle: 45,
     gradientScale: 1.0,
     gradientShift: 0,
+    boxWidth: 45,
+    boxHeight: 45,
+    boxBlur: 12,
+    boxColor: '#FFFDDA',
+    boxOpacity: 0.6,
+    boxCornerRadius: 10,
+    boxMixBlendMode: 'color-dodge' as const,
     fillMode: 'gradient' as const,
     selectedTexture: 'Gold01.png',
     textureScale: 1.0,
@@ -172,32 +109,23 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
   }, rawProps);
 
   // Generate unique ID prefix to isolate gradients
-  const uniqueId = props.idPrefix || `coin-${Math.random().toString(36).substring(2, 9)}`;
+  const uniqueId = props.idPrefix || `kan-${Math.random().toString(36).substring(2, 9)}`;
 
-  onMount(() => {
-    if (props.interactive) {
-      initGlobalListeners();
-    }
-  });
-
-  onCleanup(() => {
-    if (props.interactive) {
-      removeGlobalListeners();
-    }
-  });
-
-  // Local cursor tracking signals
+  // Local hover tracking
+  const [isHovered, setIsHovered] = createSignal(false);
   const [localShiftX, setLocalShiftX] = createSignal(0);
   const [localShiftY, setLocalShiftY] = createSignal(0);
-  const [isHovered, setIsHovered] = createSignal(false);
 
   // Dynamic Shift Offsets (transitions to local coordinates when hovered)
-  const activeShiftX = () => props.interactive 
-    ? (isHovered() ? localShiftX() : globalShiftX()) 
-    : 0;
-  const activeShiftY = () => props.interactive 
-    ? (isHovered() ? localShiftY() : globalShiftY()) 
-    : 0;
+  const activeShiftX = () => {
+    if (!props.interactive || !sheenEnabled()) return 0;
+    return isHovered() ? localShiftX() : globalShiftX();
+  };
+  
+  const activeShiftY = () => {
+    if (!props.interactive || !sheenEnabled()) return 0;
+    return isHovered() ? localShiftY() : globalShiftY();
+  };
 
   const isRadialActive = () => {
     return ['R1', 'R2'].includes(props.gradientProfile) || (props.gradientProfile === 'Custom' && props.customType === 'radial');
@@ -432,11 +360,22 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
     return [];
   };
 
-  const finalColorUrl = () => props.fillMode === 'gradient' 
-    ? (isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad)`)
-    : `url(#${uniqueId}-pattern)`;
+  const finalColorUrl = () => {
+    if (props.fillMode === 'texture') {
+      return `url(#${uniqueId}-pattern)`;
+    }
+    if (props.gradientProfile === 'Custom' && props.customType === 'box') {
+      return `url(#${uniqueId}-box-pattern)`;
+    }
+    return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad)`;
+  };
 
-  const overlayGradUrl = () => isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad-overlay)`;
+  const overlayGradUrl = () => {
+    if (props.gradientProfile === 'Custom' && props.customType === 'box') {
+      return `url(#${uniqueId}-box-pattern)`;
+    }
+    return isOptical() ? `url(#${uniqueId}-grad-optical)` : `url(#${uniqueId}-grad-overlay)`;
+  };
 
   // Geometric coordinates for active K line
   const c = () => getKCoords(props.kScale, props.kThickness, props.linecap);
@@ -481,7 +420,7 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
       >
         <defs>
           {/* Base Material Gradient (Linear or Radial) */}
-          <Show when={!isRadialActive()}>
+          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
             <linearGradient 
               id={`${uniqueId}-grad`} 
               x1={gradCoords().x1} 
@@ -516,8 +455,53 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
             </radialGradient>
           </Show>
 
+          {/* Softbox reflection box pattern & blur filter */}
+          <Show when={props.gradientProfile === 'Custom' && props.customType === 'box'}>
+            <filter id={`${uniqueId}-softbox-blur`} x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation={props.boxBlur} />
+            </filter>
+            
+            <pattern 
+              id={`${uniqueId}-box-pattern`} 
+              patternUnits="userSpaceOnUse" 
+              width="100" 
+              height="100"
+            >
+              {/* Static Base Metal Gradient */}
+              <rect width="100" height="100" fill={`url(#${uniqueId}-box-base-grad)`} />
+              
+              {/* Sliding Blurred Softbox Rect */}
+              <rect 
+                x={50 - props.boxWidth / 2 + activeShiftX()} 
+                y={50 - props.boxHeight / 2 + activeShiftY()} 
+                width={props.boxWidth} 
+                height={props.boxHeight} 
+                rx={props.boxCornerRadius} 
+                ry={props.boxCornerRadius} 
+                fill={props.boxColor} 
+                opacity={props.boxOpacity}
+                filter={`url(#${uniqueId}-softbox-blur)`}
+                style={{
+                  "mix-blend-mode": props.boxMixBlendMode,
+                }}
+              />
+            </pattern>
+            
+            <linearGradient 
+              id={`${uniqueId}-box-base-grad`}
+              x1="0" y1="0" x2="100" y2="100"
+              gradientUnits="userSpaceOnUse"
+            >
+              <For each={getGradientStops()}>
+                {(stop) => (
+                  <stop offset={stop.offset} stop-color={stop.color} />
+                )}
+              </For>
+            </linearGradient>
+          </Show>
+
           {/* Optional Texture Overlay Gradient Layer */}
-          <Show when={!isRadialActive()}>
+          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
             <linearGradient 
               id={`${uniqueId}-grad-overlay`} 
               x1={gradCoords().x1} 
@@ -552,8 +536,8 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
             </radialGradient>
           </Show>
 
-          {/* Optical Sizing Gradient (simplified stops for smaller rendering size cells) */}
-          <Show when={!isRadialActive()}>
+          {/* Optical Sizing Gradient */}
+          <Show when={!isRadialActive() && !(props.gradientProfile === 'Custom' && props.customType === 'box')}>
             <linearGradient
               id={`${uniqueId}-grad-optical`}
               x1={gradCoords().x1}
@@ -564,7 +548,6 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
               spreadMethod="reflect"
             >
               <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(props.gradientProfile)}>
-                {/* Smooth Gold */}
                 <stop offset="0%" stop-color="#78581E" />
                 <stop offset="30%" stop-color="#E2B857" />
                 <stop offset="55%" stop-color="#FFF3C2" />
@@ -572,7 +555,6 @@ export const KitCoinIcon = (rawProps: KitCoinIconProps) => {
                 <stop offset="100%" stop-color="#9E782F" />
               </Show>
               <Show when={['D', 'E', 'F'].includes(props.gradientProfile)}>
-                {/* Smooth Silver */}
                 <stop offset="0%" stop-color="#70757D" />
                 <stop offset="30%" stop-color="#CED2D8" />
                 <stop offset="55%" stop-color="#EBEFF5" />
