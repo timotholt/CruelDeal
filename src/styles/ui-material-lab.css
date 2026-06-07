@@ -1358,8 +1358,10 @@
   padding: 1px;
   border: 0;
   background:
-    linear-gradient(180deg, var(--border-top), var(--border-bottom)),
-    linear-gradient(90deg, var(--border-left), var(--border-right));
+    linear-gradient(var(--border-top), var(--border-top)) top / 100% 1px no-repeat,
+    linear-gradient(var(--border-right), var(--border-right)) right / 1px 100% no-repeat,
+    linear-gradient(var(--border-bottom), var(--border-bottom)) bottom / 100% 1px no-repeat,
+    linear-gradient(var(--border-left), var(--border-left)) left / 1px 100% no-repeat;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
