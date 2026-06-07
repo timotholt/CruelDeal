@@ -33,9 +33,6 @@ import {
 } from '../ui/material-node';
 import {
   feedNodeLayoutCss,
-  resolveLayoutDirection,
-  resolveLayoutHMode,
-  resolveLayoutWMode,
   type FeedNodeLayout,
 } from './main-material/feedNodeLayoutCss';
 import {
@@ -125,21 +122,23 @@ import {
   feedNodeMaxLines,
   feedNodeSurfaceRecipe,
   feedRichTextTransform,
-  feedRichTextVars,
   feedTextCss,
-  parseFeedRichText,
   recipeWithFeedTextStyle,
   resolveFeedNodeRenderMode,
   resolveFeedNodeTextStyle,
-  richTextTagOverridesOpacity,
-  type FeedRichTextTag,
-  type FeedRichTextToken,
 } from './main-material/mainMaterialFeedText';
 import {
   FeedRecipeEditor,
   FeedTextGlobalsEditor,
   type FeedRecipe,
 } from './main-material/mainMaterialFeedEditors';
+import {
+  FeedNodeFrame,
+  MainMaterialDomRegistrationProvider,
+  MaterialDomRegistryTarget,
+  type CssEmissionProbe,
+} from './main-material/mainMaterialFeedFrame';
+import { FeedRichText } from './main-material/mainMaterialFeedRichText';
 import { MiniButton, Slider } from './main-material/mainMaterialEditorPrimitives';
 import {
   cloneFeedCardType,
@@ -218,11 +217,6 @@ interface SurfaceRecipes {
   toolbar: MaterialRecipe;
   nav: MaterialRecipe;
   navContainer: MaterialRecipe;
-}
-
-interface CssEmissionProbe {
-  targetId: string | null;
-  disabledKeys: ReadonlySet<string>;
 }
 
 type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
@@ -2661,59 +2655,6 @@ const FakeProfileIcon = () => (
   </div>
 );
 
-const FeedRichText = (props: { value: string; cardType: FeedCardTypeRecipe; style: FeedTextSlotStyle }) => {
-  const tokens = () => parseFeedRichText(props.value);
-  const renderTokens = (items: FeedRichTextToken[], insideTag = false): JSX.Element => (
-    <For each={items}>
-      {(token) => (
-        <Show
-          when={token.type === 'tag'}
-          fallback={(
-            <Show
-              when={token.type === 'rule'}
-              fallback={(
-                <Show
-                  when={token.type === 'divider'}
-                  fallback={(
-                    token.type === 'break'
-                      ? <span class="main-material-rich-break" aria-hidden="true" />
-                      : token.type === 'text'
-                        ? insideTag ? token.text : <span class="main-material-rich-token main-material-rich-token--normal">{token.text}</span>
-                        : null
-                  )}
-                >
-                  <span class="main-material-rich-divider" aria-hidden="true" />
-                </Show>
-              )}
-            >
-              <span class="main-material-rich-rule" aria-hidden="true" />
-            </Show>
-          )}
-        >
-          {(() => {
-            const tag = (token as { tag: FeedRichTextTag }).tag;
-            return (
-              <span
-                class={`main-material-rich-token main-material-rich-token--${tag}`}
-                classList={{ 'main-material-rich-token--opacity-override': richTextTagOverridesOpacity(props.cardType, tag) }}
-              >
-                {renderTokens((token as { children: FeedRichTextToken[] }).children, true)}
-              </span>
-            );
-          })()}
-        </Show>
-      )}
-    </For>
-  );
-  return (
-    <span class="main-material-rich-text" style={feedRichTextVars(props.cardType, props.style)}>
-      {renderTokens(tokens())}
-    </span>
-  );
-};
-
-
-
 const cssDeclarationLines = (style: JSX.CSSProperties) => (
   Object.entries(style as Record<string, string | number>)
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
@@ -2733,6 +2674,11 @@ const registerMaterialDomElement = (targetId: string, instanceId: string, elemen
   materialDomRegistry.register(targetId, instanceId, element);
 };
 const findRegisteredDomAuditTarget = (targetId: string) => materialDomRegistry.findTarget(targetId);
+const mainMaterialDomRegistration = {
+  createInstanceId: createMaterialDomInstanceId,
+  register: registerMaterialDomElement,
+  unregister: unregisterMaterialDomElement,
+};
 
 const cssEscapeIdent = (value: string) => (
   typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
@@ -3074,99 +3020,6 @@ const EmissionInspector = (props: {
     </Show>
   </div>
 );
-
-const FeedNodeFrame = (props: {
-  node: FeedCardNode;
-  targetId: string;
-  role: PreviewTargetRole;
-  targetClass: string;
-  children: JSX.Element;
-  ariaLabel?: string;
-  cssProbe?: CssEmissionProbe;
-  style?: JSX.CSSProperties;
-  onPointerDown?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-  onPointerMove?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-  onPointerUp?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-  onPointerCancel?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-  onPointerLeave?: (event: PointerEvent & { currentTarget: HTMLDivElement }) => void;
-}) => {
-  const materialInstanceId = createMaterialDomInstanceId();
-  let frameElement: HTMLDivElement | undefined;
-  createEffect(() => {
-    const targetId = props.targetId;
-    if (frameElement) registerMaterialDomElement(targetId, materialInstanceId, frameElement);
-  });
-  onCleanup(() => unregisterMaterialDomElement(materialInstanceId));
-  const layoutStyle = () => {
-    const css = {
-      ...feedNodeLayoutCss(props.node.layout, { forcePaddingVar: props.node.type === 'button' }),
-    };
-    if (props.cssProbe?.targetId === props.targetId) {
-      props.cssProbe.disabledKeys.forEach((key) => {
-        delete (css as Record<string, unknown>)[key];
-      });
-    }
-    return { ...css, ...props.style };
-  };
-  return (
-    <div
-      ref={(element) => {
-        frameElement = element;
-        registerMaterialDomElement(props.targetId, materialInstanceId, element);
-      }}
-      class={`main-material-card-node main-material-card-node--${props.node.type}-frame ${props.targetClass}`}
-      aria-label={props.ariaLabel}
-      data-feed-layout-mode={props.node.layout.mode}
-      data-feed-layout-slot={props.node.layout.slot}
-      data-w-mode={resolveLayoutWMode(props.node.layout)}
-      data-h-mode={resolveLayoutHMode(props.node.layout)}
-      data-direction={resolveLayoutDirection(props.node.layout)}
-      data-wrap={props.node.layout.wrap ? 'true' : undefined}
-      data-material-target-id={props.targetId}
-      data-material-instance-id={materialInstanceId}
-      data-material-role={props.role}
-      data-css-probe-target={props.cssProbe?.targetId === props.targetId ? 'true' : undefined}
-      style={layoutStyle()}
-      onPointerDown={props.onPointerDown}
-      onPointerMove={props.onPointerMove}
-      onPointerUp={props.onPointerUp}
-      onPointerCancel={props.onPointerCancel}
-      onPointerLeave={props.onPointerLeave}
-    >
-      {props.children}
-    </div>
-  );
-};
-
-const MaterialDomRegistryTarget = (props: {
-  targetId: string;
-  role: PreviewTargetRole;
-  class?: string;
-  children: JSX.Element;
-}) => {
-  const materialInstanceId = createMaterialDomInstanceId();
-  let elementRef: HTMLDivElement | undefined;
-  createEffect(() => {
-    const targetId = props.targetId;
-    if (elementRef) registerMaterialDomElement(targetId, materialInstanceId, elementRef);
-  });
-  onCleanup(() => unregisterMaterialDomElement(materialInstanceId));
-
-  return (
-    <div
-      ref={(element) => {
-        elementRef = element;
-        registerMaterialDomElement(props.targetId, materialInstanceId, element);
-      }}
-      class={props.class}
-      data-material-target-id={props.targetId}
-      data-material-instance-id={materialInstanceId}
-      data-material-role={props.role}
-    >
-      {props.children}
-    </div>
-  );
-};
 
 interface ChromeFeedNodeRenderContext {
   targetIdForNode: (node: FeedCardNode) => string;
@@ -5183,38 +5036,40 @@ export const MainMaterialPreviewScreen = () => {
         selectionPulseTick={selectionFlashTick()}
         selectionPulseEnabled={selectionOverlayMode() === 'flash'}
         preview={(
-          <MainMaterialPreview
-            previewStates={previewStates()}
-            selectedPart={selectedPart()}
-            selectedFeedPreviewState={selectedPreviewState()}
-            selectedFeedTargetId={selectedFeedTargetId()}
-            selectedTopBarTargetId={selectedTopBarTargetId()}
-            selectedToolbarTargetId={selectedToolbarTargetId()}
-            selectedNavTargetId={selectedNavTargetId()}
-            previewInteractionMode={previewInteractionMode()}
-            forcePreview={forcePreview()}
-            activeNavIndex={activeNavIndex()}
-            onActiveNavIndexChange={setActiveNavIndex}
-            selectedClass={selectedClass}
-            backdrop={backdrop()}
-            title={title()}
-            feed={feed()}
-            feedStories={feedStories()}
-            feedCardTypes={feedCardTypes()}
-            feedStoryImageOverrides={feedStoryImageOverrides()}
-            selectedFeedTargetClass={selectedFeedTargetClass}
-            selectedTopBarTargetClass={selectedTopBarTargetClass}
-            selectedToolbarTargetClass={selectedToolbarTargetClass}
-            selectedNavTargetClass={selectedNavTargetClass}
-            cssProbe={{
-              targetId: selectedCssProbeTargetId(),
-              disabledKeys: cssProbeDisabledKeys(),
-            }}
-            activeFeedStoryId={selectedFeedStoryId()}
-            onActiveFeedStoryChange={selectFeedStory}
-            nav={nav()}
-            surfaces={surfaces()}
-          />
+          <MainMaterialDomRegistrationProvider registration={mainMaterialDomRegistration}>
+            <MainMaterialPreview
+              previewStates={previewStates()}
+              selectedPart={selectedPart()}
+              selectedFeedPreviewState={selectedPreviewState()}
+              selectedFeedTargetId={selectedFeedTargetId()}
+              selectedTopBarTargetId={selectedTopBarTargetId()}
+              selectedToolbarTargetId={selectedToolbarTargetId()}
+              selectedNavTargetId={selectedNavTargetId()}
+              previewInteractionMode={previewInteractionMode()}
+              forcePreview={forcePreview()}
+              activeNavIndex={activeNavIndex()}
+              onActiveNavIndexChange={setActiveNavIndex}
+              selectedClass={selectedClass}
+              backdrop={backdrop()}
+              title={title()}
+              feed={feed()}
+              feedStories={feedStories()}
+              feedCardTypes={feedCardTypes()}
+              feedStoryImageOverrides={feedStoryImageOverrides()}
+              selectedFeedTargetClass={selectedFeedTargetClass}
+              selectedTopBarTargetClass={selectedTopBarTargetClass}
+              selectedToolbarTargetClass={selectedToolbarTargetClass}
+              selectedNavTargetClass={selectedNavTargetClass}
+              cssProbe={{
+                targetId: selectedCssProbeTargetId(),
+                disabledKeys: cssProbeDisabledKeys(),
+              }}
+              activeFeedStoryId={selectedFeedStoryId()}
+              onActiveFeedStoryChange={selectFeedStory}
+              nav={nav()}
+              surfaces={surfaces()}
+            />
+          </MainMaterialDomRegistrationProvider>
         )}
         editor={editor}
         actions={(

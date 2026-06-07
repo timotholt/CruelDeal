@@ -146,8 +146,7 @@ authoring JSON
   `components/screens/main-material/mainMaterialFeedText.ts`. The extracted
   contract now owns text style inheritance, local node text overrides, rich-text
   token parsing, markup/fit render-mode resolution, feed story text lookup,
-  feed media CSS helpers, and material recipe text projection. The screen keeps
-  only the Solid `FeedRichText` rendering wrapper.
+  feed media CSS helpers, and material recipe text projection.
 - [x] Moved feed authoring controls into
   `components/screens/main-material/mainMaterialFeedEditors.tsx`.
   `FeedRecipeEditor` and `FeedTextGlobalsEditor` now consume the extracted feed
@@ -157,6 +156,15 @@ authoring JSON
   `components/screens/main-material/mainMaterialEditorPrimitives.tsx`, so the
   screen shell and extracted feed editors use the same `Slider` and `MiniButton`
   controls without duplicating local editor chrome.
+- [x] Started feed preview renderer extraction by moving frame registration into
+  `components/screens/main-material/mainMaterialFeedFrame.tsx`. The screen now
+  owns the DOM registry instance and passes only a small registration API through
+  `MainMaterialDomRegistrationProvider`; `FeedNodeFrame` and
+  `MaterialDomRegistryTarget` no longer live in the giant screen.
+- [x] Moved the Solid rich-text renderer wrapper into
+  `components/screens/main-material/mainMaterialFeedRichText.tsx`, so
+  `MainMaterialPreviewScreen.tsx` no longer imports rich-text token/parser
+  internals from the text contract.
 
 ## Verification Evidence
 
@@ -199,15 +207,16 @@ Continue decomposing `/material-main` around pure editor/runtime contracts. The
 next blocker family is that feed preview component composition still lives
 inside `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for
 too much orchestration even though feed defaults, sanitization, targets, DOM
-audit, text/render policy, and feed authoring controls now have extracted
-contracts.
+audit, text/render policy, feed authoring controls, frame registration, and
+rich-text rendering now have extracted contracts.
 
 Recommended finish plan, in order:
 
 1. Extract feed preview renderer.
-   Move `FeedNodeFrame`, `ChromeFeedNodeTree`, `FeedCardTreeNode`,
-   `FeedCarousel`, and `MainMaterialPreview`. Keep DOM registry/audit injection
-   explicit so current inspector behavior survives.
+   `FeedNodeFrame` and rich text are now extracted. Next move
+   `ChromeFeedNodeTree`, `FeedCardTreeNode`, `FeedCarousel`, and
+   `MainMaterialPreview`. Keep DOM registry/audit injection explicit so current
+   inspector behavior survives.
 2. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
