@@ -97,6 +97,11 @@ assert.equal(styleOf({ bevelCorners: ['top-left'] })['--bevel-size'], '11px');
 const tex = styleOf({});
 assert.equal(tex['--texture-strength'], '1');
 assert.equal(tex['--texture-scale'], '512px');
+const silver = styleOf({ texture: 'silver01', textureStrength: 100, textureScale: 512 });
+assert.equal(surfaceLayerFlags({ texture: 'silver01', textureStrength: 100 }).texture, true);
+assert.match(surfaceClass({ texture: 'silver01', textureStrength: 100 }), /cd-surface--texture-silver01/);
+assert.equal(silver['--texture-strength'], '1');
+assert.equal(silver['--texture-image'], 'url("/art/textures/stone-local/Silver01.png")');
 
 // material base
 assert.equal(styleOf({ texture: 'none', material: 'white' })['--material-base-color'], '#ffffff');

@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import {
   clearSurfaceField,
   patchSurfaceField,
+  patchSurfaceFieldWithContext,
   surfaceFieldDisabledByCapabilities,
   visibleSurfaceFieldDefinitions,
 } from './surfaceEditorFilters';
@@ -57,4 +58,16 @@ assert.equal(
 );
 
 assert.deepEqual(patchSurfaceField('shadowBlur', 24), { shadowBlur: 24 });
+assert.deepEqual(patchSurfaceFieldWithContext('texture', 'silver01', { textureStrength: 0 }), {
+  texture: 'silver01',
+  textureStrength: 100,
+});
+assert.deepEqual(patchSurfaceFieldWithContext('texture', 'stone04', { textureStrength: 38 }), {
+  texture: 'stone04',
+  textureStrength: 38,
+});
+assert.deepEqual(patchSurfaceFieldWithContext('texture', 'none', { textureStrength: 38 }), {
+  texture: 'none',
+  textureStrength: 0,
+});
 assert.deepEqual(clearSurfaceField('shadowBlur'), { shadowBlur: undefined });

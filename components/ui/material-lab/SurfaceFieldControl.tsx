@@ -3,7 +3,7 @@ import type { SurfaceOptions } from './surfaceSchema';
 import type { SurfaceFieldDefinition } from './surfaceFieldMetadata';
 import {
   clearSurfaceField,
-  patchSurfaceField,
+  patchSurfaceFieldWithContext,
   type SurfaceEditorMode,
   type SurfaceEditorPatch,
 } from './surfaceEditorFilters';
@@ -37,7 +37,11 @@ export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
   const hasOverride = () => Object.prototype.hasOwnProperty.call(props.value, props.definition.key);
   const current = () => valueForField(props.definition, props.value, props.inheritedValue);
   const disabled = () => !!props.disabled;
-  const patch = (value: SurfaceOptions[K]) => props.onPatch(patchSurfaceField(props.definition.key, value));
+  const patch = (value: SurfaceOptions[K]) => props.onPatch(patchSurfaceFieldWithContext(
+    props.definition.key,
+    value,
+    { ...props.inheritedValue, ...props.value },
+  ));
   const clear = () => props.onPatch(clearSurfaceField(props.definition.key));
 
   const control = (): JSX.Element => {

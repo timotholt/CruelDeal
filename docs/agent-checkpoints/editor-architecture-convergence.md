@@ -125,7 +125,7 @@ authoring JSON
   private to `MainMaterialPreviewScreen.tsx`.
 - [x] Moved feed card-type cloning and card-type/node sanitization into
   `mainMaterialFeedModel.ts`, with defaults and fallback surface passed in by
-  the screen until `createDefaultFeedCardTypes` can move safely.
+  callers for compatibility.
 - [x] Moved feed region/glass/CTA surface factories into
   `mainMaterialFeedModel.ts`; CTA interaction overlays are now private model
   construction instead of screen-owned helper state.
@@ -133,13 +133,15 @@ authoring JSON
   `createFeedSlots()`, so default card-type construction no longer reaches into
   screen-owned slot id/inherited-weight policy.
 - [x] Moved reusable hero/simple feed node factory shapes into
-  `mainMaterialFeedModel.ts` with tests. The remaining `createDefaultFeedCardTypes`
-  literal is still screen-owned because its current inline nodes have drifted
-  from those reusable shapes and need a deliberate default-card split.
+  `mainMaterialFeedModel.ts` with tests.
 - [x] Moved mission briefing feed surface factories and
   `createMissionBriefingLeftNodes()` into `mainMaterialFeedModel.ts`, with tests
   covering mission card/panel/text/CTA surfaces and the left-side mission node
   tree.
+- [x] Moved `createDefaultFeedCardTypes()` and its three model-owned default
+  card factories into `mainMaterialFeedModel.ts`. `/material-main` now consumes
+  feed card defaults from the model layer instead of owning the 7k-line default
+  card literal locally.
 
 ## Verification Evidence
 
@@ -184,36 +186,19 @@ depend on hidden structures in the giant screen.
 
 Recommended finish plan, in order:
 
-1. Continue extracting the pure feed document/model layer into
-   `components/screens/main-material/mainMaterialFeedModel.ts`.
-   Feed story defaults/sanitizers, feed text slot ids/labels, inherited-weight
-   slot policy, media fade modes/labels, and the feed background image recipe
-   contract/factory/sanitizer plus feed text slot style
-   contract/factory/clone/sanitizer are already extracted. Feed node contracts,
-   layout defaults, node construction/cloning, and node layout sanitization are
-   also extracted. Card-type clone helpers and card-type/node sanitizers are
-   extracted with explicit default/fallback inputs. Feed region/glass/CTA
-   surface factories, slot-map construction, and reusable hero/simple feed node
-   factory shapes are also extracted. Next split the remaining large
-   `createDefaultFeedCardTypes` literal into smaller model-owned default-card
-   factories. Mission briefing surfaces and left-node construction are now
-   model-owned, so the next candidate is extracting card_type_01's default
-   factory first and comparing current inline children before replacing them.
-   Add tests for default card IDs, cloning depth, sanitize fallback behavior,
-   and persisted compatibility.
-2. Extract feed text/render policy into
+1. Extract feed text/render policy into
    `components/screens/main-material/mainMaterialFeedText.ts`.
    Move text-style resolution, rich-text parsing, render-mode resolution, node
    content mapping, and CSS variable helpers. Add tests for markup parsing,
    legacy render-mode mapping, inheritance, and fit-vs-flow decisions.
-3. Extract feed editor components after the model is importable.
+2. Extract feed editor components after the model is importable.
    Move `FeedRecipeEditor` and `FeedTextGlobalsEditor` without changing state
    ownership. Keep callbacks identical and rely on the new pure model tests.
-4. Extract feed preview renderer.
+3. Extract feed preview renderer.
    Move `FeedNodeFrame`, `ChromeFeedNodeTree`, `FeedCardTreeNode`,
    `FeedCarousel`, and `MainMaterialPreview`. Keep DOM registry/audit injection
    explicit so current inspector behavior survives.
-5. Extract `/material-main` import/export as an explicit compatibility adapter.
+4. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
    where the payloads are real contracts.

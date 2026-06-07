@@ -5,6 +5,10 @@ import {
   cloneFeedCardTypes,
   cloneFeedStories,
   cloneFeedSlotStyle,
+  createDefaultCommunityCardType,
+  createDefaultFeedCardTypes,
+  createDefaultMissionBriefingV1CardType,
+  createDefaultPatchNotesCardType,
   createFeedBackgroundImage,
   createFeedCtaSurface,
   createFeedGlassRegionSurface,
@@ -304,6 +308,47 @@ assert.equal(missionNodes[0].fitMode, 'single-line');
 assert.equal(missionNodes[1].children?.[0].id, 'contract-cta');
 assert.equal(missionNodes[1].children?.[0].surface?.material, 'custom');
 assert.equal(missionNodes[2].textRender, 'rich');
+
+const missionBriefingV1 = createDefaultMissionBriefingV1CardType();
+const missionBriefingV1Again = createDefaultMissionBriefingV1CardType();
+assert.equal(missionBriefingV1.id, 'card_type_01');
+assert.equal(missionBriefingV1.name, 'Mission Briefing V1');
+assert.equal(missionBriefingV1.backgroundImage.fadeMode, 'none');
+assert.deepEqual(missionBriefingV1.children.map((node) => node.id), [
+  'deadline-badge',
+  'mission-briefing',
+  'sector-mark',
+]);
+assert.equal(missionBriefingV1.children[1].children?.[0].id, 'contract-cta');
+assert.equal(missionBriefingV1.slots.contractBriefing.textTransform, 'none');
+assert.equal(missionBriefingV1.slots.sectorLabel.textOpacity, 34);
+assert.notEqual(missionBriefingV1, missionBriefingV1Again);
+assert.notEqual(missionBriefingV1.surface, missionBriefingV1Again.surface);
+assert.notEqual(missionBriefingV1.children[0], missionBriefingV1Again.children[0]);
+assert.notEqual(missionBriefingV1.slots.contractTitle, missionBriefingV1Again.slots.contractTitle);
+
+const patchNotesCard = createDefaultPatchNotesCardType();
+assert.equal(patchNotesCard.id, 'card_type_02');
+assert.equal(patchNotesCard.description, 'Clean system update and patch-note cards.');
+assert.deepEqual(patchNotesCard.children.map((node) => node.id), ['center-copy', 'meta-top-right']);
+assert.equal(patchNotesCard.children[0].children?.[2].binding, 'body');
+assert.equal(patchNotesCard.slots.title.contentTone, 'white');
+
+const communityCard = createDefaultCommunityCardType();
+assert.equal(communityCard.id, 'card_type_03');
+assert.equal(communityCard.description, 'Dark community and competitive cards.');
+assert.deepEqual(communityCard.children.map((node) => node.id), ['center-copy', 'meta-top-right']);
+assert.equal(communityCard.children[0].children?.[0].binding, 'eyebrow');
+assert.equal(communityCard.slots.body.contentTone, 'white');
+
+const defaultFeedCardTypes = createDefaultFeedCardTypes();
+const defaultFeedCardTypesAgain = createDefaultFeedCardTypes();
+assert.deepEqual(Object.keys(defaultFeedCardTypes), ['card_type_01', 'card_type_02', 'card_type_03']);
+assert.equal(defaultFeedCardTypes.card_type_01.name, 'Mission Briefing V1');
+assert.equal(defaultFeedCardTypes.card_type_02.name, 'card_type_02');
+assert.equal(defaultFeedCardTypes.card_type_03.name, 'card_type_03');
+assert.notEqual(defaultFeedCardTypes.card_type_02, defaultFeedCardTypesAgain.card_type_02);
+assert.notEqual(defaultFeedCardTypes.card_type_03.children[0], defaultFeedCardTypesAgain.card_type_03.children[0]);
 
 const createTestCardType = (id: FeedCardTypeId, name: string): FeedCardTypeRecipe => ({
   id,

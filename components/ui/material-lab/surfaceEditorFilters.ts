@@ -69,6 +69,22 @@ export const patchSurfaceField = <K extends keyof SurfaceOptions>(
   value: SurfaceOptions[K],
 ): SurfaceEditorPatch => ({ [key]: value } as SurfaceEditorPatch);
 
+export const patchSurfaceFieldWithContext = <K extends keyof SurfaceOptions>(
+  key: K,
+  value: SurfaceOptions[K],
+  current: Partial<SurfaceOptions> = {},
+): SurfaceEditorPatch => {
+  if (key === 'texture') {
+    const texture = value as SurfaceOptions['texture'];
+    if (texture === 'none') return { texture, textureStrength: 0 };
+    return {
+      texture,
+      textureStrength: (current.textureStrength ?? 0) > 0 ? current.textureStrength : 100,
+    };
+  }
+  return patchSurfaceField(key, value);
+};
+
 export const clearSurfaceField = <K extends keyof SurfaceOptions>(
   key: K,
 ): SurfaceEditorPatch => ({ [key]: undefined } as SurfaceEditorPatch);
