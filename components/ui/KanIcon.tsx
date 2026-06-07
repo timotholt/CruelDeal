@@ -1,7 +1,7 @@
 import { For, Show, mergeProps } from 'solid-js';
 import { sheenEnabled } from './reflex/ReflexController';
 import { createReflexShift, REFLEX_SVG_UNITS } from './reflex/useReflex';
-import { METALS, PROFILE_TO_METAL, metalSvgStops } from './reflex/metals';
+import { METALS, PROFILE_TO_METAL, metalSvgStops, proceduralNoiseEnabled, PRESETS, getBrushedNoiseTexture } from './reflex/metals';
 
 
 export interface KanIconProps {
@@ -45,7 +45,7 @@ export interface KanIconProps {
   boxMixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'color-dodge' | 'soft-light';
 
   // Texture schemes
-  fillMode?: 'gradient' | 'texture'; // Defaults to 'gradient'.
+  fillMode?: 'gradient' | 'texture' | 'procedural'; // Defaults to 'gradient'.
   selectedTexture?: string; // Name of active image file (default: Gold01.png)
   textureScale?: number; // Scale/zoom of texture image. Defaults to 1.0.
   textureOffsetX?: number; // Texture X offset. Defaults to 0.
@@ -218,19 +218,16 @@ export const KanIcon = (rawProps: KanIconProps) => {
   };
 
   const isOptical = () => {
-    if (typeof props.size === 'number') {
-      return props.size <= 40;
-    }
-    if (typeof props.size === 'string') {
-      const match = props.size.match(/^([\d.]+)(px|rem|em)?$/);
-      if (match) {
-        const val = parseFloat(match[1]);
-        const unit = match[2] || 'px';
-        if (unit === 'px') return val <= 40;
-        if (unit === 'rem' || unit === 'em') return val <= 2.5;
-      }
-    }
     return false;
+  };
+  
+  const getCanonicalMetal = () => {
+    const profile = props.gradientProfile;
+    if (['D', 'E', 'silver'].includes(profile)) return 'silver';
+    if (['G', 'brass'].includes(profile)) return 'brass';
+    if (['F', 'mark'].includes(profile)) return 'mark';
+    if (['credit'].includes(profile)) return 'credit';
+    return 'gold';
   };
 
   const getGradientStops = () => {
@@ -238,137 +235,24 @@ export const KanIcon = (rawProps: KanIconProps) => {
     // shared registry so the hex matches the text/buttons exactly.
     const metal = PROFILE_TO_METAL[props.gradientProfile];
     if (metal) return metalSvgStops(METALS[metal]);
-    if (props.gradientProfile === 'A') {
-      return [
-        { offset: '0%', color: '#FFF3C2' },
-        { offset: '25%', color: '#E2B857' },
-        { offset: '50%', color: '#FCF6BA' },
-        { offset: '75%', color: '#B28424' },
-        { offset: '100%', color: '#FCD267' }
-      ];
-    }
-    if (props.gradientProfile === 'B') {
-      return [
-        { offset: '0%', color: '#251502' },
-        { offset: '25%', color: '#E5B842' },
-        { offset: '50%', color: '#FFF7C7' },
-        { offset: '75%', color: '#E5B842' },
-        { offset: '100%', color: '#251502' }
-      ];
-    }
-    if (props.gradientProfile === 'C') {
-      return [
-        { offset: '0%', color: '#FFF2C2' },
-        { offset: '30%', color: '#C5A44E' },
-        { offset: '50%', color: '#A48748' },
-        { offset: '70%', color: '#EDCD75' },
-        { offset: '100%', color: '#B7984A' }
-      ];
-    }
-    if (props.gradientProfile === 'D') {
-      return [
-        { offset: '0%', color: '#EBEFF5' },
-        { offset: '25%', color: '#B5B9BF' },
-        { offset: '50%', color: '#EDF1F7' },
-        { offset: '75%', color: '#83878D' },
-        { offset: '100%', color: '#CED2D8' }
-      ];
-    }
-    if (props.gradientProfile === 'E') {
-      return [
-        { offset: '0%', color: '#D1D5DB' },
-        { offset: '30%', color: '#6B7280' },
-        { offset: '50%', color: '#374151' },
-        { offset: '70%', color: '#9CA3AF' },
-        { offset: '100%', color: '#4B5563' }
-      ];
-    }
-    if (props.gradientProfile === 'F') {
-      return [
-        { offset: '0%', color: '#9CA3AF' },
-        { offset: '25%', color: '#4B5563' },
-        { offset: '50%', color: '#1F2937' },
-        { offset: '75%', color: '#111827' },
-        { offset: '100%', color: '#374151' }
-      ];
-    }
-    if (props.gradientProfile === 'G') {
-      return [
-        { offset: '0%', color: '#55411B' },
-        { offset: '15%', color: '#997E47' },
-        { offset: '30%', color: '#55411B' },
-        { offset: '45%', color: '#FFFDDA' },
-        { offset: '60%', color: '#D5BB8A' },
-        { offset: '75%', color: '#B8A269' },
-        { offset: '85%', color: '#55411B' },
-        { offset: '100%', color: '#FBECA9' }
-      ];
-    }
-    if (props.gradientProfile === 'I') {
-      return [
-        { offset: '0%', color: '#7C6535' },
-        { offset: '15%', color: '#997E47' },
-        { offset: '30%', color: '#7C6535' },
-        { offset: '45%', color: '#FFFDDA' },
-        { offset: '60%', color: '#D5BB8A' },
-        { offset: '75%', color: '#B8A269' },
-        { offset: '85%', color: '#7C6535' },
-        { offset: '100%', color: '#FBECA9' }
-      ];
-    }
-    if (props.gradientProfile === 'J') {
-      return [
-        { offset: '0%', color: '#7C6535' },
-        { offset: '8%', color: '#997E47' },
-        { offset: '26%', color: '#B8A269' },
-        { offset: '30%', color: '#7C6535' },
-        { offset: '34%', color: '#FFFDDA' },
-        { offset: '60%', color: '#D5BB8A' },
-        { offset: '81%', color: '#B8A269' },
-        { offset: '85%', color: '#7C6535' },
-        { offset: '93%', color: '#FBECA9' },
-        { offset: '100%', color: '#7C6535' }
-      ];
-    }
-    if (props.gradientProfile === 'K') {
-      return [
-        { offset: '0%', color: '#FFFDDA' },
-        { offset: '31%', color: '#D5BB8A' },
-        { offset: '44%', color: '#7C6535' },
-        { offset: '100%', color: '#55411B' }
-      ];
-    }
-    if (props.gradientProfile === 'R1') {
-      return [
-        { offset: '0%', color: '#FFFDDA' },
-        { offset: '15%', color: '#D5BB8A' },
-        { offset: '35%', color: '#7C6535' },
-        { offset: '55%', color: '#FFFDDA' },
-        { offset: '75%', color: '#D5BB8A' },
-        { offset: '90%', color: '#7C6535' },
-        { offset: '100%', color: '#55411B' }
-      ];
-    }
-    if (props.gradientProfile === 'R2') {
-      return [
-        { offset: '0%', color: '#FFFDDA' },
-        { offset: '25%', color: '#D5BB8A' },
-        { offset: '60%', color: '#7C6535' },
-        { offset: '100%', color: '#55411B' }
-      ];
-    }
+    
     if (props.gradientProfile === 'Custom') {
       return [...(props.customStops || [])].sort((a, b) => a.offset - b.offset).map(stop => ({
         offset: `${stop.offset}%`,
         color: stop.color
       }));
     }
-    return [];
+    
+    const stops = PRESETS[props.gradientProfile] || PRESETS.J;
+    return stops.map(s => ({ offset: `${s.offset}%`, color: s.color }));
   };
 
   const finalColorUrl = () => {
     if (props.fillMode === 'texture') {
       return `url(#${uniqueId}-pattern)`;
+    }
+    if (props.fillMode === 'procedural') {
+      return `url(#${uniqueId}-procedural-pattern)`;
     }
     if (props.customType === 'box') {
       return `url(#${uniqueId}-grad-base)`;
@@ -552,6 +436,64 @@ export const KanIcon = (rawProps: KanIconProps) => {
             </Show>
           </radialGradient>
 
+          {/* Procedural Brushed Metal Pattern */}
+          <Show when={props.fillMode === 'procedural'}>
+            {/* Brushed Noise Pattern */}
+            <pattern 
+              id={`${uniqueId}-brushed-noise-pattern`} 
+              width={128 * (props.textureScale ?? 1.0)} 
+              height={128 * (props.textureScale ?? 1.0)} 
+              x={(props.textureOffsetX ?? 0) + (props.interactive ? activeShiftX() : 0)} 
+              y={(props.textureOffsetY ?? 0) + (props.interactive ? activeShiftY() : 0)} 
+              patternUnits="userSpaceOnUse"
+            >
+              <image 
+                href={getBrushedNoiseTexture()} 
+                width={128 * (props.textureScale ?? 1.0)} 
+                height={128 * (props.textureScale ?? 1.0)} 
+                style={{
+                  filter: `brightness(${props.textureBrightness ?? 1.0}) contrast(${props.textureContrast ?? 1.0}) saturate(${props.textureSaturation ?? 1.0})`
+                }}
+              />
+            </pattern>
+
+            <pattern 
+              id={`${uniqueId}-procedural-pattern`} 
+              patternUnits="userSpaceOnUse" 
+              x="0" 
+              y="0" 
+              width="100" 
+              height="100"
+            >
+              {/* Base Gradient matching Gradient Mode */}
+              <rect 
+                x="0" 
+                y="0" 
+                width="100" 
+                height="100" 
+                fill={
+                  props.customType === 'box'
+                    ? `url(#${uniqueId}-box-pattern)`
+                    : (isRadialActive() ? `url(#${uniqueId}-grad-radial)` : `url(#${uniqueId}-grad-linear)`)
+                } 
+              />
+              {/* Brushed Metal Grain overlay */}
+              <Show when={proceduralNoiseEnabled()}>
+                <rect 
+                  x="0" 
+                  y="0" 
+                  width="100" 
+                  height="100" 
+                  fill={`url(#${uniqueId}-brushed-noise-pattern)`} 
+                  style={{
+                    "mix-blend-mode": "overlay",
+                    opacity: 0.15
+                  }} 
+                />
+              </Show>
+            </pattern>
+          </Show>
+
           {/* Photographic Texture Image Pattern */}
           <pattern 
             id={`${uniqueId}-pattern`} 
@@ -646,7 +588,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
         </Show>
 
         {/* 4.5. Optional Softbox Specular Overlay Pass for Gradient Mode */}
-        <Show when={props.fillMode === 'gradient' && props.customType === 'box'}>
+        <Show when={(props.fillMode === 'gradient' || props.fillMode === 'procedural') && props.customType === 'box'}>
           <For each={Array.from({ length: props.rings }, (_, i) => i)}>
             {(index) => (
               <polygon 
@@ -756,7 +698,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
         </g>
 
         {/* 8. K Texture spec overlay Pass */}
-        <Show when={props.fillMode === 'texture' && props.overlayOpacity > 0}>
+        <Show when={(props.fillMode === 'texture' || props.fillMode === 'procedural') && props.overlayOpacity > 0}>
           <path 
             d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
             fill="none"
@@ -800,7 +742,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
         </Show>
 
         {/* 8.5. K Softbox specular overlay Pass for Gradient Mode */}
-        <Show when={props.fillMode === 'gradient' && props.customType === 'box'}>
+        <Show when={(props.fillMode === 'gradient' || props.fillMode === 'procedural') && props.customType === 'box'}>
           <path 
             d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
             fill="none"

@@ -384,3 +384,51 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   --base-metal-gradient: var(--metal-mark-gradient);
   --highlight-color: var(--metal-mark-highlight);
 }
+
+/* Procedural method overrides */
+.method-procedural.metal-gold,
+.method-procedural .main-material-rich-token--gold,
+.main-material-rich-token--gold.method-procedural {
+  --base-metal-gradient: var(--metal-gold-procedural-texture);
+}
+.method-procedural.metal-silver,
+.method-procedural .main-material-rich-token--silver,
+.main-material-rich-token--silver.method-procedural {
+  --base-metal-gradient: var(--metal-silver-procedural-texture);
+}
+.method-procedural.metal-brass,
+.method-procedural .main-material-rich-token--brass,
+.main-material-rich-token--brass.method-procedural {
+  --base-metal-gradient: var(--metal-brass-procedural-texture);
+}
+.method-procedural.metal-kan,
+.method-procedural .main-material-rich-token--kan,
+.main-material-rich-token--kan.method-procedural {
+  --base-metal-gradient: var(--metal-kan-procedural-texture);
+}
+.method-procedural.metal-credit,
+.method-procedural .main-material-rich-token--credit,
+.main-material-rich-token--credit.method-procedural {
+  --base-metal-gradient: var(--metal-credit-procedural-texture);
+}
+.method-procedural.metal-mark,
+.method-procedural .main-material-rich-token--mark,
+.main-material-rich-token--mark.method-procedural {
+  --base-metal-gradient: var(--metal-mark-procedural-texture);
+}
+
+/* When procedural noise is enabled, background-image will expand to 3 layers.
+   We override background-position and background-blend-mode to support the 3rd layer
+   while keeping the base gradient static at the center. */
+.method-procedural .sheen-linear {
+  background-position: calc(50% + var(--reflex-x) * 40%) calc(50% + var(--reflex-y) * 40%), center, center;
+  background-blend-mode: overlay, overlay, normal;
+}
+.method-procedural .sheen-radial {
+  background-position: center, center, center;
+  background-blend-mode: overlay, overlay, normal;
+}
+.method-procedural .sheen-box {
+  background-position: center, center, center;
+  background-blend-mode: var(--box-blend-mode, overlay), overlay, normal;
+}

@@ -1,6 +1,7 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
 import { KanIcon } from '../ui/KanIcon';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/reflex/useReflex';
+import { METALS, PROFILE_TO_METAL, proceduralNoiseEnabled, setProceduralNoise, PRESETS, getBrushedNoiseTexture } from '../ui/reflex/metals';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -232,7 +233,18 @@ export const IconsPreviewScreen = () => {
   const [kDiagWidth, setKDiagWidth] = createSignal(25.5);
   const [kOffsetX, setKOffsetX] = createSignal(-0.5);
   const [kOffsetY, setKOffsetY] = createSignal(0);
-  const [fillMode, setFillMode] = createSignal<'gradient' | 'texture'>('gradient');
+  const [fillMode, setFillMode] = createSignal<'gradient' | 'texture' | 'procedural'>('gradient');
+  const [tweakerTab, setTweakerTab] = createSignal<'geometry' | 'texturing'>('texturing');
+
+  const getCanonicalMetal = () => {
+    const profile = gradientProfile();
+    if (['D', 'E', 'silver'].includes(profile)) return 'silver';
+    if (['G', 'brass'].includes(profile)) return 'brass';
+    if (['F', 'mark'].includes(profile)) return 'mark';
+    if (['credit'].includes(profile)) return 'credit';
+    return 'gold';
+  };
+
   const [selectedTexture, setSelectedTexture] = createSignal('Gold01.png');
   const [textureScale, setTextureScale] = createSignal(1.0);
   const [textureOffsetX, setTextureOffsetX] = createSignal(0);
@@ -492,6 +504,13 @@ export const IconsPreviewScreen = () => {
     { id: 10, offset: 100, color: '#7C6535' }
   ]);
 
+  const getActiveStops = () => {
+    if (gradientProfile() === 'Custom') {
+      return [...customStops()].sort((a, b) => a.offset - b.offset);
+    }
+    return PRESETS[gradientProfile()] || PRESETS.J;
+  };
+
   const gradCoords = (customX?: number, customY?: number) => {
     const rad = (gradientAngle() * Math.PI) / 180;
     const cx = 50;
@@ -525,6 +544,54 @@ export const IconsPreviewScreen = () => {
     const fx = 50 + activeX + (gradientShift() * Math.cos(rad));
     const fy = 50 + activeY + (gradientShift() * Math.sin(rad));
     return { cx: 50, cy: 50, r, fx, fy };
+  };
+
+  // Single source of truth for the preview coins: the editor signals mapped to
+  // KanIcon props. Getters keep it reactive when spread into <KanIcon>. Per-type
+  // thickness/kThickness are passed separately by each card. This is what lets
+  // every preview coin render through the ONE KanIcon renderer instead of a
+  // hand-rolled SVG duplicate.
+  const sharedKanProps = {
+    get interactive() { return interactiveSheen(); },
+    get gradientProfile() { return gradientProfile(); },
+    get customStops() { return customStops().map((s) => ({ offset: s.offset, color: s.color })); },
+    get gradientAngle() { return gradientAngle(); },
+    get gradientScale() { return gradientScale(); },
+    get gradientShift() { return gradientShift(); },
+    get rings() { return rings(); },
+    get ringGap() { return ringGap(); },
+    get kScale() { return kScale(); },
+    get bevelOffset() { return bevelOffset(); },
+    get bevelOpacity() { return bevelOpacity(); },
+    get hexFillOpacity() { return hexFillOpacity(); },
+    get linecap() { return linecap(); },
+    get kBlockMode() { return kBlockMode(); },
+    get kOffsetX() { return kOffsetX(); },
+    get kOffsetY() { return kOffsetY(); },
+    get kDiag2X() { return kDiag2X(); },
+    get kDiag1Slope() { return kDiag1Slope(); },
+    get kDiag2Slope() { return kDiag2Slope(); },
+    get kDiagWidth() { return kDiagWidth(); },
+    get fillMode() { return fillMode(); },
+    get selectedTexture() { return selectedTexture(); },
+    get textureScale() { return textureScale(); },
+    get textureOffsetX() { return textureOffsetX(); },
+    get textureOffsetY() { return textureOffsetY(); },
+    get textureBrightness() { return textureBrightness(); },
+    get textureContrast() { return textureContrast(); },
+    get textureSaturation() { return textureSaturation(); },
+    get overlayOpacity() { return overlayOpacity(); },
+    get overlayBlendMode() { return overlayBlendMode(); },
+    get customType() { return customType(); },
+    get boxWidth() { return boxWidth(); },
+    get boxHeight() { return boxHeight(); },
+    get boxBlur() { return boxBlur(); },
+    get boxColor() { return boxColor(); },
+    get boxOpacity() { return boxOpacity(); },
+    get boxCornerRadius() { return boxCornerRadius(); },
+    get boxMixBlendMode() { return boxMixBlendMode(); },
+    get glowRadius() { return glowIntensity(); },
+    get glowColor() { return glowIntensity() > 0 ? 'rgba(251, 191, 36, 0.45)' : 'none'; },
   };
 
   const stopsCssString = () => {
@@ -670,7 +737,25 @@ export const IconsPreviewScreen = () => {
         : (isRadialActive()
           ? `    <radialGradient id="gold" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
           : `    <linearGradient id="gold" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`))
-      : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`;
+      : (fillMode() === 'procedural'
+        ? (() => {
+            const baseGradDef = customType() === 'box'
+              ? `    <filter id="softbox-blur" x="-100%" y="-100%" width="300%" height="300%">\n      <feGaussianBlur stdDeviation="${boxBlur()}" />\n    </filter>\n    <linearGradient id="gold-base-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </linearGradient>\n    <pattern id="gold-base-fill" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-base-grad)" />\n      <rect x="${(50 - boxWidth() / 2).toFixed(1)}" y="${(50 - boxHeight() / 2).toFixed(1)}" width="${boxWidth()}" height="${boxHeight()}" rx="${boxCornerRadius()}" ry="${boxCornerRadius()}" fill="${boxColor()}" opacity="${boxOpacity()}" filter="url(#softbox-blur)" style="mix-blend-mode: ${boxMixBlendMode()};" />\n    </pattern>`
+              : (isRadialActive()
+                ? `    <radialGradient id="gold-base-fill" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
+                : `    <linearGradient id="gold-base-fill" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`);
+
+            const noiseDef = proceduralNoiseEnabled()
+              ? `\n    <pattern id="brushed-noise" width="128" height="128" patternUnits="userSpaceOnUse">\n      <image href="${getBrushedNoiseTexture()}" width="128" height="128" />\n    </pattern>`
+              : '';
+
+            const overlayRect = proceduralNoiseEnabled()
+              ? `\n      <rect width="100" height="100" fill="url(#brushed-noise)" style="mix-blend-mode: overlay; opacity: 0.15;" />`
+              : '';
+
+            return `${baseGradDef}${noiseDef}\n    <pattern id="gold-texture" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-base-fill)" />${overlayRect}\n    </pattern>`;
+          })()
+        : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`);
 
     const overlayGradDef = fillMode() === 'texture' && overlayOpacity() > 0
       ? (customType() === 'box'
@@ -1133,9 +1218,29 @@ ${paintDef}${overlayGradDef}
             {/* Interactive Editor Controls */}
             <div class="lg:col-span-1 p-3.5 rounded-lg bg-white/[0.02] border border-white/10 backdrop-blur-md flex flex-col justify-between gap-4">
               <div>
-                <h3 class="text-xs font-semibold tracking-wider uppercase text-white/80 mb-2.5 pb-1.5 border-b border-white/5">
-                  SVG Geometry Tweaker
+                <h3 class="text-xs font-semibold tracking-wider uppercase text-white/80 mb-2 pb-1.5 border-b border-white/5">
+                  SVG Currency Icon Lab
                 </h3>
+
+                {/* Tab Switcher */}
+                <div class="flex border-b border-white/10 mb-3.5 gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setTweakerTab('texturing')}
+                    class={`flex-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-center transition-all ${tweakerTab() === 'texturing' ? 'text-amber-400 border-b-2 border-amber-500 font-bold' : 'text-white/40 hover:text-white/70 border-b-2 border-transparent'}`}
+                  >
+                    Texturing
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setTweakerTab('geometry')}
+                    class={`flex-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-center transition-all ${tweakerTab() === 'geometry' ? 'text-amber-400 border-b-2 border-amber-500 font-bold' : 'text-white/40 hover:text-white/70 border-b-2 border-transparent'}`}
+                  >
+                    Geometry
+                  </button>
+                </div>
+
+                <Show when={tweakerTab() === 'texturing'}>
 
                  {/* Performance gate: hide blur / glow / texture-filter effects */}
                  <label class="mb-2.5 flex items-center gap-2 cursor-pointer select-none rounded border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5">
@@ -1153,26 +1258,32 @@ ${paintDef}${overlayGradDef}
                  {/* Fill Mode Switcher */}
                  <div class="mb-2.5">
                    <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Fill Mode</span>
-                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                     <button 
-                       onClick={() => setFillMode('gradient')}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'gradient' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       GRADIENT
-                     </button>
-                     <Show when={heavyFx()}>
-                       <button
-                         onClick={() => setFillMode('texture')}
-                         class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                       >
-                         TEXTURE FILE
-                       </button>
-                     </Show>
-                   </div>
+                   <div class={`grid ${heavyFx() ? 'grid-cols-3' : 'grid-cols-2'} gap-1 bg-black/40 p-0.5 rounded border border-white/5`}>
+                      <button 
+                        onClick={() => setFillMode('gradient')}
+                        class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'gradient' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                      >
+                        GRADIENT
+                      </button>
+                      <button 
+                        onClick={() => setFillMode('procedural')}
+                        class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'procedural' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                      >
+                        PROCEDURAL
+                      </button>
+                      <Show when={heavyFx()}>
+                        <button
+                          onClick={() => setFillMode('texture')}
+                          class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                        >
+                          TEXTURE FILE
+                        </button>
+                      </Show>
+                    </div>
                  </div>
 
                  {/* Material Gradient Profiles or Texture Dropdown */}
-                 <Show when={fillMode() === 'gradient'}>
+                 <Show when={fillMode() === 'gradient' || fillMode() === 'procedural'}>
                    <div class="mb-2.5">
                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Material Gradient Scheme</span>
                      <select
@@ -1188,20 +1299,20 @@ ${paintDef}${overlayGradDef}
                        }}
                        class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1.5 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
                      >
-                       <option value="G">Opt G: Horizon Au (Reference match)</option>
-                       <option value="I">Opt I: Soft Horizon Au (Subtle)</option>
-                       <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
-                       <option value="K">Opt K: Soft Chrome II (Linear Preset)</option>
-                       <option value="A">Opt A: Shiny Au</option>
-                       <option value="B">Opt B: Contrast Au</option>
-                       <option value="C">Opt C: Antique Au</option>
-                       <option value="D">Opt D: Platinum Ag</option>
-                       <option value="E">Opt E: Steel Ag</option>
-                       <option value="F">Opt F: Obsidian Ag</option>
-                       <option value="R1">Opt R1: Radial Chrome (Dome Reflect)</option>
-                       <option value="R2">Opt R2: Radial Soft (Smooth Dome)</option>
-                       <option value="Custom">Opt H: Custom (Interactive Editor)</option>
-                     </select>
+                        <option value="A">Opt A: Shiny Au</option>
+                        <option value="B">Opt B: Contrast Au</option>
+                        <option value="C">Opt C: Antique Au</option>
+                        <option value="D">Opt D: Platinum Ag</option>
+                        <option value="E">Opt E: Steel Ag</option>
+                        <option value="F">Opt F: Obsidian Ag</option>
+                        <option value="G">Opt G: Horizon Au (Reference match)</option>
+                        <option value="Custom">Opt H: Custom (Interactive Editor)</option>
+                        <option value="I">Opt I: Soft Horizon Au (Subtle)</option>
+                        <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
+                        <option value="K">Opt K: Soft Chrome II (Linear Preset)</option>
+                        <option value="R1">Opt R1: Radial Chrome (Dome Reflect)</option>
+                        <option value="R2">Opt R2: Radial Soft (Smooth Dome)</option>
+                      </select>
                    </div>
 
                    {/* Reflection Style Selector (Globally Visible for all profiles) */}
@@ -1238,7 +1349,7 @@ ${paintDef}${overlayGradDef}
                  </Show>
 
                   {/* Dynamic Gradient stop editor (Opt H Custom only) */}
-                  <Show when={fillMode() === 'gradient' && gradientProfile() === 'Custom' && customType() !== 'box'}>
+                  <Show when={(fillMode() === 'gradient' || fillMode() === 'procedural') && gradientProfile() === 'Custom' && customType() !== 'box'}>
                     <div class="mt-4 border-t border-white/10 pt-4">
                       <h4 class="text-[10.5px] font-semibold tracking-wider uppercase text-amber-400 mb-3 flex justify-between items-center">
                         <span>Gradient stop editor</span>
@@ -1356,6 +1467,13 @@ ${paintDef}${overlayGradDef}
                               { id: 4, offset: 70, color: '#9CA3AF' },
                               { id: 5, offset: 100, color: '#4B5563' }
                             ]);
+                            else if (val === 'F') setCustomStops([
+                              { id: 1, offset: 0, color: '#9CA3AF' },
+                              { id: 2, offset: 25, color: '#4B5563' },
+                              { id: 3, offset: 50, color: '#1F2937' },
+                              { id: 4, offset: 75, color: '#111827' },
+                              { id: 5, offset: 100, color: '#374151' }
+                            ]);
                             else if (val === 'G') setCustomStops([
                               { id: 1, offset: 0, color: '#55411B' },
                               { id: 2, offset: 8, color: '#997E47' },
@@ -1418,17 +1536,18 @@ ${paintDef}${overlayGradDef}
                           class="bg-[#12131a] border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
                         >
                           <option value="">-- Choose Preset --</option>
+                          <option value="A">Opt A: Shiny Au</option>
+                          <option value="B">Opt B: Contrast Au</option>
+                          <option value="C">Opt C: Antique Au</option>
+                          <option value="D">Opt D: Platinum Ag</option>
+                          <option value="E">Opt E: Steel Ag</option>
+                          <option value="F">Opt F: Obsidian Ag</option>
                           <option value="G">Opt G: Horizon Au</option>
                           <option value="I">Opt I: Soft Horizon Au</option>
                           <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
                           <option value="K">Opt K: Soft Chrome II</option>
                           <option value="R1">Opt R1: Radial Chrome</option>
                           <option value="R2">Opt R2: Radial Soft</option>
-                          <option value="A">Opt A: Shiny Au</option>
-                          <option value="B">Opt B: Contrast Au</option>
-                          <option value="C">Opt C: Antique Au</option>
-                          <option value="D">Opt D: Platinum Ag</option>
-                          <option value="E">Opt E: Steel Ag</option>
                         </select>
                       </div>
 
@@ -1741,7 +1860,7 @@ ${paintDef}${overlayGradDef}
                   </Show>
 
                   {/* Softbox Reflection Editor Panel (Visible whenever Softbox style is active) */}
-                  <Show when={fillMode() === 'gradient' && customType() === 'box'}>
+                  <Show when={(fillMode() === 'gradient' || fillMode() === 'procedural') && customType() === 'box'}>
                     <div class="mt-4 border-t border-white/10 pt-4">
                       <h4 class="text-[10.5px] font-semibold tracking-wider uppercase text-amber-400 mb-3 flex justify-between items-center">
                         <span>Softbox Reflection Editor</span>
@@ -1930,22 +2049,55 @@ ${paintDef}${overlayGradDef}
                       </div>
                     </div>
                   </Show>
+                  
+                  <Show when={fillMode() === 'texture' || fillMode() === 'procedural'}>
+                    <Show when={fillMode() === 'texture'}>
+                      <div class="mb-2.5">
+                        <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Active Texture File</span>
+                        <select
+                          value={selectedTexture()}
+                          onChange={(e) => setSelectedTexture(e.currentTarget.value)}
+                          class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                        >
+                          <For each={textureFiles}>
+                            {(file) => (
+                              <option value={file} class="bg-[#12131a] text-white/80">{file}</option>
+                            )}
+                          </For>
+                        </select>
+                      </div>
+                    </Show>
 
-                 <Show when={fillMode() === 'texture'}>
-                    <div class="mb-2.5">
-                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Active Texture File</span>
-                      <select
-                        value={selectedTexture()}
-                        onChange={(e) => setSelectedTexture(e.currentTarget.value)}
-                        class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
-                      >
-                        <For each={textureFiles}>
-                          {(file) => (
-                            <option value={file} class="bg-[#12131a] text-white/80">{file}</option>
-                          )}
-                        </For>
-                      </select>
-                    </div>
+                    <Show when={fillMode() === 'procedural'}>
+                      <div class="mb-3.5 flex flex-col gap-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none rounded border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5 w-full">
+                          <input
+                            type="checkbox"
+                            checked={proceduralNoiseEnabled()}
+                            onChange={(e) => setProceduralNoise(e.currentTarget.checked)}
+                            class="accent-amber-500 cursor-pointer"
+                          />
+                          <span class="text-[10px] leading-tight text-amber-200/90">
+                            Enable Brushed Metal Grain & Scratches
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTextureScale(1.0);
+                            setTextureBrightness(1.0);
+                            setTextureOffsetX(0);
+                            setTextureOffsetY(0);
+                            setTextureContrast(1.0);
+                            setTextureSaturation(1.0);
+                            setProceduralNoise(false);
+                          }}
+                          class="w-full py-1 text-[9.5px] font-mono border border-amber-500/25 hover:border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/15 text-amber-300 hover:text-amber-200 rounded transition-all uppercase tracking-wider font-semibold text-center"
+                        >
+                          Reset Sliders
+                        </button>
+                      </div>
+                    </Show>
 
                     {/* Texture Scale Slider */}
                     <div class="mb-2.5">
@@ -2049,352 +2201,404 @@ ${paintDef}${overlayGradDef}
                       />
                     </div>
 
-                    {/* Overlay Gradient Opacity Slider */}
-                    <div class="mb-2.5">
-                      <div class="flex justify-between text-[11px] mb-0.5">
-                        <span class="text-white/60">Overlay Gradient Opacity</span>
-                        <span class="font-mono text-amber-400 font-semibold">{(overlayOpacity() * 100).toFixed(0)}%</span>
+                    <Show when={fillMode() === 'texture'}>
+                      {/* Overlay Gradient Opacity Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Overlay Gradient Opacity</span>
+                          <span class="font-mono text-amber-400 font-semibold">{(overlayOpacity() * 100).toFixed(0)}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0.0" 
+                          max="1.0" 
+                          step="0.05"
+                          value={overlayOpacity()}
+                          onInput={(e) => setOverlayOpacity(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
                       </div>
-                      <input 
-                        type="range" 
-                        min="0.0" 
-                        max="1.0" 
-                        step="0.05"
-                        value={overlayOpacity()}
-                        onInput={(e) => setOverlayOpacity(parseFloat(e.currentTarget.value))}
-                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                      />
-                    </div>
 
-                    {/* Overlay Gradient Blend Mode Selector */}
-                    <div class="mb-2.5">
-                      <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider font-mono">Overlay Blend Mode</span>
-                      <select
-                        value={overlayBlendMode()}
-                        onChange={(e) => setOverlayBlendMode(e.currentTarget.value as any)}
-                        class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
-                      >
-                        <option value="overlay" class="bg-[#12131a] text-white/80">overlay</option>
-                        <option value="color-dodge" class="bg-[#12131a] text-white/80">color-dodge</option>
-                        <option value="soft-light" class="bg-[#12131a] text-white/80">soft-light</option>
-                        <option value="multiply" class="bg-[#12131a] text-white/80">multiply</option>
-                        <option value="screen" class="bg-[#12131a] text-white/80">screen</option>
-                      </select>
-                    </div>
+                      {/* Overlay Gradient Blend Mode Selector */}
+                      <div class="mb-2.5">
+                        <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider font-mono">Overlay Blend Mode</span>
+                        <select
+                          value={overlayBlendMode()}
+                          onChange={(e) => setOverlayBlendMode(e.currentTarget.value as any)}
+                          class="w-full bg-[#12131a] border border-white/10 rounded px-2 py-1 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
+                        >
+                          <option value="overlay" class="bg-[#12131a] text-white/80">overlay</option>
+                          <option value="color-dodge" class="bg-[#12131a] text-white/80">color-dodge</option>
+                          <option value="soft-light" class="bg-[#12131a] text-white/80">soft-light</option>
+                          <option value="multiply" class="bg-[#12131a] text-white/80">multiply</option>
+                          <option value="screen" class="bg-[#12131a] text-white/80">screen</option>
+                        </select>
+                      </div>
+                    </Show>
                   </Show>
 
-                {/* Stroke Cap Style Toggle */}
-                 <div class="mb-2.5">
-                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Stroke Cap Edges</span>
-                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                     <button 
-                       onClick={() => setLinecap('butt')}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'butt' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       SHARP
-                     </button>
-                     <button 
-                       onClick={() => setLinecap('round')}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'round' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       ROUNDED
-                     </button>
-                   </div>
-                 </div>
- 
-                 {/* K Block Mode Toggle */}
-                 <div class="mb-2.5">
-                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Rendering Mode</span>
-                   <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                     <button 
-                       onClick={() => {
-                         setKBlockMode(false);
-                         setKThickness(6.5);
-                       }}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${!kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       LINE/STROKE
-                     </button>
-                     <button 
-                       onClick={() => {
-                         setKBlockMode(true);
-                         setLinecap('butt'); // Enforce sharp caps for block mode
-                         if (kThickness() < 12) setKThickness(16); // Set a good default block thickness
-                       }}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       BLOCK MODE
-                     </button>
-                   </div>
-                 </div>
-
-                 {/* Hexagon Border Rings Selector */}
-                 <div class="mb-2.5">
-                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Hexagon Border Count</span>
-                   <div class="grid grid-cols-3 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
-                     <button 
-                       onClick={() => setRings(1)}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       1 RING
-                     </button>
-                     <button 
-                       onClick={() => setRings(2)}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       2 RINGS
-                     </button>
-                     <button 
-                       onClick={() => setRings(3)}
-                       class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 3 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                     >
-                       3 RINGS
-                     </button>
-                   </div>
-                 </div>
-
-                {/* K Scale Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Letter K Size / Scale</span>
-                    <span class="font-mono text-amber-400 font-semibold">{(kScale() * 100).toFixed(0)}%</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0.5" 
-                    max="1.5" 
-                    step="0.05"
-                    value={kScale()}
-                    onInput={(e) => setKScale(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Nudge K Left/Right Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Nudge K Left/Right</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kOffsetX() > 0 ? `+` : ``}{kOffsetX()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="-15" 
-                    max="15" 
-                    step="0.5"
-                    value={kOffsetX()}
-                    onInput={(e) => setKOffsetX(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Nudge K Up/Down Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Nudge K Up/Down</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kOffsetY() > 0 ? `+` : ``}{kOffsetY()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="-15" 
-                    max="15" 
-                    step="0.5"
-                    value={kOffsetY()}
-                    onInput={(e) => setKOffsetY(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Arm Span Width (Anchor X) Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Arm Span Width</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kDiagWidth()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="10" 
-                    max="35" 
-                    step="0.5"
-                    value={kDiagWidth()}
-                    onInput={(e) => setKDiagWidth(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Lower K Arm X Start Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Lower Arm X-Connection</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kDiag2X() > 0 ? `+` : ``}{kDiag2X()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="-12" 
-                    max="12" 
-                    step="0.5"
-                    value={kDiag2X()}
-                    onInput={(e) => setKDiag2X(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Upper Arm Angle Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Upper Arm Angle (Spread)</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kDiag1Slope().toFixed(2)}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0.4" 
-                    max="2.2" 
-                    step="0.02"
-                    value={kDiag1Slope()}
-                    onInput={(e) => setKDiag1Slope(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Lower Arm Angle Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Lower Arm Angle (Spread)</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kDiag2Slope().toFixed(2)}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0.3" 
-                    max="2.0" 
-                    step="0.02"
-                    value={kDiag2Slope()}
-                    onInput={(e) => setKDiag2Slope(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* K Thickness Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Letter K Thickness</span>
-                    <span class="font-mono text-amber-400 font-semibold">{kThickness()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="24" 
-                    step="0.5"
-                    value={kThickness()}
-                    onInput={(e) => setKThickness(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
-
-                {/* Ring Gap/Spacing Slider */}
-                <Show when={rings() > 1}>
-                  <div class="mb-2.5">
-                    <div class="flex justify-between text-[11px] mb-0.5">
-                      <span class="text-white/60">Ring Spacing (Gap)</span>
-                      <span class="font-mono text-amber-400 font-semibold">{ringGap()}px</span>
+                  {/* Backend Texture Preview Panel */}
+                  <div class="mt-4 border-t border-white/10 pt-4">
+                    <span class="text-[10px] text-white/50 block mb-1.5 uppercase tracking-wider font-semibold">Active Backend Texture</span>
+                    <div class="bg-black/40 p-2 rounded border border-white/5 flex flex-col gap-2">
+                      <div 
+                        style={{
+                          background: (() => {
+                            if (fillMode() === 'procedural') {
+                              const baseGrad = (() => {
+                                if (customType() === 'box') {
+                                  return `linear-gradient(135deg, ${stopsCssString()})`;
+                                }
+                                if (customType() === 'radial') {
+                                  return `radial-gradient(circle at 50% 50%, ${stopsCssString()})`;
+                                }
+                                return `linear-gradient(${gradientAngle()}deg, ${stopsCssString()})`;
+                              })();
+                              return proceduralNoiseEnabled() 
+                                ? `url(${getBrushedNoiseTexture()}), ${baseGrad}`
+                                : baseGrad;
+                            }
+                            if (fillMode() === 'texture') {
+                              return `url(/gold-textures/${selectedTexture()})`;
+                            }
+                            // Gradient Mode
+                            if (customType() === 'box') {
+                              return `linear-gradient(135deg, ${stopsCssString()})`;
+                            }
+                            if (customType() === 'radial') {
+                              return `radial-gradient(circle at 50% 50%, ${stopsCssString()})`;
+                            }
+                            return `linear-gradient(${gradientAngle()}deg, ${stopsCssString()})`;
+                          })(),
+                          "background-size": "cover",
+                          "background-position": "center",
+                          "background-blend-mode": fillMode() === 'procedural' && proceduralNoiseEnabled() ? "overlay" : "normal",
+                          filter: fillMode() === 'gradient' ? 'none' : `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})`
+                        }} 
+                        class="w-full h-24 rounded border border-white/10 overflow-hidden relative shadow-inner"
+                      >
+                        <div class="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 rounded text-[8px] font-mono text-white/70 border border-white/5">
+                          {fillMode() === 'procedural' ? 'Canvas texture (used in game client)' : (fillMode() === 'texture' ? selectedTexture() : 'CSS Gradient')}
+                        </div>
+                      </div>
                     </div>
-                    <input 
-                      type="range" 
-                      min="2" 
-                      max="16" 
-                      step="0.5"
-                      value={ringGap()}
-                      onInput={(e) => setRingGap(parseFloat(e.currentTarget.value))}
-                      class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                    />
                   </div>
                 </Show>
 
-                {/* Border Thickness Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Border Thickness</span>
-                    <span class="font-mono text-amber-400 font-semibold">{thickness()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="24" 
-                    step="0.5"
-                    value={thickness()}
-                    onInput={(e) => setThickness(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
+                      <Show when={tweakerTab() === 'geometry'}>
+                      {/* Stroke Cap Style Toggle */}
+                      <div class="mb-2.5">
+                        <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Stroke Cap Edges</span>
+                        <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                          <button 
+                            onClick={() => setLinecap('butt')}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'butt' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            SHARP
+                          </button>
+                          <button 
+                            onClick={() => setLinecap('round')}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${linecap() === 'round' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            ROUNDED
+                          </button>
+                        </div>
+                      </div>
 
-                {/* Bevel Offset Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">3D Bevel Offset</span>
-                    <span class="font-mono text-amber-400 font-semibold">{bevelOffset()}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="3" 
-                    step="0.1"
-                    value={bevelOffset()}
-                    onInput={(e) => setBevelOffset(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
+                      {/* K Block Mode Toggle */}
+                      <div class="mb-2.5">
+                        <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">K Rendering Mode</span>
+                        <div class="grid grid-cols-2 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                          <button 
+                            onClick={() => {
+                              setKBlockMode(false);
+                              setKThickness(6.5);
+                            }}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${!kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            LINE/STROKE
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setKBlockMode(true);
+                              setLinecap('butt'); // Enforce sharp caps for block mode
+                              if (kThickness() < 12) setKThickness(16); // Set a good default block thickness
+                            }}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${kBlockMode() ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            BLOCK MODE
+                          </button>
+                        </div>
+                      </div>
 
-                {/* Bevel Opacity Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">3D Bevel Opacity</span>
-                    <span class="font-mono text-amber-400 font-semibold">{(bevelOpacity() * 100).toFixed(0)}%</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05"
-                    value={bevelOpacity()}
-                    onInput={(e) => setBevelOpacity(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
+                      {/* Hexagon Border Rings Selector */}
+                      <div class="mb-2.5">
+                        <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Hexagon Border Count</span>
+                        <div class="grid grid-cols-3 gap-1 bg-black/40 p-0.5 rounded border border-white/5">
+                          <button 
+                            onClick={() => setRings(1)}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            1 RING
+                          </button>
+                          <button 
+                            onClick={() => setRings(2)}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 2 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            2 RINGS
+                          </button>
+                          <button 
+                            onClick={() => setRings(3)}
+                            class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${rings() === 3 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                          >
+                            3 RINGS
+                          </button>
+                        </div>
+                      </div>
 
-                {/* Fill Opacity Slider */}
-                <div class="mb-2.5">
-                  <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-white/60">Inner Hex Fill Opacity</span>
-                    <span class="font-mono text-amber-400 font-semibold">{(hexFillOpacity() * 100).toFixed(0)}%</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="0.4" 
-                    step="0.01"
-                    value={hexFillOpacity()}
-                    onInput={(e) => setHexFillOpacity(parseFloat(e.currentTarget.value))}
-                    class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
-                  />
-                </div>
+                      {/* K Scale Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Letter K Size / Scale</span>
+                          <span class="font-mono text-amber-400 font-semibold">{(kScale() * 100).toFixed(0)}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0.5" 
+                          max="1.5" 
+                          step="0.05"
+                          value={kScale()}
+                          onInput={(e) => setKScale(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
 
-                {/* Glow Intensity Slider — drop-shadow filter, perf-gated */}
-                <Show when={heavyFx()}>
-                  <div class="mb-1">
-                    <div class="flex justify-between text-[11px] mb-0.5">
-                      <span class="text-white/60">Specular Glow Blur</span>
-                      <span class="font-mono text-amber-400 font-semibold">{glowIntensity()}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="20"
-                      step="1"
-                      value={glowIntensity()}
-                      onInput={(e) => setGlowIntensity(parseInt(e.currentTarget.value))}
-                      class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                    />
+                      {/* Nudge K Left/Right Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Nudge K Left/Right</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kOffsetX() > 0 ? `+` : ``}{kOffsetX()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="-15" 
+                          max="15" 
+                          step="0.5"
+                          value={kOffsetX()}
+                          onInput={(e) => setKOffsetX(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Nudge K Up/Down Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Nudge K Up/Down</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kOffsetY() > 0 ? `+` : ``}{kOffsetY()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="-15" 
+                          max="15" 
+                          step="0.5"
+                          value={kOffsetY()}
+                          onInput={(e) => setKOffsetY(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Arm Span Width (Anchor X) Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Arm Span Width</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kDiagWidth()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="10" 
+                          max="35" 
+                          step="0.5"
+                          value={kDiagWidth()}
+                          onInput={(e) => setKDiagWidth(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Lower K Arm X Start Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Lower Arm X-Connection</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kDiag2X() > 0 ? `+` : ``}{kDiag2X()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="-12" 
+                          max="12" 
+                          step="0.5"
+                          value={kDiag2X()}
+                          onInput={(e) => setKDiag2X(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Upper Arm Angle Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Upper Arm Angle (Spread)</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kDiag1Slope().toFixed(2)}</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0.4" 
+                          max="2.2" 
+                          step="0.02"
+                          value={kDiag1Slope()}
+                          onInput={(e) => setKDiag1Slope(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Lower Arm Angle Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Lower Arm Angle (Spread)</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kDiag2Slope().toFixed(2)}</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0.3" 
+                          max="2.0" 
+                          step="0.02"
+                          value={kDiag2Slope()}
+                          onInput={(e) => setKDiag2Slope(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* K Thickness Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Letter K Thickness</span>
+                          <span class="font-mono text-amber-400 font-semibold">{kThickness()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="1" 
+                          max="24" 
+                          step="0.5"
+                          value={kThickness()}
+                          onInput={(e) => setKThickness(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Ring Gap/Spacing Slider */}
+                      <Show when={rings() > 1}>
+                        <div class="mb-2.5">
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Ring Spacing (Gap)</span>
+                            <span class="font-mono text-amber-400 font-semibold">{ringGap()}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="2" 
+                            max="16" 
+                            step="0.5"
+                            value={ringGap()}
+                            onInput={(e) => setRingGap(parseFloat(e.currentTarget.value))}
+                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                          />
+                        </div>
+                      </Show>
+
+                      {/* Border Thickness Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Border Thickness</span>
+                          <span class="font-mono text-amber-400 font-semibold">{thickness()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="1" 
+                          max="24" 
+                          step="0.5"
+                          value={thickness()}
+                          onInput={(e) => setThickness(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Bevel Offset Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">3D Bevel Offset</span>
+                          <span class="font-mono text-amber-400 font-semibold">{bevelOffset()}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="3" 
+                          step="0.1"
+                          value={bevelOffset()}
+                          onInput={(e) => setBevelOffset(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Bevel Opacity Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">3D Bevel Opacity</span>
+                          <span class="font-mono text-amber-400 font-semibold">{(bevelOpacity() * 100).toFixed(0)}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="1" 
+                          step="0.05"
+                          value={bevelOpacity()}
+                          onInput={(e) => setBevelOpacity(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Fill Opacity Slider */}
+                      <div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                          <span class="text-white/60">Inner Hex Fill Opacity</span>
+                          <span class="font-mono text-amber-400 font-semibold">{(hexFillOpacity() * 100).toFixed(0)}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="0.4" 
+                          step="0.01"
+                          value={hexFillOpacity()}
+                          onInput={(e) => setHexFillOpacity(parseFloat(e.currentTarget.value))}
+                          class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        />
+                      </div>
+
+                      {/* Glow Intensity Slider — drop-shadow filter, perf-gated */}
+                      <Show when={heavyFx()}>
+                        <div class="mb-1">
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Specular Glow Blur</span>
+                            <span class="font-mono text-amber-400 font-semibold">{glowIntensity()}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="20"
+                            step="1"
+                            value={glowIntensity()}
+                            onInput={(e) => setGlowIntensity(parseInt(e.currentTarget.value))}
+                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                          />
+                        </div>
+                      </Show>
+                    </Show>
                   </div>
-                </Show>
-              </div>
 
               <div class="p-2.5 bg-amber-500/5 border border-amber-500/10 rounded text-[10px] text-amber-300/80 leading-snug space-y-0.5">
                 <p><strong>Independent Thickness:</strong> Border & K can be scaled separately. Slanted path shearing cuts adjust to K's thickness dynamically.</p>
@@ -2408,20 +2612,6 @@ ${paintDef}${overlayGradDef}
               {/* Presets Visual Representation */}
               <For each={['thin', 'medium', 'thick'] as const}>
                 {(type) => {
-                  const uniqueId = `card-${type}`;
-
-                  // Global reflex from the single pointer source — same path as
-                  // KanIcon, no rect reads, no hover swap, no damping.
-                  const cardReflex = createReflexShift();
-                  const activeCardShiftX = () => cardReflex().nx * REFLEX_SVG_UNITS;
-                  const activeCardShiftY = () => cardReflex().ny * REFLEX_SVG_UNITS;
-
-                  const cardCoords = () => gradCoords(activeCardShiftX(), activeCardShiftY());
-                  const cardRadialCoords = () => radialCoords(activeCardShiftX(), activeCardShiftY());
-
-                  const cardCoordsStatic = () => gradCoords(0, 0);
-                  const cardRadialCoordsStatic = () => radialCoords(0, 0);
-
                   const borderStrokeWidth = () => {
                     const base = thickness();
                     if (type === 'thin') return Math.max(1, base - 3);
@@ -2436,328 +2626,20 @@ ${paintDef}${overlayGradDef}
                     return base;
                   };
 
-                  const c = () => getKCoords(kScale(), currentKStrokeWidth(), linecap());
-const renderSizeCell = (size: string, px: string) => {
-                    const isOptical = ['1rem', '1.5rem', '2rem', '2.5rem'].includes(size);
-                    // Live gradients (mouse-driven) so every size cell reacts,
-                    // not just the main coin.
-                    const sizeColor = () => {
-                      if (fillMode() === 'gradient') {
-                        if (customType() === 'box') {
-                          return `url(#gold-grad-base-${type})`;
-                        }
-                        return isOptical
-                          ? (isRadialActive() ? `url(#gold-grad-optical-radial-${type})` : `url(#gold-grad-optical-linear-${type})`)
-                          : (isRadialActive() ? `url(#gold-grad-radial-${type})` : `url(#gold-grad-linear-${type})`);
-                      } else {
-                        return customType() === 'box'
-                          ? `url(#gold-pattern-static-${type})`
-                          : `url(#gold-pattern-${type})`;
-                      }
-                    };
-                    const sizeGradientColor = () => {
-                      if (customType() === 'box') {
-                        return `url(#gold-grad-base-${type})`;
-                      }
-                      return isOptical
-                        ? (isRadialActive() ? `url(#gold-grad-optical-radial-${type})` : `url(#gold-grad-optical-linear-${type})`)
-                        : (isRadialActive() ? `url(#gold-grad-radial-${type})` : `url(#gold-grad-linear-${type})`);
-                    };
+                  const renderSizeCell = (size: string, px: string) => (
+                    <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
+                      <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
+                        <KanIcon size={size} thickness={borderStrokeWidth()} kThickness={currentKStrokeWidth()} {...sharedKanProps} />
+                      </div>
+                      <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
+                      <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 opacity-0 group-hover/size:opacity-100 transition-all duration-200 transform scale-95 group-hover/size:scale-100 bg-[#12131a] border border-amber-500/30 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-50 flex items-center gap-1">
+                        <span class="font-bold">{size}</span>
+                        <span class="text-white/40">|</span>
+                        <span class="text-white/70">{px}</span>
+                      </div>
+                    </div>
+                  );
 
-                    return (
-                      <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
-                        <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
-                           <svg viewBox="0 0 100 100" style={{ width: size, height: size, ...(glowIntensity() > 0 ? { filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` } : {}) }}>
-                             {/* Hexagon Shadow Outline */}
-                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                               {(index) => (
-                                 <polygon 
-                                   points={getHexagonPoints(index, borderStrokeWidth())} 
-                                   fill={index === 0 ? sizeColor() : 'none'} 
-                                   fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                   stroke="#201A0A" 
-                                   stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
-                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                   transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                                 />
-                               )}
-                             </For>
-                             {/* Hexagon Highlight Outline */}
-                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                               {(index) => (
-                                 <polygon 
-                                   points={getHexagonPoints(index, borderStrokeWidth())} 
-                                   fill="none" 
-                                   stroke="#FFFDDA" 
-                                   stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
-                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                   transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                   opacity={bevelOpacity()}
-                                 />
-                               )}
-                             </For>
-                             {/* Hexagon Main Face */}
-                             <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                               {(index) => (
-                                 <polygon 
-                                   points={getHexagonPoints(index, borderStrokeWidth())} 
-                                   fill={index === 0 ? sizeColor() : 'none'} 
-                                   fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                   stroke={sizeColor()} 
-                                   stroke-width={borderStrokeWidth()}
-                                   stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                 />
-                               )}
-                             </For>
-                             
-                             {/* Hexagon Softbox Specular Overlay */}
-                             <Show when={fillMode() === 'gradient' && customType() === 'box'}>
-                               <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                 {(index) => (
-                                   <polygon 
-                                     points={getHexagonPoints(index, borderStrokeWidth())} 
-                                     fill={index === 0 ? (isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`) : 'none'} 
-                                     fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                     stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`} 
-                                     stroke-width={borderStrokeWidth()}
-                                     stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                     style={{
-                                       "mix-blend-mode": boxMixBlendMode(),
-                                       "pointer-events": "none"
-                                     }}
-                                   />
-                                 )}
-                               </For>
-                             </Show>
-
-                             <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                               <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                 {(index) => (
-                                   <polygon 
-                                     points={getHexagonPoints(index, borderStrokeWidth())} 
-                                     fill={index === 0 ? sizeGradientColor() : 'none'} 
-                                     fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                     stroke={sizeGradientColor()} 
-                                     stroke-width={borderStrokeWidth()}
-                                     stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                     style={{
-                                       "mix-blend-mode": overlayBlendMode(),
-                                       opacity: overlayOpacity(),
-                                       "pointer-events": "none"
-                                     }}
-                                   />
-                                 )}
-                               </For>
-                             </Show>
-
-                             {/* 1. K SHADOWS */}
-                             <path 
-                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                               fill="none"
-                               stroke="#201A0A"
-                               stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                               stroke-linecap={linecap()}
-                               transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                             />
-                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                               <path 
-                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                 fill="none"
-                                 stroke="#201A0A"
-                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                                 transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                               />
-                               <path 
-                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                 fill="none"
-                                 stroke="#201A0A"
-                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                                 transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                               />
-                             </g>
-
-                             {/* 2. K HIGHLIGHTS */}
-                             <path 
-                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                               fill="none"
-                               stroke="#FFFDDA"
-                               stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                               stroke-linecap={linecap()}
-                               transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                               opacity={bevelOpacity()}
-                             />
-                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                               <path 
-                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                 fill="none"
-                                 stroke="#FFFDDA"
-                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                                 transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                 opacity={bevelOpacity()}
-                               />
-                               <path 
-                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                 fill="none"
-                                 stroke="#FFFDDA"
-                                 stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                                 transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                 opacity={bevelOpacity()}
-                               />
-                             </g>
-
-                             {/* 3. K MAINS */}
-                             <path 
-                               d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                               fill="none"
-                               stroke={sizeColor()}
-                               stroke-width={currentKStrokeWidth()}
-                               stroke-linecap={linecap()}
-                             />
-                             <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                               <path 
-                                 d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                 fill="none"
-                                 stroke={sizeColor()}
-                                 stroke-width={currentKStrokeWidth()}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                               />
-                               <path 
-                                 d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                 fill="none"
-                                 stroke={sizeColor()}
-                                 stroke-width={currentKStrokeWidth()}
-                                 stroke-linecap={linecap()}
-                                 stroke-linejoin="miter"
-                               />
-                             </g>
-
-                             {/* 4. K TEXTURE OVERLAYS */}
-                             <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                               <path 
-                                 d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                 fill="none"
-                                 stroke={sizeGradientColor()}
-                                 stroke-width={currentKStrokeWidth()}
-                                 stroke-linecap={linecap()}
-                                 style={{
-                                   "mix-blend-mode": overlayBlendMode(),
-                                   opacity: overlayOpacity(),
-                                   "pointer-events": "none"
-                                 }}
-                               />
-                               <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                 <path 
-                                   d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                   fill="none"
-                                   stroke={sizeGradientColor()}
-                                   stroke-width={currentKStrokeWidth()}
-                                   stroke-linecap={linecap()}
-                                   stroke-linejoin="miter"
-                                   style={{
-                                     "mix-blend-mode": overlayBlendMode(),
-                                     opacity: overlayOpacity(),
-                                     "pointer-events": "none"
-                                   }}
-                                 />
-                                 <path 
-                                   d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                   fill="none"
-                                   stroke={sizeGradientColor()}
-                                   stroke-width={currentKStrokeWidth()}
-                                   stroke-linecap={linecap()}
-                                   stroke-linejoin="miter"
-                                   style={{
-                                     "mix-blend-mode": overlayBlendMode(),
-                                     opacity: overlayOpacity(),
-                                     "pointer-events": "none"
-                                   }}
-                                 />
-                               </g>
-                             </Show>
-
-                             {/* 4.5. K Softbox Specular Overlay */}
-                             <Show when={fillMode() === 'gradient' && customType() === 'box'}>
-                               <path 
-                                 d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                 fill="none"
-                                 stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
-                                 stroke-width={currentKStrokeWidth()}
-                                 stroke-linecap={linecap()}
-                                 style={{
-                                   "mix-blend-mode": boxMixBlendMode(),
-                                   "pointer-events": "none"
-                                 }}
-                               />
-                               <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                 <path 
-                                   d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                   fill="none"
-                                   stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
-                                   stroke-width={currentKStrokeWidth()}
-                                   stroke-linecap={linecap()}
-                                   stroke-linejoin="miter"
-                                   style={{
-                                     "mix-blend-mode": boxMixBlendMode(),
-                                     "pointer-events": "none"
-                                   }}
-                                 />
-                                 <path 
-                                   d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                   fill="none"
-                                   stroke={isOptical ? `url(#gold-box-pattern-optical-static-${type})` : `url(#gold-box-pattern-static-${type})`}
-                                   stroke-width={currentKStrokeWidth()}
-                                   stroke-linecap={linecap()}
-                                   stroke-linejoin="miter"
-                                   style={{
-                                     "mix-blend-mode": boxMixBlendMode(),
-                                     "pointer-events": "none"
-                                   }}
-                                 />
-                               </g>
-                             </Show>
-                           </svg>
-                         </div>
-                         <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
-                         
-                         {/* Absolute Custom Tooltip */}
-                         <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 opacity-0 group-hover/size:opacity-100 transition-all duration-200 transform scale-95 group-hover/size:scale-100 bg-[#12131a] border border-amber-500/30 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-50 flex items-center gap-1">
-                           <span class="font-bold">{size}</span>
-                           <span class="text-white/40">|</span>
-                           <span class="text-white/70">{px}</span>
-                         </div>
-                       </div>
-                    );
-                  };
-
-                  const mainColor = () => {
-                    if (fillMode() === 'texture') {
-                      return `url(#gold-pattern-${type})`;
-                    }
-                    if (customType() === 'box') {
-                      return `url(#gold-grad-base-${type})`;
-                    }
-                    return isRadialActive() 
-                      ? `url(#gold-grad-radial-${type})` 
-                      : `url(#gold-grad-linear-${type})`;
-                  };
-
-                  const mainGradientColor = () => {
-                    if (customType() === 'box') {
-                      return `url(#gold-grad-base-${type})`;
-                    }
-                    return isRadialActive() 
-                      ? `url(#gold-grad-radial-${type})` 
-                      : `url(#gold-grad-linear-${type})`;
-                  };
 
                   return (
                     <div
@@ -2774,555 +2656,7 @@ const renderSizeCell = (size: string, px: string) => {
                       >
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                         
-                        <svg viewBox="0 0 100 100" class="w-28 h-28" style={glowIntensity() > 0 ? { filter: `drop-shadow(0 0 ${glowIntensity()}px rgba(251, 191, 36, 0.45))` } : {}}>
-                          <defs>
-                            {/* Base metal gradient for softbox mode (clean background without linear shiny bands) */}
-                            <linearGradient id={`gold-grad-base-${type}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'R1', 'R2', 'Custom'].includes(gradientProfile())}>
-                                <stop offset="0%" stop-color="#7C6535" />
-                                <stop offset="50%" stop-color="#D5BB8A" />
-                                <stop offset="100%" stop-color="#7C6535" />
-                              </Show>
-                              <Show when={['D', 'E'].includes(gradientProfile())}>
-                                <stop offset="0%" stop-color="#70757D" />
-                                <stop offset="50%" stop-color="#CED2D8" />
-                                <stop offset="100%" stop-color="#5B5F66" />
-                              </Show>
-                              <Show when={['F'].includes(gradientProfile())}>
-                                <stop offset="0%" stop-color="#4b5563" />
-                                <stop offset="50%" stop-color="#9ca3af" />
-                                <stop offset="100%" stop-color="#374151" />
-                              </Show>
-                            </linearGradient>
-
-                            {/* Base Linear Gradient */}
-                            <linearGradient 
-                              id={`gold-grad-linear-${type}`} 
-                              x1={cardCoords().x1} 
-                              y1={cardCoords().y1} 
-                              x2={cardCoords().x2} 
-                              y2={cardCoords().y2} 
-                              gradientUnits="userSpaceOnUse"
-                              spreadMethod="reflect"
-                            >
-                              <Show when={gradientProfile() === 'A'}>
-                                <stop offset="0%" stop-color="#FFF3C2" />
-                                <stop offset="25%" stop-color="#E2B857" />
-                                <stop offset="50%" stop-color="#FCF6BA" />
-                                <stop offset="75%" stop-color="#B28424" />
-                                <stop offset="100%" stop-color="#FCD267" />
-                              </Show>
-                              <Show when={gradientProfile() === 'B'}>
-                                <stop offset="0%" stop-color="#251502" />
-                                <stop offset="25%" stop-color="#E5B842" />
-                                <stop offset="50%" stop-color="#FFF7C7" />
-                                <stop offset="75%" stop-color="#E5B842" />
-                                <stop offset="100%" stop-color="#251502" />
-                              </Show>
-                              <Show when={gradientProfile() === 'C'}>
-                                <stop offset="0%" stop-color="#FFF2C2" />
-                                <stop offset="30%" stop-color="#C5A44E" />
-                                <stop offset="50%" stop-color="#A48748" />
-                                <stop offset="70%" stop-color="#EDCD75" />
-                                <stop offset="100%" stop-color="#B7984A" />
-                              </Show>
-                              <Show when={gradientProfile() === 'D'}>
-                                <stop offset="0%" stop-color="#EBEFF5" />
-                                <stop offset="25%" stop-color="#B5B9BF" />
-                                <stop offset="50%" stop-color="#EDF1F7" />
-                                <stop offset="75%" stop-color="#83878D" />
-                                <stop offset="100%" stop-color="#CED2D8" />
-                              </Show>
-                              <Show when={gradientProfile() === 'E'}>
-                                <stop offset="0%" stop-color="#D1D5DB" />
-                                <stop offset="30%" stop-color="#6B7280" />
-                                <stop offset="50%" stop-color="#374151" />
-                                <stop offset="70%" stop-color="#9CA3AF" />
-                                <stop offset="100%" stop-color="#4B5563" />
-                              </Show>
-                              <Show when={gradientProfile() === 'F'}>
-                                <stop offset="0%" stop-color="#9CA3AF" />
-                                <stop offset="25%" stop-color="#4B5563" />
-                                <stop offset="50%" stop-color="#1F2937" />
-                                <stop offset="75%" stop-color="#111827" />
-                                <stop offset="100%" stop-color="#374151" />
-                              </Show>
-                              <Show when={gradientProfile() === 'G'}>
-                                <stop offset="0%" stop-color="#55411B" />
-                                <stop offset="15%" stop-color="#997E47" />
-                                <stop offset="30%" stop-color="#55411B" />
-                                <stop offset="45%" stop-color="#FFFDDA" />
-                                <stop offset="60%" stop-color="#D5BB8A" />
-                                <stop offset="75%" stop-color="#B8A269" />
-                                <stop offset="85%" stop-color="#55411B" />
-                                <stop offset="100%" stop-color="#FBECA9" />
-                              </Show>
-                              <Show when={gradientProfile() === 'I'}>
-                                <stop offset="0%" stop-color="#7C6535" />
-                                <stop offset="15%" stop-color="#997E47" />
-                                <stop offset="30%" stop-color="#7C6535" />
-                                <stop offset="45%" stop-color="#FFFDDA" />
-                                <stop offset="60%" stop-color="#D5BB8A" />
-                                <stop offset="75%" stop-color="#B8A269" />
-                                <stop offset="85%" stop-color="#7C6535" />
-                                <stop offset="100%" stop-color="#FBECA9" />
-                              </Show>
-                              <Show when={gradientProfile() === 'J'}>
-                                <stop offset="0%" stop-color="#7C6535" />
-                                <stop offset="8%" stop-color="#997E47" />
-                                <stop offset="26%" stop-color="#B8A269" />
-                                <stop offset="30%" stop-color="#7C6535" />
-                                <stop offset="34%" stop-color="#FFFDDA" />
-                                <stop offset="60%" stop-color="#D5BB8A" />
-                                <stop offset="81%" stop-color="#B8A269" />
-                                <stop offset="85%" stop-color="#7C6535" />
-                                <stop offset="93%" stop-color="#FBECA9" />
-                                <stop offset="100%" stop-color="#7C6535" />
-                              </Show>
-                              <Show when={gradientProfile() === 'K'}>
-                                <stop offset="0%" stop-color="#FFFDDA" />
-                                <stop offset="31%" stop-color="#D5BB8A" />
-                                <stop offset="44%" stop-color="#7C6535" />
-                                <stop offset="100%" stop-color="#55411B" />
-                              </Show>
-                              <Show when={gradientProfile() === 'Custom'}>
-                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                  {(stop) => (
-                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                  )}
-                                </For>
-                              </Show>
-                            </linearGradient>
-
-                            {/* Base Radial Gradient */}
-                            <radialGradient
-                              id={`gold-grad-radial-${type}`}
-                              cx={cardRadialCoords().cx}
-                              cy={cardRadialCoords().cy}
-                              r={cardRadialCoords().r}
-                              fx={cardRadialCoords().fx}
-                              fy={cardRadialCoords().fy}
-                              gradientUnits="userSpaceOnUse"
-                            >
-                              <Show when={gradientProfile() === 'R1'}>
-                                <stop offset="0%" stop-color="#FFFDDA" />
-                                <stop offset="15%" stop-color="#D5BB8A" />
-                                <stop offset="35%" stop-color="#7C6535" />
-                                <stop offset="55%" stop-color="#FFFDDA" />
-                                <stop offset="75%" stop-color="#D5BB8A" />
-                                <stop offset="90%" stop-color="#7C6535" />
-                                <stop offset="100%" stop-color="#55411B" />
-                              </Show>
-                              <Show when={gradientProfile() === 'R2'}>
-                                <stop offset="0%" stop-color="#FFFDDA" />
-                                <stop offset="25%" stop-color="#D5BB8A" />
-                                <stop offset="60%" stop-color="#7C6535" />
-                                <stop offset="100%" stop-color="#55411B" />
-                              </Show>
-                              <Show when={gradientProfile() === 'Custom'}>
-                                <For each={[...customStops()].sort((a, b) => a.offset - b.offset)}>
-                                  {(stop) => (
-                                    <stop offset={`${stop.offset}%`} stop-color={stop.color} />
-                                  )}
-                                </For>
-                              </Show>
-                            </radialGradient>
-
-                            {/* Softbox reflection box pattern & blur filter */}
-                            <Show when={customType() === 'box'}>
-                              <filter id={`softbox-blur-${type}-${uniqueId}`} x="-100%" y="-100%" width="300%" height="300%">
-                                <feGaussianBlur stdDeviation={boxBlur()} />
-                              </filter>
-                              
-                              <pattern 
-                                id={`gold-box-pattern-${type}`} 
-                                patternUnits="userSpaceOnUse" 
-                                x={activeCardShiftX()}
-                                y={activeCardShiftY()}
-                                width="100" 
-                                height="100"
-                              >
-                                <rect 
-                                  x={50 - boxWidth() / 2} 
-                                  y={50 - boxHeight() / 2} 
-                                  width={boxWidth()} 
-                                  height={boxHeight()} 
-                                  rx={boxCornerRadius()} 
-                                  ry={boxCornerRadius()} 
-                                  fill={boxColor()} 
-                                  opacity={boxOpacity()}
-                                  filter={`url(#softbox-blur-${type}-${uniqueId})`}
-                                />
-                              </pattern>
-
-                              {/* Optical pattern version */}
-                              <pattern 
-                                id={`gold-box-pattern-optical-${type}`} 
-                                patternUnits="userSpaceOnUse" 
-                                x={activeCardShiftX()}
-                                y={activeCardShiftY()}
-                                width="100" 
-                                height="100"
-                              >
-                                <rect 
-                                  x={50 - boxWidth() / 2} 
-                                  y={50 - boxHeight() / 2} 
-                                  width={boxWidth()} 
-                                  height={boxHeight()} 
-                                  rx={boxCornerRadius()} 
-                                  ry={boxCornerRadius()} 
-                                  fill={boxColor()} 
-                                  opacity={boxOpacity()}
-                                  filter={`url(#softbox-blur-${type}-${uniqueId})`}
-                                />
-                              </pattern>
-
-                              {/* Static versions */}
-                              <pattern 
-                                id={`gold-box-pattern-static-${type}`} 
-                                href={`#gold-box-pattern-${type}`}
-                                x="0" 
-                                y="0"
-                                patternUnits="userSpaceOnUse" 
-                              />
-                              <pattern 
-                                id={`gold-box-pattern-optical-static-${type}`} 
-                                href={`#gold-box-pattern-optical-${type}`}
-                                x="0" 
-                                y="0"
-                                patternUnits="userSpaceOnUse" 
-                              />
-                            </Show>
-                              
-                            {/* Optical Sizing Gradient for smaller cell views */}
-                            <linearGradient 
-                              id={`gold-grad-optical-linear-${type}`} 
-                              x1={cardCoords().x1} 
-                              y1={cardCoords().y1} 
-                              x2={cardCoords().x2} 
-                              y2={cardCoords().y2} 
-                              gradientUnits="userSpaceOnUse"
-                              spreadMethod="reflect"
-                            >
-                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(gradientProfile())}>
-                                {/* Smooth Gold */}
-                                <stop offset="0%" stop-color="#78581E" />
-                                <stop offset="30%" stop-color="#E2B857" />
-                                <stop offset="55%" stop-color="#FFF3C2" />
-                                <stop offset="80%" stop-color="#E2B857" />
-                                <stop offset="100%" stop-color="#9E782F" />
-                              </Show>
-                              <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
-                                {/* Smooth Silver */}
-                                <stop offset="0%" stop-color="#70757D" />
-                                <stop offset="30%" stop-color="#CED2D8" />
-                                <stop offset="55%" stop-color="#EBEFF5" />
-                                <stop offset="80%" stop-color="#CED2D8" />
-                                <stop offset="100%" stop-color="#5B5F66" />
-                              </Show>
-                            </linearGradient>
-
-                            <radialGradient 
-                              id={`gold-grad-optical-radial-${type}`} 
-                              cx={cardRadialCoords().cx}
-                              cy={cardRadialCoords().cy}
-                              r={cardRadialCoords().r}
-                              fx={cardRadialCoords().fx}
-                              fy={cardRadialCoords().fy}
-                              gradientUnits="userSpaceOnUse"
-                            >
-                              <Show when={['A', 'B', 'C', 'G', 'I', 'J', 'K', 'Custom'].includes(gradientProfile())}>
-                                <stop offset="0%" stop-color="#FFFDDA" />
-                                <stop offset="35%" stop-color="#D5BB8A" />
-                                <stop offset="70%" stop-color="#78581E" />
-                                <stop offset="100%" stop-color="#4E3D1E" />
-                              </Show>
-                              <Show when={['D', 'E', 'F'].includes(gradientProfile())}>
-                                <stop offset="0%" stop-color="#EBEFF5" />
-                                <stop offset="35%" stop-color="#CED2D8" />
-                                <stop offset="70%" stop-color="#70757D" />
-                                <stop offset="100%" stop-color="#3A3D42" />
-                              </Show>
-                            </radialGradient>
-
-                            <pattern id={`gold-pattern-${type}`} patternUnits="userSpaceOnUse" x={textureOffsetX() + (interactiveSheen() ? interactiveShiftX() : 0)} y={textureOffsetY() + (interactiveSheen() ? interactiveShiftY() : 0)} width={100 * textureScale()} height={100 * textureScale()}>
-                              <image href={`/gold-textures/${selectedTexture()}`} x="0" y="0" width={100 * textureScale()} height={100 * textureScale()} preserveAspectRatio="xMidYMid slice" style={{ filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})` }} />
-                            </pattern>
-
-                            {/* Horizontal clip path to cut diagonal stroke extensions perfectly flat */}
-                            <clipPath id={`k-horizontal-clip-${type}`}>
-                              <rect x="10" y={c().clipY} width="80" height={c().clipHeight} />
-                            </clipPath>
-
-                            <pattern 
-                              id={`gold-pattern-static-${type}`} 
-                              href={`#gold-pattern-${type}`}
-                              x={textureOffsetX()} 
-                              y={textureOffsetY()}
-                              patternUnits="userSpaceOnUse" 
-                            />
-                          </defs>
-
-                          {/* Dummy element to force browser repaint of optical gradients */}
-                          <rect width="0" height="0" fill={`url(#gold-grad-optical-linear-${type})`} />
-
-                              {/* Hexagon Shadow Outline */}
-                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                {(index) => (
-                                  <polygon 
-                                    points={getHexagonPoints(index, borderStrokeWidth())} 
-                                    fill={index === 0 ? mainColor() : 'none'} 
-                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                    stroke="#201A0A" 
-                                    stroke-width={borderStrokeWidth() + bevelOffset() * 1.5}
-                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                    transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                                  />
-                                )}
-                              </For>
-                              {/* Hexagon Highlight Outline */}
-                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                {(index) => (
-                                  <polygon 
-                                    points={getHexagonPoints(index, borderStrokeWidth())} 
-                                    fill="none" 
-                                    stroke="#FFFDDA" 
-                                    stroke-width={borderStrokeWidth() + bevelOffset() * 0.5}
-                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                    transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                    opacity={bevelOpacity()}
-                                  />
-                                )}
-                              </For>
-                              {/* Hexagon Main Face */}
-                              <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                {(index) => (
-                                  <polygon 
-                                    points={getHexagonPoints(index, borderStrokeWidth())} 
-                                    fill={index === 0 ? mainColor() : 'none'} 
-                                    fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                    stroke={mainColor()} 
-                                    stroke-width={borderStrokeWidth()}
-                                    stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                  />
-                                )}
-                              </For>
-                              
-                              {/* Hexagon Softbox Specular Overlay */}
-                              <Show when={fillMode() === 'gradient' && customType() === 'box'}>
-                                <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                  {(index) => (
-                                    <polygon 
-                                      points={getHexagonPoints(index, borderStrokeWidth())} 
-                                      fill={index === 0 ? `url(#gold-box-pattern-${type})` : 'none'} 
-                                      fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                      stroke={`url(#gold-box-pattern-${type})`} 
-                                      stroke-width={borderStrokeWidth()}
-                                      stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                      style={{
-                                        "mix-blend-mode": boxMixBlendMode(),
-                                        "pointer-events": "none"
-                                      }}
-                                    />
-                                  )}
-                                </For>
-                              </Show>
-
-                              <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                                <For each={Array.from({ length: rings() }, (_, i) => i)}>
-                                  {(index) => (
-                                    <polygon 
-                                      points={getHexagonPoints(index, borderStrokeWidth())} 
-                                      fill={index === 0 ? mainGradientColor() : 'none'} 
-                                      fill-opacity={index === 0 ? hexFillOpacity() : 0}
-                                      stroke={mainGradientColor()} 
-                                      stroke-width={borderStrokeWidth()}
-                                      stroke-linejoin={linecap() === 'round' ? 'round' : 'miter'}
-                                      style={{
-                                        "mix-blend-mode": overlayBlendMode(),
-                                        opacity: overlayOpacity(),
-                                        "pointer-events": "none"
-                                      }}
-                                    />
-                                  )}
-                                </For>
-                              </Show>
-
-                              {/* 1. K SHADOWS */}
-                              <path 
-                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                fill="none"
-                                stroke="#201A0A"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                stroke-linecap={linecap()}
-                                transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                              />
-                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                <path 
-                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                  fill="none"
-                                  stroke="#201A0A"
-                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                                />
-                                <path 
-                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                  fill="none"
-                                  stroke="#201A0A"
-                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 1.5}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  transform={`translate(${bevelOffset()}, ${bevelOffset()})`}
-                                />
-                              </g>
-
-                              {/* 2. K HIGHLIGHTS */}
-                              <path 
-                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                fill="none"
-                                stroke="#FFFDDA"
-                                stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                stroke-linecap={linecap()}
-                                transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                opacity={bevelOpacity()}
-                              />
-                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                <path 
-                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                  fill="none"
-                                  stroke="#FFFDDA"
-                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                  opacity={bevelOpacity()}
-                                />
-                                <path 
-                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                  fill="none"
-                                  stroke="#FFFDDA"
-                                  stroke-width={currentKStrokeWidth() + bevelOffset() * 0.5}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                  transform={`translate(${-bevelOffset()}, ${-bevelOffset()})`}
-                                  opacity={bevelOpacity()}
-                                />
-                              </g>
-
-                              {/* 3. K MAINS */}
-                              <path 
-                                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                fill="none"
-                                stroke={mainColor()}
-                                stroke-width={currentKStrokeWidth()}
-                                stroke-linecap={linecap()}
-                              />
-                              <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                <path 
-                                  d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                  fill="none"
-                                  stroke={mainColor()}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                />
-                                <path 
-                                  d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                  fill="none"
-                                  stroke={mainColor()}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  stroke-linejoin="miter"
-                                />
-                              </g>
-
-                              {/* 4. K TEXTURE OVERLAYS */}
-                              <Show when={fillMode() === 'texture' && overlayOpacity() > 0}>
-                                <path 
-                                  d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                  fill="none"
-                                  stroke={mainGradientColor()}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  style={{
-                                    "mix-blend-mode": overlayBlendMode(),
-                                    opacity: overlayOpacity(),
-                                    "pointer-events": "none"
-                                  }}
-                                />
-                                <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                  <path 
-                                    d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                    fill="none"
-                                    stroke={mainGradientColor()}
-                                    stroke-width={currentKStrokeWidth()}
-                                    stroke-linecap={linecap()}
-                                    stroke-linejoin="miter"
-                                    style={{
-                                      "mix-blend-mode": overlayBlendMode(),
-                                      opacity: overlayOpacity(),
-                                      "pointer-events": "none"
-                                    }}
-                                  />
-                                  <path 
-                                    d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                    fill="none"
-                                    stroke={mainGradientColor()}
-                                    stroke-width={currentKStrokeWidth()}
-                                    stroke-linecap={linecap()}
-                                    stroke-linejoin="miter"
-                                    style={{
-                                      "mix-blend-mode": overlayBlendMode(),
-                                      opacity: overlayOpacity(),
-                                      "pointer-events": "none"
-                                    }}
-                                  />
-                                </g>
-                              </Show>
-
-                              {/* 4.5. K Softbox Specular Overlay */}
-                              <Show when={fillMode() === 'gradient' && customType() === 'box'}>
-                                <path 
-                                  d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-                                  fill="none"
-                                  stroke={`url(#gold-box-pattern-${type})`}
-                                  stroke-width={currentKStrokeWidth()}
-                                  stroke-linecap={linecap()}
-                                  style={{
-                                    "mix-blend-mode": boxMixBlendMode(),
-                                    "pointer-events": "none"
-                                  }}
-                                />
-                                <g clip-path={`url(#k-horizontal-clip-${type})`}>
-                                  <path 
-                                    d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
-                                    fill="none"
-                                    stroke={`url(#gold-box-pattern-${type})`}
-                                    stroke-width={currentKStrokeWidth()}
-                                    stroke-linecap={linecap()}
-                                    stroke-linejoin="miter"
-                                    style={{
-                                      "mix-blend-mode": boxMixBlendMode(),
-                                      "pointer-events": "none"
-                                    }}
-                                  />
-                                  <path 
-                                    d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-                                    fill="none"
-                                    stroke={`url(#gold-box-pattern-${type})`}
-                                    stroke-width={currentKStrokeWidth()}
-                                    stroke-linecap={linecap()}
-                                    stroke-linejoin="miter"
-                                    style={{
-                                      "mix-blend-mode": boxMixBlendMode(),
-                                      "pointer-events": "none"
-                                    }}
-                                  />
-                                </g>
-                              </Show>
-                        </svg>
+                        <KanIcon size="7rem" thickness={borderStrokeWidth()} kThickness={currentKStrokeWidth()} {...sharedKanProps} />
                       </div>
 
                       {/* Scaling Preview Pyramid Grid */}
@@ -3418,49 +2752,6 @@ const renderSizeCell = (size: string, px: string) => {
           </div>
         </section>
 
-        {/* SECTION 2: 3D Rendered Asset Sheets (PNG) */}
-        <section class="mb-12">
-          <h2 class="text-xl font-bold tracking-wide text-white border-l-2 border-amber-500 pl-3 mb-6">
-            2. High-Quality 3D Render Assets (PNG)
-          </h2>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <For each={pngVariations}>
-              {(item) => (
-                <div class="group relative rounded-lg border border-white/10 bg-white/[0.01] overflow-hidden hover:border-amber-500/40 hover:bg-white/[0.03] transition-all flex flex-col">
-                  {/* Aspect ratio box for image */}
-                  <div class="aspect-square w-full bg-black/60 flex items-center justify-center p-6 border-b border-white/10 relative">
-                    {/* Glowing mesh background */}
-                    <div class="absolute inset-0 bg-radial-gradient from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                    <img 
-                      src={item.src} 
-                      alt={item.name} 
-                      class="max-w-[75%] max-h-[75%] object-contain select-none filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.5)] group-hover:scale-105 transition-transform duration-500" 
-                    />
-                  </div>
-                  
-                  {/* Meta Details */}
-                  <div class="p-4 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 class="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors">{item.name}</h3>
-                      <p class="text-xs text-white/50 mt-1 leading-relaxed">{item.desc}</p>
-                    </div>
-                    <div class="mt-4 flex gap-2">
-                      <a 
-                        href={item.src} 
-                        download={item.src.split('/').pop()}
-                        class="flex-1 text-center py-1.5 text-[11px] font-mono border border-white/10 rounded hover:border-amber-500/40 hover:bg-amber-500/10 text-white/80 hover:text-amber-300 transition-all"
-                      >
-                        DOWNLOAD PNG
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
-        </section>
-
         {/* SECTION 3: SVG Texture Masking Tutorial */}
         <section class="p-6 rounded-lg border border-white/10 bg-white/[0.01] backdrop-blur-md">
           <h2 class="text-lg font-bold text-white mb-3">
@@ -3523,7 +2814,10 @@ const renderSizeCell = (size: string, px: string) => {
         </section>
 
         {/* SECTION 4: Unified Motion & Reflex UI Sandbox Demo */}
-        <section class="mt-12 p-8 rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent backdrop-blur-md relative overflow-hidden">
+        <section 
+          class="mt-12 p-8 rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent backdrop-blur-md relative overflow-hidden"
+          classList={{ 'method-procedural': fillMode() === 'procedural' }}
+        >
           <div class="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full filter blur-3xl pointer-events-none" />
           
           <h2 class="text-xl font-bold tracking-wide text-white border-l-2 border-amber-500 pl-3 mb-2 flex items-center gap-2">
@@ -3573,6 +2867,16 @@ const renderSizeCell = (size: string, px: string) => {
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    fillMode={fillMode()}
+                    selectedTexture={selectedTexture()}
+                    textureScale={textureScale()}
+                    textureOffsetX={textureOffsetX()}
+                    textureOffsetY={textureOffsetY()}
+                    textureBrightness={textureBrightness()}
+                    textureContrast={textureContrast()}
+                    textureSaturation={textureSaturation()}
+                    overlayOpacity={overlayOpacity()}
+                    overlayBlendMode={overlayBlendMode()}
                   />
                 </div>
                 
@@ -3629,6 +2933,16 @@ const renderSizeCell = (size: string, px: string) => {
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    fillMode={fillMode()}
+                    selectedTexture={selectedTexture()}
+                    textureScale={textureScale()}
+                    textureOffsetX={textureOffsetX()}
+                    textureOffsetY={textureOffsetY()}
+                    textureBrightness={textureBrightness()}
+                    textureContrast={textureContrast()}
+                    textureSaturation={textureSaturation()}
+                    overlayOpacity={overlayOpacity()}
+                    overlayBlendMode={overlayBlendMode()}
                   />
                 </div>
                 
@@ -3685,6 +2999,16 @@ const renderSizeCell = (size: string, px: string) => {
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    fillMode={fillMode()}
+                    selectedTexture={selectedTexture()}
+                    textureScale={textureScale()}
+                    textureOffsetX={textureOffsetX()}
+                    textureOffsetY={textureOffsetY()}
+                    textureBrightness={textureBrightness()}
+                    textureContrast={textureContrast()}
+                    textureSaturation={textureSaturation()}
+                    overlayOpacity={overlayOpacity()}
+                    overlayBlendMode={overlayBlendMode()}
                   />
                 </div>
                 
@@ -3741,6 +3065,16 @@ const renderSizeCell = (size: string, px: string) => {
                     boxOpacity={boxOpacity()}
                     boxCornerRadius={boxCornerRadius()}
                     boxMixBlendMode={boxMixBlendMode()}
+                    fillMode={fillMode()}
+                    selectedTexture={selectedTexture()}
+                    textureScale={textureScale()}
+                    textureOffsetX={textureOffsetX()}
+                    textureOffsetY={textureOffsetY()}
+                    textureBrightness={textureBrightness()}
+                    textureContrast={textureContrast()}
+                    textureSaturation={textureSaturation()}
+                    overlayOpacity={overlayOpacity()}
+                    overlayBlendMode={overlayBlendMode()}
                   />
                 </div>
                 
@@ -3881,6 +3215,50 @@ const renderSizeCell = (size: string, px: string) => {
             </div>
           </div>
         </section>
+
+        {/* SECTION 2: 3D Rendered Asset Sheets (PNG) */}
+        <section class="mb-12">
+          <h2 class="text-xl font-bold tracking-wide text-white border-l-2 border-amber-500 pl-3 mb-6">
+            Reference Renders (PNG) — static art only, not live
+          </h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <For each={pngVariations}>
+              {(item) => (
+                <div class="group relative rounded-lg border border-white/10 bg-white/[0.01] overflow-hidden hover:border-amber-500/40 hover:bg-white/[0.03] transition-all flex flex-col">
+                  {/* Aspect ratio box for image */}
+                  <div class="aspect-square w-full bg-black/60 flex items-center justify-center p-6 border-b border-white/10 relative">
+                    {/* Glowing mesh background */}
+                    <div class="absolute inset-0 bg-radial-gradient from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                    <img 
+                      src={item.src} 
+                      alt={item.name} 
+                      class="max-w-[75%] max-h-[75%] object-contain select-none filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.5)] group-hover:scale-105 transition-transform duration-500" 
+                    />
+                  </div>
+                  
+                  {/* Meta Details */}
+                  <div class="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 class="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors">{item.name}</h3>
+                      <p class="text-xs text-white/50 mt-1 leading-relaxed">{item.desc}</p>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                      <a 
+                        href={item.src} 
+                        download={item.src.split('/').pop()}
+                        class="flex-1 text-center py-1.5 text-[11px] font-mono border border-white/10 rounded hover:border-amber-500/40 hover:bg-amber-500/10 text-white/80 hover:text-amber-300 transition-all"
+                      >
+                        DOWNLOAD PNG
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </section>
+
 
       </div>
     </main>
