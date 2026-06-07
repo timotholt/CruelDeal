@@ -436,26 +436,36 @@ export const KanIcon = (rawProps: KanIconProps) => {
             </Show>
           </radialGradient>
 
-          {/* Baked Canvas Metal — the "canvas metal" method. ONE pre-baked
-              texture (same METALS stops + grain) revealed through the hex+K
-              shape, slid by the reflex direction. Pattern is 2x the viewBox and
-              centred so the reflex offset never reaches a tile seam. */}
+          {/* Baked Canvas Metal mask — the "canvas metal" method. The hex+K
+              shape becomes a MASK; ONE baked texture image is revealed through
+              it and slid by a CSS transform (composited, no per-frame re-raster
+              like a moving SVG pattern). Mask mirrors the main-pass geometry. */}
           <Show when={props.fillMode === 'procedural'}>
-            <pattern
-              id={`${uniqueId}-procedural-pattern`}
-              patternUnits="userSpaceOnUse"
-              x={-50 + (props.interactive ? activeShiftX() : 0)}
-              y={-50 + (props.interactive ? activeShiftY() : 0)}
-              width={200}
-              height={200}
-            >
-              <image
-                href={makeMetalTexture(getCanonicalMetal())}
-                width={200}
-                height={200}
-                preserveAspectRatio="xMidYMid slice"
+            <mask id={`${uniqueId}-metal-mask`}>
+              <For each={Array.from({ length: props.rings }, (_, i) => i)}>
+                {(index) => (
+                  <polygon
+                    points={getHexagonPoints(index, props.thickness)}
+                    fill={index === 0 ? 'white' : 'none'}
+                    fill-opacity={index === 0 ? props.hexFillOpacity : 0}
+                    stroke="white"
+                    stroke-width={props.thickness}
+                    stroke-linejoin={props.linecap === 'round' ? 'round' : 'miter'}
+                  />
+                )}
+              </For>
+              <path
+                d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
+                fill="none"
+                stroke="white"
+                stroke-width={props.kThickness}
+                stroke-linecap={props.linecap}
               />
-            </pattern>
+              <g clip-path={`url(#${uniqueId}-clip)`}>
+                <path d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`} fill="none" stroke="white" stroke-width={props.kThickness} stroke-linecap={props.linecap} stroke-linejoin="miter" />
+                <path d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`} fill="none" stroke="white" stroke-width={props.kThickness} stroke-linecap={props.linecap} stroke-linejoin="miter" />
+              </g>
+            </mask>
           </Show>
 
           {/* Photographic Texture Image Pattern */}
@@ -491,9 +501,9 @@ export const KanIcon = (rawProps: KanIconProps) => {
           {(index) => (
             <polygon 
               points={getHexagonPoints(index, props.thickness)} 
-              fill={index === 0 ? finalColorUrl() : 'none'} 
+              fill={index === 0 && props.fillMode !== 'procedural' ? finalColorUrl() : 'none'}
               fill-opacity={index === 0 ? props.hexFillOpacity : 0}
-              stroke="#201A0A" 
+              stroke="#201A0A"
               stroke-width={props.thickness + props.bevelOffset * 1.5}
               stroke-linejoin={props.linecap === 'round' ? 'round' : 'miter'}
               transform={`translate(${props.bevelOffset}, ${props.bevelOffset})`}
@@ -516,19 +526,21 @@ export const KanIcon = (rawProps: KanIconProps) => {
           )}
         </For>
 
-        {/* 3. Hexagon Main Pass */}
-        <For each={Array.from({ length: props.rings }, (_, i) => i)}>
-          {(index) => (
-            <polygon 
-              points={getHexagonPoints(index, props.thickness)} 
-              fill={index === 0 ? finalColorUrl() : 'none'} 
-              fill-opacity={index === 0 ? props.hexFillOpacity : 0}
-              stroke={finalColorUrl()} 
-              stroke-width={props.thickness}
-              stroke-linejoin={props.linecap === 'round' ? 'round' : 'miter'}
-            />
-          )}
-        </For>
+        {/* 3. Hexagon Main Pass (vector/texture metal fill; procedural uses the masked image below) */}
+        <Show when={props.fillMode !== 'procedural'}>
+          <For each={Array.from({ length: props.rings }, (_, i) => i)}>
+            {(index) => (
+              <polygon
+                points={getHexagonPoints(index, props.thickness)}
+                fill={index === 0 ? finalColorUrl() : 'none'}
+                fill-opacity={index === 0 ? props.hexFillOpacity : 0}
+                stroke={finalColorUrl()}
+                stroke-width={props.thickness}
+                stroke-linejoin={props.linecap === 'round' ? 'round' : 'miter'}
+              />
+            )}
+          </For>
+        </Show>
 
         {/* 4. Optional Hexagon Texture Specular Overlay Pass */}
         <Show when={props.fillMode === 'texture' && props.overlayOpacity > 0}>
@@ -634,32 +646,55 @@ export const KanIcon = (rawProps: KanIconProps) => {
           />
         </g>
 
-        {/* 7. K Main Pass */}
-        <path 
-          d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
-          fill="none"
-          stroke={finalColorUrl()}
-          stroke-width={props.kThickness}
-          stroke-linecap={props.linecap}
-        />
-        <g clip-path={`url(#${uniqueId}-clip)`}>
-          <path 
-            d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+        {/* Canvas-metal masked image — ONE baked texture revealed through the
+            hex+K mask, slid by a CSS transform (composited; avoids the moving
+            SVG-pattern re-raster that made canvas mode slow). Replaces the
+            procedural metal fill of passes 3 + 7. */}
+        <Show when={props.fillMode === 'procedural'}>
+          <g mask={`url(#${uniqueId}-metal-mask)`}>
+            <image
+              href={makeMetalTexture(getCanonicalMetal())}
+              x="-50"
+              y="-50"
+              width="200"
+              height="200"
+              preserveAspectRatio="xMidYMid slice"
+              style={{
+                transform: props.interactive ? `translate(${activeShiftX()}px, ${activeShiftY()}px)` : undefined,
+                "will-change": "transform",
+              }}
+            />
+          </g>
+        </Show>
+
+        {/* 7. K Main Pass (vector/texture metal stroke; procedural is the masked image above) */}
+        <Show when={props.fillMode !== 'procedural'}>
+          <path
+            d={`M ${c().stemX1},${c().stemY1} L ${c().stemX2},${c().stemY2}`}
             fill="none"
             stroke={finalColorUrl()}
             stroke-width={props.kThickness}
             stroke-linecap={props.linecap}
-            stroke-linejoin="miter"
           />
-          <path 
-            d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
-            fill="none"
-            stroke={finalColorUrl()}
-            stroke-width={props.kThickness}
-            stroke-linecap={props.linecap}
-            stroke-linejoin="miter"
-          />
-        </g>
+          <g clip-path={`url(#${uniqueId}-clip)`}>
+            <path
+              d={`M ${c().diag1X1},${c().diag1Y1} L ${c().diag1X2},${c().diag1Y2}`}
+              fill="none"
+              stroke={finalColorUrl()}
+              stroke-width={props.kThickness}
+              stroke-linecap={props.linecap}
+              stroke-linejoin="miter"
+            />
+            <path
+              d={`M ${c().diag2X1},${c().diag2Y1} L ${c().diag2X2},${c().diag2Y2}`}
+              fill="none"
+              stroke={finalColorUrl()}
+              stroke-width={props.kThickness}
+              stroke-linecap={props.linecap}
+              stroke-linejoin="miter"
+            />
+          </g>
+        </Show>
 
         {/* 8. K Texture spec overlay Pass */}
         <Show when={(props.fillMode === 'texture' || props.fillMode === 'procedural') && props.overlayOpacity > 0}>
