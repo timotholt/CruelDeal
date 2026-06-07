@@ -71,12 +71,26 @@ import {
   createMainMaterialExportPlan,
   type MainMaterialExportResult,
 } from './main-material/mainMaterialExportPlanner';
+import {
+  feedCardMaterialTargetId,
+  feedCardMaterialTargetPrefix,
+  feedMaterialTargetIdForNode,
+  navItemTargetId,
+  navMaterialTargetPrefix,
+  parseFeedMaterialTargetId,
+  toolbarMaterialTargetId,
+  toolbarMaterialTargetPrefix,
+  topBarCurrencyTargetId,
+  topBarMaterialTargetPrefix,
+  topBarProfileTargetId,
+  type FeedMaterialTargetId as MainFeedMaterialTargetId,
+  type NavMaterialTargetId,
+  type ToolbarMaterialTargetId,
+  type TopBarMaterialTargetId,
+} from './main-material/materialTargetIds';
 
 type MainPartId = 'backdrop' | 'topBar' | 'profileButton' | 'currencyButtons' | 'titleBlock' | 'feedCards' | 'toolBar' | 'navBar' | 'navBarContainer';
-type FeedMaterialTargetId = `feed:card:${FeedCardTypeId}` | `feed:card:${FeedCardTypeId}:node:${string}`;
-type TopBarMaterialTargetId = `topbar:${string}`;
-type ToolbarMaterialTargetId = `toolbar:${string}`;
-type NavMaterialTargetId = `nav:item:${number}`;
+type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 type MainWorkbenchPartId = MainPartId | FeedMaterialTargetId | TopBarMaterialTargetId | ToolbarMaterialTargetId | NavMaterialTargetId;
 type BackdropFit = 'cover' | 'tile';
 type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
@@ -377,17 +391,6 @@ const topBarCurrencySpecs = [
   { id: 'gold', label: 'Gold', text: '5400', iconClass: 'main-material-currency-icon--gold' },
   { id: 'tokens', label: 'Tokens', text: '3050', iconClass: 'main-material-currency-icon--tokens' },
 ] as const;
-const topBarMaterialTargetPrefix = 'topbar:';
-const topBarProfileTargetId: TopBarMaterialTargetId = `${topBarMaterialTargetPrefix}profile`;
-const topBarCurrencyTargetId = (id: string): TopBarMaterialTargetId => `${topBarMaterialTargetPrefix}currency:${id}`;
-const toolbarMaterialTargetPrefix = 'toolbar:';
-const toolbarMaterialTargetId = (nodeId: string): ToolbarMaterialTargetId => `${toolbarMaterialTargetPrefix}${nodeId}`;
-const navMaterialTargetPrefix = 'nav:item:';
-const navItemTargetId = (index: number): NavMaterialTargetId => `${navMaterialTargetPrefix}${index}`;
-const feedCardMaterialTargetPrefix = 'feed:card:';
-const feedCardMaterialTargetId = (cardTypeId: FeedCardTypeId): FeedMaterialTargetId => `feed:card:${cardTypeId}`;
-const feedMaterialTargetIdForNode = (cardTypeId: FeedCardTypeId, nodeId: string): FeedMaterialTargetId => `feed:card:${cardTypeId}:node:${nodeId}`;
-
 const topBarTextFit = {
   baseFontSize: 0.82,
   minScale: 0.05,
@@ -443,17 +446,6 @@ const toolbarTextFit = {
     textTransform: 'uppercase',
   },
 } as const;
-
-const parseFeedMaterialTargetId = (targetId: string) => {
-  if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
-  const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
-  const nodeSeparator = ':node:';
-  const nodeIndex = rest.indexOf(nodeSeparator);
-  return {
-    cardTypeId: (nodeIndex >= 0 ? rest.slice(0, nodeIndex) : rest) as FeedCardTypeId,
-    nodeId: nodeIndex >= 0 ? rest.slice(nodeIndex + nodeSeparator.length) : undefined,
-  };
-};
 
 const selectionOverlayModes: readonly SelectionOverlayMode[] = ['off', 'flash', 'persistent'];
 const selectionOverlayLabels: Record<SelectionOverlayMode, string> = {

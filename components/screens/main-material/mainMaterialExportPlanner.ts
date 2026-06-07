@@ -10,6 +10,7 @@ import {
   type MaterialRecipeState,
   type SurfaceOptions,
 } from '../../ui/material-lab';
+import { parseFeedMaterialTargetId } from './materialTargetIds';
 
 export type MainMaterialExportTargetKind = 'feed-button';
 
@@ -53,19 +54,6 @@ export interface MainMaterialExportResult {
   css: string;
   metrics: EmissionMetrics;
 }
-
-const feedCardMaterialTargetPrefix = 'feed:card:';
-
-const parseFeedMaterialTargetId = (targetId: string) => {
-  if (!targetId.startsWith(feedCardMaterialTargetPrefix)) return null;
-  const rest = targetId.slice(feedCardMaterialTargetPrefix.length);
-  const nodeSeparator = ':node:';
-  const nodeIndex = rest.indexOf(nodeSeparator);
-  return {
-    cardTypeId: nodeIndex >= 0 ? rest.slice(0, nodeIndex) : rest,
-    nodeId: nodeIndex >= 0 ? rest.slice(nodeIndex + nodeSeparator.length) : undefined,
-  };
-};
 
 const findExportNodeById = <TNode extends MainMaterialExportNode>(
   nodes: TNode[],
