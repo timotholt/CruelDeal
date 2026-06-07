@@ -97,6 +97,49 @@ authoring JSON
   `JSON.stringify`.
 - [x] Added `components/screens/materialLabJsonReadout.ts` as the tested seam
   between screen orchestration and editor-output serialization.
+- [x] Routed `GameUiSkinProofScreen` runtime JSON panes through registered
+  editor-output modes via `components/screens/gameUiSkinProofJsonReadout.ts`.
+- [x] Routed `UiNodePreviewScreen` template JSON through the registered
+  `ui-node` output mode via `components/screens/uiNodePreviewJsonReadout.ts`;
+  its local demo CMS/theme panes remain explicit legacy JSON readouts until
+  they have first-class output schemas.
+- [x] Started the next `/material-main` decomposition slice by extracting feed
+  story document defaults, `FeedCardTypeId`/`FeedStory` contracts, story
+  cloning, story sanitization, and story image override sanitization into
+  `components/screens/main-material/mainMaterialFeedModel.ts`.
+- [x] Updated `/material-main` localStorage load and JSON import paths to use
+  the extracted feed story sanitizer with the active feed card type registry.
+- [x] Continued feed model extraction by moving feed text slot ids/labels,
+  inherited-weight slot policy, media fade modes/labels, and the feed
+  background image recipe contract into
+  `components/screens/main-material/mainMaterialFeedModel.ts`.
+- [x] Moved feed background image default construction and sanitization into
+  `mainMaterialFeedModel.ts`, so card-type persistence fallback logic no longer
+  owns that document contract inside `/material-main`.
+- [x] Moved feed text slot style contract, default construction, cloning, and
+  sanitization into `mainMaterialFeedModel.ts`, including font/tone/style
+  validation through the same material-lab token rules.
+- [x] Moved feed node contracts, card-type container contracts, feed node layout
+  defaults, node construction/cloning, and node layout sanitization into
+  `mainMaterialFeedModel.ts`, so the editable feed tree shape is no longer
+  private to `MainMaterialPreviewScreen.tsx`.
+- [x] Moved feed card-type cloning and card-type/node sanitization into
+  `mainMaterialFeedModel.ts`, with defaults and fallback surface passed in by
+  the screen until `createDefaultFeedCardTypes` can move safely.
+- [x] Moved feed region/glass/CTA surface factories into
+  `mainMaterialFeedModel.ts`; CTA interaction overlays are now private model
+  construction instead of screen-owned helper state.
+- [x] Moved feed slot-map construction into `mainMaterialFeedModel.ts` via
+  `createFeedSlots()`, so default card-type construction no longer reaches into
+  screen-owned slot id/inherited-weight policy.
+- [x] Moved reusable hero/simple feed node factory shapes into
+  `mainMaterialFeedModel.ts` with tests. The remaining `createDefaultFeedCardTypes`
+  literal is still screen-owned because its current inline nodes have drifted
+  from those reusable shapes and need a deliberate default-card split.
+- [x] Moved mission briefing feed surface factories and
+  `createMissionBriefingLeftNodes()` into `mainMaterialFeedModel.ts`, with tests
+  covering mission card/panel/text/CTA surfaces and the left-side mission node
+  tree.
 
 ## Verification Evidence
 
@@ -112,8 +155,13 @@ authoring JSON
 - PASS `npx tsx components/ui/material-lab/surfaceFieldMetadata.test.ts`
 - PASS `npx tsx components/ui/editor-output/editorOutputRegistry.test.ts`
 - PASS `npx tsx components/screens/materialLabJsonReadout.test.ts`
+- PASS `npx tsx components/screens/gameUiSkinProofJsonReadout.test.ts`
+- PASS `npx tsx components/screens/uiNodePreviewJsonReadout.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPersistence.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialTargetTree.test.ts`
 - PASS `npm run build`
 
 ## Current Architecture State
@@ -128,19 +176,57 @@ authoring JSON
 
 ## Next Bottleneck
 
-Continue decomposing `/material-main` around pure editor/runtime contracts.
-Recommended next slices, in order:
+Continue decomposing `/material-main` around pure editor/runtime contracts. The
+next blocker family is that feed document schema/defaults/sanitization/render
+policy are still private to `MainMaterialPreviewScreen.tsx`, so editor controls,
+preview rendering, persistence, target generation, and export planning all
+depend on hidden structures in the giant screen.
 
-1. Wire the `/material-main` clipboard export/import preview-state path through
-   an explicit compatibility adapter, then decide which runtime output modes
-   should sit beside that preview-state export.
-2. Wire `UiNodePreviewScreen` and `GameUiSkinProofScreen` JSON panes through
-   `editorOutputRegistry` for their registered modes.
-3. Migrate the next low-risk `MaterialRecipeEditor` groups to
-   `SurfaceGeneratedEditor` and keep pushing field-specific UI knowledge into
-   metadata/capabilities instead of bespoke JSX.
-4. Keep extracting `/material-main` shell logic until it is only orchestration
-   over pure editor/runtime contracts.
+Recommended finish plan, in order:
+
+1. Continue extracting the pure feed document/model layer into
+   `components/screens/main-material/mainMaterialFeedModel.ts`.
+   Feed story defaults/sanitizers, feed text slot ids/labels, inherited-weight
+   slot policy, media fade modes/labels, and the feed background image recipe
+   contract/factory/sanitizer plus feed text slot style
+   contract/factory/clone/sanitizer are already extracted. Feed node contracts,
+   layout defaults, node construction/cloning, and node layout sanitization are
+   also extracted. Card-type clone helpers and card-type/node sanitizers are
+   extracted with explicit default/fallback inputs. Feed region/glass/CTA
+   surface factories, slot-map construction, and reusable hero/simple feed node
+   factory shapes are also extracted. Next split the remaining large
+   `createDefaultFeedCardTypes` literal into smaller model-owned default-card
+   factories. Mission briefing surfaces and left-node construction are now
+   model-owned, so the next candidate is extracting card_type_01's default
+   factory first and comparing current inline children before replacing them.
+   Add tests for default card IDs, cloning depth, sanitize fallback behavior,
+   and persisted compatibility.
+2. Extract feed text/render policy into
+   `components/screens/main-material/mainMaterialFeedText.ts`.
+   Move text-style resolution, rich-text parsing, render-mode resolution, node
+   content mapping, and CSS variable helpers. Add tests for markup parsing,
+   legacy render-mode mapping, inheritance, and fit-vs-flow decisions.
+3. Extract feed editor components after the model is importable.
+   Move `FeedRecipeEditor` and `FeedTextGlobalsEditor` without changing state
+   ownership. Keep callbacks identical and rely on the new pure model tests.
+4. Extract feed preview renderer.
+   Move `FeedNodeFrame`, `ChromeFeedNodeTree`, `FeedCardTreeNode`,
+   `FeedCarousel`, and `MainMaterialPreview`. Keep DOM registry/audit injection
+   explicit so current inspector behavior survives.
+5. Extract `/material-main` import/export as an explicit compatibility adapter.
+   Keep current preview-state JSON working, but label it as editor preview state
+   rather than runtime JSON. Add registered runtime output modes beside it only
+   where the payloads are real contracts.
+6. Extract the top-level controller last into a
+   `createMainMaterialEditorController` orchestration helper. At that point the
+   screen should mostly compose workbench, editor, preview, and inspector.
+7. Continue `MaterialRecipeEditor` generated-control migration in this order:
+   Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
+   Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
+   selector/presets as bespoke editor chrome. Add metadata/capabilities for
+   tone/texture/border/font options, dependency disables, array toggles, and a
+   separate state-overlay metadata adapter rather than forcing overlay-only
+   authoring fields into `SurfaceOptions` metadata.
 
 ## Known Dirty Parallel Work
 

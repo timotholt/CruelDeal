@@ -1,0 +1,1017 @@
+import {
+  cloneMaterialRecipe,
+  createMaterialRecipe,
+  createMaterialStateOverlays,
+  materialRecipeContentTones,
+  materialRecipeFontStyles,
+  materialRecipeTextAligns,
+  materialRecipeTextFonts,
+  materialRecipeTextTransforms,
+  sanitizeMaterialRecipe,
+  sanitizeFontWeight,
+  type ContentAlign,
+  type FontStyleToken,
+  type FontWeightToken,
+  type MaterialRecipe,
+  type MaterialTone,
+  type TextTransformToken,
+} from '../../ui/material-lab';
+import type { MaterialTextFitMode } from '../../ui/material-node';
+import type { FeedNodeLayout } from './feedNodeLayoutCss';
+
+export type FeedCardTypeId = 'card_type_01' | 'card_type_02' | 'card_type_03' | 'card_type_04';
+
+export const feedTextSlotIds = [
+  'eyebrow',
+  'title',
+  'body',
+  'meta',
+  'ctaLabel',
+  'contractBadge',
+  'contractBriefing',
+  'contractEyebrow',
+  'contractTitle',
+  'contractBody',
+  'contractRewardLabel',
+  'contractRewardValue',
+  'contractH4',
+  'contractAcc1',
+  'contractAcc2',
+  'contractAcc3',
+  'contractAcc4',
+  'contractRule',
+  'contractDivider',
+  'contractCtaLabel',
+  'seasonBadge',
+  'seasonBriefing',
+  'seasonEyebrow',
+  'sectorLabel',
+] as const;
+
+export type FeedTextSlotId = typeof feedTextSlotIds[number];
+
+export const feedTextSlotLabels: Record<FeedTextSlotId, string> = {
+  eyebrow: 'Header',
+  title: 'Title',
+  body: 'Body',
+  meta: 'Meta',
+  ctaLabel: 'Button',
+  contractBadge: 'Contract Badge',
+  contractBriefing: 'Mission Briefing',
+  contractEyebrow: 'Contract Header',
+  contractTitle: 'Contract Title',
+  contractBody: 'Contract Body',
+  contractRewardLabel: 'Reward Label',
+  contractRewardValue: 'Reward Value',
+  contractH4: 'H4',
+  contractAcc1: 'Acc 1',
+  contractAcc2: 'Acc 2',
+  contractAcc3: 'Acc 3',
+  contractAcc4: 'Acc 4',
+  contractRule: 'Rule',
+  contractDivider: 'Divider',
+  contractCtaLabel: 'Contract Button',
+  seasonBadge: 'Season Badge',
+  seasonBriefing: 'Season Briefing',
+  seasonEyebrow: 'Season Header',
+  sectorLabel: 'Sector Label',
+};
+
+export const feedSlotsInheritingBodyWeight: ReadonlySet<FeedTextSlotId> = new Set([
+  'contractEyebrow',
+  'contractTitle',
+  'contractRewardValue',
+  'contractH4',
+  'contractAcc1',
+  'contractAcc2',
+  'contractAcc3',
+  'contractAcc4',
+  'contractRewardLabel',
+  'contractRule',
+  'seasonEyebrow',
+]);
+
+export type FeedBackgroundFit = 'cover' | 'contain';
+
+export const feedMediaFadeModes = [
+  'none',
+  'top-dark',
+  'bottom-dark',
+  'left-dark',
+  'right-dark',
+  'left-bottom-dark',
+  'top-bottom-dark',
+  'vignette-dark',
+  'left-light',
+  'top-light',
+  'bottom-light',
+] as const;
+
+export type FeedMediaFadeMode = typeof feedMediaFadeModes[number];
+
+export const feedMediaFadeLabels: Record<FeedMediaFadeMode, string> = {
+  none: 'none',
+  'top-dark': 'top dark',
+  'bottom-dark': 'bottom dark',
+  'left-dark': 'left dark',
+  'right-dark': 'right dark',
+  'left-bottom-dark': 'left + bottom',
+  'top-bottom-dark': 'top + bottom',
+  'vignette-dark': 'vignette',
+  'left-light': 'left light',
+  'top-light': 'top light',
+  'bottom-light': 'bottom light',
+};
+
+export interface FeedBackgroundImageRecipe {
+  binding: 'image';
+  enabled: boolean;
+  fit: FeedBackgroundFit;
+  x: number;
+  y: number;
+  scale: number;
+  fadeMode: FeedMediaFadeMode;
+  fadeStrength: number;
+  fadeSize: number;
+}
+
+export type FeedTextEmbossMode = 'none' | 'dark' | 'light' | 'shadow';
+export type FeedTextTransformToken = TextTransformToken | 'inherit';
+
+export interface FeedTextSlotStyle {
+  inherit: boolean;
+  overrideColor: boolean;
+  overrideOpacity: boolean;
+  overrideFont: boolean;
+  overrideSize: boolean;
+  overrideWeight: boolean;
+  overrideStyle: boolean;
+  overrideCase: boolean;
+  overrideEmboss: boolean;
+  overrideLineHeight: boolean;
+  overrideParagraphGap: boolean;
+  overrideLetterSpacing: boolean;
+  overrideAlign: boolean;
+  overridePosition: boolean;
+  textFontFamily: string;
+  textSizeRem: number;
+  lineHeight: number;
+  paragraphGap: number;
+  contentTone: MaterialTone;
+  fontWeight: FontWeightToken;
+  fontStyle: FontStyleToken;
+  textTransform: FeedTextTransformToken;
+  textEmbossMode: FeedTextEmbossMode;
+  textEmbossStrength: number;
+  textEmbossOffset: number;
+  textEmbossBlur: number;
+  letterSpacing: number;
+  textOpacity: number;
+  textAlign: ContentAlign;
+  textX: number;
+  textY: number;
+}
+
+export type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
+// Two orthogonal axes (legacy textRender is derived into these when absent):
+//   markup: parse [..] markup into styled tokens, or treat literally
+//   sizing: autoscale-to-fit the box, or use normal browser flow
+export type FeedNodeMarkupMode = 'auto' | 'on' | 'off';
+export type FeedNodeSizingMode = 'auto' | 'fit' | 'flow';
+export type FeedCardNodeType = 'container' | 'text' | 'button';
+
+export interface FeedCardNode {
+  id: string;
+  label: string;
+  type: FeedCardNodeType;
+  binding?: FeedTextSlotId;
+  layout: FeedNodeLayout;
+  surface?: MaterialRecipe;
+  text?: FeedTextSlotStyle;
+  textRender?: FeedNodeTextRender;
+  markup?: FeedNodeMarkupMode;
+  sizing?: FeedNodeSizingMode;
+  fitMode?: MaterialTextFitMode;
+  maxLines?: number;
+  children?: FeedCardNode[];
+}
+
+export interface FeedCardTypeRecipe {
+  id: FeedCardTypeId;
+  name: string;
+  description: string;
+  surface: MaterialRecipe;
+  backgroundImage: FeedBackgroundImageRecipe;
+  children: FeedCardNode[];
+  slots: Record<FeedTextSlotId, FeedTextSlotStyle>;
+}
+
+export type FeedCardTypes = Record<FeedCardTypeId, FeedCardTypeRecipe>;
+
+export interface FeedStory {
+  id: string;
+  label: string;
+  cardTypeId: FeedCardTypeId;
+  image: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  meta: string;
+  ctaLabel: string;
+  contractBadge?: string;
+  contractBriefing?: string;
+  contractEyebrow?: string;
+  contractTitle?: string;
+  contractBody?: string;
+  contractRewardLabel?: string;
+  contractRewardValue?: string;
+  contractRule?: string;
+  contractCtaLabel?: string;
+  seasonBadge?: string;
+  seasonBriefing?: string;
+  seasonEyebrow?: string;
+  sectorLabel?: string;
+}
+
+const isOneOf = <T extends readonly unknown[]>(value: unknown, options: T): value is T[number] => (
+  options.includes(value)
+);
+
+const clamp = (value: unknown, fallback: number, min: number, max: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+};
+
+export const createFeedBackgroundImage = (
+  overrides: Partial<FeedBackgroundImageRecipe> = {},
+): FeedBackgroundImageRecipe => ({
+  binding: 'image',
+  enabled: true,
+  fit: 'cover',
+  x: 0,
+  y: 0,
+  scale: 100,
+  fadeMode: 'left-bottom-dark',
+  fadeStrength: 58,
+  fadeSize: 52,
+  ...overrides,
+});
+
+export const feedDefaultTextFontCondensed = materialRecipeTextFonts[1]?.value || 'inherit';
+export const feedDefaultTextFontDin = '"DIN Condensed", "Bahnschrift", "Arial Narrow", ui-sans-serif, system-ui, sans-serif';
+
+export const createFeedSlotStyle = (
+  overrides: Partial<FeedTextSlotStyle> = {},
+): FeedTextSlotStyle => ({
+  inherit: false,
+  overrideColor: true,
+  overrideOpacity: true,
+  overrideFont: true,
+  overrideSize: true,
+  overrideWeight: true,
+  overrideStyle: true,
+  overrideCase: true,
+  overrideEmboss: true,
+  overrideLineHeight: true,
+  overrideParagraphGap: true,
+  overrideLetterSpacing: true,
+  overrideAlign: true,
+  overridePosition: true,
+  textFontFamily: feedDefaultTextFontCondensed,
+  textSizeRem: 1,
+  lineHeight: 1,
+  paragraphGap: 0,
+  contentTone: 'black',
+  fontWeight: 600,
+  fontStyle: 'normal',
+  textTransform: 'uppercase',
+  textEmbossMode: 'dark',
+  textEmbossStrength: 100,
+  textEmbossOffset: 50,
+  textEmbossBlur: 50,
+  letterSpacing: 0,
+  textOpacity: 90,
+  textAlign: 'center',
+  textX: 0,
+  textY: 0,
+  ...overrides,
+});
+
+export const cloneFeedSlotStyle = (style: FeedTextSlotStyle): FeedTextSlotStyle => ({ ...style });
+
+export const createFeedSlots = (
+  overrides: Partial<Record<FeedTextSlotId, Partial<FeedTextSlotStyle>>> = {},
+): Record<FeedTextSlotId, FeedTextSlotStyle> => Object.fromEntries(
+  feedTextSlotIds.map((slot) => {
+    const slotOverrides = overrides[slot] || {};
+    return [
+      slot,
+      createFeedSlotStyle({
+        ...slotOverrides,
+        overrideWeight: slotOverrides.overrideWeight ?? !feedSlotsInheritingBodyWeight.has(slot),
+      }),
+    ];
+  }),
+) as Record<FeedTextSlotId, FeedTextSlotStyle>;
+
+export const createFeedNodeLayout = (
+  overrides: Partial<FeedNodeLayout> = {},
+): FeedNodeLayout => ({
+  mode: 'absolute',
+  slot: 'auto',
+  x: 8,
+  y: 44,
+  width: 44,
+  height: 38,
+  nudgeX: 0,
+  nudgeY: 0,
+  padding: 14,
+  gap: 10,
+  align: 'left',
+  justify: 'center',
+  ...overrides,
+});
+
+export const createFeedNode = (
+  overrides: Omit<Partial<FeedCardNode>, 'children'> & { children?: FeedCardNode[] },
+): FeedCardNode => ({
+  id: overrides.id || `node-${Math.random().toString(36).slice(2, 8)}`,
+  label: overrides.label || 'Node',
+  type: overrides.type || 'container',
+  binding: overrides.binding,
+  layout: createFeedNodeLayout(overrides.layout),
+  surface: overrides.surface ? cloneMaterialRecipe(overrides.surface) : undefined,
+  text: overrides.text ? cloneFeedSlotStyle(overrides.text) : undefined,
+  textRender: overrides.textRender,
+  markup: overrides.markup,
+  sizing: overrides.sizing,
+  fitMode: overrides.fitMode,
+  maxLines: overrides.maxLines,
+  children: overrides.children?.map((child) => cloneFeedCardNode(child)) || [],
+});
+
+export const cloneFeedCardNode = (node: FeedCardNode): FeedCardNode => ({
+  ...node,
+  layout: { ...node.layout },
+  surface: node.surface ? cloneMaterialRecipe(node.surface) : undefined,
+  text: node.text ? cloneFeedSlotStyle(node.text) : undefined,
+  children: node.children?.map((child) => cloneFeedCardNode(child)) || [],
+});
+
+export const cloneFeedCardType = (cardType: FeedCardTypeRecipe): FeedCardTypeRecipe => ({
+  ...cardType,
+  surface: cloneMaterialRecipe(cardType.surface),
+  backgroundImage: { ...cardType.backgroundImage },
+  children: cardType.children.map((child) => cloneFeedCardNode(child)),
+  slots: Object.fromEntries(
+    feedTextSlotIds.map((slot) => [slot, cloneFeedSlotStyle(cardType.slots[slot])]),
+  ) as Record<FeedTextSlotId, FeedTextSlotStyle>,
+});
+
+export const cloneFeedCardTypes = (cardTypes: FeedCardTypes): FeedCardTypes => ({
+  card_type_01: cloneFeedCardType(cardTypes.card_type_01),
+  card_type_02: cloneFeedCardType(cardTypes.card_type_02),
+  card_type_03: cloneFeedCardType(cardTypes.card_type_03),
+  card_type_04: cloneFeedCardType(cardTypes.card_type_04),
+});
+
+const ctaInteractionStates = () => createMaterialStateOverlays({
+  hover: {
+    enabled: true,
+    surface: { tint: 'gold', tintStrength: 14, borderOpacityBoost: 22, lightStrengthBoost: 16, darkStrengthBoost: -4 },
+    glow: { tone: 'gold', glowStrength: 34, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'], cornerSize: 14 },
+    content: { contentTone: 'black', iconTone: 'black', contentGlowStrength: 8 },
+    motion: { translateY: -1, scale: 1.01 },
+  },
+  pressed: {
+    enabled: true,
+    surface: { tint: 'gold', tintStrength: 28, borderOpacityBoost: 26, lightStrengthBoost: 6, darkStrengthBoost: 18 },
+    glow: { tone: 'gold', glowStrength: 42, corners: ['bottom-left', 'bottom-right'], edgeHighlight: ['bottom'], cornerSize: 14 },
+    emission: { emission: 'center-blip', emissionTone: 'gold', emissionStrength: 58, emissionLength: 34, emissionThickness: 2, emissionBlipSize: 16 },
+    content: { contentTone: 'black', iconTone: 'black', fontWeight: 700 },
+    motion: { translateY: 1, scale: 0.985 },
+  },
+});
+
+export const createFeedCtaSurface = () => createMaterialRecipe({
+  material: 'white',
+  texture: 'stoneGray01',
+  textureStrength: 54,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 18,
+  glassBlur: 2,
+  tint: 'white',
+  tintStrength: 6,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 36,
+  lightStrength: 28,
+  darkStrength: 14,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 4,
+  contentTone: 'black',
+  contentOpacity: 82,
+  states: ctaInteractionStates(),
+});
+
+export const createFeedRegionSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: false,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'none',
+  border: [],
+  borderOpacity: 0,
+  lightStrength: 0,
+  darkStrength: 0,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 0,
+});
+
+export const createFeedGlassRegionSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: true,
+  glassOpacity: 34,
+  glassBlur: 7,
+  tint: 'white',
+  tintStrength: 5,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 22,
+  lightStrength: 18,
+  darkStrength: 6,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 5,
+});
+
+export const createMissionBriefingCardSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 0,
+  glassBlur: 3,
+  bevelCorners: ['top-right'],
+  bevelSize: 18,
+  tint: 'black',
+  tintStrength: 50,
+  gradient: 'both',
+  border: ['top'],
+  borderOpacity: 22,
+  lightStrength: 10,
+  darkStrength: 10,
+  sheen: false,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 0,
+  edgeWearWidth: 1,
+  edgeWearScale: 256,
+  edgeWearLayer: 'above-highlights',
+  radius: 8,
+  contentTone: 'white',
+  textFontFamily: feedDefaultTextFontCondensed,
+  textSizeRem: 0.65,
+  contentOpacity: 80,
+  fontWeight: 100,
+  fontStyle: 'normal',
+  textTransform: 'none',
+  letterSpacing: 0.05,
+});
+
+export const createMissionBriefingPanelSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  textureScale: 512,
+  glass: true,
+  glassOpacity: 41,
+  glassReflectionOpacity: 52,
+  glassBlur: 3,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 2,
+  glassHighlightY: 0,
+  bevelCorners: ['top-right'],
+  bevelSize: 18,
+  tint: 'none',
+  tintStrength: 42,
+  gradient: 'none',
+  border: ['top', 'left'],
+  borderColor: 'custom',
+  borderCustomColor: '#c2c2c2',
+  borderOpacity: 49,
+  lightStrength: 5,
+  darkStrength: 0,
+  sheen: false,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 45,
+  edgeWearWidth: 1,
+  edgeWearScale: 1024,
+  edgeWearLayer: 'above-highlights',
+  dropShadow: true,
+  shadowOpacity: 69,
+  shadowBlur: 22,
+  shadowX: 11,
+  shadowY: 10,
+  shadowSpread: -1,
+  radius: 8,
+  contentTone: 'white',
+  textFontFamily: feedDefaultTextFontCondensed,
+  textSizeRem: 0.65,
+  contentOpacity: 90,
+  fontWeight: 100,
+  fontStyle: 'normal',
+  textTransform: 'none',
+  letterSpacing: 0.05,
+});
+
+export const createMissionBriefingTextSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'none',
+  textureStrength: 0,
+  glass: true,
+  glassOpacity: 34,
+  glassBlur: 7,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'none',
+  border: [],
+  borderOpacity: 0,
+  lightStrength: 0,
+  darkStrength: 0,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  radius: 0,
+});
+
+export const createMissionBriefingBadgeSurface = () => createMaterialRecipe({
+  material: 'none',
+  texture: 'stoneGray01',
+  textureStrength: 0,
+  textureScale: 512,
+  glass: false,
+  glassOpacity: 35,
+  glassBlur: 5,
+  tint: 'white',
+  tintStrength: 9,
+  gradient: 'top-light',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderOpacity: 24,
+  lightStrength: 22,
+  darkStrength: 8,
+  sheen: true,
+  edgeWearTexture: 'none',
+  edgeWearOpacity: 0,
+  edgeWearLayer: 'below-highlights',
+  radius: 4,
+  contentTone: 'gold',
+  contentOpacity: 80,
+});
+
+export const createMissionBriefingCtaSurface = () => createMaterialRecipe({
+  material: 'custom',
+  materialColor: '#707275',
+  texture: 'stone04',
+  textureStrength: 84,
+  textureScale: 256,
+  glass: true,
+  glassOpacity: 15,
+  glassBlur: 3,
+  glassHighlightWidth: 100,
+  glassHighlightHeight: 32,
+  glassHighlightY: 4,
+  tint: 'none',
+  tintStrength: 0,
+  gradient: 'both',
+  border: ['top', 'right', 'bottom', 'left'],
+  borderColor: 'custom',
+  borderCustomColor: '#eaeaea',
+  borderOpacity: 54,
+  lightStrength: 62,
+  darkStrength: 36,
+  sheen: true,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 45,
+  edgeWearWidth: 1,
+  edgeWearScale: 1024,
+  edgeWearLayer: 'above-highlights',
+  dropShadow: true,
+  shadowOpacity: 58,
+  shadowBlur: 6,
+  shadowX: 0,
+  shadowY: 3,
+  shadowSpread: 0,
+  radius: 6,
+  contentTone: 'black',
+  textFontFamily: feedDefaultTextFontDin,
+  textSizeRem: 0.8,
+  contentOpacity: 90,
+  fontWeight: 800,
+  fontStyle: 'normal',
+  textTransform: 'uppercase',
+  letterSpacing: 0.05,
+  states: createMaterialStateOverlays({
+    hover: {
+      enabled: true,
+      surface: { tint: 'gold', tintStrength: 8, borderOpacityBoost: 8, lightStrengthBoost: 8, darkStrengthBoost: 0 },
+      glow: { tone: 'gold', glowStrength: 1, corners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'], edgeHighlight: ['top'], cornerSize: 17 },
+      content: { contentTone: 'inherit', iconTone: 'inherit', contentGlowStrength: 0, iconGlowStrength: 20 },
+      motion: { translateY: 0, scale: 1 },
+    },
+    pressed: {
+      enabled: true,
+      content: {
+        contentTone: 'black',
+        iconTone: 'inherit',
+        fontWeight: 800,
+        fontStyle: 'normal',
+        textTransform: 'uppercase',
+        letterSpacing: 0.05,
+        contentGlowStrength: 0,
+      },
+    },
+  }),
+});
+
+export const createMissionBriefingLeftNodes = (): FeedCardNode[] => [
+  createFeedNode({
+    id: 'deadline-badge',
+    label: 'Deadline Badge',
+    type: 'text',
+    binding: 'contractBadge',
+    surface: createMissionBriefingBadgeSurface(),
+    textRender: 'fit',
+    fitMode: 'single-line',
+    maxLines: 1,
+    layout: createFeedNodeLayout({ x: 51, y: 10, width: 38, height: 6, padding: 0, gap: 0, align: 'center', justify: 'center' }),
+  }),
+  createFeedNode({
+    id: 'mission-briefing',
+    label: 'Mission Briefing',
+    type: 'container',
+    binding: 'contractBriefing',
+    surface: createMissionBriefingPanelSurface(),
+    textRender: 'rich',
+    layout: createFeedNodeLayout({ x: 47, y: 29, width: 39, height: 55, padding: 16, gap: 12, align: 'center', justify: 'start' }),
+    children: [
+      createFeedNode({
+        id: 'contract-cta',
+        label: 'Contract CTA',
+        type: 'button',
+        binding: 'contractCtaLabel',
+        surface: createMissionBriefingCtaSurface(),
+        textRender: 'fit',
+        fitMode: 'single-line',
+        maxLines: 1,
+        layout: createFeedNodeLayout({ mode: 'flow', slot: 'footer', x: 10, y: 84, width: 83, height: 11, padding: 0, gap: 0, align: 'center', justify: 'center' }),
+      }),
+    ],
+  }),
+  createFeedNode({
+    id: 'sector-mark',
+    label: 'Sector Mark',
+    type: 'text',
+    binding: 'sectorLabel',
+    surface: createFeedRegionSurface(),
+    textRender: 'rich',
+    layout: createFeedNodeLayout({ x: 7, y: 11, width: 18, height: 14, padding: 0, gap: 0, align: 'center', justify: 'start' }),
+  }),
+];
+
+export const createHeroFeedNodes = (): FeedCardNode[] => [
+  createFeedNode({
+    id: 'primary-copy',
+    label: 'Primary Copy',
+    type: 'container',
+    surface: createFeedGlassRegionSurface(),
+    layout: createFeedNodeLayout({ x: 7, y: 26, width: 42, height: 55, padding: 16, gap: 14, align: 'left', justify: 'center' }),
+    children: [
+      createFeedNode({ id: 'eyebrow', label: 'Header', type: 'text', binding: 'eyebrow', surface: createFeedGlassRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 7, width: 100, height: 8, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'title', label: 'Title', type: 'text', binding: 'title', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 22, width: 100, height: 28, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'body', label: 'Body', type: 'text', binding: 'body', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 57, width: 100, height: 18, padding: 0, gap: 0, align: 'left' }) }),
+      createFeedNode({ id: 'cta', label: 'CTA Button', type: 'button', binding: 'ctaLabel', surface: createFeedCtaSurface(), layout: createFeedNodeLayout({ x: 0, y: 82, width: 72, height: 13, padding: 0, gap: 0, align: 'left' }) }),
+    ],
+  }),
+  createFeedNode({
+    id: 'meta-top-right',
+    label: 'Meta',
+    type: 'text',
+    binding: 'meta',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({ x: 68, y: 7, width: 26, height: 8, padding: 0, gap: 0, align: 'right', justify: 'start' }),
+  }),
+];
+
+export const createSimpleFeedNodes = (): FeedCardNode[] => [
+  createFeedNode({
+    id: 'center-copy',
+    label: 'Center Copy',
+    type: 'container',
+    surface: createFeedGlassRegionSurface(),
+    layout: createFeedNodeLayout({ x: 12, y: 36, width: 76, height: 42, padding: 16, gap: 10, align: 'center', justify: 'center' }),
+    children: [
+      createFeedNode({ id: 'eyebrow', label: 'Header', type: 'text', binding: 'eyebrow', surface: createFeedGlassRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 8, width: 100, height: 8, padding: 0, gap: 0, align: 'center' }) }),
+      createFeedNode({ id: 'title', label: 'Title', type: 'text', binding: 'title', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 24, width: 100, height: 24, padding: 0, gap: 0, align: 'center' }) }),
+      createFeedNode({ id: 'body', label: 'Body', type: 'text', binding: 'body', surface: createFeedRegionSurface(), layout: createFeedNodeLayout({ x: 0, y: 60, width: 100, height: 16, padding: 0, gap: 0, align: 'center' }) }),
+    ],
+  }),
+  createFeedNode({
+    id: 'meta-top-right',
+    label: 'Meta',
+    type: 'text',
+    binding: 'meta',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({ x: 66, y: 7, width: 28, height: 8, padding: 0, gap: 0, align: 'right', justify: 'start' }),
+  }),
+];
+
+export const sanitizeFeedBackgroundImage = (
+  value: unknown,
+  fallback: FeedBackgroundImageRecipe,
+): FeedBackgroundImageRecipe => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedBackgroundImageRecipe> : {};
+  return {
+    binding: 'image',
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
+    fit: input.fit === 'contain' || input.fit === 'cover' ? input.fit : fallback.fit,
+    x: clamp(input.x, fallback.x, -100, 100),
+    y: clamp(input.y, fallback.y, -100, 100),
+    scale: clamp(input.scale, fallback.scale, 50, 180),
+    fadeMode: isOneOf(input.fadeMode, feedMediaFadeModes) ? input.fadeMode : fallback.fadeMode,
+    fadeStrength: clamp(input.fadeStrength, fallback.fadeStrength, 0, 100),
+    fadeSize: clamp(input.fadeSize, fallback.fadeSize, 0, 100),
+  };
+};
+
+export const sanitizeFeedTextSlotStyle = (
+  value: unknown,
+  fallback: FeedTextSlotStyle,
+): FeedTextSlotStyle => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedTextSlotStyle> : {};
+  return {
+    inherit: typeof input.inherit === 'boolean' ? input.inherit : fallback.inherit,
+    overrideColor: typeof input.overrideColor === 'boolean' ? input.overrideColor : fallback.overrideColor,
+    overrideOpacity: typeof input.overrideOpacity === 'boolean' ? input.overrideOpacity : fallback.overrideOpacity,
+    overrideFont: typeof input.overrideFont === 'boolean' ? input.overrideFont : fallback.overrideFont,
+    overrideSize: typeof input.overrideSize === 'boolean' ? input.overrideSize : fallback.overrideSize,
+    overrideWeight: typeof input.overrideWeight === 'boolean' ? input.overrideWeight : fallback.overrideWeight,
+    overrideStyle: typeof input.overrideStyle === 'boolean' ? input.overrideStyle : fallback.overrideStyle,
+    overrideCase: typeof input.overrideCase === 'boolean' ? input.overrideCase : fallback.overrideCase,
+    overrideEmboss: typeof input.overrideEmboss === 'boolean' ? input.overrideEmboss : fallback.overrideEmboss,
+    overrideLineHeight: typeof input.overrideLineHeight === 'boolean' ? input.overrideLineHeight : fallback.overrideLineHeight,
+    overrideParagraphGap: typeof input.overrideParagraphGap === 'boolean' ? input.overrideParagraphGap : fallback.overrideParagraphGap,
+    overrideLetterSpacing: typeof input.overrideLetterSpacing === 'boolean' ? input.overrideLetterSpacing : fallback.overrideLetterSpacing,
+    overrideAlign: typeof input.overrideAlign === 'boolean' ? input.overrideAlign : fallback.overrideAlign,
+    overridePosition: typeof input.overridePosition === 'boolean' ? input.overridePosition : fallback.overridePosition,
+    textFontFamily: isOneOf(input.textFontFamily, materialRecipeTextFonts.map((option) => option.value))
+      ? input.textFontFamily
+      : fallback.textFontFamily,
+    textSizeRem: clamp(input.textSizeRem, fallback.textSizeRem, 0.5, 4),
+    lineHeight: clamp(input.lineHeight, fallback.lineHeight ?? 1, 0.7, 1.8),
+    paragraphGap: clamp(input.paragraphGap, fallback.paragraphGap ?? 0, -24, 48),
+    contentTone: isOneOf(input.contentTone, materialRecipeContentTones) ? input.contentTone : fallback.contentTone,
+    fontWeight: sanitizeFontWeight(input.fontWeight, fallback.fontWeight),
+    fontStyle: isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
+    textTransform: input.textTransform === 'inherit' || isOneOf(input.textTransform, materialRecipeTextTransforms)
+      ? input.textTransform
+      : fallback.textTransform,
+    textEmbossMode: isOneOf(input.textEmbossMode, ['none', 'dark', 'light', 'shadow'] as const)
+      ? input.textEmbossMode
+      : fallback.textEmbossMode,
+    textEmbossStrength: clamp(input.textEmbossStrength, fallback.textEmbossStrength ?? 100, 0, 100),
+    textEmbossOffset: clamp(input.textEmbossOffset, fallback.textEmbossOffset ?? 50, 0, 100),
+    textEmbossBlur: clamp(input.textEmbossBlur, fallback.textEmbossBlur ?? 50, 0, 100),
+    letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
+    textOpacity: clamp(input.textOpacity, fallback.textOpacity ?? 90, 0, 100),
+    textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
+    textX: clamp(input.textX, fallback.textX, -80, 80),
+    textY: clamp(input.textY, fallback.textY, -80, 80),
+  };
+};
+
+export const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout): FeedNodeLayout => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedNodeLayout> : {};
+  return {
+    mode: isOneOf(input.mode, ['absolute', 'flow'] as const) ? input.mode : fallback.mode,
+    slot: isOneOf(input.slot, ['auto', 'body', 'footer', 'overlay'] as const) ? input.slot : fallback.slot,
+    x: clamp(input.x, fallback.x, -50, 150),
+    y: clamp(input.y, fallback.y, -50, 150),
+    width: clamp(input.width, fallback.width, 4, 140),
+    height: clamp(input.height, fallback.height, 4, 140),
+    nudgeX: clamp(input.nudgeX, fallback.nudgeX, -80, 80),
+    nudgeY: clamp(input.nudgeY, fallback.nudgeY, -80, 80),
+    padding: clamp(input.padding, fallback.padding, 0, 40),
+    gap: clamp(input.gap, fallback.gap, 0, 40),
+    align: isOneOf(input.align, ['left', 'center', 'right'] as const) ? input.align : fallback.align,
+    justify: isOneOf(input.justify, ['start', 'center', 'end'] as const) ? input.justify : fallback.justify,
+    direction: isOneOf(input.direction, ['row', 'column'] as const) ? input.direction : fallback.direction,
+    reverse: typeof input.reverse === 'boolean' ? input.reverse : fallback.reverse,
+    wrap: typeof input.wrap === 'boolean' ? input.wrap : fallback.wrap,
+    distribute: isOneOf(input.distribute, ['start', 'center', 'end', 'between', 'around', 'evenly'] as const) ? input.distribute : fallback.distribute,
+    crossAlign: isOneOf(input.crossAlign, ['start', 'center', 'end', 'stretch'] as const) ? input.crossAlign : fallback.crossAlign,
+    wMode: isOneOf(input.wMode, ['fixed', 'hug', 'fill'] as const) ? input.wMode : fallback.wMode,
+    hMode: isOneOf(input.hMode, ['fixed', 'hug', 'fill'] as const) ? input.hMode : fallback.hMode,
+    selfPosition: isOneOf(input.selfPosition, ['in-flow', 'absolute'] as const) ? input.selfPosition : fallback.selfPosition,
+    pushToEnd: typeof input.pushToEnd === 'boolean' ? input.pushToEnd : fallback.pushToEnd,
+    constraintH: isOneOf(input.constraintH, ['left', 'right', 'left-right', 'center', 'scale'] as const) ? input.constraintH : fallback.constraintH,
+    constraintV: isOneOf(input.constraintV, ['top', 'bottom', 'top-bottom', 'center', 'scale'] as const) ? input.constraintV : fallback.constraintV,
+  };
+};
+
+export const sanitizeFeedCardNode = (
+  value: unknown,
+  fallback: FeedCardNode,
+  fallbackSurface: MaterialRecipe,
+): FeedCardNode => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<FeedCardNode> : {};
+  const type = isOneOf(input.type, ['container', 'text', 'button'] as const) ? input.type : fallback.type;
+  const childrenInput = Array.isArray(input.children) ? input.children : [];
+  const surface = input.surface
+    ? sanitizeMaterialRecipe(input.surface, fallback.surface || fallbackSurface)
+    : fallback.surface
+      ? cloneMaterialRecipe(fallback.surface)
+      : undefined;
+  return {
+    id: typeof input.id === 'string' && input.id.trim() ? input.id : fallback.id,
+    label: typeof input.label === 'string' && input.label.trim() ? input.label : fallback.label,
+    type,
+    binding: isOneOf(input.binding, feedTextSlotIds) ? input.binding : fallback.binding,
+    layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
+    surface,
+    text: input.text
+      ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle())
+      : fallback.text
+        ? cloneFeedSlotStyle(fallback.text)
+        : undefined,
+    textRender: isOneOf(input.textRender, ['auto', 'rich', 'fit', 'raw'] as const) ? input.textRender : fallback.textRender,
+    markup: isOneOf(input.markup, ['auto', 'on', 'off'] as const) ? input.markup : fallback.markup,
+    sizing: isOneOf(input.sizing, ['auto', 'fit', 'flow'] as const) ? input.sizing : fallback.sizing,
+    fitMode: isOneOf(input.fitMode, ['single-line', 'fixed-lines', 'paragraph'] as const) ? input.fitMode : fallback.fitMode,
+    maxLines: clamp(input.maxLines, fallback.maxLines ?? 1, 1, 8),
+    children: (fallback.children || []).map((childFallback, index) => (
+      sanitizeFeedCardNode(childrenInput[index], childFallback, fallbackSurface)
+    )),
+  };
+};
+
+export const sanitizeFeedCardTypes = (
+  value: unknown,
+  defaults: FeedCardTypes,
+  cardTypeIds: readonly FeedCardTypeId[],
+  fallbackSurface: MaterialRecipe,
+): FeedCardTypes => {
+  const input = typeof value === 'object' && value !== null ? value as Partial<Record<FeedCardTypeId, unknown>> : {};
+  const next = cloneFeedCardTypes(defaults);
+  cardTypeIds.forEach((id) => {
+    const raw = typeof input[id] === 'object' && input[id] !== null ? input[id] as Partial<FeedCardTypeRecipe> : {};
+    const fallback = defaults[id];
+    const rawSlots = typeof raw.slots === 'object' && raw.slots !== null ? raw.slots : undefined;
+    next[id] = {
+      ...fallback,
+      name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name,
+      description: typeof raw.description === 'string' && raw.description.trim() ? raw.description.trim() : fallback.description,
+      surface: sanitizeMaterialRecipe(raw.surface, fallback.surface),
+      backgroundImage: sanitizeFeedBackgroundImage(raw.backgroundImage, fallback.backgroundImage),
+      children: fallback.children.map((childFallback, index) => (
+        sanitizeFeedCardNode(Array.isArray(raw.children) ? raw.children[index] : undefined, childFallback, fallbackSurface)
+      )),
+      slots: Object.fromEntries(
+        feedTextSlotIds.map((slot) => {
+          const sanitized = sanitizeFeedTextSlotStyle(rawSlots?.[slot], fallback.slots[slot]);
+          const shouldInheritBodyWeight = (
+            feedSlotsInheritingBodyWeight.has(slot)
+            && sanitized.fontWeight === fallback.slots[slot].fontWeight
+          );
+          return [
+            slot,
+            shouldInheritBodyWeight
+              ? { ...sanitized, overrideWeight: false }
+              : sanitized,
+          ];
+        }),
+      ) as Record<FeedTextSlotId, FeedTextSlotStyle>,
+    };
+  });
+  return next;
+};
+
+export const mockFeedStories: FeedStory[] = [
+  {
+    id: "season-pass-cosmic-eclipse",
+    label: "Mission Briefing V1",
+    cardTypeId: "card_type_01",
+    image: "/art/login/main-menu-contract-reference.png",
+    eyebrow: "[accent]//[/accent] Active Contract",
+    title: "[h1]Cosmic\nEclipse[/h1]",
+    body: "A new era of power. Claim the darkness.",
+    meta: "03 days left",
+    ctaLabel: "View Season",
+    contractBadge: "03 Days Left",
+    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,800 [acc1]K[/acc1][/h3]",
+    contractEyebrow: "[accent]//[/accent] Active Contract",
+    contractTitle: "[h1]Data\nExtraction[/h1]",
+    contractBody: "[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.",
+    contractRewardLabel: "Reward",
+    contractRewardValue: "1,850 [accent]CR[/accent]",
+    contractRule: "",
+    contractCtaLabel: "View Contract",
+    seasonBadge: "03 Days Left",
+    seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
+    seasonEyebrow: "[accent]//[/accent] Season Pass",
+    sectorLabel: "Sector\n[black]07[/black]",
+  },
+  {
+    id: "season-pass-cosmic-eclipse-v2",
+    label: "Mission Briefing V2",
+    cardTypeId: "card_type_04",
+    image: "/art/login/main-menu-contract-reference.png",
+    eyebrow: "[accent]//[/accent] Active Contract",
+    title: "[h1]Cosmic\nEclipse[/h1]",
+    body: "A new era of power. Claim the darkness.",
+    meta: "03 days left",
+    ctaLabel: "View Season",
+    contractBadge: "03 Days Left",
+    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,800 [acc1]K[/acc1][/h3]",
+    contractEyebrow: "[accent]//[/accent] Active Contract",
+    contractTitle: "[h1]Data\nExtraction[/h1]",
+    contractBody: "[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.",
+    contractRewardLabel: "Reward",
+    contractRewardValue: "1,850 [accent]CR[/accent]",
+    contractRule: "",
+    contractCtaLabel: "View Contract",
+    seasonBadge: "03 Days Left",
+    seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
+    seasonEyebrow: "[accent]//[/accent] Season Pass",
+    sectorLabel: "Sector\n[black]07[/black]",
+  },
+  {
+    id: "patch-spatial-ui",
+    label: "Patch Notes",
+    cardTypeId: "card_type_02",
+    image: "/art/login/material-preview-bg.jpeg",
+    eyebrow: "Patch Notes",
+    title: "Spatial UI",
+    body: "Navigation has been rebuilt around faster command choices and thumb-first play.",
+    meta: "Update 1.4.0",
+    ctaLabel: "View Details",
+  },
+  {
+    id: "community-top-decks",
+    label: "Community",
+    cardTypeId: "card_type_03",
+    image: "/art/login/cruel-company-final-login.png",
+    eyebrow: "Community",
+    title: "Top Decks",
+    body: "See the ladder lists gaining ground across the company circuit this week.",
+    meta: "12 decks live",
+    ctaLabel: "Read More",
+  },
+];
+
+export const cloneFeedStories = (stories: FeedStory[]): FeedStory[] => (
+  stories.map((story) => ({ ...story }))
+);
+
+export const sanitizeFeedStories = (
+  value: unknown,
+  cardTypeIds: readonly FeedCardTypeId[],
+): FeedStory[] => {
+  if (!Array.isArray(value)) return cloneFeedStories(mockFeedStories);
+  const byDefaultId = new Map(mockFeedStories.map((story) => [story.id, story]));
+  const stories = value
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) return null;
+      const input = item as Partial<FeedStory>;
+      const fallback = typeof input.id === 'string' ? byDefaultId.get(input.id) : undefined;
+      if (!fallback) return null;
+      return {
+        ...fallback,
+        ...Object.fromEntries(
+          Object.entries(input).filter(([, entryValue]) => typeof entryValue === 'string'),
+        ),
+        cardTypeId: isOneOf(input.cardTypeId, cardTypeIds) ? input.cardTypeId : fallback.cardTypeId,
+      } as FeedStory;
+    })
+    .filter((story): story is FeedStory => Boolean(story));
+  return stories.length ? stories : cloneFeedStories(mockFeedStories);
+};
+
+export const sanitizeStoryImageOverrides = (value: unknown): Record<string, string> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([storyId, image]) => (
+        mockFeedStories.some((story) => story.id === storyId)
+        && typeof image === 'string'
+        && image.trim()
+      ))
+      .map(([storyId, image]) => [storyId, (image as string).trim()]),
+  );
+};

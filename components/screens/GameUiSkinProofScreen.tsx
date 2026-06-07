@@ -13,8 +13,12 @@ import {
   type GameUiPlacementFixtureId,
   type GameUiThemeFixtureId,
 } from '../ui/game-ui';
+import {
+  createGameUiSkinProofJsonReadout,
+  type GameUiSkinProofJsonTabId,
+} from './gameUiSkinProofJsonReadout';
 
-type JsonTabId = 'theme' | 'cms' | 'placements';
+type JsonTabId = GameUiSkinProofJsonTabId;
 
 const ToggleButton = (props: {
   active: boolean;
@@ -124,7 +128,7 @@ export const GameUiSkinProofScreen = () => {
             )}
           </For>
         </div>
-        <pre>{JSON.stringify(activeJson(), null, 2)}</pre>
+        <pre>{createGameUiSkinProofJsonReadout(jsonTab(), activeJson())}</pre>
       </aside>
     </main>
   );

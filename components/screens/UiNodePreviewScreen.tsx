@@ -12,6 +12,10 @@ import {
   type UiNodeTheme,
 } from '../ui/material-lab';
 import { MaterialRichText } from '../ui/material-node';
+import {
+  createUiNodePreviewJsonReadout,
+  type UiNodePreviewJsonTabId,
+} from './uiNodePreviewJsonReadout';
 
 type CmsContentValue =
   | string
@@ -19,7 +23,7 @@ type CmsContentValue =
   | UiActionPayload['target']
   | Record<string, string | number | boolean>;
 
-type JsonTabId = 'template' | 'cms' | 'theme';
+type JsonTabId = UiNodePreviewJsonTabId;
 
 const missionTemplate: UiNodePayload = {
   id: 'mission-card',
@@ -224,7 +228,7 @@ export const UiNodePreviewScreen = () => {
               <span>{activeJson().label}</span>
               <span>{activeJson().meta}</span>
             </div>
-            <pre class={`ui-node-preview__payload ui-node-preview__payload--${activeJson().id}`}>{JSON.stringify(activeJson().value, null, 2)}</pre>
+            <pre class={`ui-node-preview__payload ui-node-preview__payload--${activeJson().id}`}>{createUiNodePreviewJsonReadout(activeJson().id, activeJson().value)}</pre>
           </section>
         </div>
       </section>
