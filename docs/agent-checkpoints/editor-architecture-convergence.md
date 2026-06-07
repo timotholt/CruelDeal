@@ -165,6 +165,15 @@ authoring JSON
   `components/screens/main-material/mainMaterialFeedRichText.tsx`, so
   `MainMaterialPreviewScreen.tsx` no longer imports rich-text token/parser
   internals from the text contract.
+- [x] Moved chrome feed-node rendering into
+  `components/screens/main-material/mainMaterialChromeFeedTree.tsx`. The
+  screen now supplies chrome render context callbacks, while the product
+  renderer owns recursive chrome node composition.
+- [x] Moved feed card tree, slide frame, dots, track slide, and carousel
+  rendering into `components/screens/main-material/mainMaterialFeedCarousel.tsx`.
+  `MainMaterialPreviewScreen.tsx` now injects material surface/button adapter
+  functions instead of importing feed text/media/render helpers for the live
+  carousel subtree.
 
 ## Verification Evidence
 
@@ -198,25 +207,27 @@ authoring JSON
 - Surface runtime, sparse state vars, typed host, field metadata, generated
   editor scaffolding, material recipe compiler modules, and editor output-mode
   registry exist.
-- `/material-main` is still too large and remains the main technical debt
-  blocking a clean JSON-emitting editor rewrite.
+- `/material-main` is still too large, but its feed model, text/render policy,
+  authoring controls, frame registration, rich text, chrome renderer, and feed
+  carousel renderer are now extracted from the giant screen.
 
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that feed preview component composition still lives
-inside `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for
-too much orchestration even though feed defaults, sanitization, targets, DOM
-audit, text/render policy, feed authoring controls, frame registration, and
-rich-text rendering now have extracted contracts.
+next blocker family is that the phone preview controller and import/export
+compatibility adapter still live inside `MainMaterialPreviewScreen.tsx`, so the
+screen remains responsible for orchestration even though the feed model,
+sanitization, targets, DOM audit, text/render policy, feed authoring controls,
+frame registration, rich-text rendering, chrome renderer, and carousel renderer
+now have extracted contracts.
 
 Recommended finish plan, in order:
 
 1. Extract feed preview renderer.
-   `FeedNodeFrame` and rich text are now extracted. Next move
-   `ChromeFeedNodeTree`, `FeedCardTreeNode`, `FeedCarousel`, and
-   `MainMaterialPreview`. Keep DOM registry/audit injection explicit so current
-   inspector behavior survives.
+   `FeedNodeFrame`, rich text, `ChromeFeedNodeTree`, and `FeedCarousel` are now
+   extracted. Next move `MainMaterialPreview` into a product renderer/controller
+   module. Keep DOM registry/audit injection explicit so current inspector
+   behavior survives.
 2. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
