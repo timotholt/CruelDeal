@@ -72,6 +72,7 @@ interface LabControls {
   bevelCorners: CornerName[];
   bevelSize: number;
   borderEdges: EdgeName[];
+  edgeWear: boolean;
   edgeWearTexture: EdgeTextureKind;
   edgeWearOpacity: number;
   edgeWearWidth: number;
@@ -130,6 +131,7 @@ const controlDefaults: LabControls = {
   bevelCorners: [],
   bevelSize: 11,
   borderEdges: ['top', 'right', 'bottom', 'left'],
+  edgeWear: false,
   edgeWearTexture: 'none',
   edgeWearOpacity: 0,
   edgeWearWidth: 5,
@@ -198,6 +200,7 @@ const controlsToRecipe = (controls: LabControls): MaterialRecipe => createMateri
   borderOpacity: controls.borderOpacity,
   lightStrength: controls.lightStrength,
   darkStrength: controls.darkStrength,
+  edgeWear: controls.edgeWear,
   edgeWearTexture: controls.edgeWearTexture,
   edgeWearOpacity: controls.edgeWearOpacity,
   edgeWearWidth: controls.edgeWearWidth,
@@ -241,6 +244,7 @@ const recipeToControls = (recipe: MaterialRecipe, current: LabControls): LabCont
   borderOpacity: recipe.borderOpacity,
   lightStrength: recipe.lightStrength,
   darkStrength: recipe.darkStrength,
+  edgeWear: recipe.edgeWear,
   edgeWearTexture: recipe.edgeWearTexture,
   edgeWearOpacity: recipe.edgeWearOpacity,
   edgeWearWidth: recipe.edgeWearWidth,
@@ -323,6 +327,8 @@ const sanitizeStateOverlays = (value: unknown): Record<MaterialRecipeState, Mate
 
 const sanitizeControls = (value: unknown): LabControls => {
   const input = typeof value === 'object' && value !== null ? value as Partial<LabControls> : {};
+  const edgeWearTexture = isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture;
+  const edgeWearOpacity = clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100);
   return {
     target: isOneOf(input.target, previewTargetOptions) ? input.target : controlDefaults.target,
     applyToControlPanel: typeof input.applyToControlPanel === 'boolean' ? input.applyToControlPanel : controlDefaults.applyToControlPanel,
@@ -334,8 +340,9 @@ const sanitizeControls = (value: unknown): LabControls => {
     bevelCorners: uniqueCorners(input.bevelCorners, controlDefaults.bevelCorners),
     bevelSize: clamp(input.bevelSize, controlDefaults.bevelSize, 0, 30),
     borderEdges: uniqueEdges(input.borderEdges, controlDefaults.borderEdges),
-    edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : controlDefaults.edgeWearTexture,
-    edgeWearOpacity: clamp(input.edgeWearOpacity, controlDefaults.edgeWearOpacity, 0, 100),
+    edgeWear: typeof input.edgeWear === 'boolean' ? input.edgeWear : edgeWearTexture !== 'none' && edgeWearOpacity > 0,
+    edgeWearTexture,
+    edgeWearOpacity,
     edgeWearWidth: clamp(input.edgeWearWidth, controlDefaults.edgeWearWidth, 1, 24),
     edgeWearScale: textureScaleStops.includes(input.edgeWearScale as typeof textureScaleStops[number])
       ? input.edgeWearScale as typeof textureScaleStops[number]

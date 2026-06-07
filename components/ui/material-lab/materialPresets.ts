@@ -23,6 +23,7 @@ export const navTabMaterialRecipe = createMaterialRecipe({
   lightStrength: 62,
   darkStrength: 36,
   sheen: true,
+  edgeWear: true,
   edgeWearTexture: 'edge-bw-noise-dense',
   edgeWearOpacity: 45,
   edgeWearWidth: 1,

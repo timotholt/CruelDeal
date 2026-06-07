@@ -17,6 +17,7 @@ const simplePlan = createMaterialButtonEmissionPlan({
   gradient: 'none',
   glass: false,
   borderEnabled: false,
+  edgeWear: false,
   edgeWearTexture: 'none',
   dropShadow: false,
   size: 'sm',
@@ -41,6 +42,7 @@ const activePlan = createMaterialButtonEmissionPlan({
   borderEnabled: true,
   border: ['top', 'right', 'bottom', 'left'],
   borderOpacity: 36,
+  edgeWear: false,
   edgeWearTexture: 'none',
   size: 'sm',
 }, 'View Contract', 'export');

@@ -175,6 +175,7 @@ type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialSt
   value: MaterialStateOverlay[G][K],
 ) => void;
 const edgeWearDependentFields = [
+  'edgeWearTexture',
   'edgeWearLayer',
   'edgeWearOpacity',
   'edgeWearWidth',
@@ -888,7 +889,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     if (state !== 'rest') props.onForcePreviewChange?.(true);
   };
   const hasTexture = () => props.recipe.texture !== 'none';
-  const hasEdgeWear = () => capabilities().edgeWear && props.recipe.edgeWearTexture !== 'none';
+  const hasEdgeWear = () => capabilities().edgeWear && props.recipe.edgeWear;
   const hasBlur = () => capabilities().blur && props.recipe.glassBlurEnabled;
   const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
 

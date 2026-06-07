@@ -144,7 +144,8 @@ assert.equal(border['--border-alpha'], '0.34');
 assert.equal(border['--border-rgb'], '235 226 205');
 
 // edge wear (width/scale defaults; opacity is an explicit opt-in)
-const wear = styleOf({ edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 50 });
+assert.equal(surfaceLayerFlags({ edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 50 }).edgeWear, false);
+const wear = styleOf({ edgeWear: true, edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 50 });
 assert.equal(wear['--edge-wear-alpha'], '0.5');
 assert.equal(wear['--edge-wear-width'], '5px');
 assert.equal(wear['--edge-wear-scale'], '256px');

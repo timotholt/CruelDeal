@@ -22,7 +22,7 @@ assert.deepEqual(
 
 assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({ mode: 'rest', groups: ['edgeWear'] })),
-  ['edgeWearTexture', 'edgeWearOpacity', 'edgeWearWidth', 'edgeWearScale', 'edgeWearLayer'],
+  ['edgeWear', 'edgeWearTexture', 'edgeWearOpacity', 'edgeWearWidth', 'edgeWearScale', 'edgeWearLayer'],
 );
 
 assert.deepEqual(
@@ -69,5 +69,25 @@ assert.deepEqual(patchSurfaceFieldWithContext('texture', 'stone04', { textureStr
 assert.deepEqual(patchSurfaceFieldWithContext('texture', 'none', { textureStrength: 38 }), {
   texture: 'none',
   textureStrength: 0,
+});
+assert.deepEqual(patchSurfaceFieldWithContext('edgeWear', true, { edgeWearTexture: 'none', edgeWearOpacity: 0 }), {
+  edgeWear: true,
+  edgeWearTexture: 'edge-bw-noise-dense',
+  edgeWearOpacity: 45,
+  edgeWearWidth: 5,
+  edgeWearScale: 256,
+  edgeWearLayer: 'below-highlights',
+});
+assert.deepEqual(patchSurfaceFieldWithContext('edgeWear', false, { edgeWearTexture: 'edge-bw-chips-fine', edgeWearOpacity: 42 }), {
+  edgeWear: false,
+});
+assert.deepEqual(patchSurfaceFieldWithContext('edgeWearTexture', 'none', { edgeWear: true, edgeWearOpacity: 42 }), {
+  edgeWearTexture: 'none',
+  edgeWear: false,
+});
+assert.deepEqual(patchSurfaceFieldWithContext('edgeWearTexture', 'edge-bw-chips-fine', { edgeWearOpacity: 0 }), {
+  edgeWear: true,
+  edgeWearTexture: 'edge-bw-chips-fine',
+  edgeWearOpacity: 45,
 });
 assert.deepEqual(clearSurfaceField('shadowBlur'), { shadowBlur: undefined });

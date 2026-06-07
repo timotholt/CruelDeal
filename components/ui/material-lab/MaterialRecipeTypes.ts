@@ -119,6 +119,7 @@ export interface MaterialRecipe {
   borderOpacity: number;
   lightStrength: number;
   darkStrength: number;
+  edgeWear: boolean;
   edgeWearTexture: EdgeTextureKind;
   edgeWearOpacity: number;
   edgeWearWidth: number;

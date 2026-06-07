@@ -169,6 +169,11 @@ export const createMaterialStateOverlays = (
 
 export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): MaterialRecipe => {
   const defaultGlass = overrides.glass ?? false;
+  const defaultEdgeWear = overrides.edgeWear ?? (
+    overrides.edgeWearTexture !== undefined
+      ? overrides.edgeWearTexture !== 'none' && (overrides.edgeWearOpacity ?? 0) > 0
+      : false
+  );
   return {
     material: 'white',
     materialColor: '#808080',
@@ -200,6 +205,7 @@ export const createMaterialRecipe = (overrides: Partial<MaterialRecipe> = {}): M
     borderOpacity: 42,
     lightStrength: 24,
     darkStrength: 36,
+    edgeWear: defaultEdgeWear,
     edgeWearTexture: 'none',
     edgeWearOpacity: 0,
     edgeWearWidth: 5,

@@ -93,6 +93,7 @@ export const materialRecipeToResolvedSurface = (
     borderOpacity,
     lightStrength: clamp(recipe.lightStrength + (surface?.lightStrengthBoost || 0), recipe.lightStrength, 0, 100),
     darkStrength: clamp(recipe.darkStrength + (surface?.darkStrengthBoost || 0), recipe.darkStrength, 0, 100),
+    edgeWear: recipe.edgeWear,
     edgeWearTexture: recipe.edgeWearTexture,
     edgeWearOpacity: recipe.edgeWearOpacity,
     edgeWearWidth: recipe.edgeWearWidth,

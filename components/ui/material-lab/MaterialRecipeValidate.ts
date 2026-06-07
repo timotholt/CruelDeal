@@ -175,6 +175,9 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
   const bevelCorners = Array.isArray(input.bevelCorners)
     ? uniqueCorners(input.bevelCorners, fallback.bevelCorners || [])
     : fallback.bevelCorners || [];
+  const edgeWearTexture = isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : fallback.edgeWearTexture;
+  const edgeWearOpacity = clamp(input.edgeWearOpacity, fallback.edgeWearOpacity, 0, 100);
+  const legacyEdgeWearEnabled = edgeWearTexture !== 'none' && edgeWearOpacity > 0;
   return {
     material: isOneOf(input.material, materialRecipeMaterials) ? input.material : fallback.material,
     materialColor: sanitizeHexColor(input.materialColor, fallback.materialColor || '#808080'),
@@ -208,8 +211,9 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     borderOpacity: clamp(input.borderOpacity, fallback.borderOpacity, 0, 100),
     lightStrength: clamp(input.lightStrength, fallback.lightStrength, 0, 100),
     darkStrength: clamp(input.darkStrength, fallback.darkStrength, 0, 100),
-    edgeWearTexture: isOneOf(input.edgeWearTexture, edgeTextureOptions.map((option) => option.id)) ? input.edgeWearTexture : fallback.edgeWearTexture,
-    edgeWearOpacity: clamp(input.edgeWearOpacity, fallback.edgeWearOpacity, 0, 100),
+    edgeWear: typeof input.edgeWear === 'boolean' ? input.edgeWear : legacyEdgeWearEnabled,
+    edgeWearTexture,
+    edgeWearOpacity,
     edgeWearWidth: clamp(input.edgeWearWidth, fallback.edgeWearWidth, 1, 24),
     edgeWearScale: materialRecipeTextureScales.includes(input.edgeWearScale as typeof materialRecipeTextureScales[number])
       ? input.edgeWearScale as typeof materialRecipeTextureScales[number]

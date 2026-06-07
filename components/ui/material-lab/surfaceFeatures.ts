@@ -110,7 +110,8 @@ const hasBorderLayer = (options: SurfaceOptions) => (
 );
 
 const hasEdgeWearLayer = (options: SurfaceOptions) => (
-  !!options.edgeWearTexture
+  (options.edgeWear ?? false)
+  && !!options.edgeWearTexture
   && options.edgeWearTexture !== 'none'
   && (options.edgeWearOpacity ?? 0) > 0
 );

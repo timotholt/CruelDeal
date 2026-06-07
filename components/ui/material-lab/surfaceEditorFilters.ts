@@ -20,6 +20,12 @@ export type SurfaceEditorPatch = Partial<{
   [K in keyof SurfaceOptions]: SurfaceOptions[K] | undefined;
 }>;
 
+const defaultEdgeWearTexture: NonNullable<SurfaceOptions['edgeWearTexture']> = 'edge-bw-noise-dense';
+const defaultEdgeWearOpacity = 45;
+const defaultEdgeWearWidth = 5;
+const defaultEdgeWearScale = 256;
+const defaultEdgeWearLayer: NonNullable<SurfaceOptions['edgeWearLayer']> = 'below-highlights';
+
 const modeAllows = (definition: SurfaceFieldDefinition, mode: SurfaceEditorMode) => (
   definition.editMode === 'rest-and-state' || definition.editMode === mode
 );
@@ -80,6 +86,29 @@ export const patchSurfaceFieldWithContext = <K extends keyof SurfaceOptions>(
     return {
       texture,
       textureStrength: (current.textureStrength ?? 0) > 0 ? current.textureStrength : 100,
+    };
+  }
+  if (key === 'edgeWear') {
+    const edgeWear = value as SurfaceOptions['edgeWear'];
+    if (!edgeWear) return { edgeWear: false };
+    return {
+      edgeWear: true,
+      edgeWearTexture: current.edgeWearTexture && current.edgeWearTexture !== 'none'
+        ? current.edgeWearTexture
+        : defaultEdgeWearTexture,
+      edgeWearOpacity: (current.edgeWearOpacity ?? 0) > 0 ? current.edgeWearOpacity : defaultEdgeWearOpacity,
+      edgeWearWidth: current.edgeWearWidth ?? defaultEdgeWearWidth,
+      edgeWearScale: current.edgeWearScale ?? defaultEdgeWearScale,
+      edgeWearLayer: current.edgeWearLayer ?? defaultEdgeWearLayer,
+    };
+  }
+  if (key === 'edgeWearTexture') {
+    const edgeWearTexture = value as SurfaceOptions['edgeWearTexture'];
+    if (edgeWearTexture === 'none') return { edgeWearTexture, edgeWear: false };
+    return {
+      edgeWear: true,
+      edgeWearTexture,
+      edgeWearOpacity: (current.edgeWearOpacity ?? 0) > 0 ? current.edgeWearOpacity : defaultEdgeWearOpacity,
     };
   }
   return patchSurfaceField(key, value);

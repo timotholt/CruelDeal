@@ -19,6 +19,7 @@ assert.equal(surfaceFieldDefinitionByKey.stateVars.editMode, 'renderer-internal'
 assert.equal(surfaceFieldDefinitionByKey.visualState.editMode, 'renderer-internal');
 assert.equal(surfaceFieldDefinitionByKey.glassBlur.max, 24);
 assert.equal(surfaceFieldDefinitionByKey.glassBlur.step, 0.25);
+assert.equal(surfaceFieldDefinitionByKey.edgeWear.control, 'toggle');
 assert.ok(surfaceFieldDefinitionByKey.edgeWearTexture.options?.includes('edge-bw-noise-dense'));
 assert.equal(surfaceFieldDefinitionByKey.edgeWearTexture.optionLabels?.['edge-bw-noise-dense'], 'Edge B/W Noise Dense');
 

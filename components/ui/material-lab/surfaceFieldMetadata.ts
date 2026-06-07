@@ -92,6 +92,7 @@ export const surfaceFieldDefinitions = [
   field({ key: 'darkStrength', group: 'lighting', label: 'Dark Strength', control: 'slider', editMode: 'rest-and-state', min: 0, max: 100, step: 1 }),
   field({ key: 'surfaceFilterBrightness', group: 'lighting', label: 'Host Brightness', control: 'slider', editMode: 'rest-and-state', min: 0, max: 3, step: 0.01 }),
   field({ key: 'surfaceLayerBrightness', group: 'lighting', label: 'Layer Brightness', control: 'slider', editMode: 'rest-and-state', min: 0, max: 3, step: 0.01 }),
+  field({ key: 'edgeWear', group: 'edgeWear', label: 'Edge Wear', control: 'toggle', editMode: 'rest' }),
   field({ key: 'edgeWearTexture', group: 'edgeWear', label: 'Edge Wear Texture', control: 'select', editMode: 'rest', options: edgeTextureIds, optionLabels: edgeTextureLabels }),
   field({ key: 'edgeWearOpacity', group: 'edgeWear', label: 'Edge Wear Opacity', control: 'slider', editMode: 'rest', min: 0, max: 100, step: 1 }),
   field({ key: 'edgeWearWidth', group: 'edgeWear', label: 'Edge Wear Width', control: 'slider', editMode: 'rest', min: 0, max: 200, step: 1 }),

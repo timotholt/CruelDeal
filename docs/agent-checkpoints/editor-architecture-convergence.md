@@ -174,6 +174,11 @@ authoring JSON
   `MainMaterialPreviewScreen.tsx` now injects material surface/button adapter
   functions instead of importing feed text/media/render helpers for the live
   carousel subtree.
+- [x] Moved the phone preview controller into
+  `components/screens/main-material/mainMaterialPreview.tsx`. The screen now
+  passes preview state, selection callbacks, and material adapter functions,
+  while the extracted module owns chrome node factories, target-id helpers, and
+  the composed product preview.
 
 ## Verification Evidence
 
@@ -208,26 +213,26 @@ authoring JSON
   editor scaffolding, material recipe compiler modules, and editor output-mode
   registry exist.
 - `/material-main` is still too large, but its feed model, text/render policy,
-  authoring controls, frame registration, rich text, chrome renderer, and feed
-  carousel renderer are now extracted from the giant screen.
+  authoring controls, frame registration, rich text, chrome renderer, feed
+  carousel renderer, and phone preview controller are now extracted from the
+  giant screen.
 
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that the phone preview controller and import/export
-compatibility adapter still live inside `MainMaterialPreviewScreen.tsx`, so the
-screen remains responsible for orchestration even though the feed model,
-sanitization, targets, DOM audit, text/render policy, feed authoring controls,
-frame registration, rich-text rendering, chrome renderer, and carousel renderer
-now have extracted contracts.
+next blocker family is that import/export compatibility and emission inspector
+orchestration still live inside `MainMaterialPreviewScreen.tsx`, so the screen
+remains responsible for persistence/export mode decisions even though the feed
+model, sanitization, targets, DOM audit, text/render policy, feed authoring
+controls, frame registration, rich-text rendering, chrome renderer, carousel
+renderer, and phone preview controller now have extracted contracts.
 
 Recommended finish plan, in order:
 
 1. Extract feed preview renderer.
-   `FeedNodeFrame`, rich text, `ChromeFeedNodeTree`, and `FeedCarousel` are now
-   extracted. Next move `MainMaterialPreview` into a product renderer/controller
-   module. Keep DOM registry/audit injection explicit so current inspector
-   behavior survives.
+   `FeedNodeFrame`, rich text, `ChromeFeedNodeTree`, `FeedCarousel`, and
+   `MainMaterialPreview` are now extracted. DOM registry/audit injection remains
+   explicit so current inspector behavior survives.
 2. Extract `/material-main` import/export as an explicit compatibility adapter.
    Keep current preview-state JSON working, but label it as editor preview state
    rather than runtime JSON. Add registered runtime output modes beside it only
