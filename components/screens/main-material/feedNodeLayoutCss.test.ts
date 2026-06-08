@@ -81,16 +81,25 @@ describe('feedNodeLayoutCss', () => {
     expect(css).not.toHaveProperty('width');
   });
 
-  it('emits center constraints through offsets plus transform', () => {
-    const css = feedNodeLayoutCss(layout({ constraintH: 'center', constraintV: 'center' }));
+  it('emits center constraints as center plus relative offsets', () => {
+    const css = feedNodeLayoutCss(layout({ x: 0, y: 0, constraintH: 'center', constraintV: 'center' }));
 
     expect(css).toMatchObject({
-      left: 'calc(50% + -40%)',
-      top: 'calc(50% + -30%)',
+      left: 'calc(50% + 0%)',
+      top: 'calc(50% + 0%)',
       transform: 'translateX(-50%) translateY(-50%)',
     });
     expect(css).not.toHaveProperty('right');
     expect(css).not.toHaveProperty('bottom');
+  });
+
+  it('applies center constraint offsets relative to the center', () => {
+    const css = feedNodeLayoutCss(layout({ x: -12, y: 8, constraintH: 'center', constraintV: 'center' }));
+
+    expect(css).toMatchObject({
+      left: 'calc(50% + -12%)',
+      top: 'calc(50% + 8%)',
+    });
   });
 
   it('emits one push-to-end margin for the active axis', () => {

@@ -80,7 +80,7 @@ const absoluteConstraintCss = (layout: FeedNodeLayout, wMode: FeedNodeSizeMode, 
     css.left = `${layout.x}%`;
     css.right = `${rightFromLegacyBox}%`;
   } else if (h === 'center') {
-    css.left = `calc(50% + ${layout.x - 50}%)`;
+    css.left = `calc(50% + ${layout.x}%)`;
     transforms.push('translateX(-50%)');
   } else {
     css.left = `${layout.x}%`;
@@ -92,7 +92,7 @@ const absoluteConstraintCss = (layout: FeedNodeLayout, wMode: FeedNodeSizeMode, 
     css.top = `${layout.y}%`;
     css.bottom = `${bottomFromLegacyBox}%`;
   } else if (v === 'center') {
-    css.top = `calc(50% + ${layout.y - 50}%)`;
+    css.top = `calc(50% + ${layout.y}%)`;
     transforms.push('translateY(-50%)');
   } else {
     css.top = `${layout.y}%`;

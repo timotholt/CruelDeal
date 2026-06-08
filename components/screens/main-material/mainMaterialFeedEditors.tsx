@@ -135,6 +135,18 @@ export const FeedRecipeEditor = (props: {
       },
     });
   };
+  const updateSelectedNodeConstraintH = (constraintH: FeedNodeConstraintH) => {
+    updateSelectedNodeLayoutFields({
+      constraintH,
+      ...(constraintH === 'center' ? { x: 0 } : {}),
+    });
+  };
+  const updateSelectedNodeConstraintV = (constraintV: FeedNodeConstraintV) => {
+    updateSelectedNodeLayoutFields({
+      constraintV,
+      ...(constraintV === 'center' ? { y: 0 } : {}),
+    });
+  };
   const selectedNodeCanEditText = () => {
     const node = selectedTargetNode();
     return Boolean(node?.binding) && (node?.type === 'text' || node?.type === 'button' || node?.type === 'container');
@@ -221,6 +233,37 @@ export const FeedRecipeEditor = (props: {
       distribute,
       ...(mode === 'packed' ? legacyScreenAlignment(direction, cross, distribute) : {}),
     });
+  };
+  const selectedNodeLayout = () => selectedTargetNode()?.layout;
+  const layoutXControlLabel = () => {
+    const layout = selectedNodeLayout();
+    if (!layout) return 'X';
+    if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old X';
+    const constraint = resolveLayoutConstraintH(layout);
+    if (constraint === 'center') return 'X Offset';
+    if (constraint === 'right') return 'Right';
+    return 'X';
+  };
+  const layoutYControlLabel = () => {
+    const layout = selectedNodeLayout();
+    if (!layout) return 'Y';
+    if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old Y';
+    const constraint = resolveLayoutConstraintV(layout);
+    if (constraint === 'center') return 'Y Offset';
+    if (constraint === 'bottom') return 'Bottom';
+    return 'Y';
+  };
+  const layoutXRange = () => {
+    const layout = selectedNodeLayout();
+    return layout && resolveLayoutConstraintH(layout) === 'center'
+      ? { min: -80, max: 80 }
+      : { min: -50, max: 150 };
+  };
+  const layoutYRange = () => {
+    const layout = selectedNodeLayout();
+    return layout && resolveLayoutConstraintV(layout) === 'center'
+      ? { min: -80, max: 80 }
+      : { min: -50, max: 150 };
   };
   const updateSelectedNodeTextStyle = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
     const node = selectedTargetNode();
@@ -708,9 +751,9 @@ export const FeedRecipeEditor = (props: {
                   <select
                     class="ui-lab-select"
                     value={resolveLayoutConstraintH(node().layout)}
-                    onChange={(event) => updateSelectedNodeLayout('constraintH', event.currentTarget.value as FeedNodeConstraintH)}
+                    onChange={(event) => updateSelectedNodeConstraintH(event.currentTarget.value as FeedNodeConstraintH)}
                   >
-                    <For each={['left', 'right', 'left-right', 'center', 'scale'] as const}>
+                    <For each={['left', 'right', 'left-right', 'center'] as const}>
                       {(constraint) => <option value={constraint}>{constraint}</option>}
                     </For>
                   </select>
@@ -720,9 +763,9 @@ export const FeedRecipeEditor = (props: {
                   <select
                     class="ui-lab-select"
                     value={resolveLayoutConstraintV(node().layout)}
-                    onChange={(event) => updateSelectedNodeLayout('constraintV', event.currentTarget.value as FeedNodeConstraintV)}
+                    onChange={(event) => updateSelectedNodeConstraintV(event.currentTarget.value as FeedNodeConstraintV)}
                   >
-                    <For each={['top', 'bottom', 'top-bottom', 'center', 'scale'] as const}>
+                    <For each={['top', 'bottom', 'top-bottom', 'center'] as const}>
                       {(constraint) => <option value={constraint}>{constraint}</option>}
                     </For>
                   </select>
@@ -751,12 +794,12 @@ export const FeedRecipeEditor = (props: {
                 </div>
               </Show>
               <div class="ui-lab-control-row">
-                <span>{resolveLayoutSelfPosition(node().layout) === 'in-flow' ? 'Old X' : 'X'}</span>
-                <Slider value={node().layout.x} min={-50} max={150} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+                <span>{layoutXControlLabel()}</span>
+                <Slider value={node().layout.x} min={layoutXRange().min} max={layoutXRange().max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>{resolveLayoutSelfPosition(node().layout) === 'in-flow' ? 'Old Y' : 'Y'}</span>
-                <Slider value={node().layout.y} min={-50} max={150} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+                <span>{layoutYControlLabel()}</span>
+                <Slider value={node().layout.y} min={layoutYRange().min} max={layoutYRange().max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>W</span>
@@ -837,7 +880,7 @@ export const FeedRecipeEditor = (props: {
                 </div>
               </div>
               <div class="ui-lab-control-row">
-                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Distribute Y' : 'Distribute X'}</span>
+                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Spread Y' : 'Spread X'}</span>
                 <div class="ui-lab-toggles">
                   <For each={layoutDistributeModes}>
                     {(mode) => (
