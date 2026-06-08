@@ -1,17 +1,11 @@
 import { createSignal, For, JSX, Show } from 'solid-js';
-import {
-  textureOptions,
-  type TextureKind,
-} from './TextureOptions';
 import type {
   CornerName,
   EdgeName,
-  SurfaceGradient,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
 import {
   materialRecipeCorners,
-  materialRecipeBorderColors,
   materialRecipeEdges,
   materialRecipeContentLayers,
   materialRecipeContentTones,
@@ -19,15 +13,12 @@ import {
   materialRecipeEmissionKinds,
   materialRecipeFontStyles,
   materialRecipeGlows,
-  materialRecipeGradients,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
   materialRecipeTextTransforms,
-  materialRecipeTextureScales,
   materialRecipeTints,
   type EdgeEmissionKind,
-  type BorderColorKind,
   type FontStyleToken,
   type FontWeightToken,
   type MaterialRecipeState,
@@ -130,27 +121,6 @@ const TextInput = (props: { value: string; disabled?: boolean; onInput: (value: 
   />
 );
 
-const TextureScaleSlider = (props: { value: number; disabled?: boolean; onInput: (value: number) => void }) => {
-  const min = 0;
-  const max = materialRecipeTextureScales.length - 1;
-  const index = () => Math.max(0, materialRecipeTextureScales.findIndex((stop) => stop === props.value));
-
-  return (
-    <label class="ui-lab-slider">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={1}
-        value={index()}
-        disabled={props.disabled}
-        onInput={(event) => props.onInput(materialRecipeTextureScales[Number(event.currentTarget.value)])}
-      />
-      <output>{props.value}</output>
-    </label>
-  );
-};
-
 interface MaterialRecipeEditorProps {
   recipe: MaterialRecipe;
   onChange: (recipe: MaterialRecipe) => void;
@@ -181,244 +151,58 @@ const edgeWearDependentFields = [
 ] as const satisfies readonly (keyof SurfaceOptions)[];
 const blurFields = ['glassBlurEnabled', 'glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
 const blurDependentFields = ['glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
+const glassFields = [
+  'glass',
+  'glassOpacity',
+  'glassShine',
+  'glassReflectionOpacity',
+  'glassHighlightWidth',
+  'glassHighlightHeight',
+  'glassHighlightY',
+] as const satisfies readonly (keyof SurfaceOptions)[];
+const glassDependentFields = [
+  'glassOpacity',
+  'glassShine',
+  'glassReflectionOpacity',
+  'glassHighlightWidth',
+  'glassHighlightHeight',
+  'glassHighlightY',
+] as const satisfies readonly (keyof SurfaceOptions)[];
+const glassShineDependentFields = [
+  'glassReflectionOpacity',
+  'glassHighlightWidth',
+  'glassHighlightHeight',
+  'glassHighlightY',
+] as const satisfies readonly (keyof SurfaceOptions)[];
 const baseFields = ['material', 'materialColor'] as const satisfies readonly (keyof SurfaceOptions)[];
 const baseDependentFields = ['materialColor'] as const satisfies readonly (keyof SurfaceOptions)[];
-
-const borderColorLabels: Record<BorderColorKind, string> = {
-  inherit: 'inherit',
-  black: 'pure black',
-  white: 'pure white',
-  gray: '50% gray',
-  custom: 'color',
-};
-
-const ShapeSection = (props: {
-  recipe: MaterialRecipe;
-  enabled: boolean;
-  update: RecipeUpdate;
-}) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Base Shape</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Bevel</ControlLabel>
-      <div class="ui-lab-toggles">
-        <For each={materialRecipeCorners}>
-          {(corner) => (
-            <ToggleButton
-              active={props.recipe.bevelCorners.includes(corner)}
-              disabled={!props.enabled}
-              onClick={() => props.update(
-                'bevelCorners',
-                props.recipe.bevelCorners.includes(corner)
-                  ? props.recipe.bevelCorners.filter((item) => item !== corner)
-                  : [...props.recipe.bevelCorners, corner],
-              )}
-            >
-              {{
-                'top-left': 'TL',
-                'top-right': 'TR',
-                'bottom-left': 'BL',
-                'bottom-right': 'BR',
-              }[corner]}
-            </ToggleButton>
-          )}
-        </For>
-      </div>
-    </div>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Radius</ControlLabel>
-      <Slider disabled={!props.enabled} value={props.recipe.radius} min={0} max={30} onInput={(value) => props.update('radius', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.bevelCorners.length ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Bevel Size</ControlLabel>
-      <Slider
-        disabled={!props.enabled || props.recipe.bevelCorners.length === 0}
-        value={props.recipe.bevelSize}
-        min={0}
-        max={30}
-        onInput={(value) => props.update('bevelSize', value)}
-      />
-    </div>
-  </div>
-);
-
-const TextureSection = (props: {
-  recipe: MaterialRecipe;
-  enabled: boolean;
-  hasTexture: boolean;
-  update: RecipeUpdate;
-  updateTexture: (texture: TextureKind) => void;
-}) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Texture</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Texture</ControlLabel>
-      <select class="ui-lab-select" value={props.recipe.texture} disabled={!props.enabled} onChange={(event) => props.updateTexture(event.currentTarget.value as TextureKind)}>
-        <For each={textureOptions}>
-          {(texture) => <option value={texture.id}>{texture.label}</option>}
-        </For>
-      </select>
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.hasTexture ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Tex Opacity</ControlLabel>
-      <Slider disabled={!props.enabled || !props.hasTexture} value={props.recipe.textureStrength} onInput={(value) => props.update('textureStrength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.hasTexture ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Tex Scale</ControlLabel>
-      <TextureScaleSlider disabled={!props.enabled || !props.hasTexture} value={props.recipe.textureScale} onInput={(value) => props.update('textureScale', value)} />
-    </div>
-  </div>
-);
-
-const TintSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Tint</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Tint</ControlLabel>
-      <Segments disabled={!props.enabled} value={props.recipe.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.update('tint', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.tint !== 'none' ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Tint Power</ControlLabel>
-      <Slider disabled={!props.enabled || props.recipe.tint === 'none'} value={props.recipe.tintStrength} onInput={(value) => props.update('tintStrength', value)} />
-    </div>
-  </div>
-);
-
-const GradientSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => {
-  const hasGradient = () => props.enabled && props.recipe.gradient !== 'none';
-  return (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Gradient</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Mode</ControlLabel>
-      <Segments
-        value={props.recipe.gradient}
-        options={materialRecipeGradients}
-        disabled={!props.enabled}
-        labels={{ 'top-light': 'top', 'bottom-dark': 'bottom' }}
-        onChange={(value: SurfaceGradient) => props.update('gradient', value)}
-      />
-    </div>
-    <div class={`ui-lab-control-row ${hasGradient() && props.recipe.gradient !== 'bottom-dark' ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>White</ControlLabel>
-      <Slider disabled={!hasGradient() || props.recipe.gradient === 'bottom-dark'} value={props.recipe.lightStrength} onInput={(value) => props.update('lightStrength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${hasGradient() && props.recipe.gradient !== 'top-light' ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Dark</ControlLabel>
-      <Slider disabled={!hasGradient() || props.recipe.gradient === 'top-light'} value={props.recipe.darkStrength} onInput={(value) => props.update('darkStrength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${hasGradient() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Side Sheen</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.sheen} disabled={!hasGradient()} onClick={() => props.update('sheen', !props.recipe.sheen)}>on</ToggleButton>
-      </div>
-    </div>
-  </div>
-  );
-};
-
-const GlassSection = (props: { recipe: MaterialRecipe; enabled: boolean; update: RecipeUpdate }) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Frosted Glass</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Enabled</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.glass} disabled={!props.enabled} onClick={() => props.update('glass', !props.recipe.glass)}>on</ToggleButton>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Alpha</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass} min={1} value={props.recipe.glassOpacity} onInput={(value) => props.update('glassOpacity', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Shine</ControlLabel>
-      <div class="ui-lab-toggles">
-        <ToggleButton active={props.recipe.glassShine} disabled={!props.enabled || !props.recipe.glass} onClick={() => props.update('glassShine', !props.recipe.glassShine)}>on</ToggleButton>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Reflection</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} min={1} value={props.recipe.glassReflectionOpacity} onInput={(value) => props.update('glassReflectionOpacity', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Shine Width</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightWidth} onInput={(value) => props.update('glassHighlightWidth', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Shine Height</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightHeight} onInput={(value) => props.update('glassHighlightHeight', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${props.enabled && props.recipe.glass && props.recipe.glassShine ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Shine Y</ControlLabel>
-      <Slider disabled={!props.enabled || !props.recipe.glass || !props.recipe.glassShine} value={props.recipe.glassHighlightY} onInput={(value) => props.update('glassHighlightY', value)} />
-    </div>
-  </div>
-);
-
-const BorderSection = (props: {
-  recipe: MaterialRecipe;
-  enabled: boolean;
-  update: RecipeUpdate;
-  toggleEnabled: () => void;
-  toggleBorder: (edge: EdgeName) => void;
-}) => {
-  const borderActive = () => props.enabled && props.recipe.borderEnabled;
-  const hasBorderSides = () => borderActive() && props.recipe.border.length > 0;
-
-  return (
-    <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-      <SectionLabel size="xs">Border</SectionLabel>
-      <div class="ui-lab-control-row">
-        <ControlLabel>Enabled</ControlLabel>
-        <div class="ui-lab-toggles">
-          <ToggleButton active={props.recipe.borderEnabled} disabled={!props.enabled} onClick={props.toggleEnabled}>on</ToggleButton>
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Color</ControlLabel>
-        <div class="ui-lab-toggles ui-lab-toggles--wrap">
-          <For each={materialRecipeBorderColors}>
-            {(color) => (
-              <ToggleButton active={props.recipe.borderColor === color} disabled={!borderActive()} onClick={() => props.update('borderColor', color)}>
-                {borderColorLabels[color]}
-              </ToggleButton>
-            )}
-          </For>
-        </div>
-      </div>
-      <Show when={props.recipe.borderColor === 'custom'}>
-        <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
-          <ControlLabel>Color Pick</ControlLabel>
-          <input
-            class="ui-lab-color-input"
-            type="color"
-            value={props.recipe.borderCustomColor}
-            disabled={!borderActive()}
-            onInput={(event) => props.update('borderCustomColor', event.currentTarget.value)}
-          />
-        </div>
-      </Show>
-      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Lit</ControlLabel>
-        <div class="ui-lab-toggles">
-          <ToggleButton active={props.recipe.borderLit} disabled={!borderActive()} onClick={() => props.update('borderLit', !props.recipe.borderLit)}>on</ToggleButton>
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${borderActive() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Sides</ControlLabel>
-        <div class="ui-lab-toggles">
-          <For each={materialRecipeEdges}>
-            {(edge) => <ToggleButton active={props.recipe.border.includes(edge)} disabled={!borderActive()} onClick={() => props.toggleBorder(edge)}>{edge}</ToggleButton>}
-          </For>
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${hasBorderSides() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Alpha</ControlLabel>
-        <Slider disabled={!hasBorderSides()} value={props.recipe.borderOpacity} onInput={(value) => props.update('borderOpacity', value)} />
-      </div>
-    </div>
-  );
-};
+const tintFields = ['tint', 'tintStrength'] as const satisfies readonly (keyof SurfaceOptions)[];
+const tintDependentFields = ['tintStrength'] as const satisfies readonly (keyof SurfaceOptions)[];
+const gradientFields = ['gradient', 'lightStrength', 'darkStrength', 'sheen'] as const satisfies readonly (keyof SurfaceOptions)[];
+const gradientDependentFields = ['lightStrength', 'darkStrength', 'sheen'] as const satisfies readonly (keyof SurfaceOptions)[];
+const topGradientDisabledFields = ['darkStrength'] as const satisfies readonly (keyof SurfaceOptions)[];
+const bottomGradientDisabledFields = ['lightStrength'] as const satisfies readonly (keyof SurfaceOptions)[];
+const textureFields = ['texture', 'textureStrength', 'textureScale'] as const satisfies readonly (keyof SurfaceOptions)[];
+const textureDependentFields = ['textureStrength', 'textureScale'] as const satisfies readonly (keyof SurfaceOptions)[];
+const borderFields = [
+  'borderEnabled',
+  'borderColor',
+  'borderCustomColor',
+  'borderLit',
+  'border',
+  'borderOpacity',
+] as const satisfies readonly (keyof SurfaceOptions)[];
+const borderDependentFields = [
+  'borderColor',
+  'borderCustomColor',
+  'borderLit',
+  'border',
+  'borderOpacity',
+] as const satisfies readonly (keyof SurfaceOptions)[];
+const borderOpacityDependentFields = ['borderOpacity'] as const satisfies readonly (keyof SurfaceOptions)[];
+const borderCustomColorFields = ['borderCustomColor'] as const satisfies readonly (keyof SurfaceOptions)[];
+const shapeFields = ['bevelCorners', 'radius', 'bevelSize'] as const satisfies readonly (keyof SurfaceOptions)[];
+const shapeDependentFields = ['bevelSize'] as const satisfies readonly (keyof SurfaceOptions)[];
 
 type StatePresetId = 'quiet-hover' | 'gold-active' | 'cyan-data' | 'danger-active' | 'cta-powered' | 'nav-tab';
 
@@ -844,34 +628,36 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   };
   const hasTexture = () => props.recipe.texture !== 'none';
   const hasCustomBase = () => capabilities().material && props.recipe.material === 'custom';
+  const hasTint = () => capabilities().tint && props.recipe.tint !== 'none';
+  const disabledGradientFields = (): readonly (keyof SurfaceOptions)[] => {
+    if (!capabilities().gradient || props.recipe.gradient === 'none') return gradientDependentFields;
+    if (props.recipe.gradient === 'top-light') return topGradientDisabledFields;
+    if (props.recipe.gradient === 'bottom-dark') return bottomGradientDisabledFields;
+    return [];
+  };
+  const disabledGlassFields = (): readonly (keyof SurfaceOptions)[] => {
+    if (!capabilities().glass || !props.recipe.glass) return glassDependentFields;
+    if (!props.recipe.glassShine) return glassShineDependentFields;
+    return [];
+  };
+  const borderActive = () => capabilities().border && props.recipe.borderEnabled;
+  const disabledBorderFields = (): readonly (keyof SurfaceOptions)[] => {
+    if (!borderActive()) return borderDependentFields;
+    if (props.recipe.border.length === 0) return borderOpacityDependentFields;
+    return [];
+  };
+  const hiddenBorderFields = (): readonly (keyof SurfaceOptions)[] => (
+    props.recipe.borderColor === 'custom' ? [] : borderCustomColorFields
+  );
+  const disabledShapeFields = (): readonly (keyof SurfaceOptions)[] => (
+    capabilities().material && props.recipe.bevelCorners.length > 0 ? [] : shapeDependentFields
+  );
   const hasEdgeWear = () => capabilities().edgeWear && props.recipe.edgeWear;
   const hasBlur = () => capabilities().blur && props.recipe.glassBlurEnabled;
   const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
 
   const update: RecipeUpdate = (key, value) => {
     props.onChange({ ...props.recipe, [key]: value });
-  };
-
-  const updateTexture = (texture: TextureKind) => {
-    props.onChange({
-      ...props.recipe,
-      texture,
-      textureStrength: texture === 'none' ? 0 : props.recipe.textureStrength || 100,
-    });
-  };
-
-  const toggleBorder = (value: EdgeName) => {
-    const next = props.recipe.border.includes(value)
-      ? props.recipe.border.filter((item) => item !== value)
-      : [...props.recipe.border, value];
-    update('border', next);
-  };
-
-  const toggleBorderEnabled = () => {
-    props.onChange({
-      ...props.recipe,
-      borderEnabled: !props.recipe.borderEnabled,
-    });
   };
 
   const updateEnabled = (enabled: boolean) => {
@@ -1014,7 +800,15 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   return (
     <>
-      <ShapeSection recipe={props.recipe} enabled={capabilities().material} update={update} />
+      <SurfaceGeneratedEditor
+        title="Base Shape"
+        mode="rest"
+        fields={shapeFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().material}
+        capabilities={{ disabledFields: disabledShapeFields() }}
+        onPatch={patchRestSurface}
+      />
       <SurfaceGeneratedEditor
         title="Base Color"
         mode="rest"
@@ -1024,9 +818,33 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         capabilities={{ disabledFields: hasCustomBase() ? [] : baseDependentFields }}
         onPatch={patchRestSurface}
       />
-      <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
-      <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
-      <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />
+      <SurfaceGeneratedEditor
+        title="Texture"
+        mode="rest"
+        fields={textureFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().texture}
+        capabilities={{ disabledFields: hasTexture() ? [] : textureDependentFields }}
+        onPatch={patchRestSurface}
+      />
+      <SurfaceGeneratedEditor
+        title="Tint"
+        mode="rest"
+        fields={tintFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().tint}
+        capabilities={{ disabledFields: hasTint() ? [] : tintDependentFields }}
+        onPatch={patchRestSurface}
+      />
+      <SurfaceGeneratedEditor
+        title="Gradient"
+        mode="rest"
+        fields={gradientFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().gradient}
+        capabilities={{ disabledFields: disabledGradientFields() }}
+        onPatch={patchRestSurface}
+      />
       <SurfaceGeneratedEditor
         title="Blur"
         mode="rest"
@@ -1036,8 +854,27 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
         capabilities={{ disabledFields: hasBlur() ? [] : blurDependentFields }}
         onPatch={patchRestSurface}
       />
-      <GlassSection recipe={props.recipe} enabled={capabilities().glass} update={update} />
-      <BorderSection recipe={props.recipe} enabled={capabilities().border} update={update} toggleEnabled={toggleBorderEnabled} toggleBorder={toggleBorder} />
+      <SurfaceGeneratedEditor
+        title="Frosted Glass"
+        mode="rest"
+        fields={glassFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().glass}
+        capabilities={{ disabledFields: disabledGlassFields() }}
+        onPatch={patchRestSurface}
+      />
+      <SurfaceGeneratedEditor
+        title="Border"
+        mode="rest"
+        fields={borderFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().border}
+        capabilities={{
+          disabledFields: disabledBorderFields(),
+          hiddenFields: hiddenBorderFields(),
+        }}
+        onPatch={patchRestSurface}
+      />
       <SurfaceGeneratedEditor
         title="Edge Wear"
         mode="rest"

@@ -88,6 +88,36 @@ authoring JSON
   to `SurfaceGeneratedEditor`, with `material`/`materialColor` labels and
   option names owned by `surfaceFieldMetadata.ts` and custom color disabled
   unless the material mode is `custom`.
+- [x] Moved `MaterialRecipeEditor` tint controls from a bespoke section to
+  `SurfaceGeneratedEditor`, with `tint` options and `Tint Power` labels owned
+  by `surfaceFieldMetadata.ts` and tint strength disabled while tint is `none`.
+- [x] Moved `MaterialRecipeEditor` gradient controls from a bespoke section to
+  `SurfaceGeneratedEditor`, with gradient options/labels owned by
+  `surfaceFieldMetadata.ts` and white/dark/sheen controls disabled according to
+  the selected gradient mode.
+- [x] Updated `visibleSurfaceFieldDefinitions()` so explicitly requested field
+  lists preserve caller order. Generated editor sections can now stay
+  schema-driven while keeping deliberate authoring order.
+- [x] Moved `MaterialRecipeEditor` frosted-glass controls from a bespoke
+  section to `SurfaceGeneratedEditor`, with glass/shine dependent controls
+  disabled through generated-editor capabilities and old editor labels/ranges
+  owned by `surfaceFieldMetadata.ts`.
+- [x] Moved `MaterialRecipeEditor` texture controls from a bespoke section to
+  `SurfaceGeneratedEditor`, with texture dropdown options/labels and discrete
+  validated texture-scale stops owned by `surfaceFieldMetadata.ts`.
+- [x] Added generated numeric slider `valueStops` support in
+  `SurfaceFieldControl`, preserving stepped authoring controls while keeping
+  sections metadata-driven.
+- [x] Moved `MaterialRecipeEditor` border controls from a bespoke section to
+  `SurfaceGeneratedEditor`, with border color options/labels, side-array
+  toggles, custom-color visibility, and border-alpha dependency behavior owned
+  by metadata/capabilities.
+- [x] Added generated `multi-toggle` controls in `SurfaceFieldControl`, so
+  array-valued authoring fields can use metadata-driven toggle groups instead
+  of JSON textareas or bespoke editor JSX.
+- [x] Moved `MaterialRecipeEditor` base-shape controls from a bespoke section
+  to `SurfaceGeneratedEditor`, with bevel-corner multi-toggle labels and
+  radius/bevel-size editor ranges owned by `surfaceFieldMetadata.ts`.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -298,8 +328,7 @@ even though schema/metadata-driven controls exist.
 Recommended finish plan, in order:
 
 1. Continue `MaterialRecipeEditor` generated-control migration in this order:
-   Tint -> Gradient -> Glass -> Texture -> Border -> Shape -> Edge Emission
-   state -> State Glow -> State Text -> State Surface. Keep state
+   Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
    tone/texture/border/font options, dependency disables, array toggles, and a
    separate state-overlay metadata adapter rather than forcing overlay-only

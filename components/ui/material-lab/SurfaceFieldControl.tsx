@@ -22,6 +22,10 @@ const numericValue = (value: unknown) => (
 
 const booleanValue = (value: unknown) => value === true;
 
+const arrayValue = (value: unknown) => (
+  Array.isArray(value) ? value.map((item) => String(item)) : []
+);
+
 const stringValue = (value: unknown) => (
   typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 );
@@ -60,18 +64,52 @@ export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
       );
     }
 
+    if (props.definition.control === 'multi-toggle') {
+      const values = () => arrayValue(current());
+      const toggle = (option: string) => {
+        const next = values().includes(option)
+          ? values().filter((item) => item !== option)
+          : [...values(), option];
+        patch(next as SurfaceOptions[K]);
+      };
+
+      return (
+        <div class="ui-lab-toggles">
+          <For each={props.definition.options || []}>
+            {(option) => (
+              <button
+                type="button"
+                class={`ui-lab-mini-button ${values().includes(option) ? 'is-active' : ''}`}
+                disabled={disabled()}
+                onClick={() => toggle(option)}
+              >
+                {props.definition.optionLabels?.[option] || option}
+              </button>
+            )}
+          </For>
+        </div>
+      );
+    }
+
     if (props.definition.control === 'slider') {
       const value = () => numericValue(current());
+      const stops = () => props.definition.valueStops || [];
+      const stopIndex = () => Math.max(0, stops().findIndex((stop) => stop === value()));
+      const hasStops = () => stops().length > 0;
       return (
         <label class="ui-lab-slider">
           <input
             type="range"
-            min={props.definition.min ?? 0}
-            max={props.definition.max ?? 100}
-            step={props.definition.step ?? 1}
-            value={value()}
+            min={hasStops() ? 0 : props.definition.min ?? 0}
+            max={hasStops() ? stops().length - 1 : props.definition.max ?? 100}
+            step={hasStops() ? 1 : props.definition.step ?? 1}
+            value={hasStops() ? stopIndex() : value()}
             disabled={disabled()}
-            onInput={(event) => patch(Number(event.currentTarget.value) as SurfaceOptions[K])}
+            onInput={(event) => patch(
+              (hasStops()
+                ? stops()[Number(event.currentTarget.value)]
+                : Number(event.currentTarget.value)) as SurfaceOptions[K],
+            )}
           />
           <output>{value()}</output>
         </label>

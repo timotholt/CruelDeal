@@ -26,6 +26,67 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({ mode: 'rest', fields: ['bevelCorners', 'radius', 'bevelSize'] })),
+  ['bevelCorners', 'radius', 'bevelSize'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({ mode: 'rest', fields: ['tint', 'tintStrength'] })),
+  ['tint', 'tintStrength'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({ mode: 'rest', fields: ['texture', 'textureStrength', 'textureScale'] })),
+  ['texture', 'textureStrength', 'textureScale'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'rest',
+    fields: ['borderEnabled', 'borderColor', 'borderCustomColor', 'borderLit', 'border', 'borderOpacity'],
+  })),
+  ['borderEnabled', 'borderColor', 'borderCustomColor', 'borderLit', 'border', 'borderOpacity'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'rest',
+    fields: ['borderEnabled', 'borderColor', 'borderCustomColor', 'borderLit', 'border', 'borderOpacity'],
+    capabilities: { hiddenFields: ['borderCustomColor'] },
+  })),
+  ['borderEnabled', 'borderColor', 'borderLit', 'border', 'borderOpacity'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({ mode: 'rest', fields: ['gradient', 'lightStrength', 'darkStrength', 'sheen'] })),
+  ['gradient', 'lightStrength', 'darkStrength', 'sheen'],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'rest',
+    fields: [
+      'glass',
+      'glassOpacity',
+      'glassShine',
+      'glassReflectionOpacity',
+      'glassHighlightWidth',
+      'glassHighlightHeight',
+      'glassHighlightY',
+    ],
+  })),
+  [
+    'glass',
+    'glassOpacity',
+    'glassShine',
+    'glassReflectionOpacity',
+    'glassHighlightWidth',
+    'glassHighlightHeight',
+    'glassHighlightY',
+  ],
+);
+
+assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({ mode: 'rest', groups: ['edgeWear'] })),
   ['edgeWear', 'edgeWearTexture', 'edgeWearOpacity', 'edgeWearWidth', 'edgeWearScale', 'edgeWearLayer'],
 );
@@ -67,6 +128,82 @@ assert.equal(
 );
 assert.equal(
   surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.materialColor, { disabledFields: ['materialColor'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.bevelCorners, { disabledFields: ['bevelSize'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.bevelSize, { disabledFields: ['bevelSize'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.tint, { disabledFields: ['tintStrength'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.tintStrength, { disabledFields: ['tintStrength'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.texture, { disabledFields: ['textureStrength', 'textureScale'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.textureStrength, { disabledFields: ['textureStrength'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.textureScale, { disabledFields: ['textureScale'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.borderEnabled, { disabledFields: ['borderColor', 'border'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.borderColor, { disabledFields: ['borderColor'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.border, { disabledFields: ['border'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.borderOpacity, { disabledFields: ['borderOpacity'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.gradient, { disabledFields: ['lightStrength', 'darkStrength', 'sheen'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.lightStrength, { disabledFields: ['lightStrength'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.darkStrength, { disabledFields: ['darkStrength'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.sheen, { disabledFields: ['sheen'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.glass, { disabledFields: ['glassOpacity', 'glassShine'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.glassOpacity, { disabledFields: ['glassOpacity'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.glassShine, { disabledFields: ['glassShine'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.glassReflectionOpacity, { disabledFields: ['glassReflectionOpacity'] }),
   true,
 );
 

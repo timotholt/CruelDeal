@@ -62,12 +62,18 @@ export const visibleSurfaceFieldDefinitions = (options: {
     fields: options.fields ?? options.capabilities?.fields,
   };
 
-  return surfaceFieldDefinitions.filter((definition) => (
+  const visibleFields = surfaceFieldDefinitions.filter((definition) => (
     definition.control !== 'none'
     && definition.editMode !== 'renderer-internal'
     && modeAllows(definition, options.mode)
     && surfaceFieldAllowedByCapabilities(definition, capabilities)
   ));
+
+  if (!options.fields) return visibleFields;
+
+  return [...visibleFields].sort(
+    (a, b) => options.fields!.indexOf(a.key) - options.fields!.indexOf(b.key),
+  );
 };
 
 export const patchSurfaceField = <K extends keyof SurfaceOptions>(
