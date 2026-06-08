@@ -8,6 +8,7 @@ import {
   validateUiNodeTheme,
   type UiNodePayload,
   type UiActionPayload,
+  type UiNodeContentValue,
   type UiNodeRenderContext,
   type UiNodeTheme,
 } from '../ui/material-lab';
@@ -16,12 +17,6 @@ import {
   createUiNodePreviewJsonReadout,
   type UiNodePreviewJsonTabId,
 } from './uiNodePreviewJsonReadout';
-
-type CmsContentValue =
-  | string
-  | number
-  | UiActionPayload['target']
-  | Record<string, string | number | boolean>;
 
 type JsonTabId = UiNodePreviewJsonTabId;
 
@@ -87,7 +82,7 @@ const missionTemplate: UiNodePayload = {
   ],
 };
 
-const cmsContent: Record<string, CmsContentValue> = {
+const cmsContent: Record<string, UiNodeContentValue> = {
   'mission.deadline': '03 Days Left',
   'mission.sector': 'Sector\n[black]07[/black]',
   'mission.briefing': '[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data\n[acc2]Extraction[/acc2][/h2][RULE][body]Extract encrypted corporate data from Solace Corp mainframe cluster.[/body][DIVIDER]\n[h1]Reward[/h1][h3]1,850 [acc1]CR[/acc1][/h3]',

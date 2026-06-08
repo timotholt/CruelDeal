@@ -7,13 +7,13 @@ export type UiNodePreviewJsonTabId = 'template' | 'cms' | 'theme';
 
 export const uiNodePreviewOutputModeByTab = {
   template: 'ui-node',
-} as const satisfies Partial<Record<UiNodePreviewJsonTabId, EditorOutputModeId>>;
+  cms: 'ui-node-content',
+  theme: 'ui-node-theme',
+} as const satisfies Record<UiNodePreviewJsonTabId, EditorOutputModeId>;
 
 export const createUiNodePreviewJsonReadout = (
   tab: UiNodePreviewJsonTabId,
   value: unknown,
-): string => {
-  const mode = uiNodePreviewOutputModeByTab[tab];
-  if (mode) return serializeEditorOutput(mode, value) || '{}\n';
-  return `${JSON.stringify(value, null, 2)}\n`;
-};
+): string => (
+  serializeEditorOutput(uiNodePreviewOutputModeByTab[tab], value) || '{}\n'
+);

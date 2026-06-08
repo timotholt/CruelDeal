@@ -20,6 +20,8 @@ assert.deepEqual(editorOutputModeIds, [
   'surface-states',
   'material-recipe',
   'ui-node',
+  'ui-node-content',
+  'ui-node-theme',
   'game-ui-theme',
   'game-cms-content',
   'game-ui-placements',
@@ -29,6 +31,8 @@ assert.equal(editorOutputRegistryById['surface-options'].family, 'surface');
 assert.equal(editorOutputRegistryById['surface-states'].family, 'surface');
 assert.equal(editorOutputRegistryById['material-recipe'].family, 'legacy-material');
 assert.equal(editorOutputRegistryById['ui-node'].family, 'ui-node');
+assert.equal(editorOutputRegistryById['ui-node-content'].family, 'ui-node');
+assert.equal(editorOutputRegistryById['ui-node-theme'].family, 'ui-node');
 assert.equal(editorOutputRegistryById['game-ui-theme'].family, 'game-ui');
 assert.equal(editorOutputRegistryById['game-cms-content'].family, 'game-ui');
 assert.equal(editorOutputRegistryById['game-ui-placements'].family, 'game-ui');
@@ -71,6 +75,27 @@ const uiNode = validateEditorOutput('ui-node', {
 assert.equal(uiNode.ok, true);
 assert.equal(uiNode.value?.surfaceStates?.hover?.surfaceLayerBrightness, 1.22);
 assert.equal(validateEditorOutput('ui-node', { id: 'bad', type: 'script' }).ok, false);
+
+const uiNodeContent = validateEditorOutput('ui-node-content', {
+  'mission.title': 'Solace Mainframe',
+  'mission.reward': 1850,
+  'mission.target': { kind: 'contract', id: 'contract_solace_mainframe' },
+});
+assert.equal(uiNodeContent.ok, true);
+assert.equal(uiNodeContent.value?.['mission.reward'], 1850);
+assert.equal(validateEditorOutput('ui-node-content', { 'mission.bad': ['not', 'allowed'] }).ok, false);
+
+const uiNodeTheme = validateEditorOutput('ui-node-theme', {
+  richText: {
+    missionPanel: {
+      base: { tone: 'white', fontFamily: 'ui-sans-serif', sizeRem: 0.8 },
+      h1: { tone: 'gold', transform: 'uppercase' },
+    },
+  },
+});
+assert.equal(uiNodeTheme.ok, true);
+assert.equal(uiNodeTheme.value?.richText.missionPanel.h1?.tone, 'gold');
+assert.equal(validateEditorOutput('ui-node-theme', { richText: { missionPanel: { h1: { tone: 'banana' } } } }).ok, false);
 
 const theme = validateEditorOutput('game-ui-theme', darkStoneGameUiThemeFixture);
 assert.equal(theme.ok, true);

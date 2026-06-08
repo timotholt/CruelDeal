@@ -69,6 +69,14 @@ export interface UiNodePayload {
   children?: UiNodePayload[];
 }
 
+export type UiNodeContentValue =
+  | string
+  | number
+  | UiActionPayload['target']
+  | Record<string, string | number | boolean>;
+
+export type UiNodeContentPayload = Record<string, UiNodeContentValue>;
+
 // A single CSS dimension token (no functions, no injection): a number with an
 // allowed unit, or 'auto'.
 // A single CSS dimension token: 'auto', a bare 0, or a number with an allowed
@@ -114,6 +122,33 @@ const uiActionSchema = v.strictObject({
   targetBinding: v.optional(v.string()),
 });
 
+const uiActionTargetSchema = v.strictObject({
+  kind: v.string(),
+  id: v.string(),
+});
+
+const uiNodeContentObjectValueSchema = v.record(
+  v.string(),
+  v.union([v.string(), v.number(), v.boolean()]),
+);
+
+export const uiNodeContentSchema: v.GenericSchema<UiNodeContentPayload> = v.record(
+  v.string(),
+  v.union([v.string(), v.number(), uiActionTargetSchema, uiNodeContentObjectValueSchema]),
+) as v.GenericSchema<UiNodeContentPayload>;
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const isUiNodeContentValue = (value: unknown): value is UiNodeContentValue => {
+  if (typeof value === 'string' || typeof value === 'number') return true;
+  if (!isPlainRecord(value)) return false;
+  return Object.values(value).every((entry) => (
+    typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean'
+  ));
+};
+
 // Recursive node schema. Structure is strict (reject unknown keys, bad types,
 // bad enums); the embedded surface skin is lenient (clamps values) since visual
 // drift should degrade gracefully, not reject the whole node.
@@ -144,5 +179,13 @@ export const validateUiNode = (input: unknown, label = 'ui-node'): UiNodePayload
   const result = v.safeParse(uiNodeSchema, input);
   if (result.success) return result.output;
   fault('ui.node.invalid', { label, issues: summarizeValibotIssues(result.issues) });
+  return null;
+};
+
+export const validateUiNodeContent = (input: unknown, label = 'ui-node-content'): UiNodeContentPayload | null => {
+  if (isPlainRecord(input) && Object.values(input).every(isUiNodeContentValue)) {
+    return input as UiNodeContentPayload;
+  }
+  fault('ui.node.content.invalid', { label });
   return null;
 };

@@ -10,14 +10,18 @@ import type { MaterialRecipe } from '../material-lab/MaterialRecipeTypes';
 import { sanitizeMaterialRecipe } from '../material-lab/MaterialRecipeValidate';
 import type { SurfaceOptions } from '../material-lab/surfaceSchema';
 import { surfaceStatesSchema, validateSurfaceOptions } from '../material-lab/surfaceValidate';
-import type { UiNodePayload, UiSurfaceStatesPayload } from '../material-lab/uiNodeValidate';
-import { validateUiNode } from '../material-lab/uiNodeValidate';
+import type { UiNodeTheme } from '../material-lab/uiNodeRichTextTheme';
+import { validateUiNodeTheme } from '../material-lab/uiNodeRichTextTheme';
+import type { UiNodeContentPayload, UiNodePayload, UiSurfaceStatesPayload } from '../material-lab/uiNodeValidate';
+import { validateUiNode, validateUiNodeContent } from '../material-lab/uiNodeValidate';
 
 export interface EditorOutputValueByMode {
   'surface-options': SurfaceOptions;
   'surface-states': UiSurfaceStatesPayload;
   'material-recipe': MaterialRecipe;
   'ui-node': UiNodePayload;
+  'ui-node-content': UiNodeContentPayload;
+  'ui-node-theme': UiNodeTheme;
   'game-ui-theme': GameUiTheme;
   'game-cms-content': GameCmsContent;
   'game-ui-placements': GameUiPlacements;
@@ -91,6 +95,24 @@ const definitions = [
     validation: 'strict-nullable',
     fileExtension: 'json',
     validate: (input: unknown) => validateUiNode(input, 'editor-output.ui-node'),
+  },
+  {
+    id: 'ui-node-content',
+    family: 'ui-node',
+    label: 'UiNode Content',
+    description: 'Content binding map consumed by server-driven UI node trees.',
+    validation: 'strict-nullable',
+    fileExtension: 'json',
+    validate: (input: unknown) => validateUiNodeContent(input, 'editor-output.ui-node-content'),
+  },
+  {
+    id: 'ui-node-theme',
+    family: 'ui-node',
+    label: 'UiNode Theme',
+    description: 'Rich-text theme defaults consumed by UiNode rich text renderers.',
+    validation: 'strict-nullable',
+    fileExtension: 'json',
+    validate: (input: unknown) => validateUiNodeTheme(input, 'editor-output.ui-node-theme'),
   },
   {
     id: 'game-ui-theme',

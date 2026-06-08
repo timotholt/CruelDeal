@@ -158,6 +158,12 @@ authoring JSON
   `ui-node` output mode via `components/screens/uiNodePreviewJsonReadout.ts`;
   its local demo CMS/theme panes remain explicit legacy JSON readouts until
   they have first-class output schemas.
+- [x] Added first-class editor output modes for UiNode content binding maps
+  and UiNode rich-text themes (`ui-node-content`, `ui-node-theme`).
+- [x] Routed all `UiNodePreviewScreen` JSON tabs through registered editor
+  output modes. Template, CMS/content bindings, and rich-text theme panes now
+  share the same validation/serialization path instead of falling back to raw
+  `JSON.stringify`.
 - [x] Started the next `/material-main` decomposition slice by extracting feed
   story document defaults, `FeedCardTypeId`/`FeedStory` contracts, story
   cloning, story sanitization, and story image override sanitization into
@@ -303,6 +309,7 @@ authoring JSON
 - PASS `npx tsx components/screens/materialLabJsonReadout.test.ts`
 - PASS `npx tsx components/screens/gameUiSkinProofJsonReadout.test.ts`
 - PASS `npx tsx components/screens/uiNodePreviewJsonReadout.test.ts`
+- PASS `npx tsx components/ui/material-lab/uiNodeRichTextTheme.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
@@ -348,10 +355,14 @@ for the high-risk material/state surface sections. Remaining bespoke editor
 chrome is intentional for state selection/presets and base text/content
 positioning until those get a broader content-authoring metadata pass.
 
+True runtime/editor JSON panes are now routed through registered editor output
+modes. Remaining raw stringification is classified as local storage snapshots,
+debug/action display text, play/debug drawers, or legacy login-skin clipboard
+export rather than validated runtime editor contracts.
+
 Recommended finish plan, in order:
 
-1. Route any remaining true runtime JSON panes through editor output modes.
-2. Run final end-to-end editor verification: save/load/import/export, selected
+1. Run final end-to-end editor verification: save/load/import/export, selected
    target editing, generated controls, preview rendering, and emission export.
 
 ## Known Dirty Parallel Work
