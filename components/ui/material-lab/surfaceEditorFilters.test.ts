@@ -21,6 +21,30 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'state',
+    fields: [
+      'emission',
+      'emissionEdge',
+      'emissionTone',
+      'emissionStrength',
+      'emissionLength',
+      'emissionThickness',
+      'emissionBlipSize',
+    ],
+  })),
+  [
+    'emission',
+    'emissionEdge',
+    'emissionTone',
+    'emissionStrength',
+    'emissionLength',
+    'emissionThickness',
+    'emissionBlipSize',
+  ],
+);
+
+assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({ mode: 'rest', groups: ['base'] })),
   ['material', 'materialColor'],
 );

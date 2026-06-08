@@ -9,8 +9,6 @@ import {
   materialRecipeEdges,
   materialRecipeContentLayers,
   materialRecipeContentTones,
-  materialRecipeEmissionEdges,
-  materialRecipeEmissionKinds,
   materialRecipeFontStyles,
   materialRecipeGlows,
   materialRecipeStates,
@@ -18,7 +16,6 @@ import {
   materialRecipeTextFonts,
   materialRecipeTextTransforms,
   materialRecipeTints,
-  type EdgeEmissionKind,
   type FontStyleToken,
   type FontWeightToken,
   type MaterialRecipeState,
@@ -203,6 +200,15 @@ const borderOpacityDependentFields = ['borderOpacity'] as const satisfies readon
 const borderCustomColorFields = ['borderCustomColor'] as const satisfies readonly (keyof SurfaceOptions)[];
 const shapeFields = ['bevelCorners', 'radius', 'bevelSize'] as const satisfies readonly (keyof SurfaceOptions)[];
 const shapeDependentFields = ['bevelSize'] as const satisfies readonly (keyof SurfaceOptions)[];
+const stateEmissionFields = [
+  'emission',
+  'emissionEdge',
+  'emissionTone',
+  'emissionStrength',
+  'emissionLength',
+  'emissionThickness',
+  'emissionBlipSize',
+] as const satisfies readonly (keyof SurfaceOptions)[];
 
 type StatePresetId = 'quiet-hover' | 'gold-active' | 'cyan-data' | 'danger-active' | 'cta-powered' | 'nav-tab';
 
@@ -355,46 +361,6 @@ const GlowSection = (props: {
     <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
       <ControlLabel>Bracket Size</ControlLabel>
       <Slider disabled={!active()} value={props.stateOverlay.glow.cornerSize} min={8} max={34} onInput={(value) => props.updateStateGroup('glow', 'cornerSize', value)} />
-    </div>
-  </div>
-  );
-};
-
-const EdgeEmissionSection = (props: {
-  stateOverlay: MaterialStateOverlay;
-  updateStateGroup: StateGroupUpdate;
-}) => {
-  const active = () => props.stateOverlay.enabled;
-  return (
-  <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Edge Emission</SectionLabel>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Type</ControlLabel>
-      <Segments disabled={!active()} value={props.stateOverlay.emission.emission} options={materialRecipeEmissionKinds} labels={{ 'center-blip': 'blip', 'rail-and-blip': 'rail + blip' }} onChange={(value: EdgeEmissionKind) => props.updateStateGroup('emission', 'emission', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Edge</ControlLabel>
-      <Segments disabled={!active()} value={props.stateOverlay.emission.emissionEdge} options={materialRecipeEmissionEdges} onChange={(value) => props.updateStateGroup('emission', 'emissionEdge', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Tone</ControlLabel>
-      <Segments disabled={!active()} value={props.stateOverlay.emission.emissionTone} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('emission', 'emissionTone', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Power</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionStrength} onInput={(value) => props.updateStateGroup('emission', 'emissionStrength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Length</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionLength} min={10} max={100} onInput={(value) => props.updateStateGroup('emission', 'emissionLength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Thick</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionThickness} min={1} max={8} onInput={(value) => props.updateStateGroup('emission', 'emissionThickness', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Blip</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.emission.emissionBlipSize} min={8} max={44} onInput={(value) => props.updateStateGroup('emission', 'emissionBlipSize', value)} />
     </div>
   </div>
   );
@@ -707,6 +673,36 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     ...(stateOverlay().motion.translateY !== 0 ? { stateTranslateY: stateOverlay().motion.translateY } : {}),
   });
 
+  const emissionSurfaceValue = (): Partial<SurfaceOptions> => stateOverlay().emission as Partial<SurfaceOptions>;
+
+  const patchEmissionSurface = (patch: SurfaceEditorPatch) => {
+    const overlay = stateOverlay();
+    const nextEmission = { ...overlay.emission } as Record<string, unknown>;
+    let changed = false;
+
+    for (const key of stateEmissionFields) {
+      if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+      const value = patch[key];
+      if (value === undefined) continue;
+      nextEmission[key] = value;
+      changed = true;
+    }
+
+    if (!changed) return;
+    props.onForcePreviewChange?.(true);
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: {
+          ...overlay,
+          enabled: true,
+          emission: nextEmission as MaterialStateOverlay['emission'],
+        },
+      },
+    });
+  };
+
   const patchMotionSurface = (patch: SurfaceEditorPatch) => {
     const overlay = stateOverlay();
     const hasScale = Object.prototype.hasOwnProperty.call(patch, 'stateScale');
@@ -910,7 +906,15 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           updateStateGroup={updateStateGroup}
           toggleStateList={toggleStateList}
         />
-        <EdgeEmissionSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
+        <SurfaceGeneratedEditor
+          title="Edge Emission"
+          mode="state"
+          fields={stateEmissionFields}
+          value={emissionSurfaceValue()}
+          enabled={stateOverlay().enabled}
+          inheritControls={false}
+          onPatch={patchEmissionSurface}
+        />
         <ContentStateSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
         <MotionSection
           enabled={stateOverlay().enabled}

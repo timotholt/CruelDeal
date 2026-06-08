@@ -173,7 +173,7 @@ const MaterialSurface = (props: MaterialSurfaceProps) => {
 
 // SurfaceOptions props shared by both surface hosts. One canonical list instead
 // of two hand-maintained copies.
-const surfaceOptionKeys = [
+export const surfaceOptionKeys = [
   'renderMode',
   'material',
   'materialColor',
@@ -213,6 +213,7 @@ const surfaceOptionKeys = [
   'darkStrength',
   'surfaceFilterBrightness',
   'surfaceLayerBrightness',
+  'edgeWear',
   'edgeWearTexture',
   'edgeWearOpacity',
   'edgeWearWidth',

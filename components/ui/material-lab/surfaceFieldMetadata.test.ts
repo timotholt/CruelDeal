@@ -49,6 +49,15 @@ assert.equal(surfaceFieldDefinitionByKey.gradient.optionLabels?.['top-light'], '
 assert.equal(surfaceFieldDefinitionByKey.lightStrength.label, 'White');
 assert.equal(surfaceFieldDefinitionByKey.darkStrength.label, 'Dark');
 assert.equal(surfaceFieldDefinitionByKey.sheen.label, 'Side Sheen');
+assert.equal(surfaceFieldDefinitionByKey.emission.label, 'Type');
+assert.equal(surfaceFieldDefinitionByKey.emission.optionLabels?.['center-blip'], 'blip');
+assert.equal(surfaceFieldDefinitionByKey.emission.optionLabels?.['rail-and-blip'], 'rail + blip');
+assert.deepEqual(surfaceFieldDefinitionByKey.emissionEdge.options, ['bottom']);
+assert.ok(surfaceFieldDefinitionByKey.emissionTone.options?.includes('cyan'));
+assert.equal(surfaceFieldDefinitionByKey.emissionStrength.label, 'Power');
+assert.equal(surfaceFieldDefinitionByKey.emissionLength.min, 10);
+assert.equal(surfaceFieldDefinitionByKey.emissionThickness.max, 8);
+assert.equal(surfaceFieldDefinitionByKey.emissionBlipSize.max, 44);
 assert.equal(surfaceFieldDefinitionByKey.glass.label, 'Enabled');
 assert.equal(surfaceFieldDefinitionByKey.glassOpacity.label, 'Alpha');
 assert.equal(surfaceFieldDefinitionByKey.glassOpacity.min, 1);
@@ -61,5 +70,6 @@ assert.equal(surfaceFieldDefinitionByKey.glassHighlightY.label, 'Shine Y');
 assert.equal(surfaceFieldDefinitionByKey.edgeWear.control, 'toggle');
 assert.ok(surfaceFieldDefinitionByKey.edgeWearTexture.options?.includes('edge-bw-noise-dense'));
 assert.equal(surfaceFieldDefinitionByKey.edgeWearTexture.optionLabels?.['edge-bw-noise-dense'], 'Edge B/W Noise Dense');
+assert.deepEqual(surfaceFieldDefinitionByKey.edgeWearScale.valueStops, [64, 128, 256, 512, 1024, 2048, 4096]);
 
 console.log('Surface field metadata tests passed');

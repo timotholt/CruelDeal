@@ -30,17 +30,28 @@ const stringValue = (value: unknown) => (
   typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 );
 
+export const surfaceSliderStopIndex = (stops: readonly number[], value: number) => {
+  if (!stops.length) return 0;
+  const exactIndex = stops.findIndex((stop) => stop === value);
+  if (exactIndex >= 0) return exactIndex;
+  return stops.reduce((closestIndex, stop, index) => (
+    Math.abs(stop - value) < Math.abs(stops[closestIndex] - value) ? index : closestIndex
+  ), 0);
+};
+
 export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
   definition: SurfaceFieldDefinition<K>;
   mode: SurfaceEditorMode;
   value: Partial<SurfaceOptions>;
   inheritedValue?: Partial<SurfaceOptions>;
   disabled?: boolean;
+  inheritControls?: boolean;
   onPatch: (patch: SurfaceEditorPatch) => void;
 }) => {
   const hasOverride = () => Object.prototype.hasOwnProperty.call(props.value, props.definition.key);
   const current = () => valueForField(props.definition, props.value, props.inheritedValue);
   const disabled = () => !!props.disabled;
+  const inheritControls = () => props.inheritControls ?? true;
   const patch = (value: SurfaceOptions[K]) => props.onPatch(patchSurfaceFieldWithContext(
     props.definition.key,
     value,
@@ -94,7 +105,7 @@ export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
     if (props.definition.control === 'slider') {
       const value = () => numericValue(current());
       const stops = () => props.definition.valueStops || [];
-      const stopIndex = () => Math.max(0, stops().findIndex((stop) => stop === value()));
+      const stopIndex = () => surfaceSliderStopIndex(stops(), value());
       const hasStops = () => stops().length > 0;
       return (
         <label class="ui-lab-slider">
@@ -167,7 +178,7 @@ export const SurfaceFieldControl = <K extends keyof SurfaceOptions>(props: {
     <div class={`ui-lab-control-row ${disabled() ? 'ui-lab-control-row--disabled' : ''}`}>
       <span class="ui-lab-control-label">{props.definition.label}</span>
       <div class="ui-lab-stack">
-        <Show when={props.mode === 'state'}>
+        <Show when={props.mode === 'state' && inheritControls()}>
           <button
             type="button"
             class={`ui-lab-mini-button ${!hasOverride() ? 'is-active' : ''}`}

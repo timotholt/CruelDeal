@@ -20,6 +20,7 @@ export const SurfaceGeneratedEditor = (props: {
   fields?: readonly (keyof SurfaceOptions)[];
   capabilities?: SurfaceEditorCapabilities;
   enabled?: boolean;
+  inheritControls?: boolean;
   onPatch: (patch: SurfaceEditorPatch) => void;
 }) => {
   const fields = () => visibleSurfaceFieldDefinitions({
@@ -42,6 +43,7 @@ export const SurfaceGeneratedEditor = (props: {
               value={props.value}
               inheritedValue={props.inheritedValue}
               disabled={!enabled() || surfaceFieldDisabledByCapabilities(definition, props.capabilities)}
+              inheritControls={props.inheritControls}
               onPatch={props.onPatch}
             />
           )}

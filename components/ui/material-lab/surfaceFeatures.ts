@@ -78,8 +78,10 @@ const hasGlassWash = (options: SurfaceOptions) => (
   hasGlass(options) && (options.glassOpacity ?? SURFACE_DEFAULTS.glassOpacity) > 0
 );
 
+// Blur intentionally does not require a glass wash. The editor exposes blur as
+// its own section, and legacy materials used backdrop blur with glass disabled.
 const hasGlassBlur = (options: SurfaceOptions) => (
-  hasGlassWash(options) && options.glassBlurEnabled === true && (options.glassBlur ?? 0) > 0
+  options.glassBlurEnabled === true && (options.glassBlur ?? 0) > 0
 );
 
 const hasGlassShine = (options: SurfaceOptions) => (

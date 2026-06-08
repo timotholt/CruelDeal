@@ -119,6 +119,10 @@ assert.equal(glass['--glass-reflection-alpha'], '1');
 assert.equal(glass['--glass-highlight-width'], '100%');
 assert.equal(glass['--glass-highlight-height'], '34%');
 assert.equal(glass['--glass-highlight-y'], '10%');
+const blurWithoutGlass = { glass: false, glassBlurEnabled: true, glassBlur: 12 } satisfies SurfaceOptions;
+assert.equal(surfaceLayerFlags(blurWithoutGlass).glass, false);
+assert.match(surfaceClass(blurWithoutGlass), /cd-surface--glass-blur/);
+assert.equal(styleOf(blurWithoutGlass)['--glass-blur'], '12px');
 
 // drop shadow: opacity AND >=1 non-zero geometry field are explicit opt-ins;
 // the remaining geometry fields then fall back to their defaults.

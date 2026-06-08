@@ -118,6 +118,12 @@ authoring JSON
 - [x] Moved `MaterialRecipeEditor` base-shape controls from a bespoke section
   to `SurfaceGeneratedEditor`, with bevel-corner multi-toggle labels and
   radius/bevel-size editor ranges owned by `surfaceFieldMetadata.ts`.
+- [x] Moved `MaterialRecipeEditor` edge-emission state controls from a bespoke
+  section to `SurfaceGeneratedEditor`, using a state-overlay adapter that maps
+  generated `SurfaceOptions` patches back into `states[activeState()].emission`
+  while preserving concrete overlay values.
+- [x] Added generated-editor `inheritControls` control so state-mode sections
+  can opt out of inherit buttons when the underlying overlay is not sparse.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -328,7 +334,7 @@ even though schema/metadata-driven controls exist.
 Recommended finish plan, in order:
 
 1. Continue `MaterialRecipeEditor` generated-control migration in this order:
-   Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
+   State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
    tone/texture/border/font options, dependency disables, array toggles, and a
    separate state-overlay metadata adapter rather than forcing overlay-only
