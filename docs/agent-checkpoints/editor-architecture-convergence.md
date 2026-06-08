@@ -1,6 +1,6 @@
 # Editor Architecture Convergence Checkpoint
 
-Last Updated: 2026-06-07
+Last Updated: 2026-06-08
 Status: active
 
 ## Goal
@@ -84,6 +84,10 @@ authoring JSON
   `SurfaceGeneratedEditor`, with blur amount disabled when blur is off.
 - [x] Tightened blur field metadata to express the editor control range
   `0..24` by `0.25` while leaving runtime validation broader.
+- [x] Moved `MaterialRecipeEditor` base color controls from a bespoke section
+  to `SurfaceGeneratedEditor`, with `material`/`materialColor` labels and
+  option names owned by `surfaceFieldMetadata.ts` and custom color disabled
+  unless the material mode is `custom`.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -294,8 +298,8 @@ even though schema/metadata-driven controls exist.
 Recommended finish plan, in order:
 
 1. Continue `MaterialRecipeEditor` generated-control migration in this order:
-   Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
-   Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
+   Tint -> Gradient -> Glass -> Texture -> Border -> Shape -> Edge Emission
+   state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
    tone/texture/border/font options, dependency disables, array toggles, and a
    separate state-overlay metadata adapter rather than forcing overlay-only

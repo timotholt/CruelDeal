@@ -51,11 +51,18 @@ const optionLabels = <T extends readonly { id: string; label: string }[]>(option
 
 const edgeTextureIds = edgeTextureOptions.map((option) => option.id);
 const edgeTextureLabels = optionLabels(edgeTextureOptions);
+const materialOptionLabels = {
+  none: 'none',
+  black: 'pure black',
+  white: 'pure white',
+  gray: '50% gray',
+  custom: 'color',
+} satisfies Partial<Record<string, string>>;
 
 export const surfaceFieldDefinitions = [
   field({ key: 'renderMode', group: 'renderer', label: 'Render Mode', control: 'select', editMode: 'renderer-internal', options: ['editor', 'runtime', 'export'] }),
-  field({ key: 'material', group: 'base', label: 'Material', control: 'select', editMode: 'rest', options: ['none', 'black', 'white', 'gray', 'custom'] }),
-  field({ key: 'materialColor', group: 'base', label: 'Material Color', control: 'color', editMode: 'rest' }),
+  field({ key: 'material', group: 'base', label: 'Base', control: 'select', editMode: 'rest', options: ['none', 'black', 'white', 'gray', 'custom'], optionLabels: materialOptionLabels }),
+  field({ key: 'materialColor', group: 'base', label: 'Color', control: 'color', editMode: 'rest' }),
   field({ key: 'glass', group: 'glass', label: 'Glass', control: 'toggle', editMode: 'rest' }),
   field({ key: 'texture', group: 'texture', label: 'Texture', control: 'select', editMode: 'rest' }),
   field({ key: 'shape', group: 'shape', label: 'Shape', control: 'select', editMode: 'rest', options: ['rect', 'bevel'] }),

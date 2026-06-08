@@ -6,7 +6,6 @@ import {
 import type {
   CornerName,
   EdgeName,
-  MaterialKind,
   SurfaceGradient,
 } from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
@@ -21,7 +20,6 @@ import {
   materialRecipeFontStyles,
   materialRecipeGlows,
   materialRecipeGradients,
-  materialRecipeMaterials,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
@@ -183,14 +181,8 @@ const edgeWearDependentFields = [
 ] as const satisfies readonly (keyof SurfaceOptions)[];
 const blurFields = ['glassBlurEnabled', 'glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
 const blurDependentFields = ['glassBlur'] as const satisfies readonly (keyof SurfaceOptions)[];
-
-const baseLabels: Record<MaterialKind, string> = {
-  none: 'none',
-  black: 'pure black',
-  white: 'pure white',
-  gray: '50% gray',
-  custom: 'color',
-};
+const baseFields = ['material', 'materialColor'] as const satisfies readonly (keyof SurfaceOptions)[];
+const baseDependentFields = ['materialColor'] as const satisfies readonly (keyof SurfaceOptions)[];
 
 const borderColorLabels: Record<BorderColorKind, string> = {
   inherit: 'inherit',
@@ -199,44 +191,6 @@ const borderColorLabels: Record<BorderColorKind, string> = {
   gray: '50% gray',
   custom: 'color',
 };
-
-const BaseSection = (props: {
-  recipe: MaterialRecipe;
-  enabled: boolean;
-  update: RecipeUpdate;
-}) => (
-  <div class={`ui-lab-control-group ${props.enabled ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">Base Color</SectionLabel>
-    <div class="ui-lab-control-row">
-      <ControlLabel>Base</ControlLabel>
-      <div class="ui-lab-toggles ui-lab-toggles--wrap">
-        <For each={materialRecipeMaterials}>
-          {(material) => (
-            <ToggleButton
-              active={props.recipe.material === material}
-              disabled={!props.enabled}
-              onClick={() => props.update('material', material)}
-            >
-              {baseLabels[material]}
-            </ToggleButton>
-          )}
-        </For>
-      </div>
-    </div>
-    <Show when={props.recipe.material === 'custom'}>
-      <div class="ui-lab-control-row">
-        <ControlLabel>Color</ControlLabel>
-        <input
-          class="ui-lab-color-input"
-          type="color"
-          value={props.recipe.materialColor}
-          disabled={!props.enabled}
-          onInput={(event) => props.update('materialColor', event.currentTarget.value)}
-        />
-      </div>
-    </Show>
-  </div>
-);
 
 const ShapeSection = (props: {
   recipe: MaterialRecipe;
@@ -889,6 +843,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     if (state !== 'rest') props.onForcePreviewChange?.(true);
   };
   const hasTexture = () => props.recipe.texture !== 'none';
+  const hasCustomBase = () => capabilities().material && props.recipe.material === 'custom';
   const hasEdgeWear = () => capabilities().edgeWear && props.recipe.edgeWear;
   const hasBlur = () => capabilities().blur && props.recipe.glassBlurEnabled;
   const stateOverlay = () => props.recipe.states[activeState()] || props.recipe.states.active;
@@ -1060,7 +1015,15 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   return (
     <>
       <ShapeSection recipe={props.recipe} enabled={capabilities().material} update={update} />
-      <BaseSection recipe={props.recipe} enabled={capabilities().material} update={update} />
+      <SurfaceGeneratedEditor
+        title="Base Color"
+        mode="rest"
+        fields={baseFields}
+        value={restSurfaceValue()}
+        enabled={capabilities().material}
+        capabilities={{ disabledFields: hasCustomBase() ? [] : baseDependentFields }}
+        onPatch={patchRestSurface}
+      />
       <TextureSection recipe={props.recipe} enabled={capabilities().texture} hasTexture={hasTexture()} update={update} updateTexture={updateTexture} />
       <TintSection recipe={props.recipe} enabled={capabilities().tint} update={update} />
       <GradientSection recipe={props.recipe} enabled={capabilities().gradient} update={update} />

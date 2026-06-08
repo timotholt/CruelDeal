@@ -21,6 +21,11 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({ mode: 'rest', groups: ['base'] })),
+  ['material', 'materialColor'],
+);
+
+assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({ mode: 'rest', groups: ['edgeWear'] })),
   ['edgeWear', 'edgeWearTexture', 'edgeWearOpacity', 'edgeWearWidth', 'edgeWearScale', 'edgeWearLayer'],
 );
@@ -54,6 +59,14 @@ assert.equal(
 );
 assert.equal(
   surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.edgeWearWidth, { disabledGroups: ['edgeWear'] }),
+  true,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.material, { disabledFields: ['materialColor'] }),
+  false,
+);
+assert.equal(
+  surfaceFieldDisabledByCapabilities(surfaceFieldDefinitionByKey.materialColor, { disabledFields: ['materialColor'] }),
   true,
 );
 
