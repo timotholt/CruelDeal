@@ -215,6 +215,10 @@ authoring JSON
   recipe application target decisions. Preset save/apply paths now ask the model
   whether a part targets the feed child or a surface recipe key instead of
   branching through those rules in the screen.
+- [x] Extended `components/screens/main-material/mainMaterialSelectionModel.ts`
+  with workbench selection routing. The screen now applies a tested route object
+  for feed targets, chrome child targets, and root workbench parts instead of
+  owning that branch ladder inline.
 
 ## Verification Evidence
 
@@ -259,7 +263,8 @@ authoring JSON
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
   output/controller contracts, preview-state compatibility adapter, and material
-  preset/part-state recipe models are now extracted from the giant screen.
+  preset/part-state recipe models, and workbench selection route are now
+  extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -271,8 +276,8 @@ feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
 emission inspector view/output/controller, preview-state compatibility, and
-material preset/part reset and recipe application state now have extracted
-contracts.
+material preset/part reset and recipe application state, and workbench
+selection routing now have extracted contracts.
 
 Recommended finish plan, in order:
 

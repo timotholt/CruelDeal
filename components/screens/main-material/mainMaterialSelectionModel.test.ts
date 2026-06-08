@@ -4,12 +4,14 @@ import {
   selectionOverlayLabels,
   selectionOverlayModes,
   selectionTargetClass,
+  workbenchSelectionRoute,
 } from './mainMaterialSelectionModel';
 import {
   feedCardMaterialTargetId,
   navItemTargetId,
   toolbarMaterialTargetId,
   topBarCurrencyTargetId,
+  topBarProfileTargetId,
 } from './materialTargetIds';
 
 const feedTarget = feedCardMaterialTargetId('card_type_01');
@@ -60,6 +62,42 @@ assert.equal(selectedWorkbenchPartId({
   selectedNavTargetId: null,
 }), 'navBar');
 
+assert.deepEqual(workbenchSelectionRoute(feedTarget), {
+  selectedPart: 'feedCards',
+  feedTargetId: feedTarget,
+});
+assert.deepEqual(workbenchSelectionRoute(topBarProfileTargetId), {
+  selectedPart: 'profileButton',
+  topBarTargetId: topBarProfileTargetId,
+});
+assert.deepEqual(workbenchSelectionRoute(topBarTarget), {
+  selectedPart: 'currencyButtons',
+  topBarTargetId: topBarTarget,
+});
+assert.deepEqual(workbenchSelectionRoute(toolbarTarget), {
+  selectedPart: 'toolBar',
+  toolbarTargetId: toolbarTarget,
+});
+assert.deepEqual(workbenchSelectionRoute(navTarget), {
+  selectedPart: 'navBar',
+  navTargetId: navTarget,
+});
+assert.deepEqual(workbenchSelectionRoute('topBar'), {
+  selectedPart: 'topBar',
+  topBarTargetId: null,
+});
+assert.deepEqual(workbenchSelectionRoute('toolBar'), {
+  selectedPart: 'toolBar',
+  toolbarTargetId: null,
+});
+assert.deepEqual(workbenchSelectionRoute('navBarContainer'), {
+  selectedPart: 'navBarContainer',
+  navTargetId: null,
+});
+assert.deepEqual(workbenchSelectionRoute('titleBlock'), {
+  selectedPart: 'titleBlock',
+});
+
 assert.equal(selectionTargetClass({
   selected: false,
   overlayMode: 'persistent',
@@ -82,4 +120,3 @@ assert.equal(selectionTargetClass({
 }), 'is-editing-flash is-editing-flash-b');
 
 console.log('Main material selection model tests passed');
-

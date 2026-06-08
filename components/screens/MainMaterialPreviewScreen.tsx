@@ -63,6 +63,7 @@ import {
   selectionOverlayLabels,
   selectionOverlayModes,
   selectionTargetClass,
+  workbenchSelectionRoute,
   type MainWorkbenchPartId,
   type SelectionOverlayMode,
 } from './main-material/mainMaterialSelectionModel';
@@ -2810,41 +2811,12 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   const selectWorkbenchPart = (part: MainWorkbenchPartId) => {
-    if (part.startsWith(feedCardMaterialTargetPrefix)) {
-      selectFeedTarget(part as FeedMaterialTargetId);
-      selectPart('feedCards');
-      return;
-    }
-    if (part === topBarProfileTargetId) {
-      setSelectedTopBarTargetId(part);
-      selectPart('profileButton');
-      return;
-    }
-    if (part.startsWith(`${topBarMaterialTargetPrefix}currency:`)) {
-      setSelectedTopBarTargetId(part as TopBarMaterialTargetId);
-      selectPart('currencyButtons');
-      return;
-    }
-    if (part.startsWith(toolbarMaterialTargetPrefix)) {
-      setSelectedToolbarTargetId(part as ToolbarMaterialTargetId);
-      selectPart('toolBar');
-      return;
-    }
-    if (part.startsWith(navMaterialTargetPrefix)) {
-      setSelectedNavTargetId(part as NavMaterialTargetId);
-      selectPart('navBar');
-      return;
-    }
-    if (part === 'toolBar') {
-      setSelectedToolbarTargetId(null);
-    }
-    if (part === 'topBar') {
-      setSelectedTopBarTargetId(null);
-    }
-    if (part === 'navBarContainer') {
-      setSelectedNavTargetId(null);
-    }
-    selectPart(part as MainPartId);
+    const route = workbenchSelectionRoute(part);
+    if (route.feedTargetId) selectFeedTarget(route.feedTargetId as FeedMaterialTargetId);
+    if (route.topBarTargetId !== undefined) setSelectedTopBarTargetId(route.topBarTargetId);
+    if (route.toolbarTargetId !== undefined) setSelectedToolbarTargetId(route.toolbarTargetId);
+    if (route.navTargetId !== undefined) setSelectedNavTargetId(route.navTargetId);
+    selectPart(route.selectedPart);
   };
 
   const selectedInteractionRole = () => (

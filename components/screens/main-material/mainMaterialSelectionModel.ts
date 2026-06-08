@@ -1,9 +1,14 @@
 import type { MainPartId } from './mainMaterialInteractionModel';
-import type {
-  FeedMaterialTargetId,
-  NavMaterialTargetId,
-  ToolbarMaterialTargetId,
-  TopBarMaterialTargetId,
+import {
+  feedCardMaterialTargetPrefix,
+  navMaterialTargetPrefix,
+  toolbarMaterialTargetPrefix,
+  topBarMaterialTargetPrefix,
+  topBarProfileTargetId,
+  type FeedMaterialTargetId,
+  type NavMaterialTargetId,
+  type ToolbarMaterialTargetId,
+  type TopBarMaterialTargetId,
 } from './materialTargetIds';
 
 export type SelectionOverlayMode = 'off' | 'flash' | 'persistent';
@@ -43,6 +48,36 @@ export const selectedWorkbenchPartId = (args: SelectedWorkbenchPartArgs): MainWo
   return args.selectedPart;
 };
 
+export interface WorkbenchSelectionRoute {
+  selectedPart: MainPartId;
+  feedTargetId?: FeedMaterialTargetId;
+  topBarTargetId?: TopBarMaterialTargetId | null;
+  toolbarTargetId?: ToolbarMaterialTargetId | null;
+  navTargetId?: NavMaterialTargetId | null;
+}
+
+export const workbenchSelectionRoute = (part: MainWorkbenchPartId): WorkbenchSelectionRoute => {
+  if (part.startsWith(feedCardMaterialTargetPrefix)) {
+    return { selectedPart: 'feedCards', feedTargetId: part as FeedMaterialTargetId };
+  }
+  if (part === topBarProfileTargetId) {
+    return { selectedPart: 'profileButton', topBarTargetId: part };
+  }
+  if (part.startsWith(`${topBarMaterialTargetPrefix}currency:`)) {
+    return { selectedPart: 'currencyButtons', topBarTargetId: part as TopBarMaterialTargetId };
+  }
+  if (part.startsWith(toolbarMaterialTargetPrefix)) {
+    return { selectedPart: 'toolBar', toolbarTargetId: part as ToolbarMaterialTargetId };
+  }
+  if (part.startsWith(navMaterialTargetPrefix)) {
+    return { selectedPart: 'navBar', navTargetId: part as NavMaterialTargetId };
+  }
+  if (part === 'toolBar') return { selectedPart: part, toolbarTargetId: null };
+  if (part === 'topBar') return { selectedPart: part, topBarTargetId: null };
+  if (part === 'navBarContainer') return { selectedPart: part, navTargetId: null };
+  return { selectedPart: part as MainPartId };
+};
+
 export interface SelectionTargetClassArgs {
   selected: boolean;
   overlayMode: SelectionOverlayMode;
@@ -58,4 +93,3 @@ export const selectionTargetClass = (args: SelectionTargetClassArgs): string => 
   }
   return '';
 };
-
