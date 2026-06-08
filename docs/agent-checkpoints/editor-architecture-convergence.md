@@ -193,6 +193,10 @@ authoring JSON
   now consumes a tested snapshot contract for export plan, export DOM audit
   node, HTML, CSS, metrics, active copy payloads, and inspector tab status text
   instead of deriving those pieces inline.
+- [x] Extracted live emission inspector controller helpers into
+  `components/screens/main-material/mainMaterialEmissionController.ts`. The
+  screen still owns Solid signals, but DOM audit refresh, retry queuing, hidden
+  class toggling, and drag bounds are now tested controller behavior.
 
 ## Verification Evidence
 
@@ -212,6 +216,7 @@ authoring JSON
 - PASS `npx tsx components/screens/uiNodePreviewJsonReadout.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
@@ -232,19 +237,19 @@ authoring JSON
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
-  output contract are now extracted from the giant screen.
+  output/controller contracts are now extracted from the giant screen.
 
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that import/export compatibility application and live
-emission inspector orchestration still live inside
+next blocker family is that import/export compatibility application and top-level
+state orchestration still live inside
 `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for state
-application/export mode decisions and live DOM refresh wiring even though the
+application/export mode decisions even though the
 feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
-emission inspector view/output now have extracted contracts.
+emission inspector view/output/controller now have extracted contracts.
 
 Recommended finish plan, in order:
 

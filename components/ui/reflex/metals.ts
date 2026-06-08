@@ -237,14 +237,19 @@ const metalTextureCache = new Map<string, string>();
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Bake (or return cached) a metal texture data-URL for a metal id. */
-export function makeMetalTexture(id: MetalId, opts: MetalTextureOptions = {}): string {
-  if (typeof document === 'undefined') return '';
-  const spec = METALS[id];
+/**
+ * THE baker. Bakes a metal texture data-URL from an explicit stop list, so the
+ * static metals AND the live gradient editor go through one path — vector and
+ * baked share a single source. Cached by spec only (never by reflex), so coins
+ * sharing a spec share one bake and nothing re-bakes on pointer move.
+ */
+export function makeMetalTextureFromStops(stops: MetalStop[], opts: MetalTextureOptions = {}): string {
+  if (typeof document === 'undefined' || stops.length === 0) return '';
   const size = opts.size ?? textureOpts.size;
   const grain = opts.grain ?? textureOpts.grain;
-  const angle = opts.angle ?? spec.angle;
-  const key = `${id}:${size}:${grain}:${angle}`;
+  const angle = opts.angle ?? 135;
+  const sorted = [...stops].sort((a, b) => a.offset - b.offset);
+  const key = `${size}:${grain}:${angle}:${sorted.map((s) => `${s.offset}${s.color}`).join(',')}`;
   const cached = metalTextureCache.get(key);
   if (cached) return cached;
 
@@ -261,7 +266,7 @@ export function makeMetalTexture(id: MetalId, opts: MetalTextureOptions = {}): s
   const dx = Math.cos(rad) * half;
   const dy = Math.sin(rad) * half;
   const g = ctx.createLinearGradient(half - dx, half - dy, half + dx, half + dy);
-  spec.stops.forEach((s) => g.addColorStop(clamp01(s.offset / 100), s.color));
+  sorted.forEach((s) => g.addColorStop(clamp01(s.offset / 100), s.color));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
 
@@ -286,6 +291,12 @@ export function makeMetalTexture(id: MetalId, opts: MetalTextureOptions = {}): s
   const url = canvas.toDataURL('image/png');
   metalTextureCache.set(key, url);
   return url;
+}
+
+/** Bake from a canonical metal id — thin wrapper over makeMetalTextureFromStops. */
+export function makeMetalTexture(id: MetalId, opts: MetalTextureOptions = {}): string {
+  const spec = METALS[id];
+  return makeMetalTextureFromStops(spec.stops, { angle: spec.angle, ...opts });
 }
 
 /** Re-bake all metal textures with new tuning + republish the CSS vars. */
@@ -323,32 +334,22 @@ let injected = false;
  * Write the canonical gradients/highlights to :root as CSS custom properties so
  * index.css metal classes can reference one source. Runs once, before paint.
  */
-export const injectMetalVars = (enableNoise = false) => {
+export const injectMetalVars = () => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement.style;
 
-  // Update the CSS noise layer URL
-  root.setProperty('--brushed-noise-url', enableNoise ? `url(${getBrushedNoiseTexture()})` : 'none');
-
-  (Object.keys(METALS) as MetalId[]).forEach((id) => {
-    const spec = METALS[id];
-    if (!injected) {
+  if (!injected) {
+    (Object.keys(METALS) as MetalId[]).forEach((id) => {
+      const spec = METALS[id];
       root.setProperty(`--metal-${id}-gradient`, metalCssGradient(spec));
       root.setProperty(`--metal-${id}-highlight`, spec.highlight);
-    }
-
-    // Set procedural background image variable to stack the noise overlay on top of the base gradient
-    if (enableNoise) {
-      root.setProperty(`--metal-${id}-procedural-texture`, `var(--brushed-noise-url), var(--metal-${id}-gradient)`);
-    } else {
-      root.setProperty(`--metal-${id}-procedural-texture`, `var(--metal-${id}-gradient)`);
-    }
-  });
-  injected = true;
+    });
+    injected = true;
+  }
 
   // Baked per-metal textures (the "canvas metal" method).
   publishMetalTextureVars();
 };
 
 // Inject at module load (before any component renders) so CSS vars are ready.
-injectMetalVars(false);
+injectMetalVars();

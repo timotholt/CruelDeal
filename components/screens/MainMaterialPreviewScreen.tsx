@@ -34,6 +34,13 @@ import {
   type EmissionInspectorTab,
 } from './main-material/mainMaterialEmissionOutput';
 import {
+  boundedEmissionInspectorPosition,
+  createEmptyDomClassKeys,
+  queueMainMaterialDomAuditRefresh,
+  refreshMainMaterialDomAudit,
+  toggleDomClassKey,
+} from './main-material/mainMaterialEmissionController';
+import {
   coercePreviewStateForPart,
   createDefaultPreviewStates,
   defaultPreviewStateForRole,
@@ -84,7 +91,6 @@ import {
 } from './main-material/mainMaterialDomRegistry';
 import {
   domAuditMetrics,
-  serializeDomAuditNode,
   type DomAuditNode,
 } from './main-material/mainMaterialDomAudit';
 import {
@@ -2300,7 +2306,7 @@ export const MainMaterialPreviewScreen = () => {
   const [emissionInspectorStatus, setEmissionInspectorStatus] = createSignal('');
   const [emissionInspectorBadges, setEmissionInspectorBadges] = createSignal(true);
   const [domAuditSnapshot, setDomAuditSnapshot] = createSignal<DomAuditNode | null>(null);
-  const [hiddenDomClassKeys, setHiddenDomClassKeys] = createSignal<ReadonlySet<string>>(new Set());
+  const [hiddenDomClassKeys, setHiddenDomClassKeys] = createSignal<ReadonlySet<string>>(createEmptyDomClassKeys());
   let emissionInspectorStatusTimeout: number | undefined;
   const [selectedTopBarTargetId, setSelectedTopBarTargetId] = createSignal<TopBarMaterialTargetId | null>(null);
   const [selectedToolbarTargetId, setSelectedToolbarTargetId] = createSignal<ToolbarMaterialTargetId | null>(null);
@@ -2490,7 +2496,7 @@ export const MainMaterialPreviewScreen = () => {
     selectedToolbarTargetId();
     selectedNavTargetId();
     setCssProbeDisabledKeys(createEmptyCssProbeKeys());
-    setHiddenDomClassKeys(new Set<string>());
+    setHiddenDomClassKeys(createEmptyDomClassKeys());
   });
 
   const feedWorkbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
@@ -2750,38 +2756,32 @@ export const MainMaterialPreviewScreen = () => {
     hiddenClasses = hiddenDomClassKeys(),
     reportMissing = true,
   ) => {
-    const match = findRegisteredDomAuditTarget(targetId);
-    if (match) {
-      setDomAuditSnapshot(serializeDomAuditNode(match.entry.element, '0', hiddenClasses, collectClassCssRules));
-      if (!match.exact) {
-        setInspectorStatus(`Showing ${match.entry.instanceId} (${match.entry.targetId}) for selected ${targetId}`);
-      } else {
+    return refreshMainMaterialDomAudit({
+      targetId,
+      hiddenClasses,
+      reportMissing,
+      findTarget: findRegisteredDomAuditTarget,
+      collectClassCssRules,
+      setSnapshot: setDomAuditSnapshot,
+      setStatus: setInspectorStatus,
+      clearMissingStatus: () => {
         setEmissionInspectorStatus((current) => current.startsWith('No live DOM node') ? '' : current);
-      }
-      return true;
-    }
-    if (reportMissing) {
-      setDomAuditSnapshot(null);
-      setInspectorStatus(`No live DOM node for ${targetId}`);
-    }
-    return false;
+      },
+    });
   };
   const queueDomAuditRefresh = (targetId: string, hiddenClasses: ReadonlySet<string>, maxAttempts = 6) => {
-    let attempt = 0;
-    let frame = 0;
-    const run = () => {
-      if (selectedEmissionTargetId() !== targetId) return;
-      const isLastAttempt = attempt >= maxAttempts - 1;
-      const matched = refreshDomAudit(targetId, hiddenClasses, isLastAttempt);
-      if (matched || isLastAttempt) return;
-      attempt += 1;
-      frame = window.requestAnimationFrame(run);
-    };
-    frame = window.requestAnimationFrame(run);
-    return () => window.cancelAnimationFrame(frame);
+    return queueMainMaterialDomAuditRefresh({
+      targetId,
+      hiddenClasses,
+      maxAttempts,
+      selectedTargetId: selectedEmissionTargetId,
+      refresh: refreshDomAudit,
+      requestFrame: window.requestAnimationFrame,
+      cancelFrame: window.cancelAnimationFrame,
+    });
   };
   const refreshDomAuditWithStatus = () => {
-    const reset = new Set<string>();
+    const reset = createEmptyDomClassKeys();
     setHiddenDomClassKeys(reset);
     const matched = refreshDomAudit(selectedEmissionTargetId(), reset);
     setInspectorStatus(matched
@@ -2790,15 +2790,9 @@ export const MainMaterialPreviewScreen = () => {
   };
   const toggleDomClassProbe = (key: string, className: string) => {
     setHiddenDomClassKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) {
-        next.delete(key);
-        setInspectorStatus(`Restored class ${className}`);
-      } else {
-        next.add(key);
-        setInspectorStatus(`Hid class ${className} in inspector`);
-      }
-      return next;
+      const next = toggleDomClassKey(current, key, className);
+      setInspectorStatus(next.status);
+      return next.keys;
     });
   };
   const copyActiveEmissionPayload = async () => {
@@ -2829,13 +2823,12 @@ export const MainMaterialPreviewScreen = () => {
     const start = emissionInspectorPosition();
     const offset = { x: event.clientX - start.x, y: event.clientY - start.y };
     const move = (moveEvent: PointerEvent) => {
-      const inspectorWidth = emissionInspectorOpen() ? 420 : 210;
-      const maxX = Math.max(8, window.innerWidth - inspectorWidth - 8);
-      const maxY = Math.max(8, window.innerHeight - 72);
-      setEmissionInspectorPosition({
-        x: Math.min(maxX, Math.max(8, moveEvent.clientX - offset.x)),
-        y: Math.min(maxY, Math.max(8, moveEvent.clientY - offset.y)),
-      });
+      setEmissionInspectorPosition(boundedEmissionInspectorPosition({
+        pointer: { x: moveEvent.clientX, y: moveEvent.clientY },
+        offset,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        open: emissionInspectorOpen(),
+      }));
     };
     const stop = () => {
       window.removeEventListener('pointermove', move);
