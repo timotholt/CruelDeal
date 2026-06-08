@@ -1,7 +1,7 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
-import { KanIcon } from '../ui/KanIcon';
-import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/reflex/useReflex';
-import { PRESETS, METALS, PROFILE_TO_METAL, makeMetalTextureFromStops } from '../ui/reflex/metals';
+import { KanIcon } from '../ui/shiny';
+import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/shiny';
+import { PRESETS, METALS, PROFILE_TO_METAL, makeMetalTextureFromStops } from '../ui/shiny';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -11,7 +11,7 @@ import {
   setSheenEnabled,
   enableMobileGyroscope,
   gyroActive
-} from '../ui/MotionReflex';
+} from '../ui/shiny';
 import { MaterialRichText } from '../ui/material-node/MaterialRichText';
 
 // Color Conversion Helpers

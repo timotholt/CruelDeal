@@ -1,6 +1,5 @@
 import { createSignal, onMount, Show, ErrorBoundary } from 'solid-js';
-import { initReflex } from './components/ui/reflex/ReflexController';
-import { injectMetalVars } from './components/ui/reflex/metals';
+import { initReflex, injectMetalVars } from './components/ui/shiny';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
@@ -15,7 +14,7 @@ import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPrev
 import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
-import { IconsPreviewScreen } from './components/screens/IconsPreviewScreen';
+import { ShinyAuthoringScreen } from './components/screens/ShinyAuthoringScreen';
 import { GameUiSkinProofScreen } from './components/screens/GameUiSkinProofScreen';
 
 const queryClient = new QueryClient({
@@ -72,9 +71,9 @@ const devLinks = [
     detail: 'Theme tokens, component skins, CMS content, and promo placements',
   },
   {
-    href: '/dev/icons',
-    title: 'Kit Currency Icon Lab',
-    detail: 'Flat-bottomed gold hexagon currency icon variations and SVG mask lab',
+    href: '/dev/shiny',
+    title: 'Shiny Material Authoring',
+    detail: 'Canonical metallic/reflex/icon runtime preview and material authoring surface',
   },
 ];
 
@@ -116,6 +115,7 @@ export default function App() {
   onMount(initReflex);
   const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
   const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');
+  const isDevShinyPath = () => window.location.pathname.toLowerCase().startsWith('/dev/shiny');
   const isDevIconsPath = () => window.location.pathname.toLowerCase().startsWith('/dev/icons');
   const isIconsPath = () => window.location.pathname.toLowerCase().startsWith('/icons');
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
@@ -203,7 +203,7 @@ export default function App() {
                     <Show when={isUiNodePath()} fallback={(
                       <Show when={isGameUiSkinProofPath()} fallback={(
                         <Show when={isIconsPath()} fallback={<UiMaterialLabScreen />}>
-                          <IconsPreviewScreen />
+                          <ShinyAuthoringScreen />
                         </Show>
                       )}>
                         <GameUiSkinProofScreen />
@@ -222,8 +222,8 @@ export default function App() {
               </Show>
             )}>
               <Show when={isDevUiNodePath()} fallback={(
-                <Show when={isDevIconsPath()} fallback={<DevIndexScreen />}>
-                  <IconsPreviewScreen />
+                <Show when={isDevShinyPath() || isDevIconsPath()} fallback={<DevIndexScreen />}>
+                  <ShinyAuthoringScreen />
                 </Show>
               )}>
                 <UiNodePreviewScreen />

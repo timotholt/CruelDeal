@@ -24,7 +24,7 @@ import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
 import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
 import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPreviewScreen";
 import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
-import { IconsPreviewScreen } from "./components/screens/IconsPreviewScreen";
+import { ShinyAuthoringScreen } from "./components/screens/ShinyAuthoringScreen";
 import { GameUiSkinProofScreen } from "./components/screens/GameUiSkinProofScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
@@ -247,13 +247,19 @@ const devUiNodeRoute = createRoute({
 const iconsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/icons",
-    component: () => <IconsPreviewScreen />,
+    component: () => <ShinyAuthoringScreen />,
 });
 
 const devIconsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/dev/icons",
-    component: () => <IconsPreviewScreen />,
+    component: () => <ShinyAuthoringScreen />,
+});
+
+const devShinyRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/shiny",
+    component: () => <ShinyAuthoringScreen />,
 });
 
 // 3. Create Router Instance
@@ -283,6 +289,7 @@ const routeTree = rootRoute.addChildren([
     devTensorPlayRoute,
     iconsRoute,
     devIconsRoute,
+    devShinyRoute,
 ]);
 
 export const router = createRouter({ routeTree });
