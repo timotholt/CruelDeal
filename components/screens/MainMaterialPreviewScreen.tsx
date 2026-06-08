@@ -66,17 +66,21 @@ import {
   type SelectionOverlayMode,
 } from './main-material/mainMaterialSelectionModel';
 import {
-  coerceStoredFeedTargetId,
-  createMainMaterialStoredState,
-  parseMainMaterialStoredStateJson,
   readMainMaterialStoredPresets,
   readMainMaterialStoredState,
   removeMainMaterialStoredPresets,
-  serializeMainMaterialStoredState,
   writeMainMaterialStoredPresets,
   writeMainMaterialStoredState,
   type MainMaterialStoredState,
 } from './main-material/mainMaterialPersistence';
+import {
+  createMainMaterialPreviewStateDocument,
+  parseMainMaterialPreviewStateDocument,
+  resolvePreviewStateCardTypeId,
+  resolvePreviewStateFeedTargetId,
+  resolvePreviewStateStoryId,
+  serializeMainMaterialPreviewStateDocument,
+} from './main-material/mainMaterialPreviewStateAdapter';
 import {
   findTreeNodeById,
   flattenTargetTree,
@@ -2600,23 +2604,17 @@ export const MainMaterialPreviewScreen = () => {
     try {
       const parsed = readMainMaterialStoredState(window.localStorage);
       if (parsed) {
+        const nextFeedStories = sanitizeFeedStories(parsed.feedStories, feedCardTypeIds);
+        const nextEditingFeedCardTypeId = resolvePreviewStateCardTypeId(parsed.editingFeedCardTypeId, feedCardTypeIds, 'card_type_01');
         setBackdrop(sanitizeBackdrop(parsed.backdrop));
         setTitle(sanitizeTitle(parsed.title));
         setFeed(sanitizeFeed(parsed.feed));
-        setFeedStories(sanitizeFeedStories(parsed.feedStories, feedCardTypeIds));
+        setFeedStories(nextFeedStories);
         setFeedCardTypes(sanitizeFeedCardTypes(parsed.feedCardTypes, defaultFeedCardTypes, feedCardTypeIds, createFeedRegionSurface()));
         setFeedStoryImageOverrides(sanitizeStoryImageOverrides(parsed.feedStoryImageOverrides));
-        setSelectedFeedStoryId(
-          typeof parsed.selectedFeedStoryId === 'string' && feedStories().some((story) => story.id === parsed.selectedFeedStoryId)
-            ? parsed.selectedFeedStoryId
-            : mockFeedStories[0].id,
-        );
-        setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
-        setSelectedFeedTargetId(coerceStoredFeedTargetId(
-          parsed.selectedFeedTargetId,
-          parsed.editingFeedNodeId,
-          'card_type_01',
-        ));
+        setSelectedFeedStoryId(resolvePreviewStateStoryId(parsed.selectedFeedStoryId, nextFeedStories, mockFeedStories[0].id));
+        setEditingFeedCardTypeId(nextEditingFeedCardTypeId);
+        setSelectedFeedTargetId(resolvePreviewStateFeedTargetId(parsed, feedCardTypeIds, 'card_type_01'));
         setNav(sanitizeNav(parsed.nav));
         setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
       }
@@ -2643,7 +2641,7 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   createEffect(() => {
-    writeMainMaterialStoredState(window.localStorage, createMainMaterialStoredState({
+    writeMainMaterialStoredState(window.localStorage, createMainMaterialPreviewStateDocument({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
@@ -3051,23 +3049,17 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const applyParsedState = (parsed: MainMaterialStoredState) => {
+    const nextFeedStories = sanitizeFeedStories(parsed.feedStories, feedCardTypeIds);
+    const nextEditingFeedCardTypeId = resolvePreviewStateCardTypeId(parsed.editingFeedCardTypeId, feedCardTypeIds, 'card_type_01');
     setBackdrop(sanitizeBackdrop(parsed.backdrop));
     setTitle(sanitizeTitle(parsed.title));
     setFeed(sanitizeFeed(parsed.feed));
-    setFeedStories(sanitizeFeedStories(parsed.feedStories, feedCardTypeIds));
+    setFeedStories(nextFeedStories);
     setFeedCardTypes(sanitizeFeedCardTypes(parsed.feedCardTypes, defaultFeedCardTypes, feedCardTypeIds, createFeedRegionSurface()));
     setFeedStoryImageOverrides(sanitizeStoryImageOverrides(parsed.feedStoryImageOverrides));
-    setSelectedFeedStoryId(
-      typeof parsed.selectedFeedStoryId === 'string' && feedStories().some((story) => story.id === parsed.selectedFeedStoryId)
-        ? parsed.selectedFeedStoryId
-        : mockFeedStories[0].id,
-    );
-    setEditingFeedCardTypeId(isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01');
-    setSelectedFeedTargetId(coerceStoredFeedTargetId(
-      parsed.selectedFeedTargetId,
-      undefined,
-      isOneOf(parsed.editingFeedCardTypeId, feedCardTypeIds) ? parsed.editingFeedCardTypeId : 'card_type_01',
-    ));
+    setSelectedFeedStoryId(resolvePreviewStateStoryId(parsed.selectedFeedStoryId, nextFeedStories, mockFeedStories[0].id));
+    setEditingFeedCardTypeId(nextEditingFeedCardTypeId);
+    setSelectedFeedTargetId(resolvePreviewStateFeedTargetId(parsed, feedCardTypeIds, 'card_type_01'));
     setNav(sanitizeNav(parsed.nav));
     setSurfaces(pruneSurfaceRecipesForCapabilities(sanitizeSurfaces(parsed.surfaces)));
   };
@@ -3083,22 +3075,16 @@ export const MainMaterialPreviewScreen = () => {
       text = window.prompt('Paste exported material JSON') || '';
     }
     if (!text.trim()) return;
-    let parsed: MainMaterialStoredState | null;
-    try {
-      parsed = parseMainMaterialStoredStateJson(text);
-    } catch {
-      window.alert('Import failed: clipboard does not contain valid JSON.');
+    const parsed = parseMainMaterialPreviewStateDocument(text);
+    if (!parsed.ok) {
+      if (parsed.reason !== 'empty') window.alert(parsed.message);
       return;
     }
-    if (!parsed) {
-      window.alert('Import failed: clipboard JSON must be an object.');
-      return;
-    }
-    applyParsedState(parsed);
+    applyParsedState(parsed.state);
   };
 
   const exportJson = () => {
-    void navigator.clipboard?.writeText(serializeMainMaterialStoredState({
+    void navigator.clipboard?.writeText(serializeMainMaterialPreviewStateDocument({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),

@@ -1,7 +1,7 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
 import { KanIcon } from '../ui/KanIcon';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/reflex/useReflex';
-import { METALS, PROFILE_TO_METAL, proceduralNoiseEnabled, setProceduralNoise, PRESETS, getBrushedNoiseTexture } from '../ui/reflex/metals';
+import { PRESETS, METALS, PROFILE_TO_METAL, makeMetalTextureFromStops } from '../ui/reflex/metals';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -234,6 +234,9 @@ export const IconsPreviewScreen = () => {
   const [kOffsetX, setKOffsetX] = createSignal(-0.5);
   const [kOffsetY, setKOffsetY] = createSignal(0);
   const [fillMode, setFillMode] = createSignal<'gradient' | 'texture' | 'procedural'>('gradient');
+  // Canvas-metal (baked) tuning — drives makeMetalTextureFromStops via sharedKanProps.
+  const [bakeGrain, setBakeGrain] = createSignal(8);
+  const [bakeSize, setBakeSize] = createSignal(512);
   const [tweakerTab, setTweakerTab] = createSignal<'geometry' | 'texturing'>('texturing');
 
   const getCanonicalMetal = () => {
@@ -592,6 +595,18 @@ export const IconsPreviewScreen = () => {
     get boxMixBlendMode() { return boxMixBlendMode(); },
     get glowRadius() { return glowIntensity(); },
     get glowColor() { return glowIntensity() > 0 ? 'rgba(251, 191, 36, 0.45)' : 'none'; },
+    get bakeGrain() { return bakeGrain(); },
+    get bakeSize() { return bakeSize(); },
+  };
+
+  // Resolve the live editor stops the SAME way KanIcon.getGradientStops does, so
+  // the left "backend texture" preview bakes the identical texture the coins use.
+  const liveBakeStops = (): { offset: number; color: string }[] => {
+    const p = gradientProfile();
+    const metal = PROFILE_TO_METAL[p];
+    if (metal) return METALS[metal].stops.map((s) => ({ offset: s.offset, color: s.color }));
+    if (p === 'Custom') return customStops().map((s) => ({ offset: s.offset, color: s.color }));
+    return (PRESETS[p] || PRESETS.J).map((s) => ({ offset: s.offset, color: s.color }));
   };
 
   const stopsCssString = () => {
@@ -745,15 +760,9 @@ export const IconsPreviewScreen = () => {
                 ? `    <radialGradient id="gold-base-fill" cx="50.0" cy="50.0" r="${(50 * gradientScale()).toFixed(1)}" fx="${(50 + gradientShift() * Math.cos((gradientAngle() * Math.PI) / 180)).toFixed(1)}" fy="${(50 + gradientShift() * Math.sin((gradientAngle() * Math.PI) / 180)).toFixed(1)}" gradientUnits="userSpaceOnUse">\n${getGradientStopsString()}\n    </radialGradient>`
                 : `    <linearGradient id="gold-base-fill" x1="${gradCoords().x1.toFixed(1)}" y1="${gradCoords().y1.toFixed(1)}" x2="${gradCoords().x2.toFixed(1)}" y2="${gradCoords().y2.toFixed(1)}" gradientUnits="userSpaceOnUse" spreadMethod="reflect">\n${getGradientStopsString()}\n    </linearGradient>`);
 
-            const noiseDef = proceduralNoiseEnabled()
-              ? `\n    <pattern id="brushed-noise" width="128" height="128" patternUnits="userSpaceOnUse">\n      <image href="${getBrushedNoiseTexture()}" width="128" height="128" />\n    </pattern>`
-              : '';
-
-            const overlayRect = proceduralNoiseEnabled()
-              ? `\n      <rect width="100" height="100" fill="url(#brushed-noise)" style="mix-blend-mode: overlay; opacity: 0.15;" />`
-              : '';
-
-            return `${baseGradDef}${noiseDef}\n    <pattern id="gold-texture" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-base-fill)" />${overlayRect}\n    </pattern>`;
+            // Export emits the base gradient pattern (canvas-baked grain is a
+            // runtime canvas effect, not part of the exportable SVG markup).
+            return `${baseGradDef}\n    <pattern id="gold-texture" patternUnits="userSpaceOnUse" width="100" height="100">\n      <rect width="100" height="100" fill="url(#gold-base-fill)" />\n    </pattern>`;
           })()
         : `    <pattern id="gold-texture" patternUnits="userSpaceOnUse" x="${textureOffsetX()}" y="${textureOffsetY()}" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}">\n      <image href="/gold-textures/${selectedTexture()}" x="0" y="0" width="${(100 * textureScale()).toFixed(1)}" height="${(100 * textureScale()).toFixed(1)}" preserveAspectRatio="xMidYMid slice" style="filter: brightness(${textureBrightness()});" />\n    </pattern>`);
 
@@ -2070,17 +2079,30 @@ ${paintDef}${overlayGradDef}
 
                     <Show when={fillMode() === 'procedural'}>
                       <div class="mb-3.5 flex flex-col gap-2">
-                        <label class="flex items-center gap-2 cursor-pointer select-none rounded border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5 w-full">
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Brushed Grain</span>
+                            <span class="font-mono text-amber-400 font-semibold">{bakeGrain()}</span>
+                          </div>
                           <input
-                            type="checkbox"
-                            checked={proceduralNoiseEnabled()}
-                            onChange={(e) => setProceduralNoise(e.currentTarget.checked)}
-                            class="accent-amber-500 cursor-pointer"
+                            type="range" min="0" max="40" step="1"
+                            value={bakeGrain()}
+                            onInput={(e) => setBakeGrain(parseInt(e.currentTarget.value))}
+                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
                           />
-                          <span class="text-[10px] leading-tight text-amber-200/90">
-                            Enable Brushed Metal Grain & Scratches
-                          </span>
-                        </label>
+                        </div>
+                        <div>
+                          <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-white/60">Texture Size</span>
+                            <span class="font-mono text-amber-400 font-semibold">{bakeSize()}px</span>
+                          </div>
+                          <input
+                            type="range" min="64" max="1024" step="64"
+                            value={bakeSize()}
+                            onInput={(e) => setBakeSize(parseInt(e.currentTarget.value))}
+                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                          />
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
@@ -2090,7 +2112,8 @@ ${paintDef}${overlayGradDef}
                             setTextureOffsetY(0);
                             setTextureContrast(1.0);
                             setTextureSaturation(1.0);
-                            setProceduralNoise(false);
+                            setBakeGrain(8);
+                            setBakeSize(512);
                           }}
                           class="w-full py-1 text-[9.5px] font-mono border border-amber-500/25 hover:border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/15 text-amber-300 hover:text-amber-200 rounded transition-all uppercase tracking-wider font-semibold text-center"
                         >
@@ -2245,18 +2268,8 @@ ${paintDef}${overlayGradDef}
                         style={{
                           background: (() => {
                             if (fillMode() === 'procedural') {
-                              const baseGrad = (() => {
-                                if (customType() === 'box') {
-                                  return `linear-gradient(135deg, ${stopsCssString()})`;
-                                }
-                                if (customType() === 'radial') {
-                                  return `radial-gradient(circle at 50% 50%, ${stopsCssString()})`;
-                                }
-                                return `linear-gradient(${gradientAngle()}deg, ${stopsCssString()})`;
-                              })();
-                              return proceduralNoiseEnabled() 
-                                ? `url(${getBrushedNoiseTexture()}), ${baseGrad}`
-                                : baseGrad;
+                              // The actual baked canvas texture the coins render.
+                              return `url(${makeMetalTextureFromStops(liveBakeStops(), { angle: gradientAngle(), grain: bakeGrain(), size: bakeSize() })})`;
                             }
                             if (fillMode() === 'texture') {
                               return `url(/gold-textures/${selectedTexture()})`;
@@ -2272,7 +2285,7 @@ ${paintDef}${overlayGradDef}
                           })(),
                           "background-size": "cover",
                           "background-position": "center",
-                          "background-blend-mode": fillMode() === 'procedural' && proceduralNoiseEnabled() ? "overlay" : "normal",
+                          "background-blend-mode": "normal",
                           filter: fillMode() === 'gradient' ? 'none' : `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})`
                         }} 
                         class="w-full h-24 rounded border border-white/10 overflow-hidden relative shadow-inner"

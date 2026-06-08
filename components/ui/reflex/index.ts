@@ -21,6 +21,7 @@ export {
   metalCssGradient,
   injectMetalVars,
   makeMetalTexture,
+  makeMetalTextureFromStops,
   setMetalTextureOptions,
   metalSurfaceStyle,
 } from './metals';

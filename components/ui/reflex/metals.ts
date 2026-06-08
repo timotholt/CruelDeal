@@ -11,8 +11,6 @@
  * Change a color here and the hex, the text, and the button all move together.
  */
 
-import { createSignal } from 'solid-js';
-
 export type MetalId = 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
 
 export interface MetalStop {
@@ -161,61 +159,6 @@ export const PROFILE_TO_METAL: Partial<Record<string, MetalId>> = {
   F: 'mark',
 };
 
-// Procedural noise state: off by default
-export const [proceduralNoiseEnabled, setProceduralNoiseEnabled] = createSignal(false);
-
-export const setProceduralNoise = (val: boolean) => {
-  setProceduralNoiseEnabled(val);
-  injectMetalVars(val);
-};
-
-let noiseTextureCache = '';
-
-/**
- * Generates a seamless tileable grey brushed-metal noise grain Base64 data URL.
- * Filled with mid-gray #808080 (mathematical neutral for overlay blend mode)
- * overlaid with random horizontal scratch streaks.
- */
-export function getBrushedNoiseTexture(): string {
-  if (noiseTextureCache) return noiseTextureCache;
-  if (typeof document === 'undefined') return '';
-  
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-
-  // Neutral grey background
-  ctx.fillStyle = '#808080';
-  ctx.fillRect(0, 0, size, size);
-
-  const imgData = ctx.getImageData(0, 0, size, size);
-  const data = imgData.data;
-
-  // Add horizontal streaks and micro-scratches
-  for (let y = 0; y < size; y++) {
-    // Horizontal scratch streak (larger random offset per row)
-    const streak = (Math.random() - 0.5) * 45;
-    for (let x = 0; x < size; x++) {
-      const idx = (y * size + x) * 4;
-      // Per-pixel high-frequency grain
-      const grain = (Math.random() - 0.5) * 15;
-      const noise = streak + grain;
-
-      const val = Math.max(0, Math.min(255, 128 + noise));
-      data[idx + 0] = val; // R
-      data[idx + 1] = val; // G
-      data[idx + 2] = val; // B
-      data[idx + 3] = 255; // Fully opaque
-    }
-  }
-
-  ctx.putImageData(imgData, 0, 0);
-  noiseTextureCache = canvas.toDataURL('image/jpeg', 0.8);
-  return noiseTextureCache;
-}
 
 // ---------------------------------------------------------------------------
 // BAKED METAL TEXTURE

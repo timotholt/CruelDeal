@@ -197,6 +197,11 @@ authoring JSON
   `components/screens/main-material/mainMaterialEmissionController.ts`. The
   screen still owns Solid signals, but DOM audit refresh, retry queuing, hidden
   class toggling, and drag bounds are now tested controller behavior.
+- [x] Extracted `/material-main` preview-state compatibility import/export into
+  `components/screens/main-material/mainMaterialPreviewStateAdapter.ts`. The
+  screen now routes localStorage save/load and clipboard import/export through a
+  named editor preview-state document adapter, including tested story/card
+  target fallback rules.
 
 ## Verification Evidence
 
@@ -218,6 +223,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -237,19 +243,20 @@ authoring JSON
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
-  output/controller contracts are now extracted from the giant screen.
+  output/controller contracts, and preview-state compatibility adapter are now
+  extracted from the giant screen.
 
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that import/export compatibility application and top-level
-state orchestration still live inside
+next blocker family is that top-level state orchestration still lives inside
 `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for state
-application/export mode decisions even though the
+application decisions even though the
 feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
-emission inspector view/output/controller now have extracted contracts.
+emission inspector view/output/controller and preview-state compatibility now
+have extracted contracts.
 
 Recommended finish plan, in order:
 
@@ -257,14 +264,10 @@ Recommended finish plan, in order:
    `FeedNodeFrame`, rich text, `ChromeFeedNodeTree`, `FeedCarousel`, and
    `MainMaterialPreview` are now extracted. DOM registry/audit injection remains
    explicit so current inspector behavior survives.
-2. Extract `/material-main` import/export as an explicit compatibility adapter.
-   Keep current preview-state JSON working, but label it as editor preview state
-   rather than runtime JSON. Add registered runtime output modes beside it only
-   where the payloads are real contracts.
-3. Extract the top-level controller last into a
+2. Extract the top-level controller last into a
    `createMainMaterialEditorController` orchestration helper. At that point the
    screen should mostly compose workbench, editor, preview, and inspector.
-4. Continue `MaterialRecipeEditor` generated-control migration in this order:
+3. Continue `MaterialRecipeEditor` generated-control migration in this order:
    Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
    Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for

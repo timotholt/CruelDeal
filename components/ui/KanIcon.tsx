@@ -1,7 +1,7 @@
 import { For, Show, mergeProps } from 'solid-js';
 import { sheenEnabled } from './reflex/ReflexController';
 import { createReflexShift, REFLEX_SVG_UNITS } from './reflex/useReflex';
-import { METALS, PROFILE_TO_METAL, metalSvgStops, PRESETS, makeMetalTexture } from './reflex/metals';
+import { METALS, PROFILE_TO_METAL, metalSvgStops, PRESETS, makeMetalTextureFromStops } from './reflex/metals';
 
 
 export interface KanIconProps {
@@ -57,6 +57,10 @@ export interface KanIconProps {
   overlayBlendMode?: 'overlay' | 'color-dodge' | 'multiply' | 'screen' | 'soft-light';
   customType?: 'linear' | 'radial' | 'box';
 
+  // Baked "canvas metal" texture tuning (fillMode 'procedural')
+  bakeGrain?: number; // brushed grain amount. Defaults to 8.
+  bakeSize?: number; // baked texture px. Defaults to 512.
+
   // Custom class for outer wrapper
   class?: string;
   // Unique ID prefix to prevent SVG defs collision when rendering multiple instances on the same page
@@ -108,6 +112,8 @@ export const KanIcon = (rawProps: KanIconProps) => {
     overlayOpacity: 0.4,
     overlayBlendMode: 'overlay' as const,
     customType: 'linear' as const,
+    bakeGrain: 8,
+    bakeSize: 512,
     class: '',
   }, rawProps);
 
@@ -221,15 +227,6 @@ export const KanIcon = (rawProps: KanIconProps) => {
     return false;
   };
   
-  const getCanonicalMetal = () => {
-    const profile = props.gradientProfile;
-    if (['D', 'E', 'silver'].includes(profile)) return 'silver';
-    if (['G', 'brass'].includes(profile)) return 'brass';
-    if (['F', 'mark'].includes(profile)) return 'mark';
-    if (['credit'].includes(profile)) return 'credit';
-    return 'gold';
-  };
-
   const getGradientStops = () => {
     // Canonical metals (gold=J, silver=D, brass=G, mark=F) come from the single
     // shared registry so the hex matches the text/buttons exactly.
@@ -246,6 +243,17 @@ export const KanIcon = (rawProps: KanIconProps) => {
     const stops = PRESETS[props.gradientProfile] || PRESETS.J;
     return stops.map(s => ({ offset: `${s.offset}%`, color: s.color }));
   };
+
+  // Baked "canvas metal" texture from the SAME live stops the vector path uses,
+  // so editing the gradient (profile / custom stops / angle / grain) re-bakes
+  // and updates this icon reactively. Cached per-spec in metals.ts.
+  const bakedStops = () => getGradientStops().map((s) => ({ offset: parseFloat(s.offset), color: s.color }));
+  const bakedTextureUrl = () =>
+    makeMetalTextureFromStops(bakedStops(), {
+      angle: props.gradientAngle,
+      grain: props.bakeGrain,
+      size: props.bakeSize,
+    });
 
   const finalColorUrl = () => {
     if (props.fillMode === 'texture') {
@@ -653,7 +661,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
         <Show when={props.fillMode === 'procedural'}>
           <g mask={`url(#${uniqueId}-metal-mask)`}>
             <image
-              href={makeMetalTexture(getCanonicalMetal())}
+              href={bakedTextureUrl()}
               x="-50"
               y="-50"
               width="200"
