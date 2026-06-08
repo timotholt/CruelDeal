@@ -188,6 +188,11 @@ authoring JSON
   screen still owns live DOM registry refresh/copy orchestration, while the
   extracted module owns inspector tabs, DOM tree rendering, export CSS audit
   rendering, metrics display, and frame-CSS row display.
+- [x] Extracted selected emission export output shaping into
+  `components/screens/main-material/mainMaterialEmissionOutput.ts`. The screen
+  now consumes a tested snapshot contract for export plan, export DOM audit
+  node, HTML, CSS, metrics, active copy payloads, and inspector tab status text
+  instead of deriving those pieces inline.
 
 ## Verification Evidence
 
@@ -207,6 +212,7 @@ authoring JSON
 - PASS `npx tsx components/screens/uiNodePreviewJsonReadout.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -225,8 +231,8 @@ authoring JSON
 - `/material-main` is still too large, but its feed model, text/render policy,
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
-  parser/serializer, and emission inspector view are now extracted from the
-  giant screen.
+  parser/serializer, emission inspector view, and selected emission export
+  output contract are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -234,11 +240,11 @@ Continue decomposing `/material-main` around pure editor/runtime contracts. The
 next blocker family is that import/export compatibility application and live
 emission inspector orchestration still live inside
 `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for state
-application/export mode decisions and DOM refresh/copy wiring even though the
+application/export mode decisions and live DOM refresh wiring even though the
 feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
-emission inspector view now have extracted contracts.
+emission inspector view/output now have extracted contracts.
 
 Recommended finish plan, in order:
 

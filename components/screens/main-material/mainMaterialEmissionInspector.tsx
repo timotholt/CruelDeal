@@ -6,18 +6,11 @@ import {
   type DomAuditNode,
   type DomAuditToken,
 } from './mainMaterialDomAudit';
+import {
+  cssDeclarationText,
+  type EmissionInspectorTab,
+} from './mainMaterialEmissionOutput';
 
-export type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
-
-export const tabLabel = (tab: EmissionInspectorTab) => ({
-  'frame-css': 'Frame CSS',
-  'editor-dom': 'Editor DOM',
-  'export-dom': 'Export DOM',
-  'export-css': 'Export CSS',
-}[tab]);
-
-
-export const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
 const EmissionMetricsSummary = (props: { metrics: EmissionMetrics }) => (
   <div class="main-material-emission-metrics">
     <span>nodes <strong>{props.metrics.nodeCount}</strong></span>
@@ -327,4 +320,3 @@ export const EmissionInspector = (props: {
     </Show>
   </div>
 );
-

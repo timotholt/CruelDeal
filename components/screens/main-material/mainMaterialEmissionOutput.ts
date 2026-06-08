@@ -1,0 +1,93 @@
+import type {
+  EmissionMetrics,
+  MaterialEmissionPlan,
+} from '../../ui/material-lab';
+import {
+  domAuditNodeToHtml,
+  emptyEmissionMetrics,
+  exportPlanToDomAuditNode,
+  type DomAuditNode,
+} from './mainMaterialDomAudit';
+import {
+  createMainMaterialExportPlan,
+  type MainMaterialExportFeedCardType,
+  type MainMaterialExportFeedStory,
+  type MainMaterialExportNode,
+  type MainMaterialExportPlannerContext,
+  type MainMaterialExportResult,
+} from './mainMaterialExportPlanner';
+
+export type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
+
+export const tabLabel = (tab: EmissionInspectorTab) => ({
+  'frame-css': 'Frame CSS',
+  'editor-dom': 'Editor DOM',
+  'export-dom': 'Export DOM',
+  'export-css': 'Export CSS',
+}[tab]);
+
+export const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
+
+export interface MainMaterialEmissionExportSnapshot {
+  result: MainMaterialExportResult | null;
+  plan: MaterialEmissionPlan | null;
+  domSnapshot: DomAuditNode | null;
+  html: string;
+  css: string;
+  metrics: EmissionMetrics;
+}
+
+export const mainMaterialEmissionExportSnapshot = (
+  result: MainMaterialExportResult | null,
+): MainMaterialEmissionExportSnapshot => {
+  const plan = result?.plan ?? null;
+  return {
+    result,
+    plan,
+    domSnapshot: exportPlanToDomAuditNode(plan),
+    html: result?.html ?? '',
+    css: result?.css ?? '',
+    metrics: result?.metrics ?? emptyEmissionMetrics(),
+  };
+};
+
+export const createMainMaterialEmissionExport = <
+  TNode extends MainMaterialExportNode,
+  TCardType extends MainMaterialExportFeedCardType<TNode>,
+  TStory extends MainMaterialExportFeedStory,
+>(
+  targetId: string,
+  context: MainMaterialExportPlannerContext<TNode, TCardType, TStory>,
+) => mainMaterialEmissionExportSnapshot(createMainMaterialExportPlan(targetId, context));
+
+export interface MainMaterialEmissionPayloadContext {
+  tab: EmissionInspectorTab;
+  editorDomSnapshot: DomAuditNode | null;
+  exportHtml: string;
+  exportCss: string;
+  frameCssLines: Array<[string, string | number]>;
+}
+
+export const activeEmissionPayload = (context: MainMaterialEmissionPayloadContext) => {
+  if (context.tab === 'editor-dom') {
+    return context.editorDomSnapshot ? domAuditNodeToHtml(context.editorDomSnapshot) : '';
+  }
+  if (context.tab === 'export-dom') return context.exportHtml;
+  if (context.tab === 'export-css') return context.exportCss;
+  return context.frameCssLines.map(([key, value]) => cssDeclarationText(key, value)).join('\n');
+};
+
+export const emissionInspectorTabStatus = (tab: EmissionInspectorTab) => (
+  tab === 'frame-css'
+    ? 'Showing frame layout CSS only'
+    : tab === 'editor-dom'
+    ? 'Showing cleaned live editor DOM subtree'
+    : tab === 'export-css'
+    ? 'Showing CTA pilot export CSS plan'
+    : 'Showing CTA pilot export DOM plan'
+);
+
+export const refreshedEmissionPayloadStatus = (
+  tab: EmissionInspectorTab,
+  hasExportPlan: boolean,
+) => (hasExportPlan ? `Refreshed ${tabLabel(tab)}` : 'No CTA export plan for this target');

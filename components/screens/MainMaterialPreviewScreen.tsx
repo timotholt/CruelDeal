@@ -26,9 +26,13 @@ import {
   type FeedNodeLayout,
 } from './main-material/feedNodeLayoutCss';
 import {
-  createMainMaterialExportPlan,
-  type MainMaterialExportResult,
-} from './main-material/mainMaterialExportPlanner';
+  activeEmissionPayload,
+  createMainMaterialEmissionExport,
+  emissionInspectorTabStatus,
+  refreshedEmissionPayloadStatus,
+  tabLabel,
+  type EmissionInspectorTab,
+} from './main-material/mainMaterialEmissionOutput';
 import {
   coercePreviewStateForPart,
   createDefaultPreviewStates,
@@ -80,17 +84,11 @@ import {
 } from './main-material/mainMaterialDomRegistry';
 import {
   domAuditMetrics,
-  domAuditNodeToHtml,
-  emptyEmissionMetrics,
-  exportPlanToDomAuditNode,
   serializeDomAuditNode,
   type DomAuditNode,
 } from './main-material/mainMaterialDomAudit';
 import {
   EmissionInspector,
-  cssDeclarationText,
-  tabLabel,
-  type EmissionInspectorTab,
 } from './main-material/mainMaterialEmissionInspector';
 import {
   feedCardMaterialTargetId,
@@ -2729,7 +2727,7 @@ export const MainMaterialPreviewScreen = () => {
       ? cssDeclarationLines(feedNodeLayoutCss(node.layout, { forcePaddingVar: node.type === 'button' }))
       : [];
   };
-  const selectedExportResult = (): MainMaterialExportResult | null => createMainMaterialExportPlan(
+  const selectedExportSnapshot = () => createMainMaterialEmissionExport(
     selectedEmissionTargetId(),
     {
       selectedFeedStoryId: selectedFeedStoryId(),
@@ -2742,20 +2740,11 @@ export const MainMaterialPreviewScreen = () => {
       textForNode: feedNodeContentValue,
     },
   );
-  const selectedExportPlan = () => selectedExportResult()?.plan ?? null;
-  const selectedExportDomSnapshot = () => exportPlanToDomAuditNode(selectedExportPlan());
-  const selectedExportHtml = () => {
-    const result = selectedExportResult();
-    return result ? result.html : '';
-  };
-  const selectedExportCss = () => {
-    const result = selectedExportResult();
-    return result ? result.css : '';
-  };
-  const selectedExportMetrics = () => {
-    const result = selectedExportResult();
-    return result ? result.metrics : emptyEmissionMetrics();
-  };
+  const selectedExportPlan = () => selectedExportSnapshot().plan;
+  const selectedExportDomSnapshot = () => selectedExportSnapshot().domSnapshot;
+  const selectedExportHtml = () => selectedExportSnapshot().html;
+  const selectedExportCss = () => selectedExportSnapshot().css;
+  const selectedExportMetrics = () => selectedExportSnapshot().metrics;
   const refreshDomAudit = (
     targetId = selectedEmissionTargetId(),
     hiddenClasses = hiddenDomClassKeys(),
@@ -2814,13 +2803,13 @@ export const MainMaterialPreviewScreen = () => {
   };
   const copyActiveEmissionPayload = async () => {
     const tab = emissionInspectorTab();
-    const payload = tab === 'editor-dom'
-      ? domAuditSnapshot() ? domAuditNodeToHtml(domAuditSnapshot() as DomAuditNode) : ''
-      : tab === 'export-dom'
-      ? selectedExportHtml()
-      : tab === 'export-css'
-      ? selectedExportCss()
-      : selectedCssProbeLines().map(([key, value]) => cssDeclarationText(key, value)).join('\n');
+    const payload = activeEmissionPayload({
+      tab,
+      editorDomSnapshot: domAuditSnapshot(),
+      exportHtml: selectedExportHtml(),
+      exportCss: selectedExportCss(),
+      frameCssLines: selectedCssProbeLines(),
+    });
     await navigator.clipboard?.writeText(payload);
     setInspectorStatus(payload ? `Copied ${tabLabel(tab)}` : `Nothing to copy for ${tabLabel(tab)}`);
   };
@@ -2834,9 +2823,7 @@ export const MainMaterialPreviewScreen = () => {
       return;
     }
     refreshDomAudit(selectedEmissionTargetId(), hiddenDomClassKeys(), false);
-    setInspectorStatus(selectedExportPlan()
-      ? `Refreshed ${tabLabel(emissionInspectorTab())}`
-      : 'No CTA export plan for this target');
+    setInspectorStatus(refreshedEmissionPayloadStatus(emissionInspectorTab(), Boolean(selectedExportPlan())));
   };
   const startEmissionInspectorDrag = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     const start = emissionInspectorPosition();
@@ -3544,15 +3531,7 @@ export const MainMaterialPreviewScreen = () => {
         onToggleOpen={() => setEmissionInspectorOpen((open) => !open)}
         onTabChange={(tab) => {
           setEmissionInspectorTab(tab);
-          setInspectorStatus(
-            tab === 'frame-css'
-              ? 'Showing frame layout CSS only'
-              : tab === 'editor-dom'
-              ? 'Showing cleaned live editor DOM subtree'
-              : tab === 'export-css'
-              ? 'Showing CTA pilot export CSS plan'
-              : 'Showing CTA pilot export DOM plan',
-          );
+          setInspectorStatus(emissionInspectorTabStatus(tab));
         }}
         onToggleCssKey={toggleCssProbeKey}
         onResetCss={resetCssProbe}
