@@ -207,6 +207,10 @@ authoring JSON
   maps, selected preset ids, dirty flags, preset sanitization, add/update/delete
   mutations, and clone-on-save rules are now tested model behavior instead of
   screen-owned state manipulation.
+- [x] Extracted `/material-main` part surface/reset mapping into
+  `components/screens/main-material/mainMaterialPartStateModel.ts`. The screen
+  now uses a tested part-to-surface-key contract and reset plan for selected
+  reset/all reset behavior instead of keeping those mappings as branch ladders.
 
 ## Verification Evidence
 
@@ -230,6 +234,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialPartStateModel.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -250,7 +255,7 @@ authoring JSON
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
   output/controller contracts, preview-state compatibility adapter, and material
-  preset model are now extracted from the giant screen.
+  preset/part-state models are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -262,7 +267,7 @@ feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
 emission inspector view/output/controller, preview-state compatibility, and
-material preset state now have extracted contracts.
+material preset/part reset state now have extracted contracts.
 
 Recommended finish plan, in order:
 

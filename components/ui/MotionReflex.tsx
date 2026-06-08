@@ -20,7 +20,7 @@ const sheenClass = (method: SheenMethod, type: string) =>
 // Reusable Reflective Text Component
 export interface ReflectiveTextProps {
   children: string;
-  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
+  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark' | 'engraved';
   type?: 'linear' | 'radial' | 'box';
   method?: SheenMethod;
   class?: string;
@@ -69,7 +69,7 @@ export const EmbossedReflectiveText = (rawProps: ReflectiveTextProps) => {
 // Reflective Progress Bar Component
 export interface ReflectiveProgressBarProps {
   value: number; // 0 to 100
-  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
+  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark' | 'engraved';
   type?: 'linear' | 'radial' | 'box';
   method?: SheenMethod;
   class?: string;
@@ -108,7 +108,7 @@ export const ReflectiveProgressBar = (rawProps: ReflectiveProgressBarProps) => {
 export interface ReflectiveButtonProps {
   onClick?: () => void;
   children: any;
-  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
+  profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark' | 'engraved';
   type?: 'linear' | 'radial' | 'box';
   method?: SheenMethod;
   class?: string;

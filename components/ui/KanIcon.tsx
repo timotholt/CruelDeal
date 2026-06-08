@@ -29,7 +29,7 @@ export interface KanIconProps {
   kDiagWidth?: number; // Arm span width. Defaults to 25.5.
   
   // Material schemes
-  gradientProfile?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'K' | 'R1' | 'R2' | 'Custom'; // Pre-packaged metal gradient profile. Defaults to 'J'.
+  gradientProfile?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'I' | 'J' | 'K' | 'R1' | 'R2' | 'Engraved' | 'Custom'; // Pre-packaged metal gradient profile. Defaults to 'J'.
   customStops?: Array<{ offset: number; color: string }>; // Custom stops (for 'Custom' profile).
   gradientAngle?: number; // Angle of the gradient. Defaults to 45.
   gradientScale?: number; // Scaling/width of gradient transitions. Defaults to 1.0.

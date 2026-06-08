@@ -1,0 +1,40 @@
+import type { MainPartId } from './mainMaterialInteractionModel';
+import type { SurfaceRecipes } from './mainMaterialPreview';
+
+export type MainMaterialSurfaceRecipeKey = keyof SurfaceRecipes;
+
+export interface MainMaterialSelectedResetPlan {
+  resetBackdrop: boolean;
+  resetTitle: boolean;
+  resetFeed: boolean;
+  resetNav: boolean;
+  surfaceKey: MainMaterialSurfaceRecipeKey | null;
+}
+
+export const surfaceRecipeKeyForPart = (part: MainPartId): MainMaterialSurfaceRecipeKey | null => {
+  if (part === 'backdrop') return 'backdrop';
+  if (part === 'topBar') return 'topBar';
+  if (part === 'profileButton') return 'profile';
+  if (part === 'currencyButtons') return 'currencies';
+  if (part === 'feedCards') return 'feed';
+  if (part === 'toolBar') return 'toolbar';
+  if (part === 'navBar') return 'nav';
+  if (part === 'navBarContainer') return 'navContainer';
+  return null;
+};
+
+export const selectedResetPlanForPart = (part: MainPartId): MainMaterialSelectedResetPlan => ({
+  resetBackdrop: part === 'backdrop',
+  resetTitle: part === 'titleBlock',
+  resetFeed: part === 'feedCards',
+  resetNav: part === 'navBar',
+  surfaceKey: surfaceRecipeKeyForPart(part),
+});
+
+export const mainMaterialResetAllPlan = {
+  resetBackdrop: true,
+  resetTitle: true,
+  resetFeed: true,
+  resetNav: true,
+  resetSurfaces: true,
+} as const;

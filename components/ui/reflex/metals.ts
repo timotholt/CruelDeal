@@ -11,7 +11,7 @@
  * Change a color here and the hex, the text, and the button all move together.
  */
 
-export type MetalId = 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
+export type MetalId = 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark' | 'engraved';
 
 export interface MetalStop {
   offset: number; // 0..100
@@ -122,6 +122,16 @@ export const PRESETS: Record<string, MetalStop[]> = {
     { offset: 25, color: '#D5BB8A' },
     { offset: 60, color: '#7C6535' },
     { offset: 100, color: '#55411B' }
+  ],
+  // Engraved/foil gold — bright top & bottom, dark "fold" in the middle. Read as
+  // an embossed text face; designed to be used VERTICAL (angle 180/90).
+  Engraved: [
+    { offset: 0, color: '#DAA520' },
+    { offset: 26, color: '#D5AD6D' },
+    { offset: 35, color: '#E2BA78' },
+    { offset: 45, color: '#A37E43' },
+    { offset: 61, color: '#D4AF37' },
+    { offset: 100, color: '#D5AD6D' }
   ]
 };
 
@@ -141,6 +151,9 @@ export const METALS: Record<MetalId, MetalSpec> = {
       { offset: 100, color: '#1d4ed8' },
     ],
   },
+  // Vertical (180°) so the bright/dark/bright "fold" runs top→bottom — the
+  // engraved look. The moving reflex sheen band rides on top for the tilt glint.
+  engraved: { id: 'engraved', highlight: '#FFF3C2', angle: 180, stops: PRESETS.Engraved },
 };
 
 /** SVG <stop> array for a KanIcon linearGradient/radialGradient. */
@@ -157,6 +170,7 @@ export const PROFILE_TO_METAL: Partial<Record<string, MetalId>> = {
   D: 'silver',
   G: 'brass',
   F: 'mark',
+  Engraved: 'engraved',
 };
 
 

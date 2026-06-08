@@ -400,6 +400,35 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
 .metal-kan,    .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture-sm); }
 .metal-credit, .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture-sm); }
 .metal-mark,   .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture-sm); }
+.metal-engraved, .main-material-rich-token--engraved { --metal-image: var(--metal-engraved-texture-sm); }
+
+/* Engraved gold metal — vertical bright/dark/bright base (the "fold") with the
+   moving reflex sheen band on top. Reuses .sheen-* / .sheen-baked machinery. */
+.metal-engraved {
+  --base-metal-gradient: var(--metal-engraved-gradient);
+  --highlight-color: var(--metal-engraved-highlight);
+}
+.main-material-rich-token--engraved {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 200%;
+  display: inline-block;
+  font-weight: 800;
+  filter: drop-shadow(-1px -1px 0px rgba(255, 255, 255, 0.45)) drop-shadow(1px 1px 0.5px rgba(0, 0, 0, 0.6));
+  background-image: var(--rich-sheen-bg-image, linear-gradient(135deg, transparent 30%, var(--highlight-color) 50%, transparent 70%)), var(--base-metal-gradient);
+  background-position: calc(50% + var(--reflex-x) * 40%) calc(50% + var(--reflex-y) * 40%), center;
+  background-blend-mode: var(--rich-sheen-blend-mode, overlay);
+  --base-metal-gradient: var(--metal-engraved-gradient);
+  --highlight-color: var(--metal-engraved-highlight);
+}
+.method-procedural .main-material-rich-token--engraved {
+  background-image: var(--metal-image);
+  background-size: 180% 180%;
+  background-position: calc(50% + var(--reflex-gx) * 60px) calc(50% + var(--reflex-gy) * 60px);
+  background-blend-mode: normal;
+}
 
 /* Single baked-texture layer (replaces the vector gradient + highlight band),
    positioned by the global reflex direction. background-clip:text comes from

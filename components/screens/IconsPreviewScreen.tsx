@@ -1329,6 +1329,8 @@ ${paintDef}${overlayGradDef}
                          } else if (val !== 'Custom') {
                            setCustomType('linear');
                          }
+                         // Engraved is a vertical fold — render it top→bottom.
+                         if (val === 'Engraved') setGradientAngle(90);
                        }}
                        class="w-full bg-[#12131a] border border-white/10 rounded px-2.5 py-1.5 text-[10.5px] font-mono text-amber-300 outline-none focus:border-amber-500/50"
                      >
@@ -1343,6 +1345,7 @@ ${paintDef}${overlayGradDef}
                         <option value="I">Opt I: Soft Horizon Au (Subtle)</option>
                         <option value="J">Opt J: Tiling Soft Au (Seamless)</option>
                         <option value="K">Opt K: Soft Chrome II (Linear Preset)</option>
+                        <option value="Engraved">Engraved Gold (vertical fold)</option>
                         <option value="R1">Opt R1: Radial Chrome (Dome Reflect)</option>
                         <option value="R2">Opt R2: Radial Soft (Smooth Dome)</option>
                       </select>
@@ -3280,6 +3283,19 @@ ${paintDef}${overlayGradDef}
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">John Wick Lore</span>
               </div>
+              <div class="text-center">
+                <EmbossedReflectiveText profile="engraved" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
+                  ENGRAVED GOLD
+                </EmbossedReflectiveText>
+                <span class="text-[9px] text-white/30 block mt-1 font-mono">Vertical fold + sheen</span>
+              </div>
+            </div>
+
+            {/* Engraved preset on EVERY surface — icon + text + button together */}
+            <div class="flex flex-wrap items-center justify-center gap-6 pt-4 mt-3 border-t border-white/5">
+              <KanIcon size={56} gradientProfile="Engraved" gradientAngle={90} customType="linear" fillMode={fillMode()} interactive={interactiveSheen()} bakeGrain={brushedMetal() ? bakeGrain() : 0} bakeSize={bakeSize()} />
+              <ReflectiveText profile="engraved" type={customType()} method={textMethod()} class="text-2xl uppercase tracking-widest font-black">ENGRAVED</ReflectiveText>
+              <ReflectiveButton profile="engraved" type={customType()} method={buttonMethod()}>CLAIM</ReflectiveButton>
             </div>
           </div>
         </section>

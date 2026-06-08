@@ -194,6 +194,11 @@ import {
   type MaterialPresetIdsByPart,
   type MaterialPresetsByPart,
 } from './main-material/mainMaterialPresetModel';
+import {
+  mainMaterialResetAllPlan,
+  selectedResetPlanForPart,
+  surfaceRecipeKeyForPart,
+} from './main-material/mainMaterialPartStateModel';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
@@ -1914,15 +1919,8 @@ const defaultSurfaces: SurfaceRecipes = {
 };
 
 const defaultSurfaceForPart = (part: MainPartId): MaterialRecipe => {
-  if (part === 'backdrop') return defaultBackdropSurface;
-  if (part === 'topBar') return defaultTopBarSurface;
-  if (part === 'profileButton') return defaultProfileSurface;
-  if (part === 'currencyButtons') return defaultCurrencySurface;
-  if (part === 'feedCards') return defaultFeedSurface;
-  if (part === 'toolBar') return defaultToolbarSurface;
-  if (part === 'navBar') return defaultNavSurface;
-  if (part === 'navBarContainer') return defaultNavContainerSurface;
-  return defaultFeedSurface;
+  const key = surfaceRecipeKeyForPart(part);
+  return key ? defaultSurfaces[key] : defaultFeedSurface;
 };
 
 const clamp = (value: unknown, fallback: number, min: number, max: number) => {
@@ -2870,16 +2868,10 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const currentRecipeForPart = (part: MainPartId): MaterialRecipe => {
-    const current = surfaces();
-    if (part === 'backdrop') return current.backdrop;
-    if (part === 'topBar') return current.topBar;
-    if (part === 'profileButton') return current.profile;
-    if (part === 'currencyButtons') return current.currencies;
     if (part === 'feedCards') return selectedFeedMaterialRecipe();
-    if (part === 'toolBar') return current.toolbar;
-    if (part === 'navBar') return current.nav;
-    if (part === 'navBarContainer') return current.navContainer;
-    return current.feed;
+    const key = surfaceRecipeKeyForPart(part);
+    if (key) return surfaces()[key];
+    return surfaces().feed;
   };
 
   const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
@@ -2951,15 +2943,13 @@ export const MainMaterialPreviewScreen = () => {
 
   const resetSelected = () => {
     const part = selectedPart();
-    if (part === 'backdrop') {
+    const plan = selectedResetPlanForPart(part);
+    if (plan.resetBackdrop) {
       setBackdrop(cloneBackdrop(defaultBackdrop));
-      updateSurfaceForPart('backdrop', 'backdrop', cloneMaterialRecipe(defaultBackdropSurface));
     }
-    if (part === 'topBar') updateSurfaceForPart('topBar', 'topBar', cloneMaterialRecipe(defaultTopBarSurface));
-    if (part === 'profileButton') updateSurfaceForPart('profileButton', 'profile', cloneMaterialRecipe(defaultProfileSurface));
-    if (part === 'currencyButtons') updateSurfaceForPart('currencyButtons', 'currencies', cloneMaterialRecipe(defaultCurrencySurface));
-    if (part === 'titleBlock') setTitle(cloneTitle(defaultTitle));
-    if (part === 'feedCards') {
+    if (plan.surfaceKey) updateSurfaceForPart(part, plan.surfaceKey, cloneMaterialRecipe(defaultSurfaceForPart(part)));
+    if (plan.resetTitle) setTitle(cloneTitle(defaultTitle));
+    if (plan.resetFeed) {
       setFeed(cloneFeed(defaultFeed));
       setFeedStories(cloneFeedStories(mockFeedStories));
       setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
@@ -2968,28 +2958,25 @@ export const MainMaterialPreviewScreen = () => {
       setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
       setFeedStoryImageOverrides({});
     }
-    if (part === 'toolBar') updateSurfaceForPart('toolBar', 'toolbar', cloneMaterialRecipe(defaultToolbarSurface));
-    if (part === 'navBar') {
+    if (plan.resetNav) {
       setNav(cloneNav(defaultNav));
-      updateSurfaceForPart('navBar', 'nav', cloneMaterialRecipe(defaultNavSurface));
-    }
-    if (part === 'navBarContainer') {
-      updateSurfaceForPart('navBarContainer', 'navContainer', cloneMaterialRecipe(defaultNavContainerSurface));
     }
   };
 
   const resetAll = () => {
-    setBackdrop(cloneBackdrop(defaultBackdrop));
-    setTitle(cloneTitle(defaultTitle));
-    setFeed(cloneFeed(defaultFeed));
-    setFeedStories(cloneFeedStories(mockFeedStories));
-    setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
-    setSelectedFeedStoryId(mockFeedStories[0].id);
-    setEditingFeedCardTypeId('card_type_01');
-    setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
-    setFeedStoryImageOverrides({});
-    setNav(cloneNav(defaultNav));
-    setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
+    if (mainMaterialResetAllPlan.resetBackdrop) setBackdrop(cloneBackdrop(defaultBackdrop));
+    if (mainMaterialResetAllPlan.resetTitle) setTitle(cloneTitle(defaultTitle));
+    if (mainMaterialResetAllPlan.resetFeed) {
+      setFeed(cloneFeed(defaultFeed));
+      setFeedStories(cloneFeedStories(mockFeedStories));
+      setFeedCardTypes(cloneFeedCardTypes(defaultFeedCardTypes));
+      setSelectedFeedStoryId(mockFeedStories[0].id);
+      setEditingFeedCardTypeId('card_type_01');
+      setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
+      setFeedStoryImageOverrides({});
+    }
+    if (mainMaterialResetAllPlan.resetNav) setNav(cloneNav(defaultNav));
+    if (mainMaterialResetAllPlan.resetSurfaces) setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
 
   const applyParsedState = (parsed: MainMaterialStoredState) => {
