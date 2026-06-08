@@ -17,10 +17,7 @@ export type {
   ShinyTextureOptions,
 } from './types';
 export {
-  LEGACY_AUTHORING_PRESETS,
   METALS,
-  PRESETS,
-  PROFILE_TO_METAL,
   SHINY_MATERIALS,
   metalCssGradient,
   metalSvgStops,

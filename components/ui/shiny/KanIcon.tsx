@@ -1,7 +1,7 @@
 import { For, Show, mergeProps } from 'solid-js';
 import { sheenEnabled } from './reflexController';
 import { createReflexShift, REFLEX_SVG_UNITS } from './useReflex';
-import { METALS, PROFILE_TO_METAL, metalSvgStops, PRESETS } from './materials';
+import { METALS, metalSvgStops } from './materials';
 import { makeMetalTextureFromStops } from './textureBake';
 
 
@@ -67,6 +67,14 @@ export interface KanIconProps {
   // Unique ID prefix to prevent SVG defs collision when rendering multiple instances on the same page
   idPrefix?: string;
 }
+
+const RUNTIME_PROFILE_TO_MATERIAL: Partial<Record<NonNullable<KanIconProps['gradientProfile']>, keyof typeof METALS>> = {
+  J: 'gold',
+  D: 'silver',
+  G: 'brass',
+  F: 'mark',
+  Engraved: 'engraved',
+};
 
 export const KanIcon = (rawProps: KanIconProps) => {
   // Merge default values
@@ -231,18 +239,17 @@ export const KanIcon = (rawProps: KanIconProps) => {
   const getGradientStops = () => {
     // Canonical metals (gold=J, silver=D, brass=G, mark=F) come from the single
     // shared registry so the hex matches the text/buttons exactly.
-    const metal = PROFILE_TO_METAL[props.gradientProfile];
+    const metal = RUNTIME_PROFILE_TO_MATERIAL[props.gradientProfile];
     if (metal) return metalSvgStops(METALS[metal]);
     
-    if (props.gradientProfile === 'Custom') {
+    if (props.gradientProfile === 'Custom' || (props.customStops && props.customStops.length > 0)) {
       return [...(props.customStops || [])].sort((a, b) => a.offset - b.offset).map(stop => ({
         offset: `${stop.offset}%`,
         color: stop.color
       }));
     }
     
-    const stops = PRESETS[props.gradientProfile] || PRESETS.J;
-    return stops.map(s => ({ offset: `${s.offset}%`, color: s.color }));
+    return metalSvgStops(METALS.gold);
   };
 
   // Baked "canvas metal" texture from the SAME live stops the vector path uses,

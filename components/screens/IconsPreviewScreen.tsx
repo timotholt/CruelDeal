@@ -1,7 +1,8 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
 import { KanIcon } from '../ui/shiny';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/shiny';
-import { PRESETS, METALS, PROFILE_TO_METAL, makeMetalTextureFromStops } from '../ui/shiny';
+import { METALS, makeMetalTextureFromStops } from '../ui/shiny';
+import { PRESETS, PROFILE_TO_METAL } from '../authoring/shiny/presets';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -571,8 +572,8 @@ export const IconsPreviewScreen = () => {
   // hand-rolled SVG duplicate.
   const sharedKanProps = {
     get interactive() { return interactiveSheen(); },
-    get gradientProfile() { return gradientProfile(); },
-    get customStops() { return customStops().map((s) => ({ offset: s.offset, color: s.color })); },
+    get gradientProfile() { return gradientProfile() === 'R1' || gradientProfile() === 'R2' ? gradientProfile() : 'Custom'; },
+    get customStops() { return getActiveStops().map((s) => ({ offset: s.offset, color: s.color })); },
     get gradientAngle() { return gradientAngle(); },
     get gradientScale() { return gradientScale(); },
     get gradientShift() { return gradientShift(); },

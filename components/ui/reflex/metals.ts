@@ -1,8 +1,10 @@
 export {
   LEGACY_AUTHORING_PRESETS,
-  METALS,
   PRESETS,
   PROFILE_TO_METAL,
+} from '../../authoring/shiny/presets';
+export {
+  METALS,
   SHINY_MATERIALS,
   metalCssGradient,
   metalSvgStops,
