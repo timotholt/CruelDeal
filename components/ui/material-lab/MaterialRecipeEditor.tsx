@@ -1,16 +1,10 @@
 import { createSignal, For, JSX, Show } from 'solid-js';
-import type {
-  CornerName,
-  EdgeName,
-} from './MaterialPrimitives';
 import { SectionLabel } from './MaterialPrimitives';
 import {
   materialRecipeCorners,
-  materialRecipeEdges,
   materialRecipeContentLayers,
   materialRecipeContentTones,
   materialRecipeFontStyles,
-  materialRecipeGlows,
   materialRecipeStates,
   materialRecipeTextAligns,
   materialRecipeTextFonts,
@@ -209,6 +203,13 @@ const stateEmissionFields = [
   'emissionThickness',
   'emissionBlipSize',
 ] as const satisfies readonly (keyof SurfaceOptions)[];
+const stateGlowFields = [
+  'corners',
+  'edgeHighlight',
+  'glow',
+  'glowStrength',
+  'cornerSize',
+] as const satisfies readonly (keyof SurfaceOptions)[];
 
 type StatePresetId = 'quiet-hover' | 'gold-active' | 'cyan-data' | 'danger-active' | 'cta-powered' | 'nav-tab';
 
@@ -322,47 +323,6 @@ const StateSurfaceSection = (props: {
         <Slider disabled={!active()} value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
       </div>
     </div>
-  );
-};
-
-const GlowSection = (props: {
-  stateOverlay: MaterialStateOverlay;
-  updateStateGroup: StateGroupUpdate;
-  toggleStateList: (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => void;
-}) => {
-  const active = () => props.stateOverlay.enabled;
-  return (
-  <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
-    <SectionLabel size="xs">State Glow</SectionLabel>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Corners</ControlLabel>
-      <div class="ui-lab-toggles">
-        <For each={materialRecipeCorners}>
-          {(corner) => <ToggleButton active={props.stateOverlay.glow.corners.includes(corner)} disabled={!active()} onClick={() => props.toggleStateList('corners', corner)}>{corner.replace('-', ' ')}</ToggleButton>}
-        </For>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Edges</ControlLabel>
-      <div class="ui-lab-toggles">
-        <For each={materialRecipeEdges}>
-          {(edge) => <ToggleButton active={props.stateOverlay.glow.edgeHighlight.includes(edge)} disabled={!active()} onClick={() => props.toggleStateList('edgeHighlight', edge)}>{edge}</ToggleButton>}
-        </For>
-      </div>
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Glow</ControlLabel>
-      <Segments disabled={!active()} value={props.stateOverlay.glow.tone} options={materialRecipeGlows} onChange={(value: MaterialTone) => props.updateStateGroup('glow', 'tone', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Glow Power</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.glow.glowStrength} onInput={(value) => props.updateStateGroup('glow', 'glowStrength', value)} />
-    </div>
-    <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-      <ControlLabel>Bracket Size</ControlLabel>
-      <Slider disabled={!active()} value={props.stateOverlay.glow.cornerSize} min={8} max={34} onInput={(value) => props.updateStateGroup('glow', 'cornerSize', value)} />
-    </div>
-  </div>
   );
 };
 
@@ -578,6 +538,47 @@ const TextSection = (props: { recipe: MaterialRecipe; enabled: boolean; contentE
   </div>
 );
 
+export const stateGlowSurfaceValue = (overlay: MaterialStateOverlay): Partial<SurfaceOptions> => ({
+  corners: overlay.glow.corners,
+  edgeHighlight: overlay.glow.edgeHighlight,
+  glow: overlay.glow.tone,
+  glowStrength: overlay.glow.glowStrength,
+  cornerSize: overlay.glow.cornerSize,
+});
+
+export const patchStateGlowOverlay = (
+  overlay: MaterialStateOverlay,
+  patch: SurfaceEditorPatch,
+): MaterialStateOverlay | null => {
+  const nextGlow = { ...overlay.glow };
+  let changed = false;
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'corners') && patch.corners !== undefined) {
+    nextGlow.corners = patch.corners as MaterialStateOverlay['glow']['corners'];
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'edgeHighlight') && patch.edgeHighlight !== undefined) {
+    nextGlow.edgeHighlight = patch.edgeHighlight as MaterialStateOverlay['glow']['edgeHighlight'];
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'glow') && patch.glow !== undefined) {
+    nextGlow.tone = patch.glow as MaterialStateOverlay['glow']['tone'];
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'glowStrength') && patch.glowStrength !== undefined) {
+    nextGlow.glowStrength = patch.glowStrength;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'cornerSize') && patch.cornerSize !== undefined) {
+    nextGlow.cornerSize = patch.cornerSize;
+    changed = true;
+  }
+
+  return changed
+    ? { ...overlay, enabled: true, glow: nextGlow }
+    : null;
+};
+
 export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   const [localActiveState, setLocalActiveState] = createSignal<MaterialRecipeState>('active');
   const capabilities = () => ({ ...defaultCapabilities, ...(props.capabilities || {}) });
@@ -674,6 +675,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   });
 
   const emissionSurfaceValue = (): Partial<SurfaceOptions> => stateOverlay().emission as Partial<SurfaceOptions>;
+  const glowSurfaceValue = () => stateGlowSurfaceValue(stateOverlay());
 
   const patchEmissionSurface = (patch: SurfaceEditorPatch) => {
     const overlay = stateOverlay();
@@ -726,12 +728,18 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     });
   };
 
-  const toggleStateList = (key: 'corners' | 'edgeHighlight', value: EdgeName | CornerName) => {
-    const current = stateOverlay().glow[key] as Array<EdgeName | CornerName>;
-    const next = current.includes(value)
-      ? current.filter((item) => item !== value)
-      : [...current, value];
-    updateStateGroup('glow', key, next as never);
+  const patchGlowSurface = (patch: SurfaceEditorPatch) => {
+    const overlay = stateOverlay();
+    const nextOverlay = patchStateGlowOverlay(overlay, patch);
+    if (!nextOverlay) return;
+    props.onForcePreviewChange?.(true);
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: nextOverlay,
+      },
+    });
   };
 
   const applyPreset = (preset: StatePresetId) => {
@@ -901,10 +909,14 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           applyPreset={applyPreset}
         />
         <StateSurfaceSection stateOverlay={stateOverlay()} updateEnabled={updateEnabled} updateStateGroup={updateStateGroup} />
-        <GlowSection
-          stateOverlay={stateOverlay()}
-          updateStateGroup={updateStateGroup}
-          toggleStateList={toggleStateList}
+        <SurfaceGeneratedEditor
+          title="State Glow"
+          mode="state"
+          fields={stateGlowFields}
+          value={glowSurfaceValue()}
+          enabled={stateOverlay().enabled}
+          inheritControls={false}
+          onPatch={patchGlowSurface}
         />
         <SurfaceGeneratedEditor
           title="Edge Emission"

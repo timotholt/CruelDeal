@@ -124,6 +124,11 @@ authoring JSON
   while preserving concrete overlay values.
 - [x] Added generated-editor `inheritControls` control so state-mode sections
   can opt out of inherit buttons when the underlying overlay is not sparse.
+- [x] Moved `MaterialRecipeEditor` state-glow controls from a bespoke section
+  to `SurfaceGeneratedEditor`. Glow corner/edge toggles and glow tone options
+  now come from surface field metadata, while a tested state-glow adapter maps
+  generated `corners`/`edgeHighlight`/`glow`/`glowStrength`/`cornerSize`
+  patches back into `states[activeState()].glow`.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -283,6 +288,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialDomAudit.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceEditorFilters.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFieldMetadata.test.ts`
+- PASS `npx tsx components/ui/material-lab/MaterialRecipeEditorStateAdapters.test.ts`
 - PASS `npx tsx components/ui/editor-output/editorOutputRegistry.test.ts`
 - PASS `npx tsx components/screens/materialLabJsonReadout.test.ts`
 - PASS `npx tsx components/screens/gameUiSkinProofJsonReadout.test.ts`
@@ -334,11 +340,10 @@ even though schema/metadata-driven controls exist.
 Recommended finish plan, in order:
 
 1. Continue `MaterialRecipeEditor` generated-control migration in this order:
-   State Glow -> State Text -> State Surface. Keep state
-   selector/presets as bespoke editor chrome. Add metadata/capabilities for
-   tone/texture/border/font options, dependency disables, array toggles, and a
-   separate state-overlay metadata adapter rather than forcing overlay-only
-   authoring fields into `SurfaceOptions` metadata.
+   State Text -> State Surface. Keep state selector/presets as bespoke editor
+   chrome. Add metadata/capabilities for tone/font/surface boost options,
+   dependency disables, and separate state-overlay adapters rather than forcing
+   overlay-only authoring fields into `SurfaceOptions` metadata.
 2. Route any remaining true runtime JSON panes through editor output modes.
 3. Run final end-to-end editor verification: save/load/import/export, selected
    target editing, generated controls, preview rendering, and emission export.

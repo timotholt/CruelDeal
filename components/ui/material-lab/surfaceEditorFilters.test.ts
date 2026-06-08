@@ -24,6 +24,26 @@ assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({
     mode: 'state',
     fields: [
+      'corners',
+      'edgeHighlight',
+      'glow',
+      'glowStrength',
+      'cornerSize',
+    ],
+  })),
+  [
+    'corners',
+    'edgeHighlight',
+    'glow',
+    'glowStrength',
+    'cornerSize',
+  ],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'state',
+    fields: [
       'emission',
       'emissionEdge',
       'emissionTone',
