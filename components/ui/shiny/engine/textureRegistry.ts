@@ -1,6 +1,6 @@
-import { SHINY_MATERIALS, toShinyMaterialId } from './materials';
+import { SHINY_MATERIALS } from './materials';
 import { bakeShinyTextureFromStops } from './textureBake';
-import type { MetalId, ShinyMaterialId, ShinyTextureOptions } from './types';
+import type { ShinyMaterialId, ShinyTextureOptions } from './types';
 
 const MAX_TEXTURE_CACHE_ENTRIES = 32;
 
@@ -15,8 +15,8 @@ const rememberTexture = (key: string, value: string) => {
   textureCache.set(key, value);
 };
 
-export function makeShinyTexture(id: MetalId, opts: ShinyTextureOptions = {}): string {
-  const materialId = toShinyMaterialId(id);
+export function makeShinyTexture(id: ShinyMaterialId, opts: ShinyTextureOptions = {}): string {
+  const materialId = id;
   const spec = SHINY_MATERIALS[materialId];
   const size = opts.size ?? textureOpts.size;
   const grain = opts.grain ?? textureOpts.grain;
@@ -30,16 +30,10 @@ export function makeShinyTexture(id: MetalId, opts: ShinyTextureOptions = {}): s
   return value;
 }
 
-export function makeMetalTexture(id: MetalId, opts: ShinyTextureOptions = {}): string {
-  return makeShinyTexture(id, opts);
-}
-
 export const setShinyTextureOptions = (opts: Partial<typeof textureOpts>) => {
   textureOpts = { ...textureOpts, ...opts };
   textureCache.clear();
 };
-
-export const setMetalTextureOptions = setShinyTextureOptions;
 
 export const getShinyTextureCacheSize = () => textureCache.size;
 

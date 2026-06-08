@@ -24,7 +24,7 @@ export type MaterialRichTextTag =
   | 'h4'
   | 'gold'
   | 'silver'
-  | 'brass'
+  | 'bronze'
   | 'kan'
   | 'credit'
   | 'mark';
@@ -65,7 +65,7 @@ const richTextTagAliases: Record<string, MaterialRichTextTag | 'rule' | 'divider
   h4: 'h4',
   gold: 'gold',
   silver: 'silver',
-  brass: 'brass',
+  bronze: 'bronze',
   kan: 'kan',
   credit: 'credit',
   mark: 'mark',

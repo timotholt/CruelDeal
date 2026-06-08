@@ -1,4 +1,4 @@
-import type { MetalId, MetalSpec, ShinyMaterialDefinition, ShinyMaterialId, ShinyStop } from './types';
+import type { ShinyMaterialDefinition, ShinyMaterialId, ShinyStop } from './types';
 
 const goldStops: ShinyStop[] = [
   { offset: 0, color: '#7C6535' },
@@ -73,15 +73,10 @@ export const SHINY_MATERIALS: Record<ShinyMaterialId, ShinyMaterialDefinition> =
   engraved: { id: 'engraved', displayName: 'Engraved', highlight: '#FFF3C2', angle: 180, textureSize: 512, smallTextureSize: 128, grain: 8, seed: 7001, stops: engravedStops },
 };
 
-export const METALS: Record<MetalId, MetalSpec> = {
-  ...SHINY_MATERIALS,
-  brass: { ...SHINY_MATERIALS.bronze, id: 'brass', displayName: 'Brass' },
-};
+export const SHINY_MATERIAL_IDS = Object.keys(SHINY_MATERIALS) as ShinyMaterialId[];
 
-export const toShinyMaterialId = (id: MetalId): ShinyMaterialId => (id === 'brass' ? 'bronze' : id);
-
-export const metalSvgStops = (spec: Pick<MetalSpec, 'stops'>) =>
+export const shinySvgStops = (spec: Pick<ShinyMaterialDefinition, 'stops'>) =>
   spec.stops.map((s) => ({ offset: `${s.offset}%`, color: s.color }));
 
-export const metalCssGradient = (spec: Pick<MetalSpec, 'angle' | 'stops'>) =>
+export const shinyCssGradient = (spec: Pick<ShinyMaterialDefinition, 'angle' | 'stops'>) =>
   `linear-gradient(${spec.angle}deg, ${spec.stops.map((s) => `${s.color} ${s.offset}%`).join(', ')})`;

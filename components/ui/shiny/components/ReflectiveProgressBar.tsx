@@ -1,13 +1,13 @@
 import { mergeProps } from 'solid-js';
-import type { SheenMethod, SheenType, ShinyMaterialKey } from '../engine/types';
+import type { SheenMethod, SheenType, ShinyMaterialId } from '../engine/types';
 
 const sheenClass = (method: SheenMethod, type: SheenType) =>
   method === 'bitmap' ? 'sheen-baked' : `sheen-${type}`;
 
 export interface ReflectiveProgressBarProps {
   value: number;
-  material?: ShinyMaterialKey;
-  profile?: ShinyMaterialKey;
+  material?: ShinyMaterialId;
+  profile?: ShinyMaterialId;
   type?: SheenType;
   method?: SheenMethod;
   class?: string;
@@ -15,8 +15,8 @@ export interface ReflectiveProgressBarProps {
 
 export const ReflectiveProgressBar = (rawProps: ReflectiveProgressBarProps) => {
   const props = mergeProps({
-    material: undefined as ShinyMaterialKey | undefined,
-    profile: 'gold' as ShinyMaterialKey,
+    material: undefined as ShinyMaterialId | undefined,
+    profile: 'gold' as ShinyMaterialId,
     type: 'linear' as SheenType,
     method: 'svg' as SheenMethod,
     class: '',

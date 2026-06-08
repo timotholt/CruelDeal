@@ -1,40 +1,30 @@
 export type {
-  MetalId,
-  MetalSpec,
-  MetalStop,
-  MetalTextureOptions,
   ReflexDirection,
   ReflexPointer,
   ReflexShift,
   SheenMethod,
   SheenType,
-  ShinyLegacyMaterialId,
   ShinyMaterialDefinition,
   ShinyMaterialId,
-  ShinyMaterialKey,
   ShinyStop,
   ShinySurfaceProps,
   ShinyTextureOptions,
 } from './engine/types';
 export {
-  METALS,
   SHINY_MATERIALS,
-  metalCssGradient,
-  metalSvgStops,
-  toShinyMaterialId,
+  SHINY_MATERIAL_IDS,
+  shinyCssGradient,
+  shinySvgStops,
 } from './engine/materials';
-export { bakeShinyTextureFromStops, makeMetalTextureFromStops } from './engine/textureBake';
+export { bakeShinyTextureFromStops } from './engine/textureBake';
 export {
   getShinyMaterialTextureSizes,
   getShinyTextureCacheSize,
-  makeMetalTexture,
   makeShinyTexture,
-  setMetalTextureOptions,
   setShinyTextureOptions,
 } from './engine/textureRegistry';
 export {
-  injectMetalVars,
-  metalSurfaceStyle,
+  shinySurfaceStyle,
   publishShinyCssVars,
   publishShinyTextureVars,
 } from './engine/cssVars';
@@ -60,4 +50,3 @@ export { ReflectiveButton } from './components/ReflectiveButton';
 export type { ReflectiveButtonProps } from './components/ReflectiveButton';
 export { ReflectiveProgressBar } from './components/ReflectiveProgressBar';
 export type { ReflectiveProgressBarProps } from './components/ReflectiveProgressBar';
-export { enableGyro as enableMobileGyroscope } from './engine/reflexController';

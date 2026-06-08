@@ -1,5 +1,5 @@
 import { createSignal, onMount, Show, ErrorBoundary } from 'solid-js';
-import { initReflex, injectMetalVars } from './components/ui/shiny';
+import { initReflex, publishShinyCssVars } from './components/ui/shiny';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
@@ -111,7 +111,7 @@ export default function App() {
   const [isAuthenticating, setIsAuthenticating] = createSignal(false);
 
   // Single reflex input source + canonical metal gradients for the whole app.
-  injectMetalVars();
+  publishShinyCssVars();
   onMount(initReflex);
   const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
   const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');

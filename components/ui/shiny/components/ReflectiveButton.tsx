@@ -1,6 +1,6 @@
 import { mergeProps } from 'solid-js';
 import type { JSX } from 'solid-js';
-import type { SheenMethod, SheenType, ShinyMaterialKey } from '../engine/types';
+import type { SheenMethod, SheenType, ShinyMaterialId } from '../engine/types';
 
 const sheenClass = (method: SheenMethod, type: SheenType) =>
   method === 'bitmap' ? 'sheen-baked' : `sheen-${type}`;
@@ -8,8 +8,8 @@ const sheenClass = (method: SheenMethod, type: SheenType) =>
 export interface ReflectiveButtonProps {
   onClick?: () => void;
   children: JSX.Element;
-  material?: ShinyMaterialKey;
-  profile?: ShinyMaterialKey;
+  material?: ShinyMaterialId;
+  profile?: ShinyMaterialId;
   type?: SheenType;
   method?: SheenMethod;
   class?: string;
@@ -18,8 +18,8 @@ export interface ReflectiveButtonProps {
 
 export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
   const props = mergeProps({
-    material: undefined as ShinyMaterialKey | undefined,
-    profile: 'gold' as ShinyMaterialKey,
+    material: undefined as ShinyMaterialId | undefined,
+    profile: 'gold' as ShinyMaterialId,
     type: 'linear' as SheenType,
     method: 'svg' as SheenMethod,
     class: '',
@@ -41,7 +41,7 @@ export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
       `}
       style={{
         background: 'none',
-        'box-shadow': material() === 'gold' || material() === 'kan' || material() === 'brass' || material() === 'bronze'
+        'box-shadow': material() === 'gold' || material() === 'kan' || material() === 'bronze' || material() === 'bronze'
           ? '0 4px 14px 0 rgba(251, 191, 36, 0.3)'
           : material() === 'silver'
             ? '0 4px 14px 0 rgba(148, 163, 184, 0.3)'

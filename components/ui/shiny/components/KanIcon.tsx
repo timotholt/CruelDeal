@@ -1,8 +1,8 @@
 import { For, Show, mergeProps } from 'solid-js';
 import { sheenEnabled } from '../engine/reflexController';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../engine/useReflex';
-import { METALS, metalSvgStops } from '../engine/materials';
-import { makeMetalTextureFromStops } from '../engine/textureBake';
+import { SHINY_MATERIALS, shinySvgStops } from '../engine/materials';
+import { bakeShinyTextureFromStops } from '../engine/textureBake';
 
 
 export interface KanIconProps {
@@ -68,10 +68,10 @@ export interface KanIconProps {
   idPrefix?: string;
 }
 
-const RUNTIME_PROFILE_TO_MATERIAL: Partial<Record<NonNullable<KanIconProps['gradientProfile']>, keyof typeof METALS>> = {
+const RUNTIME_PROFILE_TO_MATERIAL: Partial<Record<NonNullable<KanIconProps['gradientProfile']>, keyof typeof SHINY_MATERIALS>> = {
   J: 'gold',
   D: 'silver',
-  G: 'brass',
+  G: 'bronze',
   F: 'mark',
   Engraved: 'engraved',
 };
@@ -237,10 +237,10 @@ export const KanIcon = (rawProps: KanIconProps) => {
   };
   
   const getGradientStops = () => {
-    // Canonical metals (gold=J, silver=D, brass=G, mark=F) come from the single
+    // Canonical metals (gold=J, silver=D, bronze=G, mark=F) come from the single
     // shared registry so the hex matches the text/buttons exactly.
     const metal = RUNTIME_PROFILE_TO_MATERIAL[props.gradientProfile];
-    if (metal) return metalSvgStops(METALS[metal]);
+    if (metal) return shinySvgStops(SHINY_MATERIALS[metal]);
     
     if (props.gradientProfile === 'Custom' || (props.customStops && props.customStops.length > 0)) {
       return [...(props.customStops || [])].sort((a, b) => a.offset - b.offset).map(stop => ({
@@ -254,7 +254,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
     // authoring layer must resolve them and pass the result as `customStops`.
     // Anything unresolved falls back to gold by design; do not "fix" this to read
     // authoring presets, or runtime would depend on authoring (wrong direction).
-    return metalSvgStops(METALS.gold);
+    return shinySvgStops(SHINY_MATERIALS.gold);
   };
 
   // Baked "canvas metal" texture from the SAME live stops the vector path uses,
@@ -262,7 +262,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
   // and updates this icon reactively. Cached per-spec in metals.ts.
   const bakedStops = () => getGradientStops().map((s) => ({ offset: parseFloat(s.offset), color: s.color }));
   const bakedTextureUrl = () =>
-    makeMetalTextureFromStops(bakedStops(), {
+    bakeShinyTextureFromStops(bakedStops(), {
       angle: props.gradientAngle,
       grain: props.bakeGrain,
       size: props.bakeSize,
@@ -332,7 +332,7 @@ export const KanIcon = (rawProps: KanIconProps) => {
               <stop offset="50%" stop-color="#CED2D8" />
               <stop offset="100%" stop-color="#5B5F66" />
             </Show>
-            <Show when={['brass'].includes(props.gradientProfile)}>
+            <Show when={['bronze'].includes(props.gradientProfile)}>
               <stop offset="0%" stop-color="#55411B" />
               <stop offset="50%" stop-color="#B8A269" />
               <stop offset="100%" stop-color="#55411B" />

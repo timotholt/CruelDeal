@@ -1,7 +1,7 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
 import { KanIcon } from '../../ui/shiny';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../../ui/shiny';
-import { METALS, makeMetalTextureFromStops } from '../../ui/shiny';
+import { SHINY_MATERIALS, bakeShinyTextureFromStops } from '../../ui/shiny';
 import { PRESETS, PROFILE_TO_METAL } from './presets';
 import { 
   ReflectiveText, 
@@ -10,7 +10,7 @@ import {
   ReflectiveButton, 
   sheenEnabled, 
   setSheenEnabled,
-  enableMobileGyroscope,
+  enableGyro,
   gyroActive
 } from '../../ui/shiny';
 import { MaterialRichText } from '../../ui/material-node/MaterialRichText';
@@ -249,7 +249,7 @@ export const ShinyAuthoringScreen = () => {
     { label: 'Text', get: textMethod, set: setTextMethod },
     { label: 'Button', get: buttonMethod, set: setButtonMethod },
   ];
-  // Canvas-metal (baked) tuning — drives makeMetalTextureFromStops via sharedKanProps.
+  // Canvas-metal (baked) tuning — drives bakeShinyTextureFromStops via sharedKanProps.
   const [brushedMetal, setBrushedMetal] = createSignal(false); // off = pure gradient bake (apples-to-apples vs vector)
   const [bakeGrain, setBakeGrain] = createSignal(8);
   const [bakeSize, setBakeSize] = createSignal(512);
@@ -258,7 +258,7 @@ export const ShinyAuthoringScreen = () => {
   const getCanonicalMetal = () => {
     const profile = gradientProfile();
     if (['D', 'E', 'silver'].includes(profile)) return 'silver';
-    if (['G', 'brass'].includes(profile)) return 'brass';
+    if (['G', 'bronze'].includes(profile)) return 'bronze';
     if (['F', 'mark'].includes(profile)) return 'mark';
     if (['credit'].includes(profile)) return 'credit';
     return 'gold';
@@ -284,7 +284,7 @@ export const ShinyAuthoringScreen = () => {
   const interactiveShiftY = () => previewReflex().ny * REFLEX_SVG_UNITS;
 
   const requestGyroPermission = async () => {
-    const ok = await enableMobileGyroscope();
+    const ok = await enableGyro();
     if (ok) {
       setHasGyroPermission(true);
       setGyroEnabled(true);
@@ -620,7 +620,7 @@ export const ShinyAuthoringScreen = () => {
   const liveBakeStops = (): { offset: number; color: string }[] => {
     const p = gradientProfile();
     const metal = PROFILE_TO_METAL[p];
-    if (metal) return METALS[metal].stops.map((s) => ({ offset: s.offset, color: s.color }));
+    if (metal) return SHINY_MATERIALS[metal].stops.map((s) => ({ offset: s.offset, color: s.color }));
     if (p === 'Custom') return customStops().map((s) => ({ offset: s.offset, color: s.color }));
     return (PRESETS[p] || PRESETS.J).map((s) => ({ offset: s.offset, color: s.color }));
   };
@@ -2330,7 +2330,7 @@ ${paintDef}${overlayGradDef}
                             <Show when={fillMode() === 'procedural'}>
                               {/* same baked image, mapped exactly like the icon's pattern (-50..150) */}
                               <image
-                                href={makeMetalTextureFromStops(liveBakeStops(), { angle: gradientAngle(), grain: brushedMetal() ? bakeGrain() : 0, size: bakeSize() })}
+                                href={bakeShinyTextureFromStops(liveBakeStops(), { angle: gradientAngle(), grain: brushedMetal() ? bakeGrain() : 0, size: bakeSize() })}
                                 x="-50" y="-50" width="200" height="200"
                                 preserveAspectRatio="xMidYMid slice"
                               />
@@ -3051,7 +3051,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-amber-700 font-mono tracking-wider uppercase block mb-1">Common Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="brass" type={customType()} method={textMethod()}>
+                      <ReflectiveText profile="bronze" type={customType()} method={textMethod()}>
                         COMMON BRASS
                       </ReflectiveText>
                     </h3>
@@ -3092,14 +3092,14 @@ ${paintDef}${overlayGradDef}
                     </div>
                     <ReflectiveProgressBar 
                       value={Math.min(100, demoProgress() + 20)} 
-                      profile="brass" 
+                      profile="bronze" 
                       type={customType()} method={buttonMethod()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 110.4 kg</span>
                     <ReflectiveButton 
-                      profile="brass" 
+                      profile="bronze" 
                       type={customType()} method={buttonMethod()}
                       onClick={() => alert('Purchasing Common Brass')}
                     >
@@ -3195,7 +3195,7 @@ ${paintDef}${overlayGradDef}
                       </div>
                       <div class="pt-1">
                         <span class="text-[10px] text-white/40 font-mono block mb-1">Asian lore tags:</span>
-                        <MaterialRichText value="A seal stamped in [brass]Brass[/brass] was signed for [kan]30 Kan[/kan]." />
+                        <MaterialRichText value="A seal stamped in [bronze]Brass[/bronze] was signed for [kan]30 Kan[/kan]." />
                       </div>
                       <div class="pt-1">
                         <span class="text-[10px] text-white/40 font-mono block mb-1">Shadow/Sys tags:</span>
@@ -3273,7 +3273,7 @@ ${paintDef}${overlayGradDef}
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Reflective Metallic</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="brass" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="bronze" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
                   BRASS SHIELD
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Dark Specular</span>

@@ -51,5 +51,3 @@ export function bakeShinyTextureFromStops(stops: ShinyStop[], opts: ShinyTexture
 
   return canvas.toDataURL('image/png');
 }
-
-export const makeMetalTextureFromStops = bakeShinyTextureFromStops;

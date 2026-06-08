@@ -1,8 +1,6 @@
 import type { Accessor, JSX } from 'solid-js';
 
 export type ShinyMaterialId = 'gold' | 'silver' | 'bronze' | 'kan' | 'credit' | 'mark' | 'engraved';
-export type ShinyLegacyMaterialId = 'brass';
-export type ShinyMaterialKey = ShinyMaterialId | ShinyLegacyMaterialId;
 
 export interface ShinyStop {
   offset: number;
@@ -50,18 +48,10 @@ export type SheenMethod = 'svg' | 'bitmap';
 export type SheenType = 'linear' | 'radial' | 'box';
 
 export interface ShinySurfaceProps {
-  material?: ShinyMaterialKey;
-  profile?: ShinyMaterialKey;
+  material?: ShinyMaterialId;
+  profile?: ShinyMaterialId;
   type?: SheenType;
   method?: SheenMethod;
   class?: string;
   style?: JSX.CSSProperties;
-}
-
-export type MetalId = ShinyMaterialKey;
-export type MetalStop = ShinyStop;
-export type MetalTextureOptions = ShinyTextureOptions;
-
-export interface MetalSpec extends Omit<ShinyMaterialDefinition, 'id'> {
-  id: MetalId;
 }

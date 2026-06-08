@@ -1,4 +1,4 @@
-import type { MetalId, ShinyStop } from '../../ui/shiny';
+import type { ShinyMaterialId, ShinyStop } from '../../ui/shiny';
 
 export const LEGACY_AUTHORING_PRESETS: Record<string, ShinyStop[]> = {
   A: [
@@ -108,10 +108,10 @@ export const LEGACY_AUTHORING_PRESETS: Record<string, ShinyStop[]> = {
 
 export const PRESETS = LEGACY_AUTHORING_PRESETS;
 
-export const PROFILE_TO_METAL: Partial<Record<string, MetalId>> = {
+export const PROFILE_TO_METAL: Partial<Record<string, ShinyMaterialId>> = {
   J: 'gold',
   D: 'silver',
-  G: 'brass',
+  G: 'bronze',
   F: 'mark',
   Engraved: 'engraved',
 };
