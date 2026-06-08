@@ -36,6 +36,7 @@ import {
 import {
   boundedEmissionInspectorPosition,
   createEmptyDomClassKeys,
+  createMainMaterialWindowFrameScheduler,
   queueMainMaterialDomAuditRefresh,
   refreshMainMaterialDomAudit,
   toggleDomClassKey,
@@ -175,15 +176,26 @@ import {
   type FeedTextSlotId,
   type FeedTextSlotStyle,
 } from './main-material/mainMaterialFeedModel';
+import {
+  addMaterialPreset,
+  clearMaterialPresetDirty,
+  createEmptyMaterialPresets,
+  createEmptyPresetDirty,
+  createEmptySelectedPresetIds,
+  createMaterialPreset,
+  deleteMaterialPreset as deleteMaterialPresetFromState,
+  markMaterialPresetDirty,
+  materialPresetDirty,
+  sanitizeMaterialPresets,
+  setSelectedMaterialPresetId,
+  updateMaterialPresetRecipe,
+  type MaterialPreset,
+  type MaterialPresetDirtyByPart,
+  type MaterialPresetIdsByPart,
+  type MaterialPresetsByPart,
+} from './main-material/mainMaterialPresetModel';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
-type MaterialPresetsByPart = Record<MainPartId, MaterialPreset[]>;
-
-interface MaterialPreset {
-  id: string;
-  name: string;
-  recipe: MaterialRecipe;
-}
 
 type MaterialEditableTarget = MainMaterialEditableTarget;
 
@@ -210,42 +222,6 @@ const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabil
   navBar: { states: true },
   navBarContainer: { text: false, states: false },
 };
-
-const createEmptyMaterialPresets = (): MaterialPresetsByPart => ({
-  backdrop: [],
-  topBar: [],
-  profileButton: [],
-  currencyButtons: [],
-  titleBlock: [],
-  feedCards: [],
-  toolBar: [],
-  navBar: [],
-  navBarContainer: [],
-});
-
-const createEmptySelectedPresetIds = (): Record<MainPartId, string> => ({
-  backdrop: '',
-  topBar: '',
-  profileButton: '',
-  currencyButtons: '',
-  titleBlock: '',
-  feedCards: '',
-  toolBar: '',
-  navBar: '',
-  navBarContainer: '',
-});
-
-const createEmptyPresetDirty = (): Record<MainPartId, boolean> => ({
-  backdrop: false,
-  topBar: false,
-  profileButton: false,
-  currencyButtons: false,
-  titleBlock: false,
-  feedCards: false,
-  toolBar: false,
-  navBar: false,
-  navBarContainer: false,
-});
 
 const fontOptions = [
   { label: 'Condensed', value: '"IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif' },
@@ -2017,29 +1993,6 @@ const sanitizeSurfaces = (value: unknown): SurfaceRecipes => {
   };
 };
 
-const sanitizeMaterialPresets = (value: unknown): MaterialPresetsByPart => {
-  const input = typeof value === 'object' && value !== null ? value as Partial<Record<MainPartId, unknown>> : {};
-  const empty = createEmptyMaterialPresets();
-  partLabels.forEach((part) => {
-    const rawPresets = Array.isArray(input[part.id]) ? input[part.id] as unknown[] : [];
-    empty[part.id] = rawPresets
-      .map((preset, index): MaterialPreset | null => {
-        if (typeof preset !== 'object' || preset === null) return null;
-        const raw = preset as Partial<MaterialPreset>;
-        const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : `${part.id}-${index}`;
-        const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `${part.label} Preset ${index + 1}`;
-        return {
-          id,
-          name,
-          recipe: sanitizeMaterialRecipe(raw.recipe, defaultSurfaceForPart(part.id)),
-        };
-      })
-      .filter((preset): preset is MaterialPreset => !!preset);
-  });
-  return empty;
-};
-
-
 const BackdropRecipeEditor = (props: { backdrop: BackdropRecipe; onChange: (backdrop: BackdropRecipe) => void }) => {
   const update = <K extends keyof BackdropRecipe>(key: K, value: BackdropRecipe[K]) => {
     props.onChange({ ...props.backdrop, [key]: value });
@@ -2319,17 +2272,16 @@ export const MainMaterialPreviewScreen = () => {
   const [nav, setNav] = createSignal<NavRecipe>(cloneNav(defaultNav));
   const [surfaces, setSurfaces] = createSignal<SurfaceRecipes>(cloneSurfaceRecipes(defaultSurfaces));
   const [materialPresets, setMaterialPresets] = createSignal<MaterialPresetsByPart>(createEmptyMaterialPresets());
-  const [selectedPresetIds, setSelectedPresetIds] = createSignal<Record<MainPartId, string>>(createEmptySelectedPresetIds());
-  const [presetDirty, setPresetDirty] = createSignal<Record<MainPartId, boolean>>(createEmptyPresetDirty());
+  const [selectedPresetIds, setSelectedPresetIds] = createSignal<MaterialPresetIdsByPart>(createEmptySelectedPresetIds());
+  const [presetDirty, setPresetDirty] = createSignal<MaterialPresetDirtyByPart>(createEmptyPresetDirty());
   const [materialPresetsLoaded, setMaterialPresetsLoaded] = createSignal(false);
 
   const markPresetDirty = (part: MainPartId) => {
-    if (!selectedPresetIds()[part]) return;
-    setPresetDirty((current) => ({ ...current, [part]: true }));
+    setPresetDirty((current) => markMaterialPresetDirty(current, selectedPresetIds(), part));
   };
 
   const clearPresetDirty = (part: MainPartId) => {
-    setPresetDirty((current) => ({ ...current, [part]: false }));
+    setPresetDirty((current) => clearMaterialPresetDirty(current, part));
   };
 
   const updateSurface = (key: keyof SurfaceRecipes, recipe: MaterialRecipe) => {
@@ -2632,7 +2584,10 @@ export const MainMaterialPreviewScreen = () => {
     }
 
     try {
-      setMaterialPresets(sanitizeMaterialPresets(readMainMaterialStoredPresets(window.localStorage)));
+      setMaterialPresets(sanitizeMaterialPresets(readMainMaterialStoredPresets(window.localStorage), {
+        labelForPart: (part) => partLabelById[part],
+        defaultSurfaceForPart,
+      }));
     } catch {
       setMaterialPresets(createEmptyMaterialPresets());
     } finally {
@@ -2768,14 +2723,14 @@ export const MainMaterialPreviewScreen = () => {
     });
   };
   const queueDomAuditRefresh = (targetId: string, hiddenClasses: ReadonlySet<string>, maxAttempts = 6) => {
+    const frameScheduler = createMainMaterialWindowFrameScheduler(window);
     return queueMainMaterialDomAuditRefresh({
       targetId,
       hiddenClasses,
       maxAttempts,
       selectedTargetId: selectedEmissionTargetId,
       refresh: refreshDomAudit,
-      requestFrame: window.requestAnimationFrame,
-      cancelFrame: window.cancelAnimationFrame,
+      ...frameScheduler,
     });
   };
   const refreshDomAuditWithStatus = () => {
@@ -2943,9 +2898,9 @@ export const MainMaterialPreviewScreen = () => {
 
   const selectedMaterialPresets = () => materialPresets()[selectedPart()];
   const selectedPresetId = () => selectedPresetIds()[selectedPart()];
-  const selectedPresetDirty = () => Boolean(selectedPresetId() && presetDirty()[selectedPart()]);
+  const selectedPresetDirty = () => materialPresetDirty(selectedPresetIds(), presetDirty(), selectedPart());
   const setSelectedPresetId = (part: MainPartId, id: string) => {
-    setSelectedPresetIds((current) => ({ ...current, [part]: id }));
+    setSelectedPresetIds((current) => setSelectedMaterialPresetId(current, part, id));
   };
 
   const selectMaterialPreset = (part: MainPartId, id: string) => {
@@ -2961,12 +2916,8 @@ export const MainMaterialPreviewScreen = () => {
     const name = window.prompt('Name this material preset', `${partLabelById[part]} Preset ${materialPresets()[part].length + 1}`)?.trim();
     if (!name) return;
     const id = createPresetId(part);
-    const preset: MaterialPreset = {
-      id,
-      name,
-      recipe: cloneMaterialRecipe(currentRecipeForPart(part)),
-    };
-    setMaterialPresets((current) => ({ ...current, [part]: [...current[part], preset] }));
+    const preset = createMaterialPreset(id, name, currentRecipeForPart(part));
+    setMaterialPresets((current) => addMaterialPreset(current, part, preset));
     setSelectedPresetId(part, id);
     clearPresetDirty(part);
   };
@@ -2977,14 +2928,7 @@ export const MainMaterialPreviewScreen = () => {
       saveNewMaterialPreset(part);
       return;
     }
-    setMaterialPresets((current) => ({
-      ...current,
-      [part]: current[part].map((preset) => (
-        preset.id === id
-          ? { ...preset, recipe: cloneMaterialRecipe(currentRecipeForPart(part)) }
-          : preset
-      )),
-    }));
+    setMaterialPresets((current) => updateMaterialPresetRecipe(current, part, id, currentRecipeForPart(part)));
     setSelectedPresetId(part, id);
     clearPresetDirty(part);
   };
@@ -2994,7 +2938,7 @@ export const MainMaterialPreviewScreen = () => {
     const preset = materialPresets()[part].find((item) => item.id === id);
     if (!preset) return;
     if (!window.confirm(`Delete material preset "${preset.name}"?`)) return;
-    setMaterialPresets((current) => ({ ...current, [part]: current[part].filter((item) => item.id !== id) }));
+    setMaterialPresets((current) => deleteMaterialPresetFromState(current, part, id));
     setSelectedPresetId(part, '');
   };
 

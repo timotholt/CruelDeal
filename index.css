@@ -392,17 +392,21 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
    through the text/token glyph mask and slid by the reflex direction. This is
    literally the same texture the icon uses, so text/buttons/icon all match.
    ========================================================================== */
-.method-procedural .metal-gold,   .method-procedural .main-material-rich-token--gold   { --metal-image: var(--metal-gold-texture-sm); }
-.method-procedural .metal-silver, .method-procedural .main-material-rich-token--silver { --metal-image: var(--metal-silver-texture-sm); }
-.method-procedural .metal-brass,  .method-procedural .main-material-rich-token--brass  { --metal-image: var(--metal-brass-texture-sm); }
-.method-procedural .metal-kan,    .method-procedural .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture-sm); }
-.method-procedural .metal-credit, .method-procedural .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture-sm); }
-.method-procedural .metal-mark,   .method-procedural .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture-sm); }
+/* --metal-image (small baked texture) available on every metal, so any surface
+   can opt into the bitmap method per-element. */
+.metal-gold,   .main-material-rich-token--gold   { --metal-image: var(--metal-gold-texture-sm); }
+.metal-silver, .main-material-rich-token--silver { --metal-image: var(--metal-silver-texture-sm); }
+.metal-brass,  .main-material-rich-token--brass  { --metal-image: var(--metal-brass-texture-sm); }
+.metal-kan,    .main-material-rich-token--kan    { --metal-image: var(--metal-kan-texture-sm); }
+.metal-credit, .main-material-rich-token--credit { --metal-image: var(--metal-credit-texture-sm); }
+.metal-mark,   .main-material-rich-token--mark   { --metal-image: var(--metal-mark-texture-sm); }
 
 /* Single baked-texture layer (replaces the vector gradient + highlight band),
-   positioned by the global reflex direction. background-clip:text is inherited
-   from .sheen-text / the token rules above. */
-.method-procedural .sheen-text,
+   positioned by the global reflex direction. background-clip:text comes from
+   .sheen-text / the token rules. `.sheen-baked` = per-element bitmap method
+   (MetallicText / MetallicButton); the `.method-procedural` descendant form
+   drives rich-text tokens via a container. */
+.sheen-baked,
 .method-procedural .main-material-rich-token--gold,
 .method-procedural .main-material-rich-token--silver,
 .method-procedural .main-material-rich-token--brass,

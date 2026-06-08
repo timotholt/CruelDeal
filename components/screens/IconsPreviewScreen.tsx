@@ -202,7 +202,7 @@ export const IconsPreviewScreen = () => {
     setHeavyFx(on);
     if (!on) {
       if (customType() === 'box') setCustomType('linear');
-      if (fillMode() === 'texture') setFillMode('gradient');
+      if (useTextureFile()) setUseTextureFile(false);
       setGlowIntensity(0);
     }
   };
@@ -233,8 +233,23 @@ export const IconsPreviewScreen = () => {
   const [kDiagWidth, setKDiagWidth] = createSignal(25.5);
   const [kOffsetX, setKOffsetX] = createSignal(-0.5);
   const [kOffsetY, setKOffsetY] = createSignal(0);
-  const [fillMode, setFillMode] = createSignal<'gradient' | 'texture' | 'procedural'>('gradient');
+  // Per-surface render method (the RENDER MODE table). Each surface independently
+  // picks SVG gradient (vector) or Bitmap (baked canvas texture).
+  const [iconMethod, setIconMethod] = createSignal<'svg' | 'bitmap'>('svg');
+  const [textMethod, setTextMethod] = createSignal<'svg' | 'bitmap'>('svg');
+  const [buttonMethod, setButtonMethod] = createSignal<'svg' | 'bitmap'>('bitmap');
+  const [useTextureFile, setUseTextureFile] = createSignal(false); // niche: photo PNG for the icon
+  const anyBitmap = () => iconMethod() === 'bitmap' || textMethod() === 'bitmap' || buttonMethod() === 'bitmap';
+  // Icon's KanIcon fillMode derives from the table (+ the texture-file override).
+  const fillMode = (): 'gradient' | 'texture' | 'procedural' =>
+    useTextureFile() ? 'texture' : iconMethod() === 'bitmap' ? 'procedural' : 'gradient';
+  const methodRows: { label: string; get: () => 'svg' | 'bitmap'; set: (v: 'svg' | 'bitmap') => void }[] = [
+    { label: 'Icon', get: iconMethod, set: setIconMethod },
+    { label: 'Text', get: textMethod, set: setTextMethod },
+    { label: 'Button', get: buttonMethod, set: setButtonMethod },
+  ];
   // Canvas-metal (baked) tuning — drives makeMetalTextureFromStops via sharedKanProps.
+  const [brushedMetal, setBrushedMetal] = createSignal(false); // off = pure gradient bake (apples-to-apples vs vector)
   const [bakeGrain, setBakeGrain] = createSignal(8);
   const [bakeSize, setBakeSize] = createSignal(512);
   const [tweakerTab, setTweakerTab] = createSignal<'geometry' | 'texturing'>('texturing');
@@ -595,7 +610,7 @@ export const IconsPreviewScreen = () => {
     get boxMixBlendMode() { return boxMixBlendMode(); },
     get glowRadius() { return glowIntensity(); },
     get glowColor() { return glowIntensity() > 0 ? 'rgba(251, 191, 36, 0.45)' : 'none'; },
-    get bakeGrain() { return bakeGrain(); },
+    get bakeGrain() { return brushedMetal() ? bakeGrain() : 0; },
     get bakeSize() { return bakeSize(); },
   };
 
@@ -1264,31 +1279,40 @@ ${paintDef}${overlayGradDef}
                    </span>
                  </label>
 
-                 {/* Fill Mode Switcher */}
+                 {/* RENDER MODE — each surface independently picks SVG (vector)
+                     or Bitmap (baked canvas texture). */}
                  <div class="mb-2.5">
-                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Fill Mode</span>
-                   <div class={`grid ${heavyFx() ? 'grid-cols-3' : 'grid-cols-2'} gap-1 bg-black/40 p-0.5 rounded border border-white/5`}>
-                      <button 
-                        onClick={() => setFillMode('gradient')}
-                        class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'gradient' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                      >
-                        GRADIENT
-                      </button>
-                      <button 
-                        onClick={() => setFillMode('procedural')}
-                        class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'procedural' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                      >
-                        CANVAS METAL
-                      </button>
-                      <Show when={heavyFx()}>
-                        <button
-                          onClick={() => setFillMode('texture')}
-                          class={`py-0.5 text-[9.5px] font-mono rounded transition-all ${fillMode() === 'texture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
-                        >
-                          TEXTURE FILE
-                        </button>
-                      </Show>
-                    </div>
+                   <span class="text-[10px] text-white/50 block mb-1 uppercase tracking-wider">Render Mode</span>
+                   <div class="bg-black/40 p-1 rounded border border-white/5 flex flex-col gap-1">
+                     <div class="grid grid-cols-[54px_1fr_1fr] items-center gap-1 text-[8px] text-white/35 uppercase tracking-wider px-0.5">
+                       <span />
+                       <span class="text-center">SVG Gradient</span>
+                       <span class="text-center">Bitmap</span>
+                     </div>
+                     {methodRows.map((row) => (
+                       <div class="grid grid-cols-[54px_1fr_1fr] items-center gap-1">
+                         <span class="text-[10px] text-white/70">{row.label}</span>
+                         <button
+                           onClick={() => row.set('svg')}
+                           class={`py-0.5 text-[9px] font-mono rounded transition-all ${row.get() === 'svg' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                         >
+                           SVG
+                         </button>
+                         <button
+                           onClick={() => row.set('bitmap')}
+                           class={`py-0.5 text-[9px] font-mono rounded transition-all ${row.get() === 'bitmap' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-white/40 hover:text-white/70 border border-transparent bg-black/20 hover:bg-black/40'}`}
+                         >
+                           Bitmap
+                         </button>
+                       </div>
+                     ))}
+                   </div>
+                   <Show when={heavyFx()}>
+                     <label class="mt-1.5 flex items-center gap-2 cursor-pointer select-none rounded border border-white/10 bg-black/20 px-2 py-1">
+                       <input type="checkbox" checked={useTextureFile()} onChange={(e) => setUseTextureFile(e.currentTarget.checked)} class="accent-amber-500 cursor-pointer" />
+                       <span class="text-[9.5px] text-white/60">Icon: use photo texture file instead</span>
+                     </label>
+                   </Show>
                  </div>
 
                  {/* Material Gradient Profiles or Texture Dropdown */}
@@ -2079,30 +2103,43 @@ ${paintDef}${overlayGradDef}
 
                     <Show when={fillMode() === 'procedural'}>
                       <div class="mb-3.5 flex flex-col gap-2">
-                        <div>
-                          <div class="flex justify-between text-[11px] mb-0.5">
-                            <span class="text-white/60">Brushed Grain</span>
-                            <span class="font-mono text-amber-400 font-semibold">{bakeGrain()}</span>
-                          </div>
+                        <label class="flex items-center gap-2 cursor-pointer select-none rounded border border-amber-500/20 bg-amber-500/[0.04] px-2 py-1.5 w-full">
                           <input
-                            type="range" min="0" max="40" step="1"
-                            value={bakeGrain()}
-                            onInput={(e) => setBakeGrain(parseInt(e.currentTarget.value))}
-                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            type="checkbox"
+                            checked={brushedMetal()}
+                            onChange={(e) => setBrushedMetal(e.currentTarget.checked)}
+                            class="accent-amber-500 cursor-pointer"
                           />
-                        </div>
-                        <div>
-                          <div class="flex justify-between text-[11px] mb-0.5">
-                            <span class="text-white/60">Texture Size</span>
-                            <span class="font-mono text-amber-400 font-semibold">{bakeSize()}px</span>
+                          <span class="text-[10px] leading-tight text-amber-200/90">
+                            Brushed metal grain <span class="text-white/40">(off = pure gradient, apples-to-apples)</span>
+                          </span>
+                        </label>
+                        <Show when={brushedMetal()}>
+                          <div>
+                            <div class="flex justify-between text-[11px] mb-0.5">
+                              <span class="text-white/60">Grain Amount</span>
+                              <span class="font-mono text-amber-400 font-semibold">{bakeGrain()}</span>
+                            </div>
+                            <input
+                              type="range" min="0" max="40" step="1"
+                              value={bakeGrain()}
+                              onInput={(e) => setBakeGrain(parseInt(e.currentTarget.value))}
+                              class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
                           </div>
-                          <input
-                            type="range" min="64" max="1024" step="64"
-                            value={bakeSize()}
-                            onInput={(e) => setBakeSize(parseInt(e.currentTarget.value))}
-                            class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                          />
-                        </div>
+                          <div>
+                            <div class="flex justify-between text-[11px] mb-0.5">
+                              <span class="text-white/60">Grain Resolution</span>
+                              <span class="font-mono text-amber-400 font-semibold">{bakeSize()}px</span>
+                            </div>
+                            <input
+                              type="range" min="64" max="1024" step="64"
+                              value={bakeSize()}
+                              onInput={(e) => setBakeSize(parseInt(e.currentTarget.value))}
+                              class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                          </div>
+                        </Show>
                         <button
                           type="button"
                           onClick={() => {
@@ -2122,6 +2159,8 @@ ${paintDef}${overlayGradDef}
                       </div>
                     </Show>
 
+                    {/* Photo-texture-only controls (do NOT affect the canvas-metal bake). */}
+                    <Show when={fillMode() === 'texture'}>
                     {/* Texture Scale Slider */}
                     <div class="mb-2.5">
                       <div class="flex justify-between text-[11px] mb-0.5">
@@ -2220,9 +2259,10 @@ ${paintDef}${overlayGradDef}
                         step="0.05"
                         value={textureSaturation()}
                         onInput={(e) => setTextureSaturation(parseFloat(e.currentTarget.value))}
-                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500" 
+                        class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
                       />
                     </div>
+                    </Show>
 
                     <Show when={fillMode() === 'texture'}>
                       {/* Overlay Gradient Opacity Slider */}
@@ -2264,34 +2304,51 @@ ${paintDef}${overlayGradDef}
                   <div class="mt-4 border-t border-white/10 pt-4">
                     <span class="text-[10px] text-white/50 block mb-1.5 uppercase tracking-wider font-semibold">Active Backend Texture</span>
                     <div class="bg-black/40 p-2 rounded border border-white/5 flex flex-col gap-2">
-                      <div 
-                        style={{
-                          background: (() => {
-                            if (fillMode() === 'procedural') {
-                              // The actual baked canvas texture the coins render.
-                              return `url(${makeMetalTextureFromStops(liveBakeStops(), { angle: gradientAngle(), grain: bakeGrain(), size: bakeSize() })})`;
-                            }
-                            if (fillMode() === 'texture') {
-                              return `url(/gold-textures/${selectedTexture()})`;
-                            }
-                            // Gradient Mode
-                            if (customType() === 'box') {
-                              return `linear-gradient(135deg, ${stopsCssString()})`;
-                            }
-                            if (customType() === 'radial') {
-                              return `radial-gradient(circle at 50% 50%, ${stopsCssString()})`;
-                            }
-                            return `linear-gradient(${gradientAngle()}deg, ${stopsCssString()})`;
-                          })(),
-                          "background-size": "cover",
-                          "background-position": "center",
-                          "background-blend-mode": "normal",
-                          filter: fillMode() === 'gradient' ? 'none' : `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})`
-                        }} 
-                        class="w-full h-24 rounded border border-white/10 overflow-hidden relative shadow-inner"
-                      >
-                        <div class="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 rounded text-[8px] font-mono text-white/70 border border-white/5">
-                          {fillMode() === 'procedural' ? 'Canvas texture (used in game client)' : (fillMode() === 'texture' ? selectedTexture() : 'CSS Gradient')}
+                      {/* Faithful preview: renders exactly what the ICON renders for
+                          the current method — the same SVG gradient (angle + scale +
+                          reflect) in SVG mode, the same baked pattern in Bitmap mode. */}
+                      <div class="w-full h-24 rounded border border-white/10 overflow-hidden relative shadow-inner bg-black/30">
+                        <Show
+                          when={fillMode() !== 'texture'}
+                          fallback={
+                            <div
+                              class="absolute inset-0"
+                              style={{
+                                background: `url(/gold-textures/${selectedTexture()})`,
+                                "background-size": "cover",
+                                "background-position": "center",
+                                filter: `brightness(${textureBrightness()}) contrast(${textureContrast()}) saturate(${textureSaturation()})`,
+                              }}
+                            />
+                          }
+                        >
+                          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full">
+                            <Show when={fillMode() === 'procedural'}>
+                              {/* same baked image, mapped exactly like the icon's pattern (-50..150) */}
+                              <image
+                                href={makeMetalTextureFromStops(liveBakeStops(), { angle: gradientAngle(), grain: brushedMetal() ? bakeGrain() : 0, size: bakeSize() })}
+                                x="-50" y="-50" width="200" height="200"
+                                preserveAspectRatio="xMidYMid slice"
+                              />
+                            </Show>
+                            <Show when={fillMode() === 'gradient'}>
+                              <defs>
+                                <linearGradient
+                                  id="preview-grad"
+                                  x1={gradCoords(0, 0).x1} y1={gradCoords(0, 0).y1}
+                                  x2={gradCoords(0, 0).x2} y2={gradCoords(0, 0).y2}
+                                  gradientUnits="userSpaceOnUse"
+                                  spreadMethod="reflect"
+                                >
+                                  <For each={liveBakeStops()}>{(s) => <stop offset={`${s.offset}%`} stop-color={s.color} />}</For>
+                                </linearGradient>
+                              </defs>
+                              <rect x="0" y="0" width="100" height="100" fill="url(#preview-grad)" />
+                            </Show>
+                          </svg>
+                        </Show>
+                        <div class="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 rounded text-[8px] font-mono text-white/70 border border-white/5 z-10">
+                          {fillMode() === 'texture' ? selectedTexture() : iconMethod() === 'bitmap' ? 'Bitmap (canvas)' : 'SVG gradient (icon)'}
                         </div>
                       </div>
                     </div>
@@ -2641,7 +2698,7 @@ ${paintDef}${overlayGradDef}
 
                   const renderSizeCell = (size: string, px: string) => (
                     <div class="group/size relative flex flex-col items-center justify-end cursor-help pb-0.5">
-                      <div class="bg-black/60 border border-white/5 hover:border-amber-500/40 hover:bg-black/80 rounded flex items-center justify-center overflow-hidden transition-all shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
+                      <div class="bg-black/60 border border-white/5 rounded flex items-center justify-center overflow-hidden shadow-inner" style={{ width: `calc(${size} + 6px)`, height: `calc(${size} + 6px)` }}>
                         <KanIcon size={size} thickness={borderStrokeWidth()} kThickness={currentKStrokeWidth()} {...sharedKanProps} />
                       </div>
                       <span class="text-[7.5px] font-mono text-white/60 mt-1">{size}</span>
@@ -2656,7 +2713,7 @@ ${paintDef}${overlayGradDef}
 
                   return (
                     <div
-                      class="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-all flex flex-col items-center"
+                      class="p-3 rounded-lg border border-white/5 bg-white/[0.01] flex flex-col items-center"
                     >
                       <div class="text-center mb-3">
                         <span class="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase">{type === 'medium' ? 'Active Config' : `${type} view`}</span>
@@ -2665,10 +2722,8 @@ ${paintDef}${overlayGradDef}
                       
                       {/* SVG Render box */}
                       <div
-                        class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative group overflow-hidden shadow-inner mb-3"
+                        class="w-40 h-40 bg-black/50 border border-white/10 rounded-lg flex items-center justify-center relative overflow-hidden shadow-inner mb-3"
                       >
-                        <div class="absolute inset-0 bg-gradient-to-t from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                        
                         <KanIcon size="7rem" thickness={borderStrokeWidth()} kThickness={currentKStrokeWidth()} {...sharedKanProps} />
                       </div>
 
@@ -2829,7 +2884,7 @@ ${paintDef}${overlayGradDef}
         {/* SECTION 4: Unified Motion & Reflex UI Sandbox Demo */}
         <section 
           class="mt-12 p-8 rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent backdrop-blur-md relative overflow-hidden"
-          classList={{ 'method-procedural': fillMode() === 'procedural' }}
+          classList={{ 'method-procedural': textMethod() === 'bitmap' }}
         >
           <div class="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full filter blur-3xl pointer-events-none" />
           
@@ -2860,7 +2915,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-amber-500 font-mono tracking-wider uppercase block mb-1">Premium Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="gold" type={customType()}>
+                      <ReflectiveText profile="gold" type={customType()} method={textMethod()}>
                         IMPERIAL GOLD
                       </ReflectiveText>
                     </h3>
@@ -2902,14 +2957,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={demoProgress()} 
                       profile="gold" 
-                      type={customType()} 
+                      type={customType()} method={buttonMethod()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 12.5 kg</span>
                     <ReflectiveButton 
                       profile="gold" 
-                      type={customType()}
+                      type={customType()} method={buttonMethod()}
                       onClick={() => alert('Purchasing Imperial Gold')}
                     >
                       ACQUIRE
@@ -2926,7 +2981,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-slate-400 font-mono tracking-wider uppercase block mb-1">Standard Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="silver" type={customType()}>
+                      <ReflectiveText profile="silver" type={customType()} method={textMethod()}>
                         REFINED SILVER
                       </ReflectiveText>
                     </h3>
@@ -2968,14 +3023,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.max(0, demoProgress() - 15)} 
                       profile="silver" 
-                      type={customType()} 
+                      type={customType()} method={buttonMethod()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 42.0 kg</span>
                     <ReflectiveButton 
                       profile="silver" 
-                      type={customType()}
+                      type={customType()} method={buttonMethod()}
                       onClick={() => alert('Purchasing Refined Silver')}
                     >
                       ACQUIRE
@@ -2992,7 +3047,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-amber-700 font-mono tracking-wider uppercase block mb-1">Common Tier</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="brass" type={customType()}>
+                      <ReflectiveText profile="brass" type={customType()} method={textMethod()}>
                         COMMON BRASS
                       </ReflectiveText>
                     </h3>
@@ -3034,14 +3089,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.min(100, demoProgress() + 20)} 
                       profile="brass" 
-                      type={customType()} 
+                      type={customType()} method={buttonMethod()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 110.4 kg</span>
                     <ReflectiveButton 
                       profile="brass" 
-                      type={customType()}
+                      type={customType()} method={buttonMethod()}
                       onClick={() => alert('Purchasing Common Brass')}
                     >
                       ACQUIRE
@@ -3058,7 +3113,7 @@ ${paintDef}${overlayGradDef}
                   <div>
                     <span class="text-[10px] text-slate-500 font-mono tracking-wider uppercase block mb-1">Underworld Marker</span>
                     <h3 class="text-md font-bold text-white flex items-center gap-1">
-                      <ReflectiveText profile="mark" type={customType()}>
+                      <ReflectiveText profile="mark" type={customType()} method={textMethod()}>
                         UNDERWORLD MARK
                       </ReflectiveText>
                     </h3>
@@ -3100,14 +3155,14 @@ ${paintDef}${overlayGradDef}
                     <ReflectiveProgressBar 
                       value={Math.max(0, 100 - demoProgress())} 
                       profile="mark" 
-                      type={customType()} 
+                      type={customType()} method={buttonMethod()} 
                     />
                   </div>
                   <div class="flex items-center justify-between pt-2">
                     <span class="text-xs text-white/40 font-mono">EST. WEIGHT: 5.2 kg</span>
                     <ReflectiveButton 
                       profile="mark" 
-                      type={customType()}
+                      type={customType()} method={buttonMethod()}
                       onClick={() => alert('Claiming Underworld Mark')}
                     >
                       CLAIM
@@ -3202,25 +3257,25 @@ ${paintDef}${overlayGradDef}
             <h3 class="text-xs font-mono font-bold text-white/40 uppercase mb-3 tracking-wider text-center">Embossed 3D Metallic Typography</h3>
             <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 py-2">
               <div class="text-center">
-                <EmbossedReflectiveText profile="gold" type={customType()} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="gold" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
                   GOLD EMBOSS
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Double Shadow Offset</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="silver" type={customType()} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="silver" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
                   SILVER CHISEL
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Reflective Metallic</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="brass" type={customType()} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="brass" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
                   BRASS SHIELD
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">Dark Specular</span>
               </div>
               <div class="text-center">
-                <EmbossedReflectiveText profile="mark" type={customType()} class="text-xl uppercase tracking-widest font-black">
+                <EmbossedReflectiveText profile="mark" type={customType()} method={textMethod()} class="text-xl uppercase tracking-widest font-black">
                   MARK CONTRACT
                 </EmbossedReflectiveText>
                 <span class="text-[9px] text-white/30 block mt-1 font-mono">John Wick Lore</span>

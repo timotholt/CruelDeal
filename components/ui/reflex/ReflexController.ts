@@ -59,13 +59,29 @@ const commit = (gx: number, gy: number, src: ReflexPointer['source'], x: number,
   writeRootVars(gx, gy);
 };
 
-const flush = () => {
+// Cap commit rate. rAF already coalesces to one per displayed frame, but that's
+// the panel refresh (120fps on a 120Hz display → 120 repaints/sec of the heavy
+// bitmap mode). Capping holds it at a fixed budget. Set REFLEX_FPS_CAP to 30 for
+// the lightest load; 60 tames high-refresh panels without visible stepping.
+const REFLEX_FPS_CAP = 60;
+const MIN_FRAME_MS = 1000 / REFLEX_FPS_CAP - 4; // 4ms tolerance so 60Hz never skips
+let lastCommitTs = 0;
+
+const flush = (ts?: number) => {
   frame = 0;
   if (!sheenEnabled()) {
     pendingMouse = null;
     pendingTilt = null;
     return;
   }
+  // FPS cap: if we committed too recently, wait for a later frame (the pending
+  // value is kept, so we never drop the latest position).
+  const now = ts ?? (typeof performance !== 'undefined' ? performance.now() : 0);
+  if (now - lastCommitTs < MIN_FRAME_MS && (pendingMouse || pendingTilt)) {
+    schedule();
+    return;
+  }
+  lastCommitTs = now;
   if (pendingMouse) {
     const { x, y } = pendingMouse;
     pendingMouse = null;

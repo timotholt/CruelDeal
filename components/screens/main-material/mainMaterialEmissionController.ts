@@ -14,6 +14,23 @@ export interface InspectorViewport {
   height: number;
 }
 
+export interface MainMaterialFrameScheduler {
+  requestFrame: (callback: () => void) => number;
+  cancelFrame: (frame: number) => void;
+}
+
+export interface MainMaterialWindowFrameSource {
+  requestAnimationFrame: (callback: () => void) => number;
+  cancelAnimationFrame: (frame: number) => void;
+}
+
+export const createMainMaterialWindowFrameScheduler = (
+  source: MainMaterialWindowFrameSource,
+): MainMaterialFrameScheduler => ({
+  requestFrame: (callback) => source.requestAnimationFrame(callback),
+  cancelFrame: (frame) => source.cancelAnimationFrame(frame),
+});
+
 export const createEmptyDomClassKeys = (): ReadonlySet<string> => new Set<string>();
 
 export const toggleDomClassKey = (

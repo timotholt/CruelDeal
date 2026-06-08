@@ -669,7 +669,6 @@ export const KanIcon = (rawProps: KanIconProps) => {
               preserveAspectRatio="xMidYMid slice"
               style={{
                 transform: props.interactive ? `translate(${activeShiftX()}px, ${activeShiftY()}px)` : undefined,
-                "will-change": "transform",
               }}
             />
           </g>

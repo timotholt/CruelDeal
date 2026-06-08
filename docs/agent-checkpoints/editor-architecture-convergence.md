@@ -202,6 +202,11 @@ authoring JSON
   screen now routes localStorage save/load and clipboard import/export through a
   named editor preview-state document adapter, including tested story/card
   target fallback rules.
+- [x] Extracted `/material-main` material preset state mechanics into
+  `components/screens/main-material/mainMaterialPresetModel.ts`. Empty preset
+  maps, selected preset ids, dirty flags, preset sanitization, add/update/delete
+  mutations, and clone-on-save rules are now tested model behavior instead of
+  screen-owned state manipulation.
 
 ## Verification Evidence
 
@@ -224,6 +229,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -243,8 +249,8 @@ authoring JSON
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
-  output/controller contracts, and preview-state compatibility adapter are now
-  extracted from the giant screen.
+  output/controller contracts, preview-state compatibility adapter, and material
+  preset model are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -255,8 +261,8 @@ application decisions even though the
 feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
-emission inspector view/output/controller and preview-state compatibility now
-have extracted contracts.
+emission inspector view/output/controller, preview-state compatibility, and
+material preset state now have extracted contracts.
 
 Recommended finish plan, in order:
 

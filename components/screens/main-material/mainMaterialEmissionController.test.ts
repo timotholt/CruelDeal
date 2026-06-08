@@ -3,6 +3,7 @@ import type { RegisteredDomAuditTarget } from './mainMaterialDomRegistry';
 import {
   boundedEmissionInspectorPosition,
   createEmptyDomClassKeys,
+  createMainMaterialWindowFrameScheduler,
   queueMainMaterialDomAuditRefresh,
   refreshMainMaterialDomAudit,
   toggleDomClassKey,
@@ -38,6 +39,24 @@ assert.deepEqual(
   }),
   { x: 8, y: 8 },
 );
+
+let requestReceiverPreserved = false;
+let cancelReceiverPreserved = false;
+const frameSource = {
+  requestAnimationFrame(callback: () => void) {
+    requestReceiverPreserved = this === frameSource;
+    callback();
+    return 42;
+  },
+  cancelAnimationFrame(frame: number) {
+    cancelReceiverPreserved = this === frameSource && frame === 42;
+  },
+};
+const frameScheduler = createMainMaterialWindowFrameScheduler(frameSource);
+frameScheduler.requestFrame(() => {});
+frameScheduler.cancelFrame(42);
+assert.equal(requestReceiverPreserved, true);
+assert.equal(cancelReceiverPreserved, true);
 
 const callbacks: Array<() => void> = [];
 const reports: boolean[] = [];

@@ -12,11 +12,17 @@ import { enableGyro } from './reflex/ReflexController';
 export { sheenEnabled, setSheenEnabled, gyroActive } from './reflex/ReflexController';
 export const enableMobileGyroscope = enableGyro;
 
+export type SheenMethod = 'svg' | 'bitmap';
+// Pick the fill class: vector gradient (sheen-<type>) or baked bitmap (sheen-baked).
+const sheenClass = (method: SheenMethod, type: string) =>
+  method === 'bitmap' ? 'sheen-baked' : `sheen-${type}`;
+
 // Reusable Reflective Text Component
 export interface ReflectiveTextProps {
   children: string;
   profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
   type?: 'linear' | 'radial' | 'box';
+  method?: SheenMethod;
   class?: string;
   style?: JSX.CSSProperties;
 }
@@ -25,13 +31,14 @@ export const ReflectiveText = (rawProps: ReflectiveTextProps) => {
   const props = mergeProps({
     profile: 'gold' as const,
     type: 'linear' as const,
+    method: 'svg' as const,
     class: '',
     style: {},
   }, rawProps);
 
   return (
     <span
-      class={`sheen-text sheen-${props.type} metal-${props.profile} ${props.class}`}
+      class={`sheen-text ${sheenClass(props.method, props.type)} metal-${props.profile} ${props.class}`}
       style={props.style}
     >
       {props.children}
@@ -44,13 +51,14 @@ export const EmbossedReflectiveText = (rawProps: ReflectiveTextProps) => {
   const props = mergeProps({
     profile: 'gold' as const,
     type: 'linear' as const,
+    method: 'svg' as const,
     class: '',
     style: {},
   }, rawProps);
 
   return (
     <span
-      class={`sheen-text sheen-${props.type} metal-${props.profile} embossed-text ${props.class}`}
+      class={`sheen-text ${sheenClass(props.method, props.type)} metal-${props.profile} embossed-text ${props.class}`}
       style={props.style}
     >
       {props.children}
@@ -63,6 +71,7 @@ export interface ReflectiveProgressBarProps {
   value: number; // 0 to 100
   profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
   type?: 'linear' | 'radial' | 'box';
+  method?: SheenMethod;
   class?: string;
 }
 
@@ -70,6 +79,7 @@ export const ReflectiveProgressBar = (rawProps: ReflectiveProgressBarProps) => {
   const props = mergeProps({
     profile: 'gold' as const,
     type: 'linear' as const,
+    method: 'svg' as const,
     class: '',
   }, rawProps);
 
@@ -77,7 +87,7 @@ export const ReflectiveProgressBar = (rawProps: ReflectiveProgressBarProps) => {
     <div class={`w-full h-4 bg-black/50 rounded-full border border-white/10 overflow-hidden relative shadow-inner ${props.class}`}>
       {/* Dynamic Sheen Bar fill */}
       <div
-        class={`h-full sheen-text sheen-${props.type} metal-${props.profile} rounded-full transition-all duration-300 relative`}
+        class={`h-full sheen-text ${sheenClass(props.method, props.type)} metal-${props.profile} rounded-full transition-all duration-300 relative`}
         style={{
           width: `${Math.max(0, Math.min(100, props.value))}%`,
           "background-clip": "initial",
@@ -100,6 +110,7 @@ export interface ReflectiveButtonProps {
   children: any;
   profile?: 'gold' | 'silver' | 'brass' | 'kan' | 'credit' | 'mark';
   type?: 'linear' | 'radial' | 'box';
+  method?: SheenMethod;
   class?: string;
   disabled?: boolean;
 }
@@ -108,6 +119,7 @@ export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
   const props = mergeProps({
     profile: 'gold' as const,
     type: 'linear' as const,
+    method: 'svg' as const,
     class: '',
     disabled: false,
   }, rawProps);
@@ -135,7 +147,7 @@ export const ReflectiveButton = (rawProps: ReflectiveButtonProps) => {
     >
       {/* Background with Sheen */}
       <div
-        class={`absolute inset-0 sheen-text sheen-${props.type} metal-${props.profile} rounded`}
+        class={`absolute inset-0 sheen-text ${sheenClass(props.method, props.type)} metal-${props.profile} rounded`}
         style={{
           "background-clip": "initial",
           "-webkit-background-clip": "initial",
