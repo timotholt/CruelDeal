@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {
   mainMaterialResetAllPlan,
+  recipeApplicationTargetForPart,
   selectedResetPlanForPart,
+  surfaceRecipeForPart,
   surfaceRecipeKeyForPart,
 } from './mainMaterialPartStateModel';
 
@@ -14,6 +16,23 @@ assert.equal(surfaceRecipeKeyForPart('toolBar'), 'toolbar');
 assert.equal(surfaceRecipeKeyForPart('navBar'), 'nav');
 assert.equal(surfaceRecipeKeyForPart('navBarContainer'), 'navContainer');
 assert.equal(surfaceRecipeKeyForPart('titleBlock'), null);
+assert.deepEqual(recipeApplicationTargetForPart('feedCards'), { kind: 'feed-target' });
+assert.deepEqual(recipeApplicationTargetForPart('profileButton'), { kind: 'surface', surfaceKey: 'profile' });
+assert.deepEqual(recipeApplicationTargetForPart('titleBlock'), { kind: 'none' });
+
+const surfaces = {
+  backdrop: 'backdrop',
+  topBar: 'topBar',
+  profile: 'profile',
+  currencies: 'currencies',
+  feed: 'feed',
+  toolbar: 'toolbar',
+  nav: 'nav',
+  navContainer: 'navContainer',
+};
+assert.equal(surfaceRecipeForPart('profileButton', surfaces), 'profile');
+assert.equal(surfaceRecipeForPart('titleBlock', surfaces), 'feed');
+assert.equal(surfaceRecipeForPart('titleBlock', surfaces, 'backdrop'), 'backdrop');
 
 assert.deepEqual(selectedResetPlanForPart('backdrop'), {
   resetBackdrop: true,

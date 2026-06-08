@@ -211,6 +211,10 @@ authoring JSON
   `components/screens/main-material/mainMaterialPartStateModel.ts`. The screen
   now uses a tested part-to-surface-key contract and reset plan for selected
   reset/all reset behavior instead of keeping those mappings as branch ladders.
+- [x] Extended `mainMaterialPartStateModel.ts` to own selected recipe lookup and
+  recipe application target decisions. Preset save/apply paths now ask the model
+  whether a part targets the feed child or a surface recipe key instead of
+  branching through those rules in the screen.
 
 ## Verification Evidence
 
@@ -255,7 +259,7 @@ authoring JSON
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
   output/controller contracts, preview-state compatibility adapter, and material
-  preset/part-state models are now extracted from the giant screen.
+  preset/part-state recipe models are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -267,7 +271,8 @@ feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
 controls, frame registration, rich-text rendering, chrome renderer, carousel
 renderer, phone preview controller, persisted JSON parser/serializer, and
 emission inspector view/output/controller, preview-state compatibility, and
-material preset/part reset state now have extracted contracts.
+material preset/part reset and recipe application state now have extracted
+contracts.
 
 Recommended finish plan, in order:
 

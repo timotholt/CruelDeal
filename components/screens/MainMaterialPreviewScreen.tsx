@@ -196,8 +196,9 @@ import {
 } from './main-material/mainMaterialPresetModel';
 import {
   mainMaterialResetAllPlan,
+  recipeApplicationTargetForPart,
   selectedResetPlanForPart,
-  surfaceRecipeKeyForPart,
+  surfaceRecipeForPart,
 } from './main-material/mainMaterialPartStateModel';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
@@ -1919,8 +1920,7 @@ const defaultSurfaces: SurfaceRecipes = {
 };
 
 const defaultSurfaceForPart = (part: MainPartId): MaterialRecipe => {
-  const key = surfaceRecipeKeyForPart(part);
-  return key ? defaultSurfaces[key] : defaultFeedSurface;
+  return surfaceRecipeForPart(part, defaultSurfaces);
 };
 
 const clamp = (value: unknown, fallback: number, min: number, max: number) => {
@@ -2869,23 +2869,16 @@ export const MainMaterialPreviewScreen = () => {
 
   const currentRecipeForPart = (part: MainPartId): MaterialRecipe => {
     if (part === 'feedCards') return selectedFeedMaterialRecipe();
-    const key = surfaceRecipeKeyForPart(part);
-    if (key) return surfaces()[key];
-    return surfaces().feed;
+    return surfaceRecipeForPart(part, surfaces());
   };
 
   const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
+    const target = recipeApplicationTargetForPart(part);
     const nextRecipe = part === 'feedCards'
       ? pruneRecipeForCapabilities(cloneMaterialRecipe(recipe), selectedFeedMaterialCapabilities())
       : pruneRecipeForPartCapabilities(part, cloneMaterialRecipe(recipe));
-    if (part === 'backdrop') updateSurface('backdrop', nextRecipe);
-    if (part === 'topBar') updateSurface('topBar', nextRecipe);
-    if (part === 'profileButton') updateSurface('profile', nextRecipe);
-    if (part === 'currencyButtons') updateSurface('currencies', nextRecipe);
-    if (part === 'feedCards') selectedFeedMaterialTarget().onChange(nextRecipe);
-    if (part === 'toolBar') updateSurface('toolbar', nextRecipe);
-    if (part === 'navBar') updateSurface('nav', nextRecipe);
-    if (part === 'navBarContainer') updateSurface('navContainer', nextRecipe);
+    if (target.kind === 'feed-target') selectedFeedMaterialTarget().onChange(nextRecipe);
+    if (target.kind === 'surface') updateSurface(target.surfaceKey, nextRecipe);
   };
 
   const selectedMaterialPresets = () => materialPresets()[selectedPart()];

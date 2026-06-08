@@ -3,6 +3,11 @@ import type { SurfaceRecipes } from './mainMaterialPreview';
 
 export type MainMaterialSurfaceRecipeKey = keyof SurfaceRecipes;
 
+export type MainMaterialRecipeApplicationTarget =
+  | { kind: 'feed-target' }
+  | { kind: 'surface'; surfaceKey: MainMaterialSurfaceRecipeKey }
+  | { kind: 'none' };
+
 export interface MainMaterialSelectedResetPlan {
   resetBackdrop: boolean;
   resetTitle: boolean;
@@ -22,6 +27,18 @@ export const surfaceRecipeKeyForPart = (part: MainPartId): MainMaterialSurfaceRe
   if (part === 'navBarContainer') return 'navContainer';
   return null;
 };
+
+export const recipeApplicationTargetForPart = (part: MainPartId): MainMaterialRecipeApplicationTarget => {
+  if (part === 'feedCards') return { kind: 'feed-target' };
+  const surfaceKey = surfaceRecipeKeyForPart(part);
+  return surfaceKey ? { kind: 'surface', surfaceKey } : { kind: 'none' };
+};
+
+export const surfaceRecipeForPart = <TRecipe>(
+  part: MainPartId,
+  surfaces: Record<MainMaterialSurfaceRecipeKey, TRecipe>,
+  fallbackKey: MainMaterialSurfaceRecipeKey = 'feed',
+) => surfaces[surfaceRecipeKeyForPart(part) ?? fallbackKey];
 
 export const selectedResetPlanForPart = (part: MainPartId): MainMaterialSelectedResetPlan => ({
   resetBackdrop: part === 'backdrop',
