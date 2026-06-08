@@ -219,6 +219,17 @@ authoring JSON
   with workbench selection routing. The screen now applies a tested route object
   for feed targets, chrome child targets, and root workbench parts instead of
   owning that branch ladder inline.
+- [x] Extended `mainMaterialSelectionModel.ts` with selected-part child target
+  clearing rules, so `selectPart()` no longer owns top-bar/toolbar/nav clearing
+  branches.
+- [x] Extended `components/screens/main-material/mainMaterialInteractionModel.ts`
+  with selected interaction-role, state-option, active preview-state, and
+  preview-state update helpers. The screen now delegates selected preview state
+  resolution instead of deriving it inline.
+- [x] Extracted `/material-main` workbench part labels and workbench hierarchy
+  construction into `components/screens/main-material/mainMaterialWorkbenchModel.ts`.
+  Feed targets are still injected by the screen, but chrome/root workbench tree
+  composition is now tested model behavior.
 
 ## Verification Evidence
 
@@ -243,6 +254,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPartStateModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchModel.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -262,39 +274,35 @@ authoring JSON
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, and selected emission export
-  output/controller contracts, preview-state compatibility adapter, and material
-  preset/part-state recipe models, and workbench selection route are now
-  extracted from the giant screen.
+  output/controller contracts, preview-state compatibility adapter, material
+  preset/part-state recipe models, interaction selection helpers, and workbench
+  model are now extracted from the giant screen.
 
 ## Next Bottleneck
 
-Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that top-level state orchestration still lives inside
-`MainMaterialPreviewScreen.tsx`, so the screen remains responsible for state
-application decisions even though the
-feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
-controls, frame registration, rich-text rendering, chrome renderer, carousel
-renderer, phone preview controller, persisted JSON parser/serializer, and
-emission inspector view/output/controller, preview-state compatibility, and
-material preset/part reset and recipe application state, and workbench
-selection routing now have extracted contracts.
+The `/material-main` top-level controller decomposition is no longer the primary
+blocker. The screen still owns Solid signal wiring and JSX composition, but the
+restartable controller contracts now cover feed model/text/editors, targets,
+DOM registry/audit/emission, persistence/import/export, preview-state
+compatibility, presets, part reset/recipe application, selection routing,
+selected interaction state, and workbench tree construction.
+
+The next blocker family is generated-control convergence inside
+`MaterialRecipeEditor`: several material sections are still bespoke editor UI
+even though schema/metadata-driven controls exist.
 
 Recommended finish plan, in order:
 
-1. Extract feed preview renderer.
-   `FeedNodeFrame`, rich text, `ChromeFeedNodeTree`, `FeedCarousel`, and
-   `MainMaterialPreview` are now extracted. DOM registry/audit injection remains
-   explicit so current inspector behavior survives.
-2. Extract the top-level controller last into a
-   `createMainMaterialEditorController` orchestration helper. At that point the
-   screen should mostly compose workbench, editor, preview, and inspector.
-3. Continue `MaterialRecipeEditor` generated-control migration in this order:
+1. Continue `MaterialRecipeEditor` generated-control migration in this order:
    Base Color -> Tint -> Gradient -> Glass -> Texture -> Border -> Shape ->
    Edge Emission state -> State Glow -> State Text -> State Surface. Keep state
    selector/presets as bespoke editor chrome. Add metadata/capabilities for
    tone/texture/border/font options, dependency disables, array toggles, and a
    separate state-overlay metadata adapter rather than forcing overlay-only
    authoring fields into `SurfaceOptions` metadata.
+2. Route any remaining true runtime JSON panes through editor output modes.
+3. Run final end-to-end editor verification: save/load/import/export, selected
+   target editing, generated controls, preview rendering, and emission export.
 
 ## Known Dirty Parallel Work
 

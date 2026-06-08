@@ -91,6 +91,39 @@ export const stateOptionsForPart = (part: MainPartId): readonly MaterialRecipeSt
   interactionStateOptions[interactionRoles[part]]
 );
 
+export const interactionRoleForSelectedPart = (
+  part: MainPartId,
+  feedInteractionRole?: InteractionRole,
+): InteractionRole => (
+  part === 'feedCards'
+    ? feedInteractionRole || interactionRoles.feedCards
+    : interactionRoles[part]
+);
+
+export const stateOptionsForRole = (role: InteractionRole): readonly MaterialRecipeState[] => (
+  interactionStateOptions[role]
+);
+
+export const selectedPreviewStateForPart = (
+  part: MainPartId,
+  role: InteractionRole,
+  states: PreviewStatesByPart,
+): MaterialRecipeState => {
+  const options = stateOptionsForRole(role);
+  const state = states[part];
+  return options.includes(state) ? state : defaultPreviewStateForRole(role);
+};
+
+export const previewStatesWithSelectedState = (
+  states: PreviewStatesByPart,
+  part: MainPartId,
+  role: InteractionRole,
+  state: MaterialRecipeState,
+): PreviewStatesByPart => {
+  const nextState = stateOptionsForRole(role).includes(state) ? state : defaultPreviewStateForRole(role);
+  return states[part] === nextState ? states : { ...states, [part]: nextState };
+};
+
 export const coercePreviewStateForPart = (part: MainPartId, state: MaterialRecipeState): MaterialRecipeState => {
   const options = stateOptionsForPart(part);
   return options.includes(state) ? state : defaultPreviewStateForRole(interactionRoles[part]);
@@ -107,4 +140,3 @@ export const createDefaultPreviewStates = (): PreviewStatesByPart => ({
   navBar: defaultPreviewStateForRole(interactionRoles.navBar),
   navBarContainer: defaultPreviewStateForRole(interactionRoles.navBarContainer),
 });
-

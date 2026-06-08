@@ -2325,7 +2325,7 @@ ${paintDef}${overlayGradDef}
                             />
                           }
                         >
-                          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full">
+                          <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
                             <Show when={fillMode() === 'procedural'}>
                               {/* same baked image, mapped exactly like the icon's pattern (-50..150) */}
                               <image

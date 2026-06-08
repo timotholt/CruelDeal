@@ -3,6 +3,7 @@ import {
   selectedWorkbenchPartId,
   selectionOverlayLabels,
   selectionOverlayModes,
+  selectionTargetClearsForPart,
   selectionTargetClass,
   workbenchSelectionRoute,
 } from './mainMaterialSelectionModel';
@@ -96,6 +97,27 @@ assert.deepEqual(workbenchSelectionRoute('navBarContainer'), {
 });
 assert.deepEqual(workbenchSelectionRoute('titleBlock'), {
   selectedPart: 'titleBlock',
+});
+assert.deepEqual(selectionTargetClearsForPart('profileButton'), {
+  toolbarTargetId: null,
+  navTargetId: null,
+});
+assert.deepEqual(selectionTargetClearsForPart('topBar'), {
+  toolbarTargetId: null,
+  navTargetId: null,
+});
+assert.deepEqual(selectionTargetClearsForPart('toolBar'), {
+  topBarTargetId: null,
+  navTargetId: null,
+});
+assert.deepEqual(selectionTargetClearsForPart('navBar'), {
+  topBarTargetId: null,
+  toolbarTargetId: null,
+});
+assert.deepEqual(selectionTargetClearsForPart('feedCards'), {
+  topBarTargetId: null,
+  toolbarTargetId: null,
+  navTargetId: null,
 });
 
 assert.equal(selectionTargetClass({

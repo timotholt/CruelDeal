@@ -44,13 +44,14 @@ import {
 import {
   coercePreviewStateForPart,
   createDefaultPreviewStates,
-  defaultPreviewStateForRole,
   interactionRoleLabels,
-  interactionRoles,
+  interactionRoleForSelectedPart,
   interactionStateLabels,
-  interactionStateOptions,
   playerFacingPreviewStateForRole,
+  previewStatesWithSelectedState,
   resolvePreviewVisualState,
+  selectedPreviewStateForPart,
+  stateOptionsForRole,
   type InteractionRole,
   type MainPartId,
   type PreviewInteractionMode,
@@ -60,6 +61,7 @@ import {
 } from './main-material/mainMaterialInteractionModel';
 import {
   selectedWorkbenchPartId as resolveSelectedWorkbenchPartId,
+  selectionTargetClearsForPart,
   selectionOverlayLabels,
   selectionOverlayModes,
   selectionTargetClass,
@@ -105,13 +107,9 @@ import {
 import {
   feedCardMaterialTargetId,
   feedCardMaterialTargetPrefix,
-  feedMaterialTargetIdForNode,
-  navItemTargetId,
   navMaterialTargetPrefix,
   parseFeedMaterialTargetId,
-  toolbarMaterialTargetId,
   toolbarMaterialTargetPrefix,
-  topBarCurrencyTargetId,
   topBarMaterialTargetPrefix,
   topBarProfileTargetId,
   type FeedMaterialTargetId as MainFeedMaterialTargetId,
@@ -142,9 +140,6 @@ import {
   createBottomChromeFeedNode,
   createTopBarFeedNode,
   findFeedNodeByTargetId,
-  navNodeSpecs,
-  toolbarNodeSpecs,
-  topBarCurrencySpecs,
   topBarTargetIdForChromeNode,
   type BackdropRecipe,
   type NavRecipe,
@@ -196,6 +191,11 @@ import {
   type MaterialPresetsByPart,
 } from './main-material/mainMaterialPresetModel';
 import {
+  createMainMaterialWorkbenchParts,
+  mainMaterialPartLabelById as partLabelById,
+  mainMaterialPartLabels as partLabels,
+} from './main-material/mainMaterialWorkbenchModel';
+import {
   mainMaterialResetAllPlan,
   recipeApplicationTargetForPart,
   selectedResetPlanForPart,
@@ -205,19 +205,6 @@ import {
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
 type MaterialEditableTarget = MainMaterialEditableTarget;
-
-const partLabels: Array<MaterialWorkbenchPart<MainPartId>> = [
-  { id: 'backdrop', label: 'Backdrop', detail: 'second layer' },
-  { id: 'topBar', label: 'Top Bar', detail: 'bar material' },
-  { id: 'profileButton', label: 'Profile', detail: 'button material' },
-  { id: 'currencyButtons', label: 'Wallet', detail: 'chip material' },
-  { id: 'feedCards', label: 'Feed', detail: 'glass cards' },
-  { id: 'toolBar', label: 'Tool Bar', detail: 'command buttons' },
-  { id: 'navBar', label: 'Nav Tabs', detail: 'bottom tab items' },
-  { id: 'navBarContainer', label: 'Nav Container', detail: 'bottom bar panel' },
-];
-
-const partLabelById = Object.fromEntries(partLabels.map((part) => [part.id, part.label])) as Record<MainPartId, string>;
 const materialEditorCapabilitiesByPart: Record<MainPartId, MaterialEditorCapabilities> = {
   backdrop: { text: false, states: false },
   topBar: { text: false, states: false },
@@ -2462,57 +2449,8 @@ export const MainMaterialPreviewScreen = () => {
       depth: entry.depth,
     }))
   );
-  const topBarWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
-    { ...part, id: 'topBar' as MainWorkbenchPartId, depth: 0 },
-    { id: topBarProfileTargetId as MainWorkbenchPartId, label: 'Profile', detail: 'button material', depth: 1 },
-    ...topBarCurrencySpecs.map((node) => ({
-      id: topBarCurrencyTargetId(node.id) as MainWorkbenchPartId,
-      label: node.label,
-      detail: 'shared wallet style',
-      depth: 1,
-    })),
-  ];
-  const toolbarWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
-    { ...part, id: 'toolBar' as MainWorkbenchPartId, depth: 0 },
-    ...toolbarNodeSpecs.map((node) => ({
-      id: toolbarMaterialTargetId(node.id) as MainWorkbenchPartId,
-      label: node.label,
-      detail: 'shared command style',
-      depth: 1,
-    })),
-  ];
-  const navWorkbenchParts = (part: MaterialWorkbenchPart<MainPartId>): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => [
-    { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 0 },
-    ...navNodeSpecs.map((node, index) => ({
-      id: navItemTargetId(index) as MainWorkbenchPartId,
-      label: node.label,
-      detail: 'shared tab style',
-      depth: 1,
-    })),
-  ];
-
   const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
-    partLabels.flatMap((part) => {
-      if (part.id === 'feedCards') {
-        return feedWorkbenchParts();
-      }
-      if (part.id === 'topBar') {
-        return topBarWorkbenchParts(part);
-      }
-      if (part.id === 'profileButton' || part.id === 'currencyButtons') {
-        return [];
-      }
-      if (part.id === 'toolBar') {
-        return toolbarWorkbenchParts(part);
-      }
-      if (part.id === 'navBarContainer') {
-        return navWorkbenchParts(part);
-      }
-      if (part.id === 'navBar') {
-        return [];
-      }
-      return [{ ...part, id: part.id as MainWorkbenchPartId }];
-    })
+    createMainMaterialWorkbenchParts(feedWorkbenchParts())
   );
 
   const selectFeedStory = (storyId: string) => {
@@ -2636,9 +2574,10 @@ export const MainMaterialPreviewScreen = () => {
 
   const selectPart = (part: MainPartId) => {
     setSelectedPart(part);
-    if (part !== 'topBar' && part !== 'profileButton' && part !== 'currencyButtons') setSelectedTopBarTargetId(null);
-    if (part !== 'toolBar') setSelectedToolbarTargetId(null);
-    if (part !== 'navBar') setSelectedNavTargetId(null);
+    const clears = selectionTargetClearsForPart(part);
+    if (clears.topBarTargetId !== undefined) setSelectedTopBarTargetId(clears.topBarTargetId);
+    if (clears.toolbarTargetId !== undefined) setSelectedToolbarTargetId(clears.toolbarTargetId);
+    if (clears.navTargetId !== undefined) setSelectedNavTargetId(clears.navTargetId);
     setPreviewStates((current) => {
       const nextState = coercePreviewStateForPart(part, current[part]);
       return nextState === current[part] ? current : { ...current, [part]: nextState };
@@ -2820,23 +2759,16 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   const selectedInteractionRole = () => (
-    selectedPart() === 'feedCards'
-      ? selectedFeedMaterialTarget().interactionRole || interactionRoles.feedCards
-      : interactionRoles[selectedPart()]
+    interactionRoleForSelectedPart(selectedPart(), selectedFeedMaterialTarget().interactionRole)
   );
-  const selectedStateOptions = () => interactionStateOptions[selectedInteractionRole()];
+  const selectedStateOptions = () => stateOptionsForRole(selectedInteractionRole());
   const selectedStateLabels = () => interactionStateLabels[selectedInteractionRole()];
   const selectedPreviewState = () => {
-    const options = selectedStateOptions();
-    const state = previewStates()[selectedPart()];
-    return options.includes(state) ? state : defaultPreviewStateForRole(selectedInteractionRole());
+    return selectedPreviewStateForPart(selectedPart(), selectedInteractionRole(), previewStates());
   };
   const setSelectedPreviewState = (state: MaterialRecipeState) => {
     const part = selectedPart();
-    setPreviewStates((current) => ({
-      ...current,
-      [part]: selectedStateOptions().includes(state) ? state : defaultPreviewStateForRole(selectedInteractionRole()),
-    }));
+    setPreviewStates((current) => previewStatesWithSelectedState(current, part, selectedInteractionRole(), state));
   };
 
   const currentRecipeForPart = (part: MainPartId): MaterialRecipe => {

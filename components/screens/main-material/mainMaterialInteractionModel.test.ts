@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import {
   coercePreviewStateForPart,
   createDefaultPreviewStates,
+  interactionRoleForSelectedPart,
   interactionStateLabels,
   interactionStateOptions,
+  previewStatesWithSelectedState,
   resolvePreviewVisualState,
+  selectedPreviewStateForPart,
+  stateOptionsForRole,
   stateOptionsForPart,
   type PreviewInteractionSnapshot,
 } from './mainMaterialInteractionModel';
@@ -29,8 +33,22 @@ assert.equal(interactionStateLabels.disclosure.active, 'Open');
 assert.equal(createDefaultPreviewStates().navBar, 'active');
 assert.equal(createDefaultPreviewStates().toolBar, 'rest');
 assert.deepEqual(stateOptionsForPart('currencyButtons'), ['rest', 'hover', 'pressed']);
+assert.deepEqual(stateOptionsForRole('disclosure'), ['rest', 'hover', 'active', 'pressed']);
+assert.equal(interactionRoleForSelectedPart('profileButton'), 'disclosure');
+assert.equal(interactionRoleForSelectedPart('feedCards'), 'static');
+assert.equal(interactionRoleForSelectedPart('feedCards', 'momentary'), 'momentary');
 assert.equal(coercePreviewStateForPart('currencyButtons', 'active'), 'rest');
 assert.equal(coercePreviewStateForPart('navBar', 'active'), 'active');
+
+const defaultStates = createDefaultPreviewStates();
+assert.equal(selectedPreviewStateForPart('navBar', 'selectable', defaultStates), 'active');
+assert.equal(selectedPreviewStateForPart('feedCards', 'momentary', defaultStates), 'rest');
+assert.equal(selectedPreviewStateForPart('feedCards', 'selectable', defaultStates), 'rest');
+const updatedStates = previewStatesWithSelectedState(defaultStates, 'toolBar', 'momentary', 'pressed');
+assert.equal(updatedStates.toolBar, 'pressed');
+assert.equal(defaultStates.toolBar, 'rest');
+assert.equal(previewStatesWithSelectedState(updatedStates, 'toolBar', 'momentary', 'active').toolBar, 'rest');
+assert.equal(previewStatesWithSelectedState(updatedStates, 'toolBar', 'momentary', 'pressed'), updatedStates);
 
 assert.equal(resolvePreviewVisualState({
   targetId: 'cta',
@@ -79,4 +97,3 @@ assert.equal(resolvePreviewVisualState({
 }), 'pressed');
 
 console.log('Main material interaction model tests passed');
-

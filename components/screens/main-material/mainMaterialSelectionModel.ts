@@ -78,6 +78,18 @@ export const workbenchSelectionRoute = (part: MainWorkbenchPartId): WorkbenchSel
   return { selectedPart: part as MainPartId };
 };
 
+export interface PartSelectionTargetClears {
+  topBarTargetId?: null;
+  toolbarTargetId?: null;
+  navTargetId?: null;
+}
+
+export const selectionTargetClearsForPart = (part: MainPartId): PartSelectionTargetClears => ({
+  ...(part !== 'topBar' && part !== 'profileButton' && part !== 'currencyButtons' ? { topBarTargetId: null } : {}),
+  ...(part !== 'toolBar' ? { toolbarTargetId: null } : {}),
+  ...(part !== 'navBar' ? { navTargetId: null } : {}),
+});
+
 export interface SelectionTargetClassArgs {
   selected: boolean;
   overlayMode: SelectionOverlayMode;
