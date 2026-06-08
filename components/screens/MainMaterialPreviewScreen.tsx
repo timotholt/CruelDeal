@@ -59,11 +59,14 @@ import {
 import {
   coerceStoredFeedTargetId,
   createMainMaterialStoredState,
+  parseMainMaterialStoredStateJson,
   readMainMaterialStoredPresets,
   readMainMaterialStoredState,
   removeMainMaterialStoredPresets,
+  serializeMainMaterialStoredState,
   writeMainMaterialStoredPresets,
   writeMainMaterialStoredState,
+  type MainMaterialStoredState,
 } from './main-material/mainMaterialPersistence';
 import {
   findTreeNodeById,
@@ -3385,7 +3388,7 @@ export const MainMaterialPreviewScreen = () => {
     setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
   };
 
-  const applyParsedState = (parsed: Record<string, unknown>) => {
+  const applyParsedState = (parsed: MainMaterialStoredState) => {
     setBackdrop(sanitizeBackdrop(parsed.backdrop));
     setTitle(sanitizeTitle(parsed.title));
     setFeed(sanitizeFeed(parsed.feed));
@@ -3418,18 +3421,22 @@ export const MainMaterialPreviewScreen = () => {
       text = window.prompt('Paste exported material JSON') || '';
     }
     if (!text.trim()) return;
-    let parsed: Record<string, unknown>;
+    let parsed: MainMaterialStoredState | null;
     try {
-      parsed = JSON.parse(text) as Record<string, unknown>;
+      parsed = parseMainMaterialStoredStateJson(text);
     } catch {
       window.alert('Import failed: clipboard does not contain valid JSON.');
+      return;
+    }
+    if (!parsed) {
+      window.alert('Import failed: clipboard JSON must be an object.');
       return;
     }
     applyParsedState(parsed);
   };
 
   const exportJson = () => {
-    void navigator.clipboard?.writeText(JSON.stringify(createMainMaterialStoredState({
+    void navigator.clipboard?.writeText(serializeMainMaterialStoredState({
       backdrop: backdrop(),
       title: title(),
       feed: feed(),
@@ -3441,7 +3448,7 @@ export const MainMaterialPreviewScreen = () => {
       selectedFeedTargetId: selectedFeedTargetId(),
       nav: nav(),
       surfaces: surfaces(),
-    }), null, 2));
+    }, 2));
   };
 
   const selectedClass = (part: MainPartId) => {

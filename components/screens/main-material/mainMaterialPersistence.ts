@@ -51,17 +51,26 @@ const recordFromJson = (raw: string | null): Record<string, unknown> | null => {
     : null;
 };
 
+export const parseMainMaterialStoredStateJson = (raw: string | null): MainMaterialStoredState | null => (
+  recordFromJson(raw)
+);
+
+export const serializeMainMaterialStoredState = (
+  state: MainMaterialStoredState,
+  space?: number,
+) => JSON.stringify(createMainMaterialStoredState(state), null, space);
+
 export const readMainMaterialStoredState = (
   storage: MainMaterialStorageLike,
 ): MainMaterialStoredState | null => (
-  recordFromJson(storage.getItem(mainMaterialStorageKey))
+  parseMainMaterialStoredStateJson(storage.getItem(mainMaterialStorageKey))
 );
 
 export const writeMainMaterialStoredState = (
   storage: MainMaterialStorageLike,
   state: MainMaterialStoredState,
 ) => {
-  storage.setItem(mainMaterialStorageKey, JSON.stringify(state));
+  storage.setItem(mainMaterialStorageKey, serializeMainMaterialStoredState(state));
 };
 
 export const readMainMaterialStoredPresets = (storage: MainMaterialStorageLike): unknown => (

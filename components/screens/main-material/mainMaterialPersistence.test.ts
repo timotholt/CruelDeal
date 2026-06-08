@@ -4,9 +4,11 @@ import {
   createMainMaterialStoredState,
   mainMaterialPresetStorageKey,
   mainMaterialStorageKey,
+  parseMainMaterialStoredStateJson,
   readMainMaterialStoredPresets,
   readMainMaterialStoredState,
   removeMainMaterialStoredPresets,
+  serializeMainMaterialStoredState,
   writeMainMaterialStoredPresets,
   writeMainMaterialStoredState,
   type MainMaterialStorageLike,
@@ -48,6 +50,17 @@ assert.deepEqual(createMainMaterialStoredState({
   nav: undefined,
   surfaces: undefined,
 });
+
+assert.equal(
+  serializeMainMaterialStoredState({ selectedFeedStoryId: 'story-1' }),
+  '{"selectedFeedStoryId":"story-1"}',
+);
+assert.deepEqual(
+  parseMainMaterialStoredStateJson(serializeMainMaterialStoredState({ selectedFeedTargetId: 'feed:card:card_type_01' })),
+  { selectedFeedTargetId: 'feed:card:card_type_01' },
+);
+assert.equal(parseMainMaterialStoredStateJson('[]'), null);
+assert.equal(parseMainMaterialStoredStateJson('"bad"'), null);
 
 writeMainMaterialStoredState(storage, {
   selectedFeedStoryId: 'story-1',
