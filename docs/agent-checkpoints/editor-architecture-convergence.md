@@ -183,6 +183,11 @@ authoring JSON
   serialization in `components/screens/main-material/mainMaterialPersistence.ts`.
   LocalStorage save/load and clipboard import/export now share the same
   stored-state parser/serializer instead of the screen doing ad hoc JSON work.
+- [x] Extracted the emission inspector view into
+  `components/screens/main-material/mainMaterialEmissionInspector.tsx`. The
+  screen still owns live DOM registry refresh/copy orchestration, while the
+  extracted module owns inspector tabs, DOM tree rendering, export CSS audit
+  rendering, metrics display, and frame-CSS row display.
 
 ## Verification Evidence
 
@@ -219,20 +224,21 @@ authoring JSON
   registry exist.
 - `/material-main` is still too large, but its feed model, text/render policy,
   authoring controls, frame registration, rich text, chrome renderer, feed
-  carousel renderer, phone preview controller, and persisted preview JSON
-  parser/serializer are now extracted from the giant screen.
+  carousel renderer, phone preview controller, persisted preview JSON
+  parser/serializer, and emission inspector view are now extracted from the
+  giant screen.
 
 ## Next Bottleneck
 
 Continue decomposing `/material-main` around pure editor/runtime contracts. The
-next blocker family is that import/export compatibility application and
+next blocker family is that import/export compatibility application and live
 emission inspector orchestration still live inside
 `MainMaterialPreviewScreen.tsx`, so the screen remains responsible for state
-application/export mode decisions even though the feed model, sanitization,
-targets, DOM audit, text/render policy, feed authoring controls, frame
-registration, rich-text rendering, chrome renderer, carousel renderer, phone
-preview controller, and persisted JSON parser/serializer now have extracted
-contracts.
+application/export mode decisions and DOM refresh/copy wiring even though the
+feed model, sanitization, targets, DOM audit, text/render policy, feed authoring
+controls, frame registration, rich-text rendering, chrome renderer, carousel
+renderer, phone preview controller, persisted JSON parser/serializer, and
+emission inspector view now have extracted contracts.
 
 Recommended finish plan, in order:
 
