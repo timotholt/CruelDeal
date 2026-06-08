@@ -2,10 +2,12 @@ import type { SurfaceOptions } from './surfaceSchema';
 import { edgeTextureOptions, textureOptions } from './TextureOptions';
 import {
   materialRecipeBorderColors,
+  materialRecipeContentTones,
   materialRecipeCorners,
   materialRecipeEdges,
   materialRecipeEmissionEdges,
   materialRecipeEmissionKinds,
+  materialRecipeFontWeights,
   materialRecipeGlows,
   materialRecipeGradients,
   materialRecipeTextureScales,
@@ -94,6 +96,7 @@ const emissionKindLabels = {
   'center-blip': 'blip',
   'rail-and-blip': 'rail + blip',
 } satisfies Partial<Record<string, string>>;
+const fontWeightOptions = materialRecipeFontWeights.map(String);
 
 export const surfaceFieldDefinitions = [
   field({ key: 'renderMode', group: 'renderer', label: 'Render Mode', control: 'select', editMode: 'renderer-internal', options: ['editor', 'runtime', 'export'] }),
@@ -154,15 +157,15 @@ export const surfaceFieldDefinitions = [
   field({ key: 'textFontFamily', group: 'content', label: 'Font Family', control: 'text', editMode: 'rest-and-state' }),
   field({ key: 'textSizeRem', group: 'content', label: 'Text Size', control: 'slider', editMode: 'rest-and-state', min: 0, max: 20, step: 0.01 }),
   field({ key: 'contentOpacity', group: 'content', label: 'Content Opacity', control: 'slider', editMode: 'rest-and-state', min: 0, max: 100, step: 1 }),
-  field({ key: 'contentTone', group: 'content', label: 'Content Tone', control: 'select', editMode: 'rest-and-state' }),
-  field({ key: 'iconTone', group: 'content', label: 'Icon Tone', control: 'select', editMode: 'rest-and-state' }),
+  field({ key: 'contentTone', group: 'content', label: 'Label Color', control: 'select', editMode: 'rest-and-state', options: materialRecipeContentTones }),
+  field({ key: 'iconTone', group: 'content', label: 'Icon Color', control: 'select', editMode: 'rest-and-state', options: materialRecipeContentTones }),
   field({ key: 'contentGlowStrength', group: 'content', label: 'Content Glow', control: 'slider', editMode: 'rest-and-state', min: 0, max: 100, step: 1 }),
   field({ key: 'iconGlowStrength', group: 'content', label: 'Icon Glow', control: 'slider', editMode: 'rest-and-state', min: 0, max: 100, step: 1 }),
-  field({ key: 'fontWeight', group: 'content', label: 'Font Weight', control: 'select', editMode: 'rest-and-state' }),
+  field({ key: 'fontWeight', group: 'content', label: 'Weight', control: 'select', editMode: 'rest-and-state', options: fontWeightOptions }),
   field({ key: 'fontStyle', group: 'content', label: 'Font Style', control: 'select', editMode: 'rest-and-state', options: ['normal', 'italic'] }),
-  field({ key: 'textTransform', group: 'content', label: 'Text Transform', control: 'select', editMode: 'rest-and-state', options: ['none', 'uppercase', 'lowercase', 'capitalize'] }),
-  field({ key: 'letterSpacing', group: 'content', label: 'Letter Spacing', control: 'slider', editMode: 'rest-and-state', min: -5, max: 5, step: 0.01 }),
-  field({ key: 'textEmboss', group: 'content', label: 'Text Emboss', control: 'toggle', editMode: 'rest-and-state' }),
+  field({ key: 'textTransform', group: 'content', label: 'Case', control: 'select', editMode: 'rest-and-state', options: ['none', 'uppercase', 'lowercase', 'capitalize'] }),
+  field({ key: 'letterSpacing', group: 'content', label: 'Track', control: 'slider', editMode: 'rest-and-state', min: -0.08, max: 0.24, step: 0.005 }),
+  field({ key: 'textEmboss', group: 'content', label: 'Emboss', control: 'toggle', editMode: 'rest-and-state' }),
   field({ key: 'textAlign', group: 'content', label: 'Text Align', control: 'select', editMode: 'rest', options: ['left', 'center', 'right'] }),
   field({ key: 'textX', group: 'content', label: 'Text X', control: 'slider', editMode: 'rest-and-state', min: -1000, max: 1000, step: 1 }),
   field({ key: 'textY', group: 'content', label: 'Text Y', control: 'slider', editMode: 'rest-and-state', min: -1000, max: 1000, step: 1 }),

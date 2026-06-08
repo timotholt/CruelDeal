@@ -129,6 +129,11 @@ authoring JSON
   now come from surface field metadata, while a tested state-glow adapter maps
   generated `corners`/`edgeHighlight`/`glow`/`glowStrength`/`cornerSize`
   patches back into `states[activeState()].glow`.
+- [x] Moved `MaterialRecipeEditor` state-text controls from a bespoke section
+  to `SurfaceGeneratedEditor`. State text now uses metadata-owned tone, glow,
+  emboss, font weight/style/case, and tracking controls, with a tested sparse
+  adapter mapping generated field clears back into overlay `inherit`/`null`
+  sentinels.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -339,10 +344,10 @@ even though schema/metadata-driven controls exist.
 
 Recommended finish plan, in order:
 
-1. Continue `MaterialRecipeEditor` generated-control migration in this order:
-   State Text -> State Surface. Keep state selector/presets as bespoke editor
-   chrome. Add metadata/capabilities for tone/font/surface boost options,
-   dependency disables, and separate state-overlay adapters rather than forcing
+1. Finish `MaterialRecipeEditor` generated-control migration with State
+   Surface. Keep state selector/presets as bespoke editor chrome. Add
+   metadata/capabilities for surface tint and boost controls, dependency
+   disables, and a separate state-overlay adapter rather than forcing
    overlay-only authoring fields into `SurfaceOptions` metadata.
 2. Route any remaining true runtime JSON panes through editor output modes.
 3. Run final end-to-end editor verification: save/load/import/export, selected

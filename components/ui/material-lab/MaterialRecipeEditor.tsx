@@ -210,6 +210,17 @@ const stateGlowFields = [
   'glowStrength',
   'cornerSize',
 ] as const satisfies readonly (keyof SurfaceOptions)[];
+const stateTextFields = [
+  'contentTone',
+  'iconTone',
+  'contentGlowStrength',
+  'iconGlowStrength',
+  'textEmboss',
+  'fontWeight',
+  'fontStyle',
+  'textTransform',
+  'letterSpacing',
+] as const satisfies readonly (keyof SurfaceOptions)[];
 
 type StatePresetId = 'quiet-hover' | 'gold-active' | 'cyan-data' | 'danger-active' | 'cta-powered' | 'nav-tab';
 
@@ -321,82 +332,6 @@ const StateSurfaceSection = (props: {
       <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
         <ControlLabel>Dark +</ControlLabel>
         <Slider disabled={!active()} value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
-      </div>
-    </div>
-  );
-};
-
-const ContentStateSection = (props: {
-  stateOverlay: MaterialStateOverlay;
-  updateStateGroup: StateGroupUpdate;
-}) => {
-  const active = () => props.stateOverlay.enabled;
-  const embossOptions = ['inherit', 'on', 'off'] as const;
-  const fontStyleOptions = ['inherit', ...materialRecipeFontStyles] as const;
-  const transformOptions = ['inherit', ...materialRecipeTextTransforms] as const;
-  const letterInherited = () => props.stateOverlay.content.letterSpacing === null;
-  const weightInherited = () => props.stateOverlay.content.fontWeight === 'inherit';
-
-  return (
-    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
-      <SectionLabel size="xs">State Text</SectionLabel>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Label Color</ControlLabel>
-        <Segments disabled={!active()} value={props.stateOverlay.content.contentTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'contentTone', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Icon Color</ControlLabel>
-        <Segments disabled={!active()} value={props.stateOverlay.content.iconTone} options={materialRecipeContentTones} onChange={(value: MaterialTone) => props.updateStateGroup('content', 'iconTone', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Label Glow</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.content.contentGlowStrength} onInput={(value) => props.updateStateGroup('content', 'contentGlowStrength', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Icon Glow</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.content.iconGlowStrength} onInput={(value) => props.updateStateGroup('content', 'iconGlowStrength', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Emboss</ControlLabel>
-        <Segments
-          disabled={!active()}
-          value={props.stateOverlay.content.contentEmboss === true ? 'on' : props.stateOverlay.content.contentEmboss === false ? 'off' : 'inherit'}
-          options={embossOptions}
-          onChange={(value) => props.updateStateGroup('content', 'contentEmboss', value === 'inherit' ? 'inherit' : value === 'on')}
-        />
-      </div>
-      <div class={`ui-lab-control-row ${active() && !weightInherited() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Weight</ControlLabel>
-        <div class="ui-lab-stack">
-          <ToggleButton active={weightInherited()} disabled={!active()} onClick={() => props.updateStateGroup('content', 'fontWeight', weightInherited() ? 700 : 'inherit')}>
-            inherit
-          </ToggleButton>
-          <Slider
-            disabled={!active() || weightInherited()}
-            value={weightInherited() ? 700 : props.stateOverlay.content.fontWeight as FontWeightToken}
-            min={100}
-            max={900}
-            step={100}
-            onInput={(value) => props.updateStateGroup('content', 'fontWeight', value as FontWeightToken)}
-          />
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Style</ControlLabel>
-        <Segments disabled={!active()} value={props.stateOverlay.content.fontStyle} options={fontStyleOptions} onChange={(value) => props.updateStateGroup('content', 'fontStyle', value as FontStyleToken | 'inherit')} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Case</ControlLabel>
-        <Segments disabled={!active()} value={props.stateOverlay.content.textTransform} options={transformOptions} onChange={(value) => props.updateStateGroup('content', 'textTransform', value as TextTransformToken | 'inherit')} />
-      </div>
-      <div class={`ui-lab-control-row ${active() && !letterInherited() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Track</ControlLabel>
-        <div class="ui-lab-stack">
-          <ToggleButton active={letterInherited()} disabled={!active()} onClick={() => props.updateStateGroup('content', 'letterSpacing', letterInherited() ? 0 : null)}>
-            inherit
-          </ToggleButton>
-          <Slider disabled={!active() || letterInherited()} value={props.stateOverlay.content.letterSpacing ?? 0} min={-0.08} max={0.24} step={0.005} onInput={(value) => props.updateStateGroup('content', 'letterSpacing', value)} />
-        </div>
       </div>
     </div>
   );
@@ -579,6 +514,81 @@ export const patchStateGlowOverlay = (
     : null;
 };
 
+export const stateTextInheritedSurfaceValue: Partial<SurfaceOptions> = {
+  contentTone: 'inherit',
+  iconTone: 'inherit',
+  contentGlowStrength: 0,
+  iconGlowStrength: 0,
+  textEmboss: false,
+  fontWeight: 700,
+  fontStyle: 'normal',
+  textTransform: 'uppercase',
+  letterSpacing: 0,
+};
+
+export const stateTextSurfaceValue = (overlay: MaterialStateOverlay): Partial<SurfaceOptions> => ({
+  ...(overlay.content.contentTone !== 'inherit' ? { contentTone: overlay.content.contentTone } : {}),
+  ...(overlay.content.iconTone !== 'inherit' ? { iconTone: overlay.content.iconTone } : {}),
+  contentGlowStrength: overlay.content.contentGlowStrength,
+  iconGlowStrength: overlay.content.iconGlowStrength,
+  ...(overlay.content.contentEmboss !== 'inherit' ? { textEmboss: overlay.content.contentEmboss } : {}),
+  ...(overlay.content.fontWeight !== 'inherit' ? { fontWeight: overlay.content.fontWeight } : {}),
+  ...(overlay.content.fontStyle !== 'inherit' ? { fontStyle: overlay.content.fontStyle } : {}),
+  ...(overlay.content.textTransform !== 'inherit' ? { textTransform: overlay.content.textTransform } : {}),
+  ...(overlay.content.letterSpacing !== null ? { letterSpacing: overlay.content.letterSpacing } : {}),
+});
+
+export const patchStateTextOverlay = (
+  overlay: MaterialStateOverlay,
+  patch: SurfaceEditorPatch,
+): MaterialStateOverlay | null => {
+  const nextContent = { ...overlay.content };
+  let changed = false;
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'contentTone')) {
+    nextContent.contentTone = (patch.contentTone ?? 'inherit') as MaterialStateOverlay['content']['contentTone'];
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'iconTone')) {
+    nextContent.iconTone = (patch.iconTone ?? 'inherit') as MaterialStateOverlay['content']['iconTone'];
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'contentGlowStrength')) {
+    nextContent.contentGlowStrength = patch.contentGlowStrength ?? 0;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'iconGlowStrength')) {
+    nextContent.iconGlowStrength = patch.iconGlowStrength ?? 0;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'textEmboss')) {
+    nextContent.contentEmboss = patch.textEmboss ?? 'inherit';
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'fontWeight')) {
+    nextContent.fontWeight = patch.fontWeight === undefined
+      ? 'inherit'
+      : Number(patch.fontWeight) as FontWeightToken;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'fontStyle')) {
+    nextContent.fontStyle = patch.fontStyle ?? 'inherit';
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'textTransform')) {
+    nextContent.textTransform = patch.textTransform ?? 'inherit';
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'letterSpacing')) {
+    nextContent.letterSpacing = patch.letterSpacing ?? null;
+    changed = true;
+  }
+
+  return changed
+    ? { ...overlay, enabled: true, content: nextContent }
+    : null;
+};
+
 export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   const [localActiveState, setLocalActiveState] = createSignal<MaterialRecipeState>('active');
   const capabilities = () => ({ ...defaultCapabilities, ...(props.capabilities || {}) });
@@ -676,6 +686,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
 
   const emissionSurfaceValue = (): Partial<SurfaceOptions> => stateOverlay().emission as Partial<SurfaceOptions>;
   const glowSurfaceValue = () => stateGlowSurfaceValue(stateOverlay());
+  const textSurfaceValue = () => stateTextSurfaceValue(stateOverlay());
 
   const patchEmissionSurface = (patch: SurfaceEditorPatch) => {
     const overlay = stateOverlay();
@@ -731,6 +742,20 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   const patchGlowSurface = (patch: SurfaceEditorPatch) => {
     const overlay = stateOverlay();
     const nextOverlay = patchStateGlowOverlay(overlay, patch);
+    if (!nextOverlay) return;
+    props.onForcePreviewChange?.(true);
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: nextOverlay,
+      },
+    });
+  };
+
+  const patchTextSurface = (patch: SurfaceEditorPatch) => {
+    const overlay = stateOverlay();
+    const nextOverlay = patchStateTextOverlay(overlay, patch);
     if (!nextOverlay) return;
     props.onForcePreviewChange?.(true);
     props.onChange({
@@ -927,7 +952,15 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           inheritControls={false}
           onPatch={patchEmissionSurface}
         />
-        <ContentStateSection stateOverlay={stateOverlay()} updateStateGroup={updateStateGroup} />
+        <SurfaceGeneratedEditor
+          title="State Text"
+          mode="state"
+          fields={stateTextFields}
+          value={textSurfaceValue()}
+          inheritedValue={stateTextInheritedSurfaceValue}
+          enabled={stateOverlay().enabled}
+          onPatch={patchTextSurface}
+        />
         <MotionSection
           enabled={stateOverlay().enabled}
           value={motionSurfaceValue()}

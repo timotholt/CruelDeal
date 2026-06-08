@@ -44,6 +44,34 @@ assert.deepEqual(
   keys(visibleSurfaceFieldDefinitions({
     mode: 'state',
     fields: [
+      'contentTone',
+      'iconTone',
+      'contentGlowStrength',
+      'iconGlowStrength',
+      'textEmboss',
+      'fontWeight',
+      'fontStyle',
+      'textTransform',
+      'letterSpacing',
+    ],
+  })),
+  [
+    'contentTone',
+    'iconTone',
+    'contentGlowStrength',
+    'iconGlowStrength',
+    'textEmboss',
+    'fontWeight',
+    'fontStyle',
+    'textTransform',
+    'letterSpacing',
+  ],
+);
+
+assert.deepEqual(
+  keys(visibleSurfaceFieldDefinitions({
+    mode: 'state',
+    fields: [
       'emission',
       'emissionEdge',
       'emissionTone',
