@@ -134,6 +134,11 @@ authoring JSON
   emboss, font weight/style/case, and tracking controls, with a tested sparse
   adapter mapping generated field clears back into overlay `inherit`/`null`
   sentinels.
+- [x] Moved `MaterialRecipeEditor` State Surface controls out of bespoke
+  editor JSX and onto a small generated overlay metadata contract. The tested
+  adapter preserves overlay-only fields (`borderOpacityBoost`,
+  `lightStrengthBoost`, `darkStrengthBoost`) without forcing them into
+  `SurfaceOptions`, while keeping `tintStrength` sparse/inheritable.
 - [x] Added neutral editor output-mode registry in
   `components/ui/editor-output/editorOutputRegistry.ts`.
 - [x] Registered first-class JSON output modes for `SurfaceOptions`,
@@ -338,19 +343,15 @@ DOM registry/audit/emission, persistence/import/export, preview-state
 compatibility, presets, part reset/recipe application, selection routing,
 selected interaction state, and workbench tree construction.
 
-The next blocker family is generated-control convergence inside
-`MaterialRecipeEditor`: several material sections are still bespoke editor UI
-even though schema/metadata-driven controls exist.
+The generated-control convergence inside `MaterialRecipeEditor` is now closed
+for the high-risk material/state surface sections. Remaining bespoke editor
+chrome is intentional for state selection/presets and base text/content
+positioning until those get a broader content-authoring metadata pass.
 
 Recommended finish plan, in order:
 
-1. Finish `MaterialRecipeEditor` generated-control migration with State
-   Surface. Keep state selector/presets as bespoke editor chrome. Add
-   metadata/capabilities for surface tint and boost controls, dependency
-   disables, and a separate state-overlay adapter rather than forcing
-   overlay-only authoring fields into `SurfaceOptions` metadata.
-2. Route any remaining true runtime JSON panes through editor output modes.
-3. Run final end-to-end editor verification: save/load/import/export, selected
+1. Route any remaining true runtime JSON panes through editor output modes.
+2. Run final end-to-end editor verification: save/load/import/export, selected
    target editing, generated controls, preview rendering, and emission export.
 
 ## Known Dirty Parallel Work

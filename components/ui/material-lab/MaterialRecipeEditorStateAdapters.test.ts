@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { createMaterialStateOverlay } from './MaterialRecipeDefaults';
 import {
   patchStateGlowOverlay,
+  patchStateSurfaceOverlay,
   patchStateTextOverlay,
   stateGlowSurfaceValue,
+  stateSurfaceEditorValue,
   stateTextSurfaceValue,
 } from './MaterialRecipeEditor';
 
@@ -44,6 +46,59 @@ assert.deepEqual(patched.glow, {
   cornerSize: 18,
 });
 assert.equal(patchStateGlowOverlay(overlay, {}), null);
+
+const surfaceOverlay = createMaterialStateOverlay({
+  enabled: false,
+  surface: {
+    tint: 'inherit',
+    tintStrength: null,
+    borderOpacityBoost: 4,
+    lightStrengthBoost: 0,
+    darkStrengthBoost: -2,
+  },
+});
+
+assert.deepEqual(stateSurfaceEditorValue(surfaceOverlay), {
+  enabled: false,
+  tint: 'inherit',
+  borderOpacityBoost: 4,
+  lightStrengthBoost: 0,
+  darkStrengthBoost: -2,
+});
+
+const patchedSurface = patchStateSurfaceOverlay(surfaceOverlay, {
+  tint: 'cyan',
+  tintStrength: 24,
+  borderOpacityBoost: 18,
+  lightStrengthBoost: 12,
+  darkStrengthBoost: 6,
+});
+
+assert.ok(patchedSurface);
+assert.equal(patchedSurface.enabled, true);
+assert.deepEqual(patchedSurface.surface, {
+  tint: 'cyan',
+  tintStrength: 24,
+  borderOpacityBoost: 18,
+  lightStrengthBoost: 12,
+  darkStrengthBoost: 6,
+});
+
+const inheritedSurface = patchStateSurfaceOverlay(patchedSurface, {
+  tintStrength: undefined,
+});
+
+assert.ok(inheritedSurface);
+assert.equal(inheritedSurface.surface.tintStrength, null);
+
+const disabledSurface = patchStateSurfaceOverlay(patchedSurface, {
+  enabled: false,
+});
+
+assert.ok(disabledSurface);
+assert.equal(disabledSurface.enabled, false);
+assert.deepEqual(disabledSurface.surface, patchedSurface.surface);
+assert.equal(patchStateSurfaceOverlay(surfaceOverlay, {}), null);
 
 const textOverlay = createMaterialStateOverlay({
   content: {

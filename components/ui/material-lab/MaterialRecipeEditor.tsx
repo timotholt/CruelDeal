@@ -127,12 +127,6 @@ interface MaterialRecipeEditorProps {
 }
 
 type RecipeUpdate = <K extends keyof MaterialRecipe>(key: K, value: MaterialRecipe[K]) => void;
-type StateOverlayGroup = Exclude<keyof MaterialStateOverlay, 'enabled'>;
-type StateGroupUpdate = <G extends StateOverlayGroup, K extends keyof MaterialStateOverlay[G]>(
-  group: G,
-  key: K,
-  value: MaterialStateOverlay[G][K],
-) => void;
 const edgeWearDependentFields = [
   'edgeWearTexture',
   'edgeWearLayer',
@@ -290,49 +284,165 @@ const StateSelectorSection = (props: {
   </div>
 );
 
-const StateSurfaceSection = (props: {
-  stateOverlay: MaterialStateOverlay;
-  updateEnabled: (enabled: boolean) => void;
-  updateStateGroup: StateGroupUpdate;
+export type StateSurfaceEditorField =
+  | 'enabled'
+  | 'tint'
+  | 'tintStrength'
+  | 'borderOpacityBoost'
+  | 'lightStrengthBoost'
+  | 'darkStrengthBoost';
+export type StateSurfaceEditorValue = Partial<Record<StateSurfaceEditorField, boolean | number | MaterialTone>>;
+export type StateSurfaceEditorPatch = Partial<Record<StateSurfaceEditorField, boolean | number | MaterialTone | undefined>>;
+
+interface StateSurfaceFieldDefinition {
+  key: StateSurfaceEditorField;
+  label: string;
+  control: 'toggle' | 'select' | 'slider';
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: readonly string[];
+  inheritable?: boolean;
+}
+
+const stateSurfaceField = (definition: StateSurfaceFieldDefinition) => definition;
+
+export const stateSurfaceFieldDefinitions = [
+  stateSurfaceField({ key: 'enabled', label: 'Enabled', control: 'toggle' }),
+  stateSurfaceField({ key: 'tint', label: 'Tint', control: 'select', options: materialRecipeTints }),
+  stateSurfaceField({ key: 'tintStrength', label: 'Tint Power', control: 'slider', min: 0, max: 100, step: 1, inheritable: true }),
+  stateSurfaceField({ key: 'borderOpacityBoost', label: 'Border +', control: 'slider', min: -40, max: 60, step: 1 }),
+  stateSurfaceField({ key: 'lightStrengthBoost', label: 'Light +', control: 'slider', min: -40, max: 60, step: 1 }),
+  stateSurfaceField({ key: 'darkStrengthBoost', label: 'Dark +', control: 'slider', min: -40, max: 60, step: 1 }),
+] as const satisfies readonly StateSurfaceFieldDefinition[];
+
+export const stateSurfaceInheritedValue: StateSurfaceEditorValue = {
+  tintStrength: 0,
+};
+
+export const stateSurfaceEditorValue = (overlay: MaterialStateOverlay): StateSurfaceEditorValue => ({
+  enabled: overlay.enabled,
+  tint: overlay.surface.tint,
+  ...(overlay.surface.tintStrength !== null ? { tintStrength: overlay.surface.tintStrength } : {}),
+  borderOpacityBoost: overlay.surface.borderOpacityBoost,
+  lightStrengthBoost: overlay.surface.lightStrengthBoost,
+  darkStrengthBoost: overlay.surface.darkStrengthBoost,
+});
+
+export const patchStateSurfaceOverlay = (
+  overlay: MaterialStateOverlay,
+  patch: StateSurfaceEditorPatch,
+): MaterialStateOverlay | null => {
+  const nextSurface = { ...overlay.surface };
+  let changed = false;
+  let surfaceChanged = false;
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'tint')) {
+    nextSurface.tint = (patch.tint ?? 'inherit') as MaterialStateOverlay['surface']['tint'];
+    changed = true;
+    surfaceChanged = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'tintStrength')) {
+    nextSurface.tintStrength = typeof patch.tintStrength === 'number' ? patch.tintStrength : null;
+    changed = true;
+    surfaceChanged = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'borderOpacityBoost')) {
+    nextSurface.borderOpacityBoost = typeof patch.borderOpacityBoost === 'number' ? patch.borderOpacityBoost : 0;
+    changed = true;
+    surfaceChanged = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'lightStrengthBoost')) {
+    nextSurface.lightStrengthBoost = typeof patch.lightStrengthBoost === 'number' ? patch.lightStrengthBoost : 0;
+    changed = true;
+    surfaceChanged = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'darkStrengthBoost')) {
+    nextSurface.darkStrengthBoost = typeof patch.darkStrengthBoost === 'number' ? patch.darkStrengthBoost : 0;
+    changed = true;
+    surfaceChanged = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+    changed = true;
+  }
+
+  if (!changed) return null;
+
+  return {
+    ...overlay,
+    enabled: Object.prototype.hasOwnProperty.call(patch, 'enabled')
+      ? patch.enabled === true
+      : surfaceChanged || overlay.enabled,
+    surface: nextSurface,
+  };
+};
+
+const stateSurfaceCurrentValue = (
+  definition: StateSurfaceFieldDefinition,
+  value: StateSurfaceEditorValue,
+  inheritedValue: StateSurfaceEditorValue,
+) => value[definition.key] ?? inheritedValue[definition.key] ?? '';
+
+const StateSurfaceGeneratedEditor = (props: {
+  value: StateSurfaceEditorValue;
+  inheritedValue: StateSurfaceEditorValue;
+  onPatch: (patch: StateSurfaceEditorPatch) => void;
 }) => {
-  const active = () => props.stateOverlay.enabled;
-  const tintPowerEnabled = () => active() && props.stateOverlay.surface.tintStrength !== null;
+  const enabled = () => props.value.enabled === true;
 
   return (
-    <div class={`ui-lab-control-group ${active() ? '' : 'ui-lab-control-group--disabled'}`}>
+    <div class={`ui-lab-control-group ${enabled() ? '' : 'ui-lab-control-group--disabled'}`}>
       <SectionLabel size="xs">State Surface</SectionLabel>
-      <div class="ui-lab-control-row">
-        <ControlLabel>Enabled</ControlLabel>
-        <div class="ui-lab-toggles">
-          <ToggleButton active={!props.stateOverlay.enabled} onClick={() => props.updateEnabled(false)}>off</ToggleButton>
-          <ToggleButton active={props.stateOverlay.enabled} onClick={() => props.updateEnabled(true)}>on</ToggleButton>
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Tint</ControlLabel>
-        <Segments disabled={!active()} value={props.stateOverlay.surface.tint} options={materialRecipeTints} onChange={(value: MaterialTone) => props.updateStateGroup('surface', 'tint', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${tintPowerEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Tint Power</ControlLabel>
-        <div class="ui-lab-stack">
-          <ToggleButton active={props.stateOverlay.surface.tintStrength === null} disabled={!active()} onClick={() => props.updateStateGroup('surface', 'tintStrength', props.stateOverlay.surface.tintStrength === null ? 8 : null)}>
-            inherit
-          </ToggleButton>
-          <Slider disabled={!tintPowerEnabled()} value={props.stateOverlay.surface.tintStrength ?? 0} onInput={(value) => props.updateStateGroup('surface', 'tintStrength', value)} />
-        </div>
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Border +</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.surface.borderOpacityBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'borderOpacityBoost', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Light +</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.surface.lightStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'lightStrengthBoost', value)} />
-      </div>
-      <div class={`ui-lab-control-row ${active() ? '' : 'ui-lab-control-row--disabled'}`}>
-        <ControlLabel>Dark +</ControlLabel>
-        <Slider disabled={!active()} value={props.stateOverlay.surface.darkStrengthBoost} min={-40} max={60} onInput={(value) => props.updateStateGroup('surface', 'darkStrengthBoost', value)} />
-      </div>
+      <For each={stateSurfaceFieldDefinitions}>
+        {(definition) => {
+          const fieldEnabled = () => enabled() || definition.key === 'enabled';
+          const hasOverride = () => Object.prototype.hasOwnProperty.call(props.value, definition.key);
+          const current = () => stateSurfaceCurrentValue(definition, props.value, props.inheritedValue);
+          const numeric = () => typeof current() === 'number' ? current() as number : 0;
+          const string = () => typeof current() === 'string' || typeof current() === 'number' ? String(current()) : '';
+          const boolean = () => current() === true;
+          const patch = (value: boolean | number | MaterialTone) => props.onPatch({ [definition.key]: value });
+          const clear = () => props.onPatch({ [definition.key]: undefined });
+
+          return (
+            <div class={`ui-lab-control-row ${fieldEnabled() ? '' : 'ui-lab-control-row--disabled'}`}>
+              <ControlLabel>{definition.label}</ControlLabel>
+              <div class="ui-lab-stack">
+                <Show when={definition.inheritable}>
+                  <ToggleButton active={!hasOverride()} disabled={!fieldEnabled()} onClick={clear}>
+                    inherit
+                  </ToggleButton>
+                </Show>
+                <Show when={definition.control === 'toggle'}>
+                  <div class="ui-lab-toggles">
+                    <ToggleButton active={boolean()} disabled={!fieldEnabled()} onClick={() => patch(!boolean())}>
+                      on
+                    </ToggleButton>
+                  </div>
+                </Show>
+                <Show when={definition.control === 'select'}>
+                  <Select
+                    value={string() as MaterialTone}
+                    options={(definition.options || []) as readonly MaterialTone[]}
+                    disabled={!fieldEnabled()}
+                    onChange={(value: MaterialTone) => patch(value)}
+                  />
+                </Show>
+                <Show when={definition.control === 'slider'}>
+                  <Slider
+                    disabled={!fieldEnabled() || (definition.inheritable && !hasOverride())}
+                    value={numeric()}
+                    min={definition.min}
+                    max={definition.max}
+                    step={definition.step}
+                    onInput={(value) => patch(value)}
+                  />
+                </Show>
+              </div>
+            </div>
+          );
+        }}
+      </For>
     </div>
   );
 };
@@ -637,39 +747,6 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
     props.onChange({ ...props.recipe, [key]: value });
   };
 
-  const updateEnabled = (enabled: boolean) => {
-    if (enabled) props.onForcePreviewChange?.(true);
-    props.onChange({
-      ...props.recipe,
-      states: {
-        ...props.recipe.states,
-        [activeState()]: {
-          ...stateOverlay(),
-          enabled,
-        },
-      },
-    });
-  };
-
-  const updateStateGroup: StateGroupUpdate = (group, key, value) => {
-    const overlay = stateOverlay();
-    props.onForcePreviewChange?.(true);
-    props.onChange({
-      ...props.recipe,
-      states: {
-        ...props.recipe.states,
-        [activeState()]: {
-          ...overlay,
-          enabled: true,
-          [group]: {
-            ...overlay[group],
-            [key]: value,
-          },
-        },
-      },
-    });
-  };
-
   const restSurfaceValue = (): Partial<SurfaceOptions> => props.recipe;
 
   const patchRestSurface = (patch: SurfaceEditorPatch) => {
@@ -685,6 +762,7 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
   });
 
   const emissionSurfaceValue = (): Partial<SurfaceOptions> => stateOverlay().emission as Partial<SurfaceOptions>;
+  const stateSurfaceValue = () => stateSurfaceEditorValue(stateOverlay());
   const glowSurfaceValue = () => stateGlowSurfaceValue(stateOverlay());
   const textSurfaceValue = () => stateTextSurfaceValue(stateOverlay());
 
@@ -712,6 +790,20 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           enabled: true,
           emission: nextEmission as MaterialStateOverlay['emission'],
         },
+      },
+    });
+  };
+
+  const patchStateSurface = (patch: StateSurfaceEditorPatch) => {
+    const overlay = stateOverlay();
+    const nextOverlay = patchStateSurfaceOverlay(overlay, patch);
+    if (!nextOverlay) return;
+    if (nextOverlay.enabled) props.onForcePreviewChange?.(true);
+    props.onChange({
+      ...props.recipe,
+      states: {
+        ...props.recipe.states,
+        [activeState()]: nextOverlay,
       },
     });
   };
@@ -933,7 +1025,11 @@ export const MaterialRecipeEditor = (props: MaterialRecipeEditorProps) => {
           setActiveState={setActiveState}
           applyPreset={applyPreset}
         />
-        <StateSurfaceSection stateOverlay={stateOverlay()} updateEnabled={updateEnabled} updateStateGroup={updateStateGroup} />
+        <StateSurfaceGeneratedEditor
+          value={stateSurfaceValue()}
+          inheritedValue={stateSurfaceInheritedValue}
+          onPatch={patchStateSurface}
+        />
         <SurfaceGeneratedEditor
           title="State Glow"
           mode="state"
