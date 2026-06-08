@@ -1,6 +1,6 @@
 import { mergeProps } from 'solid-js';
 import type { JSX } from 'solid-js';
-import type { SheenMethod, SheenType, ShinyMaterialKey } from './types';
+import type { SheenMethod, SheenType, ShinyMaterialKey } from '../engine/types';
 
 const sheenClass = (method: SheenMethod, type: SheenType) =>
   method === 'bitmap' ? 'sheen-baked' : `sheen-${type}`;

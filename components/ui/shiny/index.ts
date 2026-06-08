@@ -15,15 +15,15 @@ export type {
   ShinyStop,
   ShinySurfaceProps,
   ShinyTextureOptions,
-} from './types';
+} from './engine/types';
 export {
   METALS,
   SHINY_MATERIALS,
   metalCssGradient,
   metalSvgStops,
   toShinyMaterialId,
-} from './materials';
-export { bakeShinyTextureFromStops, makeMetalTextureFromStops } from './textureBake';
+} from './engine/materials';
+export { bakeShinyTextureFromStops, makeMetalTextureFromStops } from './engine/textureBake';
 export {
   getShinyMaterialTextureSizes,
   getShinyTextureCacheSize,
@@ -31,13 +31,13 @@ export {
   makeShinyTexture,
   setMetalTextureOptions,
   setShinyTextureOptions,
-} from './textureRegistry';
+} from './engine/textureRegistry';
 export {
   injectMetalVars,
   metalSurfaceStyle,
   publishShinyCssVars,
   publishShinyTextureVars,
-} from './cssVars';
+} from './engine/cssVars';
 export {
   direction,
   enableGyro,
@@ -46,18 +46,18 @@ export {
   pointer,
   setSheenEnabled,
   sheenEnabled,
-} from './reflexController';
+} from './engine/reflexController';
 export {
   createReflexShift,
   REFLEX_CSS_SHIFT,
   REFLEX_SVG_UNITS,
-} from './useReflex';
-export { KanIcon } from './KanIcon';
-export type { KanIconProps } from './KanIcon';
-export { ReflectiveText, EmbossedReflectiveText } from './ReflectiveText';
-export type { ReflectiveTextProps } from './ReflectiveText';
-export { ReflectiveButton } from './ReflectiveButton';
-export type { ReflectiveButtonProps } from './ReflectiveButton';
-export { ReflectiveProgressBar } from './ReflectiveProgressBar';
-export type { ReflectiveProgressBarProps } from './ReflectiveProgressBar';
-export { enableGyro as enableMobileGyroscope } from './reflexController';
+} from './engine/useReflex';
+export { KanIcon } from './components/KanIcon';
+export type { KanIconProps } from './components/KanIcon';
+export { ReflectiveText, EmbossedReflectiveText } from './components/ReflectiveText';
+export type { ReflectiveTextProps } from './components/ReflectiveText';
+export { ReflectiveButton } from './components/ReflectiveButton';
+export type { ReflectiveButtonProps } from './components/ReflectiveButton';
+export { ReflectiveProgressBar } from './components/ReflectiveProgressBar';
+export type { ReflectiveProgressBarProps } from './components/ReflectiveProgressBar';
+export { enableGyro as enableMobileGyroscope } from './engine/reflexController';

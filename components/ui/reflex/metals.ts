@@ -9,8 +9,8 @@ export {
   metalCssGradient,
   metalSvgStops,
   toShinyMaterialId,
-} from '../shiny/materials';
-export { bakeShinyTextureFromStops, makeMetalTextureFromStops } from '../shiny/textureBake';
+} from '../shiny/engine/materials';
+export { bakeShinyTextureFromStops, makeMetalTextureFromStops } from '../shiny/engine/textureBake';
 export {
   getShinyMaterialTextureSizes,
   getShinyTextureCacheSize,
@@ -18,13 +18,13 @@ export {
   makeShinyTexture,
   setMetalTextureOptions,
   setShinyTextureOptions,
-} from '../shiny/textureRegistry';
+} from '../shiny/engine/textureRegistry';
 export {
   injectMetalVars,
   metalSurfaceStyle,
   publishShinyCssVars,
   publishShinyTextureVars,
-} from '../shiny/cssVars';
+} from '../shiny/engine/cssVars';
 export type {
   MetalId,
   MetalSpec,

@@ -1,8 +1,8 @@
 import { createSignal, For, Show, createEffect } from 'solid-js';
-import { KanIcon } from '../ui/shiny';
-import { createReflexShift, REFLEX_SVG_UNITS } from '../ui/shiny';
-import { METALS, makeMetalTextureFromStops } from '../ui/shiny';
-import { PRESETS, PROFILE_TO_METAL } from '../authoring/shiny/presets';
+import { KanIcon } from '../../ui/shiny';
+import { createReflexShift, REFLEX_SVG_UNITS } from '../../ui/shiny';
+import { METALS, makeMetalTextureFromStops } from '../../ui/shiny';
+import { PRESETS, PROFILE_TO_METAL } from './presets';
 import { 
   ReflectiveText, 
   EmbossedReflectiveText, 
@@ -12,8 +12,8 @@ import {
   setSheenEnabled,
   enableMobileGyroscope,
   gyroActive
-} from '../ui/shiny';
-import { MaterialRichText } from '../ui/material-node/MaterialRichText';
+} from '../../ui/shiny';
+import { MaterialRichText } from '../../ui/material-node/MaterialRichText';
 
 // Color Conversion Helpers
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -188,7 +188,7 @@ const SOFTBOX_PRESETS: Record<string, SoftboxPreset> = {
   }
 };
 
-export const IconsPreviewScreen = () => {
+export const ShinyAuthoringScreen = () => {
   // Signals for interactive SVG controls
   const interactiveSheen = sheenEnabled;
   const setInteractiveSheen = setSheenEnabled;

@@ -24,7 +24,7 @@ import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
 import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
 import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPreviewScreen";
 import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
-import { ShinyAuthoringScreen } from "./components/screens/ShinyAuthoringScreen";
+import { ShinyAuthoringScreen } from "./components/authoring/shiny/ShinyAuthoringScreen";
 import { GameUiSkinProofScreen } from "./components/screens/GameUiSkinProofScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure

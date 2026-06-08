@@ -6,5 +6,5 @@ export {
   pointer,
   setSheenEnabled,
   sheenEnabled,
-} from '../shiny/reflexController';
+} from '../shiny/engine/reflexController';
 export type { ReflexDirection, ReflexPointer } from '../shiny';

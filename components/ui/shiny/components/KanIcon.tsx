@@ -1,8 +1,8 @@
 import { For, Show, mergeProps } from 'solid-js';
-import { sheenEnabled } from './reflexController';
-import { createReflexShift, REFLEX_SVG_UNITS } from './useReflex';
-import { METALS, metalSvgStops } from './materials';
-import { makeMetalTextureFromStops } from './textureBake';
+import { sheenEnabled } from '../engine/reflexController';
+import { createReflexShift, REFLEX_SVG_UNITS } from '../engine/useReflex';
+import { METALS, metalSvgStops } from '../engine/materials';
+import { makeMetalTextureFromStops } from '../engine/textureBake';
 
 
 export interface KanIconProps {
@@ -248,7 +248,12 @@ export const KanIcon = (rawProps: KanIconProps) => {
         color: stop.color
       }));
     }
-    
+
+    // CONTRACT: runtime only ships the materials in RUNTIME_PROFILE_TO_MATERIAL.
+    // Experimental/authoring profiles (A–K, R1/R2, …) are NOT known here — the
+    // authoring layer must resolve them and pass the result as `customStops`.
+    // Anything unresolved falls back to gold by design; do not "fix" this to read
+    // authoring presets, or runtime would depend on authoring (wrong direction).
     return metalSvgStops(METALS.gold);
   };
 

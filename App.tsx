@@ -14,7 +14,7 @@ import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPrev
 import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
-import { ShinyAuthoringScreen } from './components/screens/ShinyAuthoringScreen';
+import { ShinyAuthoringScreen } from './components/authoring/shiny/ShinyAuthoringScreen';
 import { GameUiSkinProofScreen } from './components/screens/GameUiSkinProofScreen';
 
 const queryClient = new QueryClient({
