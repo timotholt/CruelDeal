@@ -454,6 +454,13 @@ authoring JSON
   through the SAME `MaterialSurfaceHost`/`materialRecipeToSurfaceProps`. Remaining DOM-wrapper
   parity is a browser-smoke item. Bonus: vitest can now render Solid components for all later
   renderer-swap slices.
+- [x] Phase 2 bridge completion: mapped `cardType.backgroundImage` (deferred in 2a) to leading
+  nodes mirroring the carousel — a `media` node bound to `image` with `feedBackgroundImageCss`
+  positioning, plus a fade-overlay `container` (`main-material-feed-media-fade--<mode>` class +
+  `feedMediaFadeCss` vars) when a fade is active. Content parity preserved by splitting the leading
+  background nodes off before the lockstep walk (feed 4/5/5 == material content 4/5/5; bg=1 mission
+  briefing, bg=2 patch/community). Forward bridge now maps every FeedCardTypeRecipe field; render
+  test confirms the canonical renderer emits the media node. Bridge + its 2 tests only.
 
 ## Verification Evidence
 

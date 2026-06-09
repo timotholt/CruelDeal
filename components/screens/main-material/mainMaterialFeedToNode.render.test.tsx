@@ -52,7 +52,9 @@ describe('Phase 2b: canonical renderer parity on bridged feed tree', () => {
   it('mounts without crashing and emits one material-node per source node', () => {
     const el = mount();
     const rendered = el.querySelectorAll('.material-node');
-    const expected = 1 + countFeedNodes(cardType.children); // root container + nodes
+    const bg = cardType.backgroundImage;
+    const bgCount = !bg?.enabled ? 0 : bg.fadeMode !== 'none' ? 2 : 1;
+    const expected = 1 + bgCount + countFeedNodes(cardType.children); // root + bg/fade + nodes
     expect(rendered.length).toBe(expected);
   });
 

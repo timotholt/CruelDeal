@@ -1,6 +1,8 @@
 import type { MaterialNodeRecipe } from '../../ui/material-node';
 import type { FeedCardNode, FeedCardTypeRecipe } from './mainMaterialFeedModel';
 import {
+  feedBackgroundImageCss,
+  feedMediaFadeCss,
   feedNodeFitMode,
   feedNodeSurfaceRecipe,
   resolveFeedNodeRenderMode,
@@ -45,9 +47,39 @@ export const feedCardNodeToMaterialNode = (
 };
 
 /**
+ * Build the background nodes for a card type, mirroring how the feed carousel renders
+ * `cardType.backgroundImage`: a `media` node bound to `image` (positioned/scaled via
+ * `feedBackgroundImageCss`) plus, when a fade is active, a fade-overlay container carrying
+ * the same `main-material-feed-media-fade--<mode>` class and CSS vars. Returns [] when the
+ * background is disabled. These render behind content, so callers prepend them.
+ */
+const feedBackgroundNodes = (cardType: FeedCardTypeRecipe): MaterialNodeRecipe[] => {
+  const bg = cardType.backgroundImage;
+  if (!bg || !bg.enabled) return [];
+  const nodes: MaterialNodeRecipe[] = [{
+    id: `${cardType.id}-background`,
+    label: 'Background Image',
+    kind: 'media',
+    content: { mode: 'media', binding: bg.binding },
+    layout: { style: feedBackgroundImageCss(bg) },
+  }];
+  if (bg.fadeMode !== 'none') {
+    nodes.push({
+      id: `${cardType.id}-media-fade`,
+      label: 'Media Fade',
+      kind: 'container',
+      layout: {
+        className: `main-material-feed-media-fade main-material-feed-media-fade--${bg.fadeMode}`,
+        style: feedMediaFadeCss(bg),
+      },
+    });
+  }
+  return nodes;
+};
+
+/**
  * Convert a whole FeedCardTypeRecipe into a root MaterialNodeRecipe container tree.
- * NOTE: cardType.backgroundImage is intentionally NOT mapped in this slice; it becomes
- * a dedicated media node in a later slice (deferred).
+ * Background image + fade are mapped to leading media/overlay nodes (see feedBackgroundNodes).
  */
 export const feedCardTypeToMaterialNodeTree = (
   cardType: FeedCardTypeRecipe,
@@ -56,5 +88,8 @@ export const feedCardTypeToMaterialNodeTree = (
   label: cardType.name,
   kind: 'container',
   surface: cardType.surface,
-  children: cardType.children.map((child) => feedCardNodeToMaterialNode(cardType, child)),
+  children: [
+    ...feedBackgroundNodes(cardType),
+    ...cardType.children.map((child) => feedCardNodeToMaterialNode(cardType, child)),
+  ],
 });

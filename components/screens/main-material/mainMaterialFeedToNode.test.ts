@@ -82,11 +82,32 @@ for (const [key, cardType] of entries) {
   assert.doesNotThrow(() => { tree = feedCardTypeToMaterialNodeTree(cardType); }, `convert ${key} must not throw`);
   tree = feedCardTypeToMaterialNodeTree(cardType);
 
-  // B) Node-count parity (over children, per card type).
+  // Background image + fade map to leading media/overlay nodes; split them off so the
+  // content subtree stays in 1:1 parity with the Feed children.
+  const bgCount = !cardType.backgroundImage?.enabled
+    ? 0
+    : cardType.backgroundImage.fadeMode !== 'none' ? 2 : 1;
+  const allChildren = tree.children ?? [];
+  const bgNodes = allChildren.slice(0, bgCount);
+  const contentChildren = allChildren.slice(bgCount);
+  if (bgCount > 0) {
+    assert.equal(bgNodes[0].kind, 'media', `${key} background node must be media`);
+    assert.equal(bgNodes[0].content?.binding, 'image', `${key} background must bind image`);
+    assert.ok(bgNodes[0].layout?.style, `${key} background must carry positioning CSS`);
+    if (bgCount === 2) {
+      assert.equal(bgNodes[1].kind, 'container', `${key} fade node must be container`);
+      assert.ok(
+        (bgNodes[1].layout?.className ?? '').includes('main-material-feed-media-fade'),
+        `${key} fade node must carry the fade class`,
+      );
+    }
+  }
+
+  // B) Node-count parity (over CONTENT children, per card type).
   const feedCount = countFeedNodes(cardType.children);
-  const materialCount = countMaterialNodes(tree.children);
-  assert.equal(materialCount, feedCount, `node-count parity for ${key}: feed=${feedCount} material=${materialCount}`);
-  console.log(`  ${key} (${cardType.name}): feed=${feedCount} material=${materialCount}`);
+  const materialCount = countMaterialNodes(contentChildren);
+  assert.equal(materialCount, feedCount, `node-count parity for ${key}: feed=${feedCount} material=${materialCount} (bg=${bgCount})`);
+  console.log(`  ${key} (${cardType.name}): feed=${feedCount} material=${materialCount} bg=${bgCount}`);
 
   // Root sanity.
   assert.equal(tree.id, cardType.id, 'root id must be card type id');
@@ -96,8 +117,8 @@ for (const [key, cardType] of entries) {
 
   // C) Structural completeness, walked in lockstep.
   const sourceChildren = cardType.children;
-  const treeChildren = tree.children ?? [];
-  assert.equal(treeChildren.length, sourceChildren.length, `root children line up for ${key}`);
+  const treeChildren = contentChildren;
+  assert.equal(treeChildren.length, sourceChildren.length, `root content children line up for ${key}`);
   sourceChildren.forEach((child, index) => assertNodeAligned(cardType, child, treeChildren[index]));
 
   // E) Layout not lost: every source node has a layout, so every converted node's
