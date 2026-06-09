@@ -442,6 +442,18 @@ authoring JSON
   count parity (4/4, 5/5, 5/5), surface deep-equals the resolver on sampled nodes, layout.style
   populated, own-key coverage guard against silent field drops. `cardType.backgroundImage`
   deferred (becomes a media node in a later slice). No consumer touched.
+- [x] Phase 2b of `docs/feed-model-unification-refactor-spec.md`: render-parity proof. Enabled the
+  Solid JSX transform under vitest (`vitest.config.ts` now loads `vite-plugin-solid` +
+  `resolve.conditions` + inline solid deps) so component render tests run in jsdom, and added
+  `mainMaterialFeedToNode.render.test.tsx`. It mounts the REAL canonical `MaterialNodeRenderer`
+  on the bridged `card_type_01` tree with a binding resolver over a real `FeedStory`, and proves:
+  exact node-count parity (one `.material-node` per source node, root + children), canonical kind
+  classes emitted, and bound story copy resolved into the DOM through the canonical content path.
+  Surface visual parity is transitive and already guaranteed: the bridge surface deep-equals
+  `feedNodeSurfaceRecipe` (Phase 2a) AND both the feed carousel and `MaterialNodeSurface` render
+  through the SAME `MaterialSurfaceHost`/`materialRecipeToSurfaceProps`. Remaining DOM-wrapper
+  parity is a browser-smoke item. Bonus: vitest can now render Solid components for all later
+  renderer-swap slices.
 
 ## Verification Evidence
 
@@ -501,6 +513,10 @@ authoring JSON
   clean; independent probe confirmed real folded text styling (e.g. deadline-badge -> gold/weight
   600/emboss/0.5rem) and 7 baked layout CSS props; diff = 2 new files only, no existing file
   modified.
+- PASS Phase 2b render parity: new Solid jsdom render test green (3/3 — mount + exact node parity
+  + kind classes + bound story copy in DOM via canonical MaterialNodeRenderer); existing
+  feedNodeLayoutCss vitest test still 8/8 under the new config; tsx-runner suite unaffected; build
+  clean; diff = vitest.config.ts + 1 new .test.tsx.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`
