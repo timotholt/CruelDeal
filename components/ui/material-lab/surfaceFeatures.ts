@@ -1,4 +1,5 @@
 import { JSX } from 'solid-js';
+import { materialTextEmbossShadow } from '../material-node/materialTextEmboss';
 import { getEdgeTextureOption, getTextureOption, type EdgeTextureKind } from './TextureOptions';
 import {
   compactStyle,
@@ -398,14 +399,18 @@ const contentVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   const contentRgb = tintColors[contentTone].rgb;
   const iconRgb = tintColors[iconTone].rgb;
   const contentAlpha = (options.contentOpacity ?? SURFACE_DEFAULTS.contentOpacity) / 100;
-  const textEmboss = options.textEmboss !== false;
+  const embossOption = options.textEmboss;
+  const embossIsObject = typeof embossOption === 'object' && embossOption !== null;
+  const textEmboss = embossOption !== false;
   const contentGlowStrength = options.contentGlowStrength ?? 0;
   const iconGlowStrength = options.iconGlowStrength ?? 0;
-  const textShadow = textEmboss
-    ? contentTone === 'black'
-      ? '0 1px 0 rgb(255 255 255 / 0.38)'
-      : '0 2px 6px rgb(0 0 0 / 0.64)'
-    : 'none';
+  const textShadow = embossIsObject
+    ? materialTextEmbossShadow({ contentTone, ...embossOption })
+    : textEmboss
+      ? contentTone === 'black'
+        ? '0 1px 0 rgb(255 255 255 / 0.38)'
+        : '0 2px 6px rgb(0 0 0 / 0.64)'
+      : 'none';
 
   return emit({
     '--content-font-family': options.textFontFamily || 'inherit',

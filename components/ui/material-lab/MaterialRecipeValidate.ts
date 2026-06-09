@@ -11,6 +11,7 @@ import type {
   MaterialRecipe,
   MaterialRecipeState,
   MaterialStateOverlay,
+  MaterialTextEmbossStyle,
   MaterialTone,
   MotionStateOverlay,
   SurfaceStateOverlay,
@@ -58,6 +59,31 @@ const uniqueCorners = (value: unknown, fallback: CornerName[]) => (
 const sanitizeTone = (value: unknown, fallback: MaterialTone, options = materialRecipeTones): MaterialTone => (
   isOneOf(value, options) ? value : fallback
 );
+
+const materialTextEmbossModes = ['none', 'dark', 'light', 'shadow'] as const;
+
+const sanitizeTextEmboss = (
+  value: unknown,
+  fallback: boolean | MaterialTextEmbossStyle,
+): boolean | MaterialTextEmbossStyle => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'object' && value !== null) {
+    const input = value as Record<string, unknown>;
+    const sanitized: MaterialTextEmbossStyle = {
+      textEmbossMode: isOneOf(input.textEmbossMode, materialTextEmbossModes)
+        ? input.textEmbossMode
+        : 'none',
+      textEmbossStrength: clamp(input.textEmbossStrength, 100, 0, 100),
+      textEmbossOffset: clamp(input.textEmbossOffset, 50, 0, 100),
+      textEmbossBlur: clamp(input.textEmbossBlur, 50, 0, 100),
+    };
+    if (isOneOf(input.contentTone, materialRecipeTones)) {
+      sanitized.contentTone = input.contentTone;
+    }
+    return sanitized;
+  }
+  return fallback;
+};
 
 const sanitizeHexColor = (value: unknown, fallback: string) => (
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
@@ -239,7 +265,7 @@ export const sanitizeMaterialRecipe = (value: unknown, fallback: MaterialRecipe)
     letterSpacing: clamp(input.letterSpacing, fallback.letterSpacing, -0.08, 0.24),
     contentTone: sanitizeTone(input.contentTone, fallback.contentTone, materialRecipeContentTones),
     iconTone: sanitizeTone(input.iconTone, fallback.iconTone, materialRecipeContentTones),
-    textEmboss: typeof input.textEmboss === 'boolean' ? input.textEmboss : fallback.textEmboss,
+    textEmboss: sanitizeTextEmboss(input.textEmboss, fallback.textEmboss),
     textAlign: isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
     textX: clamp(input.textX, fallback.textX, -80, 80),
     textY: clamp(input.textY, fallback.textY, -80, 80),

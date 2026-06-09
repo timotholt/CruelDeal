@@ -11,6 +11,8 @@ import type {
   SurfaceGradient,
 } from './MaterialPrimitives';
 export type { BorderColorKind } from './MaterialPrimitives';
+import type { MaterialTextEmbossStyle } from '../material-node/materialTextEmboss';
+export type { MaterialTextEmbossStyle, MaterialTextEmbossMode } from '../material-node/materialTextEmboss';
 
 export type MaterialTone =
   | 'none'
@@ -143,7 +145,7 @@ export interface MaterialRecipe {
   letterSpacing: number;
   contentTone: MaterialTone;
   iconTone: MaterialTone;
-  textEmboss: boolean;
+  textEmboss: boolean | MaterialTextEmbossStyle;
   textAlign: ContentAlign;
   textX: number;
   textY: number;

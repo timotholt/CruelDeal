@@ -414,6 +414,16 @@ authoring JSON
   replacing each function body with a `cloneFeedCardType(<json>)` one-liner. The model file
   dropped 8068 -> 1040 lines with byte-identical runtime output (independent snapshot match).
   No type, sanitizer, or consumer changed. Behavior-preserving data-as-code removal.
+- [x] Phase 1a of `docs/feed-model-unification-refactor-spec.md`: additive canonical-type
+  extensions so the model can later absorb the Feed shape. Added `lineHeight?`/`paragraphGap?`
+  to `MaterialNodeContent` and `'rich-fit'` to `MaterialNodeTextRenderMode`; widened
+  `MaterialRecipe.textEmboss` (and `SurfaceOptions.textEmboss`) from `boolean` to
+  `boolean | MaterialTextEmbossStyle` reusing the existing `materialTextEmboss` type/renderer;
+  `MaterialRecipeValidate` now sanitizes the emboss object (clamped) while booleans pass through
+  unchanged; `surfaceFeatures` renders object emboss via `materialTextEmbossShadow`, with
+  `true`/`false`/`undefined` branches byte-identical to before (independent boolean-baseline
+  snapshot match). Additive only — no Feed type wired (Phase 2 deferred), no consumer behavior
+  changed. Inherit sentinels for `textSizeRem`/`textAlign`/`textX`/`textY` deferred to Phase 1b.
 
 ## Verification Evidence
 
@@ -458,6 +468,12 @@ authoring JSON
   snapshot of `createDefaultFeedCardTypes()` byte-identical (221421 bytes) before/after;
   `npm run build` clean (1110 modules); diff surgical (only model file + new `defaults/`),
   no protected-lane file touched; model 8068 -> 1040 lines.
+- PASS Phase 1a type extensions: 16/16 tests green (MaterialRecipeValidate, surfaceFeatures,
+  surfaceValidate, MaterialRecipeEditorStateAdapters, surfaceFieldMetadata, surfaceStateVars,
+  uiNodeRichTextTheme, materialTextEmboss + 8 main-material lane tests); `npm run build` clean;
+  emboss boolean output byte-identical (independent baseline); test diffs purely additive
+  (pre-existing emboss assertions intact); diff scoped to 7 material-lab/material-node files,
+  no protected/Feed file.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`

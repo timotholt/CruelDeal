@@ -7,6 +7,7 @@ import {
   surfaceStyle,
 } from './surfaceFeatures';
 import type { SurfaceOptions } from './surfaceSchema';
+import { materialTextEmbossShadow } from '../material-node/materialTextEmboss';
 
 const layerClasses = (options: SurfaceOptions) =>
   surfaceLayerEmissions(options).map((layer) => (layer.classNames || [])[0]);
@@ -199,5 +200,27 @@ assert.equal(styleOf({})['--state-translate-y'], undefined);
 // can disable host brightness while brightening paint layers only)
 assert.equal(styleOf({ surfaceFilterBrightness: 1 })['--surface-filter-brightness'], '1');
 assert.equal(styleOf({ surfaceLayerBrightness: 1.18 })['--surface-layer-brightness'], '1.18');
+
+// textEmboss: object emboss drives the shadow from materialTextEmbossShadow.
+// A 'dark' object with strength yields a non-'none' shadow; explicit false is 'none';
+// and the object shadow must differ from the legacy boolean default shadow.
+const embossObjectShadow = styleOf({
+  textEmboss: { textEmbossMode: 'dark', textEmbossStrength: 100, textEmbossOffset: 50, textEmbossBlur: 50 },
+})['--content-shadow'];
+const embossFalseShadow = styleOf({ textEmboss: false })['--content-shadow'];
+const embossBoolDefaultShadow = styleOf({ textEmboss: true })['--content-shadow'];
+assert.equal(embossFalseShadow, 'none');
+assert.notEqual(embossObjectShadow, 'none');
+assert.notEqual(embossObjectShadow, embossBoolDefaultShadow);
+assert.equal(
+  embossObjectShadow,
+  materialTextEmbossShadow({
+    contentTone: 'white',
+    textEmbossMode: 'dark',
+    textEmbossStrength: 100,
+    textEmbossOffset: 50,
+    textEmbossBlur: 50,
+  }),
+);
 
 console.log('Surface feature pipeline tests passed');

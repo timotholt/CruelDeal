@@ -8,6 +8,7 @@ import type {
   FontWeightToken,
   MaterialRecipeState,
   MaterialSurfaceStateVars,
+  MaterialTextEmbossStyle,
   MaterialTone,
   TextTransformToken,
 } from './MaterialRecipeTypes';
@@ -98,7 +99,7 @@ export interface SurfaceOptions {
   fontStyle?: FontStyleToken;
   textTransform?: TextTransformToken;
   letterSpacing?: number;
-  textEmboss?: boolean;
+  textEmboss?: boolean | MaterialTextEmbossStyle;
   textAlign?: ContentAlign;
   textX?: number;
   textY?: number;
