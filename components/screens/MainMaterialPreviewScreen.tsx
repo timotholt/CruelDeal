@@ -2480,27 +2480,23 @@ export const MainMaterialPreviewScreen = () => {
     await navigator.clipboard?.writeText(payload);
     setInspectorStatus(payload ? 'Copied ui-node-content JSON' : 'No ui-node-content JSON to copy');
   };
-  const importSelectedFeedStoryContentJson = async () => {
-    let text = '';
-    try {
-      text = (await navigator.clipboard?.readText()) || '';
-    } catch {
-      text = '';
+  const importSelectedFeedStoryContentJson = (text: string) => {
+    if (!text.trim()) {
+      setInspectorStatus('No ui-node-content JSON provided');
+      return 'No ui-node-content JSON provided';
     }
-    if (!text.trim()) text = window.prompt('Paste ui-node-content JSON') || '';
-    if (!text.trim()) return;
     const currentStory = selectedFeedStory();
     const result = parseMainMaterialFeedContentJson(currentStory, text);
     if (!result.ok) {
       setInspectorStatus(result.message);
-      window.alert(result.message);
-      return;
+      return result.message;
     }
     setFeedStories((current) => current.map((story) => (
       story.id === currentStory.id ? result.story : story
     )));
     if (result.changedSlots.length) markPresetDirty('feedCards');
     setInspectorStatus(result.message);
+    return result.message;
   };
 
   const selectFeedTarget = (targetId: FeedMaterialTargetId) => {

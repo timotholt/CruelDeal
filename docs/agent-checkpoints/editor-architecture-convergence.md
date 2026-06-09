@@ -133,6 +133,14 @@ authoring JSON
   pasted documents are parsed through the editor output registry, only known
   feed content fields are applied, unknown keys are ignored, and invalid JSON
   returns a UI validation message instead of crashing the route.
+- [x] Replaced prompt/clipboard-only CMS import with an inline `ui-node-content`
+  document editor in `FeedRecipeEditor`, including apply/reset controls and
+  validation through the same content-output adapter.
+- [x] Added inline CMS document validation/status feedback beside the
+  `ui-node-content` editor.
+- [x] Added `docs/main-material-editor-architecture-handoff.md` so future
+  prompts can reload what was built, how it works, current risks, and next
+  steps.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -497,6 +505,11 @@ authoring JSON
   `copy ui-node-content` controls.
 - PASS in-app browser CMS import smoke test: `/main-material` loaded without
   critical error; the CMS section rendered copy/import content controls.
+- PASS in-app browser CMS document editor smoke test: `/main-material` loaded
+  without critical error; the CMS section rendered Content JSON, apply
+  document, and reset controls.
+- PASS in-app browser CMS status smoke test: `/main-material` loaded without
+  critical error; the CMS document editor rendered inline Status/Ready feedback.
 
 ## Current Architecture State
 
@@ -536,9 +549,12 @@ and fallback snapshot creation has been re-homed into a compatibility export
 module. CMS/content convergence has its first live slice: selected story content
 serializes through the registered `ui-node-content` output mode, and the CMS
 panel exposes bound/static state, field type, preview value, copy, and validated
-import actions. The next bottleneck is richer CMS authoring: make content field
-documents editable as documents rather than individual textarea writes, with
-inline validation feedback instead of prompt/clipboard-only import.
+import actions. The CMS panel now includes an inline `ui-node-content` document
+editor with apply/reset controls and inline status feedback, replacing
+prompt/clipboard-only import. The durable handoff doc is
+`docs/main-material-editor-architecture-handoff.md`. The next bottleneck is
+reducing the remaining per-field textarea path to a focused convenience editor
+rather than the primary CMS authoring path.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   SectionLabel,
   materialRecipeContentTones,
@@ -115,12 +115,24 @@ export const FeedRecipeEditor = (props: {
   onStoryImageOverrideChange: (storyId: string, image: string | null) => void;
   selectedStoryContentJson: string;
   onCopySelectedStoryContentJson: () => void;
-  onImportSelectedStoryContentJson: () => void;
+  onImportSelectedStoryContentJson: (json: string) => string;
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
   const [insertMode, setInsertMode] = createSignal<'inside' | 'after'>('inside');
   const [structureUndo, setStructureUndo] = createSignal<StructureUndoSnapshot | null>(null);
   const [structureStatus, setStructureStatus] = createSignal('Ready');
+  const [contentDraft, setContentDraft] = createSignal('');
+  const [lastSyncedContentJson, setLastSyncedContentJson] = createSignal('');
+  const [contentDocumentStatus, setContentDocumentStatus] = createSignal('Ready');
+  createEffect(() => {
+    const nextJson = props.selectedStoryContentJson;
+    if (contentDraft() === lastSyncedContentJson()) setContentDraft(nextJson);
+    setLastSyncedContentJson(nextJson);
+  });
+  createEffect(() => {
+    props.selectedStoryId;
+    setContentDocumentStatus('Ready');
+  });
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
     props.onChange({ ...props.feed, [key]: value });
   };
@@ -142,6 +154,11 @@ export const FeedRecipeEditor = (props: {
     const value = selectedNodeStoryText().replace(/\s+/g, ' ').trim();
     if (!value) return 'empty';
     return value.length > 96 ? `${value.slice(0, 96)}...` : value;
+  };
+  const contentDraftDirty = () => contentDraft() !== props.selectedStoryContentJson;
+  const applyContentDocument = () => {
+    const message = props.onImportSelectedStoryContentJson(contentDraft());
+    setContentDocumentStatus(message);
   };
   const editingCardType = () => props.cardTypes[props.editingCardTypeId];
   const selectedFeedTarget = () => parseFeedMaterialTargetId<FeedCardTypeId>(props.selectedMaterialTargetId);
@@ -768,7 +785,22 @@ export const FeedRecipeEditor = (props: {
                   <span>Output</span>
                   <div class="ui-lab-toggles">
                     <MiniButton disabled={!props.selectedStoryContentJson} onClick={props.onCopySelectedStoryContentJson}>copy ui-node-content</MiniButton>
-                    <MiniButton onClick={props.onImportSelectedStoryContentJson}>import</MiniButton>
+                  </div>
+                </div>
+                <div class="ui-lab-control-row ui-lab-control-row--stacked">
+                  <span>Content JSON</span>
+                  <textarea
+                    class="ui-lab-input main-material-text-input main-material-markup-input"
+                    value={contentDraft()}
+                    onInput={(event) => setContentDraft(event.currentTarget.value)}
+                  />
+                  <div class="ui-lab-control-row">
+                    <span>Status</span>
+                    <span>{contentDocumentStatus()}</span>
+                  </div>
+                  <div class="ui-lab-toggles">
+                    <MiniButton disabled={!contentDraftDirty()} onClick={applyContentDocument}>apply document</MiniButton>
+                    <MiniButton disabled={!contentDraftDirty()} onClick={() => setContentDraft(props.selectedStoryContentJson)}>reset</MiniButton>
                   </div>
                 </div>
               </Show>
