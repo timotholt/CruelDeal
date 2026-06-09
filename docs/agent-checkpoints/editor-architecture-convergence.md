@@ -94,6 +94,27 @@ authoring JSON
   separately, so future children can export parent/group subtrees without
   changing inspector refresh/copy behavior.
 - [x] Added `mainMaterialExportGroups.test.ts`.
+- [x] Extracted selected CSS probe target lookup into
+  `components/screens/main-material/mainMaterialCssProbeTargets.ts`, removing
+  top-bar/toolbar/nav/feed route branching from the giant screen.
+- [x] `/material-main` now resolves CSS probe nodes from the selected export
+  descriptor root id, keeping frame CSS inspection aligned with the live export
+  group model.
+- [x] Added `mainMaterialCssProbeTargets.test.ts`.
+- [x] Source-tagged selected export payloads as `live-dom` or `fallback-plan`
+  in `mainMaterialEmissionOutput.ts`, so fallback planner output no longer
+  masquerades as the normal live export path.
+- [x] Removed the unused `exportPlan` prop from `EmissionInspector`; the
+  inspector now consumes payload DOM/CSS/metrics plus source-aware status
+  instead of planner internals.
+- [x] Added explicit export descriptor coverage helpers in
+  `mainMaterialExportGroups.ts` so tests can fail when selectable targets are
+  missing descriptors instead of silently relying on self-target fallback.
+- [x] Added `mainMaterialExportCoverage.test.ts`, proving representative feed
+  targets plus workbench chrome targets all have explicit export descriptors.
+- [x] Guarded live export group use with `domExportGroupContainsTargetId()`, so
+  stale DOM snapshots after selection changes cannot be treated as current live
+  export payloads.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -430,7 +451,9 @@ authoring JSON
   for live DOM-to-CSS serialization.
 - PASS `npx tsx components/screens/main-material/mainMaterialDomExportGroup.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialExportGroups.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialExportCoverage.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialCssProbeTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchExportTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialExportPlanner.test.ts`
@@ -440,6 +463,12 @@ authoring JSON
   critical error; 60 live material targets were present; Top Bar and Nav
   Container DOM roots each contained child material target ids, matching the
   subtree export-group model.
+- PASS in-app browser CSS-probe smoke test: `/main-material` loaded without
+  critical error; Top Bar and a feed child target were present with layout
+  attributes after moving probe lookup out of the screen.
+- PASS in-app browser live export group smoke test: `/main-material` mounted 60
+  material targets; Top Bar and the first feed card roots each contained child
+  material target ids, matching the live group containment guard.
 
 ## Current Architecture State
 
@@ -451,12 +480,13 @@ authoring JSON
 - `/material-main` is still too large, but its feed model, text/render policy,
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
-  parser/serializer, emission inspector view, selected emission export
-  output/controller contracts, live DOM export serialization, live DOM export
-  groups, first-class export-group descriptors, chrome/workbench export-target
-  construction, preview-state compatibility adapter, material preset/part-state
-  recipe models, interaction selection helpers, and workbench model are now
-  extracted from the giant screen.
+  parser/serializer, emission inspector view, source-tagged selected emission
+  export output/controller contracts, live DOM export serialization, live DOM
+  export groups with current-target containment checks, first-class
+  export-group descriptors, descriptor coverage tests, CSS probe target lookup,
+  chrome/workbench export-target construction, preview-state compatibility
+  adapter, material preset/part-state recipe models, interaction selection
+  helpers, and workbench model are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -468,13 +498,16 @@ fallback for unmounted targets. The live export-group contract now reports every
 material target id contained by the selected DOM subtree, and selectable feed
 plus chrome targets now declare their export root through explicit descriptors.
 Chrome/workbench fallback export targets are built through a shared pure factory
-instead of the giant screen. The next bottleneck is using those descriptors to
-replace the remaining selected-CSS-probe route branching and then removing the
-unmounted planner fallback once live descriptors cover every export case with
-runtime contract tests. After that, make CMS editing fuller: show field
-type/value previews, make bound vs static content explicit, and route
-CMS/content documents through the editor output registry instead of treating
-feed story values as only fake-server textarea state.
+instead of the giant screen, selected CSS probe lookup now follows the
+descriptor root through a shared resolver, fallback planner payloads are
+source-tagged instead of being treated as the normal path, and descriptor
+coverage is now tested for representative feed plus chrome workbench targets.
+The next bottleneck is deleting the fallback planner from the normal inspector
+refresh path while retaining it only as an explicit offline/export compatibility
+adapter. After that, make CMS editing fuller: show field type/value previews,
+make bound vs static content explicit, and route CMS/content documents through
+the editor output registry instead of treating feed story values as only
+fake-server textarea state.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

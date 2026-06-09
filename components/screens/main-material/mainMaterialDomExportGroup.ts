@@ -39,3 +39,10 @@ export const createMainMaterialDomExportGroup = (
     metrics: domAuditMetrics(root),
   };
 };
+
+export const domExportGroupContainsTargetId = (
+  group: MainMaterialDomExportGroup | null,
+  targetId: string,
+): boolean => (
+  Boolean(group?.targetIds.includes(targetId))
+);

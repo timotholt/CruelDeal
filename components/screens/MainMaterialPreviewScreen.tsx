@@ -32,6 +32,7 @@ import {
   refreshedEmissionPayloadStatus,
   tabLabel,
   type EmissionInspectorTab,
+  type MainMaterialExportPayloadSource,
 } from './main-material/mainMaterialEmissionOutput';
 import {
   boundedEmissionInspectorPosition,
@@ -103,8 +104,10 @@ import {
 } from './main-material/mainMaterialDomAudit';
 import {
   createMainMaterialDomExportGroup,
+  domExportGroupContainsTargetId,
 } from './main-material/mainMaterialDomExportGroup';
 import {
+  mainMaterialExportGroupDescriptorsForTargets,
   mainMaterialExportGroupForTarget,
   type MainMaterialExportGroupDescriptor,
 } from './main-material/mainMaterialExportGroups';
@@ -114,10 +117,7 @@ import {
 import {
   feedCardMaterialTargetId,
   feedCardMaterialTargetPrefix,
-  navMaterialTargetPrefix,
   parseFeedMaterialTargetId,
-  toolbarMaterialTargetPrefix,
-  topBarMaterialTargetPrefix,
   type FeedMaterialTargetId as MainFeedMaterialTargetId,
   type NavMaterialTargetId,
   type ToolbarMaterialTargetId,
@@ -142,16 +142,14 @@ import {
 import { MiniButton, Slider } from './main-material/mainMaterialEditorPrimitives';
 import {
   MainMaterialPreview,
-  bottomChromeTargetIdForChromeNode,
-  createBottomChromeFeedNode,
-  createTopBarFeedNode,
-  findFeedNodeByTargetId,
-  topBarTargetIdForChromeNode,
   type BackdropRecipe,
   type NavRecipe,
   type SurfaceRecipes,
   type TitleRecipe,
 } from './main-material/mainMaterialPreview';
+import {
+  findMainMaterialCssProbeNode,
+} from './main-material/mainMaterialCssProbeTargets';
 import {
   createMainMaterialWorkbenchExportGroups,
   createMainMaterialWorkbenchExportTargets,
@@ -2462,15 +2460,8 @@ export const MainMaterialPreviewScreen = () => {
   const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
     createMainMaterialWorkbenchParts(feedWorkbenchParts())
   );
-  const feedExportGroupDescriptors = (): Record<string, MainMaterialExportGroupDescriptor> => {
-    const descriptors: Record<string, MainMaterialExportGroupDescriptor> = {};
-    flatFeedMaterialTargets().forEach((entry) => {
-      if (entry.target.exportGroup) descriptors[entry.target.id] = entry.target.exportGroup;
-    });
-    return descriptors;
-  };
   const exportGroupDescriptors = (): Record<string, MainMaterialExportGroupDescriptor> => ({
-    ...feedExportGroupDescriptors(),
+    ...mainMaterialExportGroupDescriptorsForTargets(feedMaterialTargets()),
     ...createMainMaterialWorkbenchExportGroups(),
   });
 
@@ -2623,27 +2614,11 @@ export const MainMaterialPreviewScreen = () => {
   const selectedEmissionTargetLabel = () => (
     workbenchParts().find((part) => part.id === selectedWorkbenchPartId())?.label || selectedEmissionTargetId()
   );
-  const selectedCssProbeNode = () => {
-    const targetId = selectedEmissionTargetId();
-    if (targetId === 'topBar' || targetId.startsWith(topBarMaterialTargetPrefix)) {
-      return findFeedNodeByTargetId(createTopBarFeedNode(), targetId, topBarTargetIdForChromeNode);
-    }
-    if (
-      targetId === 'toolBar'
-      || targetId === 'navBar'
-      || targetId === 'navBarContainer'
-      || targetId.startsWith(toolbarMaterialTargetPrefix)
-      || targetId.startsWith(navMaterialTargetPrefix)
-    ) {
-      return findFeedNodeByTargetId(createBottomChromeFeedNode(), targetId, bottomChromeTargetIdForChromeNode);
-    }
-    if (selectedPart() !== 'feedCards') return undefined;
-    const target = parseFeedMaterialTargetId(selectedFeedTargetId());
-    if (!target?.nodeId) return undefined;
-    const cardType = feedCardTypes()[target.cardTypeId];
-    return cardType ? findTreeNodeById<FeedCardNode>(cardType.children, target.nodeId) : undefined;
-  };
-  const selectedCssProbeTargetId = () => selectedCssProbeNode() ? selectedEmissionTargetId() : null;
+  const selectedCssProbeNode = () => findMainMaterialCssProbeNode({
+    targetId: selectedDomAuditTargetId(),
+    feedCardTypes: feedCardTypes(),
+  });
+  const selectedCssProbeTargetId = () => selectedCssProbeNode() ? selectedDomAuditTargetId() : null;
   const selectedCssProbeLines = () => {
     const node = selectedCssProbeNode();
     return node
@@ -2664,9 +2639,16 @@ export const MainMaterialPreviewScreen = () => {
       genericTargets: createMainMaterialWorkbenchExportTargets(surfaces()),
     },
   );
-  const selectedExportPlan = () => selectedExportSnapshot().plan;
   const selectedLiveDomSnapshot = () => domAuditSnapshot();
-  const selectedLiveExportGroup = () => createMainMaterialDomExportGroup(selectedLiveDomSnapshot());
+  const selectedLiveExportGroup = () => {
+    const group = createMainMaterialDomExportGroup(selectedLiveDomSnapshot());
+    return domExportGroupContainsTargetId(group, selectedDomAuditTargetId()) ? group : null;
+  };
+  const selectedExportPayloadSource = (): MainMaterialExportPayloadSource | null => (
+    selectedLiveExportGroup()
+      ? 'live-dom'
+      : selectedExportSnapshot().source
+  );
   const selectedExportDomSnapshot = () => selectedLiveExportGroup()?.root ?? selectedExportSnapshot().domSnapshot;
   const selectedExportHtml = () => {
     const liveGroup = selectedLiveExportGroup();
@@ -2747,7 +2729,7 @@ export const MainMaterialPreviewScreen = () => {
       return;
     }
     refreshDomAudit(selectedDomAuditTargetId(), hiddenDomClassKeys(), false);
-    setInspectorStatus(refreshedEmissionPayloadStatus(emissionInspectorTab(), Boolean(selectedExportPlan())));
+    setInspectorStatus(refreshedEmissionPayloadStatus(emissionInspectorTab(), selectedExportPayloadSource()));
   };
   const startEmissionInspectorDrag = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
     const start = emissionInspectorPosition();
@@ -3369,7 +3351,6 @@ export const MainMaterialPreviewScreen = () => {
         disabledKeys={cssProbeDisabledKeys()}
         domSnapshot={domAuditSnapshot()}
         editorMetrics={domAuditMetrics(domAuditSnapshot())}
-        exportPlan={selectedExportPlan()}
         exportDomSnapshot={selectedExportDomSnapshot()}
         exportMetrics={selectedExportMetrics()}
         exportHtml={selectedExportHtml()}

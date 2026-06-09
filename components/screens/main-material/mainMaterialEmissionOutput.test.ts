@@ -12,11 +12,13 @@ import {
 
 assert.equal(tabLabel('frame-css'), 'Frame CSS');
 assert.equal(cssDeclarationText('--surface-fill', '#fff'), '--surface-fill: #fff;');
-assert.equal(emissionInspectorTabStatus('export-css'), 'Showing selected target export CSS plan');
-assert.equal(refreshedEmissionPayloadStatus('export-dom', true), 'Refreshed Export DOM');
-assert.equal(refreshedEmissionPayloadStatus('export-dom', false), 'No export plan for this target');
+assert.equal(emissionInspectorTabStatus('export-css'), 'Showing selected target export CSS payload');
+assert.equal(refreshedEmissionPayloadStatus('export-dom', 'live-dom'), 'Refreshed Export DOM from live DOM');
+assert.equal(refreshedEmissionPayloadStatus('export-dom', 'fallback-plan'), 'Refreshed Export DOM from fallback plan');
+assert.equal(refreshedEmissionPayloadStatus('export-dom', null), 'No Export DOM payload for this target');
 
 const emptySnapshot = mainMaterialEmissionExportSnapshot(null);
+assert.equal(emptySnapshot.source, null);
 assert.equal(emptySnapshot.result, null);
 assert.equal(emptySnapshot.plan, null);
 assert.equal(emptySnapshot.domSnapshot, null);
@@ -60,6 +62,7 @@ const snapshot = mainMaterialEmissionExportSnapshot({
   },
 });
 
+assert.equal(snapshot.source, 'fallback-plan');
 assert.equal(snapshot.plan, plan);
 assert.equal(snapshot.html, '<button>Launch</button>');
 assert.equal(snapshot.css, '.cd-button { color: white; }');

@@ -62,8 +62,8 @@ export const createMainMaterialWorkbenchExportTargets = (
   navBarContainer: panelExportTarget(surfaces.navContainer, 'main-material-nav-shell'),
   navBar: panelExportTarget(surfaces.nav, 'main-material-nav-tabs'),
   ...Object.fromEntries(navNodeSpecs.map((item, index) => [
-  navItemTargetId(index),
-  buttonExportTarget(surfaces.nav, item.text, 'main-material-nav-item'),
+    navItemTargetId(index),
+    buttonExportTarget(surfaces.nav, item.text, 'main-material-nav-item'),
   ])),
 });
 

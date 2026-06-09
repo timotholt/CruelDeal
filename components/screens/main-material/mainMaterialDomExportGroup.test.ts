@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   createMainMaterialDomExportGroup,
+  domExportGroupContainsTargetId,
   domAuditTargetIds,
 } from './mainMaterialDomExportGroup';
 import type { DomAuditNode } from './mainMaterialDomAudit';
@@ -64,5 +65,8 @@ assert.match(group.html, /data-material-target-id="feed:card:card_type_01"/);
 assert.match(group.css, /\.main-material-card/);
 assert.match(group.css, /--surface-fill/);
 assert.equal(group.metrics.nodeCount, 2);
+assert.equal(domExportGroupContainsTargetId(group, 'feed:card:card_type_01'), true);
+assert.equal(domExportGroupContainsTargetId(group, 'missing'), false);
+assert.equal(domExportGroupContainsTargetId(null, 'feed:card:card_type_01'), false);
 
 console.log('Main material DOM export group tests passed');

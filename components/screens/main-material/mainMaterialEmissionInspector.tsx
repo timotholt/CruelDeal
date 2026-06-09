@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { EmissionMetrics, MaterialEmissionPlan } from '../../ui/material-lab';
+import type { EmissionMetrics } from '../../ui/material-lab';
 import {
   auditToken,
   styleProvenance,
@@ -193,7 +193,6 @@ export const EmissionInspector = (props: {
   disabledKeys: ReadonlySet<string>;
   domSnapshot: DomAuditNode | null;
   editorMetrics: EmissionMetrics;
-  exportPlan: MaterialEmissionPlan | null;
   exportDomSnapshot: DomAuditNode | null;
   exportMetrics: EmissionMetrics;
   exportHtml: string;

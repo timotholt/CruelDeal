@@ -18,6 +18,7 @@ import {
 } from './mainMaterialExportPlanner';
 
 export type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
+export type MainMaterialExportPayloadSource = 'live-dom' | 'fallback-plan';
 
 export const tabLabel = (tab: EmissionInspectorTab) => ({
   'frame-css': 'Frame CSS',
@@ -29,6 +30,7 @@ export const tabLabel = (tab: EmissionInspectorTab) => ({
 export const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
 
 export interface MainMaterialEmissionExportSnapshot {
+  source: 'fallback-plan' | null;
   result: MainMaterialExportResult | null;
   plan: MaterialEmissionPlan | null;
   domSnapshot: DomAuditNode | null;
@@ -42,6 +44,7 @@ export const mainMaterialEmissionExportSnapshot = (
 ): MainMaterialEmissionExportSnapshot => {
   const plan = result?.plan ?? null;
   return {
+    source: result ? 'fallback-plan' : null,
     result,
     plan,
     domSnapshot: exportPlanToDomAuditNode(plan),
@@ -83,11 +86,17 @@ export const emissionInspectorTabStatus = (tab: EmissionInspectorTab) => (
     : tab === 'editor-dom'
     ? 'Showing cleaned live editor DOM subtree'
     : tab === 'export-css'
-    ? 'Showing selected target export CSS plan'
-    : 'Showing selected target export DOM plan'
+    ? 'Showing selected target export CSS payload'
+    : 'Showing selected target export DOM payload'
 );
 
 export const refreshedEmissionPayloadStatus = (
   tab: EmissionInspectorTab,
-  hasExportPlan: boolean,
-) => (hasExportPlan ? `Refreshed ${tabLabel(tab)}` : 'No export plan for this target');
+  source: MainMaterialExportPayloadSource | null,
+) => (
+  source === 'live-dom'
+    ? `Refreshed ${tabLabel(tab)} from live DOM`
+    : source === 'fallback-plan'
+    ? `Refreshed ${tabLabel(tab)} from fallback plan`
+    : `No ${tabLabel(tab)} payload for this target`
+);
