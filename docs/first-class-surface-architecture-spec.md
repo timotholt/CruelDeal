@@ -10,6 +10,10 @@ Supersedes:
 - `docs/material-editor-technical-debt-plan.md`
 - `docs/sparse-surface-state-model.md`
 
+Related:
+
+- `docs/surface-composition-authoring-spec.md`
+
 ## Goal
 
 Make surfaces a first-class runtime contract with clear separation between:

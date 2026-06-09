@@ -127,6 +127,9 @@ The first build supports bounded defaults rather than arbitrary authoring:
 - The lab can select a node and adjust its box: x, y, width, height, padding, gap, alignment, and justification.
 - More node creation/removal can come later once the runtime model feels right.
 
+The follow-on authoring UX for node creation, deletion, grouping, templates, and
+CMS bindings is specified in `docs/surface-composition-authoring-spec.md`.
+
 ## Editor Layout
 
 When Feed is selected:

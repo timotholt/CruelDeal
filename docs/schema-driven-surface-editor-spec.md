@@ -3,6 +3,7 @@
 Status: active
 Date: 2026-06-06
 Parent: `docs/first-class-surface-architecture-spec.md`
+Related: `docs/surface-composition-authoring-spec.md`
 Supersedes:
 
 - `docs/typed-surface-host-and-field-metadata-spec.md`
