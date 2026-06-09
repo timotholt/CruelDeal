@@ -70,6 +70,10 @@ export interface ContentStateOverlay {
   fontStyle: FontStyleToken | 'inherit';
   textTransform: TextTransformToken | 'inherit';
   letterSpacing: number | null;
+  textSizeRem: number | 'inherit';
+  textAlign: ContentAlign | 'inherit';
+  textX: number | 'inherit';
+  textY: number | 'inherit';
 }
 
 export interface MotionStateOverlay {

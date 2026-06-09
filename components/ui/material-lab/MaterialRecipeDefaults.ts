@@ -51,6 +51,10 @@ export const createMaterialStateOverlay = (overrides: DeepPartial<MaterialStateO
     fontStyle: 'inherit',
     textTransform: 'inherit',
     letterSpacing: null,
+    textSizeRem: 'inherit',
+    textAlign: 'inherit',
+    textX: 'inherit',
+    textY: 'inherit',
     ...(overrides.content || {}),
   } as ContentStateOverlay,
   motion: {

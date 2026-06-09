@@ -76,4 +76,32 @@ assert.deepEqual(embossClamped.textEmboss, {
   textEmbossBlur: 100,
 });
 
+// --- content overlay text sentinels: concrete kept/clamped, 'inherit' preserved ---
+const sentinelRecipe = sanitizeMaterialRecipe({
+  ...fallback,
+  states: {
+    ...(fallback as any).states,
+    hover: {
+      ...(fallback as any).states.hover,
+      content: {
+        ...(fallback as any).states.hover.content,
+        textSizeRem: 2,      // concrete, in range -> kept
+        textAlign: 'left',   // concrete -> kept
+        textX: 999,          // out of range -> clamped to 80
+        textY: 'inherit',    // sentinel -> preserved
+      },
+    },
+  },
+}, fallback) as any;
+const sc = sentinelRecipe.states.hover.content;
+assert.equal(sc.textSizeRem, 2);
+assert.equal(sc.textAlign, 'left');
+assert.equal(sc.textX, 80);
+assert.equal(sc.textY, 'inherit');
+const rc = sentinelRecipe.states.rest.content;
+assert.equal(rc.textSizeRem, 'inherit');
+assert.equal(rc.textAlign, 'inherit');
+assert.equal(rc.textX, 'inherit');
+assert.equal(rc.textY, 'inherit');
+
 console.log('Material recipe validate tests passed');

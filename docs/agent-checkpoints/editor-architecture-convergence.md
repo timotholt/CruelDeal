@@ -424,6 +424,14 @@ authoring JSON
   `true`/`false`/`undefined` branches byte-identical to before (independent boolean-baseline
   snapshot match). Additive only — no Feed type wired (Phase 2 deferred), no consumer behavior
   changed. Inherit sentinels for `textSizeRem`/`textAlign`/`textX`/`textY` deferred to Phase 1b.
+- [x] Phase 1b of `docs/feed-model-unification-refactor-spec.md`: added `'inherit'` sentinels
+  for `textSizeRem`/`textAlign`/`textX`/`textY` to the `ContentStateOverlay` content-override
+  layer (type + defaults + `sanitizeContentOverlay` + compiler resolve). Defaults are `'inherit'`
+  so the compiler resolves to the base recipe value -> compiled surface output is byte-identical
+  (independent stash-based before/after snapshot, 23192 bytes, zero diff). This gives the 14 Feed
+  `overrideX` booleans a canonical home for Phase 2. Updated one existing adapter test fixture for
+  the new overlay keys and added a positive sentinel test (concrete kept/clamped, `'inherit'`
+  preserved). Additive; no Feed type wired.
 
 ## Verification Evidence
 
@@ -474,6 +482,10 @@ authoring JSON
   emboss boolean output byte-identical (independent baseline); test diffs purely additive
   (pre-existing emboss assertions intact); diff scoped to 7 material-lab/material-node files,
   no protected/Feed file.
+- PASS Phase 1b inherit sentinels: 15/15 tests green; compiled surface output byte-identical
+  before/after (stash-based snapshot, 23192 bytes, zero diff); new positive sentinel test proves
+  concrete values kept/clamped and `'inherit'` preserved; `npm run build` clean; diff scoped to 6
+  material-lab files (4 source + 2 tests), no protected/Feed file.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`

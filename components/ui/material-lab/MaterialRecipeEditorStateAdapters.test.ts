@@ -145,6 +145,10 @@ assert.deepEqual(patchedText.content, {
   fontStyle: 'inherit',
   textTransform: 'uppercase',
   letterSpacing: 0.04,
+  textSizeRem: 'inherit',
+  textAlign: 'inherit',
+  textX: 'inherit',
+  textY: 'inherit',
 });
 assert.equal(patchStateTextOverlay(textOverlay, {}), null);
 

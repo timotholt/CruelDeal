@@ -53,6 +53,10 @@ export const materialRecipeToResolvedSurface = (
   const textTransform = content?.textTransform && content.textTransform !== 'inherit' ? content.textTransform : recipe.textTransform || 'uppercase';
   const letterSpacing = content?.letterSpacing !== null && content?.letterSpacing !== undefined ? content.letterSpacing : recipe.letterSpacing ?? 0;
   const emboss = content?.contentEmboss === 'inherit' || content?.contentEmboss === undefined ? recipe.textEmboss : content.contentEmboss;
+  const textSizeRem = content?.textSizeRem !== undefined && content.textSizeRem !== 'inherit' ? content.textSizeRem : recipe.textSizeRem;
+  const textAlign = content?.textAlign !== undefined && content.textAlign !== 'inherit' ? content.textAlign : recipe.textAlign;
+  const textX = content?.textX !== undefined && content.textX !== 'inherit' ? content.textX : recipe.textX;
+  const textY = content?.textY !== undefined && content.textY !== 'inherit' ? content.textY : recipe.textY;
   const resolvedBorderEnabled = recipe.borderEnabled && recipe.border.length > 0 && recipe.borderOpacity > 0;
   const borderOpacity = resolvedBorderEnabled
     ? clamp(recipe.borderOpacity + (surface?.borderOpacityBoost || 0), recipe.borderOpacity, 0, 100)
@@ -110,7 +114,7 @@ export const materialRecipeToResolvedSurface = (
     textContent: recipe.textContent,
     contentLayer: recipe.contentLayer,
     textFontFamily: recipe.textFontFamily,
-    textSizeRem: recipe.textSizeRem,
+    textSizeRem,
     contentOpacity: recipe.contentOpacity,
     contentTone,
     iconTone,
@@ -121,9 +125,9 @@ export const materialRecipeToResolvedSurface = (
     textTransform,
     letterSpacing,
     textEmboss: emboss,
-    textAlign: recipe.textAlign,
-    textX: recipe.textX,
-    textY: recipe.textY,
+    textAlign,
+    textX,
+    textY,
     emission: emissionActive ? emission.emission : 'none',
     emissionEdge: emission?.emissionEdge || 'bottom',
     emissionTone: emissionActive ? emission.emissionTone : 'none',

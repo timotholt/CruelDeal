@@ -152,6 +152,22 @@ const sanitizeContentOverlay = (value: unknown, fallback: ContentStateOverlay): 
     fontStyle: input.fontStyle === 'inherit' || isOneOf(input.fontStyle, materialRecipeFontStyles) ? input.fontStyle : fallback.fontStyle,
     textTransform: input.textTransform === 'inherit' || isOneOf(input.textTransform, materialRecipeTextTransforms) ? input.textTransform : fallback.textTransform,
     letterSpacing: input.letterSpacing === null ? null : clamp(input.letterSpacing, fallback.letterSpacing ?? 0, -0.08, 0.24),
+    textSizeRem: input.textSizeRem === 'inherit'
+      ? 'inherit'
+      : input.textSizeRem === undefined
+        ? fallback.textSizeRem
+        : clamp(input.textSizeRem, typeof fallback.textSizeRem === 'number' ? fallback.textSizeRem : 1, 0.5, 3),
+    textAlign: input.textAlign === 'inherit' || isOneOf(input.textAlign, materialRecipeTextAligns) ? input.textAlign : fallback.textAlign,
+    textX: input.textX === 'inherit'
+      ? 'inherit'
+      : input.textX === undefined
+        ? fallback.textX
+        : clamp(input.textX, typeof fallback.textX === 'number' ? fallback.textX : 0, -80, 80),
+    textY: input.textY === 'inherit'
+      ? 'inherit'
+      : input.textY === undefined
+        ? fallback.textY
+        : clamp(input.textY, typeof fallback.textY === 'number' ? fallback.textY : 0, -80, 80),
   };
 };
 
