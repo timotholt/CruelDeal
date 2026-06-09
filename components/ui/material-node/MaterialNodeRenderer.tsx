@@ -27,23 +27,47 @@ export const MaterialNodeRenderer = (props: {
     props.context.selectedClassForNode?.(props.node),
   ].filter(Boolean).join(' ');
   const surfaceClass = () => props.context.surfaceClassForNode?.(props.node, role()) ?? '';
+  const hasChildren = () => (props.node.children?.length ?? 0) > 0;
+  const showContent = () => props.node.content && props.node.content.mode !== 'none';
 
   return (
     <MaterialNodeFrame node={props.node} role={role()} targetId={targetId()} class={frameClass()}>
-      <MaterialNodeSurface
-        node={props.node}
-        role={role()}
-        visualState={visualState()}
-        context={props.context}
-        class={surfaceClass()}
+      <Show
+        when={hasChildren()}
+        fallback={(
+          // Leaf: the surface wraps the content (text/button box).
+          <MaterialNodeSurface
+            node={props.node}
+            role={role()}
+            visualState={visualState()}
+            context={props.context}
+            class={surfaceClass()}
+          >
+            <Show when={showContent()}>
+              <MaterialNodeContentRenderer node={props.node} context={props.context} />
+            </Show>
+          </MaterialNodeSurface>
+        )}
       >
-        <Show when={props.node.content && props.node.content.mode !== 'none'}>
+        {/* Container: surface is an absolute background; content + children are laid out
+            by THIS frame, so their %/absolute positions resolve against the frame box. */}
+        <Show when={props.node.surface}>
+          <MaterialNodeSurface
+            node={props.node}
+            role={role()}
+            visualState={visualState()}
+            context={props.context}
+            class={surfaceClass()}
+            asBackground
+          />
+        </Show>
+        <Show when={showContent()}>
           <MaterialNodeContentRenderer node={props.node} context={props.context} />
         </Show>
         <For each={props.node.children || []}>
           {(child) => <MaterialNodeRenderer node={child} context={props.context} />}
         </For>
-      </MaterialNodeSurface>
+      </Show>
     </MaterialNodeFrame>
   );
 };

@@ -12,6 +12,7 @@ import { UiMaterialLabScreen } from './components/screens/UiMaterialLabScreen';
 import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPreviewScreen';
 import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPreviewScreen';
 import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
+import { CanonicalCardProofScreen } from './components/screens/CanonicalCardProofScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 import { ShinyAuthoringScreen } from './components/authoring/shiny/ShinyAuthoringScreen';
@@ -117,6 +118,7 @@ export default function App() {
   const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');
   const isDevShinyPath = () => window.location.pathname.toLowerCase().startsWith('/dev/shiny');
   const isDevIconsPath = () => window.location.pathname.toLowerCase().startsWith('/dev/icons');
+  const isDevCanonicalCardPath = () => window.location.pathname.toLowerCase().startsWith('/dev/canonical-card');
   const isIconsPath = () => window.location.pathname.toLowerCase().startsWith('/icons');
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
@@ -222,7 +224,11 @@ export default function App() {
               </Show>
             )}>
               <Show when={isDevUiNodePath()} fallback={(
-                <Show when={isDevShinyPath() || isDevIconsPath()} fallback={<DevIndexScreen />}>
+                <Show when={isDevShinyPath() || isDevIconsPath()} fallback={(
+                  <Show when={isDevCanonicalCardPath()} fallback={<DevIndexScreen />}>
+                    <CanonicalCardProofScreen />
+                  </Show>
+                )}>
                   <ShinyAuthoringScreen />
                 </Show>
               )}>

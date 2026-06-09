@@ -7,7 +7,7 @@ import {
   feedNodeSurfaceRecipe,
   resolveFeedNodeRenderMode,
 } from './mainMaterialFeedText';
-import { feedNodeLayoutCss } from './feedNodeLayoutCss';
+import { feedNodeLayoutCss, resolveLayoutSelfPosition } from './feedNodeLayoutCss';
 
 // Phase 2a bridge: pure, additive converter from the Feed model to the canonical
 // MaterialNodeRecipe tree. Reuses the existing Feed resolvers (surface fold, render
@@ -25,12 +25,16 @@ export const feedCardNodeToMaterialNode = (
   node: FeedCardNode,
 ): MaterialNodeRecipe => {
   const hasContent = node.type === 'text' || node.type === 'button' || Boolean(node.binding);
+  // `display` is the one piece feedNodeLayoutCss leaves to the host stylesheet:
+  // absolute nodes -> `display:'absolute'` (compiler adds position:absolute + flex base),
+  // in-flow nodes -> `display:'flex'`. The baked style carries offsets/size/flex props.
+  const display = resolveLayoutSelfPosition(node.layout) === 'absolute' ? 'absolute' : 'flex';
   const recipe: MaterialNodeRecipe = {
     id: node.id,
     label: node.label,
     kind: node.type, // container | text | button are all valid MaterialNodeKind
     surface: feedNodeSurfaceRecipe(cardType, node),
-    layout: { style: feedNodeLayoutCss(node.layout) }, // bake ALL layout to CSS, zero loss
+    layout: { display, style: feedNodeLayoutCss(node.layout) },
   };
   if (hasContent) {
     recipe.content = {
@@ -61,14 +65,18 @@ const feedBackgroundNodes = (cardType: FeedCardTypeRecipe): MaterialNodeRecipe[]
     label: 'Background Image',
     kind: 'media',
     content: { mode: 'media', binding: bg.binding },
-    layout: { style: feedBackgroundImageCss(bg) },
+    // Absolute background layer; the baked CSS positions/scales the image itself.
+    layout: { display: 'absolute', style: feedBackgroundImageCss(bg) },
   }];
   if (bg.fadeMode !== 'none') {
     nodes.push({
       id: `${cardType.id}-media-fade`,
       label: 'Media Fade',
       kind: 'container',
+      // Absolute overlay filling the card; the baked CSS vars drive the fade gradient.
       layout: {
+        display: 'absolute',
+        position: { inset: '0' },
         className: `main-material-feed-media-fade main-material-feed-media-fade--${bg.fadeMode}`,
         style: feedMediaFadeCss(bg),
       },

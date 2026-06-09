@@ -24,6 +24,7 @@ import { UiMaterialLabScreen } from "./components/screens/UiMaterialLabScreen";
 import { LoginMaterialPreviewScreen } from "./components/screens/LoginMaterialPreviewScreen";
 import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPreviewScreen";
 import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
+import { CanonicalCardProofScreen } from "./components/screens/CanonicalCardProofScreen";
 import { ShinyAuthoringScreen } from "./components/authoring/shiny/ShinyAuthoringScreen";
 import { GameUiSkinProofScreen } from "./components/screens/GameUiSkinProofScreen";
 
@@ -244,6 +245,12 @@ const devUiNodeRoute = createRoute({
     component: () => <UiNodePreviewScreen />,
 });
 
+const devCanonicalCardRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/canonical-card",
+    component: () => <CanonicalCardProofScreen />,
+});
+
 const iconsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/icons",
@@ -284,6 +291,7 @@ const routeTree = rootRoute.addChildren([
     uiNodeRoute,
     gameUiSkinProofRoute,
     devUiNodeRoute,
+    devCanonicalCardRoute,
     devCardFrameRoute,
     devTensorRoute,
     devTensorPlayRoute,

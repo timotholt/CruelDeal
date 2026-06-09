@@ -516,6 +516,24 @@ authoring JSON
   (absolute inset:0, flex column, z-index 2) lays out children OVER the surface — hug flips the
   flow-stack to `position:relative` so content drives frame size; fill uses `flex:1` on children.
   That two-layer structure is the layout-3 target.
+- [x] Phase 2c layout-3: implemented the two-layer canonical render structure. `MaterialNodeRenderer`
+  now renders CONTAINER nodes (nodes with children) as `frame > [absolute background surface] +
+  content + children`, where children are direct flex items of the frame (so their %/absolute
+  positions resolve against the full frame box). LEAF nodes (no children) keep surface-wraps-content.
+  `MaterialNodeSurface` gained an `asBackground` mode (panel host positioned `absolute; inset:0;
+  100%x100%; z-index:0` via `rootProps.style`, no children, self-sufficient — no host stylesheet
+  needed). The bridge now sets `display:'absolute'`/`'flex'` from feed `selfPosition`, and the
+  background media/fade nodes are `display:'absolute'` so they leave flow. Added a dev harness route
+  `/dev/canonical-card` (+ `CanonicalCardProofScreen`, wired in App.tsx's manual route ladder) that
+  renders a bridged card through `MaterialNodeRenderer` with NO feed CSS, so geometry can be verified
+  in isolation. VERIFIED BY LIVE NODE GEOMETRY (not screenshots): before the fix, children collapsed
+  (deadline-badge y1/h0) because they were nested in the 0-height surface; after, deadline-badge is
+  y48/h29 (top 10%, height 6% of the 480 frame), mission-briefing y139/h264, sector-mark y53/h67, and
+  the background fills 272x480 absolute. Remaining harness overflow (contract-cta) is the text-fit
+  enrichment gap, not structural: the harness omits the carousel's fit/richText enrichment, so the
+  briefing body renders unscaled (fit:false, raw markup) and overflows; with enrichment it scales to
+  fit. Compiler/render/bridge/lane tests green, build clean. Structural layout closed; re-swap (with
+  enrichment) is the next slice.
 
 ## Verification Evidence
 

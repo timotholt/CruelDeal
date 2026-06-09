@@ -34,6 +34,10 @@ export const MaterialNodeSurface = (props: {
   visualState: MaterialRecipeState;
   context: MaterialNodeRenderContext;
   class?: string;
+  // When true, render the panel as an absolute background layer that fills the parent
+  // frame (no children). Used by the two-layer container render so children are laid
+  // out by the frame, not nested inside the surface.
+  asBackground?: boolean;
   children?: JSX.Element;
 }) => {
   const surfaceProps = () => props.context.surfacePropsForNode?.(props.node, props.role, props.visualState)
@@ -44,6 +48,15 @@ export const MaterialNodeSurface = (props: {
 
   return (
     <Switch>
+      <Match when={props.asBackground}>
+        <MaterialSurfaceHost
+          kind="panel"
+          surfaceProps={surfaceProps()}
+          padded={false}
+          class={props.class}
+          rootProps={{ style: { position: 'absolute', inset: '0', width: '100%', height: '100%', 'z-index': '0' } }}
+        />
+      </Match>
       <Match when={props.node.kind === 'button'}>
         <MaterialSurfaceHost
           kind="button"
