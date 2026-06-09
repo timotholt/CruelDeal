@@ -304,6 +304,13 @@ authoring JSON
   `components/screens/main-material/mainMaterialNodeTemplates.ts`. The test bed
   proves reward/fingerprint/two-column composition is represented as normal
   `FeedCardNode` children.
+- [x] Wired the first structure-authoring controls into
+  `FeedRecipeEditor`. `/material-main` now exposes add-panel, add-text,
+  add-two-column, add-terms-template, duplicate, wrap, and delete controls for
+  feed nodes, with selection following created/duplicated/wrapped nodes.
+- [x] Browser-verified `/main-material` as the live testbed: clicking `terms`
+  inserted a normal nested `reward-terms-group`/two-column/fingerprint subtree
+  into the visible UI tree and selected the new material target for export.
 
 ## Verification Evidence
 
@@ -348,6 +355,9 @@ authoring JSON
   page.
 - PASS headless Chrome screenshot for `http://localhost:3000/main-material`:
   `/private/tmp/main-material-verification.png`.
+- PASS in-app browser testbed for `http://localhost:3000/main-material`: route
+  loaded without critical error, Structure controls rendered, and clicking
+  `terms` inserted/selects the nested reward terms node tree.
 
 ## Current Architecture State
 
@@ -367,15 +377,14 @@ authoring JSON
 ## Next Bottleneck
 
 The `/material-main` top-level controller decomposition is no longer the primary
-blocker. The next live editor bottleneck is structure authoring: wire the pure
-feed node tree operations and composition templates into the existing feed target
-tree so a user can add, delete, duplicate, reorder, wrap, unwrap, and template
-nodes from the UI.
+blocker. Structure authoring now has a live first slice. The next bottleneck is
+making these node operations production-complete: add explicit reorder/up/down
+controls, add unwrap, add destructive-action guardrails or undo, and improve
+template insertion so adding beside vs inside a selected node is obvious.
 
 The first tangible test bed now exists in
-`components/screens/main-material/mainMaterialNodeTemplates.ts`; the next UI
-slice should expose at least `Two Column Group`, `Label / Value Stack`, and
-`Reward Terms Group` against the selected feed node.
+`/main-material`: select a feed node, use the Structure controls in the right
+panel, and verify the visible UI tree plus export DOM/CSS target updates.
 
 The generated-control convergence inside `MaterialRecipeEditor` is now closed
 for the high-risk material/state surface sections. Remaining bespoke editor

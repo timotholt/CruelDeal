@@ -3133,6 +3133,7 @@ export const MainMaterialPreviewScreen = () => {
                                 cardTypes={feedCardTypes()}
                                 editingCardTypeId={editingFeedCardTypeId()}
                                 selectedMaterialTargetId={selectedFeedTargetId()}
+                                onSelectedMaterialTargetIdChange={setSelectedFeedTargetId}
                                 storyImageOverrides={feedStoryImageOverrides()}
                                 onStoryImageOverrideChange={updateFeedStoryImageOverride}
                                 onCardTypeChange={updateFeedCardType}
