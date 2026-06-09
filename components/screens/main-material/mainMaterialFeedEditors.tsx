@@ -54,6 +54,7 @@ import {
   createLocalTextOverrideStyle,
   legacyMarkupMode,
   legacySizingMode,
+  feedTextHasMarkup,
   resolveFeedNodeFit,
   resolveFeedNodeTextEditorStyle,
   resolveFeedNodeTextStyle,
@@ -112,6 +113,8 @@ export const FeedRecipeEditor = (props: {
   onSelectedMaterialTargetIdChange: (targetId: string) => void;
   storyImageOverrides: Record<string, string>;
   onStoryImageOverrideChange: (storyId: string, image: string | null) => void;
+  selectedStoryContentJson: string;
+  onCopySelectedStoryContentJson: () => void;
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
   const [insertMode, setInsertMode] = createSignal<'inside' | 'after'>('inside');
@@ -125,6 +128,19 @@ export const FeedRecipeEditor = (props: {
   const selectedNodeStoryText = () => {
     const binding = selectedTargetNode()?.binding;
     return binding ? selectedStory()[binding] || '' : '';
+  };
+  const selectedNodeCmsState = () => selectedTargetNode()?.binding ? 'bound' : 'static';
+  const selectedNodeFieldKind = () => {
+    const node = selectedTargetNode();
+    if (!node?.binding) return node?.type === 'button' ? 'static button text' : 'static node';
+    const value = selectedNodeStoryText();
+    if (node.type === 'button') return 'button label';
+    return feedTextHasMarkup(value) ? 'rich markup' : 'plain text';
+  };
+  const selectedNodeStoryTextPreview = () => {
+    const value = selectedNodeStoryText().replace(/\s+/g, ' ').trim();
+    if (!value) return 'empty';
+    return value.length > 96 ? `${value.slice(0, 96)}...` : value;
   };
   const editingCardType = () => props.cardTypes[props.editingCardTypeId];
   const selectedFeedTarget = () => parseFeedMaterialTargetId<FeedCardTypeId>(props.selectedMaterialTargetId);
@@ -713,6 +729,10 @@ export const FeedRecipeEditor = (props: {
               <Show when={selectedNodeCanBindContent()}>
                 <SectionLabel size="xs">CMS</SectionLabel>
                 <div class="ui-lab-control-row">
+                  <span>State</span>
+                  <span>{selectedNodeCmsState()}</span>
+                </div>
+                <div class="ui-lab-control-row">
                   <span>Binding</span>
                   <select
                     class="ui-lab-select"
@@ -725,6 +745,10 @@ export const FeedRecipeEditor = (props: {
                     </For>
                   </select>
                 </div>
+                <div class="ui-lab-control-row">
+                  <span>Type</span>
+                  <span>{selectedNodeFieldKind()}</span>
+                </div>
                 <Show when={node().binding}>
                   {(binding) => (
                     <div class="ui-lab-control-row">
@@ -733,6 +757,16 @@ export const FeedRecipeEditor = (props: {
                     </div>
                   )}
                 </Show>
+                <Show when={node().binding}>
+                  <div class="ui-lab-control-row ui-lab-control-row--stacked">
+                    <span>Preview</span>
+                    <code>{selectedNodeStoryTextPreview()}</code>
+                  </div>
+                </Show>
+                <div class="ui-lab-control-row">
+                  <span>Output</span>
+                  <MiniButton disabled={!props.selectedStoryContentJson} onClick={props.onCopySelectedStoryContentJson}>copy ui-node-content</MiniButton>
+                </div>
               </Show>
               <Show when={node().binding}>
                 {(binding) => (

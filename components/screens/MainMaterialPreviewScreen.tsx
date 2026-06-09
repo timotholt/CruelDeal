@@ -133,6 +133,9 @@ import {
   type FeedRecipe,
 } from './main-material/mainMaterialFeedEditors';
 import {
+  serializeMainMaterialFeedContentPayload,
+} from './main-material/mainMaterialFeedContentOutput';
+import {
   MainMaterialDomRegistrationProvider,
   type CssEmissionProbe,
 } from './main-material/mainMaterialFeedFrame';
@@ -2467,6 +2470,15 @@ export const MainMaterialPreviewScreen = () => {
     setEditingFeedCardTypeId(story.cardTypeId);
     setSelectedFeedTargetId(feedCardMaterialTargetId(story.cardTypeId));
   };
+  const selectedFeedStory = () => (
+    feedStories().find((item) => item.id === selectedFeedStoryId()) || feedStories()[0] || mockFeedStories[0]
+  );
+  const selectedFeedStoryContentJson = () => serializeMainMaterialFeedContentPayload(selectedFeedStory());
+  const copySelectedFeedStoryContentJson = async () => {
+    const payload = selectedFeedStoryContentJson();
+    await navigator.clipboard?.writeText(payload);
+    setInspectorStatus(payload ? 'Copied ui-node-content JSON' : 'No ui-node-content JSON to copy');
+  };
 
   const selectFeedTarget = (targetId: FeedMaterialTargetId) => {
     const target = parseFeedMaterialTargetId(targetId);
@@ -3126,6 +3138,8 @@ export const MainMaterialPreviewScreen = () => {
                                 onSelectedMaterialTargetIdChange={setSelectedFeedTargetId}
                                 storyImageOverrides={feedStoryImageOverrides()}
                                 onStoryImageOverrideChange={updateFeedStoryImageOverride}
+                                selectedStoryContentJson={selectedFeedStoryContentJson()}
+                                onCopySelectedStoryContentJson={copySelectedFeedStoryContentJson}
                                 onCardTypeChange={updateFeedCardType}
                               />
                             )}

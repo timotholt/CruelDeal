@@ -123,6 +123,12 @@ authoring JSON
   `components/screens/main-material/mainMaterialCompatibilityExport.ts`, so
   `mainMaterialEmissionOutput.ts` no longer imports planner concepts and remains
   focused on inspector tab/status/payload behavior.
+- [x] Added `components/screens/main-material/mainMaterialFeedContentOutput.ts`,
+  a tested adapter that converts selected feed story CMS values into the
+  registered `ui-node-content` editor output mode.
+- [x] Added a visible CMS contract slice in `FeedRecipeEditor`: selected nodes
+  now show bound/static state, field type, preview value, and a copy action for
+  the selected story's `ui-node-content` JSON.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -413,6 +419,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialCompatibilityExport.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedContentOutput.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPartStateModel.test.ts`
@@ -481,6 +488,9 @@ authoring JSON
 - PASS in-app browser live-only export smoke test: `/main-material` mounted 60
   material targets; Top Bar's live export group contained its own target id plus
   child target ids after fallback planner removal from the screen path.
+- PASS in-app browser CMS output smoke test: `/main-material` loaded without
+  critical error; the CMS section rendered State, Type, Preview, Output, and
+  `copy ui-node-content` controls.
 
 ## Current Architecture State
 
@@ -498,8 +508,9 @@ authoring JSON
   current-target containment checks, first-class export-group descriptors,
   descriptor coverage tests, CSS probe target lookup, chrome/workbench
   export-target construction, preview-state compatibility adapter, material
-  preset/part-state recipe models, interaction selection helpers, and workbench
-  model are now extracted from the giant screen.
+  preset/part-state recipe models, feed CMS `ui-node-content` output adapter,
+  interaction selection helpers, and workbench model are now extracted from the
+  giant screen.
 
 ## Next Bottleneck
 
@@ -516,10 +527,12 @@ descriptor root through a shared resolver, fallback planner payloads are
 source-tagged, descriptor coverage is tested for representative feed plus
 chrome workbench targets, the normal screen inspector path is now live-DOM only,
 and fallback snapshot creation has been re-homed into a compatibility export
-module. The next bottleneck is CMS/content convergence: show field type/value
-previews, make bound vs static content explicit, and route CMS/content documents
-through the editor output registry instead of treating feed story values as only
-fake-server textarea state.
+module. CMS/content convergence has its first live slice: selected story content
+serializes through the registered `ui-node-content` output mode, and the CMS
+panel exposes bound/static state, field type, preview value, and a copy action.
+The next bottleneck is richer CMS authoring/import: make content field documents
+editable as documents rather than individual textarea writes, then add
+validation feedback for invalid imported content.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right
