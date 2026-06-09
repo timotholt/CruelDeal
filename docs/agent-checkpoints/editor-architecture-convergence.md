@@ -432,6 +432,16 @@ authoring JSON
   `overrideX` booleans a canonical home for Phase 2. Updated one existing adapter test fixture for
   the new overlay keys and added a positive sentinel test (concrete kept/clamped, `'inherit'`
   preserved). Additive; no Feed type wired.
+- [x] Phase 2a of `docs/feed-model-unification-refactor-spec.md`: added the pure, tested
+  Feed->MaterialNode bridge `components/screens/main-material/mainMaterialFeedToNode.ts`
+  (`feedCardNodeToMaterialNode`, `feedCardTypeToMaterialNodeTree`). It composes the EXISTING
+  tested Feed resolvers (`feedNodeSurfaceRecipe` folds slot+node text style onto the surface;
+  `resolveFeedNodeRenderMode`/`feedNodeFitMode` for content; `feedNodeLayoutCss` bakes ALL layout
+  incl. gap/constraint/size-mode fields into `MaterialNodeLayout.style` -> zero layout fidelity
+  loss), so no resolution logic is reimplemented. Proven on all 3 real default card types: node-
+  count parity (4/4, 5/5, 5/5), surface deep-equals the resolver on sampled nodes, layout.style
+  populated, own-key coverage guard against silent field drops. `cardType.backgroundImage`
+  deferred (becomes a media node in a later slice). No consumer touched.
 
 ## Verification Evidence
 
@@ -486,6 +496,11 @@ authoring JSON
   before/after (stash-based snapshot, 23192 bytes, zero diff); new positive sentinel test proves
   concrete values kept/clamped and `'inherit'` preserved; `npm run build` clean; diff scoped to 6
   material-lab files (4 source + 2 tests), no protected/Feed file.
+- PASS Phase 2a Feed->MaterialNode bridge: bridge test green (node parity 4/4, 5/5, 5/5; surface
+  deep-equal on 6 sampled nodes; coverage guard); feedText + feedModel tests still green; build
+  clean; independent probe confirmed real folded text styling (e.g. deadline-badge -> gold/weight
+  600/emboss/0.5rem) and 7 baked layout CSS props; diff = 2 new files only, no existing file
+  modified.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`
