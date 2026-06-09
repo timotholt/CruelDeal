@@ -265,7 +265,7 @@ export const EmissionInspector = (props: {
               <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
             <EmissionMetricsSummary metrics={props.exportMetrics} />
-            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">No export DOM plan for this target yet.</p>}>
+            <Show when={props.exportDomSnapshot || props.exportHtml} fallback={<p class="main-material-emission-empty">No export DOM available for this target yet.</p>}>
               <Show when={props.showBadges && props.exportDomSnapshot} fallback={<pre class="main-material-emission-code">{props.exportHtml}</pre>}>
                 {(node) => <DomAuditTree node={node()} showBadges={props.showBadges} />}
               </Show>
@@ -278,7 +278,7 @@ export const EmissionInspector = (props: {
               <span>Export CSS</span>
               <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
-            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">No export CSS plan for this target yet.</p>}>
+            <Show when={props.exportDomSnapshot || props.exportCss} fallback={<p class="main-material-emission-empty">No export CSS available for this target yet.</p>}>
               <Show when={props.showBadges} fallback={<pre class="main-material-emission-code">{props.exportCss || '/* no export CSS emitted */'}</pre>}>
                 <ExportCssAudit css={props.exportCss || '/* no export CSS emitted */'} showBadges={props.showBadges} />
               </Show>

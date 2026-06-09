@@ -102,6 +102,9 @@ import {
   type DomAuditNode,
 } from './main-material/mainMaterialDomAudit';
 import {
+  createMainMaterialDomExportGroup,
+} from './main-material/mainMaterialDomExportGroup';
+import {
   EmissionInspector,
 } from './main-material/mainMaterialEmissionInspector';
 import {
@@ -111,7 +114,6 @@ import {
   parseFeedMaterialTargetId,
   toolbarMaterialTargetPrefix,
   topBarMaterialTargetPrefix,
-  topBarProfileTargetId,
   type FeedMaterialTargetId as MainFeedMaterialTargetId,
   type NavMaterialTargetId,
   type ToolbarMaterialTargetId,
@@ -146,6 +148,9 @@ import {
   type SurfaceRecipes,
   type TitleRecipe,
 } from './main-material/mainMaterialPreview';
+import {
+  createMainMaterialWorkbenchExportTargets,
+} from './main-material/mainMaterialWorkbenchExportTargets';
 import {
   cloneFeedCardType,
   cloneFeedCardTypes,
@@ -2635,13 +2640,25 @@ export const MainMaterialPreviewScreen = () => {
       surfaceRecipeForNode: feedNodeSurfaceRecipe,
       surfacePropsForRecipe: (recipe, state) => materialRecipeItemProps(recipe, 0, state),
       textForNode: feedNodeContentValue,
+      genericTargets: createMainMaterialWorkbenchExportTargets(surfaces()),
     },
   );
   const selectedExportPlan = () => selectedExportSnapshot().plan;
-  const selectedExportDomSnapshot = () => selectedExportSnapshot().domSnapshot;
-  const selectedExportHtml = () => selectedExportSnapshot().html;
-  const selectedExportCss = () => selectedExportSnapshot().css;
-  const selectedExportMetrics = () => selectedExportSnapshot().metrics;
+  const selectedLiveDomSnapshot = () => domAuditSnapshot();
+  const selectedLiveExportGroup = () => createMainMaterialDomExportGroup(selectedLiveDomSnapshot());
+  const selectedExportDomSnapshot = () => selectedLiveExportGroup()?.root ?? selectedExportSnapshot().domSnapshot;
+  const selectedExportHtml = () => {
+    const liveGroup = selectedLiveExportGroup();
+    return liveGroup ? liveGroup.html : selectedExportSnapshot().html;
+  };
+  const selectedExportCss = () => {
+    const liveGroup = selectedLiveExportGroup();
+    return liveGroup ? liveGroup.css : selectedExportSnapshot().css;
+  };
+  const selectedExportMetrics = () => {
+    const liveGroup = selectedLiveExportGroup();
+    return liveGroup ? liveGroup.metrics : selectedExportSnapshot().metrics;
+  };
   const refreshDomAudit = (
     targetId = selectedEmissionTargetId(),
     hiddenClasses = hiddenDomClassKeys(),

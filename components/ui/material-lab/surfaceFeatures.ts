@@ -761,13 +761,18 @@ const buttonSurfaceOptions = (
 });
 
 export const createMaterialButtonEmissionPlan = (
-  options: SurfaceOptions & { size?: ButtonSize; fullWidth?: boolean; pressed?: boolean; disabled?: boolean; exportVariant?: string },
+  options: SurfaceOptions & { size?: ButtonSize; fullWidth?: boolean; pressed?: boolean; disabled?: boolean; exportVariant?: string; className?: string },
   label: string,
   mode: MaterialRenderMode = options.renderMode || 'export',
 ): MaterialEmissionPlan => {
   const size = options.size || 'md';
   const surfaceOptions = buttonSurfaceOptions(options);
-  const buttonClass = `cd-button cd-button--${size}${options.fullWidth ? ' cd-button--full' : ''}`;
+  const buttonClass = [
+    'cd-button',
+    `cd-button--${size}`,
+    options.fullWidth ? 'cd-button--full' : '',
+    options.className || '',
+  ].filter(Boolean).join(' ');
   const classNames = surfaceClass(surfaceOptions, buttonClass).split(/\s+/).filter(Boolean);
   const hostStyle = compactStyle(surfaceStyle(surfaceOptions) as Record<string, string | number>);
   const contentWrapper: EmittedLayer = {

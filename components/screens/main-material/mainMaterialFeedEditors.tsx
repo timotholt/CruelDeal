@@ -37,6 +37,8 @@ import {
   createFeedRegionSurface,
   feedMediaFadeLabels,
   feedMediaFadeModes,
+  feedTextSlotIds,
+  feedTextSlotLabels,
   type FeedBackgroundImageRecipe,
   type FeedCardNode,
   type FeedCardTypes,
@@ -360,6 +362,16 @@ export const FeedRecipeEditor = (props: {
   const selectedNodeCanEditText = () => {
     const node = selectedTargetNode();
     return Boolean(node?.binding) && (node?.type === 'text' || node?.type === 'button' || node?.type === 'container');
+  };
+  const selectedNodeCanBindContent = () => {
+    const node = selectedTargetNode();
+    return Boolean(node && (node.type === 'text' || node.type === 'button' || node.type === 'container'));
+  };
+  const updateSelectedNodeBinding = (binding: FeedTextSlotId | '') => {
+    const node = selectedTargetNode();
+    if (!node || !selectedNodeCanBindContent()) return;
+    updateSelectedNode({ binding: binding || undefined });
+    setStructureStatus(binding ? `Bound ${node.label} to ${feedTextSlotLabels[binding]}` : `Unbound ${node.label}`);
   };
   const selectedNodeTextMode = () => {
     const node = selectedTargetNode();
@@ -698,6 +710,30 @@ export const FeedRecipeEditor = (props: {
                 <span>Node</span>
                 <span>{node().label}</span>
               </div>
+              <Show when={selectedNodeCanBindContent()}>
+                <SectionLabel size="xs">CMS</SectionLabel>
+                <div class="ui-lab-control-row">
+                  <span>Binding</span>
+                  <select
+                    class="ui-lab-select"
+                    value={node().binding || ''}
+                    onChange={(event) => updateSelectedNodeBinding(event.currentTarget.value as FeedTextSlotId | '')}
+                  >
+                    <option value="">none</option>
+                    <For each={feedTextSlotIds}>
+                      {(slotId) => <option value={slotId}>{feedTextSlotLabels[slotId]}</option>}
+                    </For>
+                  </select>
+                </div>
+                <Show when={node().binding}>
+                  {(binding) => (
+                    <div class="ui-lab-control-row">
+                      <span>Field</span>
+                      <span>{binding()}</span>
+                    </div>
+                  )}
+                </Show>
+              </Show>
               <Show when={node().binding}>
                 {(binding) => (
                   <div class="ui-lab-control-row ui-lab-control-row--stacked">

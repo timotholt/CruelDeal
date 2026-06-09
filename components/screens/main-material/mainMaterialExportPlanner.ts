@@ -13,7 +13,11 @@ import {
 } from '../../ui/material-lab';
 import { parseFeedMaterialTargetId } from './materialTargetIds';
 
-export type MainMaterialExportTargetKind = 'feed-button' | 'feed-panel';
+export type MainMaterialExportTargetKind =
+  | 'feed-button'
+  | 'feed-panel'
+  | 'workbench-button'
+  | 'workbench-panel';
 
 export interface MainMaterialExportNode {
   id: string;
@@ -35,6 +39,14 @@ export interface MainMaterialExportFeedStory {
   cardTypeId: string;
 }
 
+export interface MainMaterialGenericExportTarget {
+  kind: 'button' | 'panel';
+  recipe: MaterialRecipe;
+  text?: string;
+  className?: string;
+  fullWidth?: boolean;
+}
+
 export interface MainMaterialExportPlannerContext<
   TNode extends MainMaterialExportNode = MainMaterialExportNode,
   TCardType extends MainMaterialExportFeedCardType<TNode> = MainMaterialExportFeedCardType<TNode>,
@@ -48,6 +60,7 @@ export interface MainMaterialExportPlannerContext<
   surfaceRecipeForNode: (cardType: TCardType, node: TNode) => MaterialRecipe;
   surfacePropsForRecipe: (recipe: MaterialRecipe, state: MaterialRecipeState) => SurfaceOptions;
   textForNode: (story: TStory, node: TNode) => string;
+  genericTargets?: Record<string, MainMaterialGenericExportTarget | undefined>;
 }
 
 export interface MainMaterialExportResult {
@@ -70,16 +83,39 @@ const findExportNodeById = <TNode extends MainMaterialExportNode>(
   return undefined;
 };
 
+const cssIdentifier = (className: string) => className.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+
+const fallbackEmissionCssRules = (plan: MaterialEmissionPlan) => {
+  if (plan.cssRules?.length) return plan.cssRules;
+  const styleEntries = Object.entries(plan.host.style || {}).filter(([, value]) => (
+    value !== undefined && value !== null && value !== false && value !== ''
+  ));
+  if (!styleEntries.length) return [];
+  const productClasses = plan.host.classNames?.filter((className) => className.startsWith('main-material-')) || [];
+  const selectorClass = productClasses.at(-1)
+    || plan.host.classNames?.find((className) => className === 'cd-button' || className === 'cd-panel')
+    || plan.host.classNames?.[0];
+  if (!selectorClass) return [];
+  const declarations = styleEntries.map(([key, value]) => `  ${key}: ${value};`).join('\n');
+  return [`.${cssIdentifier(selectorClass)} {\n${declarations}\n}`];
+};
+
 const createExportResult = (
   kind: MainMaterialExportTargetKind,
   plan: MaterialEmissionPlan,
-): MainMaterialExportResult => ({
-  kind,
-  plan,
-  html: serializeEmissionPlanHtml(plan),
-  css: serializeEmissionPlanCss(plan),
-  metrics: measureEmissionPlan(plan),
-});
+): MainMaterialExportResult => {
+  const planWithCss = {
+    ...plan,
+    cssRules: fallbackEmissionCssRules(plan),
+  };
+  return {
+    kind,
+    plan: planWithCss,
+    html: serializeEmissionPlanHtml(planWithCss),
+    css: serializeEmissionPlanCss(planWithCss),
+    metrics: measureEmissionPlan(planWithCss),
+  };
+};
 
 export const createMainMaterialExportPlan = <
   TNode extends MainMaterialExportNode,
@@ -89,6 +125,29 @@ export const createMainMaterialExportPlan = <
   targetId: string,
   context: MainMaterialExportPlannerContext<TNode, TCardType, TStory>,
 ): MainMaterialExportResult | null => {
+  const genericTarget = context.genericTargets?.[targetId];
+  if (genericTarget) {
+    const surfaceProps = context.surfacePropsForRecipe(genericTarget.recipe, context.selectedState);
+    if (genericTarget.kind === 'button') {
+      const plan = createMaterialButtonEmissionPlan({
+        ...surfaceProps,
+        size: 'sm',
+        fullWidth: genericTarget.fullWidth ?? true,
+        className: genericTarget.className,
+        renderMode: 'export',
+      }, genericTarget.text || '', 'export');
+      return createExportResult('workbench-button', plan);
+    }
+
+    const plan = createMaterialPanelEmissionPlan({
+      ...surfaceProps,
+      padded: false,
+      className: genericTarget.className,
+      renderMode: 'export',
+    }, genericTarget.text || '', 'export');
+    return createExportResult('workbench-panel', plan);
+  }
+
   const target = parseFeedMaterialTargetId(targetId);
   if (!target) return null;
 

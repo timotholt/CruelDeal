@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   attrProvenance,
+  domAuditNodeToCss,
   classProvenance,
   domAuditMetrics,
   domAuditNodeToHtml,
@@ -33,7 +34,7 @@ const node: DomAuditNode = {
   path: '0',
   tag: 'button',
   text: 'Save <Now>',
-  classes: [{ key: 'c', name: 'class', value: 'cd-button', kind: 'known', reason: 'base', source: 'base' }],
+  classes: [{ key: 'c', name: 'class', value: 'cd-button', kind: 'known', reason: 'base', source: 'base', cssRules: ['.cd-button { display: inline-flex; }'] }],
   attrs: [{ key: 'a', name: 'aria-label', value: 'Save "Now"', kind: 'known', reason: 'a11y', source: 'a11y' }],
   styles: [{ key: 's', name: '--surface-fill', value: '#fff', kind: 'known', reason: 'base', source: 'base' }],
   children: [],
@@ -49,6 +50,10 @@ assert.deepEqual(domAuditMetrics(node), {
   styleCount: 1,
   cssVariableCount: 1,
 });
+assert.equal(
+  domAuditNodeToCss(node),
+  '.cd-button { display: inline-flex; }\n\n.cd-button {\n  --surface-fill: #fff;\n}',
+);
 assert.deepEqual(emptyEmissionMetrics(), {
   nodeCount: 0,
   classCount: 0,
@@ -77,4 +82,3 @@ assert.equal(planNode?.children.length, 2);
 assert.equal(planNode?.children[0].attrs[0].source, 'base');
 
 console.log('Main material DOM audit tests passed');
-

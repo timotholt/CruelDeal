@@ -176,6 +176,46 @@ export const domAuditNodeToHtml = (node: DomAuditNode, depth = 0): string => {
   ].join('\n');
 };
 
+const cssIdentifier = (className: string) => className.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+
+const cssAttributeValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+const preferredCssClass = (node: DomAuditNode) => (
+  node.classes.find((token) => token.value.startsWith('main-material-'))?.value
+  || node.classes.find((token) => token.value.startsWith('cd-'))?.value
+  || node.classes[0]?.value
+);
+
+const domAuditNodeSelector = (node: DomAuditNode) => {
+  const className = preferredCssClass(node);
+  if (className) return `.${cssIdentifier(className)}`;
+  const targetAttr = node.attrs.find((token) => token.name === 'data-material-target-id');
+  if (targetAttr) return `${node.tag}[data-material-target-id="${cssAttributeValue(targetAttr.value)}"]`;
+  return node.tag;
+};
+
+export const domAuditNodeToCss = (node: DomAuditNode | null): string => {
+  if (!node) return '';
+  const rules = new Set<string>();
+  const visit = (current: DomAuditNode) => {
+    current.classes.forEach((token) => {
+      token.cssRules?.forEach((rule) => {
+        const trimmed = rule.trim();
+        if (trimmed) rules.add(trimmed);
+      });
+    });
+    if (current.styles.length) {
+      const declarations = current.styles
+        .map((token) => `  ${token.name}: ${token.value};`)
+        .join('\n');
+      rules.add(`${domAuditNodeSelector(current)} {\n${declarations}\n}`);
+    }
+    current.children.forEach(visit);
+  };
+  visit(node);
+  return Array.from(rules).join('\n\n');
+};
+
 export const emptyEmissionMetrics = (): EmissionMetrics => ({
   nodeCount: 0,
   classCount: 0,
@@ -234,4 +274,3 @@ export const exportPlanToDomAuditNode = (plan: MaterialEmissionPlan | null): Dom
     ],
   });
 };
-

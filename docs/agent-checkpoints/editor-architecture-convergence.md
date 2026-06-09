@@ -1,7 +1,7 @@
 # Editor Architecture Convergence Checkpoint
 
 Last Updated: 2026-06-09
-Status: active - surface composition authoring continuation
+Status: active - live export/CMS composition convergence
 
 ## Goal
 
@@ -72,7 +72,22 @@ authoring JSON
   `components/screens/main-material/mainMaterialDomAudit.ts`.
 - [x] Reused the DOM audit module from `/material-main`; browser stylesheet
   rule collection remains injected by the screen shell.
+- [x] Added live DOM audit CSS serialization, so Export CSS can be derived from
+  the actual selected DOM subtree by collecting class rules and inline style
+  declarations instead of requiring target-specific export code.
 - [x] Added `mainMaterialDomAudit.test.ts`.
+- [x] Added `components/screens/main-material/mainMaterialDomExportGroup.ts`,
+  a live export-group contract that collects all `data-material-target-id`s in
+  the selected DOM subtree and returns the matching DOM, CSS, and metrics as one
+  payload.
+- [x] Routed `/material-main` Export DOM/CSS through the live export-group
+  contract first, with the emission planner retained as the unmounted fallback.
+- [x] Added `mainMaterialDomExportGroup.test.ts`.
+- [x] Extracted chrome/workbench export-target construction into
+  `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
+  `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
+  toolbar, and nav export fallback targets.
+- [x] Added `mainMaterialWorkbenchExportTargets.test.ts`.
 - [x] Added generated-editor capability support for disabled fields/groups so
   visibility and editability are separate contracts.
 - [x] Added select option labels to surface field metadata and used them from
@@ -322,6 +337,18 @@ authoring JSON
   `FeedRecipeEditor`. Successful operations snapshot the previous feed card
   type and selected material target; failed pure operations report their reason
   in the Structure panel instead of failing silently.
+- [x] Started visible CMS binding authoring in `FeedRecipeEditor`. Selected
+  text/button/container nodes now show a CMS Binding select backed by
+  `feedTextSlotIds`/`feedTextSlotLabels`, support rebinding to another story
+  field, and support `none` to unbind.
+- [x] Fixed the export-plan split where only feed targets produced Export DOM
+  plans. `mainMaterialExportPlanner.ts` now accepts registered generic
+  workbench export targets, and `/main-material` registers backdrop, top bar,
+  profile, wallet, toolbar, nav container, nav bar, and their child button
+  targets through the same `createMainMaterialEmissionExport()` path.
+- [x] Added export CSS fallback generation from emission-plan host styles, so
+  targets with inline surface vars still produce useful Export CSS instead of
+  an empty CSS tab when no shared `cssRules` are emitted.
 
 ## Verification Evidence
 
@@ -378,6 +405,24 @@ authoring JSON
 - PASS in-app browser undo smoke test: adding a text block selected the new
   text-block target, enabled `undo`, and undo removed the node while restoring
   the previous selected target without crashing the route.
+- PASS in-app browser CMS binding smoke test: selecting the Mission Briefing
+  node exposed the CMS binding select, rebinding it from `contractBriefing` to
+  `contractTitle` updated the select/status, and choosing `none` unbound the
+  node without crashing the route.
+- PASS in-app browser non-feed export smoke test: Top Bar, Profile, Credits,
+  Tool Bar, Log, Nav Container, and Battle Pass left-tree targets all produced
+  Export DOM payloads instead of the previous "No export plan" fallback.
+- PASS in-app browser non-feed Export CSS smoke test: selecting Top Bar and
+  opening Export CSS showed `.main-material-topbar-shell` with surface/content
+  vars and no "No export plan" fallback.
+- PASS `npx tsx components/screens/main-material/mainMaterialDomAudit.test.ts`
+  for live DOM-to-CSS serialization.
+- PASS `npx tsx components/screens/main-material/mainMaterialDomExportGroup.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchExportTargets.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialExportPlanner.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
+- PASS `npm run build`
 
 ## Current Architecture State
 
@@ -389,18 +434,30 @@ authoring JSON
 - `/material-main` is still too large, but its feed model, text/render policy,
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
-  parser/serializer, emission inspector view, and selected emission export
-  output/controller contracts, preview-state compatibility adapter, material
-  preset/part-state recipe models, interaction selection helpers, and workbench
-  model are now extracted from the giant screen.
+  parser/serializer, emission inspector view, selected emission export
+  output/controller contracts, live DOM export serialization, live DOM export
+  groups, chrome/workbench export-target construction, preview-state
+  compatibility adapter, material preset/part-state recipe models, interaction
+  selection helpers, and workbench model are now extracted from the giant
+  screen.
 
 ## Next Bottleneck
 
 The `/material-main` top-level controller decomposition is no longer the primary
-blocker. Structure authoring now has a live first slice. The next bottleneck is
-turning CMS field/binding support into visible editor controls. Structure
-operation status and one-step undo now exist; longer command history can wait
-until the binding/content model is visible enough to justify it.
+blocker. Structure authoring now has a live first slice, CMS binding is visible
+for selected nodes, and Export DOM/CSS now prefers the live selected DOM subtree
+instead of target-specific emitters, with the emission planner retained as a
+fallback for unmounted targets. The live export-group contract now reports every
+material target id contained by the selected DOM subtree, making the group model
+explicit instead of implicit in the inspector. Chrome/workbench fallback export
+targets are now built through a shared pure factory instead of the giant screen.
+The next bottleneck is attaching export/group descriptors directly to editable
+target construction, so selected elements consistently declare their export
+root/group before the inspector has to infer it from the DOM. After that, make
+CMS editing fuller: show field type/value previews, make bound vs static
+content explicit, and route CMS/content documents through the editor output
+registry instead of treating feed story values as only fake-server textarea
+state.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right
@@ -416,11 +473,13 @@ modes. Remaining raw stringification is classified as local storage snapshots,
 debug/action display text, play/debug drawers, or legacy login-skin clipboard
 export rather than validated runtime editor contracts.
 
-Final verification is complete. The restartable architecture goal is closed:
-validated field metadata drives the high-risk material/state controls,
-authoring JSON paths compile/serialize through named output contracts, and the
-main editor route loads and paints with extracted product renderers and
-inspector contracts.
+The restartable architecture goal is close but active: validated field metadata
+drives the high-risk material/state controls, authoring JSON paths
+compile/serialize through named output contracts, and the main editor route
+loads with extracted product renderers and inspector contracts. Remaining work
+is concentrated around first-class editable target descriptors, richer CMS
+authoring, and removing compatibility fallback paths once the live contracts
+cover every selectable target.
 
 ## Known Dirty Parallel Work
 

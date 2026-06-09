@@ -53,13 +53,43 @@ const context = {
   textForNode: (_story: typeof story, node: TestNode) => (
     node.type === 'button' ? 'View Contract' : 'Mission Briefing'
   ),
+  genericTargets: {
+    topBar: {
+      kind: 'panel' as const,
+      recipe: panelRecipe,
+      className: 'main-material-topbar-shell',
+    },
+    'topbar:profile': {
+      kind: 'button' as const,
+      recipe: buttonRecipe,
+      text: 'Profile',
+      className: 'main-material-topbar-profile',
+    },
+  },
 };
+
+const topBarExport = createMainMaterialExportPlan('topBar', context);
+assert.ok(topBarExport);
+assert.equal(topBarExport.kind, 'workbench-panel');
+assert.match(topBarExport.html, /<section class="[^"]*\bcd-panel\b/);
+assert.match(topBarExport.html, /main-material-topbar-shell/);
+assert.match(topBarExport.css, /\.main-material-topbar-shell/);
+assert.match(topBarExport.css, /--surface-/);
+
+const profileExport = createMainMaterialExportPlan('topbar:profile', context);
+assert.ok(profileExport);
+assert.equal(profileExport.kind, 'workbench-button');
+assert.match(profileExport.html, /<button class="[^"]*\bcd-button\b/);
+assert.match(profileExport.html, /main-material-topbar-profile/);
+assert.match(profileExport.html, /Profile/);
+assert.match(profileExport.css, /\.main-material-topbar-profile/);
 
 const rootExport = createMainMaterialExportPlan('feed:card:card_type_01', context);
 assert.ok(rootExport);
 assert.equal(rootExport.kind, 'feed-panel');
 assert.match(rootExport.html, /<section class="[^"]*\bcd-panel\b/);
 assert.match(rootExport.html, /main-material-card-node-surface--slide/);
+assert.match(rootExport.css, /\.main-material-card-node-surface--slide/);
 assert.ok(rootExport.metrics.nodeCount > 0);
 
 const textExport = createMainMaterialExportPlan('feed:card:card_type_01:node:briefing', context);
