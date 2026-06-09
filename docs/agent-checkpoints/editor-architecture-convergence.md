@@ -407,6 +407,13 @@ authoring JSON
 - [x] Added export CSS fallback generation from emission-plan host styles, so
   targets with inline surface vars still produce useful Export CSS instead of
   an empty CSS tab when no shared `cssRules` are emitted.
+- [x] Phase 0 of `docs/feed-model-unification-refactor-spec.md`: extracted the three
+  pure-literal default card-types (`createDefaultMissionBriefingV1CardType`,
+  `createDefaultPatchNotesCardType`, `createDefaultCommunityCardType`) out of
+  `mainMaterialFeedModel.ts` into `components/screens/main-material/defaults/*.json`,
+  replacing each function body with a `cloneFeedCardType(<json>)` one-liner. The model file
+  dropped 8068 -> 1040 lines with byte-identical runtime output (independent snapshot match).
+  No type, sanitizer, or consumer changed. Behavior-preserving data-as-code removal.
 
 ## Verification Evidence
 
@@ -447,6 +454,10 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialTargetTree.test.ts`
 - PASS `npm run build`
+- PASS Phase 0 data extraction: 14/14 main-material lane tests green; independent
+  snapshot of `createDefaultFeedCardTypes()` byte-identical (221421 bytes) before/after;
+  `npm run build` clean (1110 modules); diff surgical (only model file + new `defaults/`),
+  no protected-lane file touched; model 8068 -> 1040 lines.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`
