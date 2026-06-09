@@ -12,9 +12,9 @@ import {
 
 assert.equal(tabLabel('frame-css'), 'Frame CSS');
 assert.equal(cssDeclarationText('--surface-fill', '#fff'), '--surface-fill: #fff;');
-assert.equal(emissionInspectorTabStatus('export-css'), 'Showing CTA pilot export CSS plan');
+assert.equal(emissionInspectorTabStatus('export-css'), 'Showing selected target export CSS plan');
 assert.equal(refreshedEmissionPayloadStatus('export-dom', true), 'Refreshed Export DOM');
-assert.equal(refreshedEmissionPayloadStatus('export-dom', false), 'No CTA export plan for this target');
+assert.equal(refreshedEmissionPayloadStatus('export-dom', false), 'No export plan for this target');
 
 const emptySnapshot = mainMaterialEmissionExportSnapshot(null);
 assert.equal(emptySnapshot.result, null);

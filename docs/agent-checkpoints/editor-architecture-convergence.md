@@ -1,7 +1,7 @@
 # Editor Architecture Convergence Checkpoint
 
 Last Updated: 2026-06-08
-Status: active
+Status: complete
 
 ## Goal
 
@@ -325,6 +325,12 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialTargetTree.test.ts`
 - PASS `npm run build`
+- PASS `curl -I http://localhost:3000/main-material`
+- PASS headless Chrome DOM render for `http://localhost:3000/main-material`
+  rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`
+  page.
+- PASS headless Chrome screenshot for `http://localhost:3000/main-material`:
+  `/private/tmp/main-material-verification.png`.
 
 ## Current Architecture State
 
@@ -360,10 +366,11 @@ modes. Remaining raw stringification is classified as local storage snapshots,
 debug/action display text, play/debug drawers, or legacy login-skin clipboard
 export rather than validated runtime editor contracts.
 
-Recommended finish plan, in order:
-
-1. Run final end-to-end editor verification: save/load/import/export, selected
-   target editing, generated controls, preview rendering, and emission export.
+Final verification is complete. The restartable architecture goal is closed:
+validated field metadata drives the high-risk material/state controls,
+authoring JSON paths compile/serialize through named output contracts, and the
+main editor route loads and paints with extracted product renderers and
+inspector contracts.
 
 ## Known Dirty Parallel Work
 

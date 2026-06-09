@@ -5,6 +5,7 @@ import {
 } from './MaterialEmission';
 import {
   createMaterialButtonEmissionPlan,
+  createMaterialPanelEmissionPlan,
 } from './MaterialPrimitives';
 
 // The button emission plan is the unified product subtree: the same cd-surface
@@ -56,5 +57,27 @@ assert.deepEqual(activePlan.cssRules, []);
 // Layer spans + content wrapper mean the node count is well above the old
 // 2-node flat button.
 assert.ok(measureEmissionPlan(activePlan).nodeCount >= 5);
+
+const panelPlan = createMaterialPanelEmissionPlan({
+  material: 'white',
+  texture: 'stoneGray01',
+  textureStrength: 54,
+  gradient: 'both',
+  borderEnabled: true,
+  border: ['top', 'bottom'],
+  borderOpacity: 36,
+  edgeWear: false,
+  edgeWearTexture: 'none',
+  padded: false,
+  className: 'main-material-card-node-surface main-material-card-node-surface--text',
+}, 'Mission Briefing', 'export');
+
+const panelHtml = serializeEmissionPlanHtml(panelPlan);
+assert.match(panelHtml, /<section class="[^"]*\bcd-surface\b[^"]*\bcd-panel\b[^"]*\bcd-panel--flush\b/);
+assert.match(panelHtml, /main-material-card-node-surface--text/);
+assert.match(panelHtml, /<div class="cd-surface__content cd-surface__content--over-glass cd-panel__content">/);
+assert.match(panelHtml, /<span class="cd-panel__text">Mission Briefing<\/span>/);
+assert.match(panelHtml, /<span class="cd-surface__texture" aria-hidden="true">/);
+assert.deepEqual(panelPlan.cssRules, []);
 
 console.log('Material CTA emission tests passed');

@@ -1,5 +1,6 @@
 import {
   createMaterialButtonEmissionPlan,
+  createMaterialPanelEmissionPlan,
   measureEmissionPlan,
   serializeEmissionPlanCss,
   serializeEmissionPlanHtml,
@@ -12,11 +13,12 @@ import {
 } from '../../ui/material-lab';
 import { parseFeedMaterialTargetId } from './materialTargetIds';
 
-export type MainMaterialExportTargetKind = 'feed-button';
+export type MainMaterialExportTargetKind = 'feed-button' | 'feed-panel';
 
 export interface MainMaterialExportNode {
   id: string;
   type: string;
+  binding?: string;
   sizing?: 'auto' | 'fit' | 'flow';
   textRender?: 'auto' | 'rich' | 'fit' | 'raw';
   children?: MainMaterialExportNode[];
@@ -24,6 +26,7 @@ export interface MainMaterialExportNode {
 
 export interface MainMaterialExportFeedCardType<TNode extends MainMaterialExportNode = MainMaterialExportNode> {
   id: string;
+  surface?: MaterialRecipe;
   children: TNode[];
 }
 
@@ -87,20 +90,47 @@ export const createMainMaterialExportPlan = <
   context: MainMaterialExportPlannerContext<TNode, TCardType, TStory>,
 ): MainMaterialExportResult | null => {
   const target = parseFeedMaterialTargetId(targetId);
-  if (!target?.nodeId) return null;
+  if (!target) return null;
 
   const cardType = context.feedCardTypes[target.cardTypeId];
-  const node = cardType ? findExportNodeById(cardType.children, target.nodeId) : undefined;
-  if (!cardType || !node || node.type !== 'button') return null;
+  if (!cardType) return null;
 
   const story = context.feedStories.find((item) => item.id === context.selectedFeedStoryId)
     || context.feedStories.find((item) => item.cardTypeId === target.cardTypeId)
     || context.feedStories[0]
     || context.fallbackStory;
+  if (!target.nodeId) {
+    if (!cardType.surface) return null;
+    const surfaceProps = context.surfacePropsForRecipe(cardType.surface, context.selectedState);
+    const plan = createMaterialPanelEmissionPlan({
+      ...surfaceProps,
+      padded: false,
+      className: 'main-material-card-node-surface main-material-card-node-surface--background main-material-card-node-surface--slide',
+      renderMode: 'export',
+    }, '', 'export');
+    return createExportResult('feed-panel', plan);
+  }
+
+  const node = findExportNodeById(cardType.children, target.nodeId);
+  if (!node) return null;
+
   const content = context.textForNode(story, node);
   const explicitFitting = node.sizing === 'fit' || node.textRender === 'fit';
   const surfaceRecipe = context.surfaceRecipeForNode(cardType, node);
   const surfaceProps = context.surfacePropsForRecipe(surfaceRecipe, context.selectedState);
+  if (node.type !== 'button') {
+    const nodeClass = node.type === 'text'
+      ? `main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${node.binding || 'unbound'}`
+      : 'main-material-card-node-surface main-material-card-node-surface--background';
+    const panelPlan = createMaterialPanelEmissionPlan({
+      ...surfaceProps,
+      padded: false,
+      className: nodeClass,
+      renderMode: 'export',
+    }, content, 'export');
+    return createExportResult('feed-panel', panelPlan);
+  }
+
   const plan = createMaterialButtonEmissionPlan({
     ...surfaceProps,
     size: 'sm',

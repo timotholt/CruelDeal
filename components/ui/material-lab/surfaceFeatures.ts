@@ -729,10 +729,14 @@ const materialLayer = (
   emission: active ? emission : null,
 });
 
-const createButtonLayerPlans = (options: SurfaceOptions): MaterialLayerPlan[] => {
+const createSurfaceLayerPlans = (
+  options: SurfaceOptions,
+  contentActive: boolean,
+  contentReason: string,
+): MaterialLayerPlan[] => {
   const layers = surfaceLayerFlags(options);
   return [
-    materialLayer('base', 'Base shape/color', layers.material, 'base material changes button pixels', null),
+    materialLayer('base', 'Base shape/color', layers.material, 'base material changes surface pixels', null),
     materialLayer('texture', 'Texture', layers.texture, 'texture is active and emits as host background CSS', null),
     materialLayer('tint', 'Tint', layers.tinted, 'tint is active and emits as host background CSS', null),
     materialLayer('gradient', 'Gradient', layers.gradient, 'gradient is active and emits as host background CSS', null),
@@ -740,7 +744,7 @@ const createButtonLayerPlans = (options: SurfaceOptions): MaterialLayerPlan[] =>
     materialLayer('border', 'Border', layers.border, 'border is enabled and emits as host border CSS', null),
     materialLayer('edgeWear', 'Edge wear', layers.edgeWear, 'edge wear texture is active and emits as pseudo-element CSS', null),
     materialLayer('shadow', 'Shadow/glow', layers.glowing || layers.emitting || hasDropShadow(options), 'shadow, glow, or edge emission changes pixels', null),
-    materialLayer('content', 'Content', true, 'button label is visible content', null),
+    materialLayer('content', 'Content', contentActive, contentReason, null),
   ];
 };
 
@@ -788,7 +792,44 @@ export const createMaterialButtonEmissionPlan = (
   return {
     mode,
     host,
-    layers: createButtonLayerPlans(surfaceOptions),
+    layers: createSurfaceLayerPlans(surfaceOptions, true, 'button label is visible content'),
+    cssRules: [],
+  } satisfies MaterialEmissionPlan;
+};
+
+export const createMaterialPanelEmissionPlan = (
+  options: SurfaceOptions & { padded?: boolean; compact?: boolean; className?: string },
+  content = '',
+  mode: MaterialRenderMode = options.renderMode || 'export',
+): MaterialEmissionPlan => {
+  const panelClass = [
+    'cd-panel',
+    options.padded === false ? 'cd-panel--flush' : '',
+    options.compact ? 'cd-panel--compact' : '',
+    options.className || '',
+  ].filter(Boolean).join(' ');
+  const classNames = surfaceClass(options, panelClass).split(/\s+/).filter(Boolean);
+  const hostStyle = compactStyle(surfaceStyle(options) as Record<string, string | number>);
+  const contentWrapper: EmittedLayer = {
+    tag: 'div',
+    classNames: ['cd-surface__content', 'cd-surface__content--over-glass', 'cd-panel__content'],
+    children: content ? [{ tag: 'span', classNames: ['cd-panel__text'], text: content }] : [],
+  };
+  const host: MaterialEmissionPlan['host'] = {
+    tag: 'section',
+    classNames,
+    attrs: {
+      'data-material-surface': 'section',
+      ...surfaceEmissionAttrs(options),
+    },
+    style: hostStyle,
+    children: [...surfaceLayerEmissions(options), contentWrapper],
+  };
+
+  return {
+    mode,
+    host,
+    layers: createSurfaceLayerPlans(options, Boolean(content), content ? 'panel text is visible content' : 'panel has no bound text content'),
     cssRules: [],
   } satisfies MaterialEmissionPlan;
 };

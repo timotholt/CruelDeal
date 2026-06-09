@@ -265,7 +265,7 @@ export const EmissionInspector = (props: {
               <BadgeToggle showBadges={props.showBadges} onToggle={props.onToggleBadges} />
             </div>
             <EmissionMetricsSummary metrics={props.exportMetrics} />
-            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">Export emission is currently implemented for selected feed CTA/button nodes only.</p>}>
+            <Show when={props.exportPlan} fallback={<p class="main-material-emission-empty">No export DOM plan for this target yet.</p>}>
               <Show when={props.showBadges && props.exportDomSnapshot} fallback={<pre class="main-material-emission-code">{props.exportHtml}</pre>}>
                 {(node) => <DomAuditTree node={node()} showBadges={props.showBadges} />}
               </Show>

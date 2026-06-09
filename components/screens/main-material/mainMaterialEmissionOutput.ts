@@ -83,11 +83,11 @@ export const emissionInspectorTabStatus = (tab: EmissionInspectorTab) => (
     : tab === 'editor-dom'
     ? 'Showing cleaned live editor DOM subtree'
     : tab === 'export-css'
-    ? 'Showing CTA pilot export CSS plan'
-    : 'Showing CTA pilot export DOM plan'
+    ? 'Showing selected target export CSS plan'
+    : 'Showing selected target export DOM plan'
 );
 
 export const refreshedEmissionPayloadStatus = (
   tab: EmissionInspectorTab,
   hasExportPlan: boolean,
-) => (hasExportPlan ? `Refreshed ${tabLabel(tab)}` : 'No CTA export plan for this target');
+) => (hasExportPlan ? `Refreshed ${tabLabel(tab)}` : 'No export plan for this target');
