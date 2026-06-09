@@ -2,6 +2,7 @@ export * from './MaterialNodeBindings';
 export * from './MaterialNodeButtonBar';
 export * from './MaterialNodeContent';
 export * from './MaterialNodeFrame';
+export * from './materialNodeLayoutCss';
 export * from './MaterialNodeRenderer';
 export * from './MaterialNodeSurface';
 export * from './MaterialNodeTargets';

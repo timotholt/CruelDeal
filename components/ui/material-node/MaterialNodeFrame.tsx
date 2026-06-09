@@ -1,5 +1,6 @@
 import { createContext, createEffect, JSX, onCleanup, useContext } from 'solid-js';
 import type { MaterialNodeRecipe, MaterialNodeRole } from './MaterialNodeTypes';
+import { materialNodeLayoutCss } from './materialNodeLayoutCss';
 
 /**
  * Optional DOM-registration hook. A host (e.g. the material editor) can provide a
@@ -30,32 +31,8 @@ export const MaterialNodeDomRegistrationProvider = (props: {
   </MaterialNodeDomRegistrationContext.Provider>
 );
 
-const layoutStyle = (node: MaterialNodeRecipe): JSX.CSSProperties | undefined => {
-  const layout = node.layout;
-  if (!layout) return undefined;
-  // Explicit layout fields override the baked `style`, but only when defined — an
-  // undefined explicit field must NOT clobber a value already present in `style`
-  // (e.g. a node that carries position/size purely via `layout.style`).
-  const explicit: Record<string, string | undefined> = {
-    display: layout.display,
-    'flex-direction': layout.direction,
-    'align-items': layout.align,
-    'justify-content': layout.justify,
-    gap: layout.gap === undefined ? undefined : `${layout.gap}px`,
-    padding: layout.padding === undefined ? undefined : `${layout.padding}px`,
-    width: layout.width,
-    height: layout.height,
-    'min-width': layout.minWidth,
-    'min-height': layout.minHeight,
-    left: layout.position?.left,
-    right: layout.position?.right,
-    top: layout.position?.top,
-    bottom: layout.position?.bottom,
-    inset: layout.position?.inset,
-  };
-  const defined = Object.fromEntries(Object.entries(explicit).filter(([, v]) => v !== undefined));
-  return { ...(layout.style ?? {}), ...defined } as JSX.CSSProperties;
-};
+const layoutStyle = (node: MaterialNodeRecipe): JSX.CSSProperties | undefined =>
+  materialNodeLayoutCss(node.layout);
 
 export const MaterialNodeFrame = (props: {
   node: MaterialNodeRecipe;

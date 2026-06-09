@@ -492,6 +492,19 @@ authoring JSON
   LESSON: do not trust a screenshot for feed-card parity — the background image bakes in mockup
   UI art; verify rendered node geometry (bounding boxes / computed position) instead.
 
+- [x] Phase 2c layout-1 (closing the canonical layout gap, prereq to retrying the renderer swap):
+  extracted `MaterialNodeFrame`'s inline layout into a pure, tested
+  `components/ui/material-node/materialNodeLayoutCss.ts`, and expanded it to emit SELF-SUFFICIENT
+  CSS — `display: 'absolute'` now compiles to real `position: absolute` + a flex column box model
+  (`display:flex`, `flex-direction`, `box-sizing:border-box`, `min-width/height:0`), so an absolute
+  node positions WITHOUT depending on a host stylesheet class like `.main-material-card-node`.
+  Non-absolute `display` values and the undefined-clobber-safe `layout.style` merge are unchanged
+  (additive; no existing node uses `display:'absolute'`). Unit tests cover absolute compilation,
+  flex/block passthrough, baked-style preservation, and explicit-over-baked precedence. This is the
+  first of a few layout slices; still TODO before re-swap: canonical size-modes (hug/fill) + flow
+  vs absolute child layout, and reconciling the surface-as-wrapper vs surface-as-background
+  structure.
+
 ## Verification Evidence
 
 - PASS `npx tsx components/screens/main-material/materialTargetIds.test.ts`
