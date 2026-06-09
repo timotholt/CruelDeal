@@ -504,6 +504,18 @@ authoring JSON
   first of a few layout slices; still TODO before re-swap: canonical size-modes (hug/fill) + flow
   vs absolute child layout, and reconciling the surface-as-wrapper vs surface-as-background
   structure.
+- [x] Phase 2c layout-2: added canonical size-mode vocabulary `widthMode`/`heightMode`
+  (`fixed`|`hug`|`fill`) to `MaterialNodeLayout`, resolved in `materialNodeLayoutCss`
+  (hug -> `max-content`/`auto`, fill -> `100%`, fixed/unset -> the explicit `width`/`height`).
+  Covers leaf + absolute nodes inline; flex-based container fill of in-flow children still needs
+  the two-layer flow structure (layout-3). Additive (fields optional, unset = prior behavior).
+  Tests cover hug/fill/fixed resolution + mode-over-baked-style precedence. Compiler tests +
+  render regression (4/4) green, build clean. Reading the feed CSS confirmed hug/fill are coupled
+  to a two-layer frame/flow-stack flex structure: the frame is the positioned box, the surface is
+  an absolute `inset:0` background layer, and a `.main-material-card-node-flow-stack`
+  (absolute inset:0, flex column, z-index 2) lays out children OVER the surface — hug flips the
+  flow-stack to `position:relative` so content drives frame size; fill uses `flex:1` on children.
+  That two-layer structure is the layout-3 target.
 
 ## Verification Evidence
 

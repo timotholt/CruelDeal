@@ -34,6 +34,19 @@ export const materialNodeLayoutCss = (
     base['min-height'] = '0';
   }
 
+  // Size modes resolve the final width/height. `fixed` (or unset) keeps the explicit
+  // value; `hug` shrinks to content; `fill` stretches to the parent box.
+  const resolveWidth = layout.widthMode === 'hug'
+    ? 'max-content'
+    : layout.widthMode === 'fill'
+      ? '100%'
+      : layout.width;
+  const resolveHeight = layout.heightMode === 'hug'
+    ? 'auto'
+    : layout.heightMode === 'fill'
+      ? '100%'
+      : layout.height;
+
   const explicit: Record<string, string | undefined> = {
     // display/flex-direction already handled by `base` for the absolute case.
     display: isAbsolute ? undefined : layout.display,
@@ -42,8 +55,8 @@ export const materialNodeLayoutCss = (
     'justify-content': layout.justify,
     gap: layout.gap === undefined ? undefined : `${layout.gap}px`,
     padding: layout.padding === undefined ? undefined : `${layout.padding}px`,
-    width: layout.width,
-    height: layout.height,
+    width: resolveWidth,
+    height: resolveHeight,
     'min-width': layout.minWidth,
     'min-height': layout.minHeight,
     left: layout.position?.left,

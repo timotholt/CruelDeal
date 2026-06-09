@@ -58,4 +58,25 @@ assert.equal(merged.left, '3%');
 assert.equal(merged.top, '4%');
 assert.equal(merged.display, 'flex');
 
+// --- size modes (layout-2) ---
+const hug = css({ display: 'absolute', widthMode: 'hug', heightMode: 'hug', width: '40%', height: '6%' })!;
+assert.equal(hug.width, 'max-content', 'widthMode hug -> max-content (overrides explicit width)');
+assert.equal(hug.height, 'auto', 'heightMode hug -> auto');
+
+const fill = css({ display: 'absolute', widthMode: 'fill', heightMode: 'fill', width: '40%', height: '6%' })!;
+assert.equal(fill.width, '100%', 'widthMode fill -> 100%');
+assert.equal(fill.height, '100%', 'heightMode fill -> 100%');
+
+const fixed = css({ widthMode: 'fixed', width: '33%', heightMode: 'fixed', height: '12%' })!;
+assert.equal(fixed.width, '33%', 'fixed -> explicit width');
+assert.equal(fixed.height, '12%', 'fixed -> explicit height');
+
+// unset mode keeps explicit value
+const noMode = css({ width: '25%' })!;
+assert.equal(noMode.width, '25%', 'no widthMode -> explicit width unchanged');
+
+// mode-resolved size still overrides baked style width (explicit precedence)
+const modeOverBaked = css({ widthMode: 'hug', style: { width: '99%' } as never })!;
+assert.equal(modeOverBaked.width, 'max-content', 'hug-resolved width overrides baked style');
+
 console.log('materialNodeLayoutCss tests passed');

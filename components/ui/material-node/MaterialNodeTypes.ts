@@ -27,6 +27,14 @@ export interface MaterialNodeLayout {
   padding?: number;
   width?: string;
   height?: string;
+  // Size intent. When set, it resolves width/height in the layout compiler:
+  //   fixed -> the explicit `width`/`height` value
+  //   hug   -> shrink to content (width: max-content / height: auto)
+  //   fill  -> stretch to the parent box (100%).
+  // NOTE: flex-based container fill of in-flow children needs the two-layer flow
+  // structure (layout-3); these inline forms cover leaf + absolute nodes.
+  widthMode?: 'fixed' | 'hug' | 'fill';
+  heightMode?: 'fixed' | 'hug' | 'fill';
   minWidth?: string;
   minHeight?: string;
   position?: {
