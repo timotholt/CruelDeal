@@ -43,6 +43,7 @@ export const MaterialNodeContentRenderer = (props: {
           fit={props.node.content?.fit}
           class={props.node.content?.className}
           style={props.node.content?.style}
+          richText={props.node.content?.richText}
         />
       </Match>
     </Switch>

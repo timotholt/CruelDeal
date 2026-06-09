@@ -39,6 +39,10 @@ export const MainMaterialDomRegistrationProvider = (props: {
 
 const useDomRegistration = () => useContext(DomRegistrationContext);
 
+// Exposed so the canonical MaterialNodeRenderer path can bridge feed-node DOM
+// registration into MaterialNodeDomRegistrationProvider during the renderer swap.
+export const useMainMaterialDomRegistration = () => useContext(DomRegistrationContext);
+
 export const FeedNodeFrame = (props: {
   node: FeedCardNode;
   targetId: string;

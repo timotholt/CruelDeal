@@ -461,6 +461,36 @@ authoring JSON
   background nodes off before the lockstep walk (feed 4/5/5 == material content 4/5/5; bg=1 mission
   briefing, bg=2 patch/community). Forward bridge now maps every FeedCardTypeRecipe field; render
   test confirms the canonical renderer emits the media node. Bridge + its 2 tests only.
+- [x] Phase 2c-i of `docs/feed-model-unification-refactor-spec.md`: gave the canonical
+  `MaterialNodeFrame` an OPTIONAL DOM-registration context (`MaterialNodeDomRegistration` +
+  `MaterialNodeDomRegistrationProvider`), no-op by default (`createInstanceId` -> '' skips
+  registration), mirroring `FeedNodeFrame`. This lets the editor find mounted canonical node
+  elements by target id for live-DOM export/inspection AFTER the carousel swap, without coupling
+  the canonical layer to the editor (the registration is injected). Existing provider-less
+  consumers (UiNodePreviewScreen) render exactly as before. Proven: jsdom test asserts one
+  registration per node element with the live element + matching `data-material-target-id`, and
+  cleanup unregisters all; the 3 provider-less render tests still pass. Prereq for 2c-ii (carousel
+  swap to MaterialNodeRenderer).
+- [~] Phase 2c-ii of `docs/feed-model-unification-refactor-spec.md`: ATTEMPTED then REVERTED the
+  live carousel renderer swap. A prototype rendered card content through the canonical
+  `MaterialNodeRenderer` + the bridge + a full render context + content-enrichment. It got
+  absolute leaf nodes positioning correctly, but container/flow nodes broke: the feed layout is a
+  bespoke CSS system keyed off the `main-material-card-node--<type>-frame` CLASS, `data-feed-layout-
+  mode`/`data-w-mode`/`data-h-mode` ATTRIBUTES, and a `.main-material-card-node-flow-stack` wrapper
+  DOM that the generic `MaterialNodeRenderer` does not emit. Faithful parity needs the canonical
+  frame to natively express size-modes/flow + arbitrary data-attrs (a real layout feature, not
+  feed-specific class injection). Decision: revert the carousel swap, keep the renderer on the
+  proven `FeedCardTreeNode`, and pursue Phase 3 (migrate consumers to canonical DATA first); unify
+  the renderer LAST once the canonical layout gap is closed deliberately.
+  KEPT additive wins from the attempt (all correct, tested, additive):
+  - `MaterialNodeFrame` undefined-clobber fix: explicit layout fields no longer wipe values present
+    only in `layout.style` (genuine bug — undefined keys were clobbering baked CSS).
+  - `MaterialNodeFrame` optional DOM-registration hook (2c-i) + its jsdom test.
+  - `MaterialNodeContentRenderer` default branch forwards `richText` (additive; undefined for
+    other consumers).
+  - `useMainMaterialDomRegistration` export (infra for the eventual swap).
+  LESSON: do not trust a screenshot for feed-card parity — the background image bakes in mockup
+  UI art; verify rendered node geometry (bounding boxes / computed position) instead.
 
 ## Verification Evidence
 
@@ -524,6 +554,12 @@ authoring JSON
   + kind classes + bound story copy in DOM via canonical MaterialNodeRenderer); existing
   feedNodeLayoutCss vitest test still 8/8 under the new config; tsx-runner suite unaffected; build
   clean; diff = vitest.config.ts + 1 new .test.tsx.
+- PASS Phase 2c-i frame registration: jsdom test — one registration per node with live element +
+  matching `data-material-target-id`, cleanup unregisters all; provider-less consumers unchanged.
+- REVERTED Phase 2c-ii carousel swap (see [~] entry above). After revert: `npm run build` clean;
+  render/bridge/feedText/feedModel/MaterialRecipeValidate tests green; live `/main-material`
+  restored to the feed renderer (0 canonical `.material-node` frames, 60 targets, no error, text
+  geometry back to sane heights, Export DOM for deadline-badge = 9 nodes). Kept additive fixes only.
 - PASS `curl -I http://localhost:3000/main-material`
 - PASS headless Chrome DOM render for `http://localhost:3000/main-material`
   rendered editor controls/preview DOM instead of the prior `CRITICAL ERROR`

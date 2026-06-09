@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'solid-js/web';
 import { MaterialNodeRenderer } from '../../ui/material-node/MaterialNodeRenderer';
+import {
+  MaterialNodeDomRegistrationProvider,
+  type MaterialNodeDomRegistration,
+} from '../../ui/material-node/MaterialNodeFrame';
 import type { MaterialNodeRenderContext } from '../../ui/material-node/MaterialNodeTypes';
 import { createDefaultFeedCardTypes, mockFeedStories } from './mainMaterialFeedModel';
 import { feedStoryValue, feedTextHasMarkup } from './mainMaterialFeedText';
@@ -74,5 +78,39 @@ describe('Phase 2b: canonical renderer parity on bridged feed tree', () => {
     for (const v of resolved) {
       expect(txt).toContain(v.trim());
     }
+  });
+
+  it('registers every node element with a provided DOM registration (2c-i)', () => {
+    let next = 0;
+    const registered: Array<{ targetId: string; el: HTMLElement }> = [];
+    const unregistered: string[] = [];
+    const registration: MaterialNodeDomRegistration = {
+      createInstanceId: () => `reg-${next++}`,
+      register: (targetId, _instanceId, element) => registered.push({ targetId, el: element }),
+      unregister: (instanceId) => unregistered.push(instanceId),
+    };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    dispose = render(
+      () => (
+        <MaterialNodeDomRegistrationProvider registration={registration}>
+          <MaterialNodeRenderer node={tree} context={context} />
+        </MaterialNodeDomRegistrationProvider>
+      ),
+      container,
+    );
+    const rendered = container.querySelectorAll('.material-node').length;
+    // one registration per mounted node element
+    expect(registered.length).toBe(rendered);
+    // each registration carries the live element and a non-empty target id
+    for (const r of registered) {
+      expect(r.el).toBeInstanceOf((globalThis as any).HTMLElement);
+      expect(r.el.getAttribute('data-material-target-id')).toBe(r.targetId);
+      expect(r.targetId.length).toBeGreaterThan(0);
+    }
+    // cleanup unregisters everything
+    dispose();
+    dispose = undefined;
+    expect(unregistered.length).toBe(registered.length);
   });
 });
