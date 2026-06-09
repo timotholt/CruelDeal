@@ -8,6 +8,10 @@ import {
   feedMaterialTargetIdForNode,
   type FeedMaterialTargetId,
 } from './materialTargetIds';
+import {
+  createMainMaterialExportGroupDescriptor,
+  type MainMaterialExportGroupDescriptor,
+} from './mainMaterialExportGroups';
 
 export interface MainMaterialEditableTarget {
   id: string;
@@ -15,6 +19,7 @@ export interface MainMaterialEditableTarget {
   recipe: MaterialRecipe;
   capabilities: MaterialEditorCapabilities;
   interactionRole?: InteractionRole;
+  exportGroup?: MainMaterialExportGroupDescriptor;
   onChange: (recipe: MaterialRecipe) => void;
   children?: MainMaterialEditableTarget[];
 }
@@ -77,6 +82,7 @@ const createFeedNodeMaterialTarget = <
   recipe: options.nodeRecipe(cardType, node),
   capabilities: options.nodeCapabilities(cardType, node),
   interactionRole: options.nodeInteractionRole?.(cardType, node),
+  exportGroup: createMainMaterialExportGroupDescriptor(feedMaterialTargetIdForNode(cardType.id, node.id)),
   onChange: (recipe) => options.onNodeChange(cardType.id, node.id, recipe),
   children: node.children?.map((child) => createFeedNodeMaterialTarget(cardType, child, options)) || [],
 });
@@ -95,9 +101,9 @@ export const createFeedMaterialTargets = <
       label: feedCardMaterialTargetLabel(cardType, index),
       recipe: cardType.surface,
       capabilities: options.rootCapabilities,
+      exportGroup: createMainMaterialExportGroupDescriptor(feedCardMaterialTargetId(cardTypeId)),
       onChange: (recipe) => options.onCardChange(cardTypeId, recipe),
       children: cardType.children.map((node) => createFeedNodeMaterialTarget(cardType, node, options)),
     };
   })
 );
-

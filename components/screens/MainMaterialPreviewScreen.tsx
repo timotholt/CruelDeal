@@ -105,6 +105,10 @@ import {
   createMainMaterialDomExportGroup,
 } from './main-material/mainMaterialDomExportGroup';
 import {
+  mainMaterialExportGroupForTarget,
+  type MainMaterialExportGroupDescriptor,
+} from './main-material/mainMaterialExportGroups';
+import {
   EmissionInspector,
 } from './main-material/mainMaterialEmissionInspector';
 import {
@@ -149,6 +153,7 @@ import {
   type TitleRecipe,
 } from './main-material/mainMaterialPreview';
 import {
+  createMainMaterialWorkbenchExportGroups,
   createMainMaterialWorkbenchExportTargets,
 } from './main-material/mainMaterialWorkbenchExportTargets';
 import {
@@ -2457,6 +2462,17 @@ export const MainMaterialPreviewScreen = () => {
   const workbenchParts = (): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
     createMainMaterialWorkbenchParts(feedWorkbenchParts())
   );
+  const feedExportGroupDescriptors = (): Record<string, MainMaterialExportGroupDescriptor> => {
+    const descriptors: Record<string, MainMaterialExportGroupDescriptor> = {};
+    flatFeedMaterialTargets().forEach((entry) => {
+      if (entry.target.exportGroup) descriptors[entry.target.id] = entry.target.exportGroup;
+    });
+    return descriptors;
+  };
+  const exportGroupDescriptors = (): Record<string, MainMaterialExportGroupDescriptor> => ({
+    ...feedExportGroupDescriptors(),
+    ...createMainMaterialWorkbenchExportGroups(),
+  });
 
   const selectFeedStory = (storyId: string) => {
     const story = feedStories().find((item) => item.id === storyId) || feedStories()[0] || mockFeedStories[0];
@@ -2599,6 +2615,11 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   const selectedEmissionTargetId = () => String(selectedWorkbenchPartId());
+  const selectedExportGroupDescriptor = () => mainMaterialExportGroupForTarget(
+    selectedEmissionTargetId(),
+    exportGroupDescriptors(),
+  );
+  const selectedDomAuditTargetId = () => selectedExportGroupDescriptor().rootTargetId;
   const selectedEmissionTargetLabel = () => (
     workbenchParts().find((part) => part.id === selectedWorkbenchPartId())?.label || selectedEmissionTargetId()
   );
@@ -2660,7 +2681,7 @@ export const MainMaterialPreviewScreen = () => {
     return liveGroup ? liveGroup.metrics : selectedExportSnapshot().metrics;
   };
   const refreshDomAudit = (
-    targetId = selectedEmissionTargetId(),
+    targetId = selectedDomAuditTargetId(),
     hiddenClasses = hiddenDomClassKeys(),
     reportMissing = true,
   ) => {
@@ -2683,7 +2704,7 @@ export const MainMaterialPreviewScreen = () => {
       targetId,
       hiddenClasses,
       maxAttempts,
-      selectedTargetId: selectedEmissionTargetId,
+      selectedTargetId: selectedDomAuditTargetId,
       refresh: refreshDomAudit,
       ...frameScheduler,
     });
@@ -2691,10 +2712,11 @@ export const MainMaterialPreviewScreen = () => {
   const refreshDomAuditWithStatus = () => {
     const reset = createEmptyDomClassKeys();
     setHiddenDomClassKeys(reset);
-    const matched = refreshDomAudit(selectedEmissionTargetId(), reset);
+    const targetId = selectedDomAuditTargetId();
+    const matched = refreshDomAudit(targetId, reset);
     setInspectorStatus(matched
       ? 'DOM refreshed from live selected element; class pokes cleared'
-      : `No live DOM node for ${selectedEmissionTargetId()}`);
+      : `No live DOM node for ${targetId}`);
   };
   const toggleDomClassProbe = (key: string, className: string) => {
     setHiddenDomClassKeys((current) => {
@@ -2724,7 +2746,7 @@ export const MainMaterialPreviewScreen = () => {
       resetCssProbe();
       return;
     }
-    refreshDomAudit(selectedEmissionTargetId(), hiddenDomClassKeys(), false);
+    refreshDomAudit(selectedDomAuditTargetId(), hiddenDomClassKeys(), false);
     setInspectorStatus(refreshedEmissionPayloadStatus(emissionInspectorTab(), Boolean(selectedExportPlan())));
   };
   const startEmissionInspectorDrag = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
@@ -2748,7 +2770,7 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   createEffect(() => {
-    const targetId = selectedEmissionTargetId();
+    const targetId = selectedDomAuditTargetId();
     selectedPart();
     selectedFeedTargetId();
     selectedTopBarTargetId();

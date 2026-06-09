@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createMaterialRecipe } from '../../ui/material-lab';
-import { createMainMaterialWorkbenchExportTargets } from './mainMaterialWorkbenchExportTargets';
+import {
+  createMainMaterialWorkbenchExportGroups,
+  createMainMaterialWorkbenchExportTargets,
+} from './mainMaterialWorkbenchExportTargets';
 import {
   navItemTargetId,
   toolbarMaterialTargetId,
@@ -45,5 +48,14 @@ assert.equal(targets.navBar.kind, 'panel');
 assert.equal(targets[navItemTargetId(0)].kind, 'button');
 assert.equal(targets[navItemTargetId(0)].recipe, surfaces.nav);
 assert.equal(targets[navItemTargetId(0)].text, 'Battle Pass');
+
+const groups = createMainMaterialWorkbenchExportGroups();
+assert.equal(groups.backdrop.rootTargetId, 'backdrop');
+assert.equal(groups.topBar.rootTargetId, 'topBar');
+assert.equal(groups[topBarProfileTargetId].rootTargetId, topBarProfileTargetId);
+assert.equal(groups[topBarCurrencyTargetId('credits')].rootTargetId, topBarCurrencyTargetId('credits'));
+assert.equal(groups[toolbarMaterialTargetId('toolbar-log')].rootTargetId, toolbarMaterialTargetId('toolbar-log'));
+assert.equal(groups.navBarContainer.rootTargetId, 'navBarContainer');
+assert.equal(groups[navItemTargetId(0)].rootTargetId, navItemTargetId(0));
 
 console.log('Main material workbench export target tests passed');

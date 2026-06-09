@@ -83,6 +83,17 @@ authoring JSON
 - [x] Routed `/material-main` Export DOM/CSS through the live export-group
   contract first, with the emission planner retained as the unmounted fallback.
 - [x] Added `mainMaterialDomExportGroup.test.ts`.
+- [x] Added `components/screens/main-material/mainMaterialExportGroups.ts`,
+  the first explicit editable-target export/group descriptor contract
+  (`mode: subtree`, `rootTargetId`).
+- [x] Feed material targets now carry their own export-group descriptors during
+  target construction instead of relying on the inspector to infer ownership.
+- [x] Chrome/workbench selectable targets now expose export-group descriptors
+  through `createMainMaterialWorkbenchExportGroups()`.
+- [x] `/material-main` resolves selected UI target id and DOM export root id
+  separately, so future children can export parent/group subtrees without
+  changing inspector refresh/copy behavior.
+- [x] Added `mainMaterialExportGroups.test.ts`.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -418,11 +429,17 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialDomAudit.test.ts`
   for live DOM-to-CSS serialization.
 - PASS `npx tsx components/screens/main-material/mainMaterialDomExportGroup.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialExportGroups.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchExportTargets.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialExportPlanner.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
 - PASS `npm run build`
+- PASS in-app browser descriptor smoke test: `/main-material` loaded without
+  critical error; 60 live material targets were present; Top Bar and Nav
+  Container DOM roots each contained child material target ids, matching the
+  subtree export-group model.
 
 ## Current Architecture State
 
@@ -436,10 +453,10 @@ authoring JSON
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, selected emission export
   output/controller contracts, live DOM export serialization, live DOM export
-  groups, chrome/workbench export-target construction, preview-state
-  compatibility adapter, material preset/part-state recipe models, interaction
-  selection helpers, and workbench model are now extracted from the giant
-  screen.
+  groups, first-class export-group descriptors, chrome/workbench export-target
+  construction, preview-state compatibility adapter, material preset/part-state
+  recipe models, interaction selection helpers, and workbench model are now
+  extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -448,16 +465,16 @@ blocker. Structure authoring now has a live first slice, CMS binding is visible
 for selected nodes, and Export DOM/CSS now prefers the live selected DOM subtree
 instead of target-specific emitters, with the emission planner retained as a
 fallback for unmounted targets. The live export-group contract now reports every
-material target id contained by the selected DOM subtree, making the group model
-explicit instead of implicit in the inspector. Chrome/workbench fallback export
-targets are now built through a shared pure factory instead of the giant screen.
-The next bottleneck is attaching export/group descriptors directly to editable
-target construction, so selected elements consistently declare their export
-root/group before the inspector has to infer it from the DOM. After that, make
-CMS editing fuller: show field type/value previews, make bound vs static
-content explicit, and route CMS/content documents through the editor output
-registry instead of treating feed story values as only fake-server textarea
-state.
+material target id contained by the selected DOM subtree, and selectable feed
+plus chrome targets now declare their export root through explicit descriptors.
+Chrome/workbench fallback export targets are built through a shared pure factory
+instead of the giant screen. The next bottleneck is using those descriptors to
+replace the remaining selected-CSS-probe route branching and then removing the
+unmounted planner fallback once live descriptors cover every export case with
+runtime contract tests. After that, make CMS editing fuller: show field
+type/value previews, make bound vs static content explicit, and route
+CMS/content documents through the editor output registry instead of treating
+feed story values as only fake-server textarea state.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

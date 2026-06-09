@@ -6,6 +6,10 @@ import {
 } from './mainMaterialPreview';
 import type { MainMaterialGenericExportTarget } from './mainMaterialExportPlanner';
 import {
+  createMainMaterialExportGroupDescriptor,
+  type MainMaterialExportGroupDescriptor,
+} from './mainMaterialExportGroups';
+import {
   navItemTargetId,
   toolbarMaterialTargetId,
   topBarCurrencyTargetId,
@@ -58,7 +62,28 @@ export const createMainMaterialWorkbenchExportTargets = (
   navBarContainer: panelExportTarget(surfaces.navContainer, 'main-material-nav-shell'),
   navBar: panelExportTarget(surfaces.nav, 'main-material-nav-tabs'),
   ...Object.fromEntries(navNodeSpecs.map((item, index) => [
-    navItemTargetId(index),
-    buttonExportTarget(surfaces.nav, item.text, 'main-material-nav-item'),
+  navItemTargetId(index),
+  buttonExportTarget(surfaces.nav, item.text, 'main-material-nav-item'),
   ])),
+});
+
+export const createMainMaterialWorkbenchExportGroups = (): Record<string, MainMaterialExportGroupDescriptor> => ({
+  backdrop: createMainMaterialExportGroupDescriptor('backdrop'),
+  topBar: createMainMaterialExportGroupDescriptor('topBar'),
+  [topBarProfileTargetId]: createMainMaterialExportGroupDescriptor(topBarProfileTargetId),
+  ...Object.fromEntries(topBarCurrencySpecs.map((item) => {
+    const targetId = topBarCurrencyTargetId(item.id);
+    return [targetId, createMainMaterialExportGroupDescriptor(targetId)];
+  })),
+  toolBar: createMainMaterialExportGroupDescriptor('toolBar'),
+  ...Object.fromEntries(toolbarNodeSpecs.map((item) => {
+    const targetId = toolbarMaterialTargetId(item.id);
+    return [targetId, createMainMaterialExportGroupDescriptor(targetId)];
+  })),
+  navBarContainer: createMainMaterialExportGroupDescriptor('navBarContainer'),
+  navBar: createMainMaterialExportGroupDescriptor('navBar'),
+  ...Object.fromEntries(navNodeSpecs.map((_item, index) => {
+    const targetId = navItemTargetId(index);
+    return [targetId, createMainMaterialExportGroupDescriptor(targetId)];
+  })),
 });

@@ -55,8 +55,11 @@ const targets = createFeedMaterialTargets({
 
 assert.equal(targets[0].id, 'feed:card:card_type_01');
 assert.equal(targets[0].label, 'Feed Card 1');
+assert.equal(targets[0].exportGroup?.rootTargetId, 'feed:card:card_type_01');
 assert.equal(targets[0].children?.[0].id, 'feed:card:card_type_01:node:group');
+assert.equal(targets[0].children?.[0].exportGroup?.rootTargetId, 'feed:card:card_type_01:node:group');
 assert.equal(targets[0].children?.[0].children?.[0].id, 'feed:card:card_type_01:node:cta');
+assert.equal(targets[0].children?.[0].children?.[0].exportGroup?.rootTargetId, 'feed:card:card_type_01:node:cta');
 assert.deepEqual(targets[0].children?.[0].capabilities, { text: false, states: false });
 assert.deepEqual(targets[0].children?.[0].children?.[0].capabilities, { text: true, states: true });
 assert.equal(targets[0].children?.[0].children?.[0].interactionRole, 'momentary');
@@ -65,4 +68,3 @@ targets[0].children?.[0].children?.[0].onChange(childRecipe);
 assert.deepEqual(changes, ['card:promo', 'node:card_type_01:cta']);
 
 console.log('Main material feed target tests passed');
-
