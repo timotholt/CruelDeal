@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import { configureLogging } from '../../../utils/logger';
 import {
+  applyMainMaterialFeedContentPayload,
   createMainMaterialFeedContentPayload,
+  parseMainMaterialFeedContentJson,
   serializeMainMaterialFeedContentPayload,
   validateMainMaterialFeedContentPayload,
 } from './mainMaterialFeedContentOutput';
 import type { FeedStory } from './mainMaterialFeedModel';
+
+configureLogging({ level: 'silent', policy: 'continue' });
 
 const story: FeedStory = {
   id: 'story_01',
@@ -35,5 +40,29 @@ assert.equal(validated.contractBriefing, '[h1]Reward[/h1]');
 const serialized = serializeMainMaterialFeedContentPayload(story);
 assert.ok(serialized.endsWith('\n'));
 assert.equal(JSON.parse(serialized).title, 'Data Extraction');
+
+const imported = applyMainMaterialFeedContentPayload(story, {
+  title: 'New Title',
+  contractBriefing: '[h1]New Reward[/h1]',
+  madeUp: 'ignored',
+});
+assert.equal(imported.ok, true);
+assert.deepEqual(imported.changedSlots, ['title', 'contractBriefing']);
+assert.equal(imported.story.title, 'New Title');
+assert.equal(imported.story.contractBriefing, '[h1]New Reward[/h1]');
+assert.equal(imported.story.body, story.body);
+
+const invalidShape = applyMainMaterialFeedContentPayload(story, { title: ['bad'] });
+assert.equal(invalidShape.ok, false);
+assert.equal(invalidShape.story, story);
+
+const parsed = parseMainMaterialFeedContentJson(story, '{"body":"Updated body"}');
+assert.equal(parsed.ok, true);
+assert.deepEqual(parsed.changedSlots, ['body']);
+assert.equal(parsed.story.body, 'Updated body');
+
+const invalidJson = parseMainMaterialFeedContentJson(story, '{not json');
+assert.equal(invalidJson.ok, false);
+assert.equal(invalidJson.message, 'Invalid JSON');
 
 console.log('Main material feed content output tests passed');

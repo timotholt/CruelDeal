@@ -129,6 +129,10 @@ authoring JSON
 - [x] Added a visible CMS contract slice in `FeedRecipeEditor`: selected nodes
   now show bound/static state, field type, preview value, and a copy action for
   the selected story's `ui-node-content` JSON.
+- [x] Added validated `ui-node-content` import for the selected feed story:
+  pasted documents are parsed through the editor output registry, only known
+  feed content fields are applied, unknown keys are ignored, and invalid JSON
+  returns a UI validation message instead of crashing the route.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -491,6 +495,8 @@ authoring JSON
 - PASS in-app browser CMS output smoke test: `/main-material` loaded without
   critical error; the CMS section rendered State, Type, Preview, Output, and
   `copy ui-node-content` controls.
+- PASS in-app browser CMS import smoke test: `/main-material` loaded without
+  critical error; the CMS section rendered copy/import content controls.
 
 ## Current Architecture State
 
@@ -529,10 +535,10 @@ chrome workbench targets, the normal screen inspector path is now live-DOM only,
 and fallback snapshot creation has been re-homed into a compatibility export
 module. CMS/content convergence has its first live slice: selected story content
 serializes through the registered `ui-node-content` output mode, and the CMS
-panel exposes bound/static state, field type, preview value, and a copy action.
-The next bottleneck is richer CMS authoring/import: make content field documents
-editable as documents rather than individual textarea writes, then add
-validation feedback for invalid imported content.
+panel exposes bound/static state, field type, preview value, copy, and validated
+import actions. The next bottleneck is richer CMS authoring: make content field
+documents editable as documents rather than individual textarea writes, with
+inline validation feedback instead of prompt/clipboard-only import.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

@@ -115,6 +115,7 @@ export const FeedRecipeEditor = (props: {
   onStoryImageOverrideChange: (storyId: string, image: string | null) => void;
   selectedStoryContentJson: string;
   onCopySelectedStoryContentJson: () => void;
+  onImportSelectedStoryContentJson: () => void;
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
   const [insertMode, setInsertMode] = createSignal<'inside' | 'after'>('inside');
@@ -765,7 +766,10 @@ export const FeedRecipeEditor = (props: {
                 </Show>
                 <div class="ui-lab-control-row">
                   <span>Output</span>
-                  <MiniButton disabled={!props.selectedStoryContentJson} onClick={props.onCopySelectedStoryContentJson}>copy ui-node-content</MiniButton>
+                  <div class="ui-lab-toggles">
+                    <MiniButton disabled={!props.selectedStoryContentJson} onClick={props.onCopySelectedStoryContentJson}>copy ui-node-content</MiniButton>
+                    <MiniButton onClick={props.onImportSelectedStoryContentJson}>import</MiniButton>
+                  </div>
                 </div>
               </Show>
               <Show when={node().binding}>
