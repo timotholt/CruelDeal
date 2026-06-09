@@ -1,7 +1,7 @@
 # Editor Architecture Convergence Checkpoint
 
-Last Updated: 2026-06-08
-Status: complete
+Last Updated: 2026-06-09
+Status: active - surface composition authoring continuation
 
 ## Goal
 
@@ -291,6 +291,19 @@ authoring JSON
   construction into `components/screens/main-material/mainMaterialWorkbenchModel.ts`.
   Feed targets are still injected by the screen, but chrome/root workbench tree
   composition is now tested model behavior.
+- [x] Added `docs/surface-composition-authoring-spec.md` to define the
+  structure/layout/CMS authoring path. The spec makes two-column, reward, and
+  fingerprint layouts ordinary nested node compositions rather than rich-text
+  layout or special runtime primitives.
+- [x] Added pure feed node tree operations in
+  `components/screens/main-material/mainMaterialNodeTreeOperations.ts`.
+  Insert, remove, duplicate, move, wrap, unwrap, and patch now have a tested
+  result-object contract that can be wired into editor UI without crashing the
+  route on invalid commands.
+- [x] Added composition templates and a tangible mission-briefing test bed in
+  `components/screens/main-material/mainMaterialNodeTemplates.ts`. The test bed
+  proves reward/fingerprint/two-column composition is represented as normal
+  `FeedCardNode` children.
 
 ## Verification Evidence
 
@@ -318,6 +331,10 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPartStateModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialWorkbenchModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialNodeTreeOperations.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialFeedModel.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialTargetTree.test.ts`
+- PASS `npx vitest run components/screens/main-material/feedNodeLayoutCss.test.ts`
 - PASS `npx tsx components/ui/material-lab/MaterialRecipeValidate.test.ts`
 - PASS `npx tsx components/ui/material-lab/surfaceFeatures.test.ts`
 - PASS `npx tsx components/ui/game-ui/gameUiSchema.test.ts`
@@ -350,11 +367,15 @@ authoring JSON
 ## Next Bottleneck
 
 The `/material-main` top-level controller decomposition is no longer the primary
-blocker. The screen still owns Solid signal wiring and JSX composition, but the
-restartable controller contracts now cover feed model/text/editors, targets,
-DOM registry/audit/emission, persistence/import/export, preview-state
-compatibility, presets, part reset/recipe application, selection routing,
-selected interaction state, and workbench tree construction.
+blocker. The next live editor bottleneck is structure authoring: wire the pure
+feed node tree operations and composition templates into the existing feed target
+tree so a user can add, delete, duplicate, reorder, wrap, unwrap, and template
+nodes from the UI.
+
+The first tangible test bed now exists in
+`components/screens/main-material/mainMaterialNodeTemplates.ts`; the next UI
+slice should expose at least `Two Column Group`, `Label / Value Stack`, and
+`Reward Terms Group` against the selected feed node.
 
 The generated-control convergence inside `MaterialRecipeEditor` is now closed
 for the high-risk material/state surface sections. Remaining bespoke editor
