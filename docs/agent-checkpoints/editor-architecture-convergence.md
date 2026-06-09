@@ -318,6 +318,10 @@ authoring JSON
 - [x] Made template insertion semantics explicit in the editor. Structure
   authoring now exposes `inside` vs `after` insertion mode, backed by a tested
   pure `insertFeedNodeAfter()` operation for sibling insertion.
+- [x] Added visible structure-operation status and one-step undo to
+  `FeedRecipeEditor`. Successful operations snapshot the previous feed card
+  type and selected material target; failed pure operations report their reason
+  in the Structure panel instead of failing silently.
 
 ## Verification Evidence
 
@@ -371,6 +375,9 @@ authoring JSON
 - PASS in-app browser insertion-mode smoke test: selecting an inserted node,
   switching to `after`, and adding `text` created and selected a new text-block
   sibling target without crashing the route.
+- PASS in-app browser undo smoke test: adding a text block selected the new
+  text-block target, enabled `undo`, and undo removed the node while restoring
+  the previous selected target without crashing the route.
 
 ## Current Architecture State
 
@@ -391,10 +398,9 @@ authoring JSON
 
 The `/material-main` top-level controller decomposition is no longer the primary
 blocker. Structure authoring now has a live first slice. The next bottleneck is
-making operation safety production-complete: surface operation failures/status
-in the UI, add undo or a proper command history instead of relying only on
-delete confirmation, and start turning CMS field/binding support into visible
-editor controls.
+turning CMS field/binding support into visible editor controls. Structure
+operation status and one-step undo now exist; longer command history can wait
+until the binding/content model is visible enough to justify it.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

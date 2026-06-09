@@ -31,6 +31,7 @@ import {
 } from './feedNodeLayoutCss';
 import {
   feedDefaultTextFontCondensed,
+  cloneFeedCardType,
   createFeedNode,
   createFeedNodeLayout,
   createFeedRegionSurface,
@@ -90,6 +91,12 @@ const layoutDistributeModes = ['packed', 'between', 'around', 'evenly'] as const
 const layoutCrossPositions = ['start', 'center', 'end'] as const;
 type LayoutDistributeMode = typeof layoutDistributeModes[number];
 
+interface StructureUndoSnapshot {
+  label: string;
+  cardType: FeedCardTypeRecipe;
+  selectedMaterialTargetId: string;
+}
+
 export const FeedRecipeEditor = (props: {
   feed: FeedRecipe;
   onChange: (feed: FeedRecipe) => void;
@@ -106,6 +113,8 @@ export const FeedRecipeEditor = (props: {
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
   const [insertMode, setInsertMode] = createSignal<'inside' | 'after'>('inside');
+  const [structureUndo, setStructureUndo] = createSignal<StructureUndoSnapshot | null>(null);
+  const [structureStatus, setStructureStatus] = createSignal('Ready');
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
     props.onChange({ ...props.feed, [key]: value });
   };
@@ -185,10 +194,31 @@ export const FeedRecipeEditor = (props: {
   const selectCardRoot = () => {
     props.onSelectedMaterialTargetIdChange(feedCardMaterialTargetId(props.editingCardTypeId));
   };
-  const applyNodeTreeOperation = (result: FeedNodeTreeOperationResult, selectNodeId?: string) => {
-    if (!result.ok) return;
+  const applyNodeTreeOperation = (
+    result: FeedNodeTreeOperationResult,
+    selectNodeId?: string,
+    label = 'Updated structure',
+  ) => {
+    if (!result.ok) {
+      setStructureStatus(result.reason);
+      return;
+    }
+    setStructureUndo({
+      label,
+      cardType: cloneFeedCardType(editingCardType()),
+      selectedMaterialTargetId: props.selectedMaterialTargetId,
+    });
     updateEditingCardType({ children: result.nodes });
     if (selectNodeId) selectFeedNode(selectNodeId);
+    setStructureStatus(label);
+  };
+  const undoStructureOperation = () => {
+    const snapshot = structureUndo();
+    if (!snapshot) return;
+    props.onCardTypeChange(snapshot.cardType);
+    props.onSelectedMaterialTargetIdChange(snapshot.selectedMaterialTargetId);
+    setStructureUndo(null);
+    setStructureStatus(`Undid ${snapshot.label.toLowerCase()}`);
   };
   const selectedInsertMode = () => {
     const node = selectedTargetNode();
@@ -200,7 +230,7 @@ export const FeedRecipeEditor = (props: {
     const result = selectedNode && selectedInsertMode() === 'after'
       ? insertFeedNodeAfter(editingCardType().children, selectedNode.id, node)
       : insertFeedNode(editingCardType().children, selectedInsertParentId(), node);
-    applyNodeTreeOperation(result, selectNodeId);
+    applyNodeTreeOperation(result, selectNodeId, `Added ${node.label}`);
   };
   const selectedInsertParentId = () => {
     const node = selectedTargetNode();
@@ -247,12 +277,12 @@ export const FeedRecipeEditor = (props: {
       if (sourceId === node.id) duplicateId = nextId;
       return nextId;
     };
-    applyNodeTreeOperation(duplicateFeedNode(editingCardType().children, node.id, trackingFactory), duplicateId);
+    applyNodeTreeOperation(duplicateFeedNode(editingCardType().children, node.id, trackingFactory), duplicateId, `Duplicated ${node.label}`);
   };
   const moveSelectedNode = (offset: -1 | 1) => {
     const node = selectedTargetNode();
     if (!node) return;
-    applyNodeTreeOperation(moveFeedNodeByOffset(editingCardType().children, node.id, offset), node.id);
+    applyNodeTreeOperation(moveFeedNodeByOffset(editingCardType().children, node.id, offset), node.id, `Moved ${node.label} ${offset < 0 ? 'up' : 'down'}`);
   };
   const deleteSelectedNode = () => {
     const node = selectedTargetNode();
@@ -260,7 +290,7 @@ export const FeedRecipeEditor = (props: {
     const childCount = node.children?.length || 0;
     const detail = childCount > 0 ? ` and its ${childCount} child node${childCount === 1 ? '' : 's'}` : '';
     if (!window.confirm(`Delete "${node.label}"${detail}?`)) return;
-    applyNodeTreeOperation(removeFeedNode(editingCardType().children, node.id));
+    applyNodeTreeOperation(removeFeedNode(editingCardType().children, node.id), undefined, `Deleted ${node.label}`);
     selectCardRoot();
   };
   const wrapSelectedNodeInGroup = () => {
@@ -286,12 +316,13 @@ export const FeedRecipeEditor = (props: {
         }),
       })),
       id,
+      `Wrapped ${node.label}`,
     );
   };
   const unwrapSelectedNode = () => {
     const node = selectedTargetNode();
     if (!node || node.type !== 'container') return;
-    applyNodeTreeOperation(unwrapFeedNodeContainer(editingCardType().children, node.id));
+    applyNodeTreeOperation(unwrapFeedNodeContainer(editingCardType().children, node.id), undefined, `Unwrapped ${node.label}`);
     selectCardRoot();
   };
   const updateSelectedNodeLayout = <K extends keyof FeedNodeLayout>(key: K, value: FeedNodeLayout[K]) => {
@@ -610,6 +641,13 @@ export const FeedRecipeEditor = (props: {
 
       <div class="ui-lab-control-group">
         <SectionLabel size="xs">Structure</SectionLabel>
+        <div class="ui-lab-control-row">
+          <span>Status</span>
+          <div class="ui-lab-toggles">
+            <span>{structureStatus()}</span>
+            <MiniButton disabled={!structureUndo()} onClick={undoStructureOperation}>undo</MiniButton>
+          </div>
+        </div>
         <Show when={selectedTargetNode()}>
           <div class="ui-lab-control-row">
             <span>Insert</span>
