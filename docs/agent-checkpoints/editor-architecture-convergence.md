@@ -311,6 +311,13 @@ authoring JSON
 - [x] Browser-verified `/main-material` as the live testbed: clicking `terms`
   inserted a normal nested `reward-terms-group`/two-column/fingerprint subtree
   into the visible UI tree and selected the new material target for export.
+- [x] Extended structure authoring with production-oriented node operations:
+  reorder up/down, unwrap container, and delete confirmation. Reorder is now
+  represented by a tested pure `moveFeedNodeByOffset()` operation instead of UI
+  code manipulating sibling arrays directly.
+- [x] Made template insertion semantics explicit in the editor. Structure
+  authoring now exposes `inside` vs `after` insertion mode, backed by a tested
+  pure `insertFeedNodeAfter()` operation for sibling insertion.
 
 ## Verification Evidence
 
@@ -358,6 +365,12 @@ authoring JSON
 - PASS in-app browser testbed for `http://localhost:3000/main-material`: route
   loaded without critical error, Structure controls rendered, and clicking
   `terms` inserted/selects the nested reward terms node tree.
+- PASS in-app browser structure-authoring smoke test: after inserting `terms`,
+  `up`, `down`, `dup`, `wrap`, `unwrap`, and `delete` controls rendered; clicking
+  `up` preserved the selected reward terms target and did not crash the route.
+- PASS in-app browser insertion-mode smoke test: selecting an inserted node,
+  switching to `after`, and adding `text` created and selected a new text-block
+  sibling target without crashing the route.
 
 ## Current Architecture State
 
@@ -378,9 +391,10 @@ authoring JSON
 
 The `/material-main` top-level controller decomposition is no longer the primary
 blocker. Structure authoring now has a live first slice. The next bottleneck is
-making these node operations production-complete: add explicit reorder/up/down
-controls, add unwrap, add destructive-action guardrails or undo, and improve
-template insertion so adding beside vs inside a selected node is obvious.
+making operation safety production-complete: surface operation failures/status
+in the UI, add undo or a proper command history instead of relying only on
+delete confirmation, and start turning CMS field/binding support into visible
+editor controls.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

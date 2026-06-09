@@ -7,7 +7,9 @@ import {
 import {
   duplicateFeedNode,
   insertFeedNode,
+  insertFeedNodeAfter,
   moveFeedNode,
+  moveFeedNodeByOffset,
   patchFeedNode,
   removeFeedNode,
   unwrapFeedNodeContainer,
@@ -49,6 +51,13 @@ const inserted = assertOk(insertFeedNode(
 assert.deepEqual(idsOf(inserted[0].children || []), ['eyebrow', 'title', 'body']);
 assert.deepEqual(idsOf(baseTree[0].children || []), ['title', 'body']);
 
+const insertedAfter = assertOk(insertFeedNodeAfter(
+  inserted,
+  'title',
+  createFeedNode({ id: 'rule', label: 'Rule', type: 'text', binding: 'contractRule' }),
+));
+assert.deepEqual(idsOf(insertedAfter[0].children || []), ['eyebrow', 'title', 'rule', 'body']);
+
 const removed = assertOk(removeFeedNode(inserted, 'body'));
 assert.deepEqual(idsOf(removed[0].children || []), ['eyebrow', 'title']);
 
@@ -59,6 +68,16 @@ assert.deepEqual(idsOf(duplicated[1].children || []), ['eyebrow-2', 'title-2']);
 const moved = assertOk(moveFeedNode(duplicated, 'cta', 'panel', 1));
 assert.deepEqual(idsOf(moved), ['panel', 'panel-2']);
 assert.deepEqual(idsOf(moved[0].children || []), ['eyebrow', 'cta', 'title']);
+
+const movedDown = assertOk(moveFeedNodeByOffset(moved, 'cta', 1));
+assert.deepEqual(idsOf(movedDown[0].children || []), ['eyebrow', 'title', 'cta']);
+
+const movedUp = assertOk(moveFeedNodeByOffset(movedDown, 'cta', -1));
+assert.deepEqual(idsOf(movedUp[0].children || []), ['eyebrow', 'cta', 'title']);
+
+const invalidMoveUp = moveFeedNodeByOffset(moved, 'eyebrow', -1);
+assert.equal(invalidMoveUp.ok, false);
+assert.match(invalidMoveUp.reason, /already first/);
 
 const invalidMove = moveFeedNode(moved, 'panel', 'title', 0);
 assert.equal(invalidMove.ok, false);

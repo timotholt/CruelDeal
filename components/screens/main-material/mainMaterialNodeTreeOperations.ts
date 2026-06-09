@@ -107,6 +107,24 @@ export const insertFeedNode = (
   return { ok: true, nodes: next };
 };
 
+export const insertFeedNodeAfter = (
+  nodes: readonly FeedCardNode[],
+  siblingId: string,
+  node: FeedCardNode,
+): FeedNodeTreeOperationResult => {
+  const next = cloneFeedNodes(nodes);
+  const existingIds = collectNodeIds(next);
+  if (existingIds.has(node.id)) return { ok: false, reason: `Node id already exists: ${node.id}` };
+
+  const siblingPath = findNodePath(next, siblingId);
+  if (!siblingPath) return { ok: false, reason: `Sibling node not found: ${siblingId}` };
+  const list = getListAtPath(next, parentPathOf(siblingPath));
+  if (!list) return { ok: false, reason: `Parent node is unavailable for: ${siblingId}` };
+
+  list.splice(nodeIndexOf(siblingPath) + 1, 0, cloneFeedCardNode(node));
+  return { ok: true, nodes: next };
+};
+
 export const removeFeedNode = (
   nodes: readonly FeedCardNode[],
   nodeId: string,
@@ -166,6 +184,28 @@ export const moveFeedNode = (
   if (!targetList) return { ok: false, reason: `Parent node is unavailable: ${newParentId}` };
   const targetIndex = Math.max(0, Math.min(index, targetList.length));
   targetList.splice(targetIndex, 0, node);
+  return { ok: true, nodes: next };
+};
+
+export const moveFeedNodeByOffset = (
+  nodes: readonly FeedCardNode[],
+  nodeId: string,
+  offset: -1 | 1,
+): FeedNodeTreeOperationResult => {
+  const next = cloneFeedNodes(nodes);
+  const path = findNodePath(next, nodeId);
+  if (!path) return { ok: false, reason: `Node not found: ${nodeId}` };
+  const list = getListAtPath(next, parentPathOf(path));
+  if (!list) return { ok: false, reason: `Parent node is unavailable for: ${nodeId}` };
+
+  const currentIndex = nodeIndexOf(path);
+  const targetIndex = currentIndex + offset;
+  if (targetIndex < 0 || targetIndex >= list.length) {
+    return { ok: false, reason: offset < 0 ? 'Node is already first among siblings.' : 'Node is already last among siblings.' };
+  }
+
+  const [node] = list.splice(currentIndex, 1);
+  list.splice(targetIndex, 0, node);
   return { ok: true, nodes: next };
 };
 

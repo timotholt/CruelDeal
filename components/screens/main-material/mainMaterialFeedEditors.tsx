@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import {
   SectionLabel,
   materialRecipeContentTones,
@@ -65,7 +65,10 @@ import {
 import {
   duplicateFeedNode,
   insertFeedNode,
+  insertFeedNodeAfter,
+  moveFeedNodeByOffset,
   removeFeedNode,
+  unwrapFeedNodeContainer,
   wrapFeedNodesInContainer,
   type FeedNodeIdFactory,
   type FeedNodeTreeOperationResult,
@@ -102,6 +105,7 @@ export const FeedRecipeEditor = (props: {
   onStoryImageOverrideChange: (storyId: string, image: string | null) => void;
   onCardTypeChange: (cardType: FeedCardTypeRecipe) => void;
 }) => {
+  const [insertMode, setInsertMode] = createSignal<'inside' | 'after'>('inside');
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
     props.onChange({ ...props.feed, [key]: value });
   };
@@ -186,21 +190,30 @@ export const FeedRecipeEditor = (props: {
     updateEditingCardType({ children: result.nodes });
     if (selectNodeId) selectFeedNode(selectNodeId);
   };
+  const selectedInsertMode = () => {
+    const node = selectedTargetNode();
+    if (!node) return 'inside';
+    return node.type === 'container' ? insertMode() : 'after';
+  };
+  const insertNodeFromStructure = (node: FeedCardNode, selectNodeId: string) => {
+    const selectedNode = selectedTargetNode();
+    const result = selectedNode && selectedInsertMode() === 'after'
+      ? insertFeedNodeAfter(editingCardType().children, selectedNode.id, node)
+      : insertFeedNode(editingCardType().children, selectedInsertParentId(), node);
+    applyNodeTreeOperation(result, selectNodeId);
+  };
   const selectedInsertParentId = () => {
     const node = selectedTargetNode();
     return node?.type === 'container' ? node.id : null;
   };
   const addTextBlockNode = () => {
     const id = uniqueNodeId('text-block');
-    applyNodeTreeOperation(
-      insertFeedNode(editingCardType().children, selectedInsertParentId(), createTextBlockNode(id, 'Text Block', 'contractBody')),
-      id,
-    );
+    insertNodeFromStructure(createTextBlockNode(id, 'Text Block', 'contractBody'), id);
   };
   const addSurfacePanelNode = () => {
     const id = uniqueNodeId('surface-panel');
-    applyNodeTreeOperation(
-      insertFeedNode(editingCardType().children, selectedInsertParentId(), createFeedNode({
+    insertNodeFromStructure(
+      createFeedNode({
         id,
         label: 'Surface Panel',
         type: 'container',
@@ -216,16 +229,13 @@ export const FeedRecipeEditor = (props: {
           padding: 10,
           gap: 8,
         }),
-      })),
+      }),
       id,
     );
   };
   const addRewardTermsTemplate = () => {
     const id = uniqueNodeId('reward-terms-group');
-    applyNodeTreeOperation(
-      insertFeedNode(editingCardType().children, selectedInsertParentId(), createRewardTermsGroupNode(id)),
-      id,
-    );
+    insertNodeFromStructure(createRewardTermsGroupNode(id), id);
   };
   const duplicateSelectedNode = () => {
     const node = selectedTargetNode();
@@ -239,9 +249,17 @@ export const FeedRecipeEditor = (props: {
     };
     applyNodeTreeOperation(duplicateFeedNode(editingCardType().children, node.id, trackingFactory), duplicateId);
   };
+  const moveSelectedNode = (offset: -1 | 1) => {
+    const node = selectedTargetNode();
+    if (!node) return;
+    applyNodeTreeOperation(moveFeedNodeByOffset(editingCardType().children, node.id, offset), node.id);
+  };
   const deleteSelectedNode = () => {
     const node = selectedTargetNode();
     if (!node) return;
+    const childCount = node.children?.length || 0;
+    const detail = childCount > 0 ? ` and its ${childCount} child node${childCount === 1 ? '' : 's'}` : '';
+    if (!window.confirm(`Delete "${node.label}"${detail}?`)) return;
     applyNodeTreeOperation(removeFeedNode(editingCardType().children, node.id));
     selectCardRoot();
   };
@@ -269,6 +287,12 @@ export const FeedRecipeEditor = (props: {
       })),
       id,
     );
+  };
+  const unwrapSelectedNode = () => {
+    const node = selectedTargetNode();
+    if (!node || node.type !== 'container') return;
+    applyNodeTreeOperation(unwrapFeedNodeContainer(editingCardType().children, node.id));
+    selectCardRoot();
   };
   const updateSelectedNodeLayout = <K extends keyof FeedNodeLayout>(key: K, value: FeedNodeLayout[K]) => {
     const node = selectedTargetNode();
@@ -586,6 +610,19 @@ export const FeedRecipeEditor = (props: {
 
       <div class="ui-lab-control-group">
         <SectionLabel size="xs">Structure</SectionLabel>
+        <Show when={selectedTargetNode()}>
+          <div class="ui-lab-control-row">
+            <span>Insert</span>
+            <div class="ui-lab-toggles">
+              <MiniButton disabled={selectedTargetNode()?.type !== 'container'} active={selectedInsertMode() === 'inside'} onClick={() => setInsertMode('inside')}>
+                inside
+              </MiniButton>
+              <MiniButton active={selectedInsertMode() === 'after'} onClick={() => setInsertMode('after')}>
+                after
+              </MiniButton>
+            </div>
+          </div>
+        </Show>
         <div class="ui-lab-control-row">
           <span>Add</span>
           <div class="ui-lab-toggles">
@@ -594,10 +631,7 @@ export const FeedRecipeEditor = (props: {
             <MiniButton
               onClick={() => {
                 const id = uniqueNodeId('two-column-group');
-                applyNodeTreeOperation(
-                  insertFeedNode(editingCardType().children, selectedInsertParentId(), createTwoColumnGroupNode(id)),
-                  id,
-                );
+                insertNodeFromStructure(createTwoColumnGroupNode(id), id);
               }}
             >
               2-col
@@ -609,8 +643,11 @@ export const FeedRecipeEditor = (props: {
           <div class="ui-lab-control-row">
             <span>Node Ops</span>
             <div class="ui-lab-toggles">
+              <MiniButton onClick={() => moveSelectedNode(-1)}>up</MiniButton>
+              <MiniButton onClick={() => moveSelectedNode(1)}>down</MiniButton>
               <MiniButton onClick={duplicateSelectedNode}>dup</MiniButton>
               <MiniButton onClick={wrapSelectedNodeInGroup}>wrap</MiniButton>
+              <MiniButton disabled={selectedTargetNode()?.type !== 'container'} onClick={unwrapSelectedNode}>unwrap</MiniButton>
               <MiniButton onClick={deleteSelectedNode}>delete</MiniButton>
             </div>
           </div>
