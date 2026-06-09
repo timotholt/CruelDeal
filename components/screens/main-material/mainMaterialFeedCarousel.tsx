@@ -6,7 +6,15 @@ import {
   type MaterialRecipeState,
   type SurfaceOptions,
 } from '../../ui/material-lab';
-import { MaterialTextContent } from '../../ui/material-node';
+import {
+  MaterialNodeRenderer,
+  MaterialNodeDomRegistrationProvider,
+  type MaterialNodeRecipe,
+  type MaterialNodeRenderContext,
+  type MaterialNodeRole,
+} from '../../ui/material-node';
+import { feedCardNodeToMaterialNode } from './mainMaterialFeedToNode';
+import { useMainMaterialDomRegistration } from './mainMaterialFeedFrame';
 import type { FeedNodeLayout } from './feedNodeLayoutCss';
 import type { PreviewTargetRole } from './mainMaterialInteractionModel';
 import { feedCardMaterialTargetId, feedMaterialTargetIdForNode, type FeedMaterialTargetId as MainFeedMaterialTargetId } from './materialTargetIds';
@@ -20,6 +28,7 @@ import {
   feedNodeMaxLines,
   feedNodeSurfaceRecipe,
   feedRichTextTransform,
+  feedStoryValue,
   feedTextCss,
   resolveFeedNodeRenderMode,
   resolveFeedNodeTextStyle,
@@ -176,150 +185,6 @@ const createFeedStageNode = (): FeedCardNode => createFeedNode({
   }),
 });
 
-const FeedCardTreeNode = (props: {
-  node: FeedCardNode;
-  story: FeedStory;
-  cardType: FeedCardTypeRecipe;
-  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
-  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
-  cssProbe?: CssEmissionProbe;
-  surfacePropsForRecipe: FeedSurfacePropsForRecipe;
-  buttonPropsForRecipe: FeedSurfacePropsForRecipe;
-}) => {
-  const resolvedTextStyle = () => resolveFeedNodeTextStyle(props.cardType, props.node);
-  const textStyle = () => feedTextCss(resolvedTextStyle());
-  const fitTextTransform = () => {
-    const transform = feedRichTextTransform(resolvedTextStyle());
-    return transform === 'inherit' ? 'uppercase' : transform;
-  };
-  const fitTextStyle = () => ({
-    fontFamily: resolvedTextStyle().textFontFamily === 'inherit' ? feedDefaultTextFontDin : resolvedTextStyle().textFontFamily,
-    fontWeight: fontWeightTokenValue(resolvedTextStyle().fontWeight),
-    fontStyle: resolvedTextStyle().fontStyle,
-    letterSpacing: `${resolvedTextStyle().letterSpacing}em`,
-    lineHeight: resolvedTextStyle().lineHeight,
-    textTransform: fitTextTransform(),
-  });
-  // A button has no flow children for LINE GAP to space, so for buttons repurpose
-  // layout.gap as extra line spacing between multi-line label rows (em delta on the
-  // line-height the autoscaler measures and renders with).
-  const fitTextStyleResolved = () => {
-    const base = fitTextStyle();
-    if (props.node.type !== 'button') return base;
-    return { ...base, lineHeight: base.lineHeight + props.node.layout.gap / 100 };
-  };
-  const content = () => feedNodeContentValue(props.story, props.node);
-  const surfaceRecipe = () => feedNodeSurfaceRecipe(props.cardType, props.node);
-  const targetId = () => feedMaterialTargetIdForNode(props.cardType.id, props.node.id);
-  const nodeRole = (): PreviewTargetRole => props.node.type === 'button' ? 'momentary' : props.node.type === 'container' ? 'container' : 'text';
-  const visualState = () => props.surfaceStateForTarget(targetId(), nodeRole());
-  const targetClass = () => props.selectedFeedTargetClass(targetId());
-  const materialTextRenderMode = () => resolveFeedNodeRenderMode(props.node, content());
-  const fittedText = (className = 'main-material-card-node-text') => (
-    <MaterialTextContent
-      text={content()}
-      renderMode={materialTextRenderMode()}
-      fitMode={feedNodeFitMode(props.node, content())}
-      maxLines={feedNodeMaxLines(props.node, content())}
-      fit={{
-        baseFontSize: Math.max(0.35, resolvedTextStyle().textSizeRem),
-        minScale: 0.26,
-        maxScale: 1,
-        align: props.node.layout.align === 'right' ? 'right' : props.node.layout.align === 'center' ? 'center' : 'left',
-        verticalAlign: props.node.layout.justify === 'end' ? 'bottom' : props.node.layout.justify === 'center' ? 'center' : 'top',
-        verticalMetric: props.node.type === 'button' ? 'cap' : 'ink',
-        textStyle: fitTextStyleResolved(),
-      }}
-      class={className}
-      style={textStyle()}
-      richText={(value) => <FeedRichText value={value} cardType={props.cardType} style={resolveFeedNodeTextStyle(props.cardType, props.node)} />}
-    />
-  );
-  const hasFlowChildren = () => Boolean((props.node.children || []).some((child) => child.layout.mode === 'flow'));
-  const useFlowStack = () => Boolean(props.node.binding) || hasFlowChildren();
-  return (
-    <Show
-      when={props.node.type === 'container'}
-      fallback={(
-        <Show
-          when={props.node.type === 'button'}
-          fallback={(
-            <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
-              <MaterialSurfaceHost
-                kind="panel"
-                surfaceProps={props.surfacePropsForRecipe(surfaceRecipe(), visualState())}
-                padded={false}
-                class={`main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${props.node.binding || 'unbound'}`}
-              >
-                {fittedText()}
-              </MaterialSurfaceHost>
-            </FeedNodeFrame>
-          )}
-        >
-          <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
-            <MaterialSurfaceHost
-              kind="button"
-              surfaceProps={props.buttonPropsForRecipe(surfaceRecipe(), visualState())}
-              buttonSize="sm"
-              buttonFullWidth
-              class="main-material-card-node-surface main-material-card-node-surface--button"
-              label={fittedText('main-material-card-node-button-label')}
-            />
-          </FeedNodeFrame>
-        </Show>
-      )}
-    >
-      <FeedNodeFrame node={props.node} targetId={targetId()} role={nodeRole()} targetClass={targetClass()} cssProbe={props.cssProbe}>
-        <MaterialSurfaceHost
-          kind="panel"
-          surfaceProps={props.surfacePropsForRecipe(surfaceRecipe(), visualState())}
-          padded={false}
-          class="main-material-card-node-surface main-material-card-node-surface--background"
-        />
-        <Show
-          when={useFlowStack()}
-          fallback={(
-            <For each={props.node.children || []}>
-              {(child) => (
-                <FeedCardTreeNode
-                  node={child}
-                  story={props.story}
-                  cardType={props.cardType}
-                  surfaceStateForTarget={props.surfaceStateForTarget}
-                  selectedFeedTargetClass={props.selectedFeedTargetClass}
-                  cssProbe={props.cssProbe}
-                  surfacePropsForRecipe={props.surfacePropsForRecipe}
-                  buttonPropsForRecipe={props.buttonPropsForRecipe}
-                />
-              )}
-            </For>
-          )}
-        >
-          <div class="main-material-card-node-flow-stack">
-            <Show when={props.node.binding}>
-              {fittedText('main-material-card-node-text main-material-card-node-flow-text')}
-            </Show>
-            <For each={props.node.children || []}>
-              {(child) => (
-                <FeedCardTreeNode
-                  node={child}
-                  story={props.story}
-                  cardType={props.cardType}
-                  surfaceStateForTarget={props.surfaceStateForTarget}
-                  selectedFeedTargetClass={props.selectedFeedTargetClass}
-                  cssProbe={props.cssProbe}
-                  surfacePropsForRecipe={props.surfacePropsForRecipe}
-                  buttonPropsForRecipe={props.buttonPropsForRecipe}
-                />
-              )}
-            </For>
-          </div>
-        </Show>
-      </FeedNodeFrame>
-    </Show>
-  );
-};
-
 const clampSlideIndex = (index: number, slideCount: number) => Math.max(0, Math.min(slideCount - 1, index));
 
 const FeedSlideFrame = (props: {
@@ -383,20 +248,14 @@ const FeedSlideFrame = (props: {
         targetClass="main-material-card-tree"
         cssProbe={props.cssProbe}
       >
-        <For each={props.cardType.children}>
-          {(node) => (
-            <FeedCardTreeNode
-              node={node}
-              story={props.story}
-              cardType={props.cardType}
-              surfaceStateForTarget={props.surfaceStateForTarget}
-              selectedFeedTargetClass={props.selectedFeedTargetClass}
-              cssProbe={props.cssProbe}
-              surfacePropsForRecipe={props.surfacePropsForRecipe}
-              buttonPropsForRecipe={props.buttonPropsForRecipe}
-            />
-          )}
-        </For>
+        <CanonicalFeedCardTree
+          story={props.story}
+          cardType={props.cardType}
+          surfaceStateForTarget={props.surfaceStateForTarget}
+          selectedFeedTargetClass={props.selectedFeedTargetClass}
+          surfacePropsForRecipe={props.surfacePropsForRecipe}
+          buttonPropsForRecipe={props.buttonPropsForRecipe}
+        />
       </FeedNodeFrame>
     </FeedNodeFrame>
   );
@@ -465,6 +324,118 @@ const FeedTrackSlide = (props: {
         />
       </div>
     </FeedNodeFrame>
+  );
+};
+
+const previewRoleForNode = (role: MaterialNodeRole): PreviewTargetRole =>
+  role === 'momentary' ? 'momentary' : role === 'container' ? 'container' : 'text';
+
+const feedSurfaceClassForNode = (node: MaterialNodeRecipe): string => {
+  if (node.kind === 'button') return 'main-material-card-node-surface main-material-card-node-surface--button';
+  if (node.kind === 'text') {
+    return `main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${node.content?.binding || 'unbound'}`;
+  }
+  return 'main-material-card-node-surface main-material-card-node-surface--background';
+};
+
+// Attach the feed-specific text fit/style/rich-text config (computed with the live
+// story value) onto the bridged node's content, matching the prior FeedCardTreeNode so
+// the canonical MaterialNodeRenderer reproduces the same autoscaled text.
+const enrichFeedNodeContent = (
+  cardType: FeedCardTypeRecipe,
+  story: FeedStory,
+  source: FeedCardNode,
+  node: MaterialNodeRecipe,
+): MaterialNodeRecipe => {
+  if (node.content) {
+    const value = feedNodeContentValue(story, source);
+    const resolved = resolveFeedNodeTextStyle(cardType, source);
+    const transform = feedRichTextTransform(resolved);
+    const textTransform = transform === 'inherit' ? 'uppercase' : transform;
+    const lineHeight = source.type === 'button'
+      ? resolved.lineHeight + source.layout.gap / 100
+      : resolved.lineHeight;
+    node.content = {
+      ...node.content,
+      mode: 'plain',
+      textRender: resolveFeedNodeRenderMode(source, value),
+      fitMode: feedNodeFitMode(source, value),
+      maxLines: feedNodeMaxLines(source, value),
+      className: source.type === 'button' ? 'main-material-card-node-button-label' : 'main-material-card-node-text',
+      style: feedTextCss(resolved) as JSX.CSSProperties,
+      richText: (v: string) => (
+        <FeedRichText value={v} cardType={cardType} style={resolveFeedNodeTextStyle(cardType, source)} />
+      ),
+      fit: {
+        baseFontSize: Math.max(0.35, resolved.textSizeRem),
+        minScale: 0.26,
+        maxScale: 1,
+        align: source.layout.align === 'right' ? 'right' : source.layout.align === 'center' ? 'center' : 'left',
+        verticalAlign: source.layout.justify === 'end' ? 'bottom' : source.layout.justify === 'center' ? 'center' : 'top',
+        verticalMetric: source.type === 'button' ? 'cap' : 'ink',
+        textStyle: {
+          fontFamily: resolved.textFontFamily === 'inherit' ? feedDefaultTextFontDin : resolved.textFontFamily,
+          fontWeight: fontWeightTokenValue(resolved.fontWeight),
+          fontStyle: resolved.fontStyle,
+          letterSpacing: `${resolved.letterSpacing}em`,
+          lineHeight,
+          textTransform,
+        },
+      },
+    };
+  }
+  if (node.children && source.children) {
+    node.children = node.children.map((child, index) =>
+      enrichFeedNodeContent(cardType, story, source.children![index], child));
+  }
+  return node;
+};
+
+// Canonical render path: bridge each feed card node to a MaterialNodeRecipe, enrich its
+// content, and render through MaterialNodeRenderer (self-sufficient layout from layout-1/2/3).
+// DOM registration is bridged so Export DOM/CSS + the live inspector keep finding card nodes.
+const CanonicalFeedCardTree = (props: {
+  story: FeedStory;
+  cardType: FeedCardTypeRecipe;
+  surfaceStateForTarget: (targetId: FeedMaterialTargetId, role: PreviewTargetRole) => MaterialRecipeState;
+  selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
+  surfacePropsForRecipe: FeedSurfacePropsForRecipe;
+  buttonPropsForRecipe: FeedSurfacePropsForRecipe;
+}) => {
+  const registration = useMainMaterialDomRegistration();
+  const targetIdFor = (node: MaterialNodeRecipe) =>
+    feedMaterialTargetIdForNode(props.cardType.id, node.id) as FeedMaterialTargetId;
+  const context = (): MaterialNodeRenderContext => ({
+    treeId: props.cardType.id,
+    targetIdForNode: (node) => targetIdFor(node),
+    previewStateForNode: (node, role) => props.surfaceStateForTarget(targetIdFor(node), previewRoleForNode(role)),
+    selectedClassForNode: (node) => props.selectedFeedTargetClass(targetIdFor(node)),
+    // Frame class kept for selection-highlight CSS + base; the canonical inline layout
+    // (display/position from layout-1/2/3) takes precedence over the class for positioning.
+    classForNode: (node) => `main-material-card-node main-material-card-node--${node.kind}-frame`,
+    surfaceClassForNode: (node) => feedSurfaceClassForNode(node),
+    surfacePropsForNode: (node, _role, state) => props.surfacePropsForRecipe(node.surface!, state),
+    buttonPropsForNode: (node, _role, state) => props.buttonPropsForRecipe(node.surface!, state),
+    buttonSizeForNode: () => 'sm',
+    buttonFullWidthForNode: () => true,
+    resolveBinding: (binding) => feedStoryValue(props.story, binding as never),
+  });
+  return (
+    <MaterialNodeDomRegistrationProvider registration={registration}>
+      <For each={props.cardType.children}>
+        {(node) => (
+          <MaterialNodeRenderer
+            node={enrichFeedNodeContent(
+              props.cardType,
+              props.story,
+              node,
+              feedCardNodeToMaterialNode(props.cardType, node),
+            )}
+            context={context()}
+          />
+        )}
+      </For>
+    </MaterialNodeDomRegistrationProvider>
   );
 };
 
