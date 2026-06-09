@@ -27,12 +27,10 @@ import {
 } from './main-material/feedNodeLayoutCss';
 import {
   activeEmissionPayload,
-  createMainMaterialEmissionExport,
   emissionInspectorTabStatus,
   refreshedEmissionPayloadStatus,
   tabLabel,
   type EmissionInspectorTab,
-  type MainMaterialExportPayloadSource,
 } from './main-material/mainMaterialEmissionOutput';
 import {
   boundedEmissionInspectorPosition,
@@ -100,6 +98,7 @@ import {
 } from './main-material/mainMaterialDomRegistry';
 import {
   domAuditMetrics,
+  emptyEmissionMetrics,
   type DomAuditNode,
 } from './main-material/mainMaterialDomAudit';
 import {
@@ -125,8 +124,6 @@ import {
 } from './main-material/materialTargetIds';
 import {
   feedBaseTextStyleFromRecipe,
-  feedNodeContentValue,
-  feedNodeSurfaceRecipe,
   recipeWithFeedTextStyle,
   resolveFeedNodeTextStyle,
 } from './main-material/mainMaterialFeedText';
@@ -152,7 +149,6 @@ import {
 } from './main-material/mainMaterialCssProbeTargets';
 import {
   createMainMaterialWorkbenchExportGroups,
-  createMainMaterialWorkbenchExportTargets,
 } from './main-material/mainMaterialWorkbenchExportTargets';
 import {
   cloneFeedCardType,
@@ -2625,43 +2621,16 @@ export const MainMaterialPreviewScreen = () => {
       ? cssDeclarationLines(feedNodeLayoutCss(node.layout, { forcePaddingVar: node.type === 'button' }))
       : [];
   };
-  const selectedExportSnapshot = () => createMainMaterialEmissionExport(
-    selectedEmissionTargetId(),
-    {
-      selectedFeedStoryId: selectedFeedStoryId(),
-      feedStories: feedStories(),
-      feedCardTypes: feedCardTypes(),
-      fallbackStory: mockFeedStories[0],
-      selectedState: selectedPreviewState(),
-      surfaceRecipeForNode: feedNodeSurfaceRecipe,
-      surfacePropsForRecipe: (recipe, state) => materialRecipeItemProps(recipe, 0, state),
-      textForNode: feedNodeContentValue,
-      genericTargets: createMainMaterialWorkbenchExportTargets(surfaces()),
-    },
-  );
   const selectedLiveDomSnapshot = () => domAuditSnapshot();
   const selectedLiveExportGroup = () => {
     const group = createMainMaterialDomExportGroup(selectedLiveDomSnapshot());
     return domExportGroupContainsTargetId(group, selectedDomAuditTargetId()) ? group : null;
   };
-  const selectedExportPayloadSource = (): MainMaterialExportPayloadSource | null => (
-    selectedLiveExportGroup()
-      ? 'live-dom'
-      : selectedExportSnapshot().source
-  );
-  const selectedExportDomSnapshot = () => selectedLiveExportGroup()?.root ?? selectedExportSnapshot().domSnapshot;
-  const selectedExportHtml = () => {
-    const liveGroup = selectedLiveExportGroup();
-    return liveGroup ? liveGroup.html : selectedExportSnapshot().html;
-  };
-  const selectedExportCss = () => {
-    const liveGroup = selectedLiveExportGroup();
-    return liveGroup ? liveGroup.css : selectedExportSnapshot().css;
-  };
-  const selectedExportMetrics = () => {
-    const liveGroup = selectedLiveExportGroup();
-    return liveGroup ? liveGroup.metrics : selectedExportSnapshot().metrics;
-  };
+  const selectedExportPayloadSource = () => selectedLiveExportGroup() ? 'live-dom' : null;
+  const selectedExportDomSnapshot = () => selectedLiveExportGroup()?.root ?? null;
+  const selectedExportHtml = () => selectedLiveExportGroup()?.html ?? '';
+  const selectedExportCss = () => selectedLiveExportGroup()?.css ?? '';
+  const selectedExportMetrics = () => selectedLiveExportGroup()?.metrics ?? emptyEmissionMetrics();
   const refreshDomAudit = (
     targetId = selectedDomAuditTargetId(),
     hiddenClasses = hiddenDomClassKeys(),

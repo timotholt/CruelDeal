@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import type { MaterialEmissionPlan } from '../../ui/material-lab';
 import type { DomAuditNode } from './mainMaterialDomAudit';
 import {
   activeEmissionPayload,
   cssDeclarationText,
   emissionInspectorTabStatus,
-  mainMaterialEmissionExportSnapshot,
   refreshedEmissionPayloadStatus,
   tabLabel,
 } from './mainMaterialEmissionOutput';
@@ -17,65 +15,6 @@ assert.equal(refreshedEmissionPayloadStatus('export-dom', 'live-dom'), 'Refreshe
 assert.equal(refreshedEmissionPayloadStatus('export-dom', 'fallback-plan'), 'Refreshed Export DOM from fallback plan');
 assert.equal(refreshedEmissionPayloadStatus('export-dom', null), 'No Export DOM payload for this target');
 
-const emptySnapshot = mainMaterialEmissionExportSnapshot(null);
-assert.equal(emptySnapshot.source, null);
-assert.equal(emptySnapshot.result, null);
-assert.equal(emptySnapshot.plan, null);
-assert.equal(emptySnapshot.domSnapshot, null);
-assert.equal(emptySnapshot.html, '');
-assert.equal(emptySnapshot.css, '');
-assert.deepEqual(emptySnapshot.metrics, {
-  nodeCount: 0,
-  classCount: 0,
-  attrCount: 0,
-  styleCount: 0,
-  cssVariableCount: 0,
-});
-
-const plan: MaterialEmissionPlan = {
-  mode: 'export',
-  host: { tag: 'button', classNames: ['cd-button'], children: [{ text: 'Launch' }] },
-  layers: [{
-    id: 'edge',
-    label: 'Edge',
-    active: true,
-    reason: 'edge enabled',
-    emission: {
-      classNames: ['cd-surface-edge'],
-      attrs: { 'data-emission': true },
-      style: { '--edge-opacity': 0.8 },
-    },
-  }],
-};
-
-const snapshot = mainMaterialEmissionExportSnapshot({
-  kind: 'feed-button',
-  plan,
-  html: '<button>Launch</button>',
-  css: '.cd-button { color: white; }',
-  metrics: {
-    nodeCount: 2,
-    classCount: 2,
-    attrCount: 1,
-    styleCount: 1,
-    cssVariableCount: 1,
-  },
-});
-
-assert.equal(snapshot.source, 'fallback-plan');
-assert.equal(snapshot.plan, plan);
-assert.equal(snapshot.html, '<button>Launch</button>');
-assert.equal(snapshot.css, '.cd-button { color: white; }');
-assert.equal(snapshot.domSnapshot?.tag, 'button');
-assert.equal(snapshot.domSnapshot?.children.length, 2);
-assert.deepEqual(snapshot.metrics, {
-  nodeCount: 2,
-  classCount: 2,
-  attrCount: 1,
-  styleCount: 1,
-  cssVariableCount: 1,
-});
-
 const editorDomSnapshot: DomAuditNode = {
   path: '0',
   tag: 'div',
@@ -85,13 +24,15 @@ const editorDomSnapshot: DomAuditNode = {
   styles: [],
   children: [],
 };
+const exportHtml = '<button>Launch</button>';
+const exportCss = '.cd-button { color: white; }';
 
 assert.equal(
   activeEmissionPayload({
     tab: 'editor-dom',
     editorDomSnapshot,
-    exportHtml: snapshot.html,
-    exportCss: snapshot.css,
+    exportHtml,
+    exportCss,
     frameCssLines: [['--feed-node-gap', '4px']],
   }),
   '<div>Editor</div>',
@@ -100,28 +41,28 @@ assert.equal(
   activeEmissionPayload({
     tab: 'export-dom',
     editorDomSnapshot,
-    exportHtml: snapshot.html,
-    exportCss: snapshot.css,
+    exportHtml,
+    exportCss,
     frameCssLines: [['--feed-node-gap', '4px']],
   }),
-  snapshot.html,
+  exportHtml,
 );
 assert.equal(
   activeEmissionPayload({
     tab: 'export-css',
     editorDomSnapshot,
-    exportHtml: snapshot.html,
-    exportCss: snapshot.css,
+    exportHtml,
+    exportCss,
     frameCssLines: [['--feed-node-gap', '4px']],
   }),
-  snapshot.css,
+  exportCss,
 );
 assert.equal(
   activeEmissionPayload({
     tab: 'frame-css',
     editorDomSnapshot,
-    exportHtml: snapshot.html,
-    exportCss: snapshot.css,
+    exportHtml,
+    exportCss,
     frameCssLines: [['--feed-node-gap', '4px']],
   }),
   '--feed-node-gap: 4px;',

@@ -115,6 +115,14 @@ authoring JSON
 - [x] Guarded live export group use with `domExportGroupContainsTargetId()`, so
   stale DOM snapshots after selection changes cannot be treated as current live
   export payloads.
+- [x] Removed fallback planner generation from the normal `/material-main`
+  inspector refresh/copy path. Export DOM/CSS in the screen now emits only from
+  the current live DOM export group; the emission planner remains available as
+  an explicit compatibility/offline adapter through its own module/tests.
+- [x] Split fallback emission snapshot creation into
+  `components/screens/main-material/mainMaterialCompatibilityExport.ts`, so
+  `mainMaterialEmissionOutput.ts` no longer imports planner concepts and remains
+  focused on inspector tab/status/payload behavior.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -404,6 +412,7 @@ authoring JSON
 - PASS `npx tsx components/screens/main-material/mainMaterialFeedText.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionController.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts`
+- PASS `npx tsx components/screens/main-material/mainMaterialCompatibilityExport.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPreviewStateAdapter.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPresetModel.test.ts`
 - PASS `npx tsx components/screens/main-material/mainMaterialPartStateModel.test.ts`
@@ -469,6 +478,9 @@ authoring JSON
 - PASS in-app browser live export group smoke test: `/main-material` mounted 60
   material targets; Top Bar and the first feed card roots each contained child
   material target ids, matching the live group containment guard.
+- PASS in-app browser live-only export smoke test: `/main-material` mounted 60
+  material targets; Top Bar's live export group contained its own target id plus
+  child target ids after fallback planner removal from the screen path.
 
 ## Current Architecture State
 
@@ -481,12 +493,13 @@ authoring JSON
   authoring controls, frame registration, rich text, chrome renderer, feed
   carousel renderer, phone preview controller, persisted preview JSON
   parser/serializer, emission inspector view, source-tagged selected emission
-  export output/controller contracts, live DOM export serialization, live DOM
-  export groups with current-target containment checks, first-class
-  export-group descriptors, descriptor coverage tests, CSS probe target lookup,
-  chrome/workbench export-target construction, preview-state compatibility
-  adapter, material preset/part-state recipe models, interaction selection
-  helpers, and workbench model are now extracted from the giant screen.
+  export output/controller contracts, live-only screen export serialization,
+  compatibility-only fallback export snapshots, live DOM export groups with
+  current-target containment checks, first-class export-group descriptors,
+  descriptor coverage tests, CSS probe target lookup, chrome/workbench
+  export-target construction, preview-state compatibility adapter, material
+  preset/part-state recipe models, interaction selection helpers, and workbench
+  model are now extracted from the giant screen.
 
 ## Next Bottleneck
 
@@ -500,13 +513,12 @@ plus chrome targets now declare their export root through explicit descriptors.
 Chrome/workbench fallback export targets are built through a shared pure factory
 instead of the giant screen, selected CSS probe lookup now follows the
 descriptor root through a shared resolver, fallback planner payloads are
-source-tagged instead of being treated as the normal path, and descriptor
-coverage is now tested for representative feed plus chrome workbench targets.
-The next bottleneck is deleting the fallback planner from the normal inspector
-refresh path while retaining it only as an explicit offline/export compatibility
-adapter. After that, make CMS editing fuller: show field type/value previews,
-make bound vs static content explicit, and route CMS/content documents through
-the editor output registry instead of treating feed story values as only
+source-tagged, descriptor coverage is tested for representative feed plus
+chrome workbench targets, the normal screen inspector path is now live-DOM only,
+and fallback snapshot creation has been re-homed into a compatibility export
+module. The next bottleneck is CMS/content convergence: show field type/value
+previews, make bound vs static content explicit, and route CMS/content documents
+through the editor output registry instead of treating feed story values as only
 fake-server textarea state.
 
 The first tangible test bed now exists in

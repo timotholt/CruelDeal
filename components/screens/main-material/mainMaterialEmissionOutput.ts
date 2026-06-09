@@ -1,21 +1,7 @@
-import type {
-  EmissionMetrics,
-  MaterialEmissionPlan,
-} from '../../ui/material-lab';
 import {
   domAuditNodeToHtml,
-  emptyEmissionMetrics,
-  exportPlanToDomAuditNode,
   type DomAuditNode,
 } from './mainMaterialDomAudit';
-import {
-  createMainMaterialExportPlan,
-  type MainMaterialExportFeedCardType,
-  type MainMaterialExportFeedStory,
-  type MainMaterialExportNode,
-  type MainMaterialExportPlannerContext,
-  type MainMaterialExportResult,
-} from './mainMaterialExportPlanner';
 
 export type EmissionInspectorTab = 'frame-css' | 'editor-dom' | 'export-dom' | 'export-css';
 export type MainMaterialExportPayloadSource = 'live-dom' | 'fallback-plan';
@@ -28,40 +14,6 @@ export const tabLabel = (tab: EmissionInspectorTab) => ({
 }[tab]);
 
 export const cssDeclarationText = (key: string, value: string | number) => `${key}: ${value};`;
-
-export interface MainMaterialEmissionExportSnapshot {
-  source: 'fallback-plan' | null;
-  result: MainMaterialExportResult | null;
-  plan: MaterialEmissionPlan | null;
-  domSnapshot: DomAuditNode | null;
-  html: string;
-  css: string;
-  metrics: EmissionMetrics;
-}
-
-export const mainMaterialEmissionExportSnapshot = (
-  result: MainMaterialExportResult | null,
-): MainMaterialEmissionExportSnapshot => {
-  const plan = result?.plan ?? null;
-  return {
-    source: result ? 'fallback-plan' : null,
-    result,
-    plan,
-    domSnapshot: exportPlanToDomAuditNode(plan),
-    html: result?.html ?? '',
-    css: result?.css ?? '',
-    metrics: result?.metrics ?? emptyEmissionMetrics(),
-  };
-};
-
-export const createMainMaterialEmissionExport = <
-  TNode extends MainMaterialExportNode,
-  TCardType extends MainMaterialExportFeedCardType<TNode>,
-  TStory extends MainMaterialExportFeedStory,
->(
-  targetId: string,
-  context: MainMaterialExportPlannerContext<TNode, TCardType, TStory>,
-) => mainMaterialEmissionExportSnapshot(createMainMaterialExportPlan(targetId, context));
 
 export interface MainMaterialEmissionPayloadContext {
   tab: EmissionInspectorTab;
