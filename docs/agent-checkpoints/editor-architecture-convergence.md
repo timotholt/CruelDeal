@@ -558,6 +558,55 @@ authoring JSON
   `mainMaterialFeedModel.ts` and the persisted `feedStories` images in the `.v23` localStorage
   (which override code defaults on load). Temporary until the editor is done.
 
+- [x] Minimal-surface rewrite, first working slice (steps 1-5 of
+  `docs/surface-emitter-rewrite-spec.md`): the 10+-span surface now renders as 3 elements.
+  Step 1: per-effect CSS extraction (`docs/surface-emitter-css-extraction.md`) — every slider's
+  emitted CSS documented from `ui-material-lab.css:916-1584`, plus the fixed-slot trick (blend
+  modes are positional per background layer, so the fill is a FIXED 9-slot stack whose inactive
+  slots resolve to `none`). Step 2: `src/styles/material-minimal.css` — static template for
+  `.cdm__fill` (base/texture/tint/gradient/glass stack + glass shine/sheen pseudos),
+  `.cdm__light` (border + edge/corner strips + glow ::before + emission ::after), conditional
+  `.cdm__wear` (own mask), neutral `.cdm__content` (button label typography opt-in via
+  `--label`). Texture per-layer opacity replaced by a color-mix dilution veil (identical
+  composite math). Step 3: `minimalSurfaceCss.ts` — active-effects-only emitter; gradient
+  definitions reference the EXISTING var system so live slider tweaks propagate. Step 4:
+  `MinimalSurface.tsx` — root keeps the `cd-surface` class, so vars, shape/bevel, state var-swap
+  machinery, focus/disabled all apply unchanged; zero state-system duplication. Step 5:
+  `/dev/minimal-surface` parity harness (old vs new, same resolved SurfaceOptions, 8 recipes) —
+  worst case CTA-active drops 18 -> 6 DOM nodes; difference-overlay test (clone over old,
+  mix-blend-mode:difference) shows near-black body = pixel-parity on fill/texture/edges; first
+  three recipe rows visually indistinguishable. Remaining (next slices): faint highlight-band
+  edge delta on CTA, interactive <button> root variant, the static-CSS-text EXPORT emitter,
+  corner-arc rounding for glow corners, then consumer swap.
+
+- [x] Minimal-surface permutation gallery (JSON-driven isolation matrix): added
+  `components/screens/minimal-surface/minimalSurfacePermutations.ts` — 69 specs across 12 groups
+  (base/shape/texture/tint/gradient/glass/frame/lighting/wear/content/states/kitchen-sink), each
+  with an `expect` description; the same JSON drives the renderers AND the inspector panel.
+  Rebuilt `/dev/minimal-surface` as the gallery: group select, compare-old toggle, per-cell
+  difference mode (mix-blend difference, black = identical), sticky JSON inspector, tooltips,
+  scrollable, and a `window.__permAudit()` self-debug hook returning per-cell render facts.
+  BUGS FOUND AND FIXED via the gallery:
+  1. SurfaceOptions defaults `texture` to 'road012a' when unset — isolation specs must set
+     `texture:'none'` explicitly (spec helper now injects it). Was making base cells render the
+     default road texture on BOTH renderers.
+  2. `hasEdgeWearLayer` requires `edgeWearTexture` set — wear specs now pass
+     'edge-bw-noise-dense'.
+  3. NEW-renderer content host was missing the canonical `.cd-surface__content` styling
+     (color rgb(--content-rgb/--content-alpha), text-align --content-align, text-shadow
+     emboss+glow, --content-x/y offset) — now an exact copy; computed color/align/shadow are
+     string-identical to the old renderer.
+  4. CSS COMMENT BUG killed the whole `.cdm__light` rule: the comment text "--edge-*/--corner-*"
+     contains `*/` which terminates the comment early; CSS error recovery then swallowed the
+     entire following rule (border/edge/corner strips never painted). Diagnosed by bisecting
+     live `document.styleSheets` vs the Vite-served text. Lesson: never write `*/` inside CSS
+     comment prose.
+  Verified after fixes: 69/69 cells render, wear renders (5 cells), light rule alive (1px border
+  at the spec's exact 70% opacity + 12 strips), bevel-border cell: NEW renderer draws the bevel
+  cut + crisp border correctly while the OLD span renderer shows neither (user-confirmed old-side
+  bug — the new renderer is the reference for bevel+border). tex-100 verified semantically
+  identical on both sides (no base + opacity 1).
+
 ## Verification Evidence
 
 - PASS `npx tsx components/screens/main-material/materialTargetIds.test.ts`

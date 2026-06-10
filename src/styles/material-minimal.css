@@ -1,0 +1,308 @@
+/* Minimal material surface — 3-element structure (see docs/surface-emitter-rewrite-spec.md).
+   Root keeps the `cd-surface` class so it inherits the var system, shape/bevel, state
+   var-swap machinery, focus/disabled, and brightness filters from ui-material-lab.css.
+   This file only defines the three children:
+     .cdm__fill   — base color + texture + tint + gradient + glass base (one fixed 9-slot
+                    background stack; inactive slots resolve to `none`), glass shine/sheen pseudos
+     .cdm__light  — border + edge/corner highlight strips, glow washes (::before),
+                    emission (::after)
+     .cdm__content — content host
+   plus the conditional .cdm__wear span (edge wear needs its own mask). */
+
+.cd-surface--minimal > .cdm__fill,
+.cd-surface--minimal > .cdm__light,
+.cd-surface--minimal > .cdm__wear {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ---- child 0: fill (paint order top -> bottom within the stack) ----
+   1 glass-a | 2 glass-b | 3 glass-c | 4 grad-a | 5 grad-b | 6 tint | 7 texture-veil
+   | 8 texture | 9 base color. Slots are emitter-provided vars so only active effects paint;
+   the blend list is positional, with slot 6 carrying the tint recolor blend. */
+.cd-surface--minimal > .cdm__fill {
+  z-index: 0;
+  background-image:
+    var(--mf-glass-a, none),
+    var(--mf-glass-b, none),
+    var(--mf-glass-c, none),
+    var(--mf-grad-a, none),
+    var(--mf-grad-b, none),
+    var(--mf-tint, none),
+    var(--mf-veil, none),
+    var(--mf-texture, none),
+    var(--mf-base, none);
+  background-blend-mode:
+    normal, normal, normal,
+    normal, normal,
+    var(--mf-tint-blend, normal),
+    normal, normal, normal;
+  background-size:
+    auto, auto, auto,
+    auto, auto,
+    auto, auto,
+    var(--texture-scale, auto) var(--texture-scale, auto),
+    auto;
+  background-position: center;
+  background-repeat: repeat;
+  filter: brightness(var(--surface-layer-brightness, 1));
+}
+
+/* Glass blur: backdrop-filter must live on a layer above the backdrop; the root-level
+   .cd-surface--glass-blur rule already blurs, but the fill carries it too so the blur
+   sits under the fill's own glass gradients exactly like the old __glass span. */
+.cd-surface--minimal.cd-surface--glass-blur > .cdm__fill {
+  backdrop-filter: blur(var(--glass-blur, 0));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0));
+}
+
+/* Glass shine + sheen — copied from .cd-surface--glass-shine > .cd-surface__glass::before/::after */
+.cd-surface--minimal.cd-surface--glass-shine > .cdm__fill::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.78)) 7%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.96)) 50%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.78)) 93%,
+      transparent 100%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat,
+    linear-gradient(180deg,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.32)),
+      transparent 72%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0.94;
+}
+
+.cd-surface--minimal.cd-surface--glass-shine > .cdm__fill::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.54)) 16% 84%, transparent) center var(--glass-highlight-y) / var(--glass-highlight-width) 1px no-repeat;
+  opacity: 0.88;
+}
+
+.cd-surface--minimal.cd-surface--glass-shine.cd-surface--sheen-off > .cdm__fill::before {
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.48)) 8%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.62)) 50%,
+      rgb(255 255 255 / calc(var(--glass-reflection-alpha, 1) * 0.48)) 92%,
+      transparent 100%) center var(--glass-highlight-y) / var(--glass-highlight-width) var(--glass-highlight-height) no-repeat;
+  opacity: 0.72;
+}
+
+.cd-surface--minimal.cd-surface--glass-shine.cd-surface--sheen-off > .cdm__fill::after {
+  opacity: 0.6;
+}
+
+/* ---- child 1: frame lighting ----
+   Element: real per-side border (rect AND bevel; bevel clips via inherited clip-path /
+   corner-shape — see extraction doc holdout #5) + 4 edge strips + 8 corner strips as a
+   fixed background stack (the edge and corner vars default transparent, so inactive
+   lighting paints nothing) + border-lit inset shadows + the shared corner-glow filter. */
+.cd-surface--minimal > .cdm__light {
+  z-index: 1;
+  border-style: solid;
+  border-width: var(--ml-border-width, 0);
+  border-color:
+    var(--border-top)
+    var(--border-right)
+    var(--border-bottom)
+    var(--border-left);
+  background-image:
+    linear-gradient(var(--edge-top), var(--edge-top)),
+    linear-gradient(var(--edge-right), var(--edge-right)),
+    linear-gradient(var(--edge-bottom), var(--edge-bottom)),
+    linear-gradient(var(--edge-left), var(--edge-left)),
+    linear-gradient(var(--corner-tl), var(--corner-tl)),
+    linear-gradient(var(--corner-tl), var(--corner-tl)),
+    linear-gradient(var(--corner-tr), var(--corner-tr)),
+    linear-gradient(var(--corner-tr), var(--corner-tr)),
+    linear-gradient(var(--corner-bl), var(--corner-bl)),
+    linear-gradient(var(--corner-bl), var(--corner-bl)),
+    linear-gradient(var(--corner-br), var(--corner-br)),
+    linear-gradient(var(--corner-br), var(--corner-br));
+  background-position:
+    top, right, bottom, left,
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  background-size:
+    100% 1px, 1px 100%, 100% 1px, 1px 100%,
+    var(--corner-size) 1px, 1px var(--corner-size),
+    var(--corner-size) 1px, 1px var(--corner-size),
+    var(--corner-size) 1px, 1px var(--corner-size),
+    var(--corner-size) 1px, 1px var(--corner-size);
+  background-repeat: no-repeat;
+  filter:
+    drop-shadow(0 0 var(--glow-core) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-mid) var(--corner-shadow))
+    drop-shadow(0 0 var(--glow-wide) var(--corner-shadow));
+}
+
+.cd-surface--minimal.cd-surface--border-lit > .cdm__light {
+  box-shadow:
+    inset 0 1px 0 var(--border-top-shadow),
+    inset 0 -1px 0 var(--border-bottom-shadow);
+}
+
+@supports not (corner-shape: bevel) {
+  .cd-surface--minimal.cd-surface--bevel > .cdm__light {
+    clip-path: inherit;
+  }
+}
+
+/* Glow washes — copied from .cd-surface__glow; vars default transparent. */
+.cd-surface--minimal > .cdm__light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, var(--glow-top-wash), transparent) top / 100% var(--glow-spread) no-repeat,
+    linear-gradient(270deg, var(--glow-right-wash), transparent) right / var(--glow-spread) 100% no-repeat,
+    linear-gradient(0deg, var(--glow-bottom-wash), transparent) bottom / 100% var(--glow-spread) no-repeat,
+    linear-gradient(90deg, var(--glow-left-wash), transparent) left / var(--glow-spread) 100% no-repeat,
+    radial-gradient(circle at left top, var(--glow-tl-wash), transparent 68%) left top / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at right top, var(--glow-tr-wash), transparent 68%) right top / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at right bottom, var(--glow-br-wash), transparent 68%) right bottom / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat,
+    radial-gradient(circle at left bottom, var(--glow-bl-wash), transparent 68%) left bottom / var(--glow-corner-spread) var(--glow-corner-spread) no-repeat;
+  mix-blend-mode: screen;
+}
+
+/* Emission — copied from .cd-surface__emission (+ per-mode backgrounds below). */
+.cd-surface--minimal > .cdm__light::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: var(--emission-alpha, 0);
+  mix-blend-mode: screen;
+  filter:
+    drop-shadow(0 0 4px rgb(var(--emission-rgb) / 0.8))
+    drop-shadow(0 0 14px rgb(var(--emission-rgb) / 0.55))
+    drop-shadow(0 0 28px rgb(var(--emission-rgb) / 0.34));
+}
+
+.cd-surface--minimal[data-emission='line'][data-emission-edge='bottom'] > .cdm__light::after {
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--emission-rgb) / 0.22) 12%,
+      rgb(var(--emission-rgb) / 0.98) 50%,
+      rgb(var(--emission-rgb) / 0.22) 88%,
+      transparent
+    )
+    center bottom / var(--emission-length) var(--emission-thickness) no-repeat;
+}
+
+.cd-surface--minimal[data-emission='center-blip'][data-emission-edge='bottom'] > .cdm__light::after {
+  background:
+    radial-gradient(
+      ellipse at center bottom,
+      rgb(var(--emission-rgb) / 0.95) 0%,
+      rgb(var(--emission-rgb) / 0.52) 34%,
+      transparent 74%
+    )
+    center bottom / var(--emission-blip-size) calc(var(--emission-blip-size) * 0.58) no-repeat;
+}
+
+.cd-surface--minimal[data-emission='rail-and-blip'][data-emission-edge='bottom'] > .cdm__light::after {
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--emission-rgb) / 0.18) 12%,
+      rgb(var(--emission-rgb) / 0.98) 50%,
+      rgb(var(--emission-rgb) / 0.18) 88%,
+      transparent
+    )
+    center bottom / var(--emission-length) var(--emission-thickness) no-repeat,
+    radial-gradient(
+      ellipse at center bottom,
+      rgb(var(--emission-rgb) / 0.95) 0%,
+      rgb(var(--emission-rgb) / 0.52) 32%,
+      transparent 72%
+    )
+    center bottom / var(--emission-blip-size) calc(var(--emission-blip-size) * 0.58) no-repeat;
+}
+
+/* ---- conditional: edge wear (own element — needs its own mask) ----
+   Copied from .cd-surface__edge-wear / ::before. Rendered only when active. */
+.cd-surface--minimal > .cdm__wear {
+  z-index: 1;
+  padding: var(--edge-wear-width);
+  overflow: hidden;
+  filter: brightness(var(--surface-layer-brightness, 1));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.cd-surface--minimal.cd-surface--edge-wear-above > .cdm__wear {
+  z-index: 3;
+}
+
+.cd-surface--minimal > .cdm__wear::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--edge-wear-width) * -1);
+  background: rgb(4 5 5 / var(--edge-wear-alpha));
+  -webkit-mask-image: var(--edge-wear-image);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: repeat;
+  -webkit-mask-size: var(--edge-wear-scale) var(--edge-wear-scale);
+  mask-image: var(--edge-wear-image);
+  mask-mode: luminance;
+  mask-position: center;
+  mask-repeat: repeat;
+  mask-size: var(--edge-wear-scale) var(--edge-wear-scale);
+  filter: contrast(2.8);
+}
+
+/* ---- child 2: content host ----
+   Exact copy of the canonical .cd-surface__content rule (color/align/emboss/offset come
+   from the same content vars), so panel content renders identically to the old renderer.
+   The button variant (full label typography) is opt-in via --label. */
+.cd-surface--minimal > .cdm__content {
+  position: relative;
+  left: var(--content-x);
+  top: var(--content-y);
+  z-index: 2;
+  font-family: var(--content-font-family);
+  color: rgb(var(--content-rgb) / var(--content-alpha));
+  text-align: var(--content-align);
+  text-shadow: var(--content-shadow), var(--content-glow-shadow);
+}
+
+.cd-surface--minimal > .cdm__content--label {
+  display: flex;
+  flex-direction: column;
+  align-items: var(--content-align, center);
+  justify-content: var(--content-justify, center);
+  width: 100%;
+  height: 100%;
+  transform: translate(var(--content-x, 0px), var(--content-y, 0px));
+  font-family: var(--content-font-family, inherit);
+  font-size: var(--content-size, 0.8125rem);
+  font-weight: var(--content-font-weight, 900);
+  font-style: var(--content-font-style, italic);
+  text-transform: var(--content-text-transform, uppercase);
+  letter-spacing: var(--content-letter-spacing, 0em);
+  color: var(--content-color, #f4eee0);
+  text-shadow: var(--content-shadow), var(--content-glow-shadow);
+}

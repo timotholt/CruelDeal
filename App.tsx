@@ -13,6 +13,7 @@ import { LoginMaterialPreviewScreen } from './components/screens/LoginMaterialPr
 import { MainMaterialPreviewScreen } from './components/screens/MainMaterialPreviewScreen';
 import { UiNodePreviewScreen } from './components/screens/UiNodePreviewScreen';
 import { CanonicalCardProofScreen } from './components/screens/CanonicalCardProofScreen';
+import { MinimalSurfaceProofScreen } from './components/screens/MinimalSurfaceProofScreen';
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 import { ShinyAuthoringScreen } from './components/authoring/shiny/ShinyAuthoringScreen';
@@ -119,6 +120,7 @@ export default function App() {
   const isDevShinyPath = () => window.location.pathname.toLowerCase().startsWith('/dev/shiny');
   const isDevIconsPath = () => window.location.pathname.toLowerCase().startsWith('/dev/icons');
   const isDevCanonicalCardPath = () => window.location.pathname.toLowerCase().startsWith('/dev/canonical-card');
+  const isDevMinimalSurfacePath = () => window.location.pathname.toLowerCase().startsWith('/dev/minimal-surface');
   const isIconsPath = () => window.location.pathname.toLowerCase().startsWith('/icons');
   const isUiTestPath = () => window.location.pathname.toLowerCase().startsWith('/uitest');
   const isLoginMaterialPath = () => window.location.pathname.toLowerCase().startsWith('/login-material');
@@ -225,7 +227,11 @@ export default function App() {
             )}>
               <Show when={isDevUiNodePath()} fallback={(
                 <Show when={isDevShinyPath() || isDevIconsPath()} fallback={(
-                  <Show when={isDevCanonicalCardPath()} fallback={<DevIndexScreen />}>
+                  <Show when={isDevCanonicalCardPath()} fallback={(
+                    <Show when={isDevMinimalSurfacePath()} fallback={<DevIndexScreen />}>
+                      <MinimalSurfaceProofScreen />
+                    </Show>
+                  )}>
                     <CanonicalCardProofScreen />
                   </Show>
                 )}>
