@@ -116,6 +116,16 @@
    lighting paints nothing) + border-lit inset shadows + the shared corner-glow filter. */
 .cd-surface--minimal > .cdm__light {
   z-index: 1;
+  /* EDGE-INSET GOTCHA (read before adding any effect to this element):
+     .cdm__light carries the real per-side border. Anything painted on it is clipped to
+     the PADDING box, so it lands --ml-border-width (1px when bordered) INSIDE the true
+     edge unless compensated. Each effect type compensates differently:
+       - backgrounds (edge/corner strips) -> background-origin: border-box (below)
+       - abs pseudos (glow ::before, emission ::after) -> inset: calc(-1 * --cdm-edge-inset)
+     Use --cdm-edge-inset for the pseudo case so the compensation is named, not magic. The
+     border-lit box-shadow is intentionally NOT compensated (its inset models the bevel face).
+     The real fix is decoupling the border onto its own layer; until then, respect this. */
+  --cdm-edge-inset: var(--ml-border-width, 0px);
   border-style: solid;
   border-width: var(--ml-border-width, 0);
   border-color:
@@ -185,8 +195,8 @@
      inset:0 only covers the padding box and the soft glow dies 1px short of the edge,
      exposing the dim border as a darker outer rim. Pulling out by the border width lets
      the glow screen over the border too (matching the old separate-glow-layer behaviour).
-     0 when no border, so unbordered surfaces are unchanged. */
-  inset: calc(-1 * var(--ml-border-width, 0px));
+     0 when no border, so unbordered surfaces are unchanged. See EDGE-INSET GOTCHA above. */
+  inset: calc(-1 * var(--cdm-edge-inset, 0px));
   z-index: -1;
   border-radius: inherit;
   background:
@@ -205,8 +215,9 @@
 .cd-surface--minimal > .cdm__light::after {
   content: "";
   position: absolute;
-  /* Same as ::before — cover the border ring so emission reaches the true edge. */
-  inset: calc(-1 * var(--ml-border-width, 0px));
+  /* Same as ::before — cover the border ring so emission reaches the true edge.
+     See EDGE-INSET GOTCHA above. */
+  inset: calc(-1 * var(--cdm-edge-inset, 0px));
   border-radius: inherit;
   opacity: var(--emission-alpha, 0);
   mix-blend-mode: screen;
