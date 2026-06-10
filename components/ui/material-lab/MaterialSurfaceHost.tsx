@@ -26,6 +26,7 @@ export interface MaterialSurfaceHostButtonProps extends MaterialSurfaceHostBaseP
 export interface MaterialSurfaceHostPanelProps extends MaterialSurfaceHostBaseProps {
   kind: 'panel';
   padded?: boolean;
+  rootProps?: JSX.HTMLAttributes<HTMLElement>;
 }
 
 export interface MaterialSurfaceHostBareProps {
@@ -64,6 +65,7 @@ export const MaterialSurfaceHost = (props: MaterialSurfaceHostProps) => {
         {...props.surfaceProps}
         padded={props.padded ?? false}
         class={props.class}
+        rootProps={props.rootProps}
       >
         {resolvedChildren()}
       </MaterialPanel>

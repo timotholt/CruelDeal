@@ -62,7 +62,7 @@ export const MaterialNodeRenderer = (props: {
           />
         </Show>
         <Show when={showContent()}>
-          <MaterialNodeContentRenderer node={props.node} context={props.context} />
+          <MaterialNodeContentRenderer node={props.node} context={props.context} fill />
         </Show>
         <For each={props.node.children || []}>
           {(child) => <MaterialNodeRenderer node={child} context={props.context} />}

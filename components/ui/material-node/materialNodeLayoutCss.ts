@@ -41,11 +41,23 @@ export const materialNodeLayoutCss = (
     : layout.widthMode === 'fill'
       ? '100%'
       : layout.width;
-  const resolveHeight = layout.heightMode === 'hug'
-    ? 'auto'
-    : layout.heightMode === 'fill'
-      ? '100%'
-      : layout.height;
+  // For an IN-FLOW node (a flex item of its parent), the main-axis size mode maps to
+  // standard flexbox: `fill` grows to share remaining space, `hug`/`fixed` take natural
+  // size. Column main-axis is assumed (the common card case). For an ABSOLUTE node the
+  // height is a box dimension instead.
+  const inFlow = !isAbsolute;
+  const fillMain = inFlow && layout.heightMode === 'fill';
+  if (inFlow && layout.heightMode) {
+    base.flex = fillMain ? '1 1 0' : '0 0 auto';
+    if (fillMain) base['min-height'] = '0';
+  }
+  const resolveHeight = fillMain
+    ? undefined // flex controls the main-axis size
+    : layout.heightMode === 'hug'
+      ? 'auto'
+      : layout.heightMode === 'fill'
+        ? '100%'
+        : layout.height;
 
   const explicit: Record<string, string | undefined> = {
     // display/flex-direction already handled by `base` for the absolute case.
@@ -55,6 +67,7 @@ export const materialNodeLayoutCss = (
     'justify-content': layout.justify,
     gap: layout.gap === undefined ? undefined : `${layout.gap}px`,
     padding: layout.padding === undefined ? undefined : `${layout.padding}px`,
+    overflow: layout.overflow,
     width: resolveWidth,
     height: resolveHeight,
     'min-width': layout.minWidth,

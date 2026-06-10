@@ -265,6 +265,7 @@ export const MaterialPanel = (props: MaterialPanelProps) => {
     'underGlass',
     'padded',
     'compact',
+    'rootProps',
     ...surfaceOptionKeys,
   ]);
 

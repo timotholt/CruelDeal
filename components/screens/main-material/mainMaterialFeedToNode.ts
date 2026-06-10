@@ -29,12 +29,19 @@ export const feedCardNodeToMaterialNode = (
   // absolute nodes -> `display:'absolute'` (compiler adds position:absolute + flex base),
   // in-flow nodes -> `display:'flex'`. The baked style carries offsets/size/flex props.
   const display = resolveLayoutSelfPosition(node.layout) === 'absolute' ? 'absolute' : 'flex';
+  // NOTE: do NOT clip the container frame — its rounded surface (an absolute background
+  // layer with beveled corners) would get cut to the frame's square box. Overflow
+  // containment lives on the fill content span instead (`MaterialNodeContentRenderer`
+  // `fill`), so long text clips without clipping the surface corners.
   const recipe: MaterialNodeRecipe = {
     id: node.id,
     label: node.label,
     kind: node.type, // container | text | button are all valid MaterialNodeKind
     surface: feedNodeSurfaceRecipe(cardType, node),
-    layout: { display, style: feedNodeLayoutCss(node.layout) },
+    layout: {
+      display,
+      style: feedNodeLayoutCss(node.layout),
+    },
   };
   if (hasContent) {
     recipe.content = {

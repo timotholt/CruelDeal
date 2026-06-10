@@ -535,6 +535,29 @@ authoring JSON
   fit. Compiler/render/bridge/lane tests green, build clean. Structural layout closed; re-swap (with
   enrichment) is the next slice.
 
+- [x] Phase 2c layout-4 (re-swap) + flow->standard-CSS: re-applied the carousel swap on the
+  fixed canonical renderer. `mainMaterialFeedCarousel.tsx` renders card content through
+  `MaterialNodeRenderer` (no `FeedCardTreeNode`), with the render context (surface/button props,
+  preview state, target ids, selection + frame classes, binding) + content enrichment (fit/style/
+  rich-text) + bridged DOM registration. The two-layer container now uses STANDARD CSS flow: the
+  frame is a flex box with `overflow:hidden` (replacing the `.main-material-card-node-flow-stack`
+  wrapper), in-flow size modes map to flexbox (`fill`->`flex:1 1 0`+`min-height:0`,
+  `hug`/`fixed`->`flex:0 0 auto`, via `materialNodeLayoutCss` + `MaterialNodeLayout.overflow`/
+  size modes), and a container's bound content gets `flex:1;min-height:0;overflow:hidden`
+  (`MaterialNodeContentRenderer` `fill` prop) so it shares the column with child nodes. VERIFIED BY
+  LIVE GEOMETRY on `/main-material`: all 4 card_type_01 nodes positioned+sized correctly in the
+  272x324 stage (badge x139/y32, mission-briefing x128/y94/h178, contract-cta x137/y260 visible,
+  sector-mark x19/y36); contract-cta now visible 2/2 (was hidden/swallowed before). No flow-stack
+  in the canonical card. compiler/render tests + build green.
+- KNOWN REMAINING: bound rich text (`textRender:'rich'`) clips instead of autoscaling — only
+  `rich-fit`/`fit` modes run the GameText fit. Routing flow-rich bound text through `rich-fit`
+  (which exports as a `transform:scale`) is the follow-up; it's a text/material concern, not flow.
+- [note] Swapped the baked-in feed background image (`/art/login/main-menu-contract-reference.png`,
+  which had mockup UI baked in and was visually masking the canonical render) to a temporary clean
+  image `/art/login/editor-temp-bg.png` (old file kept). Updated both the code default in
+  `mainMaterialFeedModel.ts` and the persisted `feedStories` images in the `.v23` localStorage
+  (which override code defaults on load). Temporary until the editor is done.
+
 ## Verification Evidence
 
 - PASS `npx tsx components/screens/main-material/materialTargetIds.test.ts`

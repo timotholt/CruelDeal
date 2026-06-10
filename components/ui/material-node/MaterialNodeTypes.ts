@@ -25,6 +25,7 @@ export interface MaterialNodeLayout {
   justify?: 'start' | 'center' | 'end' | 'between' | 'around';
   gap?: number;
   padding?: number;
+  overflow?: 'visible' | 'hidden' | 'clip' | 'auto' | 'scroll';
   width?: string;
   height?: string;
   // Size intent. When set, it resolves width/height in the layout compiler:

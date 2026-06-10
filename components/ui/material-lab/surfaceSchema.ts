@@ -122,6 +122,7 @@ export interface MaterialPanelProps extends SurfaceOptions {
   compact?: boolean;
   class?: string;
   underGlass?: JSX.Element;
+  rootProps?: JSX.HTMLAttributes<HTMLElement>;
   children: JSX.Element;
 }
 
