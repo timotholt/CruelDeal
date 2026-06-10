@@ -11,11 +11,18 @@
 
 .cd-surface--minimal > .cdm__fill,
 .cd-surface--minimal > .cdm__light,
-.cd-surface--minimal > .cdm__wear {
+.cd-surface--minimal > .cdm__wear,
+.cd-surface--minimal > .cdm__corners {
   position: absolute;
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
+}
+
+/* corner-arc highlight layer (rounded accents at lit corners) — above the strips.
+   The 4 child arcs use the existing .cd-surface__corner-arc CSS from ui-material-lab.css. */
+.cd-surface--minimal > .cdm__corners {
+  z-index: 2;
 }
 
 /* ---- child 0: fill (paint order top -> bottom within the stack) ----
@@ -142,6 +149,13 @@
     var(--corner-size) 1px, 1px var(--corner-size),
     var(--corner-size) 1px, 1px var(--corner-size);
   background-repeat: no-repeat;
+  /* Edge/corner strips must register against the OUTER edge, not the padding box.
+     Default padding-box origin insets the 18px corner arms by --ml-border-width (1px
+     when border on), pushing them diagonally inward off the corner so they no longer
+     line up with the borderless .cdm__corners arc layer. The old renderer painted these
+     strips on a separate borderless element (.cd-surface__edge / .cd-surface__corners),
+     so border-box here reproduces that true-corner placement. */
+  background-origin: border-box;
   filter:
     drop-shadow(0 0 var(--glow-core) var(--corner-shadow))
     drop-shadow(0 0 var(--glow-mid) var(--corner-shadow))
@@ -160,11 +174,15 @@
   }
 }
 
-/* Glow washes — copied from .cd-surface__glow; vars default transparent. */
+/* Glow washes — copied from .cd-surface__glow; vars default transparent.
+   z-index:-1 paints the soft glow BENEATH the crisp edge/corner strips (the element
+   background), matching the old layer order (glow under strips), while still screening
+   against the fill below cdm__light. */
 .cd-surface--minimal > .cdm__light::before {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: -1;
   border-radius: inherit;
   background:
     linear-gradient(180deg, var(--glow-top-wash), transparent) top / 100% var(--glow-spread) no-repeat,
@@ -292,15 +310,27 @@
 .cd-surface--minimal > .cdm__content--label {
   display: flex;
   flex-direction: column;
-  align-items: var(--content-align, center);
-  justify-content: var(--content-justify, center);
+  align-items: stretch;
+  /* Vertical centering (main axis of this column flex). Do NOT bind --content-justify
+     here: that var is derived from textAlign (a HORIZONTAL intent) and only meant the
+     horizontal axis in the old row-flex button. On this column flex it would map
+     textAlign:'left' -> flex-start -> TOP, vertically mis-pinning the label. Horizontal
+     alignment is handled by text-align below; vertical offset comes from --content-y. */
+  justify-content: center;
+  text-align: var(--content-align, center);
   width: 100%;
   height: 100%;
-  transform: translate(var(--content-x, 0px), var(--content-y, 0px));
+  /* NO transform here: the base .cdm__content rule already offsets via
+     position:relative + left/top: var(--content-x/y). Re-applying the same offset as a
+     transform double-counted it (e.g. textY:-30 became -60px and pushed the label out
+     the top, clipped by the root's overflow:hidden — the "TL only on the old side" bug). */
   font-family: var(--content-font-family, inherit);
   font-size: var(--content-size, 0.8125rem);
   font-weight: var(--content-font-weight, 900);
   font-style: var(--content-font-style, italic);
+  /* line-height matches the canonical .cd-button__label (1.05); without it the label
+     inherited normal (~1.5), a taller line-box that read as a softer/looser emboss. */
+  line-height: 1.05;
   text-transform: var(--content-text-transform, uppercase);
   letter-spacing: var(--content-letter-spacing, 0em);
   color: var(--content-color, #f4eee0);

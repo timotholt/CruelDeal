@@ -607,6 +607,37 @@ authoring JSON
   bug — the new renderer is the reference for bevel+border). tex-100 verified semantically
   identical on both sides (no base + opacity 1).
 
+- [x] Minimal-surface parity triage (numbered gallery + computed-style probes). Per-cell
+  reference verdict established by MEASUREMENT, not eyeballing:
+  - Lighting (#46/47/48/53): glow CSS vars byte-identical both sides; OLD is the reference for
+    two details — (a) glow washes paint UNDER the crisp edge/corner strips (NEW had them over —
+    FIXED: `cdm__light::before` now `z-index:-1`, glow behind strips, still screening the fill);
+    (b) 4 `corner-arc` rounded highlights (NEW still lacks — the only remaining lighting gap, the
+    faint difference-mode residual). Kitchen-sink (#67-69) inherits the corner-arc gap.
+  - Content/typography (#57-62): NEW is correct — it applies recipe typography (size/weight/
+    transform/color); the OLD PANEL host ignored it (panels aren't buttons). HARNESS BUG fixed:
+    label cells now compare against the OLD BUTTON host, and the button is grid-stretched to fill
+    the cell (was inline-block content-height 46px vs new 110px — the "huge height difference" the
+    user saw was purely the harness not sizing the old button; now both 110px). Real NEW bug #61
+    fixed: label mode used `align-items: var(--content-align)` with a text-align value (`left`) →
+    invalid; switched to `text-align`.
+  - States (#63-66): transform + filter computed-identical both sides; class noise (is-interactive)
+    is the button host auto-adding it — not a renderer difference.
+  Net: the only outstanding renderer gap is glow corner-arcs; everything else is fixed or NEW-is-
+  correct (with #13 bevel+border being an OLD-side bug where NEW is the reference).
+
+- [x] Minimal-surface corner-arcs + bevel matrix: the square-corner clipping on glowing cells
+  (#46/47/48/53/56) was the missing 4 `corner-arc` rounded highlights — the strips alone read as
+  square-cut at the radius tangent. Added a conditional `cdm__corners` layer (rendered only when
+  glow lighting is active) that reuses the existing `.cd-surface__corner-arc--*` CSS + vars, so
+  rounded corners now get the same accented arcs as the old renderer (verified: 4 arcs render,
+  TL gold @0.98, 7px radius). Added an 8-cell `bevel-matrix` permutation group (bevel-per-corner ×
+  border off/on/lit × lit-corners off/on + a rect control) to expose the historically buggy
+  bevel+border+corner combos. KNOWN DEEPER BUG surfaced and confirmed in BOTH renderers: on a
+  BEVELED corner the corner-arc highlight is still drawn ROUNDED (border-radius), not matching the
+  diagonal cut — the old renderer has the same flaw. Fix (make the arc diagonal for beveled
+  corners) is a follow-up. Gallery now 77 cells; build + tests green.
+
 ## Verification Evidence
 
 - PASS `npx tsx components/screens/main-material/materialTargetIds.test.ts`

@@ -77,6 +77,32 @@ export const surfacePermutations: SurfacePermutation[] = [
     material: 'black', shape: 'bevel', bevelCorners: ['top-right'], bevelSize: 18, gradient: 'none', border: 'all', borderEnabled: true, borderOpacity: 70,
   }),
 
+  // ---- bevel matrix (bevel × border × lit corners — historically buggy) -----------
+  spec('bevel-matrix', 'bm-tl-plain', 'TL bevel · no border · no corners', 'Only top-left cut; no border, no lit corners. Clean diagonal cut.', {
+    material: 'gray', shape: 'bevel', bevelCorners: ['top-left'], bevelSize: 18, gradient: 'none', border: 'none',
+  }),
+  spec('bevel-matrix', 'bm-tl-border', 'TL bevel · border ON · no corners', 'Border must follow the diagonal cut on TL and the rounded corners elsewhere.', {
+    material: 'black', shape: 'bevel', bevelCorners: ['top-left'], bevelSize: 18, gradient: 'none', border: 'all', borderEnabled: true, borderOpacity: 80,
+  }),
+  spec('bevel-matrix', 'bm-tl-corners', 'TL bevel · no border · corners LIT', 'KNOWN-HARD: rounded corner-arc highlight vs the diagonal bevel cut on TL.', {
+    material: 'black', shape: 'bevel', bevelCorners: ['top-left'], bevelSize: 18, glow: 'gold', glowStrength: 70, corners: 'all', gradient: 'none', border: 'none', stateful: false,
+  }),
+  spec('bevel-matrix', 'bm-tl-all', 'TL bevel · border ON · corners LIT', 'Everything on a single beveled corner — the historically buggy combo.', {
+    material: 'black', shape: 'bevel', bevelCorners: ['top-left'], bevelSize: 18, border: 'all', borderEnabled: true, borderOpacity: 80, glow: 'gold', glowStrength: 70, corners: 'all', gradient: 'none', stateful: false,
+  }),
+  spec('bevel-matrix', 'bm-tl-lit-border', 'TL bevel · border LIT · corners LIT', 'Border-lit (inset light/dark) + diagonal cut + lit corners.', {
+    material: 'gray', shape: 'bevel', bevelCorners: ['top-left'], bevelSize: 18, border: 'all', borderEnabled: true, borderLit: true, borderOpacity: 70, glow: 'gold', glowStrength: 60, corners: 'all', gradient: 'none', stateful: false,
+  }),
+  spec('bevel-matrix', 'bm-cross-all', 'TL+BR bevel · border · corners LIT', 'Two opposite corners cut, two rounded — border + lit corners on all.', {
+    material: 'black', shape: 'bevel', bevelCorners: ['top-left', 'bottom-right'], bevelSize: 18, border: 'all', borderEnabled: true, borderOpacity: 80, glow: 'cyan', glowStrength: 80, corners: 'all', gradient: 'none', stateful: false,
+  }),
+  spec('bevel-matrix', 'bm-all-all', 'All bevel · border · corners LIT', 'Octagon: every corner cut, border + lit corners everywhere.', {
+    material: 'black', shape: 'bevel', bevelCorners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'], bevelSize: 18, border: 'all', borderEnabled: true, borderOpacity: 80, glow: 'gold', glowStrength: 70, corners: 'all', gradient: 'none', stateful: false,
+  }),
+  spec('bevel-matrix', 'bm-rect-control', 'RECT control · border · corners LIT', 'Plain rounded rect with border + lit corners — the clean reference (no bevel).', {
+    material: 'black', shape: 'rect', border: 'all', borderEnabled: true, borderOpacity: 80, glow: 'gold', glowStrength: 70, corners: 'all', gradient: 'none', stateful: false,
+  }),
+
   // ---- texture ----------------------------------------------------------------
   spec('texture', 'tex-30', 'Stone04 @ 30%', 'Faint stone texture over white base.', {
     material: 'white', texture: 'stone04', textureStrength: 30, gradient: 'none', border: 'none',
@@ -257,14 +283,14 @@ export const surfacePermutations: SurfacePermutation[] = [
   // ---- kitchen sink ------------------------------------------------------------------------
   spec('kitchen-sink', 'sink-light', 'Everything on (light)', 'White+texture+gold tint+gradient+glass shine+blur+border+glow+emission+wear at once.', {
     material: 'white', texture: 'stone04', textureStrength: 60, tint: 'gold', tintStrength: 40,
-    gradient: 'both', sheen: true, glass: true, glassShine: true, glassBlurEnabled: true, glassBlur: 4,
+    gradient: 'both', sheen: true, glass: true, glassShine: true, glassReflectionOpacity: 55, glassBlurEnabled: true, glassBlur: 4,
     border: 'all', borderEnabled: true, borderLit: true, glow: 'gold', glowStrength: 50, corners: 'all',
     edgeHighlight: ['top', 'bottom'], emission: 'rail-and-blip', emissionTone: 'gold', emissionStrength: 80,
     emissionLength: 60, edgeWear: true, edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 45, dropShadow: true, shadowOpacity: 60, stateful: false,
   }, { contentMode: 'label', text: 'Maximal' }),
   spec('kitchen-sink', 'sink-dark', 'Everything on (dark)', 'Black/cyan variant of the maximal combo.', {
     material: 'black', texture: 'blackLeather01', textureStrength: 70, tint: 'cyan', tintStrength: 35,
-    gradient: 'both', sheen: true, glass: true, glassShine: true, glassBlurEnabled: true, glassBlur: 6,
+    gradient: 'both', sheen: true, glass: true, glassShine: true, glassReflectionOpacity: 55, glassBlurEnabled: true, glassBlur: 6,
     border: 'all', borderEnabled: true, glow: 'cyan', glowStrength: 70, corners: 'all',
     edgeHighlight: ['top', 'right', 'bottom', 'left'], emission: 'line', emissionTone: 'cyan',
     emissionStrength: 100, emissionLength: 70, edgeWear: true, edgeWearTexture: 'edge-bw-noise-dense', edgeWearOpacity: 60, stateful: false,
@@ -272,7 +298,7 @@ export const surfacePermutations: SurfacePermutation[] = [
   spec('kitchen-sink', 'sink-bevel', 'Maximal + bevel', 'The full combo on a beveled octagon shape.', {
     material: 'gray', shape: 'bevel', bevelCorners: ['top-left', 'top-right', 'bottom-right', 'bottom-left'], bevelSize: 16,
     texture: 'stone04', textureStrength: 50, tint: 'brass', tintStrength: 45, gradient: 'both',
-    glass: true, glassShine: true, border: 'all', borderEnabled: true, glow: 'brass', glowStrength: 60,
+    glass: true, glassShine: true, glassReflectionOpacity: 55, border: 'all', borderEnabled: true, glow: 'brass', glowStrength: 60,
     corners: 'all', emission: 'center-blip', emissionTone: 'brass', emissionStrength: 90, stateful: false,
   }, { contentMode: 'label', text: 'Forge' }),
 ];

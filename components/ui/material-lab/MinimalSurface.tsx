@@ -46,6 +46,14 @@ export const MinimalSurface = (props: {
       <Show when={parts().wear}>
         <span class="cdm__wear" aria-hidden="true" />
       </Show>
+      <Show when={parts().corners}>
+        <span class="cdm__corners" aria-hidden="true">
+          <span class="cd-surface__corner-arc cd-surface__corner-arc--tl" />
+          <span class="cd-surface__corner-arc cd-surface__corner-arc--tr" />
+          <span class="cd-surface__corner-arc cd-surface__corner-arc--br" />
+          <span class="cd-surface__corner-arc cd-surface__corner-arc--bl" />
+        </span>
+      </Show>
       <div class={`cdm__content ${props.contentMode === 'label' ? 'cdm__content--label' : ''}`}>
         {props.children}
       </div>

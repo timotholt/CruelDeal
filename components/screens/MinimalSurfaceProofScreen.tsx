@@ -18,11 +18,13 @@ const CELL_H = 110;
 
 const SurfaceCell = (props: {
   perm: SurfacePermutation;
+  num: number;
   compare: boolean;
   difference: boolean;
   selected: boolean;
   onSelect: () => void;
 }) => {
+  const numLabel = () => `#${String(props.num).padStart(2, '0')}`;
   const content = () => props.perm.text ?? 'Sample';
   const box: Record<string, string> = {
     width: `${CELL_W}px`, height: `${CELL_H}px`, position: 'relative', 'flex-shrink': '0',
@@ -38,15 +40,33 @@ const SurfaceCell = (props: {
     </MinimalSurface>
   );
 
+  // label-mode cells compare against the old BUTTON host (which applies label typography);
+  // everything else against the panel host. Panels ignore label styling, so comparing a
+  // label cell against a panel would be apples-to-oranges.
   const oldSurface = () => (
-    <MaterialSurfaceHost
-      kind="panel"
-      surfaceProps={props.perm.options}
-      padded={false}
-      rootProps={{ style: { position: 'absolute', inset: '0', width: '100%', height: '100%' } }}
+    <Show
+      when={props.perm.contentMode === 'label'}
+      fallback={(
+        <MaterialSurfaceHost
+          kind="panel"
+          surfaceProps={props.perm.options}
+          padded={false}
+          rootProps={{ style: { position: 'absolute', inset: '0', width: '100%', height: '100%' } }}
+        >
+          <span style={{ position: 'relative', 'z-index': '2' }}>{content()}</span>
+        </MaterialSurfaceHost>
+      )}
     >
-      <span style={{ position: 'relative', 'z-index': '2' }}>{content()}</span>
-    </MaterialSurfaceHost>
+      {/* stretch the inline-block button to fill the cell so heights match the new side */}
+      <div style={{ position: 'absolute', inset: '0', display: 'grid' }} class="perm-fill-button">
+        <MaterialSurfaceHost
+          kind="button"
+          surfaceProps={props.perm.options}
+          buttonFullWidth
+          label={content()}
+        />
+      </div>
+    </Show>
   );
 
   return (
@@ -64,7 +84,7 @@ const SurfaceCell = (props: {
       }}
     >
       <div style={{ color: props.selected ? '#f8d770' : '#cfc6ad', font: '600 11px ui-sans-serif', 'margin-bottom': '6px', 'max-width': `${props.compare ? CELL_W * 2 + 10 : CELL_W}px`, overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
-        {props.perm.label}
+        <span style={{ color: '#efc85d', 'font-weight': '800' }}>{numLabel()} </span>{props.perm.label}
       </div>
       <div style={{ display: 'flex', gap: '10px' }}>
         <Show when={props.compare && !props.difference}>
@@ -97,6 +117,7 @@ export const MinimalSurfaceProofScreen = () => {
   const [difference, setDifference] = createSignal(false);
   const [selectedId, setSelectedId] = createSignal<string>(surfacePermutations[0].id);
 
+  const numberOf = new Map(surfacePermutations.map((p, i) => [p.id, i + 1]));
   const selected = () => surfacePermutations.find((p) => p.id === selectedId());
   const visibleGroups = () => (activeGroup() === 'all' ? groups : [activeGroup()]);
   const permsIn = (group: string) => surfacePermutations.filter((p) => p.group === group);
@@ -171,6 +192,7 @@ export const MinimalSurfaceProofScreen = () => {
                     {(perm) => (
                       <SurfaceCell
                         perm={perm}
+                        num={numberOf.get(perm.id) ?? 0}
                         compare={compare()}
                         difference={difference()}
                         selected={selectedId() === perm.id}
@@ -189,7 +211,9 @@ export const MinimalSurfaceProofScreen = () => {
           <Show when={selected()}>
             {(perm) => (
               <>
-                <div style={{ color: '#f8d770', font: '700 13px ui-sans-serif' }}>{perm().label}</div>
+                <div style={{ color: '#f8d770', font: '700 13px ui-sans-serif' }}>
+                  #{String(numberOf.get(perm().id) ?? 0).padStart(2, '0')} {perm().label}
+                </div>
                 <div style={{ color: '#cfc6ad', font: '500 12px ui-sans-serif', margin: '8px 0 12px', 'line-height': '1.5' }}>
                   <b style={{ color: '#efc85d' }}>Expect:</b> {perm().expect}
                 </div>

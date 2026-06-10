@@ -84,5 +84,9 @@ export const minimalSurfaceChildren = (options: SurfaceOptions) => {
     // light paints border/edges/corners/glow/emission.
     light: flags.border || flags.glowing || flags.emitting,
     wear: flags.edgeWear,
+    // corner-arcs: rounded 1px highlight arcs at each lit corner (the strips alone read
+    // as square-cut at the radius; the arcs round them). Reuses the existing
+    // cd-surface__corner-arc CSS. Only when glow lighting is active.
+    corners: flags.glowing,
   };
 };
