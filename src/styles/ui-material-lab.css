@@ -1040,7 +1040,12 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid transparent;
+  /* No transparent border. With it, decorative children (inset:0 = padding box) sat 1px
+     inside the outer edge; overflow:hidden clipped them at the padding edge, leaving a 1px
+     transparent ring that showed page bg as a dark seam (most visible on straight bottom
+     edges). box-sizing is border-box, so removing it keeps the outer box and lets children
+     fill to the true edge. Focus uses outline, not this border, so nothing depends on it. */
+  border: 0 solid transparent;
   border-radius: var(--surface-radius);
   color: #f4eee0;
   box-shadow: var(--surface-drop-shadow);
