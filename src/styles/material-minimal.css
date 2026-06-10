@@ -181,7 +181,12 @@
 .cd-surface--minimal > .cdm__light::before {
   content: "";
   position: absolute;
-  inset: 0;
+  /* Extend over the border ring. .cdm__light carries the 1px border, so a pseudo at
+     inset:0 only covers the padding box and the soft glow dies 1px short of the edge,
+     exposing the dim border as a darker outer rim. Pulling out by the border width lets
+     the glow screen over the border too (matching the old separate-glow-layer behaviour).
+     0 when no border, so unbordered surfaces are unchanged. */
+  inset: calc(-1 * var(--ml-border-width, 0px));
   z-index: -1;
   border-radius: inherit;
   background:
@@ -200,7 +205,8 @@
 .cd-surface--minimal > .cdm__light::after {
   content: "";
   position: absolute;
-  inset: 0;
+  /* Same as ::before — cover the border ring so emission reaches the true edge. */
+  inset: calc(-1 * var(--ml-border-width, 0px));
   border-radius: inherit;
   opacity: var(--emission-alpha, 0);
   mix-blend-mode: screen;

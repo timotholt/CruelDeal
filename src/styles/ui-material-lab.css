@@ -1049,7 +1049,11 @@
   border-radius: var(--surface-radius);
   color: #f4eee0;
   box-shadow: var(--surface-drop-shadow);
-  transform: translateY(var(--state-translate-y)) scale(var(--state-scale));
+  /* `none` at rest, NOT an identity translateY(0)/scale(1). An always-on transform (even
+     identity) makes the rounded overflow:hidden clip composite, which leaks ~1px of the
+     backdrop at corners/edges. Motion still works: hover/pressed rules below write their
+     own transform, and static stateScale/stateTranslateY emit --state-transform. */
+  transform: var(--state-transform, none);
 }
 
 .cd-surface--border-lit {

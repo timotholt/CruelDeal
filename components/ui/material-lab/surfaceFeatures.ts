@@ -450,9 +450,16 @@ const emissionVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => 
 
 const motionVars = (options: SurfaceOptions, emit: CssVarMapper = cssVars) => {
   if (options.stateful === false) return {};
+  const hasScale = options.stateScale !== undefined && options.stateScale !== 1;
+  const hasTranslate = options.stateTranslateY !== undefined && options.stateTranslateY !== 0;
   return emit({
-    '--state-scale': options.stateScale !== undefined && options.stateScale !== 1 ? `${options.stateScale}` : undefined,
-    '--state-translate-y': options.stateTranslateY !== undefined && options.stateTranslateY !== 0 ? `${options.stateTranslateY}px` : undefined,
+    '--state-scale': hasScale ? `${options.stateScale}` : undefined,
+    '--state-translate-y': hasTranslate ? `${options.stateTranslateY}px` : undefined,
+    // Composed transform only when static motion is authored. Absent -> root falls back to
+    // `none` (no identity transform, so the rounded clip doesn't composite/leak at rest).
+    '--state-transform': hasScale || hasTranslate
+      ? `translateY(${hasTranslate ? options.stateTranslateY : 0}px) scale(${hasScale ? options.stateScale : 1})`
+      : undefined,
   });
 };
 
