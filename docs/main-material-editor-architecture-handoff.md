@@ -1,6 +1,6 @@
 # Main Material Editor Architecture Handoff
 
-Last updated: 2026-06-09
+Last updated: 2026-06-11
 
 ## Goal
 
@@ -76,8 +76,10 @@ In the UI, selected feed nodes show:
 - preview value
 - copy `ui-node-content`
 - inline `Content JSON` editor
-- apply/reset controls
+- apply/format/reset controls
 - inline document status
+- live dirty-document validation
+- changed matching-field count
 
 The selected-field textarea still exists as a convenience edit path for the
 currently bound node. The intended future direction is for the document editor
@@ -125,7 +127,10 @@ Expected smoke signals:
 - no `CRITICAL ERROR`
 - material targets mount with `data-material-target-id`
 - Export DOM/CSS reads from live selected DOM groups
-- CMS panel shows `Content JSON`, `apply document`, `reset`, and status
+- CMS panel shows `Content JSON`, `apply document`, `format`, `reset`, and
+  status
+- invalid CMS JSON disables `apply document`
+- valid dirty CMS JSON shows matching-field changed count
 
 ## Known Risks
 
@@ -133,28 +138,27 @@ Expected smoke signals:
   controller logic rather than adding local branches.
 - The compatibility export planner is still present. It should stay isolated
   unless/until a true offline export mode is productized.
-- The CMS document editor currently uses a plain textarea. It validates on
-  apply, but does not yet provide schema-aware JSON editing, per-field error
-  locations, or formatting controls.
-- The selected-field markup textarea still duplicates part of the document edit
-  workflow.
+- The CMS document editor still uses a plain textarea. It now formats JSON,
+  validates dirty drafts live, and shows a changed matching-field count, but it
+  does not yet provide schema-aware field controls or per-field error locations.
+- The selected-field textarea is now labeled as a selected-field convenience
+  editor, but it still duplicates part of the document edit workflow.
 - Browser smoke tests depend on the dev server already running at
   `localhost:3000`.
 
 ## Recommended Next Steps
 
-1. Make the CMS document editor more capable:
-   - format JSON
-   - show parse/validation status near the textarea
-   - preserve dirty state clearly
-   - add per-field changed-count feedback
-2. Demote or restyle the selected-field markup textarea as a convenience editor,
-   not the primary CMS path.
-3. Continue shrinking `MainMaterialPreviewScreen.tsx`:
+1. Continue shrinking `MainMaterialPreviewScreen.tsx`:
    - move CMS document actions into a controller module
    - move reset/import/export orchestration out of the screen
-4. Add a real offline export mode only if needed, using
+2. Split the large `FeedRecipeEditor` into focused child editors for CMS
+   document editing, structure operations, layout, and selected-node text.
+3. Decide whether the selected-field textarea should remain as an inline
+   convenience editor or move behind an explicit edit mode.
+4. Add schema-aware CMS field controls or field-level diagnostics on top of the
+   current validated JSON document path.
+5. Add a real offline export mode only if needed, using
    `mainMaterialCompatibilityExport.ts`.
-5. Keep updating this document and
+6. Keep updating this document and
    `docs/agent-checkpoints/editor-architecture-convergence.md` after each
    meaningful architecture slice.

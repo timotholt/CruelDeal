@@ -33,6 +33,10 @@ export const feedCardNodeToMaterialNode = (
   // layer with beveled corners) would get cut to the frame's square box. Overflow
   // containment lives on the fill content span instead (`MaterialNodeContentRenderer`
   // `fill`), so long text clips without clipping the surface corners.
+  const layoutStyle = feedNodeLayoutCss(node.layout);
+  if (node.type === 'container' && node.layout.padding > 0) {
+    layoutStyle.padding = `${node.layout.padding}px`;
+  }
   const recipe: MaterialNodeRecipe = {
     id: node.id,
     label: node.label,
@@ -40,7 +44,7 @@ export const feedCardNodeToMaterialNode = (
     surface: feedNodeSurfaceRecipe(cardType, node),
     layout: {
       display,
-      style: feedNodeLayoutCss(node.layout),
+      style: layoutStyle,
     },
   };
   if (hasContent) {

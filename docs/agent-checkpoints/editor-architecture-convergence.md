@@ -1,6 +1,6 @@
 # Editor Architecture Convergence Checkpoint
 
-Last Updated: 2026-06-09
+Last Updated: 2026-06-11
 Status: active - live export/CMS composition convergence
 
 ## Goal
@@ -138,6 +138,15 @@ authoring JSON
   validation through the same content-output adapter.
 - [x] Added inline CMS document validation/status feedback beside the
   `ui-node-content` editor.
+- [x] Added non-throwing CMS document inspection plus formatting helpers in
+  `mainMaterialFeedContentOutput.ts`, so dirty `ui-node-content` drafts can
+  show live parse/shape status without invoking the stricter import path on
+  every keystroke.
+- [x] Upgraded the selected-node CMS panel with dirty-document validation,
+  changed matching-field count, a `format` action, and disabled apply for
+  invalid JSON.
+- [x] Relabeled the lower bound-field textarea to `Selected Field` so the
+  full `Content JSON` document remains the primary CMS authoring path.
 - [x] Added `docs/main-material-editor-architecture-handoff.md` so future
   prompts can reload what was built, how it works, current risks, and next
   steps.
@@ -809,11 +818,15 @@ module. CMS/content convergence has its first live slice: selected story content
 serializes through the registered `ui-node-content` output mode, and the CMS
 panel exposes bound/static state, field type, preview value, copy, and validated
 import actions. The CMS panel now includes an inline `ui-node-content` document
-editor with apply/reset controls and inline status feedback, replacing
-prompt/clipboard-only import. The durable handoff doc is
+editor with live dirty-draft validation, apply/format/reset controls, inline
+status feedback, and matching-field changed count, replacing
+prompt/clipboard-only import. The lower bound-field textarea is now labeled as
+a selected-field convenience editor, but still duplicates part of the document
+edit workflow. The durable handoff doc is
 `docs/main-material-editor-architecture-handoff.md`. The next bottleneck is
-reducing the remaining per-field textarea path to a focused convenience editor
-rather than the primary CMS authoring path.
+splitting `mainMaterialFeedEditors.tsx` into focused structure/CMS/layout/text
+subeditors and deciding how much of the selected-field convenience path should
+survive once the CMS document path gets schema-aware field controls.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

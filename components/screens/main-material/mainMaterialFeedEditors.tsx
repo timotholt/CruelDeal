@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   SectionLabel,
   materialRecipeContentTones,
@@ -82,6 +82,10 @@ import {
   createTextBlockNode,
   createTwoColumnGroupNode,
 } from './mainMaterialNodeTemplates';
+import {
+  formatMainMaterialFeedContentJson,
+  inspectMainMaterialFeedContentJson,
+} from './mainMaterialFeedContentOutput';
 
 export interface FeedRecipe {
   contentY: number;
@@ -156,9 +160,21 @@ export const FeedRecipeEditor = (props: {
     return value.length > 96 ? `${value.slice(0, 96)}...` : value;
   };
   const contentDraftDirty = () => contentDraft() !== props.selectedStoryContentJson;
+  const contentDocumentInspection = createMemo(() => (
+    inspectMainMaterialFeedContentJson(selectedStory(), contentDraft())
+  ));
+  const contentDocumentStatusText = () => (
+    contentDraftDirty() ? contentDocumentInspection().message : contentDocumentStatus()
+  );
+  const contentDocumentChangedCount = () => contentDocumentInspection().changedSlots.length;
   const applyContentDocument = () => {
     const message = props.onImportSelectedStoryContentJson(contentDraft());
     setContentDocumentStatus(message);
+  };
+  const formatContentDocument = () => {
+    const result = formatMainMaterialFeedContentJson(selectedStory(), contentDraft());
+    if (result.ok) setContentDraft(result.text);
+    setContentDocumentStatus(result.message);
   };
   const editingCardType = () => props.cardTypes[props.editingCardTypeId];
   const selectedFeedTarget = () => parseFeedMaterialTargetId<FeedCardTypeId>(props.selectedMaterialTargetId);
@@ -796,18 +812,28 @@ export const FeedRecipeEditor = (props: {
                   />
                   <div class="ui-lab-control-row">
                     <span>Status</span>
-                    <span>{contentDocumentStatus()}</span>
+                    <span>{contentDocumentStatusText()}</span>
                   </div>
+                  <Show when={contentDraftDirty() && contentDocumentInspection().ok}>
+                    <div class="ui-lab-control-row">
+                      <span>Changes</span>
+                      <span>{contentDocumentChangedCount()}</span>
+                    </div>
+                  </Show>
                   <div class="ui-lab-toggles">
-                    <MiniButton disabled={!contentDraftDirty()} onClick={applyContentDocument}>apply document</MiniButton>
-                    <MiniButton disabled={!contentDraftDirty()} onClick={() => setContentDraft(props.selectedStoryContentJson)}>reset</MiniButton>
+                    <MiniButton disabled={!contentDraftDirty() || !contentDocumentInspection().ok} onClick={applyContentDocument}>apply document</MiniButton>
+                    <MiniButton disabled={!contentDraft().trim()} onClick={formatContentDocument}>format</MiniButton>
+                    <MiniButton disabled={!contentDraftDirty()} onClick={() => {
+                      setContentDraft(props.selectedStoryContentJson);
+                      setContentDocumentStatus('Ready');
+                    }}>reset</MiniButton>
                   </div>
                 </div>
               </Show>
               <Show when={node().binding}>
                 {(binding) => (
                   <div class="ui-lab-control-row ui-lab-control-row--stacked">
-                    <span>Markup</span>
+                    <span>Selected Field</span>
                     <textarea
                       class="ui-lab-input main-material-text-input main-material-markup-input"
                       value={selectedNodeStoryText()}

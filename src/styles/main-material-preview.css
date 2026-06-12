@@ -927,7 +927,8 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   box-sizing: border-box;
   /* PAD insets the label so the autoscaled glyph never touches the button edge.
      Unclamped: GameTextV2 measures the padded box and scales text to fit it. */
-  padding: var(--feed-node-padding, 0px);
+  padding-block: min(var(--feed-node-padding, 0px), 6px);
+  padding-inline: min(var(--feed-node-padding, 0px), 8px);
   text-align: center;
 }
 
@@ -939,6 +940,7 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-card-node-surface--button .cd-button__label {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   width: 100%;
   height: 100%;

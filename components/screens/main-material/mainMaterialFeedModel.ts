@@ -681,7 +681,7 @@ export const createMissionBriefingLeftNodes = (): FeedCardNode[] => [
         textRender: 'fit',
         fitMode: 'single-line',
         maxLines: 1,
-        layout: createFeedNodeLayout({ mode: 'flow', slot: 'footer', x: 10, y: 84, width: 83, height: 11, padding: 0, gap: 0, align: 'center', justify: 'center' }),
+        layout: createFeedNodeLayout({ mode: 'flow', slot: 'footer', x: 7, y: 82, width: 86, height: 14, padding: 6, gap: 0, align: 'center', justify: 'center' }),
       }),
     ],
   }),

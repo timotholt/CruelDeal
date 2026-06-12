@@ -307,6 +307,8 @@ assert.equal(missionNodes[0].binding, 'contractBadge');
 assert.equal(missionNodes[0].fitMode, 'single-line');
 assert.equal(missionNodes[1].children?.[0].id, 'contract-cta');
 assert.equal(missionNodes[1].children?.[0].surface?.material, 'custom');
+assert.equal(missionNodes[1].children?.[0].layout.height, 14);
+assert.equal(missionNodes[1].children?.[0].layout.padding, 6);
 assert.equal(missionNodes[2].textRender, 'rich');
 
 const missionBriefingV1 = createDefaultMissionBriefingV1CardType();
@@ -320,6 +322,8 @@ assert.deepEqual(missionBriefingV1.children.map((node) => node.id), [
   'sector-mark',
 ]);
 assert.equal(missionBriefingV1.children[1].children?.[0].id, 'contract-cta');
+assert.equal(missionBriefingV1.children[1].children?.[0].layout.height, 14);
+assert.equal(missionBriefingV1.children[1].children?.[0].layout.padding, 6);
 assert.equal(missionBriefingV1.slots.contractBriefing.textTransform, 'none');
 assert.equal(missionBriefingV1.slots.sectorLabel.textOpacity, 34);
 assert.notEqual(missionBriefingV1, missionBriefingV1Again);

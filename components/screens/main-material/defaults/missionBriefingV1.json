@@ -816,13 +816,13 @@
           "layout": {
             "mode": "flow",
             "slot": "footer",
-            "x": 10,
-            "y": 84,
-            "width": 83,
-            "height": 11,
+            "x": 7,
+            "y": 82,
+            "width": 86,
+            "height": 14,
             "nudgeX": 0,
             "nudgeY": 0,
-            "padding": 0,
+            "padding": 6,
             "gap": 0,
             "align": "center",
             "justify": "center"

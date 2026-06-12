@@ -3,6 +3,8 @@ import { configureLogging } from '../../../utils/logger';
 import {
   applyMainMaterialFeedContentPayload,
   createMainMaterialFeedContentPayload,
+  formatMainMaterialFeedContentJson,
+  inspectMainMaterialFeedContentJson,
   parseMainMaterialFeedContentJson,
   serializeMainMaterialFeedContentPayload,
   validateMainMaterialFeedContentPayload,
@@ -64,5 +66,25 @@ assert.equal(parsed.story.body, 'Updated body');
 const invalidJson = parseMainMaterialFeedContentJson(story, '{not json');
 assert.equal(invalidJson.ok, false);
 assert.equal(invalidJson.message, 'Invalid JSON');
+
+const cleanInspection = inspectMainMaterialFeedContentJson(story, serialized);
+assert.equal(cleanInspection.ok, true);
+assert.deepEqual(cleanInspection.changedSlots, []);
+
+const changedInspection = inspectMainMaterialFeedContentJson(story, '{"title":"New Title","body":"Updated body"}');
+assert.equal(changedInspection.ok, true);
+assert.deepEqual(changedInspection.changedSlots, ['title', 'body']);
+
+const invalidValueInspection = inspectMainMaterialFeedContentJson(story, '{"title":["bad"]}');
+assert.equal(invalidValueInspection.ok, false);
+assert.equal(invalidValueInspection.message, 'Invalid ui-node-content value at "title"');
+
+const formatted = formatMainMaterialFeedContentJson(story, '{"body":"Updated body"}');
+assert.equal(formatted.ok, true);
+assert.equal(formatted.text, '{\n  "body": "Updated body"\n}\n');
+
+const invalidFormat = formatMainMaterialFeedContentJson(story, '{"title":["bad"]}');
+assert.equal(invalidFormat.ok, false);
+assert.equal(invalidFormat.text, '{"title":["bad"]}');
 
 console.log('Main material feed content output tests passed');

@@ -184,4 +184,18 @@ assert.deepStrictEqual(
   'direct converter surface fold',
 );
 
+const missionCard = entries[0][1];
+const missionSourceNode = missionCard.children.find((node) => node.id === 'mission-briefing');
+assert.ok(missionSourceNode);
+const missionNode = feedCardNodeToMaterialNode(missionCard, missionSourceNode);
+assert.equal(
+  missionNode.layout?.style?.padding,
+  `${missionSourceNode.layout.padding}px`,
+  'container padding must become real canonical layout padding',
+);
+const missionCtaNode = missionNode.children?.find((node) => node.id === 'contract-cta');
+assert.ok(missionCtaNode);
+assert.equal(missionCtaNode.layout?.style?.height, `${missionSourceNode.children?.[0].layout.height}%`);
+assert.equal((missionCtaNode.layout?.style as Record<string, unknown>)?.['--feed-node-padding'], '6px');
+
 console.log('Feed-to-node bridge tests passed');
