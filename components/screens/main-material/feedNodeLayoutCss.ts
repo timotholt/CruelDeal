@@ -99,10 +99,10 @@ const absoluteConstraintCss = (layout: FeedNodeLayout, wMode: FeedNodeSizeMode, 
   }
 
   if (h !== 'left-right') {
-    css.width = wMode === 'hug' ? 'max-content' : `${layout.width}%`;
+    css.width = wMode === 'hug' ? 'max-content' : wMode === 'fill' ? '100%' : `${layout.width}%`;
   }
   if (v !== 'top-bottom') {
-    css.height = hMode === 'hug' ? 'auto' : `${layout.height}%`;
+    css.height = hMode === 'hug' ? 'auto' : hMode === 'fill' ? '100%' : `${layout.height}%`;
   }
 
   return { css, transforms };

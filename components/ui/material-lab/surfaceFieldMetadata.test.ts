@@ -12,6 +12,44 @@ assert.deepEqual(
   'surface field metadata must cover every validated SurfaceOptions key exactly once',
 );
 
+surfaceFieldDefinitions.forEach((definition) => {
+  assert.ok(definition.label.trim(), `${definition.key} must have a non-empty label`);
+
+  if (definition.control === 'slider') {
+    const hasStops = (definition.valueStops?.length ?? 0) > 0;
+    const hasRange = typeof definition.min === 'number' && typeof definition.max === 'number';
+    assert.ok(
+      hasStops || hasRange,
+      `${definition.key} slider must declare either valueStops or min/max`,
+    );
+    if (hasStops) {
+      assert.ok(
+        definition.valueStops!.every((stop, index, stops) => Number.isFinite(stop) && (index === 0 || stop > stops[index - 1])),
+        `${definition.key} valueStops must be finite and strictly ascending`,
+      );
+    } else {
+      assert.ok(definition.min! < definition.max!, `${definition.key} slider min must be less than max`);
+      assert.ok((definition.step ?? 1) > 0, `${definition.key} slider step must be positive`);
+    }
+  }
+
+  if (definition.control === 'select' || definition.control === 'multi-toggle') {
+    assert.ok((definition.options?.length ?? 0) > 0, `${definition.key} ${definition.control} must declare options`);
+    assert.equal(
+      new Set(definition.options).size,
+      definition.options?.length ?? 0,
+      `${definition.key} options must be unique`,
+    );
+  }
+
+  Object.keys(definition.optionLabels ?? {}).forEach((option) => {
+    assert.ok(
+      definition.options?.includes(option),
+      `${definition.key} option label "${option}" must refer to a declared option`,
+    );
+  });
+});
+
 assert.equal(surfaceFieldDefinitionByKey.surfaceLayerBrightness.editMode, 'rest-and-state');
 assert.equal(surfaceFieldDefinitionByKey.surfaceFilterBrightness.editMode, 'rest-and-state');
 assert.equal(surfaceFieldDefinitionByKey.textY.editMode, 'rest-and-state');

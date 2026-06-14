@@ -1,6 +1,6 @@
 # Main Material Editor Architecture Handoff
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 ## Goal
 
@@ -17,6 +17,11 @@ validated authoring schema / metadata
 The direction is to keep editor state, product rendering, export contracts, and
 compatibility adapters separated. New work should prefer small pure modules with
 tests over adding more logic to `MainMaterialPreviewScreen.tsx`.
+
+The active control-trust plan lives in
+`docs/main-material-editor-control-contract-spec.md`. Use that document as the
+restartable inventory for visible controls, seams, output effects, proof levels,
+and the next acceptance slice.
 
 ## Current State
 
@@ -113,6 +118,7 @@ npx tsx components/screens/main-material/mainMaterialCssProbeTargets.test.ts
 npx tsx components/screens/main-material/mainMaterialEmissionOutput.test.ts
 npx tsx components/screens/main-material/mainMaterialCompatibilityExport.test.ts
 npx tsx components/ui/editor-output/editorOutputRegistry.test.ts
+npx vitest run components/ui/material-lab/SurfaceFieldControl.render.test.tsx
 npm run build
 ```
 
@@ -127,6 +133,19 @@ Expected smoke signals:
 - no `CRITICAL ERROR`
 - material targets mount with `data-material-target-id`
 - Export DOM/CSS reads from live selected DOM groups
+- generated controls reach live Export CSS; verified on 2026-06-12 by changing
+  `Glass Blur` from `3` to `7` on
+  `feed:card:card_type_01:node:mission-briefing` and observing
+  `--glass-blur: 7px` in the selected surface style and active Export CSS panel
+- layout center pin semantics are browser-proven for Mission Briefing:
+  `Pin V = center` centers the node, then `Y Offset = 10` moves its center
+  exactly `10%` of the parent height below center and updates Export CSS
+- absolute `W/H fill` is browser-proven for Mission Briefing: the real fill
+  buttons activate, size sliders disable, live geometry fills the parent on
+  both axes, and Export CSS emits `width: 100%` plus `height: 100%`
+- `Pad`, `Line Gap`, and `Spread Y` are browser-proven for Mission Briefing:
+  the real controls compute `padding: 24px`, `gap: 18px`, and
+  `justify-content: space-between`, with matching Export CSS declarations/vars
 - CMS panel shows `Content JSON`, `apply document`, `format`, `reset`, and
   status
 - invalid CMS JSON disables `apply document`
@@ -148,17 +167,39 @@ Expected smoke signals:
 
 ## Recommended Next Steps
 
-1. Continue shrinking `MainMaterialPreviewScreen.tsx`:
+1. Follow `docs/main-material-editor-control-contract-spec.md` and start the
+   `feed-layout-proof` slice:
+   - tie center pin + x/y offset behavior to resolver tests and browser
+     geometry evidence
+   - absolute fill sizing is now proven
+   - W/H hug is now proven: real `/main-material` controls activate, size
+     sliders disable, live style/Export CSS emit `width: max-content` and
+     `height: auto`, and browser geometry confirms `H hug` shrinks to content
+     height while `W hug` follows intrinsic content width and may exceed the
+     parent
+   - pad/gap/spread are proven for column direction; row-direction distribution
+     is now proven through pure control-mapping tests, feed-to-node bridge
+     coverage, browser geometry, and Export CSS evidence from real row controls
+   - fixed W/H size, flow/in-flow mode, footer/pin-end, and nudge are now
+     proven through pure tests, feed-to-node bridge tests, browser geometry, and
+     Export CSS evidence
+   - root feed layout controls now share tested defaults/clamps/CSS-var helpers
+     for Content Y, Copy Lift, and Dot Gap; browser proof for the actual sliders
+     is still pending
+   - inspector tab payload selection is now contract-tested for Export DOM,
+     Export CSS, Editor DOM, and Frame CSS; browser proof for visible inspector
+     controls is still pending
+2. Continue shrinking `MainMaterialPreviewScreen.tsx`:
    - move CMS document actions into a controller module
    - move reset/import/export orchestration out of the screen
-2. Split the large `FeedRecipeEditor` into focused child editors for CMS
+3. Split the large `FeedRecipeEditor` into focused child editors for CMS
    document editing, structure operations, layout, and selected-node text.
-3. Decide whether the selected-field textarea should remain as an inline
+4. Decide whether the selected-field textarea should remain as an inline
    convenience editor or move behind an explicit edit mode.
-4. Add schema-aware CMS field controls or field-level diagnostics on top of the
+5. Add schema-aware CMS field controls or field-level diagnostics on top of the
    current validated JSON document path.
-5. Add a real offline export mode only if needed, using
+6. Add a real offline export mode only if needed, using
    `mainMaterialCompatibilityExport.ts`.
-6. Keep updating this document and
+7. Keep updating this document and
    `docs/agent-checkpoints/editor-architecture-convergence.md` after each
    meaningful architecture slice.

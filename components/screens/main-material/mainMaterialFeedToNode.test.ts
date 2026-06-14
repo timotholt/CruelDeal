@@ -193,9 +193,123 @@ assert.equal(
   `${missionSourceNode.layout.padding}px`,
   'container padding must become real canonical layout padding',
 );
+assert.equal(missionNode.layout?.style?.gap, `${missionSourceNode.layout.gap}px`);
+assert.equal((missionNode.layout?.style as Record<string, unknown>)?.['--feed-node-gap'], `${missionSourceNode.layout.gap}px`);
+assert.equal((missionNode.layout?.style as Record<string, unknown>)?.['--feed-node-padding'], `${missionSourceNode.layout.padding}px`);
 const missionCtaNode = missionNode.children?.find((node) => node.id === 'contract-cta');
 assert.ok(missionCtaNode);
 assert.equal(missionCtaNode.layout?.style?.height, `${missionSourceNode.children?.[0].layout.height}%`);
 assert.equal((missionCtaNode.layout?.style as Record<string, unknown>)?.['--feed-node-padding'], '6px');
+
+const spreadMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    distribute: 'between',
+    crossAlign: 'stretch',
+  },
+});
+const spreadMissionStyle = spreadMissionNode.layout?.style as Record<string, unknown> | undefined;
+assert.equal(spreadMissionStyle?.['justify-content'], 'space-between');
+assert.equal(spreadMissionStyle?.['align-items'], 'stretch');
+
+const rowSpreadMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    direction: 'row',
+    distribute: 'evenly',
+    crossAlign: 'end',
+  },
+});
+const rowSpreadMissionStyle = rowSpreadMissionNode.layout?.style as Record<string, unknown> | undefined;
+assert.equal(rowSpreadMissionStyle?.['flex-direction'], 'row');
+assert.equal(rowSpreadMissionStyle?.['justify-content'], 'space-evenly');
+assert.equal(rowSpreadMissionStyle?.['align-items'], 'flex-end');
+
+const huggedMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    wMode: 'hug',
+    hMode: 'hug',
+  },
+});
+assert.equal(huggedMissionNode.layout?.style?.width, 'max-content', 'W hug must reach canonical layout width');
+assert.equal(huggedMissionNode.layout?.style?.height, 'auto', 'H hug must reach canonical layout height');
+
+const filledMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    wMode: 'fill',
+    hMode: 'fill',
+  },
+});
+assert.equal(filledMissionNode.layout?.style?.width, '100%', 'W fill must reach canonical layout width');
+assert.equal(filledMissionNode.layout?.style?.height, '100%', 'H fill must reach canonical layout height');
+
+const fixedMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    wMode: 'fixed',
+    hMode: 'fixed',
+    width: 52,
+    height: 34,
+  },
+});
+assert.equal(fixedMissionNode.layout?.style?.width, '52%', 'fixed W size must reach canonical layout width');
+assert.equal(fixedMissionNode.layout?.style?.height, '34%', 'fixed H size must reach canonical layout height');
+
+const flowMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    mode: 'flow',
+    selfPosition: 'in-flow',
+    slot: 'body',
+    nudgeX: 14,
+    nudgeY: -9,
+  },
+});
+const flowMissionStyle = flowMissionNode.layout?.style as Record<string, unknown> | undefined;
+assert.equal(flowMissionStyle?.position, 'relative', 'in-flow mode must emit relative positioning');
+assert.equal(flowMissionStyle?.transform, 'translate(14px, -9px)', 'flow nudge must reach canonical transform');
+assert.equal(flowMissionStyle?.left, undefined, 'in-flow mode must not preserve absolute left');
+assert.equal(flowMissionStyle?.top, undefined, 'in-flow mode must not preserve absolute top');
+
+const footerMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    mode: 'flow',
+    selfPosition: 'in-flow',
+    slot: 'footer',
+  },
+});
+assert.equal(
+  (footerMissionNode.layout?.style as Record<string, unknown> | undefined)?.['margin-top'],
+  'auto',
+  'footer slot must push in-flow column content to the end',
+);
+
+const centeredMissionNode = feedCardNodeToMaterialNode(missionCard, {
+  ...missionSourceNode,
+  layout: {
+    ...missionSourceNode.layout,
+    constraintH: 'center',
+    constraintV: 'center',
+    x: -5,
+    y: 10,
+  },
+});
+assert.equal(centeredMissionNode.layout?.style?.left, 'calc(50% + -5%)');
+assert.equal(centeredMissionNode.layout?.style?.top, 'calc(50% + 10%)');
+assert.equal(
+  centeredMissionNode.layout?.style?.transform,
+  'translateX(-50%) translateY(-50%)',
+  'center pin must center the node first, then apply x/y as relative offsets',
+);
 
 console.log('Feed-to-node bridge tests passed');

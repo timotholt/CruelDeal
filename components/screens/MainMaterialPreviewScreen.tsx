@@ -133,6 +133,10 @@ import {
   type FeedRecipe,
 } from './main-material/mainMaterialFeedEditors';
 import {
+  defaultFeedLayoutRecipe,
+  sanitizeFeedLayoutRecipe,
+} from './main-material/mainMaterialFeedLayoutControls';
+import {
   parseMainMaterialFeedContentJson,
   serializeMainMaterialFeedContentPayload,
 } from './main-material/mainMaterialFeedContentOutput';
@@ -256,11 +260,7 @@ const defaultTitle: TitleRecipe = {
   y: 0,
 };
 
-const defaultFeed: FeedRecipe = {
-  contentY: 0,
-  cardGap: 16,
-  newsGap: 10,
-};
+const defaultFeed: FeedRecipe = defaultFeedLayoutRecipe;
 
 const defaultNav: NavRecipe = {
   bottomReserve: 146,
@@ -1957,14 +1957,7 @@ const sanitizeTitle = (value: unknown): TitleRecipe => {
   };
 };
 
-const sanitizeFeed = (value: unknown): FeedRecipe => {
-  const input = typeof value === 'object' && value !== null ? value as Partial<FeedRecipe> : {};
-  return {
-    contentY: clamp(input.contentY, defaultFeed.contentY, -32, 48),
-    cardGap: clamp(input.cardGap, defaultFeed.cardGap, 8, 32),
-    newsGap: clamp(input.newsGap, defaultFeed.newsGap, 6, 28),
-  };
-};
+const sanitizeFeed = sanitizeFeedLayoutRecipe;
 
 const sanitizeNav = (value: unknown): NavRecipe => {
   const input = typeof value === 'object' && value !== null ? value as Partial<NavRecipe> : {};

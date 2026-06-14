@@ -33,6 +33,7 @@ import type { FeedRecipe } from './mainMaterialFeedEditors';
 import { MaterialDomRegistryTarget, type CssEmissionProbe } from './mainMaterialFeedFrame';
 import { ChromeFeedNodeTree, type ChromeFeedNodeRenderContext } from './mainMaterialChromeFeedTree';
 import { FeedCarousel } from './mainMaterialFeedCarousel';
+import { feedLayoutPreviewCssVars } from './mainMaterialFeedLayoutControls';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
@@ -457,7 +458,7 @@ export const MainMaterialPreview = (props: {
     '--main-bg-y': `${props.backdrop.y}px`,
     '--main-bg-warm': `${props.backdrop.warm / 100}`,
     '--main-bg-dark': `${props.backdrop.dark / 100}`,
-    '--main-content-y': `${props.feed.contentY}px`,
+    ...feedLayoutPreviewCssVars(props.feed),
     '--main-bottom-reserve': `${props.nav.bottomReserve}px`,
   }) as JSX.CSSProperties;
 

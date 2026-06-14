@@ -20,6 +20,7 @@ import type { PreviewTargetRole } from './mainMaterialInteractionModel';
 import { feedCardMaterialTargetId, feedMaterialTargetIdForNode, type FeedMaterialTargetId as MainFeedMaterialTargetId } from './materialTargetIds';
 import { FeedNodeFrame, type CssEmissionProbe } from './mainMaterialFeedFrame';
 import { FeedRichText } from './mainMaterialFeedRichText';
+import { feedLayoutCarouselCssVars } from './mainMaterialFeedLayoutControls';
 import {
   feedBackgroundImageCss,
   feedMediaFadeCss,
@@ -465,12 +466,7 @@ export const FeedCarousel = (props: {
   const lastSlideIndex = () => props.stories.length - 1;
   const canGoPrevious = () => activeSlideIndex() > 0;
   const canGoNext = () => activeSlideIndex() < lastSlideIndex();
-  const feedStyle = () => ({
-    '--main-card-gap': `${props.feed.cardGap}px`,
-    '--main-news-gap': `${props.feed.newsGap}px`,
-    '--main-feed-slide-index': activeSlideIndex(),
-    '--main-feed-drag-x': `${dragDeltaX()}px`,
-  }) as JSX.CSSProperties;
+  const feedStyle = () => feedLayoutCarouselCssVars(props.feed, activeSlideIndex(), dragDeltaX()) as JSX.CSSProperties;
   const stageNode = createFeedStageNode();
   const trackNode = createFeedTrackNode();
   const showSlide = (index: number) => {

@@ -20,15 +20,24 @@ import {
   resolveLayoutPushToEnd,
   resolveLayoutSelfPosition,
   resolveLayoutWMode,
-  type FeedNodeAlign,
   type FeedNodeConstraintH,
   type FeedNodeConstraintV,
   type FeedNodeCrossAlign,
-  type FeedNodeDirection,
   type FeedNodeDistribute,
-  type FeedNodeJustify,
   type FeedNodeLayout,
 } from './feedNodeLayoutCss';
+import {
+  layoutCrossAxisLabel,
+  layoutCrossPositions,
+  layoutDistributeMode,
+  layoutDistributeModes,
+  layoutGridCell,
+  layoutGridCellLabel,
+  layoutPackedDistributes,
+  layoutSpreadAxisLabel,
+  legacyScreenAlignment,
+  type LayoutDistributeMode,
+} from './mainMaterialFeedLayoutControls';
 import {
   feedDefaultTextFontCondensed,
   cloneFeedCardType,
@@ -92,11 +101,6 @@ export interface FeedRecipe {
   cardGap: number;
   newsGap: number;
 }
-
-const layoutPackedDistributes = ['start', 'center', 'end'] as const;
-const layoutDistributeModes = ['packed', 'between', 'around', 'evenly'] as const;
-const layoutCrossPositions = ['start', 'center', 'end'] as const;
-type LayoutDistributeMode = typeof layoutDistributeModes[number];
 
 interface StructureUndoSnapshot {
   label: string;
@@ -445,43 +449,6 @@ export const FeedRecipeEditor = (props: {
     const node = selectedTargetNode();
     return Boolean(node && (resolveLayoutWMode(node.layout) === 'hug' || resolveLayoutHMode(node.layout) === 'hug'));
   };
-  const layoutCrossToAlign = (cross: FeedNodeCrossAlign): FeedNodeAlign => (
-    cross === 'end' ? 'right' : cross === 'center' || cross === 'stretch' ? 'center' : 'left'
-  );
-  const layoutCrossToJustify = (cross: FeedNodeCrossAlign): FeedNodeJustify => (
-    cross === 'end' ? 'end' : cross === 'center' || cross === 'stretch' ? 'center' : 'start'
-  );
-  const layoutDistributeToAlign = (distribute: FeedNodeDistribute): FeedNodeAlign => (
-    distribute === 'end' ? 'right' : distribute === 'center' ? 'center' : 'left'
-  );
-  const layoutDistributeToJustify = (distribute: FeedNodeDistribute): FeedNodeJustify => (
-    distribute === 'end' ? 'end' : distribute === 'center' ? 'center' : 'start'
-  );
-  const layoutGridCell = (
-    direction: FeedNodeDirection,
-    visualRow: typeof layoutCrossPositions[number],
-    visualColumn: typeof layoutCrossPositions[number],
-  ): { cross: FeedNodeCrossAlign; distribute: FeedNodeDistribute } => (
-    direction === 'column'
-      ? { cross: visualColumn, distribute: visualRow }
-      : { cross: visualRow, distribute: visualColumn }
-  );
-  const layoutGridCellLabel = (
-    visualRow: typeof layoutCrossPositions[number],
-    visualColumn: typeof layoutCrossPositions[number],
-  ) => `${visualRow === 'start' ? 'T' : visualRow === 'center' ? 'M' : 'B'}${visualColumn === 'start' ? 'L' : visualColumn === 'center' ? 'C' : 'R'}`;
-  const layoutDistributeMode = (distribute: FeedNodeDistribute): LayoutDistributeMode => (
-    distribute === 'between' || distribute === 'around' || distribute === 'evenly' ? distribute : 'packed'
-  );
-  const legacyScreenAlignment = (
-    direction: FeedNodeDirection,
-    cross: FeedNodeCrossAlign,
-    distribute: FeedNodeDistribute,
-  ): Pick<FeedNodeLayout, 'align' | 'justify'> => (
-    direction === 'column'
-      ? { align: layoutCrossToAlign(cross), justify: layoutDistributeToJustify(distribute) }
-      : { align: layoutDistributeToAlign(distribute), justify: layoutCrossToJustify(cross) }
-  );
   const updateSelectedNodePackedAlignment = (cross: FeedNodeCrossAlign, distribute: FeedNodeDistribute) => {
     const node = selectedTargetNode();
     if (!node) return;
@@ -1244,7 +1211,7 @@ export const FeedRecipeEditor = (props: {
                 <Slider value={node().layout.gap} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('gap', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Align X' : 'Align Y'}</span>
+                <span>{layoutCrossAxisLabel(resolveLayoutDirection(node().layout))}</span>
                 <div
                   class="ui-lab-toggles"
                   style={{ display: 'grid', 'grid-template-columns': 'repeat(3, minmax(0, 1fr))', gap: '4px' }}
@@ -1272,7 +1239,7 @@ export const FeedRecipeEditor = (props: {
                 </div>
               </div>
               <div class="ui-lab-control-row">
-                <span>{resolveLayoutDirection(node().layout) === 'column' ? 'Spread Y' : 'Spread X'}</span>
+                <span>{layoutSpreadAxisLabel(resolveLayoutDirection(node().layout))}</span>
                 <div class="ui-lab-toggles">
                   <For each={layoutDistributeModes}>
                     {(mode) => (

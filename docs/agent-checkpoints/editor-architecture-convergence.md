@@ -1,7 +1,7 @@
 # Editor Architecture Convergence Checkpoint
 
-Last Updated: 2026-06-11
-Status: active - live export/CMS composition convergence
+Last Updated: 2026-06-12
+Status: active - editor control trust and proof convergence
 
 ## Goal
 
@@ -150,6 +150,98 @@ authoring JSON
 - [x] Added `docs/main-material-editor-architecture-handoff.md` so future
   prompts can reload what was built, how it works, current risks, and next
   steps.
+- [x] Added `docs/main-material-editor-control-contract-spec.md`, the
+  restartable inventory/spec for proving every visible editor control by state
+  read/write seam, preview effect, output effect, disabled behavior, and proof
+  level.
+- [x] Tightened `surfaceFieldMetadata.test.ts` with generic generated-control
+  metadata gates: every generated slider must declare a range or value stops,
+  stop lists must be strictly ascending, select/multi-toggle controls must have
+  unique options, and option labels must reference declared options.
+- [x] Added `SurfaceFieldControl.render.test.tsx`, a jsdom/Solid interaction
+  proof covering generated toggle, multi-toggle, numeric slider, stop slider,
+  select with contextual patching, color input, text input, state inherit
+  clearing, and disabled toggle behavior.
+- [x] Closed the generated surface-control proof slice with an in-app browser
+  proof on `/main-material`: selected
+  `feed:card:card_type_01:node:mission-briefing`, changed the generated
+  `Glass Blur` slider from `3` to `7`, and verified both the live selected
+  `.cd-surface` style and the active Export CSS inspector payload changed to
+  `--glass-blur: 7px`.
+- [x] Started `feed-layout-proof` with the user-reported center-pin semantics:
+  in the browser, `Pin V = center` aligned the Mission Briefing node center
+  within `0.004px` of its parent center and relabeled the slider to `Y Offset`;
+  setting `Y Offset = 10` moved the node center exactly `10%` of the parent
+  height below center while Export CSS showed normalized `top: calc(60%)` plus
+  `translateY(-50%)`.
+- [x] Added a feed-to-node bridge guard proving center-pinned layout emits
+  `left/top: calc(50% + offset%)` and preserves
+  `translateX(-50%) translateY(-50%)` in canonical layout output.
+- [x] Fixed and proved absolute W/H fill sizing in the feed layout compiler:
+  `feedNodeLayoutCss()` now emits `width: 100%` and `height: 100%` for
+  absolute fill modes instead of preserving stale fixed percentages.
+- [x] Expanded `feedNodeLayoutCss.test.ts` to cover absolute fixed/hug/fill,
+  in-flow fixed/hug/fill, and spread/cross-axis flex declarations.
+- [x] Added a feed-to-node bridge guard proving W/H fill reaches canonical
+  layout output as `width: 100%` and `height: 100%`.
+- [x] Browser-proved W/H fill in `/main-material`: on
+  `feed:card:card_type_01:node:mission-briefing`, clicking the real `W fill`
+  and `H fill` buttons activated both controls, disabled both size sliders,
+  emitted live `width: 100%; height: 100%`, produced geometry ratios of `1`,
+  and showed both declarations in Export CSS.
+- [x] Added feed-to-node bridge guards for pad/gap/spread: selected-node
+  `gap`, `--feed-node-gap`, `--feed-node-padding`,
+  `justify-content: space-between`, and `align-items: stretch` now have
+  canonical output assertions.
+- [x] Browser-proved pad/gap/spread in `/main-material`: on
+  `feed:card:card_type_01:node:mission-briefing`, setting `Pad = 24`,
+  `Line Gap = 18`, and `Spread Y = between` produced computed
+  `padding: 24px`, `gap: 18px`, and `justify-content: space-between`, with
+  matching Export CSS declarations/vars.
+- [x] Added a feed-to-node bridge guard proving W/H hug reaches canonical
+  layout output as `width: max-content` and `height: auto`.
+- [x] Browser-proved W/H hug in `/main-material`: on
+  `feed:card:card_type_01:node:mission-briefing`, clicking the real `W hug`
+  and `H hug` buttons activated both controls, disabled both size sliders,
+  emitted live `width: max-content; height: auto`, showed both declarations in
+  Export CSS, and measured the intended intrinsic behavior (`H hug` shrank
+  from full parent height to content height while `W hug` expanded to intrinsic
+  content width).
+- [x] Extracted feed layout-control mapping from `FeedRecipeEditor` into
+  `components/screens/main-material/mainMaterialFeedLayoutControls.ts`.
+- [x] Added `mainMaterialFeedLayoutControls.test.ts` to prove column vs row
+  visual-grid semantics, axis labels, distribution modes, and legacy
+  `align`/`justify` compatibility writes.
+- [x] Added a row-distribution feed-to-node bridge guard proving row direction,
+  even distribution, and end cross-alignment reach canonical CSS as
+  `flex-direction: row`, `justify-content: space-evenly`, and
+  `align-items: flex-end`.
+- [x] Browser-proved row-direction distribution in `/main-material`: on
+  `feed:card:card_type_01:node:mission-briefing`, clicking real `Direction row`
+  changed labels to `Align Y`/`Spread X` and emitted `flex-direction: row`;
+  clicking `BL` then `Spread X evenly` emitted live and Export CSS declarations
+  for `align-items: flex-end` and `justify-content: space-evenly`. Geometry
+  confirmed cross-axis end alignment because child bottoms aligned at the
+  content-box bottom (`606.133px`), one 24px padding inset above the container
+  bottom (`630.133px`).
+- [x] Added pure and bridge guards for the remaining selected-node layout
+  controls in this lane: in-flow mode, overlay-as-absolute, flow nudge
+  transforms, explicit pin-end overrides, fixed W/H sizes, and footer push.
+- [x] Browser-proved fixed-size and flow layout controls in `/main-material`:
+  real `W fixed`/`H fixed` plus `W size = 52`/`H size = 34` emitted
+  `width: 52%` and `height: 34%`; real `Mode flow`, `Self in-flow`,
+  `Slot footer`, `Nudge X = 14`, and `Nudge Y = -9` emitted
+  `position: relative`, `margin-left: auto`, and
+  `transform: translate(14px, -9px)` in live style and Export CSS, with stale
+  absolute left/top removed.
+- [x] Added root feed-layout contract helpers to
+  `mainMaterialFeedLayoutControls.ts`, covering defaults, clamps, and runtime
+  CSS var mapping for `Content Y`, `Copy Lift`, and `Dot Gap`.
+- [x] Routed `MainMaterialPreview`, `FeedCarousel`, and
+  `MainMaterialPreviewScreen` through those root feed-layout helpers so runtime
+  vars and persistence/import sanitization share the tested contract.
+- [x] Strengthened `mainMaterialEmissionOutput.test.ts` so all visible
+  inspector tab labels/statuses/payloads are contract-tested.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,
@@ -823,10 +915,22 @@ status feedback, and matching-field changed count, replacing
 prompt/clipboard-only import. The lower bound-field textarea is now labeled as
 a selected-field convenience editor, but still duplicates part of the document
 edit workflow. The durable handoff doc is
-`docs/main-material-editor-architecture-handoff.md`. The next bottleneck is
-splitting `mainMaterialFeedEditors.tsx` into focused structure/CMS/layout/text
-subeditors and deciding how much of the selected-field convenience path should
-survive once the CMS document path gets schema-aware field controls.
+`docs/main-material-editor-architecture-handoff.md`.
+
+The active trust spec is `docs/main-material-editor-control-contract-spec.md`.
+The goal has shifted from broad architecture extraction to proving the editor's
+visible controls. The generated surface-control proof slice now has metadata
+validity, `SurfaceFieldControl` interaction coverage for every shared control
+kind, contextual patch behavior for texture/edge wear, and browser proof that a
+generated control changes live Export CSS for a selected material target.
+
+The next bottleneck is either finishing the remaining layout edge cases
+(`wrap`, remaining Pin H/V constraints beyond center, and browser proof for the
+root feed layout sliders) or moving to `inspector-export-proof`. Selected-node
+layout controls now have contract and browser coverage for center pin, fill,
+hug, fixed size, row/column distribution, flow/in-flow, footer/pin-end, and
+nudge. Hug is proven, but the UI label may still need helper text or renaming
+because `max-content` can exceed the parent instead of fitting inside it.
 
 The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right

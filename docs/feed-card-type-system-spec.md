@@ -143,6 +143,7 @@ When Feed is selected:
 - `Selected Node` edits the selected child layout box when the target is a node.
 - Text and button nodes expose a simple `inherit/custom` switch. In inherit mode, Base Text is disabled and the node uses card type defaults. In custom mode, the selected node's Base Text controls edit only that node.
 - `Feed Layout` keeps carousel-level layout controls: Content Y, Copy Lift, and Dot Gap. It is shown only for card-root editing, not child-node editing.
+- The root feed layout contract is: `Content Y` stores `contentY` from `-32..48` with default `0` and emits `--main-content-y: <px>` on the main preview; `Copy Lift` stores `cardGap` from `8..32` with default `16` and emits `--main-card-gap: <px>` on the carousel; `Dot Gap` stores `newsGap` from `6..28` with default `10` and emits `--main-news-gap: <px>` on the carousel/dot row.
 
 ## Material Target Tree
 
