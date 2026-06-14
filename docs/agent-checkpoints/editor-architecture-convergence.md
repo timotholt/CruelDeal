@@ -242,6 +242,10 @@ authoring JSON
   vars and persistence/import sanitization share the tested contract.
 - [x] Strengthened `mainMaterialEmissionOutput.test.ts` so all visible
   inspector tab labels/statuses/payloads are contract-tested.
+- [x] Refactored selected-node X/Y label and range rules out of
+  `FeedRecipeEditor` and into `mainMaterialFeedLayoutControls.ts`, with tests
+  for in-flow labels, right/bottom labels, center-offset labels, and centered
+  slider ranges.
 - [x] Extracted chrome/workbench export-target construction into
   `components/screens/main-material/mainMaterialWorkbenchExportTargets.ts`, so
   `/material-main` no longer owns a local ID-by-ID map for top bar, wallet,

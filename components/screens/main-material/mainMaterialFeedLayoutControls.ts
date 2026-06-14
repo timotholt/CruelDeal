@@ -1,10 +1,15 @@
-import type {
-  FeedNodeAlign,
-  FeedNodeCrossAlign,
-  FeedNodeDirection,
-  FeedNodeDistribute,
-  FeedNodeJustify,
-  FeedNodeLayout,
+import {
+  resolveLayoutConstraintH,
+  resolveLayoutConstraintV,
+  resolveLayoutSelfPosition,
+  type FeedNodeAlign,
+  type FeedNodeConstraintH,
+  type FeedNodeConstraintV,
+  type FeedNodeCrossAlign,
+  type FeedNodeDirection,
+  type FeedNodeDistribute,
+  type FeedNodeJustify,
+  type FeedNodeLayout,
 } from './feedNodeLayoutCss';
 
 export interface FeedLayoutRecipe {
@@ -105,4 +110,38 @@ export const layoutCrossAxisLabel = (direction: FeedNodeDirection) => (
 
 export const layoutSpreadAxisLabel = (direction: FeedNodeDirection) => (
   direction === 'column' ? 'Spread Y' : 'Spread X'
+);
+
+export interface LayoutSliderRange {
+  min: number;
+  max: number;
+}
+
+const legacyPositionRange: LayoutSliderRange = { min: -50, max: 150 };
+const centeredOffsetRange: LayoutSliderRange = { min: -80, max: 80 };
+
+export const layoutXControlLabel = (layout?: FeedNodeLayout): string => {
+  if (!layout) return 'X';
+  if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old X';
+  const constraint: FeedNodeConstraintH = resolveLayoutConstraintH(layout);
+  if (constraint === 'center') return 'X Offset';
+  if (constraint === 'right') return 'Right';
+  return 'X';
+};
+
+export const layoutYControlLabel = (layout?: FeedNodeLayout): string => {
+  if (!layout) return 'Y';
+  if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old Y';
+  const constraint: FeedNodeConstraintV = resolveLayoutConstraintV(layout);
+  if (constraint === 'center') return 'Y Offset';
+  if (constraint === 'bottom') return 'Bottom';
+  return 'Y';
+};
+
+export const layoutXRange = (layout?: FeedNodeLayout): LayoutSliderRange => (
+  layout && resolveLayoutConstraintH(layout) === 'center' ? centeredOffsetRange : legacyPositionRange
+);
+
+export const layoutYRange = (layout?: FeedNodeLayout): LayoutSliderRange => (
+  layout && resolveLayoutConstraintV(layout) === 'center' ? centeredOffsetRange : legacyPositionRange
 );

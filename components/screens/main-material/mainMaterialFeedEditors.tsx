@@ -35,6 +35,10 @@ import {
   layoutGridCellLabel,
   layoutPackedDistributes,
   layoutSpreadAxisLabel,
+  layoutXControlLabel,
+  layoutXRange,
+  layoutYControlLabel,
+  layoutYRange,
   legacyScreenAlignment,
   type LayoutDistributeMode,
 } from './mainMaterialFeedLayoutControls';
@@ -474,36 +478,6 @@ export const FeedRecipeEditor = (props: {
     });
   };
   const selectedNodeLayout = () => selectedTargetNode()?.layout;
-  const layoutXControlLabel = () => {
-    const layout = selectedNodeLayout();
-    if (!layout) return 'X';
-    if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old X';
-    const constraint = resolveLayoutConstraintH(layout);
-    if (constraint === 'center') return 'X Offset';
-    if (constraint === 'right') return 'Right';
-    return 'X';
-  };
-  const layoutYControlLabel = () => {
-    const layout = selectedNodeLayout();
-    if (!layout) return 'Y';
-    if (resolveLayoutSelfPosition(layout) === 'in-flow') return 'Old Y';
-    const constraint = resolveLayoutConstraintV(layout);
-    if (constraint === 'center') return 'Y Offset';
-    if (constraint === 'bottom') return 'Bottom';
-    return 'Y';
-  };
-  const layoutXRange = () => {
-    const layout = selectedNodeLayout();
-    return layout && resolveLayoutConstraintH(layout) === 'center'
-      ? { min: -80, max: 80 }
-      : { min: -50, max: 150 };
-  };
-  const layoutYRange = () => {
-    const layout = selectedNodeLayout();
-    return layout && resolveLayoutConstraintV(layout) === 'center'
-      ? { min: -80, max: 80 }
-      : { min: -50, max: 150 };
-  };
   const updateSelectedNodeTextStyle = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
     const node = selectedTargetNode();
     if (!node || !selectedNodeCanEditText()) return;
@@ -1153,12 +1127,12 @@ export const FeedRecipeEditor = (props: {
                 </div>
               </Show>
               <div class="ui-lab-control-row">
-                <span>{layoutXControlLabel()}</span>
-                <Slider value={node().layout.x} min={layoutXRange().min} max={layoutXRange().max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+                <span>{layoutXControlLabel(node().layout)}</span>
+                <Slider value={node().layout.x} min={layoutXRange(node().layout).min} max={layoutXRange(node().layout).max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
               </div>
               <div class="ui-lab-control-row">
-                <span>{layoutYControlLabel()}</span>
-                <Slider value={node().layout.y} min={layoutYRange().min} max={layoutYRange().max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+                <span>{layoutYControlLabel(node().layout)}</span>
+                <Slider value={node().layout.y} min={layoutYRange(node().layout).min} max={layoutYRange(node().layout).max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>W</span>

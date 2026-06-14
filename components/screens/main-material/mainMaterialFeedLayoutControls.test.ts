@@ -8,9 +8,30 @@ import {
   layoutGridCell,
   layoutGridCellLabel,
   layoutSpreadAxisLabel,
+  layoutXControlLabel,
+  layoutXRange,
+  layoutYControlLabel,
+  layoutYRange,
   legacyScreenAlignment,
   sanitizeFeedLayoutRecipe,
 } from './mainMaterialFeedLayoutControls';
+import type { FeedNodeLayout } from './feedNodeLayoutCss';
+
+const layout = (overrides: Partial<FeedNodeLayout> = {}): FeedNodeLayout => ({
+  mode: 'absolute',
+  slot: 'auto',
+  x: 10,
+  y: 20,
+  width: 30,
+  height: 40,
+  nudgeX: 0,
+  nudgeY: 0,
+  padding: 0,
+  gap: 0,
+  align: 'left',
+  justify: 'start',
+  ...overrides,
+});
 
 assert.deepEqual(defaultFeedLayoutRecipe, {
   contentY: 0,
@@ -88,5 +109,18 @@ assert.equal(layoutCrossAxisLabel('column'), 'Align X');
 assert.equal(layoutCrossAxisLabel('row'), 'Align Y');
 assert.equal(layoutSpreadAxisLabel('column'), 'Spread Y');
 assert.equal(layoutSpreadAxisLabel('row'), 'Spread X');
+
+assert.equal(layoutXControlLabel(), 'X');
+assert.equal(layoutYControlLabel(), 'Y');
+assert.equal(layoutXControlLabel(layout({ constraintH: 'center' })), 'X Offset');
+assert.equal(layoutYControlLabel(layout({ constraintV: 'center' })), 'Y Offset');
+assert.equal(layoutXControlLabel(layout({ constraintH: 'right' })), 'Right');
+assert.equal(layoutYControlLabel(layout({ constraintV: 'bottom' })), 'Bottom');
+assert.equal(layoutXControlLabel(layout({ mode: 'flow', selfPosition: 'in-flow' })), 'Old X');
+assert.equal(layoutYControlLabel(layout({ mode: 'flow', selfPosition: 'in-flow' })), 'Old Y');
+assert.deepEqual(layoutXRange(layout()), { min: -50, max: 150 });
+assert.deepEqual(layoutYRange(layout()), { min: -50, max: 150 });
+assert.deepEqual(layoutXRange(layout({ constraintH: 'center' })), { min: -80, max: 80 });
+assert.deepEqual(layoutYRange(layout({ constraintV: 'center' })), { min: -80, max: 80 });
 
 console.log('Feed layout control mapping tests passed');
