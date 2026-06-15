@@ -7,7 +7,13 @@ import {
   feedNodeSurfaceRecipe,
   resolveFeedNodeRenderMode,
 } from './mainMaterialFeedText';
-import { feedNodeLayoutCss, resolveLayoutSelfPosition } from './feedNodeLayoutCss';
+import {
+  feedNodeLayoutCss,
+  resolveLayoutDirection,
+  resolveLayoutHMode,
+  resolveLayoutSelfPosition,
+  resolveLayoutWMode,
+} from './feedNodeLayoutCss';
 
 // Phase 2a bridge: pure, additive converter from the Feed model to the canonical
 // MaterialNodeRecipe tree. Reuses the existing Feed resolvers (surface fold, render
@@ -37,9 +43,15 @@ export const feedCardNodeToMaterialNode = (
   if (node.type === 'container' && node.layout.padding > 0) {
     layoutStyle.padding = `${node.layout.padding}px`;
   }
-  const layoutClassName = node.presentation === 'fingerprint-hold'
-    ? 'main-material-fingerprint-hold-node'
-    : undefined;
+  const layoutClassName = [
+    node.presentation === 'fingerprint-hold' ? 'main-material-fingerprint-hold-node' : undefined,
+    `main-material-card-node--layout-${node.layout.mode}`,
+    `main-material-card-node--slot-${node.layout.slot}`,
+    `main-material-card-node--w-${resolveLayoutWMode(node.layout)}`,
+    `main-material-card-node--h-${resolveLayoutHMode(node.layout)}`,
+    `main-material-card-node--direction-${resolveLayoutDirection(node.layout)}`,
+    node.layout.wrap ? 'main-material-card-node--wrap' : undefined,
+  ].filter(Boolean).join(' ');
   if (node.holdDurationMs !== undefined) {
     (layoutStyle as Record<string, string>)['--main-material-hold-duration'] = `${node.holdDurationMs}ms`;
   }

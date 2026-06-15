@@ -24,6 +24,7 @@ const tree = feedCardTypeToMaterialNodeTree(cardType);
 const context: MaterialNodeRenderContext = {
   treeId: 'parity-test',
   resolveBinding: (binding) => feedStoryValue(story, binding as any),
+  childStackClassForNode: () => 'main-material-card-node-flow-stack',
 };
 
 const collectBindings = (node: any, out: string[] = []): string[] => {
@@ -66,6 +67,14 @@ describe('Phase 2b: canonical renderer parity on bridged feed tree', () => {
     const el = mount();
     expect(el.querySelector('.material-node--container')).toBeTruthy();
     expect(el.querySelector('.material-node--text')).toBeTruthy();
+  });
+
+  it('places container children inside the product flow stack', () => {
+    const el = mount();
+    const container = el.querySelector('.material-node--container');
+    const stack = container?.querySelector(':scope > .main-material-card-node-flow-stack');
+    expect(stack).toBeTruthy();
+    expect(stack?.querySelector('.material-node')).toBeTruthy();
   });
 
   it('resolves bound story copy into the rendered DOM (content parity)', () => {

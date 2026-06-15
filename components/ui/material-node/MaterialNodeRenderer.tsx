@@ -26,9 +26,20 @@ export const MaterialNodeRenderer = (props: {
     props.context.classForNode?.(props.node, role()),
     props.context.selectedClassForNode?.(props.node),
   ].filter(Boolean).join(' ');
+  const childStackClass = () => props.context.childStackClassForNode?.(props.node, role());
   const surfaceClass = () => props.context.surfaceClassForNode?.(props.node, role()) ?? '';
   const hasChildren = () => (props.node.children?.length ?? 0) > 0;
   const showContent = () => props.node.content && props.node.content.mode !== 'none';
+  const renderedChildren = () => (
+    <>
+      <Show when={showContent()}>
+        <MaterialNodeContentRenderer node={props.node} context={props.context} fill />
+      </Show>
+      <For each={props.node.children || []}>
+        {(child) => <MaterialNodeRenderer node={child} context={props.context} />}
+      </For>
+    </>
+  );
 
   return (
     <MaterialNodeFrame node={props.node} role={role()} targetId={targetId()} class={frameClass()}>
@@ -61,12 +72,13 @@ export const MaterialNodeRenderer = (props: {
             asBackground
           />
         </Show>
-        <Show when={showContent()}>
-          <MaterialNodeContentRenderer node={props.node} context={props.context} fill />
+        <Show when={childStackClass()} fallback={renderedChildren()}>
+          {(stackClass) => (
+            <div class={stackClass()}>
+              {renderedChildren()}
+            </div>
+          )}
         </Show>
-        <For each={props.node.children || []}>
-          {(child) => <MaterialNodeRenderer node={child} context={props.context} />}
-        </For>
       </Show>
     </MaterialNodeFrame>
   );

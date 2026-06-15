@@ -106,6 +106,7 @@ export interface MaterialNodeRenderContext {
   targetIdForNode?: (node: MaterialNodeRecipe) => string;
   selectedClassForNode?: (node: MaterialNodeRecipe) => string;
   classForNode?: (node: MaterialNodeRecipe, role: MaterialNodeRole) => string;
+  childStackClassForNode?: (node: MaterialNodeRecipe, role: MaterialNodeRole) => string;
   surfaceClassForNode?: (node: MaterialNodeRecipe, role: MaterialNodeRole) => string;
   surfacePropsForNode?: (
     node: MaterialNodeRecipe,

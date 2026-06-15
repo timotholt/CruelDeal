@@ -333,6 +333,18 @@ const feedTextSlotDefaultOverrides: Partial<Record<FeedTextSlotId, Partial<FeedT
     letterSpacing: 0.02,
     textAlign: 'left',
   },
+  contractRewardLabel: {
+    overrideColor: true,
+    overrideOpacity: true,
+    overrideWeight: true,
+    overrideLineHeight: true,
+    overrideLetterSpacing: true,
+    contentTone: 'gold',
+    textOpacity: 94,
+    fontWeight: 700,
+    lineHeight: 0.98,
+    letterSpacing: 0.08,
+  },
 };
 
 const defaultFeedSlotOverrides = (
@@ -806,7 +818,7 @@ export const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'
 });
 
 const legacyContractRewardSummary = "[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]\n[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]";
-const defaultContractRewardSummary = "[small]Deposit:[/small]\n[h3]200 [accent]CR[/accent][/h3]\n[small]Success:[/small]\n[h3]800 [accent]CR[/accent][/h3]";
+const defaultContractRewardSummary = "[small][acc1]Deposit:[/acc1][/small]\n[h3]200 [accent]CR[/accent][/h3]\n[small][acc1]Success:[/acc1][/small]\n[h3]800 [accent]CR[/accent][/h3]";
 
 export const sanitizeFeedBackgroundImage = (
   value: unknown,

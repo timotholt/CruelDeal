@@ -19,6 +19,7 @@ export const CanonicalCardProofScreen = () => {
   const context: MaterialNodeRenderContext = {
     treeId: cardType.id,
     resolveBinding: (binding) => feedStoryValue(story, binding as never),
+    childStackClassForNode: () => 'main-material-card-node-flow-stack',
   };
   return (
     <div style={{ padding: '24px', background: '#14110b', 'min-height': '100vh' }}>

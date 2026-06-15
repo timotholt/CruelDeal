@@ -1126,14 +1126,16 @@ export const FeedRecipeEditor = (props: {
                   </div>
                 </div>
               </Show>
-              <div class="ui-lab-control-row">
-                <span>{layoutXControlLabel(node().layout)}</span>
-                <Slider value={node().layout.x} min={layoutXRange(node().layout).min} max={layoutXRange(node().layout).max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('x', value)} />
-              </div>
-              <div class="ui-lab-control-row">
-                <span>{layoutYControlLabel(node().layout)}</span>
-                <Slider value={node().layout.y} min={layoutYRange(node().layout).min} max={layoutYRange(node().layout).max} disabled={resolveLayoutSelfPosition(node().layout) === 'in-flow'} onInput={(value) => updateSelectedNodeLayout('y', value)} />
-              </div>
+              <Show when={resolveLayoutSelfPosition(node().layout) === 'absolute'}>
+                <div class="ui-lab-control-row">
+                  <span>{layoutXControlLabel(node().layout)}</span>
+                  <Slider value={node().layout.x} min={layoutXRange(node().layout).min} max={layoutXRange(node().layout).max} onInput={(value) => updateSelectedNodeLayout('x', value)} />
+                </div>
+                <div class="ui-lab-control-row">
+                  <span>{layoutYControlLabel(node().layout)}</span>
+                  <Slider value={node().layout.y} min={layoutYRange(node().layout).min} max={layoutYRange(node().layout).max} onInput={(value) => updateSelectedNodeLayout('y', value)} />
+                </div>
+              </Show>
               <div class="ui-lab-control-row">
                 <span>W</span>
                 <div class="ui-lab-toggles">
@@ -1263,6 +1265,8 @@ export const FeedTextGlobalsEditor = (props: {
     { label: 'H1', slot: 'contractEyebrow', line: true },
     { label: 'H2', slot: 'contractTitle', line: true },
     { label: 'H3', slot: 'contractRewardValue', line: true },
+    { label: 'Reward Label', slot: 'contractRewardLabel', line: true, track: true },
+    { label: 'Reward Summary', slot: 'contractRewardSummary', paragraph: true, line: true, track: true },
     { label: 'H4', slot: 'contractH4', line: true },
     { label: 'Acc 1', slot: 'contractAcc1' },
     { label: 'Acc 2', slot: 'contractAcc2' },
@@ -1277,6 +1281,8 @@ export const FeedTextGlobalsEditor = (props: {
     'contractEyebrow',
     'contractTitle',
     'contractRewardValue',
+    'contractRewardLabel',
+    'contractRewardSummary',
     'contractH4',
     'contractAcc1',
     'contractAcc2',

@@ -2117,6 +2117,7 @@ const SurfaceRecipeEditor = (props: {
   onSavePreset: () => void;
   onSaveNewPreset: () => void;
   onDeletePreset: () => void;
+  onResetRecipe?: () => void;
   onChange: (recipe: MaterialRecipe) => void;
   activeState: MaterialRecipeState;
   onActiveStateChange: (state: MaterialRecipeState) => void;
@@ -2141,7 +2142,12 @@ const SurfaceRecipeEditor = (props: {
       <div class="main-material-preset-actions">
         <button type="button" class="ui-lab-mini-button" onClick={props.onSavePreset}>Save</button>
         <button type="button" class="ui-lab-mini-button" onClick={props.onSaveNewPreset}>Save New</button>
-        <button type="button" class="ui-lab-mini-button" disabled={!props.selectedPresetId} onClick={props.onDeletePreset}>Delete</button>
+        <button type="button" class="ui-lab-mini-button" disabled={!props.selectedPresetId} onClick={props.onDeletePreset}>Delete Preset</button>
+        <Show when={props.onResetRecipe}>
+          {(onResetRecipe) => (
+            <button type="button" class="ui-lab-mini-button" onClick={onResetRecipe()}>Reset Surface</button>
+          )}
+        </Show>
       </div>
       <Show when={props.presetDirty}>
         <p class="main-material-preset-dirty">Changes not saved</p>
@@ -2785,6 +2791,16 @@ export const MainMaterialPreviewScreen = () => {
     return surfaceRecipeForPart(part, surfaces());
   };
 
+  const defaultFeedMaterialRecipeForTarget = (targetId: FeedMaterialTargetId): MaterialRecipe => {
+    const parsed = parseFeedMaterialTargetId<FeedCardTypeId>(targetId);
+    if (!parsed) return createFeedRegionSurface();
+    const cardType = defaultFeedCardTypes[parsed.cardTypeId] || defaultFeedCardTypes.card_type_01;
+    if (!parsed.nodeId) return cloneMaterialRecipe(cardType.surface);
+    return cloneMaterialRecipe(
+      findTreeNodeById(cardType.children, parsed.nodeId)?.surface || createFeedRegionSurface(),
+    );
+  };
+
   const applyRecipeForPart = (part: MainPartId, recipe: MaterialRecipe) => {
     const target = recipeApplicationTargetForPart(part);
     const nextRecipe = part === 'feedCards'
@@ -2806,6 +2822,17 @@ export const MainMaterialPreviewScreen = () => {
     const preset = materialPresets()[part].find((item) => item.id === id);
     if (preset) applyRecipeForPart(part, preset.recipe);
     clearPresetDirty(part);
+  };
+
+  const resetCurrentSurfaceRecipe = (part: MainPartId) => {
+    const target = recipeApplicationTargetForPart(part);
+    if (target.kind === 'feed-target') {
+      updateSelectedFeedMaterialRecipe(defaultFeedMaterialRecipeForTarget(selectedFeedTargetId()));
+    }
+    if (target.kind === 'surface') {
+      updateSurfaceForPart(part, target.surfaceKey, cloneMaterialRecipe(defaultSurfaceForPart(part)));
+    }
+    setSelectedPresetId(part, '');
   };
 
   const createPresetId = (part: MainPartId) => `${part}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3058,6 +3085,7 @@ export const MainMaterialPreviewScreen = () => {
                                         onSavePreset={() => saveMaterialPreset('navBarContainer')}
                                         onSaveNewPreset={() => saveNewMaterialPreset('navBarContainer')}
                                         onDeletePreset={() => deleteMaterialPreset('navBarContainer')}
+                                        onResetRecipe={() => resetCurrentSurfaceRecipe('navBarContainer')}
                                         onChange={(recipe) => updateSurfaceForPart('navBarContainer', 'navContainer', recipe)}
                                         activeState={selectedPreviewState()}
                                         onActiveStateChange={setSelectedPreviewState}
@@ -3081,6 +3109,7 @@ export const MainMaterialPreviewScreen = () => {
                                     onSavePreset={() => saveMaterialPreset('navBar')}
                                     onSaveNewPreset={() => saveNewMaterialPreset('navBar')}
                                     onDeletePreset={() => deleteMaterialPreset('navBar')}
+                                    onResetRecipe={() => resetCurrentSurfaceRecipe('navBar')}
                                     onChange={(recipe) => updateSurfaceForPart('navBar', 'nav', recipe)}
                                     activeState={selectedPreviewState()}
                                     onActiveStateChange={setSelectedPreviewState}
@@ -3105,6 +3134,7 @@ export const MainMaterialPreviewScreen = () => {
                                 onSavePreset={() => saveMaterialPreset('toolBar')}
                                 onSaveNewPreset={() => saveNewMaterialPreset('toolBar')}
                                 onDeletePreset={() => deleteMaterialPreset('toolBar')}
+                                onResetRecipe={() => resetCurrentSurfaceRecipe('toolBar')}
                                 onChange={(recipe) => updateSurfaceForPart('toolBar', 'toolbar', recipe)}
                                 activeState={selectedPreviewState()}
                                 onActiveStateChange={setSelectedPreviewState}
@@ -3128,6 +3158,7 @@ export const MainMaterialPreviewScreen = () => {
                             onSavePreset={() => saveMaterialPreset('feedCards')}
                             onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
                             onDeletePreset={() => deleteMaterialPreset('feedCards')}
+                            onResetRecipe={() => resetCurrentSurfaceRecipe('feedCards')}
                             onChange={updateSelectedFeedMaterialRecipe}
                             activeState={selectedPreviewState()}
                             onActiveStateChange={setSelectedPreviewState}
@@ -3175,6 +3206,7 @@ export const MainMaterialPreviewScreen = () => {
                     onSavePreset={() => saveMaterialPreset('currencyButtons')}
                     onSaveNewPreset={() => saveNewMaterialPreset('currencyButtons')}
                     onDeletePreset={() => deleteMaterialPreset('currencyButtons')}
+                    onResetRecipe={() => resetCurrentSurfaceRecipe('currencyButtons')}
                     onChange={(recipe) => updateSurfaceForPart('currencyButtons', 'currencies', recipe)}
                     activeState={selectedPreviewState()}
                     onActiveStateChange={setSelectedPreviewState}
@@ -3198,6 +3230,7 @@ export const MainMaterialPreviewScreen = () => {
                 onSavePreset={() => saveMaterialPreset('profileButton')}
                 onSaveNewPreset={() => saveNewMaterialPreset('profileButton')}
                 onDeletePreset={() => deleteMaterialPreset('profileButton')}
+                onResetRecipe={() => resetCurrentSurfaceRecipe('profileButton')}
                 onChange={(recipe) => updateSurfaceForPart('profileButton', 'profile', recipe)}
                 activeState={selectedPreviewState()}
                 onActiveStateChange={setSelectedPreviewState}
@@ -3221,6 +3254,7 @@ export const MainMaterialPreviewScreen = () => {
             onSavePreset={() => saveMaterialPreset('topBar')}
             onSaveNewPreset={() => saveNewMaterialPreset('topBar')}
             onDeletePreset={() => deleteMaterialPreset('topBar')}
+            onResetRecipe={() => resetCurrentSurfaceRecipe('topBar')}
             onChange={(recipe) => updateSurfaceForPart('topBar', 'topBar', recipe)}
             activeState={selectedPreviewState()}
             onActiveStateChange={setSelectedPreviewState}
@@ -3244,6 +3278,7 @@ export const MainMaterialPreviewScreen = () => {
         onSavePreset={() => saveMaterialPreset('backdrop')}
         onSaveNewPreset={() => saveNewMaterialPreset('backdrop')}
         onDeletePreset={() => deleteMaterialPreset('backdrop')}
+        onResetRecipe={() => resetCurrentSurfaceRecipe('backdrop')}
         onChange={(recipe) => updateSurfaceForPart('backdrop', 'backdrop', recipe)}
         activeState={selectedPreviewState()}
         onActiveStateChange={setSelectedPreviewState}

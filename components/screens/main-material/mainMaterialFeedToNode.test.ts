@@ -30,6 +30,13 @@ const countMaterialNodes = (nodes: MaterialNodeRecipe[] | undefined): number => 
   return nodes.reduce((sum, node) => sum + 1 + countMaterialNodes(node.children), 0);
 };
 
+const assertClassIncludes = (value: string | undefined, expected: string, message: string) => {
+  assert.ok(
+    (value ?? '').split(/\s+/).includes(expected),
+    `${message}: expected class "${expected}" in "${value ?? ''}"`,
+  );
+};
+
 // Walk both source and converted trees in lockstep, asserting structural alignment.
 const assertNodeAligned = (cardType: FeedCardTypeRecipe, source: FeedCardNode, node: MaterialNodeRecipe) => {
   assert.ok(node.id && node.id.length > 0, `node id must be non-empty (source ${source.id})`);
@@ -194,7 +201,7 @@ const fingerprintNode = feedCardNodeToMaterialNode(firstCard, {
   presentation: 'fingerprint-hold',
   holdDurationMs: 1800,
 });
-assert.equal(
+assertClassIncludes(
   fingerprintNode.layout?.className,
   'main-material-fingerprint-hold-node',
   'fingerprint hold presentation must compile to the canonical renderer class',
@@ -247,6 +254,11 @@ const rowSpreadMissionStyle = rowSpreadMissionNode.layout?.style as Record<strin
 assert.equal(rowSpreadMissionStyle?.['flex-direction'], 'row');
 assert.equal(rowSpreadMissionStyle?.['justify-content'], 'space-evenly');
 assert.equal(rowSpreadMissionStyle?.['align-items'], 'flex-end');
+assertClassIncludes(
+  rowSpreadMissionNode.layout?.className,
+  'main-material-card-node--direction-row',
+  'row direction must reach canonical CSS selectors',
+);
 
 const huggedMissionNode = feedCardNodeToMaterialNode(missionCard, {
   ...missionSourceNode,
@@ -258,6 +270,16 @@ const huggedMissionNode = feedCardNodeToMaterialNode(missionCard, {
 });
 assert.equal(huggedMissionNode.layout?.style?.width, 'max-content', 'W hug must reach canonical layout width');
 assert.equal(huggedMissionNode.layout?.style?.height, 'auto', 'H hug must reach canonical layout height');
+assertClassIncludes(
+  huggedMissionNode.layout?.className,
+  'main-material-card-node--w-hug',
+  'W hug must reach canonical CSS selectors',
+);
+assertClassIncludes(
+  huggedMissionNode.layout?.className,
+  'main-material-card-node--h-hug',
+  'H hug must reach canonical CSS selectors',
+);
 
 const filledMissionNode = feedCardNodeToMaterialNode(missionCard, {
   ...missionSourceNode,
@@ -269,6 +291,16 @@ const filledMissionNode = feedCardNodeToMaterialNode(missionCard, {
 });
 assert.equal(filledMissionNode.layout?.style?.width, '100%', 'W fill must reach canonical layout width');
 assert.equal(filledMissionNode.layout?.style?.height, '100%', 'H fill must reach canonical layout height');
+assertClassIncludes(
+  filledMissionNode.layout?.className,
+  'main-material-card-node--w-fill',
+  'W fill must reach canonical CSS selectors',
+);
+assertClassIncludes(
+  filledMissionNode.layout?.className,
+  'main-material-card-node--h-fill',
+  'H fill must reach canonical CSS selectors',
+);
 
 const fixedMissionNode = feedCardNodeToMaterialNode(missionCard, {
   ...missionSourceNode,

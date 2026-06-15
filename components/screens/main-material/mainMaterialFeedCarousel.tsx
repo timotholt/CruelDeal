@@ -492,6 +492,7 @@ const CanonicalFeedCardTree = (props: {
       holdingNodeId() === node.id ? 'main-material-fingerprint-hold-node--holding' : undefined,
       completedNodeId() === node.id ? 'main-material-fingerprint-hold-node--complete' : undefined,
     ].filter(Boolean).join(' '),
+    childStackClassForNode: () => 'main-material-card-node-flow-stack',
     surfaceClassForNode: (node) => feedSurfaceClassForNode(node),
     surfacePropsForNode: (node, _role, state) => props.surfacePropsForRecipe(node.surface!, state),
     buttonPropsForNode: (node, _role, state) => props.buttonPropsForRecipe(node.surface!, state),
