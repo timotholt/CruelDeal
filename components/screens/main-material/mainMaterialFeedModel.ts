@@ -37,6 +37,7 @@ export const feedTextSlotIds = [
   'contractBody',
   'contractRewardLabel',
   'contractRewardValue',
+  'contractRewardSummary',
   'contractH4',
   'contractAcc1',
   'contractAcc2',
@@ -66,6 +67,7 @@ export const feedTextSlotLabels: Record<FeedTextSlotId, string> = {
   contractBody: 'Contract Body',
   contractRewardLabel: 'Reward Label',
   contractRewardValue: 'Reward Value',
+  contractRewardSummary: 'Reward Summary',
   contractH4: 'H4',
   contractAcc1: 'Acc 1',
   contractAcc2: 'Acc 2',
@@ -84,6 +86,7 @@ export const feedSlotsInheritingBodyWeight: ReadonlySet<FeedTextSlotId> = new Se
   'contractEyebrow',
   'contractTitle',
   'contractRewardValue',
+  'contractRewardSummary',
   'contractH4',
   'contractAcc1',
   'contractAcc2',
@@ -182,6 +185,7 @@ export type FeedNodeTextRender = 'auto' | 'rich' | 'fit' | 'raw';
 export type FeedNodeMarkupMode = 'auto' | 'on' | 'off';
 export type FeedNodeSizingMode = 'auto' | 'fit' | 'flow';
 export type FeedCardNodeType = 'container' | 'text' | 'button';
+export type FeedCardNodePresentation = 'default' | 'fingerprint-hold';
 
 export interface FeedCardNode {
   id: string;
@@ -196,6 +200,8 @@ export interface FeedCardNode {
   sizing?: FeedNodeSizingMode;
   fitMode?: MaterialTextFitMode;
   maxLines?: number;
+  presentation?: FeedCardNodePresentation;
+  holdDurationMs?: number;
   children?: FeedCardNode[];
 }
 
@@ -228,6 +234,7 @@ export interface FeedStory {
   contractBody?: string;
   contractRewardLabel?: string;
   contractRewardValue?: string;
+  contractRewardSummary?: string;
   contractRule?: string;
   contractCtaLabel?: string;
   seasonBadge?: string;
@@ -300,7 +307,46 @@ export const createFeedSlotStyle = (
   ...overrides,
 });
 
-export const cloneFeedSlotStyle = (style: FeedTextSlotStyle): FeedTextSlotStyle => ({ ...style });
+const feedTextSlotDefaultOverrides: Partial<Record<FeedTextSlotId, Partial<FeedTextSlotStyle>>> = {
+  contractRewardSummary: {
+    overrideColor: true,
+    overrideOpacity: true,
+    overrideFont: true,
+    overrideSize: true,
+    overrideStyle: true,
+    overrideCase: true,
+    overrideEmboss: true,
+    overrideLineHeight: true,
+    overrideParagraphGap: true,
+    overrideLetterSpacing: true,
+    overrideAlign: true,
+    overridePosition: true,
+    textFontFamily: feedDefaultTextFontCondensed,
+    textSizeRem: 1,
+    lineHeight: 1,
+    paragraphGap: 0,
+    contentTone: 'white',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    textEmbossMode: 'dark',
+    textOpacity: 94,
+    letterSpacing: 0.02,
+    textAlign: 'left',
+  },
+};
+
+const defaultFeedSlotOverrides = (
+  slot: FeedTextSlotId,
+  overrides: Partial<FeedTextSlotStyle> = {},
+): Partial<FeedTextSlotStyle> => ({
+  ...(feedTextSlotDefaultOverrides[slot] || {}),
+  ...overrides,
+  overrideWeight: overrides.overrideWeight
+    ?? feedTextSlotDefaultOverrides[slot]?.overrideWeight
+    ?? !feedSlotsInheritingBodyWeight.has(slot),
+});
+
+export const cloneFeedSlotStyle = (style?: Partial<FeedTextSlotStyle>): FeedTextSlotStyle => createFeedSlotStyle(style || {});
 
 export const createFeedSlots = (
   overrides: Partial<Record<FeedTextSlotId, Partial<FeedTextSlotStyle>>> = {},
@@ -309,10 +355,7 @@ export const createFeedSlots = (
     const slotOverrides = overrides[slot] || {};
     return [
       slot,
-      createFeedSlotStyle({
-        ...slotOverrides,
-        overrideWeight: slotOverrides.overrideWeight ?? !feedSlotsInheritingBodyWeight.has(slot),
-      }),
+      createFeedSlotStyle(defaultFeedSlotOverrides(slot, slotOverrides)),
     ];
   }),
 ) as Record<FeedTextSlotId, FeedTextSlotStyle>;
@@ -350,6 +393,8 @@ export const createFeedNode = (
   sizing: overrides.sizing,
   fitMode: overrides.fitMode,
   maxLines: overrides.maxLines,
+  presentation: overrides.presentation,
+  holdDurationMs: overrides.holdDurationMs,
   children: overrides.children?.map((child) => cloneFeedCardNode(child)) || [],
 });
 
@@ -367,7 +412,12 @@ export const cloneFeedCardType = (cardType: FeedCardTypeRecipe): FeedCardTypeRec
   backgroundImage: { ...cardType.backgroundImage },
   children: cardType.children.map((child) => cloneFeedCardNode(child)),
   slots: Object.fromEntries(
-    feedTextSlotIds.map((slot) => [slot, cloneFeedSlotStyle(cardType.slots[slot])]),
+    feedTextSlotIds.map((slot) => [
+      slot,
+      cardType.slots[slot]
+        ? cloneFeedSlotStyle(cardType.slots[slot])
+        : createFeedSlotStyle(defaultFeedSlotOverrides(slot)),
+    ]),
   ) as Record<FeedTextSlotId, FeedTextSlotStyle>,
 });
 
@@ -755,6 +805,9 @@ export const createDefaultFeedCardTypes = (): Omit<FeedCardTypes, 'card_type_04'
   card_type_03: createDefaultCommunityCardType(),
 });
 
+const legacyContractRewardSummary = "[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]\n[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]";
+const defaultContractRewardSummary = "[small]Deposit:[/small]\n[h3]200 [accent]CR[/accent][/h3]\n[small]Success:[/small]\n[h3]800 [accent]CR[/accent][/h3]";
+
 export const sanitizeFeedBackgroundImage = (
   value: unknown,
   fallback: FeedBackgroundImageRecipe,
@@ -819,6 +872,20 @@ export const sanitizeFeedTextSlotStyle = (
   };
 };
 
+const isLegacyGenericRewardSummarySlot = (value: unknown): boolean => {
+  if (typeof value !== 'object' || value === null) return false;
+  const input = value as Partial<FeedTextSlotStyle>;
+  return (
+    input.contentTone === 'black'
+    && (input.textOpacity === undefined || input.textOpacity === 90)
+    && (input.textSizeRem === undefined || input.textSizeRem === 1)
+    && (input.lineHeight === undefined || input.lineHeight === 1)
+    && (input.paragraphGap === undefined || input.paragraphGap === 0)
+    && (input.textTransform === undefined || input.textTransform === 'uppercase')
+    && (input.textEmbossMode === undefined || input.textEmbossMode === 'dark')
+  );
+};
+
 export const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout): FeedNodeLayout => {
   const input = typeof value === 'object' && value !== null ? value as Partial<FeedNodeLayout> : {};
   return {
@@ -878,6 +945,12 @@ export const sanitizeFeedCardNode = (
     sizing: isOneOf(input.sizing, ['auto', 'fit', 'flow'] as const) ? input.sizing : fallback.sizing,
     fitMode: isOneOf(input.fitMode, ['single-line', 'fixed-lines', 'paragraph'] as const) ? input.fitMode : fallback.fitMode,
     maxLines: clamp(input.maxLines, fallback.maxLines ?? 1, 1, 8),
+    presentation: isOneOf(input.presentation, ['default', 'fingerprint-hold'] as const)
+      ? input.presentation
+      : fallback.presentation,
+    holdDurationMs: typeof input.holdDurationMs === 'number' || fallback.holdDurationMs !== undefined
+      ? clamp(input.holdDurationMs, fallback.holdDurationMs ?? 1400, 300, 5000)
+      : undefined,
     children: (fallback.children || []).map((childFallback, index) => (
       sanitizeFeedCardNode(childrenInput[index], childFallback, fallbackSurface)
     )),
@@ -896,6 +969,48 @@ export const sanitizeFeedCardTypes = (
     const raw = typeof input[id] === 'object' && input[id] !== null ? input[id] as Partial<FeedCardTypeRecipe> : {};
     const fallback = defaults[id];
     const rawSlots = typeof raw.slots === 'object' && raw.slots !== null ? raw.slots : undefined;
+    const rawChildren = Array.isArray(raw.children) ? raw.children : undefined;
+    const rawChildIds = rawChildren?.map((child) => (
+      typeof child === 'object' && child !== null ? (child as Partial<FeedCardNode>).id : undefined
+    ));
+    const fallbackChildIds = fallback.children.map((child) => child.id);
+    const rawMissionPanel = rawChildren
+      ?.filter((child): child is Partial<FeedCardNode> => typeof child === 'object' && child !== null)
+      .find((child) => child.id === 'mission-briefing');
+    const fallbackMissionPanel = fallback.children.find((child) => child.id === 'mission-briefing');
+    const rawFooter = rawMissionPanel?.children?.[0];
+    const fallbackFooter = fallbackMissionPanel?.children?.[0];
+    const rawRewardSummary = rawFooter?.children?.[0]?.children?.find((node) => node.id === 'reward-terms-group-summary');
+    const fallbackRewardSummary = fallbackFooter?.children?.[0]?.children?.find((node) => node.id === 'reward-terms-group-summary');
+    const rawFingerprint = rawFooter?.children?.[1]?.children?.find((node) => node.id === 'reward-terms-group-fingerprint');
+    const fallbackFingerprint = fallbackFooter?.children?.[1]?.children?.find((node) => node.id === 'reward-terms-group-fingerprint');
+    const shouldUseRawChildren = !(
+      id === 'card_type_04'
+      && rawChildren?.length
+      && (
+        rawChildIds?.join('|') !== fallbackChildIds.join('|')
+        || rawMissionPanel?.binding !== fallbackMissionPanel?.binding
+        || rawFooter?.id !== fallbackFooter?.id
+        || rawFooter?.layout?.slot !== fallbackFooter?.layout.slot
+        || (
+          Boolean(fallbackRewardSummary)
+          && (
+            rawRewardSummary?.binding !== fallbackRewardSummary?.binding
+            || rawRewardSummary?.markup !== fallbackRewardSummary?.markup
+            || rawRewardSummary?.sizing !== fallbackRewardSummary?.sizing
+            || rawRewardSummary?.fitMode !== fallbackRewardSummary?.fitMode
+          )
+        )
+        || (
+          Boolean(fallbackFingerprint)
+          && (
+            rawFingerprint?.layout?.wMode !== fallbackFingerprint?.layout.wMode
+            || rawFingerprint?.layout?.hMode !== fallbackFingerprint?.layout.hMode
+            || rawFingerprint?.layout?.height !== fallbackFingerprint?.layout.height
+          )
+        )
+      )
+    );
     next[id] = {
       ...fallback,
       name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name,
@@ -903,11 +1018,17 @@ export const sanitizeFeedCardTypes = (
       surface: sanitizeMaterialRecipe(raw.surface, fallback.surface),
       backgroundImage: sanitizeFeedBackgroundImage(raw.backgroundImage, fallback.backgroundImage),
       children: fallback.children.map((childFallback, index) => (
-        sanitizeFeedCardNode(Array.isArray(raw.children) ? raw.children[index] : undefined, childFallback, fallbackSurface)
+        sanitizeFeedCardNode(shouldUseRawChildren ? rawChildren?.[index] : undefined, childFallback, fallbackSurface)
       )),
       slots: Object.fromEntries(
         feedTextSlotIds.map((slot) => {
-          const sanitized = sanitizeFeedTextSlotStyle(rawSlots?.[slot], fallback.slots[slot]);
+          const rawSlot = rawSlots?.[slot];
+          const sanitized = sanitizeFeedTextSlotStyle(
+            slot === 'contractRewardSummary' && isLegacyGenericRewardSummarySlot(rawSlot)
+              ? undefined
+              : rawSlot,
+            fallback.slots[slot],
+          );
           const shouldInheritBodyWeight = (
             feedSlotsInheritingBodyWeight.has(slot)
             && sanitized.fontWeight === fallback.slots[slot].fontWeight
@@ -943,6 +1064,7 @@ export const mockFeedStories: FeedStory[] = [
     contractBody: "[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.",
     contractRewardLabel: "Reward",
     contractRewardValue: "1,850 [accent]CR[/accent]",
+    contractRewardSummary: defaultContractRewardSummary,
     contractRule: "",
     contractCtaLabel: "View Contract",
     seasonBadge: "03 Days Left",
@@ -961,14 +1083,15 @@ export const mockFeedStories: FeedStory[] = [
     meta: "03 days left",
     ctaLabel: "View Season",
     contractBadge: "03 Days Left",
-    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,800 [acc1]K[/acc1][/h3]",
+    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.",
     contractEyebrow: "[accent]//[/accent] Active Contract",
     contractTitle: "[h1]Data\nExtraction[/h1]",
     contractBody: "[rule]\nExtract encrypted corporate data from Solace Corp mainframe cluster.",
     contractRewardLabel: "Reward",
     contractRewardValue: "1,850 [accent]CR[/accent]",
+    contractRewardSummary: defaultContractRewardSummary,
     contractRule: "",
-    contractCtaLabel: "View Contract",
+    contractCtaLabel: "Accept Terms",
     seasonBadge: "03 Days Left",
     seasonBriefing: "[accent]//[/accent] Season Pass\n\n[h1]Cosmic Eclipse[/h1]\n\nA new era of power. Claim the darkness.",
     seasonEyebrow: "[accent]//[/accent] Season Pass",
@@ -1014,13 +1137,32 @@ export const sanitizeFeedStories = (
       const input = item as Partial<FeedStory>;
       const fallback = typeof input.id === 'string' ? byDefaultId.get(input.id) : undefined;
       if (!fallback) return null;
-      return {
+      const story = {
         ...fallback,
         ...Object.fromEntries(
           Object.entries(input).filter(([, entryValue]) => typeof entryValue === 'string'),
         ),
         cardTypeId: isOneOf(input.cardTypeId, cardTypeIds) ? input.cardTypeId : fallback.cardTypeId,
       } as FeedStory;
+      if (
+        story.id === 'season-pass-cosmic-eclipse-v2'
+        && story.contractCtaLabel === 'View Contract'
+      ) {
+        story.contractCtaLabel = fallback.contractCtaLabel;
+      }
+      if (
+        story.id === 'season-pass-cosmic-eclipse-v2'
+        && story.contractBriefing?.includes('[DIVIDER]')
+      ) {
+        story.contractBriefing = fallback.contractBriefing;
+      }
+      if (
+        story.id === 'season-pass-cosmic-eclipse-v2'
+        && story.contractRewardSummary === legacyContractRewardSummary
+      ) {
+        story.contractRewardSummary = fallback.contractRewardSummary;
+      }
+      return story;
     })
     .filter((story): story is FeedStory => Boolean(story));
   return stories.length ? stories : cloneFeedStories(mockFeedStories);

@@ -1,11 +1,11 @@
 import {
-  createFeedGlassRegionSurface,
+  cloneFeedCardType,
   createFeedNode,
   createFeedNodeLayout,
   createFeedRegionSurface,
   createMissionBriefingCtaSurface,
   createMissionBriefingPanelSurface,
-  createMissionBriefingTextSurface,
+  type FeedCardTypeRecipe,
   type FeedCardNode,
   type FeedTextSlotId,
 } from './mainMaterialFeedModel';
@@ -14,21 +14,23 @@ export const createTextBlockNode = (
   id: string,
   label: string,
   binding: FeedTextSlotId,
+  layout: Parameters<typeof createFeedNodeLayout>[0] = {},
 ): FeedCardNode => createFeedNode({
   id,
   label,
   type: 'text',
   binding,
-  surface: createMissionBriefingTextSurface(),
+  surface: createFeedRegionSurface(),
   layout: createFeedNodeLayout({
     mode: 'flow',
     selfPosition: 'in-flow',
     width: 100,
     height: 10,
-    wMode: 'fill',
-    hMode: 'hug',
+    wMode: 'fixed',
+    hMode: 'fixed',
     padding: 0,
     gap: 0,
+    ...layout,
   }),
 });
 
@@ -48,9 +50,9 @@ export const createTwoColumnGroupNode = (
     distribute: 'between',
     crossAlign: 'stretch',
     width: 100,
-    height: 28,
-    wMode: 'fill',
-    hMode: 'hug',
+    height: 32,
+    wMode: 'fixed',
+    hMode: 'fixed',
     padding: 0,
     gap: 16,
   }),
@@ -65,9 +67,9 @@ export const createTwoColumnGroupNode = (
         selfPosition: 'in-flow',
         direction: 'column',
         width: 52,
-        height: 28,
-        wMode: 'fill',
-        hMode: 'hug',
+        height: 100,
+        wMode: 'fixed',
+        hMode: 'fixed',
         padding: 0,
         gap: 6,
       }),
@@ -83,9 +85,9 @@ export const createTwoColumnGroupNode = (
         selfPosition: 'in-flow',
         direction: 'column',
         width: 38,
-        height: 28,
+        height: 100,
         wMode: 'fixed',
-        hMode: 'hug',
+        hMode: 'fixed',
         padding: 0,
         gap: 8,
         align: 'center',
@@ -100,40 +102,46 @@ export const createLabelValueStackNode = (
   id: string,
   labelBinding: FeedTextSlotId,
   valueBinding: FeedTextSlotId,
-): FeedCardNode => createFeedNode({
-  id,
-  label: 'Label / Value Stack',
-  type: 'container',
-  surface: createFeedRegionSurface(),
-  layout: createFeedNodeLayout({
-    mode: 'flow',
-    selfPosition: 'in-flow',
-    direction: 'column',
-    width: 100,
-    height: 12,
-    wMode: 'fill',
-    hMode: 'hug',
-    padding: 0,
-    gap: 2,
-  }),
-  children: [
-    createTextBlockNode(`${id}-label`, 'Label', labelBinding),
-    createTextBlockNode(`${id}-value`, 'Value', valueBinding),
-  ],
-});
+): FeedCardNode => {
+  const label = createTextBlockNode(`${id}-label`, 'Label', labelBinding, { height: 32 });
+  const value = createTextBlockNode(`${id}-value`, 'Value', valueBinding, { height: 52 });
+  return createFeedNode({
+    id,
+    label: 'Label / Value Stack',
+    type: 'container',
+    surface: createFeedRegionSurface(),
+    layout: createFeedNodeLayout({
+      mode: 'flow',
+      selfPosition: 'in-flow',
+      direction: 'column',
+      width: 100,
+      height: 42,
+      wMode: 'fixed',
+      hMode: 'fixed',
+      padding: 0,
+      gap: 2,
+    }),
+    children: [
+      { ...label, sizing: 'fit', fitMode: 'single-line', maxLines: 1 },
+      { ...value, sizing: 'fit', fitMode: 'single-line', maxLines: 1 },
+    ],
+  });
+};
 
 export const createFingerprintActionNode = (id: string): FeedCardNode => createFeedNode({
   id,
   label: 'Fingerprint Action',
   type: 'button',
   binding: 'contractCtaLabel',
+  presentation: 'fingerprint-hold',
+  holdDurationMs: 1400,
   surface: createMissionBriefingCtaSurface(),
   layout: createFeedNodeLayout({
     mode: 'flow',
     selfPosition: 'in-flow',
     width: 100,
-    height: 22,
-    wMode: 'fill',
+    height: 100,
+    wMode: 'fixed',
     hMode: 'fixed',
     padding: 8,
     gap: 4,
@@ -142,18 +150,55 @@ export const createFingerprintActionNode = (id: string): FeedCardNode => createF
   }),
 });
 
+export const createRewardSummaryNode = (id: string): FeedCardNode => ({
+  ...createTextBlockNode(id, 'Reward Summary', 'contractRewardSummary', {
+    width: 100,
+    height: 100,
+    wMode: 'fixed',
+    hMode: 'fixed',
+    padding: 0,
+    align: 'left',
+    justify: 'center',
+  }),
+  markup: 'on',
+  sizing: 'flow',
+  fitMode: 'paragraph',
+  maxLines: 4,
+});
+
 export const createRewardTermsGroupNode = (id = 'reward-terms-group'): FeedCardNode => (
   createTwoColumnGroupNode(
     id,
     [
-      createLabelValueStackNode(`${id}-deposit`, 'contractRewardLabel', 'contractRewardValue'),
-      createLabelValueStackNode(`${id}-success`, 'contractRewardLabel', 'contractRewardValue'),
+      createRewardSummaryNode(`${id}-summary`),
     ],
     [
       createFingerprintActionNode(`${id}-fingerprint`),
     ],
   )
 );
+
+export const createMissionBriefingV2FooterNode = (): FeedCardNode => {
+  const footer = createRewardTermsGroupNode();
+  return {
+    ...footer,
+    layout: createFeedNodeLayout({
+      mode: 'flow',
+      slot: 'footer',
+      selfPosition: 'in-flow',
+      direction: 'row',
+      distribute: 'between',
+      crossAlign: 'stretch',
+      width: 100,
+      height: 30,
+      wMode: 'fixed',
+      hMode: 'fixed',
+      padding: 0,
+      gap: 14,
+      pushToEnd: true,
+    }),
+  };
+};
 
 export const createMissionBriefingCompositionTestBed = (): FeedCardNode[] => [
   createFeedNode({
@@ -162,40 +207,40 @@ export const createMissionBriefingCompositionTestBed = (): FeedCardNode[] => [
     type: 'container',
     surface: createMissionBriefingPanelSurface(),
     layout: createFeedNodeLayout({
-      mode: 'flow',
-      selfPosition: 'in-flow',
+      x: 5,
+      y: 35,
+      width: 47,
+      height: 49,
+      mode: 'absolute',
+      selfPosition: 'absolute',
       direction: 'column',
-      width: 52,
-      height: 84,
       wMode: 'fixed',
-      hMode: 'hug',
+      hMode: 'fixed',
       padding: 18,
       gap: 12,
     }),
     children: [
-      createTextBlockNode('mission-eyebrow', 'Contract Header', 'contractEyebrow'),
-      createTextBlockNode('mission-title', 'Contract Title', 'contractTitle'),
-      createTextBlockNode('mission-body', 'Contract Body', 'contractBody'),
+      createTextBlockNode('mission-eyebrow', 'Contract Header', 'contractEyebrow', { height: 10 }),
+      createTextBlockNode('mission-title', 'Contract Title', 'contractTitle', { height: 24 }),
+      createTextBlockNode('mission-body', 'Contract Body', 'contractBody', { height: 22 }),
       createRewardTermsGroupNode(),
     ],
   }),
-  createFeedNode({
-    id: 'mission-side-glass',
-    label: 'Mission Side Glass',
-    type: 'container',
-    surface: createFeedGlassRegionSurface(),
-    layout: createFeedNodeLayout({
-      x: 58,
-      y: 35,
-      width: 32,
-      height: 26,
-      padding: 10,
-      gap: 8,
-      align: 'center',
-      justify: 'center',
-    }),
-  }),
 ];
+
+export const createMissionBriefingV2CardType = (base: FeedCardTypeRecipe): FeedCardTypeRecipe => {
+  const cardType = cloneFeedCardType(base);
+  const missionPanel = cardType.children.find((node) => node.id === 'mission-briefing');
+  if (missionPanel) {
+    missionPanel.children = [createMissionBriefingV2FooterNode()];
+  }
+  return {
+    ...cardType,
+    id: 'card_type_04',
+    name: 'Mission Briefing V2',
+    description: 'Mission briefing V1 visual contract with a structured reward/fingerprint footer.',
+  };
+};
 
 export const describeFeedNodeTree = (nodes: readonly FeedCardNode[], depth = 0): string[] => (
   nodes.flatMap((node) => [

@@ -594,9 +594,20 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   z-index: 2;
 }
 
+.main-material-card-node--text-frame > .main-material-card-node-surface--text {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .main-material-card-node-surface--text > .cd-panel__content {
   align-items: inherit;
   justify-content: inherit;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   text-align: inherit;
 }
 
@@ -607,6 +618,15 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   padding: var(--feed-node-padding, 0px);
   z-index: 2;
   line-height: calc(1.05 + var(--feed-node-gap-scale, 0));
+}
+
+.main-material-card-node-text.material-text-content--fit,
+.main-material-card-node-text.material-text-content--rich-fit {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding-block: min(var(--feed-node-padding, 0px), 0.18em);
 }
 
 .main-material-card-node-surface--flow .main-material-card-node-text {
@@ -655,6 +675,150 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   overflow: hidden;
   line-height: 1;
   white-space: nowrap;
+}
+
+.main-material-fingerprint-hold-node {
+  --main-material-fingerprint-accent: #f5b31f;
+  --main-material-fingerprint-ink: rgb(222 231 238 / 0.72);
+  overflow: visible;
+}
+
+.main-material-card-node-surface--fingerprint-hold.cd-button {
+  overflow: visible;
+}
+
+.main-material-card-node-surface--fingerprint-hold > .cd-button__content {
+  overflow: visible;
+  padding: 0;
+}
+
+.main-material-card-node-surface--fingerprint-hold .cd-button__label {
+  overflow: visible;
+}
+
+.main-material-fingerprint-hold-label {
+  position: relative;
+  justify-content: flex-end;
+  overflow: visible;
+  padding: min(54%, 86px) 0 0.08rem;
+  color: rgb(245 248 252 / 0.96);
+  text-shadow:
+    0 1px 1px rgb(0 0 0 / 0.82),
+    0 0 10px rgb(245 179 31 / 0.18);
+  background:
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 15% 16% / 18px 2px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 15% 16% / 2px 18px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 85% 16% / 18px 2px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 85% 16% / 2px 18px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 15% 79% / 18px 2px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 15% 79% / 2px 18px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 85% 79% / 18px 2px no-repeat,
+    linear-gradient(var(--main-material-fingerprint-accent), var(--main-material-fingerprint-accent)) 85% 79% / 2px 18px no-repeat;
+}
+
+.main-material-fingerprint-hold-label::before,
+.main-material-fingerprint-hold-label::after {
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+  content: "";
+}
+
+.main-material-fingerprint-hold-label::before {
+  top: 20%;
+  width: min(48%, 78px);
+  height: min(48%, 88px);
+  transform: translateX(-50%);
+  border-radius: 46% 46% 50% 50%;
+  background:
+    radial-gradient(ellipse at 50% 22%, transparent 0 12%, var(--main-material-fingerprint-ink) 13% 16%, transparent 17% 21%),
+    radial-gradient(ellipse at 50% 36%, transparent 0 20%, var(--main-material-fingerprint-ink) 21% 24%, transparent 25% 31%),
+    radial-gradient(ellipse at 50% 48%, transparent 0 28%, var(--main-material-fingerprint-ink) 29% 32%, transparent 33% 40%),
+    radial-gradient(ellipse at 50% 58%, transparent 0 36%, var(--main-material-fingerprint-ink) 37% 40%, transparent 41% 49%),
+    radial-gradient(ellipse at 50% 66%, transparent 0 44%, var(--main-material-fingerprint-ink) 45% 48%, transparent 49% 56%);
+  clip-path: polygon(18% 0, 82% 0, 100% 30%, 88% 100%, 14% 100%, 0 31%);
+  opacity: 0.58;
+  filter: drop-shadow(0 0 10px rgb(245 179 31 / 0.22));
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    filter 180ms ease;
+}
+
+.main-material-fingerprint-hold-label::after {
+  top: 19%;
+  width: min(60%, 96px);
+  height: 2px;
+  transform: translate(-50%, -8px);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(245 179 31 / 0.92) 22%,
+    rgb(255 246 180 / 0.96) 50%,
+    rgb(245 179 31 / 0.92) 78%,
+    transparent
+  );
+  box-shadow:
+    0 0 8px rgb(245 179 31 / 0.8),
+    0 0 18px rgb(245 179 31 / 0.38);
+  opacity: 0;
+  transition:
+    opacity 160ms ease,
+    transform 220ms ease-out;
+}
+
+.main-material-fingerprint-hold-label .main-material-rich-text,
+.main-material-fingerprint-hold-label.material-text-content--fit,
+.main-material-fingerprint-hold-label.material-text-content--rich-fit {
+  position: relative;
+  z-index: 1;
+}
+
+.main-material-fingerprint-hold-node--holding .main-material-fingerprint-hold-label::before {
+  transform: translateX(-50%) scale(1.045);
+  opacity: 0.88;
+  filter:
+    drop-shadow(0 0 10px rgb(245 179 31 / 0.52))
+    drop-shadow(0 0 18px rgb(81 185 255 / 0.22));
+}
+
+.main-material-fingerprint-hold-node--holding .main-material-fingerprint-hold-label::after {
+  opacity: 1;
+  animation: main-material-fingerprint-scan var(--main-material-hold-duration, 1400ms) linear forwards;
+}
+
+.main-material-fingerprint-hold-node--complete .main-material-fingerprint-hold-label::before {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 12px rgb(245 179 31 / 0.72))
+    drop-shadow(0 0 28px rgb(81 185 255 / 0.44));
+  animation: main-material-fingerprint-complete 520ms ease-out both;
+}
+
+.main-material-fingerprint-hold-node--complete .main-material-fingerprint-hold-label::after {
+  opacity: 1;
+  transform: translate(-50%, 58px);
+}
+
+@keyframes main-material-fingerprint-scan {
+  0% {
+    transform: translate(-50%, -8px);
+  }
+  100% {
+    transform: translate(-50%, 58px);
+  }
+}
+
+@keyframes main-material-fingerprint-complete {
+  0% {
+    transform: translateX(-50%) scale(1);
+  }
+  42% {
+    transform: translateX(-50%) scale(1.12);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
 }
 
 .main-material-rich-text {
@@ -869,6 +1033,28 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-rich-token .main-material-rich-token:not(.main-material-rich-token--opacity-override) {
   opacity: 1;
+}
+
+.main-material-card-node--contractRewardSummary .main-material-rich-text {
+  overflow: hidden;
+}
+
+.main-material-card-node--contractRewardSummary .main-material-rich-break {
+  height: 0.14em;
+}
+
+.main-material-card-node--contractRewardSummary .main-material-rich-token--small,
+.main-material-card-node--contractRewardSummary .main-material-rich-token--h3 {
+  display: block;
+}
+
+.main-material-card-node--contractRewardSummary .main-material-rich-token--small {
+  line-height: 0.98;
+}
+
+.main-material-card-node--contractRewardSummary .main-material-rich-token--h3 {
+  line-height: 0.95;
+  white-space: nowrap;
 }
 
 .main-material-rich-rule {

@@ -940,6 +940,13 @@ The first tangible test bed now exists in
 `/main-material`: select a feed node, use the Structure controls in the right
 panel, and verify the visible UI tree plus export DOM/CSS target updates.
 
+Mission Briefing V2 now treats the reward column as one authored rich-text CMS
+slot (`contractRewardSummary`) instead of two nested label/value stacks. The
+default footer tree is `reward-terms-group-summary` plus the fingerprint
+hold-action, and stale persisted V2 trees with the old deposit/success stack are
+migrated back to the current default structure during feed card-type
+sanitization.
+
 The generated-control convergence inside `MaterialRecipeEditor` is now closed
 for the high-risk material/state surface sections. Remaining bespoke editor
 chrome is intentional for state selection/presets and base text/content

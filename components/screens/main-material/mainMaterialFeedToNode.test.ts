@@ -67,7 +67,8 @@ const collectTextButtonPairs = (
 // Keys the bridge knowingly consumes (directly or indirectly via the reused resolvers).
 const CONSUMED_KEYS: ReadonlySet<string> = new Set([
   'id', 'label', 'type', 'binding', 'layout', 'surface',
-  'text', 'textRender', 'markup', 'sizing', 'fitMode', 'maxLines', 'children',
+  'text', 'textRender', 'markup', 'sizing', 'fitMode', 'maxLines',
+  'presentation', 'holdDurationMs', 'children',
 ]);
 
 const cardTypes = createDefaultFeedCardTypes();
@@ -182,6 +183,26 @@ assert.deepStrictEqual(
   directNode.surface,
   feedNodeSurfaceRecipe(firstCard, firstNode),
   'direct converter surface fold',
+);
+
+const fingerprintNode = feedCardNodeToMaterialNode(firstCard, {
+  ...firstNode,
+  id: 'fingerprint-action',
+  label: 'Fingerprint Action',
+  type: 'button',
+  binding: 'contractCtaLabel',
+  presentation: 'fingerprint-hold',
+  holdDurationMs: 1800,
+});
+assert.equal(
+  fingerprintNode.layout?.className,
+  'main-material-fingerprint-hold-node',
+  'fingerprint hold presentation must compile to the canonical renderer class',
+);
+assert.equal(
+  (fingerprintNode.layout?.style as Record<string, unknown>)?.['--main-material-hold-duration'],
+  '1800ms',
+  'hold duration must compile to the CSS timing contract',
 );
 
 const missionCard = entries[0][1];

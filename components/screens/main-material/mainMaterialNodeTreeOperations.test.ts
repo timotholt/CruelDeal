@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  createDefaultMissionBriefingV1CardType,
   createFeedNode,
   createFeedNodeLayout,
   type FeedCardNode,
@@ -17,6 +18,7 @@ import {
 } from './mainMaterialNodeTreeOperations';
 import {
   createMissionBriefingCompositionTestBed,
+  createMissionBriefingV2CardType,
   createRewardTermsGroupNode,
   createTwoColumnGroupNode,
   describeFeedNodeTree,
@@ -120,22 +122,42 @@ assert.equal(rewardTerms.layout.direction, 'row');
 assert.deepEqual(idsOf(rewardTerms.children || []), ['reward-terms-group-left', 'reward-terms-group-right']);
 assert.equal(rewardTerms.children?.[1].children?.[0].type, 'button');
 assert.equal(rewardTerms.children?.[1].children?.[0].binding, 'contractCtaLabel');
+assert.equal(rewardTerms.children?.[1].children?.[0].presentation, 'fingerprint-hold');
+assert.equal(rewardTerms.children?.[1].children?.[0].holdDurationMs, 1400);
+assert.equal(rewardTerms.children?.[0].children?.[0].type, 'text');
+assert.equal(rewardTerms.children?.[0].children?.[0].binding, 'contractRewardSummary');
+assert.equal(rewardTerms.children?.[0].children?.[0].markup, 'on');
+assert.equal(rewardTerms.children?.[0].children?.[0].sizing, 'flow');
+assert.equal(rewardTerms.children?.[0].children?.[0].fitMode, 'paragraph');
+assert.equal(rewardTerms.children?.[0].children?.[0].maxLines, 4);
 
 const testBed = createMissionBriefingCompositionTestBed();
 const treeDescription = describeFeedNodeTree(testBed);
-assert.deepEqual(treeDescription.slice(0, 13), [
+assert.deepEqual(treeDescription.slice(0, 9), [
   '- mission-briefing-panel [container]',
   '  - mission-eyebrow [text] -> contractEyebrow',
   '  - mission-title [text] -> contractTitle',
   '  - mission-body [text] -> contractBody',
   '  - reward-terms-group [container]',
   '    - reward-terms-group-left [container]',
-  '      - reward-terms-group-deposit [container]',
-  '        - reward-terms-group-deposit-label [text] -> contractRewardLabel',
-  '        - reward-terms-group-deposit-value [text] -> contractRewardValue',
-  '      - reward-terms-group-success [container]',
-  '        - reward-terms-group-success-label [text] -> contractRewardLabel',
-  '        - reward-terms-group-success-value [text] -> contractRewardValue',
+  '      - reward-terms-group-summary [text] -> contractRewardSummary',
   '    - reward-terms-group-right [container]',
+  '      - reward-terms-group-fingerprint [button] -> contractCtaLabel',
 ]);
-assert.equal(treeDescription.at(-1), '- mission-side-glass [container]');
+assert.equal(testBed.length, 1);
+assert.equal(testBed[0].layout.selfPosition, 'absolute');
+assert.equal(testBed[0].children?.[0].layout.width, 100);
+assert.equal(testBed[0].children?.[0].layout.wMode, 'fixed');
+assert.equal(testBed[0].children?.[1].layout.height, 24);
+assert.equal(testBed[0].children?.[2].layout.height, 22);
+
+const missionBriefingV2 = createMissionBriefingV2CardType(createDefaultMissionBriefingV1CardType());
+assert.equal(missionBriefingV2.id, 'card_type_04');
+assert.equal(missionBriefingV2.name, 'Mission Briefing V2');
+assert.deepEqual(idsOf(missionBriefingV2.children), ['deadline-badge', 'mission-briefing', 'sector-mark']);
+const missionBriefingV2Panel = missionBriefingV2.children[1];
+assert.equal(missionBriefingV2Panel.binding, 'contractBriefing');
+assert.equal(missionBriefingV2Panel.textRender, 'rich');
+assert.deepEqual(idsOf(missionBriefingV2Panel.children || []), ['reward-terms-group']);
+assert.equal(missionBriefingV2Panel.children?.[0].layout.slot, 'footer');
+assert.equal(missionBriefingV2Panel.children?.[0].children?.[1].children?.[0].presentation, 'fingerprint-hold');

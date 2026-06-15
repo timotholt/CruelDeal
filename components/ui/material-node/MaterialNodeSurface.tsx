@@ -66,6 +66,10 @@ export const MaterialNodeSurface = (props: {
           buttonFullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
           class={props.class}
           onClick={() => props.context.onNodeAction?.(props.node)}
+          onPointerDown={(event) => props.context.onPointerDown?.(props.node, event)}
+          onPointerUp={(event) => props.context.onPointerUp?.(props.node, event)}
+          onPointerLeave={(event) => props.context.onPointerUp?.(props.node, event)}
+          onPointerCancel={(event) => props.context.onPointerUp?.(props.node, event)}
           label={resolvedChildren()}
         />
       </Match>

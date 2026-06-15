@@ -159,7 +159,6 @@ import {
   createMainMaterialWorkbenchExportGroups,
 } from './main-material/mainMaterialWorkbenchExportTargets';
 import {
-  cloneFeedCardType,
   cloneFeedCardTypes,
   createDefaultFeedCardTypes,
   cloneFeedStories,
@@ -184,6 +183,7 @@ import {
   type FeedTextSlotId,
   type FeedTextSlotStyle,
 } from './main-material/mainMaterialFeedModel';
+import { createMissionBriefingV2CardType } from './main-material/mainMaterialNodeTemplates';
 import {
   addMaterialPreset,
   clearMaterialPresetDirty,
@@ -1831,12 +1831,7 @@ const defaultFeedCardTypes: FeedCardTypes = (() => {
   const cardTypes = createDefaultFeedCardTypes();
   return {
     ...cardTypes,
-    card_type_04: {
-      ...cloneFeedCardType(cardTypes.card_type_01),
-      id: 'card_type_04' as const,
-      name: 'Mission Briefing V2',
-      description: 'Duplicate mission briefing layout for v2 experimentation.',
-    },
+    card_type_04: createMissionBriefingV2CardType(cardTypes.card_type_01),
   };
 })();
 const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];

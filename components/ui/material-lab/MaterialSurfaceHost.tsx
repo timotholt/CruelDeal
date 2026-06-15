@@ -21,6 +21,10 @@ export interface MaterialSurfaceHostButtonProps extends MaterialSurfaceHostBaseP
   iconPosition?: IconPosition;
   label?: JSX.Element;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  onPointerDown?: JSX.EventHandler<HTMLButtonElement, PointerEvent>;
+  onPointerUp?: JSX.EventHandler<HTMLButtonElement, PointerEvent>;
+  onPointerLeave?: JSX.EventHandler<HTMLButtonElement, PointerEvent>;
+  onPointerCancel?: JSX.EventHandler<HTMLButtonElement, PointerEvent>;
 }
 
 export interface MaterialSurfaceHostPanelProps extends MaterialSurfaceHostBaseProps {
@@ -54,6 +58,10 @@ export const MaterialSurfaceHost = (props: MaterialSurfaceHostProps) => {
         iconPosition={props.iconPosition}
         class={props.class}
         onClick={props.onClick}
+        onPointerDown={props.onPointerDown}
+        onPointerUp={props.onPointerUp}
+        onPointerLeave={props.onPointerLeave}
+        onPointerCancel={props.onPointerCancel}
         label={props.label ?? resolvedChildren()}
       />
     );

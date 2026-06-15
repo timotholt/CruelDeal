@@ -41,6 +41,7 @@ import {
   type FeedCardTypes,
   type FeedCardTypeId,
 } from './mainMaterialFeedModel';
+import { createMissionBriefingV2CardType } from './mainMaterialNodeTemplates';
 
 const cardTypeIds: readonly FeedCardTypeId[] = [
   'card_type_01',
@@ -49,11 +50,13 @@ const cardTypeIds: readonly FeedCardTypeId[] = [
   'card_type_04',
 ];
 
-assert.equal(feedTextSlotIds.length, 24);
+assert.equal(feedTextSlotIds.length, 25);
 assert.equal(feedTextSlotIds[0], 'eyebrow');
 assert.equal(feedTextSlotIds.at(-1), 'sectorLabel');
 assert.equal(feedTextSlotLabels.contractBriefing, 'Mission Briefing');
+assert.equal(feedTextSlotLabels.contractRewardSummary, 'Reward Summary');
 assert.equal(feedSlotsInheritingBodyWeight.has('contractTitle'), true);
+assert.equal(feedSlotsInheritingBodyWeight.has('contractRewardSummary'), true);
 assert.equal(feedSlotsInheritingBodyWeight.has('body'), false);
 
 assert.deepEqual([...feedMediaFadeModes], [
@@ -140,6 +143,9 @@ assert.equal(feedSlots.title.textSizeRem, 1.8);
 assert.equal(feedSlots.title.overrideWeight, true);
 assert.equal(feedSlots.contractTitle.fontWeight, 700);
 assert.equal(feedSlots.contractTitle.overrideWeight, false);
+assert.equal(feedSlots.contractRewardSummary.contentTone, 'white');
+assert.equal(feedSlots.contractRewardSummary.overrideColor, true);
+assert.equal(feedSlots.contractRewardSummary.textOpacity, 94);
 assert.equal(feedSlots.body.contentTone, 'black');
 
 const clonedSlotStyle = cloneFeedSlotStyle(slotStyle);
@@ -248,6 +254,8 @@ const childNode = createFeedNode({
   binding: 'title',
   layout: { width: 30 },
   text: slotStyle,
+  presentation: 'fingerprint-hold',
+  holdDurationMs: 1800,
 });
 const parentNode = createFeedNode({
   id: 'parent',
@@ -260,12 +268,16 @@ assert.equal(parentNode.children?.[0].id, 'child');
 assert.notEqual(parentNode.children?.[0], childNode);
 assert.notEqual(parentNode.children?.[0].text, slotStyle);
 assert.equal(parentNode.children?.[0].layout.width, 30);
+assert.equal(parentNode.children?.[0].presentation, 'fingerprint-hold');
+assert.equal(parentNode.children?.[0].holdDurationMs, 1800);
 
 const clonedNode = cloneFeedCardNode(parentNode);
 assert.notEqual(clonedNode, parentNode);
 assert.notEqual(clonedNode.layout, parentNode.layout);
 assert.notEqual(clonedNode.surface, parentNode.surface);
 assert.notEqual(clonedNode.children?.[0], parentNode.children?.[0]);
+assert.equal(clonedNode.children?.[0].presentation, 'fingerprint-hold');
+assert.equal(clonedNode.children?.[0].holdDurationMs, 1800);
 if (clonedNode.children?.[0]) clonedNode.children[0].label = 'Changed';
 assert.equal(parentNode.children?.[0].label, 'Child');
 
@@ -325,6 +337,8 @@ assert.equal(missionBriefingV1.children[1].children?.[0].id, 'contract-cta');
 assert.equal(missionBriefingV1.children[1].children?.[0].layout.height, 14);
 assert.equal(missionBriefingV1.children[1].children?.[0].layout.padding, 6);
 assert.equal(missionBriefingV1.slots.contractBriefing.textTransform, 'none');
+assert.equal(missionBriefingV1.slots.contractRewardSummary.contentTone, 'white');
+assert.equal(missionBriefingV1.slots.contractRewardSummary.textOpacity, 94);
 assert.equal(missionBriefingV1.slots.sectorLabel.textOpacity, 34);
 assert.notEqual(missionBriefingV1, missionBriefingV1Again);
 assert.notEqual(missionBriefingV1.surface, missionBriefingV1Again.surface);
@@ -370,11 +384,7 @@ const createTestCardType = (id: FeedCardTypeId, name: string): FeedCardTypeRecip
       text: createFeedSlotStyle({ textSizeRem: 1.2 }),
     }),
   ],
-  slots: Object.fromEntries(
-    feedTextSlotIds.map((slot) => [slot, createFeedSlotStyle({
-      overrideWeight: !feedSlotsInheritingBodyWeight.has(slot),
-    })]),
-  ) as FeedCardTypeRecipe['slots'],
+  slots: createFeedSlots(),
 });
 
 const cardTypes: FeedCardTypes = {
@@ -410,6 +420,8 @@ const sanitizedCardTypes = sanitizeFeedCardTypes({
         sizing: 'flow',
         fitMode: 'paragraph',
         maxLines: 20,
+        presentation: 'fingerprint-hold',
+        holdDurationMs: 9000,
       },
     ],
     slots: {
@@ -437,8 +449,110 @@ assert.equal(sanitizedCardTypes.card_type_01.children[0].markup, 'on');
 assert.equal(sanitizedCardTypes.card_type_01.children[0].sizing, 'flow');
 assert.equal(sanitizedCardTypes.card_type_01.children[0].fitMode, 'paragraph');
 assert.equal(sanitizedCardTypes.card_type_01.children[0].maxLines, 8);
+assert.equal(sanitizedCardTypes.card_type_01.children[0].presentation, 'fingerprint-hold');
+assert.equal(sanitizedCardTypes.card_type_01.children[0].holdDurationMs, 5000);
 assert.equal(sanitizedCardTypes.card_type_01.slots.contractTitle.overrideWeight, false);
 assert.equal(sanitizedCardTypes.card_type_02.name, 'Two');
+
+const sanitizedLegacyRewardSummarySlot = sanitizeFeedCardTypes({
+  card_type_01: {
+    slots: {
+      contractRewardSummary: createFeedSlotStyle({
+        contentTone: 'black',
+        textOpacity: 90,
+        textSizeRem: 1,
+        lineHeight: 1,
+        paragraphGap: 0,
+        textTransform: 'uppercase',
+        textEmbossMode: 'dark',
+      }),
+    },
+  },
+}, cardTypes, cardTypeIds, createMaterialRecipe({ textContent: 'fallback' }));
+assert.equal(sanitizedLegacyRewardSummarySlot.card_type_01.slots.contractRewardSummary.contentTone, 'white');
+assert.equal(sanitizedLegacyRewardSummarySlot.card_type_01.slots.contractRewardSummary.textOpacity, 94);
+
+const sanitizedCustomRewardSummarySlot = sanitizeFeedCardTypes({
+  card_type_01: {
+    slots: {
+      contractRewardSummary: createFeedSlotStyle({
+        contentTone: 'black',
+        textOpacity: 88,
+        textSizeRem: 1.1,
+      }),
+    },
+  },
+}, cardTypes, cardTypeIds, createMaterialRecipe({ textContent: 'fallback' }));
+assert.equal(sanitizedCustomRewardSummarySlot.card_type_01.slots.contractRewardSummary.contentTone, 'black');
+assert.equal(sanitizedCustomRewardSummarySlot.card_type_01.slots.contractRewardSummary.textOpacity, 88);
+
+const sanitizedStaleV2CardType = sanitizeFeedCardTypes({
+  card_type_04: {
+    children: [
+      {
+        id: 'deadline-badge',
+        label: 'Old V1 Clone Child',
+        layout: { width: 99 },
+      },
+    ],
+  },
+}, cardTypes, cardTypeIds, createMaterialRecipe({ textContent: 'fallback' }));
+assert.equal(sanitizedStaleV2CardType.card_type_04.children[0].id, 'card_type_04-copy');
+assert.equal(sanitizedStaleV2CardType.card_type_04.children[0].label, 'Copy');
+assert.equal(sanitizedStaleV2CardType.card_type_04.children[0].layout.width, 40);
+
+const realV2Defaults: FeedCardTypes = {
+  ...createDefaultFeedCardTypes(),
+  card_type_04: createMissionBriefingV2CardType(createDefaultMissionBriefingV1CardType()),
+};
+const sanitizedExperimentalV2Tree = sanitizeFeedCardTypes({
+  card_type_04: {
+    children: [
+      {
+        id: 'mission-briefing-panel',
+        label: 'Old Experimental V2 Panel',
+        type: 'container',
+        binding: 'contractTitle',
+        layout: { width: 47, height: 49 },
+        children: [
+          { id: 'mission-title', label: 'Old Title', type: 'text', binding: 'contractTitle' },
+        ],
+      },
+    ],
+  },
+}, realV2Defaults, cardTypeIds, createMaterialRecipe({ textContent: 'fallback' }));
+assert.deepEqual(sanitizedExperimentalV2Tree.card_type_04.children.map((node) => node.id), [
+  'deadline-badge',
+  'mission-briefing',
+  'sector-mark',
+]);
+assert.equal(sanitizedExperimentalV2Tree.card_type_04.children[1].binding, 'contractBriefing');
+assert.equal(sanitizedExperimentalV2Tree.card_type_04.children[1].children?.[0].id, 'reward-terms-group');
+assert.equal(sanitizedExperimentalV2Tree.card_type_04.children[1].children?.[0].layout.slot, 'footer');
+
+const legacyV2RewardFooter = cloneFeedCardTypes(realV2Defaults).card_type_04;
+const legacyV2Footer = legacyV2RewardFooter.children[1].children?.[0];
+if (!legacyV2Footer?.children?.[0]) {
+  throw new Error('Expected Mission Briefing V2 footer fixture');
+}
+legacyV2Footer.children[0].children = [
+  createFeedNode({
+    id: 'reward-terms-group-deposit',
+    label: 'Label / Value Stack',
+    type: 'container',
+  }),
+];
+const sanitizedLegacyV2RewardFooter = sanitizeFeedCardTypes({
+  card_type_04: legacyV2RewardFooter,
+}, realV2Defaults, cardTypeIds, createMaterialRecipe({ textContent: 'fallback' }));
+assert.equal(
+  sanitizedLegacyV2RewardFooter.card_type_04.children[1].children?.[0].children?.[0].children?.[0].id,
+  'reward-terms-group-summary',
+);
+assert.equal(
+  sanitizedLegacyV2RewardFooter.card_type_04.children[1].children?.[0].children?.[0].children?.[0].binding,
+  'contractRewardSummary',
+);
 
 assert.deepEqual(mockFeedStories.map((story) => story.cardTypeId), [
   'card_type_01',
@@ -478,6 +592,21 @@ assert.equal(sanitized[1].body, 'Updated body');
 
 assert.deepEqual(sanitizeFeedStories(null, cardTypeIds), mockFeedStories);
 assert.deepEqual(sanitizeFeedStories([{ id: 'unknown-story' }], cardTypeIds), mockFeedStories);
+
+const migratedV2Story = sanitizeFeedStories([
+  {
+    id: 'season-pass-cosmic-eclipse-v2',
+    contractCtaLabel: 'View Contract',
+    contractBriefing: "[h1][acc1]//[/acc1] Active Contract[/h1]\n[h2]Data [acc2]Extraction[/acc2][/h2][RULE]Extract encrypted data from Solace Corp mainframe cluster.[DIVIDER]\n[h1]Reward[/h1][h3]1,800 [acc1]K[/acc1][/h3]",
+    contractRewardSummary: "[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]\n[small]Reward[/small]\n[h3]1,850 [accent]CR[/accent][/h3]",
+  },
+], cardTypeIds);
+assert.equal(migratedV2Story[0].contractCtaLabel, 'Accept Terms');
+assert.equal(migratedV2Story[0].contractBriefing?.includes('[DIVIDER]'), false);
+assert.equal(migratedV2Story[0].contractRewardSummary?.includes('Deposit'), true);
+assert.equal(migratedV2Story[0].contractRewardSummary?.includes('Success'), true);
+assert.equal(mockFeedStories[0].contractBriefing?.includes('[DIVIDER]'), true);
+assert.equal(mockFeedStories[1].contractBriefing?.includes('[DIVIDER]'), false);
 
 assert.deepEqual(sanitizeStoryImageOverrides({
   'season-pass-cosmic-eclipse': '  /art/custom.png  ',

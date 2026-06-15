@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, JSX, Show } from 'solid-js';
+import { createEffect, createSignal, For, JSX, onCleanup, Show } from 'solid-js';
 import {
   fontWeightTokenValue,
   MaterialSurfaceHost,
@@ -332,12 +332,32 @@ const previewRoleForNode = (role: MaterialNodeRole): PreviewTargetRole =>
   role === 'momentary' ? 'momentary' : role === 'container' ? 'container' : 'text';
 
 const feedSurfaceClassForNode = (node: MaterialNodeRecipe): string => {
-  if (node.kind === 'button') return 'main-material-card-node-surface main-material-card-node-surface--button';
+  const isFingerprintHold = node.layout?.className?.includes('main-material-fingerprint-hold-node');
+  if (node.kind === 'button') {
+    return [
+      'main-material-card-node-surface',
+      'main-material-card-node-surface--button',
+      isFingerprintHold ? 'main-material-card-node-surface--fingerprint-hold' : undefined,
+    ].filter(Boolean).join(' ');
+  }
   if (node.kind === 'text') {
     return `main-material-card-node-surface main-material-card-node-surface--text main-material-card-node--${node.content?.binding || 'unbound'}`;
   }
   return 'main-material-card-node-surface main-material-card-node-surface--background';
 };
+
+const findFeedCardNodeById = (nodes: readonly FeedCardNode[], id: string): FeedCardNode | undefined => {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const child = findFeedCardNodeById(node.children || [], id);
+    if (child) return child;
+  }
+  return undefined;
+};
+
+const isFingerprintHoldNode = (node: MaterialNodeRecipe): boolean => (
+  node.layout?.className?.includes('main-material-fingerprint-hold-node') ?? false
+);
 
 // Attach the feed-specific text fit/style/rich-text config (computed with the live
 // story value) onto the bridged node's content, matching the prior FeedCardTreeNode so
@@ -362,7 +382,12 @@ const enrichFeedNodeContent = (
       textRender: resolveFeedNodeRenderMode(source, value),
       fitMode: feedNodeFitMode(source, value),
       maxLines: feedNodeMaxLines(source, value),
-      className: source.type === 'button' ? 'main-material-card-node-button-label' : 'main-material-card-node-text',
+      className: source.type === 'button'
+        ? [
+          'main-material-card-node-button-label',
+          source.presentation === 'fingerprint-hold' ? 'main-material-fingerprint-hold-label' : undefined,
+        ].filter(Boolean).join(' ')
+        : 'main-material-card-node-text',
       style: feedTextCss(resolved) as JSX.CSSProperties,
       richText: (v: string) => (
         <FeedRichText value={v} cardType={cardType} style={resolveFeedNodeTextStyle(cardType, source)} />
@@ -404,8 +429,55 @@ const CanonicalFeedCardTree = (props: {
   buttonPropsForRecipe: FeedSurfacePropsForRecipe;
 }) => {
   const registration = useMainMaterialDomRegistration();
+  const [holdingNodeId, setHoldingNodeId] = createSignal<string | null>(null);
+  const [completedNodeId, setCompletedNodeId] = createSignal<string | null>(null);
+  let holdTimer: number | undefined;
+  let completeTimer: number | undefined;
   const targetIdFor = (node: MaterialNodeRecipe) =>
     feedMaterialTargetIdForNode(props.cardType.id, node.id) as FeedMaterialTargetId;
+  const clearHoldTimer = () => {
+    if (holdTimer !== undefined) window.clearTimeout(holdTimer);
+    holdTimer = undefined;
+  };
+  const clearCompleteTimer = () => {
+    if (completeTimer !== undefined) window.clearTimeout(completeTimer);
+    completeTimer = undefined;
+  };
+  const cancelHold = (node: MaterialNodeRecipe, event?: PointerEvent) => {
+    if (!isFingerprintHoldNode(node)) return;
+    clearHoldTimer();
+    setHoldingNodeId((current) => current === node.id ? null : current);
+    if (event?.currentTarget instanceof HTMLElement) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Pointer capture may already be released by the browser on leave/cancel.
+      }
+    }
+  };
+  const startHold = (node: MaterialNodeRecipe, event: PointerEvent) => {
+    if (!isFingerprintHoldNode(node)) return;
+    event.preventDefault();
+    const source = findFeedCardNodeById(props.cardType.children, node.id);
+    const holdDurationMs = source?.holdDurationMs ?? 1400;
+    clearHoldTimer();
+    clearCompleteTimer();
+    setCompletedNodeId(null);
+    setHoldingNodeId(node.id);
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+    holdTimer = window.setTimeout(() => {
+      clearHoldTimer();
+      setHoldingNodeId(null);
+      setCompletedNodeId(node.id);
+      completeTimer = window.setTimeout(() => setCompletedNodeId(null), 520);
+    }, holdDurationMs);
+  };
+  onCleanup(() => {
+    clearHoldTimer();
+    clearCompleteTimer();
+  });
   const context = (): MaterialNodeRenderContext => ({
     treeId: props.cardType.id,
     targetIdForNode: (node) => targetIdFor(node),
@@ -413,13 +485,21 @@ const CanonicalFeedCardTree = (props: {
     selectedClassForNode: (node) => props.selectedFeedTargetClass(targetIdFor(node)),
     // Frame class kept for selection-highlight CSS + base; the canonical inline layout
     // (display/position from layout-1/2/3) takes precedence over the class for positioning.
-    classForNode: (node) => `main-material-card-node main-material-card-node--${node.kind}-frame`,
+    classForNode: (node) => [
+      'main-material-card-node',
+      `main-material-card-node--${node.kind}-frame`,
+      isFingerprintHoldNode(node) ? 'main-material-fingerprint-hold-node--ready' : undefined,
+      holdingNodeId() === node.id ? 'main-material-fingerprint-hold-node--holding' : undefined,
+      completedNodeId() === node.id ? 'main-material-fingerprint-hold-node--complete' : undefined,
+    ].filter(Boolean).join(' '),
     surfaceClassForNode: (node) => feedSurfaceClassForNode(node),
     surfacePropsForNode: (node, _role, state) => props.surfacePropsForRecipe(node.surface!, state),
     buttonPropsForNode: (node, _role, state) => props.buttonPropsForRecipe(node.surface!, state),
     buttonSizeForNode: () => 'sm',
     buttonFullWidthForNode: () => true,
     resolveBinding: (binding) => feedStoryValue(props.story, binding as never),
+    onPointerDown: startHold,
+    onPointerUp: cancelHold,
   });
   return (
     <MaterialNodeDomRegistrationProvider registration={registration}>
