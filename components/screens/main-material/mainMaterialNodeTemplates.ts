@@ -66,7 +66,7 @@ export const createTwoColumnGroupNode = (
         mode: 'flow',
         selfPosition: 'in-flow',
         direction: 'column',
-        width: 52,
+        width: 48,
         height: 100,
         wMode: 'fixed',
         hMode: 'fixed',
@@ -84,7 +84,7 @@ export const createTwoColumnGroupNode = (
         mode: 'flow',
         selfPosition: 'in-flow',
         direction: 'column',
-        width: 38,
+        width: 46,
         height: 100,
         wMode: 'fixed',
         hMode: 'fixed',
@@ -158,10 +158,10 @@ export const createRewardSummaryNode = (id: string): FeedCardNode => ({
     hMode: 'fixed',
     padding: 0,
     align: 'left',
-    justify: 'center',
+    justify: 'start',
   }),
   markup: 'on',
-  sizing: 'flow',
+  sizing: 'fit',
   fitMode: 'paragraph',
   maxLines: 4,
 });
@@ -190,11 +190,11 @@ export const createMissionBriefingV2FooterNode = (): FeedCardNode => {
       distribute: 'between',
       crossAlign: 'stretch',
       width: 100,
-      height: 30,
+      height: 50,
       wMode: 'fixed',
       hMode: 'fixed',
       padding: 0,
-      gap: 14,
+      gap: 8,
       pushToEnd: true,
     }),
   };
@@ -232,6 +232,16 @@ export const createMissionBriefingV2CardType = (base: FeedCardTypeRecipe): FeedC
   const cardType = cloneFeedCardType(base);
   const missionPanel = cardType.children.find((node) => node.id === 'mission-briefing');
   if (missionPanel) {
+    missionPanel.layout = {
+      ...missionPanel.layout,
+      x: 5,
+      y: 35,
+      width: 58,
+      height: 50,
+      padding: 16,
+      align: 'left',
+      justify: 'start',
+    };
     missionPanel.children = [createMissionBriefingV2FooterNode()];
   }
   return {

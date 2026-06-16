@@ -706,18 +706,53 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   --main-material-fingerprint-accent: #f5b31f;
   --main-material-fingerprint-ink: rgb(222 231 238 / 0.72);
   --main-material-fingerprint-size: min(82%, 118px);
-  min-width: 92px;
+  min-width: 84px;
   min-height: 108px;
   overflow: visible;
 }
 
+.main-material-card-node[data-material-node-id="reward-terms-group"]::before {
+  position: absolute;
+  top: -8px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.18), transparent);
+}
+
+.main-material-card-node[data-material-node-id="reward-terms-group-right"]::before {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  left: -4px;
+  width: 1px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(180deg, transparent, rgb(255 255 255 / 0.52), transparent);
+}
+
 .main-material-card-node-surface--fingerprint-hold.cd-button {
+  background: transparent !important;
+  box-shadow: none !important;
   overflow: visible;
 }
 
+.main-material-card-node-surface--fingerprint-hold > :not(.cd-button__content) {
+  opacity: 0 !important;
+}
+
 .main-material-card-node-surface--fingerprint-hold > .cd-button__content {
+  background: transparent !important;
   overflow: visible;
   padding: 0;
+}
+
+.main-material-card-node-surface--fingerprint-hold .cd-button__content {
+  background: transparent !important;
+  overflow: visible;
+  padding: 0 !important;
 }
 
 .main-material-card-node-surface--fingerprint-hold .cd-button__label {

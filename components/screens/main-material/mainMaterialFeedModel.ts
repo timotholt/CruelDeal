@@ -927,6 +927,47 @@ export const sanitizeFeedNodeLayout = (value: unknown, fallback: FeedNodeLayout)
   };
 };
 
+const layoutNumberEquals = (value: unknown, expected: number): boolean =>
+  typeof value === 'number' && Math.abs(value - expected) < 0.001;
+
+const shouldUpgradeLegacyV2Layout = (
+  nodeId: string,
+  value: unknown,
+  fallback: FeedNodeLayout,
+): boolean => {
+  if (typeof value !== 'object' || value === null) return false;
+  const input = value as Partial<FeedNodeLayout>;
+  if (nodeId === 'mission-briefing') {
+    return (
+      layoutNumberEquals(input.x, 47)
+      && layoutNumberEquals(input.y, 29)
+      && layoutNumberEquals(input.width, 39)
+      && layoutNumberEquals(input.height, 55)
+      && !layoutNumberEquals(fallback.x, 47)
+    );
+  }
+  if (nodeId === 'reward-terms-group') {
+    return (
+      (layoutNumberEquals(input.height, 30) || layoutNumberEquals(input.height, 44))
+      && (layoutNumberEquals(input.gap, 14) || layoutNumberEquals(input.gap, 8))
+      && !layoutNumberEquals(fallback.height, 30)
+    );
+  }
+  if (nodeId === 'reward-terms-group-left') {
+    return (
+      layoutNumberEquals(input.width, 52)
+      && !layoutNumberEquals(fallback.width, 52)
+    );
+  }
+  if (nodeId === 'reward-terms-group-right') {
+    return (
+      layoutNumberEquals(input.width, 38)
+      && !layoutNumberEquals(fallback.width, 38)
+    );
+  }
+  return false;
+};
+
 export const sanitizeFeedCardNode = (
   value: unknown,
   fallback: FeedCardNode,
@@ -945,7 +986,9 @@ export const sanitizeFeedCardNode = (
     label: typeof input.label === 'string' && input.label.trim() ? input.label : fallback.label,
     type,
     binding: isOneOf(input.binding, feedTextSlotIds) ? input.binding : fallback.binding,
-    layout: sanitizeFeedNodeLayout(input.layout, fallback.layout),
+    layout: shouldUpgradeLegacyV2Layout(fallback.id, input.layout, fallback.layout)
+      ? { ...fallback.layout }
+      : sanitizeFeedNodeLayout(input.layout, fallback.layout),
     surface,
     text: input.text
       ? sanitizeFeedTextSlotStyle(input.text, fallback.text || createFeedSlotStyle())

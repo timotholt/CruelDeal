@@ -127,7 +127,7 @@ assert.equal(rewardTerms.children?.[1].children?.[0].holdDurationMs, 1400);
 assert.equal(rewardTerms.children?.[0].children?.[0].type, 'text');
 assert.equal(rewardTerms.children?.[0].children?.[0].binding, 'contractRewardSummary');
 assert.equal(rewardTerms.children?.[0].children?.[0].markup, 'on');
-assert.equal(rewardTerms.children?.[0].children?.[0].sizing, 'flow');
+assert.equal(rewardTerms.children?.[0].children?.[0].sizing, 'fit');
 assert.equal(rewardTerms.children?.[0].children?.[0].fitMode, 'paragraph');
 assert.equal(rewardTerms.children?.[0].children?.[0].maxLines, 4);
 
