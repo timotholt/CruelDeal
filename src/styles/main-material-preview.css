@@ -468,12 +468,14 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 .main-material-card-node.is-editing-flash::after {
   content: "";
   position: absolute;
-  inset: -3px;
+  inset: 0;
   z-index: 40;
   border: 2px solid rgb(239 200 93 / 0.95);
-  border-radius: calc(var(--surface-radius, 6px) + 3px);
+  border-radius: var(--surface-radius, 6px);
   background: rgb(239 200 93 / 0.08);
-  box-shadow: 0 0 0 1px rgb(31 26 12 / 0.64), 0 0 22px rgb(239 200 93 / 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgb(31 26 12 / 0.64),
+    0 0 18px rgb(239 200 93 / 0.28);
   pointer-events: none;
 }
 
@@ -1468,6 +1470,14 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-page .is-editing-flash-b {
   animation: main-material-selection-flash-b 820ms ease-out both;
+}
+
+.main-material-page .main-material-card-node.is-editing-persistent,
+.main-material-page .main-material-card-node.is-editing-flash {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: none;
+  animation: none;
 }
 
 .main-material-backdrop-surface.is-editing-persistent,
