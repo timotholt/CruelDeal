@@ -3,17 +3,6 @@ import '../../../src/styles/shiny-performance.css';
 
 const clamp = (value: number, min = -1, max = 1) => Math.max(min, Math.min(max, value));
 
-interface GoldStop {
-  offset: number;
-  color: string;
-}
-
-interface GoldGradientPreset {
-  id: string;
-  name: string;
-  stops: GoldStop[];
-}
-
 interface ReflectionPreset {
   id: string;
   name: string;
@@ -28,32 +17,11 @@ interface ReflectionPreset {
   tokenBlackOpacity: number;
 }
 
-const GOLD_STOP_OFFSETS = [0, 8, 26, 30, 34, 60, 81, 85, 93, 100];
-
-const createGoldStops = (colors: string[]): GoldStop[] => (
-  colors.map((color, index) => ({ offset: GOLD_STOP_OFFSETS[index], color }))
-);
-
-const GOLD_GRADIENT_PRESETS: GoldGradientPreset[] = [
-  { id: 'whisper', name: '01 Whisper', stops: createGoldStops(['#B9A772', '#C8B887', '#D8CAA1', '#C1AF7B', '#FFF9DD', '#E6D9B4', '#D4C493', '#BCAA75', '#F5E9C2', '#B9A772']) },
-  { id: 'champagne', name: '02 Champagne', stops: createGoldStops(['#AA925C', '#BFA873', '#D4C08F', '#B39A62', '#FFF8D8', '#E4D2AA', '#CEB983', '#A98F56', '#F6E5B2', '#AA925C']) },
-  { id: 'soft-aurum', name: '03 Soft Aurum', stops: createGoldStops(['#9C8048', '#B1965C', '#CBB37C', '#957741', '#FFF5CB', '#E0C99A', '#C4AB70', '#92743B', '#F6DFA1', '#9C8048']) },
-  { id: 'satin', name: '04 Satin', stops: createGoldStops(['#8D6E34', '#A98848', '#C3A765', '#80602A', '#FFF0B4', '#D9BA7D', '#B99950', '#785821', '#F5D68A', '#8D6E34']) },
-  { id: 'balanced', name: '05 Balanced', stops: createGoldStops(['#957B45', '#AA8F59', '#C3AC76', '#8F7440', '#FFFDDA', '#DDC79B', '#C3AC76', '#8F7440', '#FBECA9', '#957B45']) },
-  { id: 'coin', name: '06 Coin', stops: createGoldStops(['#74531E', '#967331', '#BC984F', '#684716', '#FFE99A', '#D4AA58', '#AB8538', '#5E3E10', '#F3CE6E', '#74531E']) },
-  { id: 'royal', name: '07 Royal', stops: createGoldStops(['#60400F', '#87601D', '#B98C37', '#533307', '#FFE47C', '#D3A244', '#A57421', '#482B04', '#F4C753', '#60400F']) },
-  { id: 'antique', name: '08 Antique', stops: createGoldStops(['#51350D', '#75531B', '#9F792F', '#432904', '#EAC76E', '#BA8F42', '#8A6221', '#392203', '#DDB657', '#51350D']) },
-  { id: 'foil', name: '09 Foil', stops: createGoldStops(['#3A2405', '#6E490D', '#AD7E25', '#2C1901', '#FFF0A1', '#D8A83D', '#8E5E12', '#211100', '#FFD564', '#3A2405']) },
-  { id: 'black-gold', name: '10 Black Gold', stops: createGoldStops(['#211304', '#533007', '#946014', '#160B00', '#FFF7C5', '#D49B2C', '#754308', '#0E0700', '#FFD96B', '#211304']) },
-];
-
-const DEFAULT_GOLD_STOPS = GOLD_GRADIENT_PRESETS[4].stops;
-
 const REFLECTION_PRESETS: ReflectionPreset[] = [
   { id: 'diffuse', name: '01 Diffuse', whiteColor: 'rgba(255,248,222,0.52)', whiteWidth: 32, blackWidth: 38, blackOffsetX: 30, blackOffsetY: 12, blackIdle: 0.04, blackActive: 0.12, tokenWhiteOpacity: 0.24, tokenBlackOpacity: 0.14 },
   { id: 'satin-sweep', name: '02 Satin Sweep', whiteColor: 'rgba(255,244,204,0.64)', whiteWidth: 25, blackWidth: 32, blackOffsetX: 34, blackOffsetY: 14, blackIdle: 0.06, blackActive: 0.18, tokenWhiteOpacity: 0.32, tokenBlackOpacity: 0.18 },
   { id: 'softbox', name: '03 Softbox', whiteColor: 'rgba(255,249,218,0.76)', whiteWidth: 20, blackWidth: 29, blackOffsetX: 36, blackOffsetY: 16, blackIdle: 0.08, blackActive: 0.24, tokenWhiteOpacity: 0.4, tokenBlackOpacity: 0.22 },
-  { id: 'studio', name: '04 Studio', whiteColor: 'rgba(255,249,207,0.88)', whiteWidth: 14, blackWidth: 21, blackOffsetX: 38, blackOffsetY: 18, blackIdle: 0.16, blackActive: 0.38, tokenWhiteOpacity: 0.52, tokenBlackOpacity: 0.34 },
+  { id: 'studio', name: '04 Window Balanced', whiteColor: 'rgba(255,252,229,0.92)', whiteWidth: 11, blackWidth: 26, blackOffsetX: 44, blackOffsetY: 12, blackIdle: 0.1, blackActive: 0.3, tokenWhiteOpacity: 0.52, tokenBlackOpacity: 0.2 },
   { id: 'window', name: '05 Window', whiteColor: 'rgba(255,252,229,0.92)', whiteWidth: 11, blackWidth: 26, blackOffsetX: 44, blackOffsetY: 12, blackIdle: 0.1, blackActive: 0.3, tokenWhiteOpacity: 0.58, tokenBlackOpacity: 0.28 },
   { id: 'warm-lamp', name: '06 Warm Lamp', whiteColor: 'rgba(255,226,156,0.88)', whiteWidth: 17, blackWidth: 24, blackOffsetX: 40, blackOffsetY: 20, blackIdle: 0.1, blackActive: 0.3, tokenWhiteOpacity: 0.5, tokenBlackOpacity: 0.28 },
   { id: 'cool-panel', name: '07 Cool Panel', whiteColor: 'rgba(255,254,241,0.96)', whiteWidth: 16, blackWidth: 27, blackOffsetX: 46, blackOffsetY: 8, blackIdle: 0.08, blackActive: 0.28, tokenWhiteOpacity: 0.56, tokenBlackOpacity: 0.26 },
@@ -66,11 +34,11 @@ type ReflectionPatternId = 'twin-panes' | 'crosslight' | 'diagonal-pair' | 'wind
   | 'chevron' | 'pillars' | 'horizon' | 'diamonds' | 'corner-fold';
 
 const REFLECTION_PATTERNS: { id: ReflectionPatternId; name: string }[] = [
-  { id: 'twin-panes', name: '01 Twin Panes' },
+  { id: 'frames', name: '01 Frames' },
   { id: 'crosslight', name: '02 Crosslight' },
   { id: 'diagonal-pair', name: '03 Diagonal Pair' },
   { id: 'window-grid', name: '04 Window Grid' },
-  { id: 'frames', name: '05 Frames' },
+  { id: 'twin-panes', name: '05 Twin Panes' },
   { id: 'chevron', name: '06 Chevron' },
   { id: 'pillars', name: '07 Pillars' },
   { id: 'horizon', name: '08 Horizon' },
@@ -78,11 +46,27 @@ const REFLECTION_PATTERNS: { id: ReflectionPatternId; name: string }[] = [
   { id: 'corner-fold', name: '10 Corner Fold' },
 ];
 
+const METAL_PRESETS = [
+  { id: 'gold-14k', name: '14K Gold', color: '#c9a45a' },
+  { id: 'gold-18k', name: '18K Gold', color: '#d6a338' },
+  { id: 'gold-24k', name: '24K Gold', color: '#e0b21d' },
+  { id: 'bronze', name: 'Bronze', color: '#a66f35' },
+  { id: 'silver', name: 'Silver', color: '#bcc2c5' },
+] as const;
+
+const REFLECTION_MAP_WIDTH = 367.5;
+const REFLECTION_MAP_HEIGHT = 330;
+const REFLECTION_MAP_X = -106.25;
+const REFLECTION_MAP_Y = -95;
+const REFLECTION_RASTER_SCALE = 2;
+
 interface PerformanceKanTokenProps {
   idPrefix: string;
   filmOnly?: boolean;
   pattern: ReflectionPatternId;
+  reflectionMap?: string;
   softness: number;
+  zoom: number;
   sourceRef?: (element: SVGSVGElement) => void;
 }
 
@@ -93,6 +77,7 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
   const reflectionFilm = () => (
     <g class="perf-kan-token__reflection-film">
       <g filter={props.softness > 0 ? url('film-soften') : undefined}>
+        <g transform={`translate(65 65) scale(${props.zoom}) translate(-65 -65)`}>
         <Switch>
         <Match when={props.pattern === 'twin-panes'}>
           <g class="perf-kan-token__reflection-film-dark">
@@ -215,6 +200,7 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
           </g>
         </Match>
         </Switch>
+        </g>
       </g>
     </g>
   );
@@ -258,7 +244,22 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
         <>
           <polygon class="perf-kan-token__recess" points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" />
           <use href={`#${id('metal-geometry')}`} class="perf-kan-token__substrate" />
-          <g mask={url('metal-mask')}>{reflectionFilm()}</g>
+          <g mask={url('metal-mask')}>
+            <Show when={props.reflectionMap} fallback={reflectionFilm()}>
+              {(map) => (
+                <g class="perf-kan-token__reflection-film">
+                  <image
+                    href={map()}
+                    x={REFLECTION_MAP_X}
+                    y={REFLECTION_MAP_Y}
+                    width={REFLECTION_MAP_WIDTH}
+                    height={REFLECTION_MAP_HEIGHT}
+                    preserveAspectRatio="none"
+                  />
+                </g>
+              )}
+            </Show>
+          </g>
         </>
       )}
     >
@@ -273,12 +274,12 @@ export const ShinyPerformanceScreen = () => {
   let screenRef!: HTMLElement;
   let reflectionSourceRef!: SVGSVGElement;
   let pendingDirection: { x: number; y: number } | null = null;
+  let pendingInputCoordinates = { x: 0, y: 0 };
   let animationFrame = 0;
   let reflectionRasterFrame = 0;
   let reflectionRasterVersion = 0;
+  let reflectionMapObjectUrl = '';
   let lastFrameAt = 0;
-  let reflectionIdleTimer = 0;
-  let lastInputDirection = { x: 0, y: 0 };
   let gyroOrigin: { beta: number; gamma: number } | null = null;
   let updateCount = 0;
   let metricsTimer = 0;
@@ -289,79 +290,42 @@ export const ShinyPerformanceScreen = () => {
   const [tiltEnabled, setTiltEnabled] = createSignal(false);
   const [updatesPerSecond, setUpdatesPerSecond] = createSignal(0);
   const [movingReflections, setMovingReflections] = createSignal(true);
-  const [showGradientEditor, setShowGradientEditor] = createSignal(true);
-  const [goldStops, setGoldStops] = createSignal<GoldStop[]>(DEFAULT_GOLD_STOPS.map((stop) => ({ ...stop })));
-  const [selectedGradientPreset, setSelectedGradientPreset] = createSignal('balanced');
-  const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('studio');
+  const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('foil-flash');
   const [selectedReflectionPattern, setSelectedReflectionPattern] = createSignal<ReflectionPatternId>('frames');
-  const [reflectionSoftness, setReflectionSoftness] = createSignal(12);
+  const [reflectionSoftness, setReflectionSoftness] = createSignal(9);
+  const [reflectionZoom, setReflectionZoom] = createSignal(1);
+  const [selectedMetal, setSelectedMetal] = createSignal('gold-18k');
   const [reflectionMap, setReflectionMap] = createSignal('');
   const [inputCoordinates, setInputCoordinates] = createSignal({ x: 0, y: 0 });
   const [reflectionDirection, setReflectionDirection] = createSignal({ x: 0, y: 0 });
 
-  const applyGoldStops = (nextStops: GoldStop[], presetId = 'custom') => {
-    setGoldStops(nextStops);
-    setSelectedGradientPreset(presetId);
-    nextStops.forEach((stop, index) => {
-      screenRef.style.setProperty(`--perf-gold-color-${index}`, stop.color);
-      screenRef.style.setProperty(`--perf-gold-offset-${index}`, `${stop.offset}%`);
-    });
-  };
-
-  const updateGoldStopColor = (index: number, color: string) => {
-    const normalized = color.toUpperCase();
-    if (!/^#[0-9A-F]{6}$/.test(normalized)) return;
-    applyGoldStops(goldStops().map((stop, stopIndex) => stopIndex === index ? { ...stop, color: normalized } : stop));
-  };
-
-  const updateGoldStopOffset = (index: number, value: number) => {
-    const stops = goldStops();
-    const minimum = index === 0 ? 0 : stops[index - 1].offset;
-    const maximum = index === stops.length - 1 ? 100 : stops[index + 1].offset;
-    const offset = Math.round(clamp(value, minimum, maximum) * 10) / 10;
-    applyGoldStops(stops.map((stop, stopIndex) => stopIndex === index ? { ...stop, offset } : stop));
-  };
-
-  const resetGoldStops = () => applyGoldStops(DEFAULT_GOLD_STOPS.map((stop) => ({ ...stop })), 'balanced');
-
-  const applyGradientPreset = (preset: GoldGradientPreset) => {
-    applyGoldStops(preset.stops.map((stop) => ({ ...stop })), preset.id);
-  };
-
   const applyReflectionPreset = (preset: ReflectionPreset) => {
     setSelectedReflectionPreset(preset.id);
     screenRef.style.setProperty('--perf-white-reflection', preset.whiteColor);
-    screenRef.style.setProperty('--perf-white-radius-x', `${preset.whiteWidth}%`);
-    screenRef.style.setProperty('--perf-black-radius-x', `${preset.blackWidth}%`);
-    screenRef.style.setProperty('--perf-black-offset-x', `${preset.blackOffsetX}%`);
-    screenRef.style.setProperty('--perf-black-offset-y', `${preset.blackOffsetY}%`);
-    screenRef.style.setProperty('--perf-black-idle-core', String(preset.blackIdle));
-    screenRef.style.setProperty('--perf-black-active-core', String(preset.blackActive));
-    screenRef.style.setProperty('--perf-black-idle-edge', String(preset.blackIdle * 0.56));
-    screenRef.style.setProperty('--perf-black-active-edge', String(preset.blackActive * 0.63));
     screenRef.style.setProperty('--perf-white-reflection-opacity', String(preset.tokenWhiteOpacity));
     screenRef.style.setProperty('--perf-black-reflection-opacity', String(preset.tokenBlackOpacity));
+  };
+
+  const applyMetalPreset = (preset: typeof METAL_PRESETS[number]) => {
+    setSelectedMetal(preset.id);
+    screenRef.style.setProperty('--perf-metal-base', preset.color);
   };
 
   const reflectionPreview = (preset: ReflectionPreset) => (
     `radial-gradient(ellipse ${preset.whiteWidth}% 150% at 34% 50%, ${preset.whiteColor} 0%, transparent 100%), `
     + `radial-gradient(ellipse ${preset.blackWidth}% 170% at ${34 + preset.blackOffsetX}% 50%, rgba(0,0,0,${Math.min(0.9, preset.blackIdle + preset.blackActive)}) 0%, transparent 100%), `
-    + 'var(--perf-gold-gradient)'
+    + 'var(--perf-metal-base)'
   );
-
-  const gradientPreview = () => `linear-gradient(90deg, ${goldStops().map((stop) => `${stop.color} ${stop.offset}%`).join(', ')})`;
 
   const toggleMovingReflections = (enabled: boolean) => {
     setMovingReflections(enabled);
-    if (!enabled) {
-      pendingDirection = null;
-      screenRef.style.setProperty('--perf-reflex-active', '0');
-    }
+    if (!enabled) pendingDirection = null;
   };
 
   const commitDirection = (x: number, y: number) => {
     screenRef.style.setProperty('--perf-reflex-x', x.toFixed(4));
     screenRef.style.setProperty('--perf-reflex-y', y.toFixed(4));
+    setInputCoordinates(pendingInputCoordinates);
     setReflectionDirection({ x, y });
     updateCount += 1;
   };
@@ -388,25 +352,13 @@ export const ShinyPerformanceScreen = () => {
     return Math.sign(normalized) * Math.pow(Math.abs(normalized), exponent) * 0.92;
   };
 
-  const scheduleDirection = (x: number, y: number) => {
+  const scheduleDirection = (x: number, y: number, input = { x, y }) => {
     const nextDirection = {
       x: mapReflectionAxis(x),
       y: mapReflectionAxis(y),
     };
-    const movement = Math.hypot(
-      nextDirection.x - lastInputDirection.x,
-      nextDirection.y - lastInputDirection.y,
-    );
-    lastInputDirection = nextDirection;
+    pendingInputCoordinates = input;
     pendingDirection = nextDirection;
-
-    if (movement > 0.006) {
-      screenRef.style.setProperty('--perf-reflex-active', '1');
-      window.clearTimeout(reflectionIdleTimer);
-      reflectionIdleTimer = window.setTimeout(() => {
-        screenRef.style.setProperty('--perf-reflex-active', '0');
-      }, 140);
-    }
     if (!animationFrame) animationFrame = requestAnimationFrame(flush);
   };
 
@@ -414,14 +366,12 @@ export const ShinyPerformanceScreen = () => {
     if (tiltEnabled() || !movingReflections()) return;
     const x = event.clientX / window.innerWidth * 2 - 1;
     const y = event.clientY / window.innerHeight * 2 - 1;
-    setInputCoordinates({ x, y });
     // Reverse pointer X so the visible reflection follows horizontal mouse movement.
-    scheduleDirection(-x, y);
+    scheduleDirection(-x, y, { x, y });
   };
 
   const handlePointerLeave = () => {
     if (!tiltEnabled() && movingReflections()) {
-      setInputCoordinates({ x: 0, y: 0 });
       scheduleDirection(0, 0);
     }
   };
@@ -433,7 +383,6 @@ export const ShinyPerformanceScreen = () => {
     if (!gyroOrigin) gyroOrigin = { beta, gamma };
     const x = (gamma - gyroOrigin.gamma) / 28;
     const y = (beta - gyroOrigin.beta) / 28;
-    setInputCoordinates({ x, y });
     scheduleDirection(x, y);
   };
 
@@ -455,7 +404,6 @@ export const ShinyPerformanceScreen = () => {
   const usePointer = () => {
     setTiltEnabled(false);
     gyroOrigin = null;
-    setInputCoordinates({ x: 0, y: 0 });
     scheduleDirection(0, 0);
   };
 
@@ -470,8 +418,8 @@ export const ShinyPerformanceScreen = () => {
     const source = reflectionSourceRef;
     const clone = source.cloneNode(true) as SVGSVGElement;
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('width', '490');
-    clone.setAttribute('height', '440');
+    clone.setAttribute('width', String(REFLECTION_MAP_WIDTH * REFLECTION_RASTER_SCALE));
+    clone.setAttribute('height', String(REFLECTION_MAP_HEIGHT * REFLECTION_RASTER_SCALE));
     clone.querySelector('.perf-kan-debug-film__base')?.remove();
 
     const sourceFilm = source.querySelector('.perf-kan-token__reflection-film') as SVGGElement | null;
@@ -512,12 +460,21 @@ export const ShinyPerformanceScreen = () => {
       });
 
       const canvas = document.createElement('canvas');
-      canvas.width = 490;
-      canvas.height = 440;
+      canvas.width = REFLECTION_MAP_WIDTH * REFLECTION_RASTER_SCALE;
+      canvas.height = REFLECTION_MAP_HEIGHT * REFLECTION_RASTER_SCALE;
       const context = canvas.getContext('2d');
       if (!context) return;
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      if (version === reflectionRasterVersion) setReflectionMap(canvas.toDataURL('image/png'));
+      const png = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Unable to encode reflection map')), 'image/png');
+      });
+      if (version !== reflectionRasterVersion) return;
+
+      const nextObjectUrl = URL.createObjectURL(png);
+      const previousObjectUrl = reflectionMapObjectUrl;
+      reflectionMapObjectUrl = nextObjectUrl;
+      setReflectionMap(nextObjectUrl);
+      if (previousObjectUrl) requestAnimationFrame(() => URL.revokeObjectURL(previousObjectUrl));
     } finally {
       URL.revokeObjectURL(objectUrl);
     }
@@ -526,6 +483,7 @@ export const ShinyPerformanceScreen = () => {
   createEffect(() => {
     selectedReflectionPattern();
     reflectionSoftness();
+    reflectionZoom();
     selectedReflectionPreset();
     const version = ++reflectionRasterVersion;
     cancelAnimationFrame(reflectionRasterFrame);
@@ -552,9 +510,9 @@ export const ShinyPerformanceScreen = () => {
     document.removeEventListener('pointerleave', handlePointerLeave);
     window.removeEventListener('deviceorientation', handleOrientation);
     window.clearInterval(metricsTimer);
-    window.clearTimeout(reflectionIdleTimer);
     if (animationFrame) cancelAnimationFrame(animationFrame);
     if (reflectionRasterFrame) cancelAnimationFrame(reflectionRasterFrame);
+    if (reflectionMapObjectUrl) URL.revokeObjectURL(reflectionMapObjectUrl);
   });
 
   return (
@@ -616,92 +574,39 @@ export const ShinyPerformanceScreen = () => {
           <span><strong>{tiltEnabled() ? 'tilt' : 'pointer'}</strong> input</span>
         </div>
 
-        <section class="shiny-performance-gradient-editor" data-open={showGradientEditor() ? 'true' : 'false'}>
-          <div class="shiny-performance-gradient-editor__header">
+        <section class="shiny-performance-reflection-editor">
+          <div class="shiny-performance-reflection-editor__header">
             <div>
-              <span class="shiny-performance-kicker">// MATERIAL SOURCE</span>
-              <strong>10-stop gold</strong>
-            </div>
-            <div class="shiny-performance-gradient-editor__commands">
-              <button onClick={() => setShowGradientEditor(!showGradientEditor())}>
-                {showGradientEditor() ? 'Close stops' : 'Edit stops'}
-              </button>
-              <button onClick={resetGoldStops}>Reset</button>
+              <span class="shiny-performance-kicker">// REFLECTION SOURCE</span>
+              <strong>Intensity profiles</strong>
             </div>
           </div>
-          <div class="shiny-performance-gradient-strip" style={{ background: gradientPreview() }} />
-
-          <Show when={showGradientEditor()}>
-            <div class="shiny-performance-gradient-presets" aria-label="Gold gradient presets">
-              <Index each={GOLD_GRADIENT_PRESETS}>
-                {(preset) => (
-                  <button
-                    classList={{ active: selectedGradientPreset() === preset().id }}
-                    onClick={() => applyGradientPreset(preset())}
-                  >
-                    <span style={{ background: `linear-gradient(90deg, ${preset().stops.map((stop) => `${stop.color} ${stop.offset}%`).join(', ')})` }} />
-                    <strong>{preset().name}</strong>
-                  </button>
-                )}
-              </Index>
-            </div>
-            <div class="shiny-performance-reflection-presets">
-              <div class="shiny-performance-reflection-presets__title">
-                <span class="shiny-performance-kicker">// MOVING LAYERS</span>
-                <strong>Reflection profiles</strong>
-              </div>
-              <div class="shiny-performance-gradient-presets" aria-label="Moving reflection presets">
-                <Index each={REFLECTION_PRESETS}>
-                  {(preset) => (
-                    <button
-                      classList={{ active: selectedReflectionPreset() === preset().id }}
-                      onClick={() => applyReflectionPreset(preset())}
-                    >
-                      <span style={{ background: reflectionPreview(preset()) }} />
-                      <strong>{preset().name}</strong>
-                    </button>
-                  )}
-                </Index>
-              </div>
-            </div>
-            <div class="shiny-performance-stop-grid">
-              <Index each={goldStops()}>
-                {(stop, index) => (
-                  <div class="shiny-performance-stop-control">
-                    <div class="shiny-performance-stop-control__title">
-                      <span>Stop {index + 1}</span>
-                      <code>{stop().offset}%</code>
-                    </div>
-                    <input
-                      class="shiny-performance-stop-control__swatch"
-                      type="color"
-                      value={stop().color}
-                      aria-label={`Stop ${index + 1} color`}
-                      onInput={(event) => updateGoldStopColor(index, event.currentTarget.value)}
-                    />
-                    <input
-                      class="shiny-performance-stop-control__hex"
-                      type="text"
-                      value={stop().color}
-                      aria-label={`Stop ${index + 1} hex color`}
-                      onChange={(event) => updateGoldStopColor(index, event.currentTarget.value)}
-                    />
-                    <label>
-                      <span>Offset</span>
-                      <input
-                        type="number"
-                        min={index === 0 ? 0 : goldStops()[index - 1].offset}
-                        max={index === goldStops().length - 1 ? 100 : goldStops()[index + 1].offset}
-                        step="0.1"
-                        value={stop().offset}
-                        onChange={(event) => updateGoldStopOffset(index, Number(event.currentTarget.value))}
-                      />
-                    </label>
-                  </div>
-                )}
-              </Index>
-            </div>
-          </Show>
+          <div class="shiny-performance-reflection-profile-grid" aria-label="Moving reflection presets">
+            <Index each={REFLECTION_PRESETS}>
+              {(preset) => (
+                <button
+                  classList={{ active: selectedReflectionPreset() === preset().id }}
+                  onClick={() => applyReflectionPreset(preset())}
+                >
+                  <span style={{ background: reflectionPreview(preset()) }} />
+                  <strong>{preset().name}</strong>
+                </button>
+              )}
+            </Index>
+          </div>
+          <div class="shiny-performance-metal-picker" aria-label="Metal color">
+            <Index each={METAL_PRESETS}>
+              {(metal) => (
+                <button
+                  classList={{ active: selectedMetal() === metal().id }}
+                  onClick={() => applyMetalPreset(metal())}
+                >
+                  <span style={{ background: metal().color }} />
+                  <strong>{metal().name}</strong>
+                </button>
+              )}
+            </Index>
+          </div>
         </section>
 
         <article class="shiny-performance-phone" aria-label="Mobile game UI reflex preview">
@@ -716,7 +621,9 @@ export const ShinyPerformanceScreen = () => {
               <PerformanceKanToken
                 idPrefix="perf-kan-small"
                 pattern={selectedReflectionPattern()}
+                reflectionMap={reflectionMap()}
                 softness={reflectionSoftness()}
+                zoom={reflectionZoom()}
               />
             </div>
             <div class="shiny-performance-appbar-copy">
@@ -784,18 +691,32 @@ export const ShinyPerformanceScreen = () => {
               <span class="shiny-performance-kicker">// REFLECTION SOURCE</span>
               <strong>Pattern geometry</strong>
             </div>
-            <label>
-              <span>Softness</span>
-              <input
-                type="range"
-                min="0"
-                max="12"
-                step="0.5"
-                value={reflectionSoftness()}
-                onInput={(event) => setReflectionSoftness(Number(event.currentTarget.value))}
-              />
-              <output>{reflectionSoftness().toFixed(1)}</output>
-            </label>
+            <div class="shiny-performance-pattern-toolbar__controls">
+              <label>
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value={reflectionZoom()}
+                  onInput={(event) => setReflectionZoom(Number(event.currentTarget.value))}
+                />
+                <output>{Math.round(reflectionZoom() * 100)}%</output>
+              </label>
+              <label>
+                <span>Softness</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="12"
+                  step="0.5"
+                  value={reflectionSoftness()}
+                  onInput={(event) => setReflectionSoftness(Number(event.currentTarget.value))}
+                />
+                <output>{reflectionSoftness().toFixed(1)}</output>
+              </label>
+            </div>
           </div>
 
           <nav class="shiny-performance-pattern-picker" aria-label="Reflection pattern">
@@ -829,6 +750,7 @@ export const ShinyPerformanceScreen = () => {
                 idPrefix="perf-kan-atlas"
                 pattern={selectedReflectionPattern()}
                 softness={reflectionSoftness()}
+                zoom={reflectionZoom()}
                 sourceRef={(element) => { reflectionSourceRef = element; }}
                 filmOnly
               />
@@ -846,7 +768,9 @@ export const ShinyPerformanceScreen = () => {
               <PerformanceKanToken
                 idPrefix="perf-kan-large"
                 pattern={selectedReflectionPattern()}
+                reflectionMap={reflectionMap()}
                 softness={reflectionSoftness()}
+                zoom={reflectionZoom()}
               />
             </div>
           </figure>
