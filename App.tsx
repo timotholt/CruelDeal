@@ -17,6 +17,7 @@ import { MinimalSurfaceProofScreen } from './components/screens/MinimalSurfacePr
 import { GameTextTestScreen } from './components/screens/GameTextTestScreen';
 import { AppViewport } from './components/ui/AppViewport';
 import { ShinyAuthoringScreen } from './components/authoring/shiny/ShinyAuthoringScreen';
+import { ShinyPerformanceScreen } from './components/authoring/shiny/ShinyPerformanceScreen';
 import { GameUiSkinProofScreen } from './components/screens/GameUiSkinProofScreen';
 
 const queryClient = new QueryClient({
@@ -77,6 +78,11 @@ const devLinks = [
     title: 'Shiny Material Authoring',
     detail: 'Canonical metallic/reflex/icon runtime preview and material authoring surface',
   },
+  {
+    href: '/dev/shiny-performance',
+    title: 'Gold Reflex Mobile Proof',
+    detail: 'Scoped, phone-oriented reflex performance variation with a realistic gold load',
+  },
 ];
 
 const DevIndexScreen = () => (
@@ -118,6 +124,7 @@ export default function App() {
   const isDevPath = () => window.location.pathname.toLowerCase().startsWith('/dev');
   const isDevUiNodePath = () => window.location.pathname.toLowerCase().startsWith('/dev/ui-node');
   const isDevShinyPath = () => window.location.pathname.toLowerCase().startsWith('/dev/shiny');
+  const isDevShinyPerformancePath = () => window.location.pathname.toLowerCase().startsWith('/dev/shiny-performance');
   const isDevIconsPath = () => window.location.pathname.toLowerCase().startsWith('/dev/icons');
   const isDevCanonicalCardPath = () => window.location.pathname.toLowerCase().startsWith('/dev/canonical-card');
   const isDevMinimalSurfacePath = () => window.location.pathname.toLowerCase().startsWith('/dev/minimal-surface');
@@ -226,7 +233,8 @@ export default function App() {
               </Show>
             )}>
               <Show when={isDevUiNodePath()} fallback={(
-                <Show when={isDevShinyPath() || isDevIconsPath()} fallback={(
+                <Show when={isDevShinyPerformancePath()} fallback={(
+                  <Show when={isDevShinyPath() || isDevIconsPath()} fallback={(
                   <Show when={isDevCanonicalCardPath()} fallback={(
                     <Show when={isDevMinimalSurfacePath()} fallback={<DevIndexScreen />}>
                       <MinimalSurfaceProofScreen />
@@ -234,8 +242,11 @@ export default function App() {
                   )}>
                     <CanonicalCardProofScreen />
                   </Show>
+                  )}>
+                    <ShinyAuthoringScreen />
+                  </Show>
                 )}>
-                  <ShinyAuthoringScreen />
+                  <ShinyPerformanceScreen />
                 </Show>
               )}>
                 <UiNodePreviewScreen />

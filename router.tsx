@@ -26,6 +26,7 @@ import { MainMaterialPreviewScreen } from "./components/screens/MainMaterialPrev
 import { UiNodePreviewScreen } from "./components/screens/UiNodePreviewScreen";
 import { CanonicalCardProofScreen } from "./components/screens/CanonicalCardProofScreen";
 import { ShinyAuthoringScreen } from "./components/authoring/shiny/ShinyAuthoringScreen";
+import { ShinyPerformanceScreen } from "./components/authoring/shiny/ShinyPerformanceScreen";
 import { GameUiSkinProofScreen } from "./components/screens/GameUiSkinProofScreen";
 
 // 1. Root Layout - Preserving existing CSS/Structure
@@ -269,6 +270,12 @@ const devShinyRoute = createRoute({
     component: () => <ShinyAuthoringScreen />,
 });
 
+const devShinyPerformanceRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/dev/shiny-performance",
+    component: () => <ShinyPerformanceScreen />,
+});
+
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
@@ -298,6 +305,7 @@ const routeTree = rootRoute.addChildren([
     iconsRoute,
     devIconsRoute,
     devShinyRoute,
+    devShinyPerformanceRoute,
 ]);
 
 export const router = createRouter({ routeTree });
