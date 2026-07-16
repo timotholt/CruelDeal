@@ -551,51 +551,51 @@
 }
 
 .material-workbench-parts {
-  display: grid;
   min-height: 0;
-  align-content: start;
-  grid-template-columns: 1fr;
-  gap: 6px;
+  --tree-font-size: 10px;
+  --tree-indent-base: 4px;
+  --tree-row-pad-y: 6px;
+  --tree-row-pad-x: 7px;
+  --tree-row-radius: 5px;
+  --tree-row-color: #efe5cb;
+  --tree-row-hover-bg: rgb(239 200 93 / 0.08);
+  --tree-row-active-bg: linear-gradient(180deg, rgb(239 200 93 / 0.18), rgb(239 200 93 / 0.06));
+  --tree-chevron-color: rgb(244 238 224 / 0.62);
+  --text-muted: rgb(244 238 224 / 0.54);
+  --border-subtle: rgb(244 238 224 / 0.14);
 }
 
-.material-workbench-parts button {
+.material-workbench-parts .solid-tree-container {
   display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.material-workbench-parts .solid-tree-row {
+  box-sizing: border-box;
   min-width: 0;
-  min-height: 42px;
-  gap: 2px;
-  padding: 7px 8px;
-  text-align: left;
-}
-
-.material-workbench-parts .material-workbench-part-button--depth-1 {
-  margin-left: 14px;
   min-height: 36px;
-  border-color: rgba(244, 238, 224, 0.18);
+  border: 1px solid rgb(244 238 224 / 0.14);
+  text-align: left;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
-.material-workbench-parts .material-workbench-part-button--depth-2 {
-  margin-left: 28px;
-  min-height: 34px;
-  border-color: rgba(244, 238, 224, 0.14);
-}
-
-.material-workbench-parts button:hover,
-.material-workbench-parts button.is-active,
+.material-workbench-parts .solid-tree-row:hover,
+.material-workbench-parts .solid-tree-row[data-selected],
 .material-workbench-footer > button:hover {
   border-color: rgba(239, 200, 93, 0.72);
   color: #ffe2a4;
 }
 
-.material-workbench-parts button.is-active {
-  background: linear-gradient(180deg, rgb(239 200 93 / 0.18), rgb(239 200 93 / 0.06));
+.material-workbench-parts .solid-tree-row[data-selected] {
   box-shadow: inset 0 0 0 1px rgb(239 200 93 / 0.22), 0 0 16px rgb(239 200 93 / 0.12);
 }
 
-.material-workbench-parts button.is-selection-flash-a {
+.material-workbench-parts.is-selection-flash-a .solid-tree-row[data-selected] {
   animation: material-workbench-selection-flash-a 820ms ease-out both;
 }
 
-.material-workbench-parts button.is-selection-flash-b {
+.material-workbench-parts.is-selection-flash-b .solid-tree-row[data-selected] {
   animation: material-workbench-selection-flash-b 820ms ease-out both;
 }
 
@@ -627,16 +627,24 @@
   }
 }
 
-.material-workbench-parts strong,
-.material-workbench-parts span {
+.material-workbench-tree-label,
+.material-workbench-tree-label strong,
+.material-workbench-tree-label span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.material-workbench-parts span {
+.material-workbench-tree-label {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.material-workbench-tree-label span {
   color: rgba(244, 238, 224, 0.54);
   font-size: 9px;
+  font-weight: 500;
 }
 
 .material-workbench-stage {

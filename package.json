@@ -29,6 +29,7 @@
     "@tanstack/solid-query": "^5.99.0",
     "@tanstack/solid-router": "^1.168.20",
     "@tanstack/solid-virtual": "^3.13.24",
+    "@timotholt/solid-tree": "git+https://github.com/timotholt/solid-tree.git#3db2ea13aa69bd1b1d3a95c7c531c388619da32c",
     "d3-quadtree": "^3.0.1",
     "dat.gui": "^0.7.9",
     "howler": "2.2.4",

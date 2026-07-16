@@ -16,9 +16,13 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
       resolve: {
+        dedupe: ['solid-js'],
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      optimizeDeps: {
+        exclude: ['@timotholt/solid-tree'],
+      },
     };
 });

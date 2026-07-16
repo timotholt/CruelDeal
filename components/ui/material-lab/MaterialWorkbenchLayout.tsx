@@ -1,4 +1,6 @@
-import { For, JSX, Show } from 'solid-js';
+import { createMemo, For, JSX, Show } from 'solid-js';
+import { Tree, type TreeNodeData } from '@timotholt/solid-tree';
+import '@timotholt/solid-tree/theme.css';
 import { MaterialPanel, SectionLabel } from './MaterialPrimitives';
 
 export interface MaterialWorkbenchPart<T extends string = string> {
@@ -12,39 +14,69 @@ interface MaterialPartSelectorProps<T extends string> {
   parts: MaterialWorkbenchPart<T>[];
   selectedPartId: T;
   onSelect: (id: T) => void;
+  storageKey?: string;
   selectionPulseTick?: number;
   selectionPulseEnabled?: boolean;
 }
 
-export const MaterialPartSelector = <T extends string>(props: MaterialPartSelectorProps<T>) => (
-  <div class="ui-lab-control-grid">
-    <div class="ui-lab-control-group">
-      <SectionLabel size="xs">UI Tree</SectionLabel>
-      <div class="material-workbench-parts">
-        <For each={props.parts}>
-          {(part) => {
-            const isSelected = () => props.selectedPartId === part.id;
-            const pulseClass = () => (
-              props.selectionPulseEnabled && isSelected()
-                ? `is-selection-flash is-selection-flash-${(props.selectionPulseTick || 0) % 2 === 0 ? 'a' : 'b'}`
-                : ''
-            );
-            return (
-              <button
-                type="button"
-                class={`ui-lab-mini-button material-workbench-part-button material-workbench-part-button--depth-${part.depth ?? 0} ${isSelected() ? 'is-active' : ''} ${pulseClass()}`}
-                onClick={() => props.onSelect(part.id)}
-              >
-                <strong>{part.label}</strong>
-                <span>{part.detail}</span>
-              </button>
-            );
-          }}
-        </For>
+export const materialWorkbenchPartsToTreeData = <T extends string>(
+  parts: MaterialWorkbenchPart<T>[],
+): TreeNodeData[] => {
+  const roots: TreeNodeData[] = [];
+  const ancestors: TreeNodeData[] = [];
+  for (const part of parts) {
+    const requestedDepth = Math.max(0, Math.floor(part.depth ?? 0));
+    const depth = Math.min(requestedDepth, ancestors.length);
+    ancestors.length = depth;
+    const node: TreeNodeData = {
+      id: part.id,
+      label: part.label,
+      status: part.detail,
+      type: 'material-workbench-part',
+      children: [],
+    };
+    if (depth === 0) {
+      roots.push(node);
+    } else {
+      ancestors[depth - 1].children!.push(node);
+    }
+    ancestors.push(node);
+  }
+  return roots;
+};
+
+export const MaterialPartSelector = <T extends string>(props: MaterialPartSelectorProps<T>) => {
+  const treeData = createMemo(() => materialWorkbenchPartsToTreeData(props.parts));
+  const pulseClass = () => props.selectionPulseEnabled
+    ? `is-selection-flash-${(props.selectionPulseTick || 0) % 2 === 0 ? 'a' : 'b'}`
+    : '';
+  return (
+    <div class="ui-lab-control-grid">
+      <div class="ui-lab-control-group">
+        <SectionLabel size="xs">UI Tree</SectionLabel>
+        <div class={`material-workbench-parts ${pulseClass()}`}>
+          <Tree
+            data={treeData()}
+            selectedId={props.selectedPartId}
+            ariaLabel="Editable UI component tree"
+            storageKey={props.storageKey}
+            storagePrefix="cruel-deal"
+            rowClickPolicy="select-only"
+            basePadding={4}
+            indentStep={13}
+            onSelect={(node) => props.onSelect(node.id as T)}
+            renderLabel={(node) => (
+              <span class="material-workbench-tree-label">
+                <strong>{node.label}</strong>
+                <Show when={node.status}><span>{node.status}</span></Show>
+              </span>
+            )}
+          />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface MaterialWorkbenchLayoutProps<T extends string> {
   title: string;
@@ -56,6 +88,7 @@ interface MaterialWorkbenchLayoutProps<T extends string> {
   parts: MaterialWorkbenchPart<T>[];
   selectedPartId: T;
   onSelectPart: (id: T) => void;
+  treeStorageKey?: string;
   selectionPulseTick?: number;
   selectionPulseEnabled?: boolean;
   preview: JSX.Element;
@@ -105,6 +138,7 @@ export const MaterialWorkbenchLayout = <T extends string>(props: MaterialWorkben
             parts={props.parts}
             selectedPartId={props.selectedPartId}
             onSelect={props.onSelectPart}
+            storageKey={props.treeStorageKey ?? props.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
             selectionPulseTick={props.selectionPulseTick}
             selectionPulseEnabled={props.selectionPulseEnabled}
           />
