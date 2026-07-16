@@ -62,45 +62,50 @@ const REFLECTION_PRESETS: ReflectionPreset[] = [
   { id: 'hard-specular', name: '10 Hard Specular', whiteColor: 'rgba(255,255,246,1)', whiteWidth: 8, blackWidth: 19, blackOffsetX: 50, blackOffsetY: 18, blackIdle: 0.2, blackActive: 0.52, tokenWhiteOpacity: 0.74, tokenBlackOpacity: 0.46 },
 ];
 
-const PerformanceKanToken = (props: { stops: GoldStop[] }) => (
+const PerformanceKanToken = () => (
   <svg class="perf-kan-token__svg" viewBox="0 0 100 100" aria-hidden="true">
     <defs>
-      <linearGradient id="perf-kan-gold" x1="2.0" y1="5.8" x2="102.0" y2="105.8" gradientUnits="userSpaceOnUse" spreadMethod="reflect">
-        <Index each={props.stops}>
-          {(stop) => <stop offset={`${stop().offset}%`} stop-color={stop().color} />}
-        </Index>
-      </linearGradient>
       <clipPath id="perf-kan-k-clip"><rect x="10" y="32.40" width="80" height="35.20" /></clipPath>
+      <linearGradient id="perf-kan-film-dark" x1="-50" y1="-40" x2="150" y2="140" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#000" stop-opacity="0" />
+        <stop offset="18%" stop-color="#000" stop-opacity="0.1" />
+        <stop offset="29%" stop-color="#000" stop-opacity="1" />
+        <stop offset="42%" stop-color="#000" stop-opacity="0.72" />
+        <stop offset="56%" stop-color="#000" stop-opacity="0" />
+        <stop offset="100%" stop-color="#000" stop-opacity="0" />
+      </linearGradient>
+      <linearGradient id="perf-kan-film-light" x1="-50" y1="-40" x2="150" y2="140" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0" />
+        <stop offset="46%" stop-color="#F4D993" stop-opacity="0" />
+        <stop offset="60%" stop-color="#F4D993" stop-opacity="0.42" />
+        <stop offset="70%" stop-color="#FFF8D5" stop-opacity="0.96" />
+        <stop offset="76%" stop-color="#fff" stop-opacity="1" />
+        <stop offset="84%" stop-color="#F4D993" stop-opacity="0.52" />
+        <stop offset="94%" stop-color="#F4D993" stop-opacity="0" />
+        <stop offset="100%" stop-color="#F4D993" stop-opacity="0" />
+      </linearGradient>
+      <g id="perf-kan-metal-geometry" fill="none" stroke-linejoin="miter">
+        <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke-width="3.50" />
+        <polygon points="31.25, 17.53 68.75, 17.53 87.49, 50 68.75, 82.47 31.25, 82.47 12.51, 50" stroke-width="3.50" />
+        <polygon points="35.01, 24.03 64.99, 24.03 79.99, 50 64.99, 75.97 35.01, 75.97 20.01, 50" stroke-width="3.50" />
+        <path d="M 39.90,32.40 L 39.91,67.60" stroke-width="6.5" stroke-linecap="butt" />
+        <g clip-path="url(#perf-kan-k-clip)">
+          <path d="M 39.90,56.12 L 72.13,18.65" stroke-width="6.5" stroke-linecap="butt" />
+          <path d="M 48.70,48.27 L 68.55,81.35" stroke-width="6.5" stroke-linecap="butt" />
+        </g>
+      </g>
+      <mask id="perf-kan-metal-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+        <use href="#perf-kan-metal-geometry" stroke="#fff" />
+      </mask>
     </defs>
 
-    <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke="#201A0A" stroke-width="3.65" stroke-opacity="0.22" fill="#201A0A" fill-opacity="0.12" stroke-linejoin="miter" transform="translate(0.25, 0.25)" />
-    <polygon points="31.25, 17.53 68.75, 17.53 87.49, 50 68.75, 82.47 31.25, 82.47 12.51, 50" stroke="#201A0A" stroke-width="3.65" stroke-opacity="0.22" fill="none" stroke-linejoin="miter" transform="translate(0.25, 0.25)" />
-    <polygon points="35.01, 24.03 64.99, 24.03 79.99, 50 64.99, 75.97 35.01, 75.97 20.01, 50" stroke="#201A0A" stroke-width="3.65" stroke-opacity="0.22" fill="none" stroke-linejoin="miter" transform="translate(0.25, 0.25)" />
-
-    <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke="#FFFDDA" stroke-width="3.80" fill="none" stroke-linejoin="miter" transform="translate(-0.6, -0.6)" opacity="0.60" />
-    <polygon points="31.25, 17.53 68.75, 17.53 87.49, 50 68.75, 82.47 31.25, 82.47 12.51, 50" stroke="#FFFDDA" stroke-width="3.80" fill="none" stroke-linejoin="miter" transform="translate(-0.6, -0.6)" opacity="0.60" />
-    <polygon points="35.01, 24.03 64.99, 24.03 79.99, 50 64.99, 75.97 35.01, 75.97 20.01, 50" stroke="#FFFDDA" stroke-width="3.80" fill="none" stroke-linejoin="miter" transform="translate(-0.6, -0.6)" opacity="0.60" />
-
-    <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke="url(#perf-kan-gold)" stroke-width="3.50" fill="url(#perf-kan-gold)" fill-opacity="0.12" stroke-linejoin="miter" />
-    <polygon points="31.25, 17.53 68.75, 17.53 87.49, 50 68.75, 82.47 31.25, 82.47 12.51, 50" stroke="url(#perf-kan-gold)" stroke-width="3.50" fill="none" stroke-linejoin="miter" />
-    <polygon points="35.01, 24.03 64.99, 24.03 79.99, 50 64.99, 75.97 35.01, 75.97 20.01, 50" stroke="url(#perf-kan-gold)" stroke-width="3.50" fill="none" stroke-linejoin="miter" />
-
-    <path d="M 39.90,32.40 L 39.91,67.60" fill="none" stroke="#201A0A" stroke-width="6.65" stroke-opacity="0.22" stroke-linecap="butt" transform="translate(0.25, 0.25)" />
-    <g clip-path="url(#perf-kan-k-clip)">
-      <path d="M 39.90,56.12 L 72.13,18.65" fill="none" stroke="#201A0A" stroke-width="6.65" stroke-opacity="0.22" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(0.25, 0.25)" />
-      <path d="M 48.70,48.27 L 68.55,81.35" fill="none" stroke="#201A0A" stroke-width="6.65" stroke-opacity="0.22" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(0.25, 0.25)" />
-    </g>
-
-    <path d="M 39.90,32.40 L 39.91,67.60" fill="none" stroke="#FFFDDA" stroke-width="6.80" stroke-linecap="butt" transform="translate(-0.6, -0.6)" opacity="0.60" />
-    <g clip-path="url(#perf-kan-k-clip)">
-      <path d="M 39.90,56.12 L 72.13,18.65" fill="none" stroke="#FFFDDA" stroke-width="6.80" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(-0.6, -0.6)" opacity="0.60" />
-      <path d="M 48.70,48.27 L 68.55,81.35" fill="none" stroke="#FFFDDA" stroke-width="6.80" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(-0.6, -0.6)" opacity="0.60" />
-    </g>
-
-    <path d="M 39.90,32.40 L 39.91,67.60" fill="none" stroke="url(#perf-kan-gold)" stroke-width="6.5" stroke-linecap="butt" />
-    <g clip-path="url(#perf-kan-k-clip)">
-      <path d="M 39.90,56.12 L 72.13,18.65" fill="none" stroke="url(#perf-kan-gold)" stroke-width="6.5" stroke-linecap="butt" stroke-linejoin="miter" />
-      <path d="M 48.70,48.27 L 68.55,81.35" fill="none" stroke="url(#perf-kan-gold)" stroke-width="6.5" stroke-linecap="butt" stroke-linejoin="miter" />
+    <polygon class="perf-kan-token__recess" points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" />
+    <use href="#perf-kan-metal-geometry" class="perf-kan-token__substrate" />
+    <g mask="url(#perf-kan-metal-mask)">
+      <g class="perf-kan-token__reflection-film">
+        <rect class="perf-kan-token__reflection-film-dark" x="-140" y="-140" width="380" height="380" />
+        <rect class="perf-kan-token__reflection-film-light" x="-140" y="-140" width="380" height="380" />
+      </g>
     </g>
   </svg>
 );
@@ -451,7 +456,7 @@ export const ShinyPerformanceScreen = () => {
 
           <div class="shiny-performance-appbar">
             <div class="perf-kan-token perf-metal--dynamic" aria-label="Kan token">
-              <PerformanceKanToken stops={goldStops()} />
+              <PerformanceKanToken />
             </div>
             <div class="shiny-performance-appbar-copy">
               <span>District 09</span>
