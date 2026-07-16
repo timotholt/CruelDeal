@@ -62,57 +62,79 @@ const REFLECTION_PRESETS: ReflectionPreset[] = [
   { id: 'hard-specular', name: '10 Hard Specular', whiteColor: 'rgba(255,255,246,1)', whiteWidth: 8, blackWidth: 19, blackOffsetX: 50, blackOffsetY: 18, blackIdle: 0.2, blackActive: 0.52, tokenWhiteOpacity: 0.74, tokenBlackOpacity: 0.46 },
 ];
 
-const PerformanceKanToken = () => (
-  <svg class="perf-kan-token__svg" viewBox="0 0 100 100" aria-hidden="true">
+interface PerformanceKanTokenProps {
+  idPrefix: string;
+  filmOnly?: boolean;
+}
+
+const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
+  const id = (part: string) => `${props.idPrefix}-${part}`;
+  const url = (part: string) => `url(#${id(part)})`;
+
+  const reflectionFilm = () => (
+    <g class="perf-kan-token__reflection-film">
+      <g class="perf-kan-token__reflection-film-dark">
+        <rect x="-34" y="-28" width="108" height="98" opacity="0.52" filter={url('box-soft')} />
+        <rect x="-22" y="-16" width="84" height="74" opacity="0.58" filter={url('box-tight')} />
+        <rect x="-12" y="-6" width="64" height="54" opacity="0.5" />
+        <rect x="76" y="68" width="112" height="96" opacity="0.38" filter={url('box-soft')} />
+        <rect x="90" y="81" width="84" height="70" opacity="0.48" filter={url('box-tight')} />
+        <rect x="101" y="92" width="62" height="48" opacity="0.42" />
+      </g>
+      <g class="perf-kan-token__reflection-film-light">
+        <rect x="43" y="-12" width="86" height="74" opacity="0.48" filter={url('box-soft')} />
+        <rect x="54" y="-2" width="64" height="54" opacity="0.62" filter={url('box-tight')} />
+        <rect x="64" y="8" width="44" height="34" opacity="0.54" />
+        <rect x="-25" y="92" width="66" height="76" opacity="0.34" filter={url('box-soft')} />
+        <rect x="-15" y="103" width="46" height="54" opacity="0.5" filter={url('box-tight')} />
+      </g>
+    </g>
+  );
+
+  return (
+  <svg class="perf-kan-token__svg" viewBox={props.filmOnly ? '-45 -40 245 220' : '0 0 100 100'} aria-hidden="true">
     <defs>
-      <clipPath id="perf-kan-k-clip"><rect x="10" y="32.40" width="80" height="35.20" /></clipPath>
-      <linearGradient id="perf-kan-film-dark" x1="-50" y1="-40" x2="150" y2="140" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#000" stop-opacity="0" />
-        <stop offset="18%" stop-color="#000" stop-opacity="0.1" />
-        <stop offset="29%" stop-color="#000" stop-opacity="1" />
-        <stop offset="42%" stop-color="#000" stop-opacity="0.72" />
-        <stop offset="56%" stop-color="#000" stop-opacity="0" />
-        <stop offset="100%" stop-color="#000" stop-opacity="0" />
-      </linearGradient>
-      <linearGradient id="perf-kan-film-light" x1="-50" y1="-40" x2="150" y2="140" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#fff" stop-opacity="0" />
-        <stop offset="46%" stop-color="#F4D993" stop-opacity="0" />
-        <stop offset="60%" stop-color="#F4D993" stop-opacity="0.42" />
-        <stop offset="70%" stop-color="#FFF8D5" stop-opacity="0.96" />
-        <stop offset="76%" stop-color="#fff" stop-opacity="1" />
-        <stop offset="84%" stop-color="#F4D993" stop-opacity="0.52" />
-        <stop offset="94%" stop-color="#F4D993" stop-opacity="0" />
-        <stop offset="100%" stop-color="#F4D993" stop-opacity="0" />
-      </linearGradient>
-      <g id="perf-kan-metal-geometry" fill="none" stroke-linejoin="miter">
+      <clipPath id={id('k-clip')}><rect x="10" y="32.40" width="80" height="35.20" /></clipPath>
+      <filter id={id('box-soft')} filterUnits="userSpaceOnUse" x="-160" y="-160" width="420" height="420">
+        <feGaussianBlur stdDeviation="7" />
+      </filter>
+      <filter id={id('box-tight')} filterUnits="userSpaceOnUse" x="-160" y="-160" width="420" height="420">
+        <feGaussianBlur stdDeviation="3" />
+      </filter>
+      <g id={id('metal-geometry')} fill="none" stroke-linejoin="miter">
         <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke-width="3.50" />
         <polygon points="31.25, 17.53 68.75, 17.53 87.49, 50 68.75, 82.47 31.25, 82.47 12.51, 50" stroke-width="3.50" />
         <polygon points="35.01, 24.03 64.99, 24.03 79.99, 50 64.99, 75.97 35.01, 75.97 20.01, 50" stroke-width="3.50" />
         <path d="M 39.90,32.40 L 39.91,67.60" stroke-width="6.5" stroke-linecap="butt" />
-        <g clip-path="url(#perf-kan-k-clip)">
+        <g clip-path={url('k-clip')}>
           <path d="M 39.90,56.12 L 72.13,18.65" stroke-width="6.5" stroke-linecap="butt" />
           <path d="M 48.70,48.27 L 68.55,81.35" stroke-width="6.5" stroke-linecap="butt" />
         </g>
       </g>
-      <mask id="perf-kan-metal-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-        <use href="#perf-kan-metal-geometry" stroke="#fff" />
+      <mask id={id('metal-mask')} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+        <use href={`#${id('metal-geometry')}`} stroke="#fff" />
       </mask>
     </defs>
 
-    <polygon class="perf-kan-token__recess" points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" />
-    <use href="#perf-kan-metal-geometry" class="perf-kan-token__substrate" />
-    <g mask="url(#perf-kan-metal-mask)">
-      <g class="perf-kan-token__reflection-film">
-        <rect class="perf-kan-token__reflection-film-dark" x="-140" y="-140" width="380" height="380" />
-        <rect class="perf-kan-token__reflection-film-light" x="-140" y="-140" width="380" height="380" />
-      </g>
-    </g>
+    <Show
+      when={props.filmOnly}
+      fallback={(
+        <>
+          <polygon class="perf-kan-token__recess" points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" />
+          <use href={`#${id('metal-geometry')}`} class="perf-kan-token__substrate" />
+          <g mask={url('metal-mask')}>{reflectionFilm()}</g>
+        </>
+      )}
+    >
+      <rect class="perf-kan-debug-film__base" x="-45" y="-40" width="245" height="220" />
+      {reflectionFilm()}
+    </Show>
   </svg>
-);
+  );
+};
 
 export const ShinyPerformanceScreen = () => {
   let screenRef!: HTMLElement;
-  let phoneRef!: HTMLElement;
   let pendingDirection: { x: number; y: number } | null = null;
   let animationFrame = 0;
   let lastFrameAt = 0;
@@ -132,6 +154,8 @@ export const ShinyPerformanceScreen = () => {
   const [goldStops, setGoldStops] = createSignal<GoldStop[]>(DEFAULT_GOLD_STOPS.map((stop) => ({ ...stop })));
   const [selectedGradientPreset, setSelectedGradientPreset] = createSignal('balanced');
   const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('studio');
+  const [inputCoordinates, setInputCoordinates] = createSignal({ x: 0, y: 0 });
+  const [reflectionDirection, setReflectionDirection] = createSignal({ x: 0, y: 0 });
 
   const applyGoldStops = (nextStops: GoldStop[], presetId = 'custom') => {
     setGoldStops(nextStops);
@@ -196,6 +220,7 @@ export const ShinyPerformanceScreen = () => {
   const commitDirection = (x: number, y: number) => {
     screenRef.style.setProperty('--perf-reflex-x', x.toFixed(4));
     screenRef.style.setProperty('--perf-reflex-y', y.toFixed(4));
+    setReflectionDirection({ x, y });
     updateCount += 1;
   };
 
@@ -215,10 +240,16 @@ export const ShinyPerformanceScreen = () => {
     commitDirection(next.x, next.y);
   };
 
+  const mapReflectionAxis = (value: number) => {
+    const normalized = clamp(value, -1, 1);
+    const exponent = 1 / gain();
+    return Math.sign(normalized) * Math.pow(Math.abs(normalized), exponent) * 0.92;
+  };
+
   const scheduleDirection = (x: number, y: number) => {
     const nextDirection = {
-      x: clamp(x * gain(), -0.92, 0.92),
-      y: clamp(y * gain(), -0.92, 0.92),
+      x: mapReflectionAxis(x),
+      y: mapReflectionAxis(y),
     };
     const movement = Math.hypot(
       nextDirection.x - lastInputDirection.x,
@@ -239,17 +270,18 @@ export const ShinyPerformanceScreen = () => {
 
   const handlePointerMove = (event: PointerEvent) => {
     if (tiltEnabled() || !movingReflections()) return;
-    const bounds = phoneRef.getBoundingClientRect();
-    const x = (event.clientX - (bounds.left + bounds.width / 2)) / (bounds.width / 2);
-    const y = (event.clientY - (bounds.top + bounds.height / 2)) / (bounds.height / 2);
-    // Oversized CSS backgrounds travel visually opposite background-position.
-    // Reverse pointer X so the visible white reflection follows horizontal mouse
-    // movement. Pointer Y and device orientation retain their own conventions.
+    const x = event.clientX / window.innerWidth * 2 - 1;
+    const y = event.clientY / window.innerHeight * 2 - 1;
+    setInputCoordinates({ x, y });
+    // Reverse pointer X so the visible reflection follows horizontal mouse movement.
     scheduleDirection(-x, y);
   };
 
   const handlePointerLeave = () => {
-    if (!tiltEnabled() && movingReflections()) scheduleDirection(0, 0);
+    if (!tiltEnabled() && movingReflections()) {
+      setInputCoordinates({ x: 0, y: 0 });
+      scheduleDirection(0, 0);
+    }
   };
 
   const handleOrientation = (event: DeviceOrientationEvent) => {
@@ -257,7 +289,10 @@ export const ShinyPerformanceScreen = () => {
     const beta = event.beta ?? 0;
     const gamma = event.gamma ?? 0;
     if (!gyroOrigin) gyroOrigin = { beta, gamma };
-    scheduleDirection((gamma - gyroOrigin.gamma) / 28, (beta - gyroOrigin.beta) / 28);
+    const x = (gamma - gyroOrigin.gamma) / 28;
+    const y = (beta - gyroOrigin.beta) / 28;
+    setInputCoordinates({ x, y });
+    scheduleDirection(x, y);
   };
 
   const enableTilt = async () => {
@@ -278,8 +313,14 @@ export const ShinyPerformanceScreen = () => {
   const usePointer = () => {
     setTiltEnabled(false);
     gyroOrigin = null;
+    setInputCoordinates({ x: 0, y: 0 });
     scheduleDirection(0, 0);
   };
+
+  const reflectionShift = () => ({
+    x: -14 - reflectionDirection().x * 78,
+    y: -10 - reflectionDirection().y * 96,
+  });
 
   onMount(() => {
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
@@ -447,7 +488,7 @@ export const ShinyPerformanceScreen = () => {
           </Show>
         </section>
 
-        <article ref={(element) => { phoneRef = element; }} class="shiny-performance-phone" aria-label="Mobile game UI reflex preview">
+        <article class="shiny-performance-phone" aria-label="Mobile game UI reflex preview">
           <div class="shiny-performance-phone-status">
             <span>23:41</span>
             <span>CRUELNET // SECURE</span>
@@ -456,7 +497,7 @@ export const ShinyPerformanceScreen = () => {
 
           <div class="shiny-performance-appbar">
             <div class="perf-kan-token perf-metal--dynamic" aria-label="Kan token">
-              <PerformanceKanToken />
+              <PerformanceKanToken idPrefix="perf-kan-small" />
             </div>
             <div class="shiny-performance-appbar-copy">
               <span>District 09</span>
@@ -516,6 +557,38 @@ export const ShinyPerformanceScreen = () => {
             <button><span>◎</span><small>Profile</small></button>
           </nav>
         </article>
+
+        <section class="shiny-performance-token-debug" aria-label="Token reflection diagnostics">
+          <figure class="shiny-performance-token-debug__figure">
+            <figcaption>
+              <div>
+                <span class="shiny-performance-kicker">// UNMASKED</span>
+                <strong>Reflection film</strong>
+              </div>
+              <dl class="shiny-performance-token-debug__readout" aria-live="polite">
+                <div><dt>mouse x</dt><dd>{inputCoordinates().x.toFixed(3)}</dd></div>
+                <div><dt>mouse y</dt><dd>{inputCoordinates().y.toFixed(3)}</dd></div>
+                <div><dt>shift x</dt><dd>{reflectionShift().x.toFixed(1)}px</dd></div>
+                <div><dt>shift y</dt><dd>{reflectionShift().y.toFixed(1)}px</dd></div>
+              </dl>
+            </figcaption>
+            <div class="shiny-performance-token-debug__atlas">
+              <PerformanceKanToken idPrefix="perf-kan-atlas" filmOnly />
+            </div>
+          </figure>
+
+          <figure class="shiny-performance-token-debug__figure shiny-performance-token-debug__figure--token">
+            <figcaption>
+              <div>
+                <span class="shiny-performance-kicker">// 3X MASK</span>
+                <strong>Kan token</strong>
+              </div>
+            </figcaption>
+            <div class="perf-kan-token perf-kan-token--large perf-metal--dynamic" aria-label="Kan token at three times scale">
+              <PerformanceKanToken idPrefix="perf-kan-large" />
+            </div>
+          </figure>
+        </section>
       </section>
     </main>
   );
