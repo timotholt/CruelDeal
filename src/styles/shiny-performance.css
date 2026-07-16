@@ -26,6 +26,8 @@
   --perf-black-active-edge: 0.24;
   --perf-kan-reflection-travel-x: 78px;
   --perf-kan-reflection-travel-y: 96px;
+  --perf-metal-base: #c9a45a;
+  --perf-reflection-map: none;
   --perf-white-center-x: calc(50% - var(--perf-reflex-x) * 64%);
   --perf-white-center-y: calc(50% - var(--perf-reflex-y) * 52%);
   --perf-black-center-x: calc(50% + var(--perf-black-offset-x) - var(--perf-reflex-x) * 64%);
@@ -231,7 +233,17 @@
 .shiny-performance-progress { margin-top: 25px; }
 .shiny-performance-progress__head { display: flex; justify-content: space-between; margin-bottom: 7px; color: rgba(255,255,255,0.54); font: 800 9px/1 ui-monospace, monospace; text-transform: uppercase; }
 .shiny-performance-progress__track { height: 5px; overflow: hidden; background: #202720; }
-.shiny-performance-progress__fill { width: 68%; height: 100%; background-image: linear-gradient(90deg, #6d501c, #f1cb65, #8d671f); background-size: 180% 100%; background-position: calc(50% + var(--perf-reflex-x) * 45%) 50%; }
+.shiny-performance-progress__fill {
+  width: 68%;
+  height: 100%;
+  background-color: var(--perf-metal-base);
+  background-image: var(--perf-reflection-map);
+  background-size: 245px 220px;
+  background-position:
+    calc(50% - 14px - var(--perf-reflex-x) * var(--perf-kan-reflection-travel-x))
+    calc(50% - 10px - var(--perf-reflex-y) * var(--perf-kan-reflection-travel-y));
+  background-repeat: no-repeat;
+}
 
 .shiny-performance-objectives { display: grid; gap: 7px; padding: 22px; }
 .shiny-performance-section-title { margin-bottom: 4px; }
@@ -263,35 +275,24 @@
 
 .perf-metal--dynamic,
 .shiny-performance-screen[data-full-load='true'] .perf-metal {
-  background-image:
-    radial-gradient(
-      ellipse var(--perf-white-radius-x) 155% at var(--perf-white-center-x) var(--perf-white-center-y),
-      var(--perf-white-reflection) 0%,
-      rgba(255,249,207,0.5) 34%,
-      rgba(255,249,207,0.14) 68%,
-      transparent 100%
-    ),
-    radial-gradient(
-      ellipse var(--perf-black-radius-x) 175% at var(--perf-black-center-x) var(--perf-black-center-y),
-      rgb(0 0 0 / calc(var(--perf-black-idle-core) + var(--perf-reflex-active) * var(--perf-black-active-core))) 0%,
-      rgb(0 0 0 / calc(var(--perf-black-idle-edge) + var(--perf-reflex-active) * var(--perf-black-active-edge))) 48%,
-      transparent 100%
-    ),
-    radial-gradient(ellipse at 0% 0%, rgba(0,0,0,0.06) 0%, transparent 22%),
-    var(--perf-gold-gradient);
-  background-size: 100% 100%;
-  background-position: center;
+  background-color: var(--perf-metal-base);
+  background-image: var(--perf-reflection-map);
+  background-size: 245px 220px;
+  background-position:
+    calc(50% - 14px - var(--perf-reflex-x) * var(--perf-kan-reflection-travel-x))
+    calc(50% - 10px - var(--perf-reflex-y) * var(--perf-kan-reflection-travel-y));
   background-repeat: no-repeat;
-  background-blend-mode: screen, multiply, multiply, normal;
+  background-blend-mode: normal;
 }
 
 .shiny-performance-screen[data-motion='off'] .perf-metal--dynamic:not(.perf-kan-token),
 .shiny-performance-screen[data-motion='off'][data-full-load='true'] .perf-metal {
-  background-image: var(--perf-gold-gradient);
-  background-size: 100% 100%;
+  background-image: none;
   background-position: center;
   background-blend-mode: normal;
 }
+
+.shiny-performance-screen[data-motion='off'] .shiny-performance-progress__fill { background-image: none; }
 
 .shiny-performance-screen[data-motion='off'] .perf-kan-token__reflection-film {
   display: none;
@@ -304,6 +305,7 @@
 .perf-kan-token.perf-metal--dynamic,
 .shiny-performance-screen[data-full-load='true'] .perf-kan-token.perf-metal {
   color: inherit;
+  background-color: transparent;
   background-image: none;
   -webkit-text-fill-color: initial;
   background-clip: border-box;
@@ -325,10 +327,12 @@
   );
 }
 .perf-kan-token__reflection-film-dark {
+  color: #000;
   fill: #000;
   opacity: calc(0.16 + var(--perf-black-reflection-opacity));
 }
 .perf-kan-token__reflection-film-light {
+  color: var(--perf-white-reflection);
   fill: var(--perf-white-reflection);
   opacity: calc(0.22 + var(--perf-white-reflection-opacity) * 0.9);
 }
@@ -341,6 +345,51 @@
   border: 1px solid rgba(255,255,255,0.12);
   background: #0b0e0c;
 }
+
+.shiny-performance-pattern-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.shiny-performance-pattern-toolbar > div { display: grid; gap: 5px; }
+.shiny-performance-pattern-toolbar strong { color: #fff; font-size: 12px; line-height: 1; text-transform: uppercase; }
+.shiny-performance-pattern-toolbar label { display: grid; grid-template-columns: auto 150px 38px; align-items: center; gap: 9px; color: rgba(255,255,255,0.56); font: 800 9px/1 ui-monospace, monospace; text-transform: uppercase; }
+.shiny-performance-pattern-toolbar input { width: 100%; accent-color: #dfb64f; }
+.shiny-performance-pattern-toolbar output { color: #dfb64f; font-variant-numeric: tabular-nums; text-align: right; }
+
+.shiny-performance-pattern-picker {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.shiny-performance-pattern-picker button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 7px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  color: rgba(255,255,255,0.54);
+  background: #080b09;
+  font: 800 8px/1.1 ui-monospace, monospace;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shiny-performance-pattern-picker button:hover { border-color: rgba(223,182,79,0.42); color: #fff; }
+.shiny-performance-pattern-picker button.active { border-color: #dfb64f; color: #f2d98f; box-shadow: inset 0 0 0 1px rgba(223,182,79,0.22); }
 
 .shiny-performance-token-debug__figure {
   display: grid;
@@ -412,6 +461,9 @@
   .shiny-performance-stop-control:nth-child(2n) { border-right: 0; }
   .shiny-performance-phone { width: 100%; min-height: calc(100dvh - 190px); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
   .shiny-performance-token-debug { grid-template-columns: 1fr; width: calc(100% - 24px); }
+  .shiny-performance-pattern-toolbar { align-items: stretch; flex-direction: column; }
+  .shiny-performance-pattern-toolbar label { grid-template-columns: auto minmax(0, 1fr) 38px; }
+  .shiny-performance-pattern-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shiny-performance-token-debug__figure--token { border-top: 1px solid rgba(255,255,255,0.1); border-left: 0; }
   .shiny-performance-token-debug figcaption { align-items: stretch; flex-direction: column; }
   .shiny-performance-token-debug__readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }

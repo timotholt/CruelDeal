@@ -1,4 +1,4 @@
-import { createSignal, Index, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, Index, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import '../../../src/styles/shiny-performance.css';
 
 const clamp = (value: number, min = -1, max = 1) => Math.max(min, Math.min(max, value));
@@ -62,9 +62,28 @@ const REFLECTION_PRESETS: ReflectionPreset[] = [
   { id: 'hard-specular', name: '10 Hard Specular', whiteColor: 'rgba(255,255,246,1)', whiteWidth: 8, blackWidth: 19, blackOffsetX: 50, blackOffsetY: 18, blackIdle: 0.2, blackActive: 0.52, tokenWhiteOpacity: 0.74, tokenBlackOpacity: 0.46 },
 ];
 
+type ReflectionPatternId = 'twin-panes' | 'crosslight' | 'diagonal-pair' | 'window-grid' | 'frames'
+  | 'chevron' | 'pillars' | 'horizon' | 'diamonds' | 'corner-fold';
+
+const REFLECTION_PATTERNS: { id: ReflectionPatternId; name: string }[] = [
+  { id: 'twin-panes', name: '01 Twin Panes' },
+  { id: 'crosslight', name: '02 Crosslight' },
+  { id: 'diagonal-pair', name: '03 Diagonal Pair' },
+  { id: 'window-grid', name: '04 Window Grid' },
+  { id: 'frames', name: '05 Frames' },
+  { id: 'chevron', name: '06 Chevron' },
+  { id: 'pillars', name: '07 Pillars' },
+  { id: 'horizon', name: '08 Horizon' },
+  { id: 'diamonds', name: '09 Diamonds' },
+  { id: 'corner-fold', name: '10 Corner Fold' },
+];
+
 interface PerformanceKanTokenProps {
   idPrefix: string;
   filmOnly?: boolean;
+  pattern: ReflectionPatternId;
+  softness: number;
+  sourceRef?: (element: SVGSVGElement) => void;
 }
 
 const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
@@ -73,26 +92,140 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
 
   const reflectionFilm = () => (
     <g class="perf-kan-token__reflection-film">
-      <g class="perf-kan-token__reflection-film-dark">
-        <rect x="-34" y="-28" width="108" height="98" opacity="0.52" filter={url('box-soft')} />
-        <rect x="-22" y="-16" width="84" height="74" opacity="0.58" filter={url('box-tight')} />
-        <rect x="-12" y="-6" width="64" height="54" opacity="0.5" />
-        <rect x="76" y="68" width="112" height="96" opacity="0.38" filter={url('box-soft')} />
-        <rect x="90" y="81" width="84" height="70" opacity="0.48" filter={url('box-tight')} />
-        <rect x="101" y="92" width="62" height="48" opacity="0.42" />
-      </g>
-      <g class="perf-kan-token__reflection-film-light">
-        <rect x="43" y="-12" width="86" height="74" opacity="0.48" filter={url('box-soft')} />
-        <rect x="54" y="-2" width="64" height="54" opacity="0.62" filter={url('box-tight')} />
-        <rect x="64" y="8" width="44" height="34" opacity="0.54" />
-        <rect x="-25" y="92" width="66" height="76" opacity="0.34" filter={url('box-soft')} />
-        <rect x="-15" y="103" width="46" height="54" opacity="0.5" filter={url('box-tight')} />
+      <g filter={props.softness > 0 ? url('film-soften') : undefined}>
+        <Switch>
+        <Match when={props.pattern === 'twin-panes'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <rect x="-34" y="-28" width="108" height="98" opacity="0.52" filter={url('box-soft')} />
+            <rect x="-12" y="-6" width="64" height="54" opacity="0.62" />
+            <rect x="76" y="68" width="112" height="96" opacity="0.42" filter={url('box-soft')} />
+            <rect x="101" y="92" width="62" height="48" opacity="0.54" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light">
+            <rect x="43" y="-12" width="86" height="74" opacity="0.62" filter={url('box-tight')} />
+            <rect x="64" y="8" width="44" height="34" opacity="0.64" />
+            <rect x="-25" y="92" width="66" height="76" opacity="0.46" filter={url('box-tight')} />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'crosslight'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <rect x="-80" y="44" width="290" height="40" opacity="0.5" filter={url('box-soft')} />
+            <rect x="52" y="-90" width="42" height="310" opacity="0.46" filter={url('box-soft')} />
+            <rect x="-80" y="55" width="290" height="17" opacity="0.48" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light">
+            <rect x="-80" y="88" width="290" height="18" opacity="0.58" filter={url('box-tight')} />
+            <rect x="104" y="-90" width="18" height="310" opacity="0.66" filter={url('box-tight')} />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'diagonal-pair'}>
+          <g class="perf-kan-token__reflection-film-dark" transform="rotate(32 65 65)">
+            <rect x="-95" y="19" width="320" height="48" opacity="0.52" filter={url('box-soft')} />
+            <rect x="-95" y="31" width="320" height="21" opacity="0.56" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light" transform="rotate(-32 65 65)">
+            <rect x="-95" y="78" width="320" height="30" opacity="0.62" filter={url('box-tight')} />
+            <rect x="-95" y="86" width="320" height="11" opacity="0.72" />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'window-grid'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <rect x="-58" y="-50" width="92" height="84" opacity="0.5" filter={url('box-tight')} />
+            <rect x="92" y="-50" width="92" height="84" opacity="0.5" filter={url('box-tight')} />
+            <rect x="-58" y="96" width="92" height="84" opacity="0.5" filter={url('box-tight')} />
+            <rect x="92" y="96" width="92" height="84" opacity="0.5" filter={url('box-tight')} />
+          </g>
+          <g class="perf-kan-token__reflection-film-light">
+            <rect x="43" y="-50" width="38" height="230" opacity="0.62" filter={url('box-tight')} />
+            <rect x="-58" y="45" width="242" height="38" opacity="0.56" filter={url('box-tight')} />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'frames'}>
+          <g class="perf-kan-token__reflection-film-dark" fill="none" stroke="currentColor">
+            <rect x="-46" y="-40" width="226" height="210" rx="2" stroke-width="34" opacity="0.5" filter={url('box-soft')} />
+            <rect x="-8" y="-4" width="150" height="138" rx="2" stroke-width="18" opacity="0.58" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light" fill="none" stroke="currentColor">
+            <rect x="12" y="14" width="110" height="101" rx="2" stroke-width="12" opacity="0.68" filter={url('box-tight')} />
+            <rect x="42" y="42" width="50" height="46" rx="1" stroke-width="7" opacity="0.7" />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'chevron'}>
+          <g class="perf-kan-token__reflection-film-dark" fill="none" stroke="currentColor" stroke-linejoin="miter">
+            <path d="M -78,-54 L 67,64 L -78,182" stroke-width="42" opacity="0.5" filter={url('box-soft')} />
+            <path d="M -70,-45 L 65,64 L -70,173" stroke-width="19" opacity="0.58" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light" fill="none" stroke="currentColor" stroke-linejoin="miter">
+            <path d="M 208,-54 L 63,64 L 208,182" stroke-width="27" opacity="0.62" filter={url('box-tight')} />
+            <path d="M 198,-44 L 65,64 L 198,172" stroke-width="10" opacity="0.72" />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'pillars'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <rect x="-66" y="-90" width="34" height="320" opacity="0.46" filter={url('box-tight')} />
+            <rect x="10" y="-90" width="48" height="320" opacity="0.54" filter={url('box-soft')} />
+            <rect x="147" y="-90" width="34" height="320" opacity="0.46" filter={url('box-tight')} />
+          </g>
+          <g class="perf-kan-token__reflection-film-light">
+            <rect x="-22" y="-90" width="18" height="320" opacity="0.62" />
+            <rect x="79" y="-90" width="26" height="320" opacity="0.7" filter={url('box-tight')} />
+            <rect x="120" y="-90" width="12" height="320" opacity="0.58" />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'horizon'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <rect x="-100" y="-48" width="340" height="36" opacity="0.42" filter={url('box-soft')} />
+            <rect x="-100" y="42" width="340" height="50" opacity="0.56" filter={url('box-soft')} />
+            <rect x="-100" y="154" width="340" height="32" opacity="0.44" filter={url('box-tight')} />
+          </g>
+          <g class="perf-kan-token__reflection-film-light">
+            <rect x="-100" y="5" width="340" height="16" opacity="0.66" filter={url('box-tight')} />
+            <rect x="-100" y="110" width="340" height="24" opacity="0.7" filter={url('box-tight')} />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'diamonds'}>
+          <g class="perf-kan-token__reflection-film-dark">
+            <polygon points="-40,63 34,-12 108,63 34,138" opacity="0.52" filter={url('box-soft')} />
+            <polygon points="80,63 154,-12 228,63 154,138" opacity="0.46" filter={url('box-soft')} />
+            <polygon points="4,63 34,32 64,63 34,94" opacity="0.58" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light" fill="none" stroke="currentColor">
+            <polygon points="20,63 94,-12 168,63 94,138" stroke-width="20" opacity="0.66" filter={url('box-tight')} />
+            <polygon points="58,63 94,26 130,63 94,100" stroke-width="8" opacity="0.72" />
+          </g>
+        </Match>
+
+        <Match when={props.pattern === 'corner-fold'}>
+          <g class="perf-kan-token__reflection-film-dark" fill="none" stroke="currentColor">
+            <path d="M -56,78 L -56,-36 L 62,-36" stroke-width="46" opacity="0.5" filter={url('box-soft')} />
+            <path d="M 184,48 L 184,166 L 66,166" stroke-width="46" opacity="0.5" filter={url('box-soft')} />
+            <path d="M -45,70 L -45,-24 L 53,-24" stroke-width="18" opacity="0.56" />
+          </g>
+          <g class="perf-kan-token__reflection-film-light" fill="none" stroke="currentColor">
+            <path d="M 72,-24 L 174,-24 L 174,74" stroke-width="24" opacity="0.64" filter={url('box-tight')} />
+            <path d="M 56,154 L -44,154 L -44,54" stroke-width="24" opacity="0.64" filter={url('box-tight')} />
+          </g>
+        </Match>
+        </Switch>
       </g>
     </g>
   );
 
   return (
-  <svg class="perf-kan-token__svg" viewBox={props.filmOnly ? '-45 -40 245 220' : '0 0 100 100'} aria-hidden="true">
+  <svg
+    ref={(element) => props.sourceRef?.(element)}
+    class="perf-kan-token__svg"
+    viewBox={props.filmOnly ? '-45 -40 245 220' : '0 0 100 100'}
+    aria-hidden="true"
+  >
     <defs>
       <clipPath id={id('k-clip')}><rect x="10" y="32.40" width="80" height="35.20" /></clipPath>
       <filter id={id('box-soft')} filterUnits="userSpaceOnUse" x="-160" y="-160" width="420" height="420">
@@ -100,6 +233,9 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
       </filter>
       <filter id={id('box-tight')} filterUnits="userSpaceOnUse" x="-160" y="-160" width="420" height="420">
         <feGaussianBlur stdDeviation="3" />
+      </filter>
+      <filter id={id('film-soften')} filterUnits="userSpaceOnUse" x="-160" y="-160" width="420" height="420">
+        <feGaussianBlur stdDeviation={props.softness} />
       </filter>
       <g id={id('metal-geometry')} fill="none" stroke-linejoin="miter">
         <polygon points="27.50, 11.03 72.50, 11.03 95.00, 50 72.50, 88.97 27.50, 88.97 5.00, 50" stroke-width="3.50" />
@@ -135,8 +271,11 @@ const PerformanceKanToken = (props: PerformanceKanTokenProps) => {
 
 export const ShinyPerformanceScreen = () => {
   let screenRef!: HTMLElement;
+  let reflectionSourceRef!: SVGSVGElement;
   let pendingDirection: { x: number; y: number } | null = null;
   let animationFrame = 0;
+  let reflectionRasterFrame = 0;
+  let reflectionRasterVersion = 0;
   let lastFrameAt = 0;
   let reflectionIdleTimer = 0;
   let lastInputDirection = { x: 0, y: 0 };
@@ -154,6 +293,9 @@ export const ShinyPerformanceScreen = () => {
   const [goldStops, setGoldStops] = createSignal<GoldStop[]>(DEFAULT_GOLD_STOPS.map((stop) => ({ ...stop })));
   const [selectedGradientPreset, setSelectedGradientPreset] = createSignal('balanced');
   const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('studio');
+  const [selectedReflectionPattern, setSelectedReflectionPattern] = createSignal<ReflectionPatternId>('frames');
+  const [reflectionSoftness, setReflectionSoftness] = createSignal(12);
+  const [reflectionMap, setReflectionMap] = createSignal('');
   const [inputCoordinates, setInputCoordinates] = createSignal({ x: 0, y: 0 });
   const [reflectionDirection, setReflectionDirection] = createSignal({ x: 0, y: 0 });
 
@@ -322,6 +464,79 @@ export const ShinyPerformanceScreen = () => {
     y: -10 - reflectionDirection().y * 96,
   });
 
+  const rasterizeReflectionMap = async (version: number) => {
+    if (!reflectionSourceRef) return;
+
+    const source = reflectionSourceRef;
+    const clone = source.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', '490');
+    clone.setAttribute('height', '440');
+    clone.querySelector('.perf-kan-debug-film__base')?.remove();
+
+    const sourceFilm = source.querySelector('.perf-kan-token__reflection-film') as SVGGElement | null;
+    const cloneFilm = clone.querySelector('.perf-kan-token__reflection-film') as SVGGElement | null;
+    if (cloneFilm) {
+      cloneFilm.style.transform = 'none';
+      cloneFilm.setAttribute('transform', 'translate(0 0)');
+    }
+
+    const sourceLayers = source.querySelectorAll<SVGGElement>(
+      '.perf-kan-token__reflection-film-dark, .perf-kan-token__reflection-film-light',
+    );
+    const cloneLayers = clone.querySelectorAll<SVGGElement>(
+      '.perf-kan-token__reflection-film-dark, .perf-kan-token__reflection-film-light',
+    );
+    sourceLayers.forEach((layer, index) => {
+      const target = cloneLayers[index];
+      if (!target) return;
+      const style = getComputedStyle(layer);
+      target.style.color = style.color;
+      target.style.fill = style.fill;
+      target.style.opacity = style.opacity;
+    });
+
+    if (sourceFilm && cloneFilm) {
+      cloneFilm.style.opacity = getComputedStyle(sourceFilm).opacity;
+    }
+
+    const svg = new XMLSerializer().serializeToString(clone);
+    const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+
+    try {
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('Unable to rasterize reflection map'));
+        image.src = objectUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 490;
+      canvas.height = 440;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      if (version === reflectionRasterVersion) setReflectionMap(canvas.toDataURL('image/png'));
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  createEffect(() => {
+    selectedReflectionPattern();
+    reflectionSoftness();
+    selectedReflectionPreset();
+    const version = ++reflectionRasterVersion;
+    cancelAnimationFrame(reflectionRasterFrame);
+    reflectionRasterFrame = requestAnimationFrame(() => void rasterizeReflectionMap(version));
+  });
+
+  createEffect(() => {
+    const map = reflectionMap();
+    if (map && screenRef) screenRef.style.setProperty('--perf-reflection-map', `url(${map})`);
+  });
+
   onMount(() => {
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('pointerleave', handlePointerLeave, { passive: true });
@@ -339,6 +554,7 @@ export const ShinyPerformanceScreen = () => {
     window.clearInterval(metricsTimer);
     window.clearTimeout(reflectionIdleTimer);
     if (animationFrame) cancelAnimationFrame(animationFrame);
+    if (reflectionRasterFrame) cancelAnimationFrame(reflectionRasterFrame);
   });
 
   return (
@@ -497,7 +713,11 @@ export const ShinyPerformanceScreen = () => {
 
           <div class="shiny-performance-appbar">
             <div class="perf-kan-token perf-metal--dynamic" aria-label="Kan token">
-              <PerformanceKanToken idPrefix="perf-kan-small" />
+              <PerformanceKanToken
+                idPrefix="perf-kan-small"
+                pattern={selectedReflectionPattern()}
+                softness={reflectionSoftness()}
+              />
             </div>
             <div class="shiny-performance-appbar-copy">
               <span>District 09</span>
@@ -559,6 +779,38 @@ export const ShinyPerformanceScreen = () => {
         </article>
 
         <section class="shiny-performance-token-debug" aria-label="Token reflection diagnostics">
+          <div class="shiny-performance-pattern-toolbar">
+            <div>
+              <span class="shiny-performance-kicker">// REFLECTION SOURCE</span>
+              <strong>Pattern geometry</strong>
+            </div>
+            <label>
+              <span>Softness</span>
+              <input
+                type="range"
+                min="0"
+                max="12"
+                step="0.5"
+                value={reflectionSoftness()}
+                onInput={(event) => setReflectionSoftness(Number(event.currentTarget.value))}
+              />
+              <output>{reflectionSoftness().toFixed(1)}</output>
+            </label>
+          </div>
+
+          <nav class="shiny-performance-pattern-picker" aria-label="Reflection pattern">
+            <Index each={REFLECTION_PATTERNS}>
+              {(pattern) => (
+                <button
+                  classList={{ active: selectedReflectionPattern() === pattern().id }}
+                  onClick={() => setSelectedReflectionPattern(pattern().id)}
+                >
+                  {pattern().name}
+                </button>
+              )}
+            </Index>
+          </nav>
+
           <figure class="shiny-performance-token-debug__figure">
             <figcaption>
               <div>
@@ -573,7 +825,13 @@ export const ShinyPerformanceScreen = () => {
               </dl>
             </figcaption>
             <div class="shiny-performance-token-debug__atlas">
-              <PerformanceKanToken idPrefix="perf-kan-atlas" filmOnly />
+              <PerformanceKanToken
+                idPrefix="perf-kan-atlas"
+                pattern={selectedReflectionPattern()}
+                softness={reflectionSoftness()}
+                sourceRef={(element) => { reflectionSourceRef = element; }}
+                filmOnly
+              />
             </div>
           </figure>
 
@@ -585,7 +843,11 @@ export const ShinyPerformanceScreen = () => {
               </div>
             </figcaption>
             <div class="perf-kan-token perf-kan-token--large perf-metal--dynamic" aria-label="Kan token at three times scale">
-              <PerformanceKanToken idPrefix="perf-kan-large" />
+              <PerformanceKanToken
+                idPrefix="perf-kan-large"
+                pattern={selectedReflectionPattern()}
+                softness={reflectionSoftness()}
+              />
             </div>
           </figure>
         </section>
