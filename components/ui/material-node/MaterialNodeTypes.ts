@@ -7,6 +7,8 @@ import type {
   SurfaceOptions,
 } from '../material-lab';
 import type { MaterialTextFitOptions } from './MaterialTextContent';
+import type { FingerprintHoldActionRuntimePlanV1 } from '../semantic-runtime/fingerprint-hold/fingerprintHoldRuntimePlan';
+import type { UiActionEventHandler } from '../semantic-runtime/actions/UiActionEvent';
 
 export type MaterialNodeKind = 'container' | 'button' | 'text' | 'media' | 'slot';
 
@@ -80,6 +82,7 @@ export interface MaterialNodeRecipe {
   content?: MaterialNodeContent;
   capabilities?: Partial<MaterialEditorCapabilities>;
   sharedStyle?: MaterialNodeSharedStyleRef;
+  interaction?: FingerprintHoldActionRuntimePlanV1;
   children?: MaterialNodeRecipe[];
 }
 
@@ -121,6 +124,7 @@ export interface MaterialNodeRenderContext {
   buttonSizeForNode?: (node: MaterialNodeRecipe) => ButtonSize | undefined;
   buttonFullWidthForNode?: (node: MaterialNodeRecipe) => boolean;
   onNodeAction?: (node: MaterialNodeRecipe) => void;
+  onUiAction?: UiActionEventHandler;
   onPointerDown?: (node: MaterialNodeRecipe, event: PointerEvent) => void;
   onPointerUp?: (node: MaterialNodeRecipe, event: PointerEvent) => void;
 }

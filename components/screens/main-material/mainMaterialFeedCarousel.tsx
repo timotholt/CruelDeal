@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, JSX, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, JSX, Show } from 'solid-js';
 import {
   fontWeightTokenValue,
   MaterialSurfaceHost,
@@ -45,6 +45,8 @@ import {
   type FeedCardTypeRecipe,
   type FeedStory,
 } from './mainMaterialFeedModel';
+import type { FingerprintHoldActionRuntimePlanV1 } from '../../ui/semantic-runtime/fingerprint-hold/fingerprintHoldRuntimePlan';
+import type { UiActionEventHandler } from '../../ui/semantic-runtime/actions/UiActionEvent';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 export type FeedSurfacePropsForRecipe = (recipe: MaterialRecipe, state: MaterialRecipeState) => SurfaceOptions;
@@ -197,6 +199,9 @@ const FeedSlideFrame = (props: {
   cssProbe?: CssEmissionProbe;
   surfacePropsForRecipe: FeedSurfacePropsForRecipe;
   buttonPropsForRecipe: FeedSurfacePropsForRecipe;
+  fingerprintActionPlan?: FingerprintHoldActionRuntimePlanV1;
+  onUiAction?: UiActionEventHandler;
+  suppressContent?: boolean;
 }) => {
   const slideNode = createFeedSlideFrameNode(props.cardType.id);
   const mediaNode = slideNode.children?.[0] || createFeedNode({ id: `feed-slide-${props.cardType.id}-media`, label: 'Feed Media', type: 'container', layout: createFeedSlideLayerLayout() });
@@ -249,14 +254,18 @@ const FeedSlideFrame = (props: {
         targetClass="main-material-card-tree"
         cssProbe={props.cssProbe}
       >
-        <CanonicalFeedCardTree
-          story={props.story}
-          cardType={props.cardType}
-          surfaceStateForTarget={props.surfaceStateForTarget}
-          selectedFeedTargetClass={props.selectedFeedTargetClass}
-          surfacePropsForRecipe={props.surfacePropsForRecipe}
-          buttonPropsForRecipe={props.buttonPropsForRecipe}
-        />
+        <Show when={!props.suppressContent}>
+          <CanonicalFeedCardTree
+            story={props.story}
+            cardType={props.cardType}
+            surfaceStateForTarget={props.surfaceStateForTarget}
+            selectedFeedTargetClass={props.selectedFeedTargetClass}
+            surfacePropsForRecipe={props.surfacePropsForRecipe}
+            buttonPropsForRecipe={props.buttonPropsForRecipe}
+            fingerprintActionPlan={props.fingerprintActionPlan}
+            onUiAction={props.onUiAction}
+          />
+        </Show>
       </FeedNodeFrame>
     </FeedNodeFrame>
   );
@@ -302,6 +311,9 @@ const FeedTrackSlide = (props: {
   cssProbe?: CssEmissionProbe;
   surfacePropsForRecipe: FeedSurfacePropsForRecipe;
   buttonPropsForRecipe: FeedSurfacePropsForRecipe;
+  fingerprintActionPlan?: FingerprintHoldActionRuntimePlanV1;
+  onUiAction?: UiActionEventHandler;
+  suppressContent?: boolean;
 }) => {
   const node = createFeedTrackSlideNode(props.story.id);
   return (
@@ -322,6 +334,9 @@ const FeedTrackSlide = (props: {
           cssProbe={props.cssProbe}
           surfacePropsForRecipe={props.surfacePropsForRecipe}
           buttonPropsForRecipe={props.buttonPropsForRecipe}
+          fingerprintActionPlan={props.fingerprintActionPlan}
+          onUiAction={props.onUiAction}
+          suppressContent={props.suppressContent}
         />
       </div>
     </FeedNodeFrame>
@@ -332,7 +347,7 @@ const previewRoleForNode = (role: MaterialNodeRole): PreviewTargetRole =>
   role === 'momentary' ? 'momentary' : role === 'container' ? 'container' : 'text';
 
 const feedSurfaceClassForNode = (node: MaterialNodeRecipe): string => {
-  const isFingerprintHold = node.layout?.className?.includes('main-material-fingerprint-hold-node');
+  const isFingerprintHold = node.interaction?.type === 'FingerprintHoldActionRuntimePlanV1';
   if (node.kind === 'button') {
     return [
       'main-material-card-node-surface',
@@ -346,19 +361,6 @@ const feedSurfaceClassForNode = (node: MaterialNodeRecipe): string => {
   return 'main-material-card-node-surface main-material-card-node-surface--background';
 };
 
-const findFeedCardNodeById = (nodes: readonly FeedCardNode[], id: string): FeedCardNode | undefined => {
-  for (const node of nodes) {
-    if (node.id === id) return node;
-    const child = findFeedCardNodeById(node.children || [], id);
-    if (child) return child;
-  }
-  return undefined;
-};
-
-const isFingerprintHoldNode = (node: MaterialNodeRecipe): boolean => (
-  node.layout?.className?.includes('main-material-fingerprint-hold-node') ?? false
-);
-
 // Attach the feed-specific text fit/style/rich-text config (computed with the live
 // story value) onto the bridged node's content, matching the prior FeedCardTreeNode so
 // the canonical MaterialNodeRenderer reproduces the same autoscaled text.
@@ -367,7 +369,14 @@ const enrichFeedNodeContent = (
   story: FeedStory,
   source: FeedCardNode,
   node: MaterialNodeRecipe,
+  fingerprintActionPlan?: FingerprintHoldActionRuntimePlanV1,
 ): MaterialNodeRecipe => {
+  if (source.id === 'reward-terms-group-fingerprint' && fingerprintActionPlan) {
+    node.interaction = fingerprintActionPlan;
+    if (node.layout?.style) {
+      (node.layout.style as Record<string, string>)['--main-material-hold-duration'] = `${fingerprintActionPlan.holdDurationMs}ms`;
+    }
+  }
   if (node.content) {
     const value = feedNodeContentValue(story, source);
     const resolved = resolveFeedNodeTextStyle(cardType, source);
@@ -412,7 +421,7 @@ const enrichFeedNodeContent = (
   }
   if (node.children && source.children) {
     node.children = node.children.map((child, index) =>
-      enrichFeedNodeContent(cardType, story, source.children![index], child));
+      enrichFeedNodeContent(cardType, story, source.children![index], child, fingerprintActionPlan));
   }
   return node;
 };
@@ -427,57 +436,12 @@ const CanonicalFeedCardTree = (props: {
   selectedFeedTargetClass: (targetId: FeedMaterialTargetId) => string;
   surfacePropsForRecipe: FeedSurfacePropsForRecipe;
   buttonPropsForRecipe: FeedSurfacePropsForRecipe;
+  fingerprintActionPlan?: FingerprintHoldActionRuntimePlanV1;
+  onUiAction?: UiActionEventHandler;
 }) => {
   const registration = useMainMaterialDomRegistration();
-  const [holdingNodeId, setHoldingNodeId] = createSignal<string | null>(null);
-  const [completedNodeId, setCompletedNodeId] = createSignal<string | null>(null);
-  let holdTimer: number | undefined;
-  let completeTimer: number | undefined;
   const targetIdFor = (node: MaterialNodeRecipe) =>
     feedMaterialTargetIdForNode(props.cardType.id, node.id) as FeedMaterialTargetId;
-  const clearHoldTimer = () => {
-    if (holdTimer !== undefined) window.clearTimeout(holdTimer);
-    holdTimer = undefined;
-  };
-  const clearCompleteTimer = () => {
-    if (completeTimer !== undefined) window.clearTimeout(completeTimer);
-    completeTimer = undefined;
-  };
-  const cancelHold = (node: MaterialNodeRecipe, event?: PointerEvent) => {
-    if (!isFingerprintHoldNode(node)) return;
-    clearHoldTimer();
-    setHoldingNodeId((current) => current === node.id ? null : current);
-    if (event?.currentTarget instanceof HTMLElement) {
-      try {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      } catch {
-        // Pointer capture may already be released by the browser on leave/cancel.
-      }
-    }
-  };
-  const startHold = (node: MaterialNodeRecipe, event: PointerEvent) => {
-    if (!isFingerprintHoldNode(node)) return;
-    event.preventDefault();
-    const source = findFeedCardNodeById(props.cardType.children, node.id);
-    const holdDurationMs = source?.holdDurationMs ?? 1400;
-    clearHoldTimer();
-    clearCompleteTimer();
-    setCompletedNodeId(null);
-    setHoldingNodeId(node.id);
-    if (event.currentTarget instanceof HTMLElement) {
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    }
-    holdTimer = window.setTimeout(() => {
-      clearHoldTimer();
-      setHoldingNodeId(null);
-      setCompletedNodeId(node.id);
-      completeTimer = window.setTimeout(() => setCompletedNodeId(null), 520);
-    }, holdDurationMs);
-  };
-  onCleanup(() => {
-    clearHoldTimer();
-    clearCompleteTimer();
-  });
   const context = (): MaterialNodeRenderContext => ({
     treeId: props.cardType.id,
     targetIdForNode: (node) => targetIdFor(node),
@@ -488,9 +452,6 @@ const CanonicalFeedCardTree = (props: {
     classForNode: (node) => [
       'main-material-card-node',
       `main-material-card-node--${node.kind}-frame`,
-      isFingerprintHoldNode(node) ? 'main-material-fingerprint-hold-node--ready' : undefined,
-      holdingNodeId() === node.id ? 'main-material-fingerprint-hold-node--holding' : undefined,
-      completedNodeId() === node.id ? 'main-material-fingerprint-hold-node--complete' : undefined,
     ].filter(Boolean).join(' '),
     childStackClassForNode: () => 'main-material-card-node-flow-stack',
     surfaceClassForNode: (node) => feedSurfaceClassForNode(node),
@@ -499,8 +460,7 @@ const CanonicalFeedCardTree = (props: {
     buttonSizeForNode: () => 'sm',
     buttonFullWidthForNode: () => true,
     resolveBinding: (binding) => feedStoryValue(props.story, binding as never),
-    onPointerDown: startHold,
-    onPointerUp: cancelHold,
+    onUiAction: props.onUiAction,
   });
   return (
     <MaterialNodeDomRegistrationProvider registration={registration}>
@@ -512,6 +472,7 @@ const CanonicalFeedCardTree = (props: {
               props.story,
               node,
               feedCardNodeToMaterialNode(props.cardType, node),
+              props.fingerprintActionPlan,
             )}
             context={context()}
           />
@@ -535,6 +496,8 @@ export const FeedCarousel = (props: {
   surfacePropsForRecipe: FeedSurfacePropsForRecipe;
   buttonPropsForRecipe: FeedSurfacePropsForRecipe;
   onInteractiveDragStart?: () => void;
+  onUiAction?: UiActionEventHandler;
+  suppressedCardTypeId?: string;
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = createSignal(0);
   const [dragStartX, setDragStartX] = createSignal<number | null>(null);
@@ -615,6 +578,8 @@ export const FeedCarousel = (props: {
                   cssProbe={props.cssProbe}
                   surfacePropsForRecipe={props.surfacePropsForRecipe}
                   buttonPropsForRecipe={props.buttonPropsForRecipe}
+                  onUiAction={props.onUiAction}
+                  suppressContent={story.cardTypeId === props.suppressedCardTypeId}
                 />
               );
             }}

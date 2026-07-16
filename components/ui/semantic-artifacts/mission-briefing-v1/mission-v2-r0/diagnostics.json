@@ -1,0 +1,11 @@
+{
+  "diagnostics": [
+    {
+      "code": "frame-owned-by-layout-variant",
+      "message": "contract-left owns its screen-relative frame; the panel graph owns visible frame paint.",
+      "path": "appearance.frame.idle",
+      "severity": "info"
+    }
+  ],
+  "schemaVersion": 1
+}

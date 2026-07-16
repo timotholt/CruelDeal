@@ -1,6 +1,7 @@
-import { createEffect, createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
 import '../../src/styles/ui-material-lab.css';
 import '../../src/styles/main-material-preview.css';
+import '../ui/semantic-artifacts/mission-briefing-v1/mission-v2-r0/appearance.css';
 import {
   type MaterialEditorCapabilities,
   MaterialRecipeEditor,
@@ -213,6 +214,29 @@ import {
   selectedResetPlanForPart,
   surfaceRecipeForPart,
 } from './main-material/mainMaterialPartStateModel';
+import { MissionBriefingOwnershipPanel } from '../ui/semantic-authoring/mission-briefing/MissionBriefingOwnershipPanel';
+import {
+  dispatchMissionBriefingCommand,
+  type MissionBriefingCommand,
+  type MissionBriefingCommandResult,
+} from '../ui/semantic-authoring/mission-briefing/missionBriefingCommands';
+import {
+  readStoredMissionAppearance,
+  readStoredMissionBriefingSource,
+  writeStoredMissionAppearance,
+  writeStoredMissionBriefingSource,
+} from '../ui/semantic-authoring/mission-briefing/missionBriefingPersistence';
+import {
+  validateMissionBriefingSourceV1,
+  type MissionBriefingSourceV1,
+} from '../ui/semantic-authoring/mission-briefing/missionBriefingSource';
+import missionBriefingSourceFixture from '../ui/semantic-authoring/mission-briefing/__fixtures__/mission-briefing-v1.inline.json';
+import {
+  compileMissionBriefingComponentV1,
+  type MissionBriefingComponentPlanV1,
+} from '../ui/semantic-compiler/mission-briefing/missionBriefingComponentCompiler';
+import missionV2Appearance from '../ui/semantic-compiler/paint/__fixtures__/mission-v2-r0.appearance.json';
+import type { MissionAppearanceDocumentV1 } from '../ui/semantic-compiler/paint/paintSource';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
@@ -1835,6 +1859,13 @@ const defaultFeedCardTypes: FeedCardTypes = (() => {
   };
 })();
 const feedCardTypeIds = Object.keys(defaultFeedCardTypes) as FeedCardTypeId[];
+const defaultMissionBriefingSource: MissionBriefingSourceV1 = (() => {
+  const parsed = validateMissionBriefingSourceV1(missionBriefingSourceFixture);
+  if (!parsed.ok) {
+    throw new Error(`The default Mission Briefing V2 fixture is invalid: ${parsed.issues[0]?.message}`);
+  }
+  return parsed.source;
+})();
 
 const recipeTextItems = (recipe: MaterialRecipe) => (
   recipe.textContent
@@ -2227,6 +2258,8 @@ const collectClassCssRules = (className: string): string[] => {
 
 
 export const MainMaterialPreviewScreen = () => {
+  const missionProofMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('mission-proof') === '1';
   const [selectedPart, setSelectedPart] = createSignal<MainPartId>('feedCards');
   const [sidebarTab, setSidebarTab] = createSignal<'parts' | 'text'>('parts');
   const [previewStates, setPreviewStates] = createSignal<PreviewStatesByPart>(createDefaultPreviewStates());
@@ -2263,6 +2296,108 @@ export const MainMaterialPreviewScreen = () => {
   const [selectedPresetIds, setSelectedPresetIds] = createSignal<MaterialPresetIdsByPart>(createEmptySelectedPresetIds());
   const [presetDirty, setPresetDirty] = createSignal<MaterialPresetDirtyByPart>(createEmptyPresetDirty());
   const [materialPresetsLoaded, setMaterialPresetsLoaded] = createSignal(false);
+  const [missionBriefingSource, setMissionBriefingSource] = createSignal<MissionBriefingSourceV1>(
+    structuredClone(defaultMissionBriefingSource),
+  );
+  const [missionAppearance, setMissionAppearance] = createSignal<MissionAppearanceDocumentV1>(
+    structuredClone(missionV2Appearance) as MissionAppearanceDocumentV1,
+  );
+  type MissionHistoryEntry = { source: MissionBriefingSourceV1; appearance: MissionAppearanceDocumentV1 };
+  const [missionUndoStack, setMissionUndoStack] = createSignal<MissionHistoryEntry[]>([]);
+  const [missionRedoStack, setMissionRedoStack] = createSignal<MissionHistoryEntry[]>([]);
+  const [compiledMissionPreview, setCompiledMissionPreview] = createSignal<{
+    plan: MissionBriefingComponentPlanV1;
+    appearanceCss: string;
+  } | null>(null);
+  const [missionBriefingLoaded, setMissionBriefingLoaded] = createSignal(false);
+  const [missionBriefingCommandStatus, setMissionBriefingCommandStatus] = createSignal('Ready');
+  const compiledMissionBriefing = createMemo(() => (
+    compileMissionBriefingComponentV1(missionBriefingSource(), missionAppearance())
+  ));
+  const missionBriefingPlan = () => {
+    const pinned = compiledMissionPreview();
+    if (pinned) return pinned.plan;
+    const result = compiledMissionBriefing();
+    return result.ok ? result.plan : null;
+  };
+  const currentMissionHistoryEntry = (): MissionHistoryEntry => ({
+    source: structuredClone(missionBriefingSource()),
+    appearance: structuredClone(missionAppearance()),
+  });
+  const commitMissionEdit = (next: Partial<MissionHistoryEntry>) => {
+    setMissionUndoStack((current) => [...current, currentMissionHistoryEntry()]);
+    setMissionRedoStack([]);
+    if (next.source) setMissionBriefingSource(next.source);
+    if (next.appearance) setMissionAppearance(next.appearance);
+    setCompiledMissionPreview(null);
+  };
+
+  const applyMissionBriefingCommand = (command: MissionBriefingCommand): MissionBriefingCommandResult => {
+    const result = dispatchMissionBriefingCommand(missionBriefingSource(), command);
+    if (result.ok) {
+      commitMissionEdit({ source: result.source });
+      setMissionBriefingCommandStatus(`${command.type} ${command.slot}: applied`);
+    } else {
+      setMissionBriefingCommandStatus(`${result.code}: ${result.reason}`);
+    }
+    return result;
+  };
+
+  const updateMissionAppearance = (appearance: MissionAppearanceDocumentV1) => {
+    commitMissionEdit({ appearance });
+    setMissionBriefingCommandStatus('Appearance graph updated through compiler');
+  };
+  const undoMissionEdit = () => {
+    const stack = missionUndoStack();
+    const previous = stack.at(-1);
+    if (!previous) return;
+    setMissionUndoStack(stack.slice(0, -1));
+    setMissionRedoStack((current) => [...current, currentMissionHistoryEntry()]);
+    setMissionBriefingSource(previous.source);
+    setMissionAppearance(previous.appearance);
+    setCompiledMissionPreview(null);
+    setMissionBriefingCommandStatus('Undo applied');
+  };
+  const redoMissionEdit = () => {
+    const stack = missionRedoStack();
+    const next = stack.at(-1);
+    if (!next) return;
+    setMissionRedoStack(stack.slice(0, -1));
+    setMissionUndoStack((current) => [...current, currentMissionHistoryEntry()]);
+    setMissionBriefingSource(next.source);
+    setMissionAppearance(next.appearance);
+    setCompiledMissionPreview(null);
+    setMissionBriefingCommandStatus('Redo applied');
+  };
+  const compileMissionPreview = () => {
+    const result = compiledMissionBriefing();
+    if (!result.ok) {
+      setMissionBriefingCommandStatus(`Compile rejected: ${result.issues[0]?.message ?? 'unknown issue'}`);
+      return;
+    }
+    setCompiledMissionPreview({ plan: structuredClone(result.plan), appearanceCss: result.appearanceCss });
+    setMissionBriefingCommandStatus(`Compiled ${result.plan.compilerVersion}; preview pinned to artifact plan`);
+  };
+  const missionAppearanceCss = () => {
+    const pinned = compiledMissionPreview();
+    if (pinned) return pinned.appearanceCss;
+    const result = compiledMissionBriefing();
+    return result.ok ? result.appearanceCss : '';
+  };
+  const returnToLiveMissionPreview = () => {
+    setCompiledMissionPreview(null);
+    setMissionBriefingCommandStatus('Live compiled preview resumed');
+  };
+
+  const copyMissionBriefingSource = (serialized: string) => {
+    void navigator.clipboard?.writeText(serialized);
+    setMissionBriefingCommandStatus('Canonical Mission source copied');
+  };
+
+  const copyMissionAppearance = (serialized: string) => {
+    void navigator.clipboard?.writeText(serialized);
+    setMissionBriefingCommandStatus('Canonical Mission appearance copied');
+  };
 
   const markPresetDirty = (part: MainPartId) => {
     setPresetDirty((current) => markMaterialPresetDirty(current, selectedPresetIds(), part));
@@ -2523,6 +2658,16 @@ export const MainMaterialPreviewScreen = () => {
   };
 
   onMount(() => {
+    if (missionProofMode) {
+      setMissionBriefingSource(structuredClone(defaultMissionBriefingSource));
+      setMissionAppearance(structuredClone(missionV2Appearance) as MissionAppearanceDocumentV1);
+      setEditingFeedCardTypeId('card_type_04');
+      setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_04'));
+      setMissionBriefingLoaded(true);
+      setMaterialPresetsLoaded(true);
+      return;
+    }
+
     try {
       const parsed = readMainMaterialStoredState(window.localStorage);
       if (parsed) {
@@ -2553,6 +2698,16 @@ export const MainMaterialPreviewScreen = () => {
       setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
     }
 
+    const storedMissionBriefing = readStoredMissionBriefingSource(window.localStorage);
+    if (storedMissionBriefing) {
+      setMissionBriefingSource(storedMissionBriefing);
+    } else {
+      setMissionBriefingSource(structuredClone(defaultMissionBriefingSource));
+    }
+    const storedMissionAppearance = readStoredMissionAppearance(window.localStorage);
+    setMissionAppearance(storedMissionAppearance ?? structuredClone(missionV2Appearance) as MissionAppearanceDocumentV1);
+    setMissionBriefingLoaded(true);
+
     try {
       setMaterialPresets(sanitizeMaterialPresets(readMainMaterialStoredPresets(window.localStorage), {
         labelForPart: (part) => partLabelById[part],
@@ -2566,6 +2721,7 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   createEffect(() => {
+    if (missionProofMode) return;
     writeMainMaterialStoredState(window.localStorage, createMainMaterialPreviewStateDocument({
       backdrop: backdrop(),
       title: title(),
@@ -2582,6 +2738,14 @@ export const MainMaterialPreviewScreen = () => {
   });
 
   createEffect(() => {
+    if (missionProofMode) return;
+    if (!missionBriefingLoaded()) return;
+    writeStoredMissionBriefingSource(window.localStorage, missionBriefingSource());
+    writeStoredMissionAppearance(window.localStorage, missionAppearance());
+  });
+
+  createEffect(() => {
+    if (missionProofMode) return;
     if (!materialPresetsLoaded()) return;
     writeMainMaterialStoredPresets(window.localStorage, materialPresets());
   });
@@ -2890,6 +3054,7 @@ export const MainMaterialPreviewScreen = () => {
       setEditingFeedCardTypeId('card_type_01');
       setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
       setFeedStoryImageOverrides({});
+      setMissionBriefingSource(structuredClone(defaultMissionBriefingSource));
     }
     if (plan.resetNav) {
       setNav(cloneNav(defaultNav));
@@ -2907,6 +3072,7 @@ export const MainMaterialPreviewScreen = () => {
       setEditingFeedCardTypeId('card_type_01');
       setSelectedFeedTargetId(feedCardMaterialTargetId('card_type_01'));
       setFeedStoryImageOverrides({});
+      setMissionBriefingSource(structuredClone(defaultMissionBriefingSource));
     }
     if (mainMaterialResetAllPlan.resetNav) setNav(cloneNav(defaultNav));
     if (mainMaterialResetAllPlan.resetSurfaces) setSurfaces(pruneSurfaceRecipesForCapabilities(cloneSurfaceRecipes(defaultSurfaces)));
@@ -3142,47 +3308,70 @@ export const MainMaterialPreviewScreen = () => {
                             </Show>
                           )}
                         >
-                          <SurfaceRecipeEditor
-                            title={selectedFeedMaterialTitle()}
-                            recipe={selectedFeedMaterialRecipe()}
-                            interactionRole={selectedInteractionRole()}
-                            capabilities={selectedFeedMaterialCapabilities()}
-                            stateOptions={selectedStateOptions()}
-                            stateLabels={selectedStateLabels()}
-                            forcePreview={forcePreview()}
-                            onForcePreviewChange={setForcePreview}
-                            presets={selectedMaterialPresets()}
-                            selectedPresetId={selectedPresetId()}
-                                    presetDirty={selectedPresetDirty()}
-                            onSelectPreset={(id) => selectMaterialPreset('feedCards', id)}
-                            onSavePreset={() => saveMaterialPreset('feedCards')}
-                            onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
-                            onDeletePreset={() => deleteMaterialPreset('feedCards')}
-                            onResetRecipe={() => resetCurrentSurfaceRecipe('feedCards')}
-                            onChange={updateSelectedFeedMaterialRecipe}
-                            activeState={selectedPreviewState()}
-                            onActiveStateChange={setSelectedPreviewState}
-                            extraControls={(
-                              <FeedRecipeEditor
-                                feed={feed()}
-                                onChange={setFeed}
-                                stories={feedStories()}
-                                selectedStoryId={selectedFeedStoryId()}
-                                onSelectedStoryIdChange={selectFeedStory}
-                                onStoryTextChange={updateFeedStoryText}
-                                cardTypes={feedCardTypes()}
-                                editingCardTypeId={editingFeedCardTypeId()}
-                                selectedMaterialTargetId={selectedFeedTargetId()}
-                                onSelectedMaterialTargetIdChange={setSelectedFeedTargetId}
-                                storyImageOverrides={feedStoryImageOverrides()}
-                                onStoryImageOverrideChange={updateFeedStoryImageOverride}
-                                selectedStoryContentJson={selectedFeedStoryContentJson()}
-                                onCopySelectedStoryContentJson={copySelectedFeedStoryContentJson}
-                                onImportSelectedStoryContentJson={importSelectedFeedStoryContentJson}
-                                onCardTypeChange={updateFeedCardType}
+                          <Show
+                            when={editingFeedCardTypeId() === 'card_type_04'}
+                            fallback={(
+                              <SurfaceRecipeEditor
+                                title={selectedFeedMaterialTitle()}
+                                recipe={selectedFeedMaterialRecipe()}
+                                interactionRole={selectedInteractionRole()}
+                                capabilities={selectedFeedMaterialCapabilities()}
+                                stateOptions={selectedStateOptions()}
+                                stateLabels={selectedStateLabels()}
+                                forcePreview={forcePreview()}
+                                onForcePreviewChange={setForcePreview}
+                                presets={selectedMaterialPresets()}
+                                selectedPresetId={selectedPresetId()}
+                                presetDirty={selectedPresetDirty()}
+                                onSelectPreset={(id) => selectMaterialPreset('feedCards', id)}
+                                onSavePreset={() => saveMaterialPreset('feedCards')}
+                                onSaveNewPreset={() => saveNewMaterialPreset('feedCards')}
+                                onDeletePreset={() => deleteMaterialPreset('feedCards')}
+                                onResetRecipe={() => resetCurrentSurfaceRecipe('feedCards')}
+                                onChange={updateSelectedFeedMaterialRecipe}
+                                activeState={selectedPreviewState()}
+                                onActiveStateChange={setSelectedPreviewState}
+                                extraControls={(
+                                  <FeedRecipeEditor
+                                    feed={feed()}
+                                    onChange={setFeed}
+                                    stories={feedStories()}
+                                    selectedStoryId={selectedFeedStoryId()}
+                                    onSelectedStoryIdChange={selectFeedStory}
+                                    onStoryTextChange={updateFeedStoryText}
+                                    cardTypes={feedCardTypes()}
+                                    editingCardTypeId={editingFeedCardTypeId()}
+                                    selectedMaterialTargetId={selectedFeedTargetId()}
+                                    onSelectedMaterialTargetIdChange={setSelectedFeedTargetId}
+                                    storyImageOverrides={feedStoryImageOverrides()}
+                                    onStoryImageOverrideChange={updateFeedStoryImageOverride}
+                                    selectedStoryContentJson={selectedFeedStoryContentJson()}
+                                    onCopySelectedStoryContentJson={copySelectedFeedStoryContentJson}
+                                    onImportSelectedStoryContentJson={importSelectedFeedStoryContentJson}
+                                    onCardTypeChange={updateFeedCardType}
+                                  />
+                                )}
                               />
                             )}
-                          />
+                          >
+                            <MissionBriefingOwnershipPanel
+                              source={missionBriefingSource()}
+                              defaults={defaultMissionBriefingSource}
+                              appearance={missionAppearance()}
+                              status={missionBriefingCommandStatus()}
+                              canUndo={missionUndoStack().length > 0}
+                              canRedo={missionRedoStack().length > 0}
+                              compiled={compiledMissionPreview() !== null}
+                              onCommand={applyMissionBriefingCommand}
+                              onAppearanceChange={updateMissionAppearance}
+                              onUndo={undoMissionEdit}
+                              onRedo={redoMissionEdit}
+                              onCompile={compileMissionPreview}
+                              onReturnToLive={returnToLiveMissionPreview}
+                              onCopy={copyMissionBriefingSource}
+                              onCopyAppearance={copyMissionAppearance}
+                            />
+                          </Show>
                         </Show>
                       )}
                     >
@@ -3287,9 +3476,64 @@ export const MainMaterialPreviewScreen = () => {
     </Show>
   );
 
+  const missionPreview = () => (
+    <MainMaterialDomRegistrationProvider registration={mainMaterialDomRegistration}>
+      <MainMaterialPreview
+        previewStates={previewStates()}
+        selectedPart={selectedPart()}
+        selectedFeedPreviewState={selectedPreviewState()}
+        selectedFeedTargetId={selectedFeedTargetId()}
+        selectedTopBarTargetId={selectedTopBarTargetId()}
+        selectedToolbarTargetId={selectedToolbarTargetId()}
+        selectedNavTargetId={selectedNavTargetId()}
+        previewInteractionMode={previewInteractionMode()}
+        forcePreview={forcePreview()}
+        activeNavIndex={activeNavIndex()}
+        onActiveNavIndexChange={setActiveNavIndex}
+        selectedClass={selectedClass}
+        backdrop={backdrop()}
+        title={title()}
+        feed={feed()}
+        feedStories={feedStories()}
+        feedCardTypes={feedCardTypes()}
+        feedStoryImageOverrides={feedStoryImageOverrides()}
+        selectedFeedTargetClass={selectedFeedTargetClass}
+        selectedTopBarTargetClass={selectedTopBarTargetClass}
+        selectedToolbarTargetClass={selectedToolbarTargetClass}
+        selectedNavTargetClass={selectedNavTargetClass}
+        cssProbe={{
+          targetId: selectedCssProbeTargetId(),
+          disabledKeys: cssProbeDisabledKeys(),
+        }}
+        activeFeedStoryId={selectedFeedStoryId()}
+        onActiveFeedStoryChange={selectFeedStory}
+        nav={nav()}
+        surfaces={surfaces()}
+        surfacePropsForPart={materialSurfacePropsForPart}
+        buttonPropsForRecipe={materialRecipeItemProps}
+        missionBriefingPlan={missionBriefingPlan() ?? undefined}
+        missionBriefingActive={missionProofMode || editingFeedCardTypeId() === 'card_type_04'}
+        onUiAction={(event) => {
+          const message = `${event.actionType} dispatched ${event.actionId}`;
+          setMissionBriefingCommandStatus(message);
+          setInspectorStatus(message);
+        }}
+      />
+    </MainMaterialDomRegistrationProvider>
+  );
+
   return (
     <>
-      <MaterialWorkbenchLayout
+      <style data-mission-live-appearance>{missionAppearanceCss()}</style>
+      <Show
+        when={!missionProofMode}
+        fallback={(
+          <main class="mission-v2-proof-frame" data-mission-proof="r0">
+            {missionPreview()}
+          </main>
+        )}
+      >
+        <MaterialWorkbenchLayout
         title="Main Skin"
         subtitle="Material Preview"
         sidebarTabs={[
@@ -3299,54 +3543,40 @@ export const MainMaterialPreviewScreen = () => {
         selectedSidebarTabId={sidebarTab()}
         onSelectSidebarTab={(id) => setSidebarTab(id === 'text' ? 'text' : 'parts')}
         sidebarAlt={(
-          <FeedTextGlobalsEditor
-            cardType={feedCardTypes()[editingFeedCardTypeId()]}
-            onSlotChange={updateGlobalFeedTypeSlot}
-          />
+          <Show
+            when={editingFeedCardTypeId() === 'card_type_04'}
+            fallback={(
+              <FeedTextGlobalsEditor
+                cardType={feedCardTypes()[editingFeedCardTypeId()]}
+                onSlotChange={updateGlobalFeedTypeSlot}
+              />
+            )}
+          >
+            <MissionBriefingOwnershipPanel
+              source={missionBriefingSource()}
+              defaults={defaultMissionBriefingSource}
+              appearance={missionAppearance()}
+              status={missionBriefingCommandStatus()}
+              canUndo={missionUndoStack().length > 0}
+              canRedo={missionRedoStack().length > 0}
+              compiled={compiledMissionPreview() !== null}
+              onCommand={applyMissionBriefingCommand}
+              onAppearanceChange={updateMissionAppearance}
+              onUndo={undoMissionEdit}
+              onRedo={redoMissionEdit}
+              onCompile={compileMissionPreview}
+              onReturnToLive={returnToLiveMissionPreview}
+              onCopy={copyMissionBriefingSource}
+              onCopyAppearance={copyMissionAppearance}
+            />
+          </Show>
         )}
         parts={workbenchParts()}
         selectedPartId={selectedWorkbenchPartId()}
         onSelectPart={selectWorkbenchPart}
         selectionPulseTick={selectionFlashTick()}
         selectionPulseEnabled={selectionOverlayMode() === 'flash'}
-        preview={(
-          <MainMaterialDomRegistrationProvider registration={mainMaterialDomRegistration}>
-            <MainMaterialPreview
-              previewStates={previewStates()}
-              selectedPart={selectedPart()}
-              selectedFeedPreviewState={selectedPreviewState()}
-              selectedFeedTargetId={selectedFeedTargetId()}
-              selectedTopBarTargetId={selectedTopBarTargetId()}
-              selectedToolbarTargetId={selectedToolbarTargetId()}
-              selectedNavTargetId={selectedNavTargetId()}
-              previewInteractionMode={previewInteractionMode()}
-              forcePreview={forcePreview()}
-              activeNavIndex={activeNavIndex()}
-              onActiveNavIndexChange={setActiveNavIndex}
-              selectedClass={selectedClass}
-              backdrop={backdrop()}
-              title={title()}
-              feed={feed()}
-              feedStories={feedStories()}
-              feedCardTypes={feedCardTypes()}
-              feedStoryImageOverrides={feedStoryImageOverrides()}
-              selectedFeedTargetClass={selectedFeedTargetClass}
-              selectedTopBarTargetClass={selectedTopBarTargetClass}
-              selectedToolbarTargetClass={selectedToolbarTargetClass}
-              selectedNavTargetClass={selectedNavTargetClass}
-              cssProbe={{
-                targetId: selectedCssProbeTargetId(),
-                disabledKeys: cssProbeDisabledKeys(),
-              }}
-              activeFeedStoryId={selectedFeedStoryId()}
-              onActiveFeedStoryChange={selectFeedStory}
-              nav={nav()}
-              surfaces={surfaces()}
-              surfacePropsForPart={materialSurfacePropsForPart}
-              buttonPropsForRecipe={materialRecipeItemProps}
-            />
-          </MainMaterialDomRegistrationProvider>
-        )}
+        preview={missionPreview()}
         editor={editor}
         actions={(
           <>
@@ -3366,8 +3596,8 @@ export const MainMaterialPreviewScreen = () => {
           </>
         )}
         class="main-material-page"
-      />
-      <EmissionInspector
+        />
+        <EmissionInspector
         open={emissionInspectorOpen()}
         tab={emissionInspectorTab()}
         position={emissionInspectorPosition()}
@@ -3395,7 +3625,8 @@ export const MainMaterialPreviewScreen = () => {
         onToggleBadges={() => setEmissionInspectorBadges((show) => !show)}
         onToggleDomClass={toggleDomClassProbe}
         onDragStart={startEmissionInspectorDrag}
-      />
+        />
+      </Show>
     </>
   );
 };

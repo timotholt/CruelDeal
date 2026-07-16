@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-07-16",
+  "route": "/main-material?mission-proof=1",
+  "browser": "Google Chrome 150.0.7871.124",
+  "os": "macOS 15.7.7 (24G720)",
+  "viewport": {
+    "width": 941,
+    "height": 1672,
+    "deviceScaleFactor": 1
+  },
+  "motion": "disabled by proof route",
+  "font": {
+    "family": "IBM Plex Sans Condensed",
+    "source": "@fontsource/ibm-plex-sans-condensed",
+    "weights": [400, 600, 700]
+  },
+  "targetSha256": "5861872957eec92ad3d999e98e987ce3a30eae63d5d8ba3e2ab125110ef59a57",
+  "captureSha256": "27f430d59bbcb32465186601a36a21fe3bcce33008e5833aa190b28de5a4f24f",
+  "comparisonSha256": "798329df9566c9012467417bfb8528a9b10782f484d6a322eea17d6cf65f53b3",
+  "differenceSha256": "16b94da39ef6a9a94778517587fc5b796bdd2644498b248698f17402e00c8f7f"
+}

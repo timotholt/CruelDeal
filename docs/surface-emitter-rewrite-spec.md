@@ -1,6 +1,12 @@
 # Surface Renderer + Emitter Rewrite Spec
 
-Status: active (design locked, implementation pending)
+Status: superseded on 2026-07-15; its design is no longer locked
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Do not implement the universal-node or fixed-element renderer described
+> below. Semantic components retain behavior and structure, while authored
+> appearance layers are compiled to target-specific paint slots and minimal DOM.
+
 Date: 2026-06-09
 Related: `docs/first-class-surface-architecture-spec.md`, `docs/feed-model-unification-refactor-spec.md`
 

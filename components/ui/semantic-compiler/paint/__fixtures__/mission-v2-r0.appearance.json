@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "targetProfile": "chromium-primary-v1",
+  "typography": {
+    "title": {
+      "base": { "fontFamily": "\"Barlow Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 6.8, "weight": 700, "lineHeight": 1.42, "letterSpacingEm": 0.025, "transform": "uppercase", "color": "#e4e7e9", "opacity": 1, "embossMode": "shadow", "embossStrength": 72, "embossOffset": 18, "embossBlur": 22 },
+      "bright": { "color": "#f5f7f8" },
+      "muted": { "color": "#8e989d" }
+    },
+    "body": { "base": { "fontFamily": "\"IBM Plex Sans Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 2.9, "weight": 400, "lineHeight": 1.72, "letterSpacingEm": 0.025, "transform": "none", "color": "#e1e5e7", "opacity": 1, "embossMode": "shadow", "embossStrength": 28, "embossOffset": 10, "embossBlur": 16 } },
+    "availability": { "base": { "fontFamily": "\"IBM Plex Sans Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 2.2, "weight": 400, "lineHeight": 1.2, "letterSpacingEm": 0.035, "transform": "uppercase", "color": "#d7dde0", "opacity": 1, "embossMode": "shadow", "embossStrength": 22, "embossOffset": 8, "embossBlur": 14 } },
+    "termLabel": { "base": { "fontFamily": "\"IBM Plex Sans Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 2.2, "weight": 400, "lineHeight": 1.2, "letterSpacingEm": 0.04, "transform": "uppercase", "color": "#9ba5aa", "opacity": 1, "embossMode": "shadow", "embossStrength": 25, "embossOffset": 10, "embossBlur": 15 } },
+    "termValue": { "base": { "fontFamily": "\"IBM Plex Sans Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 5.8, "weight": 700, "lineHeight": 1, "letterSpacingEm": 0, "transform": "none", "color": "#d6dadd", "opacity": 1, "embossMode": "dark", "embossStrength": 58, "embossOffset": 20, "embossBlur": 18 } },
+    "actionLabel": { "base": { "fontFamily": "\"IBM Plex Sans Condensed\", \"Arial Narrow\", sans-serif", "sizeCqw": 2.2, "weight": 400, "lineHeight": 1.2, "letterSpacingEm": 0.04, "transform": "uppercase", "color": "#eef1f2", "opacity": 1, "embossMode": "shadow", "embossStrength": 36, "embossOffset": 12, "embossBlur": 16 } }
+  },
+  "graphs": [
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.panel.idle",
+      "part": "panel",
+      "state": "idle",
+      "geometry": { "clip": "mission-chamfer", "radiusPx": 0, "chamferPx": 18, "chamferTopRightPx": 38 },
+      "layers": [
+        { "id": "base", "type": "fill", "enabled": true, "color": "#03121b", "opacity": 0.68 },
+        { "id": "glass", "type": "backdropGlass", "enabled": true, "blurPx": 7, "saturationPct": 125, "tintColor": "#061923", "tintOpacity": 0.18 },
+        { "id": "hex", "type": "texture", "enabled": true, "texture": "hex-grid", "color": "#a8d8e8", "opacity": 0.055, "scalePx": 18 },
+        { "id": "reflection", "type": "reflection", "enabled": true, "color": "#d8f3ff", "opacity": 0.13, "angleDeg": 112, "startPct": 8, "endPct": 38 },
+        { "id": "rough-edge", "type": "edgeWear", "enabled": true, "variant": "edge-chips", "color": "#d6e5e8", "opacity": 0.22, "widthPx": 2.2, "scalePx": 18 },
+        { "id": "hairline", "type": "border", "enabled": true, "color": "#b9d9e5", "opacity": 0.48, "widthPx": 1 },
+        { "id": "depth", "type": "shadow", "enabled": true, "placement": "outer", "color": "#000000", "opacity": 0.58, "xPx": 8, "yPx": 12, "blurPx": 24, "spreadPx": 0 }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.terms.idle",
+      "part": "terms",
+      "state": "idle",
+      "geometry": { "clip": "rounded-rect", "radiusPx": 0, "chamferPx": 0 },
+      "layers": [
+        { "id": "divider", "type": "border", "enabled": true, "color": "#c2d6dc", "opacity": 0.38, "widthPx": 1, "edges": ["top"] }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.primary-action.idle",
+      "part": "primaryAction",
+      "state": "idle",
+      "geometry": { "clip": "rounded-rect", "radiusPx": 0, "chamferPx": 0 },
+      "layers": [
+        { "id": "fingerprint", "type": "maskImage", "enabled": true, "assetId": "fingerprint-svgrepo-v1", "color": "#8e9ba0", "opacity": 0.76 },
+        { "id": "brackets", "type": "cornerBrackets", "enabled": true, "color": "#f5b31f", "opacity": 0.92, "insetPct": 4, "armPct": 12, "thicknessPx": 1.5 },
+        { "id": "scan", "type": "scanLine", "enabled": false, "color": "#f5b31f", "opacity": 0.9, "thicknessPx": 2, "glowBlurPx": 12 }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.primary-action.holding",
+      "part": "primaryAction",
+      "state": "holding",
+      "geometry": { "clip": "rounded-rect", "radiusPx": 0, "chamferPx": 0 },
+      "layers": [
+        { "id": "fingerprint", "type": "maskImage", "enabled": true, "assetId": "fingerprint-svgrepo-v1", "color": "#f5b31f", "opacity": 0.9 },
+        { "id": "brackets", "type": "cornerBrackets", "enabled": true, "color": "#f5b31f", "opacity": 1, "insetPct": 4, "armPct": 12, "thicknessPx": 1.5 },
+        { "id": "scan", "type": "scanLine", "enabled": true, "color": "#f5b31f", "opacity": 0.94, "thicknessPx": 2, "glowBlurPx": 14 },
+        { "id": "glow", "type": "glow", "enabled": true, "color": "#f5b31f", "opacity": 0.28, "xPx": 0, "yPx": 0, "blurPx": 22, "spreadPx": 1 }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.primary-action.complete",
+      "part": "primaryAction",
+      "state": "complete",
+      "geometry": { "clip": "rounded-rect", "radiusPx": 0, "chamferPx": 0 },
+      "layers": [
+        { "id": "fingerprint", "type": "maskImage", "enabled": true, "assetId": "fingerprint-svgrepo-v1", "color": "#f5b31f", "opacity": 1 },
+        { "id": "brackets", "type": "cornerBrackets", "enabled": true, "color": "#51b9ff", "opacity": 1, "insetPct": 4, "armPct": 12, "thicknessPx": 1.5 },
+        { "id": "scan", "type": "scanLine", "enabled": false, "color": "#f5b31f", "opacity": 0.94, "thicknessPx": 2, "glowBlurPx": 14 },
+        { "id": "glow", "type": "glow", "enabled": true, "color": "#51b9ff", "opacity": 0.34, "xPx": 0, "yPx": 0, "blurPx": 28, "spreadPx": 1 }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "mission-v2-r0.primary-action.disabled",
+      "part": "primaryAction",
+      "state": "disabled",
+      "geometry": { "clip": "rounded-rect", "radiusPx": 0, "chamferPx": 0 },
+      "layers": [
+        { "id": "fingerprint", "type": "maskImage", "enabled": true, "assetId": "fingerprint-svgrepo-v1", "color": "#58666c", "opacity": 0.36 },
+        { "id": "brackets", "type": "cornerBrackets", "enabled": true, "color": "#58666c", "opacity": 0.34, "insetPct": 4, "armPct": 12, "thicknessPx": 1.5 },
+        { "id": "scan", "type": "scanLine", "enabled": false, "color": "#f5b31f", "opacity": 0.5, "thicknessPx": 2, "glowBlurPx": 8 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+.ui-paint-mission-v2-r0-panel-idle {
+  clip-path: polygon(18px 0, calc(100% - 38px) 0, 100% 38px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M3 0H88L100 12V97H12L0 85V3Z' fill='none' stroke='%23d6e5e8' stroke-opacity='0.22' stroke-width='2.2' vector-effect='non-scaling-stroke' stroke-dasharray='3.24 7.56 1.44 12.6'/%3E%3Cpath d='M0 6H82M94 18V91M91 100H18M6 82V18' fill='none' stroke='%23d6e5e8' stroke-opacity='0.121' stroke-width='1.21' vector-effect='non-scaling-stroke' stroke-dasharray='0.72 9'/%3E%3C/svg%3E"), linear-gradient(112deg, transparent 8%, rgb(216 243 255 / 0.13) 38%, transparent 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='42' viewBox='0 0 36 42'%3E%3Cpath d='M18 1 35 10.5v21L18 41 1 31.5v-21Z' fill='none' stroke='%23a8d8e8' stroke-opacity='0.055' stroke-width='1'/%3E%3C/svg%3E"), linear-gradient(rgb(6 25 35 / 0.18), rgb(6 25 35 / 0.18)), linear-gradient(rgb(3 18 27 / 0.68), rgb(3 18 27 / 0.68));
+  background-size: 100% 100%, 100% 100%, 18px 18px, 100% 100%, 100% 100%;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat;
+  -webkit-backdrop-filter: blur(7px) saturate(125%);
+  backdrop-filter: blur(7px) saturate(125%);
+  box-shadow: 8px 12px 24px 0px rgb(0 0 0 / 0.58);
+}
+.ui-paint-mission-v2-r0-panel-idle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  pointer-events: none;
+  clip-path: polygon(18px 0, calc(100% - 38px) 0, 100% 38px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
+  background-color: rgb(185 217 229 / 0.48);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.ui-paint-mission-v2-r0-terms-idle {
+  border-radius: 0px;
+  border-top: 1px solid rgb(194 214 220 / 0.38);
+}
+
+.ui-paint-mission-v2-r0-primary-action-idle {
+  border-radius: 0px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23f5b31f' stroke-opacity='0.92' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M4 16V4H16M84 4H96V16M96 84V96H84M16 96H4V84'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 100% 82%;
+  background-repeat: no-repeat;
+}
+.ui-paint-mission-v2-r0-primary-action-idle::before {
+  content: "";
+  position: absolute;
+  inset: 8% 11% 24%;
+  pointer-events: none;
+  background-color: rgb(142 155 160 / 0.76);
+  -webkit-mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.ui-paint-mission-v2-r0-primary-action-holding {
+  border-radius: 0px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23f5b31f' stroke-opacity='1' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M4 16V4H16M84 4H96V16M96 84V96H84M16 96H4V84'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 100% 82%;
+  background-repeat: no-repeat;
+  box-shadow: 0px 0px 22px 1px rgb(245 179 31 / 0.28);
+}
+.ui-paint-mission-v2-r0-primary-action-holding::before {
+  content: "";
+  position: absolute;
+  inset: 8% 11% 24%;
+  pointer-events: none;
+  background-color: rgb(245 179 31 / 0.9);
+  -webkit-mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.ui-paint-mission-v2-r0-primary-action-holding::after {
+  content: "";
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  top: 8%;
+  height: 2px;
+  pointer-events: none;
+  background-image: linear-gradient(90deg, transparent, rgb(245 179 31 / 0.94), transparent);
+  box-shadow: 0 0 14px rgb(245 179 31 / 0.94);
+  transform: translateY(0);
+}
+
+.ui-paint-mission-v2-r0-primary-action-complete {
+  border-radius: 0px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%2351b9ff' stroke-opacity='1' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M4 16V4H16M84 4H96V16M96 84V96H84M16 96H4V84'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 100% 82%;
+  background-repeat: no-repeat;
+  box-shadow: 0px 0px 28px 1px rgb(81 185 255 / 0.34);
+}
+.ui-paint-mission-v2-r0-primary-action-complete::before {
+  content: "";
+  position: absolute;
+  inset: 8% 11% 24%;
+  pointer-events: none;
+  background-color: rgb(245 179 31 / 1);
+  -webkit-mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.ui-paint-mission-v2-r0-primary-action-disabled {
+  border-radius: 0px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%2358666c' stroke-opacity='0.34' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M4 16V4H16M84 4H96V16M96 84V96H84M16 96H4V84'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 100% 82%;
+  background-repeat: no-repeat;
+}
+.ui-paint-mission-v2-r0-primary-action-disabled::before {
+  content: "";
+  position: absolute;
+  inset: 8% 11% 24%;
+  pointer-events: none;
+  background-color: rgb(88 102 108 / 0.36);
+  -webkit-mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  mask-image: url("/art/ui/fingerprint-svgrepo-v1.svg");
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}

@@ -1,0 +1,127 @@
+{
+  "classMap": {
+    "panel": "ui-paint-mission-v2-r0-panel-idle",
+    "primaryAction": {
+      "complete": "ui-paint-mission-v2-r0-primary-action-complete",
+      "disabled": "ui-paint-mission-v2-r0-primary-action-disabled",
+      "holding": "ui-paint-mission-v2-r0-primary-action-holding",
+      "idle": "ui-paint-mission-v2-r0-primary-action-idle"
+    },
+    "terms": "ui-paint-mission-v2-r0-terms-idle",
+    "typography": {
+      "actionLabel": "ui-type-mission-actionlabel",
+      "availability": "ui-type-mission-availability",
+      "body": "ui-type-mission-body",
+      "termLabel": "ui-type-mission-termlabel",
+      "termValue": "ui-type-mission-termvalue",
+      "title": "ui-type-mission-title"
+    }
+  },
+  "compilerVersion": "semantic-ui-v1",
+  "component": {
+    "action": {
+      "accessibleLabel": "Accept Terms",
+      "acknowledgementMs": 520,
+      "actionId": "mission.accept-terms",
+      "actionType": "fingerprint-hold/v1",
+      "componentInstanceId": "mission.data-extraction.accept",
+      "disabled": false,
+      "holdDurationMs": 1400,
+      "type": "FingerprintHoldActionRuntimePlanV1"
+    },
+    "componentInstanceId": "mission.data-extraction",
+    "content": {
+      "availabilityStatus": {
+        "format": "plain",
+        "kind": "literal",
+        "plainText": "Available Contract",
+        "tokens": [
+          {
+            "text": "Available Contract",
+            "type": "text"
+          }
+        ],
+        "value": "Available Contract"
+      },
+      "body": {
+        "format": "plain",
+        "kind": "literal",
+        "plainText": "Extract encrypted corporate data from Solace Corp mainframe cluster.",
+        "tokens": [
+          {
+            "text": "Extract encrypted corporate data from Solace Corp mainframe cluster.",
+            "type": "text"
+          }
+        ],
+        "value": "Extract encrypted corporate data from Solace Corp mainframe cluster."
+      },
+      "primaryActionLabel": {
+        "format": "plain",
+        "kind": "literal",
+        "plainText": "Accept Terms",
+        "tokens": [
+          {
+            "text": "Accept Terms",
+            "type": "text"
+          }
+        ],
+        "value": "Accept Terms"
+      },
+      "progress": {
+        "completed": 1,
+        "total": 4
+      },
+      "terms": {
+        "deposit": {
+          "amount": {
+            "kind": "literal",
+            "value": 200
+          },
+          "currencyCode": "credits"
+        },
+        "successReward": {
+          "amount": {
+            "kind": "literal",
+            "value": 800
+          },
+          "currencyCode": "credits"
+        }
+      },
+      "title": {
+        "format": "cruel-markup-v1",
+        "kind": "literal",
+        "plainText": "Data\nExtraction",
+        "tokens": [
+          {
+            "children": [
+              {
+                "text": "Data",
+                "type": "text"
+              }
+            ],
+            "tag": "bright",
+            "type": "tag"
+          },
+          {
+            "type": "break"
+          },
+          {
+            "children": [
+              {
+                "text": "Extraction",
+                "type": "text"
+              }
+            ],
+            "tag": "muted",
+            "type": "tag"
+          }
+        ],
+        "value": "[bright]Data[/bright]\n[muted]Extraction[/muted]"
+      }
+    },
+    "layoutVariant": "contract-left",
+    "type": "MissionBriefing"
+  },
+  "schemaVersion": 1,
+  "targetProfile": "chromium-primary-v1"
+}

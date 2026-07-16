@@ -1,0 +1,13 @@
+{
+  "comparison": "current-941x1672.png versus ../mission-v2-target.png",
+  "dimensionsMatch": true,
+  "wholeScreenSsim": {
+    "red": 0.240073,
+    "green": 0.278965,
+    "blue": 0.275586,
+    "all": 0.264875
+  },
+  "criterion": "M9",
+  "result": "fail",
+  "dominantRemainingDelta": "The exact R0 blue server-room/hand/datablock background artwork is absent; the checked capture uses a materially different local proxy composition."
+}

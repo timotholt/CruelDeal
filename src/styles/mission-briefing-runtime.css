@@ -1,0 +1,94 @@
+.mission-briefing-product-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  container-type: inline-size;
+}
+
+.mission-briefing-runtime {
+  position: absolute;
+  z-index: 12;
+  left: 1.1%;
+  top: 30.5%;
+  width: 48.6%;
+  height: 52.5%;
+  box-sizing: border-box;
+  color: #e8ecee;
+  font-family: "IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, sans-serif;
+}
+
+.mission-briefing-runtime__narrative {
+  position: absolute;
+  inset: 4.2% 9% 38% 8.2%;
+}
+
+.mission-briefing-runtime__availability {
+  margin: 0 0 9%;
+  color: #d7dde0;
+  font-size: 2.2cqw;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.mission-briefing-runtime__availability span,
+.mission-briefing-runtime dd span { color: #f5b31f; }
+
+.mission-briefing-runtime h1 {
+  max-width: 100%;
+  margin: 0;
+  white-space: pre-line;
+  color: #e4e7e9;
+  font-size: 6.8cqw;
+  font-weight: 700;
+  line-height: 1.42;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 2px rgb(0 0 0 / 0.72);
+}
+
+.mission-briefing-runtime__progress { display: flex; gap: 2.4%; margin-top: 9%; }
+.mission-briefing-runtime__progress i { width: 16%; height: 5px; border-radius: 4px; background: #42515a; }
+.mission-briefing-runtime__progress i.is-complete { background: #f5b31f; box-shadow: 0 0 8px rgb(245 179 31 / .35); }
+
+.mission-briefing-runtime__body {
+  max-width: 92%;
+  margin: 10% 0 0;
+  color: #e1e5e7;
+  font-size: 2.9cqw;
+  line-height: 1.72;
+  letter-spacing: .025em;
+}
+
+.mission-briefing-runtime__footer {
+  position: absolute;
+  left: 8.2%;
+  right: 9%;
+  bottom: 4.2%;
+  height: 35%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+.mission-briefing-runtime__terms { position: absolute; inset: 16% 54% 0 0; margin: 0; border-right: 1px solid rgb(190 211 220 / .34); }
+.mission-briefing-runtime__terms div + div { margin-top: 36%; }
+.mission-briefing-runtime dt { color: #9ba5aa; font-size: 2.2cqw; letter-spacing: .04em; text-transform: uppercase; }
+.mission-briefing-runtime dd { margin: 2% 0 0; color: #d6dadd; font-size: 5.8cqw; font-weight: 700; line-height: 1; }
+.mission-briefing-runtime dd span { font-size: .58em; }
+
+.mission-briefing-runtime__action {
+  position: absolute;
+  inset: 7% 0 0 54%;
+  width: 46%;
+  padding: 67% 0 0;
+  border: 0;
+  background-color: transparent;
+  color: #eef1f2;
+  font: inherit;
+  font-size: 2.2cqw;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mission-briefing-runtime__action:focus-visible { outline: 2px solid #f5b31f; outline-offset: 4px; }

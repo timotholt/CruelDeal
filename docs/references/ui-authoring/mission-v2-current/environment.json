@@ -1,0 +1,169 @@
+{
+  "manifestVersion": 1,
+  "baselineId": "mission-briefing-v2-current",
+  "purpose": "Protected P0 rendering environment for the current Mission Briefing V2 migration baseline.",
+  "repository": {
+    "commit": "cbabe7fff71079fdc265198923efb7dfbf1cd878",
+    "branch": "main",
+    "runtimeScopeDirty": true,
+    "runtimeScopeDirtyPaths": [
+      "App.tsx",
+      "router.tsx",
+      "components/authoring/shiny/ShinyPerformanceScreen.tsx",
+      "src/styles/shiny-performance.css"
+    ],
+    "captureRelevantRuntimeScopeDirty": false,
+    "captureRelevantRuntimeScope": [
+      "components/screens/main-material/",
+      "components/screens/MainMaterialPreviewScreen.tsx",
+      "components/ui/material-node/",
+      "components/ui/material-lab/",
+      "src/styles/main-material-preview.css"
+    ],
+    "runtimeScope": [
+      "components/",
+      "src/",
+      "public/",
+      "package.json",
+      "package-lock.json",
+      "vite.config.*",
+      "tsconfig*.json"
+    ]
+  },
+  "host": {
+    "operatingSystem": "macOS 15.7.7",
+    "build": "24G720",
+    "architecture": "arm64"
+  },
+  "toolchain": {
+    "node": "20.20.2",
+    "npm": "10.8.2"
+  },
+  "browser": {
+    "product": "Google Chrome",
+    "version": "150.0.7871.124",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "route": "/main-material",
+    "browserViewportCssPixels": {
+      "width": 2560,
+      "height": 1440
+    },
+    "devicePixelRatio": 1,
+    "colorScheme": "dark",
+    "prefersReducedMotion": false,
+    "colorProfile": "sRGB IEC61966-2.1",
+    "colorProfileEvidence": "editor-context.png PNG metadata",
+    "componentViewportTarget": {
+      "aspectRatio": "9:16",
+      "observedCaptureRectCssPixels": {
+        "width": 520,
+        "height": 924.4375
+      },
+      "source": "docs/mission-briefing-v2-vertical-slice-spec.md section 9; the spec fixes the aspect ratio but does not state pixel dimensions"
+    }
+  },
+  "animation": {
+    "clock": "real-time",
+    "clockFrozen": false,
+    "cssAnimations": "enabled",
+    "fingerprintHoldDurationMs": 1400,
+    "completeStateDurationMs": 520,
+    "source": "fixture.json and components/screens/main-material/mainMaterialFeedCarousel.tsx"
+  },
+  "fixture": {
+    "path": "docs/references/ui-authoring/mission-v2-current/fixture.json",
+    "sha256": "e2167f9a09f5137db15bdfac28446a6853cedf534cd7bc51483d32ea23761ca2",
+    "fixtureVersion": 1,
+    "inputKind": "legacy-generic-render-input",
+    "storyId": "season-pass-cosmic-eclipse-v2",
+    "cardTypeId": "card_type_04"
+  },
+  "fonts": {
+    "repositoryFontFiles": [],
+    "declaredStacks": [
+      "\"DIN Condensed\", \"Bahnschrift\", \"Arial Narrow\", ui-sans-serif, system-ui, sans-serif",
+      "\"IBM Plex Sans Condensed\", \"Arial Narrow\", ui-sans-serif, system-ui, sans-serif",
+      "ui-sans-serif, system-ui, sans-serif",
+      "inherit"
+    ],
+    "installedNamedCandidates": [
+      {
+        "family": "DIN Condensed",
+        "style": "Bold",
+        "path": "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf",
+        "bytes": 212040,
+        "sha256": "36958182a424e1e8a1307b2636a615a6323ce1bbfadda136735ab4fb3bd26ceb"
+      },
+      {
+        "family": "Arial Narrow",
+        "style": "Regular",
+        "path": "/System/Library/Fonts/Supplemental/Arial Narrow.ttf",
+        "bytes": 179492,
+        "sha256": "9e1d881c4e43b51868f5e235ea5a12c838e23cc8df6277df1a3c94e158999826"
+      },
+      {
+        "family": "Arial Narrow",
+        "style": "Bold",
+        "path": "/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf",
+        "bytes": 184420,
+        "sha256": "fcf34b330033e26c06e9bd466bea5a3e4b2f39272972275369beb7d8b257ed57"
+      },
+      {
+        "family": "Arial Narrow",
+        "style": "Italic",
+        "path": "/System/Library/Fonts/Supplemental/Arial Narrow Italic.ttf",
+        "bytes": 184944,
+        "sha256": "f3d0827024939f01f134668c1d25709e56c5a085bd560e33dc598e86203d31d9"
+      },
+      {
+        "family": "Arial Narrow",
+        "style": "Bold Italic",
+        "path": "/System/Library/Fonts/Supplemental/Arial Narrow Bold Italic.ttf",
+        "bytes": 183932,
+        "sha256": "035cfb8b776e7ce27f4c0ea0dc3ca3ccf85c8da5d59595cecddf02de966fb985"
+      }
+    ],
+    "declaredButNoMatchingFontFileFound": [
+      "Bahnschrift",
+      "IBM Plex Sans Condensed"
+    ],
+    "searchRoots": [
+      "/System/Library/Fonts",
+      "/Library/Fonts",
+      "/Users/timotholt/Library/Fonts"
+    ]
+  },
+  "assets": [
+    {
+      "kind": "story-background",
+      "route": "/art/login/editor-temp-bg.png",
+      "path": "public/art/login/editor-temp-bg.png",
+      "bytes": 1832573,
+      "sha256": "b0c87c9a54fe3b5f8ce859433439bf0ca2cd8bc0f212d7a3cd31df5181532044"
+    },
+    {
+      "kind": "surface-texture",
+      "logicalId": "stone04",
+      "route": "/art/textures/stone-local/Stone04.png",
+      "path": "public/art/textures/stone-local/Stone04.png",
+      "bytes": 3005848,
+      "sha256": "3bdb8fc28684016137f07db002d094d21d0e0b6d192897ff190d3748c6a28084"
+    },
+    {
+      "kind": "surface-texture",
+      "logicalId": "stoneGray01",
+      "route": "/art/textures/stone-local/StoneGray01.png",
+      "path": "public/art/textures/stone-local/StoneGray01.png",
+      "bytes": 2975220,
+      "sha256": "15da2cecf80e39ba8665ef2d1c529a9631860e06027d721b2428706c25b0ee91"
+    },
+    {
+      "kind": "edge-wear-mask",
+      "logicalId": "edge-bw-noise-dense",
+      "route": "/art/ui/edge-bw-noise-dense.svg",
+      "path": "public/art/ui/edge-bw-noise-dense.svg",
+      "bytes": 626,
+      "sha256": "504b77d5b0f696784b90ed6a21e6d4690a6abeee23dd580d416b0f80eaa524fd"
+    }
+  ]
+}

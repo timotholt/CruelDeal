@@ -1,5 +1,12 @@
 # Mission Briefing Design Memory
 
+Status: supporting visual/content reference; not an implementation spec
+Authority: `docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> Use this document to recover intent, copy, and proportions. The authoritative
+> V2 semantic, interaction, compiler, DOM, and visual acceptance rules now live
+> in the vertical-slice spec.
+
 Date: 2026-06-02
 Refactor name: `mission-briefing-design-memory`
 
@@ -9,19 +16,16 @@ It is not a backwards-compatibility shim, migration layer, or runtime contract. 
 
 ## Source Anchors
 
-Primary source file:
+Current migration sources:
 
-- `components/screens/MainMaterialScreen.tsx`
+- `components/screens/main-material/mainMaterialNodeTemplates.ts`
+- `components/screens/main-material/mainMaterialFeedModel.ts`
+- `components/screens/main-material/mainMaterialFeedCarousel.tsx`
+- `src/styles/main-material-preview.css`
 
-Important source functions and constants:
-
-- `mockFeedStories`
-- `createMissionBriefingLeftNodes`
-- `createMissionBriefingCardSurface`
-- `createMissionBriefingPanelSurface`
-- `createMissionBriefingBadgeSurface`
-- `createMissionBriefingCtaSurface`
-- `createFeedRegionSurface`
+The earlier `components/screens/MainMaterialScreen.tsx` anchors recorded by this
+memory have since moved or been replaced. Treat old function names elsewhere in
+this file as historical search terms, not current architecture.
 
 ## Restore Prompt
 

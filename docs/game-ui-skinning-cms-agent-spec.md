@@ -1,6 +1,12 @@
 # Game UI Skinning And CMS Agent Spec
 
-Status: active
+Status: supporting server/CMS reference; subordinate as of 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Its preference for trusted bespoke components aligns with the semantic
+> compiler direction. Its `SurfaceOptions` and named-skin shapes are historical
+> inputs, not the canonical appearance graph or compiled artifact contract.
+
 Date: 2026-06-06
 Related:
 

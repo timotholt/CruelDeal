@@ -1,5 +1,12 @@
 # Main Material Content-Box Renderer Architecture
 
+Status: superseded for new implementation on 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Historical renderer evidence only. Its fixed node frame/surface/content shape
+> does not define the canonical semantic document, Paint IR, or emitted DOM.
+> Consult it only when reproducing a specific existing Mission V2 behavior.
+
 Date: 2026-06-16
 
 ## Objective

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "type": "MissionBriefing",
+  "id": "mission.bound-example",
+  "layoutVariant": "contract-left",
+  "slots": {
+    "availabilityStatus": {
+      "binding": {
+        "key": "mission.status"
+      }
+    },
+    "title": {
+      "binding": {
+        "key": "mission.title"
+      }
+    },
+    "body": {
+      "binding": {
+        "key": "mission.body"
+      }
+    },
+    "terms": {
+      "deposit": {
+        "amount": {
+          "binding": {
+            "key": "mission.deposit"
+          }
+        },
+        "currencyCode": "credits"
+      },
+      "successReward": {
+        "amount": {
+          "binding": {
+            "key": "mission.successReward"
+          }
+        },
+        "currencyCode": "credits"
+      }
+    },
+    "primaryAction": {
+      "schemaVersion": 1,
+      "type": "FingerprintHoldAction",
+      "id": "mission.bound-example.accept",
+      "label": {
+        "binding": {
+          "key": "mission.actionLabel"
+        }
+      },
+      "actionId": "mission.accept-terms",
+      "holdDurationMs": 1400,
+      "disabled": false,
+      "completionMessage": {
+        "binding": {
+          "key": "mission.completionMessage"
+        }
+      },
+      "appearance": {
+        "idle": "mission-v2-r0.primary-action.idle",
+        "holding": "mission-v2-r0.primary-action.holding",
+        "complete": "mission-v2-r0.primary-action.complete",
+        "disabled": "mission-v2-r0.primary-action.disabled"
+      }
+    }
+  },
+  "appearance": {
+    "frame.idle": "mission-v2-r0.frame.idle",
+    "panel.idle": "mission-v2-r0.panel.idle",
+    "terms.idle": "mission-v2-r0.terms.idle",
+    "primary-action.idle": "mission-v2-r0.primary-action.idle"
+  }
+}

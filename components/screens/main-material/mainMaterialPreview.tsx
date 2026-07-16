@@ -1,4 +1,4 @@
-import { createSignal, JSX } from 'solid-js';
+import { createSignal, JSX, Show } from 'solid-js';
 import {
   MaterialPanel,
   type MaterialRecipe,
@@ -34,6 +34,10 @@ import { MaterialDomRegistryTarget, type CssEmissionProbe } from './mainMaterial
 import { ChromeFeedNodeTree, type ChromeFeedNodeRenderContext } from './mainMaterialChromeFeedTree';
 import { FeedCarousel } from './mainMaterialFeedCarousel';
 import { feedLayoutPreviewCssVars } from './mainMaterialFeedLayoutControls';
+import type { UiActionEventHandler } from '../../ui/semantic-runtime/actions/UiActionEvent';
+import { MissionBriefingRuntime } from '../../ui/semantic-runtime/mission-briefing/MissionBriefingRuntime';
+import { MissionBriefingScreenContext } from '../../ui/semantic-runtime/mission-briefing/MissionBriefingScreenContext';
+import type { MissionBriefingComponentPlanV1 } from '../../ui/semantic-compiler/mission-briefing/missionBriefingComponentCompiler';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
@@ -370,6 +374,9 @@ export const MainMaterialPreview = (props: {
   cssProbe?: CssEmissionProbe;
   surfacePropsForPart: (part: MainPartId, recipe: MaterialRecipe, state: MaterialRecipeState) => SurfaceOptions;
   buttonPropsForRecipe: (recipe: MaterialRecipe, index: number, state: MaterialRecipeState) => SurfaceOptions;
+  onUiAction?: UiActionEventHandler;
+  missionBriefingPlan?: MissionBriefingComponentPlanV1;
+  missionBriefingActive?: boolean;
 }) => {
   const [hoveredTargetId, setHoveredTargetId] = createSignal<string | null>(null);
   const [pressedTargetId, setPressedTargetId] = createSignal<string | null>(null);
@@ -660,29 +667,53 @@ export const MainMaterialPreview = (props: {
         <MaterialDomRegistryTarget
           targetId="titleBlock"
           role="static"
-          class="main-material-frame main-material-frame--editor"
+          class="main-material-frame main-material-frame--editor mission-briefing-product-shell"
         >
-          <ChromeFeedNodeTree node={topBarNode} context={topBarNodeContext} cssProbe={props.cssProbe} />
+          <Show when={!props.missionBriefingActive}>
+            <ChromeFeedNodeTree node={topBarNode} context={topBarNodeContext} cssProbe={props.cssProbe} />
+          </Show>
 
-          <main class="main-material-scroll">
-            <FeedCarousel
-              stories={props.feedStories}
-              cardTypes={props.feedCardTypes}
-              activeStoryId={props.activeFeedStoryId}
-              onActiveStoryChange={props.onActiveFeedStoryChange}
-              class={props.selectedClass('feedCards')}
-              feed={props.feed}
-              surfaceStateForTarget={feedSurfaceStateForTarget}
-              storyImageOverrides={props.feedStoryImageOverrides}
-              selectedFeedTargetClass={props.selectedFeedTargetClass}
-              cssProbe={props.cssProbe}
-              surfacePropsForRecipe={(recipe, state) => props.surfacePropsForPart('feedCards', recipe, state)}
-              buttonPropsForRecipe={(recipe, state) => props.buttonPropsForRecipe(recipe, 0, state)}
-              onInteractiveDragStart={onPhonePointerUp}
+          <Show when={!props.missionBriefingActive}>
+            <main class="main-material-scroll">
+              <FeedCarousel
+                stories={props.feedStories}
+                cardTypes={props.feedCardTypes}
+                activeStoryId={props.activeFeedStoryId}
+                onActiveStoryChange={props.onActiveFeedStoryChange}
+                class={props.selectedClass('feedCards')}
+                feed={props.feed}
+                surfaceStateForTarget={feedSurfaceStateForTarget}
+                storyImageOverrides={props.feedStoryImageOverrides}
+                selectedFeedTargetClass={props.selectedFeedTargetClass}
+                cssProbe={props.cssProbe}
+                surfacePropsForRecipe={(recipe, state) => props.surfacePropsForPart('feedCards', recipe, state)}
+                buttonPropsForRecipe={(recipe, state) => props.buttonPropsForRecipe(recipe, 0, state)}
+                onInteractiveDragStart={onPhonePointerUp}
+                onUiAction={props.onUiAction}
+              />
+            </main>
+          </Show>
+
+          <Show when={props.missionBriefingPlan && props.missionBriefingActive}>
+            <MissionBriefingScreenContext
+              data={{
+                playerName: 'NETRUNNER_07',
+                level: 24,
+                currentXp: 18450,
+                targetXp: 24000,
+                credits: 2450,
+                data: 870,
+              }}
             />
-          </main>
+            <MissionBriefingRuntime
+              plan={props.missionBriefingPlan!}
+              onAction={(event) => props.onUiAction?.(event)}
+            />
+          </Show>
 
-          <ChromeFeedNodeTree node={bottomChromeNode} context={bottomChromeNodeContext} cssProbe={props.cssProbe} />
+          <Show when={!props.missionBriefingActive}>
+            <ChromeFeedNodeTree node={bottomChromeNode} context={bottomChromeNodeContext} cssProbe={props.cssProbe} />
+          </Show>
         </MaterialDomRegistryTarget>
       </div>
     </div>

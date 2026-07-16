@@ -1,0 +1,101 @@
+.mission-v2-screen-context {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  color: #dce4e8;
+  font-family: "IBM Plex Sans Condensed", "Arial Narrow", ui-sans-serif, sans-serif;
+  pointer-events: none;
+}
+
+.mission-v2-proof-frame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.mission-v2-proof-frame > .main-material-phone {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  box-shadow: none;
+}
+
+.mission-v2-proof-frame *,
+.mission-v2-proof-frame *::before,
+.mission-v2-proof-frame *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.mission-v2-screen-context__media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  filter: grayscale(.82) sepia(.28) hue-rotate(145deg) saturate(2.2) brightness(.82) contrast(1.15);
+}
+
+.mission-v2-screen-context::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(0 8 13 / .22), transparent 58%), linear-gradient(180deg, rgb(0 8 13 / .12), transparent 28% 78%, rgb(0 8 13 / .3));
+  pointer-events: none;
+}
+
+.mission-v2-player-summary,
+.mission-v2-resource-summary,
+.mission-v2-activity-navigation,
+.mission-v2-primary-navigation {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 1px solid rgb(196 220 230 / .55);
+  background: linear-gradient(135deg, rgb(3 17 25 / .88), rgb(3 15 22 / .72));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 8px 20px rgb(0 0 0 / .3);
+  backdrop-filter: blur(8px) saturate(120%);
+  pointer-events: auto;
+}
+
+.mission-v2-player-summary { left: 1.7%; top: 1.7%; width: 46.1%; height: 15.3%; display: grid; grid-template-columns: 42% 1fr; clip-path: polygon(0 12px,12px 0,calc(100% - 30px) 0,100% 30px,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%); }
+.mission-v2-player-summary__portrait { width: 100%; height: 100%; object-fit: cover; object-position: left center; border-right: 1px solid rgb(202 222 230 / .45); }
+.mission-v2-player-summary__identity { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 6%; padding: 8% 17% 8% 10%; }
+.mission-v2-player-summary__identity strong { overflow: hidden; font-size: 2.75cqw; font-weight: 600; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
+.mission-v2-player-summary__identity span { font-size: 2.3cqw; letter-spacing: .04em; white-space: nowrap; }
+.mission-v2-player-summary progress { width: 100%; height: 6px; border: 0; accent-color: #e9a900; }
+.mission-v2-player-summary progress::-webkit-progress-bar { background: #07121a; }
+.mission-v2-player-summary progress::-webkit-progress-value { background: #e9a900; }
+.mission-v2-player-summary > .mission-v2-shell-icon { position: absolute; top: 12%; right: 3.5%; width: 7%; height: 20%; color: #9eaaaf; }
+
+.mission-v2-resource-summary { left: 49.5%; top: 1.7%; width: 48.8%; height: 7%; display: grid; grid-template-columns: 1fr 1fr 15%; border-radius: 14px; }
+.mission-v2-resource { position: relative; display: grid; grid-template-columns: 28% 1fr; grid-template-rows: 58% 42%; align-items: center; padding: 5% 8%; border-right: 1px solid rgb(210 226 232 / .35); }
+.mission-v2-resource i { grid-row: 1 / 3; width: 2.8cqw; aspect-ratio: 1; border: 4px solid currentColor; transform: rotate(45deg); }
+.mission-v2-resource--credits i { color: #e9a900; box-shadow: inset 0 0 0 4px #e9a900; }
+.mission-v2-resource--data i { color: #0099e8; box-shadow: inset 0 0 0 4px #0099e8; }
+.mission-v2-resource strong { font-size: 3.2cqw; line-height: 1; }
+.mission-v2-resource span { font-size: 1.9cqw; letter-spacing: .08em; text-transform: uppercase; }
+.mission-v2-resource-summary > button { border: 0; background: transparent; color: #e8ecee; }
+
+.mission-v2-activity-navigation { left: 49.5%; top: 10.2%; width: 48.8%; height: 6.7%; display: grid; grid-template-columns: repeat(4, 1fr); border-radius: 14px; }
+.mission-v2-activity-navigation button { position: relative; display: grid; place-items: center; gap: 4%; border: 0; border-right: 1px solid rgb(210 226 232 / .3); background: transparent; color: #e4e9eb; font: inherit; font-size: 2cqw; letter-spacing: .04em; text-transform: uppercase; }
+.mission-v2-activity-navigation button:last-child { border-right: 0; }
+.mission-v2-activity-navigation__icon { position: relative; width: 3.3cqw; height: 3.3cqw; }
+.mission-v2-activity-navigation__icon i { position: absolute; top: -12%; right: -18%; width: 7px; height: 7px; border-radius: 50%; background: #e9a900; }
+
+.mission-v2-primary-navigation { left: 1.7%; top: 86.4%; width: 96.2%; height: 10.9%; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.2%; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.mission-v2-primary-navigation button { position: relative; display: grid; grid-template-rows: 58% 42%; place-items: center; border: 1px solid rgb(196 220 230 / .55); border-radius: 14px; background: linear-gradient(135deg, rgb(3 17 25 / .9), rgb(3 15 22 / .78)); color: #c4ccd0; font: inherit; font-size: 2.3cqw; letter-spacing: .05em; text-transform: uppercase; box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 8px 20px rgb(0 0 0 / .3); backdrop-filter: blur(8px) saturate(120%); }
+.mission-v2-primary-navigation button.is-active { border-color: rgb(247 184 38 / .9); background: linear-gradient(145deg, rgb(120 72 4 / .9), rgb(54 35 8 / .88)); color: #ffc32d; box-shadow: inset 0 0 22px rgb(255 183 24 / .28), 0 0 16px rgb(255 173 10 / .35); }
+.mission-v2-primary-navigation button.is-active::after { content: ""; position: absolute; bottom: -6px; width: 10px; height: 10px; border: 2px solid #e9a900; background: #17202a; transform: rotate(45deg); }
+.mission-v2-primary-navigation .mission-v2-shell-icon { width: 5.2cqw; height: 5.2cqw; }
+
+.mission-v2-shell-icon { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mission-v2-screen-context *, .mission-v2-screen-context *::before, .mission-v2-screen-context *::after { transition: none !important; animation: none !important; }
+}

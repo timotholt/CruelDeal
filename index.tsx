@@ -1,5 +1,13 @@
 import { render } from 'solid-js/web';
 import App from './App';
+import '@fontsource/ibm-plex-sans-condensed/latin-400.css';
+import '@fontsource/ibm-plex-sans-condensed/latin-600.css';
+import '@fontsource/ibm-plex-sans-condensed/latin-700.css';
+import '@fontsource/barlow-condensed/latin-400.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-700.css';
 // The /play game's CSS (ported wholesale from the vfx-engine demo).
 // Imported BEFORE index.css so Tailwind's @import and the font @import
 // in index.css are not split across other statements in the bundled output.

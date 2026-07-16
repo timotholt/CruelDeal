@@ -867,6 +867,16 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   transform: translate(-50%, 58px);
 }
 
+.main-material-fingerprint-hold-node--reduced-motion .main-material-fingerprint-hold-label::before,
+.main-material-fingerprint-hold-node--reduced-motion .main-material-fingerprint-hold-label::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.main-material-fingerprint-hold-node--reduced-motion.main-material-fingerprint-hold-node--holding .main-material-fingerprint-hold-label::after {
+  transform: translate(-50%, 25px);
+}
+
 @keyframes main-material-fingerprint-scan {
   0% {
     transform: translate(-50%, -8px);

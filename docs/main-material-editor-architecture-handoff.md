@@ -1,5 +1,12 @@
 # Main Material Editor Architecture Handoff
 
+Status: superseded as a restart plan on 2026-07-15
+Authorities: `docs/semantic-ui-authoring-compiler-spec.md` and
+`docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> This remains implementation history. Do not restart from its control-trust
+> plan or use module extraction/test count as the measure of product progress.
+
 Last updated: 2026-06-12
 
 ## Goal

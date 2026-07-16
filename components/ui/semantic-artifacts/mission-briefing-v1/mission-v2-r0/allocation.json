@@ -1,0 +1,320 @@
+{
+  "browserEvidence": "Google Chrome 150.0.7871.124",
+  "entries": [
+    {
+      "cssProperties": [
+        "clip-path"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "background-image"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "base",
+      "reason": "Folded into the semantic host background stack.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [
+        "backdrop-filter",
+        "-webkit-backdrop-filter",
+        "background-image"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "glass",
+      "reason": "Native Chromium backdrop filtering on the semantic host.",
+      "slot": "host.backdrop-filter"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "hex",
+      "reason": "Procedural texture folded into the semantic host background stack.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "reflection",
+      "reason": "Directional reflection is folded into the semantic host background stack.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "rough-edge",
+      "reason": "Deterministic rough edge paint is folded into the panel host background stack.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "clip-path",
+        "background-color",
+        "mask"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "hairline",
+      "reason": "Chamfer-following hairline uses the host before paint slot.",
+      "slot": "host::before"
+    },
+    {
+      "cssProperties": [
+        "box-shadow"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.panel.idle",
+      "layerId": "depth",
+      "reason": "Native box shadow on the semantic host.",
+      "slot": "host.box-shadow"
+    },
+    {
+      "cssProperties": [
+        "border-radius"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.terms.idle",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "border"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.terms.idle",
+      "layerId": "divider",
+      "reason": "Native border on the semantic host.",
+      "slot": "host.border"
+    },
+    {
+      "cssProperties": [
+        "border-radius"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.idle",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "mask-image",
+        "-webkit-mask-image",
+        "background-color",
+        "opacity"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.idle",
+      "layerId": "fingerprint",
+      "reason": "Fingerprint glyph uses the action host before paint slot.",
+      "slot": "host::before"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.idle",
+      "layerId": "brackets",
+      "reason": "Fingerprint brackets are one vector background layer on the semantic action host.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [],
+      "enabled": false,
+      "graphId": "mission-v2-r0.primary-action.idle",
+      "layerId": "scan",
+      "reason": "Disabled authored layers emit no residual paint rule.",
+      "slot": "omitted"
+    },
+    {
+      "cssProperties": [
+        "border-radius"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.holding",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "mask-image",
+        "-webkit-mask-image",
+        "background-color",
+        "opacity"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.holding",
+      "layerId": "fingerprint",
+      "reason": "Fingerprint glyph uses the action host before paint slot.",
+      "slot": "host::before"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.holding",
+      "layerId": "brackets",
+      "reason": "Fingerprint brackets are one vector background layer on the semantic action host.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "background-image",
+        "box-shadow",
+        "transform"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.holding",
+      "layerId": "scan",
+      "reason": "Progress scan uses the action host after paint slot.",
+      "slot": "host::after"
+    },
+    {
+      "cssProperties": [
+        "box-shadow"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.holding",
+      "layerId": "glow",
+      "reason": "Localized glow shares the semantic host shadow stack.",
+      "slot": "host.box-shadow"
+    },
+    {
+      "cssProperties": [
+        "border-radius"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.complete",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "mask-image",
+        "-webkit-mask-image",
+        "background-color",
+        "opacity"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.complete",
+      "layerId": "fingerprint",
+      "reason": "Fingerprint glyph uses the action host before paint slot.",
+      "slot": "host::before"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.complete",
+      "layerId": "brackets",
+      "reason": "Fingerprint brackets are one vector background layer on the semantic action host.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [],
+      "enabled": false,
+      "graphId": "mission-v2-r0.primary-action.complete",
+      "layerId": "scan",
+      "reason": "Disabled authored layers emit no residual paint rule.",
+      "slot": "omitted"
+    },
+    {
+      "cssProperties": [
+        "box-shadow"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.complete",
+      "layerId": "glow",
+      "reason": "Localized glow shares the semantic host shadow stack.",
+      "slot": "host.box-shadow"
+    },
+    {
+      "cssProperties": [
+        "border-radius"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.disabled",
+      "layerId": "$geometry",
+      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
+      "slot": "host.clip-path"
+    },
+    {
+      "cssProperties": [
+        "content",
+        "mask-image",
+        "-webkit-mask-image",
+        "background-color",
+        "opacity"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.disabled",
+      "layerId": "fingerprint",
+      "reason": "Fingerprint glyph uses the action host before paint slot.",
+      "slot": "host::before"
+    },
+    {
+      "cssProperties": [
+        "background-image",
+        "background-size",
+        "background-repeat"
+      ],
+      "enabled": true,
+      "graphId": "mission-v2-r0.primary-action.disabled",
+      "layerId": "brackets",
+      "reason": "Fingerprint brackets are one vector background layer on the semantic action host.",
+      "slot": "host.background"
+    },
+    {
+      "cssProperties": [],
+      "enabled": false,
+      "graphId": "mission-v2-r0.primary-action.disabled",
+      "layerId": "scan",
+      "reason": "Disabled authored layers emit no residual paint rule.",
+      "slot": "omitted"
+    }
+  ],
+  "helpers": [],
+  "schemaVersion": 1,
+  "targetProfile": "chromium-primary-v1"
+}

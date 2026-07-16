@@ -1,6 +1,12 @@
 # SolidJS Server-Driven UI And Downloadable Skins Migration Plan
 
-Status: active
+Status: supporting server-delivery migration plan; subordinate as of 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Keep the trusted-data and shared-runtime principles. The generic
+> `UiNodePayload` and material emission shapes below are migration-era examples,
+> not the canonical semantic component or appearance compiler schema.
+
 Date: 2026-06-03
 
 ## Goal

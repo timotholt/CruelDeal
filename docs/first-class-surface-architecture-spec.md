@@ -1,6 +1,12 @@
 # First-Class Surface Architecture Spec
 
-Status: active
+Status: superseded for new implementation on 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Historical architecture only. Its surface/runtime observations may help with
+> migration, but its flat surface contract is not the canonical authored model.
+> Do not begin new UI authoring work from this document.
+
 Date: 2026-06-06
 Supersedes:
 

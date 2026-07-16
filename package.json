@@ -13,10 +13,15 @@
     "engine:cli": "tsx services/playgame/engine/cli/main.ts",
     "cards:generate": "tsx scripts/cards/generate-card-modules.ts",
     "cards:generate:check": "tsx scripts/cards/generate-card-modules.ts --check",
+    "ui:mission-v2:generate": "tsx scripts/generate-mission-v2-artifact.ts",
+    "ui:mission-v2:generate:check": "tsx scripts/generate-mission-v2-artifact.ts --check",
     "cards:rename": "tsx scripts/cards/rename-card.ts",
     "cards:validate": "tsx services/playgame/engine/manifest/validate-cards.ts"
   },
   "dependencies": {
+    "@fontsource/barlow-condensed": "^5.2.8",
+    "@fontsource/ibm-plex-sans-condensed": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@google/genai": "^1.30.0",
     "@motionone/solid": "^10.16.4",
     "@svgdotjs/svg.js": "^3.2.5",

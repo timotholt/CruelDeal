@@ -1,7 +1,13 @@
 # Editor Architecture Convergence Checkpoint
 
 Last Updated: 2026-06-12
-Status: active - editor control trust and proof convergence
+Status: historical implementation checkpoint; superseded as an active plan on 2026-07-15
+Authorities: `docs/semantic-ui-authoring-compiler-spec.md` and
+`docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> Preserve this file as evidence of completed experiments and migration traps.
+> Its control-trust lane, DOM-scraping export, and small contract-extraction work
+> are not the current goal or progress metric.
 
 ## Goal
 

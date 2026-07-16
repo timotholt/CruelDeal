@@ -1,5 +1,13 @@
 # Main Material Editor Control Contract Spec
 
+Status: superseded as a governing plan on 2026-07-15
+Authorities: `docs/semantic-ui-authoring-compiler-spec.md` and
+`docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> Keep this as a historical control inventory. New work is not accepted because
+> every control has a test; it is accepted when a vertical-slice scorecard
+> criterion changes from failing to passing.
+
 Last updated: 2026-06-12
 
 ## Goal

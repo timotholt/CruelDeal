@@ -1,0 +1,69 @@
+{
+  "artifactId": "mission-v2-r0",
+  "artifactSetSha256": "6ec9544ada80a890d90fc134b8837a1685d1aa534ac0b2891f7c6b34f20f6465",
+  "artifactVersion": 1,
+  "assets": [
+    {
+      "id": "fingerprint-svgrepo-v1",
+      "kind": "vendored-svg-mask",
+      "owner": "primaryAction::before",
+      "path": "/art/ui/fingerprint-svgrepo-v1.svg",
+      "sha256": "114106a40b58a4728893fbb5799aed998e462ac240126a3c8f275d61a5f114f8"
+    },
+    {
+      "id": "hex-grid-v1",
+      "kind": "embedded-svg-texture",
+      "owner": "panel.background"
+    }
+  ],
+  "browserEvidence": "Google Chrome 150.0.7871.124",
+  "compilerVersion": "semantic-ui-v1",
+  "componentSchemaVersion": 1,
+  "componentType": "MissionBriefing",
+  "files": [
+    {
+      "bytes": 9114,
+      "path": "allocation.json",
+      "sha256": "d788f3e2ae4521c7afcf52420224ab2d7f52a21794d0f3841a7339b8b354aa54"
+    },
+    {
+      "bytes": 17471,
+      "path": "appearance.css",
+      "sha256": "7a805baba1af3b92c5fa8fc43a08c61ecc30167153c18f72a5460ea38798cf22"
+    },
+    {
+      "bytes": 3492,
+      "path": "component-plan.json",
+      "sha256": "1ee897be06c1006ce52bc3cd27bb202ffac041dfd7cc1b3489a8ab672ecf30f1"
+    },
+    {
+      "bytes": 280,
+      "path": "diagnostics.json",
+      "sha256": "3d204d842cdefd0619bc4189776ad03da4f36fe7eec97ab16651b4127ec507d8"
+    },
+    {
+      "bytes": 2412,
+      "path": "reference.html",
+      "sha256": "6cf61a03de8c7d6394d9fc50b6fdf4fcf60a806a236fa9a915f141e32c6fa075"
+    }
+  ],
+  "fonts": [
+    {
+      "family": "DIN Condensed",
+      "sha256": "36958182a424e1e8a1307b2636a615a6323ce1bbfadda136735ab4fb3bd26ceb",
+      "style": "Bold"
+    },
+    {
+      "family": "Arial Narrow",
+      "sha256": "9e1d881c4e43b51868f5e235ea5a12c838e23cc8df6277df1a3c94e158999826",
+      "style": "Regular"
+    }
+  ],
+  "inputs": {
+    "appearanceSha256": "c310e5207e016c57072f39abe6f419f2da0f65800a561c177a8a4023a4cc7174",
+    "layoutCssSha256": "7f94425e3296574a7be06e053e68508d325c9ad8b7c10684545aaca10ca0d36c",
+    "sourceSha256": "507703c8d49ed2a4d3a9f8a0aba1fb44b427e7e5c993ed1fec967bf5cb90ded7"
+  },
+  "schemaVersion": 1,
+  "targetProfile": "chromium-primary-v1"
+}

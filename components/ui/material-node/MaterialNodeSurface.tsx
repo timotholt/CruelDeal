@@ -7,6 +7,7 @@ import {
   type MaterialRecipeState,
 } from '../material-lab';
 import type { MaterialNodeRecipe, MaterialNodeRenderContext, MaterialNodeRole } from './MaterialNodeTypes';
+import { FingerprintHoldAction } from '../semantic-runtime/fingerprint-hold/FingerprintHoldAction';
 
 export const materialNodeSurfaceProps = (
   node: MaterialNodeRecipe,
@@ -55,6 +56,17 @@ export const MaterialNodeSurface = (props: {
           padded={false}
           class={props.class}
           rootProps={{ style: { position: 'absolute', inset: '0', width: '100%', height: '100%', 'z-index': '0' } }}
+        />
+      </Match>
+      <Match when={props.node.kind === 'button' && props.node.interaction?.type === 'FingerprintHoldActionRuntimePlanV1'}>
+        <FingerprintHoldAction
+          plan={props.node.interaction!}
+          surfaceProps={buttonProps()}
+          size={props.context.buttonSizeForNode?.(props.node)}
+          fullWidth={props.context.buttonFullWidthForNode?.(props.node) ?? false}
+          class={props.class}
+          label={resolvedChildren()}
+          onAction={(event) => props.context.onUiAction?.(event)}
         />
       </Match>
       <Match when={props.node.kind === 'button'}>

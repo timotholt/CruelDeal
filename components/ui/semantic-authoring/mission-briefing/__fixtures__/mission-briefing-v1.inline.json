@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "type": "MissionBriefing",
+  "id": "mission.data-extraction",
+  "layoutVariant": "contract-left",
+  "slots": {
+    "availabilityStatus": {
+      "inline": {
+        "format": "plain",
+        "value": "Available Contract"
+      }
+    },
+    "title": {
+      "inline": {
+        "format": "cruel-markup-v1",
+        "value": "[bright]Data[/bright]\n[muted]Extraction[/muted]"
+      }
+    },
+    "body": {
+      "inline": {
+        "format": "plain",
+        "value": "Extract encrypted corporate data from Solace Corp mainframe cluster."
+      }
+    },
+    "progress": {
+      "completed": 1,
+      "total": 4
+    },
+    "terms": {
+      "deposit": {
+        "amount": {
+          "literal": 200
+        },
+        "currencyCode": "credits"
+      },
+      "successReward": {
+        "amount": {
+          "literal": 800
+        },
+        "currencyCode": "credits"
+      }
+    },
+    "primaryAction": {
+      "schemaVersion": 1,
+      "type": "FingerprintHoldAction",
+      "id": "mission.data-extraction.accept",
+      "label": {
+        "inline": {
+          "format": "plain",
+          "value": "Accept Terms"
+        }
+      },
+      "actionId": "mission.accept-terms",
+      "holdDurationMs": 1400,
+      "disabled": false,
+      "appearance": {
+        "idle": "mission-v2-r0.primary-action.idle",
+        "holding": "mission-v2-r0.primary-action.holding",
+        "complete": "mission-v2-r0.primary-action.complete",
+        "disabled": "mission-v2-r0.primary-action.disabled"
+      }
+    }
+  },
+  "appearance": {
+    "frame.idle": "mission-v2-r0.frame.idle",
+    "panel.idle": "mission-v2-r0.panel.idle",
+    "terms.idle": "mission-v2-r0.terms.idle",
+    "primary-action.idle": "mission-v2-r0.primary-action.idle"
+  }
+}

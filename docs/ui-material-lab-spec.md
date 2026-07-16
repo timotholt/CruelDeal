@@ -1,5 +1,12 @@
 # UI Material Lab Spec
 
+Status: supporting visual/legacy-lab reference; not an architectural authority
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> `/uitest` is not a second production editor. Preserve useful visual
+> observations, but do not add another production schema, renderer, or export
+> path here.
+
 ## Purpose
 
 Create a temporary development route at `/uitest` for tuning the next Cruel Deal UI material system before replacing production screens.

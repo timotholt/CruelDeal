@@ -1,0 +1,12 @@
+{
+  "cases": [
+    { "name": "unknown-target", "setPath": "targetProfile", "value": "latest-browser" },
+    { "name": "unknown-state", "setPath": "graphs.0.state", "value": "pressed" },
+    { "name": "unknown-layer", "setPath": "graphs.0.layers.0.type", "value": "css" },
+    { "name": "opacity-over-one", "setPath": "graphs.0.layers.0.opacity", "value": 1.1 },
+    { "name": "raw-mask-url", "setPath": "graphs.2.layers.0.assetId", "value": "https://example.com/fingerprint.svg" },
+    { "name": "mask-owned-by-panel", "setPath": "graphs.2.part", "value": "panel" },
+    { "name": "reflection-range-reversed", "setPath": "graphs.0.layers.3.startPct", "value": 50 },
+    { "name": "duplicate-layer-id", "setPath": "graphs.0.layers.1.id", "value": "base" }
+  ]
+}

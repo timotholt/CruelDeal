@@ -1,8 +1,16 @@
 # Feed Model Unification Refactor Spec
 
-Status: active
+Status: superseded as a governing refactor on 2026-07-15
+Authorities: `docs/semantic-ui-authoring-compiler-spec.md` and
+`docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> The duplicate-model evidence remains useful. Do not collapse the Feed model
+> into another universal generic node contract as an independent milestone.
+> Migrate only the bounded `card_type_04` edge needed by the Mission Briefing
+> vertical slice, into semantic components and appearance graphs.
+
 Date: 2026-06-09
-Parent: `docs/first-class-surface-architecture-spec.md`
+Historical parent: `docs/first-class-surface-architecture-spec.md`
 Related: `docs/main-material-editor-architecture-handoff.md`, `docs/agent-checkpoints/editor-architecture-convergence.md`
 Supersedes (on completion): `docs/feed-card-type-system-spec.md`
 

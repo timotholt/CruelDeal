@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-16",
+  "editorUrl": "http://127.0.0.1:4001/main-material",
+  "component": "MissionBriefing",
+  "result": "pass",
+  "browserWorkflow": [
+    {
+      "operation": "edit-content",
+      "inputs": {
+        "title": "DATA EXTRACTION OMEGA",
+        "body": "Extract encrypted corporate data from the Solace Corp omega mainframe cluster.",
+        "successRewardCredits": 875
+      },
+      "observed": "The live semantic runtime updated all three values."
+    },
+    {
+      "operation": "edit-appearance",
+      "inputs": {
+        "panelGlassBlurPx": 11,
+        "panelReflectionOpacity": 0.22,
+        "holdingGlowOpacity": 0.65,
+        "panelReflectionMovedUp": true,
+        "panelHexLayerEnabled": false
+      },
+      "observed": "The live paint compiler regenerated the runtime CSS from the edited graph."
+    },
+    {
+      "operation": "enforce-required-function",
+      "input": "remove title",
+      "observed": "MISSION_REQUIRED_SLOT denial; source and runtime title remained present."
+    },
+    {
+      "operation": "edit-optional-slots",
+      "input": "hide/restore availability and restore/hide progress",
+      "observed": "Optional slots changed through semantic commands without changing component identity."
+    },
+    {
+      "operation": "undo-redo",
+      "observed": "Undo restored progress and enabled redo; redo removed it again."
+    },
+    {
+      "operation": "compile-run",
+      "observed": {
+        "status": "Compiled semantic-ui-v1; preview pinned to artifact plan",
+        "compiledPlanVersion": "semantic-ui-v1",
+        "paintHelperElements": 0,
+        "actionChildElements": 0
+      }
+    },
+    {
+      "operation": "cancel-fingerprint-hold",
+      "observed": "An immediate browser-controlled press returned to idle without dispatch."
+    },
+    {
+      "operation": "restore-trial-document",
+      "observed": "Twelve undo operations restored the pre-proof title, body, 800 CR reward, optional-slot set, and appearance; undo was disabled."
+    }
+  ],
+  "automatedProof": {
+    "command": "npx vitest run components/ui/semantic-authoring/mission-briefing components/ui/semantic-compiler components/ui/semantic-runtime",
+    "testFiles": 11,
+    "tests": 67,
+    "result": "pass",
+    "holdCompletionCoverage": "Controller and compiled runtime tests prove completed pointer/keyboard holds dispatch exactly one typed UiActionEvent and cancellation dispatches none."
+  },
+  "artifactCheck": {
+    "command": "npm run ui:mission-v2:generate:check",
+    "result": "pass"
+  },
+  "productionBuild": {
+    "command": "npm run build",
+    "result": "pass"
+  },
+  "remainingBlocker": "M9 visual conformance still requires the approved R0 server-room background and font identities, which are not present in the repository."
+}

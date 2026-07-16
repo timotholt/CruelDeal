@@ -1,0 +1,20 @@
+{
+  "proofRoutePresent": true,
+  "semanticRegions": {
+    "playerSummary": 1,
+    "resources": 1,
+    "activityNavigation": 1,
+    "primaryNavigation": 1,
+    "missionBriefing": 1
+  },
+  "missionNormalizedBounds": {
+    "left": 0.01099,
+    "top": 0.305,
+    "width": 0.486,
+    "height": 0.525
+  },
+  "missionButtons": 1,
+  "primaryActionChildren": 0,
+  "paintHelperElements": 0,
+  "browserConsoleErrors": 0
+}

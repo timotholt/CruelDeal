@@ -1,6 +1,12 @@
 # Surface CSS Extraction — span layers → 3-element allocation
 
-Status: step-1 deliverable of `docs/surface-emitter-rewrite-spec.md`
+Status: superseded for new implementation on 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Historical CSS inventory only. Do not implement the fixed three-element
+> allocation described below. The semantic compiler allocates each appearance
+> graph to target-specific host CSS, pseudo-elements, or justified helpers.
+
 Date: 2026-06-09
 Source of truth: `src/styles/ui-material-lab.css` lines 916–1584 (the working span renderer).
 

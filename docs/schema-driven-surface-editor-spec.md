@@ -1,8 +1,14 @@
 # Schema-Driven Surface Editor Spec
 
-Status: active
+Status: superseded for new implementation on 2026-07-15
+Authority: `docs/semantic-ui-authoring-compiler-spec.md`
+
+> Historical editor strategy only. Generated controls may be useful, but a
+> validator/field-metadata pair is not the product architecture or a milestone.
+> New work is measured by the Mission Briefing vertical slice.
+
 Date: 2026-06-06
-Parent: `docs/first-class-surface-architecture-spec.md`
+Historical parent: `docs/first-class-surface-architecture-spec.md`
 Related: `docs/surface-composition-authoring-spec.md`
 Supersedes:
 

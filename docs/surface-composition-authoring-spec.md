@@ -1,6 +1,14 @@
 # Surface Composition Authoring Spec
 
-Status: active
+Status: superseded on 2026-07-15
+Authorities: `docs/semantic-ui-authoring-compiler-spec.md` and
+`docs/mission-briefing-v2-vertical-slice-spec.md`
+
+> Historical composition strategy only. Generic node trees remain useful as an
+> implementation technique, but they are not allowed to erase functional
+> component identity. Mission Briefing and fingerprint behavior now follow typed
+> semantic contracts.
+
 Date: 2026-06-09
 
 Related specs:

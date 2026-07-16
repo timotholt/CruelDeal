@@ -1,0 +1,16 @@
+{
+  "cases": [
+    { "name": "missing-title", "removePath": "slots.title" },
+    { "name": "missing-body", "removePath": "slots.body" },
+    { "name": "missing-terms", "removePath": "slots.terms" },
+    { "name": "missing-primary-action", "removePath": "slots.primaryAction" },
+    { "name": "unknown-slot", "setPath": "slots.genericButton", "value": { "inline": { "format": "plain", "value": "No" } } },
+    { "name": "generic-primary-action", "setPath": "slots.primaryAction", "value": { "schemaVersion": 1, "type": "Button", "id": "generic", "label": "Accept" } },
+    { "name": "rich-text-terms", "setPath": "slots.terms", "value": { "inline": { "format": "plain", "value": "Deposit 200; success 800" } } },
+    { "name": "hold-too-short", "setPath": "slots.primaryAction.holdDurationMs", "value": 399 },
+    { "name": "hold-too-long", "setPath": "slots.primaryAction.holdDurationMs", "value": 5001 },
+    { "name": "negative-currency", "setPath": "slots.terms.deposit.amount.literal", "value": -1 },
+    { "name": "progress-over-total", "setPath": "slots.progress", "value": { "completed": 4, "total": 3 } },
+    { "name": "unknown-root-field", "setPath": "children", "value": [] }
+  ]
+}
