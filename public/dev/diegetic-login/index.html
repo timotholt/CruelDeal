@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Cruel Company — Diegetic Login Prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          "Arial Narrow", "Roboto Condensed", "DIN Condensed", "Helvetica Neue",
+          sans-serif;
+        background: #050403;
+        color: #f4e4d4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100svh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 50% 20%, #24150f 0, #080605 30rem, #020202 70rem);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .demo {
+        min-height: 100svh;
+        display: grid;
+        grid-template-columns: minmax(320px, 474px) minmax(220px, 300px);
+        place-content: center;
+        gap: clamp(18px, 4vw, 54px);
+        padding: 24px;
+      }
+
+      .phone {
+        --tilt: 14deg;
+        --perspective: 680px;
+        --plane-y: 0px;
+        --gold-deep: #6f5008;
+        --gold: #d5ab2d;
+        --gold-light: #ffe999;
+        --gold-white: #fff7c7;
+        --copper: var(--gold);
+        --copper-light: var(--gold-light);
+        --bone: #f4e7d7;
+        --ink: #0a0705;
+
+        position: relative;
+        width: min(100%, 474px);
+        aspect-ratio: 9 / 16;
+        overflow: hidden;
+        isolation: isolate;
+        perspective: var(--perspective);
+        perspective-origin: 50% 50%;
+        background: #090706;
+        border: 1px solid rgb(231 190 71 / 42%);
+        box-shadow:
+          0 40px 100px rgb(0 0 0 / 75%),
+          0 0 0 7px #080706,
+          0 0 0 8px rgb(224 181 48 / 24%);
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        z-index: -4;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0;
+        user-select: none;
+        transition: opacity 500ms ease;
+      }
+
+      .phone[data-scene="hood"] .scene-hood,
+      .phone[data-scene="briefcase"] .scene-briefcase,
+      .phone[data-scene="casino"] .scene-casino,
+      .phone[data-scene="train"] .scene-train,
+      .phone[data-scene="penthouse"] .scene-penthouse {
+        opacity: 1;
+      }
+
+      .color-grade,
+      .hood-shade,
+      .rain,
+      .seams {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .color-grade {
+        z-index: -3;
+        background:
+          linear-gradient(135deg, rgb(255 221 100 / 7%), transparent 36% 70%, rgb(187 128 13 / 6%)),
+          linear-gradient(180deg, rgb(0 0 0 / 3%) 0 40%, rgb(0 0 0 / 10%) 53%, rgb(0 0 0 / 30%) 100%),
+          radial-gradient(circle at 71% 27%, transparent 0 18%, rgb(0 0 0 / 25%) 44%, rgb(0 0 0 / 50%) 100%);
+      }
+
+      .hood-shade {
+        z-index: -2;
+        top: 47%;
+        background:
+          linear-gradient(180deg, transparent, rgb(0 0 0 / 9%) 20%, rgb(0 0 0 / 34%)),
+          radial-gradient(ellipse at 50% 30%, rgb(229 181 47 / 12%), transparent 62%);
+        mix-blend-mode: multiply;
+      }
+
+      .rain {
+        z-index: 8;
+        opacity: 0.17;
+        background-image: repeating-linear-gradient(
+          104deg,
+          transparent 0 38px,
+          rgb(240 223 204 / 75%) 39px,
+          transparent 40px 83px
+        );
+        background-size: 130% 180%;
+        animation: rain-drift 1.8s linear infinite;
+        mask-image: linear-gradient(180deg, #000, transparent 72%);
+      }
+
+      @keyframes rain-drift {
+        to {
+          background-position: -34px 110px;
+        }
+      }
+
+      .brand {
+        position: absolute;
+        z-index: 3;
+        top: max(26px, env(safe-area-inset-top));
+        left: 6.5%;
+        color: var(--gold);
+        text-shadow: 0 2px 9px rgb(0 0 0 / 80%);
+        filter: drop-shadow(0 0 8px rgb(198 107 49 / 15%));
+      }
+
+      .brand-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+        font-size: clamp(15px, 4.6vw, 23px);
+        font-weight: 900;
+        letter-spacing: -0.08em;
+      }
+
+      .brand-mark::before,
+      .brand-mark::after {
+        content: "";
+        width: clamp(24px, 8vw, 44px);
+        height: 1px;
+        background: linear-gradient(90deg, transparent, currentColor);
+      }
+
+      .brand-mark::after {
+        background: linear-gradient(90deg, currentColor, transparent);
+      }
+
+      .brand-name {
+        display: block;
+        max-width: 8ch;
+        font-size: clamp(20px, 7.8vw, 40px);
+        font-weight: 950;
+        line-height: 0.82;
+        letter-spacing: -0.045em;
+        text-transform: uppercase;
+      }
+
+      .seams {
+        z-index: 0;
+        top: 49%;
+        overflow: hidden;
+        opacity: 0.34;
+      }
+
+      .seam {
+        position: absolute;
+        top: -5%;
+        width: 1px;
+        height: 120%;
+        transform-origin: 50% 0;
+        background: linear-gradient(180deg, transparent, var(--copper) 45%, transparent);
+        box-shadow: 0 0 7px rgb(238 196 69 / 52%);
+      }
+
+      .seam.left {
+        left: 23%;
+        transform: rotate(8.5deg);
+      }
+
+      .seam.right {
+        right: 23%;
+        transform: rotate(-8.5deg);
+      }
+
+      .world-form {
+        position: absolute;
+        z-index: 4;
+        left: 4.5%;
+        right: 4.5%;
+        top: 50.3%;
+        bottom: max(2.6%, env(safe-area-inset-bottom));
+
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: clamp(6px, 1.35vh, 11px);
+
+        translate: 0 var(--plane-y);
+        transform: rotateX(var(--tilt));
+        transform-origin: 50% 100%;
+        will-change: transform, translate;
+      }
+
+      .phone[data-scene="briefcase"] .world-form,
+      .phone[data-scene="casino"] .world-form,
+      .phone[data-scene="train"] .world-form,
+      .phone[data-scene="penthouse"] .world-form {
+        top: 55.5%;
+      }
+
+      .phone[data-scene="briefcase"] .rain,
+      .phone[data-scene="casino"] .rain {
+        opacity: 0;
+      }
+
+      .phone[data-scene="briefcase"] .hood-shade,
+      .phone[data-scene="casino"] .hood-shade,
+      .phone[data-scene="train"] .hood-shade,
+      .phone[data-scene="penthouse"] .hood-shade {
+        top: 52%;
+        background:
+          linear-gradient(180deg, transparent, rgb(0 0 0 / 8%) 20%, rgb(0 0 0 / 30%)),
+          radial-gradient(ellipse at 50% 22%, rgb(229 181 47 / 10%), transparent 62%);
+      }
+
+      .phone[data-scene="briefcase"] .seams,
+      .phone[data-scene="casino"] .seams,
+      .phone[data-scene="train"] .seams,
+      .phone[data-scene="penthouse"] .seams {
+        top: 56%;
+        opacity: 0.24;
+      }
+
+      .phone[data-scene="train"] .rain,
+      .phone[data-scene="penthouse"] .rain {
+        opacity: 0.07;
+      }
+
+      .welcome {
+        position: relative;
+        width: 100%;
+        margin: 0 auto clamp(0px, 0.5vh, 5px);
+        padding: 7px 18px 9px;
+        color: var(--gold);
+        font-size: clamp(30px, 9.3vw, 47px);
+        font-weight: 950;
+        line-height: 0.92;
+        letter-spacing: -0.045em;
+        text-align: center;
+        text-transform: uppercase;
+        text-shadow:
+          0 2px 0 #352016,
+          0 3px 8px rgb(0 0 0 / 95%),
+          0 0 18px rgb(237 194 66 / 26%);
+      }
+
+      .welcome::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.58;
+        background:
+          linear-gradient(90deg, var(--gold), transparent) left top / 27% 1px no-repeat,
+          linear-gradient(90deg, transparent, var(--gold)) right top / 27% 1px no-repeat,
+          linear-gradient(90deg, var(--gold-light), transparent) left bottom / 34% 1px no-repeat,
+          linear-gradient(90deg, transparent, var(--gold-light)) right bottom / 34% 1px no-repeat,
+          linear-gradient(180deg, var(--gold), transparent) left top / 1px 38% no-repeat,
+          linear-gradient(180deg, var(--gold), transparent) right top / 1px 38% no-repeat,
+          linear-gradient(0deg, var(--gold-light), transparent) left bottom / 1px 42% no-repeat,
+          linear-gradient(0deg, var(--gold-light), transparent) right bottom / 1px 42% no-repeat;
+        filter: drop-shadow(0 0 5px rgb(238 197 73 / 34%));
+      }
+
+      .world-field {
+        display: grid;
+        gap: 4px;
+        margin-inline: auto;
+      }
+
+      .world-field.username {
+        width: 100%;
+      }
+
+      .world-field.password {
+        width: 100%;
+      }
+
+      .field-label {
+        padding-inline: 13px;
+        color: var(--gold-white);
+        font-size: clamp(12px, 3.6vw, 18px);
+        font-weight: 800;
+        letter-spacing: 0.17em;
+        line-height: 1;
+        text-shadow: 0 2px 5px #000;
+      }
+
+      .field-surface {
+        position: relative;
+        height: clamp(56px, 7.8vh, 66px);
+        padding: 1px;
+        overflow: hidden;
+        background: linear-gradient(90deg, #6e5007, var(--gold-light), #624606);
+        filter:
+          drop-shadow(0 3px 4px rgb(0 0 0 / 75%))
+          drop-shadow(0 0 6px rgb(237 195 65 / 24%));
+        transition:
+          filter 160ms ease,
+          background 160ms ease;
+      }
+
+      .field-surface::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgb(255 235 150 / 7%), transparent 16% 84%, rgb(255 235 150 / 8%)),
+          rgb(6 5 4 / 79%);
+        box-shadow: inset 0 5px 11px rgb(0 0 0 / 58%);
+      }
+
+      .field-surface:focus-within {
+        background: linear-gradient(90deg, #9c7615, var(--gold-white), #957011);
+        filter:
+          drop-shadow(0 3px 5px rgb(0 0 0 / 75%))
+          drop-shadow(0 0 12px rgb(255 224 111 / 52%));
+      }
+
+      .field-surface input {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        padding: 0 clamp(12px, 3.5vw, 18px);
+        border: 0;
+        border-radius: 0;
+        outline: 0;
+        background: transparent;
+        appearance: none;
+        color: #f2cf62;
+        caret-color: var(--copper-light);
+        font-size: clamp(19px, 5.2vw, 24px);
+        font-weight: 820;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-shadow: 0 1px 5px #000;
+      }
+
+      .field-surface input::selection {
+        background: rgb(228 190 67 / 50%);
+      }
+
+      .meta {
+        position: relative;
+        width: 100%;
+        min-height: 38px;
+        margin-inline: auto;
+        padding-inline: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        font-size: clamp(13px, 3.7vw, 17px);
+        text-shadow: 0 2px 5px #000;
+      }
+
+      .meta::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-inline: 1px solid rgb(221 181 55 / 58%);
+        background:
+          linear-gradient(90deg, rgb(218 176 45 / 11%), transparent 20% 80%, rgb(218 176 45 / 11%)),
+          rgb(5 4 3 / 26%);
+        box-shadow: inset 0 1px rgb(255 238 162 / 12%);
+      }
+
+      .remember {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        cursor: pointer;
+      }
+
+      .remember input {
+        width: 26px;
+        height: 26px;
+        margin: 0;
+        border: 1px solid var(--copper-light);
+        border-radius: 2px;
+        appearance: none;
+        background: rgb(7 5 4 / 72%);
+        box-shadow:
+          inset 0 0 7px rgb(0 0 0 / 70%),
+          0 0 7px rgb(236 195 67 / 30%);
+        cursor: pointer;
+      }
+
+      .remember input:checked {
+        background:
+          linear-gradient(135deg, transparent 44%, #17100a 45% 55%, transparent 56%)
+            2px -1px / 12px 17px no-repeat,
+          linear-gradient(45deg, transparent 39%, #17100a 40% 54%, transparent 55%)
+            8px 7px / 14px 11px no-repeat,
+          var(--copper-light);
+      }
+
+      .forgot {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        color: #e4bd4e;
+        text-decoration: none;
+      }
+
+      .forgot:hover,
+      .forgot:focus-visible {
+        color: var(--gold-white);
+        outline: none;
+        text-shadow: 0 0 8px rgb(255 173 93 / 45%);
+      }
+
+      .sign-in {
+        position: relative;
+        width: 100%;
+        min-height: clamp(58px, 8.2vh, 70px);
+        padding: 0 24px;
+        overflow: hidden;
+        border: 1px solid var(--gold-white);
+        border-radius: 0;
+        appearance: none;
+        background:
+          linear-gradient(105deg, transparent 0 9%, rgb(255 247 194 / 30%) 10%, transparent 12% 88%, rgb(255 247 194 / 26%) 90%, transparent 92%),
+          repeating-linear-gradient(90deg, rgb(70 33 13 / 10%) 0 1px, transparent 1px 14px),
+          linear-gradient(180deg, #f1ce62, #a87b13 52%, #d9ac2d);
+        color: #150c07;
+        box-shadow:
+          inset 0 0 0 2px rgb(72 35 16 / 35%),
+          inset 0 0 21px rgb(255 225 181 / 40%),
+          0 0 20px rgb(237 194 63 / 46%);
+        cursor: pointer;
+        font-size: clamp(22px, 7vw, 34px);
+        font-weight: 950;
+        letter-spacing: 0.18em;
+        text-shadow: 0 1px rgb(255 247 198 / 46%);
+        transition:
+          filter 150ms ease,
+          transform 150ms ease;
+      }
+
+      .sign-in::before {
+        content: "";
+        position: absolute;
+        inset: 7px;
+        border: 1px solid rgb(92 44 20 / 50%);
+      }
+
+      .sign-in:hover,
+      .sign-in:focus-visible {
+        outline: none;
+        filter: brightness(1.16) drop-shadow(0 0 10px rgb(255 174 91 / 55%));
+      }
+
+      .sign-in:active {
+        transform: translateY(2px);
+        filter: brightness(1.28);
+      }
+
+      .sign-in.authenticated {
+        background: linear-gradient(180deg, #fff1a6, #b6a33a);
+        letter-spacing: 0.11em;
+      }
+
+      .tuner {
+        align-self: center;
+        padding: 22px;
+        border: 1px solid rgb(218 177 49 / 34%);
+        background: rgb(10 8 6 / 82%);
+        box-shadow: 0 20px 50px rgb(0 0 0 / 50%);
+        color: #d9c7b7;
+      }
+
+      .tuner h2 {
+        margin: 0 0 8px;
+        color: #dfb83f;
+        font-size: 18px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .tuner p {
+        margin: 0 0 22px;
+        color: #948579;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .control {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-top: 18px;
+        font-size: 13px;
+        font-weight: 750;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .scene-toggle {
+        width: 100%;
+        min-height: 62px;
+        margin: 2px 0 4px;
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #806316;
+        background:
+          linear-gradient(90deg, rgb(218 177 49 / 12%), transparent),
+          rgb(6 5 4 / 68%);
+        color: #d8b34d;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .scene-toggle span {
+        color: #76675b;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .scene-toggle strong {
+        grid-column: 1;
+        color: #f0ce68;
+        font-size: 14px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .scene-toggle::after {
+        content: "NEXT";
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        padding: 7px 8px;
+        border: 1px solid rgb(230 193 76 / 48%);
+        color: #ebc451;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+      }
+
+      .scene-toggle:hover,
+      .scene-toggle:focus-visible {
+        border-color: #e7c95d;
+        outline: none;
+        filter: brightness(1.13);
+      }
+
+      .control output {
+        color: #f2d36d;
+      }
+
+      .control input {
+        grid-column: 1 / -1;
+        width: 100%;
+        accent-color: #d9b438;
+      }
+
+      .reset {
+        width: 100%;
+        min-height: 42px;
+        margin-top: 22px;
+        border: 1px solid #806316;
+        background: transparent;
+        color: #d8b34d;
+        cursor: pointer;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .reset:hover {
+        border-color: #e7c95d;
+        color: #fff0a6;
+      }
+
+      @media (max-width: 760px) {
+        .demo {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 0;
+          gap: 0;
+        }
+
+        .phone {
+          width: min(100vw, 474px);
+          margin-inline: auto;
+          border: 0;
+          box-shadow: none;
+        }
+
+        .tuner {
+          width: min(100%, 474px);
+          margin-inline: auto;
+          border-inline: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .rain {
+          animation: none;
+        }
+
+        .scene,
+        .field-surface,
+        .sign-in {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="demo">
+      <section
+        class="phone"
+        id="phone"
+        data-scene="hood"
+        aria-label="Cruel Company mobile login concept"
+      >
+        <img
+          class="scene scene-hood"
+          src="./hood-login-background.png"
+          alt="A cyberpunk operative standing behind the rain-covered hood of an armored vehicle"
+        />
+        <img
+          class="scene scene-briefcase"
+          src="./briefcase-warehouse-background.png"
+          alt="An evening operative standing behind a closed briefcase in a dark warehouse"
+        />
+        <img
+          class="scene scene-casino"
+          src="./casino-login-background.png"
+          alt="An evening operative waiting behind a black table in a midnight casino"
+        />
+        <img
+          class="scene scene-train"
+          src="./train-login-background.png"
+          alt="An evening operative waiting behind a table aboard an armored night train"
+        />
+        <img
+          class="scene scene-penthouse"
+          src="./penthouse-login-background.png"
+          alt="An evening operative waiting behind an obsidian counter in a penthouse bar"
+        />
+        <div class="color-grade"></div>
+        <div class="hood-shade"></div>
+        <div class="seams" aria-hidden="true">
+          <i class="seam left"></i>
+          <i class="seam right"></i>
+        </div>
+
+        <header class="brand" aria-label="Cruel Company">
+          <span class="brand-mark">CC</span>
+          <strong class="brand-name">Cruel Company</strong>
+        </header>
+
+        <form class="world-form" id="login-form">
+          <h1 class="welcome">Welcome Back</h1>
+
+          <label class="world-field username">
+            <span class="field-label">Username</span>
+            <span class="field-surface">
+              <input
+                name="username"
+                value="A24 Executive"
+                autocomplete="username"
+                spellcheck="false"
+                aria-label="Username"
+              />
+            </span>
+          </label>
+
+          <label class="world-field password">
+            <span class="field-label">Password</span>
+            <span class="field-surface">
+              <input
+                type="password"
+                name="password"
+                value="password"
+                autocomplete="current-password"
+                aria-label="Password"
+              />
+            </span>
+          </label>
+
+          <div class="meta">
+            <label class="remember">
+              <input type="checkbox" name="remember" checked />
+              <span>Remember me</span>
+            </label>
+            <a class="forgot" href="#forgot">Forgot password?</a>
+          </div>
+
+          <button class="sign-in" type="submit">Sign In</button>
+        </form>
+
+        <div class="rain" aria-hidden="true"></div>
+      </section>
+
+      <aside class="tuner">
+        <h2>Perspective Lab</h2>
+        <p>
+          These are genuine HTML inputs. Explore from a flat plane to an extreme
+          near-edge-on projection, then position the result on the physical surface.
+        </p>
+
+        <button
+          class="scene-toggle"
+          id="scene-toggle"
+          type="button"
+          aria-label="Show next environment"
+        >
+          <span>Environment</span>
+          <strong id="scene-label" aria-live="polite">Armored hood · 1/5</strong>
+        </button>
+
+        <label class="control">
+          <span>Plane angle</span>
+          <output id="tilt-output">14°</output>
+          <input
+            id="tilt"
+            type="range"
+            min="0"
+            max="82"
+            step="0.5"
+            value="14"
+            aria-label="Plane angle"
+          />
+        </label>
+
+        <label class="control">
+          <span>Perspective depth</span>
+          <output id="depth-output">680px</output>
+          <input
+            id="depth"
+            type="range"
+            min="160"
+            max="2400"
+            step="20"
+            value="680"
+            aria-label="Perspective depth"
+          />
+        </label>
+
+        <label class="control">
+          <span>Vertical position</span>
+          <output id="vertical-output">0px</output>
+          <input
+            id="vertical"
+            type="range"
+            min="-120"
+            max="120"
+            step="2"
+            value="0"
+            aria-label="Vertical position"
+          />
+        </label>
+
+        <button class="reset" id="reset" type="button">Reset view</button>
+      </aside>
+    </main>
+
+    <script>
+      const phone = document.querySelector("#phone");
+      const tilt = document.querySelector("#tilt");
+      const depth = document.querySelector("#depth");
+      const vertical = document.querySelector("#vertical");
+      const tiltOutput = document.querySelector("#tilt-output");
+      const depthOutput = document.querySelector("#depth-output");
+      const verticalOutput = document.querySelector("#vertical-output");
+      const reset = document.querySelector("#reset");
+      const sceneToggle = document.querySelector("#scene-toggle");
+      const sceneLabel = document.querySelector("#scene-label");
+      const form = document.querySelector("#login-form");
+      const submit = form.querySelector(".sign-in");
+
+      function updatePerspective() {
+        phone.style.setProperty("--tilt", `${tilt.value}deg`);
+        phone.style.setProperty("--perspective", `${depth.value}px`);
+        phone.style.setProperty("--plane-y", `${vertical.value}px`);
+        tiltOutput.value = `${tilt.value}°`;
+        depthOutput.value = `${depth.value}px`;
+        verticalOutput.value = `${Number(vertical.value) > 0 ? "+" : ""}${vertical.value}px`;
+      }
+
+      tilt.addEventListener("input", updatePerspective);
+      depth.addEventListener("input", updatePerspective);
+      vertical.addEventListener("input", updatePerspective);
+
+      reset.addEventListener("click", () => {
+        tilt.value = 14;
+        depth.value = 680;
+        vertical.value = 0;
+        updatePerspective();
+      });
+
+      sceneToggle.addEventListener("click", () => {
+        const scenes = [
+          ["hood", "Armored hood"],
+          ["briefcase", "Warehouse briefcase"],
+          ["casino", "Midnight casino"],
+          ["train", "Armored night train"],
+          ["penthouse", "Penthouse bar"],
+        ];
+        const currentIndex = scenes.findIndex(([id]) => id === phone.dataset.scene);
+        const nextIndex = (currentIndex + 1) % scenes.length;
+        const [nextId, nextLabel] = scenes[nextIndex];
+
+        phone.dataset.scene = nextId;
+        sceneLabel.textContent = `${nextLabel} · ${nextIndex + 1}/${scenes.length}`;
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submit.textContent = "Access Granted";
+        submit.classList.add("authenticated");
+
+        window.setTimeout(() => {
+          submit.textContent = "Sign In";
+          submit.classList.remove("authenticated");
+        }, 1800);
+      });
+    </script>
+  </body>
+</html>

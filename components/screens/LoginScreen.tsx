@@ -43,7 +43,7 @@ export const LoginScreen = (props: LoginScreenProps) => {
 
   return (
     <div class="login-material-phone login-screen-phone login-material-phone--light" style={backdropStyle}>
-      <img class="login-material-bg" src="/art/login/cruel-company-final-login.png" alt="" />
+      <img class="login-material-bg" src="/art/login/login-social-bg.png" alt="" />
       <div class="login-material-bg-wash" />
 
       <div class="login-material-content">

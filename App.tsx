@@ -44,6 +44,11 @@ function AppContent() {
 
 const devLinks = [
   {
+    href: '/dev/diegetic-login/index.html',
+    title: 'Diegetic Login Prototype',
+    detail: 'Perspective-mapped login UI embedded into cinematic environments',
+  },
+  {
     href: '/gametext-test',
     title: 'GameText V1 Test',
     detail: 'Legacy fit-text lab',
