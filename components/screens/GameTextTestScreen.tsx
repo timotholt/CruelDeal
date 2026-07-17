@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For } from 'solid-js';
 import { GameText } from '../ui/GameText';
 import { GameTextV2, type GameTextV2FitMode } from '../ui/GameTextV2';
+import { GameTextV3 } from '../ui/GameTextV3';
 import '../../src/styles/gametext-test.css';
 
 type GameTextAlign = 'left' | 'center' | 'right';
@@ -13,7 +14,7 @@ interface GameTextCase {
   id: string;
   label: string;
   text: string;
-  section?: 'core' | 'international';
+  section?: 'core' | 'international' | 'boundary' | 'dynamic';
   kind?: 'plain' | 'button' | 'badge' | 'danger';
   width: number;
   height: number;
@@ -39,6 +40,12 @@ interface GameTextCase {
   lang?: string;
   dir?: 'ltr' | 'rtl' | 'auto';
   typographyVariant?: TypographyVariantId;
+  verticalMetric?: 'line-box' | 'ink' | 'cap';
+  skewFactor?: number;
+  safetyScale?: number;
+  // Case is DESIGNED to hit the minScale floor and clip; overflow is expected,
+  // so the audit skips containment checks (scale bounds still enforced).
+  expectClip?: boolean;
 }
 
 interface GameTextAuditResult {
@@ -65,6 +72,8 @@ declare global {
     __gameTextAuditResults?: GameTextAuditSummary;
     __gameTextV2Audit?: () => Promise<GameTextAuditSummary>;
     __gameTextV2AuditResults?: GameTextAuditSummary;
+    __gameTextV3Audit?: () => Promise<GameTextAuditSummary>;
+    __gameTextV3AuditResults?: GameTextAuditSummary;
   }
 }
 
@@ -118,6 +127,22 @@ const internationalCases: GameTextCase[] = [
   { id: 'accented-latin', section: 'international', label: 'Accented Latin', text: 'CRÉDITS ÉQUIPE', kind: 'button', width: 94, height: 28, insetX: 6, insetY: 4, baseFontSize: 0.62, minScale: 0.36, italic: true, textTransform: 'uppercase', fitMode: 'single-line', lang: 'fr' },
   { id: 'de-compound', section: 'international', label: 'Long compound', text: 'SICHERHEITSPRÜFUNG', kind: 'danger', width: 106, height: 24, insetX: 5, insetY: 3, baseFontSize: 0.56, minScale: 0.24, italic: false, textTransform: 'uppercase', fitMode: 'single-line', lang: 'de' },
   { id: 'cjk-paragraph', section: 'international', label: 'CJK paragraph', text: '暗号化されたデータを回収し、区域を離脱する。', width: 118, height: 54, insetX: 5, insetY: 4, baseFontSize: 0.5, maxLines: 3, minScale: 0.36, align: 'left', italic: false, textTransform: 'none', lineHeight: 1.08, fitMode: 'paragraph', lang: 'ja' },
+];
+
+const boundaryCases: GameTextCase[] = [
+  { id: 'up-scale', section: 'boundary', label: 'Upscale clamp', text: 'GO', kind: 'button', width: 160, height: 60, insetX: 8, insetY: 6, baseFontSize: 0.6, minScale: 0.5, maxScale: 2, italic: false },
+  { id: 'min-floor-clip', section: 'boundary', label: 'MinScale floor clip', text: 'ABSOLUTELY MAXIMUM OVERFLOWING LABEL TEXT', kind: 'danger', width: 60, height: 20, insetX: 3, insetY: 2, baseFontSize: 0.6, minScale: 0.6, italic: false, expectClip: true },
+  { id: 'unbreakable-paragraph', section: 'boundary', label: 'Unbreakable word', text: 'INCOMPREHENSIBILITIES DEINSTITUTIONALIZATION', width: 110, height: 60, insetX: 4, insetY: 4, baseFontSize: 0.6, maxLines: 3, minScale: 0.2, align: 'left', italic: false, textTransform: 'none', fitMode: 'paragraph', lineHeight: 1.05 },
+  { id: 'maxlines-clamp', section: 'boundary', label: 'MaxLines clamp', text: 'This mission briefing keeps going far past the space available so the line clamp has to cut it off with an ellipsis somewhere.', width: 110, height: 40, insetX: 4, insetY: 4, baseFontSize: 0.56, maxLines: 2, minScale: 0.45, align: 'left', italic: false, textTransform: 'none', fitMode: 'paragraph', lineHeight: 1.08, expectClip: true },
+  { id: 'whitespace-only', section: 'boundary', label: 'Whitespace only', text: ' ', width: 40, height: 20, baseFontSize: 0.6, minScale: 0.5, italic: false },
+  { id: 'one-line-height', section: 'boundary', label: 'Slim container', text: 'SLIM', kind: 'badge', width: 60, height: 13, insetX: 3, insetY: 1, baseFontSize: 0.6, minScale: 0.3, italic: false },
+  { id: 'skew-factor', section: 'boundary', label: 'Skew factor', text: 'ENTER ZONE', kind: 'button', width: 100, height: 26, insetX: 6, insetY: 4, baseFontSize: 0.66, minScale: 0.35, italic: true, skewFactor: 0.85 },
+  { id: 'exact-fit', section: 'boundary', label: 'Exact fit (safety 1)', text: 'EXACT', width: 70, height: 22, baseFontSize: 0.62, minScale: 0.4, italic: false, safetyScale: 1 },
+  { id: 'metric-cap', section: 'boundary', label: 'Cap metric explicit', text: 'CAPLINE', width: 84, height: 24, baseFontSize: 0.62, minScale: 0.4, italic: false, verticalMetric: 'cap' },
+  { id: 'metric-linebox', section: 'boundary', label: 'Line-box metric', text: 'BASELINE', width: 84, height: 24, baseFontSize: 0.62, minScale: 0.4, italic: false, verticalMetric: 'line-box' },
+  { id: 'viet-diacritics', section: 'boundary', label: 'Tall diacritics', text: 'TIẾN LÊN', kind: 'button', width: 90, height: 26, insetX: 6, insetY: 4, baseFontSize: 0.66, minScale: 0.4, italic: false, lang: 'vi' },
+  { id: 'emoji-label', section: 'boundary', label: 'Emoji glyph', text: 'ROLL 🎲', width: 80, height: 24, baseFontSize: 0.6, minScale: 0.4, italic: false, textTransform: 'none', verticalMetric: 'line-box' },
+  { id: 'descender-ink', section: 'boundary', label: 'Descender ink', text: 'gypsy jelly', width: 90, height: 24, baseFontSize: 0.62, minScale: 0.4, italic: false, fontWeight: 600, textTransform: 'none', verticalMetric: 'ink' },
 ];
 
 const typographyVariants: Array<{
@@ -236,10 +261,12 @@ const auditGameText = async (testCases: GameTextCase[]): Promise<GameTextAuditSu
 
     if (innerRect.width <= 0 || innerRect.height <= 0) failures.push('empty text rect');
     if (outerRect.width <= 0 || outerRect.height <= 0) failures.push('empty container rect');
-    if (overflowX > 1.25) failures.push(`horizontal overflow ${overflowX.toFixed(2)}px`);
-    if (overflowY > 1.25) failures.push(`vertical overflow ${overflowY.toFixed(2)}px`);
-    if (centerDeltaX > alignToleranceX) failures.push(`${align} alignment drift ${centerDeltaX.toFixed(2)}px`);
-    if (centerDeltaY > alignToleranceY) failures.push(`${verticalAlign} alignment drift ${centerDeltaY.toFixed(2)}px`);
+    if (!testCase.expectClip) {
+      if (overflowX > 1.25) failures.push(`horizontal overflow ${overflowX.toFixed(2)}px`);
+      if (overflowY > 1.25) failures.push(`vertical overflow ${overflowY.toFixed(2)}px`);
+      if (centerDeltaX > alignToleranceX) failures.push(`${align} alignment drift ${centerDeltaX.toFixed(2)}px`);
+      if (centerDeltaY > alignToleranceY) failures.push(`${verticalAlign} alignment drift ${centerDeltaY.toFixed(2)}px`);
+    }
     if (scale < (testCase.minScale ?? 0.2) - 0.01) failures.push(`scale below min ${scale.toFixed(3)}`);
     if (scale > (testCase.maxScale ?? 1) + 0.01) failures.push(`scale above max ${scale.toFixed(3)}`);
 
@@ -274,14 +301,25 @@ const caseStyle = (testCase: GameTextCase) => ({
   '--gt-inset-left': `${testCase.insetLeft ?? testCase.insetX ?? 0}px`,
 });
 
-export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
+export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' | 'v3' }) => {
   const [summary, setSummary] = createSignal<GameTextAuditSummary | null>(null);
   const [enabledVariants, setEnabledVariants] = createSignal<ReadonlySet<TypographyVariantId>>(new Set(typographyVariants.map((item) => item.id)));
   const [enabledFitModes, setEnabledFitModes] = createSignal<ReadonlySet<FitFilterId>>(new Set(fitFilters.map((item) => item.id)));
   const [enabledLanguages, setEnabledLanguages] = createSignal<ReadonlySet<LanguageFilterId>>(new Set(languageFilters.map((item) => item.id)));
+  // Dynamic stress toggles: exercise the ResizeObserver refit path (container
+  // width change) and reactive text swap. Flipping either rebuilds the case
+  // list, which re-runs the audit.
+  const [stressNarrow, setStressNarrow] = createSignal(false);
+  const [stressAltText, setStressAltText] = createSignal(false);
+  const dynamicCases = createMemo<GameTextCase[]>(() => [
+    { id: 'dyn-resize', section: 'dynamic', label: `Resize refit (${stressNarrow() ? 'narrow' : 'wide'})`, text: 'ADAPTIVE WIDTH', kind: 'button', width: stressNarrow() ? 70 : 150, height: 26, insetX: 5, insetY: 4, baseFontSize: 0.66, minScale: 0.3, italic: false },
+    { id: 'dyn-text', section: 'dynamic', label: `Text swap (${stressAltText() ? 'short' : 'long'})`, text: stressAltText() ? 'SHORT' : 'CONSIDERABLY LONGER LABEL TEXT', width: 120, height: 24, baseFontSize: 0.62, minScale: 0.25, italic: false },
+  ]);
   const version = () => props.version ?? 'v1';
-  const isV2 = () => version() === 'v2';
-  const allCases = createMemo(() => isV2() ? expandV2Cases([...coreCases, ...internationalCases]) : coreCases);
+  const isV3 = () => version() === 'v3';
+  // V3 shares V2's full matrix (typography variants, fit modes, scripts).
+  const isV2 = () => version() === 'v2' || isV3();
+  const allCases = createMemo(() => isV2() ? expandV2Cases([...coreCases, ...internationalCases, ...boundaryCases, ...dynamicCases()]) : coreCases);
   const cases = createMemo(() => allCases().filter((testCase) => {
     if (!isV2()) return true;
     const variant = testCase.typographyVariant ?? 'normal';
@@ -304,6 +342,14 @@ export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
   createEffect(() => {
     const activeCases = cases();
     const runAudit = () => auditGameText(activeCases);
+    if (isV3()) {
+      window.__gameTextV3Audit = runAudit;
+      void runAudit().then((result) => {
+        window.__gameTextV3AuditResults = result;
+        setSummary(result);
+      });
+      return;
+    }
     if (isV2()) {
       window.__gameTextV2Audit = runAudit;
       void runAudit().then((result) => {
@@ -324,9 +370,11 @@ export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
       <div class="game-text-test-shell">
         <header class="game-text-test-header">
           <div>
-            <h1>{isV2() ? 'GameTextV2 Fit Lab' : 'GameText Fit Lab'}</h1>
+            <h1>{isV3() ? 'GameTextV3 Fit Lab' : isV2() ? 'GameTextV2 Fit Lab' : 'GameText Fit Lab'}</h1>
             <p>
-              {isV2()
+              {isV3()
+                ? 'V3 proves the live-geometry engine: boot-gated fonts, one measured-and-painted element, contained layout, and native font-size fitting with no transform.'
+                : isV2()
                 ? 'V2 proves explicit fit modes, grouped text styling, font-load remeasurement, and language direction handling before material UI adopts it.'
                 : 'Fixed-size boxes and button-like surfaces for proving that fitted game labels scale, align, and stay inside their text boxes before we wire them into material nodes.'}
             </p>
@@ -368,6 +416,25 @@ export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
                   </label>
                 )}
               </For>
+            </div>
+            <div class="game-text-test-filter-group">
+              <strong>Stress</strong>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={stressNarrow()}
+                  onInput={() => setStressNarrow((v) => !v)}
+                />
+                <span>Narrow resize</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={stressAltText()}
+                  onInput={() => setStressAltText((v) => !v)}
+                />
+                <span>Alt text</span>
+              </label>
             </div>
             <div class="game-text-test-filter-group">
               <strong>Script</strong>
@@ -415,7 +482,31 @@ export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
                       style={caseStyle(testCase)}
                     >
                       <div class="game-text-test-label-box">
-                        {isV2() ? (
+                        {isV3() ? (
+                          <GameTextV3
+                            text={testCase.text}
+                            baseFontSize={testCase.baseFontSize}
+                            minScale={testCase.minScale}
+                            maxScale={testCase.maxScale}
+                            maxLines={testCase.maxLines}
+                            fitMode={testCase.fitMode}
+                            align={testCase.align}
+                            verticalAlign={testCase.verticalAlign}
+                            lang={testCase.lang}
+                            dir={testCase.dir}
+                            verticalMetric={testCase.verticalMetric}
+                            skewFactor={testCase.skewFactor}
+                            safetyScale={testCase.safetyScale}
+                            textStyle={{
+                              fontFamily: testCase.fontFamily,
+                              fontWeight: testCase.fontWeight,
+                              fontStyle: testCase.italic === false ? 'normal' : 'italic',
+                              letterSpacing: testCase.letterSpacing,
+                              lineHeight: testCase.lineHeight,
+                              textTransform: testCase.textTransform,
+                            }}
+                          />
+                        ) : isV2() ? (
                           <GameTextV2
                             text={testCase.text}
                             baseFontSize={testCase.baseFontSize}
@@ -427,6 +518,9 @@ export const GameTextTestScreen = (props: { version?: 'v1' | 'v2' }) => {
                             verticalAlign={testCase.verticalAlign}
                             lang={testCase.lang}
                             dir={testCase.dir}
+                            verticalMetric={testCase.verticalMetric}
+                            skewFactor={testCase.skewFactor}
+                            safetyScale={testCase.safetyScale}
                             textStyle={{
                               fontFamily: testCase.fontFamily,
                               fontWeight: testCase.fontWeight,

@@ -48,6 +48,21 @@ interface TextVerticalMetric {
 }
 
 const measurementCache = new Map<string, Measurement>();
+let fontsReadyPromise: Promise<void> | undefined;
+
+const whenDocumentFontsAreReady = () => {
+  if (!document.fonts) return Promise.resolve();
+
+  if (!fontsReadyPromise) {
+    fontsReadyPromise = document.fonts.ready.then(() => {
+      // A measurement taken while a web font is loading contains fallback-font
+      // geometry. Never allow those dimensions to survive the font-ready pass.
+      measurementCache.clear();
+    });
+  }
+
+  return fontsReadyPromise;
+};
 
 const defaultTextStyle: Required<GameTextV2Style> = {
   fontFamily: '"IBM Plex Sans Condensed", sans-serif',
@@ -338,12 +353,6 @@ export const GameTextV2 = (props: GameTextV2Props) => {
       const scaleX = (containerWidth * safetyScale) / Math.max(measurement.width, 1);
       const scaleY = containerHeight / Math.max(verticalMetricBox.height, 1);
       const targetScale = Math.min(maxScale(), Math.max(minScale(), Math.min(scaleX, scaleY)));
-      const scaledWidth = measurement.width * targetScale;
-      const left = align() === 'right'
-        ? containerWidth - scaledWidth
-        : align() === 'center'
-        ? (containerWidth - scaledWidth) / 2
-        : 0;
       const top = verticalAlign() === 'bottom'
         ? containerHeight - verticalMetricBox.bottom * targetScale
         : verticalAlign() === 'center'
@@ -351,7 +360,6 @@ export const GameTextV2 = (props: GameTextV2Props) => {
         : -verticalMetricBox.top * targetScale;
 
       textEl.style.position = 'absolute';
-      textEl.style.left = `${left.toFixed(3)}px`;
       textEl.style.top = `${top.toFixed(3)}px`;
       textEl.style.transformOrigin = 'top left';
       textEl.dataset.gameTextMetricOffset = top.toFixed(3);
@@ -365,6 +373,19 @@ export const GameTextV2 = (props: GameTextV2Props) => {
         currentTransform = nextTransform;
         textEl.style.transform = nextTransform;
       }
+
+      // The clone is useful for choosing a scale, but the live element is the
+      // authority for placement. Its width includes the browser's final font,
+      // synthesized weight, letter spacing, padding, and transform. Positioning
+      // from that width keeps every alignment on the same rendered geometry.
+      const liveScaledWidth = textEl.getBoundingClientRect().width;
+      const left = align() === 'right'
+        ? rect.width - liveScaledWidth
+        : align() === 'center'
+        ? (rect.width - liveScaledWidth) / 2
+        : 0;
+      textEl.style.left = `${left.toFixed(3)}px`;
+
       textEl.dataset.gameTextScale = targetScale.toFixed(4);
       textEl.dataset.gameTextMode = mode;
 
@@ -379,8 +400,13 @@ export const GameTextV2 = (props: GameTextV2Props) => {
         targetScale,
       );
       if (placed !== null) {
-        textEl.style.top = `${placed.toFixed(3)}px`;
-        textEl.dataset.gameTextMetricOffset = placed.toFixed(3);
+        const liveScaledHeight = textEl.getBoundingClientRect().height;
+        const boundedTop = Math.min(
+          Math.max(0, rect.height - liveScaledHeight),
+          Math.max(0, placed),
+        );
+        textEl.style.top = `${boundedTop.toFixed(3)}px`;
+        textEl.dataset.gameTextMetricOffset = boundedTop.toFixed(3);
       }
     };
 
@@ -389,9 +415,8 @@ export const GameTextV2 = (props: GameTextV2Props) => {
     const observer = new ResizeObserver(applyMeasure);
     observer.observe(container);
 
-    const fontsReady = document.fonts?.ready;
     let disposed = false;
-    void fontsReady?.then(() => {
+    void whenDocumentFontsAreReady().then(() => {
       if (!disposed) applyMeasure();
     });
 

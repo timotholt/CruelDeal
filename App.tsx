@@ -59,6 +59,11 @@ const devLinks = [
     detail: 'Fit modes, style matrix, and script stress tests',
   },
   {
+    href: '/gametextv3-test',
+    title: 'GameText V3 Test',
+    detail: 'Live-geometry engine: boot-gated fonts, contained layout, native font-size fitting',
+  },
+  {
     href: '/uitest',
     title: 'Material UI Editor',
     detail: 'Material primitives and recipe editor',
@@ -144,6 +149,10 @@ export default function App() {
     const path = window.location.pathname.toLowerCase();
     return path.startsWith('/gametextv2-test') || path.startsWith('/gametext-v2-test');
   };
+  const isGameTextV3TestPath = () => {
+    const path = window.location.pathname.toLowerCase();
+    return path.startsWith('/gametextv3-test') || path.startsWith('/gametext-v3-test');
+  };
 
   const performLogin = async () => {
     setIsAuthenticating(true);
@@ -180,7 +189,7 @@ export default function App() {
           </div>
       )}>
         <Show
-          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isUiNodePath() || isGameUiSkinProofPath() || isGameTextTestPath() || isGameTextV2TestPath() || isIconsPath()}
+          when={isDevPath() || isUiTestPath() || isLoginMaterialPath() || isMainMaterialPath() || isUiNodePath() || isGameUiSkinProofPath() || isGameTextTestPath() || isGameTextV2TestPath() || isGameTextV3TestPath() || isIconsPath()}
           fallback={
             <AppViewport>
               <Show
@@ -213,7 +222,7 @@ export default function App() {
         >
           <div class="w-full h-full bg-slate-950 text-white font-sans overflow-hidden">
             <Show when={isDevPath()} fallback={(
-              <Show when={isGameTextTestPath() || isGameTextV2TestPath()} fallback={(
+              <Show when={isGameTextTestPath() || isGameTextV2TestPath() || isGameTextV3TestPath()} fallback={(
                 <Show when={isLoginMaterialPath()} fallback={(
                   <Show when={isMainMaterialPath()} fallback={(
                     <Show when={isUiNodePath()} fallback={(
@@ -234,7 +243,7 @@ export default function App() {
                   <LoginMaterialPreviewScreen />
                 </Show>
               )}>
-                <GameTextTestScreen version={isGameTextV2TestPath() ? 'v2' : 'v1'} />
+                <GameTextTestScreen version={isGameTextV3TestPath() ? 'v3' : isGameTextV2TestPath() ? 'v2' : 'v1'} />
               </Show>
             )}>
               <Show when={isDevUiNodePath()} fallback={(
