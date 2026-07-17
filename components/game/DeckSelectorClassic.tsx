@@ -2,7 +2,7 @@ import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
 import { CARDS } from '../../constants';
 import { SlantedButton } from '../ui/SlantedButton';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 
 interface DeckSelectorProps {
     activeDeckId: number;

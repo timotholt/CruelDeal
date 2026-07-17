@@ -1,5 +1,5 @@
 import { createSignal, onMount, For, Show } from 'solid-js';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { DynamicBackground } from '../ui/DynamicBackground';
 import { api } from '../../services/api';
 import { useUser } from '../../contexts/UserContext';

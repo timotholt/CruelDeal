@@ -3,7 +3,7 @@ import { HexBadge } from '../ui/HexBadge';
 import { RewardIconGraphic } from '../ui/RewardItemVisual';
 import { ProgressionRewardType } from '../../types';
 import { getVariant, getScale, getPulseColor, getSpinnerColor, getCheckmarkColor, getFlareColor } from './progressionUtils';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { Portal } from '../ui/Portal';
 
 interface ProgressionHexButtonProps {
@@ -257,7 +257,7 @@ export const ProgressionHexButton = (props: ProgressionHexButtonProps) => {
                                     <div 
                                         class="absolute -bottom-3 -right-3 bg-red-600 border-2 border-white h-[1.3rem] min-w-[1.3rem] px-1 flex items-center justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.6)] z-50 animate-badge-gain overflow-hidden"
                                     >
-                                        <div class="w-full h-[75%]"><GameText text={props.unclaimedCount.toString()} baseFontSize={0.65} italic={false} class="text-white font-black drop-shadow-md" /></div>
+                                        <div class="w-full h-[75%]"><GameText text={props.unclaimedCount.toString()} baseFontSize={0.65} textStyle={{ fontStyle: 'normal' }} class="text-white font-black drop-shadow-md" /></div>
                                     </div>
                                 </Show>
                             </div>

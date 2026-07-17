@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, JSX, mergeProps, splitProps, children as solidChildren, Show } from 'solid-js';
-import { GameText } from './GameText';
+import { GameTextV3 as GameText } from './GameTextV3';
 
 type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'blue';
 

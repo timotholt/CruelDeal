@@ -3,7 +3,7 @@ import { createMemo, Show } from 'solid-js';
 import { CardDefinition, CardInstance } from '../../types';
 import { getCardVisualState, RARITY_COLORS } from '../../utils/cardStyles';
 import { CardBadge } from './CardBadge';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 
 interface UnifiedCardViewProps {
     card: CardInstance | CardDefinition;

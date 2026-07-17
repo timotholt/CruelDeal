@@ -4,7 +4,7 @@ import { useUser } from '../../contexts/UserContext';
 import { SlantedButton } from '../ui/SlantedButton';
 import { audio } from '../../services/audio';
 import { Portal } from '../ui/Portal';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { useNavigate } from '@tanstack/solid-router';
 
 interface HomeCommandBarProps {

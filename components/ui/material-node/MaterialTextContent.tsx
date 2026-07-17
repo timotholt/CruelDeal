@@ -1,11 +1,11 @@
 import { JSX, Match, Switch } from 'solid-js';
 import {
-  GameTextV2,
-  type GameTextV2Align,
-  type GameTextV2Style,
-  type GameTextV2VerticalAlign,
-  type GameTextV2VerticalMetric,
-} from '../GameTextV2';
+  GameTextV3,
+  type GameTextV3Align,
+  type GameTextV3Style,
+  type GameTextV3VerticalAlign,
+  type GameTextV3VerticalMetric,
+} from '../GameTextV3';
 import { ScaleToFit } from '../ScaleToFit';
 
 // Two orthogonal axes folded into one enum:
@@ -20,10 +20,10 @@ export interface MaterialTextFitOptions {
   baseFontSize: number;
   minScale?: number;
   maxScale?: number;
-  align?: GameTextV2Align;
-  verticalAlign?: GameTextV2VerticalAlign;
-  verticalMetric?: GameTextV2VerticalMetric;
-  textStyle?: GameTextV2Style;
+  align?: GameTextV3Align;
+  verticalAlign?: GameTextV3VerticalAlign;
+  verticalMetric?: GameTextV3VerticalMetric;
+  textStyle?: GameTextV3Style;
   lang?: string;
   dir?: 'ltr' | 'rtl' | 'auto';
   safetyScale?: number;
@@ -53,7 +53,7 @@ export const MaterialTextContent = (props: {
       <Switch>
         <Match when={renderMode() === 'fit' && props.fit}>
           {(fit) => (
-            <GameTextV2
+            <GameTextV3
               text={props.text}
               baseFontSize={fit().baseFontSize}
               minScale={fit().minScale}

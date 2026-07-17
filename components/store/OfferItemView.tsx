@@ -2,7 +2,7 @@ import { Switch, Match, createMemo, Show } from 'solid-js';
 import { OfferItem, OfferItemCurrency, OfferItemCard } from '../../types';
 import { CARDS } from '../../constants';
 import { Card } from '../Card';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { useUI } from '../../contexts/UIContext';
 import { CreditIcon, GoldIcon } from '../ui/CurrencyIcons';
 

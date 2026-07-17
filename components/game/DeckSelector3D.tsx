@@ -1,7 +1,7 @@
 import { createEffect, onCleanup, For } from 'solid-js';
 import { useUser } from '../../contexts/UserContext';
 import { SlantedButton } from '../ui/SlantedButton';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { audio } from '../../services/audio';
 
 interface DeckSelectorProps {

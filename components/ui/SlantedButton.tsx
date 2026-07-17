@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, JSX, children as solidChildren } from 'solid-js';
-import { GameText } from './GameText';
+import { GameTextV3 as GameText } from './GameTextV3';
 
 // Constants for consistent HUD styling
 const SKEW_CLASS = 'skew-x-[-9deg]';

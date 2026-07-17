@@ -1,7 +1,7 @@
 import { createMemo, Show } from 'solid-js';
 import { ActivityLogEntry } from '../../types';
 import { RewardIconGraphic } from '../ui/RewardItemVisual';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 
 interface ActivityLogItemProps {
     item: ActivityLogEntry;
@@ -55,10 +55,10 @@ export const ActivityLogItem = (props: ActivityLogItemProps) => {
 
                         <div class="flex-1 flex flex-col justify-center pl-4 min-w-0">
                             <div class="h-[1.1rem]">
-                                <GameText text={gainHeader()} baseFontSize={0.9} class="text-white font-black italic uppercase !justify-start" />
+                                <GameText text={gainHeader()} baseFontSize={0.9} align="left" class="text-white font-black italic uppercase" />
                             </div>
                             <div class="h-[0.8rem] opacity-60 mt-0.5">
-                                 <GameText text={props.item.title} baseFontSize={0.55} maxLines={1} class="text-indigo-300 font-bold uppercase !justify-start" />
+                                 <GameText text={props.item.title} baseFontSize={0.55} maxLines={1} align="left" class="text-indigo-300 font-bold uppercase" />
                             </div>
                         </div>
                         
@@ -75,7 +75,7 @@ export const ActivityLogItem = (props: ActivityLogItemProps) => {
                     >
                         <span class="text-[0.45rem] font-black text-indigo-400 uppercase tracking-[0.25em] mb-1">Transaction ID</span>
                         <div class="h-6 flex items-center">
-                            <GameText text={props.item.id} baseFontSize={0.65} italic={false} class="text-white font-bold select-all !justify-start" />
+                            <GameText text={props.item.id} baseFontSize={0.65} align="left" textStyle={{ fontStyle: 'normal' }} class="text-white font-bold select-all" />
                         </div>
                         <div class="absolute inset-x-0 bottom-0 h-[1px] bg-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
                     </div>

@@ -1,6 +1,6 @@
 import { createMemo, For } from 'solid-js';
 import { CardDefinition } from '../../types';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 
 interface DeckStatsProps {
     cards: CardDefinition[];

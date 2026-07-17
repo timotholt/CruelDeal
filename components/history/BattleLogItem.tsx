@@ -1,4 +1,4 @@
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 
 interface BattleLogItemProps {
     result: 'VICTORY' | 'DEFEAT' | 'DRAW';
@@ -53,7 +53,8 @@ export const BattleLogItem = (props: BattleLogItemProps) => {
                             <GameText 
                                 text={shortResult()} 
                                 baseFontSize={0.7} 
-                                class={`font-black italic tracking-tighter ${resultColor()} !justify-start drop-shadow-md`}
+                                align="left"
+                                class={`font-black italic tracking-tighter ${resultColor()} drop-shadow-md`}
                             />
                         </div>
                         
@@ -64,7 +65,8 @@ export const BattleLogItem = (props: BattleLogItemProps) => {
                                 text={props.opponent} 
                                 baseFontSize={0.8} 
                                 maxScale={1.0}
-                                class="text-white font-black uppercase italic !justify-start drop-shadow-[0_2px_4px_rgba(0,0,0,1)]"
+                                align="left"
+                                class="text-white font-black uppercase italic drop-shadow-[0_2px_4px_rgba(0,0,0,1)]"
                             />
                         </div>
                     </div>

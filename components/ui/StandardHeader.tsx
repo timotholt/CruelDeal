@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import { CurrencyDisplay } from './CurrencyDisplay';
 import { PremiumHeaderBase } from './PremiumHeaderBase';
-import { GameText } from './GameText';
+import { GameTextV3 as GameText } from './GameTextV3';
 
 interface StandardHeaderProps {
     title: string;
@@ -29,7 +29,8 @@ export const StandardHeader = (props: StandardHeaderProps) => {
                         baseFontSize={1.4}
                         maxScale={1}
                         minScale={0.5}
-                        class="justify-start text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.8)] !font-sans uppercase italic"
+                        align="left"
+                        class="text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.8)] !font-sans uppercase italic"
                     />
                 </div>
             </div>

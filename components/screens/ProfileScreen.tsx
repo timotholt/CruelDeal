@@ -1,7 +1,7 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { StandardHeader } from '../ui/StandardHeader';
 import { useUser } from '../../contexts/UserContext';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { ModalFooter } from '../ui/ModalFooter';
 import { t } from '../../services/localization';
 import { api } from '../../services/api';

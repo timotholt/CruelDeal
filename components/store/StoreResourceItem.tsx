@@ -1,6 +1,6 @@
 import { createSignal, createMemo, onCleanup, Show, onMount, Switch, Match } from 'solid-js';
 import { SlantedButton } from '../ui/SlantedButton';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import { useUser } from '../../contexts/UserContext';
 import { useSynchronizedAction } from '../../hooks/useSynchronizedAction';
 import { CreditIcon, GoldIcon, TokenIcon } from '../ui/CurrencyIcons';

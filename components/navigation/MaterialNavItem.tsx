@@ -1,5 +1,5 @@
 import { JSX } from 'solid-js';
-import { GameText } from '../ui/GameText';
+import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import {
   MaterialButton,
   materialRecipeToInteractiveSurfaceProps,
@@ -42,8 +42,10 @@ export const MaterialNavItem = (props: MaterialNavItemProps) => {
           maxScale={1}
           skewFactor={0.9}
           maxLines={1}
-          italic={resolved().fontStyle === 'italic'}
-          letterSpacing="var(--content-letter-spacing)"
+          textStyle={{
+            fontStyle: resolved().fontStyle === 'italic' ? 'italic' : 'normal',
+            letterSpacing: 'var(--content-letter-spacing)',
+          }}
           class="cd-nav-item__game-text"
         />
       </span>
