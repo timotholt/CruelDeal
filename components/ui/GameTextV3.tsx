@@ -1,5 +1,5 @@
 import { createEffect, onCleanup } from 'solid-js';
-import { assertFontReady } from '../../services/fontManager';
+import { assertFontReady, resolveGameFontFace } from '../../services/fontManager';
 
 // GameTextV3 — live-geometry fit engine.
 //
@@ -48,7 +48,9 @@ export interface GameTextV3Props {
 
 const defaultTextStyle: Required<GameTextV3Style> = {
   fontFamily: '"IBM Plex Sans Condensed", sans-serif',
-  fontWeight: 900,
+  // IBM Plex Sans Condensed ships through weight 700. Requesting 900 silently
+  // selected 700 anyway, so make the real painted face explicit.
+  fontWeight: 700,
   fontStyle: 'italic',
   letterSpacing: '-0.05em',
   lineHeight: 0.95,
@@ -71,7 +73,7 @@ const resolvedMode = (text: string, maxLines: number, fitMode?: GameTextV3FitMod
 };
 
 const whiteSpaceForMode = (mode: GameTextV3FitMode) => (mode === 'paragraph' ? 'pre-wrap' : 'pre');
-const displayForMode = (mode: GameTextV3FitMode) => (mode === 'paragraph' ? '-webkit-box' : 'block');
+const displayForMode = (mode: GameTextV3FitMode) => (mode === 'single-line' ? 'block' : '-webkit-box');
 const widthForMode = (mode: GameTextV3FitMode) => (mode === 'paragraph' ? '100%' : 'max-content');
 
 // Italic glyphs overhang their advance widths; reserve room so the skewed
@@ -149,7 +151,17 @@ export const GameTextV3 = (props: GameTextV3Props) => {
   const fitMode = () => resolvedMode(props.text, maxLines(), props.fitMode);
   const verticalMetric = () => props.verticalMetric ?? (fitMode() === 'single-line' ? 'ink' : 'line-box');
   const skewFactor = () => props.skewFactor ?? 1;
-  const textStyle = () => resolvedStyle(props.textStyle);
+  const textStyle = () => {
+    const requested = resolvedStyle(props.textStyle);
+    return {
+      ...requested,
+      ...resolveGameFontFace(requested.fontFamily, requested.fontWeight, requested.fontStyle),
+    };
+  };
+  const renderedText = () => {
+    if (fitMode() !== 'fixed-lines') return props.text;
+    return props.text.split('\n').slice(0, maxLines()).join('\n');
+  };
 
   createEffect(() => {
     const container = containerRef;
@@ -157,7 +169,7 @@ export const GameTextV3 = (props: GameTextV3Props) => {
     if (!container || !textEl) return;
 
     const style = textStyle();
-    assertFontReady(style.fontFamily);
+    assertFontReady(style.fontFamily, style.fontWeight, style.fontStyle);
 
     const fit = () => {
       const rect = container.getBoundingClientRect();
@@ -173,40 +185,67 @@ export const GameTextV3 = (props: GameTextV3Props) => {
       textEl.style.top = '0px';
       const basePx = Number.parseFloat(getComputedStyle(textEl).fontSize) || props.baseFontSize * 16;
 
-      const fits = () => {
+      const measurements = () => {
         const r = textEl.getBoundingClientRect();
-        const width = Math.max(r.width, textEl.scrollWidth);
-        const height = Math.max(r.height, textEl.scrollHeight);
-        return width <= containerWidth * safetyScale + 0.5 && height <= containerHeight + 0.5;
+        const computed = getComputedStyle(textEl);
+        return {
+          width: Math.max(r.width, textEl.scrollWidth),
+          height: Math.max(r.height, textEl.scrollHeight),
+          lineHeight: Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) || 1,
+        };
+      };
+
+      const fits = () => {
+        const measured = measurements();
+        // Paragraphs intentionally occupy the full container width so the
+        // browser has a stable wrapping column. Their element box therefore
+        // equals containerWidth even when the text is short; only scrollWidth
+        // beyond that column is overflow. Applying safetyScale to the fixed
+        // box made every paragraph fail, including at minScale.
+        const allowedWidth = mode === 'paragraph'
+          ? containerWidth
+          : containerWidth * safetyScale;
+        const allowedHeight = mode === 'paragraph'
+          ? Math.min(containerHeight, measured.lineHeight * maxLines())
+          : containerHeight;
+        return measured.width <= allowedWidth + 0.5
+          && measured.height <= allowedHeight + 1;
       };
 
       let scale: number;
       if (mode === 'paragraph') {
         // Wrapping is nonlinear in font size — binary-search the largest
         // fitting scale. Every probe is a scoped micro-layout of this subtree.
-        let lo = minScale();
-        let hi = maxScale();
+        const minimum = Math.min(minScale(), maxScale());
+        const maximum = Math.max(minScale(), maxScale());
+        let lo = minimum;
+        let hi = maximum;
         textEl.style.fontSize = `${basePx * hi}px`;
         if (fits()) {
           scale = hi;
         } else {
-          for (let i = 0; i < 7; i += 1) {
-            const mid = (lo + hi) / 2;
-            textEl.style.fontSize = `${basePx * mid}px`;
-            if (fits()) lo = mid;
-            else hi = mid;
+          textEl.style.fontSize = `${basePx * lo}px`;
+          if (!fits()) {
+            // The content cannot fit even at the readability floor. Paint at
+            // the floor and let maxLines/overflow clipping enforce the box.
+            scale = lo;
+          } else {
+            for (let i = 0; i < 8; i += 1) {
+              const mid = (lo + hi) / 2;
+              textEl.style.fontSize = `${basePx * mid}px`;
+              if (fits()) lo = mid;
+              else hi = mid;
+            }
+            scale = lo;
           }
-          scale = lo;
           textEl.style.fontSize = `${basePx * scale}px`;
         }
       } else {
         // Unwrapped text scales linearly with font size: one measurement at
         // base size determines the scale, one verify pass guards rounding.
-        const r = textEl.getBoundingClientRect();
-        const width = Math.max(r.width, textEl.scrollWidth);
-        const height = Math.max(r.height, textEl.scrollHeight);
-        const scaleX = (containerWidth * safetyScale) / Math.max(width, 1);
-        const scaleY = containerHeight / Math.max(height, 1);
+        const measured = measurements();
+        const scaleX = (containerWidth * safetyScale) / Math.max(measured.width, 1);
+        const scaleY = containerHeight / Math.max(measured.height, 1);
         scale = Math.min(maxScale(), Math.max(minScale(), Math.min(scaleX, scaleY)));
         textEl.style.fontSize = `${basePx * scale}px`;
         if (!fits() && scale > minScale()) {
@@ -270,9 +309,12 @@ export const GameTextV3 = (props: GameTextV3Props) => {
         dir={props.dir ?? 'auto'}
         style={{
           position: 'relative',
+          'box-sizing': 'border-box',
           display: displayForMode(mode()),
           width: widthForMode(mode()),
           'max-width': '100%',
+          'min-width': '0',
+          'min-height': '0',
           'font-family': style().fontFamily,
           'font-size': `${props.baseFontSize}rem`,
           'font-weight': style().fontWeight,
@@ -284,13 +326,14 @@ export const GameTextV3 = (props: GameTextV3Props) => {
           'white-space': whiteSpaceForMode(mode()),
           'overflow-wrap': 'normal',
           'word-break': 'normal',
+          overflow: mode() === 'single-line' ? 'visible' : 'hidden',
           'padding-inline-start': inlinePadding().start,
           'padding-inline-end': inlinePadding().end,
           '-webkit-box-orient': 'vertical',
           '-webkit-line-clamp': maxLines(),
         }}
       >
-        {props.text}
+        {renderedText()}
       </div>
     </div>
   );
