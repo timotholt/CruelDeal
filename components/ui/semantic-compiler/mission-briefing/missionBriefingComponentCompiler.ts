@@ -8,8 +8,10 @@ import type { FingerprintHoldActionRuntimePlanV1 } from '../../semantic-runtime/
 import {
   compileMissionPaintV1,
   paintClassForGraphId,
+  paintShellClassMapForGraphId,
   type PaintAllocationReportV1,
   type PaintIrV1,
+  type PaintShellClassMapV1,
 } from '../paint/paintCompiler';
 import {
   validateMissionAppearanceDocumentV1,
@@ -34,6 +36,21 @@ export type RuntimeContentV1 =
 export type RuntimeNumberV1 =
   | { kind: 'literal'; value: number }
   | { kind: 'binding'; key: string };
+
+export interface MissionBriefingShellMapV1 {
+  panel: PaintShellClassMapV1;
+  terms: PaintShellClassMapV1;
+  primaryAction: {
+    slots: {
+      underlay: boolean;
+      overlay: boolean;
+    };
+    idle: PaintShellClassMapV1;
+    holding: PaintShellClassMapV1;
+    complete: PaintShellClassMapV1;
+    disabled: PaintShellClassMapV1;
+  };
+}
 
 export interface MissionBriefingComponentPlanV1 {
   schemaVersion: 1;
@@ -69,6 +86,7 @@ export interface MissionBriefingComponentPlanV1 {
     };
     typography: Record<MissionTypographyRoleId, string>;
   };
+  shellMap?: MissionBriefingShellMapV1;
 }
 
 export interface MissionBriefingCompileDiagnosticV1 {
@@ -175,7 +193,16 @@ export const compileMissionBriefingComponentV1 = (
     actionDisabled: resolveAppearanceReference(source.slots.primaryAction.appearance.disabled, 'slots.primaryAction.appearance.disabled', 'primaryAction', 'disabled', graphsById, diagnostics),
   };
   const issues = Object.values(references).flatMap((result) => result.ok ? [] : [result.issue]);
-  if (issues.length) return { ok: false, issues };
+  if (
+    !references.panel.ok
+    || !references.terms.ok
+    || !references.actionIdle.ok
+    || !references.actionHolding.ok
+    || !references.actionComplete.ok
+    || !references.actionDisabled.ok
+  ) {
+    return { ok: false, issues };
+  }
 
   if (source.appearance['frame.idle']) {
     diagnostics.push({
@@ -187,6 +214,31 @@ export const compileMissionBriefingComponentV1 = (
   }
 
   const primaryAction = source.slots.primaryAction;
+  const actionShellMaps = {
+    idle: paintShellClassMapForGraphId(paintResult.allocation, references.actionIdle.graph.id),
+    holding: paintShellClassMapForGraphId(paintResult.allocation, references.actionHolding.graph.id),
+    complete: paintShellClassMapForGraphId(paintResult.allocation, references.actionComplete.graph.id),
+    disabled: paintShellClassMapForGraphId(paintResult.allocation, references.actionDisabled.graph.id),
+  };
+  const shellMap: MissionBriefingShellMapV1 = {
+    panel: paintShellClassMapForGraphId(paintResult.allocation, references.panel.graph.id),
+    terms: paintShellClassMapForGraphId(paintResult.allocation, references.terms.graph.id),
+    primaryAction: {
+      slots: {
+        underlay: Object.values(actionShellMaps).some((map) => Boolean(map.underlay)),
+        overlay: Object.values(actionShellMaps).some((map) => Boolean(map.overlay)),
+      },
+      ...actionShellMaps,
+    },
+  };
+  const needsShell = Boolean(
+    shellMap.panel.underlay
+    || shellMap.panel.overlay
+    || shellMap.terms.underlay
+    || shellMap.terms.overlay
+    || shellMap.primaryAction.slots.underlay
+    || shellMap.primaryAction.slots.overlay
+  );
   const plan: MissionBriefingComponentPlanV1 = {
     schemaVersion: 1,
     compilerVersion: MISSION_BRIEFING_COMPILER_VERSION,
@@ -238,6 +290,7 @@ export const compileMissionBriefingComponentV1 = (
       },
       typography: typographyResult.classMap,
     },
+    ...(needsShell ? { shellMap } : {}),
   };
   return {
     ok: true,

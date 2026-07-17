@@ -29,14 +29,23 @@ export {
   publishShinyTextureVars,
 } from './engine/cssVars';
 export {
+  LOCKED_METALLIC_REFLECTION,
+  METALLIC_MATERIAL_COLORS,
+  METALLIC_REFLECTION_DATA_URL,
+} from './engine/reflectionFilm';
+export type { MetallicMaterialId } from './engine/reflectionFilm';
+export {
   direction,
   enableGyro,
+  getReflexFpsCap,
   gyroActive,
   initReflex,
   pointer,
+  setReflexFpsCap,
   setSheenEnabled,
   sheenEnabled,
 } from './engine/reflexController';
+export type { ReflexFpsCap } from './engine/reflexController';
 export {
   createReflexShift,
   REFLEX_CSS_SHIFT,

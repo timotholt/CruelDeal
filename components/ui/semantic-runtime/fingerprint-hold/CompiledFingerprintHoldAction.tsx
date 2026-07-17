@@ -1,4 +1,12 @@
-import { createEffect, createSignal, onCleanup, onMount, type JSX } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+  type JSX,
+} from 'solid-js';
 import type { UiActionEventHandler } from '../actions/UiActionEvent';
 import {
   createFingerprintHoldController,
@@ -20,6 +28,14 @@ export const CompiledFingerprintHoldAction = (props: {
   label: JSX.Element;
   onAction: UiActionEventHandler;
   classForState?: (state: FingerprintHoldState) => string;
+  shellSlots?: {
+    underlay: boolean;
+    overlay: boolean;
+  };
+  shellForState?: (state: FingerprintHoldState) => {
+    underlay?: string;
+    overlay?: string;
+  };
 }) => {
   const [state, setState] = createSignal<FingerprintHoldState>('idle');
   const [reducedMotion, setReducedMotion] = createSignal(false);
@@ -28,7 +44,7 @@ export const CompiledFingerprintHoldAction = (props: {
     onStateChange: setState,
     onAction: (event) => props.onAction(event),
   });
-  let controller = createController();
+  let controller = untrack(createController);
   let planIdentity = '';
 
   createEffect(() => {
@@ -124,7 +140,21 @@ export const CompiledFingerprintHoldAction = (props: {
         event.stopPropagation();
       }}
     >
+      <Show when={props.shellSlots?.underlay}>
+        <span
+          class={`ui-paint-helper ui-paint-helper--underlay ${props.shellForState?.(state()).underlay || ''}`}
+          data-paint-helper="underlay"
+          aria-hidden="true"
+        />
+      </Show>
       {props.label}
+      <Show when={props.shellSlots?.overlay}>
+        <span
+          class={`ui-paint-helper ui-paint-helper--overlay ${props.shellForState?.(state()).overlay || ''}`}
+          data-paint-helper="overlay"
+          aria-hidden="true"
+        />
+      </Show>
     </button>
   );
 };

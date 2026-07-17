@@ -1,5 +1,6 @@
 import * as v from 'valibot';
 import { materialTextEmbossShadow, type MaterialTextEmbossMode } from '../../material-node/materialTextEmboss';
+import { authoringControlCssProperty } from '../controls/authoringControlRegistry';
 
 export const missionTypographyRoleIds = ['title', 'body', 'availability', 'termLabel', 'termValue', 'actionLabel'] as const;
 export type MissionTypographyRoleId = typeof missionTypographyRoleIds[number];
@@ -70,16 +71,32 @@ export const missionTypographyDocumentV1Schema: v.GenericSchema<MissionTypograph
 const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 export const missionTypographyClass = (role: MissionTypographyRoleId) => `ui-type-mission-${slug(role)}`;
 
+const typographyProperties = {
+  fontFamily: authoringControlCssProperty('type.fontFamily', 'font-family'),
+  fontSize: authoringControlCssProperty('type.fontSize', 'font-size'),
+  weight: authoringControlCssProperty('type.weight', 'font-weight'),
+  lineHeight: authoringControlCssProperty('type.lineHeight', 'line-height'),
+  letterSpacing: authoringControlCssProperty('type.letterSpacing', 'letter-spacing'),
+  transform: authoringControlCssProperty('type.transform', 'text-transform'),
+  color: authoringControlCssProperty('type.color', 'color'),
+  opacity: authoringControlCssProperty('type.opacity', 'color'),
+  emboss: authoringControlCssProperty('type.embossMode', 'text-shadow'),
+} as const;
+
+const colorWithOpacity = (hex: string, opacity: number) => {
+  const numeric = Number.parseInt(hex.slice(1), 16);
+  return `rgb(${numeric >> 16} ${(numeric >> 8) & 255} ${numeric & 255} / ${Number(opacity.toFixed(4))})`;
+};
+
 const cssForStyle = (style: MissionTextStyleV1) => [
-  `font-family: ${style.fontFamily}`,
-  `font-size: ${Number(style.sizeCqw.toFixed(4))}cqw`,
-  `font-weight: ${style.weight}`,
-  `line-height: ${Number(style.lineHeight.toFixed(4))}`,
-  `letter-spacing: ${Number(style.letterSpacingEm.toFixed(4))}em`,
-  `text-transform: ${style.transform}`,
-  `color: ${style.color}`,
-  `opacity: ${Number(style.opacity.toFixed(4))}`,
-  `text-shadow: ${materialTextEmbossShadow({
+  `${typographyProperties.fontFamily}: ${style.fontFamily}`,
+  `${typographyProperties.fontSize}: ${Number(style.sizeCqw.toFixed(4))}cqw`,
+  `${typographyProperties.weight}: ${style.weight}`,
+  `${typographyProperties.lineHeight}: ${Number(style.lineHeight.toFixed(4))}`,
+  `${typographyProperties.letterSpacing}: ${Number(style.letterSpacingEm.toFixed(4))}em`,
+  `${typographyProperties.transform}: ${style.transform}`,
+  `${typographyProperties.color}: ${colorWithOpacity(style.color, style.opacity)}`,
+  `${typographyProperties.emboss}: ${materialTextEmbossShadow({
     contentTone: style.color.toLowerCase() === '#ffffff' ? 'white' : 'gray',
     textEmbossMode: style.embossMode,
     textEmbossStrength: style.embossStrength,

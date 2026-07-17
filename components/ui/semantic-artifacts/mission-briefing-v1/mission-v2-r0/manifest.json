@@ -1,6 +1,6 @@
 {
   "artifactId": "mission-v2-r0",
-  "artifactSetSha256": "6ec9544ada80a890d90fc134b8837a1685d1aa534ac0b2891f7c6b34f20f6465",
+  "artifactSetSha256": "2611224076072f0bbf1c5ed66cc5cad9127b8b35aa36a333b723a829358f7c42",
   "artifactVersion": 1,
   "assets": [
     {
@@ -14,6 +14,13 @@
       "id": "hex-grid-v1",
       "kind": "embedded-svg-texture",
       "owner": "panel.background"
+    },
+    {
+      "id": "edge-bw-chips-fine",
+      "kind": "vendored-svg-mask",
+      "owner": "panel::after",
+      "path": "/art/ui/edge-bw-chips-fine.svg",
+      "sha256": "7ba5cee2693457d83949d72976d36af8c07a91f0cae6a578258aeefcdc15f38f"
     }
   ],
   "browserEvidence": "Google Chrome 150.0.7871.124",
@@ -22,14 +29,14 @@
   "componentType": "MissionBriefing",
   "files": [
     {
-      "bytes": 9114,
+      "bytes": 9110,
       "path": "allocation.json",
-      "sha256": "d788f3e2ae4521c7afcf52420224ab2d7f52a21794d0f3841a7339b8b354aa54"
+      "sha256": "54aee01713e0c57248883e666ae5971d52ce42a06582ee665e577b19d7779f6f"
     },
     {
-      "bytes": 17471,
+      "bytes": 18096,
       "path": "appearance.css",
-      "sha256": "7a805baba1af3b92c5fa8fc43a08c61ecc30167153c18f72a5460ea38798cf22"
+      "sha256": "deeafdbdc7a65e00393953e72ac52f07c7ff7de75dbf80460dd4a3ff4a0009eb"
     },
     {
       "bytes": 3492,
@@ -42,9 +49,9 @@
       "sha256": "3d204d842cdefd0619bc4189776ad03da4f36fe7eec97ab16651b4127ec507d8"
     },
     {
-      "bytes": 2412,
+      "bytes": 2524,
       "path": "reference.html",
-      "sha256": "6cf61a03de8c7d6394d9fc50b6fdf4fcf60a806a236fa9a915f141e32c6fa075"
+      "sha256": "7c3775139f1b1b243285298d0825f1a816d141176df6f39eae7ca7522252a3b0"
     }
   ],
   "fonts": [
@@ -61,7 +68,7 @@
   ],
   "inputs": {
     "appearanceSha256": "c310e5207e016c57072f39abe6f419f2da0f65800a561c177a8a4023a4cc7174",
-    "layoutCssSha256": "7f94425e3296574a7be06e053e68508d325c9ad8b7c10684545aaca10ca0d36c",
+    "layoutCssSha256": "1c2b672cb548b47d164b65d02775c7fb9bbd3a5aa731939c4e1a3ab928d26a0f",
     "sourceSha256": "507703c8d49ed2a4d3a9f8a0aba1fb44b427e7e5c993ed1fec967bf5cb90ded7"
   },
   "schemaVersion": 1,

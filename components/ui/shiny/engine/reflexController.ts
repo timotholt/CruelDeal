@@ -31,9 +31,16 @@ const commit = (gx: number, gy: number, src: ReflexPointer['source'], x: number,
   writeRootVars(gx, gy);
 };
 
-const REFLEX_FPS_CAP = 60;
-const MIN_FRAME_MS = 1000 / REFLEX_FPS_CAP - 4;
-let lastCommitTs = 0;
+export type ReflexFpsCap = 15 | 30 | 60;
+
+let reflexFpsCap: ReflexFpsCap = 30;
+let lastCommitTs = Number.NEGATIVE_INFINITY;
+
+export const getReflexFpsCap = () => reflexFpsCap;
+
+export const setReflexFpsCap = (fps: ReflexFpsCap) => {
+  reflexFpsCap = fps;
+};
 
 const flush = (ts?: number) => {
   frame = 0;
@@ -43,7 +50,8 @@ const flush = (ts?: number) => {
     return;
   }
   const now = ts ?? (typeof performance !== 'undefined' ? performance.now() : 0);
-  if (now - lastCommitTs < MIN_FRAME_MS && (pendingMouse || pendingTilt)) {
+  const minFrameMs = 1000 / reflexFpsCap - 1;
+  if (now - lastCommitTs < minFrameMs && (pendingMouse || pendingTilt)) {
     schedule();
     return;
   }
@@ -85,28 +93,42 @@ const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
 };
 
 let started = false;
+let orientationListening = false;
+
+type DeviceOrientationEventConstructor = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<'granted' | 'denied'>;
+};
+
+const orientationEventConstructor = (): DeviceOrientationEventConstructor | undefined => (
+  typeof DeviceOrientationEvent === 'undefined'
+    ? undefined
+    : DeviceOrientationEvent as DeviceOrientationEventConstructor
+);
+
+const listenForOrientation = () => {
+  if (orientationListening) return;
+  window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
+  orientationListening = true;
+  setGyroActive(true);
+};
 
 export const initReflex = () => {
   if (started || typeof window === 'undefined') return;
   started = true;
   window.addEventListener('pointermove', handlePointerMove, { passive: true });
-  // @ts-ignore
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
-    window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
-    setGyroActive(true);
-  }
+  const orientation = orientationEventConstructor();
+  if (orientation && typeof orientation.requestPermission !== 'function') listenForOrientation();
 };
 
 export const enableGyro = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
-  // @ts-ignore
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+  const orientation = orientationEventConstructor();
+  if (!orientation) return false;
+  if (typeof orientation.requestPermission === 'function') {
     try {
-      // @ts-ignore
-      const state = await DeviceOrientationEvent.requestPermission();
+      const state = await orientation.requestPermission();
       if (state === 'granted') {
-        window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
-        setGyroActive(true);
+        listenForOrientation();
         return true;
       }
     } catch (e) {
@@ -114,7 +136,6 @@ export const enableGyro = async (): Promise<boolean> => {
     }
     return false;
   }
-  window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
-  setGyroActive(true);
+  listenForOrientation();
   return true;
 };

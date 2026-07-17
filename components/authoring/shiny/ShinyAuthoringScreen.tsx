@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect } from 'solid-js';
+import { createSignal, For, Show, createEffect, onMount } from 'solid-js';
 import { KanIcon } from '../../ui/shiny';
 import { createReflexShift, REFLEX_SVG_UNITS } from '../../ui/shiny';
 import { SHINY_MATERIALS, bakeShinyTextureFromStops } from '../../ui/shiny';
@@ -11,7 +11,8 @@ import {
   sheenEnabled, 
   setSheenEnabled,
   enableGyro,
-  gyroActive
+  gyroActive,
+  publishShinyTextureVars,
 } from '../../ui/shiny';
 import { MaterialRichText } from '../../ui/material-node/MaterialRichText';
 
@@ -189,6 +190,8 @@ const SOFTBOX_PRESETS: Record<string, SoftboxPreset> = {
 };
 
 export const ShinyAuthoringScreen = () => {
+  onMount(publishShinyTextureVars);
+
   // Signals for interactive SVG controls
   const interactiveSheen = sheenEnabled;
   const setInteractiveSheen = setSheenEnabled;

@@ -40,14 +40,19 @@ const workbench = createMainMaterialWorkbenchParts([
 ]);
 
 assert.equal(workbench[0].id, 'backdrop');
+assert.equal(workbench[0].label, 'App');
+assert.equal(workbench[0].detail, 'root control');
+assert.equal(workbench[0].depth, 0);
 assert.equal(workbench.some((part) => part.id === 'profileButton'), false);
 assert.equal(workbench.some((part) => part.id === 'currencyButtons'), false);
 assert.equal(workbench.some((part) => part.id === 'navBar'), false);
 assert.equal(workbench.find((part) => part.id === 'feed:card:card_type_01')?.label, 'Mission Briefing');
-assert.equal(workbench.find((part) => part.id === topBarProfileTargetId)?.depth, 1);
+assert.equal(workbench.find((part) => part.id === 'feed:card:card_type_01')?.depth, 1);
+assert.equal(workbench.find((part) => part.id === 'feed:card:card_type_01:node:cta')?.depth, 2);
+assert.equal(workbench.find((part) => part.id === topBarProfileTargetId)?.depth, 2);
 assert.equal(workbench.some((part) => part.id === topBarCurrencyTargetId('credits')), true);
 assert.equal(workbench.some((part) => part.id === toolbarMaterialTargetId('toolbar-log')), true);
 assert.equal(workbench.some((part) => part.id === navItemTargetId(0)), true);
-assert.equal(workbench.find((part) => part.id === 'navBarContainer')?.depth, 0);
+assert.equal(workbench.find((part) => part.id === 'navBarContainer')?.depth, 1);
 
 console.log('Main material workbench model tests passed');

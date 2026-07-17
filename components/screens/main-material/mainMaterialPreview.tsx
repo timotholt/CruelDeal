@@ -38,6 +38,7 @@ import type { UiActionEventHandler } from '../../ui/semantic-runtime/actions/UiA
 import { MissionBriefingRuntime } from '../../ui/semantic-runtime/mission-briefing/MissionBriefingRuntime';
 import { MissionBriefingScreenContext } from '../../ui/semantic-runtime/mission-briefing/MissionBriefingScreenContext';
 import type { MissionBriefingComponentPlanV1 } from '../../ui/semantic-compiler/mission-briefing/missionBriefingComponentCompiler';
+import type { AppearancePartId } from '../../ui/semantic-compiler/paint/paintSource';
 
 type FeedMaterialTargetId = MainFeedMaterialTargetId<FeedCardTypeId>;
 
@@ -377,6 +378,7 @@ export const MainMaterialPreview = (props: {
   onUiAction?: UiActionEventHandler;
   missionBriefingPlan?: MissionBriefingComponentPlanV1;
   missionBriefingActive?: boolean;
+  missionBriefingSelectionClass?: (part: AppearancePartId) => string;
 }) => {
   const [hoveredTargetId, setHoveredTargetId] = createSignal<string | null>(null);
   const [pressedTargetId, setPressedTargetId] = createSignal<string | null>(null);
@@ -707,6 +709,7 @@ export const MainMaterialPreview = (props: {
             />
             <MissionBriefingRuntime
               plan={props.missionBriefingPlan!}
+              selectionClassForPart={props.missionBriefingSelectionClass}
               onAction={(event) => props.onUiAction?.(event)}
             />
           </Show>

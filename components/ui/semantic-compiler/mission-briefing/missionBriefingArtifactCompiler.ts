@@ -87,6 +87,13 @@ export const compileMissionBriefingArtifactV1 = (
         sha256: paintMaskAssets['fingerprint-svgrepo-v1'].sha256,
       },
       { id: 'hex-grid-v1', kind: 'embedded-svg-texture', owner: 'panel.background' },
+      {
+        id: 'edge-bw-chips-fine',
+        kind: 'vendored-svg-mask',
+        owner: 'panel::after',
+        path: '/art/ui/edge-bw-chips-fine.svg',
+        sha256: '7ba5cee2693457d83949d72976d36af8c07a91f0cae6a578258aeefcdc15f38f',
+      },
     ],
     fonts: [
       { family: 'DIN Condensed', style: 'Bold', sha256: '36958182a424e1e8a1307b2636a615a6323ce1bbfadda136735ab4fb3bd26ceb' },

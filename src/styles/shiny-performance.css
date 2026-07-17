@@ -1,9 +1,9 @@
 .shiny-performance-screen {
   --perf-reflex-x: 0;
   --perf-reflex-y: 0;
-  --perf-white-reflection: rgba(255, 255, 238, 1);
-  --perf-white-reflection-opacity: 0.68;
-  --perf-black-reflection-opacity: 0.38;
+  --perf-white-reflection: rgba(255, 252, 229, 0.92);
+  --perf-white-reflection-opacity: 0.52;
+  --perf-black-reflection-opacity: 0.2;
   --perf-kan-reflection-travel-x: 78px;
   --perf-kan-reflection-travel-y: 96px;
   --perf-metal-base: #d6a338;

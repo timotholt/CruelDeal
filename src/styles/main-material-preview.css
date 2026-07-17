@@ -1469,6 +1469,15 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
   outline-offset: 3px;
 }
 
+.main-material-page .mission-briefing-runtime.is-editing-persistent,
+.main-material-page .mission-briefing-runtime.is-editing-flash,
+.main-material-page .mission-briefing-runtime__footer.is-editing-persistent,
+.main-material-page .mission-briefing-runtime__footer.is-editing-flash,
+.main-material-page .mission-briefing-runtime__action.is-editing-persistent,
+.main-material-page .mission-briefing-runtime__action.is-editing-flash {
+  outline-offset: -2px;
+}
+
 .main-material-page .is-editing-persistent {
   outline-color: rgb(239 200 93 / 0.9);
   box-shadow: 0 0 0 1px rgb(239 200 93 / 0.2), 0 0 18px rgb(239 200 93 / 0.22);
@@ -1977,6 +1986,47 @@ section.main-material-backdrop-surface.cd-surface > .cd-surface__material {
 
 .main-material-surface-editor {
   display: contents;
+}
+
+.main-material-control-layers {
+  display: grid;
+  gap: 4px;
+  padding: 4px 0 8px;
+}
+
+.main-material-control-layer {
+  display: grid;
+  grid-template-columns: 20px minmax(70px, 0.6fr) minmax(0, 1fr);
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: rgb(0 0 0 / 0.16);
+  color: rgb(255 255 255 / 0.48);
+}
+
+.main-material-control-layer.is-active {
+  border-color: rgb(245 179 31 / 0.34);
+  color: rgb(255 255 255 / 0.84);
+}
+
+.main-material-control-layer > span {
+  color: #f5b31f;
+  font: 600 10px/1 var(--ui-mono, monospace);
+}
+
+.main-material-control-layer > strong {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.main-material-control-layer > small {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cruel-company-commandbar .skew-x-\[-9deg\] {

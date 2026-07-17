@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Metal Runtime Contract</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    html {
+      color: #fff;
+      background: #080a08;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+      margin: 0;
+      padding: 24px;
+    }
+    main {
+      display: grid;
+      width: min(560px, 100%);
+      gap: 28px;
+    }
+    header {
+      display: grid;
+      gap: 8px;
+      border-bottom: 1px solid rgb(255 255 255 / 0.14);
+      padding-bottom: 18px;
+    }
+    h1, p {
+      margin: 0;
+    }
+    h1 {
+      font-size: 36px;
+      letter-spacing: 0;
+    }
+    p {
+      color: rgb(255 255 255 / 0.62);
+      font-size: 14px;
+    }
+    .metal-proof-text {
+      display: grid;
+      gap: 12px;
+      font-size: 30px;
+      font-weight: 800;
+    }
+    .metal-proof-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+    }
+    .metal-proof-button {
+      min-height: 48px;
+      border: 1px solid rgb(255 255 255 / 0.3);
+      border-radius: 4px;
+      color: #171207;
+      font: 800 14px/1 inherit;
+      text-transform: uppercase;
+    }
+    .metal-proof-tilt {
+      min-height: 48px;
+      padding: 0 14px;
+      border: 1px solid rgb(214 163 56 / 0.5);
+      border-radius: 4px;
+      color: #fff;
+      background: transparent;
+      font: 700 12px/1 inherit;
+      text-transform: uppercase;
+    }
+    .metal-proof-progress {
+      height: 7px;
+      overflow: hidden;
+      background: #202720;
+    }
+    .metal-proof-progress > span {
+      display: block;
+      width: 68%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body class="fonts-ready">
+  <main>
+    <header>
+      <h1><span id="gold-text" class="metal-gold">Yellow Gold World</span></h1>
+      <p>CRUELNET // MATERIAL CLEARANCE</p>
+    </header>
+
+    <section class="metal-proof-text" aria-label="Metal text">
+      <span id="silver-text" class="metal-silver">Silver clearance</span>
+      <span id="bronze-text" class="metal-bronze">Bronze access</span>
+    </section>
+
+    <section class="metal-proof-actions">
+      <button id="gold-button" class="metal-surface-gold metal-proof-button">Initiate extraction</button>
+      <button id="tilt-button" class="metal-proof-tilt">Enable tilt</button>
+    </section>
+
+    <div class="metal-proof-progress" aria-label="Progress">
+      <span id="gold-progress" class="metal-surface-gold"></span>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      enableGyro,
+      initReflex,
+      publishShinyCssVars,
+    } from "/components/ui/shiny/index.ts";
+
+    publishShinyCssVars();
+    initReflex();
+    document.querySelector("#tilt-button").addEventListener("click", () => {
+      void enableGyro();
+    });
+  </script>
+</body>
+</html>

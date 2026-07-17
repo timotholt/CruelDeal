@@ -8,6 +8,10 @@ This document is the architectural authority for the Cruel Deal UI authoring
 system. When an older editor, surface, composition, emitter, or control-contract
 document disagrees with this spec, this spec wins.
 
+The property, layer-allocation, control, and performance rules required by this
+architecture are defined in
+`docs/css-effects-surface-compiler-rulebook.md`.
+
 The first delivery governed by this architecture is defined in
 `docs/mission-briefing-v2-vertical-slice-spec.md`.
 
@@ -83,8 +87,20 @@ The compiler lowers them into the cheapest faithful browser paint operations:
 - a helper element only when the target browser cannot express the result on
   the semantic host and its pseudo-elements.
 
-There is no permanent "one authored layer equals one span" rule and no arbitrary
-fixed three-element renderer rule.
+There is no permanent "one authored layer equals one span" rule.
+
+Each styled appearance part has a bounded surface shell: its semantic host plus
+at most three surface-owned children for underlay, content wrapping, and
+overlay. Most parts use fewer. Semantic descendants required by the component's
+function do not count as decorative shell elements, but every such descendant
+must be justified by the component contract.
+
+Pseudo-elements are bounded compiler paint slots, not permission to grow an
+untracked renderer. If an appearance graph cannot fit the host, its
+pseudo-elements, and the bounded shell, the compiler must fold compatible
+operations, pre-bake static paint, apply a declared approximation, or reject the
+graph. The exact slot and conflict rules are authoritative in
+`docs/css-effects-surface-compiler-rulebook.md`.
 
 ### G3 — Deterministic output and bounded visual fidelity
 
@@ -296,10 +312,18 @@ Allocation prefers, in order:
 1. the semantic host's backgrounds, borders, shadows, filters, masks, and vars;
 2. the host's `::before` and `::after` slots;
 3. an existing semantic child when the paint belongs to that child;
-4. the smallest justified decorative helper subtree.
+4. the optional bounded underlay or overlay helper.
+
+The host plus surface-owned underlay, content wrapper, and overlay may not
+exceed four shell elements for one appearance part. The compiler reserves the
+union of slots required by every component state so interaction never mounts or
+unmounts decorative helpers.
 
 The allocation report records which authored layers were folded into which CSS
-operations and why helpers were required.
+operations, which pseudo/helper slots were consumed, why a helper was required,
+the mobile cost tier, and any pre-baked or approximated result. Slot conflicts
+follow the deterministic policy in the CSS and Effects Surface Compiler
+Rulebook; they are never resolved by silently dropping or reordering paint.
 
 ### 4.5 Stable emission
 
@@ -504,6 +528,7 @@ Change this document before implementation if a proposal would:
 
 - make generic nodes the source of semantic behavior;
 - map authored paint layers directly to DOM children;
+- exceed the bounded surface shell for a styled appearance part;
 - introduce another production renderer or authoring schema;
 - weaken deterministic artifact guarantees;
 - promise cross-browser bit identity without a pinned identical renderer;

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { textureOptions, type TextureKind } from '../../material-lab/TextureOptions';
 import { paintMaskAssetIds, type PaintMaskAssetId } from './paintMaskAssets';
 import {
   missionTypographyDocumentV1Schema,
@@ -14,6 +15,16 @@ export const appearanceStateIds = ['idle', 'hover', 'focus-visible', 'holding', 
 export type AppearanceStateId = typeof appearanceStateIds[number];
 export const paintBorderEdges = ['top', 'right', 'bottom', 'left'] as const;
 export type PaintBorderEdge = typeof paintBorderEdges[number];
+export const paintCornerIds = ['top-left', 'top-right', 'bottom-right', 'bottom-left'] as const;
+export type PaintCornerId = typeof paintCornerIds[number];
+export const proceduralPaintTextureIds = ['hex-grid', 'fine-noise'] as const;
+export type PaintTextureId = typeof proceduralPaintTextureIds[number] | Exclude<TextureKind, 'none'>;
+export const paintTextureOptions = [
+  { id: 'hex-grid', label: 'Hex Grid' },
+  { id: 'fine-noise', label: 'Fine Noise' },
+  ...textureOptions.filter((option) => option.id !== 'none').map((option) => ({ id: option.id, label: option.label })),
+] as ReadonlyArray<{ id: PaintTextureId; label: string }>;
+export const paintTextureIds = paintTextureOptions.map((option) => option.id) as PaintTextureId[];
 
 interface PaintLayerBase {
   id: string;
@@ -23,7 +34,7 @@ interface PaintLayerBase {
 export type PaintLayerSourceV1 =
   | (PaintLayerBase & { type: 'fill'; color: string; opacity: number })
   | (PaintLayerBase & { type: 'backdropGlass'; blurPx: number; saturationPct: number; tintColor: string; tintOpacity: number })
-  | (PaintLayerBase & { type: 'texture'; texture: 'hex-grid' | 'fine-noise'; color: string; opacity: number; scalePx: number })
+  | (PaintLayerBase & { type: 'texture'; texture: PaintTextureId; color: string; opacity: number; scalePx: number })
   | (PaintLayerBase & { type: 'edgeWear'; variant: 'edge-chips' | 'edge-noise' | 'fine-scratches'; color: string; opacity: number; widthPx: number; scalePx: number })
   | (PaintLayerBase & { type: 'border'; color: string; opacity: number; widthPx: number; edges?: PaintBorderEdge[] })
   | (PaintLayerBase & { type: 'reflection'; color: string; opacity: number; angleDeg: number; startPct: number; endPct: number })
@@ -43,6 +54,7 @@ export interface AppearanceGraphSourceV1 {
     radiusPx: number;
     chamferPx: number;
     chamferTopRightPx?: number;
+    chamferCorners?: PaintCornerId[];
   };
   layers: PaintLayerSourceV1[];
 }
@@ -75,7 +87,7 @@ export const paintLayerSourceV1Schema: v.GenericSchema<PaintLayerSourceV1> = v.v
   v.strictObject({
     ...layerBase,
     type: v.literal('texture'),
-    texture: v.picklist(['hex-grid', 'fine-noise']),
+    texture: v.picklist(paintTextureIds),
     color,
     opacity,
     scalePx: v.pipe(v.number(), v.minValue(4), v.maxValue(512)),
@@ -163,6 +175,7 @@ export const appearanceGraphSourceV1Schema: v.GenericSchema<AppearanceGraphSourc
     radiusPx: px(64),
     chamferPx: px(64),
     chamferTopRightPx: v.optional(px(96)),
+    chamferCorners: v.optional(v.pipe(v.array(v.picklist(paintCornerIds)), v.maxLength(4))),
   }),
   layers: v.array(paintLayerSourceV1Schema),
 }) as v.GenericSchema<AppearanceGraphSourceV1>;

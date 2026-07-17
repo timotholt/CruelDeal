@@ -1,4 +1,5 @@
 import { createEffect, createSignal, Index, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { LOCKED_METALLIC_REFLECTION } from '../../ui/shiny';
 import '../../../src/styles/shiny-performance.css';
 
 const clamp = (value: number, min = -1, max = 1) => Math.max(min, Math.min(max, value));
@@ -290,10 +291,10 @@ export const ShinyPerformanceScreen = () => {
   const [tiltEnabled, setTiltEnabled] = createSignal(false);
   const [updatesPerSecond, setUpdatesPerSecond] = createSignal(0);
   const [movingReflections, setMovingReflections] = createSignal(true);
-  const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('foil-flash');
+  const [selectedReflectionPreset, setSelectedReflectionPreset] = createSignal('studio');
   const [selectedReflectionPattern, setSelectedReflectionPattern] = createSignal<ReflectionPatternId>('frames');
-  const [reflectionSoftness, setReflectionSoftness] = createSignal(9);
-  const [reflectionZoom, setReflectionZoom] = createSignal(1);
+  const [reflectionSoftness, setReflectionSoftness] = createSignal(LOCKED_METALLIC_REFLECTION.softness);
+  const [reflectionZoom, setReflectionZoom] = createSignal(LOCKED_METALLIC_REFLECTION.zoom);
   const [selectedMetal, setSelectedMetal] = createSignal('gold-18k');
   const [reflectionMap, setReflectionMap] = createSignal('');
   const [inputCoordinates, setInputCoordinates] = createSignal({ x: 0, y: 0 });

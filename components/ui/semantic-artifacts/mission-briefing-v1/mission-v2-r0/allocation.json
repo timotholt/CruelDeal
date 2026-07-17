@@ -3,13 +3,15 @@
   "entries": [
     {
       "cssProperties": [
+        "border-radius",
+        "corner-shape",
         "clip-path"
       ],
       "enabled": true,
       "graphId": "mission-v2-r0.panel.idle",
       "layerId": "$geometry",
       "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "slot": "host.geometry"
     },
     {
       "cssProperties": [
@@ -42,7 +44,7 @@
       "enabled": true,
       "graphId": "mission-v2-r0.panel.idle",
       "layerId": "hex",
-      "reason": "Procedural texture folded into the semantic host background stack.",
+      "reason": "Authored procedural or image texture folded into the semantic host background stack.",
       "slot": "host.background"
     },
     {
@@ -59,15 +61,17 @@
     },
     {
       "cssProperties": [
-        "background-image",
-        "background-size",
-        "background-repeat"
+        "content",
+        "border",
+        "border-radius",
+        "corner-shape",
+        "mask-image"
       ],
       "enabled": true,
       "graphId": "mission-v2-r0.panel.idle",
       "layerId": "rough-edge",
-      "reason": "Deterministic rough edge paint is folded into the panel host background stack.",
-      "slot": "host.background"
+      "reason": "Rough edge paint inherits the semantic host geometry in the after paint slot.",
+      "slot": "host::after"
     },
     {
       "cssProperties": [
@@ -100,7 +104,7 @@
       "graphId": "mission-v2-r0.terms.idle",
       "layerId": "$geometry",
       "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "slot": "host.geometry"
     },
     {
       "cssProperties": [
@@ -113,14 +117,12 @@
       "slot": "host.border"
     },
     {
-      "cssProperties": [
-        "border-radius"
-      ],
+      "cssProperties": [],
       "enabled": true,
       "graphId": "mission-v2-r0.primary-action.idle",
       "layerId": "$geometry",
-      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "reason": "Decorative corner brackets own their own geometry and must not be clipped by the action host.",
+      "slot": "omitted"
     },
     {
       "cssProperties": [
@@ -157,14 +159,12 @@
       "slot": "omitted"
     },
     {
-      "cssProperties": [
-        "border-radius"
-      ],
+      "cssProperties": [],
       "enabled": true,
       "graphId": "mission-v2-r0.primary-action.holding",
       "layerId": "$geometry",
-      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "reason": "Decorative corner brackets own their own geometry and must not be clipped by the action host.",
+      "slot": "omitted"
     },
     {
       "cssProperties": [
@@ -216,14 +216,12 @@
       "slot": "host.box-shadow"
     },
     {
-      "cssProperties": [
-        "border-radius"
-      ],
+      "cssProperties": [],
       "enabled": true,
       "graphId": "mission-v2-r0.primary-action.complete",
       "layerId": "$geometry",
-      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "reason": "Decorative corner brackets own their own geometry and must not be clipped by the action host.",
+      "slot": "omitted"
     },
     {
       "cssProperties": [
@@ -270,14 +268,12 @@
       "slot": "host.box-shadow"
     },
     {
-      "cssProperties": [
-        "border-radius"
-      ],
+      "cssProperties": [],
       "enabled": true,
       "graphId": "mission-v2-r0.primary-action.disabled",
       "layerId": "$geometry",
-      "reason": "Part geometry is applied once by the semantic host and shared by every layer.",
-      "slot": "host.clip-path"
+      "reason": "Decorative corner brackets own their own geometry and must not be clipped by the action host.",
+      "slot": "omitted"
     },
     {
       "cssProperties": [

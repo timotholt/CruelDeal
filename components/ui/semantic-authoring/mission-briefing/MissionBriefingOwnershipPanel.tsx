@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   missionBriefingOptionalSlots,
   missionBriefingRequiredSlots,
@@ -11,11 +11,15 @@ import {
   type ContentSourceV1,
   type MissionBriefingSourceV1,
 } from './missionBriefingSource';
-import type {
-  AppearanceGraphSourceV1,
-  AppearancePartId,
-  MissionAppearanceDocumentV1,
-  PaintLayerSourceV1,
+import {
+  paintCornerIds,
+  paintTextureOptions,
+  type PaintCornerId,
+  type PaintTextureId,
+  type AppearanceGraphSourceV1,
+  type AppearancePartId,
+  type MissionAppearanceDocumentV1,
+  type PaintLayerSourceV1,
 } from '../../semantic-compiler/paint/paintSource';
 import { serializePaintArtifact } from '../../semantic-compiler/paint/paintCompiler';
 import {
@@ -26,6 +30,7 @@ import {
   type MissionTypographyRoleId,
   type MissionTypographyVariantId,
 } from '../../semantic-compiler/typography/missionTypography';
+import { controlRange } from '../../semantic-compiler/controls/authoringControlRegistry';
 
 const slotLabels: Record<string, string> = {
   availabilityStatus: 'Availability',
@@ -44,17 +49,44 @@ const partLabels: Record<AppearancePartId, string> = {
   terms: 'Reward Region',
   primaryAction: 'Primary Action',
 };
+const cornerLabels: Record<PaintCornerId, string> = {
+  'top-left': 'TL',
+  'top-right': 'TR',
+  'bottom-right': 'BR',
+  'bottom-left': 'BL',
+};
+
+const RegistryRangeInput = (props: {
+  ruleId: string;
+  value: number;
+  onValue: (value: number) => void;
+}) => {
+  const range = createMemo(() => controlRange(props.ruleId));
+  return (
+    <input
+      type="range"
+      min={range().min}
+      max={range().max}
+      step={range().step}
+      value={props.value}
+      data-control-rule={props.ruleId}
+      onInput={(event) => props.onValue(event.currentTarget.valueAsNumber)}
+    />
+  );
+};
 
 export const MissionBriefingOwnershipPanel = (props: {
   source: MissionBriefingSourceV1;
   defaults: MissionBriefingSourceV1;
   appearance: MissionAppearanceDocumentV1;
+  focusPart?: AppearancePartId | null;
   status: string;
   canUndo: boolean;
   canRedo: boolean;
   compiled: boolean;
   onCommand: (command: MissionBriefingCommand) => MissionBriefingCommandResult;
   onAppearanceChange: (appearance: MissionAppearanceDocumentV1) => void;
+  onFocusPartChange?: (part: AppearancePartId) => void;
   onUndo: () => void;
   onRedo: () => void;
   onCompile: () => void;
@@ -69,7 +101,36 @@ export const MissionBriefingOwnershipPanel = (props: {
   const serializedAppearance = () => serializePaintArtifact(props.appearance);
   const presentOptionalSlots = () => missionBriefingOptionalSlots.filter((slot) => props.source.slots[slot] !== undefined);
   const missingOptionalSlots = () => missionBriefingOptionalSlots.filter((slot) => props.source.slots[slot] === undefined && props.defaults.slots[slot] !== undefined);
-  const selectedGraphs = () => props.appearance.graphs.filter((graph) => graph.part === selectedPart());
+  const focusedPart = () => props.focusPart ?? null;
+  const activePart = () => focusedPart() ?? selectedPart();
+  const showPart = (part: AppearancePartId) => focusedPart() === null || focusedPart() === part;
+  const selectPart = (part: AppearancePartId) => {
+    setSelectedPart(part);
+    props.onFocusPartChange?.(part);
+  };
+  const typographyRolesForPart = (): MissionTypographyRoleId[] => {
+    if (focusedPart() === 'terms') return ['termLabel', 'termValue'];
+    if (focusedPart() === 'primaryAction') return ['actionLabel'];
+    if (focusedPart() === 'panel') return ['title', 'body', 'availability'];
+    return [...missionTypographyRoleIds];
+  };
+  const focusLabel = () => {
+    const part = focusedPart();
+    return part ? partLabels[part] : 'Overview';
+  };
+  createEffect(() => {
+    const roles = typographyRolesForPart();
+    if (!roles.includes(selectedTypographyRole())) setSelectedTypographyRole(roles[0]);
+  });
+  const selectedGraphs = () => props.appearance.graphs.filter((graph) => graph.part === activePart());
+  const activeGeometry = () => (
+    activePart() === 'panel' ? selectedGraphs()[0]?.geometry : undefined
+  );
+  const activeChamferCorners = (): PaintCornerId[] => {
+    const geometry = activeGeometry();
+    if (!geometry || geometry.clip !== 'mission-chamfer') return [];
+    return geometry.chamferCorners ?? [...paintCornerIds];
+  };
 
   const contentFormat = (source: ContentSourceV1) => ('inline' in source ? source.inline.format : 'plain');
   const replaceContent = (slot: 'title' | 'body' | 'availabilityStatus', value: string) => {
@@ -111,6 +172,27 @@ export const MissionBriefingOwnershipPanel = (props: {
       graphs: props.appearance.graphs.map((graph) => graph.id === graphId ? update(graph) : graph),
     });
   };
+  const updateActiveGeometry = (update: (geometry: AppearanceGraphSourceV1['geometry']) => AppearanceGraphSourceV1['geometry']) => {
+    props.onAppearanceChange({
+      ...props.appearance,
+      graphs: props.appearance.graphs.map((graph) => (
+        graph.part === activePart() ? { ...graph, geometry: update(graph.geometry) } : graph
+      )),
+    });
+  };
+  const toggleChamferCorner = (corner: PaintCornerId) => {
+    const current = activeChamferCorners();
+    const next = current.includes(corner)
+      ? current.filter((value) => value !== corner)
+      : paintCornerIds.filter((value) => current.includes(value) || value === corner);
+    updateActiveGeometry((geometry) => ({
+      ...geometry,
+      clip: next.length ? 'mission-chamfer' : 'rounded-rect',
+      radiusPx: geometry.radiusPx || 8,
+      chamferPx: geometry.chamferPx || 18,
+      chamferCorners: next,
+    }));
+  };
   const updateLayer = (graphId: string, layerId: string, update: (layer: PaintLayerSourceV1) => PaintLayerSourceV1) => {
     updateGraph(graphId, (graph) => ({
       ...graph,
@@ -145,8 +227,8 @@ export const MissionBriefingOwnershipPanel = (props: {
   };
 
   return (
-    <div class="ui-lab-stack" data-semantic-editor="MissionBriefingV1">
-      <SectionHeading label="Mission Briefing V1" />
+    <div class="ui-lab-stack" data-semantic-editor="MissionBriefingV2" data-selected-appearance-part={focusedPart() ?? 'overview'}>
+      <SectionHeading label={`Mission Briefing V2 · ${focusLabel()}`} />
       <div class="ui-lab-control-row ui-lab-control-row--stacked">
         <span>Ownership</span>
         <code>Semantic source → compiler → runtime</code>
@@ -155,16 +237,18 @@ export const MissionBriefingOwnershipPanel = (props: {
 
       <SectionHeading label="Workflow" />
       <div class="ui-lab-control-row">
-        <button type="button" class="ui-lab-mini-button" disabled={!props.canUndo} onClick={props.onUndo}>undo</button>
-        <button type="button" class="ui-lab-mini-button" disabled={!props.canRedo} onClick={props.onRedo}>redo</button>
+        <button type="button" class="ui-lab-mini-button" disabled={!props.canUndo} onClick={() => props.onUndo()}>undo</button>
+        <button type="button" class="ui-lab-mini-button" disabled={!props.canRedo} onClick={() => props.onRedo()}>redo</button>
       </div>
       <div class="ui-lab-control-row">
-        <button type="button" class="ui-lab-mini-button" onClick={props.onCompile}>compile</button>
-        <button type="button" class="ui-lab-mini-button" disabled={!props.compiled} onClick={props.onReturnToLive}>return live</button>
+        <button type="button" class="ui-lab-mini-button" onClick={() => props.onCompile()}>compile</button>
+        <button type="button" class="ui-lab-mini-button" disabled={!props.compiled} onClick={() => props.onReturnToLive()}>return live</button>
       </div>
 
       <SectionHeading label="Content" />
-      <label class="ui-lab-control-row ui-lab-control-row--stacked">
+      <Show when={showPart('panel')}>
+        <>
+        <label class="ui-lab-control-row ui-lab-control-row--stacked">
         <span>Title · rich text supports [bright], [muted], [accent]</span>
         <select class="ui-lab-input" value={contentFormat(props.source.slots.title)} onChange={(event) => replaceContentFormat('title', event.currentTarget.value as 'plain' | 'cruel-markup-v1')}>
           <option value="plain">Plain text</option>
@@ -188,6 +272,10 @@ export const MissionBriefingOwnershipPanel = (props: {
           </label>
         )}
       </Show>
+        </>
+      </Show>
+      <Show when={showPart('terms')}>
+        <>
       <label class="ui-lab-control-row">
         <span>Deposit CR</span>
         <input type="number" min="0" class="ui-lab-input main-material-text-input" value={'literal' in (props.source.slots.terms.deposit?.amount ?? { literal: 0 }) ? (props.source.slots.terms.deposit?.amount as { literal: number }).literal : 0} onInput={(event) => replaceTermsAmount('deposit', event.currentTarget.valueAsNumber)} />
@@ -196,6 +284,9 @@ export const MissionBriefingOwnershipPanel = (props: {
         <span>Success CR</span>
         <input type="number" min="0" class="ui-lab-input main-material-text-input" value={'literal' in props.source.slots.terms.successReward.amount ? props.source.slots.terms.successReward.amount.literal : 0} onInput={(event) => replaceTermsAmount('successReward', event.currentTarget.valueAsNumber)} />
       </label>
+        </>
+      </Show>
+      <Show when={showPart('primaryAction')}>
       <label class="ui-lab-control-row ui-lab-control-row--stacked">
         <span>Action Label</span>
         <select class="ui-lab-input" value={contentFormat(props.source.slots.primaryAction.label)} onChange={(event) => replaceActionFormat(event.currentTarget.value as 'plain' | 'cruel-markup-v1')}>
@@ -204,12 +295,13 @@ export const MissionBriefingOwnershipPanel = (props: {
         </select>
         <input class="ui-lab-input main-material-text-input" value={inlineValue(props.source.slots.primaryAction.label)} onInput={(event) => replaceActionLabel(event.currentTarget.value)} />
       </label>
+      </Show>
 
       <SectionHeading label="Typography & Emboss" />
       <label class="ui-lab-control-row ui-lab-control-row--stacked">
         <span>Text target</span>
         <select class="ui-lab-input" value={selectedTypographyRole()} onChange={(event) => setSelectedTypographyRole(event.currentTarget.value as MissionTypographyRoleId)}>
-          <For each={missionTypographyRoleIds}>{(role) => <option value={role}>{role}</option>}</For>
+          <For each={typographyRolesForPart()}>{(role) => <option value={role}>{role}</option>}</For>
         </select>
       </label>
       <label class="ui-lab-control-row ui-lab-control-row--stacked">
@@ -225,49 +317,75 @@ export const MissionBriefingOwnershipPanel = (props: {
         </select>
       </label>
       <label class="ui-lab-control-row"><span>Color</span><input type="color" value={selectedTypographyStyle().color} onInput={(event) => updateTypographyStyle({ color: event.currentTarget.value })} /></label>
-      <label class="ui-lab-control-row"><span>Size cqw</span><input type="range" min="0.4" max="12" step="0.1" value={selectedTypographyStyle().sizeCqw} onInput={(event) => updateTypographyStyle({ sizeCqw: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().sizeCqw}</output></label>
-      <label class="ui-lab-control-row"><span>Weight</span><input type="range" min="100" max="900" step="100" value={selectedTypographyStyle().weight} onInput={(event) => updateTypographyStyle({ weight: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().weight}</output></label>
-      <label class="ui-lab-control-row"><span>Line height</span><input type="range" min="0.6" max="2.5" step="0.02" value={selectedTypographyStyle().lineHeight} onInput={(event) => updateTypographyStyle({ lineHeight: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().lineHeight}</output></label>
-      <label class="ui-lab-control-row"><span>Tracking em</span><input type="range" min="-0.1" max="0.3" step="0.005" value={selectedTypographyStyle().letterSpacingEm} onInput={(event) => updateTypographyStyle({ letterSpacingEm: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().letterSpacingEm}</output></label>
+      <label class="ui-lab-control-row"><span>Size cqw</span><RegistryRangeInput ruleId="type.fontSize" value={selectedTypographyStyle().sizeCqw} onValue={(value) => updateTypographyStyle({ sizeCqw: value })} /><output>{selectedTypographyStyle().sizeCqw}</output></label>
+      <label class="ui-lab-control-row"><span>Weight</span><RegistryRangeInput ruleId="type.weight" value={selectedTypographyStyle().weight} onValue={(value) => updateTypographyStyle({ weight: value })} /><output>{selectedTypographyStyle().weight}</output></label>
+      <label class="ui-lab-control-row"><span>Line height</span><RegistryRangeInput ruleId="type.lineHeight" value={selectedTypographyStyle().lineHeight} onValue={(value) => updateTypographyStyle({ lineHeight: value })} /><output>{selectedTypographyStyle().lineHeight}</output></label>
+      <label class="ui-lab-control-row"><span>Tracking em</span><RegistryRangeInput ruleId="type.letterSpacing" value={selectedTypographyStyle().letterSpacingEm} onValue={(value) => updateTypographyStyle({ letterSpacingEm: value })} /><output>{selectedTypographyStyle().letterSpacingEm}</output></label>
       <label class="ui-lab-control-row ui-lab-control-row--stacked"><span>Emboss / shadow</span><select class="ui-lab-input" value={selectedTypographyStyle().embossMode} onChange={(event) => updateTypographyStyle({ embossMode: event.currentTarget.value as MissionTextStyleV1['embossMode'] })}><option value="none">None</option><option value="dark">Dark emboss</option><option value="light">Light emboss</option><option value="shadow">Drop shadow</option></select></label>
-      <label class="ui-lab-control-row"><span>Strength</span><input type="range" min="0" max="100" value={selectedTypographyStyle().embossStrength} onInput={(event) => updateTypographyStyle({ embossStrength: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().embossStrength}</output></label>
-      <label class="ui-lab-control-row"><span>Offset</span><input type="range" min="0" max="100" value={selectedTypographyStyle().embossOffset} onInput={(event) => updateTypographyStyle({ embossOffset: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().embossOffset}</output></label>
-      <label class="ui-lab-control-row"><span>Blur</span><input type="range" min="0" max="100" value={selectedTypographyStyle().embossBlur} onInput={(event) => updateTypographyStyle({ embossBlur: event.currentTarget.valueAsNumber })} /><output>{selectedTypographyStyle().embossBlur}</output></label>
+      <label class="ui-lab-control-row"><span>Strength</span><RegistryRangeInput ruleId="type.embossStrength" value={selectedTypographyStyle().embossStrength} onValue={(value) => updateTypographyStyle({ embossStrength: value })} /><output>{selectedTypographyStyle().embossStrength}</output></label>
+      <label class="ui-lab-control-row"><span>Offset</span><RegistryRangeInput ruleId="type.embossOffset" value={selectedTypographyStyle().embossOffset} onValue={(value) => updateTypographyStyle({ embossOffset: value })} /><output>{selectedTypographyStyle().embossOffset}</output></label>
+      <label class="ui-lab-control-row"><span>Blur</span><RegistryRangeInput ruleId="type.embossBlur" value={selectedTypographyStyle().embossBlur} onValue={(value) => updateTypographyStyle({ embossBlur: value })} /><output>{selectedTypographyStyle().embossBlur}</output></label>
 
-      <SectionHeading label="Required Function" />
-      <For each={missionBriefingRequiredSlots}>
-        {(slot) => (
-          <div class="ui-lab-control-row">
-            <span>{slotLabels[slot]}</span>
-            <button type="button" class="ui-lab-mini-button" onClick={() => props.onCommand({ type: 'slot/remove', slot })}>test remove</button>
-          </div>
-        )}
-      </For>
+      <Show when={focusedPart() === null}>
+        <SectionHeading label="Required Function" />
+        <For each={missionBriefingRequiredSlots}>
+          {(slot) => (
+            <div class="ui-lab-control-row">
+              <span>{slotLabels[slot]}</span>
+              <button type="button" class="ui-lab-mini-button" onClick={() => props.onCommand({ type: 'slot/remove', slot })}>test remove</button>
+            </div>
+          )}
+        </For>
 
-      <SectionHeading label="Optional Slots" />
-      <For each={presentOptionalSlots()}>
-        {(slot) => (
-          <div class="ui-lab-control-row">
-            <span>{slotLabels[slot]}</span>
-            <button type="button" class="ui-lab-mini-button" onClick={() => props.onCommand({ type: 'slot/remove', slot })}>hide</button>
-          </div>
-        )}
-      </For>
-      <For each={missingOptionalSlots()}>
-        {(slot) => (
-          <div class="ui-lab-control-row">
-            <span>{slotLabels[slot]}</span>
-            <button type="button" class="ui-lab-mini-button" onClick={() => restoreOptional(slot)}>restore</button>
-          </div>
-        )}
-      </For>
+        <SectionHeading label="Optional Slots" />
+        <For each={presentOptionalSlots()}>
+          {(slot) => (
+            <div class="ui-lab-control-row">
+              <span>{slotLabels[slot]}</span>
+              <button type="button" class="ui-lab-mini-button" onClick={() => props.onCommand({ type: 'slot/remove', slot })}>hide</button>
+            </div>
+          )}
+        </For>
+        <For each={missingOptionalSlots()}>
+          {(slot) => (
+            <div class="ui-lab-control-row">
+              <span>{slotLabels[slot]}</span>
+              <button type="button" class="ui-lab-mini-button" onClick={() => restoreOptional(slot)}>restore</button>
+            </div>
+          )}
+        </For>
+      </Show>
 
       <SectionHeading label="Appearance Parts" />
       <div class="ui-lab-control-row">
         <For each={(['panel', 'terms', 'primaryAction'] as AppearancePartId[])}>
-          {(part) => <button type="button" class="ui-lab-mini-button" aria-pressed={selectedPart() === part} onClick={() => setSelectedPart(part)}>{partLabels[part]}</button>}
+          {(part) => <button type="button" class="ui-lab-mini-button" aria-pressed={activePart() === part} onClick={() => selectPart(part)}>{partLabels[part]}</button>}
         </For>
       </div>
+      <Show when={activeGeometry()}>
+        {(geometry) => (
+          <>
+            <SectionHeading label="Corner Shape" />
+            <div class="ui-lab-control-row">
+              <span>Slanted</span>
+              <For each={paintCornerIds}>
+                {(corner) => (
+                  <button
+                    type="button"
+                    class="ui-lab-mini-button"
+                    aria-pressed={activeChamferCorners().includes(corner)}
+                    onClick={() => toggleChamferCorner(corner)}
+                  >
+                    {cornerLabels[corner]}
+                  </button>
+                )}
+              </For>
+            </div>
+            <label class="ui-lab-control-row"><span>Round radius</span><RegistryRangeInput ruleId="paint.geometry.radiusPx" value={geometry().radiusPx} onValue={(value) => updateActiveGeometry((current) => ({ ...current, radiusPx: value }))} /><output>{geometry().radiusPx}</output></label>
+            <label class="ui-lab-control-row"><span>Slant size</span><RegistryRangeInput ruleId="paint.geometry.chamferPx" value={geometry().chamferPx} onValue={(value) => updateActiveGeometry((current) => ({ ...current, chamferPx: value }))} /><output>{geometry().chamferPx}</output></label>
+          </>
+        )}
+      </Show>
       <For each={selectedGraphs()}>
         {(graph) => (
           <div class="ui-lab-control-row ui-lab-control-row--stacked" data-appearance-graph={graph.id}>
@@ -282,16 +400,39 @@ export const MissionBriefingOwnershipPanel = (props: {
                     <button type="button" class="ui-lab-mini-button" disabled={index() === graph.layers.length - 1} onClick={() => moveLayer(graph.id, index(), 1)}>↓</button>
                   </div>
                   <Show when={layer.type === 'backdropGlass'}>
-                    <label class="ui-lab-control-row"><span>Blur px</span><input type="range" min="0" max="32" value={(layer as Extract<PaintLayerSourceV1, { type: 'backdropGlass' }>).blurPx} onInput={(event) => updateLayer(graph.id, layer.id, (current) => current.type === 'backdropGlass' ? { ...current, blurPx: event.currentTarget.valueAsNumber } : current)} /></label>
+                    <label class="ui-lab-control-row"><span>Blur px</span><RegistryRangeInput ruleId="paint.glass.blurPx" value={(layer as Extract<PaintLayerSourceV1, { type: 'backdropGlass' }>).blurPx} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'backdropGlass' ? { ...current, blurPx: value } : current)} /></label>
                   </Show>
                   <Show when={layer.type === 'reflection' || layer.type === 'glow'}>
-                    <label class="ui-lab-control-row"><span>Opacity</span><input type="range" min="0" max="1" step="0.01" value={(layer as Extract<PaintLayerSourceV1, { type: 'reflection' | 'glow' }>).opacity} onInput={(event) => updateLayer(graph.id, layer.id, (current) => (current.type === 'reflection' || current.type === 'glow') ? { ...current, opacity: event.currentTarget.valueAsNumber } : current)} /></label>
+                    <label class="ui-lab-control-row"><span>Opacity</span><RegistryRangeInput ruleId="paint.layer.opacity" value={(layer as Extract<PaintLayerSourceV1, { type: 'reflection' | 'glow' }>).opacity} onValue={(value) => updateLayer(graph.id, layer.id, (current) => (current.type === 'reflection' || current.type === 'glow') ? { ...current, opacity: value } : current)} /></label>
+                  </Show>
+                  <Show when={layer.type === 'texture'}>
+                    <label class="ui-lab-control-row ui-lab-control-row--stacked">
+                      <span>Texture Picker</span>
+                      <select
+                        class="ui-lab-input"
+                        value={(layer as Extract<PaintLayerSourceV1, { type: 'texture' }>).texture}
+                        onChange={(event) => updateLayer(graph.id, layer.id, (current) => {
+                          if (current.type !== 'texture') return current;
+                          const texture = event.currentTarget.value as PaintTextureId;
+                          const procedural = texture === 'hex-grid' || texture === 'fine-noise';
+                          return {
+                            ...current,
+                            texture,
+                            scalePx: procedural ? Math.min(current.scalePx, 96) : Math.max(current.scalePx, 256),
+                          };
+                        })}
+                      >
+                        <For each={paintTextureOptions}>{(texture) => <option value={texture.id}>{texture.label}</option>}</For>
+                      </select>
+                    </label>
+                    <label class="ui-lab-control-row"><span>Texture opacity</span><RegistryRangeInput ruleId="paint.layer.opacity" value={(layer as Extract<PaintLayerSourceV1, { type: 'texture' }>).opacity} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'texture' ? { ...current, opacity: value } : current)} /><output>{(layer as Extract<PaintLayerSourceV1, { type: 'texture' }>).opacity}</output></label>
+                    <label class="ui-lab-control-row"><span>Texture scale</span><RegistryRangeInput ruleId="paint.texture.scalePx" value={(layer as Extract<PaintLayerSourceV1, { type: 'texture' }>).scalePx} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'texture' ? { ...current, scalePx: value } : current)} /><output>{(layer as Extract<PaintLayerSourceV1, { type: 'texture' }>).scalePx}</output></label>
                   </Show>
                   <Show when={layer.type === 'edgeWear'}>
                     <label class="ui-lab-control-row ui-lab-control-row--stacked"><span>Rough edge</span><select class="ui-lab-input" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).variant} onChange={(event) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, variant: event.currentTarget.value as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>['variant'] } : current)}><option value="edge-chips">Edge chips</option><option value="edge-noise">Edge noise</option><option value="fine-scratches">Fine scratches</option></select></label>
-                    <label class="ui-lab-control-row"><span>Opacity</span><input type="range" min="0" max="1" step="0.01" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).opacity} onInput={(event) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, opacity: event.currentTarget.valueAsNumber } : current)} /></label>
-                    <label class="ui-lab-control-row"><span>Width</span><input type="range" min="0.5" max="8" step="0.1" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).widthPx} onInput={(event) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, widthPx: event.currentTarget.valueAsNumber } : current)} /></label>
-                    <label class="ui-lab-control-row"><span>Scale</span><input type="range" min="2" max="64" step="1" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).scalePx} onInput={(event) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, scalePx: event.currentTarget.valueAsNumber } : current)} /></label>
+                    <label class="ui-lab-control-row"><span>Opacity</span><RegistryRangeInput ruleId="paint.layer.opacity" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).opacity} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, opacity: value } : current)} /></label>
+                    <label class="ui-lab-control-row"><span>Width</span><RegistryRangeInput ruleId="paint.edgeWear.widthPx" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).widthPx} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, widthPx: value } : current)} /></label>
+                    <label class="ui-lab-control-row"><span>Scale</span><RegistryRangeInput ruleId="paint.edgeWear.scalePx" value={(layer as Extract<PaintLayerSourceV1, { type: 'edgeWear' }>).scalePx} onValue={(value) => updateLayer(graph.id, layer.id, (current) => current.type === 'edgeWear' ? { ...current, scalePx: value } : current)} /></label>
                   </Show>
                 </div>
               )}

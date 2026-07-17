@@ -73,6 +73,7 @@ import {
   resolveFeedNodeTextStyle,
 } from './mainMaterialFeedText';
 import { MiniButton, Slider } from './mainMaterialEditorPrimitives';
+import { controlRange } from '../../ui/semantic-compiler/controls/authoringControlRegistry';
 import { findTreeNodeById, updateTreeNodeById } from './mainMaterialTargetTree';
 import {
   feedCardMaterialTargetId,
@@ -99,6 +100,13 @@ import {
   formatMainMaterialFeedContentJson,
   inspectMainMaterialFeedContentJson,
 } from './mainMaterialFeedContentOutput';
+
+const layoutWidthControlRange = controlRange('layout.width');
+const layoutHeightControlRange = controlRange('layout.height');
+const layoutNudgeXControlRange = controlRange('layout.nudgeX');
+const layoutNudgeYControlRange = controlRange('layout.nudgeY');
+const layoutPaddingControlRange = controlRange('layout.padding');
+const layoutGapControlRange = controlRange('layout.gap');
 
 export interface FeedRecipe {
   contentY: number;
@@ -142,7 +150,7 @@ export const FeedRecipeEditor = (props: {
     setLastSyncedContentJson(nextJson);
   });
   createEffect(() => {
-    props.selectedStoryId;
+    void props.selectedStoryId;
     setContentDocumentStatus('Ready');
   });
   const update = <K extends keyof FeedRecipe>(key: K, value: FeedRecipe[K]) => {
@@ -298,7 +306,11 @@ export const FeedRecipeEditor = (props: {
   };
   const addTextBlockNode = () => {
     const id = uniqueNodeId('text-block');
-    insertNodeFromStructure(createTextBlockNode(id, 'Text Block', 'contractBody'), id);
+    insertNodeFromStructure({
+      ...createTextBlockNode(id, 'Rich Text', 'contractBody'),
+      markup: 'on',
+      sizing: 'flow',
+    }, id);
   };
   const addSurfacePanelNode = () => {
     const id = uniqueNodeId('surface-panel');
@@ -318,6 +330,35 @@ export const FeedRecipeEditor = (props: {
           hMode: 'hug',
           padding: 10,
           gap: 8,
+        }),
+      }),
+      id,
+    );
+  };
+  const addButtonNode = () => {
+    const id = uniqueNodeId('button');
+    insertNodeFromStructure(
+      createFeedNode({
+        id,
+        label: 'Button',
+        type: 'button',
+        binding: 'contractCtaLabel',
+        surface: createFeedRegionSurface(),
+        markup: 'on',
+        sizing: 'fit',
+        fitMode: 'single-line',
+        maxLines: 1,
+        layout: createFeedNodeLayout({
+          mode: 'flow',
+          selfPosition: 'in-flow',
+          width: 100,
+          height: 12,
+          wMode: 'fill',
+          hMode: 'fixed',
+          padding: 8,
+          gap: 0,
+          align: 'center',
+          justify: 'center',
         }),
       }),
       id,
@@ -477,7 +518,6 @@ export const FeedRecipeEditor = (props: {
       ...(mode === 'packed' ? legacyScreenAlignment(direction, cross, distribute) : {}),
     });
   };
-  const selectedNodeLayout = () => selectedTargetNode()?.layout;
   const updateSelectedNodeTextStyle = <K extends keyof FeedTextSlotStyle>(key: K, value: FeedTextSlotStyle[K]) => {
     const node = selectedTargetNode();
     if (!node || !selectedNodeCanEditText()) return;
@@ -643,7 +683,7 @@ export const FeedRecipeEditor = (props: {
       </Show>
 
       <div class="ui-lab-control-group">
-        <SectionLabel size="xs">Structure</SectionLabel>
+        <SectionLabel size="xs">Controls</SectionLabel>
         <div class="ui-lab-control-row">
           <span>Status</span>
           <div class="ui-lab-toggles">
@@ -653,22 +693,23 @@ export const FeedRecipeEditor = (props: {
         </div>
         <Show when={selectedTargetNode()}>
           <div class="ui-lab-control-row">
-            <span>Insert</span>
+            <span>Placement</span>
             <div class="ui-lab-toggles">
               <MiniButton disabled={selectedTargetNode()?.type !== 'container'} active={selectedInsertMode() === 'inside'} onClick={() => setInsertMode('inside')}>
-                inside
+                child
               </MiniButton>
               <MiniButton active={selectedInsertMode() === 'after'} onClick={() => setInsertMode('after')}>
-                after
+                sibling
               </MiniButton>
             </div>
           </div>
         </Show>
         <div class="ui-lab-control-row">
-          <span>Add</span>
+          <span>Add Control</span>
           <div class="ui-lab-toggles">
             <MiniButton onClick={addSurfacePanelNode}>panel</MiniButton>
-            <MiniButton onClick={addTextBlockNode}>text</MiniButton>
+            <MiniButton onClick={addTextBlockNode}>rich text</MiniButton>
+            <MiniButton onClick={addButtonNode}>button</MiniButton>
             <MiniButton
               onClick={() => {
                 const id = uniqueNodeId('two-column-group');
@@ -682,24 +723,28 @@ export const FeedRecipeEditor = (props: {
         </div>
         <Show when={selectedTargetNode()}>
           <div class="ui-lab-control-row">
-            <span>Node Ops</span>
+            <span>Control</span>
             <div class="ui-lab-toggles">
               <MiniButton onClick={() => moveSelectedNode(-1)}>up</MiniButton>
               <MiniButton onClick={() => moveSelectedNode(1)}>down</MiniButton>
               <MiniButton onClick={duplicateSelectedNode}>dup</MiniButton>
               <MiniButton onClick={wrapSelectedNodeInGroup}>wrap</MiniButton>
               <MiniButton disabled={selectedTargetNode()?.type !== 'container'} onClick={unwrapSelectedNode}>unwrap</MiniButton>
-              <MiniButton onClick={deleteSelectedNode}>delete</MiniButton>
+              <MiniButton onClick={deleteSelectedNode}>remove</MiniButton>
             </div>
           </div>
         </Show>
-        <SectionLabel size="xs">Selected Node</SectionLabel>
+        <SectionLabel size="xs">Selected Control</SectionLabel>
         <Show when={selectedTargetNode()}>
           {(node) => (
             <>
               <div class="ui-lab-control-row">
-                <span>Node</span>
-                <span>{node().label}</span>
+                <span>Control</span>
+                <input
+                  class="ui-lab-input main-material-text-input"
+                  value={node().label}
+                  onInput={(event) => updateSelectedNode({ label: event.currentTarget.value })}
+                />
               </div>
               <Show when={selectedNodeCanBindContent()}>
                 <SectionLabel size="xs">CMS</SectionLabel>
@@ -1150,7 +1195,7 @@ export const FeedRecipeEditor = (props: {
               </div>
               <div class="ui-lab-control-row">
                 <span>W size</span>
-                <Slider value={node().layout.width} min={4} max={140} disabled={(node().layout.wMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('width', value)} />
+                <Slider value={node().layout.width} {...layoutWidthControlRange} disabled={(node().layout.wMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('width', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>H</span>
@@ -1166,25 +1211,25 @@ export const FeedRecipeEditor = (props: {
               </div>
               <div class="ui-lab-control-row">
                 <span>H size</span>
-                <Slider value={node().layout.height} min={4} max={140} disabled={(node().layout.hMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('height', value)} />
+                <Slider value={node().layout.height} {...layoutHeightControlRange} disabled={(node().layout.hMode ?? 'fixed') !== 'fixed'} onInput={(value) => updateSelectedNodeLayout('height', value)} />
               </div>
               <Show when={node().layout.mode === 'flow'}>
                 <div class="ui-lab-control-row">
                   <span>Nudge X</span>
-                  <Slider value={node().layout.nudgeX} min={-80} max={80} onInput={(value) => updateSelectedNodeLayout('nudgeX', value)} />
+                  <Slider value={node().layout.nudgeX} {...layoutNudgeXControlRange} onInput={(value) => updateSelectedNodeLayout('nudgeX', value)} />
                 </div>
                 <div class="ui-lab-control-row">
                   <span>Nudge Y</span>
-                  <Slider value={node().layout.nudgeY} min={-80} max={80} onInput={(value) => updateSelectedNodeLayout('nudgeY', value)} />
+                  <Slider value={node().layout.nudgeY} {...layoutNudgeYControlRange} onInput={(value) => updateSelectedNodeLayout('nudgeY', value)} />
                 </div>
               </Show>
               <div class="ui-lab-control-row">
                 <span>Pad</span>
-                <Slider value={node().layout.padding} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('padding', value)} />
+                <Slider value={node().layout.padding} {...layoutPaddingControlRange} onInput={(value) => updateSelectedNodeLayout('padding', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>{selectedNodeCanEditText() ? 'Line Gap' : 'Gap'}</span>
-                <Slider value={node().layout.gap} min={0} max={40} onInput={(value) => updateSelectedNodeLayout('gap', value)} />
+                <Slider value={node().layout.gap} {...layoutGapControlRange} onInput={(value) => updateSelectedNodeLayout('gap', value)} />
               </div>
               <div class="ui-lab-control-row">
                 <span>{layoutCrossAxisLabel(resolveLayoutDirection(node().layout))}</span>

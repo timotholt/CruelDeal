@@ -241,6 +241,16 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   --reflex-gy: 0;
   --reflex-x: var(--reflex-gx);
   --reflex-y: var(--reflex-gy);
+  --metal-gold-base: #d6a338;
+  --metal-silver-base: #bcc2c5;
+  --metal-bronze-base: #a66f35;
+  --metal-reflection-map: none;
+  --metal-reflection-map-width: 367.5px;
+  --metal-reflection-map-height: 330px;
+  --metal-reflection-offset-x: -14px;
+  --metal-reflection-offset-y: -10px;
+  --metal-reflection-travel-x: 78px;
+  --metal-reflection-travel-y: 96px;
 }
 
 /* Metallic Color Profiles — all sourced from the canonical METALS registry
@@ -446,4 +456,68 @@ html, body { height: 100%; width: 100%; overscroll-behavior: none; overflow: hid
   background-size: 180% 180%;
   background-position: calc(50% + var(--reflex-gx) * 60px) calc(50% + var(--reflex-gy) * 60px);
   background-blend-mode: normal;
+}
+
+/* Locked runtime metals. A text node needs only `.metal-gold`,
+   `.metal-silver`, or `.metal-bronze`; the application-level controller
+   supplies the shared motion variables. Legacy authoring combinations retain
+   their explicit `.sheen-text` recipe. */
+:is(
+  .metal-gold:not(.sheen-text),
+  .metal-silver:not(.sheen-text),
+  .metal-bronze:not(.sheen-text),
+  .gold18k
+) {
+  color: transparent;
+  background-color: var(--metal-runtime-base);
+  background-image: var(--metal-reflection-map);
+  background-size: var(--metal-reflection-map-width) var(--metal-reflection-map-height);
+  background-position:
+    calc(50% + var(--metal-reflection-offset-x) + var(--reflex-gx) * var(--metal-reflection-travel-x))
+    calc(50% + var(--metal-reflection-offset-y) + var(--reflex-gy) * var(--metal-reflection-travel-y));
+  background-repeat: no-repeat;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.metal-gold:not(.sheen-text),
+.gold18k {
+  --metal-runtime-base: var(--metal-gold-base);
+}
+
+.metal-silver:not(.sheen-text) {
+  --metal-runtime-base: var(--metal-silver-base);
+}
+
+.metal-bronze:not(.sheen-text) {
+  --metal-runtime-base: var(--metal-bronze-base);
+}
+
+:is(.metal-surface-gold, .metal-surface-silver, .metal-surface-bronze) {
+  background-color: var(--metal-runtime-base);
+  background-image: var(--metal-reflection-map);
+  background-size: var(--metal-reflection-map-width) var(--metal-reflection-map-height);
+  background-position:
+    calc(50% + var(--metal-reflection-offset-x) + var(--reflex-gx) * var(--metal-reflection-travel-x))
+    calc(50% + var(--metal-reflection-offset-y) + var(--reflex-gy) * var(--metal-reflection-travel-y));
+  background-repeat: no-repeat;
+}
+
+.metal-surface-gold { --metal-runtime-base: var(--metal-gold-base); }
+.metal-surface-silver { --metal-runtime-base: var(--metal-silver-base); }
+.metal-surface-bronze { --metal-runtime-base: var(--metal-bronze-base); }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(
+    .metal-gold:not(.sheen-text),
+    .metal-silver:not(.sheen-text),
+    .metal-bronze:not(.sheen-text),
+    .gold18k,
+    .metal-surface-gold,
+    .metal-surface-silver,
+    .metal-surface-bronze
+  ) {
+    background-position: center;
+  }
 }

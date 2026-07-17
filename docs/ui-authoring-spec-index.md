@@ -10,15 +10,18 @@ Use this page to decide which UI authoring documents may direct new work.
 1. `docs/semantic-ui-authoring-compiler-spec.md`
    Product goals, semantic component model, appearance compiler, deterministic
    output contract, editor topology, and progress rules.
-2. `docs/mission-briefing-v2-vertical-slice-spec.md`
+2. `docs/css-effects-surface-compiler-rulebook.md`
+   Property-by-property control behavior, CSS and effect lowering, bounded
+   host/underlay/content/overlay allocation, conflicts, states, and mobile cost.
+3. `docs/mission-briefing-v2-vertical-slice-spec.md`
    First measurable implementation milestone and its 10-point scorecard.
-3. `docs/ui-authoring-visual-capability-contract.md`
+4. `docs/ui-authoring-visual-capability-contract.md`
    Supported visual range, the approved Mission Briefing target, and the rule
    that migration checkpoints must not be confused with product acceptance.
-4. `docs/mission-briefing-v2-scorecard.md`
+5. `docs/mission-briefing-v2-scorecard.md`
    Current binary milestone status, evidence locations, active work packet, and
    the only permitted measure of implementation progress.
-5. `docs/references/ui-authoring/mission-v2-target-analysis.md`
+6. `docs/references/ui-authoring/mission-v2-target-analysis.md`
    Measured extraction of the approved Mission target: normalized region
    bounds, hierarchy, material facts, responsive invariants, and implementation
    choice boundaries.
@@ -62,8 +65,9 @@ These describe prior strategies and must not direct new implementation:
 
 Their useful observations may be migrated deliberately. Their governing ideas
 are rejected where they assume a universal generic node, flat surface field bag,
-fixed renderer element count, class-discovered behavior, editor DOM export, or
-control/test completion as the primary measure of progress.
+one universal DOM template, unbounded layer-shaped DOM, class-discovered
+behavior, editor DOM export, or control/test completion as the primary measure
+of progress.
 
 ## Current editor/lab names
 

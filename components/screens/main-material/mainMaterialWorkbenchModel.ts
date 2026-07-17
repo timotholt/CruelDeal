@@ -33,43 +33,57 @@ export const createMainMaterialWorkbenchParts = (
   partLabels: Array<MaterialWorkbenchPart<MainPartId>> = mainMaterialPartLabels,
 ): Array<MaterialWorkbenchPart<MainWorkbenchPartId>> => (
   partLabels.flatMap((part) => {
-    if (part.id === 'feedCards') return feedWorkbenchParts;
+    if (part.id === 'backdrop') {
+      return [{
+        ...part,
+        id: 'backdrop' as MainWorkbenchPartId,
+        label: 'App',
+        detail: 'root control',
+        depth: 0,
+      }];
+    }
+    if (part.id === 'feedCards') {
+      return feedWorkbenchParts.map((feedPart) => ({
+        ...feedPart,
+        depth: (feedPart.depth ?? 0) + 1,
+      }));
+    }
     if (part.id === 'topBar') {
       return [
-        { ...part, id: 'topBar' as MainWorkbenchPartId, depth: 0 },
-        { id: topBarProfileTargetId as MainWorkbenchPartId, label: 'Profile', detail: 'button material', depth: 1 },
+        { ...part, id: 'topBar' as MainWorkbenchPartId, depth: 1 },
+        { id: topBarProfileTargetId as MainWorkbenchPartId, label: 'Profile', detail: 'button material', depth: 2 },
         ...topBarCurrencySpecs.map((node) => ({
           id: topBarCurrencyTargetId(node.id) as MainWorkbenchPartId,
           label: node.label,
           detail: 'shared wallet style',
-          depth: 1,
+          depth: 2,
         })),
       ];
     }
     if (part.id === 'profileButton' || part.id === 'currencyButtons') return [];
     if (part.id === 'toolBar') {
       return [
-        { ...part, id: 'toolBar' as MainWorkbenchPartId, depth: 0 },
+        { ...part, id: 'toolBar' as MainWorkbenchPartId, depth: 1 },
         ...toolbarNodeSpecs.map((node) => ({
           id: toolbarMaterialTargetId(node.id) as MainWorkbenchPartId,
           label: node.label,
           detail: 'shared command style',
-          depth: 1,
+          depth: 2,
         })),
       ];
     }
     if (part.id === 'navBarContainer') {
       return [
-        { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 0 },
+        { ...part, id: 'navBarContainer' as MainWorkbenchPartId, depth: 1 },
         ...navNodeSpecs.map((node, index) => ({
           id: navItemTargetId(index) as MainWorkbenchPartId,
           label: node.label,
           detail: 'shared tab style',
-          depth: 1,
+          depth: 2,
         })),
       ];
     }
     if (part.id === 'navBar') return [];
-    return [{ ...part, id: part.id as MainWorkbenchPartId }];
+    return [{ ...part, id: part.id as MainWorkbenchPartId, depth: 1 }];
   })
 );
