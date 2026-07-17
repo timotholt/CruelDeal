@@ -1,6 +1,5 @@
 import { createRootRoute, createRoute, createRouter, Outlet, useNavigate, useRouter } from "@tanstack/solid-router";
 import { MainMenuScreen } from "./components/screens/MainMenuScreen";
-import { GameScreen } from "./components/screens/GameScreen";
 import { CityMapScreen } from "./components/screens/CityMapScreen";
 import { ClassicPlayScreen } from "./components/screens/ClassicPlayScreen";
 import { DeckScreen } from "./components/screens/DeckScreen";
@@ -38,8 +37,6 @@ const RootComponent = () => {
     const activeScreen = createMemo<ScreenKey>(() => {
         const path = router.state.location.pathname.toLowerCase();
         
-        // NOTE: /play must be tested BEFORE /game because `/play` doesn't
-        // contain "/game" but we want them distinct.
         if (path.includes("/uitest")) return "GAME";
         if (path.includes("/login-material")) return "GAME";
         if (path.includes("/main-material")) return "GAME";
@@ -48,7 +45,6 @@ const RootComponent = () => {
         if (path.includes("/dev")) return "GAME";
         if (path.includes("/citymap")) return "GAME";
         if (path.includes("/play")) return "PLAY";
-        if (path.includes("/game")) return "GAME";
         if (path.includes("/deck")) return "DECK";
         if (path.includes("/season")) return "SEASON";
         if (path.includes("/store")) return "STORE";
@@ -108,12 +104,6 @@ const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
     component: () => <MainMenuScreen onNavigate={(s) => router.navigate({ to: s === 'MENU' ? '/' : `/${s.toLowerCase()}` })} onLogout={() => console.log('Logout')} />,
-});
-
-const gameRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/game",
-    component: () => <GameScreen onExit={() => router.history.back()} />,
 });
 
 const playRoute = createRoute({
@@ -279,7 +269,6 @@ const devShinyPerformanceRoute = createRoute({
 // 3. Create Router Instance
 const routeTree = rootRoute.addChildren([
     indexRoute,
-    gameRoute,
     playRoute,
     cityMapRoute,
     legacyPlayAliasRoute,
