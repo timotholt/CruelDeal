@@ -102,7 +102,7 @@ export interface IntentEnvelope<TIntent = RuntimeIntent> {
 
 export interface CommittedIntentIdentity {
   readonly matchId: string;
-  readonly seat: Seat;
+  readonly seat: Seat | 'SYSTEM';
   readonly intentId: string;
   readonly intentSeq?: number;
 }
@@ -199,3 +199,11 @@ export type IntentReceiptKey = string & { readonly [intentReceiptKeyBrand]: true
 
 /** Local-only receipt storage. Durability, watermarks, and compaction are deferred. */
 export type InMemoryIntentReceiptMap = Map<IntentReceiptKey, IntentReceipt>;
+
+/** Canonical local replay source; transaction events never overlap genesis. */
+export interface MatchRuntimeReplayExport {
+  readonly version: 1;
+  readonly bootstrap: ValidatedMatchBootstrap;
+  readonly genesis: MatchState;
+  readonly transactions: readonly CommittedTransactionRecord[];
+}

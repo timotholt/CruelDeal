@@ -539,6 +539,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
   const events = resolve(s, { type: 'END_TURN', intentId: 'end', owner: 'P0' }, createRng('end'), manifest);
+  eq(events[0], { type: 'TURN_RESOLUTION_STARTED', turn: 2 }, 'END_TURN intent: starts resolution first');
   truthy(events.some(e => e.type === 'TURN_ENDED'), 'END_TURN intent: emits TURN_ENDED');
   truthy(events.some(e => e.type === 'TURN_STARTED'), 'END_TURN intent: emits TURN_STARTED');
 }

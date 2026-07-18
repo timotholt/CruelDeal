@@ -951,6 +951,7 @@ export function evalEffect(
           lane,
           oldId: prev.id,
           newId,
+          newDefId: effect.newDefId,
           cause: ctx.source,
         };
         events.push(e);

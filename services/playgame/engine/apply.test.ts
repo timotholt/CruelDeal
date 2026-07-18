@@ -382,6 +382,41 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s2.lanes[0].locationRevealed, false, 'LOCATION_REVEALED: id mismatch is a no-op');
 }
 
+// -- LOCATION_REPLACED: preserves the new definition identity for replay
+
+{
+  const oldId = 'old-location' as LocationId;
+  const newId = 'new-location' as LocationId;
+  const s0: MatchState = {
+    ...emptyState(),
+    lanes: [
+      { ...blankLane(0), location: { id: oldId, defId: 'old-def', lane: 0, tags: [] }, locationRevealed: true },
+      blankLane(1),
+      blankLane(2),
+    ],
+  };
+  const s1 = run(s0, {
+    type: 'LOCATION_REPLACED',
+    lane: 0,
+    oldId,
+    newId,
+    newDefId: 'new-def',
+    cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+  });
+  eq(s1.lanes[0].location?.id, newId, 'LOCATION_REPLACED: new instance id recorded');
+  eq(s1.lanes[0].location?.defId, 'new-def', 'LOCATION_REPLACED: new definition id recorded');
+  eq(s1.lanes[0].locationRevealed, false, 'LOCATION_REPLACED: new location starts hidden');
+  const mismatched = run(s0, {
+    type: 'LOCATION_REPLACED',
+    lane: 0,
+    oldId: 'not-the-current-location' as LocationId,
+    newId,
+    newDefId: 'new-def',
+    cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+  });
+  eq(mismatched.lanes[0].location?.id, oldId, 'LOCATION_REPLACED: old instance mismatch is a no-op');
+}
+
 // -- LOCATION_TAG_ADDED / REMOVED: on lane.location.tags
 
 {
@@ -450,7 +485,10 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s0 = stateWithSentinelInHand();
-  const s1 = run(s0,
+  const resolving = run(s0, { type: 'TURN_RESOLUTION_STARTED', turn: 1 });
+  eq(resolving.phase, 'RESOLVING', 'TURN_RESOLUTION_STARTED: phase = RESOLVING');
+
+  const s1 = run(resolving,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     // Give the card a transient tag...
     { type: 'CARD_TAG_ADDED', cardId: 's1' as CardId, tag: { kind: 'MOVED_THIS_TURN' } },

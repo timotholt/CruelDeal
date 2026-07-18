@@ -88,7 +88,7 @@ export type MatchEvent =
 
   // --- Location ---
   | { type: 'LOCATION_REVEALED'; lane: LaneIdx; locationId: LocationId }
-  | { type: 'LOCATION_REPLACED'; lane: LaneIdx; oldId: LocationId; newId: LocationId; cause: EffectRef }
+  | { type: 'LOCATION_REPLACED'; lane: LaneIdx; oldId: LocationId; newId: LocationId; newDefId: string; cause: EffectRef }
   /** Location is removed from the lane entirely (lane becomes locationless).
    *  Distinct from REPLACED, which swaps one location for another. */
   | { type: 'LOCATION_DESTROYED'; lane: LaneIdx; locationId: LocationId; cause: EffectRef }
@@ -100,6 +100,7 @@ export type MatchEvent =
   | { type: 'LOCATION_COUNTER_CHANGED'; lane: LaneIdx; name: string; owner?: Owner; delta: number }
 
   // --- Turn flow ---
+  | { type: 'TURN_RESOLUTION_STARTED'; turn: number }
   | { type: 'TURN_STARTED'; turn: number; priority: Owner; priorityReason: PriorityReason }
   | { type: 'TURN_ENDED'; turn: number }
   | { type: 'MATCH_ENDED'; result: { winner: Owner | 'DRAW'; lanesWon: Record<Owner, number>; totalPower: Record<Owner, number> } }

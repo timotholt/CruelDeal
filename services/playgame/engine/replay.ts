@@ -1,7 +1,7 @@
 import type { MatchEvent } from './types/events';
 import type { Manifest } from './manifest/types';
 import type { MatchState } from './types/state';
-import { apply } from './apply';
+import { buildEventTransactionFrames } from './transactionFrames';
 
 export interface ReplayBundle {
   readonly version: 1;
@@ -51,21 +51,24 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
   }
   assertReplayInitialState(opts.initialState, opts.manifest);
   const initialState = opts.initialState;
-  const frames: ReplayFrame[] = [{ index: 0, event: null, state: initialState }];
-  let state = initialState;
-
-  for (let i = 0; i < opts.events.length; i++) {
-    state = apply(state, opts.events[i], opts.manifest);
-    frames.push({
-      index: i + 1,
-      event: opts.events[i],
-      state,
-    });
-  }
+  const transaction = buildEventTransactionFrames({
+    transactionId: 'replay',
+    initialState,
+    events: opts.events,
+    manifest: opts.manifest,
+  });
+  const frames: ReplayFrame[] = [
+    { index: 0, event: null, state: initialState },
+    ...transaction.frames.map((frame) => ({
+      index: frame.index + 1,
+      event: frame.event,
+      state: frame.after,
+    })),
+  ];
 
   return {
     initialState,
-    finalState: state,
+    finalState: transaction.finalState,
     frames,
   };
 }
@@ -73,7 +76,7 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
 export function exportReplayBundle(
   state: MatchState,
   manifest: Manifest,
-  extras?: ReplayBundle['metadata'],
+  extras: ReplayBundle['metadata'] | undefined,
   initialState: MatchState,
 ): ReplayBundle {
   if (!initialState) {

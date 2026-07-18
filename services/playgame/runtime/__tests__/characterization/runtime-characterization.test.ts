@@ -81,7 +81,7 @@ const revealCascade = testCardDef('reveal-cascade', {
 
 describe('Phase 0 runtime characterization', () => {
   it('ends a turn with no staged cards and records every intermediate state', () => {
-    const runtimeFixture = fixture('end-turn-empty');
+    const runtimeFixture = fixture('end-turn-empty', { phase: 'AWAITING_INTENT' });
     const manifest = testManifest([plain]);
     const intentRng = createRng(runtimeFixture.seed);
     const events = resolve(runtimeFixture.state, {
@@ -89,8 +89,15 @@ describe('Phase 0 runtime characterization', () => {
       intentId: 'end-turn-empty-intent',
       owner: runtimeFixture.localSeat,
     }, intentRng, manifest);
+    expect(events[0]).toEqual({ type: 'TURN_RESOLUTION_STARTED', turn: 2 });
+    const resolutionStart = buildEventTransactionFrames({
+      transactionId: 'end-turn-empty:resolution-start',
+      initialState: runtimeFixture.state,
+      events: [events[0]],
+      manifest,
+    }).finalState;
     const authoritative = resolveTurn(
-      runtimeFixture.state,
+      resolutionStart,
       manifest,
       createRng(runtimeFixture.seed).fork(`turn:${runtimeFixture.state.turn}`),
     );
@@ -101,7 +108,10 @@ describe('Phase 0 runtime characterization', () => {
       manifest,
     });
 
+    expect(events.slice(1)).toEqual(authoritative.events);
     assertRuntimeParity({ finalState: authoritative.state, events }, folded);
+    expect(folded.frames[0].before.phase).toBe('AWAITING_INTENT');
+    expect(folded.frames[0].after.phase).toBe('RESOLVING');
     expect(events.some((event) => event.type === 'CARD_FLIPPED')).toBe(false);
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
     expect(folded.frames).toHaveLength(events.length);

@@ -30,6 +30,12 @@ export { createRng } from './rng';
 export { apply } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
+export { buildEventTransactionFrames } from './transactionFrames';
+export type {
+  BuildEventTransactionFramesOptions,
+  EventTransactionFrames,
+  TransactionFrame,
+} from './transactionFrames';
 
 // ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
 export { revealPlayedCard, forceRevealPlayedCard, triggerOnReveal, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';

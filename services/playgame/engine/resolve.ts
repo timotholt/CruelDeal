@@ -43,7 +43,14 @@ export function resolve(
     case 'STAGE_CARD':   return resolveStage(state, intent, rng, manifest);
     case 'UNSTAGE_CARD': return resolveUnstage(state, intent, manifest);
     case 'UNDO_TURN':    return resolveUndoTurn(state, intent, manifest);
-    case 'END_TURN':     return resolveTurn(state, manifest, rng.fork(`turn:${state.turn}`)).events as MatchEvent[];
+    case 'END_TURN': {
+      const started: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: state.turn };
+      const resolvingState = apply(state, started, manifest);
+      return [
+        started,
+        ...resolveTurn(resolvingState, manifest, rng.fork(`turn:${state.turn}`)).events,
+      ];
+    }
     case 'CONCEDE':      return resolveConcede(state, intent);
   }
 }
@@ -123,7 +130,6 @@ function resolveUnstage(
   if (!state.stagingOrder.includes(intent.cardId)) {
     return reject(intent.intentId, 'card not in staging order');
   }
-  const def = manifest.cards[card.defId];
   const refund = getCardCost(state, intent.cardId, manifest);
 
   return [
@@ -147,7 +153,6 @@ function resolveUndoTurn(
   for (const id of mine) {
     const card = state.cards[id];
     if (!card) continue;
-    const def = manifest.cards[card.defId];
     events.push({ type: 'CARD_UNSTAGED', intentId: intent.intentId, cardId: id });
     events.push({
       type: 'ENERGY_CHANGED',

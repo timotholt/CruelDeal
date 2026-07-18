@@ -1,0 +1,428 @@
+import { createInitialMatchState } from '../engine/cli/initState';
+import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
+import type { Manifest } from '../engine/manifest/types';
+import { createRng } from '../engine/rng';
+import { resolve } from '../engine/resolve';
+import { buildEventTransactionFrames } from '../engine/transactionFrames';
+import type { MatchEvent } from '../engine/types/events';
+import type { Seat } from '../engine/types/ids';
+import type { MatchIntent } from '../engine/types/intents';
+import type { MatchState } from '../engine/types/state';
+import type {
+  AcceptedIntentResult,
+  CommittedIntentIdentity,
+  CommittedTransactionRecord,
+  IllegalIntentResult,
+  InMemoryIntentReceiptMap,
+  IntentAcceptanceResult,
+  IntentEnvelope,
+  IntentReceipt,
+  IntentReceiptKey,
+  MatchRevision,
+  MatchRuntimeReplayExport,
+  MatchTransactionFrames,
+  RuntimeIntent,
+  ValidatedMatchBootstrap,
+} from './contracts';
+import { buildOpeningTransaction } from './opening';
+import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
+
+export type MatchTransactionSubscriber = (timeline: MatchTransactionFrames) => void;
+
+export interface MatchRuntime {
+  state(): MatchState;
+  genesis(): MatchState;
+  revision(): MatchRevision;
+  transactions(): readonly CommittedTransactionRecord[];
+  submitIntent(envelope: IntentEnvelope): Promise<IntentAcceptanceResult>;
+  subscribeCommittedTransactions(subscriber: MatchTransactionSubscriber): () => void;
+  exportReplay(): MatchRuntimeReplayExport;
+}
+
+interface QueuedIntent {
+  readonly envelope: IntentEnvelope;
+  readonly resolve: (result: IntentAcceptanceResult) => void;
+}
+
+interface CommitCandidate {
+  readonly identity: CommittedIntentIdentity;
+  readonly events: readonly MatchEvent[];
+  readonly receiptKey?: IntentReceiptKey;
+}
+
+interface CommittedCandidate {
+  readonly result?: AcceptedIntentResult;
+  readonly timeline: MatchTransactionFrames;
+}
+
+const MUTATION_OPTIONAL_EVENTS = new Set<MatchEvent['type']>([
+  'OR_WINDOW_OPEN',
+  'OR_WINDOW_CLOSE',
+  'RECURSION_LIMIT_HIT',
+  'INTENT_REJECTED',
+]);
+
+function isSeat(value: unknown): value is Seat {
+  return value === 'P0' || value === 'P1';
+}
+
+function isRuntimeIntent(value: unknown): value is RuntimeIntent {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as { readonly type?: unknown }).type === 'string';
+}
+
+function receiptKey(matchId: string, seat: Seat, intentId: string): IntentReceiptKey {
+  return JSON.stringify([matchId, seat, intentId]) as IntentReceiptKey;
+}
+
+function copyEnvelope(envelope: IntentEnvelope): IntentEnvelope {
+  const intent = typeof envelope.intent === 'object' && envelope.intent !== null
+    ? Object.freeze({ ...envelope.intent }) as RuntimeIntent
+    : envelope.intent;
+  return Object.freeze({
+    matchId: envelope.matchId,
+    seat: envelope.seat,
+    intentId: envelope.intentId,
+    expectedRevision: envelope.expectedRevision,
+    ...(envelope.intentSeq === undefined ? {} : { intentSeq: envelope.intentSeq }),
+    intent,
+  });
+}
+
+function toEngineIntent(envelope: IntentEnvelope): MatchIntent | null {
+  const intent = envelope.intent;
+  switch (intent.type) {
+    case 'STAGE_CARD':
+      return {
+        type: intent.type,
+        intentId: envelope.intentId,
+        owner: envelope.seat,
+        cardId: intent.cardId,
+        lane: intent.lane,
+      };
+    case 'UNSTAGE_CARD':
+      return {
+        type: intent.type,
+        intentId: envelope.intentId,
+        owner: envelope.seat,
+        cardId: intent.cardId,
+      };
+    case 'UNDO_TURN':
+    case 'END_TURN':
+    case 'CONCEDE':
+      return {
+        type: intent.type,
+        intentId: envelope.intentId,
+        owner: envelope.seat,
+      };
+    default:
+      return null;
+  }
+}
+
+function hasMechanicalChange(before: MatchState, after: MatchState): boolean {
+  return (Object.keys(before) as (keyof MatchState)[]).some(
+    (key) => key !== 'log' && before[key] !== after[key],
+  );
+}
+
+function assertValidTimeline(
+  timeline: MatchTransactionFrames,
+  initialState: MatchState,
+  events: readonly MatchEvent[],
+): void {
+  if (events.length === 0 || timeline.frames.length !== events.length) {
+    throw new Error('validated commit requires a non-empty contiguous event sequence');
+  }
+
+  let expectedBefore = initialState;
+  timeline.frames.forEach((frame, index) => {
+    if (frame.index !== index || frame.before !== expectedBefore || frame.event !== events[index]) {
+      throw new Error(`transaction frame sequence is not contiguous at index ${index}`);
+    }
+    if (frame.after.seed !== initialState.seed) {
+      throw new Error(`authoritative event changed the match seed at index ${index}`);
+    }
+    if (frame.after.log.length !== frame.before.log.length + 1) {
+      throw new Error(`authoritative event did not append exactly one log entry at index ${index}`);
+    }
+    const appended = frame.after.log[frame.after.log.length - 1];
+    if (appended?.seq !== frame.before.log.length || appended.event !== frame.event) {
+      throw new Error(`authoritative log is not contiguous at index ${index}`);
+    }
+    if (!MUTATION_OPTIONAL_EVENTS.has(frame.event.type) && !hasMechanicalChange(frame.before, frame.after)) {
+      throw new Error(`authoritative ${frame.event.type} event was a silent no-op at index ${index}`);
+    }
+    expectedBefore = frame.after;
+  });
+
+  if (timeline.finalState !== expectedBefore) {
+    throw new Error('transaction final state does not match its final frame');
+  }
+}
+
+function phaseAllowsIntent(state: MatchState, intent: RuntimeIntent): boolean {
+  if (intent.type === 'CONCEDE') return state.phase !== 'ENDED';
+  return state.phase === 'AWAITING_INTENT';
+}
+
+function illegalResult(
+  envelope: IntentEnvelope,
+  currentRevision: MatchRevision,
+  code: IllegalIntentResult['code'],
+  message?: string,
+): IllegalIntentResult {
+  return {
+    status: 'illegal',
+    matchId: envelope.matchId,
+    seat: envelope.seat,
+    intentId: envelope.intentId,
+    currentRevision,
+    code,
+    ...(message === undefined ? {} : { message }),
+  };
+}
+
+/**
+ * Creates the local, non-DOM match authority from an already validated and
+ * frozen bootstrap. The bootstrap manifest is the only Phase 1 rules source.
+ */
+export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap): MatchRuntime {
+  const manifest: Manifest = BOOTSTRAP_MANIFEST;
+  if (validatedBootstrap.manifestVersion !== manifest.version) {
+    throw new Error(
+      `createMatchRuntime: bootstrap manifest ${validatedBootstrap.manifestVersion} does not match ${manifest.version}`,
+    );
+  }
+  if (!manifest.rulesets[validatedBootstrap.rulesetId]) {
+    throw new Error(`createMatchRuntime: unknown ruleset "${validatedBootstrap.rulesetId}"`);
+  }
+
+  const genesisState = createInitialMatchState(validatedBootstrap.seed, manifest, {
+    P0: validatedBootstrap.decks.P0.entries,
+    P1: validatedBootstrap.decks.P1.entries,
+  });
+  const receipts: InMemoryIntentReceiptMap = new Map();
+  const queue: QueuedIntent[] = [];
+  const subscribers = new Set<MatchTransactionSubscriber>();
+  const resolutionRng = forkResolutionRng(createRng(validatedBootstrap.seed));
+  let authoritativeState = genesisState;
+  let currentRevision: MatchRevision = 0;
+  let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
+  let drainScheduled = false;
+  let draining = false;
+
+  const commit = (candidate: CommitCandidate): CommittedCandidate => {
+    const baseRevision = currentRevision;
+    const revision = baseRevision + 1;
+    const transactionId = `${validatedBootstrap.matchId}:tx:${revision}`;
+    const events = Object.freeze([...candidate.events]);
+    const transaction: CommittedTransactionRecord = Object.freeze({
+      transactionId,
+      matchId: validatedBootstrap.matchId,
+      baseRevision,
+      revision,
+      intent: Object.freeze({ ...candidate.identity }),
+      events,
+    });
+    const built = buildEventTransactionFrames({
+      transactionId,
+      initialState: authoritativeState,
+      events,
+      manifest,
+    });
+    const timeline: MatchTransactionFrames = Object.freeze({
+      transaction,
+      frames: built.frames,
+      finalState: built.finalState,
+    });
+    assertValidTimeline(timeline, authoritativeState, events);
+
+    const result: AcceptedIntentResult | undefined = candidate.receiptKey
+      ? Object.freeze({
+          status: 'accepted',
+          matchId: candidate.identity.matchId,
+          seat: candidate.identity.seat as Seat,
+          intentId: candidate.identity.intentId,
+          revision,
+          transaction,
+        })
+      : undefined;
+
+    // Local atomic commit: no callbacks, promises, or awaits may enter this block.
+    authoritativeState = built.finalState;
+    committedTransactions = Object.freeze([...committedTransactions, transaction]);
+    currentRevision = revision;
+    if (candidate.receiptKey && result) receipts.set(candidate.receiptKey, result);
+
+    return { result, timeline };
+  };
+
+  const publish = (timeline: MatchTransactionFrames): void => {
+    for (const subscriber of [...subscribers]) {
+      try {
+        subscriber(timeline);
+      } catch {
+        // Read-only observer failures cannot roll back or halt authority.
+      }
+    }
+  };
+
+  const opening = buildOpeningTransaction(genesisState, manifest);
+  const opened = commit({
+    identity: {
+      matchId: validatedBootstrap.matchId,
+      seat: 'SYSTEM',
+      intentId: opening.transactionId,
+    },
+    events: opening.events,
+  });
+  publish(opened.timeline);
+
+  const storeRejection = (
+    key: IntentReceiptKey,
+    rejection: IntentReceipt,
+  ): IntentAcceptanceResult => {
+    receipts.set(key, rejection);
+    return rejection;
+  };
+
+  const acceptAtDequeue = (envelope: IntentEnvelope): IntentAcceptanceResult => {
+    const key = receiptKey(envelope.matchId, envelope.seat, envelope.intentId);
+    const original = receipts.get(key);
+    if (original) {
+      return {
+        status: 'duplicate',
+        matchId: envelope.matchId,
+        seat: envelope.seat,
+        intentId: envelope.intentId,
+        original,
+      };
+    }
+
+    if (envelope.matchId !== validatedBootstrap.matchId) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'MATCH_MISMATCH'));
+    }
+    if (!isSeat(envelope.seat)) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'SEAT_AUTHORITY'));
+    }
+    const suppliedOwner = isRuntimeIntent(envelope.intent)
+      ? (envelope.intent as RuntimeIntent & { readonly owner?: unknown }).owner
+      : undefined;
+    if (suppliedOwner !== undefined && suppliedOwner !== envelope.seat) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'SEAT_AUTHORITY'));
+    }
+    if (envelope.expectedRevision !== currentRevision) {
+      return storeRejection(key, {
+        status: 'stale',
+        matchId: envelope.matchId,
+        seat: envelope.seat,
+        intentId: envelope.intentId,
+        expectedRevision: envelope.expectedRevision,
+        currentRevision,
+      });
+    }
+    if (authoritativeState.phase === 'ENDED' || authoritativeState.result !== null) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'TERMINAL_MATCH'));
+    }
+    if (!isRuntimeIntent(envelope.intent)) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID'));
+    }
+    if (!phaseAllowsIntent(authoritativeState, envelope.intent)) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID'));
+    }
+
+    const engineIntent = toEngineIntent(envelope);
+    if (!engineIntent) {
+      return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID'));
+    }
+
+    try {
+      const rng = forkSemanticRng(
+        resolutionRng,
+        `${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`,
+      );
+      const events = resolve(authoritativeState, engineIntent, rng, manifest);
+      const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
+      if (events.length === 0 || engineRejection) {
+        return storeRejection(key, illegalResult(
+          envelope,
+          currentRevision,
+          'RULES_INVALID',
+          engineRejection?.reason ?? 'intent produced no authoritative events',
+        ));
+      }
+
+      const committed = commit({
+        identity: {
+          matchId: envelope.matchId,
+          seat: envelope.seat,
+          intentId: envelope.intentId,
+          ...(envelope.intentSeq === undefined ? {} : { intentSeq: envelope.intentSeq }),
+        },
+        events,
+        receiptKey: key,
+      });
+      publish(committed.timeline);
+      return committed.result!;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return storeRejection(key, illegalResult(
+        envelope,
+        currentRevision,
+        'RULES_INVALID',
+        message,
+      ));
+    }
+  };
+
+  const drainQueue = (): void => {
+    drainScheduled = false;
+    if (draining) return;
+    draining = true;
+    try {
+      while (queue.length > 0) {
+        const queued = queue.shift()!;
+        const result = acceptAtDequeue(queued.envelope);
+        queued.resolve(result);
+      }
+    } finally {
+      draining = false;
+      if (queue.length > 0 && !drainScheduled) {
+        drainScheduled = true;
+        queueMicrotask(drainQueue);
+      }
+    }
+  };
+
+  const submitIntent = (envelope: IntentEnvelope): Promise<IntentAcceptanceResult> => {
+    const copied = copyEnvelope(envelope);
+    const pending = new Promise<IntentAcceptanceResult>((resolveResult) => {
+      queue.push({ envelope: copied, resolve: resolveResult });
+    });
+    if (!draining && !drainScheduled) {
+      drainScheduled = true;
+      queueMicrotask(drainQueue);
+    }
+    return pending;
+  };
+
+  return Object.freeze({
+    state: () => authoritativeState,
+    genesis: () => genesisState,
+    revision: () => currentRevision,
+    transactions: () => committedTransactions,
+    submitIntent,
+    subscribeCommittedTransactions: (subscriber: MatchTransactionSubscriber) => {
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+    exportReplay: () => Object.freeze({
+      version: 1 as const,
+      bootstrap: validatedBootstrap,
+      genesis: genesisState,
+      transactions: committedTransactions,
+    }),
+  });
+}

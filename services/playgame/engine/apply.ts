@@ -402,9 +402,11 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     }
 
     case 'LOCATION_REPLACED': {
+      const lane = state.lanes[event.lane];
+      if (!lane.location || lane.location.id !== event.oldId) return state;
       const newLoc: LocationInstance = {
         id: event.newId,
-        defId: '',              // Phase 6 fills defId when it emits this event
+        defId: event.newDefId,
         lane: event.lane,
         tags: [],
       };
@@ -476,6 +478,13 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     }
 
     // ---- Turn flow --------------------------------------------------------
+
+    case 'TURN_RESOLUTION_STARTED':
+      if (event.turn !== state.turn) return state;
+      return {
+        ...state,
+        phase: 'RESOLVING',
+      };
 
     case 'TURN_STARTED':
       // Priority is stored in state; reason is log-only. Phase enters
