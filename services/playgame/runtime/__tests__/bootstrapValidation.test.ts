@@ -29,7 +29,7 @@ function manifestFixture(): Manifest {
   return testManifest(
     [variantCard, ...Array.from({ length: 11 }, (_, index) => testCardDef(`card-${index + 1}`))],
     [],
-    { deckSize: 12, startingHandSize: 3 },
+    { deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
   );
 }
 
@@ -244,24 +244,52 @@ describe('card variants and opening initialization', () => {
     expect(first.events
       .filter((event) => event.type === 'CARD_DRAWN')
       .map((event) => event.owner)).toEqual([
-      'P0', 'P0', 'P0', 'P1', 'P1', 'P1',
+      'P0', 'P0', 'P0', 'P1', 'P1', 'P1', 'P0', 'P1',
     ]);
     const opened = first.events.reduce(
       (state, event) => apply(state, event, manifest),
       firstGenesis,
     );
-    expect(opened.hand.P0).toHaveLength(manifest.constants.startingHandSize);
-    expect(opened.hand.P1).toHaveLength(manifest.constants.startingHandSize);
+    const openingHandSize = manifest.constants.startingHandSize + manifest.constants.turnStartDraw;
+    expect(opened.hand.P0).toHaveLength(openingHandSize);
+    expect(opened.hand.P1).toHaveLength(openingHandSize);
+    expect(opened.deck.P0).toHaveLength(manifest.constants.deckSize - openingHandSize);
+    expect(opened.deck.P1).toHaveLength(manifest.constants.deckSize - openingHandSize);
   });
 
-  it('makes the headless driver consume the shared startingHandSize transaction', () => {
+  it('makes the headless driver consume the shared 3+1 opening transaction', () => {
     const manifest = manifestFixture();
     const result = runMatch({ seed: 'headless-shared-opening', manifest, maxTurns: 0 });
+    const openingHandSize = manifest.constants.startingHandSize + manifest.constants.turnStartDraw;
 
-    expect(result.events).toHaveLength(manifest.constants.startingHandSize * 2);
+    expect(result.events).toHaveLength(openingHandSize * 2);
     expect(result.events.every((event) => event.type === 'CARD_DRAWN')).toBe(true);
-    expect(result.finalState.hand.P0).toHaveLength(manifest.constants.startingHandSize);
-    expect(result.finalState.hand.P1).toHaveLength(manifest.constants.startingHandSize);
+    expect(result.finalState.hand.P0).toHaveLength(openingHandSize);
+    expect(result.finalState.hand.P1).toHaveLength(openingHandSize);
+    expect(result.finalState.deck.P0).toHaveLength(manifest.constants.deckSize - openingHandSize);
+    expect(result.finalState.deck.P1).toHaveLength(manifest.constants.deckSize - openingHandSize);
+  });
+
+  it('derives the turn-1 start draw count from the manifest', () => {
+    const base = manifestFixture();
+    const manifest: Manifest = {
+      ...base,
+      constants: { ...base.constants, turnStartDraw: 2 },
+    };
+    const genesis = createInitialMatchState(
+      'manifest-turn-start-draw',
+      manifest,
+      { P0: deckFixture(), P1: deckFixture() },
+    );
+    const opened = buildOpeningTransaction(genesis, manifest).events.reduce(
+      (state, event) => apply(state, event, manifest),
+      genesis,
+    );
+
+    expect(opened.hand.P0).toHaveLength(5);
+    expect(opened.hand.P1).toHaveLength(5);
+    expect(opened.deck.P0).toHaveLength(7);
+    expect(opened.deck.P1).toHaveLength(7);
   });
 
   it('makes the debug builder fail hard on an unknown definition', () => {

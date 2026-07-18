@@ -31,7 +31,7 @@ const mkCard = (defId: string, basePower: number, cost: number): CardDef => ({
 const mkManifest = (cards: CardDef[], disabled: string[] = []): Manifest => ({
   version: 1,
   protocolVersion: 1,
-  constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3 },
+  constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
   rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
   cards: Object.fromEntries(cards.map((c) => [c.defId, c])),
   locations: {},

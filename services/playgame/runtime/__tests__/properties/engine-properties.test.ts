@@ -107,7 +107,7 @@ function executeGeneratedMatch(
 
   state = commitEvents('opening', state, opened.openingEvents, events, onApply);
   commits.push({
-    label: 'opening-draws',
+    label: 'opening-deal-reveal-turn-start-draws',
     eventStart: 0,
     eventEnd: events.length,
     state,

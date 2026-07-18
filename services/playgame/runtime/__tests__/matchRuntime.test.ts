@@ -89,13 +89,22 @@ describe('createMatchRuntime', () => {
 
     expect(runtime.revision()).toBe(1);
     expect(opening.intent.seat).toBe('SYSTEM');
+    const openingHandSize = BOOTSTRAP_MANIFEST.constants.startingHandSize
+      + BOOTSTRAP_MANIFEST.constants.turnStartDraw;
     expect(opening.events.filter((event) => event.type === 'CARD_DRAWN'))
-      .toHaveLength(BOOTSTRAP_MANIFEST.constants.startingHandSize * 2);
+      .toHaveLength(openingHandSize * 2);
     expect(opening.events.some((event) => event.type === 'LOCATION_REVEALED')).toBe(true);
+    const revealIndex = opening.events.findIndex((event) => event.type === 'LOCATION_REVEALED');
+    expect(opening.events.slice(0, revealIndex).filter((event) => event.type === 'CARD_DRAWN'))
+      .toHaveLength(BOOTSTRAP_MANIFEST.constants.startingHandSize * 2);
+    expect(opening.events.slice(revealIndex + 1).filter((event) => event.type === 'CARD_DRAWN'))
+      .toHaveLength(BOOTSTRAP_MANIFEST.constants.turnStartDraw * 2);
     expect(runtime.genesis().hand.P0).toHaveLength(0);
     expect(runtime.genesis().hand.P1).toHaveLength(0);
-    expect(runtime.state().hand.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.startingHandSize);
-    expect(runtime.state().hand.P1).toHaveLength(BOOTSTRAP_MANIFEST.constants.startingHandSize);
+    expect(runtime.state().hand.P0).toHaveLength(openingHandSize);
+    expect(runtime.state().hand.P1).toHaveLength(openingHandSize);
+    expect(runtime.state().deck.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
+    expect(runtime.state().deck.P1).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
   });
 
   it('keeps planning private, then publishes one complete system resolution timeline', async () => {

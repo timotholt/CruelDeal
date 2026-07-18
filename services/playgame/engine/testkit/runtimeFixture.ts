@@ -236,6 +236,7 @@ export function testManifest(
       laneCapacity: 4,
       deckSize: 12,
       startingHandSize: 3,
+      turnStartDraw: 1,
       ...constants,
     },
     rulesets: {

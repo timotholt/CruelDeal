@@ -192,3 +192,22 @@ second returns no matches after `npm run build`.
 Phase 1's complete BUILD NOW authority migration is therefore closed. The four
 not-met entries are the plan's explicitly later integration, hardening, and
 server-adapter work; none was started here.
+
+## Post-merge fixes
+
+- Fixed END TURN presentation choreography so the committed
+  `TURN_RESOLUTION_STARTED` frame locks every staged card on both seats
+  face-down in one shared 250 ms beat before the priority-ordered reveal walk.
+  Planning still shows the owner's staged cards face-up, and each subsequent
+  `CARD_FLIPPED` frame now reveals from the locked face-down presentation in
+  canonical frame order.
+- Split the presentation-only opening cadence into committed deal, location
+  reveal, and turn-start beats. The `TURN 1` toast now lands after the
+  three-card deal and before the first `LOCATION_REVEALED` frame; the normal
+  draw animation follows the reveal.
+- Added manifest constant `turnStartDraw: 1` and made the canonical opening
+  transaction deal `startingHandSize` cards, reveal lane 1, then draw once for
+  each seat through the shared deterministic draw pipeline. Turn 1 therefore
+  starts symmetrically at four cards in hand and eight remaining in deck, with
+  headless execution, runtime projection, replay, and generated properties all
+  consuming the same changed event stream.

@@ -124,6 +124,7 @@ export interface MatchConstants {
   laneCapacity: number;
   deckSize: number;
   startingHandSize: number;
+  turnStartDraw: number;
 }
 
 // ---- Rulesets / deck construction -----------------------------------------

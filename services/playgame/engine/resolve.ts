@@ -28,6 +28,7 @@ import { getLanePower } from './projections/power';
 import { isRevealDelayed } from './projections/reveal';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
+import { buildCardDrawEvents } from './draw';
 
 // ============================================================================
 // resolve — intent → events
@@ -332,7 +333,7 @@ export function resolveTurn(
       if (!card || !card.revealed) continue;
       const def = manifest.cards[card.defId];
       if (!hasPowerGainDrawTrigger(def)) continue;
-      const draws = drawStep(s, card.owner, 1, manifest);
+      const draws = buildCardDrawEvents(s, card.owner, 1, manifest);
       for (const drawEvt of draws) {
         events.push(drawEvt);
         s = apply(s, drawEvt, manifest);
@@ -532,9 +533,9 @@ export function resolveTurn(
     }
   }
 
-  // Phase 6  Draws (1 per owner, hand-cap permitting).
+  // Phase 6  Manifest-declared turn-start draws per owner, hand-cap permitting.
   for (const owner of ['P0', 'P1'] as const) {
-    const draws = drawStep(s, owner, 1, manifest);
+    const draws = buildCardDrawEvents(s, owner, manifest.constants.turnStartDraw, manifest);
     for (const e of draws) {
       events.push(e);
       s = apply(s, e, manifest);
@@ -662,27 +663,6 @@ function revealDelayedCardsAtEndOfGame(
     s = res.state;
   }
   return { events, state: s };
-}
-
-function drawStep(
-  state: MatchState,
-  owner: Owner,
-  count: number,
-  manifest: Manifest,
-): Extract<MatchEvent, { type: 'CARD_DRAWN' }>[] {
-  const events: Extract<MatchEvent, { type: 'CARD_DRAWN' }>[] = [];
-  let deckLen = state.deck[owner].length;
-  let handLen = state.hand[owner].length;
-  let idx = 0;
-  while (idx < count && deckLen > 0 && handLen < manifest.constants.handCap) {
-    const top = state.deck[owner][idx] as CardInstance | undefined;
-    if (!top) break;
-    events.push({ type: 'CARD_DRAWN', owner, cardId: top.id, toHand: true });
-    idx++;
-    deckLen--;
-    handLen++;
-  }
-  return events;
 }
 
 export function computeMatchResult(state: MatchState, manifest: Manifest): MatchResult {

@@ -8,7 +8,12 @@ import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBo
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
-import { paceCommittedOpening, type PlayScriptCtx } from '@/services/playgame/script/actions';
+import {
+  paceCommittedOpeningDeal,
+  paceCommittedOpeningLocationReveal,
+  paceCommittedOpeningTurnStart,
+  type PlayScriptCtx,
+} from '@/services/playgame/script/actions';
 import { getHandForSeat } from '@/services/playgame/view';
 import { selectInteractiveHand } from '@/components/screens/play/handInteractivity';
 
@@ -20,11 +25,11 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function debugSession() {
+function debugSession(seed = 'provider-0') {
   const candidate = buildDebugMatchBootstrap(
     DEBUG_DECKS[0],
     DEBUG_DECKS[7],
-    'provider-0',
+    seed,
   );
   return MatchSession.fromBootstrap(candidate);
 }
@@ -159,6 +164,72 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(cardId);
   });
 
+  it('locks every staged card face-down at resolution start, then presents reveals in frame order', async () => {
+    let pg!: PlayGameContextValue;
+
+    const Probe = () => {
+      onMount(() => { pg = usePlayGame(); });
+      return null;
+    };
+
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(render(
+      () => (
+        <PlayGameProvider session={debugSession('lock-0')}>
+          <Probe />
+        </PlayGameProvider>
+      ),
+      host,
+    ));
+
+    presentOpeningImmediately(pg);
+    const localCardId = firstPlayableCard(pg);
+    await expect(pg.actions.stageCardInLane(localCardId, 0)).resolves.toBe(true);
+    const timeline = await pg.actions.endTurn();
+    if (!timeline) throw new Error('END_TURN did not commit a resolution timeline');
+
+    const resolutionStartIndex = timeline.frames.findIndex(
+      (frame) => frame.event.type === 'TURN_RESOLUTION_STARTED',
+    );
+    expect(resolutionStartIndex).toBeGreaterThanOrEqual(0);
+    const resolutionStart = timeline.frames[resolutionStartIndex]!;
+
+    pg.actions.presentCommittedFrame(resolutionStart);
+
+    const stagedIds = [...pg.engineState.stagingOrder];
+    expect(stagedIds).toContain(localCardId);
+    expect(new Set(stagedIds.map((id) => pg.engineState.cards[id]?.owner)))
+      .toEqual(new Set(['P0', 'P1']));
+    expect(pg.ui.isFlipped, 'local owner-facing presentation lock').toBe(true);
+    expect(stagedIds.every((id) => pg.engineState.cards[id]?.revealed === false))
+      .toBe(true);
+
+    const revealFrames = timeline.frames
+      .slice(resolutionStartIndex + 1)
+      .filter((frame) => frame.event.type === 'CARD_FLIPPED');
+    const expectedRevealOrder = revealFrames.map((frame) => frame.event.cardId);
+    expect(expectedRevealOrder.length).toBeGreaterThan(0);
+
+    const presentedRevealOrder: CardId[] = [];
+    for (const frame of timeline.frames.slice(resolutionStartIndex + 1)) {
+      pg.actions.presentCommittedFrame(frame);
+      if (frame.event.type !== 'CARD_FLIPPED') continue;
+      presentedRevealOrder.push(frame.event.cardId);
+      expect(pg.engineState.cards[frame.event.cardId]?.revealed).toBe(true);
+      for (const pendingId of expectedRevealOrder.slice(presentedRevealOrder.length)) {
+        expect(pg.engineState.cards[pendingId]?.revealed).toBe(false);
+      }
+      expect(presentedRevealOrder).toEqual(
+        expectedRevealOrder.slice(0, presentedRevealOrder.length),
+      );
+    }
+
+    expect(presentedRevealOrder).toEqual(expectedRevealOrder);
+    pg.actions.finishTurnPresentation();
+    expect(pg.ui.isFlipped).toBe(false);
+  });
+
   it('finishes the committed opening projection with no DOM anchors present', async () => {
     vi.useFakeTimers();
     let pg!: PlayGameContextValue;
@@ -215,25 +286,35 @@ describe('PlayGameProvider runtime synchronization', () => {
       },
       finishTurnPresentation: () => undefined,
     };
-    const openingStep = paceCommittedOpening(pg.openingTimeline);
-    if (typeof openingStep !== 'function') throw new Error('opening presentation must be a step');
-    const presentation = Promise.resolve(openingStep(presentationCtx));
+    const runOpeningBeat = async (step: ReturnType<typeof paceCommittedOpeningDeal>) => {
+      if (typeof step !== 'function') throw new Error('opening presentation must be a step');
+      const presentation = Promise.resolve(step(presentationCtx));
+      await vi.runAllTimersAsync();
+      await presentation;
+    };
 
-    await vi.runAllTimersAsync();
-    await presentation;
+    await runOpeningBeat(paceCommittedOpeningDeal(pg.openingTimeline));
+    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
+    expect(pg.engineState.lanes[0].locationRevealed).toBe(false);
+
+    await runOpeningBeat(paceCommittedOpeningLocationReveal(pg.openingTimeline));
+    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
+    expect(pg.engineState.lanes[0].locationRevealed).toBe(true);
+
+    await runOpeningBeat(paceCommittedOpeningTurnStart(pg.openingTimeline));
 
     const localDealHandSizes = presentedFrames
       .filter((frame, index) => frame.type === 'CARD_DRAWN'
         && (index === 0 || frame.localHandSize !== presentedFrames[index - 1]?.localHandSize))
       .map((frame) => frame.localHandSize);
-    expect(localDealHandSizes).toEqual([1, 2, 3]);
+    expect(localDealHandSizes).toEqual([1, 2, 3, 4]);
     const locationFrameIndex = presentedFrames.findIndex((frame) => frame.type === 'LOCATION_REVEALED');
     const locationFrame = presentedFrames[locationFrameIndex];
     expect(locationFrame?.laneOneRevealed).toBe(true);
     expect(presentedFrames.slice(0, locationFrameIndex)
       .every((frame) => !frame.laneOneRevealed)).toBe(true);
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
-    expect(pg.engineState.deck[pg.localSeat]).toHaveLength(9);
+    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(4);
+    expect(pg.engineState.deck[pg.localSeat]).toHaveLength(8);
     expect(pg.engineState.lanes[0].locationRevealed).toBe(true);
 
     expect(pg.ui.handReservations).toEqual([]);

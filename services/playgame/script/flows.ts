@@ -10,9 +10,10 @@
 import { serial, wait, type Step } from './runner';
 import {
   fadeInLocationTile,
-  flipPlayerCardsFaceDown,
   hideLocationTiles,
-  paceCommittedOpening,
+  paceCommittedOpeningDeal,
+  paceCommittedOpeningLocationReveal,
+  paceCommittedOpeningTurnStart,
   paceCommittedTurn,
   setBoardVisible,
   toast,
@@ -26,8 +27,10 @@ import type { MatchTransactionFrames } from '../runtime/contracts';
  *   2. CRUEL DEAL banner
  *   3. board UI fades in
  *   4. 3 ??? location tiles fade in left -> right
- *   5. walk the runtime's committed opening frames
+ *   5. pace the committed three-card deal
  *   6. TURN 1 banner
+ *   7. pace the committed location reveal
+ *   8. pace the committed turn-start draw
  */
 export const openingSequence = (timeline: MatchTransactionFrames): Step =>
   serial(
@@ -54,9 +57,12 @@ export const openingSequence = (timeline: MatchTransactionFrames): Step =>
     wait(150),
 
     // Opening authority was committed by MatchRuntime as revision 1 before
-    // this storyboard mounted. This step only paces those immutable frames.
-    paceCommittedOpening(timeline),
+    // this storyboard mounted. These steps only split the immutable frames
+    // into the designer's presentation beats.
+    paceCommittedOpeningDeal(timeline),
     toast('TURN 1', { duration: 1800 }),
+    paceCommittedOpeningLocationReveal(timeline),
+    paceCommittedOpeningTurnStart(timeline),
   );
 
 /**
@@ -66,9 +72,10 @@ export const openingSequence = (timeline: MatchTransactionFrames): Step =>
  * Runtime has already accepted END_TURN and committed the complete timeline
  * before this presentation-only flow starts.
  *
- *   1. Flip the player's this-turn plays face-down — they were sitting
- *      face-up in lane since the player dropped them.
- *   2. Pace the committed enemy plays face-down (fly-in, no reveal yet).
+ *   1. Pace the committed staged-card frames. Enemy plays remain face-down;
+ *      the owner still sees their own plays as they did during planning.
+ *   2. At TURN_RESOLUTION_STARTED, lock every staged card on both seats
+ *      face-down together and hold that shared beat.
  *   3. Priority-ordered reveal: whichever side has higher total power
  *      flips its cards face-up first, then the other side follows.
  *   4. Pace turn bookkeeping, draws, and location reveals in frame order.
@@ -76,7 +83,6 @@ export const openingSequence = (timeline: MatchTransactionFrames): Step =>
  */
 export const resolveTurnFlow = (timeline: MatchTransactionFrames): Step =>
   serial(
-    flipPlayerCardsFaceDown(),
     wait(200),
     wait(250),
     paceCommittedTurn(timeline),

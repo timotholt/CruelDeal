@@ -209,6 +209,12 @@ export const PlayGameProvider = (props: {
       undoPendingCard,
       endTurn,
       presentCommittedFrame: (frame) => {
+        if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
+          // Presentation-only lock: staged cards remain mechanically
+          // unrevealed, but the owner was allowed to see their faces while
+          // planning. Lock that facing before the reveal walk advances.
+          setUi('isFlipped', true);
+        }
         const capturedProjection = frame.transactionId === activeProjectedTransactionId
           ? projectedFrameStates.get(frame)
           : undefined;
@@ -218,6 +224,7 @@ export const PlayGameProvider = (props: {
         // Normal completion is already at the final frame. Cancellation or a
         // best-effort animation failure fast-forwards display only.
         activeProjectedTransactionId = null;
+        setUi('isFlipped', false);
         syncFromRuntime();
         setPresentationBusy(false);
       },

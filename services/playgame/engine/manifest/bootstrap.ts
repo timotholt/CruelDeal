@@ -28,7 +28,7 @@ const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<strin
 };
 
 export const BOOTSTRAP_MANIFEST: Manifest = {
-  version: 2,
+  version: 3,
   protocolVersion: 1,
   constants: {
     energyCurve: [1, 2, 3, 4, 5, 6],
@@ -37,6 +37,7 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     laneCapacity: 4,
     deckSize: 12,
     startingHandSize: 3,
+    turnStartDraw: 1,
   },
   rulesets: {
     standard: {

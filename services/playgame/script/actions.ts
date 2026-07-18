@@ -127,6 +127,13 @@ const paceFrame = async (
   frame: MatchEventFrame,
   presentFrame: () => void,
 ): Promise<void> => {
+  if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
+    // Present and hold one shared lock beat so every staged card can paint
+    // face-down before the first per-card reveal cinematic starts.
+    presentFrame();
+    await waitFor(250);
+    return;
+  }
   if (frame.event.type === 'LOCATION_REVEALED') {
     await paceLocationReveal(c, frame, presentFrame);
     return;
@@ -142,10 +149,13 @@ const paceFrame = async (
   await animateEvent(c, frame, presentFrame);
 };
 
-const paceTimeline = async (c: PlayScriptCtx, timeline: MatchTransactionFrames): Promise<void> => {
+const paceTimeline = async (
+  c: PlayScriptCtx,
+  timeline: MatchTransactionFrames,
+  eventIndexes = planCommittedEventPacing(timeline.transaction.events).orderedEventIndexes,
+): Promise<void> => {
   try {
-    const plan = planCommittedEventPacing(timeline.transaction.events);
-    for (const index of plan.orderedEventIndexes) {
+    for (const index of eventIndexes) {
       const frame = timeline.frames[index];
       if (!frame) continue;
       if (c.cancelled) return;
@@ -175,16 +185,43 @@ const paceTimeline = async (c: PlayScriptCtx, timeline: MatchTransactionFrames):
   }
 };
 
-export const paceCommittedOpening = (timeline: MatchTransactionFrames): Step => async (ctx) => {
-  await paceTimeline(ctx as PlayScriptCtx, timeline);
+const openingRevealIndex = (timeline: MatchTransactionFrames): number =>
+  timeline.transaction.events.findIndex((event) => event.type === 'LOCATION_REVEALED');
+
+const openingDealEndIndex = (c: PlayScriptCtx, timeline: MatchTransactionFrames): number => {
+  const revealIndex = openingRevealIndex(timeline);
+  if (revealIndex >= 0) return revealIndex;
+  return Math.min(timeline.frames.length, c.manifest.constants.startingHandSize * 2);
 };
 
-export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
+export const paceCommittedOpeningDeal = (timeline: MatchTransactionFrames): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const localStaged = c.state.stagingOrder.some((id) => c.state.cards[id]?.owner === c.localSeat);
-  if (!localStaged) return;
-  c.setUi('isFlipped', true);
-  await waitFor(250);
+  const end = openingDealEndIndex(c, timeline);
+  await paceTimeline(
+    c,
+    timeline,
+    Array.from({ length: end }, (_, index) => index),
+  );
+};
+
+export const paceCommittedOpeningLocationReveal = (
+  timeline: MatchTransactionFrames,
+): Step => async (ctx) => {
+  const revealIndex = openingRevealIndex(timeline);
+  await paceTimeline(ctx as PlayScriptCtx, timeline, revealIndex < 0 ? [] : [revealIndex]);
+};
+
+export const paceCommittedOpeningTurnStart = (
+  timeline: MatchTransactionFrames,
+): Step => async (ctx) => {
+  const c = ctx as PlayScriptCtx;
+  const revealIndex = openingRevealIndex(timeline);
+  const start = revealIndex < 0 ? openingDealEndIndex(c, timeline) : revealIndex + 1;
+  await paceTimeline(
+    c,
+    timeline,
+    Array.from({ length: timeline.frames.length - start }, (_, index) => start + index),
+  );
 };
 
 export const paceCommittedTurn = (timeline: MatchTransactionFrames): Step => async (ctx) => {

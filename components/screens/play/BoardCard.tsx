@@ -1,9 +1,9 @@
 /**
  * BoardCard — a card sitting in a lane slot.
  *
- * Face-down logic: unrevealed remote cards are always face-down; unrevealed
- * local cards are face-down only during resolution (ui.isFlipped = true),
- * so the Snap UX (your cards show face-up while staging) stays intact.
+ * Face-down logic: unrevealed remote cards are always face-down. Unrevealed
+ * local cards stay face-up while planning, then the resolution-start
+ * presentation lock turns them face-down before the reveal walk.
  */
 
 import { createEffect } from 'solid-js';
@@ -76,8 +76,7 @@ export const BoardCard = (props: BoardCardProps) => {
   const isFaceDown = (): boolean => {
     if (props.card.revealed) return false;
     if (props.card.owner !== viewerSeat()) return true;
-    if (!interactive()) return phase() === 'RESOLVING';
-    return ui.isFlipped;
+    return ui.isFlipped || phase() === 'RESOLVING';
   };
   const isPending = isFaceDown;
 

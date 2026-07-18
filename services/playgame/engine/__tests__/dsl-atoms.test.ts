@@ -107,7 +107,7 @@ function mkManifest(defs: CardDef[]): Manifest {
     locations: {},
     disabled: { cards: [], locations: [] },
     version: 1, protocolVersion: 1,
-    constants: { handCap: 7, deckSize: 12, laneCapacity: 4, turnLimit: 6, energyCurve: [1,2,3,4,5,6], startingHandSize: 3 },
+    constants: { handCap: 7, deckSize: 12, laneCapacity: 4, turnLimit: 6, energyCurve: [1,2,3,4,5,6], startingHandSize: 3, turnStartDraw: 1 },
     rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
   };
 }
