@@ -2,17 +2,17 @@
 
 ## Status
 
-Revised after Fable review round 6; cost-triaged and ready for implementation approval.
+Amended after Phase 1 completion with a review-ready Phase 1.5 engine-capability and location-authoring dependency before Phases 2 and 3.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
 ## Cost Model
 
-The tags are delivery commitments, not importance labels. Each visible tag counts as one requirement in the round-6 census; a tagged parent item owns any untagged examples or field lists nested beneath it.
+The tags are delivery commitments, not importance labels. The round-6 census remains the historical Phase 0/1 baseline; this amendment adds tagged Phase 1.5 requirements that require a fresh review census. A tagged parent item owns any untagged examples or field lists nested beneath it.
 
 - **[SEAM]** Decide the contract or ownership shape now, with zero or near-zero implementation cost. The seam gate is a type/API review proving that later work can attach without reopening runtime authority.
 - **[BUILD NOW]** Phase 0/1 is roughly **8–10 review-commit units**: characterization and generated parity/provenance/fold tests; bootstrap validation; shared opening and frame construction; hand-based AI; one local single-writer intent queue; simultaneous lock/reveal; and complete migration of authoritative live mutations. The tier gate is `P-PARITY`, `P-EXACTLY-ONCE`, `P-PROVENANCE`, `P-FOLD`, and `P-NO-TIME` green at the configured CI depth, plus the named opening/reveal regressions and a DOM-free complete turn.
-- **[BUILD AFTER]** Implement during Phases 2–4 when the provider or presentation consumer exists. The tier gate is H1–H7 and `P-INTERLEAVE` green, presentation tests green with zero-duration/missing-DOM/error/unmount cases, and provider/board consumers unable to bypass the session API.
+- **[BUILD AFTER]** Implement during Phase 1.5 and Phases 2–4. Phase 1.5 stabilizes governed engine operations, committed reactions, and location authoring before provider or presentation consumers bind to them. The tier gate includes the Phase 1.5 capability/reaction/location gates plus H1–H7 and `P-INTERLEAVE` when the director exists.
 - **[BUILD LAST]** Implement during Phases 5–7 or a final hardening pass; these items have local value but no ordering dependency. The tier gate is transaction-bound, retention-release, bounded-index, mutation-check, component/layout, mobile, CSS, content, and browser proofs green for the touched slice.
 - **[DEFER]** Record only; perform no implementation work in this plan. The future live-server gate is durable recovery/idempotency and checksum parity under injected failures, exhaustive wire redaction/version compatibility, reconnect race coverage, fencing, clocks, backpressure, and an approved retention policy.
 
@@ -23,6 +23,8 @@ The tags are delivery commitments, not importance labels. Each visible tag count
 **[SEAM]** Establish a sole-authority match runtime first; refactor UI/presentation only after that boundary is stable.
 
 **[SEAM]** Preserve the engine, reducer, card-transfer derivation, and most leaf UI; remove misplaced responsibility rather than replacing working code.
+
+**[SEAM]** Phase 1 is closed. Phase 1.5 strengthens the preserved deterministic engine's control plane and content-authoring boundaries; it does not reopen runtime authority, replay, bootstrap, or simultaneous-turn design.
 
 ## Scope
 
@@ -35,6 +37,9 @@ Included:
 - `PlayGameContext`
 - `PlayBoard` and its active child components
 - replay/debug integration for `/play`
+- governed engine operations and committed gameplay reactions
+- folder-based location authoring with generated manifest output
+- reusable rule capabilities needed by ordinary cards and locations
 - mobile card interaction
 - playgame CSS ownership and board sizing
 - focused test and validation work needed to prove the refactor
@@ -47,6 +52,8 @@ Excluded:
 - the deprecated game route and deprecated game files
 - a visual redesign of the card game
 - a rewrite of the deterministic engine
+- arbitrary runtime callbacks or executable code in content manifests
+- inventing every conceivable card/location hook before a concrete rule needs it
 - broad card balancing or content rewriting
 - replacing SolidJS
 
@@ -112,6 +119,11 @@ The refactor is successful only if all of these remain true:
 20. **[BUILD LAST]** Active presentation timelines have bounded size and lifetime, use structurally shared log-free states, and release all frame references after completion, abort, fast-forward, reset, or unmount.
 21. **[BUILD NOW]** The product model is simultaneous staged turns: seats privately stage and revise, then lock; resolution begins only at the local readiness boundary. The first `END_TURN` must not resolve the turn immediately. Deadline policy remains deferred with authoritative clocks.
 22. **[BUILD AFTER]** Presentation-run and match generations make stale cursor operations no-ops. Reset, disposal, remount, animation failure, and fast-forward cannot mutate a newer cursor or resurrect an old timeline.
+23. **[BUILD AFTER]** Every effect-originated domain mutation passes through its governed operation before a past-tense event exists. Reducers remain blind event appliers and never enforce card/location policy.
+24. **[BUILD AFTER]** One committed-event reaction dispatcher derives card and location reactions. Mutation producers, scripts, and presentation code never manually fire the same gameplay hook.
+25. **[BUILD AFTER]** An ordinary card or location is authored in one content folder and cannot import engine implementation code. Exceptional built-ins may orchestrate governed operations but may not bypass them.
+26. **[BUILD AFTER]** Continuous projections and committed mutations remain distinct. Recomputing an ongoing modifier or suppression may change effective power but never emits a gained/lost-power mutation or reaction.
+27. **[BUILD AFTER]** A committed event or its immutable semantic envelope retains the historical source, cause, owner, reason, and before/after zone/lane facts required by reactions, replay, and presentation; consumers do not reconstruct those facts from post-event state.
 
 ## Target Architecture
 
@@ -465,21 +477,175 @@ Commit and presentation behavior:
 - **[DEFER]** Durable recovery/receipt/checksum/CAS and exhaustive hidden-information serialization gates pass only when live-server adapters are built.
 - **[SEAM]** Phase 1 lands as a complete BUILD NOW authority migration, never a partial runtime beside a second live path.
 
+## Phase 1.5: Capability Kernel, Committed Reactions, and Location Authoring
+
+### Objective
+
+**[BUILD AFTER]** Stabilize the deterministic engine contract before Solid providers and presentation bind to its event vocabulary.
+
+An ordinary card or location should live in one content folder. When a new rule needs engine support, the implementation should add one reusable governed operation, policy, adjustment, or committed reaction—not scatter definition-ID checks or manual hook calls across resolution paths.
+
+Phase 1.5 is a vertical refactor of the existing engine, not a replacement:
+
+- preserve `MatchSession`, `MatchRuntime`, reducer application, transaction records, replay folding, seeded RNG, simultaneous staging/lock/reveal, and Phase 1 authority
+- preserve the declarative effect/ongoing DSL where it is sufficient
+- preserve exceptional built-ins only as orchestration adapters over governed operations
+- add hooks only from proven content requirements; do not pre-invent a 40-hook public API
+- make no provider, animator, board-component, CSS, or visual-design changes
+
+### Rule-Source and Location Authoring Contract
+
+**[SEAM]** Cards and locations remain distinct definitions with distinct setup/reveal rules, but both are typed rule sources that can declare triggered effects, ongoing projections, and operation policies supported by the engine.
+
+**[BUILD AFTER]** Move each location from the centralized location table into a self-contained folder mirroring card authoring:
+
+```text
+services/playgame/engine/manifest/location-sets/core-v1/
+  set.json
+  locations.generated.ts
+  locations/
+    courthouse/
+      location.json
+    ...
+```
+
+This deliberately matches the active card-set layout. There is one generated index at the set root and no second hand-maintained registry.
+
+Each location folder owns its definition ID, version/status, rarity, display data, cosmetics/assets, and declarative abilities. A strict loader/schema validator:
+
+- rejects duplicate IDs, unknown operators/capabilities/hooks, invalid references, and malformed parameters
+- emits deterministic generated output and fails CI on drift
+- preserves all current location IDs and manifest-visible values during migration
+- prevents content definitions from importing engine modules or supplying arbitrary executable callbacks
+
+**[SEAM]** Locations behave conceptually as a neutral third deck: their setup order and reveal schedule differ from player cards, but once committed they participate in the same rule-source and reaction infrastructure.
+
+### Governed Domain Operations
+
+**[BUILD AFTER]** Put semantic commands before past-tense events. Every effect-originated mutation enters one governed operation family:
+
+- play commitment and reveal; Phase 1 staging/lock scheduling remains unchanged
+- move, destroy, banish, return, create, and transform
+- power and cost changes
+- draw and discard
+- energy changes
+- location reveal, replace, and destroy
+
+Each operation follows one deterministic pipeline:
+
+1. validate the proposed command and current phase/state
+2. collect prohibitions from active rule sources
+3. apply replacements
+4. apply ordered adjustments
+5. commit zero or more canonical events
+6. dispatch reactions from those committed events
+
+**[SEAM]** Only the operation implementation may create its corresponding mutation event during normal resolution. The reducer applies accepted past-tense events without consulting abilities. Replay applies the same events without rerunning operations or reactions.
+
+**[BUILD AFTER]** Add an architectural boundary test with an explicit exception list for reducers, codecs, replay fixtures, and tests. Effect evaluators, built-ins, scripts, and content implementations may call governed operations but may not directly construct/apply mutation events or invoke the reducer.
+
+Exceptional built-ins remain legal when a declarative effect cannot express orchestration. They must use the same operations as ordinary content, so policy gates and reactions cannot be skipped.
+
+### Continuous Projection Versus Committed Mutation
+
+**[SEAM]** The engine has two intentionally different rule paths:
+
+- committed mutation changes authoritative stored state, emits events, and may trigger reactions
+- continuous projection calculates an effective value from stored state plus active ongoing modifiers/policies and emits nothing
+
+**[BUILD AFTER]** Formalize the existing `BLOCK_POWER_INCREASE` behavior as a complete reusable capability rather than a Courthouse special case. The power model must retain enough contribution/provenance information to suppress positive stored contributions without deleting them or confusing them with later reductions.
+
+Courthouse is the acceptance slice:
+
+- a card entering Courthouse with an earlier positive permanent increase displays no positive increase there
+- that earlier increase remains stored and becomes effective again if the card leaves
+- a positive permanent change attempted while the card is at Courthouse is denied, is not stored, and therefore does not appear after it leaves
+- a card increased in hand retains the stored increase when played at Courthouse, but the increase is suppressed until it leaves
+- positive ongoing/lane projections do not apply there
+- negative power changes still commit and apply there
+- entering/leaving or recomputing the projection does not emit gained/lost-power hooks
+
+**[SEAM]** This same separation governs future cost, movement, destruction, targeting, and scoring restrictions: persistent state is not destructively rewritten merely because an ongoing policy suppresses its current effect.
+
+### Committed-Event Reaction Dispatcher
+
+**[BUILD AFTER]** Add one deterministic dispatcher that consumes each newly committed event plus an immutable semantic envelope. The envelope contains the event's historical facts at commit time, including:
+
+- source and `cause`
+- affected owner/controller
+- semantic reason
+- prior and resulting zone
+- prior and resulting lane
+- whether the transition was play-from-hand, move, creation, return, destruction, or banishment
+
+Removed or moved cards cannot rely on a post-state lookup to recover these facts.
+
+If the serialized replay/event format changes, version it explicitly and update compatibility fixtures at this boundary. Old events are either migrated deterministically or rejected by version; presentation and replay may not fabricate missing context heuristically.
+
+**[SEAM]** Friendly authoring hooks lower to generic typed subscriptions in this dispatcher; they are not separate imperative call sites:
+
+| Authoring hook | Exact committed meaning |
+| --- | --- |
+| `onCardPlayedHere` | A card committed from its owner's hand into this lane; staging, undo, move, create, and return do not count |
+| `onCardRevealedHere` | A card in this lane committed its reveal |
+| `onCardDestroyedHere` | A card was committed from this lane to the destroyed zone |
+| `onCardBanishedHere` | A card was committed from this lane to the banished zone |
+| `onCardGainedPowerHere` | A positive stored power mutation committed while the card was here |
+| `onCardLostPowerHere` | A negative stored power mutation committed while the card was here |
+| `onCardEnteredHere` | An existing card committed a lane-to-lane move into this lane; play/create/return do not count |
+| `onCardLeftHere` | An existing card committed a lane-to-lane move out of this lane |
+| `onCardCreatedHere` | A new card instance was committed into this lane |
+| `onCardReturnedHere` | A previously removed card was committed back into this lane |
+
+New names are added only when a real rule cannot be expressed unambiguously with the generic event filter and existing vocabulary.
+
+**[BUILD AFTER]** Specify and characterize deterministic reaction ordering before migration: event order, affected-card reactions, source-card reactions, location order, seat priority, lane order, nested reaction queue order, and seeded RNG namespace. Add a bounded recursion/reaction budget that fails deterministically rather than hanging.
+
+One semantic event is routed once. Producer call sites must not also call `fireLocationTrigger`, `evalEffect`, or equivalent manual reaction helpers. Reactions may issue new governed commands, which commit new events and re-enter the queue in the specified order.
+
+### Migration Checkpoints
+
+**[SEAM]** Land Phase 1.5 as reviewable vertical checkpoints. A checkpoint may merge only when every producer path for its migrated operation uses the new route; an individual operation may never have parallel governed and ungoverned semantics.
+
+1. **[BUILD AFTER] Contract and characterization:** inventory all current mutation producers, manual card/location trigger sites, built-ins, and event fields; freeze current ordering and ordinary-content behavior with tests.
+2. **[BUILD AFTER] Location folders:** add schema/generator/check commands, migrate every current location, and prove generated manifest parity before changing rule behavior.
+3. **[BUILD AFTER] Power/Courthouse vertical slice:** govern power mutation/projection, add sufficient contribution provenance, implement the complete reusable capability, and pass the Courthouse matrix.
+4. **[BUILD AFTER] Lifecycle reactions:** route play, reveal, move, destroy, banish, create, and return through committed semantic envelopes and the central dispatcher; migrate existing card/location hooks without behavior drift.
+5. **[BUILD AFTER] Operation conformance:** govern remaining effect-originated mutation families, convert built-ins to operation clients, delete superseded manual trigger paths, and enable architectural gates.
+
+### Exit Criteria
+
+- **[BUILD AFTER]** All Phase 0/1 engine/runtime parity, provenance, exactly-once, fold, no-time, opening, and simultaneous-turn gates remain green.
+- **[BUILD AFTER]** Every current location loads from one folder; generated IDs, data, cosmetics, and abilities match the pre-migration manifest except for explicitly approved Courthouse behavior.
+- **[BUILD AFTER]** Adding an ordinary location changes only its folder and generated output; it does not require edits to evaluator, resolver, runtime, reducer, or presentation files.
+- **[BUILD AFTER]** The Courthouse matrix proves stored-versus-effective power, hand buffs, enter/leave restoration, denied in-location gains, ongoing suppression, reductions, movement, replay, and both seats.
+- **[BUILD AFTER]** Projection evaluation emits no mutation event or gained/lost-power reaction.
+- **[BUILD AFTER]** Every migrated semantic event produces exactly one ordered reaction-dispatch opportunity; staging/undo and replay produce no phantom gameplay reactions.
+- **[BUILD AFTER]** Effect evaluators and built-ins cannot bypass governed operations, and reducers contain no content policy or definition-ID branch.
+- **[BUILD AFTER]** Committed events/envelopes contain enough historical context for reactions, replay, and later presentation without semantic state-diff guessing.
+- **[BUILD AFTER]** Architecture tests reject direct mutation event construction/application and scattered manual trigger invocation outside the named kernel exceptions.
+- **[BUILD AFTER]** Production build, lint baseline, content generation/validation, and deterministic reaction-budget tests pass.
+- **[SEAM]** Phase 2 does not begin until these gates pass; Phase 1 remains closed throughout.
+
 ## Phase 2: Split the Provider Boundary
 
 ### Objective
 
-**[BUILD AFTER]** Make Solid contexts reflect the authority boundary without rewriting the board.
+**[BUILD AFTER]** Make Solid contexts reflect the Phase 1 authority boundary and consume the stabilized Phase 1.5 engine contract without rewriting the board.
+
+Phase 2 is a consumer migration. It may expose projected committed events, reaction outcomes, and effective values, but it may not reimplement policies, call the capability kernel, or infer location hooks.
 
 ### Work
 
 - **[BUILD AFTER]** Introduce `MatchSessionProvider` and `PlayUiProvider`.
 - **[BUILD AFTER]** Expose projected bootstrap identity/metadata through `MatchSessionContext`, never inferred from `MatchState`.
 - **[BUILD AFTER]** Replace `YOU`/`OPPONENT` defaults with bootstrap identity while keeping view-relative labels explicit.
-- **[BUILD AFTER]** Adapt selectors to read-only `SeatMatchState`; canonical types do not cross the provider boundary.
+- **[BUILD AFTER]** Adapt selectors to read-only `SeatMatchState` and Phase 1.5-enriched `SeatTransactionFrame`; canonical types and operation services do not cross the provider boundary.
 - **[BUILD AFTER]** Move replay/debug window helpers behind a development adapter.
 - **[BUILD AFTER]** Move modal/menu/inspector/reservation/prompt state and the non-authoritative presented cursor into `PlayUiProvider`.
 - **[BUILD AFTER]** Replace component `dispatch`/`setEngineState` with typed commands and route undo through the chosen engine intent.
+- **[BUILD AFTER]** Expose effective projected values and committed power-history/debug data through explicit read models; components never evaluate `BLOCK_POWER_INCREASE` or other capabilities.
+- **[BUILD AFTER]** Keep all card/location reaction dispatch inside the engine transaction. Providers publish results and never duplicate, delay, or manually invoke reactions.
 - **[BUILD AFTER]** Use a compatibility facade only transiently and remove it within this phase.
 
 ### Exit Criteria
@@ -487,13 +653,15 @@ Commit and presentation behavior:
 - **[BUILD AFTER]** `PlayBoard` cannot mutate engine state; engine/UI state have separate owners.
 - **[BUILD AFTER]** Match metadata comes from projected bootstrap, not `MatchState` or defaults.
 - **[BUILD AFTER]** Reset, stage, undo, end-turn, and replay export use the session API.
+- **[BUILD AFTER]** No provider/component imports governed operations, the capability registry, effect evaluation, or the reaction dispatcher.
+- **[BUILD AFTER]** Live and replay providers expose the same projected event context and effective-value read models.
 - **[BUILD AFTER]** Production code does not install debug globals unconditionally.
 
 ## Phase 3a: Convert the Event Animator to Frames
 
 ### Objective
 
-**[BUILD AFTER]** Convert event animation to committed frames before changing opening choreography/script context.
+**[BUILD AFTER]** Convert event animation to committed frames using the stabilized Phase 1.5 event/envelope vocabulary before changing opening choreography/script context.
 
 ### Work
 
@@ -510,8 +678,10 @@ Commit and presentation behavior:
   - hand-slot reservations
   - VFX/SFX choreography
 - **[BUILD AFTER]** Consolidate redundant structural choreography with card-transfer derivation.
-- **[BUILD AFTER]** Choreography selects VFX/SFX from event causality — keyed by `(event.type, cause.effectKind)` with `cause.sourceId` as the effect-origin anchor — never from state-diff shape alone. State diffing supplies geometry (rects) only.
-- **[BUILD AFTER]** Make `cause: EffectRef` mandatory on every effect-originated mutating event (`ENERGY_CHANGED`'s optional cause and the tag events are the known gaps) so presentation never guesses a mutation's origin.
+- **[BUILD AFTER]** Choreography selects VFX/SFX from the committed semantic event and Phase 1.5 envelope — keyed by `(event.type, reason, cause.effectKind)` with `cause.sourceId` as the effect-origin anchor — never from state-diff shape alone. State diffing supplies geometry (rects) only.
+- **[BUILD AFTER]** Consume and assert the mandatory cause, owner, reason, zone, and lane context established by Phase 1.5. If presentation discovers a missing semantic fact, fix the engine envelope and replay contract; do not add a presentation-only inference or shadow event schema.
+- **[BUILD AFTER]** Add exhaustive choreography disposition for the stabilized lifecycle vocabulary: animation, structural transfer only, intentional no-op, or unsupported-event failure in development.
+- **[BUILD AFTER]** Treat a projection-only effective-value change as frame-state presentation, not as a committed gained/lost-power event. A move may animate the projected number transition, but its semantic cause remains the move.
 - **[BUILD AFTER]** Implement generation-safe failure snap and queued-intent fast-forward.
 - **[BUILD AFTER]** Enforce the no-submission hook capability and defer presentation-triggered commands.
 - **[BUILD AFTER]** On provider disposal abort/invalidate/unsubscribe, prevent stale writes, and remount from latest projection.
@@ -522,6 +692,8 @@ Commit and presentation behavior:
 - **[BUILD AFTER]** Animator has no dispatch and receives DOM anchors through its host.
 - **[BUILD AFTER]** Zero-duration and missing-anchor execution produce identical gameplay; reveal order stays correct.
 - **[BUILD AFTER]** Transaction choreography uses hooks rather than lookahead.
+- **[BUILD AFTER]** Every stabilized event/reason pair has an explicit choreography disposition; presentation does not infer play/move/create/return or power-gain semantics from before/after diffs.
+- **[BUILD AFTER]** Live and replay frames select identical choreography for the same committed transaction.
 - **[BUILD AFTER]** Queued fast-forward, error-snap races, unmount/remount, and deferred sink actions pass H1–H7 without stale cursor writes.
 - **[BUILD LAST]** Memory-retention assertions prove old timelines are released.
 - **[BUILD AFTER]** Card-transfer coverage continues to pass.
@@ -530,13 +702,14 @@ Commit and presentation behavior:
 
 ### Objective
 
-**[BUILD AFTER]** Separate opening presentation from gameplay commands after the frame consumer is proven.
+**[BUILD AFTER]** Separate opening presentation from gameplay commands after the Phase 1.5 reaction contract and Phase 3a frame consumer are proven.
 
 ### Work
 
 - **[BUILD AFTER]** Separate opening cinematics from turn resolution:
   - opening scripts may manipulate presentation state
-  - opening draws, location reveal, location effects, remote staging, and all other gameplay events go through `MatchRuntime`
+  - opening draws, location reveal, location reactions, remote staging, and all other gameplay events go through `MatchRuntime`, governed operations, and the committed reaction dispatcher
+- **[BUILD AFTER]** Preserve the characterized ordering between location reveals, their nested reactions, card reveals, and turn transitions; scripts may pace already-committed frames but cannot invoke `evalEffect`, operation services, or reaction dispatch.
 - **[BUILD AFTER]** Apply every Phase 0 script-step disposition.
 - **[BUILD AFTER]** Reduce `PlayScriptCtx` to presentation-only state with no engine mutation or borrowed DOM registry.
 - **[BUILD AFTER]** Remove reveal/advance slicing and its retained engine fields.
@@ -544,6 +717,7 @@ Commit and presentation behavior:
 ### Exit Criteria
 
 - **[BUILD AFTER]** No script step originates/dispatches/slices/suppresses events; opening gameplay comes from runtime frames.
+- **[BUILD AFTER]** Opening location reactions appear in the same canonical transaction order in live play and replay, with no script-owned reaction path.
 - **[BUILD AFTER]** `PlayScriptCtx` has no engine setter/dispatch/cursor/DOM registry.
 - **[BUILD AFTER]** Opening and turn presentation consume the same committed-frame model.
 
@@ -680,7 +854,7 @@ Extract cohesive units without changing the visual design:
 
 ### Content and Manifest
 
-- **[BUILD LAST]** Strengthen runtime/schema validation, verify generated modules, and fail CI on manifest drift.
+- **[BUILD LAST]** Extend the Phase 1.5 card/location schema and generated-module gates for remaining content/tooling debt; do not postpone location folderization or its drift check to this phase.
 - **[SEAM]** Track missing portrait assets separately.
 
 ### Debug and Setup
@@ -713,7 +887,7 @@ Extract cohesive units without changing the visual design:
 ### Preserve — **[SEAM]**
 
 - deterministic engine and reducer
-- engine effects and projections
+- deterministic effect/projection semantics that satisfy the Phase 1.5 contracts
 - replay logic
 - `cardTransfers.ts`
 - most of `choreography.ts`
@@ -729,6 +903,7 @@ Extract cohesive units without changing the visual design:
 ### Refactor — tiered by the phase work above
 
 - **[BUILD NOW]** runtime-facing portions of `router.tsx`, entry adapters, `ClassicPlayScreen.tsx`, `flows.ts`, `runner.ts`, replay export, manifest constants, and debug state construction
+- **[BUILD AFTER]** Phase 1.5 operation/effect/projection boundaries, mutation-event construction, committed reaction routing, power contribution representation, location manifest loading/generation, and existing built-ins
 - **[BUILD AFTER]** `PlayGameContext.tsx`, `PlayBoard.tsx`, `eventAnimator.ts`, and presentation-facing portions of `view.ts`/script integration
 - **[BUILD LAST]** `BoardCard.tsx`, `HandCard.tsx`, `LaneSlots.tsx`, `PlayerPortraitMenu.tsx`, `PileViewer.tsx`, `inspector.ts`, `VfxHost.tsx`, and `playgame.css`
 
@@ -752,7 +927,16 @@ npx vitest run services/playgame/runtime
 
 **[BUILD NOW]** The runtime suite includes bootstrap/freeze/deck validation, both-seat provenance/shared hands, five BUILD NOW properties, local commit invariants, RNG/no-time guards, and simultaneous local lock/reveal.
 
-**[BUILD AFTER]** Add P-INTERLEAVE and H1–H7 when the director exists.
+**[BUILD AFTER]** Phase 1.5 adds:
+
+- governed-operation boundary tests for every effect-originated mutation family
+- deterministic committed-reaction ordering, nested queue, and reaction-budget tests
+- event-envelope completeness and live/replay fold parity
+- all current card/location trigger characterization tests
+- the complete Courthouse stored/effective-power matrix
+- generated location parity, schema rejection, and content-only authoring proof
+
+**[BUILD AFTER]** Add P-INTERLEAVE and H1–H7 when the director exists in Phases 2/3.
 
 **[BUILD LAST]** Add transaction-bound, retention, and bounded-index tests during hardening.
 
@@ -769,9 +953,13 @@ npx vitest run services/playgame/presentation
 ```sh
 npm run cards:generate:check
 npm run cards:validate
+npm run locations:generate:check
+npm run locations:validate
 npm run build
 npm run lint
 ```
+
+**[BUILD AFTER]** Phase 1.5 introduces the two location commands and makes all four content checks mandatory before its final checkpoint merges.
 
 **[BUILD NOW]** Record existing unrelated lint/build failures and prove touched scope adds none; never weaken gates to hide them.
 
@@ -794,20 +982,25 @@ npm run lint
 
 **[SEAM]** Keep commits reviewable and reversible:
 
-1. **[BUILD NOW]** Phase 0 BUILD NOW characterization/properties/decisions/baseline; exclude mutation automation, H1–H7, P-INTERLEAVE, durable recovery, and index implementation from this commit.
-2. **[BUILD NOW]** Phase 1 bootstrap/session, local FIFO/revision/retry/commit, transactions, projection seams, simultaneous phase scheduling, shared opening/AI/frame builder, parity proof, all live intents, and old-authority removal. Land one complete local authority migration, not a server build.
-3. **[BUILD AFTER]** Phase 2 provider split and facade removal.
-4. **[BUILD AFTER]** Phase 3a animator frame conversion and DOM-ref relocation.
-5. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
-6. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
-7. **[BUILD LAST]** Phase 5 shared card rendering.
-8. **[BUILD LAST]** Phase 5 board sizing.
-9. **[BUILD LAST]** Phase 5 declarative lane maps.
-10. **[BUILD LAST]** Phase 5 instance-scoped VFX.
-11. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
-12. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
+1. **[BUILD NOW — COMPLETE]** Phase 0 characterization, properties, decisions, and baseline.
+2. **[BUILD NOW — COMPLETE]** Phase 1 bootstrap/session/runtime authority, transactions, simultaneous scheduling, shared opening/AI/frame builder, parity proof, and old-authority removal.
+3. **[BUILD AFTER]** Phase 1.5 contracts and characterization: producer/trigger inventory, operation/reaction semantics, event-envelope fields, ordering, architectural test skeletons.
+4. **[BUILD AFTER]** Phase 1.5 location folders, schema/generator/check commands, complete location migration, and generated parity proof.
+5. **[BUILD AFTER]** Phase 1.5 governed power operation, contribution/provenance representation, reusable Courthouse capability, and acceptance matrix.
+6. **[BUILD AFTER]** Phase 1.5 committed lifecycle reaction dispatcher and migration of play/reveal/move/destroy/banish/create/return hooks.
+7. **[BUILD AFTER]** Phase 1.5 remaining operation/built-in conformance, old manual-trigger deletion, architectural enforcement, and full exit gates.
+8. **[BUILD AFTER]** Phase 2 provider split and facade removal.
+9. **[BUILD AFTER]** Phase 3a animator frame conversion and DOM-ref relocation.
+10. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
+11. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
+12. **[BUILD LAST]** Phase 5 shared card rendering.
+13. **[BUILD LAST]** Phase 5 board sizing.
+14. **[BUILD LAST]** Phase 5 declarative lane maps.
+15. **[BUILD LAST]** Phase 5 instance-scoped VFX.
+16. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
+17. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
 
-**[SEAM]** Do not combine engine behavior, presentation migration, component extraction, and CSS cleanup in one commit.
+**[SEAM]** Do not combine Phase 1.5 engine behavior with Phase 2/3 provider or presentation migration. Do not combine component extraction and CSS cleanup with either.
 
 ## Stop Conditions
 
@@ -818,6 +1011,12 @@ Stop and reassess rather than layering patches if:
 - **[BUILD NOW]** local intents bypass FIFO/dequeue validation, trust caller ownership, or commit outside the non-yielding local boundary
 - **[DEFER]** when server work begins, any commit bypasses durable receipt/CAS or network timing becomes an unstated tiebreaker
 - **[BUILD NOW]** first local seat lock resolves immediately, gameplay consumes cosmetic RNG/time, or live/headless parity is not exact
+- **[BUILD AFTER]** a Phase 1.5 operation has both governed and ungoverned producer paths, or an effect/built-in constructs/applies its mutation event directly
+- **[BUILD AFTER]** a reducer contains a content-policy/definition-ID branch, a normal location requires central engine edits, or content can execute arbitrary callbacks
+- **[BUILD AFTER]** reaction dispatch remains scattered across producers, one event fires a hook twice, replay fires reactions, or staging/undo produces a play reaction
+- **[BUILD AFTER]** an event/envelope lacks the historical facts needed after a card moves or disappears and a consumer compensates with post-state guessing
+- **[BUILD AFTER]** a continuous projection emits a mutation/reaction, or stored contributions must be erased to suppress their effective value
+- **[BUILD AFTER]** Phase 2 begins before Phase 1.5 exits, a provider imports the capability/operation kernel, or Phase 3 invents presentation-only semantic fields
 - **[BUILD AFTER]** presentation still dispatches, sinks submit reentrantly, stale generations mutate cursors, or a compatibility facade becomes permanent
 - **[SEAM]** engine semantics change only to animate an event
 - **[BUILD LAST]** frame retention is unbounded, frames copy canonical history, or a full-log gameplay scan remains after the hardening tier
@@ -845,33 +1044,34 @@ Decided:
 - **[BUILD LAST]** Log-free state, retention bounds, and tracked gameplay indexes are final hardening.
 - **[DEFER]** Collection possession wiring, clocks/reconnect, fencing, transport backpressure, wire compatibility, and retention operations remain deferred.
 - **[BUILD NOW]** Script-originated gameplay, including location reveal/effects, moves behind runtime resolution.
+- **[BUILD AFTER]** Phase 1.5 precedes Phase 2; it strengthens engine extension seams without reopening Phase 1 authority.
+- **[SEAM]** Cards and locations remain distinct definitions but share typed rule-source abilities; locations become folder-authored neutral-deck content.
+- **[BUILD AFTER]** Governed operations are the exclusive normal mutation-event producers; reducers stay policy-blind and built-ins only orchestrate operations.
+- **[BUILD AFTER]** One committed-event dispatcher owns reactions; friendly named location hooks lower to typed event subscriptions.
+- **[SEAM]** Continuous projection changes do not become mutation events or gained/lost-power hooks.
+- **[BUILD AFTER]** Courthouse suppresses prior/hand/ongoing positive contributions without erasing them, rejects new positive mutations while present, preserves reductions, and restores only previously stored contributions after leaving.
 - **[BUILD LAST]** Tap-card/tap-lane is primary phone interaction; pointer drag is an enhancement.
-- **[SEAM]** Phase 3 stays split, Phase 5 has four commits, and the BUILD NOW authority migration is indivisible.
+- **[SEAM]** Phase 3 stays split and waits for the Phase 1.5 event contract; Phase 5 has four commits.
 
-Phase 0 must answer with evidence:
+Phase 1.5 must answer with evidence:
 
-1. **[BUILD NOW]** Does the event vocabulary reconstruct every gameplay-visible transition, including opening reveal?
-2. **[BUILD NOW]** Do `UNSTAGE_CARD`/`UNDO_TURN` reproduce single-card/LIFO undo after triggers?
-3. **[SEAM]** Does the two-context plus development-adapter shape suffice, or is a third context required?
-4. **[BUILD NOW]** Will zones normalize to `CardId[]`, or what enforcement proves ID-only views?
-5. **[SEAM]** Which bounded field/index will replace each `state.log` gameplay query?
-6. **[BUILD NOW]** Is pre-reveal staging merged canonically or explicitly serialized?
+1. **[BUILD AFTER]** Does every effect-originated mutation family have exactly one governed producer path and a tested policy/replacement/adjustment order?
+2. **[BUILD AFTER]** Does the committed envelope retain enough historical context to distinguish play, move, create, return, destroy, and banish after the state changes?
+3. **[BUILD AFTER]** Does every existing card/location reaction preserve characterized order, including nested reactions and opening location reveal?
+4. **[BUILD AFTER]** Can every current ordinary location be represented in one folder without evaluator/resolver definition-ID branches?
+5. **[BUILD AFTER]** Can power contributions distinguish prior positive gains from later reductions so Courthouse suppression/restoration is exact?
+6. **[BUILD AFTER]** Do live execution and replay fold the same committed events while reactions run only during command resolution?
 
 ## Approval Decision
 
-**[SEAM]** Before implementation, reviewers explicitly approve or reject the following contract/delivery decisions:
+**[SEAM]** Phase 0 and Phase 1 are implemented and closed. Before Phase 1.5 implementation, reviewers explicitly approve or reject:
 
-- Approve the runtime-first direction?
-- Approve immediate local complete-transaction commitment and the later transaction/per-frame presentation hooks?
-- Approve BUILD NOW local FIFO/revision/retry semantics, BUILD AFTER generation-safe fast-forward, and only a SEAM/DEFER commitment for durable receipts/CAS?
-- Approve splitting match state from UI state?
-- Approve canonical transaction-record shapes now, local fold properties now, final log-free/retention hardening last, and durable recovery only later?
-- Approve seat-projected types as the only normal API boundary, with local pass-through after and exhaustive wire redaction deferred?
-- Approve simultaneous private staging with per-seat lock and a system-owned reveal boundary?
-- Approve the validated, frozen `MatchBootstrap` as the required construction boundary, with session-owned metadata and mechanical-only reducer inputs?
-- Approve fixing live opponent provenance, centralizing `startingHandSize`, and exporting the bootstrap with replay in Phase 1 while collection ownership remains deferred?
-- Approve preserving the engine subject to the Phase 0 event-vocabulary proof, and preserving card-transfer derivation?
-- Approve deferring component/CSS cleanup until after runtime authority is migrated?
-- Approve tap-first mobile interaction, with pointer drag as a later enhancement in the same independent vertical slice?
+- the five-checkpoint Phase 1.5 delivery order before any Phase 2/3 work
+- folder-authored locations with generated deterministic output and no arbitrary callbacks
+- governed operations as exclusive normal mutation-event producers
+- a single committed-event reaction dispatcher with the named hook meanings and deterministic nested ordering
+- stored-versus-effective modifier separation and the exact Courthouse acceptance semantics
+- enriched canonical event envelopes as an engine/replay contract consumed by later presentation
+- the rule that missing Phase 3 semantic context returns to Phase 1.5 rather than being inferred in presentation
 
-**[SEAM]** If accepted, implementation begins with the triaged Phase 0 and proceeds by tier/phase order; DEFER items do not enter implementation commits.
+**[SEAM]** If accepted, implementation resumes at Phase 1.5 checkpoint 1 and proceeds in dependency order. DEFER items do not enter implementation commits.
