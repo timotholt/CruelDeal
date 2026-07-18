@@ -803,11 +803,6 @@
   }
   .card.facedown .name, .card.facedown .type,
   .card.facedown .cost, .card.facedown .power, .card.facedown .bar { visibility: hidden; }
-  .card.facedown::before {
-    content: ''; position: absolute; inset: 50% 0 0 0;
-    background: radial-gradient(circle at 50% 0, var(--accent), transparent 40%);
-    opacity: 0.7;
-  }
 
   /* Lane cards — smaller tokens, same structure. The explicit class travels
      with zoom-inspector clones after they leave the .lane-slots subtree. */

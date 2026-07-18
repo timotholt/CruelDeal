@@ -99,6 +99,15 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(actionBarRule).toContain('gap: 13px');
   });
 
+  it('uses one full-surface purple card back without a split gold overlay', () => {
+    const css = source('../../../src/styles/playgame.css');
+    const facedownRule = css.match(/\.card\.facedown\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(facedownRule).toContain('repeating-linear-gradient');
+    expect(facedownRule).toContain('#1a1f3a');
+    expect(facedownRule).toContain('#12172a');
+    expect(css).not.toContain('.card.facedown::before');
+  });
+
   it('keeps native HTML drag-and-drop out of canonical card components', () => {
     const handCard = source('./HandCard.tsx');
     const boardCard = source('./BoardCard.tsx');
