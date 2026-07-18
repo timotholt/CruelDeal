@@ -99,7 +99,9 @@ export const HandCard = (props: HandCardProps) => {
       >
         <CardVfxStack cardId={props.card.id as CardId}>
           <div class="cost">{props.card.cost}</div>
-          <div class={'power ' + powerClass()}>{props.card.power}</div>
+          {props.card.type !== 'spell'
+            ? <div class={'power ' + powerClass()}>{props.card.power}</div>
+            : null}
           {props.card.portraitPath
             ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
             : <div class="bar" style={{ background: props.card.art }} />

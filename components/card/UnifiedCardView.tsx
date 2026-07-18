@@ -104,7 +104,9 @@ export const UnifiedCardView = (props: UnifiedCardViewProps) => {
                 {/* 3. Badges */}
                 <Show when={visual()}>
                     <CardBadge anchor={() => cardRef} value={() => visual()?.currentCost || 0} type="cost" colorClass={() => visual()?.costColor || 'text-white'} />
-                    <CardBadge anchor={() => cardRef} value={() => visual()?.currentPower || 0} type="power" colorClass={() => visual()?.powerColor || 'text-white'} />
+                    <Show when={visual()?.def?.cardType !== 'spell'}>
+                        <CardBadge anchor={() => cardRef} value={() => visual()?.currentPower || 0} type="power" colorClass={() => visual()?.powerColor || 'text-white'} />
+                    </Show>
                 </Show>
 
                 {/* 4. Nameplate Overlay */}

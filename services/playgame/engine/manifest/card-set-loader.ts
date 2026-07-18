@@ -9,6 +9,7 @@ export interface CardModule {
 export interface CardValidationIssue {
   cardId: string;
   message: string;
+  severity?: 'error' | 'warning';
 }
 
 const ACTIVE_CARD_SETS: Record<string, readonly CardModule[]> = {
@@ -35,6 +36,13 @@ export const validateCardModule = (module: CardModule): CardValidationIssue[] =>
   }
   if (!Number.isInteger(card.cost) || card.cost < 0 || card.cost > 6) issues.push({ cardId, message: 'cost must be an integer in [0,6]' });
   if (!Number.isInteger(card.basePower) || card.basePower < 0) issues.push({ cardId, message: 'basePower must be an integer >= 0' });
+  if (card.cardType === 'spell' && card.basePower !== 0) {
+    issues.push({
+      cardId,
+      severity: 'warning',
+      message: `spell basePower (${card.basePower}) is meaningless and ignored; retained only for schema compatibility`,
+    });
+  }
   if (!card.abilities || typeof card.abilities !== 'object') issues.push({ cardId, message: 'abilities must be an object' });
   if (!card.cosmetic || typeof card.cosmetic !== 'object') issues.push({ cardId, message: 'cosmetic must be an object' });
   if (!card.cosmetic?.displayName) issues.push({ cardId, message: 'cosmetic.displayName is required' });
@@ -61,10 +69,11 @@ export const loadCardsFromSets = (setIds: readonly string[] = ['core-v1']): Reco
 
     for (const module of modules) {
       const issues = validateCardModule(module);
-      if (issues.length > 0) {
+      const errors = issues.filter(issue => issue.severity !== 'warning');
+      if (errors.length > 0) {
         throw new Error(
           `loadCardsFromSets: invalid card "${module.card?.defId ?? module.folder}"\n` +
-          issues.map((issue) => `- ${issue.message}`).join('\n'),
+          errors.map((issue) => `- ${issue.message}`).join('\n'),
         );
       }
       if (cards[module.card.defId]) {

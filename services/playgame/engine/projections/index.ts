@@ -7,6 +7,7 @@
  */
 
 export { getCardPower, getCardPowerModifiers, getLanePower, getLanePowerBreakdown } from './power';
+export { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
 export type {
   PowerModifierEntry,
   LaneCardContribution,

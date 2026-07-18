@@ -15,6 +15,7 @@ import { collectAllOngoings, ongoingsTargeting } from './ongoing';
 import { ctxForCard, ctxForLocation, ctxForTargetCard, type SourcedOngoing } from './context';
 import { evalNum } from './numexpr';
 import { ownerMatches } from './select';
+import { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
 
 export interface PowerModifierEntry {
   readonly sourceId: CardId | LocationId;
@@ -56,7 +57,9 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
   const card = state.cards[cardId];
   if (!card) return 0;
   const def = manifest.cards[card.defId];
-  if (!def) return 0;
+  // This numeric API predates spell cards. Its boundary fallback is 0, but
+  // callers that compare, select, or sum power must use the structural guard.
+  if (!isPowerBearingDef(def)) return 0;
 
   // Stage 1: base (text-override resolution lands in Step 5/6 via
   // resolveOngoingText; for Step 4 we read the def directly).
@@ -84,7 +87,7 @@ export function getCardPowerModifiers(
   manifest: Manifest,
 ): PowerModifierEntry[] {
   const card = state.cards[cardId];
-  if (!card) return [];
+  if (!card || !isPowerBearingCard(state, cardId, manifest)) return [];
 
   const targeting = ongoingsTargeting(state, manifest, cardId);
   const targetCtx = ctxForTargetCard(state, manifest, cardId);
@@ -122,7 +125,7 @@ export function getLanePowerBreakdown(
 ): LanePowerBreakdown {
   const cardIds = state.lanes[lane].cards[owner].filter(id => {
     const c = state.cards[id];
-    return !!c && c.revealed && c.zone === 'LANE';
+    return !!c && c.revealed && c.zone === 'LANE' && isPowerBearingCard(state, id, manifest);
   });
   const cards: LaneCardContribution[] = cardIds.map((id) => {
     const card = state.cards[id];

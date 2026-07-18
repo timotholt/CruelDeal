@@ -215,6 +215,7 @@ export interface CardDefinition {
   cardType?: CardType;
   rarity: CardRarity;
   baseCost: number;
+  /** Compatibility-only for spells; spell cards have no Power and ignore this value. */
   basePower: number;
   tags: string[]; 
   baseText: string;

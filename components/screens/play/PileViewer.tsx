@@ -40,10 +40,12 @@ export const PileViewer = (props: PileViewerProps) => {
           <div class="pile-viewer__grid">
             <For each={props.cards}>
               {(card) => (
-                <div class="pile-card">
+                <div class="pile-card" data-card-type={card.type}>
                   <div class="pile-card__badges">
                     <span class="pile-card__cost">{card.cost}</span>
-                    <span class="pile-card__power">{card.power}</span>
+                    {card.type !== 'spell'
+                      ? <span class="pile-card__power">{card.power}</span>
+                      : null}
                   </div>
                   <div class="pile-card__name">{card.name}</div>
                   <div class="pile-card__type">{card.type}</div>

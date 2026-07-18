@@ -29,6 +29,7 @@ import { type EvalCtx } from '../projections/context';
 import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
 import { findLanes } from '../projections/query';
+import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
 
@@ -429,6 +430,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
+        if (!isPowerBearingCard(s, id, manifest)) continue;
         const perTargetCtx: EffectCtx = {
           ...liveCtx,
           state: s,
@@ -459,6 +461,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
+        if (!isPowerBearingCard(s, id, manifest)) continue;
         const card = s.cards[id];
         const def = card ? manifest.cards[card.defId] : undefined;
         if (!card || !def) continue;
@@ -1031,6 +1034,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
+        if (!isPowerBearingCard(s, id, manifest)) continue;
         const card = s.cards[id];
         if (!card || card.powerDelta === 0) continue;
         const e: MatchEvent = {
@@ -1197,6 +1201,7 @@ export function applyHandEntryDebuffs(
   rng: Rng,
   manifest: Manifest,
 ): { events: MatchEvent[]; state: MatchState } {
+  if (!isPowerBearingCard(state, cardId, manifest)) return { events: [], state };
   const oppOwner: Owner = newOwner === 'P0' ? 'P1' : 'P0';
   const events: MatchEvent[] = [];
   let s = state;

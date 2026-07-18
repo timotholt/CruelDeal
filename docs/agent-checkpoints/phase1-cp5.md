@@ -279,3 +279,19 @@ server-adapter work; none was started here.
   `npx vitest run services/playgame/runtime contexts services/playgame/presentation`
   (16 files, 67 tests), and `npm run build` (1,187 modules transformed). All
   requested gates passed.
+- Established the design rule that spells have no Power. Hand, board, pile,
+  zoom-inspector, legacy card, and inspector-history presentation now omit the
+  power element for `cardType: "spell"` while retaining cost. A shared
+  card-type guard excludes spells before lane aggregation, breakdowns,
+  effective-power thresholds, min/max power selection, query filters, power
+  mutations, and the two bespoke weakest-card builtins; staged spells can no
+  longer become phantom zero-Power targets. `basePower` remains schema-required
+  but is documented as meaningless for spells, and card validation emits
+  non-failing warnings for the 15 nonzero legacy spell values without requiring
+  JSON migration. Added projection/selector, direct builtin, and rendered pile
+  regressions. Verified with focused Vitest (4 files, 52 tests), card validation
+  (128 cards, 15 warnings), `npm run test:playgame:phase0` (9 files, 53 tests,
+  200 property cases),
+  `npx vitest run services/playgame/runtime contexts services/playgame/presentation services/playgame/engine/testkit`
+  (16 files, 67 tests), `npm run build` (1,188 modules transformed), and
+  `git diff --check`; all requested gates passed.

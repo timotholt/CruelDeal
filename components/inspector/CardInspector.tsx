@@ -38,9 +38,11 @@ export const CardInspector = (props: CardInspectorProps) => {
                         <div class="absolute -left-1 top-0 bottom-0 pointer-events-none z-50">
                             <StatHistory modifiers={(props.card as CardInstance).costModifiers} type="cost" side="left" />
                         </div>
-                        <div class="absolute -right-1 top-0 bottom-0 pointer-events-none z-50">
-                            <StatHistory modifiers={(props.card as CardInstance).powerModifiers} type="power" side="right" />
-                        </div>
+                        <Show when={def().cardType !== 'spell'}>
+                            <div class="absolute -right-1 top-0 bottom-0 pointer-events-none z-50">
+                                <StatHistory modifiers={(props.card as CardInstance).powerModifiers} type="power" side="right" />
+                            </div>
+                        </Show>
                     </Show>
                     <Card 
                         card={{ ...def(), rarity: currentRarity() }} 

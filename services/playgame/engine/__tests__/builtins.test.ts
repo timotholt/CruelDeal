@@ -242,6 +242,34 @@ describe('CALL_BUILTIN: MOVE_ENEMY_CARD_TO_OTHER_LANE', () => {
   });
 });
 
+describe('CALL_BUILTIN: MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', () => {
+  it('ignores a staged spell instead of treating it as a phantom weakest card', () => {
+    const self = mkCard('self', 'mover', 'P0', 'LANE', 0);
+    const spell = mkCard('spell', 'spell', 'P1', 'LANE', 0, { revealed: true });
+    const operative = mkCard('operative', 'operative', 'P1', 'LANE', 0);
+    const spellDef = { ...mkDef('spell', 0, 1), cardType: 'spell' as const };
+    const manifest = buildManifest([
+      mkDef('mover', 2, 2),
+      spellDef,
+      mkDef('operative', 3, 2),
+    ]);
+    const state = buildState({ P0: [self], P1: [spell, operative] });
+
+    const { state: after } = runBuiltin(
+      'MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE',
+      {},
+      state,
+      manifest,
+      'self' as CardId,
+      'P0',
+      0,
+    );
+
+    expect(after.cards['spell' as CardId]?.lane).toBe(0);
+    expect(after.cards['operative' as CardId]?.lane).not.toBe(0);
+  });
+});
+
 // ---- MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE ------------------------------------
 
 describe('CALL_BUILTIN: MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', () => {

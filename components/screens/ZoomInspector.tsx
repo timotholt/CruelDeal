@@ -101,7 +101,10 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         return;
       }
       const el = e.target as HTMLElement;
-      if (el.classList.contains('power')) { setLogKind(k => k === 'power' ? null : 'power'); return; }
+      if (props.target.card.type !== 'spell' && el.classList.contains('power')) {
+        setLogKind(k => k === 'power' ? null : 'power');
+        return;
+      }
       if (el.classList.contains('cost'))  { setLogKind(k => k === 'cost' ? null : 'cost'); return; }
       handleClose();
     });
@@ -264,7 +267,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         />
       </Show>
 
-      <Show when={props.target.kind === 'card' && logKind()}>
+      <Show when={props.target.kind === 'card' && props.target.card.type !== 'spell' && logKind()}>
         <StatLogPanel
           kind={logKind() as 'power' | 'cost'}
           basePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.basePower}

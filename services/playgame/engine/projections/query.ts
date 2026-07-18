@@ -31,6 +31,7 @@ import type {
 import type { CardDef, CardType, Manifest } from '../manifest/types';
 import type { CardId, LaneIdx, Owner } from '../types/ids';
 import { getCardPower } from './power';
+import { isPowerBearingDef } from './power-bearing';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Comparison primitives
@@ -200,13 +201,16 @@ export function matchesCard(
     if (!def || !matchesNum(def.cost, filter.cost)) return false;
   }
   if (filter.basePower !== undefined) {
-    if (!def || !matchesNum(def.basePower, filter.basePower)) return false;
+    if (!isPowerBearingDef(def) || !matchesNum(def.basePower, filter.basePower)) return false;
   }
   if (filter.power !== undefined) {
+    if (!isPowerBearingDef(def)) return false;
     const p = getCardPower(state, card.id, manifest);
     if (!matchesNum(p, filter.power)) return false;
   }
-  if (filter.powerDelta !== undefined && !matchesNum(card.powerDelta, filter.powerDelta)) return false;
+  if (filter.powerDelta !== undefined) {
+    if (!isPowerBearingDef(def) || !matchesNum(card.powerDelta, filter.powerDelta)) return false;
+  }
 
   // ── Taxonomy ──────────────────────────────────────────────────────────
   if (filter.cardType !== undefined) {
@@ -371,7 +375,7 @@ export function matchesCardDef(
 ): boolean {
   if (filter.defId !== undefined && !matchesString(def.defId, filter.defId)) return false;
   if (filter.cost !== undefined && !matchesNum(def.cost, filter.cost)) return false;
-  if (filter.basePower !== undefined && !matchesNum(def.basePower, filter.basePower)) return false;
+  if (filter.basePower !== undefined && (!isPowerBearingDef(def) || !matchesNum(def.basePower, filter.basePower))) return false;
 
   if (filter.cardType !== undefined) {
     const cardTypes = arrayOrOne(filter.cardType);

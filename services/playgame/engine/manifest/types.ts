@@ -54,6 +54,10 @@ export interface CardDef {
   version: number;
   name: string;                         // display only; real display name is cosmetic
   cardType: CardType;
+  /**
+   * Schema-compatibility field. For spells this value is meaningless: spells
+   * have no Power, and engine projections/selectors ignore it structurally.
+   */
   basePower: number;
   cost: number;
   abilities: CardAbilities;

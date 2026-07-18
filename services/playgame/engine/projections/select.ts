@@ -17,6 +17,7 @@ import type { EvalCtx } from './context';
 import { evalNum } from './numexpr';
 import { getCardPower } from './power';
 import { getCardCost } from './cost';
+import { isPowerBearingCard } from './power-bearing';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -127,7 +128,7 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
     }
 
     case 'MIN_POWER_OF': {
-      const ids = select(sel.of, ctx);
+      const ids = select(sel.of, ctx).filter(id => isPowerBearingCard(ctx.state, id, ctx.manifest));
       if (ids.length === 0) return [];
       let minPow = Infinity;
       let minId: CardId | null = null;
@@ -139,7 +140,7 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
     }
 
     case 'MAX_POWER_OF': {
-      const ids = select(sel.of, ctx);
+      const ids = select(sel.of, ctx).filter(id => isPowerBearingCard(ctx.state, id, ctx.manifest));
       if (ids.length === 0) return [];
       let maxPow = -Infinity;
       let maxId: CardId | null = null;
@@ -285,7 +286,8 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
         if (!c) return false;
         const def = ctx.manifest.cards[c.defId];
         if (!def) return false;
-        const stat = pred.kind === 'POWER_CMP' ? def.basePower : def.cost;
+        if (pred.kind === 'POWER_CMP' && !isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
+        const stat = pred.kind === 'POWER_CMP' ? getCardPower(ctx.state, id, ctx.manifest) : def.cost;
         return compareNum(stat, pred.op, value);
       });
     }
@@ -316,6 +318,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'POWER_INCREASED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
+        if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
         const c = ctx.state.cards[id];
         return (c?.powerDelta ?? 0) > 0;
       });
@@ -324,6 +327,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'POWER_REDUCED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
+        if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
         const c = ctx.state.cards[id];
         return (c?.powerDelta ?? 0) < 0;
       });
