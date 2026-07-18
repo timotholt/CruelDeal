@@ -937,7 +937,13 @@ function buildState(
   const manifest = mkManifest([pulse]);
   const s0 = buildState([{ def: 'pulse', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('spell-cleanup'));
-  truthy(res.events.some((e) => e.type === 'CARD_BANISHED'), 'SPELL: emits CARD_BANISHED after reveal');
+  const banish = res.events.find((e) => e.type === 'CARD_BANISHED');
+  truthy(banish !== undefined, 'SPELL: emits CARD_BANISHED after reveal');
+  eq(
+    banish?.cause,
+    { sourceId: 'c1' as CardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
+    'SPELL: records its game-rules cleanup reason',
+  );
   eq(res.state.cards['c1' as CardId]?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
   eq(res.state.lanes[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
 }

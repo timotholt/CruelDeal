@@ -211,3 +211,22 @@ server-adapter work; none was started here.
   starts symmetrically at four cards in hand and eight remaining in deck, with
   headless execution, runtime projection, replay, and generated properties all
   consuming the same changed event stream.
+- Made dev replay descriptions resolve card and location instance ids through
+  replay state and the active manifest, with historical location fallback for
+  post-destroy/replace frames and raw-id fallback for unknown instances. The
+  selected-frame summary and nested `cause.sourceId` now render labels such as
+  `b0v5a7im (Bone Market)`, while the JSON block remains the untouched event.
+- Added one-line human-readable replay causes for card effects, location
+  effects, resolved-spell cleanup, and other game-rule mutations. The same
+  description is available from `window.__snapDebug.getFrameDescription()`.
+- Extended `EffectRef` with optional `systemReason`; resolved spells now emit
+  `SPELL_RESOLVED`. The SYSTEM-emitter audit found no other production
+  `EffectRef` emitters (remaining SYSTEM references are intent seats, spawn
+  provenance, or test/debug fixtures).
+- Verified these fixes with the focused replay-presentation Vitest (3 tests),
+  the standalone evaluator suite including the new spell-reason assertion,
+  `npm run test:playgame:phase0` (9 files, 53 tests, 200 property cases),
+  `npx vitest run services/playgame/runtime contexts` (10 files, 57 tests),
+  and `npm run build` (1,186 modules transformed). All passed; focused ESLint,
+  `git diff --check`, and the production-bundle debug-global grep also
+  passed.

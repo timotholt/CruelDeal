@@ -484,6 +484,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
               frameIndex={replayFrameIndex()}
               frameCount={timeline().frames.length}
               seed={engineState.seed}
+              frames={timeline().frames}
+              manifest={manifest}
               selectedFrame={replayEnabled() ? replayFrame() : timeline().frames[timeline().frames.length - 1]}
               onToggleOpen={() => setReplayOpen((open) => !open)}
               onToggleReplay={toggleReplayMode}

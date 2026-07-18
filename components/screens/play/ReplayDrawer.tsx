@@ -1,6 +1,12 @@
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { ReplayFrame } from '@/services/playgame/engine/replay';
+import {
+  annotateReplayEventJson,
+  createReplayNameResolver,
+  describeReplayFrame,
+} from '@/services/playgame/debug/replayPresentation';
 
 interface ReplayDrawerProps {
   open: boolean;
@@ -8,6 +14,8 @@ interface ReplayDrawerProps {
   frameIndex: number;
   frameCount: number;
   seed: string;
+  frames: readonly ReplayFrame[];
+  manifest: Manifest;
   selectedFrame: ReplayFrame | null;
   onToggleOpen: () => void;
   onToggleReplay: () => void;
@@ -15,20 +23,12 @@ interface ReplayDrawerProps {
   onCopyReplayJson: () => Promise<void>;
 }
 
-const describeEvent = (frame: ReplayFrame | null): string => {
-  if (!frame || !frame.event) return 'Initial seeded state';
-  const { event } = frame;
-  const details = Object.entries(event)
-    .filter(([key]) => key !== 'type')
-    .slice(0, 3)
-    .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
-  return details.length > 0 ? `${event.type} · ${details.join(' · ')}` : event.type;
-};
-
 export const ReplayDrawer = (props: ReplayDrawerProps) => {
   let drawerEl: HTMLDivElement | undefined;
   let stopDrag: (() => void) | null = null;
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
+  const names = createMemo(() => createReplayNameResolver(props.frames, props.manifest));
+  const selectedDescription = createMemo(() => describeReplayFrame(props.selectedFrame, names()));
 
   const beginDrag = (event: PointerEvent): void => {
     if (event.button !== 0) return;
@@ -73,7 +73,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   return (
     <Portal mount={document.body}>
       <div
-        ref={drawerEl}
+        ref={(element) => { drawerEl = element; }}
         class={'replay-drawer' + (props.open ? ' open' : '')}
         style={position()
           ? {
@@ -97,7 +97,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   {props.replayEnabled ? `Frame ${props.frameIndex}/${Math.max(props.frameCount - 1, 0)}` : 'Live State'}
                 </div>
               </div>
-              <button class="replay-chip" type="button" onClick={props.onToggleReplay}>
+              <button class="replay-chip" type="button" onClick={() => props.onToggleReplay()}>
                 {props.replayEnabled ? 'Exit Replay' : 'Enter Replay'}
               </button>
             </div>
@@ -173,7 +173,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
 
             <div class="replay-panel__summary">
               <div class="replay-panel__section-title">Selected Frame</div>
-              <div class="replay-panel__event">{describeEvent(props.selectedFrame)}</div>
+              <div class="replay-panel__event">{selectedDescription().summary}</div>
             </div>
 
             <Show when={props.selectedFrame}>
@@ -188,7 +188,10 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
             </Show>
 
             <Show when={props.selectedFrame?.event}>
-              <pre class="replay-panel__json">{JSON.stringify(props.selectedFrame?.event, null, 2)}</pre>
+              <Show when={selectedDescription().cause}>
+                {(cause) => <div class="replay-panel__cause">{cause()}</div>}
+              </Show>
+              <pre class="replay-panel__json">{annotateReplayEventJson(props.selectedFrame, names())}</pre>
             </Show>
 
             <div class="replay-panel__footer">

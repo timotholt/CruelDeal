@@ -370,4 +370,5 @@ export interface EffectRef {
   sourceId: CardId | LocationId;
   effectKind: 'ON_REVEAL' | 'ONGOING' | 'LOCATION' | 'SYSTEM';
   exprIdx?: number;
+  systemReason?: string;
 }

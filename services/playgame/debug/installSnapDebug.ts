@@ -4,6 +4,11 @@ import type { MatchLogEntry, MatchState } from '../engine/types/state';
 import type { MatchRuntime } from '../runtime/matchRuntime';
 import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
+import {
+  createReplayNameResolver,
+  describeReplayFrame,
+  type ReplayFrameDescription,
+} from './replayPresentation';
 
 export interface SnapDebugApi {
   getLiveState: () => MatchState;
@@ -11,6 +16,7 @@ export interface SnapDebugApi {
   getReplayBundle: () => MatchRuntimeReplayExport;
   getReplayTimeline: () => ReplayResult;
   getFrame: (index: number) => ReplayFrame | null;
+  getFrameDescription: (index: number) => ReplayFrameDescription | null;
   copyReplayJson: () => Promise<string>;
 }
 
@@ -33,6 +39,12 @@ export function installSnapDebug(
     getReplayBundle: exportReplay,
     getReplayTimeline: timeline,
     getFrame: (index) => timeline().frames[index] ?? null,
+    getFrameDescription: (index) => {
+      const replay = timeline();
+      const frame = replay.frames[index] ?? null;
+      if (!frame) return null;
+      return describeReplayFrame(frame, createReplayNameResolver(replay.frames, manifest));
+    },
     copyReplayJson: async () => {
       const json = JSON.stringify(exportReplay(), null, 2);
       await navigator.clipboard.writeText(json);

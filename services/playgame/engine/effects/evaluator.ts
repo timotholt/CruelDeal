@@ -162,7 +162,7 @@ function banishResolvedSpell(state: MatchState, cardId: CardId, manifest: Manife
   const banish: MatchEvent = {
     type: 'CARD_BANISHED',
     cardId,
-    cause: { sourceId: cardId, effectKind: 'SYSTEM' },
+    cause: { sourceId: cardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
   };
   return { events: [banish], state: apply(state, banish, manifest) };
 }
