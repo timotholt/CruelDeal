@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "test:playgame:phase0": "PLAYGAME_PROPERTY_CASES=200 vitest run services/playgame/runtime",
     "engine:cli": "tsx services/playgame/engine/cli/main.ts",
     "cards:generate": "tsx scripts/cards/generate-card-modules.ts",
     "cards:generate:check": "tsx scripts/cards/generate-card-modules.ts --check",

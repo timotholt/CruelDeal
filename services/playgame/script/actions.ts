@@ -20,8 +20,9 @@ import type { Manifest } from '../engine/manifest/types';
 import type { Rng } from '../engine/rng';
 import { resolveTurn } from '../engine/resolve';
 import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
-import { planEnemyTurnFromPool } from '../engine/ai';
 import { animateEvent } from '../presentation/eventAnimator';
+import { planLiveRemoteSeat } from './liveRemoteSeatPlanner';
+import { planLiveRevealHandoff } from './liveRevealHandoff';
 import {
   type UiState,
   newEngineCardInstance,
@@ -414,34 +415,19 @@ const dispatchPerRevealEvent = async (c: PlayScriptCtx, event: MatchEvent): Prom
 export const revealByPriorityFromEngine = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   const events = c._engineEvents ?? [];
+  const handoff = planLiveRevealHandoff(
+    events,
+    (cardId) => {
+      const card = c.state.cards[cardId];
+      return !card || card.revealed;
+    },
+  );
+  c._revealsConsumedUpTo = handoff.consumedUpTo;
 
-  // Build an index of CARD_FLIPPED positions and find the TURN_ENDED
-  // boundary in one pass. `turnEndedIdx` defaults to events.length so a
-  // stream with no TURN_ENDED (unlikely, but shape-safe) still terminates.
-  const flippedIndices: Array<{ cardId: string; idx: number }> = [];
-  let turnEndedIdx = events.length;
-  for (let i = 0; i < events.length; i++) {
-    const e = events[i];
-    if (e.type === 'CARD_FLIPPED') {
-      flippedIndices.push({ cardId: e.cardId as string, idx: i });
-    } else if (e.type === 'TURN_ENDED' && turnEndedIdx === events.length) {
-      turnEndedIdx = i;
-    }
-  }
-  c._revealsConsumedUpTo = turnEndedIdx;
-
-  if (flippedIndices.length === 0) return;
-
-  // Only animate cards still face-down in the UI — CARD_FLIPPED can appear
-  // for cards the engine chose to flip but the UI already considers revealed.
-  const activeFlipped = flippedIndices.filter(({ cardId }) => {
-    const card = c.state.cards[cardId as CardId];
-    return card && !card.revealed;
-  });
-  if (activeFlipped.length === 0) return;
+  if (handoff.flips.length === 0 || handoff.activeFlips.length === 0) return;
 
   await revealPendingCinematic({
-    pendingIds: activeFlipped.map(({ cardId }) => cardId),
+    pendingIds: handoff.activeFlips.map(({ cardId }) => cardId),
     cardElMap: c.cardRefs,
     boardWrap: c.boardWrap,
     sfx: c.sfx,
@@ -451,13 +437,9 @@ export const revealByPriorityFromEngine = (): Step => async (ctx) => {
       // revealed card).
       c.dispatch({ type: 'CARD_FLIPPED', cardId: id as CardId });
 
-      // Per-reveal slice = (this CARD_FLIPPED, next CARD_FLIPPED ∪ TURN_ENDED).
-      const myIdx = flippedIndices.find((f) => f.cardId === id)?.idx;
-      if (myIdx === undefined) return;
-      const nextIdx = flippedIndices.find((f) => f.idx > myIdx)?.idx ?? turnEndedIdx;
-      const slice = events.slice(myIdx + 1, nextIdx);
-      for (const ev of slice) {
-        if (ev.type === 'CARD_FLIPPED') continue; // belongs to another card
+      const flip = handoff.flips.find((candidate) => candidate.cardId === id);
+      if (!flip) return;
+      for (const ev of flip.eventsAfter) {
         await dispatchPerRevealEvent(c, ev);
       }
     },
@@ -534,12 +516,11 @@ export const advanceTurnFromEngine = (): Step => async (ctx) => {
 export const autoPlayRemoteSeat = (): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
 
-  const plays = planEnemyTurnFromPool(
+  const plays = planLiveRemoteSeat(
     c.state as EngineMatchState,
     c.remoteSeat,
     c.manifest,
     c.engineRng,
-    { forkTag: `seat-plays:${c.remoteSeat}` },
   );
 
   for (const play of plays) {

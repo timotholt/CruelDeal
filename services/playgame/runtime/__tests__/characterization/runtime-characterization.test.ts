@@ -104,10 +104,11 @@ describe('Phase 0 runtime characterization', () => {
     assertRuntimeParity({ finalState: authoritative.state, events }, folded);
     expect(events.some((event) => event.type === 'CARD_FLIPPED')).toBe(false);
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
-    expect(folded.frames).toHaveLength(events.length + 1);
+    expect(folded.frames).toHaveLength(events.length);
     folded.frames.forEach((frame) => {
-      expect(frame.state.log).toHaveLength(frame.index);
-      expect(frame.event).toEqual(frame.index === 0 ? null : events[frame.index - 1]);
+      expect(frame.before.log).toHaveLength(frame.index);
+      expect(frame.after.log).toHaveLength(frame.index + 1);
+      expect(frame.event).toEqual(events[frame.index]);
     });
   });
 
@@ -151,7 +152,7 @@ describe('Phase 0 runtime characterization', () => {
       'CARD_POWER_CHANGED',
       'OR_WINDOW_CLOSE',
     ]);
-    expect(frames[close + 1].state.cards['cascade-card'].powerDelta).toBe(6);
+    expect(frames[close].after.cards['cascade-card'].powerDelta).toBe(6);
   });
 
   it('reveals multiple staged cards in priority-owner order', () => {

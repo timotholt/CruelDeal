@@ -28,15 +28,20 @@ landed). Every later phase gate compares against these exact numbers:
 - Phase 1 may convert legacy script-style tests to real vitest suites; that
   conversion is tracked work, not silent baseline erosion.
 
-## npx vitest run services/playgame/runtime (new Phase 0 suites)
+## npm run test:playgame:phase0 (new Phase 0 merge gate)
 
-- 3 files, **16 passed, 3 expected-fail** — the expected failures are the
-  three characterized reveal event-loss paths from the Problem Statement,
-  encoded as failing contract tests that must FLIP TO PASSING when
-  MatchRuntime lands (Phase 1 gate).
+- Runs the complete `services/playgame/runtime` suite with
+  `PLAYGAME_PROPERTY_CASES=200`: 1,000 generated property cases in every gate
+  run.
+- 5 files, **16 passed, 5 expected-fail**. The expected failures are three
+  production-linked reveal event-loss paths, the live manifest-pool opponent
+  planner, and the local-only live opening flow. Each desired-state contract
+  must flip to passing when its Phase 1 replacement lands.
+- The quick local command remains `npx vitest run services/playgame/runtime`;
+  it uses 8 cases per property.
 
 ## Gate rule
 
 A phase merge is blocked only by NEW failures relative to this record:
 lint errors above 269 in touched files, build exit != 0, engine test-level
-failures above 0, or any regression in the Phase 0 runtime suites.
+failures above 0, or any regression in `npm run test:playgame:phase0`.

@@ -24,10 +24,16 @@ Intent resolution uses a stable RNG fork derived from match seed, intent index, 
 ## Properties
 
 - `P-PARITY`: compares direct resolve/apply execution with `replayMatch`, including complete final state, ordered event log, turn, phase, priority, energy, and result.
-- `P-EXACTLY-ONCE`: counts reducer application by global committed event index, requires every index exactly once, and verifies the result against replay.
+- `P-EXACTLY-ONCE`: identifies reducer application by stable
+  `transactionId:eventIndex`, requires every identity exactly once, proves the
+  oracle rejects a retried event even when it is appended at a fresh global log
+  position, and verifies the result against replay.
 - `P-PROVENANCE`: checks both frozen input deck snapshots, genesis deck membership, every replay frame, every zone reference, and requires non-deck cards to first appear through an explicit card-creation event with non-deck provenance.
 - `P-FOLD`: checks the replay frame at every commit boundary against the state captured after that direct local commit.
-- `P-NO-TIME`: executes each generated match under two fake wall-clock values, rejects any `Math.random()` call, requires zero `Date.now()` calls, and compares logs and final state exactly.
+- `P-NO-TIME`: executes each generated match under two fake wall-clock values,
+  rejects any `Math.random()` call, requires zero `Date.now()` calls, compares
+  logs and final state exactly, and proves cosmetic RNG namespaces and fork
+  order cannot perturb gameplay output.
 
 No property produced a legitimate current-engine failure at the required depth, so no `test.failing` characterization was needed.
 
@@ -48,5 +54,8 @@ Every caught generation or assertion failure reports the suite seed, exact gener
 - `PLAYGAME_PROPERTY_CASES=200 npx vitest run services/playgame/runtime/__tests__/properties/engine-properties.test.ts`
   - 1 file passed, 5 tests passed.
   - 200 generated matches per property; 1,000 property cases total.
+- `npm run test:playgame:phase0` is the named merge gate. It runs the complete
+  runtime characterization suite and enforces 200 generated matches per
+  property.
 - Focused ESLint over both new TypeScript files passed with zero warnings or errors.
 - A focused TypeScript invocation reached three pre-existing errors in imported engine files (`effects/evaluator.ts` twice and `replay.ts` once); it reported no error in either new property-suite file.

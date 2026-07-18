@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 import {
   BOOTSTRAP_MANIFEST,
   apply,
+  createRng,
   replayMatch,
   resolve,
   type MatchEvent,
@@ -28,6 +29,13 @@ interface CommitRecord {
   readonly eventStart: number;
   readonly eventEnd: number;
   readonly state: MatchState;
+}
+
+interface EventApplication {
+  readonly transactionId: string;
+  readonly eventIndex: number;
+  readonly globalIndex: number;
+  readonly event: MatchEvent;
 }
 
 interface ExecutionResult {
@@ -71,31 +79,33 @@ function propertyCases(): readonly PropertyCaseRef[] {
 }
 
 function commitEvents(
+  transactionId: string,
   state: MatchState,
   batch: readonly MatchEvent[],
   allEvents: MatchEvent[],
-  onApply?: (eventIndex: number, event: MatchEvent) => void,
+  onApply?: (application: EventApplication) => void,
 ): MatchState {
   let next = state;
-  for (const event of batch) {
-    const eventIndex = allEvents.length;
-    onApply?.(eventIndex, event);
+  batch.forEach((event, eventIndex) => {
+    const globalIndex = allEvents.length;
+    onApply?.({ transactionId, eventIndex, globalIndex, event });
     allEvents.push(event);
     next = apply(next, event, BOOTSTRAP_MANIFEST);
-  }
+  });
   return next;
 }
 
 function executeGeneratedMatch(
   input: GeneratedMatchCase,
-  onApply?: (eventIndex: number, event: MatchEvent) => void,
+  onApply?: (application: EventApplication) => void,
+  beforeIntent?: (intentIndex: number, intent: GeneratedMatchCase['intents'][number]) => void,
 ): ExecutionResult {
   const opened = createOpenedMatch(input, BOOTSTRAP_MANIFEST);
   const events: MatchEvent[] = [];
   const commits: CommitRecord[] = [];
   let state = opened.genesis;
 
-  state = commitEvents(state, opened.openingEvents, events, onApply);
+  state = commitEvents('opening', state, opened.openingEvents, events, onApply);
   commits.push({
     label: 'opening-draws',
     eventStart: 0,
@@ -104,6 +114,7 @@ function executeGeneratedMatch(
   });
 
   input.intents.forEach((intent, intentIndex) => {
+    beforeIntent?.(intentIndex, intent);
     const eventStart = events.length;
     const batch = resolve(
       state,
@@ -115,7 +126,7 @@ function executeGeneratedMatch(
       const reason = batch[0]?.type === 'INTENT_REJECTED' ? batch[0].reason : 'no events';
       throw new Error(`generated ${intent.type} intent ${intent.intentId} was not legal: ${reason}`);
     }
-    state = commitEvents(state, batch, events, onApply);
+    state = commitEvents(`intent:${intent.intentId}`, state, batch, events, onApply);
     commits.push({
       label: `${intentIndex}:${intent.type}`,
       eventStart,
@@ -175,6 +186,26 @@ function runProperty(
 
 function eventsFromLog(state: MatchState): readonly MatchEvent[] {
   return state.log.map((entry) => entry.event as MatchEvent);
+}
+
+function applicationKey(application: EventApplication): string {
+  return `${application.transactionId}:${application.eventIndex}`;
+}
+
+function assertStableApplicationsExactlyOnce(applications: readonly EventApplication[]): void {
+  const counts = new Map<string, number>();
+  for (const application of applications) {
+    const key = applicationKey(application);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const duplicates = [...counts].filter(([, count]) => count !== 1);
+  if (duplicates.length > 0) {
+    throw new Error(
+      `stable transaction event applied more than once: ${duplicates
+        .map(([key, count]) => `${key}=${count}`)
+        .join(', ')}`,
+    );
+  }
 }
 
 function parityFields(state: MatchState): unknown {
@@ -297,6 +328,35 @@ function executeWithEntropyGuards(
   }
 }
 
+function gameplayNamespaceProbe(seed: string, cosmeticForkOrder: readonly string[]): readonly number[] {
+  const root = createRng(seed);
+  for (const tag of cosmeticForkOrder) {
+    const cosmetic = root.fork(`cosmetic:${tag}`);
+    cosmetic.int(0, 0x7fffffff);
+    cosmetic.int(0, 0x7fffffff);
+  }
+  const gameplay = root.fork('gameplay:probe');
+  return [
+    gameplay.int(0, 0x7fffffff),
+    gameplay.int(0, 0x7fffffff),
+    gameplay.int(0, 0x7fffffff),
+  ];
+}
+
+function executeWithCosmeticNoise(
+  input: GeneratedMatchCase,
+  cosmeticForkOrder: readonly string[],
+): ExecutionResult {
+  const cosmeticRoot = createRng(`${input.matchSeed}:presentation`);
+  return executeGeneratedMatch(input, undefined, (intentIndex) => {
+    for (const tag of cosmeticForkOrder) {
+      cosmeticRoot
+        .fork(`${tag}:intent:${intentIndex}`)
+        .int(0, 0x7fffffff);
+    }
+  });
+}
+
 describe('seeded engine properties', () => {
   test('P-PARITY: direct execution equals replay fold', { timeout: PROPERTY_TIMEOUT_MS }, () => {
     runProperty('P-PARITY', (input) => {
@@ -317,9 +377,9 @@ describe('seeded engine properties', () => {
 
   test('P-EXACTLY-ONCE: each committed event index is reduced once', { timeout: PROPERTY_TIMEOUT_MS }, () => {
     runProperty('P-EXACTLY-ONCE', (input) => {
-      const counts = new Map<number, number>();
-      const direct = executeGeneratedMatch(input, (eventIndex) => {
-        counts.set(eventIndex, (counts.get(eventIndex) ?? 0) + 1);
+      const applications: EventApplication[] = [];
+      const direct = executeGeneratedMatch(input, (application) => {
+        applications.push(application);
       });
       const replayed = replayMatch({
         seed: input.matchSeed,
@@ -328,8 +388,20 @@ describe('seeded engine properties', () => {
         events: direct.events,
       });
 
-      expect([...counts.keys()]).toEqual(direct.events.map((_, index) => index));
-      expect([...counts.values()]).toEqual(direct.events.map(() => 1));
+      assertStableApplicationsExactlyOnce(applications);
+      expect(applications).toHaveLength(direct.events.length);
+      expect(applications.map((application) => application.globalIndex))
+        .toEqual(direct.events.map((_, index) => index));
+      expect(applications.map((application) => application.event)).toEqual(direct.events);
+
+      // Prove the oracle is sensitive to the failure it claims to guard.
+      // A retried transaction retains its transaction/event identity even if
+      // it would otherwise be appended at fresh global log positions.
+      expect(() => assertStableApplicationsExactlyOnce([
+        ...applications,
+        { ...applications[0], globalIndex: applications.length },
+      ])).toThrow(/applied more than once/);
+
       expect(direct.finalState.log).toHaveLength(direct.events.length);
       expect(replayed.finalState).toEqual(direct.finalState);
     });
@@ -364,6 +436,9 @@ describe('seeded engine properties', () => {
     runProperty('P-NO-TIME', (input) => {
       const early = executeWithEntropyGuards(input, 1);
       const late = executeWithEntropyGuards(input, 4_102_444_800_000);
+      const quiet = executeWithCosmeticNoise(input, []);
+      const noisyForward = executeWithCosmeticNoise(input, ['card-glint', 'screen-shake', 'particle']);
+      const noisyReverse = executeWithCosmeticNoise(input, ['particle', 'screen-shake', 'card-glint']);
 
       expect(early.nowCalls).toBe(0);
       expect(late.nowCalls).toBe(0);
@@ -371,6 +446,14 @@ describe('seeded engine properties', () => {
       expect(late.randomCalls).toBe(0);
       expect(early.execution.events).toEqual(late.execution.events);
       expect(early.execution.finalState).toEqual(late.execution.finalState);
+      expect(noisyForward.events).toEqual(quiet.events);
+      expect(noisyForward.finalState).toEqual(quiet.finalState);
+      expect(noisyReverse.events).toEqual(quiet.events);
+      expect(noisyReverse.finalState).toEqual(quiet.finalState);
+      expect(gameplayNamespaceProbe(input.matchSeed, []))
+        .toEqual(gameplayNamespaceProbe(input.matchSeed, ['card-glint', 'particle']));
+      expect(gameplayNamespaceProbe(input.matchSeed, ['card-glint', 'particle']))
+        .toEqual(gameplayNamespaceProbe(input.matchSeed, ['particle', 'card-glint']));
     });
   });
 });

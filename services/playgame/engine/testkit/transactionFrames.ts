@@ -5,11 +5,12 @@ import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
 
 export interface TransactionFrame {
-  /** Zero is the genesis frame; event N produces frame N + 1. */
+  /** Zero-based position of this event inside the transaction. */
   readonly index: number;
   readonly transactionId: string;
-  readonly event: MatchEvent | null;
-  readonly state: MatchState;
+  readonly event: MatchEvent;
+  readonly before: MatchState;
+  readonly after: MatchState;
 }
 
 export interface EventTransactionFrames {
@@ -34,22 +35,20 @@ export interface BuildEventTransactionFramesOptions {
 export function buildEventTransactionFrames(
   options: BuildEventTransactionFramesOptions,
 ): EventTransactionFrames {
-  const frames: TransactionFrame[] = [{
-    index: 0,
-    transactionId: options.transactionId,
-    event: null,
-    state: options.initialState,
-  }];
+  const frames: TransactionFrame[] = [];
   let state = options.initialState;
 
   options.events.forEach((event, eventIndex) => {
-    state = apply(state, event, options.manifest);
+    const before = state;
+    const after = apply(before, event, options.manifest);
     frames.push({
-      index: eventIndex + 1,
+      index: eventIndex,
       transactionId: options.transactionId,
       event,
-      state,
+      before,
+      after,
     });
+    state = after;
   });
 
   return {
