@@ -1,0 +1,296 @@
+{
+  "protocolVersion": 1,
+  "cases": [
+    {
+      "name": "valid framed turn boundary",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 66,
+          "scope": {
+            "turn": 3,
+            "phase": "START"
+          },
+          "event": {
+            "type": "TURN_STARTED",
+            "turn": 3,
+            "priority": "P0",
+            "priorityReason": "MORE_POWER"
+          }
+        }
+      }
+    },
+    {
+      "name": "valid non-boundary event envelope",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 67,
+          "scope": {
+            "turn": 3,
+            "phase": "START"
+          },
+          "event": {
+            "type": "ENERGY_CHANGED",
+            "owner": "P0",
+            "delta": 3,
+            "reason": "TURN_START"
+          }
+        }
+      }
+    },
+    {
+      "name": "valid intent envelope",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "INTENT_ENVELOPE",
+        "payload": {
+          "matchId": "match-1",
+          "seat": "P0",
+          "intentId": "intent-1",
+          "expectedRevision": 8,
+          "intentSeq": 12,
+          "intent": {
+            "type": "STAGE_CARD",
+            "cardId": "card-1",
+            "lane": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "valid match bootstrap",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "MATCH_BOOTSTRAP",
+        "payload": {
+          "matchId": "match-1",
+          "mode": "LADDER",
+          "seed": "seed-1",
+          "rulesetId": "standard",
+          "manifestVersion": 1,
+          "viewerSeat": "P0",
+          "participants": {
+            "P0": {
+              "participantId": "participant-0",
+              "controller": "LOCAL_HUMAN",
+              "displayName": "Player"
+            },
+            "P1": {
+              "participantId": "participant-1",
+              "controller": "REMOTE_PLAYER",
+              "displayName": "Opponent"
+            }
+          },
+          "decks": {
+            "P0": {
+              "deckId": "deck-0",
+              "revision": 1,
+              "name": "Deck 0",
+              "entries": [],
+              "contentHash": "sha256:deck-0"
+            },
+            "P1": {
+              "deckId": "deck-1",
+              "revision": 1,
+              "name": "Deck 1",
+              "entries": [],
+              "contentHash": "sha256:deck-1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "valid committed transaction",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "COMMITTED_TRANSACTION",
+        "payload": {
+          "transactionId": "match-1:tx:9",
+          "matchId": "match-1",
+          "baseRevision": 8,
+          "revision": 9,
+          "intent": {
+            "matchId": "match-1",
+            "seat": "SYSTEM",
+            "intentId": "resolve-turn-2"
+          },
+          "framedEvents": [
+            {
+              "frame": 66,
+              "scope": {
+                "turn": 3,
+                "phase": "START"
+              },
+              "event": {
+                "type": "TURN_STARTED",
+                "turn": 3,
+                "priority": "P0",
+                "priorityReason": "RETAINED"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "frame zero cannot own an event",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 0,
+          "scope": {
+            "turn": 1,
+            "phase": "SETUP"
+          },
+          "event": {
+            "type": "CARD_DRAWN"
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown event type is rejected",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 1,
+          "scope": {
+            "turn": 1,
+            "phase": "SETUP"
+          },
+          "event": {
+            "type": "CARD_DREW_ITSELF"
+          }
+        }
+      }
+    },
+    {
+      "name": "turn started requires priority",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 4,
+          "scope": {
+            "turn": 2,
+            "phase": "START"
+          },
+          "event": {
+            "type": "TURN_STARTED",
+            "turn": 2,
+            "priorityReason": "RETAINED"
+          }
+        }
+      }
+    },
+    {
+      "name": "intent rejects unknown properties",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "INTENT_ENVELOPE",
+        "payload": {
+          "matchId": "match-1",
+          "seat": "P0",
+          "intentId": "intent-1",
+          "expectedRevision": 8,
+          "intent": {
+            "type": "END_TURN",
+            "owner": "P0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction must contain a frame",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "COMMITTED_TRANSACTION",
+        "payload": {
+          "transactionId": "match-1:tx:9",
+          "matchId": "match-1",
+          "baseRevision": 8,
+          "revision": 9,
+          "intent": {
+            "matchId": "match-1",
+            "seat": "SYSTEM",
+            "intentId": "resolve-turn-2"
+          },
+          "framedEvents": []
+        }
+      }
+    },
+    {
+      "name": "bootstrap rejects an incomplete seat map",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "MATCH_BOOTSTRAP",
+        "payload": {
+          "matchId": "match-1",
+          "mode": "LADDER",
+          "seed": "seed-1",
+          "rulesetId": "standard",
+          "manifestVersion": 1,
+          "viewerSeat": "P0",
+          "participants": {
+            "P0": {
+              "participantId": "participant-0",
+              "controller": "LOCAL_HUMAN",
+              "displayName": "Player"
+            }
+          },
+          "decks": {
+            "P0": {
+              "deckId": "deck-0",
+              "revision": 1,
+              "name": "Deck 0",
+              "entries": [],
+              "contentHash": "sha256:deck-0"
+            },
+            "P1": {
+              "deckId": "deck-1",
+              "revision": 1,
+              "name": "Deck 1",
+              "entries": [],
+              "contentHash": "sha256:deck-1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "protocol version is exact",
+      "valid": false,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 1,
+          "scope": {
+            "turn": 1,
+            "phase": "SETUP"
+          },
+          "event": {
+            "type": "CARD_DRAWN"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -280,12 +280,16 @@ function assertProvenance(input: GeneratedMatchCase, execution: ExecutionResult)
     seed: input.matchSeed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState: execution.genesis,
-    events: execution.events,
+    framedEvents: execution.finalState.log.map(({ frame, scope, event }) => ({
+      frame,
+      scope,
+      event: event as MatchEvent,
+    })),
   });
 
-  replay.frames.forEach((frame, frameIndex) => {
+  replay.steps.forEach((frame, frameIndex) => {
     if (frame.event) {
-      const previous = replay.frames[frameIndex - 1].state;
+      const previous = replay.steps[frameIndex - 1].state;
       const owner = explicitCreationOwner(frame.event);
       if (owner && 'cardId' in frame.event && !previous.cards[frame.event.cardId]) {
         explicitlyCreatedFor.set(frame.event.cardId, owner);
@@ -297,7 +301,7 @@ function assertProvenance(input: GeneratedMatchCase, execution: ExecutionResult)
       const createdForSeat = explicitlyCreatedFor.get(card.id) === card.owner;
       expect(
         fromSeatDeck || createdForSeat,
-        `card ${card.id} (${card.defId}) for ${card.owner} at frame ${frame.index} lacks provenance`,
+        `card ${card.id} (${card.defId}) for ${card.owner} at frame ${frame.frame} lacks provenance`,
       ).toBe(true);
       if (!fromSeatDeck) {
         expect(card.spawnSource.kind).not.toBe('DECK_CREATION');
@@ -365,7 +369,11 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        events: direct.events,
+        framedEvents: direct.finalState.log.map(({ frame, scope, event }) => ({
+          frame,
+          scope,
+          event: event as MatchEvent,
+        })),
       });
 
       expect(replayed.finalState).toEqual(direct.finalState);
@@ -385,7 +393,11 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        events: direct.events,
+        framedEvents: direct.finalState.log.map(({ frame, scope, event }) => ({
+          frame,
+          scope,
+          event: event as MatchEvent,
+        })),
       });
 
       assertStableApplicationsExactlyOnce(applications);
@@ -420,12 +432,16 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        events: direct.events,
+        framedEvents: direct.finalState.log.map(({ frame, scope, event }) => ({
+          frame,
+          scope,
+          event: event as MatchEvent,
+        })),
       });
 
       for (const commit of direct.commits) {
         expect(
-          replayed.frames[commit.eventEnd].state,
+          replayed.steps[commit.eventEnd].state,
           `commit ${commit.label} covering events [${commit.eventStart}, ${commit.eventEnd})`,
         ).toEqual(commit.state);
       }

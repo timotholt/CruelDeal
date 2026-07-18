@@ -1,8 +1,9 @@
 import type { Deck } from '../engine/manifest/types';
-import type { MatchEvent } from '../engine/types/events';
+import type { EventTransition } from '../engine/transactionTimeline';
 import type { Seat } from '../engine/types/ids';
 import type { MatchIntent } from '../engine/types/intents';
 import type { MatchState } from '../engine/types/state';
+import type { FramedEvent } from '../engine/types/timeline';
 
 /** Descriptive match modes. They do not select reducer rules in Phase 1. */
 export type MatchMode = 'CONQUEST' | 'LADDER' | 'DEBUG';
@@ -117,7 +118,8 @@ export interface CommittedTransactionRecord {
   readonly baseRevision: MatchRevision;
   readonly revision: MatchRevision;
   readonly intent: CommittedIntentIdentity;
-  readonly events: readonly MatchEvent[];
+  /** Canonical committed event stream. Frames are match-global and contiguous. */
+  readonly framedEvents: readonly FramedEvent[];
   readonly preStateChecksum?: string;
   readonly postStateChecksum?: string;
 }
@@ -131,22 +133,14 @@ export interface CommittedTransactionRecord {
  * disposal, unmount, and every other terminal presentation path. Replay
  * frames are generated lazily rather than retained with a live session.
  */
-export interface MatchEventFrame {
-  readonly transactionId: string;
-  readonly index: number;
-  readonly event: MatchEvent;
-  readonly before: MatchState;
-  readonly after: MatchState;
-}
-
 /**
  * A materialized canonical timeline is short-lived and transaction-scoped.
- * Consumers must follow MatchEventFrame's release rules and may not retain it
+ * Consumers must follow EventTransition's release rules and may not retain it
  * as match history.
  */
-export interface MatchTransactionFrames {
+export interface CommittedTransactionTimeline {
   readonly transaction: CommittedTransactionRecord;
-  readonly frames: readonly MatchEventFrame[];
+  readonly transitions: readonly EventTransition[];
   readonly finalState: MatchState;
 }
 
@@ -204,7 +198,7 @@ export type InMemoryIntentReceiptMap = Map<IntentReceiptKey, IntentReceipt>;
 
 /** Runtime-owned replay records; transaction events never overlap genesis. */
 export interface MatchRuntimeRecordExport {
-  readonly version: 1;
+  readonly version: 2;
   readonly genesis: MatchState;
   readonly transactions: readonly CommittedTransactionRecord[];
 }

@@ -271,6 +271,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
         <StatLogPanel
           kind={logKind() as 'power' | 'cost'}
           basePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.basePower}
+          effectivePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.power}
           baseCost={(props.target as { kind: 'card'; card: ResolvedCard }).card.baseCost}
           powerLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerLog}
           powerModifiers={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerModifiers}

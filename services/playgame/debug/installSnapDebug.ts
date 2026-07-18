@@ -1,5 +1,5 @@
 import type { Manifest } from '../engine/manifest/types';
-import type { ReplayFrame, ReplayResult } from '../engine/replay';
+import type { ReplayResult, ReplayStep } from '../engine/replay';
 import type { MatchLogEntry, MatchState } from '../engine/types/state';
 import type { MatchRuntime } from '../runtime/matchRuntime';
 import { renderRuntimeReplay } from '../runtime/replayExport';
@@ -7,8 +7,8 @@ import type { MatchRuntimeReplayExport } from '../runtime/contracts';
 import {
   createReplayNameResolver,
   createReplayActorResolver,
-  describeReplayFrame,
-  type ReplayFrameDescription,
+  describeReplayStep,
+  type ReplayStepDescription,
 } from './replayPresentation';
 
 export interface SnapDebugApi {
@@ -16,8 +16,8 @@ export interface SnapDebugApi {
   getLiveLog: () => readonly MatchLogEntry[];
   getReplayBundle: () => MatchRuntimeReplayExport;
   getReplayTimeline: () => ReplayResult;
-  getFrame: (index: number) => ReplayFrame | null;
-  getFrameDescription: (index: number) => ReplayFrameDescription | null;
+  getStep: (cursor: number) => ReplayStep | null;
+  getStepDescription: (cursor: number) => ReplayStepDescription | null;
   copyReplayJson: () => Promise<string>;
 }
 
@@ -39,15 +39,15 @@ export function installSnapDebug(
     getLiveLog: () => structuredClone(runtime.state().log),
     getReplayBundle: exportReplay,
     getReplayTimeline: timeline,
-    getFrame: (index) => timeline().frames[index] ?? null,
-    getFrameDescription: (index) => {
+    getStep: (cursor) => timeline().steps[cursor] ?? null,
+    getStepDescription: (cursor) => {
       const bundle = exportReplay();
       const replay = renderRuntimeReplay(bundle, manifest);
-      const frame = replay.frames[index] ?? null;
-      if (!frame) return null;
-      return describeReplayFrame(
-        frame,
-        createReplayNameResolver(replay.frames, manifest),
+      const step = replay.steps[cursor] ?? null;
+      if (!step) return null;
+      return describeReplayStep(
+        step,
+        createReplayNameResolver(replay.steps, manifest),
         createReplayActorResolver(bundle),
       );
     },

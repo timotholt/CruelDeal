@@ -27,15 +27,29 @@ export type { Rng } from './rng';
 export { createRng } from './rng';
 
 // ---- Reducer / resolvers ---------------------------------------------------
-export { apply } from './apply';
+export { apply, applyFramed } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
-export { buildEventTransactionFrames } from './transactionFrames';
+export {
+  assertFramedEventSequence,
+  cardLifecycleFrames,
+  currentFrame,
+  frameEventSequence,
+  frameSingleEvent,
+  scopeAtFrame,
+  turnAtFrame,
+  turnSpans,
+} from './timeline';
+export {
+  foldFramedEvents,
+  frameAndFoldEvents,
+} from './transactionTimeline';
 export type {
-  BuildEventTransactionFramesOptions,
-  EventTransactionFrames,
-  TransactionFrame,
-} from './transactionFrames';
+  FoldFramedEventsOptions,
+  EventTransition,
+  EventTransactionFold,
+  FrameAndFoldEventsOptions,
+} from './transactionTimeline';
 
 // ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
 export { revealPlayedCard, forceRevealPlayedCard, triggerOnReveal, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
@@ -50,7 +64,7 @@ export {
   exportReplayBundle,
   validateReplayBundle,
   type ReplayBundle,
-  type ReplayFrame,
+  type ReplayStep,
   type ReplayResult,
   type ReplayMatchOptions,
   type ReplayValidationResult,

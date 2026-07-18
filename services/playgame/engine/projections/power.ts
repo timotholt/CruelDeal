@@ -16,6 +16,10 @@ import { ctxForCard, ctxForLocation, ctxForTargetCard, type SourcedOngoing } fro
 import { evalNum } from './numexpr';
 import { ownerMatches } from './select';
 import { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
+import {
+  isLanePowerIncreaseBlocked,
+  isPowerIncreaseBlocked,
+} from './power-restrictions';
 
 export interface PowerModifierEntry {
   readonly sourceId: CardId | LocationId;
@@ -61,6 +65,8 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
   // callers that compare, select, or sum power must use the structural guard.
   if (!isPowerBearingDef(def)) return 0;
 
+  const increaseBlocked = isPowerIncreaseBlocked(state, cardId, manifest);
+
   // Stage 1: base (text-override resolution lands in Step 5/6 via
   // resolveOngoingText; for Step 4 we read the def directly).
   let power = def.basePower;
@@ -71,11 +77,18 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
   }
 
   // Stage 3: one-shot accumulated deltas (Hex Witch OR, Ice Lance OR, etc.)
-  power += card.powerDelta;
+  // A restricted lane suppresses positive Power earned before the card
+  // arrived without erasing it. Moving away therefore restores that stored
+  // delta; positive changes attempted while restricted are rejected before
+  // they can enter powerDelta.
+  power += increaseBlocked ? Math.min(0, card.powerDelta) : card.powerDelta;
 
   // Stage 4: per-card pending buffs (Shuri tag).
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
-    power = Math.floor(power * 2);
+    const doubled = Math.floor(power * 2);
+    if (!increaseBlocked || doubled <= power) {
+      power = doubled;
+    }
   }
 
   return power;
@@ -145,6 +158,8 @@ export function getLanePowerBreakdown(
   });
   const cardSubtotal = cards.reduce((sum, entry) => sum + entry.finalCardPower, 0);
 
+  const increaseBlocked = isLanePowerIncreaseBlocked(state, lane, owner, manifest);
+
   // Collect LANE_POWER_ADD auras applicable to this (lane, owner).
   const laneAdditions: LanePowerAddEntry[] = [];
   for (const entry of collectAllOngoings(state, manifest)) {
@@ -155,9 +170,11 @@ export function getLanePowerBreakdown(
     if (!ctx) continue;
     const sourceId = entry.sourceCardId ?? entry.sourceLocationId;
     if (!sourceId) continue;
+    const delta = evalNum(entry.expr.delta, ctx);
+    if (increaseBlocked && delta > 0) continue;
     laneAdditions.push({
       sourceId,
-      delta: evalNum(entry.expr.delta, ctx),
+      delta,
     });
   }
   const additive = laneAdditions.reduce((sum, entry) => sum + entry.delta, 0);
@@ -172,9 +189,11 @@ export function getLanePowerBreakdown(
     if (!ctx) continue;
     const sourceId = entry.sourceCardId ?? entry.sourceLocationId;
     if (!sourceId) continue;
+    const factor = evalNum(entry.expr.factor, ctx);
+    if (increaseBlocked && factor > 1) continue;
     multipliers.push({
       sourceId,
-      factor: evalNum(entry.expr.factor, ctx),
+      factor,
     });
   }
 
@@ -202,11 +221,6 @@ function laneOngoingMatchesOwner(entry: SourcedOngoing, owner: Owner): boolean {
     return false;
   }
   return ownerMatches(entry.expr.laneScope.ownerFilter, entry.sourceOwner, owner);
-}
-
-function isPowerIncreaseBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(entry => entry.expr.kind === 'BLOCK_POWER_INCREASE');
 }
 
 function getOngoingEvalCtx(

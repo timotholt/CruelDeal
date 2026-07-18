@@ -144,7 +144,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     const baseRevision = runtime.revision();
     const counts = new Map<string, number>();
     runtime.subscribeCommittedTransactions((timeline) => {
-      timeline.frames.forEach((frame) => {
+      timeline.transitions.forEach((frame) => {
         const key = `${frame.transactionId}:${frame.index}`;
         counts.set(key, (counts.get(key) ?? 0) + 1);
       });
@@ -165,8 +165,8 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     });
     const committed = runtime.transactions().at(-1)!;
     expect(committed.intent.seat).toBe('SYSTEM');
-    expect([...counts.values()]).toEqual(committed.events.map(() => 1));
-    expect(runtime.state().log.slice(-committed.events.length).map((entry) => entry.event))
-      .toEqual(committed.events);
+    expect([...counts.values()]).toEqual(committed.framedEvents.map(() => 1));
+    expect(runtime.state().log.slice(-committed.framedEvents.length).map((entry) => entry.event))
+      .toEqual(committed.framedEvents.map(({ event }) => event));
   });
 });

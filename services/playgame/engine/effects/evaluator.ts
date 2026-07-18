@@ -29,9 +29,12 @@ import { type EvalCtx } from '../projections/context';
 import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
 import { findLanes } from '../projections/query';
+import { getCardPower } from '../projections/power';
 import { isPowerBearingCard } from '../projections/power-bearing';
+import { isPowerIncreaseBlocked } from '../projections/power-restrictions';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
+import { resolveCardPowerChange } from './power-change';
 
 export const MAX_REVEAL_RECURSION = 16;
 
@@ -440,16 +443,9 @@ export function evalEffect(
           selfOwner: s.cards[id]?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
-        if (delta === 0) continue;
-        if (delta > 0 && isPowerIncreaseBlocked(s, id, manifest)) continue;
-        const e: MatchEvent = {
-          type: 'CARD_POWER_CHANGED',
-          cardId: id,
-          delta,
-          cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const change = resolveCardPowerChange(s, id, delta, ctx.source, manifest);
+        events.push(...change.events);
+        s = change.state;
       }
       return { events, state: s };
     }
@@ -466,18 +462,16 @@ export function evalEffect(
         const def = card ? manifest.cards[card.defId] : undefined;
         if (!card || !def) continue;
         const value = evalNum(effect.value, { ...liveCtx, state: s, self: id });
+        // A set above the card's currently visible Power is still an
+        // increase even when a larger pre-Courthouse delta is hidden.
+        if (isPowerIncreaseBlocked(s, id, manifest) && value > getCardPower(s, id, manifest)) {
+          continue;
+        }
         const currentBase = def.basePower + card.powerDelta;
         const delta = value - currentBase;
-        if (delta === 0) continue;
-        if (delta > 0 && isPowerIncreaseBlocked(s, id, manifest)) continue;
-        const e: MatchEvent = {
-          type: 'CARD_POWER_CHANGED',
-          cardId: id,
-          delta,
-          cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const change = resolveCardPowerChange(s, id, delta, ctx.source, manifest);
+        events.push(...change.events);
+        s = change.state;
       }
       return { events, state: s };
     }
@@ -1234,11 +1228,6 @@ export function applyHandEntryDebuffs(
 function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
   return ongoingsTargeting(state, manifest, cardId)
     .some(entry => entry.expr.kind === 'BLOCK_MOVE');
-}
-
-function isPowerIncreaseBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(entry => entry.expr.kind === 'BLOCK_POWER_INCREASE');
 }
 
 function effectSourceOwner(state: MatchState, source: EffectRef): Owner | null {

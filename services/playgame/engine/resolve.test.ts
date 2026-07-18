@@ -320,6 +320,13 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   truthy(events.some(e => e.type === 'OR_WINDOW_CLOSE'), 'cascade: OR_WINDOW_CLOSE present');
   truthy(events.some(e => e.type === 'TURN_ENDED'), 'cascade: TURN_ENDED');
   truthy(events.some(e => e.type === 'TURN_STARTED'), 'cascade: TURN_STARTED');
+  const endedIndex = events.findIndex(e => e.type === 'TURN_ENDED');
+  const startedIndex = events.findIndex(e => e.type === 'TURN_STARTED');
+  const rampIndex = events.findIndex(e => e.type === 'MAX_ENERGY_CHANGED');
+  truthy(
+    endedIndex < startedIndex && startedIndex < rampIndex,
+    'turn boundary order: TURN_ENDED < TURN_STARTED < start bookkeeping',
+  );
   const started = events.find(e => e.type === 'TURN_STARTED') as { turn: number };
   eq(started.turn, 4, 'TURN_STARTED: turn = 4');
   eq(after.turn, 4, 'state.turn advanced');

@@ -68,7 +68,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   } = pg;
   const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
-  const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
+  const [replayCursor, setReplayCursor] = createSignal(0);
   const [replayFollowingLive, setReplayFollowingLive] = createSignal(true);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
@@ -85,15 +85,15 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const replay = runtimeReplay();
     return replay ? renderRuntimeReplay(replay, manifest) : null;
   });
-  const replayLastIndex = createMemo(() => Math.max(0, (replayTimeline()?.frames.length ?? 1) - 1));
-  const replayFrame = createMemo(() => {
+  const replayLastCursor = createMemo(() => Math.max(0, (replayTimeline()?.steps.length ?? 1) - 1));
+  const replayStep = createMemo(() => {
     const timeline = replayTimeline();
     if (!timeline) return null;
-    return timeline.frames[replayFrameIndex()] ?? null;
+    return timeline.steps[replayCursor()] ?? null;
   });
-  const inspectingReplayHistory = createMemo(() => replayFrameIndex() < replayLastIndex());
+  const inspectingReplayHistory = createMemo(() => replayCursor() < replayLastCursor());
   const presentedState = createMemo<EngineMatchState>(() => (
-    inspectingReplayHistory() ? replayFrame()?.state ?? engineState : engineState
+    inspectingReplayHistory() ? replayStep()?.state ?? engineState : engineState
   ));
   const boardLocked = createMemo(() => turnFlowRunning() || isResolving() || presentedState().phase === 'RESOLVING');
   const boardInteractive = createMemo(() => !inspectingReplayHistory() && !boardLocked());
@@ -105,12 +105,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
   }));
 
   createEffect(() => {
-    const maxIndex = replayLastIndex();
+    const maxIndex = replayLastCursor();
     if (replayFollowingLive()) {
-      setReplayFrameIndex(maxIndex);
-    } else if (replayFrameIndex() > maxIndex) {
+      setReplayCursor(maxIndex);
+    } else if (replayCursor() > maxIndex) {
       setReplayFollowingLive(true);
-      setReplayFrameIndex(maxIndex);
+      setReplayCursor(maxIndex);
     }
   });
 
@@ -223,7 +223,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     onCleanup(unbindDnd);
 
     // Opening authority is already committed by the runtime. The script is a
-    // presentation-only reader of committed frames plus the UI sidecar.
+    // presentation-only reader of committed transitions plus the UI sidecar.
     const boardWrapEl = boardRef();
     if (!boardWrapEl) return;
 
@@ -249,11 +249,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
     onCleanup(() => script?.cancel());
   });
 
-  const selectReplayFrame = (index: number): void => {
-    const maxIndex = replayLastIndex();
-    const nextIndex = Math.min(Math.max(0, index), maxIndex);
-    setReplayFollowingLive(nextIndex === maxIndex);
-    setReplayFrameIndex(nextIndex);
+  const selectReplayCursor = (cursor: number): void => {
+    const maxIndex = replayLastCursor();
+    const nextCursor = Math.min(Math.max(0, cursor), maxIndex);
+    setReplayFollowingLive(nextCursor === maxIndex);
+    setReplayCursor(nextCursor);
   };
 
   const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
@@ -281,7 +281,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
 
   const copyFrameJson = async (): Promise<void> => {
-    const json = JSON.stringify(replayFrame(), null, 2);
+    const json = JSON.stringify(replayStep(), null, 2);
     await navigator.clipboard.writeText(json);
   };
 
@@ -517,14 +517,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
             <ReplayDrawer
               open={replayOpen()}
               followingLive={replayFollowingLive()}
-              frameIndex={replayFrameIndex()}
-              frameCount={timeline().frames.length}
+              cursor={replayCursor()}
+              stepCount={timeline().steps.length}
               seed={engineState.seed}
-              frames={timeline().frames}
+              steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}
-              selectedFrame={replayFrame()}
-              onFrameChange={selectReplayFrame}
+              selectedStep={replayStep()}
+              onCursorChange={selectReplayCursor}
               onCopyFrameJson={copyFrameJson}
               onCopyGameJson={copyGameJson}
             />

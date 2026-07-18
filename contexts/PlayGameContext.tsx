@@ -12,12 +12,14 @@ import { createStore, type SetStoreFunction } from 'solid-js/store';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { CardId, LaneIdx, Seat } from '@/services/playgame/engine/types/ids';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
-import { buildEventTransactionFrames } from '@/services/playgame/engine/transactionFrames';
+import {
+  foldFramedEvents,
+  type EventTransition,
+} from '@/services/playgame/engine/transactionTimeline';
 import type {
+  CommittedTransactionTimeline,
   IntentAcceptanceResult,
-  MatchEventFrame,
   MatchRuntimeReplayExport,
-  MatchTransactionFrames,
   RuntimeIntent,
 } from '@/services/playgame/runtime/contracts';
 import type { MatchSession } from '@/services/playgame/runtime/matchSession';
@@ -38,14 +40,14 @@ export interface PlayGameContextValue {
   ui: UiState;
   setUi: SetStoreFunction<UiState>;
   isResolving: Accessor<boolean>;
-  openingTimeline: MatchTransactionFrames;
+  openingTimeline: CommittedTransactionTimeline;
   exportRuntimeReplay: () => MatchRuntimeReplayExport;
   actions: {
     stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
     undoPendingCard: (cardId: string) => Promise<boolean>;
-    endTurn: () => Promise<MatchTransactionFrames | null>;
-    presentCommittedFrame: (frame: MatchEventFrame) => void;
+    endTurn: () => Promise<CommittedTransactionTimeline | null>;
+    presentCommittedFrame: (frame: EventTransition) => void;
     finishTurnPresentation: () => void;
   };
 }
@@ -68,15 +70,15 @@ export const PlayGameProvider = (props: {
   };
   const opening = runtime.transactions()[0];
   if (!opening) throw new Error('PlayGameProvider: runtime did not commit opening transaction');
-  const builtOpening = buildEventTransactionFrames({
+  const builtOpening = foldFramedEvents({
     transactionId: opening.transactionId,
     initialState: runtime.genesis(),
-    events: opening.events,
+    framedEvents: opening.framedEvents,
     manifest,
   });
-  const openingTimeline: MatchTransactionFrames = {
+  const openingTimeline: CommittedTransactionTimeline = {
     transaction: opening,
-    frames: builtOpening.frames,
+    transitions: builtOpening.transitions,
     finalState: builtOpening.finalState,
   };
 
@@ -91,8 +93,8 @@ export const PlayGameProvider = (props: {
     showEndGamePrompt: false,
   });
   const [presentationBusy, setPresentationBusy] = createSignal(false);
-  const resolutionWaiters = new Set<(timeline: MatchTransactionFrames) => void>();
-  const projectedFrameStates = new WeakMap<MatchEventFrame, EngineMatchState>();
+  const resolutionWaiters = new Set<(timeline: CommittedTransactionTimeline) => void>();
+  const projectedFrameStates = new WeakMap<EventTransition, EngineMatchState>();
   let activeProjectedTransactionId: string | null = null;
   let intentCounter = 0;
 
@@ -113,8 +115,8 @@ export const PlayGameProvider = (props: {
 
   const syncFromRuntime = (): void => adoptWorkingProjection();
 
-  const captureTimelineProjection = (timeline: MatchTransactionFrames): void => {
-    for (const frame of timeline.frames) {
+  const captureTimelineProjection = (timeline: CommittedTransactionTimeline): void => {
+    for (const frame of timeline.transitions) {
       projectedFrameStates.set(frame, runtime.projectWorkingState(frame.after));
     }
   };
@@ -126,7 +128,7 @@ export const PlayGameProvider = (props: {
     // projections synchronously while the runtime still has the viewer's
     // private plan available, then let the presentation driver walk them.
     captureTimelineProjection(timeline);
-    const isTurnResolution = timeline.frames.some(
+    const isTurnResolution = timeline.transitions.some(
       (frame) => frame.event.type === 'TURN_RESOLUTION_STARTED',
     );
     if (isTurnResolution && resolutionWaiters.size > 0) {
@@ -134,7 +136,7 @@ export const PlayGameProvider = (props: {
       for (const resolveWaiter of [...resolutionWaiters]) resolveWaiter(timeline);
       resolutionWaiters.clear();
     } else {
-      const finalFrame = timeline.frames.at(-1);
+      const finalFrame = timeline.transitions.at(-1);
       adoptWorkingProjection(
         timeline.finalState,
         finalFrame ? projectedFrameStates.get(finalFrame) : undefined,
@@ -176,10 +178,10 @@ export const PlayGameProvider = (props: {
     return lastStaged ? undoPendingCard(lastStaged) : false;
   };
 
-  const endTurn = async (): Promise<MatchTransactionFrames | null> => {
+  const endTurn = async (): Promise<CommittedTransactionTimeline | null> => {
     setPresentationBusy(true);
-    let resolveTimeline!: (timeline: MatchTransactionFrames) => void;
-    const timelinePromise = new Promise<MatchTransactionFrames>((resolve) => {
+    let resolveTimeline!: (timeline: CommittedTransactionTimeline) => void;
+    const timelinePromise = new Promise<CommittedTransactionTimeline>((resolve) => {
       resolveTimeline = resolve;
       resolutionWaiters.add(resolve);
     });

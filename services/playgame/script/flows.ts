@@ -18,7 +18,7 @@ import {
   setBoardVisible,
   toast,
 } from './actions';
-import type { MatchTransactionFrames } from '../runtime/contracts';
+import type { CommittedTransactionTimeline } from '../runtime/contracts';
 
 /**
  * Opening sequence for a new match.
@@ -32,7 +32,7 @@ import type { MatchTransactionFrames } from '../runtime/contracts';
  *   7. pace the committed location reveal
  *   8. pace the committed turn-start draw
  */
-export const openingSequence = (timeline: MatchTransactionFrames): Step =>
+export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
   serial(
     setBoardVisible(false),
     hideLocationTiles(),
@@ -81,7 +81,7 @@ export const openingSequence = (timeline: MatchTransactionFrames): Step =>
  *   4. Pace turn bookkeeping, draws, and location reveals in frame order.
  *   5. Unlock the UI presentation sidecar.
  */
-export const resolveTurnFlow = (timeline: MatchTransactionFrames): Step =>
+export const resolveTurnFlow = (timeline: CommittedTransactionTimeline): Step =>
   serial(
     wait(200),
     wait(250),

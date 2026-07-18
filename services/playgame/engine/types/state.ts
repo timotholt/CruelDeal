@@ -316,7 +316,10 @@ export interface MatchResult {
 // ---- Log entries -----------------------------------------------------------
 
 export interface MatchLogEntry {
-  readonly seq: number;
+  /** Canonical match-local event coordinate. Genesis is frame 0. */
+  readonly frame: import('./timeline').Frame;
+  /** Explicit turn/phase ownership; never reconstructed from wall time. */
+  readonly scope: import('./timeline').TemporalScope;
   readonly event: unknown; // MatchEvent; untyped here to avoid circular import
 }
 

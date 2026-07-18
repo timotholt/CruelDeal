@@ -11,6 +11,7 @@ node_modules
 dist
 dist-asset-foundry
 dist-ssr
+target
 *.local
 
 # Local asset generation workbench state and unpromoted candidates

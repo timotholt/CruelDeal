@@ -18,6 +18,11 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 };
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
 const clone = <T>(value: T): T => structuredClone(value) as T;
+const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event }) => ({
+  frame,
+  scope,
+  event: event as MatchEvent,
+}));
 
 {
   const initialState = createInitialMatchState('replay-seed-1', BOOTSTRAP_MANIFEST);
@@ -29,10 +34,10 @@ const clone = <T>(value: T): T => structuredClone(value) as T;
     seed: result.finalState.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    events: result.events,
+    framedEvents: framedEvents(result.finalState),
   });
 
-  eq(replayed.frames.length, result.events.length + 1, 'replayMatch: frame count = events + initial');
+  eq(replayed.steps.length, result.events.length + 1, 'replayMatch: step count = events + genesis');
   eq(replayed.finalState, result.finalState, 'replayMatch: final state matches original run');
 }
 
@@ -47,7 +52,7 @@ const clone = <T>(value: T): T => structuredClone(value) as T;
     notes: 'test bundle',
   }, initialState);
   eq(bundle.seed, result.finalState.seed, 'exportReplayBundle: seed copied');
-  eq(bundle.events.length, result.finalState.log.length, 'exportReplayBundle: event count matches log');
+  eq(bundle.framedEvents.length, result.finalState.log.length, 'exportReplayBundle: event count matches log');
   eq(bundle.manifestVersion, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifestVersion copied');
   eq(bundle.manifestSnapshot.version, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifest snapshot copied');
 }
@@ -65,7 +70,7 @@ const clone = <T>(value: T): T => structuredClone(value) as T;
     seed: finalState.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    events: [draw],
+    framedEvents: framedEvents(finalState),
   });
   eq(replayed.initialState.cards[cardId]!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
   eq(replayed.finalState, finalState, 'replayMatch: supplied initial state reaches expected final state');
@@ -82,6 +87,16 @@ const clone = <T>(value: T): T => structuredClone(value) as T;
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
   truthy(validation.ok, 'validateReplayBundle: valid bundle passes');
   eq(validation.errors.length, 0, 'validateReplayBundle: valid bundle has no errors');
+
+  const legacyValidation = validateReplayBundle(
+    { ...bundle, version: 1 } as unknown as typeof bundle,
+    BOOTSTRAP_MANIFEST,
+  );
+  truthy(!legacyValidation.ok, 'validateReplayBundle: legacy raw-event schema is rejected');
+  truthy(
+    legacyValidation.errors.some((e) => e.includes('Unsupported replay bundle version: 1')),
+    'validateReplayBundle: legacy schema reports its unsupported version',
+  );
 }
 
 {
@@ -113,7 +128,7 @@ const clone = <T>(value: T): T => structuredClone(value) as T;
       seed: result.finalState.seed,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: undefined as never,
-      events: result.events,
+      framedEvents: framedEvents(result.finalState),
     });
   } catch {
     threw = true;

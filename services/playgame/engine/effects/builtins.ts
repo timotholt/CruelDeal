@@ -24,6 +24,7 @@ import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard, isPowerBearingDef } from '../projections/power-bearing';
+import { resolveCardPowerChange } from './power-change';
 
 type BuiltinArgs = Record<string, unknown>;
 type BuiltinResult = { events: MatchEvent[]; state: MatchState };
@@ -83,8 +84,7 @@ function powerToDestroyer(
   const sourceId = ctx.source.sourceId as CardId;
   const srcCard = state.cards[sourceId];
   if (!srcCard || !delta || !isPowerBearingCard(state, sourceId, manifest)) return noop(state);
-  const e: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: sourceId, delta, cause: ctx.source };
-  return { events: [e], state: apply(state, e, manifest) };
+  return resolveCardPowerChange(state, sourceId, delta, ctx.source, manifest);
 }
 
 /**
@@ -336,11 +336,9 @@ function overclockChip(
   const events: MatchEvent[] = [];
   let s = state;
 
-  const powerEvt: MatchEvent = {
-    type: 'CARD_POWER_CHANGED', cardId: targetId, delta: powerDelta, cause: ctx.source,
-  };
-  events.push(powerEvt);
-  s = apply(s, powerEvt, manifest);
+  const powerChange = resolveCardPowerChange(s, targetId, powerDelta, ctx.source, manifest);
+  events.push(...powerChange.events);
+  s = powerChange.state;
 
   // Schedule destruction at end of next turn
   const destroyEffect: import('../types/ability').EffectExpr = {
@@ -615,14 +613,9 @@ function securityDetail(
     if (addEvent.type !== 'CARD_ADDED_TO_LANE') continue;
     const delta = sourcePower - guardBasePower;
     if (delta === 0) continue;
-    const powerEvent: MatchEvent = {
-      type: 'CARD_POWER_CHANGED',
-      cardId: addEvent.cardId,
-      delta,
-      cause: ctx.source,
-    };
-    events.push(powerEvent);
-    s = apply(s, powerEvent, manifest);
+    const powerChange = resolveCardPowerChange(s, addEvent.cardId, delta, ctx.source, manifest);
+    events.push(...powerChange.events);
+    s = powerChange.state;
   }
   return { events, state: s };
 }
@@ -639,11 +632,20 @@ function recklessRecruiter(
   for (const card of state.deck[owner]) {
     const giveCost = ctx.rng.fork(`recruit:${card.id}`).int(0, 1) === 0;
     if (!giveCost && !isPowerBearingCard(state, card.id, manifest)) continue;
-    const event: MatchEvent = giveCost
-      ? { type: 'CARD_COST_CHANGED', cardId: card.id, delta: -1, cause: ctx.source }
-      : { type: 'CARD_POWER_CHANGED', cardId: card.id, delta: 2, cause: ctx.source };
-    events.push(event);
-    s = apply(s, event, manifest);
+    if (giveCost) {
+      const event: MatchEvent = {
+        type: 'CARD_COST_CHANGED',
+        cardId: card.id,
+        delta: -1,
+        cause: ctx.source,
+      };
+      events.push(event);
+      s = apply(s, event, manifest);
+    } else {
+      const powerChange = resolveCardPowerChange(s, card.id, 2, ctx.source, manifest);
+      events.push(...powerChange.events);
+      s = powerChange.state;
+    }
   }
   return { events, state: s };
 }
@@ -673,8 +675,7 @@ function barracadeCheck(
   if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
 
   const delta = (args.powerDelta as number) ?? 4;
-  const event: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
-  return { events: [event], state: apply(state, event, manifest) };
+  return resolveCardPowerChange(state, self, delta, ctx.source, manifest);
 }
 
 function leonReturn(
@@ -699,9 +700,9 @@ function leonReturn(
   if (s.cards[self]?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
   const delta = (args.powerDelta as number) ?? 2;
-  const powerEvent: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
-  events.push(powerEvent);
-  s = apply(s, powerEvent, manifest);
+  const powerChange = resolveCardPowerChange(s, self, delta, ctx.source, manifest);
+  events.push(...powerChange.events);
+  s = powerChange.state;
   return { events, state: s };
 }
 
@@ -718,8 +719,7 @@ function riotSquad(
   if (!isPowerBearingCard(state, self, manifest)) return noop(state);
 
   const delta = (args.powerDelta as number) ?? 2;
-  const event: MatchEvent = { type: 'CARD_POWER_CHANGED', cardId: self, delta, cause: ctx.source };
-  return { events: [event], state: apply(state, event, manifest) };
+  return resolveCardPowerChange(state, self, delta, ctx.source, manifest);
 }
 
 function corporateClimber(
@@ -747,14 +747,9 @@ function corporateClimber(
     s = apply(s, destroyEvent, manifest);
   }
   if (gainedPower > 0 && s.cards[self]?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
-    const powerEvent: MatchEvent = {
-      type: 'CARD_POWER_CHANGED',
-      cardId: self,
-      delta: gainedPower,
-      cause: ctx.source,
-    };
-    events.push(powerEvent);
-    s = apply(s, powerEvent, manifest);
+    const powerChange = resolveCardPowerChange(s, self, gainedPower, ctx.source, manifest);
+    events.push(...powerChange.events);
+    s = powerChange.state;
   }
   return { events, state: s };
 }

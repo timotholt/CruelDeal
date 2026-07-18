@@ -1,16 +1,24 @@
 import type { MatchEvent } from './types/events';
 import type { Manifest } from './manifest/types';
 import type { MatchState } from './types/state';
-import { buildEventTransactionFrames } from './transactionFrames';
+import { currentFrame } from './timeline';
+import {
+  GENESIS_FRAME,
+  type Frame,
+  type FramedEvent,
+  type TemporalScope,
+} from './types/timeline';
+import { foldFramedEvents } from './transactionTimeline';
+import { assertProtocolPayload } from '../protocol';
 
 export interface ReplayBundle {
-  readonly version: 1;
+  readonly version: 2;
   readonly manifestVersion: number;
   readonly protocolVersion: number;
   readonly seed: string;
   readonly manifestSnapshot: Manifest;
   readonly initialState?: MatchState;
-  readonly events: readonly MatchEvent[];
+  readonly framedEvents: readonly FramedEvent[];
   readonly metadata?: {
     readonly createdAt?: string;
     readonly localSeat?: 'P0' | 'P1';
@@ -18,10 +26,17 @@ export interface ReplayBundle {
   };
 }
 
-export interface ReplayFrame {
-  readonly index: number;
+/**
+ * Materialized replay view. `cursor` addresses playback storage; `frame` is
+ * the one canonical gameplay coordinate shared with live execution.
+ */
+export interface ReplayStep {
+  readonly cursor: number;
   /** Present on runtime-record replays so debug UI can resolve the actor. */
   readonly transactionId?: string;
+  readonly framedEvent: FramedEvent | null;
+  readonly frame: Frame;
+  readonly scope: TemporalScope | null;
   readonly event: MatchEvent | null;
   readonly state: MatchState;
 }
@@ -29,14 +44,14 @@ export interface ReplayFrame {
 export interface ReplayResult {
   readonly initialState: MatchState;
   readonly finalState: MatchState;
-  readonly frames: readonly ReplayFrame[];
+  readonly steps: readonly ReplayStep[];
 }
 
 export interface ReplayMatchOptions {
   readonly seed: string;
   readonly manifest: Manifest;
   readonly initialState: MatchState;
-  readonly events: readonly MatchEvent[];
+  readonly framedEvents: readonly FramedEvent[];
 }
 
 export interface ReplayValidationResult {
@@ -52,17 +67,30 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
     throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.seed} replay=${opts.seed}`);
   }
   assertReplayInitialState(opts.initialState, opts.manifest);
+  for (const framedEvent of opts.framedEvents) {
+    assertProtocolPayload('FRAMED_EVENT', framedEvent);
+  }
   const initialState = opts.initialState;
-  const transaction = buildEventTransactionFrames({
+  const transaction = foldFramedEvents({
     transactionId: 'replay',
     initialState,
-    events: opts.events,
+    framedEvents: opts.framedEvents,
     manifest: opts.manifest,
   });
-  const frames: ReplayFrame[] = [
-    { index: 0, event: null, state: initialState },
-    ...transaction.frames.map((frame) => ({
-      index: frame.index + 1,
+  const steps: ReplayStep[] = [
+    {
+      cursor: 0,
+      framedEvent: null,
+      frame: GENESIS_FRAME,
+      scope: null,
+      event: null,
+      state: initialState,
+    },
+    ...transaction.transitions.map((frame) => ({
+      cursor: frame.index + 1,
+      framedEvent: frame.framedEvent,
+      frame: frame.frame,
+      scope: frame.scope,
       event: frame.event,
       state: frame.after,
     })),
@@ -71,7 +99,7 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
   return {
     initialState,
     finalState: transaction.finalState,
-    frames,
+    steps,
   };
 }
 
@@ -87,14 +115,22 @@ export function exportReplayBundle(
   if (initialState.seed !== state.seed) {
     throw new Error(`exportReplayBundle: seed mismatch initialState=${initialState.seed} state=${state.seed}`);
   }
+  const framedEvents = state.log.map((entry) => ({
+    frame: entry.frame,
+    scope: entry.scope,
+    event: entry.event as MatchEvent,
+  }));
+  for (const framedEvent of framedEvents) {
+    assertProtocolPayload('FRAMED_EVENT', framedEvent);
+  }
   return {
-    version: 1,
+    version: 2,
     manifestVersion: manifest.version,
     protocolVersion: manifest.protocolVersion,
     seed: state.seed,
     manifestSnapshot: manifest,
     initialState,
-    events: state.log.map((entry) => entry.event as MatchEvent),
+    framedEvents,
     metadata: extras,
   };
 }
@@ -105,13 +141,14 @@ export function replayBundle(bundle: ReplayBundle): ReplayResult {
     seed: bundle.seed,
     manifest: bundle.manifestSnapshot,
     initialState: bundle.initialState!,
-    events: bundle.events,
+    framedEvents: bundle.framedEvents,
   });
 }
 
 export function assertReplayBundle(bundle: ReplayBundle): void {
-  if (bundle.version !== 1) {
-    throw new Error(`Unsupported replay bundle version: ${bundle.version}`);
+  const serializedVersion = (bundle as { readonly version: number }).version;
+  if (serializedVersion !== 2) {
+    throw new Error(`Unsupported replay bundle version: ${serializedVersion}`);
   }
   if (!bundle.manifestSnapshot) {
     throw new Error('Replay bundle is missing manifestSnapshot');
@@ -132,13 +169,18 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
   if (bundle.initialState.seed !== bundle.seed) {
     throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.seed}`);
   }
-  if (!Array.isArray(bundle.events)) {
-    throw new Error('Replay bundle events must be an array');
+  if (!Array.isArray(bundle.framedEvents)) {
+    throw new Error('Replay bundle framedEvents must be an array');
   }
   assertReplayInitialState(bundle.initialState, bundle.manifestSnapshot);
 }
 
 function assertReplayInitialState(initialState: MatchState, manifest: Manifest): void {
+  if (currentFrame(initialState) !== GENESIS_FRAME || initialState.log.length !== 0) {
+    throw new Error(
+      `Replay initialState must be frame 0; received frame ${currentFrame(initialState)}`,
+    );
+  }
   for (const card of Object.values(initialState.cards)) {
     const def = manifest.cards[card.defId];
     if (!def) {
@@ -165,8 +207,9 @@ export function validateReplayBundle(
 ): ReplayValidationResult {
   const errors: string[] = [];
 
-  if (bundle.version !== 1) {
-    errors.push(`Unsupported replay bundle version: ${bundle.version}`);
+  const serializedVersion = (bundle as { readonly version: number }).version;
+  if (serializedVersion !== 2) {
+    errors.push(`Unsupported replay bundle version: ${serializedVersion}`);
   }
   if (bundle.manifestVersion !== manifest.version) {
     errors.push(
@@ -178,8 +221,8 @@ export function validateReplayBundle(
       `Protocol version mismatch: bundle=${bundle.protocolVersion} manifest=${manifest.protocolVersion}`,
     );
   }
-  if (!Array.isArray(bundle.events)) {
-    errors.push('Replay bundle events must be an array');
+  if (!Array.isArray(bundle.framedEvents)) {
+    errors.push('Replay bundle framedEvents must be an array');
   }
   if (!bundle.initialState) {
     errors.push('Replay bundle is missing initialState');
@@ -193,7 +236,7 @@ export function validateReplayBundle(
       seed: bundle.seed,
       manifest: bundle.manifestSnapshot,
       initialState: bundle.initialState!,
-      events: bundle.events,
+      framedEvents: bundle.framedEvents,
     });
   }
 

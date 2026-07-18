@@ -1,5 +1,5 @@
 import type { MatchState as EngineMatchState } from '../engine/types/state';
-import type { MatchEventFrame } from '../runtime/contracts';
+import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
 import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
@@ -401,7 +401,7 @@ const reserveVisibleHandDestinations = (
 
 export async function animateEvent(
   ctx: PlayScriptCtx,
-  frame: MatchEventFrame,
+  frame: EventTransition,
   dispatchPresentedFrame: () => void = () => undefined,
   hooks: {
     readonly onTransferAnimation?: (transfer: CardTransfer) => void;

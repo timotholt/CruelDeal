@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
-import type { ReplayFrame } from '../engine/replay';
+import type { ReplayStep } from '../engine/replay';
 import type { CardId, LocationId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
+import { GENESIS_FRAME, asFrame } from '../engine/types/timeline';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
   createReplayNameResolver,
   describeReplayCause,
-  describeReplayFrame,
+  describeReplayStep,
 } from './replayPresentation';
 
 const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST, {
@@ -20,9 +21,24 @@ const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST,
 const cardId = state.deck.P0[0].id;
 const location = state.lanes[0].location!;
 
-const frame = (event: MatchEvent): ReplayFrame => ({ index: 1, transactionId: 'p0-tx', event, state });
-const frames: ReplayFrame[] = [{ index: 0, event: null, state }];
-const names = createReplayNameResolver(frames, BOOTSTRAP_MANIFEST);
+const step = (event: MatchEvent): ReplayStep => ({
+  cursor: 1,
+  transactionId: 'p0-tx',
+  framedEvent: { frame: asFrame(1), scope: { turn: 1, phase: 'ACTION' }, event },
+  frame: asFrame(1),
+  scope: { turn: 1, phase: 'ACTION' },
+  event,
+  state,
+});
+const steps: ReplayStep[] = [{
+  cursor: 0,
+  framedEvent: null,
+  frame: GENESIS_FRAME,
+  scope: null,
+  event: null,
+  state,
+}];
+const names = createReplayNameResolver(steps, BOOTSTRAP_MANIFEST);
 const actors = {
   actorLabel: () => 'Player 1 (YOU)',
   playerLabel: (owner: string | undefined) => owner === 'P0' ? 'Player 1' : owner === 'P1' ? 'Player 2' : 'Game',
@@ -46,8 +62,8 @@ describe('replay debug presentation', () => {
       ] as const,
     };
     const historicalNames = createReplayNameResolver([
-      ...frames,
-      { index: 1, event: null, state: stateAfterRemoval },
+      ...steps,
+      { ...steps[0], state: stateAfterRemoval },
     ], BOOTSTRAP_MANIFEST);
     expect(historicalNames.locationLabel(stateAfterRemoval, location.id)).toBe(
       `${location.id} (${BOOTSTRAP_MANIFEST.locations[location.defId].name})`,
@@ -60,8 +76,8 @@ describe('replay debug presentation', () => {
       ) as typeof state.cards,
     };
     const historicalCardNames = createReplayNameResolver([
-      ...frames,
-      { index: 1, event: null, state: stateAfterCardRemoval },
+      ...steps,
+      { ...steps[0], state: stateAfterCardRemoval },
     ], BOOTSTRAP_MANIFEST);
     expect(historicalCardNames.cardLabel(stateAfterCardRemoval, cardId))
       .toBe(`${cardId} (Bone Market, P0)`);
@@ -76,47 +92,47 @@ describe('replay debug presentation', () => {
     };
     const snapshot = structuredClone(event);
 
-    expect(describeReplayFrame(frame(event), names, actors).summary)
+    expect(describeReplayStep(step(event), names, actors).summary)
       .toBe('Bone Market gained 2 power - caused by Bone Market (P0).');
-    expect(annotateReplayEventJson(frame(event), names)).toContain(`// Bone Market (P0)`);
+    expect(annotateReplayEventJson(step(event), names)).toContain(`// Bone Market (P0)`);
     expect(event).toEqual(snapshot);
   });
 
   it('decodes card, location, spell-cleanup, and generic system causes', () => {
-    expect(describeReplayCause(frame({
+    expect(describeReplayCause(step({
       type: 'CARD_POWER_CHANGED',
       cardId,
       delta: 1,
       cause: { sourceId: cardId, effectKind: 'ONGOING' },
     }), names)).toBe('caused by Bone Market (P0)');
 
-    expect(describeReplayCause(frame({
+    expect(describeReplayCause(step({
       type: 'LOCATION_DESTROYED',
       lane: 0,
       locationId: location.id,
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
 
-    expect(describeReplayCause(frame({
+    expect(describeReplayCause(step({
       type: 'CARD_BANISHED',
       cardId,
       cause: { sourceId: cardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
     }), names)).toBe('caused by Bone Market (P0) resolving under the game rules');
 
-    expect(describeReplayCause(frame({
+    expect(describeReplayCause(step({
       type: 'CARD_BANISHED',
       cardId,
       cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', systemReason: 'ROUND_CLEANUP' },
     }), names)).toBe('caused by game rules: Round cleanup');
 
-    const locationJson = annotateReplayEventJson(frame({
+    const locationJson = annotateReplayEventJson(step({
       type: 'CARD_COST_CHANGED',
       cardId,
       delta: -1,
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names);
     expect(locationJson).toContain(`// ${BOOTSTRAP_MANIFEST.locations[location.defId].name}, left lane`);
-    expect(describeReplayFrame(frame({
+    expect(describeReplayStep(step({
       type: 'CARD_COST_CHANGED',
       cardId,
       delta: -1,
@@ -126,9 +142,9 @@ describe('replay debug presentation', () => {
     );
   });
 
-  it('maps runtime frames to the accepted transaction actor and bootstrap display name', () => {
+  it('maps replay steps to the accepted transaction actor and bootstrap display name', () => {
     const replay = {
-      version: 1 as const,
+      version: 2 as const,
       genesis: state,
       bootstrap: {
         viewerSeat: 'P0',
@@ -146,12 +162,12 @@ describe('replay debug presentation', () => {
     const resolver = createReplayActorResolver(replay);
 
     const event: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: 2 };
-    expect(resolver.actorLabel(frame(event))).toBe('Player 1 (YOU)');
-    expect(resolver.actorLabel({ ...frame(event), transactionId: 'p1-tx' }))
+    expect(resolver.actorLabel(step(event))).toBe('Player 1 (YOU)');
+    expect(resolver.actorLabel({ ...step(event), transactionId: 'p1-tx' }))
       .toBe('Player 2 (OPPONENT)');
-    expect(resolver.actorLabel({ ...frame(event), transactionId: 'system-tx' }))
+    expect(resolver.actorLabel({ ...step(event), transactionId: 'system-tx' }))
       .toBe('Game');
-    expect(resolver.actorLabel(frames[0])).toBe('Game');
+    expect(resolver.actorLabel(steps[0])).toBe('Game');
   });
 
   it('explains common replay events without exposing engine field names', () => {
@@ -163,17 +179,17 @@ describe('replay debug presentation', () => {
       owner: 'P0',
       cost: 1,
     };
-    expect(describeReplayFrame(frame(stagedEvent), names, actors).summary)
+    expect(describeReplayStep(step(stagedEvent), names, actors).summary)
       .toBe('Player 1 played Bone Market to the right lane, slot FL.');
-    expect(annotateReplayEventJson(frame(stagedEvent), names))
+    expect(annotateReplayEventJson(step(stagedEvent), names))
       .toContain('"lane": 2,  // right lane');
 
-    expect(describeReplayFrame(frame({
+    expect(describeReplayStep(step({
       type: 'CARD_FLIPPED',
       cardId,
     }), names, actors).summary).toBe('Player 1 — Bone Market — Revealed.');
 
-    expect(describeReplayFrame(frame({
+    expect(describeReplayStep(step({
       type: 'MATCH_ENDED',
       result: {
         winner: 'P0',

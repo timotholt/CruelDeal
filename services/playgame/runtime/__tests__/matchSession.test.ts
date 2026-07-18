@@ -59,8 +59,11 @@ describe('MatchSession', () => {
 
     expect(rendered.initialState).toBe(exported.genesis);
     expect(rendered.finalState).toEqual(session.runtime.state());
-    expect(rendered.frames).toHaveLength(
-      1 + exported.transactions.reduce((count, transaction) => count + transaction.events.length, 0),
+    expect(rendered.steps).toHaveLength(
+      1 + exported.transactions.reduce(
+        (count, transaction) => count + transaction.framedEvents.length,
+        0,
+      ),
     );
     expect(exported).toEqual(snapshot);
   });

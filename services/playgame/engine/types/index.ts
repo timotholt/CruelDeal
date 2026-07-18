@@ -8,3 +8,4 @@ export * from './ability';
 export * from './state';
 export * from './events';
 export * from './intents';
+export * from './timeline';

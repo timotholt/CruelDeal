@@ -13,6 +13,8 @@ interface StatLogPanelProps {
   kind: 'power' | 'cost';
   /** Card's base power — used to compute final power per row (power mode only). */
   basePower?: number;
+  /** Card's current projected power after live restrictions. */
+  effectivePower?: number;
   /** Card's base cost — used to compute final cost per row (cost mode only). */
   baseCost?: number;
   /** Permanent power change log (power mode). */
@@ -71,6 +73,12 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
   };
+
+  const loggedPowerTotal = () => (
+    (props.basePower ?? 0)
+    + (props.powerLog?.at(-1)?.runningDelta ?? 0)
+    + (props.powerModifiers?.reduce((sum, item) => sum + item.delta, 0) ?? 0)
+  );
 
   return (
     <div
@@ -155,6 +163,16 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
                 />
               )}
             </For>
+          </Show>
+          <Show when={
+            props.effectivePower !== undefined
+            && props.effectivePower !== loggedPowerTotal()
+          }>
+            <PowerRow
+              label="Current restrictions"
+              delta={(props.effectivePower ?? 0) - loggedPowerTotal()}
+              total={props.effectivePower ?? 0}
+            />
           </Show>
           <Show when={(props.powerLog?.length ?? 0) === 0 && (props.powerModifiers?.length ?? 0) === 0}>
             <span style={{ color: '#475569', 'font-size': '0.65rem', 'text-align': 'center', padding: '8px 0' }}>

@@ -1,26 +1,26 @@
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
-import type { ReplayFrame } from '@/services/playgame/engine/replay';
+import type { ReplayStep } from '@/services/playgame/engine/replay';
 import type { MatchRuntimeReplayExport } from '@/services/playgame/runtime/contracts';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
   createReplayNameResolver,
-  describeReplayFrame,
+  describeReplayStep,
 } from '@/services/playgame/debug/replayPresentation';
 
 interface ReplayDrawerProps {
   open: boolean;
   followingLive: boolean;
-  frameIndex: number;
-  frameCount: number;
+  cursor: number;
+  stepCount: number;
   seed: string;
-  frames: readonly ReplayFrame[];
+  steps: readonly ReplayStep[];
   manifest: Manifest;
   replay: MatchRuntimeReplayExport;
-  selectedFrame: ReplayFrame | null;
-  onFrameChange: (index: number) => void;
+  selectedStep: ReplayStep | null;
+  onCursorChange: (cursor: number) => void;
   onCopyFrameJson: () => Promise<void>;
   onCopyGameJson: () => Promise<void>;
 }
@@ -29,11 +29,11 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   let drawerEl: HTMLDivElement | undefined;
   let stopDrag: (() => void) | null = null;
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
-  const names = createMemo(() => createReplayNameResolver(props.frames, props.manifest));
+  const names = createMemo(() => createReplayNameResolver(props.steps, props.manifest));
   const actors = createMemo(() => createReplayActorResolver(props.replay));
-  const selectedDescription = createMemo(() => describeReplayFrame(props.selectedFrame, names(), actors()));
-  const eventJson = createMemo(() => annotateReplayEventJson(props.selectedFrame, names()));
-  const humanPhase = createMemo(() => props.selectedFrame?.state.phase
+  const selectedDescription = createMemo(() => describeReplayStep(props.selectedStep, names(), actors()));
+  const eventJson = createMemo(() => annotateReplayEventJson(props.selectedStep, names()));
+  const humanPhase = createMemo(() => props.selectedStep?.state.phase
     .toLowerCase()
     .replaceAll('_', ' ') ?? '');
 
@@ -102,7 +102,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                 <div class="replay-panel__eyebrow">Dev Replay</div>
                 <div class="replay-panel__title">
                   {props.followingLive ? 'Live · ' : ''}
-                  Frame {props.frameIndex}/{Math.max(props.frameCount - 1, 0)}
+                  Frame {props.selectedStep?.frame ?? 0} · Replay {props.cursor}/{Math.max(props.stepCount - 1, 0)}
                 </div>
                 <div class="replay-panel__actor">{selectedDescription().actor}</div>
               </div>
@@ -110,7 +110,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
 
             <div class="replay-panel__meta">
               <span>Seed: {props.seed}</span>
-              <span>Frames: {props.frameCount}</span>
+              <span>Steps: {props.stepCount}</span>
             </div>
 
             <div class="replay-panel__controls">
@@ -120,18 +120,18 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   type="button"
                   title="Go to beginning"
                   aria-label="Go to beginning"
-                  onClick={() => props.onFrameChange(0)}
-                  disabled={props.frameIndex <= 0}
+                  onClick={() => props.onCursorChange(0)}
+                  disabled={props.cursor <= 0}
                 >
                   {'|<'}
                 </button>
                 <button
                   class="replay-transport"
                   type="button"
-                  title="Step back 10 frames"
-                  aria-label="Step back 10 frames"
-                  onClick={() => props.onFrameChange(Math.max(0, props.frameIndex - 10))}
-                  disabled={props.frameIndex <= 0}
+                  title="Step back 10 replay steps"
+                  aria-label="Step back 10 replay steps"
+                  onClick={() => props.onCursorChange(Math.max(0, props.cursor - 10))}
+                  disabled={props.cursor <= 0}
                 >
                   {'<<'}
                 </button>
@@ -140,8 +140,8 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   type="button"
                   title="Step back 1 frame"
                   aria-label="Step back 1 frame"
-                  onClick={() => props.onFrameChange(Math.max(0, props.frameIndex - 1))}
-                  disabled={props.frameIndex <= 0}
+                  onClick={() => props.onCursorChange(Math.max(0, props.cursor - 1))}
+                  disabled={props.cursor <= 0}
                 >
                   {'<'}
                 </button>
@@ -150,18 +150,18 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   type="button"
                   title="Go forward 1 frame"
                   aria-label="Go forward 1 frame"
-                  onClick={() => props.onFrameChange(Math.min(props.frameCount - 1, props.frameIndex + 1))}
-                  disabled={props.frameIndex >= props.frameCount - 1}
+                  onClick={() => props.onCursorChange(Math.min(props.stepCount - 1, props.cursor + 1))}
+                  disabled={props.cursor >= props.stepCount - 1}
                 >
                   {'>'}
                 </button>
                 <button
                   class="replay-transport"
                   type="button"
-                  title="Go forward 10 frames"
-                  aria-label="Go forward 10 frames"
-                  onClick={() => props.onFrameChange(Math.min(props.frameCount - 1, props.frameIndex + 10))}
-                  disabled={props.frameIndex >= props.frameCount - 1}
+                  title="Go forward 10 replay steps"
+                  aria-label="Go forward 10 replay steps"
+                  onClick={() => props.onCursorChange(Math.min(props.stepCount - 1, props.cursor + 10))}
+                  disabled={props.cursor >= props.stepCount - 1}
                 >
                   {'>>'}
                 </button>
@@ -170,7 +170,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   type="button"
                   title="Go to end and follow live"
                   aria-label="Go to end and follow live"
-                  onClick={() => props.onFrameChange(Math.max(props.frameCount - 1, 0))}
+                  onClick={() => props.onCursorChange(Math.max(props.stepCount - 1, 0))}
                   disabled={props.followingLive}
                 >
                   {'>|'}
@@ -181,10 +181,10 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                 class="replay-slider"
                 type="range"
                 min="0"
-                max={String(Math.max(props.frameCount - 1, 0))}
-                value={String(props.frameIndex)}
+                max={String(Math.max(props.stepCount - 1, 0))}
+                value={String(props.cursor)}
                 aria-label="Replay frame"
-                onInput={(e) => props.onFrameChange(e.currentTarget.valueAsNumber)}
+                onInput={(e) => props.onCursorChange(e.currentTarget.valueAsNumber)}
               />
             </div>
 
@@ -192,18 +192,18 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
               <div class="replay-panel__event">{selectedDescription().summary}</div>
             </div>
 
-            <Show when={props.selectedFrame}>
-              {(frame) => (
+            <Show when={props.selectedStep}>
+              {(step) => (
                 <div class="replay-panel__stats">
-                  <div>Turn {frame().state.turn}</div>
+                  <div>Turn {step().state.turn}</div>
                   <div>Phase: {humanPhase()}</div>
-                  <div>Priority: {actors().playerLabel(frame().state.priority)}</div>
-                  <div>Player 1 Energy = {frame().state.energy.P0}, Player 2 Energy = {frame().state.energy.P1}</div>
+                  <div>Priority: {actors().playerLabel(step().state.priority)}</div>
+                  <div>Player 1 Energy = {step().state.energy.P0}, Player 2 Energy = {step().state.energy.P1}</div>
                 </div>
               )}
             </Show>
 
-            <Show when={props.selectedFrame?.event}>
+            <Show when={props.selectedStep?.event}>
               <pre class="replay-panel__json">{eventJson()}</pre>
             </Show>
 

@@ -1,5 +1,6 @@
 import type { Deck, Manifest, MatchRuleset } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
+import { validateMatchBootstrapWire } from '../protocol';
 import type {
   MatchBootstrap,
   MatchBootstrapValidationIssue,
@@ -10,12 +11,6 @@ import type {
 } from './contracts';
 
 const SEATS = ['P0', 'P1'] as const satisfies readonly Seat[];
-const MODES = new Set(['CONQUEST', 'LADDER', 'DEBUG']);
-const CONTROLLERS = new Set(['LOCAL_HUMAN', 'LOCAL_AI', 'REMOTE_PLAYER']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function rightRotate(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
@@ -111,107 +106,6 @@ function deepFreeze<T>(value: T): T {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
   for (const nested of Object.values(value)) deepFreeze(nested);
   return Object.freeze(value);
-}
-
-function addShapeIssue(
-  issues: MatchBootstrapValidationIssue[],
-  path: string,
-  message: string,
-  seat?: Seat,
-  entryIndex?: number,
-): void {
-  issues.push({ code: 'INVALID_BOOTSTRAP_SHAPE', path, message, seat, entryIndex });
-}
-
-function validString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function validateParticipantShape(
-  value: unknown,
-  seat: Seat,
-  issues: MatchBootstrapValidationIssue[],
-): value is MatchParticipantBootstrap {
-  const path = `participants.${seat}`;
-  if (!isRecord(value)) {
-    addShapeIssue(issues, path, 'participant must be an object', seat);
-    return false;
-  }
-  let valid = true;
-  if (!validString(value.participantId)) {
-    addShapeIssue(issues, `${path}.participantId`, 'participantId must be a non-empty string', seat);
-    valid = false;
-  }
-  if (!validString(value.displayName)) {
-    addShapeIssue(issues, `${path}.displayName`, 'displayName must be a non-empty string', seat);
-    valid = false;
-  }
-  if (typeof value.controller !== 'string' || !CONTROLLERS.has(value.controller)) {
-    addShapeIssue(issues, `${path}.controller`, 'controller is not recognized', seat);
-    valid = false;
-  }
-  if (value.avatarId !== undefined && typeof value.avatarId !== 'string') {
-    addShapeIssue(issues, `${path}.avatarId`, 'avatarId must be a string when supplied', seat);
-    valid = false;
-  }
-  return valid;
-}
-
-function validateDeckShape(
-  value: unknown,
-  seat: Seat,
-  issues: MatchBootstrapValidationIssue[],
-): value is MatchDeckBootstrap {
-  const path = `decks.${seat}`;
-  if (!isRecord(value)) {
-    addShapeIssue(issues, path, 'deck snapshot must be an object', seat);
-    return false;
-  }
-  let valid = true;
-  if (!validString(value.deckId)) {
-    addShapeIssue(issues, `${path}.deckId`, 'deckId must be a non-empty string', seat);
-    valid = false;
-  }
-  if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0) {
-    addShapeIssue(issues, `${path}.revision`, 'revision must be a non-negative integer', seat);
-    valid = false;
-  }
-  if (!validString(value.name)) {
-    addShapeIssue(issues, `${path}.name`, 'name must be a non-empty string', seat);
-    valid = false;
-  }
-  if (!Array.isArray(value.entries)) {
-    addShapeIssue(issues, `${path}.entries`, 'entries must be an array', seat);
-    valid = false;
-  } else {
-    value.entries.forEach((entry, entryIndex) => {
-      if (!isRecord(entry) || !validString(entry.defId)) {
-        addShapeIssue(
-          issues,
-          `${path}.entries.${entryIndex}.defId`,
-          'defId must be a non-empty string',
-          seat,
-          entryIndex,
-        );
-        valid = false;
-      }
-      if (isRecord(entry) && entry.variantId !== undefined && !validString(entry.variantId)) {
-        addShapeIssue(
-          issues,
-          `${path}.entries.${entryIndex}.variantId`,
-          'variantId must be a non-empty string when supplied',
-          seat,
-          entryIndex,
-        );
-        valid = false;
-      }
-    });
-  }
-  if (!validString(value.contentHash)) {
-    addShapeIssue(issues, `${path}.contentHash`, 'contentHash must be a non-empty string', seat);
-    valid = false;
-  }
-  return valid;
 }
 
 function validateDeckContents(
@@ -355,66 +249,45 @@ export function validateMatchBootstrap(
   input: unknown,
   manifest: Manifest,
 ): MatchBootstrapValidationResult {
-  const issues: MatchBootstrapValidationIssue[] = [];
-  if (!isRecord(input)) {
-    addShapeIssue(issues, '', 'bootstrap must be an object');
-    return { ok: false, issues: deepFreeze(issues) };
+  const wire = validateMatchBootstrapWire(input);
+  if (!wire.ok) {
+    return {
+      ok: false,
+      issues: deepFreeze(wire.issues.map((issue) => ({
+        code: 'INVALID_BOOTSTRAP_SHAPE' as const,
+        path: issue.path,
+        message: `${issue.keyword}: ${issue.message}`,
+      }))),
+    };
   }
 
-  if (!validString(input.matchId)) addShapeIssue(issues, 'matchId', 'matchId must be a non-empty string');
-  if (typeof input.mode !== 'string' || !MODES.has(input.mode)) addShapeIssue(issues, 'mode', 'mode is not recognized');
-  if (!validString(input.seed)) addShapeIssue(issues, 'seed', 'seed must be a non-empty string');
-  if (!validString(input.rulesetId)) addShapeIssue(issues, 'rulesetId', 'rulesetId must be a non-empty string');
-  if (!Number.isSafeInteger(input.manifestVersion)) addShapeIssue(issues, 'manifestVersion', 'manifestVersion must be an integer');
-  if (input.viewerSeat !== 'P0' && input.viewerSeat !== 'P1') addShapeIssue(issues, 'viewerSeat', 'viewerSeat is not recognized');
+  const bootstrap = wire.value;
+  const issues: MatchBootstrapValidationIssue[] = [];
 
-  const participants = isRecord(input.participants) ? input.participants : null;
-  if (!participants) addShapeIssue(issues, 'participants', 'participants must be an object');
-  const decks = isRecord(input.decks) ? input.decks : null;
-  if (!decks) addShapeIssue(issues, 'decks', 'decks must be an object');
-
-  const participantValid = Object.fromEntries(SEATS.map((seat) => [
-    seat,
-    participants ? validateParticipantShape(participants[seat], seat, issues) : false,
-  ])) as Record<Seat, boolean>;
-  const deckValid = Object.fromEntries(SEATS.map((seat) => [
-    seat,
-    decks ? validateDeckShape(decks[seat], seat, issues) : false,
-  ])) as Record<Seat, boolean>;
-
-  if (Number.isSafeInteger(input.manifestVersion) && input.manifestVersion !== manifest.version) {
+  if (bootstrap.manifestVersion !== manifest.version) {
     issues.push({
       code: 'MANIFEST_VERSION_MISMATCH',
       path: 'manifestVersion',
-      message: `manifest version ${input.manifestVersion as number} does not match ${manifest.version}`,
+      message: `manifest version ${bootstrap.manifestVersion} does not match ${manifest.version}`,
     });
   }
-  const ruleset = validString(input.rulesetId) ? manifest.rulesets[input.rulesetId] : undefined;
-  if (validString(input.rulesetId) && !ruleset) {
+  const ruleset = manifest.rulesets[bootstrap.rulesetId];
+  if (!ruleset) {
     issues.push({
       code: 'UNKNOWN_RULESET',
       path: 'rulesetId',
-      message: `unknown ruleset "${input.rulesetId}"`,
+      message: `unknown ruleset "${bootstrap.rulesetId}"`,
     });
   }
   for (const seat of SEATS) {
-    if (deckValid[seat] && decks) {
-      validateDeckContents(decks[seat] as unknown as MatchDeckBootstrap, seat, manifest, ruleset, issues);
-    }
+    validateDeckContents(bootstrap.decks[seat], seat, manifest, ruleset, issues);
   }
 
-  const rootShapeValid = validString(input.matchId)
-    && typeof input.mode === 'string' && MODES.has(input.mode)
-    && validString(input.seed)
-    && validString(input.rulesetId)
-    && Number.isSafeInteger(input.manifestVersion)
-    && (input.viewerSeat === 'P0' || input.viewerSeat === 'P1')
-    && SEATS.every((seat) => participantValid[seat] && deckValid[seat]);
-  if (issues.length > 0 || !rootShapeValid) {
+  if (issues.length > 0) {
     return { ok: false, issues: deepFreeze(issues) };
   }
 
-  const copied = cloneBootstrap(input as unknown as MatchBootstrap);
+  const copied = cloneBootstrap(bootstrap);
   return {
     ok: true,
     value: deepFreeze(copied) as ValidatedMatchBootstrap,

@@ -3,7 +3,8 @@ import { revealPendingCinematic } from '@/services/vfx/animations/reveal-cinemat
 import type { Manifest } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
 import type { MatchState as EngineMatchState } from '../engine/types/state';
-import type { MatchEventFrame, MatchTransactionFrames } from '../runtime/contracts';
+import type { EventTransition } from '../engine/transactionTimeline';
+import type { CommittedTransactionTimeline } from '../runtime/contracts';
 import type { ZoneAnchorKey } from '../presentation/cardTransfers';
 import { animateEvent } from '../presentation/eventAnimator';
 import {
@@ -31,7 +32,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   sfx?: (name: string) => void;
   cancelled?: boolean;
   onCancel?: () => void;
-  presentCommittedFrame: (frame: MatchEventFrame) => void;
+  presentCommittedFrame: (frame: EventTransition) => void;
   finishTurnPresentation: () => void;
 }
 
@@ -95,7 +96,7 @@ export const fadeInLocationTile = (lane: number, ms = 400): Step => async (ctx) 
 
 const paceLocationReveal = async (
   c: PlayScriptCtx,
-  frame: MatchEventFrame,
+  frame: EventTransition,
   presentFrame: () => void,
 ): Promise<void> => {
   if (frame.event.type !== 'LOCATION_REVEALED') return;
@@ -127,7 +128,7 @@ const paceLocationReveal = async (
 
 const paceFrame = async (
   c: PlayScriptCtx,
-  frame: MatchEventFrame,
+  frame: EventTransition,
   presentFrame: () => void,
 ): Promise<void> => {
   if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
@@ -153,8 +154,10 @@ const paceFrame = async (
 
 const paceTimeline = async (
   c: PlayScriptCtx,
-  timeline: MatchTransactionFrames,
-  eventIndexes = planCommittedEventPacing(timeline.transaction.events).orderedEventIndexes,
+  timeline: CommittedTransactionTimeline,
+  eventIndexes = planCommittedEventPacing(
+    timeline.transaction.framedEvents.map(({ event }) => event),
+  ).orderedEventIndexes,
 ): Promise<void> => {
   try {
     const beats = planCommittedResolutionWalk(timeline, c.localSeat, eventIndexes);
@@ -198,16 +201,16 @@ const paceTimeline = async (
   }
 };
 
-const openingRevealIndex = (timeline: MatchTransactionFrames): number =>
-  timeline.transaction.events.findIndex((event) => event.type === 'LOCATION_REVEALED');
+const openingRevealIndex = (timeline: CommittedTransactionTimeline): number =>
+  timeline.transaction.framedEvents.findIndex(({ event }) => event.type === 'LOCATION_REVEALED');
 
-const openingDealEndIndex = (c: PlayScriptCtx, timeline: MatchTransactionFrames): number => {
+const openingDealEndIndex = (c: PlayScriptCtx, timeline: CommittedTransactionTimeline): number => {
   const revealIndex = openingRevealIndex(timeline);
   if (revealIndex >= 0) return revealIndex;
-  return Math.min(timeline.frames.length, c.manifest.constants.startingHandSize * 2);
+  return Math.min(timeline.transitions.length, c.manifest.constants.startingHandSize * 2);
 };
 
-export const paceCommittedOpeningDeal = (timeline: MatchTransactionFrames): Step => async (ctx) => {
+export const paceCommittedOpeningDeal = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   const end = openingDealEndIndex(c, timeline);
   await paceTimeline(
@@ -218,14 +221,14 @@ export const paceCommittedOpeningDeal = (timeline: MatchTransactionFrames): Step
 };
 
 export const paceCommittedOpeningLocationReveal = (
-  timeline: MatchTransactionFrames,
+  timeline: CommittedTransactionTimeline,
 ): Step => async (ctx) => {
   const revealIndex = openingRevealIndex(timeline);
   await paceTimeline(ctx as PlayScriptCtx, timeline, revealIndex < 0 ? [] : [revealIndex]);
 };
 
 export const paceCommittedOpeningTurnStart = (
-  timeline: MatchTransactionFrames,
+  timeline: CommittedTransactionTimeline,
 ): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   const revealIndex = openingRevealIndex(timeline);
@@ -233,11 +236,11 @@ export const paceCommittedOpeningTurnStart = (
   await paceTimeline(
     c,
     timeline,
-    Array.from({ length: timeline.frames.length - start }, (_, index) => start + index),
+    Array.from({ length: timeline.transitions.length - start }, (_, index) => start + index),
   );
 };
 
-export const paceCommittedTurn = (timeline: MatchTransactionFrames): Step => async (ctx) => {
+export const paceCommittedTurn = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   try {
     await paceTimeline(c, timeline);

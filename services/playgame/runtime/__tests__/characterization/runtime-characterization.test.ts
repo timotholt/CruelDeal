@@ -5,7 +5,7 @@ import type { MatchEvent } from '../../../engine/types/events';
 import type { Owner, Seat } from '../../../engine/types/ids';
 import {
   assertRuntimeParity,
-  buildEventTransactionFrames,
+  frameAndFoldEvents,
   buildRuntimeFixture,
   testCardDef,
   testLocationDef,
@@ -44,7 +44,7 @@ function fixture(
 function characterizeTurn(runtimeFixture: RuntimeFixture, manifest: Manifest) {
   const rng = createRng(`${runtimeFixture.seed}:turn-resolution`);
   const authoritative = resolveTurn(runtimeFixture.state, manifest, rng);
-  const folded = buildEventTransactionFrames({
+  const folded = frameAndFoldEvents({
     transactionId: `${runtimeFixture.seed}:turn:${runtimeFixture.state.turn}`,
     initialState: runtimeFixture.state,
     events: authoritative.events,
@@ -54,7 +54,7 @@ function characterizeTurn(runtimeFixture: RuntimeFixture, manifest: Manifest) {
     { finalState: authoritative.state, events: authoritative.events },
     folded,
   );
-  return { ...authoritative, frames: folded.frames, foldedState: folded.finalState };
+  return { ...authoritative, transitions: folded.transitions, foldedState: folded.finalState };
 }
 
 const plain = testCardDef('plain', { power: 2, cost: 1 });
@@ -90,7 +90,7 @@ describe('Phase 0 runtime characterization', () => {
       owner: runtimeFixture.localSeat,
     }, intentRng, manifest);
     expect(events[0]).toEqual({ type: 'TURN_RESOLUTION_STARTED', turn: 2 });
-    const resolutionStart = buildEventTransactionFrames({
+    const resolutionStart = frameAndFoldEvents({
       transactionId: 'end-turn-empty:resolution-start',
       initialState: runtimeFixture.state,
       events: [events[0]],
@@ -101,7 +101,7 @@ describe('Phase 0 runtime characterization', () => {
       manifest,
       createRng(runtimeFixture.seed).fork(`turn:${runtimeFixture.state.turn}`),
     );
-    const folded = buildEventTransactionFrames({
+    const folded = frameAndFoldEvents({
       transactionId: 'end-turn-empty:turn:2',
       initialState: runtimeFixture.state,
       events,
@@ -110,12 +110,12 @@ describe('Phase 0 runtime characterization', () => {
 
     expect(events.slice(1)).toEqual(authoritative.events);
     assertRuntimeParity({ finalState: authoritative.state, events }, folded);
-    expect(folded.frames[0].before.phase).toBe('AWAITING_INTENT');
-    expect(folded.frames[0].after.phase).toBe('RESOLVING');
+    expect(folded.transitions[0].before.phase).toBe('AWAITING_INTENT');
+    expect(folded.transitions[0].after.phase).toBe('RESOLVING');
     expect(events.some((event) => event.type === 'CARD_FLIPPED')).toBe(false);
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
-    expect(folded.frames).toHaveLength(events.length);
-    folded.frames.forEach((frame) => {
+    expect(folded.transitions).toHaveLength(events.length);
+    folded.transitions.forEach((frame) => {
       expect(frame.before.log).toHaveLength(frame.index);
       expect(frame.after.log).toHaveLength(frame.index + 1);
       expect(frame.event).toEqual(events[frame.index]);
@@ -147,7 +147,7 @@ describe('Phase 0 runtime characterization', () => {
       P0: [{ id: 'cascade-card', defId: 'reveal-cascade', revealed: false }],
       P1: [],
     };
-    const { events, frames } = characterizeTurn(
+    const { events, transitions } = characterizeTurn(
       fixture('one-reveal-cascade', { lanes, stagingOrder: ['cascade-card'] }),
       testManifest([revealCascade]),
     );
@@ -162,7 +162,7 @@ describe('Phase 0 runtime characterization', () => {
       'CARD_POWER_CHANGED',
       'OR_WINDOW_CLOSE',
     ]);
-    expect(frames[close].after.cards['cascade-card'].powerDelta).toBe(6);
+    expect(transitions[close].after.cards['cascade-card'].powerDelta).toBe(6);
   });
 
   it('reveals multiple staged cards in priority-owner order', () => {
@@ -296,7 +296,7 @@ describe('Phase 0 runtime characterization', () => {
       manifest,
     );
     const lockedResult = state.result;
-    const afterDiagnostic = buildEventTransactionFrames({
+    const afterDiagnostic = frameAndFoldEvents({
       transactionId: 'match-end-lock:post-result',
       initialState: state,
       events: [{ type: 'INTENT_REJECTED', intentId: 'late', reason: 'match ended' }],

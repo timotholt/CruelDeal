@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOOTSTRAP_MANIFEST, buildEventTransactionFrames } from '../../engine';
+import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine';
 import type { Deck } from '../../engine/manifest/types';
 import type { CardId, Seat } from '../../engine/types/ids';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
@@ -86,18 +86,23 @@ describe('createMatchRuntime', () => {
   it('commits the symmetric opening as a system transaction over canonical genesis', () => {
     const runtime = runtimeFixture();
     const [opening] = runtime.transactions();
+    const openingEvents = opening.framedEvents.map(({ event }) => event);
 
     expect(runtime.revision()).toBe(1);
     expect(opening.intent.seat).toBe('SYSTEM');
+    expect(opening.framedEvents.map(({ frame }) => frame))
+      .toEqual(openingEvents.map((_, index) => index + 1));
+    expect(opening.framedEvents.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
+    expect(runtime.frame()).toBe(opening.framedEvents.at(-1)?.frame);
     const openingHandSize = BOOTSTRAP_MANIFEST.constants.startingHandSize
       + BOOTSTRAP_MANIFEST.constants.turnStartDraw;
-    expect(opening.events.filter((event) => event.type === 'CARD_DRAWN'))
+    expect(openingEvents.filter((event) => event.type === 'CARD_DRAWN'))
       .toHaveLength(openingHandSize * 2);
-    expect(opening.events.some((event) => event.type === 'LOCATION_REVEALED')).toBe(true);
-    const revealIndex = opening.events.findIndex((event) => event.type === 'LOCATION_REVEALED');
-    expect(opening.events.slice(0, revealIndex).filter((event) => event.type === 'CARD_DRAWN'))
+    expect(openingEvents.some((event) => event.type === 'LOCATION_REVEALED')).toBe(true);
+    const revealIndex = openingEvents.findIndex((event) => event.type === 'LOCATION_REVEALED');
+    expect(openingEvents.slice(0, revealIndex).filter((event) => event.type === 'CARD_DRAWN'))
       .toHaveLength(BOOTSTRAP_MANIFEST.constants.startingHandSize * 2);
-    expect(opening.events.slice(revealIndex + 1).filter((event) => event.type === 'CARD_DRAWN'))
+    expect(openingEvents.slice(revealIndex + 1).filter((event) => event.type === 'CARD_DRAWN'))
       .toHaveLength(BOOTSTRAP_MANIFEST.constants.turnStartDraw * 2);
     expect(runtime.genesis().hand.P0).toHaveLength(0);
     expect(runtime.genesis().hand.P1).toHaveLength(0);
@@ -116,14 +121,16 @@ describe('createMatchRuntime', () => {
       expect(runtime.state()).toBe(timeline.finalState);
       expect(runtime.revision()).toBe(timeline.transaction.revision);
       expect(runtime.transactions().at(-1)).toBe(timeline.transaction);
-      expect(timeline.frames).toHaveLength(timeline.transaction.events.length);
-      expect(timeline.frames.at(-1)?.after).toBe(timeline.finalState);
-      expect(timeline.frames[0].before.lanes[1]).toBe(timeline.frames[0].after.lanes[1]);
+      expect(timeline.transitions).toHaveLength(timeline.transaction.framedEvents.length);
+      expect(timeline.transitions.at(-1)?.after).toBe(timeline.finalState);
+      expect(timeline.transitions[0].before.lanes[1]).toBe(timeline.transitions[0].after.lanes[1]);
     });
 
     const result = await runtime.submitIntent(stageEnvelope(runtime, 'atomic-publication'));
 
     expect(result).toMatchObject({ status: 'accepted', revision: baseRevision + 1, commit: 'PRIVATE' });
+    const committedFrameBeforeLock = runtime.frame();
+    expect(currentFrame(runtime.state())).toBe(committedFrameBeforeLock);
     expect(publications).toBe(0);
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
@@ -133,6 +140,7 @@ describe('createMatchRuntime', () => {
       intent: { type: 'END_TURN' },
     });
     expect(publications).toBe(1);
+    expect(runtime.frame()).toBeGreaterThan(committedFrameBeforeLock);
   });
 
   it('returns stale, authority, match, rules, and terminal receipts without log events', async () => {
@@ -290,18 +298,34 @@ describe('createMatchRuntime', () => {
     expect(runtime.transactions()).toHaveLength(1);
   });
 
+  it('rejects non-contract envelope fields before rules resolution', async () => {
+    const runtime = runtimeFixture();
+    const envelope = {
+      ...stageEnvelope(runtime, 'schema-invalid-envelope'),
+      clientAuthority: 'P0',
+    } as unknown as IntentEnvelope;
+
+    await expect(runtime.submitIntent(envelope)).resolves.toMatchObject({
+      status: 'illegal',
+      code: 'RULES_INVALID',
+      message: expect.stringContaining('additional properties'),
+    });
+    expect(runtime.transactions()).toHaveLength(1);
+  });
+
   it('exports bootstrap, genesis, and a non-overlapping transaction log that folds to current state', async () => {
     const runtime = runtimeFixture('phase1-runtime-replay-export');
     await runtime.submitIntent(stageEnvelope(runtime, 'replay-stage'));
     const exported = runtime.exportReplay();
+    expect(exported.version).toBe(2);
     let replayed = exported.genesis;
 
     exported.transactions.forEach((transaction) => {
       expect(transaction.baseRevision + 1).toBe(transaction.revision);
-      replayed = buildEventTransactionFrames({
+      replayed = foldFramedEvents({
         transactionId: transaction.transactionId,
         initialState: replayed,
-        events: transaction.events,
+        framedEvents: transaction.framedEvents,
         manifest: BOOTSTRAP_MANIFEST,
       }).finalState;
     });
@@ -319,10 +343,10 @@ describe('createMatchRuntime', () => {
     const resolvedExport = runtime.exportReplay();
     let resolvedReplay = resolvedExport.genesis;
     for (const transaction of resolvedExport.transactions) {
-      resolvedReplay = buildEventTransactionFrames({
+      resolvedReplay = foldFramedEvents({
         transactionId: transaction.transactionId,
         initialState: resolvedReplay,
-        events: transaction.events,
+        framedEvents: transaction.framedEvents,
         manifest: BOOTSTRAP_MANIFEST,
       }).finalState;
     }
@@ -333,7 +357,7 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture();
     let resolutionPhaseObserved = false;
     runtime.subscribeCommittedTransactions((timeline) => {
-      const first = timeline.frames.find((frame) => frame.event.type === 'TURN_RESOLUTION_STARTED');
+      const first = timeline.transitions.find((frame) => frame.event.type === 'TURN_RESOLUTION_STARTED');
       if (!first) return;
       resolutionPhaseObserved = true;
       expect(first.before.phase).toBe('AWAITING_INTENT');

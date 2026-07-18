@@ -5,11 +5,17 @@ import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { Deck, Manifest } from '../engine/manifest/types';
 import { createRng } from '../engine/rng';
 import { resolve } from '../engine/resolve';
-import { buildEventTransactionFrames } from '../engine/transactionFrames';
+import { currentFrame } from '../engine/timeline';
+import { frameAndFoldEvents } from '../engine/transactionTimeline';
 import type { MatchEvent } from '../engine/types/events';
 import type { Seat } from '../engine/types/ids';
 import type { MatchIntent } from '../engine/types/intents';
 import type { MatchState } from '../engine/types/state';
+import { nextFrame, type Frame, type TimelinePhase } from '../engine/types/timeline';
+import {
+  assertProtocolPayload,
+  validateIntentEnvelopeWire,
+} from '../protocol';
 import type {
   AcceptedIntentResult,
   CommittedIntentIdentity,
@@ -22,17 +28,19 @@ import type {
   IntentReceiptKey,
   MatchRevision,
   MatchRuntimeRecordExport,
-  MatchTransactionFrames,
+  CommittedTransactionTimeline,
   ParticipantController,
   RuntimeIntent,
 } from './contracts';
 import { buildOpeningTransaction } from './opening';
 import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
 
-export type MatchTransactionSubscriber = (timeline: MatchTransactionFrames) => void;
+export type MatchTransactionSubscriber = (timeline: CommittedTransactionTimeline) => void;
 
 export interface MatchRuntime {
   state(): MatchState;
+  /** Latest committed gameplay frame. Private planning never advances it. */
+  frame(): Frame;
   /** Read-only private-plan projection over a committed presentation base. */
   projectWorkingState(baseState?: MatchState): MatchState;
   genesis(): MatchState;
@@ -62,12 +70,13 @@ interface QueuedIntent {
 interface CommitCandidate {
   readonly identity: CommittedIntentIdentity;
   readonly events: readonly MatchEvent[];
+  readonly initialTimelinePhase?: TimelinePhase;
   readonly receiptKey?: IntentReceiptKey;
 }
 
 interface CommittedCandidate {
   readonly result?: AcceptedIntentResult;
-  readonly timeline: MatchTransactionFrames;
+  readonly timeline: CommittedTransactionTimeline;
 }
 
 interface PlannedStage {
@@ -101,11 +110,7 @@ function copyEnvelope(envelope: IntentEnvelope): IntentEnvelope {
     ? Object.freeze({ ...envelope.intent }) as RuntimeIntent
     : envelope.intent;
   return Object.freeze({
-    matchId: envelope.matchId,
-    seat: envelope.seat,
-    intentId: envelope.intentId,
-    expectedRevision: envelope.expectedRevision,
-    ...(envelope.intentSeq === undefined ? {} : { intentSeq: envelope.intentSeq }),
+    ...envelope,
     intent,
   });
 }
@@ -148,18 +153,22 @@ function hasMechanicalChange(before: MatchState, after: MatchState): boolean {
 }
 
 function assertValidTimeline(
-  timeline: MatchTransactionFrames,
+  timeline: CommittedTransactionTimeline,
   initialState: MatchState,
   events: readonly MatchEvent[],
 ): void {
-  if (events.length === 0 || timeline.frames.length !== events.length) {
+  if (events.length === 0 || timeline.transitions.length !== events.length) {
     throw new Error('validated commit requires a non-empty contiguous event sequence');
   }
 
   let expectedBefore = initialState;
-  timeline.frames.forEach((frame, index) => {
+  timeline.transitions.forEach((frame, index) => {
     if (frame.index !== index || frame.before !== expectedBefore || frame.event !== events[index]) {
       throw new Error(`transaction frame sequence is not contiguous at index ${index}`);
+    }
+    const expectedFrame = nextFrame(currentFrame(frame.before));
+    if (frame.frame !== expectedFrame || frame.framedEvent.frame !== frame.frame) {
+      throw new Error(`canonical gameplay frame is not contiguous at transaction index ${index}`);
     }
     if (frame.after.seed !== initialState.seed) {
       throw new Error(`authoritative event changed the match seed at index ${index}`);
@@ -168,7 +177,11 @@ function assertValidTimeline(
       throw new Error(`authoritative event did not append exactly one log entry at index ${index}`);
     }
     const appended = frame.after.log[frame.after.log.length - 1];
-    if (appended?.seq !== frame.before.log.length || appended.event !== frame.event) {
+    if (
+      appended?.frame !== frame.frame
+      || appended.scope !== frame.scope
+      || appended.event !== frame.event
+    ) {
       throw new Error(`authoritative log is not contiguous at index ${index}`);
     }
     if (!MUTATION_OPTIONAL_EVENTS.has(frame.event.type) && !hasMechanicalChange(frame.before, frame.after)) {
@@ -243,7 +256,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       if (state.cards[planned.intent.cardId]?.zone !== 'HAND') continue;
       for (const event of planned.events) state = apply(state, event, manifest);
     }
-    return state;
+    // Private plans are hypothetical branches, not committed chronology.
+    // Preserve their mechanical projection while withholding candidate log
+    // entries (and therefore candidate frame numbers) from consumers.
+    return state.log === baseState.log ? state : { ...state, log: baseState.log };
   };
 
   const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
@@ -257,23 +273,25 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     const revision = baseRevision + 1;
     const transactionId = `${config.matchId}:tx:${revision}`;
     const events = Object.freeze([...candidate.events]);
+    const built = frameAndFoldEvents({
+      transactionId,
+      initialState: authoritativeState,
+      events,
+      manifest,
+      initialPhase: candidate.initialTimelinePhase,
+    });
     const transaction: CommittedTransactionRecord = Object.freeze({
       transactionId,
       matchId: config.matchId,
       baseRevision,
       revision,
       intent: Object.freeze({ ...candidate.identity }),
-      events,
+      framedEvents: built.framedEvents,
     });
-    const built = buildEventTransactionFrames({
-      transactionId,
-      initialState: authoritativeState,
-      events,
-      manifest,
-    });
-    const timeline: MatchTransactionFrames = Object.freeze({
+    assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
+    const timeline: CommittedTransactionTimeline = Object.freeze({
       transaction,
-      frames: built.frames,
+      transitions: built.transitions,
       finalState: built.finalState,
     });
     assertValidTimeline(timeline, authoritativeState, events);
@@ -299,7 +317,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     return { result, timeline };
   };
 
-  const publish = (timeline: MatchTransactionFrames): void => {
+  const publish = (timeline: CommittedTransactionTimeline): void => {
     for (const subscriber of [...subscribers]) {
       try {
         subscriber(timeline);
@@ -317,6 +335,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       intentId: opening.transactionId,
     },
     events: opening.events,
+    initialTimelinePhase: 'SETUP',
   });
   publish(opened.timeline);
 
@@ -463,6 +482,15 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       : undefined;
     if (suppliedOwner !== undefined && suppliedOwner !== envelope.seat) {
       return storeRejection(key, illegalResult(envelope, currentRevision, 'SEAT_AUTHORITY'));
+    }
+    const wire = validateIntentEnvelopeWire(envelope);
+    if (!wire.ok) {
+      return storeRejection(key, illegalResult(
+        envelope,
+        currentRevision,
+        'RULES_INVALID',
+        wire.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; '),
+      ));
     }
     if (envelope.expectedRevision !== currentRevision) {
       return storeRejection(key, {
@@ -645,6 +673,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
   return Object.freeze({
     state: visibleState,
+    frame: () => currentFrame(authoritativeState),
     projectWorkingState,
     genesis: () => genesisState,
     revision: () => currentRevision,
@@ -655,7 +684,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       return () => subscribers.delete(subscriber);
     },
     exportReplay: () => Object.freeze({
-      version: 1 as const,
+      version: 2 as const,
       genesis: genesisState,
       transactions: committedTransactions,
     }),

@@ -541,7 +541,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     { type: 'ENERGY_CHANGED', owner: 'P0', delta: +2, reason: 'TURN_START' },
   );
   eq(s1.log.length, 3, 'log length = 3');
-  eq(s1.log.map(e => e.seq), [0, 1, 2], 'log seq is monotonic 0..n');
+  eq(s1.log.map(e => e.frame), [1, 2, 3], 'canonical frame is monotonic from genesis');
 }
 
 // -- Purity: applying an event does not mutate the input state

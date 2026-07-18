@@ -31,14 +31,36 @@ import type {
 } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
+import { currentFrame, frameSingleEvent } from './timeline';
+import { nextFrame, type FramedEvent } from './types/timeline';
 
-export function apply(state: MatchState, event: MatchEvent, _manifest: Manifest): MatchState {
-  const next = applyBody(state, event, _manifest);
+export function apply(
+  state: MatchState,
+  event: MatchEvent,
+  _manifest: Manifest,
+): MatchState {
+  return applyFramed(state, frameSingleEvent(state, event), _manifest);
+}
+
+/**
+ * Canonical reducer entry point. A supplied frame must be the immediate
+ * successor of the state's current frame; gaps, duplicates, and rewinds fail.
+ */
+export function applyFramed(
+  state: MatchState,
+  framed: FramedEvent,
+  _manifest: Manifest,
+): MatchState {
+  const expected = nextFrame(currentFrame(state));
+  if (framed.frame !== expected) {
+    throw new Error(`applyFramed: expected frame ${expected}, received ${framed.frame}`);
+  }
+  const next = applyBody(state, framed.event, _manifest);
   // Every event is appended to the log, regardless of whether the body
   // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
   // INTENT_REJECTED) only contribute to the log.
-  const next2 = applyTrackedVars(next, state, event);
-  return appendLog(next2, event);
+  const next2 = applyTrackedVars(next, state, framed.event);
+  return appendLog(next2, framed);
 }
 
 function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): MatchState {
@@ -652,8 +674,12 @@ function pendingEffectEq(a: PendingEffect, b: PendingEffect): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function appendLog(state: MatchState, event: MatchEvent): MatchState {
-  const entry: MatchLogEntry = { seq: state.log.length, event };
+function appendLog(state: MatchState, framed: FramedEvent): MatchState {
+  const entry: MatchLogEntry = {
+    frame: framed.frame,
+    scope: framed.scope,
+    event: framed.event,
+  };
   return { ...state, log: [...state.log, entry] };
 }
 

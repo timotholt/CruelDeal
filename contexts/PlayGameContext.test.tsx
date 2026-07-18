@@ -44,7 +44,7 @@ function firstPlayableCard(pg: PlayGameContextValue): CardId {
 }
 
 function presentOpeningImmediately(pg: PlayGameContextValue): void {
-  for (const frame of pg.openingTimeline.frames) {
+  for (const frame of pg.openingTimeline.transitions) {
     pg.actions.presentCommittedFrame(frame);
   }
 }
@@ -120,7 +120,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(pg.engineState.stagingOrder, 'staged projection survives the system commit')
       .toContain(turnOneCard);
     expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(turnOneCard);
-    for (const frame of timeline?.frames ?? []) pg.actions.presentCommittedFrame(frame);
+    for (const frame of timeline?.transitions ?? []) pg.actions.presentCommittedFrame(frame);
     expect(pg.engineState.turn).toBe(2);
     expect(pg.engineState.stagingOrder).toHaveLength(0);
     expect(observed.length, 'end-turn reactive notification').toBeGreaterThan(beforeEndTurnObservations);
@@ -155,7 +155,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(pg.engineState.hand[pg.localSeat].map((card) => card.id)).not.toContain(cardId);
     expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(cardId);
 
-    const committedFinalFrame = pg.openingTimeline.frames.at(-1);
+    const committedFinalFrame = pg.openingTimeline.transitions.at(-1);
     if (!committedFinalFrame) throw new Error('opening timeline has no final frame');
     pg.actions.presentCommittedFrame(committedFinalFrame);
 
@@ -197,11 +197,11 @@ describe('PlayGameProvider runtime synchronization', () => {
     const timeline = await pg.actions.endTurn();
     if (!timeline) throw new Error('END_TURN did not commit a resolution timeline');
 
-    const resolutionStartIndex = timeline.frames.findIndex(
+    const resolutionStartIndex = timeline.transitions.findIndex(
       (frame) => frame.event.type === 'TURN_RESOLUTION_STARTED',
     );
     expect(resolutionStartIndex).toBeGreaterThanOrEqual(0);
-    const resolutionStart = timeline.frames[resolutionStartIndex]!;
+    const resolutionStart = timeline.transitions[resolutionStartIndex]!;
 
     const observationsBeforeLock = facingObservations.length;
     pg.actions.presentCommittedFrame(resolutionStart);
@@ -216,14 +216,19 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(stagedIds.every((id) => pg.engineState.cards[id]?.revealed === false))
       .toBe(true);
 
-    const revealFrames = timeline.frames
+    const revealFrames = timeline.transitions
       .slice(resolutionStartIndex + 1)
       .filter((frame) => frame.event.type === 'CARD_FLIPPED');
-    const expectedRevealOrder = revealFrames.map((frame) => frame.event.cardId);
+    const expectedRevealOrder = revealFrames.map((frame) => {
+      if (frame.event.type !== 'CARD_FLIPPED') {
+        throw new Error('reveal frame lost its CARD_FLIPPED event');
+      }
+      return frame.event.cardId;
+    });
     expect(expectedRevealOrder.length).toBeGreaterThan(0);
 
     const presentedRevealOrder: CardId[] = [];
-    for (const frame of timeline.frames.slice(resolutionStartIndex + 1)) {
+    for (const frame of timeline.transitions.slice(resolutionStartIndex + 1)) {
       pg.actions.presentCommittedFrame(frame);
       if (frame.event.type !== 'CARD_FLIPPED') continue;
       presentedRevealOrder.push(frame.event.cardId);

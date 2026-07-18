@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { apply } from '../engine/apply';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
-import type { MatchEventFrame } from '../runtime/contracts';
+import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import type { LaneIdx } from '../engine/types/ids';
 import { animateEvent, fallbackRectForZone } from './eventAnimator';
@@ -55,9 +55,17 @@ describe('event animator transfer origins', () => {
         cause: { sourceId: 'skyrail-instance' as never, effectKind: 'LOCATION' as const },
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
-      const frame: MatchEventFrame = {
+      const framedEvent = {
+        frame: after.log[after.log.length - 1].frame,
+        scope: after.log[after.log.length - 1].scope,
+        event,
+      };
+      const frame: EventTransition = {
         transactionId: 'moved-transfer:tx',
         index: 0,
+        framedEvent,
+        frame: framedEvent.frame,
+        scope: framedEvent.scope,
         event,
         before,
         after,

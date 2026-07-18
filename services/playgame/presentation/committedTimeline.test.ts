@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
-import { buildEventTransactionFrames } from '../engine/transactionFrames';
+import { frameAndFoldEvents } from '../engine/transactionTimeline';
 import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneIdx } from '../engine/types/ids';
 import { buildRuntimeFixture } from '../engine/testkit';
-import type { MatchTransactionFrames } from '../runtime/contracts';
+import type { CommittedTransactionTimeline } from '../runtime/contracts';
 import { planCommittedResolutionWalk } from './committedTimeline';
 
 describe('committed END TURN choreography', () => {
@@ -63,22 +63,22 @@ describe('committed END TURN choreography', () => {
       // engine's DELAY_REVEAL projection expresses eligibility this way.
       { type: 'TURN_ENDED', turn: 2 },
     ];
-    const built = buildEventTransactionFrames({
+    const built = frameAndFoldEvents({
       transactionId: 'presentation-order:tx',
       initialState: fixture.state,
       events,
       manifest: BOOTSTRAP_MANIFEST,
     });
-    const timeline: MatchTransactionFrames = {
+    const timeline: CommittedTransactionTimeline = {
       transaction: {
         transactionId: built.transactionId,
         matchId: 'presentation-order',
         baseRevision: 1,
         revision: 2,
         intent: { matchId: 'presentation-order', seat: 'SYSTEM', intentId: 'resolve' },
-        events,
+        framedEvents: built.framedEvents,
       },
-      frames: built.frames,
+      transitions: built.transitions,
       finalState: built.finalState,
     };
 

@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
-import type { EventTransactionFrames } from '../transactionFrames';
+import type { EventTransactionFold } from '../transactionTimeline';
 
-export { buildEventTransactionFrames } from '../transactionFrames';
+export {
+  foldFramedEvents,
+  frameAndFoldEvents,
+} from '../transactionTimeline';
 export type {
-  BuildEventTransactionFramesOptions,
-  EventTransactionFrames,
-  TransactionFrame,
-} from '../transactionFrames';
+  FoldFramedEventsOptions,
+  EventTransition,
+  EventTransactionFold,
+  FrameAndFoldEventsOptions,
+} from '../transactionTimeline';
 
 export interface RuntimeParitySubject {
   readonly finalState: MatchState;
@@ -32,10 +36,13 @@ function parityProjection(subject: RuntimeParitySubject) {
 /** Exact live/headless parity required by the Phase 0 guardrail. */
 export function assertRuntimeParity(
   authoritative: RuntimeParitySubject,
-  folded: EventTransactionFrames,
+  folded: EventTransactionFold,
 ): void {
   assert.deepStrictEqual(
     parityProjection(authoritative),
-    parityProjection({ finalState: folded.finalState, events: folded.events }),
+    parityProjection({
+      finalState: folded.finalState,
+      events: folded.framedEvents.map(({ event }) => event),
+    }),
   );
 }

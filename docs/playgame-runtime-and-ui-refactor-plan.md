@@ -101,9 +101,9 @@ The refactor is successful only if all of these remain true:
 2. **[BUILD NOW]** The match runtime is the sole owner of authoritative live state and event application.
 3. **[SEAM]** Every accepted intent produces a complete ordered event transaction.
 4. **[BUILD NOW]** The complete transaction is committed immediately in the local runtime and every event in it is applied exactly once.
-5. **[SEAM]** Presentation consumes a read-only frame timeline; pacing advances a presentation cursor and cannot gate authoritative commitment.
+5. **[SEAM]** Presentation consumes a read-only transition timeline; pacing advances a presentation cursor and cannot gate authoritative commitment.
 6. **[BUILD AFTER]** Missing DOM elements, disabled animation, animation errors, or cancellation cannot alter the final match state because presentation never owns a partially committed transaction.
-7. **[BUILD NOW]** Live execution and replay use the exact same transaction-frame builder.
+7. **[BUILD NOW]** Live execution and replay use the exact same framed-event fold.
 8. **[BUILD NOW]** Live execution and headless replay finish with the same state and event log for the same seed and intents.
 9. **[BUILD AFTER]** Components cannot directly mutate engine state.
 10. **[BUILD AFTER]** Replay rendering remains read-only and does not run gameplay commands.
@@ -212,21 +212,35 @@ The runtime does not own:
 - **[SEAM]** modal, inspector, pile-menu, or toast state
 - **[SEAM]** clocks, deadlines, disconnect grace, transport backpressure, or distributed-worker leases
 
-### Event Frame
+### Canonical Frame and Transition View
 
-**[SEAM]** Presentation receives an immutable frame rather than raw mutation access:
+**[SEAM]** Phase 1.1 defines the only gameplay chronology. `Frame` is a
+match-local integer (`0` is genesis), and each `FramedEvent` owns exactly one:
 
 ```ts
-interface MatchEventFrame {
-  transactionId: string;
-  index: number;
+interface FramedEvent {
+  frame: Frame;
+  scope: TemporalScope;
   event: MatchEvent;
+}
+
+interface EventTransition {
+  transactionId: string;
+  /** Transaction-local playback order; not gameplay chronology. */
+  index: number;
+  framedEvent: FramedEvent;
   before: MatchState;
   after: MatchState;
 }
 ```
 
-**[SEAM]** `MatchEventFrame` is canonical and runtime-internal. The frame builder derives `after` through the reducer without deep-cloning each state or embedding a copied canonical log; reducer snapshots preserve immutable structural sharing.
+**[SEAM]** `FramedEvent` is canonical and runtime-internal.
+`EventTransition` is a short-lived materialized before/after view of that same
+event, not another frame type. `ReplayStep.cursor` and transaction-local
+`EventTransition.index` are playback coordinates and never gameplay clocks.
+The shared builder derives `after` through the reducer without deep-cloning
+each state or embedding a copied canonical log; reducer snapshots preserve
+immutable structural sharing.
 
 **[BUILD LAST]** Interactive timelines retain only a bounded active transaction and release it when consumed or invalidated; replay frames are generated lazily/on demand.
 
@@ -238,7 +252,7 @@ interface MatchEventFrame {
 
 ### Commit and Presentation Contract
 
-**[SEAM]** The runtime commits the complete accepted transaction immediately; `PresentationDirector` consumes a projected form of the same immutable frame timeline used by replay and owns iteration/pacing. A `PlayUiContext` cursor controls which already-committed frame the visible UI reflects.
+**[SEAM]** The runtime commits the complete accepted transaction immediately; `PresentationDirector` consumes a projected form of the same immutable transition timeline used by replay and owns iteration/pacing. A `PlayUiContext` cursor controls which already-committed transition the visible UI reflects.
 
 **[SEAM]** The future durable unit is the validated bootstrap and canonical genesis mechanical state plus ordered append-only transaction records. The storage API reserves transaction identity, revision, actor/intent identity, ordered events, and checksum fields; a snapshot is only a cache at a stated revision.
 
@@ -263,7 +277,7 @@ interface MatchPresentationSink {
 
 Commit and presentation behavior:
 
-1. **[BUILD NOW]** Resolve the accepted intent and build its complete immutable frame timeline with the shared live/replay frame builder.
+1. **[BUILD NOW]** Resolve the accepted intent and build its complete immutable transition timeline with the shared live/replay fold.
 2. **[BUILD NOW]** Atomically within the local process commit the accepted result, transaction record, resulting revision, and final state, without invoking or awaiting presentation.
 3. **[BUILD AFTER]** Publish the read-only projected timeline while the UI cursor still reflects the pre-transaction state; the runtime's responsibility ends at publication.
 4. **[BUILD AFTER]** `PresentationDirector` calls `beforeTransaction`, then for each frame calls `beforeFrame`, advances the visible cursor to `frame.after`, awaits `afterFrame`, and finally calls `afterTransaction`.
@@ -342,7 +356,7 @@ Commit and presentation behavior:
 - **[BUILD LAST]** Perform and record a one-time reducer mutation check proving P-PARITY and P-FOLD fail, then immediately revert the mutation.
 - **[BUILD NOW]** Add a two-debug-deck provenance characterization that fails on current live pool planning and passes after hand planning.
 - **[BUILD NOW]** Characterize the current live-four-local versus headless-three-per-seat opening divergence before replacing both with one constant.
-- **[BUILD NOW]** Add the headless intermediate-state helper and make it the only shared live/replay transaction-frame builder.
+- **[BUILD NOW]** Add the headless intermediate-state helper and make it the only shared live/replay framed-event fold.
 - **[BUILD NOW]** Audit every script action that originates engine events or directly changes authoritative state. The initial code-verified inventory is:
   - `drawFromDeck`, `dealPlayerCard`, and `drawHandCard`, which synthesize hand-entry/draw events
   - `revealLocation` and `revealNextLocation`, including `dispatchLocationRevealEffects` and its local `evalEffect` fallback
@@ -454,7 +468,7 @@ Commit and presentation behavior:
 
 1. **[SEAM]** Contract-only types: bootstrap, transaction/revision, envelope/result, generation token, RNG namespaces, projected types, future persistence/limit interfaces, and lock/reveal state.
 2. **[BUILD NOW]** Bootstrap validation, provenance, variants, card representation, and shared opening initialization.
-3. **[BUILD NOW]** Pure frame builder/committer, FIFO, in-memory retry/idempotency, in-memory fold, and parity properties.
+3. **[BUILD NOW]** Pure transaction fold/committer, FIFO, in-memory retry/idempotency, and parity properties.
 4. **[BUILD NOW]** Hand-based AI, phase scheduling, simultaneous reveal, and every live mutation behind typed commands.
 5. **[BUILD NOW]** Session/debug adapters, local replay export, observer seam, old-authority deletion, and final BUILD NOW gates.
 
@@ -465,7 +479,7 @@ Commit and presentation behavior:
 - **[BUILD NOW]** A complete turn runs with no DOM/director; live runtime and headless fold produce identical final state/log.
 - **[BUILD NOW]** P-PARITY, P-EXACTLY-ONCE, P-PROVENANCE, P-FOLD, and P-NO-TIME pass at configured CI depth.
 - **[BUILD NOW]** No runtime API exposes a raw setter and no authoritative cursor remains in presentation/script state.
-- **[BUILD NOW]** Live/replay use one frame builder and presentation absence cannot partially apply a transaction.
+- **[BUILD NOW]** Live/replay use one framed-event fold and presentation absence cannot partially apply a transaction.
 - **[BUILD NOW]** Both opening hands use `startingHandSize`; live/headless provenance matches and AI cannot play absent deck definitions without creation events.
 - **[BUILD NOW]** Invalid ruleset/version/length/definition/variant/copy/hash rejects bootstrap without shortening a deck.
 - **[BUILD NOW]** Local replay export contains bootstrap, genesis, and non-overlapping in-memory transactions.
@@ -476,6 +490,68 @@ Commit and presentation behavior:
 - **[BUILD LAST]** Frame retention is bounded/released, materialized state is log-free, and gameplay queries use bounded indexes.
 - **[DEFER]** Durable recovery/receipt/checksum/CAS and exhaustive hidden-information serialization gates pass only when live-server adapters are built.
 - **[SEAM]** Phase 1 lands as a complete BUILD NOW authority migration, never a partial runtime beside a second live path.
+
+## Phase 1.1: Canonical Simulation Timeline
+
+**[BUILD NOW]** Establish one match-local `Frame` and one `FramedEvent` stream
+before location lifecycle or modifier provenance depends on chronology.
+
+- **[BUILD NOW]** Genesis is frame `0`; every committed event owns exactly one
+  globally contiguous frame.
+- **[BUILD NOW]** `MatchRuntime` owns the committed head. Rejected intents,
+  private plans, projections, playback, VFX, and wall-clock activity do not
+  advance it.
+- **[BUILD NOW]** Live commit, state log, runtime replay, engine replay, and
+  transition materialization use the same framing/fold implementation.
+- **[BUILD NOW]** Store explicit turn/phase scope on each framed event and keep
+  future scheduling semantic (`turn + phase`) rather than guessing a frame.
+- **[BUILD NOW]** Make `TURN_STARTED` the first frame of the new turn and the
+  transition that changes `state.turn`; start-of-turn bookkeeping follows it.
+- **[BUILD NOW]** Treat `EventTransition.index` and `ReplayStep.cursor` only as
+  playback coordinates. They are never alternate gameplay clocks.
+- **[BUILD NOW]** Store only `FramedEvent[]` in committed transactions and
+  replay bundles. Retain raw `MatchEvent[]` only as temporary resolver output;
+  do not maintain an unshipped legacy replay format.
+- **[BUILD NOW]** Prove continuity, live/replay identity, turn mapping,
+  lifecycle chronology, invalid-frame rejection, and private-plan
+  non-advancement.
+
+See `docs/agent-checkpoints/phase1.1-canonical-timeline.md`.
+
+## Phase 1.15: Cross-Language Protocol Validation
+
+**[BUILD NOW]** Establish one generated JSON Schema 2020-12 structural
+contract before location lifecycle and capability-kernel work expands the
+event vocabulary.
+
+- **[BUILD NOW]** Validate match bootstrap, intent envelopes, framed events,
+  and committed transactions from one versioned schema.
+- **[BUILD NOW]** Consume that schema through Ajv in TypeScript and
+  `jsonschema` plus `typify` in Rust; do not hand-maintain a parallel Rust
+  protocol model.
+- **[BUILD NOW]** Run the same valid/invalid conformance fixtures in both
+  languages and fail CI on generated-schema drift.
+- **[BUILD NOW]** Enforce JavaScript-safe integer limits at the shared wire
+  boundary.
+- **[SEAM]** Keep frame continuity, revision continuity, manifest existence,
+  deck construction, and gameplay legality in the simulation. Portable shape
+  validation must not become a second rules engine.
+- **[SEAM]** Recognize every event discriminant now, but defer exhaustive
+  payload closure for events whose envelope is being redesigned by Phase 1.5.
+- **[DEFER]** Full match-state/replay serialization, multiplayer redaction,
+  durable storage, compatibility adapters, and Rust simulation wait for their
+  owning server phases.
+
+See `docs/agent-checkpoints/phase1.15-cross-language-validation.md`.
+
+## Phase 1.2: Location Deck and Lifecycle
+
+**[BUILD AFTER]** Model locations as an authored deck with deterministic draw,
+reorder, stage, reveal, replace, and zone lifecycle rules. Every lifecycle
+coordinate uses the Phase 1.1 `Frame`; Phase 1.2 must not introduce
+`FrameStamp` or another timeline implementation.
+
+See `docs/playgame-phase1.2-location-deck-spec.md`.
 
 ## Phase 1.5: Capability Kernel, Committed Reactions, and Location Authoring
 
@@ -983,22 +1059,23 @@ npm run lint
 **[SEAM]** Keep commits reviewable and reversible:
 
 1. **[BUILD NOW — COMPLETE]** Phase 0 characterization, properties, decisions, and baseline.
-2. **[BUILD NOW — COMPLETE]** Phase 1 bootstrap/session/runtime authority, transactions, simultaneous scheduling, shared opening/AI/frame builder, parity proof, and old-authority removal.
-3. **[BUILD AFTER]** Phase 1.5 contracts and characterization: producer/trigger inventory, operation/reaction semantics, event-envelope fields, ordering, architectural test skeletons.
-4. **[BUILD AFTER]** Phase 1.5 location folders, schema/generator/check commands, complete location migration, and generated parity proof.
-5. **[BUILD AFTER]** Phase 1.5 governed power operation, contribution/provenance representation, reusable Courthouse capability, and acceptance matrix.
-6. **[BUILD AFTER]** Phase 1.5 committed lifecycle reaction dispatcher and migration of play/reveal/move/destroy/banish/create/return hooks.
-7. **[BUILD AFTER]** Phase 1.5 remaining operation/built-in conformance, old manual-trigger deletion, architectural enforcement, and full exit gates.
-8. **[BUILD AFTER]** Phase 2 provider split and facade removal.
-9. **[BUILD AFTER]** Phase 3a animator frame conversion and DOM-ref relocation.
-10. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
-11. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
-12. **[BUILD LAST]** Phase 5 shared card rendering.
-13. **[BUILD LAST]** Phase 5 board sizing.
-14. **[BUILD LAST]** Phase 5 declarative lane maps.
-15. **[BUILD LAST]** Phase 5 instance-scoped VFX.
-16. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
-17. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
+2. **[BUILD NOW — COMPLETE]** Phase 1 bootstrap/session/runtime authority, transactions, simultaneous scheduling, shared opening/AI fold, parity proof, and old-authority removal.
+3. **[BUILD NOW — COMPLETE]** Phase 1.15 generated cross-language structural protocol, shared TypeScript/Rust fixtures, and live boundary validation.
+4. **[BUILD AFTER]** Phase 1.5 contracts and characterization: producer/trigger inventory, operation/reaction semantics, event-envelope fields, ordering, architectural test skeletons.
+5. **[BUILD AFTER]** Phase 1.5 location folders, schema/generator/check commands, complete location migration, and generated parity proof.
+6. **[BUILD AFTER]** Phase 1.5 governed power operation, contribution/provenance representation, reusable Courthouse capability, and acceptance matrix.
+7. **[BUILD AFTER]** Phase 1.5 committed lifecycle reaction dispatcher and migration of play/reveal/move/destroy/banish/create/return hooks.
+8. **[BUILD AFTER]** Phase 1.5 remaining operation/built-in conformance, old manual-trigger deletion, architectural enforcement, and full exit gates.
+9. **[BUILD AFTER]** Phase 2 provider split and facade removal.
+10. **[BUILD AFTER]** Phase 3a animator frame conversion and DOM-ref relocation.
+11. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
+12. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
+13. **[BUILD LAST]** Phase 5 shared card rendering.
+14. **[BUILD LAST]** Phase 5 board sizing.
+15. **[BUILD LAST]** Phase 5 declarative lane maps.
+16. **[BUILD LAST]** Phase 5 instance-scoped VFX.
+17. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
+18. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
 
 **[SEAM]** Do not combine Phase 1.5 engine behavior with Phase 2/3 provider or presentation migration. Do not combine component extraction and CSS cleanup with either.
 
@@ -1029,7 +1106,7 @@ Decided:
 - **[BUILD NOW]** `MatchRuntime` becomes the sole live authority and commits complete local transactions immediately.
 - **[SEAM]** `PlayUiContext` paces read-only frames; `PresentationDirector`, not runtime, owns frame iteration/hooks/waits.
 - **[BUILD AFTER]** Implement transaction/per-frame hooks, generation-safe snaps, reset/unmount invalidation, queued fast-forward, and sink deferral.
-- **[BUILD NOW]** Live/replay use one frame builder.
+- **[BUILD NOW]** Live/replay use one framed-event fold.
 - **[SEAM]** Bootstrap/genesis plus transaction records define the future durable canonical shape; snapshots are caches.
 - **[DEFER]** Durable receipt/transaction/revision/checksum atomicity and CAS wait for server storage.
 - **[BUILD NOW]** Local intent sources share one FIFO with dequeue validation, in-memory retry idempotency, at-most-once commit, and typed rejection.

@@ -1,6 +1,7 @@
 import type { MatchEvent } from '../engine/types/events';
 import type { Seat } from '../engine/types/ids';
-import type { MatchEventFrame, MatchTransactionFrames } from '../runtime/contracts';
+import type { EventTransition } from '../engine/transactionTimeline';
+import type { CommittedTransactionTimeline } from '../runtime/contracts';
 
 export interface CommittedEventPacingPlan {
   readonly orderedEventIndexes: readonly number[];
@@ -16,7 +17,7 @@ export type ResolutionWalkBeat =
         | 'priority-reveal'
         | 'non-priority-reveal'
         | 'committed-frame';
-      readonly frame: MatchEventFrame;
+      readonly frame: EventTransition;
     };
 
 /**
@@ -49,15 +50,15 @@ export function planCommittedEventPacing(
  * are never accidentally added to the reveal walk.
  */
 export function planCommittedResolutionWalk(
-  timeline: MatchTransactionFrames,
+  timeline: CommittedTransactionTimeline,
   localSeat: Seat,
   eventIndexes: readonly number[] = planCommittedEventPacing(
-    timeline.transaction.events,
+    timeline.transaction.framedEvents.map(({ event }) => event),
   ).orderedEventIndexes,
 ): readonly ResolutionWalkBeat[] {
   const frames = eventIndexes
-    .map((index) => timeline.frames[index])
-    .filter((frame): frame is MatchEventFrame => frame !== undefined);
+    .map((index) => timeline.transitions[index])
+    .filter((frame): frame is EventTransition => frame !== undefined);
   if (!frames.some((frame) => frame.event.type === 'TURN_RESOLUTION_STARTED')) {
     return frames.map((frame) => ({ kind: 'committed-frame' as const, frame }));
   }

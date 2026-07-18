@@ -7,6 +7,7 @@ import { runMatch } from '../../engine/cli/runMatch';
 import { replayMatch } from '../../engine/replay';
 import { testCardDef, testManifest } from '../../engine/testkit';
 import type { CardDef, Deck, Manifest } from '../../engine/manifest/types';
+import type { MatchEvent } from '../../engine/types/events';
 import type { MatchBootstrap } from '../contracts';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
 import { buildOpeningTransaction } from '../opening';
@@ -111,6 +112,19 @@ describe('validateMatchBootstrap', () => {
     }, manifest);
 
     expect(issueCodes(result)).toContain('MANIFEST_VERSION_MISMATCH');
+  });
+
+  it('uses the shared protocol schema as the structural bootstrap boundary', () => {
+    const manifest = manifestFixture();
+    const result = validateMatchBootstrap({
+      ...bootstrapFixture(manifest),
+      transportOnlyField: true,
+    }, manifest);
+
+    expect(issueCodes(result)).toEqual(['INVALID_BOOTSTRAP_SHAPE']);
+    if (!result.ok) {
+      expect(result.issues[0].message).toContain('additional properties');
+    }
   });
 
   it('rejects an unknown ruleset', () => {
@@ -224,7 +238,11 @@ describe('card variants and opening initialization', () => {
       seed: genesis.seed,
       manifest,
       initialState: genesis,
-      events: opening.events,
+      framedEvents: finalState.log.map(({ frame, scope, event }) => ({
+        frame,
+        scope,
+        event: event as MatchEvent,
+      })),
     });
 
     expect(finalState.cards[selected!.id].variantId).toBe('holo');

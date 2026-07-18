@@ -1,9 +1,10 @@
 import type { MatchState } from '../engine/types/state';
+import type { Frame } from '../engine/types/timeline';
 import type { Seat } from '../engine/types/ids';
+import type { EventTransition } from '../engine/transactionTimeline';
 import type {
   CommittedTransactionRecord,
   MatchBootstrap,
-  MatchEventFrame,
   MatchRevision,
 } from './contracts';
 
@@ -28,7 +29,7 @@ export interface ProjectedState {
 
 interface TrustedProjectedTransactionPayload {
   readonly transaction: CommittedTransactionRecord;
-  readonly frames: readonly MatchEventFrame[];
+  readonly frames: readonly EventTransition[];
 }
 
 /** Explicit player-facing frame type; canonical event/state stay opaque. */
@@ -36,8 +37,10 @@ export interface SeatTransactionFrame {
   readonly kind: 'projected-transaction-frame';
   readonly viewerSeat: Seat;
   readonly transactionId: string;
+  readonly frame: Frame;
+  /** Transaction-local presentation order; never gameplay chronology. */
   readonly index: number;
-  readonly [framePayload]: MatchEventFrame;
+  readonly [framePayload]: EventTransition;
 }
 
 /** Explicit player-facing transaction type; canonical events/frames stay opaque. */
@@ -88,13 +91,14 @@ export function projectStateForTrustedLocalPlay(
  */
 export function projectTransactionForTrustedLocalPlay(
   transaction: CommittedTransactionRecord,
-  frames: readonly MatchEventFrame[],
+  frames: readonly EventTransition[],
   viewerSeat: Seat,
 ): ProjectedTransaction {
   const projectedFrames = frames.map((frame): SeatTransactionFrame => ({
     kind: 'projected-transaction-frame',
     viewerSeat,
     transactionId: frame.transactionId,
+    frame: frame.frame,
     index: frame.index,
     [framePayload]: frame,
   }));
@@ -126,6 +130,6 @@ export function readTrustedLocalTransaction(
 }
 
 /** Explicit trusted/debug escape hatch; never expose through a player API. */
-export function readTrustedLocalFrame(projected: SeatTransactionFrame): MatchEventFrame {
+export function readTrustedLocalFrame(projected: SeatTransactionFrame): EventTransition {
   return projected[framePayload];
 }

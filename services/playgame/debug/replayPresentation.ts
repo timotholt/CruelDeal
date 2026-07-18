@@ -1,5 +1,5 @@
 import type { Manifest } from '../engine/manifest/types';
-import type { ReplayFrame } from '../engine/replay';
+import type { ReplayStep } from '../engine/replay';
 import type { EffectRef } from '../engine/types/ability';
 import type { CardId, LocationId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
@@ -18,14 +18,14 @@ export interface ReplayNameResolver {
   locationLabel: (state: MatchState, id: LocationId) => string;
 }
 
-export interface ReplayFrameDescription {
+export interface ReplayStepDescription {
   readonly actor: string;
   readonly summary: string;
   readonly cause: string | null;
 }
 
 export interface ReplayActorResolver {
-  actorLabel: (frame: ReplayFrame | null) => string;
+  actorLabel: (frame: ReplayStep | null) => string;
   playerLabel: (owner: string | undefined) => string;
 }
 
@@ -45,7 +45,7 @@ const label = (id: string, name: string | undefined): string => name ? `${id} ($
  * replace events are rendered from their post-event state.
  */
 export function createReplayNameResolver(
-  frames: readonly ReplayFrame[],
+  steps: readonly ReplayStep[],
   manifest: Manifest,
 ): ReplayNameResolver {
   const historicalCardDefIds = new Map<string, string>();
@@ -53,12 +53,12 @@ export function createReplayNameResolver(
   const historicalLocationDefIds = new Map<string, string>();
   const historicalLocationLanes = new Map<string, number>();
 
-  for (const frame of frames) {
-    for (const card of Object.values(frame.state.cards)) {
+  for (const step of steps) {
+    for (const card of Object.values(step.state.cards)) {
       historicalCardDefIds.set(card.id, card.defId);
       historicalCardOwners.set(card.id, card.owner);
     }
-    for (const lane of frame.state.lanes) {
+    for (const lane of step.state.lanes) {
       if (lane.location) {
         historicalLocationDefIds.set(lane.location.id, lane.location.defId);
         historicalLocationLanes.set(lane.location.id, lane.idx);
@@ -123,7 +123,7 @@ function eventCause(event: MatchEvent): EffectRef | null {
 }
 
 export function describeReplayCause(
-  frame: ReplayFrame | null,
+  frame: ReplayStep | null,
   names: ReplayNameResolver,
 ): string | null {
   if (!frame?.event) return null;
@@ -168,22 +168,22 @@ const signedChange = (delta: number, positive: string, negative: string): string
   delta >= 0 ? `${positive} ${delta}` : `${negative} ${Math.abs(delta)}`
 );
 
-export function describeReplayFrame(
-  frame: ReplayFrame | null,
+export function describeReplayStep(
+  step: ReplayStep | null,
   names: ReplayNameResolver,
   actors: ReplayActorResolver,
-): ReplayFrameDescription {
-  const actor = actors.actorLabel(frame);
-  if (!frame?.event) return { actor, summary: 'Initial game state.', cause: null };
-  const event = frame.event;
-  const cardName = (id: CardId): string => names.cardName(frame.state, id);
-  const cardPlayer = (id: CardId): string => actors.playerLabel(names.cardOwner(frame.state, id));
-  const cardOwner = (id: CardId): string => names.cardOwner(frame.state, id) ?? actor;
+): ReplayStepDescription {
+  const actor = actors.actorLabel(step);
+  if (!step?.event) return { actor, summary: 'Initial game state.', cause: null };
+  const event = step.event;
+  const cardName = (id: CardId): string => names.cardName(step.state, id);
+  const cardPlayer = (id: CardId): string => actors.playerLabel(names.cardOwner(step.state, id));
+  const cardOwner = (id: CardId): string => names.cardOwner(step.state, id) ?? actor;
   const player = (owner: string | undefined): string => actors.playerLabel(owner);
-  const locationName = (id: LocationId): string => names.locationName(frame.state, id);
+  const locationName = (id: LocationId): string => names.locationName(step.state, id);
   const cardSlot = (cardId: CardId, lane: number, owner: string): string => {
     if (owner !== 'P0' && owner !== 'P1') return slotLabel(0);
-    const slot = Math.max(0, frame.state.lanes[lane]?.cards[owner].indexOf(cardId) ?? 0);
+    const slot = Math.max(0, step.state.lanes[lane]?.cards[owner].indexOf(cardId) ?? 0);
     return slotLabel(slot);
   };
   const destination = (value: Extract<MatchEvent, { type: 'CARD_MOVED_TO_ZONE' }>['destination']): string => {
@@ -321,7 +321,7 @@ export function describeReplayFrame(
       break;
   }
 
-  const cause = describeReplayCause(frame, names);
+  const cause = describeReplayCause(step, names);
   return {
     actor,
     summary: cause ? `${summary.replace(/\.$/, '')} - ${cause}.` : summary,
@@ -335,7 +335,7 @@ export function describeReplayFrame(
  * so exported JSON never carries decoration.
  */
 export function annotateReplayEventJson(
-  frame: ReplayFrame | null,
+  frame: ReplayStep | null,
   names: ReplayNameResolver,
 ): string {
   if (!frame?.event) return '';

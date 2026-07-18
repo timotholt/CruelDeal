@@ -17,7 +17,7 @@
 
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
-import type { CardInstance, MatchResult, MatchState, PendingEffect } from './types/state';
+import type { MatchResult, MatchState, PendingEffect } from './types/state';
 import type { CardId, LaneIdx, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
@@ -370,15 +370,16 @@ export function resolveTurn(
   }
 
   // ─── START-OF-TURN BOOKKEEPING ───────────────────────────────────────────
-  // Deliberate order: energy → priority → draw → location reveal.
+  // Deliberate order: turn boundary → energy → draw → location reveal.
   //
-  //   Energy first so "+N energy next turn" effects (Psylocke, Electra,
-  //   etc.) resolve before anything consumes or displays the new pool.
+  //   TURN_STARTED is the canonical boundary: its frame changes `state.turn`
+  //   and is the first frame owned by the new turn. Priority is computed on
+  //   the clean post-TURN_ENDED board before that boundary is emitted.
   //
-  //   Priority next so it's decided on the clean post-TURN_ENDED board —
-  //   no drawn cards, no newly-revealed location in the picture.
+  //   Energy follows the boundary so "+N energy next turn" effects resolve
+  //   before anything consumes or displays the new pool.
   //
-  //   Draws run after priority because drawing can't change priority
+  //   Draws run after energy because drawing can't change priority
   //   (hand contents don't feed the priority computation) but effects
   //   that react to "card drawn" expect the priority holder for this
   //   turn to already be known.
@@ -388,7 +389,19 @@ export function resolveTurn(
   //   energy are already settled.
   const nextTurn = s.turn + 1;
 
-  // Phase 4  Ramp `maxEnergy` (+1 per owner), refill `energy` to
+  // Phase 4  Compute priority, then emit the canonical turn boundary.
+  //          `TURN_STARTED` advances `state.turn` to `nextTurn` via apply().
+  const newPriority = computePriorityForNextTurn(s, manifest, rng.fork(`priority:${nextTurn}`));
+  const started: MatchEvent = {
+    type: 'TURN_STARTED',
+    turn: nextTurn,
+    priority: newPriority.owner,
+    priorityReason: newPriority.reason,
+  };
+  events.push(started);
+  s = apply(s, started, manifest);
+
+  // Phase 5  Ramp `maxEnergy` (+1 per owner), refill `energy` to
   //          `maxEnergy + nextTurnEnergyBonus`, then consume the bonus.
   //          Event order per owner:
   //            1. MAX_ENERGY_CHANGED  (ramp ceiling by +1)
@@ -429,18 +442,6 @@ export function resolveTurn(
       s = apply(s, consume, manifest);
     }
   }
-
-  // Phase 5  Priority for nextTurn + TURN_STARTED.
-  //          `TURN_STARTED` advances `state.turn` to `nextTurn` via apply().
-  const newPriority = computePriorityForNextTurn(s, manifest, rng.fork(`priority:${nextTurn}`));
-  const started: MatchEvent = {
-    type: 'TURN_STARTED',
-    turn: nextTurn,
-    priority: newPriority.owner,
-    priorityReason: newPriority.reason,
-  };
-  events.push(started);
-  s = apply(s, started, manifest);
 
   // Phase 5.5  Fire any SCHEDULED pending effects with when='START_OF_NEXT_TURN'.
   //            These are the generic DSL counterpart to named pending
