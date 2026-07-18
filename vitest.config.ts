@@ -10,6 +10,11 @@ export default defineConfig({
     conditions: ['development', 'browser'],
   },
   test: {
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/worktrees/**',
+    ],
     server: { deps: { inline: [/solid-js/, /@solidjs/] } },
     // Engine tests are pure Node — no DOM needed.
     environmentMatchGlobs: [

@@ -18,6 +18,12 @@ export type VfxCue =
   | { kind: 'power-flash'; cardId: CardId; delta: number }
   | { kind: 'destroy-burst'; cardId: CardId }
   | { kind: 'glitch-flash'; cardId: CardId }
+  | {
+      kind: 'move-trail';
+      cardId: CardId;
+      effectKind: Extract<MatchEvent, { type: 'CARD_MOVED' }>['cause']['effectKind'];
+      sourceId: string;
+    }
   | { kind: 'none' };
 
 export type SfxCue = {
@@ -42,7 +48,24 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
     case 'CARD_MOVED':
       return {
         structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
-        vfx: [],
+        vfx: [{
+          kind: 'move-trail',
+          cardId: event.cardId,
+          effectKind: event.cause.effectKind,
+          sourceId: event.cause.sourceId,
+        }],
+        sfx: [{ name: 'move', timing: 'on-dispatch' }],
+      };
+
+    case 'CARD_MOVED_TO_ZONE':
+      return {
+        structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
+        vfx: [{
+          kind: 'move-trail',
+          cardId: event.cardId,
+          effectKind: event.cause.effectKind,
+          sourceId: event.cause.sourceId,
+        }],
         sfx: [{ name: 'move', timing: 'on-dispatch' }],
       };
 

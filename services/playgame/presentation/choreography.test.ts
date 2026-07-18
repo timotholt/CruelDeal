@@ -2,10 +2,11 @@
  * Event choreography tests.
  *
  * Run:
- *   npx tsx services/playgame/presentation/choreography.test.ts
+ *   npx vitest run services/playgame/presentation/choreography.test.ts
  */
 
 import { describeEventChoreography } from './choreography';
+import { expect, test } from 'vitest';
 import type { MatchEvent } from '../engine/types/events';
 import type { EffectRef } from '../engine/types/ability';
 import type { CardId, LaneIdx } from '../engine/types/ids';
@@ -43,9 +44,34 @@ const event = <T extends MatchEvent>(e: T): T => e;
 
   eq(choreography, {
     structural: { kind: 'card-move', cardId: 'c1', durationMs: 360 },
-    vfx: [],
+    vfx: [{
+      kind: 'move-trail',
+      cardId: 'c1',
+      effectKind: 'SYSTEM',
+      sourceId: 'sys',
+    }],
     sfx: [{ name: 'move', timing: 'on-dispatch' }],
   }, 'CARD_MOVED is a structural card move');
+}
+
+{
+  const choreography = describeEventChoreography(event({
+    type: 'CARD_MOVED_TO_ZONE',
+    cardId: 'c1' as CardId,
+    destination: { kind: 'HAND' },
+    cause: source,
+  }));
+
+  eq(choreography, {
+    structural: { kind: 'card-move', cardId: 'c1', durationMs: 360 },
+    vfx: [{
+      kind: 'move-trail',
+      cardId: 'c1',
+      effectKind: 'SYSTEM',
+      sourceId: 'sys',
+    }],
+    sfx: [{ name: 'move', timing: 'on-dispatch' }],
+  }, 'CARD_MOVED_TO_ZONE uses the same cause-keyed structural transfer path');
 }
 
 {
@@ -164,3 +190,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
 if (failures > 0) {
   process.exitCode = 1;
 }
+
+test('event choreography mappings satisfy their legacy assertion matrix', () => {
+  expect(failures).toBe(0);
+});

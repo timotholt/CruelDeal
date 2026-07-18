@@ -2,8 +2,9 @@
  * BoardCard — a card sitting in a lane slot.
  *
  * Face-down logic: unrevealed remote cards are always face-down. Unrevealed
- * local cards stay face-up while planning, then the resolution-start
- * presentation lock turns them face-down before the reveal walk.
+ * local cards in the current staging order stay face-up while planning, then
+ * the presentation lock turns them face-down before the reveal walk. Older
+ * delayed cards remain face-down after their staging order is cleared.
  */
 
 import { createEffect } from 'solid-js';
@@ -16,6 +17,7 @@ import { openInspect } from './inspector';
 import { dragState } from './useDragDrop';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
 
 interface BoardCardProps {
   card: ResolvedCard;
@@ -41,7 +43,6 @@ export const BoardCard = (props: BoardCardProps) => {
       : [];
     cardVfxRegistry.reconcilePersistent(cardId(), sources);
   });
-  const phase = (): EngineMatchState['phase'] => props.phase ?? engineState.phase;
   const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState.stagingOrder;
   const interactive = (): boolean => props.interactive ?? true;
   const inspectable = (): boolean => props.inspectable ?? interactive();
@@ -74,9 +75,14 @@ export const BoardCard = (props: BoardCardProps) => {
   };
 
   const isFaceDown = (): boolean => {
-    if (props.card.revealed) return false;
-    if (props.card.owner !== viewerSeat()) return true;
-    return ui.isFlipped || phase() === 'RESOLVING';
+    return isBoardCardFaceDown({
+      cardId: props.card.id,
+      owner: props.card.owner,
+      viewerSeat: viewerSeat(),
+      revealed: props.card.revealed,
+      stagingOrder: stagingOrder(),
+      resolutionLocked: ui.isFlipped,
+    });
   };
   const isPending = isFaceDown;
 

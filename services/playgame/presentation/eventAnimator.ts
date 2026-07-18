@@ -150,6 +150,26 @@ const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
       return;
     }
 
+    case 'move-trail': {
+      const cardId = cue.cardId as CardId;
+      const causeClass = cue.effectKind.toLowerCase().replaceAll('_', '-');
+      cardVfxRegistry.createTransient({
+        cardId,
+        eventType: 'CARD_MOVED',
+        channel: 'world-motion',
+        effectKind: `move-trail:${cue.effectKind}:${cue.sourceId}`,
+        className: `card-vfx-move-trail card-vfx-move-trail--${causeClass}`,
+        vars: {
+          '--card-fx-color': cue.effectKind === 'LOCATION' ? '#58c7ff' : '#b86cff',
+        },
+        durationMs: 420,
+        exitDurationMs: 0,
+        priority: 12,
+        dedupeKey: `move-trail:${cue.cardId}:${cue.effectKind}:${cue.sourceId}`,
+      });
+      return;
+    }
+
     case 'none':
       return;
   }
@@ -359,6 +379,9 @@ export async function animateEvent(
   ctx: PlayScriptCtx,
   frame: MatchEventFrame,
   dispatchPresentedFrame: () => void = () => undefined,
+  hooks: {
+    readonly onTransferAnimation?: (transfer: CardTransfer) => void;
+  } = {},
 ): Promise<void> {
   const { event, before, after } = frame;
   const choreography = describeEventChoreography(event);
@@ -395,6 +418,7 @@ export async function animateEvent(
     if (reservedHandCards.length > 0) await wait(HAND_SLOT_RESERVE_MS);
 
     for (const transfer of transfers) {
+      hooks.onTransferAnimation?.(transfer);
       await animateOneTransfer(ctx, transfer, oldRects, oldClones, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
     }
   });

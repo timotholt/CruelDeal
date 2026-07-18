@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { fallbackRectForZone } from './eventAnimator';
+import { apply } from '../engine/apply';
+import { createInitialMatchState } from '../engine/cli/initState';
+import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
+import type { MatchEventFrame } from '../runtime/contracts';
+import type { PlayScriptCtx } from '../script/actions';
+import type { LaneIdx } from '../engine/types/ids';
+import { animateEvent, fallbackRectForZone } from './eventAnimator';
 
 describe('event animator transfer origins', () => {
   it('falls remote hand transfers back to the opponent hand region at board top-center', () => {
@@ -20,5 +26,100 @@ describe('event animator transfer origins', () => {
 
     expect(rect.left + rect.width / 2).toBe(board.left + board.width / 2);
     expect(rect.top + rect.height / 2).toBe(board.top + board.height / 2);
+  });
+
+  it('routes CARD_MOVED adoption through a captured card transfer animation', async () => {
+    vi.useFakeTimers();
+    try {
+      let before = createInitialMatchState('moved-transfer', BOOTSTRAP_MANIFEST);
+      const cardId = before.deck.P0[0].id;
+      before = apply(before, {
+        type: 'CARD_DRAWN',
+        owner: 'P0',
+        cardId,
+        toHand: true,
+      }, BOOTSTRAP_MANIFEST);
+      before = apply(before, {
+        type: 'CARD_STAGED',
+        intentId: 'stage',
+        owner: 'P0',
+        cardId,
+        lane: 0 as LaneIdx,
+        cost: 1,
+      }, BOOTSTRAP_MANIFEST);
+      const event = {
+        type: 'CARD_MOVED' as const,
+        cardId,
+        fromLane: 0 as LaneIdx,
+        toLane: 2 as LaneIdx,
+        cause: { sourceId: 'skyrail-instance' as never, effectKind: 'LOCATION' as const },
+      };
+      const after = apply(before, event, BOOTSTRAP_MANIFEST);
+      const frame: MatchEventFrame = {
+        transactionId: 'moved-transfer:tx',
+        index: 0,
+        event,
+        before,
+        after,
+      };
+
+      const boardWrap = document.createElement('div');
+      const boardEl = document.createElement('div');
+      const toastArea = document.createElement('div');
+      const cardEl = document.createElement('div');
+      cardEl.className = 'card lane-card';
+      cardEl.dataset.cardId = cardId;
+      let adopted = false;
+      boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
+      boardEl.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
+      cardEl.getBoundingClientRect = () => adopted
+        ? new DOMRect(430, 300, 70, 100)
+        : new DOMRect(90, 300, 70, 100);
+      boardWrap.append(boardEl, toastArea, cardEl);
+      document.body.append(boardWrap);
+
+      const calls: string[] = [];
+      const ctx = {
+        state: before,
+        ui: {
+          handReservations: [],
+          history: [],
+          isFlipped: true,
+          lockedResult: null,
+          showEndGamePrompt: false,
+        },
+        setUi: vi.fn(),
+        manifest: BOOTSTRAP_MANIFEST,
+        localSeat: 'P0',
+        remoteSeat: 'P1',
+        boardEl,
+        boardWrap,
+        toastArea,
+        cardRefs: new Map([[cardId as string, cardEl]]),
+        zoneRefs: new Map(),
+        presentCommittedFrame: vi.fn(),
+        finishTurnPresentation: vi.fn(),
+      } as unknown as PlayScriptCtx;
+
+      const animation = animateEvent(ctx, frame, () => {
+        adopted = true;
+        calls.push('adopt');
+      }, {
+        onTransferAnimation: (transfer) => {
+          calls.push(`transfer:${transfer.reason}:${transfer.from.kind}->${transfer.to.kind}`);
+        },
+      });
+      await vi.runAllTimersAsync();
+      await animation;
+
+      expect(calls).toEqual([
+        'adopt',
+        'transfer:CARD_MOVED:LANE->LANE',
+      ]);
+      expect(cardEl.style.visibility).toBe('');
+      expect(document.querySelector('.transfer-flyer')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -2,10 +2,11 @@
  * Card transfer normalizer tests.
  *
  * Run:
- *   npx tsx services/playgame/presentation/cardTransfers.test.ts
+ *   npx vitest run services/playgame/presentation/cardTransfers.test.ts
  */
 
 import { apply } from '../engine/apply';
+import { expect, test } from 'vitest';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
@@ -138,3 +139,7 @@ const stateWithHandCard = () => {
 if (failures > 0) {
   process.exitCode = 1;
 }
+
+test('card transfer mappings satisfy their legacy assertion matrix', () => {
+  expect(failures).toBe(0);
+});

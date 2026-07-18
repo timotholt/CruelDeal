@@ -6,7 +6,10 @@ import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { MatchEventFrame, MatchTransactionFrames } from '../runtime/contracts';
 import type { ZoneAnchorKey } from '../presentation/cardTransfers';
 import { animateEvent } from '../presentation/eventAnimator';
-import { planCommittedEventPacing } from '../presentation/committedTimeline';
+import {
+  planCommittedEventPacing,
+  planCommittedResolutionWalk,
+} from '../presentation/committedTimeline';
 import { releaseAllHandSlots } from '../presentation/handReservations';
 import { showToast } from '../toast';
 import type { UiState } from '../view';
@@ -128,10 +131,9 @@ const paceFrame = async (
   presentFrame: () => void,
 ): Promise<void> => {
   if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
-    // Present and hold one shared lock beat so every staged card can paint
-    // face-down before the first per-card reveal cinematic starts.
+    // The synthetic local-lock beat has already painted. This canonical frame
+    // now adopts authority without introducing a second facing transition.
     presentFrame();
-    await waitFor(250);
     return;
   }
   if (frame.event.type === 'LOCATION_REVEALED') {
@@ -155,10 +157,19 @@ const paceTimeline = async (
   eventIndexes = planCommittedEventPacing(timeline.transaction.events).orderedEventIndexes,
 ): Promise<void> => {
   try {
-    for (const index of eventIndexes) {
-      const frame = timeline.frames[index];
-      if (!frame) continue;
+    const beats = planCommittedResolutionWalk(timeline, c.localSeat, eventIndexes);
+    for (const beat of beats) {
       if (c.cancelled) return;
+      if (beat.kind === 'local-lock') {
+        // Lock the already-visible local plan before the remote fake-hand
+        // flight. TURN_RESOLUTION_STARTED later reasserts this same value in
+        // the provider's atomic committed projection adoption.
+        c.setUi('isFlipped', true);
+        await waitFor(250);
+        continue;
+      }
+
+      const frame = beat.frame;
       let acceptingAnimationDispatch = true;
       let framePresented = false;
       const presentFrame = (): void => {
@@ -166,10 +177,12 @@ const paceTimeline = async (
         framePresented = true;
         c.presentCommittedFrame(frame);
       };
-      const outcome = await settlePresentationWithin(
-        paceFrame(c, frame, presentFrame),
-        PRESENTATION_FRAME_TIMEOUT_MS,
-      );
+      const outcome = beat.kind === 'local-stage-adoption'
+        ? (presentFrame(), 'completed' as const)
+        : await settlePresentationWithin(
+          paceFrame(c, frame, presentFrame),
+          PRESENTATION_FRAME_TIMEOUT_MS,
+        );
 
       // State progression is the invariant; animation completion is optional.
       // Commit a missing frame on success, error, or timeout, then prevent a
@@ -228,7 +241,6 @@ export const paceCommittedTurn = (timeline: MatchTransactionFrames): Step => asy
   const c = ctx as PlayScriptCtx;
   try {
     await paceTimeline(c, timeline);
-    c.setUi('isFlipped', false);
     if (c.state.phase === 'ENDED' && c.state.result && !c.ui.lockedResult) {
       c.setUi('lockedResult', c.state.result);
       c.setUi('showEndGamePrompt', true);

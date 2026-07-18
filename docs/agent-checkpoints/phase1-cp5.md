@@ -253,3 +253,29 @@ server-adapter work; none was started here.
   `npm run test:playgame:phase0` (9 files, 53 tests, 200 property cases),
   `npx vitest run services/playgame/runtime contexts` (10 files, 57 tests),
   and `npm run build` (1,186 modules transformed). All passed.
+- Conformed the END TURN presentation walk to the designer-authored sequence:
+  the local private plan locks first in one 250 ms beat, remote staged cards
+  then fly face-down from the opponent hand region, priority-owner
+  `CARD_FLIPPED` frames reveal one at a time, and non-priority frames follow.
+  Local canonical `CARD_STAGED` frames are adopted without replaying an extra
+  hand-to-lane flight, while delayed cards remain absent from the reveal walk.
+- Routed effect-driven `CARD_MOVED` and visible `CARD_MOVED_TO_ZONE` frames
+  through the shared rect-capture/card-transfer FLIP animator. Move VFX is now
+  keyed by `cause.effectKind` and `cause.sourceId`, with location relocations
+  receiving the location palette instead of silently adopting the destination
+  projection.
+- Centralized `BoardCard` facing so a local card is owner-visible only while it
+  belongs to the current staging order. The resolution lock supplies its sole
+  face-down transition, each committed reveal supplies at most one face-up
+  transition, and cards held by the engine's `DELAY_REVEAL` projection stay
+  face-down after turn cleanup instead of flipping back up during planning.
+- Added presentation regressions for the per-card facing-transition ceiling,
+  delayed-card facing, real `CARD_MOVED` transfer invocation, and the exact
+  lock → remote fly-in → priority reveal → non-priority reveal order. Also
+  made the legacy presentation mapping checks Vitest-collectable and excluded
+  nested `.claude/worktrees` checkouts from the repository test boundary.
+- Verified this conformance round with `npm run test:playgame:phase0` (9 files,
+  53 tests, 200 property cases),
+  `npx vitest run services/playgame/runtime contexts services/playgame/presentation`
+  (16 files, 67 tests), and `npm run build` (1,187 modules transformed). All
+  requested gates passed.
