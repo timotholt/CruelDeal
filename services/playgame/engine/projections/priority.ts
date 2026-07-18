@@ -13,6 +13,7 @@ import type { Manifest } from '../manifest/types';
 import type { PriorityReason } from '../types/events';
 import { getLanePower } from './power';
 import { createRng } from '../rng';
+import { activeLaneIds } from '../laneTopology';
 
 export interface PriorityResult {
   readonly owner: Owner;
@@ -24,8 +25,7 @@ export function getPriority(state: MatchState, manifest: Manifest): PriorityResu
   let lanesO = 0;
   let totP = 0;
   let totO = 0;
-  for (let i = 0; i < 3; i++) {
-    const lane = i as 0 | 1 | 2;
+  for (const lane of activeLaneIds(state)) {
     const p = getLanePower(state, lane, 'P0', manifest);
     const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;

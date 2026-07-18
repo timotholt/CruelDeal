@@ -201,6 +201,7 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'BLOCK_PLAY':
     case 'BLOCK_MOVE':
     case 'BLOCK_POWER_INCREASE':
+    case 'BLOCK_DESTROY':
     case 'BLOCK_FRIENDLY_DESTROY':
     case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF':
@@ -270,6 +271,7 @@ function targetIncludes(
     case 'BLOCK_PLAY':
     case 'BLOCK_MOVE':
     case 'BLOCK_POWER_INCREASE':
+    case 'BLOCK_DESTROY':
     case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF': {
       const target = (expr as { target?: import('../types/ability').Selector }).target;

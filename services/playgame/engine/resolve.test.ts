@@ -17,7 +17,7 @@ import type {
   MatchState,
 } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
-import type { CardId, LaneIdx, LocationId, Owner } from './types/ids';
+import type { CardId, LaneId, LocationId, Owner } from './types/ids';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -48,7 +48,12 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
     version: 1,
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-    rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+    rulesets: { standard: {
+      rulesetId: 'standard',
+      deckConstruction: { defaultCopyLimit: 1 },
+      laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+      locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+    } },
     cards: byId(cards),
     locations: byId(locations),
     disabled: { cards: [], locations: [] },
@@ -58,7 +63,7 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
 let idCounter = 0;
 const nextCardId = (): CardId => `r${++idCounter}` as CardId;
 
-function blankLane(i: LaneIdx): LaneState {
+function blankLane(i: LaneId): LaneState {
   return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
 }
 
@@ -132,7 +137,7 @@ function withCardInDeck(state: MatchState, defId: string, owner: Owner = 'P0'): 
   };
 }
 
-function withLocation(state: MatchState, lane: LaneIdx, defId: string, revealed: boolean = false): MatchState {
+function withLocation(state: MatchState, lane: LaneId, defId: string, revealed: boolean = false): MatchState {
   const loc: LocationInstance = { id: `loc${lane}` as LocationId, defId, lane, tags: [] };
   const newLane = { ...state.lanes[lane], location: loc, locationRevealed: revealed };
   const lanes: [LaneState, LaneState, LaneState] = [
@@ -400,7 +405,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = withLocation(s, 1, 'some-loc', false);
   const { events, state: after } = resolveTurn(s, manifest, createRng('loc'));
   truthy(
-    events.some(e => e.type === 'LOCATION_REVEALED' && (e as { lane: LaneIdx }).lane === 1),
+    events.some(e => e.type === 'LOCATION_REVEALED' && (e as { lane: LaneId }).lane === 1),
     'LOCATION_REVEALED for lane 1 at start of turn 2',
   );
   eq(after.lanes[1].locationRevealed, true, 'lane 1 location flipped face-up');
@@ -430,7 +435,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   };
   let s = baseState({ turn: 1, priority: 'P0' });
   s = withLocation(s, 1, 'rally-point', false);
-  const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 1 as LaneIdx, revealed: true };
+  const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 1 as LaneId, revealed: true };
   s = {
     ...s,
     cards: { ...s.cards, [inst.id]: inst },
@@ -453,7 +458,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   let s = baseState({ turn: 6, priority: 'P0' });
   // Give P0 two grunts on board; P1 one.
   for (let i = 0; i < 2; i++) {
-    const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
+    const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
     s = {
       ...s,
       cards: { ...s.cards, [inst.id]: inst },
@@ -463,7 +468,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
       ],
     };
   }
-  const opp = { ...mkCardInstance('grunt', 'P1'), zone: 'LANE' as const, lane: 0 as LaneIdx, revealed: true };
+  const opp = { ...mkCardInstance('grunt', 'P1'), zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
   s = {
     ...s,
     cards: { ...s.cards, [opp.id]: opp },

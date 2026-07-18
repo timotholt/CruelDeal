@@ -1,4 +1,4 @@
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import { isPowerBearingCard } from './power-bearing';
@@ -29,7 +29,7 @@ export function isPowerIncreaseBlocked(
  */
 export function isLanePowerIncreaseBlocked(
   state: MatchState,
-  lane: LaneIdx,
+  lane: LaneId,
   owner: Owner,
   manifest: Manifest,
 ): boolean {

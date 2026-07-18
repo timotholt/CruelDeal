@@ -1,5 +1,5 @@
 import type { CardDef, LocationDef, Manifest } from './manifest/types';
-import type { CardId, LaneIdx, Owner } from './types/ids';
+import type { CardId, LaneId, Owner } from './types/ids';
 import type { CardInstance, MatchState } from './types/state';
 import type { MatchEvent } from './types/events';
 import { apply } from './apply';
@@ -32,7 +32,12 @@ const manifest = (locations: LocationDef[], cards: CardDef[]): Manifest => ({
   version: 1,
   protocolVersion: 1,
   constants: { energyCurve: [0, 1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-  rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+  rulesets: { standard: {
+    rulesetId: 'standard',
+    deckConstruction: { defaultCopyLimit: 1 },
+    laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+    locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+  } },
   cards: Object.fromEntries(cards.map(c => [c.defId, c])),
   locations: Object.fromEntries(locations.map(l => [l.defId, l])),
   disabled: { cards: [], locations: [] },
@@ -48,7 +53,7 @@ const loc = (defId: string, abilities: LocationDef['abilities']): LocationDef =>
 });
 
 let idSeq = 0;
-const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: LaneIdx | null = null): CardInstance => ({
+const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: LaneId | null = null): CardInstance => ({
   id: `${defId}-${++idSeq}` as CardId,
   defId,
   version: 1,
@@ -67,9 +72,9 @@ const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: Lan
 });
 
 const stateWith = (cards: CardInstance[], location: LocationDef, turn = 1): MatchState => {
-  const lane = (idx: LaneIdx) => ({
-    idx: idx as LaneIdx,
-    location: idx === 0 ? { id: 'loc-0' as any, defId: location.defId, lane: 0 as LaneIdx, tags: [] } : null,
+  const lane = (idx: LaneId) => ({
+    idx: idx as LaneId,
+    location: idx === 0 ? { id: 'loc-0' as any, defId: location.defId, lane: 0 as LaneId, tags: [] } : null,
     locationRevealed: idx === 0,
     cards: {
       P0: cards.filter(c => c.zone === 'LANE' && c.lane === idx && c.owner === 'P0').map(c => c.id),

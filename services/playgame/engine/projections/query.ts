@@ -29,9 +29,13 @@ import type {
   SpawnSource,
 } from '../types/state';
 import type { CardDef, CardType, Manifest } from '../manifest/types';
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
+import type { CardPositionCriteria } from '../types/cardPosition';
 import { getCardPower } from './power';
 import { isPowerBearingDef } from './power-bearing';
+import { activeLaneIds, isActiveLane } from '../laneTopology';
+import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
+import { matchesCardPosition } from './cardPosition';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Comparison primitives
@@ -104,7 +108,7 @@ export function matchesString(value: string, cmp: StringComparison): boolean {
 // CardFilter
 // ────────────────────────────────────────────────────────────────────────────
 
-export interface CardFilter {
+export interface CardFilter extends CardPositionCriteria {
   // Identity
   id?: StringComparison;
   defId?: StringComparison;
@@ -112,7 +116,7 @@ export interface CardFilter {
 
   // Location
   zone?: CardZone | readonly CardZone[];
-  lane?: LaneIdx | readonly LaneIdx[] | 'any' | 'none';
+  lane?: LaneId | readonly LaneId[] | 'any' | 'none';
   owner?: Owner | 'any';
 
   // Stats
@@ -195,6 +199,10 @@ export function matchesCard(
   if (filter.owner !== undefined && filter.owner !== 'any') {
     if (card.owner !== filter.owner) return false;
   }
+  if (
+    (filter.slot !== undefined || filter.row !== undefined || filter.column !== undefined) &&
+    !matchesCardPosition(card, state, filter)
+  ) return false;
 
   // ── Stats ─────────────────────────────────────────────────────────────
   if (filter.cost !== undefined) {
@@ -305,8 +313,7 @@ function matchesAbilityFlags(
     key: keyof NonNullable<CardDef['abilities']>,
   ): boolean => {
     if (flag === undefined) return true;
-    const arr = def?.abilities[key];
-    const has = Array.isArray(arr) && arr.length > 0;
+    const has = hasCardAbility(def?.abilities, key);
     return has === flag;
   };
 
@@ -320,17 +327,7 @@ function matchesAbilityFlags(
   if (!check(filter.hasActivate, 'activate')) return false;
 
   if (filter.hasAnyAbility !== undefined) {
-    const a = def?.abilities ?? {};
-    const any =
-      (a.onReveal?.length ?? 0) > 0 ||
-      (a.ongoing?.length ?? 0) > 0 ||
-      (a.onMove?.length ?? 0) > 0 ||
-      (a.onDestroyed?.length ?? 0) > 0 ||
-      (a.onDiscarded?.length ?? 0) > 0 ||
-      (a.onEndOfTurn?.length ?? 0) > 0 ||
-      (a.onTurnStart?.length ?? 0) > 0 ||
-      (a.onAnyCardPlayedHere?.length ?? 0) > 0 ||
-      (a.activate?.length ?? 0) > 0;
+    const any = hasAnyCardAbility(def?.abilities);
     if (any !== filter.hasAnyAbility) return false;
   }
 
@@ -416,7 +413,7 @@ export function matchesCardDef(
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface LaneFilter {
-  idx?: LaneIdx | readonly LaneIdx[];
+  idx?: LaneId | readonly LaneId[];
 
   hasCapacity?: boolean | Owner;
   isFull?: boolean | Owner;
@@ -438,12 +435,13 @@ export interface LaneFilter {
 }
 
 export function matchesLane(
-  idx: LaneIdx,
+  idx: LaneId,
   filter: LaneFilter,
   state: MatchState,
   manifest: Manifest,
 ): boolean {
   const lane = state.lanes[idx];
+  if (!lane || !isActiveLane(state, idx)) return false;
   const cap = manifest.constants.laneCapacity;
   const playerCount = lane.cards.P0.length;
   const oppCount = lane.cards.P1.length;
@@ -592,10 +590,9 @@ export function findLanes(
   state: MatchState,
   manifest: Manifest,
   filter: LaneFilter,
-): LaneIdx[] {
-  const out: LaneIdx[] = [];
-  for (let i = 0; i < 3; i++) {
-    const idx = i as LaneIdx;
+): LaneId[] {
+  const out: LaneId[] = [];
+  for (const idx of activeLaneIds(state)) {
     if (matchesLane(idx, filter, state, manifest)) out.push(idx);
   }
   return out;
@@ -605,9 +602,8 @@ export function findLane(
   state: MatchState,
   manifest: Manifest,
   filter: LaneFilter,
-): LaneIdx | null {
-  for (let i = 0; i < 3; i++) {
-    const idx = i as LaneIdx;
+): LaneId | null {
+  for (const idx of activeLaneIds(state)) {
     if (matchesLane(idx, filter, state, manifest)) return idx;
   }
   return null;

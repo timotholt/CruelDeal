@@ -31,6 +31,7 @@ import type {
   CommittedTransactionTimeline,
   ParticipantController,
   RuntimeIntent,
+  LocationCardDeckEntry,
 } from './contracts';
 import { buildOpeningTransaction } from './opening';
 import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
@@ -59,6 +60,7 @@ export interface MatchRuntimeConfig {
   readonly viewerSeat: Seat;
   readonly controllers: Readonly<Record<Seat, ParticipantController>>;
   readonly decks: Readonly<Record<Seat, Deck>>;
+  readonly locationDeck: readonly LocationCardDeckEntry[];
 }
 
 interface QueuedIntent {
@@ -232,7 +234,12 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     throw new Error(`createMatchRuntime: unknown ruleset "${config.rulesetId}"`);
   }
 
-  const genesisState = createInitialMatchState(config.seed, manifest, config.decks);
+  const genesisState = createInitialMatchState(
+    config.seed,
+    manifest,
+    config.decks,
+    config.locationDeck,
+  );
   const receipts: InMemoryIntentReceiptMap = new Map();
   const queue: QueuedIntent[] = [];
   const subscribers = new Set<MatchTransactionSubscriber>();

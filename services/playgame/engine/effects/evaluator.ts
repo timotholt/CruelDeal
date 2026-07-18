@@ -17,7 +17,7 @@
 
 import type { EffectExpr, EffectRef, PoolRef, Selector } from '../types/ability';
 import type { MatchState, SpawnSource } from '../types/state';
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import type { MatchEvent } from '../types/events';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
@@ -35,6 +35,12 @@ import { isPowerIncreaseBlocked } from '../projections/power-restrictions';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
 import { resolveCardPowerChange } from './power-change';
+import {
+  destroyAllOtherLanes,
+  destroyLane,
+  type LocationLifecycleResult,
+} from '../locationLifecycle';
+import { isActiveLane } from '../laneTopology';
 
 export const MAX_REVEAL_RECURSION = 16;
 
@@ -55,7 +61,7 @@ type LocationTriggerSlot = 'atTurnStart' | 'atTurnEnd' | 'onCardPlayedHere' | 'o
 function fireCardTrigger(
   state: MatchState,
   cardId: CardId,
-  selfLane: LaneIdx | null,
+  selfLane: LaneId | null,
   selfOwner: Owner | null,
   slot: TriggerSlot,
   parentRng: Rng,
@@ -94,7 +100,7 @@ function fireCardTrigger(
 
 export function fireLocationTrigger(
   state: MatchState,
-  lane: LaneIdx,
+  lane: LaneId,
   slot: LocationTriggerSlot,
   parentRng: Rng,
   manifest: Manifest,
@@ -146,6 +152,132 @@ export interface EffectCtx extends EvalCtx {
 export interface EvalResult {
   readonly events: readonly MatchEvent[];
   readonly state: MatchState;
+}
+
+export interface DestroyCardsOptions {
+  readonly source: EffectRef;
+  readonly rng: Rng;
+  readonly sourceLane: LaneId | null;
+  readonly sourceOwner?: Owner | null;
+  readonly depth?: number;
+}
+
+/**
+ * Governed card-destruction primitive shared by authored DESTROY effects and
+ * structural operations such as lane destruction.
+ *
+ * This is deliberately more than a CARD_DESTROYED event constructor: it
+ * honors destroy immunity and friendly-destroy gates, then runs the normal
+ * card onDestroyed and location onCardDestroyedHere reactions in order.
+ */
+export function destroyCards(
+  state: MatchState,
+  cardIds: readonly CardId[],
+  options: DestroyCardsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const events: MatchEvent[] = [];
+  let s = state;
+  const ctx: EffectCtx = {
+    state: s,
+    manifest,
+    self: options.source.sourceId,
+    selfKind: manifest.cards[options.source.sourceId] ? 'card' : 'location',
+    selfLane: options.sourceLane,
+    selfOwner: options.sourceOwner ?? effectSourceOwner(s, options.source),
+    rng: options.rng,
+    source: options.source,
+    depth: options.depth ?? 0,
+  };
+
+  for (const id of cardIds) {
+    const preCard = s.cards[id];
+    const preLane = preCard?.lane ?? null;
+    const preOwner = preCard?.owner ?? null;
+    if (!preCard || preCard.zone !== 'LANE') continue;
+    const liveCtx = { ...ctx, state: s };
+    if (preCard.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
+    if (isDestroyBlocked(s, id, manifest)) continue;
+    if (isFriendlyDestroyBlocked(s, id, liveCtx, manifest)) continue;
+
+    const event: MatchEvent = {
+      type: 'CARD_DESTROYED',
+      cardId: id,
+      cause: options.source,
+    };
+    events.push(event);
+    s = apply(s, event, manifest);
+
+    const trigger = fireCardTrigger(
+      s,
+      id,
+      preLane,
+      preOwner,
+      'onDestroyed',
+      options.rng.fork(`destroyed:${id}`),
+      options.depth ?? 0,
+      manifest,
+    );
+    events.push(...trigger.events);
+    s = trigger.state;
+
+    if (preLane !== null) {
+      const locationTrigger = fireLocationTrigger(
+        s,
+        preLane,
+        'onCardDestroyedHere',
+        options.rng.fork(`locDestroyed:${id}`),
+        manifest,
+        id,
+        preOwner,
+        options.depth ?? 0,
+      );
+      events.push(...locationTrigger.events);
+      s = locationTrigger.state;
+    }
+  }
+  return { events, state: s };
+}
+
+const normalLaneOccupantDestruction = (
+  state: MatchState,
+  cardIds: readonly CardId[],
+  laneId: LaneId,
+  cause: EffectRef,
+  rng: Rng,
+  manifest: Manifest,
+): EvalResult => destroyCards(state, cardIds, {
+  source: cause,
+  rng,
+  sourceLane: laneId,
+}, manifest);
+
+export function destroyLaneWithNormalRules(
+  state: MatchState,
+  laneId: LaneId,
+  source: EffectRef,
+  rng: Rng,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  return destroyLane(state, laneId, {
+    cause: source,
+    rng,
+    destroyOccupants: normalLaneOccupantDestruction,
+  }, manifest);
+}
+
+export function destroyAllOtherLanesWithNormalRules(
+  state: MatchState,
+  survivor: LaneId,
+  source: EffectRef,
+  rng: Rng,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  return destroyAllOtherLanes(state, survivor, {
+    cause: source,
+    rng,
+    destroyOccupants: normalLaneOccupantDestruction,
+  }, manifest);
 }
 
 // ============================================================================
@@ -241,7 +373,14 @@ function resolveCardReveal(
   options: CardRevealOptions,
 ): EvalResult {
   const card = state.cards[cardId];
-  if (!card) return { events: [], state };
+  if (
+    !card
+    || card.zone !== 'LANE'
+    || card.lane === null
+    || !isActiveLane(state, card.lane)
+  ) {
+    return { events: [], state };
+  }
 
   if (!options.ignoreDelay && !card.revealed && isRevealDelayed(state, cardId, manifest)) {
     return { events: [], state };
@@ -507,37 +646,27 @@ export function evalEffect(
 
     case 'DESTROY': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of targets) {
-        const preCard = s.cards[id];
-        const preLane = preCard?.lane ?? null;
-        const preOwner = preCard?.owner ?? null;
-        if (preCard?.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
-        if (isFriendlyDestroyBlocked(s, id, ctx, manifest)) continue;
-        const e: MatchEvent = { type: 'CARD_DESTROYED', cardId: id, cause: ctx.source };
-        events.push(e);
-        s = apply(s, e, manifest);
-        // Fire onDestroyed for this card, anchored to its pre-destroy lane
-        // so SELF-relative selectors still resolve meaningfully.
-        const trig = fireCardTrigger(s, id, preLane, preOwner, 'onDestroyed', ctx.rng, ctx.depth, manifest);
-        events.push(...trig.events);
-        s = trig.state;
-        if (preLane !== null) {
-          const locTrig = fireLocationTrigger(
-            s,
-            preLane,
-            'onCardDestroyedHere',
-            ctx.rng.fork(`locDestroyed:${id}`),
-            manifest,
-            id,
-            preOwner,
-          );
-          events.push(...locTrig.events);
-          s = locTrig.state;
-        }
-      }
-      return { events, state: s };
+      return destroyCards(state, targets, {
+        source: ctx.source,
+        rng: ctx.rng,
+        sourceLane: ctx.selfLane,
+        sourceOwner: ctx.selfOwner,
+        depth: ctx.depth,
+      }, manifest);
+    }
+
+    case 'DESTROY_OTHER_LANES': {
+      if (liveCtx.selfLane === null) return { events: [], state };
+      const result = destroyAllOtherLanesWithNormalRules(
+        state,
+        liveCtx.selfLane,
+        ctx.source,
+        ctx.rng.fork(`destroy-other-lanes:${liveCtx.selfLane}`),
+        manifest,
+      );
+      return result.ok
+        ? { events: result.events, state: result.state }
+        : { events: [], state };
     }
 
     case 'BANISH': {
@@ -950,6 +1079,7 @@ export function evalEffect(
           newId,
           newDefId: effect.newDefId,
           cause: ctx.source,
+          revealed: false,
         };
         events.push(e);
         s = apply(s, e, manifest);
@@ -1235,6 +1365,20 @@ function effectSourceOwner(state: MatchState, source: EffectRef): Owner | null {
   return sourceCard?.owner ?? null;
 }
 
+function isDestroyBlocked(
+  state: MatchState,
+  victimId: CardId,
+  manifest: Manifest,
+): boolean {
+  for (const entry of collectAllOngoings(state, manifest)) {
+    if (entry.expr.kind !== 'BLOCK_DESTROY') continue;
+    const ongoingCtx = sourceCtx(entry, state, manifest);
+    if (!ongoingCtx) continue;
+    if (select(entry.expr.target, ongoingCtx).includes(victimId)) return true;
+  }
+  return false;
+}
+
 function isFriendlyDestroyBlocked(
   state: MatchState,
   victimId: CardId,
@@ -1255,7 +1399,11 @@ function isFriendlyDestroyBlocked(
 
     const ongoingCtx = sourceCtx(entry, state, manifest);
     if (!ongoingCtx) continue;
-    if (selectLanes(entry.expr.laneOf, ongoingCtx).includes(victim.lane)) {
+    const laneMatches = entry.expr.laneOf === undefined ||
+      selectLanes(entry.expr.laneOf, ongoingCtx).includes(victim.lane);
+    const targetMatches = entry.expr.target === undefined ||
+      select(entry.expr.target, ongoingCtx).includes(victimId);
+    if (laneMatches && targetMatches) {
       return true;
     }
   }
@@ -1300,6 +1448,9 @@ function resolveCardTagSpec(
       return { kind: 'FROM_SPAWN', sourceId: source.sourceId as CardId };
     case 'DESTROY_IMMUNE':
       return { kind: 'DESTROY_IMMUNE' };
+    case 'PLAYED_THIS_TURN':
+    case 'EVER_MOVED':
+      return { kind: spec.kind };
   }
 }
 
@@ -1359,7 +1510,7 @@ export function resolveLaneDestination(
   sel: Selector,
   ctx: EvalCtx,
   rng: Rng,
-): LaneIdx | null {
+): LaneId | null {
   const lanes = selectLanes(sel, { ...ctx, rng });
   if (lanes.length === 0) return null;
   return lanes.length === 1 ? lanes[0] : rng.pick(lanes);

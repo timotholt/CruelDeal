@@ -8,7 +8,7 @@
  * multipliers (Iron Man / Science Lab / similar).
  */
 
-import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
 import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import { collectAllOngoings, ongoingsTargeting } from './ongoing';
@@ -46,7 +46,7 @@ export interface LanePowerMultiplierEntry {
 }
 
 export interface LanePowerBreakdown {
-  readonly lane: LaneIdx;
+  readonly lane: LaneId;
   readonly owner: Owner;
   readonly cards: readonly LaneCardContribution[];
   readonly cardSubtotal: number;
@@ -123,7 +123,7 @@ export function getCardPowerModifiers(
 
 export function getLanePower(
   state: MatchState,
-  lane: LaneIdx,
+  lane: LaneId,
   owner: Owner,
   manifest: Manifest,
 ): number {
@@ -132,7 +132,7 @@ export function getLanePower(
 
 export function getLanePowerBreakdown(
   state: MatchState,
-  lane: LaneIdx,
+  lane: LaneId,
   owner: Owner,
   manifest: Manifest,
 ): LanePowerBreakdown {

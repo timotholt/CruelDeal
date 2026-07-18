@@ -29,7 +29,7 @@ import type {
   SpawnSource,
   TrackedVariables,
 } from './types/state';
-import type { CardId, LaneIdx, Owner } from './types/ids';
+import type { CardId, LaneId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import { currentFrame, frameSingleEvent } from './timeline';
 import { nextFrame, type FramedEvent } from './types/timeline';
@@ -432,24 +432,56 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
         lane: event.lane,
         tags: [],
       };
-      return patchLane(state, event.lane, { location: newLoc, locationRevealed: false });
+      return patchLane(state, event.lane, {
+        location: newLoc,
+        locationRevealed: event.revealed,
+      });
     }
 
-    case 'LOCATION_DESTROYED': {
-      // Lane becomes locationless. Card slots stay intact; only the
-      // location (and therefore its ongoing auras / lane tags) is gone.
-      const lane = state.lanes[event.lane];
-      if (!lane.location || lane.location.id !== event.locationId) return state;
-      return patchLane(state, event.lane, { location: null, locationRevealed: false });
+    case 'LOCATIONS_SWAPPED': {
+      const leftLane = state.lanes[event.left.fromLane];
+      const rightLane = state.lanes[event.right.fromLane];
+      if (
+        !leftLane?.location
+        || !rightLane?.location
+        || leftLane.location.id !== event.left.locationId
+        || rightLane.location.id !== event.right.locationId
+        || event.left.toLane !== event.right.fromLane
+        || event.right.toLane !== event.left.fromLane
+      ) {
+        return state;
+      }
+      const leftLocation = {
+        ...leftLane.location,
+        lane: event.left.toLane,
+      };
+      const rightLocation = {
+        ...rightLane.location,
+        lane: event.right.toLane,
+      };
+      const afterLeft = patchLane(state, event.left.fromLane, {
+        location: rightLocation,
+        locationRevealed: rightLane.locationRevealed,
+      });
+      return patchLane(afterLeft, event.right.fromLane, {
+        location: leftLocation,
+        locationRevealed: leftLane.locationRevealed,
+      });
     }
 
     case 'LOCATION_SHIFTED': {
-      // Move the location instance from `fromLane` to `toLane`. If the
-      // target lane already has a location we overwrite it — callers that
-      // want REPLACED semantics should emit LOCATION_REPLACED + _DESTROYED
-      // instead, this event models a pure move.
+      // A pure move requires an empty destination. It may never evict an
+      // occupied location as an implicit destruction/replacement path.
       const fromLane = state.lanes[event.fromLane];
-      if (!fromLane.location || fromLane.location.id !== event.locationId) return state;
+      const toLane = state.lanes[event.toLane];
+      if (
+        !fromLane?.location
+        || fromLane.location.id !== event.locationId
+        || !toLane
+        || toLane.location
+      ) {
+        return state;
+      }
       const loc = fromLane.location;
       const relocated: LocationInstance = { ...loc, lane: event.toLane };
       const s1 = patchLane(state, event.fromLane, {
@@ -497,6 +529,75 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
           },
         },
       });
+    }
+
+    // ---- Lane lifecycle --------------------------------------------------
+
+    case 'LANE_DESTRUCTION_STARTED': {
+      const lane = state.lanes[event.lane];
+      if (!lane || laneStatus(lane) !== 'ACTIVE') return state;
+      return patchLane(state, event.lane, { status: 'DESTROYING' });
+    }
+
+    case 'LANE_DESTROYED': {
+      const lane = state.lanes[event.lane];
+      if (!lane || laneStatus(lane) !== 'DESTROYING') return state;
+      const activeLaneOrder = activeLaneIds(state).filter(id => id !== event.lane);
+      return {
+        ...patchLane(state, event.lane, {
+          status: 'DESTROYED',
+          location: null,
+          locationRevealed: false,
+          cards: { P0: [], P1: [] },
+        }),
+        activeLaneOrder,
+        pendingEffects: state.pendingEffects.filter(effect =>
+          !('lane' in effect && effect.lane === event.lane)
+          && !('sourceLane' in effect && effect.sourceLane === event.lane),
+        ),
+      };
+    }
+
+    case 'LANE_CREATION_STARTED': {
+      if (state.lanes[event.lane]) return state;
+      const lane: LaneState = {
+        idx: event.lane,
+        status: 'CREATING',
+        location: null,
+        locationRevealed: false,
+        cards: { P0: [], P1: [] },
+      };
+      return {
+        ...state,
+        lanes: [...state.lanes, lane],
+        nextLaneId: event.lane + 1,
+      };
+    }
+
+    case 'LANE_CREATED': {
+      const lane = state.lanes[event.lane];
+      if (!lane || laneStatus(lane) !== 'CREATING') return state;
+      const active = activeLaneIds(state);
+      const insertion = Math.min(Math.max(0, event.position), active.length);
+      const activeLaneOrder = [
+        ...active.slice(0, insertion),
+        event.lane,
+        ...active.slice(insertion),
+      ];
+      const location: LocationInstance = {
+        id: event.location.id,
+        defId: event.location.defId,
+        lane: event.lane,
+        tags: [],
+      };
+      return {
+        ...patchLane(state, event.lane, {
+          status: 'ACTIVE',
+          location,
+          locationRevealed: event.location.revealed,
+        }),
+        activeLaneOrder,
+      };
     }
 
     // ---- Turn flow --------------------------------------------------------
@@ -573,7 +674,7 @@ function mintOrUpdate(
   owner: Owner,
   spawnSource: SpawnSource,
   zone: 'HAND' | 'LANE' | 'DECK',
-  lane: LaneIdx | null = null,
+  lane: LaneId | null = null,
 ): MatchState {
   const existing = state.cards[id];
   if (existing) {
@@ -608,18 +709,15 @@ function patchCard(state: MatchState, id: CardId, patch: Partial<CardInstance>):
   };
 }
 
-function patchLane(state: MatchState, idx: LaneIdx, patch: Partial<LaneState>): MatchState {
+function patchLane(state: MatchState, idx: LaneId, patch: Partial<LaneState>): MatchState {
   const prev = state.lanes[idx];
+  if (!prev) return state;
   const next: LaneState = { ...prev, ...patch };
-  const lanes: [LaneState, LaneState, LaneState] = [
-    idx === 0 ? next : state.lanes[0],
-    idx === 1 ? next : state.lanes[1],
-    idx === 2 ? next : state.lanes[2],
-  ];
+  const lanes = state.lanes.map(lane => lane.idx === idx ? next : lane);
   return { ...state, lanes };
 }
 
-function addToLane(state: MatchState, owner: Owner, lane: LaneIdx, cardId: CardId): MatchState {
+function addToLane(state: MatchState, owner: Owner, lane: LaneId, cardId: CardId): MatchState {
   const prev = state.lanes[lane];
   if (prev.cards[owner].includes(cardId)) return state;
   return patchLane(state, lane, {
@@ -627,7 +725,7 @@ function addToLane(state: MatchState, owner: Owner, lane: LaneIdx, cardId: CardI
   });
 }
 
-function removeFromLane(state: MatchState, owner: Owner, lane: LaneIdx, cardId: CardId): MatchState {
+function removeFromLane(state: MatchState, owner: Owner, lane: LaneId, cardId: CardId): MatchState {
   const prev = state.lanes[lane];
   return patchLane(state, lane, {
     cards: {
@@ -654,7 +752,7 @@ function removeFromHand(state: MatchState, owner: Owner, cardId: CardId): MatchS
 function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId): MatchState {
   let s = state;
   for (let lane = 0; lane < s.lanes.length; lane++) {
-    s = removeFromLane(s, owner, lane as LaneIdx, cardId);
+    s = removeFromLane(s, owner, lane as LaneId, cardId);
   }
   s = removeFromHand(s, owner, cardId);
   return {
@@ -681,6 +779,17 @@ function appendLog(state: MatchState, framed: FramedEvent): MatchState {
     event: framed.event,
   };
   return { ...state, log: [...state.log, entry] };
+}
+
+function laneStatus(lane: LaneState): NonNullable<LaneState['status']> {
+  return lane.status ?? 'ACTIVE';
+}
+
+function activeLaneIds(state: MatchState): readonly LaneId[] {
+  return state.activeLaneOrder
+    ?? state.lanes
+      .filter(lane => laneStatus(lane) === 'ACTIVE')
+      .map(lane => lane.idx);
 }
 
 // ---- trackedVariables maintenance ------------------------------------------

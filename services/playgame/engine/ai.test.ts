@@ -9,7 +9,7 @@ import { planEnemyTurnFromPool, planEnemyTurnFromHand } from './ai';
 import type { CardDef, Manifest } from './manifest/types';
 import type { CardInstance, LaneState, MatchState } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
-import type { CardId, LaneIdx, Owner } from './types/ids';
+import type { CardId, LaneId, Owner } from './types/ids';
 
 // ── Shim ────────────────────────────────────────────────────────────────────
 let failures = 0;
@@ -32,13 +32,18 @@ const mkManifest = (cards: CardDef[], disabled: string[] = []): Manifest => ({
   version: 1,
   protocolVersion: 1,
   constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-  rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+  rulesets: { standard: {
+    rulesetId: 'standard',
+    deckConstruction: { defaultCopyLimit: 1 },
+    laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+    locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+  } },
   cards: Object.fromEntries(cards.map((c) => [c.defId, c])),
   locations: {},
   disabled: { cards: disabled, locations: [] },
 });
 
-const blankLane = (i: LaneIdx): LaneState => ({
+const blankLane = (i: LaneId): LaneState => ({
   idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] },
 });
 
@@ -46,7 +51,7 @@ interface CardSpec {
   id?: string;
   def: string;
   owner: Owner;
-  lane: LaneIdx | null;
+  lane: LaneId | null;
   zone?: CardInstance['zone'];
 }
 
@@ -205,7 +210,7 @@ const buildState = (
   ];
   // Fill all 3 lanes for P1.
   for (let lane = 0; lane < 3; lane++) {
-    for (let i = 0; i < 4; i++) specs.push({ def: 'cheap', owner: 'P1', lane: lane as LaneIdx, zone: 'LANE' });
+    for (let i = 0; i < 4; i++) specs.push({ def: 'cheap', owner: 'P1', lane: lane as LaneId, zone: 'LANE' });
   }
   const state = buildState(specs, { energy: { P0: 0, P1: 3 } });
   const plays = planEnemyTurnFromHand(state, 'P1', manifest, createRng('full'));

@@ -31,6 +31,29 @@ export { apply, applyFramed } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
 export {
+  activeLaneIds,
+  createLane,
+  destroyLocationCard,
+  isActiveLane,
+  laneOccupantIds,
+  laneStatus,
+  MAXIMUM_ACTIVE_LANES,
+  MINIMUM_ACTIVE_LANES,
+  RUIN_LOCATION_DEF_ID,
+  swapLocations,
+  validateLaneTopology,
+} from './locationLifecycle';
+export type {
+  CreateLaneOptions,
+  DestroyLaneOptions,
+  LocationLifecycleFailure,
+  LocationLifecycleResult,
+} from './locationLifecycle';
+export {
+  destroyAllOtherLanesWithNormalRules as destroyAllOtherLanes,
+  destroyLaneWithNormalRules as destroyLane,
+} from './effects/evaluator';
+export {
   assertFramedEventSequence,
   cardLifecycleFrames,
   currentFrame,

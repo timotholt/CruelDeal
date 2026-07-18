@@ -6,17 +6,18 @@
  * state to figure out where an Ongoing came from.
  */
 
-import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
 import type { CardInstance, LocationInstance, MatchState } from '../types/state';
 import type { OngoingExpr } from '../types/ability';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
+import { activeLaneIds } from '../laneTopology';
 
 /** Ongoing with its provenance resolved. */
 export interface SourcedOngoing {
   readonly sourceCardId: CardId | null;      // null for location Ongoings
   readonly sourceLocationId: LocationId | null;
-  readonly sourceLane: LaneIdx;
+  readonly sourceLane: LaneId;
   readonly sourceOwner: Owner | null;        // null for locations
   readonly expr: OngoingExpr;                // numeric params already boosted
 }
@@ -34,14 +35,14 @@ export interface EvalCtx {
   /** Lane in which `self` lives. Pre-resolved for both cards and
    *  locations because locations don't have a lane field reachable from
    *  their id alone. */
-  readonly selfLane: LaneIdx | null;
+  readonly selfLane: LaneId | null;
   /** Owner of `self`. Locations have no owner. */
   readonly selfOwner: Owner | null;
   /** Optional "it" binding for FOREACH iteration. */
   readonly it?: CardId;
   /** Optional triggering-event bindings for location/card reactive abilities. */
   readonly eventCard?: CardId | null;
-  readonly eventLane?: LaneIdx | null;
+  readonly eventLane?: LaneId | null;
   readonly eventOwner?: Owner | null;
   /** Optional RNG. Required for selectors that sample (RANDOM_N,
    *  FIRST_N with random ordering) and for NumExpr.RANDOM_INT. Pure
@@ -116,7 +117,8 @@ export function liveCardSources(state: MatchState): CardInstance[] {
 /** All revealed locations currently capable of emitting Ongoings. */
 export function liveLocationSources(state: MatchState): LocationInstance[] {
   const out: LocationInstance[] = [];
-  for (const lane of state.lanes) {
+  for (const laneId of activeLaneIds(state)) {
+    const lane = state.lanes[laneId];
     if (lane.location && lane.locationRevealed) out.push(lane.location);
   }
   return out;

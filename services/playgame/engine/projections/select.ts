@@ -10,7 +10,7 @@
  * onReveal-time primitives and land in Step 6.
  */
 
-import type { CardId } from '../types/ids';
+import type { CardId, LaneId } from '../types/ids';
 import type { OwnerFilter, Predicate, Selector, ZoneFilter, CmpOp } from '../types/ability';
 import type { CardZone } from '../types/state';
 import type { EvalCtx } from './context';
@@ -18,6 +18,9 @@ import { evalNum } from './numexpr';
 import { getCardPower } from './power';
 import { getCardCost } from './cost';
 import { isPowerBearingCard } from './power-bearing';
+import { activeLaneIds } from '../laneTopology';
+import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
+import { matchesCardPosition } from './cardPosition';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -43,9 +46,9 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       const srcLane = resolveLaneOf(sel.of, ctx);
       if (srcLane === null) return [];
       const out: CardId[] = [];
-      for (let i = 0 as 0 | 1 | 2; i < 3; i++) {
-        if (i === srcLane) continue;
-        out.push(...collectInLane(ctx, i as 0 | 1 | 2, sel.ownerFilter ?? 'ANY_OWNER'));
+      for (const laneId of activeLaneIds(ctx.state)) {
+        if (laneId === srcLane) continue;
+        out.push(...collectInLane(ctx, laneId, sel.ownerFilter ?? 'ANY_OWNER'));
       }
       return out;
     }
@@ -178,14 +181,14 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
 }
 
 /**
- * Resolve a Selector to a set of unique LaneIdx values. Used for MOVE
+ * Resolve a Selector to a set of unique LaneId values. Used for MOVE
  * destinations, REPLACE_LOCATION targets, and any effect whose "to" is
  * semantically a lane rather than a card.
  *
  * Handles LANE_OF / SAME_LANE / OTHER_LANES specially; falls back to
  * "unique lanes of whatever cards this resolves to" for card selectors.
  */
-export function selectLanes(sel: Selector, ctx: EvalCtx): Array<0 | 1 | 2> {
+export function selectLanes(sel: Selector, ctx: EvalCtx): LaneId[] {
   switch (sel.kind) {
     case 'SELF':
       return ctx.selfLane !== null ? [ctx.selfLane] : [];
@@ -198,8 +201,8 @@ export function selectLanes(sel: Selector, ctx: EvalCtx): Array<0 | 1 | 2> {
 
     case 'OTHER_LANES': {
       const mine = laneOfSelector(sel.of, ctx);
-      if (mine === null) return [0, 1, 2];
-      return ([0, 1, 2] as Array<0 | 1 | 2>).filter(l => l !== mine);
+      if (mine === null) return [...activeLaneIds(ctx.state)];
+      return activeLaneIds(ctx.state).filter(laneId => laneId !== mine);
     }
 
     case 'RANDOM_N': {
@@ -220,8 +223,8 @@ export function selectLanes(sel: Selector, ctx: EvalCtx): Array<0 | 1 | 2> {
     default: {
       // Fall back: evaluate as card selector and collect unique lanes.
       const ids = select(sel, ctx);
-      const seen = new Set<0 | 1 | 2>();
-      const out: Array<0 | 1 | 2> = [];
+      const seen = new Set<LaneId>();
+      const out: LaneId[] = [];
       for (const id of ids) {
         const c = ctx.state.cards[id];
         if (c?.lane !== null && c?.lane !== undefined && !seen.has(c.lane)) {
@@ -234,7 +237,7 @@ export function selectLanes(sel: Selector, ctx: EvalCtx): Array<0 | 1 | 2> {
   }
 }
 
-function laneOfSelector(sel: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
+function laneOfSelector(sel: Selector, ctx: EvalCtx): LaneId | null {
   if (sel.kind === 'SELF') return ctx.selfLane;
   const ids = select(sel, ctx);
   for (const id of ids) {
@@ -367,6 +370,14 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       return ids.some(id => !hasEffectiveAbility(id, ctx, 'ANY'));
     }
 
+    case 'CARD_POSITION': {
+      const ids = select(pred.target, ctx);
+      return ids.some(id => {
+        const card = ctx.state.cards[id];
+        return card ? matchesCardPosition(card, ctx.state, pred) : false;
+      });
+    }
+
     case 'IN_FULL_LANE': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
@@ -421,7 +432,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
  *  to ctx.selfLane. For a selector that yields cards, returns the lane
  *  of the first result (Ongoings target sets that span multiple lanes
  *  are rare and the primary caller is `SAME_LANE of SELF`). */
-function resolveLaneOf(of: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
+function resolveLaneOf(of: Selector, ctx: EvalCtx): LaneId | null {
   if (of.kind === 'SELF') return ctx.selfLane;
   const ids = select(of, ctx);
   for (const id of ids) {
@@ -431,7 +442,7 @@ function resolveLaneOf(of: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
   return null;
 }
 
-function laneOfFirst(sel: Selector, ctx: EvalCtx): (0 | 1 | 2) | null {
+function laneOfFirst(sel: Selector, ctx: EvalCtx): LaneId | null {
   const ids = select(sel, ctx);
   if (ids.length === 0) return null;
   const c = ctx.state.cards[ids[0]];
@@ -447,7 +458,7 @@ function ownerOfFirst(sel: Selector, ctx: EvalCtx): 'P0' | 'P1' | null {
 
 function collectInLane(
   ctx: EvalCtx,
-  lane: 0 | 1 | 2,
+  lane: LaneId,
   ownerFilter: OwnerFilter,
 ): CardId[] {
   const laneState = ctx.state.lanes[lane];
@@ -515,22 +526,19 @@ function hasEffectiveAbility(
 
   const printed = ctx.manifest.cards[card.defId]?.abilities ?? {};
   const printedHas = (s: typeof slot): boolean => {
-    if (s === 'ANY') {
-      return (printed.onReveal?.length ?? 0) > 0 ||
-        (printed.ongoing?.length ?? 0) > 0 ||
-        (printed.onTurnStart?.length ?? 0) > 0 ||
-        (printed.activate?.length ?? 0) > 0;
-    }
-    if (s === 'ON_REVEAL') return (printed.onReveal?.length ?? 0) > 0;
-    if (s === 'ONGOING') return (printed.ongoing?.length ?? 0) > 0;
-    return (printed.activate?.length ?? 0) > 0;
+    if (s === 'ANY') return hasAnyCardAbility(printed);
+    if (s === 'ON_REVEAL') return hasCardAbility(printed, 'onReveal');
+    if (s === 'ONGOING') return hasCardAbility(printed, 'ongoing');
+    return hasCardAbility(printed, 'activate');
   };
 
   const ov = card.textOverride;
   if (!ov) return printedHas(slot);
   if (ov.kind === 'BLANK_ALL') return false;
   if (ov.kind === 'BLANK_ONGOING') {
-    return slot === 'ONGOING' ? false : printedHas(slot);
+    if (slot === 'ONGOING') return false;
+    if (slot === 'ANY') return hasAnyCardAbility(printed, ['ongoing']);
+    return printedHas(slot);
   }
 
   const sourceDefId = ov.kind === 'COPY_OF_DEF'
@@ -543,24 +551,19 @@ function hasEffectiveAbility(
 
   if (ov.kind === 'COPY_ON_REVEAL_OF_CARD') {
     return slot === 'ON_REVEAL' || slot === 'ANY'
-      ? (source.onReveal?.length ?? 0) > 0
+      ? hasCardAbility(source, 'onReveal')
       : false;
   }
   if (ov.kind === 'COPY_ONGOING_OF_CARD') {
     return slot === 'ONGOING' || slot === 'ANY'
-      ? (source.ongoing?.length ?? 0) > 0
+      ? hasCardAbility(source, 'ongoing')
       : false;
   }
 
-  if (slot === 'ANY') {
-    return (source.onReveal?.length ?? 0) > 0 ||
-      (source.ongoing?.length ?? 0) > 0 ||
-      (source.onTurnStart?.length ?? 0) > 0 ||
-      (source.activate?.length ?? 0) > 0;
-  }
-  if (slot === 'ON_REVEAL') return (source.onReveal?.length ?? 0) > 0;
-  if (slot === 'ONGOING') return (source.ongoing?.length ?? 0) > 0;
-  return (source.activate?.length ?? 0) > 0;
+  if (slot === 'ANY') return hasAnyCardAbility(source);
+  if (slot === 'ON_REVEAL') return hasCardAbility(source, 'onReveal');
+  if (slot === 'ONGOING') return hasCardAbility(source, 'ongoing');
+  return hasCardAbility(source, 'activate');
 }
 
 export function compareNum(a: number, op: CmpOp, b: number): boolean {

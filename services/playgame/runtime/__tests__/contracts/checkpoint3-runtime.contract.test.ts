@@ -5,6 +5,7 @@ import type { Deck } from '../../../engine/manifest/types';
 import type { CardId, Seat } from '../../../engine/types/ids';
 import { computeDeckContentHash, validateMatchBootstrap } from '../../bootstrapValidation';
 import type { IntentEnvelope, MatchBootstrap, RuntimeIntent } from '../../contracts';
+import { defaultLocationDeckFactory } from '../../locationDeckFactory';
 import { createMatchRuntime, type MatchRuntime } from '../../matchRuntime';
 
 function cheapDeck(): Deck {
@@ -16,6 +17,8 @@ function cheapDeck(): Deck {
 
 function runtimeFixture(): MatchRuntime {
   const deck = cheapDeck();
+  const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard;
+  if (!ruleset) throw new Error('fixture requires standard ruleset');
   const bootstrap: MatchBootstrap = {
     matchId: 'phase1-contract-match',
     mode: 'CONQUEST',
@@ -29,6 +32,7 @@ function runtimeFixture(): MatchRuntime {
     },
     decks: {
       P0: {
+        kind: 'PLAYER',
         deckId: 'p0-deck',
         revision: 1,
         name: 'P0 Deck',
@@ -36,12 +40,18 @@ function runtimeFixture(): MatchRuntime {
         contentHash: computeDeckContentHash(deck),
       },
       P1: {
+        kind: 'PLAYER',
         deckId: 'p1-deck',
         revision: 1,
         name: 'P1 Deck',
         entries: deck,
         contentHash: computeDeckContentHash(deck),
       },
+      LOCATIONS: defaultLocationDeckFactory.build({
+        manifest: BOOTSTRAP_MANIFEST,
+        ruleset,
+        seed: 'phase1-checkpoint3-contracts',
+      }),
     },
   };
   const validation = validateMatchBootstrap(bootstrap, BOOTSTRAP_MANIFEST);
@@ -60,6 +70,7 @@ function runtimeFixture(): MatchRuntime {
       P0: validation.value.decks.P0.entries,
       P1: validation.value.decks.P1.entries,
     },
+    locationDeck: validation.value.decks.LOCATIONS.entries,
   });
 }
 

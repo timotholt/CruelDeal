@@ -45,6 +45,14 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
       deckConstruction: {
         defaultCopyLimit: 1,
       },
+      laneRules: {
+        initialLaneCount: 3,
+        maximumActiveLaneCount: 3,
+      },
+      locationDeck: {
+        minimumReserveCount: 1,
+        copyLimit: 1,
+      },
     },
   },
   cards: loadCardsFromSets(['core-v1']),

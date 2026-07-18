@@ -18,13 +18,33 @@ export interface MatchParticipantBootstrap {
   readonly avatarId?: string;
 }
 
-export interface MatchDeckBootstrap {
+export interface DeckBootstrapBase<TEntry> {
   readonly deckId: string;
   readonly revision: number;
   readonly name: string;
-  readonly entries: Deck;
+  readonly entries: readonly TEntry[];
   readonly contentHash: string;
 }
+
+export interface PlayerDeckBootstrap
+  extends DeckBootstrapBase<Deck[number]> {
+  readonly kind: 'PLAYER';
+}
+
+export interface LocationCardDeckEntry {
+  readonly defId: string;
+}
+
+export interface LocationDeckBootstrap
+  extends DeckBootstrapBase<LocationCardDeckEntry> {
+  readonly kind: 'LOCATION';
+  readonly order: 'PRESERVE';
+}
+
+/** @deprecated Use PlayerDeckBootstrap. */
+export type MatchDeckBootstrap = PlayerDeckBootstrap;
+
+export type MatchDeckSlot = Seat | 'LOCATIONS';
 
 /**
  * Complete match-construction descriptor retained by MatchSession.
@@ -38,7 +58,11 @@ export interface MatchBootstrap {
   readonly manifestVersion: number;
   readonly viewerSeat: Seat;
   readonly participants: Readonly<Record<Seat, MatchParticipantBootstrap>>;
-  readonly decks: Readonly<Record<Seat, MatchDeckBootstrap>>;
+  readonly decks: Readonly<{
+    readonly P0: PlayerDeckBootstrap;
+    readonly P1: PlayerDeckBootstrap;
+    readonly LOCATIONS: LocationDeckBootstrap;
+  }>;
 }
 
 /** Structural validation only. Collection ownership/possession is deferred. */
@@ -50,6 +74,11 @@ export type MatchBootstrapValidationIssueCode =
   | 'UNKNOWN_CARD_DEFINITION'
   | 'DISABLED_CARD_DEFINITION'
   | 'UNKNOWN_CARD_VARIANT'
+  | 'INVALID_LOCATION_DECK_SIZE'
+  | 'UNKNOWN_LOCATION_DEFINITION'
+  | 'DISABLED_LOCATION_DEFINITION'
+  | 'PLAYER_CARD_IN_LOCATION_DECK'
+  | 'LOCATION_CARD_IN_PLAYER_DECK'
   | 'UNIQUENESS_RULE_VIOLATION'
   | 'COPY_LIMIT_EXCEEDED'
   | 'CONTENT_HASH_MISMATCH';

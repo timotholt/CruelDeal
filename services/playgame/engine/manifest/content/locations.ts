@@ -121,12 +121,6 @@ const p = (spec: Omit<LocationSpec, 'status'>): LocationSpec => ({
   ...spec,
 });
 
-const u = (spec: Omit<LocationSpec, 'status' | 'abilities'>): LocationSpec => ({
-  status: 'unimplemented',
-  abilities: {},
-  ...spec,
-});
-
 const slug = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -752,4 +746,26 @@ export const UNIMPLEMENTED_LOCATION_DEFS: readonly LocationDef[] = LOCATION_CATA
 
 export const DISABLED_LOCATION_IDS: readonly string[] = UNIMPLEMENTED_LOCATION_DEFS.map((loc) => loc.defId);
 
-export const LOCATIONS_INDEX: readonly LocationDef[] = LOCATION_CATALOG.map((entry) => entry.def);
+/**
+ * Inert system location used when an effect destroys a location card.
+ * Rarity 0 keeps it out of the bootstrap location deck; it enters play only
+ * through the governed destroy/replace operation.
+ */
+export const RUIN_LOCATION_DEF: LocationDef = {
+  defId: 'ruin',
+  version: 1,
+  name: 'Ruin',
+  rarity: 0,
+  abilities: {},
+  cosmetic: {
+    displayName: 'RUIN',
+    description: 'No effect.',
+    accent: '#665f56',
+    art: { map: { path: '/art/maps/LavaFlow.png', kind: 'image' } },
+  },
+};
+
+export const LOCATIONS_INDEX: readonly LocationDef[] = [
+  ...LOCATION_CATALOG.map((entry) => entry.def),
+  RUIN_LOCATION_DEF,
+];

@@ -18,7 +18,7 @@ import type {
   MatchState,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
 import {
   getCardCost,
   getCardPower,
@@ -235,7 +235,12 @@ const MANIFEST: Manifest = {
   version: 1,
   protocolVersion: 1,
   constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-  rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+  rulesets: { standard: {
+    rulesetId: 'standard',
+    deckConstruction: { defaultCopyLimit: 1 },
+    laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+    locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+  } },
   cards: CARDS,
   locations: LOCS,
   disabled: { cards: [], locations: [] },
@@ -249,14 +254,14 @@ const nextId = (): CardId => `card${++idCounter}` as CardId;
 interface CardSpec {
   def: string;
   owner: Owner;
-  lane: LaneIdx;
+  lane: LaneId;
   revealed?: boolean;      // default true
   tags?: CardTag[];
 }
 
 function buildState(
   cardSpecs: CardSpec[],
-  locSpecs: Partial<Record<LaneIdx, { def: string; revealed?: boolean }>> = {},
+  locSpecs: Partial<Record<LaneId, { def: string; revealed?: boolean }>> = {},
   opts: { seed?: string; turn?: number } = {},
 ): MatchState {
   idCounter = 0;
@@ -287,7 +292,7 @@ function buildState(
     (lanesCards[spec.lane].cards[spec.owner] as CardId[]).push(id);
   }
   for (const laneStr of Object.keys(locSpecs)) {
-    const laneIdx = Number(laneStr) as LaneIdx;
+    const laneIdx = Number(laneStr) as LaneId;
     const ls = locSpecs[laneIdx]!;
     const loc: LocationInstance = {
       id: `loc${laneIdx}` as LocationId,
@@ -324,7 +329,7 @@ function buildState(
   };
 }
 
-function blankLane(i: LaneIdx): LaneState {
+function blankLane(i: LaneId): LaneState {
   return {
     idx: i,
     location: null,
@@ -333,7 +338,7 @@ function blankLane(i: LaneIdx): LaneState {
   };
 }
 
-function firstCard(state: MatchState, owner: Owner, lane: LaneIdx): CardId {
+function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
   return state.lanes[lane].cards[owner][0];
 }
 

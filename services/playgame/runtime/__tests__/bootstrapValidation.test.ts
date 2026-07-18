@@ -5,11 +5,12 @@ import { buildDebugMatchState } from '../../debug/buildDebugState';
 import { createInitialMatchState } from '../../engine/cli/initState';
 import { runMatch } from '../../engine/cli/runMatch';
 import { replayMatch } from '../../engine/replay';
-import { testCardDef, testManifest } from '../../engine/testkit';
+import { testCardDef, testLocationDef, testManifest } from '../../engine/testkit';
 import type { CardDef, Deck, Manifest } from '../../engine/manifest/types';
 import type { MatchEvent } from '../../engine/types/events';
 import type { MatchBootstrap } from '../contracts';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
+import { defaultLocationDeckFactory } from '../locationDeckFactory';
 import { buildOpeningTransaction } from '../opening';
 
 function manifestFixture(): Manifest {
@@ -29,7 +30,7 @@ function manifestFixture(): Manifest {
   };
   return testManifest(
     [variantCard, ...Array.from({ length: 11 }, (_, index) => testCardDef(`card-${index + 1}`))],
-    [],
+    Array.from({ length: 3 }, (_, index) => testLocationDef(`location-${index}`)),
     { deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
   );
 }
@@ -42,6 +43,8 @@ function deckFixture(withVariant = false): Deck {
 }
 
 function bootstrapFixture(manifest: Manifest, p0 = deckFixture(true), p1 = deckFixture()): MatchBootstrap {
+  const ruleset = manifest.rulesets.standard;
+  if (!ruleset) throw new Error('fixture requires standard ruleset');
   return {
     matchId: 'bootstrap-validation-match',
     mode: 'CONQUEST',
@@ -55,6 +58,7 @@ function bootstrapFixture(manifest: Manifest, p0 = deckFixture(true), p1 = deckF
     },
     decks: {
       P0: {
+        kind: 'PLAYER',
         deckId: 'deck-p0',
         revision: 4,
         name: 'P0 Deck',
@@ -62,12 +66,18 @@ function bootstrapFixture(manifest: Manifest, p0 = deckFixture(true), p1 = deckF
         contentHash: computeDeckContentHash(p0),
       },
       P1: {
+        kind: 'PLAYER',
         deckId: 'deck-p1',
         revision: 7,
         name: 'P1 Deck',
         entries: p1,
         contentHash: computeDeckContentHash(p1),
       },
+      LOCATIONS: defaultLocationDeckFactory.build({
+        manifest,
+        ruleset,
+        seed: 'bootstrap-validation-seed',
+      }),
     },
   };
 }
@@ -180,6 +190,7 @@ describe('validateMatchBootstrap', () => {
       ...base,
       rulesets: {
         standard: {
+          ...base.rulesets.standard,
           rulesetId: 'standard',
           deckConstruction: { uniqueCardDefIds: ['card-0'] },
         },
@@ -196,7 +207,11 @@ describe('validateMatchBootstrap', () => {
     const manifest: Manifest = {
       ...base,
       rulesets: {
-        standard: { rulesetId: 'standard', deckConstruction: {} },
+        standard: {
+          ...base.rulesets.standard,
+          rulesetId: 'standard',
+          deckConstruction: {},
+        },
       },
     };
     const entries = deckFixture().map((entry, index) => index === 11 ? { defId: 'card-0' } : entry);
@@ -280,8 +295,8 @@ describe('card variants and opening initialization', () => {
     const result = runMatch({ seed: 'headless-shared-opening', manifest, maxTurns: 0 });
     const openingHandSize = manifest.constants.startingHandSize + manifest.constants.turnStartDraw;
 
-    expect(result.events).toHaveLength(openingHandSize * 2);
-    expect(result.events.every((event) => event.type === 'CARD_DRAWN')).toBe(true);
+    expect(result.events.filter((event) => event.type === 'CARD_DRAWN'))
+      .toHaveLength(openingHandSize * 2);
     expect(result.finalState.hand.P0).toHaveLength(openingHandSize);
     expect(result.finalState.hand.P1).toHaveLength(openingHandSize);
     expect(result.finalState.deck.P0).toHaveLength(manifest.constants.deckSize - openingHandSize);

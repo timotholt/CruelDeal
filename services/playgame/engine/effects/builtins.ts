@@ -17,7 +17,7 @@
 
 import type { MatchEvent } from '../types/events';
 import type { MatchState, SpawnSource } from '../types/state';
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { EffectCtx } from './evaluator';
 import { apply } from '../apply';
@@ -25,6 +25,7 @@ import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard, isPowerBearingDef } from '../projections/power-bearing';
 import { resolveCardPowerChange } from './power-change';
+import { activeLaneIds } from '../laneTopology';
 
 type BuiltinArgs = Record<string, unknown>;
 type BuiltinResult = { events: MatchEvent[]; state: MatchState };
@@ -56,8 +57,8 @@ function spawnSource(ctx: EffectCtx, forOwner: Owner): SpawnSource {
     : { kind: 'ENEMY_CREATED', sourceCardId };
 }
 
-function otherLanes(lane: 0 | 1 | 2): Array<0 | 1 | 2> {
-  return ([0, 1, 2] as Array<0 | 1 | 2>).filter(l => l !== lane);
+function otherLanes(state: MatchState, lane: LaneId): LaneId[] {
+  return activeLaneIds(state).filter(laneId => laneId !== lane);
 }
 
 function getPermanentCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
@@ -377,7 +378,7 @@ function moveEnemyCardToOtherLane(
   if (enemiesHere.length === 0) return noop(state);
 
   const targetId = ctx.rng.fork('target').pick([...enemiesHere]);
-  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+  const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
@@ -400,7 +401,7 @@ function moveSelfToRandomOtherLane(
   const owner = ctx.selfOwner;
   if (!self || owner === null || ctx.selfLane === null) return noop(state);
 
-  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+  const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
@@ -427,7 +428,7 @@ function moveRandomFriendlyToOtherLane(
   if (others.length === 0) return noop(state);
 
   const targetId = ctx.rng.fork('target').pick([...others]);
-  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+  const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
@@ -459,7 +460,7 @@ function moveLowestPowerEnemyToOtherLane(
   );
   const targetId = sorted[0];
 
-  const toLaneCandidates = otherLanes(ctx.selfLane).filter(l =>
+  const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
@@ -574,7 +575,7 @@ function spawnTokenInLane(
   ctx: EffectCtx,
   manifest: Manifest,
   owner: Owner,
-  lane: LaneIdx,
+  lane: LaneId,
   defId: string,
   salt: string,
 ): BuiltinResult {
@@ -650,7 +651,7 @@ function recklessRecruiter(
   return { events, state: s };
 }
 
-function cardWasPlayedAtLaneThisTurn(state: MatchState, lane: LaneIdx, owner?: Owner): boolean {
+function cardWasPlayedAtLaneThisTurn(state: MatchState, lane: LaneId, owner?: Owner): boolean {
   let turn = 1;
   for (const entry of state.log) {
     const event = entry.event as MatchEvent;
@@ -834,7 +835,7 @@ function riffRaff(
 
   const events: MatchEvent[] = [];
   let s = state;
-  for (const targetLane of ([0, 1, 2] as LaneIdx[]).filter(l => l !== lane)) {
+  for (const targetLane of activeLaneIds(state).filter(laneId => laneId !== lane)) {
     const spawned = spawnTokenInLane(s, ctx, manifest, owner, targetLane, 'riff-raff-token', `riff:${targetLane}`);
     events.push(...spawned.events);
     s = spawned.state;

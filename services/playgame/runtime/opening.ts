@@ -3,7 +3,7 @@ import { apply } from '../engine/apply';
 import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
 import type { MatchEvent } from '../engine/types/events';
-import type { LaneIdx } from '../engine/types/ids';
+import type { LaneId } from '../engine/types/ids';
 import type { MatchState } from '../engine/types/state';
 import { buildCardDrawEvents } from '../engine/draw';
 import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
@@ -59,7 +59,7 @@ export function buildOpeningTransaction(
     }
   }
 
-  const lane = state.lanes.findIndex((candidate) => !candidate.locationRevealed) as LaneIdx;
+  const lane = state.lanes.findIndex((candidate) => !candidate.locationRevealed) as LaneId;
   const location = lane >= 0 && lane <= 2 ? state.lanes[lane].location : null;
   if (location) {
     const reveal: MatchEvent = {

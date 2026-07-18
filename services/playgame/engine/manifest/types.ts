@@ -146,11 +146,25 @@ export interface DeckConstructionRules {
   uniqueCardDefIds?: readonly string[];
 }
 
+export interface LaneRules {
+  readonly initialLaneCount: number;
+  readonly maximumActiveLaneCount: number;
+}
+
+export interface LocationDeckRules {
+  readonly minimumReserveCount: number;
+  readonly copyLimit: number;
+}
+
 export interface MatchRuleset {
   rulesetId: string;
   /** When present, only these globally enabled definitions are enabled here. */
   enabledCardDefIds?: readonly string[];
+  /** When present, only these globally enabled location definitions are enabled here. */
+  enabledLocationDefIds?: readonly string[];
   deckConstruction: DeckConstructionRules;
+  laneRules: LaneRules;
+  locationDeck: LocationDeckRules;
 }
 
 // ---- Full manifest ---------------------------------------------------------

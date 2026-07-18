@@ -22,11 +22,12 @@
  */
 
 import type { MatchState } from './types/state';
-import type { CardId, LaneIdx, Owner } from './types/ids';
+import type { CardId, LaneId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { getCardCost } from './projections/cost';
-import { findCardDefs, findLanes } from './projections/query';
+import { findCardDefs } from './projections/query';
+import { activeLaneIds } from './laneTopology';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Plan shapes
@@ -35,14 +36,14 @@ import { findCardDefs, findLanes } from './projections/query';
 /** One enemy play when cards come from the manifest pool (no real deck yet). */
 export interface PoolPlay {
   readonly defId: string;
-  readonly lane: LaneIdx;
+  readonly lane: LaneId;
   readonly cost: number;
 }
 
 /** One enemy play when cards already exist in `state.hand[owner]`. */
 export interface HandPlay {
   readonly cardId: CardId;
-  readonly lane: LaneIdx;
+  readonly lane: LaneId;
 }
 
 export interface PlanOptions {
@@ -85,11 +86,9 @@ export function planEnemyTurnFromPool(
 
   // Mutable lane-fill simulation so successive plays respect earlier ones
   // without needing to call `apply()` per iteration.
-  const laneFill: [number, number, number] = [
-    state.lanes[0].cards[owner].length,
-    state.lanes[1].cards[owner].length,
-    state.lanes[2].cards[owner].length,
-  ];
+  const laneFill = new Map(
+    activeLaneIds(state).map(laneId => [laneId, state.lanes[laneId].cards[owner].length]),
+  );
   const cap = manifest.constants.laneCapacity;
 
   for (let i = 0; i < maxPlays; i++) {
@@ -103,10 +102,9 @@ export function planEnemyTurnFromPool(
     if (pool.length === 0) break;
 
     // Candidate lanes (running simulation, not just state).
-    const candidates: LaneIdx[] = [];
-    for (let j = 0; j < 3; j++) {
-      if (laneFill[j] < cap) candidates.push(j as LaneIdx);
-    }
+    const candidates = [...laneFill.entries()]
+      .filter(([, count]) => count < cap)
+      .map(([laneId]) => laneId);
     if (candidates.length === 0) break;
 
     const def = picker.pick(pool);
@@ -114,7 +112,7 @@ export function planEnemyTurnFromPool(
 
     plays.push({ defId: def.defId, lane, cost: def.cost });
     energy -= def.cost;
-    laneFill[lane]++;
+    laneFill.set(lane, (laneFill.get(lane) ?? 0) + 1);
   }
 
   return plays;
@@ -154,21 +152,18 @@ export function planEnemyTurnFromHand(
 
   const plays: HandPlay[] = [];
   let energy = state.energy[owner];
-  const laneFill: [number, number, number] = [
-    state.lanes[0].cards[owner].length,
-    state.lanes[1].cards[owner].length,
-    state.lanes[2].cards[owner].length,
-  ];
+  const laneFill = new Map(
+    activeLaneIds(state).map(laneId => [laneId, state.lanes[laneId].cards[owner].length]),
+  );
   const cap = manifest.constants.laneCapacity;
 
   for (const card of hand) {
     const cost = getCardCost(state, card.id, manifest);
     if (cost > energy) continue;
 
-    const candidates: LaneIdx[] = [];
-    for (let j = 0; j < 3; j++) {
-      if (laneFill[j] < cap) candidates.push(j as LaneIdx);
-    }
+    const candidates = [...laneFill.entries()]
+      .filter(([, count]) => count < cap)
+      .map(([laneId]) => laneId);
     if (candidates.length === 0) break;
 
     // Per-card fork so adding/removing cards earlier in the hand doesn't
@@ -177,7 +172,7 @@ export function planEnemyTurnFromHand(
 
     plays.push({ cardId: card.id, lane });
     energy -= cost;
-    laneFill[lane]++;
+    laneFill.set(lane, (laneFill.get(lane) ?? 0) + 1);
   }
 
   return plays;

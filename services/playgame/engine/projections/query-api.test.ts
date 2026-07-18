@@ -1,0 +1,206 @@
+import { describe, expect, it } from 'vitest';
+import type { EffectExpr, OngoingExpr } from '../types/ability';
+import type { CardId } from '../types/ids';
+import {
+  buildRuntimeFixture,
+  testCardDef,
+  testManifest,
+} from '../testkit/runtimeFixture';
+import {
+  findCard,
+  findCardDef,
+  findCardDefs,
+  findCards,
+} from './query';
+
+const selfPower: EffectExpr = {
+  kind: 'ADD_POWER',
+  target: { kind: 'SELF' },
+  delta: { kind: 'LIT', n: 1 },
+};
+
+const selfOngoingPower: OngoingExpr = {
+  kind: 'POWER_ADD',
+  target: { kind: 'SELF' },
+  delta: { kind: 'LIT', n: 1 },
+  stack: 'ADDITIVE',
+};
+
+const vanilla = testCardDef('vanilla', { power: 2, cost: 1 });
+const revealer = testCardDef('revealer', {
+  power: 3,
+  cost: 2,
+  onReveal: [selfPower],
+});
+const ender = testCardDef('ender', {
+  power: 4,
+  cost: 3,
+  onEndOfTurn: [selfPower],
+});
+const device = {
+  ...testCardDef('device', { power: 5, cost: 4 }),
+  cardType: 'device' as const,
+  abilities: { ongoing: [selfOngoingPower] },
+};
+const retired = testCardDef('retired', { power: 9, cost: 5 });
+
+const baseManifest = testManifest([vanilla, revealer, ender, device, retired]);
+const manifest = {
+  ...baseManifest,
+  disabled: {
+    ...baseManifest.disabled,
+    cards: ['retired'],
+  },
+};
+
+const fixture = buildRuntimeFixture({
+  seed: 'query-api-tests',
+  localSeat: 'P0',
+  turn: 3,
+  phase: 'AWAITING_INTENT',
+  priority: 'P0',
+  decks: {
+    P0: [{ id: 'deck-vanilla', defId: 'vanilla' }],
+    P1: [{ id: 'enemy-deck-retired', defId: 'retired' }],
+  },
+  hands: {
+    P0: [
+      { id: 'hand-revealer', defId: 'revealer' },
+      { id: 'hand-vanilla', defId: 'vanilla' },
+    ],
+    P1: [],
+  },
+  lanes: [
+    {
+      P0: [{ id: 'board-vanilla', defId: 'vanilla', revealed: true }],
+      P1: [{ id: 'enemy-device', defId: 'device', revealed: true }],
+    },
+    {
+      P0: [{
+        id: 'created-ender',
+        defId: 'ender',
+        revealed: true,
+        powerDelta: 2,
+        tags: [{ kind: 'EVER_MOVED' }],
+        spawnSource: {
+          kind: 'CARD_CREATED',
+          sourceCardId: 'creator' as CardId,
+        },
+      }],
+      P1: [{ id: 'enemy-revealer', defId: 'revealer', revealed: true }],
+    },
+    { P0: [], P1: [] },
+  ],
+  locations: [null, null, null],
+});
+
+const state = fixture.state;
+
+describe('live CardInstance queries', () => {
+  it('findCard combines game-state and manifest-backed criteria', () => {
+    const match = findCard(state, manifest, {
+      zone: 'LANE',
+      lane: 1,
+      owner: 'P0',
+      power: { gte: 6 },
+      hasOnEndOfTurn: true,
+      hasTag: 'EVER_MOVED',
+      createdInGame: true,
+    });
+
+    expect(match?.id).toBe('created-ender');
+  });
+
+  it('findCards returns every matching instance, not one result per template', () => {
+    const matches = findCards(state, manifest, { defId: 'vanilla' });
+
+    expect(matches.map((card) => card.id)).toEqual([
+      'deck-vanilla',
+      'hand-vanilla',
+      'board-vanilla',
+    ]);
+  });
+
+  it('supports nested AND, OR, and NOT criteria', () => {
+    const matches = findCards(state, manifest, {
+      zone: 'LANE',
+      and: [
+        { owner: 'P0' },
+        {
+          or: [
+            { hasAnyAbility: false },
+            { hasOnEndOfTurn: true },
+          ],
+        },
+      ],
+      not: { cardType: 'device' },
+    });
+
+    expect(matches.map((card) => card.id)).toEqual([
+      'board-vanilla',
+      'created-ender',
+    ]);
+  });
+
+  it('findCard returns the first stable match and null when nothing matches', () => {
+    expect(findCard(state, manifest, {
+      zone: 'HAND',
+      owner: 'P0',
+    })?.id).toBe('hand-revealer');
+
+    expect(findCard(state, manifest, {
+      zone: 'DISCARD',
+    })).toBeNull();
+  });
+});
+
+describe('manifest CardDef queries', () => {
+  it('findCardDefs queries templates without requiring MatchState', () => {
+    const matches = findCardDefs(manifest, {
+      hasAnyAbility: false,
+      disabled: false,
+    });
+
+    expect(matches.map((def) => def.defId)).toEqual(['vanilla']);
+  });
+
+  it('combines taxonomy, cost, and ability criteria', () => {
+    expect(findCardDefs(manifest, {
+      cardType: 'device',
+      cost: { between: [3, 5] },
+      hasOngoing: true,
+    }).map((def) => def.defId)).toEqual(['device']);
+
+    expect(findCardDefs(manifest, {
+      hasOnEndOfTurn: true,
+    }).map((def) => def.defId)).toEqual(['ender']);
+  });
+
+  it('supports disabled and composed template criteria', () => {
+    expect(findCardDefs(manifest, {
+      disabled: true,
+    }).map((def) => def.defId)).toEqual(['retired']);
+
+    expect(findCardDefs(manifest, {
+      and: [
+        { cost: { gte: 2 } },
+        { not: { cardType: 'device' } },
+      ],
+    }).map((def) => def.defId)).toEqual([
+      'revealer',
+      'ender',
+      'retired',
+    ]);
+  });
+
+  it('findCardDef returns the first stable match and null when none qualify', () => {
+    expect(findCardDef(manifest, {
+      cost: { gte: 2 },
+      not: { cardType: 'device' },
+    })?.defId).toBe('revealer');
+
+    expect(findCardDef(manifest, {
+      defId: 'missing-template',
+    })).toBeNull();
+  });
+});

@@ -5,7 +5,7 @@ import {
   createRng,
   resolve,
   type Deck,
-  type LaneIdx,
+  type LaneId,
   type Manifest,
   type MatchEvent,
   type MatchIntent,
@@ -29,7 +29,7 @@ export interface OpenedMatch {
 }
 
 const OWNERS = ['P0', 'P1'] as const;
-const LANES = [0, 1, 2] as const satisfies readonly LaneIdx[];
+const LANES = [0, 1, 2] as const satisfies readonly LaneId[];
 
 function applyAll(
   state: MatchState,

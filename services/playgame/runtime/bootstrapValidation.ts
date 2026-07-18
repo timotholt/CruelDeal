@@ -2,6 +2,8 @@ import type { Deck, Manifest, MatchRuleset } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
 import { validateMatchBootstrapWire } from '../protocol';
 import type {
+  LocationCardDeckEntry,
+  LocationDeckBootstrap,
   MatchBootstrap,
   MatchBootstrapValidationIssue,
   MatchBootstrapValidationResult,
@@ -102,6 +104,17 @@ export function computeDeckContentHash(entries: Deck): string {
   return `sha256:${sha256(canonical)}`;
 }
 
+/** Hashes the exact system-owned location draw order and policy version. */
+export function computeLocationDeckContentHash(
+  entries: readonly LocationCardDeckEntry[],
+): string {
+  const canonical = JSON.stringify([
+    'playgame-location-deck-entries-v1',
+    entries.map((entry) => [entry.defId]),
+  ]);
+  return `sha256:${sha256(canonical)}`;
+}
+
 function deepFreeze<T>(value: T): T {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
   for (const nested of Object.values(value)) deepFreeze(nested);
@@ -135,9 +148,13 @@ function validateDeckContents(
     const def = manifest.cards[entry.defId];
     if (!def) {
       issues.push({
-        code: 'UNKNOWN_CARD_DEFINITION',
+        code: manifest.locations[entry.defId]
+          ? 'LOCATION_CARD_IN_PLAYER_DECK'
+          : 'UNKNOWN_CARD_DEFINITION',
         path: `${path}.${entryIndex}.defId`,
-        message: `unknown card definition "${entry.defId}"`,
+        message: manifest.locations[entry.defId]
+          ? `location card definition "${entry.defId}" cannot enter player deck ${seat}`
+          : `unknown card definition "${entry.defId}"`,
         seat,
         entryIndex,
       });
@@ -205,6 +222,84 @@ function validateDeckContents(
   }
 }
 
+function validateLocationDeckContents(
+  deck: LocationDeckBootstrap,
+  manifest: Manifest,
+  ruleset: MatchRuleset | undefined,
+  issues: MatchBootstrapValidationIssue[],
+): void {
+  const path = 'decks.LOCATIONS.entries';
+  if (ruleset) {
+    const minimumSize = ruleset.laneRules.initialLaneCount
+      + ruleset.locationDeck.minimumReserveCount;
+    if (deck.entries.length < minimumSize) {
+      issues.push({
+        code: 'INVALID_LOCATION_DECK_SIZE',
+        path,
+        message: `location deck must contain at least ${minimumSize} entries; received ${deck.entries.length}`,
+      });
+    }
+  }
+
+  const globallyDisabled = new Set(manifest.disabled.locations);
+  const rulesetEnabled = ruleset?.enabledLocationDefIds
+    ? new Set(ruleset.enabledLocationDefIds)
+    : null;
+  const counts = new Map<string, number>();
+
+  deck.entries.forEach((entry, entryIndex) => {
+    const definition = manifest.locations[entry.defId];
+    if (!definition) {
+      issues.push({
+        code: manifest.cards[entry.defId]
+          ? 'PLAYER_CARD_IN_LOCATION_DECK'
+          : 'UNKNOWN_LOCATION_DEFINITION',
+        path: `${path}.${entryIndex}.defId`,
+        message: manifest.cards[entry.defId]
+          ? `player card definition "${entry.defId}" cannot enter the location deck`
+          : `unknown location card definition "${entry.defId}"`,
+        entryIndex,
+      });
+      return;
+    }
+    if (
+      globallyDisabled.has(entry.defId)
+      || (rulesetEnabled && !rulesetEnabled.has(entry.defId))
+    ) {
+      issues.push({
+        code: 'DISABLED_LOCATION_DEFINITION',
+        path: `${path}.${entryIndex}.defId`,
+        message: `location card definition "${entry.defId}" is disabled for ruleset "${ruleset?.rulesetId ?? ''}"`,
+        entryIndex,
+      });
+    }
+    counts.set(entry.defId, (counts.get(entry.defId) ?? 0) + 1);
+  });
+
+  if (ruleset) {
+    for (const [defId, count] of counts) {
+      if (count > ruleset.locationDeck.copyLimit) {
+        issues.push({
+          code: ruleset.locationDeck.copyLimit === 1
+            ? 'UNIQUENESS_RULE_VIOLATION'
+            : 'COPY_LIMIT_EXCEEDED',
+          path,
+          message: `location card definition "${defId}" appears ${count} times; limit is ${ruleset.locationDeck.copyLimit}`,
+        });
+      }
+    }
+  }
+
+  const computedHash = computeLocationDeckContentHash(deck.entries);
+  if (computedHash !== deck.contentHash) {
+    issues.push({
+      code: 'CONTENT_HASH_MISMATCH',
+      path: 'decks.LOCATIONS.contentHash',
+      message: `location deck content hash mismatch; expected ${computedHash}`,
+    });
+  }
+}
+
 function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
   const cloneParticipant = (participant: MatchParticipantBootstrap): MatchParticipantBootstrap => ({
     participantId: participant.participantId,
@@ -213,6 +308,7 @@ function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
     ...(participant.avatarId === undefined ? {} : { avatarId: participant.avatarId }),
   });
   const cloneDeck = (deck: MatchDeckBootstrap): MatchDeckBootstrap => ({
+    kind: 'PLAYER',
     deckId: deck.deckId,
     revision: deck.revision,
     name: deck.name,
@@ -220,6 +316,17 @@ function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
       defId: entry.defId,
       ...(entry.variantId === undefined ? {} : { variantId: entry.variantId }),
     })),
+    contentHash: deck.contentHash,
+  });
+  const cloneLocationDeck = (
+    deck: LocationDeckBootstrap,
+  ): LocationDeckBootstrap => ({
+    kind: 'LOCATION',
+    order: 'PRESERVE',
+    deckId: deck.deckId,
+    revision: deck.revision,
+    name: deck.name,
+    entries: deck.entries.map((entry) => ({ defId: entry.defId })),
     contentHash: deck.contentHash,
   });
 
@@ -237,6 +344,7 @@ function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
     decks: {
       P0: cloneDeck(bootstrap.decks.P0),
       P1: cloneDeck(bootstrap.decks.P1),
+      LOCATIONS: cloneLocationDeck(bootstrap.decks.LOCATIONS),
     },
   };
 }
@@ -282,6 +390,12 @@ export function validateMatchBootstrap(
   for (const seat of SEATS) {
     validateDeckContents(bootstrap.decks[seat], seat, manifest, ruleset, issues);
   }
+  validateLocationDeckContents(
+    bootstrap.decks.LOCATIONS,
+    manifest,
+    ruleset,
+    issues,
+  );
 
   if (issues.length > 0) {
     return { ok: false, issues: deepFreeze(issues) };

@@ -38,12 +38,10 @@
         "SYSTEM"
       ]
     },
-    "LaneIdx": {
-      "enum": [
-        0,
-        1,
-        2
-      ]
+    "LaneId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
     },
     "TimelinePhase": {
       "enum": [
@@ -250,11 +248,15 @@
             "PENDING_EFFECT_REMOVED",
             "LOCATION_REVEALED",
             "LOCATION_REPLACED",
-            "LOCATION_DESTROYED",
+            "LOCATIONS_SWAPPED",
             "LOCATION_SHIFTED",
             "LOCATION_TAG_ADDED",
             "LOCATION_TAG_REMOVED",
             "LOCATION_COUNTER_CHANGED",
+            "LANE_DESTRUCTION_STARTED",
+            "LANE_DESTROYED",
+            "LANE_CREATION_STARTED",
+            "LANE_CREATED",
             "RECURSION_LIMIT_HIT",
             "INTENT_REJECTED"
           ]
@@ -317,7 +319,7 @@
               "minLength": 1
             },
             "lane": {
-              "$ref": "#/$defs/LaneIdx"
+              "$ref": "#/$defs/LaneId"
             }
           },
           "required": [
@@ -458,9 +460,12 @@
       ],
       "additionalProperties": false
     },
-    "DeckBootstrap": {
+    "PlayerDeckBootstrap": {
       "type": "object",
       "properties": {
+        "kind": {
+          "const": "PLAYER"
+        },
         "deckId": {
           "type": "string",
           "minLength": 1
@@ -484,6 +489,62 @@
         }
       },
       "required": [
+        "kind",
+        "deckId",
+        "revision",
+        "name",
+        "entries",
+        "contentHash"
+      ],
+      "additionalProperties": false
+    },
+    "LocationDeckEntry": {
+      "type": "object",
+      "properties": {
+        "defId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "defId"
+      ],
+      "additionalProperties": false
+    },
+    "LocationDeckBootstrap": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "LOCATION"
+        },
+        "order": {
+          "const": "PRESERVE"
+        },
+        "deckId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocationDeckEntry"
+          }
+        },
+        "contentHash": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "order",
         "deckId",
         "revision",
         "name",
@@ -536,15 +597,19 @@
           "type": "object",
           "properties": {
             "P0": {
-              "$ref": "#/$defs/DeckBootstrap"
+              "$ref": "#/$defs/PlayerDeckBootstrap"
             },
             "P1": {
-              "$ref": "#/$defs/DeckBootstrap"
+              "$ref": "#/$defs/PlayerDeckBootstrap"
+            },
+            "LOCATIONS": {
+              "$ref": "#/$defs/LocationDeckBootstrap"
             }
           },
           "required": [
             "P0",
-            "P1"
+            "P1",
+            "LOCATIONS"
           ],
           "additionalProperties": false
         }

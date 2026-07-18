@@ -11,9 +11,17 @@ export type LocationId = string & { readonly __brand: 'LocationId' };
 
 export type Seat = 'P0' | 'P1';
 export type Owner = Seat;
-export type LaneIdx = 0 | 1 | 2;
+/**
+ * Stable, match-local lane identity.
+ *
+ * A LaneId is allocated monotonically and is never reused. Its numeric value
+ * is not the lane's current left-to-right position; position is derived from
+ * MatchState.activeLaneOrder.
+ */
+export type LaneId = number;
 
 export const otherSeat = (seat: Seat): Seat => (seat === 'P0' ? 'P1' : 'P0');
 
 export const mkCardId = (s: string): CardId => s as CardId;
 export const mkLocationId = (s: string): LocationId => s as LocationId;
+export const mkLaneId = (value: number): LaneId => value;

@@ -11,7 +11,7 @@ import { getCardPower } from '../projections/power';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
 import type { MatchState, CardInstance } from '../types/state';
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardDef, LocationDef, Manifest } from '../manifest/types';
 import type { EffectCtx } from '../effects/evaluator';
 import type { EffectExpr } from '../types/ability';
@@ -45,7 +45,7 @@ function mkLocation(defId: string, abilities: LocationDef['abilities']): Locatio
 function mkCard(
   id: string, defId: string, owner: Owner,
   zone: CardInstance['zone'] = 'LANE',
-  lane: LaneIdx | null = 0,
+  lane: LaneId | null = 0,
   extra: Partial<CardInstance> = {},
 ): CardInstance {
   return {
@@ -64,7 +64,12 @@ function buildManifest(defs: CardDef[]): Manifest {
     disabled: { cards: [], locations: [] },
     version: 1, protocolVersion: 1,
     constants: { handCap: 7, deckSize: 12, laneCapacity: 4, turnLimit: 6, energyCurve: [1,2,3,4,5,6], startingHandSize: 3, turnStartDraw: 1 },
-    rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+    rulesets: { standard: {
+      rulesetId: 'standard',
+      deckConstruction: { defaultCopyLimit: 1 },
+      laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+      locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+    } },
   };
 }
 
@@ -109,7 +114,7 @@ function buildState(
 
 function makeCtx(
   state: MatchState, manifest: Manifest,
-  selfId: CardId, selfOwner: Owner, selfLane: LaneIdx | null = 0,
+  selfId: CardId, selfOwner: Owner, selfLane: LaneId | null = 0,
 ): EffectCtx {
   return {
     state, manifest,
@@ -123,7 +128,7 @@ function makeCtx(
 function runBuiltin(
   fn: string, args: Record<string, unknown>,
   state: MatchState, manifest: Manifest,
-  selfId: CardId, selfOwner: Owner, selfLane: LaneIdx | null = 0,
+  selfId: CardId, selfOwner: Owner, selfLane: LaneId | null = 0,
 ) {
   const effect: EffectExpr = { kind: 'CALL_BUILTIN', fn, args };
   const ctx = makeCtx(state, manifest, selfId, selfOwner, selfLane);

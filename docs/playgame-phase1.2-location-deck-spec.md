@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed, implementation-ready architecture specification.
+Implementation active. Checkpoint 1 is complete; checkpoint 2 is next.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before
 Phase 1.5 governed operations, reactions, and folder-based location authoring.
@@ -59,10 +59,12 @@ seat-specific information, reactions, presentation, and future location rules
 one authoritative history.
 
 A lane and its location card are different entities. Destroying a location
-card empties one location slot. Destroying a lane removes the whole gameplay
-space—including its location slot—from the active board. Lane identity is
-stable and independent of its current left-to-right position so future rules
-can create, remove, or reorder lanes without renumbering existing history.
+card atomically swaps that card for a revealed, inert `Ruin`; it never leaves
+the active lane's location slot empty. Destroying a lane removes the whole
+gameplay space—including its location slot—from the active board. Lane
+identity is stable and independent of its current left-to-right position so
+future rules can create, remove, or reorder lanes without renumbering existing
+history.
 
 ## Core Problem
 
@@ -132,6 +134,14 @@ Phase 1.2 is complete only when all of the following are true:
     tombstones do not count toward that maximum.
 23. Creating a lane creates a new `LaneId`; it does not resurrect or reuse a
     destroyed lane identity.
+24. At least one lane must remain active. A three-lane match may destroy at
+    most two lanes; destruction of the final lane is rejected atomically.
+25. Destroying a location card replaces it with the revealed, inert `Ruin`
+    location card in one atomic event. It never creates an observable
+    locationless lane and does not destroy the lane.
+26. Lane destruction destroys every player card in that lane through the
+    ordinary governed card-destruction path. Immunity, destruction gates, and
+    destruction reactions are not bypassed.
 
 ## Non-Goals
 
@@ -603,8 +613,21 @@ type LocationEvent =
       readonly type: 'LOCATION_REMOVED_FROM_LANE';
       readonly locationCardId: LocationCardInstanceId;
       readonly laneId: LaneId;
-      readonly destination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+      readonly destination: 'DISCARD' | 'BANISHED';
       readonly reason: LocationRemovalReason;
+    }
+  | {
+      /**
+       * Atomic slot mutation. Destruction always uses oldDestination
+       * DESTROYED, a Ruin instance as the replacement, and REVEAL_IMMEDIATELY.
+       */
+      readonly type: 'LOCATION_REPLACED';
+      readonly laneId: LaneId;
+      readonly oldLocationCardId: LocationCardInstanceId;
+      readonly newLocationCardId: LocationCardInstanceId;
+      readonly oldDestination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+      readonly revealPolicy: LocationReplacementRevealPolicy;
+      readonly reason: LocationReplacementReason;
     }
   | {
       readonly type: 'LOCATION_RETURNED_TO_DECK';
@@ -618,16 +641,19 @@ type LocationEvent =
 as two ordinary moves would either create an invalid occupied-lane transition
 or expose a misleading intermediate state to reactions and presentation.
 
-`LOCATION_REPLACED` should not remain the authoritative mutation. Replacement
-is a composed operation:
+`LOCATION_REPLACED` is the authoritative atomic slot mutation. A governed
+replacement operation may first stage or draw its incoming card, but it commits
+the outgoing disposition and incoming occupant together:
 
-1. remove the existing location to its specified destination
-2. draw the next location for that lane
-3. play the drawn location into the lane
-4. reveal it immediately only when the governing rule says so
+1. prepare or draw the incoming location card
+2. validate the outgoing destination and incoming reveal policy
+3. atomically replace the slot occupant and disposition the outgoing card
+4. reveal the incoming card immediately only when the governing rule says so
 
-This preserves every meaningful fact and makes replacement compatible with
-deck exhaustion, reactions, and replay.
+This preserves every meaningful fact without exposing a transient empty slot.
+For destruction, there is no alternate event or reducer path:
+`LOCATION_REPLACED` dispositions the old card to `DESTROYED`, installs a fresh
+`Ruin` instance, and reveals it in that same event.
 
 `LOCATION_REVEALED` is a public mechanical reveal. It turns the instance
 face-up, discloses it to both seats, clears its pending scheduled reveal, and
@@ -704,8 +730,10 @@ capability gates and committed-event reactions around them.
 
 Lane lifecycle is distinct from location-card lifecycle.
 
-Removing or destroying a `LocationCardInstance` leaves an active lane with an
-empty location slot. Destroying a lane removes the lane itself from the board.
+A non-destructive discard or banish operation may leave an active lane with an
+empty slot when a rule explicitly says so. “Destroy location” never uses that
+path: it atomically replaces the instance with the revealed, inert `Ruin`
+system location. Destroying a lane removes the lane itself from the board.
 
 ### Canonical lane-destruction events
 
@@ -727,34 +755,32 @@ type LaneLifecycleEvent =
 
 `destroyLane(...)` is a transaction-level governed operation:
 
-1. validate that the lane is active and lane destruction is permitted
-2. determine an explicit disposition for every player card and the location
-   card currently in that lane
+1. validate that the lane is active, at least two lanes are currently active,
+   and lane destruction is permitted
+2. snapshot every player card and the location card currently in that lane
 3. prove that the complete transaction leaves no entity pointing at the lane
 4. emit `LANE_DESTRUCTION_STARTED` and mark the lane `DESTROYING`
-5. move, destroy, discard, or banish occupants through their ordinary governed
-   operations
+5. destroy player-card occupants through the ordinary governed destruction
+   operation, including immunity, gates, `onDestroyed`, and location reactions
 6. remove the location card through `removeLocation(...)`
 7. cancel the location slot's reveal schedule
 8. emit `LANE_DESTROYED`, remove the ID from `activeLaneOrder`, and retain the
    lane in `lanesById` as a `DESTROYED` tombstone
 
-The requested destruction policy must state occupant outcomes explicitly:
-
-```ts
-interface LaneDestructionPolicy {
-  readonly playerCards: 'DESTROY' | 'BANISH';
-  readonly locationCard: 'DISCARD' | 'DESTROY' | 'BANISH';
-}
-```
-
 An effect that needs to move occupants elsewhere does so through governed move
 operations before requesting lane destruction. The engine must not silently
-choose a destination.
+choose a destination or convert a protected card into banishment.
 
 The runtime validates and commits the complete lane-destruction transaction
 atomically. If any required transition is illegal and the rule does not carry
 an explicit governed override, no partial destruction transaction commits.
+If a card survives ordinary destruction, or a destruction reaction leaves a
+card pointing at the lane, the complete lane destruction is rejected.
+
+`destroyAllOtherLanes(survivorLaneId)` applies the same transaction to every
+other active lane. It is atomic across the complete group: a failure in any
+target lane rolls back all target-lane destruction. The survivor becomes the
+only entry in `activeLaneOrder`, which makes normal board projection center it.
 
 After `LANE_DESTROYED`:
 
@@ -767,12 +793,9 @@ After `LANE_DESTROYED`:
 Destroying the lane and merely destroying the card in its location slot must
 never share an event or reducer path.
 
-### Future lane creation seam
+### Lane creation
 
-Player-accessible lane creation is deferred, but Phase 1.2 must avoid a future
-state migration.
-
-A future `createLane(...)` operation will:
+`createLane(...)` fills vacancies left by destruction:
 
 1. reject when three active or creating lanes already exist
 2. allocate a new deterministic `LaneId`
@@ -1052,9 +1075,11 @@ Exit gate:
 - migrate private location disclosure through seat-knowledge events/projections
 - migrate shift/move to `LOCATION_MOVED`
 - migrate simultaneous swaps to `LOCATIONS_SWAPPED`
-- migrate destruction/banishment/removal
+- migrate destruction to atomic Ruin replacement and migrate independent
+  banishment/removal
 - add governed lane destruction and tombstone retention
-- replace `LOCATION_REPLACED` producers with composed replacement
+- route all `LOCATION_REPLACED` producers through the governed atomic
+  replacement operation
 - route every producer through the location operation module
 
 Exit gate:
@@ -1132,14 +1157,24 @@ Exit gate:
 - turning a card face-down does not erase knowledge already acquired
 - replacement does not leak the incoming card through knowledge of the removed
   instance
-- replacement emits remove, draw, play, and optional reveal in order
+- replacement prepares its source card, then atomically dispositions the old
+  occupant and installs the new occupant with the declared reveal policy
 - swap commits atomically
 - move rejects an occupied destination
 - face state follows the instance when it moves or swaps; the reveal schedule
   belongs to the lane slot
 - destroyed, discarded, and banished destinations remain distinct
-- destroying a location card leaves its active lane intact
+- destroying a location card emits exactly one atomic replacement by fresh,
+  revealed inert Ruin and leaves its active lane intact
 - destroying a lane removes it from board layout, targeting, and scoring
+- no operation may destroy the final active lane
+- destroy-all-other-lanes works with the survivor initially at left, center,
+  or right and leaves that stable ID as the sole projected lane
+- after lane creation, two active lanes occupy equal left/right screen regions
+  regardless of their stable IDs or prior positions
+- every lane occupant uses ordinary destruction behavior; a protected
+  survivor rejects the complete lane transaction
+- face-down cards destroyed with their lane never reveal afterward
 - lane destruction leaves no player card or location card pointing at the
   destroyed lane
 - a rejected lane destruction commits no partial events

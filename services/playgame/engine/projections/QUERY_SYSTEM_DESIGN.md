@@ -76,7 +76,7 @@ export interface CardFilter {
 
   // ── Location ────────────────────────────────────────────────────
   zone?: CardZone | readonly CardZone[];
-  lane?: LaneIdx | readonly LaneIdx[] | 'any' | 'none';
+  lane?: LaneId | readonly LaneId[] | 'any' | 'none';
   owner?: Owner | 'any';
 
   // ── Stats (resolved through manifest + ongoings) ─────────────────
@@ -163,7 +163,7 @@ export interface CardDefFilter {
 
 ```typescript
 export interface LaneFilter {
-  idx?: LaneIdx | readonly LaneIdx[];
+  idx?: LaneId | readonly LaneId[];
 
   // ── Capacity ────────────────────────────────────────────────────
   hasCapacity?: boolean | Owner;     // true = either side has room; Owner = that side has room
@@ -206,20 +206,20 @@ export function findCardDef(manifest: Manifest, filter: CardDefFilter): CardDef 
 export function countCardDefs(manifest: Manifest, filter: CardDefFilter): number;
 
 // Lane queries
-export function findLanes(state: MatchState, manifest: Manifest, filter: LaneFilter): LaneIdx[];
-export function findLane(state: MatchState, manifest: Manifest, filter: LaneFilter): LaneIdx | null;
+export function findLanes(state: MatchState, manifest: Manifest, filter: LaneFilter): LaneId[];
+export function findLane(state: MatchState, manifest: Manifest, filter: LaneFilter): LaneId | null;
 
 // Predicate matching (single-item check)
 export function matchesCard(card: CardInstance, filter: CardFilter, state: MatchState, manifest: Manifest): boolean;
 export function matchesCardDef(def: CardDef, filter: CardDefFilter, manifest: Manifest): boolean;
-export function matchesLane(idx: LaneIdx, filter: LaneFilter, state: MatchState, manifest: Manifest): boolean;
+export function matchesLane(idx: LaneId, filter: LaneFilter, state: MatchState, manifest: Manifest): boolean;
 ```
 
 ### Return ordering
 
 - `findCards`: iteration order of `state.cards` (stable, insertion-ordered by spec)
 - `findCardDefs`: iteration order of `manifest.cards` keys
-- `findLanes`: ascending `LaneIdx` (0, 1, 2)
+- `findLanes`: ascending `LaneId` (0, 1, 2)
 
 No RNG involved — callers that need random selection should fork an RNG and call `.pick()` on the result.
 

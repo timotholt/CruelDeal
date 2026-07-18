@@ -118,7 +118,10 @@ The ordered events are sufficient to reconstruct the effect-driven board changes
 - card stats/text/metadata: `CARD_POWER_CHANGED`, `CARD_COST_CHANGED`, `CARD_TRANSFORMED`, `CARD_TAG_ADDED`, `CARD_TAG_REMOVED`, `CARD_TEXT_OVERRIDDEN`, `CARD_COUNTER_CHANGED` (`services/playgame/engine/types/events.ts:52-64`);
 - card-zone movement/removal/creation: `CARD_DESTROYED`, `CARD_DISCARDED`, `CARD_BANISHED`, `CARD_MOVED`, `CARD_RETURNED_TO_LANE`, `CARD_DRAWN`, `CARD_ADDED_TO_DECK`, `CARD_ADDED_TO_HAND`, `CARD_ADDED_TO_LANE`, `CARD_MOVED_TO_ZONE`, `DECK_SHUFFLED` (`services/playgame/engine/types/events.ts:55-83`);
 - scheduled state: `PENDING_EFFECT_ADDED`, `PENDING_EFFECT_REMOVED` (`services/playgame/engine/types/events.ts:85-87`);
-- location removal/movement/tags/counters: `LOCATION_DESTROYED`, `LOCATION_SHIFTED`, `LOCATION_TAG_ADDED`, `LOCATION_TAG_REMOVED`, `LOCATION_COUNTER_CHANGED` (`services/playgame/engine/types/events.ts:89-100`);
+- location replacement/movement/tags/counters: `LOCATION_REPLACED`,
+  `LOCATION_SHIFTED`, `LOCATION_TAG_ADDED`, `LOCATION_TAG_REMOVED`,
+  `LOCATION_COUNTER_CHANGED`; location destruction is the canonical atomic
+  replacement-by-revealed-Ruin operation (`services/playgame/engine/types/events.ts`);
 - energy and turn/result state: the energy and turn-flow variants already mapped above (`services/playgame/engine/types/events.ts:33-45,102-105`).
 
 `INTENT_REJECTED` and `RECURSION_LIMIT_HIT` are diagnostic variants (`services/playgame/engine/types/events.ts:107-109`). Per the target runtime contract, local rejection should become a typed result rather than a committed gameplay frame; recursion diagnostics may remain in deterministic transactions.

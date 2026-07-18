@@ -79,11 +79,15 @@ export const PROTOCOL_MATCH_EVENT_TYPES = [
   'PENDING_EFFECT_REMOVED',
   'LOCATION_REVEALED',
   'LOCATION_REPLACED',
-  'LOCATION_DESTROYED',
+  'LOCATIONS_SWAPPED',
   'LOCATION_SHIFTED',
   'LOCATION_TAG_ADDED',
   'LOCATION_TAG_REMOVED',
   'LOCATION_COUNTER_CHANGED',
+  'LANE_DESTRUCTION_STARTED',
+  'LANE_DESTROYED',
+  'LANE_CREATION_STARTED',
+  'LANE_CREATED',
   'TURN_RESOLUTION_STARTED',
   'TURN_STARTED',
   'TURN_ENDED',
@@ -129,7 +133,7 @@ export const PROTOCOL_SCHEMA = {
     EventFrame: integer(1),
     Seat: { enum: ['P0', 'P1'] },
     ActorSeat: { enum: ['P0', 'P1', 'SYSTEM'] },
-    LaneIdx: { enum: [0, 1, 2] },
+    LaneId: integer(0),
     TimelinePhase: {
       enum: ['SETUP', 'ACTION', 'RESOLUTION', 'END', 'START', 'MATCH_END'],
     },
@@ -214,7 +218,7 @@ export const PROTOCOL_SCHEMA = {
       oneOf: [
         tagged(
           'STAGE_CARD',
-          { cardId: string(), lane: ref('LaneIdx') },
+          { cardId: string(), lane: ref('LaneId') },
           ['cardId', 'lane'],
         ),
         tagged('UNSTAGE_CARD', { cardId: string() }, ['cardId']),
@@ -247,15 +251,32 @@ export const PROTOCOL_SCHEMA = {
       },
       ['participantId', 'controller', 'displayName'],
     ),
-    DeckBootstrap: object(
+    PlayerDeckBootstrap: object(
       {
+        kind: { const: 'PLAYER' },
         deckId: string(),
         revision: ref('SafeInteger'),
         name: string(),
         entries: array(ref('DeckEntry')),
         contentHash: string(),
       },
-      ['deckId', 'revision', 'name', 'entries', 'contentHash'],
+      ['kind', 'deckId', 'revision', 'name', 'entries', 'contentHash'],
+    ),
+    LocationDeckEntry: object(
+      { defId: string() },
+      ['defId'],
+    ),
+    LocationDeckBootstrap: object(
+      {
+        kind: { const: 'LOCATION' },
+        order: { const: 'PRESERVE' },
+        deckId: string(),
+        revision: ref('SafeInteger'),
+        name: string(),
+        entries: array(ref('LocationDeckEntry')),
+        contentHash: string(),
+      },
+      ['kind', 'order', 'deckId', 'revision', 'name', 'entries', 'contentHash'],
     ),
     MatchBootstrap: object(
       {
@@ -273,8 +294,12 @@ export const PROTOCOL_SCHEMA = {
           ['P0', 'P1'],
         ),
         decks: object(
-          { P0: ref('DeckBootstrap'), P1: ref('DeckBootstrap') },
-          ['P0', 'P1'],
+          {
+            P0: ref('PlayerDeckBootstrap'),
+            P1: ref('PlayerDeckBootstrap'),
+            LOCATIONS: ref('LocationDeckBootstrap'),
+          },
+          ['P0', 'P1', 'LOCATIONS'],
         ),
       },
       [

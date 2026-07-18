@@ -10,7 +10,7 @@
  * Mystique / Super Skrull enter the picture.
  */
 
-import type { CardId, LaneIdx, LocationId, Owner } from './ids';
+import type { CardId, LaneId, LocationId, Owner } from './ids';
 import type { TextOverride, EffectRef, TrackedStatKey, TrackedFlagKey } from './ability';
 
 // ---- Tracked variables (game-history summary, updated by apply()) ----------
@@ -221,7 +221,7 @@ export interface CardInstance {
   readonly variantId?: string;
   readonly version: number;
   readonly owner: Owner;
-  readonly lane: LaneIdx | null;
+  readonly lane: LaneId | null;
   readonly zone: CardZone;
   readonly revealed: boolean;
   /** Accumulated one-shot power adjustments from ADD_POWER / SET_POWER
@@ -248,7 +248,7 @@ export interface CardInstance {
 export interface LocationInstance {
   readonly id: LocationId;
   readonly defId: string;
-  readonly lane: LaneIdx;
+  readonly lane: LaneId;
   readonly tags: readonly LaneTag[];
   readonly counters?: Readonly<Record<string, number>>;
 }
@@ -275,10 +275,10 @@ export type LaneTag =
 // ---- Pending one-shot effects ----------------------------------------------
 
 export type PendingEffect =
-  | { kind: 'SHURI_DOUBLE_NEXT'; owner: Owner; lane: LaneIdx; sourceId: CardId }
-  | { kind: 'COULSON_TRIGGER_NEXT'; owner: Owner; lane: LaneIdx; sourceId: CardId }
+  | { kind: 'SHURI_DOUBLE_NEXT'; owner: Owner; lane: LaneId; sourceId: CardId }
+  | { kind: 'COULSON_TRIGGER_NEXT'; owner: Owner; lane: LaneId; sourceId: CardId }
   | { kind: 'EGO_OVERRIDE'; turn: number }
-  | { kind: 'RICKETY_BRIDGE_DESTROY'; lane: LaneIdx; atEndOfTurn: number }
+  | { kind: 'RICKETY_BRIDGE_DESTROY'; lane: LaneId; atEndOfTurn: number }
   /**
    * Generic scheduled effect. The DSL's `ADD_PENDING` with a `SCHEDULED`
    * spec produces this shape. `sourceId` / `owner` / `lane` carry the
@@ -291,15 +291,23 @@ export type PendingEffect =
       when: import('./ability').PendingWhen;
       sourceId: CardId;
       sourceOwner: Owner | null;
-      sourceLane: LaneIdx | null;
+      sourceLane: LaneId | null;
       fireTurn: number;
       effect: import('./ability').EffectExpr;
     };
 
 // ---- Lane state ------------------------------------------------------------
 
+export type LaneStatus = 'CREATING' | 'ACTIVE' | 'DESTROYING' | 'DESTROYED';
+
 export interface LaneState {
-  readonly idx: LaneIdx;
+  /** Stable identity. This value never changes or gets reused. */
+  readonly idx: LaneId;
+  /**
+   * Lifecycle status. Older fixtures that predate dynamic topology omit this
+   * field and are interpreted as ACTIVE; engine-created states always set it.
+   */
+  readonly status?: LaneStatus;
   readonly location: LocationInstance | null;
   readonly locationRevealed: boolean;
   readonly cards: Readonly<Record<Owner, readonly CardId[]>>;
@@ -352,7 +360,18 @@ export interface MatchState {
   readonly deck: Readonly<Record<Owner, readonly CardInstance[]>>;
   readonly hand: Readonly<Record<Owner, readonly CardInstance[]>>;
   readonly cards: Readonly<Record<CardId, CardInstance>>;
-  readonly lanes: readonly [LaneState, LaneState, LaneState];
+  /**
+   * Stable lane registry in allocation order. Destroyed lanes remain here as
+   * tombstones; this array is never reordered and IDs are never reused.
+   */
+  readonly lanes: readonly LaneState[];
+  /**
+   * Current left-to-right playable order. Position is derived from this list.
+   * Optional only while pre-Phase-1.2 test fixtures are migrated.
+   */
+  readonly activeLaneOrder?: readonly LaneId[];
+  /** Next monotonic stable lane ID. Engine-created states always supply it. */
+  readonly nextLaneId?: LaneId;
   readonly pending: readonly CardId[];
   readonly stagingOrder: readonly CardId[];
   readonly pendingEffects: readonly PendingEffect[];

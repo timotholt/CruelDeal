@@ -16,6 +16,7 @@
 
 import type { CardId, LocationId, Owner } from './ids';
 import type { CardType } from '../manifest/types';
+import type { CardPositionCriteria } from './cardPosition';
 
 export type OwnerRef = Owner | 'SELF_OWNER' | 'OPP_OWNER' | 'EVENT_OWNER' | 'EVENT_OPP_OWNER';
 
@@ -112,6 +113,8 @@ export type Predicate =
   | { kind: 'HAS_ABILITY'; target: Selector; slot: 'ON_REVEAL' | 'ONGOING' | 'ACTIVATE' | 'ANY' }
   /** True if the target has no effective ability text. */
   | { kind: 'HAS_NO_ABILITY'; target: Selector }
+  /** True if the target occupies an owner-relative slot, row, and/or column. */
+  | ({ kind: 'CARD_POSITION'; target: Selector } & CardPositionCriteria)
   /** True if the card is in a lane that is currently at full capacity for its owner. */
   | { kind: 'IN_FULL_LANE'; target: Selector }
   /** True if the lane containing the given selector card is at full capacity for its owner. */
@@ -201,6 +204,8 @@ export type EffectExpr =
 
   // --- Card lifecycle atoms ---
   | { kind: 'DESTROY'; target: Selector }
+  /** Destroy every active lane except the source's lane. */
+  | { kind: 'DESTROY_OTHER_LANES' }
   | { kind: 'BANISH'; target: Selector }
   | { kind: 'MOVE'; target: Selector; to: Selector }
   | { kind: 'DRAW'; owner: OwnerRef; count: NumExpr }
@@ -286,12 +291,21 @@ export type OngoingExpr =
   | { kind: 'BLOCK_PLAY'; target?: Selector; laneOf?: Selector; pred?: Predicate; cardPred?: Predicate; when?: Predicate; ownerFilter?: OwnerFilter; stack: 'SINGLE' }
   | { kind: 'BLOCK_MOVE'; target: Selector; stack: 'SINGLE' }
   | { kind: 'BLOCK_POWER_INCREASE'; target: Selector; stack: 'SINGLE' }
+  /** Prevents any destruction source from destroying the selected cards. */
+  | { kind: 'BLOCK_DESTROY'; target: Selector; stack: 'SINGLE' }
   | { kind: 'DELAY_REVEAL'; target: Selector; until: 'END_OF_GAME'; stack: 'SINGLE' }
   /**
-   * Prevents cards in `laneOf` from being destroyed by effects sourced from
-   * the same owner (Union Rep: "your cards here can't be destroyed by your own cards").
+   * Prevents selected cards from being destroyed by effects sourced from the
+   * same owner. `laneOf` preserves Union Rep's lane-wide rule; `target` allows
+   * narrower rules such as "cards in the first row here".
    */
-  | { kind: 'BLOCK_FRIENDLY_DESTROY'; laneOf: Selector; stack: 'SINGLE' }
+  | ({
+      kind: 'BLOCK_FRIENDLY_DESTROY';
+      stack: 'SINGLE';
+    } & (
+      | { laneOf: Selector; target?: Selector }
+      | { laneOf?: Selector; target: Selector }
+    ))
 
   // Text copy (Super Skrull)
   | { kind: 'COPY_ONGOING_OF'; into: Selector; source: Selector; stack: 'SINGLE' };

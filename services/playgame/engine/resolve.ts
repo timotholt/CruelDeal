@@ -18,7 +18,7 @@
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
 import type { MatchResult, MatchState, PendingEffect } from './types/state';
-import type { CardId, LaneIdx, Owner } from './types/ids';
+import type { CardId, LaneId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
@@ -29,6 +29,7 @@ import { isRevealDelayed } from './projections/reveal';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { buildCardDrawEvents } from './draw';
+import { activeLaneIds, isActiveLane } from './laneTopology';
 
 // ============================================================================
 // resolve — intent → events
@@ -74,6 +75,9 @@ function resolveStage(
   if (!def) return reject(intent.intentId, `unknown defId ${card.defId}`);
 
   const lane = state.lanes[intent.lane];
+  if (!lane || !isActiveLane(state, intent.lane)) {
+    return reject(intent.intentId, 'lane is not active');
+  }
   if (lane.cards[intent.owner].length >= manifest.constants.laneCapacity) {
     return reject(intent.intentId, 'lane full');
   }
@@ -219,6 +223,15 @@ export function resolveTurn(
   for (const owner of order) {
     const mine = s.stagingOrder.filter(id => s.cards[id]?.owner === owner);
     for (const cardId of mine) {
+      const card = s.cards[cardId];
+      if (
+        !card
+        || card.zone !== 'LANE'
+        || card.lane === null
+        || !isActiveLane(s, card.lane)
+      ) {
+        continue;
+      }
       const subRng = rng.fork(`reveal:${owner}:${cardId}`);
       const res = revealPlayedCard(s, cardId, manifest, subRng);
       events.push(...res.events);
@@ -239,7 +252,7 @@ export function resolveTurn(
   //            the card as SELF and a forked RNG keyed on cardId + exprIdx.
   {
     const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
-    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+    for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
         const ids = s.lanes[lane].cards[owner];
         for (const id of ids) {
@@ -278,7 +291,7 @@ export function resolveTurn(
   // Phase 1.92  Location end-of-turn triggers. These run after card EOT
   // triggers and before TURN_ENDED cleanup clears transient play/move tags.
   {
-    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+    for (const lane of activeLaneIds(s)) {
       const trig = fireLocationTrigger(
         s,
         lane,
@@ -482,7 +495,7 @@ export function resolveTurn(
   // start effects, before location triggers and normal draws.
   {
     const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
-    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+    for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
         const ids = s.lanes[lane].cards[owner];
         for (const id of ids) {
@@ -521,7 +534,7 @@ export function resolveTurn(
   // Phase 5.7  Location start-of-turn triggers, after card start triggers,
   // before normal draws.
   {
-    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+    for (const lane of activeLaneIds(s)) {
       const trig = fireLocationTrigger(
         s,
         lane,
@@ -549,7 +562,7 @@ export function resolveTurn(
   // Phase 7  Reveal the location for the upcoming turn (turns 2–3).
   //          `s.turn === nextTurn` now, so the lane index is `turn - 1`.
   if (s.turn <= 3) {
-    const laneIdx = (s.turn - 1) as LaneIdx;
+    const laneIdx = (s.turn - 1) as LaneId;
     const loc = s.lanes[laneIdx].location;
     if (loc && !s.lanes[laneIdx].locationRevealed) {
       const revealEvt: MatchEvent = {
@@ -591,7 +604,7 @@ export function resolveTurn(
 function isPlayBlocked(
   state: MatchState,
   cardId: CardId,
-  lane: LaneIdx,
+  lane: LaneId,
   owner: Owner,
   manifest: Manifest,
 ): boolean {
@@ -644,7 +657,7 @@ function revealDelayedCardsAtEndOfGame(
   // Any remaining face-down lane cards not captured by stagingOrder (e.g.
   // effect-spawned with DELAY_REVEAL), in lane-array order.
   for (const owner of ['P0', 'P1'] as const) {
-    for (let lane = 0 as LaneIdx; lane <= 2; lane = (lane + 1) as LaneIdx) {
+    for (const lane of activeLaneIds(s)) {
       for (const id of s.lanes[lane].cards[owner]) {
         if (seenInOrder.has(id)) continue;
         const card = s.cards[id];
@@ -671,8 +684,7 @@ export function computeMatchResult(state: MatchState, manifest: Manifest): Match
   let lanesO = 0;
   let totP = 0;
   let totO = 0;
-  for (let i = 0; i < 3; i++) {
-    const lane = i as LaneIdx;
+  for (const lane of activeLaneIds(state)) {
     const p = getLanePower(state, lane, 'P0', manifest);
     const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;
@@ -702,8 +714,7 @@ function computePriorityForNextTurn(
   let lanesO = 0;
   let totP = 0;
   let totO = 0;
-  for (let i = 0; i < 3; i++) {
-    const lane = i as LaneIdx;
+  for (const lane of activeLaneIds(state)) {
     const p = getLanePower(state, lane, 'P0', manifest);
     const o = getLanePower(state, lane, 'P1', manifest);
     totP += p;

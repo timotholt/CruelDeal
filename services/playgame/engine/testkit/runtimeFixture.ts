@@ -1,5 +1,5 @@
 import type { EffectExpr } from '../types/ability';
-import type { CardId, LaneIdx, LocationId, Owner, Seat } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner, Seat } from '../types/ids';
 import type { CardDef, LocationDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
@@ -69,7 +69,7 @@ function buildCard(
   spec: RuntimeCardSpec,
   owner: Owner,
   zone: CardZone,
-  lane: LaneIdx | null,
+  lane: LaneId | null,
 ): CardInstance {
   return {
     id: spec.id as CardId,
@@ -113,7 +113,7 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
   };
 
   const lanes = options.lanes.map((laneSpec, laneNumber) => {
-    const lane = laneNumber as LaneIdx;
+    const lane = laneNumber as LaneId;
     const locationSpec = options.locations[lane];
     const location: LocationInstance | null = locationSpec
       ? {
@@ -128,11 +128,12 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     const P1 = laneSpec.P1.map((spec) => register(buildCard(spec, 'P1', 'LANE', lane)).id);
     return {
       idx: lane,
+      status: 'ACTIVE',
       location,
       locationRevealed: locationSpec?.revealed ?? false,
       cards: { P0, P1 },
     } satisfies LaneState;
-  }) as unknown as [LaneState, LaneState, LaneState];
+  }) as LaneState[];
 
   const stagingOrder = (options.stagingOrder ?? []).map((id) => id as CardId);
   for (const id of stagingOrder) {
@@ -156,6 +157,8 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     hand,
     cards,
     lanes,
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
     pending: [],
     stagingOrder,
     pendingEffects: options.pendingEffects ?? [],
@@ -243,6 +246,14 @@ export function testManifest(
       standard: {
         rulesetId: 'standard',
         deckConstruction: { defaultCopyLimit: 1 },
+        laneRules: {
+          initialLaneCount: 3,
+          maximumActiveLaneCount: 3,
+        },
+        locationDeck: {
+          minimumReserveCount: 0,
+          copyLimit: 1,
+        },
       },
     },
     cards: Object.fromEntries(cards.map((card) => [card.defId, card])),

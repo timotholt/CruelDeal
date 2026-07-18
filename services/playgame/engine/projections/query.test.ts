@@ -7,7 +7,7 @@
 import type { CardDef, Manifest } from '../manifest/types';
 import type { CardInstance, LaneState, MatchState } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { CardId, LaneIdx, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   matchesNum,
   matchesString,
@@ -47,13 +47,18 @@ const mkManifest = (cards: CardDef[]): Manifest => ({
   version: 1,
   protocolVersion: 1,
   constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-  rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+  rulesets: { standard: {
+    rulesetId: 'standard',
+    deckConstruction: { defaultCopyLimit: 1 },
+    laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+    locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+  } },
   cards: Object.fromEntries(cards.map((c) => [c.defId, c])),
   locations: {},
   disabled: { cards: [], locations: [] },
 });
 
-const blankLane = (i: LaneIdx): LaneState => ({
+const blankLane = (i: LaneId): LaneState => ({
   idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] },
 });
 
@@ -61,7 +66,7 @@ interface CardSpec {
   id?: string;
   def: string;
   owner: Owner;
-  lane: LaneIdx | null;
+  lane: LaneId | null;
   zone?: CardInstance['zone'];
   revealed?: boolean;
   powerDelta?: number;
@@ -192,7 +197,7 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
   eq(findCards(state, manifest, { cost: { lte: 3 } }).length, 2, 'cost: lte');
   eq(findCards(state, manifest, { cost: { gt: 1 } }).length, 2, 'cost: gt');
   eq(findCards(state, manifest, { cost: { between: [2, 4] } }).length, 1, 'cost: between');
-  eq(findCards(state, manifest, { basePower: { gte: 4 } }).length, 2, 'basePower: gte');
+  eq(findCards(state, manifest, { basePower: { gte: 4 } }).length, 1, 'basePower: gte excludes non-power-bearing spells');
   eq(findCards(state, manifest, { cardType: 'character' }).length, 1, 'cardType: single');
   eq(findCards(state, manifest, { cardType: ['device', 'spell'] }).length, 2, 'cardType: array');
 }
@@ -351,7 +356,7 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 
   // findLane
   truthy(findLane(state, manifest, { isEmpty: true }) === 0, 'Lane: findLane first match');
-  truthy(findLane(state, manifest, { idx: 99 as LaneIdx }) === null, 'Lane: findLane no match');
+  truthy(findLane(state, manifest, { idx: 99 as LaneId }) === null, 'Lane: findLane no match');
 }
 
 // ════════════════════════════════════════════════════════════════════════════

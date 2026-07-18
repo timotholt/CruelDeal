@@ -9,7 +9,7 @@
 import type { MatchState, CardInstance, LaneState, LocationInstance } from '../engine/types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../engine/types/state';
 import type { Deck, Manifest } from '../engine/manifest/types';
-import type { CardId, LaneIdx, LocationId, Owner } from '../engine/types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../engine/types/ids';
 import { createRng, type Rng } from '../engine/rng';
 
 function mintId(rng: Rng, tag: string): string {
@@ -81,7 +81,7 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
   return picked.map((def, laneIdx): LocationInstance => ({
     id: `${def.defId}@${laneIdx}` as LocationId,
     defId: def.defId,
-    lane: laneIdx as LaneIdx,
+    lane: laneIdx as LaneId,
     tags: [],
   }));
 }
@@ -108,11 +108,12 @@ export function buildDebugMatchState(
 
   const locs = pickLaneLocations(manifest, rng.fork('locations'));
   const lanes = [0, 1, 2].map(i => ({
-    idx: i as LaneIdx,
+    idx: i as LaneId,
+    status: 'ACTIVE' as const,
     location: locs[i] ?? null,
     locationRevealed: false,
     cards: { P0: [] as CardId[], P1: [] as CardId[] },
-  })) as unknown as readonly [LaneState, LaneState, LaneState];
+  })) satisfies LaneState[];
 
   const startEnergy = manifest.constants.energyCurve[0] ?? 1;
   const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
@@ -129,6 +130,8 @@ export function buildDebugMatchState(
     hand: { P0: [], P1: [] },
     cards: cards as Record<CardId, CardInstance>,
     lanes,
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
     pending: [],
     stagingOrder: [],
     pendingEffects: [],

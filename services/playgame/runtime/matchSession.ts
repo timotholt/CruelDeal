@@ -49,6 +49,7 @@ export class MatchSession {
         P0: bootstrap.decks.P0.entries,
         P1: bootstrap.decks.P1.entries,
       },
+      locationDeck: bootstrap.decks.LOCATIONS.entries,
     });
     Object.freeze(this);
   }

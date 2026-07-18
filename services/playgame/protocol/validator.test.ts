@@ -37,6 +37,21 @@ describe('Cruel Deal protocol v1 TypeScript validator', () => {
     );
   });
 
+  it('rejects the removed locationless destruction event shape', () => {
+    const result = validateFramedEventWire({
+      frame: 1,
+      scope: { turn: 1, phase: 'ACTION' },
+      event: {
+        type: 'LOCATION_DESTROYED',
+        lane: 0,
+        locationId: 'location-0',
+        cause: { sourceId: 'rules', effectKind: 'SYSTEM' },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
   it('throws a typed boundary error from the assertion API', () => {
     expect(() => assertProtocolPayload('INTENT_ENVELOPE', {
       matchId: 'match',

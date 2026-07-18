@@ -1,6 +1,7 @@
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchBootstrap } from '../runtime/contracts';
 import { computeDeckContentHash } from '../runtime/bootstrapValidation';
+import { defaultLocationDeckFactory } from '../runtime/locationDeckFactory';
 import type { DebugDeck } from './debugDecks';
 
 export function buildDebugMatchBootstrap(
@@ -8,6 +9,8 @@ export function buildDebugMatchBootstrap(
   opponentDeck: Pick<DebugDeck, 'id' | 'name' | 'cards'>,
   seed: string,
 ): MatchBootstrap {
+  const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard;
+  if (!ruleset) throw new Error('Debug bootstrap requires the standard ruleset');
   return {
     matchId: `debug-match-${seed}`,
     mode: 'DEBUG',
@@ -29,6 +32,7 @@ export function buildDebugMatchBootstrap(
     },
     decks: {
       P0: {
+        kind: 'PLAYER',
         deckId: `debug:${playerDeck.id}`,
         revision: 1,
         name: playerDeck.name,
@@ -36,12 +40,18 @@ export function buildDebugMatchBootstrap(
         contentHash: computeDeckContentHash(playerDeck.cards),
       },
       P1: {
+        kind: 'PLAYER',
         deckId: `debug:${opponentDeck.id}`,
         revision: 1,
         name: opponentDeck.name,
         entries: opponentDeck.cards,
         contentHash: computeDeckContentHash(opponentDeck.cards),
       },
+      LOCATIONS: defaultLocationDeckFactory.build({
+        manifest: BOOTSTRAP_MANIFEST,
+        ruleset,
+        seed,
+      }),
     },
   };
 }

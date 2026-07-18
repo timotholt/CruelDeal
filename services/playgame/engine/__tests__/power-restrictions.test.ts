@@ -14,7 +14,7 @@ import {
 } from '../testkit/runtimeFixture';
 import type { EffectExpr } from '../types/ability';
 import type { MatchEvent } from '../types/events';
-import type { CardId, LaneIdx } from '../types/ids';
+import type { CardId, LaneId } from '../types/ids';
 import type { MatchState } from '../types/state';
 
 const SELF = { kind: 'SELF' } as const;
@@ -88,7 +88,7 @@ function fixtureState(
     readonly lane0?: readonly RuntimeCardSpec[];
     readonly lane1?: readonly RuntimeCardSpec[];
     readonly lane2?: readonly RuntimeCardSpec[];
-    readonly courthouseLane?: LaneIdx;
+    readonly courthouseLane?: LaneId;
   },
 ): MatchState {
   const courthouseLane = options.courthouseLane ?? 0;
@@ -123,7 +123,7 @@ function effectCtx(
   state: MatchState,
   manifest: Manifest,
   self: CardId,
-  lane: LaneIdx,
+  lane: LaneId,
 ): EffectCtx {
   return {
     state,

@@ -19,7 +19,7 @@ import type {
   MatchState,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
 import { getCardPower } from '../projections';
 
@@ -59,7 +59,12 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
     version: 1,
     protocolVersion: 1,
     constants: { energyCurve: [1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
-    rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
+    rulesets: { standard: {
+      rulesetId: 'standard',
+      deckConstruction: { defaultCopyLimit: 1 },
+      laneRules: { initialLaneCount: 3, maximumActiveLaneCount: 3 },
+      locationDeck: { minimumReserveCount: 0, copyLimit: 1 },
+    } },
     cards: byId(cards),
     locations: byId(locations),
     disabled: { cards: [], locations: [] },
@@ -69,14 +74,14 @@ function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
 let idCounter = 0;
 const nextCardId = (): CardId => `c${++idCounter}` as CardId;
 
-function blankLane(i: LaneIdx): LaneState {
+function blankLane(i: LaneId): LaneState {
   return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
 }
 
 interface CardSpec {
   def: string;
   owner: Owner;
-  lane: LaneIdx | null;
+  lane: LaneId | null;
   zone?: 'LANE' | 'HAND' | 'DECK';
   revealed?: boolean;
   powerDelta?: number;
@@ -84,7 +89,7 @@ interface CardSpec {
 
 function buildState(
   cardSpecs: CardSpec[],
-  locSpecs: Partial<Record<LaneIdx, string>> = {},
+  locSpecs: Partial<Record<LaneId, string>> = {},
   opts: { seed?: string; turn?: number } = {},
 ): MatchState {
   idCounter = 0;
@@ -123,7 +128,7 @@ function buildState(
     }
   }
   for (const laneStr of Object.keys(locSpecs)) {
-    const laneIdx = Number(laneStr) as LaneIdx;
+    const laneIdx = Number(laneStr) as LaneId;
     const loc: LocationInstance = {
       id: `loc${laneIdx}` as LocationId,
       defId: locSpecs[laneIdx]!,
@@ -307,7 +312,7 @@ function buildState(
   const manifest = mkManifest([sapper]);
   const s0 = buildState([{ def: 'sapper', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('sapper'));
-  const moved = res.events.find(e => e.type === 'CARD_MOVED') as { fromLane: LaneIdx; toLane: LaneIdx };
+  const moved = res.events.find(e => e.type === 'CARD_MOVED') as { fromLane: LaneId; toLane: LaneId };
   truthy(!!moved, 'MOVE: CARD_MOVED emitted');
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
   truthy(moved.toLane !== 0 && (moved.toLane === 1 || moved.toLane === 2), 'MOVE: toLane is another lane');
@@ -584,7 +589,7 @@ function buildState(
     manifest,
     self: 'c1' as CardId,
     selfKind: 'card' as const,
-    selfLane: 0 as LaneIdx,
+    selfLane: 0 as LaneId,
     selfOwner: 'P0' as Owner,
     rng,
     source: { sourceId: 'c1' as CardId, effectKind: 'ON_REVEAL' as const },
@@ -690,7 +695,7 @@ function buildState(
     manifest,
     self: 'loc0' as LocationId,
     selfKind: 'location' as const,
-    selfLane: 0 as LaneIdx,
+    selfLane: 0 as LaneId,
     selfOwner: null,
     rng: createRng('ice-box'),
     source: { sourceId: 'loc0' as LocationId, effectKind: 'LOCATION' as const },

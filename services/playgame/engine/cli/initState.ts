@@ -16,10 +16,11 @@
 import type { MatchState, CardInstance, LaneState, LocationInstance } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { Deck, Manifest } from '../manifest/types';
-import type { CardId, LaneIdx, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
 import { createRng, type Rng } from '../rng';
 
 export type InitialDecks = Partial<Record<Owner, Deck>>;
+export type InitialLocationDeck = readonly { readonly defId: string }[];
 
 /** Short id derived from a seeded RNG. 8 alphanumerics — enough for a match. */
 function mintId(rng: Rng, tag: string): string {
@@ -118,9 +119,30 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
   return picked.map((def, idx): LocationInstance => ({
     id: `${def.defId}@${idx}` as LocationId,
     defId: def.defId,
-    lane: idx as LaneIdx,
+    lane: idx as LaneId,
     tags: [],
   }));
+}
+
+function buildSuppliedLaneLocations(
+  manifest: Manifest,
+  entries: InitialLocationDeck,
+): LocationInstance[] {
+  if (entries.length < 3) {
+    throw new Error(`initState: location deck requires at least 3 entries; received ${entries.length}`);
+  }
+  return entries.slice(0, 3).map((entry, index) => {
+    const definition = manifest.locations[entry.defId];
+    if (!definition) {
+      throw new Error(`initState: location deck references unknown defId "${entry.defId}"`);
+    }
+    return {
+      id: `${definition.defId}@${index}` as LocationId,
+      defId: definition.defId,
+      lane: index as LaneId,
+      tags: [],
+    };
+  });
 }
 
 /**
@@ -129,7 +151,12 @@ function pickLaneLocations(manifest: Manifest, rng: Rng): (LocationInstance | nu
  * seeded coin flip. If `decks` is omitted, each owner gets a deterministic
  * random deck for CLI/test convenience.
  */
-export function createInitialMatchState(seed: string, manifest: Manifest, decks: InitialDecks = {}): MatchState {
+export function createInitialMatchState(
+  seed: string,
+  manifest: Manifest,
+  decks: InitialDecks = {},
+  locationDeck?: InitialLocationDeck,
+): MatchState {
   const rng = createRng(seed);
   const deckRng = rng.fork('deck');
   const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'), decks.P0);
@@ -140,13 +167,18 @@ export function createInitialMatchState(seed: string, manifest: Manifest, decks:
   for (const c of playerDeck) cards[c.id] = c;
   for (const c of oppDeck) cards[c.id] = c;
 
-  const locs = pickLaneLocations(manifest, rng.fork('locations'));
-  const lanes: readonly [LaneState, LaneState, LaneState] = [0, 1, 2].map((i) => ({
-    idx: i as LaneIdx,
+  // The runtime always supplies the frozen bootstrap order. The fallback is
+  // retained temporarily for CLI/test adapters until Phase 1.2 checkpoint 3.
+  const locs = locationDeck
+    ? buildSuppliedLaneLocations(manifest, locationDeck)
+    : pickLaneLocations(manifest, rng.fork('locations'));
+  const lanes: readonly LaneState[] = [0, 1, 2].map((i) => ({
+    idx: i as LaneId,
+    status: 'ACTIVE',
     location: locs[i] ?? null,
     locationRevealed: false,
     cards: { P0: [], P1: [] } as Record<Owner, readonly CardId[]>,
-  })) as unknown as readonly [LaneState, LaneState, LaneState];
+  }));
 
   const startEnergy = manifest.constants.energyCurve[0] ?? 1;
   const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
@@ -166,6 +198,8 @@ export function createInitialMatchState(seed: string, manifest: Manifest, decks:
     hand: { P0: [], P1: [] },
     cards,
     lanes,
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
     pending: [],
     stagingOrder: [],
     pendingEffects: [],

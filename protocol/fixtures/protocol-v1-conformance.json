@@ -90,6 +90,7 @@
           },
           "decks": {
             "P0": {
+              "kind": "PLAYER",
               "deckId": "deck-0",
               "revision": 1,
               "name": "Deck 0",
@@ -97,11 +98,25 @@
               "contentHash": "sha256:deck-0"
             },
             "P1": {
+              "kind": "PLAYER",
               "deckId": "deck-1",
               "revision": 1,
               "name": "Deck 1",
               "entries": [],
               "contentHash": "sha256:deck-1"
+            },
+            "LOCATIONS": {
+              "kind": "LOCATION",
+              "order": "PRESERVE",
+              "deckId": "locations-0",
+              "revision": 1,
+              "name": "Locations",
+              "entries": [
+                {
+                  "defId": "courthouse"
+                }
+              ],
+              "contentHash": "sha256:locations-0"
             }
           }
         }
@@ -257,6 +272,7 @@
           },
           "decks": {
             "P0": {
+              "kind": "PLAYER",
               "deckId": "deck-0",
               "revision": 1,
               "name": "Deck 0",
@@ -264,11 +280,25 @@
               "contentHash": "sha256:deck-0"
             },
             "P1": {
+              "kind": "PLAYER",
               "deckId": "deck-1",
               "revision": 1,
               "name": "Deck 1",
               "entries": [],
               "contentHash": "sha256:deck-1"
+            },
+            "LOCATIONS": {
+              "kind": "LOCATION",
+              "order": "PRESERVE",
+              "deckId": "locations-0",
+              "revision": 1,
+              "name": "Locations",
+              "entries": [
+                {
+                  "defId": "courthouse"
+                }
+              ],
+              "contentHash": "sha256:locations-0"
             }
           }
         }
