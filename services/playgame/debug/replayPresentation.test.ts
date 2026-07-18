@@ -23,7 +23,10 @@ const location = state.lanes[0].location!;
 const frame = (event: MatchEvent): ReplayFrame => ({ index: 1, transactionId: 'p0-tx', event, state });
 const frames: ReplayFrame[] = [{ index: 0, event: null, state }];
 const names = createReplayNameResolver(frames, BOOTSTRAP_MANIFEST);
-const actors = { actorLabel: () => 'P0 (YOU)' };
+const actors = {
+  actorLabel: () => 'Player 1 (YOU)',
+  playerLabel: (owner: string | undefined) => owner === 'P0' ? 'Player 1' : owner === 'P1' ? 'Player 2' : 'Game',
+};
 
 describe('replay debug presentation', () => {
   it('resolves card and location instance ids while preserving unknown ids', () => {
@@ -73,9 +76,8 @@ describe('replay debug presentation', () => {
     };
     const snapshot = structuredClone(event);
 
-    expect(describeReplayFrame(frame(event), names, actors).summary).toBe(
-      `P0 (YOU) · CARD_POWER_CHANGED · cardId=${cardId} (Bone Market, P0) · delta=2 · cause={"sourceId":"${cardId} (Bone Market, P0)","effectKind":"ON_REVEAL"}`,
-    );
+    expect(describeReplayFrame(frame(event), names, actors).summary)
+      .toBe('Bone Market gained 2 power - caused by Bone Market (P0).');
     expect(annotateReplayEventJson(frame(event), names)).toContain(`// Bone Market (P0)`);
     expect(event).toEqual(snapshot);
   });
@@ -86,26 +88,42 @@ describe('replay debug presentation', () => {
       cardId,
       delta: 1,
       cause: { sourceId: cardId, effectKind: 'ONGOING' },
-    }), names)).toBe('effect of Bone Market (P0)');
+    }), names)).toBe('caused by Bone Market (P0)');
 
     expect(describeReplayCause(frame({
       type: 'LOCATION_DESTROYED',
       lane: 0,
       locationId: location.id,
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
-    }), names)).toBe(`effect of ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
+    }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
 
     expect(describeReplayCause(frame({
       type: 'CARD_BANISHED',
       cardId,
       cause: { sourceId: cardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
-    }), names)).toBe('Bone Market (P0): spell resolved — banished by game rules');
+    }), names)).toBe('caused by Bone Market (P0) resolving under the game rules');
 
     expect(describeReplayCause(frame({
       type: 'CARD_BANISHED',
       cardId,
       cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', systemReason: 'ROUND_CLEANUP' },
-    }), names)).toBe('game rules (ROUND_CLEANUP)');
+    }), names)).toBe('caused by game rules: Round cleanup');
+
+    const locationJson = annotateReplayEventJson(frame({
+      type: 'CARD_COST_CHANGED',
+      cardId,
+      delta: -1,
+      cause: { sourceId: location.id, effectKind: 'LOCATION' },
+    }), names);
+    expect(locationJson).toContain(`// ${BOOTSTRAP_MANIFEST.locations[location.defId].name}, left lane`);
+    expect(describeReplayFrame(frame({
+      type: 'CARD_COST_CHANGED',
+      cardId,
+      delta: -1,
+      cause: { sourceId: location.id, effectKind: 'LOCATION' },
+    }), names, actors).summary).toBe(
+      `P0 - Bone Market's cost decreased by 1 - caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}.`,
+    );
   });
 
   it('maps runtime frames to the accepted transaction actor and bootstrap display name', () => {
@@ -128,11 +146,40 @@ describe('replay debug presentation', () => {
     const resolver = createReplayActorResolver(replay);
 
     const event: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: 2 };
-    expect(resolver.actorLabel(frame(event))).toBe('P0 (YOU)');
+    expect(resolver.actorLabel(frame(event))).toBe('Player 1 (YOU)');
     expect(resolver.actorLabel({ ...frame(event), transactionId: 'p1-tx' }))
-      .toBe('P1 (OPPONENT)');
+      .toBe('Player 2 (OPPONENT)');
     expect(resolver.actorLabel({ ...frame(event), transactionId: 'system-tx' }))
-      .toBe('SYSTEM');
-    expect(resolver.actorLabel(frames[0])).toBe('SYSTEM');
+      .toBe('Game');
+    expect(resolver.actorLabel(frames[0])).toBe('Game');
+  });
+
+  it('explains common replay events without exposing engine field names', () => {
+    const stagedEvent: MatchEvent = {
+      type: 'CARD_STAGED',
+      intentId: 'play-card',
+      cardId,
+      lane: 2,
+      owner: 'P0',
+      cost: 1,
+    };
+    expect(describeReplayFrame(frame(stagedEvent), names, actors).summary)
+      .toBe('Player 1 played Bone Market to the right lane, slot FL.');
+    expect(annotateReplayEventJson(frame(stagedEvent), names))
+      .toContain('"lane": 2,  // right lane');
+
+    expect(describeReplayFrame(frame({
+      type: 'CARD_FLIPPED',
+      cardId,
+    }), names, actors).summary).toBe('Player 1 — Bone Market — Revealed.');
+
+    expect(describeReplayFrame(frame({
+      type: 'MATCH_ENDED',
+      result: {
+        winner: 'P0',
+        lanesWon: { P0: 2, P1: 1 },
+        totalPower: { P0: 24, P1: 19 },
+      },
+    }), names, actors).summary).toBe('End of game — Player 1 won.');
   });
 });

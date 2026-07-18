@@ -1,4 +1,5 @@
 import type { Seat } from '../engine/types/ids';
+import type { MatchPhase } from '../engine/types/state';
 
 export interface BoardCardFacingInput {
   readonly cardId: string;
@@ -7,6 +8,23 @@ export interface BoardCardFacingInput {
   readonly revealed: boolean;
   readonly stagingOrder: readonly string[];
   readonly resolutionLocked: boolean;
+}
+
+export interface BoardCardResolutionLockInput {
+  readonly inspectingHistory: boolean;
+  readonly phase: MatchPhase;
+  readonly liveResolutionLocked: boolean;
+}
+
+/**
+ * Historical replay facing must come from the selected frame. The live UI
+ * keeps its sidecar lock because it paints a synthetic face-down beat just
+ * before TURN_RESOLUTION_STARTED is adopted.
+ */
+export function isBoardCardResolutionLocked(input: BoardCardResolutionLockInput): boolean {
+  return input.inspectingHistory
+    ? input.phase === 'RESOLVING'
+    : input.liveResolutionLocked;
 }
 
 /**

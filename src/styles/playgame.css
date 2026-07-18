@@ -428,16 +428,21 @@
   }
   .replay-toggle,
   .replay-chip,
-  .replay-tick {
+  .replay-tick,
+  .replay-transport {
     border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 999px;
     background: rgba(9, 13, 18, 0.88);
     color: var(--text);
     font-family: var(--font-mono);
+    cursor: pointer;
+  }
+  .replay-toggle,
+  .replay-chip,
+  .replay-tick {
+    border-radius: 999px;
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    cursor: pointer;
   }
   .replay-toggle,
   .replay-chip {
@@ -445,13 +450,15 @@
   }
   .replay-toggle:hover,
   .replay-chip:hover,
-  .replay-tick:hover {
+  .replay-tick:hover,
+  .replay-transport:hover {
     border-color: rgba(255,207,91,0.5);
     color: var(--accent);
   }
   .replay-toggle:disabled,
   .replay-chip:disabled,
-  .replay-tick:disabled {
+  .replay-tick:disabled,
+  .replay-transport:disabled {
     opacity: 0.45;
     cursor: default;
   }
@@ -481,6 +488,24 @@
   .replay-panel__footer {
     justify-content: space-between;
     align-items: center;
+  }
+  .replay-panel__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .replay-panel__buttons {
+    justify-content: center;
+    gap: 5px;
+  }
+  .replay-transport {
+    width: 34px;
+    height: 30px;
+    padding: 0;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 28px;
+    text-align: center;
   }
   .replay-panel__header {
     margin-bottom: 10px;
@@ -530,6 +555,12 @@
   .replay-panel__title {
     font-size: 20px;
   }
+  .replay-panel__actor {
+    margin-top: 2px;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+  }
   .replay-panel__section-title {
     margin-bottom: 4px;
     font-size: 14px;
@@ -564,6 +595,13 @@
     line-height: 1.45;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .replay-panel__footer {
+    flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .replay-panel__footer .replay-chip {
+    padding: 7px 10px;
   }
   .replay-tick {
     padding: 4px 8px;

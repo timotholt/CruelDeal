@@ -11,7 +11,6 @@ import { createEffect } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { ResolvedCard } from '@/services/playgame/view';
-import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { CardId, Seat } from '@/services/playgame/engine/types/ids';
 import { openInspect } from './inspector';
 import { dragState } from './useDragDrop';
@@ -26,8 +25,8 @@ interface BoardCardProps {
   interactive?: boolean;
   inspectable?: boolean;
   viewerSeat?: Seat;
-  phase?: EngineMatchState['phase'];
   stagingOrder?: readonly string[];
+  resolutionLocked?: boolean;
 }
 
 export const BoardCard = (props: BoardCardProps) => {
@@ -81,7 +80,7 @@ export const BoardCard = (props: BoardCardProps) => {
       viewerSeat: viewerSeat(),
       revealed: props.card.revealed,
       stagingOrder: stagingOrder(),
-      resolutionLocked: ui.isFlipped,
+      resolutionLocked: props.resolutionLocked ?? ui.isFlipped,
     });
   };
   const isPending = isFaceDown;

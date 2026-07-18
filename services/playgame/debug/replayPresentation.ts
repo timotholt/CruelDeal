@@ -7,9 +7,13 @@ import type { MatchState } from '../engine/types/state';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
 
 export interface ReplayNameResolver {
+  cardName: (state: MatchState, id: CardId) => string;
   cardNameWithOwner: (state: MatchState, id: CardId) => string;
+  cardOwner: (state: MatchState, id: CardId) => string | undefined;
   cardLabel: (state: MatchState, id: CardId) => string;
   cardType: (state: MatchState, id: CardId) => string | undefined;
+  definitionName: (defId: string) => string;
+  locationLane: (state: MatchState, id: LocationId) => number | undefined;
   locationName: (state: MatchState, id: LocationId) => string;
   locationLabel: (state: MatchState, id: LocationId) => string;
 }
@@ -22,6 +26,7 @@ export interface ReplayFrameDescription {
 
 export interface ReplayActorResolver {
   actorLabel: (frame: ReplayFrame | null) => string;
+  playerLabel: (owner: string | undefined) => string;
 }
 
 const cardLabel = (id: string, name: string | undefined, owner: string | undefined): string => {
@@ -46,6 +51,7 @@ export function createReplayNameResolver(
   const historicalCardDefIds = new Map<string, string>();
   const historicalCardOwners = new Map<string, string>();
   const historicalLocationDefIds = new Map<string, string>();
+  const historicalLocationLanes = new Map<string, number>();
 
   for (const frame of frames) {
     for (const card of Object.values(frame.state.cards)) {
@@ -53,7 +59,10 @@ export function createReplayNameResolver(
       historicalCardOwners.set(card.id, card.owner);
     }
     for (const lane of frame.state.lanes) {
-      if (lane.location) historicalLocationDefIds.set(lane.location.id, lane.location.defId);
+      if (lane.location) {
+        historicalLocationDefIds.set(lane.location.id, lane.location.defId);
+        historicalLocationLanes.set(lane.location.id, lane.idx);
+      }
     }
   }
 
@@ -71,9 +80,16 @@ export function createReplayNameResolver(
   );
 
   return {
+    cardName: (state, id) => cardDef(state, id)?.name ?? id,
     cardNameWithOwner: (state, id) => nameWithOwner(id, cardDef(state, id)?.name, cardOwner(state, id)),
+    cardOwner,
     cardLabel: (state, id) => cardLabel(id, cardDef(state, id)?.name, cardOwner(state, id)),
     cardType: (state, id) => cardDef(state, id)?.cardType,
+    definitionName: (defId) => manifest.cards[defId]?.name ?? defId,
+    locationLane: (state, id) => (
+      state.lanes.find((lane) => lane.location?.id === id)?.idx
+      ?? historicalLocationLanes.get(id)
+    ),
     locationName: (state, id) => locationDef(state, id)?.name ?? id,
     locationLabel: (state, id) => label(id, locationDef(state, id)?.name),
   };
@@ -84,53 +100,21 @@ export function createReplayActorResolver(replay: MatchRuntimeReplayExport): Rep
   const actorByTransaction = new Map(
     replay.transactions.map((transaction) => [transaction.transactionId, transaction.intent.seat]),
   );
+  const playerLabel = (owner: string | undefined): string => {
+    if (owner === 'P0') return 'Player 1';
+    if (owner === 'P1') return 'Player 2';
+    return 'Game';
+  };
   return {
+    playerLabel,
     actorLabel: (frame) => {
-      if (!frame?.transactionId) return 'SYSTEM';
+      if (!frame?.transactionId) return 'Game';
       const seat = actorByTransaction.get(frame.transactionId);
-      if (!seat || seat === 'SYSTEM') return 'SYSTEM';
-      return `${seat} (${replay.bootstrap.participants[seat].displayName})`;
+      if (!seat || seat === 'SYSTEM') return 'Game';
+      const displayName = replay.bootstrap.participants[seat].displayName;
+      return `${playerLabel(seat)} (${displayName})`;
     },
   };
-}
-
-const CARD_ID_FIELDS = new Set(['cardId', 'sourceCardId', 'targetId', 'newCardId']);
-const LOCATION_ID_FIELDS = new Set(['locationId', 'oldId', 'newId', 'sourceLocationId']);
-
-function displayValue(
-  key: string,
-  value: unknown,
-  state: MatchState,
-  names: ReplayNameResolver,
-  parent?: Readonly<Record<string, unknown>>,
-): unknown {
-  if (typeof value === 'string') {
-    if (CARD_ID_FIELDS.has(key)) return names.cardLabel(state, value as CardId);
-    if (LOCATION_ID_FIELDS.has(key)) return names.locationLabel(state, value as LocationId);
-    if (key === 'sourceId') {
-      return parent?.effectKind === 'LOCATION'
-        ? names.locationLabel(state, value as LocationId)
-        : names.cardLabel(state, value as CardId);
-    }
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    const itemKey = key === 'newOrder' ? 'cardId' : key;
-    return value.map((item) => displayValue(itemKey, item, state, names));
-  }
-
-  if (value !== null && typeof value === 'object') {
-    const object = value as Readonly<Record<string, unknown>>;
-    return Object.fromEntries(
-      Object.entries(object).map(([childKey, childValue]) => [
-        childKey,
-        displayValue(childKey, childValue, state, names, object),
-      ]),
-    );
-  }
-
-  return value;
 }
 
 function eventCause(event: MatchEvent): EffectRef | null {
@@ -147,10 +131,14 @@ export function describeReplayCause(
   if (!cause) return null;
 
   if (cause.effectKind === 'ON_REVEAL' || cause.effectKind === 'ONGOING') {
-    return `effect of ${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)}`;
+    return `caused by ${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)}`;
   }
   if (cause.effectKind === 'LOCATION') {
-    return `effect of ${names.locationName(frame.state, cause.sourceId as LocationId)}`;
+    const locationId = cause.sourceId as LocationId;
+    const lane = names.locationLane(frame.state, locationId);
+    return lane === undefined
+      ? `caused by location ${names.locationName(frame.state, locationId)}`
+      : `caused by ${laneLabel(lane)} location ${names.locationName(frame.state, locationId)}`;
   }
 
   const eventCardId = 'cardId' in frame.event ? frame.event.cardId : undefined;
@@ -158,10 +146,27 @@ export function describeReplayCause(
     eventCardId === cause.sourceId
     && names.cardType(frame.state, cause.sourceId as CardId) === 'spell'
   ) {
-    return `${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)}: spell resolved — banished by game rules`;
+    return `caused by ${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)} resolving under the game rules`;
   }
-  return cause.systemReason ? `game rules (${cause.systemReason})` : 'game rules';
+  return cause.systemReason
+    ? `caused by game rules: ${humanizeToken(cause.systemReason)}`
+    : 'caused by game rules';
 }
+
+const humanizeToken = (value: string): string => value
+  .toLowerCase()
+  .replaceAll('_', ' ')
+  .replace(/^\w/, (letter) => letter.toUpperCase());
+
+const LANE_LABELS = ['left lane', 'center lane', 'right lane'] as const;
+const SLOT_LABELS = ['FL', 'FR', 'BL', 'BR'] as const;
+
+const laneLabel = (lane: number): string => LANE_LABELS[lane] ?? `lane ${lane}`;
+const slotLabel = (slot: number): string => SLOT_LABELS[slot] ?? `slot ${slot}`;
+
+const signedChange = (delta: number, positive: string, negative: string): string => (
+  delta >= 0 ? `${positive} ${delta}` : `${negative} ${Math.abs(delta)}`
+);
 
 export function describeReplayFrame(
   frame: ReplayFrame | null,
@@ -169,28 +174,158 @@ export function describeReplayFrame(
   actors: ReplayActorResolver,
 ): ReplayFrameDescription {
   const actor = actors.actorLabel(frame);
-  if (!frame?.event) return { actor, summary: `${actor} · Initial seeded state`, cause: null };
+  if (!frame?.event) return { actor, summary: 'Initial game state.', cause: null };
   const event = frame.event;
-  const details = Object.entries(event)
-    .filter(([key]) => key !== 'type')
-    .slice(0, 3)
-    .map(([key, value]) => {
-      const displayed = displayValue(
-        key,
-        value,
-        frame.state,
-        names,
-        event as unknown as Readonly<Record<string, unknown>>,
-      );
-      return `${key}=${typeof displayed === 'object' ? JSON.stringify(displayed) : String(displayed)}`;
-    });
+  const cardName = (id: CardId): string => names.cardName(frame.state, id);
+  const cardPlayer = (id: CardId): string => actors.playerLabel(names.cardOwner(frame.state, id));
+  const cardOwner = (id: CardId): string => names.cardOwner(frame.state, id) ?? actor;
+  const player = (owner: string | undefined): string => actors.playerLabel(owner);
+  const locationName = (id: LocationId): string => names.locationName(frame.state, id);
+  const cardSlot = (cardId: CardId, lane: number, owner: string): string => {
+    if (owner !== 'P0' && owner !== 'P1') return slotLabel(0);
+    const slot = Math.max(0, frame.state.lanes[lane]?.cards[owner].indexOf(cardId) ?? 0);
+    return slotLabel(slot);
+  };
+  const destination = (value: Extract<MatchEvent, { type: 'CARD_MOVED_TO_ZONE' }>['destination']): string => {
+    if (value.kind === 'LANE') return `the ${laneLabel(value.lane)}`;
+    if (value.kind === 'DECK') return `${value.position?.toLowerCase() ?? 'the'} deck`;
+    return 'their hand';
+  };
 
+  let summary: string;
+  switch (event.type) {
+    case 'CARD_STAGED':
+      summary = `${player(event.owner)} played ${cardName(event.cardId)} to the ${laneLabel(event.lane)}, slot ${cardSlot(event.cardId, event.lane, event.owner)}.`;
+      break;
+    case 'CARD_UNSTAGED':
+      summary = `${cardPlayer(event.cardId)} returned ${cardName(event.cardId)} to their hand.`;
+      break;
+    case 'ENERGY_CHANGED':
+      summary = `${player(event.owner)} ${signedChange(event.delta, 'gained', 'spent')} energy (${humanizeToken(event.reason).toLowerCase()}).`;
+      break;
+    case 'MAX_ENERGY_CHANGED':
+      summary = `${player(event.owner)}'s maximum energy ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      break;
+    case 'NEXT_TURN_ENERGY_BONUS_CHANGED':
+      summary = `${player(event.owner)}'s next-turn energy bonus ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      break;
+    case 'CARD_FLIPPED':
+      summary = `${cardPlayer(event.cardId)} — ${cardName(event.cardId)} — Revealed.`;
+      break;
+    case 'OR_WINDOW_OPEN':
+      summary = `${cardName(event.cardId)} began resolving its reveal effect${event.multiplier === 1 ? '' : ` ${event.multiplier} times`}.`;
+      break;
+    case 'OR_WINDOW_CLOSE':
+      summary = `${cardName(event.cardId)} finished resolving its reveal effect.`;
+      break;
+    case 'CARD_POWER_CHANGED':
+      summary = `${cardName(event.cardId)} ${signedChange(event.delta, 'gained', 'lost')} power.`;
+      break;
+    case 'CARD_COST_CHANGED':
+      summary = `${cardOwner(event.cardId)} - ${cardName(event.cardId)}'s cost ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      break;
+    case 'CARD_DESTROYED':
+      summary = `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} was destroyed.`;
+      break;
+    case 'CARD_DISCARDED':
+      summary = `${cardPlayer(event.cardId)} discarded ${cardName(event.cardId)} (${humanizeToken(event.reason).toLowerCase()}).`;
+      break;
+    case 'CARD_BANISHED':
+      summary = `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} was banished.`;
+      break;
+    case 'CARD_MOVED':
+      summary = `${cardName(event.cardId)} moved from the ${laneLabel(event.fromLane)} to the ${laneLabel(event.toLane)}.`;
+      break;
+    case 'CARD_RETURNED_TO_LANE':
+      summary = `${cardName(event.cardId)} returned to the ${laneLabel(event.lane)} ${event.revealed ? 'face up' : 'face down'}.`;
+      break;
+    case 'CARD_TRANSFORMED':
+      summary = `${names.definitionName(event.oldDefId)} transformed into ${names.definitionName(event.newDefId)}.`;
+      break;
+    case 'CARD_TAG_ADDED':
+      summary = `${cardName(event.cardId)} gained the “${humanizeToken(event.tag.kind)}” status.`;
+      break;
+    case 'CARD_TAG_REMOVED':
+      summary = `${cardName(event.cardId)} lost the “${humanizeToken(event.tag)}” status.`;
+      break;
+    case 'CARD_TEXT_OVERRIDDEN':
+      summary = `${cardName(event.cardId)}'s rules text changed.`;
+      break;
+    case 'CARD_COUNTER_CHANGED':
+      summary = `${cardName(event.cardId)}'s ${event.name} counter ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      break;
+    case 'CARD_DRAWN':
+      summary = `${player(event.owner)} drew ${cardName(event.cardId)}.`;
+      break;
+    case 'CARD_ADDED_TO_DECK':
+      summary = `${cardName(event.cardId)} was added to ${player(event.owner)}'s deck${event.position ? ` at the ${event.position.toLowerCase()}` : ''}.`;
+      break;
+    case 'CARD_ADDED_TO_HAND':
+      summary = `${names.definitionName(event.defId)} was added to ${player(event.owner)}'s hand.`;
+      break;
+    case 'CARD_ADDED_TO_LANE':
+      summary = `${names.definitionName(event.defId)} was added to ${player(event.owner)}'s side of the ${laneLabel(event.lane)}.`;
+      break;
+    case 'CARD_MOVED_TO_ZONE':
+      summary = `${cardName(event.cardId)} moved to ${destination(event.destination)}.`;
+      break;
+    case 'DECK_SHUFFLED':
+      summary = `${player(event.owner)}'s deck was shuffled.`;
+      break;
+    case 'PENDING_EFFECT_ADDED':
+      summary = `The “${humanizeToken(event.effect.kind)}” effect was scheduled.`;
+      break;
+    case 'PENDING_EFFECT_REMOVED':
+      summary = `The “${humanizeToken(event.effect.kind)}” effect finished.`;
+      break;
+    case 'LOCATION_REVEALED':
+      summary = `${locationName(event.locationId)} was revealed in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_REPLACED':
+      summary = `${locationName(event.oldId)} was replaced by ${locationName(event.newId)} in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_DESTROYED':
+      summary = `${locationName(event.locationId)} was destroyed in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_SHIFTED':
+      summary = `${locationName(event.locationId)} moved from the ${laneLabel(event.fromLane)} to the ${laneLabel(event.toLane)}.`;
+      break;
+    case 'LOCATION_TAG_ADDED':
+      summary = `The ${laneLabel(event.lane)} gained the “${humanizeToken(event.tag.kind)}” status.`;
+      break;
+    case 'LOCATION_TAG_REMOVED':
+      summary = `The ${laneLabel(event.lane)} lost the “${humanizeToken(event.tag)}” status.`;
+      break;
+    case 'LOCATION_COUNTER_CHANGED':
+      summary = `The ${laneLabel(event.lane)}'s ${event.name} counter ${signedChange(event.delta, 'increased by', 'decreased by')}${event.owner ? ` for ${player(event.owner)}` : ''}.`;
+      break;
+    case 'TURN_RESOLUTION_STARTED':
+      summary = `Turn ${event.turn} began resolving.`;
+      break;
+    case 'TURN_STARTED':
+      summary = `Turn ${event.turn} started. ${player(event.priority)} has priority (${humanizeToken(event.priorityReason).toLowerCase()}).`;
+      break;
+    case 'TURN_ENDED':
+      summary = `Turn ${event.turn} ended.`;
+      break;
+    case 'MATCH_ENDED':
+      summary = event.result.winner === 'DRAW'
+        ? 'End of game — draw.'
+        : `End of game — ${player(event.result.winner)} won.`;
+      break;
+    case 'RECURSION_LIMIT_HIT':
+      summary = `${cardName(event.cardId)} stopped resolving after reaching the effect limit at depth ${event.depth}.`;
+      break;
+    case 'INTENT_REJECTED':
+      summary = `${actor}'s action was rejected: ${event.reason}.`;
+      break;
+  }
+
+  const cause = describeReplayCause(frame, names);
   return {
     actor,
-    summary: details.length > 0
-      ? `${actor} · ${event.type} · ${details.join(' · ')}`
-      : `${actor} · ${event.type}`,
-    cause: describeReplayCause(frame, names),
+    summary: cause ? `${summary.replace(/\.$/, '')} - ${cause}.` : summary,
+    cause,
   };
 }
 
@@ -205,16 +340,24 @@ export function annotateReplayEventJson(
 ): string {
   if (!frame?.event) return '';
   const raw = JSON.stringify(frame.event, null, 2);
+  const cause = eventCause(frame.event);
   return raw
     .split('\n')
     .map((line) => {
       const m = line.match(/"(cardId|sourceId|targetId|newCardId|locationId)":\s*"([^"]+)"/);
       if (!m) return line;
       const [, key, id] = m;
-      const name = key === 'locationId'
-        ? names.locationName(frame.state, id as LocationId)
+      const isLocation = key === 'locationId'
+        || (key === 'sourceId' && cause?.sourceId === id && cause.effectKind === 'LOCATION');
+      const lane = isLocation ? names.locationLane(frame.state, id as LocationId) : undefined;
+      const name = isLocation
+        ? `${names.locationName(frame.state, id as LocationId)}${lane === undefined ? '' : `, ${laneLabel(lane)}`}`
         : names.cardNameWithOwner(frame.state, id as CardId);
       return name && name !== id ? `${line}  // ${name}` : line;
+    })
+    .map((line) => {
+      const match = line.match(/"(lane|fromLane|toLane)":\s*(0|1|2)/);
+      return match ? `${line}  // ${laneLabel(Number(match[2]))}` : line;
     })
     .join('\n');
 }

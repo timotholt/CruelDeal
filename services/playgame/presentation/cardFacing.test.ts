@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isBoardCardFaceDown, type BoardCardFacingInput } from './cardFacing';
+import {
+  isBoardCardFaceDown,
+  isBoardCardResolutionLocked,
+  type BoardCardFacingInput,
+} from './cardFacing';
 
 const transitions = (states: readonly boolean[]): number => states.reduce(
   (count, state, index) => count + (index > 0 && state !== states[index - 1] ? 1 : 0),
@@ -18,6 +22,24 @@ const facing = (overrides: Partial<BoardCardFacingInput>): boolean => isBoardCar
 });
 
 describe('END TURN card facing', () => {
+  it('uses the selected replay frame phase instead of the current live presentation lock', () => {
+    expect(isBoardCardResolutionLocked({
+      inspectingHistory: true,
+      phase: 'AWAITING_INTENT',
+      liveResolutionLocked: true,
+    })).toBe(false);
+    expect(isBoardCardResolutionLocked({
+      inspectingHistory: true,
+      phase: 'RESOLVING',
+      liveResolutionLocked: false,
+    })).toBe(true);
+    expect(isBoardCardResolutionLocked({
+      inspectingHistory: false,
+      phase: 'AWAITING_INTENT',
+      liveResolutionLocked: true,
+    })).toBe(true);
+  });
+
   it('allows at most one down and one up transition per card per resolution', () => {
     const local = [
       facing({ resolutionLocked: false }),

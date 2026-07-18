@@ -53,6 +53,7 @@ import { PileViewer } from './PileViewer';
 import { TurnOrb } from './TurnOrb';
 import { selectInteractiveHand } from './handInteractivity';
 import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
+import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
 
 interface PlayBoardProps {
   onExit?: () => void;
@@ -67,8 +68,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   } = pg;
   const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
-  const [replayEnabled, setReplayEnabled] = createSignal(false);
   const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
+  const [replayFollowingLive, setReplayFollowingLive] = createSignal(true);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
   const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
@@ -84,25 +85,37 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const replay = runtimeReplay();
     return replay ? renderRuntimeReplay(replay, manifest) : null;
   });
+  const replayLastIndex = createMemo(() => Math.max(0, (replayTimeline()?.frames.length ?? 1) - 1));
   const replayFrame = createMemo(() => {
     const timeline = replayTimeline();
-    if (!replayEnabled() || !timeline) return null;
+    if (!timeline) return null;
     return timeline.frames[replayFrameIndex()] ?? null;
   });
-  const presentedState = createMemo<EngineMatchState>(() => replayFrame()?.state ?? engineState);
+  const inspectingReplayHistory = createMemo(() => replayFrameIndex() < replayLastIndex());
+  const presentedState = createMemo<EngineMatchState>(() => (
+    inspectingReplayHistory() ? replayFrame()?.state ?? engineState : engineState
+  ));
   const boardLocked = createMemo(() => turnFlowRunning() || isResolving() || presentedState().phase === 'RESOLVING');
-  const boardInteractive = createMemo(() => !replayEnabled() && !boardLocked());
-  const boardInspectable = createMemo(() => replayEnabled() || boardInteractive());
+  const boardInteractive = createMemo(() => !inspectingReplayHistory() && !boardLocked());
+  const boardInspectable = createMemo(() => inspectingReplayHistory() || boardInteractive());
+  const boardCardResolutionLocked = createMemo(() => isBoardCardResolutionLocked({
+    inspectingHistory: inspectingReplayHistory(),
+    phase: presentedState().phase,
+    liveResolutionLocked: ui.isFlipped,
+  }));
 
   createEffect(() => {
-    const timeline = replayTimeline();
-    if (!timeline) return;
-    const maxIndex = Math.max(0, timeline.frames.length - 1);
-    if (replayFrameIndex() > maxIndex) setReplayFrameIndex(maxIndex);
+    const maxIndex = replayLastIndex();
+    if (replayFollowingLive()) {
+      setReplayFrameIndex(maxIndex);
+    } else if (replayFrameIndex() > maxIndex) {
+      setReplayFollowingLive(true);
+      setReplayFrameIndex(maxIndex);
+    }
   });
 
   createEffect(() => {
-    if (!boardLocked() || replayEnabled()) return;
+    if (!boardLocked() || inspectingReplayHistory()) return;
     closeInspect();
     setOpenPile(null);
     setOpenMenuSeat(null);
@@ -111,7 +124,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   // ── Derived projections ─────────────────────────────────────────────────
   const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(presentedState(), localSeat, manifest));
   const reservedHandIds = createMemo<Set<string>>(() => (
-    replayEnabled() ? new Set<string>() : new Set(ui.handReservations.map((card) => card.id))
+    inspectingReplayHistory() ? new Set<string>() : new Set(ui.handReservations.map((card) => card.id))
   ));
   const interactiveHand = createMemo<ResolvedCard[]>(() => {
     const reserved = reservedHandIds();
@@ -236,12 +249,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
     onCleanup(() => script?.cancel());
   });
 
-  const toggleReplayMode = (): void => {
-    if (!replayEnabled()) {
-      const timeline = replayTimeline();
-      if (timeline) setReplayFrameIndex(timeline.frames.length - 1);
-    }
-    setReplayEnabled((current) => !current);
+  const selectReplayFrame = (index: number): void => {
+    const maxIndex = replayLastIndex();
+    const nextIndex = Math.min(Math.max(0, index), maxIndex);
+    setReplayFollowingLive(nextIndex === maxIndex);
+    setReplayFrameIndex(nextIndex);
   };
 
   const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
@@ -268,7 +280,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return remoteBanished();
   });
 
-  const copyReplayJson = async (): Promise<void> => {
+  const copyFrameJson = async (): Promise<void> => {
+    const json = JSON.stringify(replayFrame(), null, 2);
+    await navigator.clipboard.writeText(json);
+  };
+
+  const copyGameJson = async (): Promise<void> => {
     const json = JSON.stringify(pg.exportRuntimeReplay(), null, 2);
     await navigator.clipboard.writeText(json);
   };
@@ -346,8 +363,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   interactive={boardInteractive()}
                   inspectable={boardInspectable()}
                   viewerSeat={localSeat}
-                  phase={presentedState().phase}
                   stagingOrder={presentedState().stagingOrder}
+                  resolutionLocked={boardCardResolutionLocked()}
                 />
               )}
             </For>
@@ -379,8 +396,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   interactive={boardInteractive()}
                   inspectable={boardInspectable()}
                   viewerSeat={localSeat}
-                  phase={presentedState().phase}
                   stagingOrder={presentedState().stagingOrder}
+                  resolutionLocked={boardCardResolutionLocked()}
                 />
               )}
             </For>
@@ -499,18 +516,17 @@ export const PlayBoard = (props: PlayBoardProps) => {
           {(timeline) => (
             <ReplayDrawer
               open={replayOpen()}
-              replayEnabled={replayEnabled()}
+              followingLive={replayFollowingLive()}
               frameIndex={replayFrameIndex()}
               frameCount={timeline().frames.length}
               seed={engineState.seed}
               frames={timeline().frames}
               manifest={manifest}
               replay={runtimeReplay()!}
-              selectedFrame={replayEnabled() ? replayFrame() : timeline().frames[timeline().frames.length - 1]}
-              onToggleOpen={() => setReplayOpen((open) => !open)}
-              onToggleReplay={toggleReplayMode}
-              onFrameChange={setReplayFrameIndex}
-              onCopyReplayJson={copyReplayJson}
+              selectedFrame={replayFrame()}
+              onFrameChange={selectReplayFrame}
+              onCopyFrameJson={copyFrameJson}
+              onCopyGameJson={copyGameJson}
             />
           )}
         </Show>
