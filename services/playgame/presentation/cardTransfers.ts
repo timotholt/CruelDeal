@@ -1,11 +1,11 @@
 import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneIdx, Owner } from '../engine/types/ids';
+import type { CardId, LaneId, Owner } from '../engine/types/ids';
 import type { CardInstance, CardZone, MatchState } from '../engine/types/state';
 
 export type CardZoneRef =
   | { kind: 'DECK'; owner: Owner }
   | { kind: 'HAND'; owner: Owner; index?: number }
-  | { kind: 'LANE'; owner: Owner; lane: LaneIdx; index?: number }
+  | { kind: 'LANE'; owner: Owner; lane: LaneId; index?: number }
   | { kind: 'DISCARD'; owner: Owner }
   | { kind: 'DESTROYED'; owner: Owner }
   | { kind: 'BANISHED'; owner: Owner }
@@ -58,7 +58,7 @@ export type ZoneAnchorKey =
   | `${Owner}:discard`
   | `${Owner}:destroyed`
   | `${Owner}:banished`
-  | `${Owner}:lane:${LaneIdx}`
+  | `${Owner}:lane:${LaneId}`
   | 'generated';
 
 const baseStyle: TransferStyle = {
@@ -143,7 +143,7 @@ function zoneOfInstance(state: MatchState, card: CardInstance): CardZoneRef {
     case 'LANE': {
       const lane = card.lane ?? 0;
       const index = state.lanes[lane].cards[card.owner].findIndex(id => id === card.id);
-      return { kind: 'LANE', owner: card.owner, lane: lane as LaneIdx, ...(index >= 0 ? { index } : {}) };
+      return { kind: 'LANE', owner: card.owner, lane: lane as LaneId, ...(index >= 0 ? { index } : {}) };
     }
     case 'DISCARD':
       return { kind: 'DISCARD', owner: card.owner };

@@ -1,5 +1,5 @@
 import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneIdx, Owner } from '../engine/types/ids';
+import type { CardId, LaneId, Owner } from '../engine/types/ids';
 
 export type StructuralAnimation =
   | { kind: 'dispatch-only' }
@@ -12,7 +12,7 @@ export type StructuralAnimation =
       origin: 'deck' | 'generated';
       popDurationMs: number;
     }
-  | { kind: 'location-reveal'; lane: LaneIdx };
+  | { kind: 'location-reveal'; lane: LaneId };
 
 export type VfxCue =
   | { kind: 'power-flash'; cardId: CardId; delta: number }

@@ -6,7 +6,7 @@ import { PlayGameProvider, usePlayGame, type PlayGameContextValue } from './Play
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
-import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { CardId, LaneId } from '@/services/playgame/engine/types/ids';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import {
   paceCommittedOpeningDeal,
@@ -92,7 +92,7 @@ describe('PlayGameProvider runtime synchronization', () => {
       const energyBefore = pg.engineState.energy[pg.localSeat];
       const observationsBefore = observed.length;
 
-      await expect(pg.actions.stageCardInLane(cardId, 0 as LaneIdx)).resolves.toBe(true);
+      await expect(pg.actions.stageCardInLane(cardId, 0 as LaneId)).resolves.toBe(true);
 
       expect(pg.engineState.stagingOrder, `${label}: store projection`).toContain(cardId);
       expect(pg.engineState.energy[pg.localSeat]).toBe(energyBefore - cost);
@@ -112,7 +112,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(observed.length, 'unstage reactive notification').toBeGreaterThan(beforeUndoObservations);
     expect(JSON.parse(observed.at(-1)!).stagingOrder).not.toContain(turnOneCard);
 
-    await expect(pg.actions.stageCardInLane(turnOneCard, 0 as LaneIdx)).resolves.toBe(true);
+    await expect(pg.actions.stageCardInLane(turnOneCard, 0 as LaneId)).resolves.toBe(true);
     const beforeEndTurnObservations = observed.length;
     const timeline = await pg.actions.endTurn();
     expect(timeline).not.toBeNull();

@@ -17,6 +17,8 @@ export interface StartRect {
   height: number;
 }
 
+import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+
 export interface FlyFaceDownOpts {
   /** ID of the target card already rendered in its slot. */
   cardId: string;
@@ -30,8 +32,8 @@ export interface FlyFaceDownOpts {
   flyDur?: number;
   /** ID → element map (one per card, populated via refs). */
   cardElMap: Map<string, HTMLElement>;
-  /** Board container (flyer is appended here, positioned absolute). */
-  boardWrap: HTMLElement;
+  /** Canonical frame-relative mount and coordinate system. */
+  motionSurface: PlayMotionSurface;
   /** Optional sfx hook for the 'move' effect. */
   sfx?: (name: string) => void;
 }
@@ -45,11 +47,11 @@ export function flyFaceDownToSlot(opts: FlyFaceDownOpts): Promise<void> {
     previewDur = 160,
     flyDur = 380,
     cardElMap,
-    boardWrap,
+    motionSurface,
     sfx,
   } = opts;
 
-  const boardRect = boardWrap.getBoundingClientRect();
+  const boardRect = motionSurface.frameRect();
   const slotEl = cardElMap.get(cardId);
   if (!slotEl) return Promise.resolve();
 
@@ -68,7 +70,7 @@ export function flyFaceDownToSlot(opts: FlyFaceDownOpts): Promise<void> {
   const back = document.createElement('div');
   back.className = 'face back';
   flyer.appendChild(back);
-  boardWrap.appendChild(flyer);
+  const unmountFlyer = motionSurface.mountTemporary(flyer);
 
   const previewScale = 1.28;
 
@@ -95,7 +97,7 @@ export function flyFaceDownToSlot(opts: FlyFaceDownOpts): Promise<void> {
         flyer.style.transform = 'rotateY(180deg) scale(1)';
 
         setTimeout(() => {
-          flyer.remove();
+          unmountFlyer();
           slotEl.style.visibility = '';
           resolve();
         }, flyDur + 40);

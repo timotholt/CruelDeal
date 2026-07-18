@@ -9,7 +9,7 @@ import { describeEventChoreography } from './choreography';
 import { expect, test } from 'vitest';
 import type { MatchEvent } from '../engine/types/events';
 import type { EffectRef } from '../engine/types/ability';
-import type { CardId, LaneIdx } from '../engine/types/ids';
+import type { CardId, LaneId } from '../engine/types/ids';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -37,8 +37,8 @@ const event = <T extends MatchEvent>(e: T): T => e;
   const choreography = describeEventChoreography(event({
     type: 'CARD_MOVED',
     cardId: 'c1' as CardId,
-    fromLane: 0 as LaneIdx,
-    toLane: 2 as LaneIdx,
+    fromLane: 0 as LaneId,
+    toLane: 2 as LaneId,
     cause: source,
   }));
 

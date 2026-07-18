@@ -40,11 +40,13 @@ export const LaneSlots = (props: LaneSlotsProps) => {
     <div
       ref={(el) => {
         const seat = owner();
-        if (seat) bindZoneRef(`${seat}:lane:${props.laneIdx as 0 | 1 | 2}`)(el);
+        if (seat) bindZoneRef(`${seat}:lane:${props.laneIdx}`)(el);
       }}
       class={'lane-slots ' + (props.side === 'top' ? 'top' : 'bot')}
       data-lane={props.laneIdx}
       data-side={props.side}
+      data-drop-zone={props.side === 'bottom' ? 'lane' : undefined}
+      data-lane-id={props.side === 'bottom' ? props.laneIdx : undefined}
     >
       <For each={[0, 1, 2, 3]}>
         {(gridIdx) => (

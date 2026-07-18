@@ -10,7 +10,7 @@
  */
 
 import type { CardZone, CostLogEntry, MatchResult, MatchState as EngineMatchState, PowerLogEntry } from './engine/types/state';
-import type { CardId, LaneIdx, Owner, Seat } from './engine/types/ids';
+import type { CardId, LaneId, Owner, Seat } from './engine/types/ids';
 import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
 import type { CostModifierEntry, PowerModifierEntry } from './engine/projections';
 import {
@@ -163,7 +163,7 @@ export function getHandForSeat(
 /** Cards in a player lane, in slot order. */
 export function getPlayerLaneCards(
   state: EngineMatchState,
-  laneIdx: LaneIdx,
+  laneIdx: LaneId,
   manifest: Manifest,
 ): ResolvedCard[] {
   return getLaneCardsForSeat(state, laneIdx, 'P0', manifest);
@@ -171,7 +171,7 @@ export function getPlayerLaneCards(
 
 export function getLaneCardsForSeat(
   state: EngineMatchState,
-  laneIdx: LaneIdx,
+  laneIdx: LaneId,
   seat: Seat,
   manifest: Manifest,
 ): ResolvedCard[] {
@@ -183,7 +183,7 @@ export function getLaneCardsForSeat(
 /** Cards in an enemy lane, in slot order. */
 export function getEnemyLaneCards(
   state: EngineMatchState,
-  laneIdx: LaneIdx,
+  laneIdx: LaneId,
   manifest: Manifest,
 ): ResolvedCard[] {
   return getLaneCardsForSeat(state, laneIdx, 'P1', manifest);
@@ -195,7 +195,7 @@ export function getEnemyLaneCards(
  */
 export function getLocation(
   state: EngineMatchState,
-  laneIdx: LaneIdx,
+  laneIdx: LaneId,
   manifest: Manifest,
 ): ResolvedLocation {
   const lane = state.lanes[laneIdx];
@@ -228,7 +228,7 @@ export function getLocation(
 /** Total power for one owner in one lane. */
 export function getLanePower(
   state: EngineMatchState,
-  laneIdx: LaneIdx,
+  laneIdx: LaneId,
   owner: Seat,
   manifest: Manifest,
 ): number {

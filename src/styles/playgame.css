@@ -44,7 +44,8 @@
     --board-h: calc(var(--board-w) * 16 / 9);
 
     /* Gap between location strip and the lane-slot rows above/below it. */
-    --location-gap: 24px;
+    --location-gap: 12px;
+    --playfield-gutter-y: 12px;
 
     /* Side breathing room inside the board. */
     --board-pad-x: 8px;
@@ -246,13 +247,14 @@
     background: #000;
     overflow: hidden;
     z-index: 1;
+    container-name: play-frame;
+    container-type: size;
   }
   /* Subtle grid texture — clipped to the board column only */
   .board-wrap::before {
     content: '';
     position: absolute;
-    width: var(--board-w);
-    height: var(--board-h);
+    inset: 0;
     background:
       linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
@@ -261,11 +263,19 @@
     pointer-events: none;
     z-index: 0;
   }
-  /* The board: fixed 9:16 column, never taller than the viewport. */
+  .play-vfx-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 400;
+    overflow: hidden;
+    pointer-events: none;
+    contain: layout paint;
+  }
+  /* AppViewport is the sole 9:16 sizing authority. /play fills that frame. */
   .board {
     position: relative;
     width: var(--board-w);
-    height: var(--board-h);   /* ← fixed 9:16, not 100vh */
+    height: var(--board-h);
     max-height: 100%;
     flex-shrink: 0;
     display: flex;
@@ -280,13 +290,29 @@
       radial-gradient(60% 35% at 110% 100%, rgba(96, 52, 64, 0.28) 0%, transparent 100%),
       radial-gradient(60% 38% at -10% 100%, rgba(33, 92, 78, 0.26) 0%, transparent 100%),
       var(--bg-0);
-    /* Hidden until JS renders content — prevents flash of unsized layout. */
     visibility: hidden;
+  }
+  .board.play-frame {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 5fr 74fr 21fr;
+    --board-w: 100cqw;
+    --board-h: 100cqh;
+    --play-control-size: 30px;
+    --message-center-y: 43.5%;
   }
   .board.ready {
     visibility: visible;
   }
-  /* The lane rows + locations sit in a flex column with their own gap */
+  .opponent-header,
+  .board-stage,
+  .player-footer {
+    min-width: 0;
+    min-height: 0;
+  }
   .board-game-area {
     display: flex;
     flex-direction: column;
@@ -295,13 +321,45 @@
     min-height: 0;
     justify-content: center;
   }
+  .play-frame > .board-game-area {
+    display: block;
+    position: relative;
+    min-height: 0;
+    width: 100%;
+    overflow: visible;
+  }
   .playgame-root.debug-on .board-game-area { background: rgba(0,255,0,0.15); }
-  /* Gap between lane rows and the location strip */
-  .board-game-area > .row.enemy-row  { margin-bottom: var(--location-gap); }
-  .board-game-area > .row.locations  { margin-bottom: var(--location-gap); }
+  .lane-track {
+    position: absolute;
+    inset: var(--playfield-gutter-y) 0;
+    min-width: 0;
+    min-height: 0;
+  }
+  /*
+   * Lanes never resize. Only their horizontal target changes:
+   * 1 lane = 50%; 2 = 25%/75%; 3 = 1/6, 1/2, 5/6.
+   */
+  .lane-column {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--lane-center) - (var(--lane-w) / 2));
+    width: var(--lane-w);
+    height: 100%;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) var(--location-h) minmax(0, 1fr);
+    row-gap: var(--location-gap);
+    align-items: center;
+    justify-items: center;
+    min-width: 0;
+    min-height: 0;
+    isolation: isolate;
+  }
   .lane-map {
     position: absolute;
-    width: var(--lane-w);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     border-radius: 10px;
     background-position: center;
     background-size: cover;
@@ -317,31 +375,29 @@
     inset: 0;
     background: rgba(0,0,0,0.28);
   }
-  .board.maps-enabled .lane-map {
+  .lane-map[data-revealed="true"] {
     opacity: 1;
   }
-  .board > *,
-  .board-game-area > .row {
+  .lane-column > :not(.lane-map) {
     position: relative;
     z-index: 1;
   }
-  .hand { flex: 0 0 auto; margin-bottom: auto; /* pushes action-bar to bottom */ }
-  /* 3 lanes use CSS grid columns inside each row.
-     Using 1fr columns (instead of fixed --lane-w) means the grid itself
-     self-distributes any rounding error, and lanes always fill the row
-     cleanly — this is key for responsiveness. */
-  .row {
+  .lane-column > .lane-slots {
+    align-self: center;
+  }
+  .lane-column > .location {
+    width: 100%;
+    height: var(--location-h);
+  }
+  .player-footer {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--lane-gap);
-    position: relative;
+    grid-template-rows: minmax(0, 1fr) auto;
     min-width: 0;
     min-height: 0;
     width: 100%;
+    overflow: visible;
   }
-  .row.locations {
-    height: var(--location-h);
-  }
+  .hand { min-width: 0; min-height: 0; }
   .lane-slots {
     /* 2×2 landing grid — mandatory layout, mirrors Marvel Snap.
        2 columns × 2 rows, each cell sized to hold one 5:7 card. */
@@ -378,17 +434,17 @@
     transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     pointer-events: none;
   }
-  .board.dragging-card .player-row .lane-slots {
+  .board.dragging-card .lane-column > .lane-slots.bot {
     background:
       linear-gradient(180deg, var(--lane-bg-2), var(--lane-bg)),
       radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08), transparent 72%);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 36px rgba(0,0,0,0.18);
   }
-  .board.maps-enabled .lane-slots {
+  .board .lane-slots {
     background: transparent;
     box-shadow: none;
   }
-  .board.maps-enabled .location {
+  .board .location {
     background:
       linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
       rgba(18, 22, 28, 0.4);
@@ -404,11 +460,11 @@
     display: flex; align-items: center; justify-content: center;
     overflow: visible;
   }
-  .board.dragging-card .player-row .slot:empty {
+  .board.dragging-card .lane-column > .lane-slots.bot .slot:empty {
     background: rgba(255,255,255,0.045);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045);
   }
-  .board.dragging-card .player-row .lane-slots.drop-target .slot.next-drop {
+  .board.dragging-card .lane-column > .lane-slots.bot.drop-target .slot.next-drop {
     box-shadow: inset 0 0 0 1px rgba(255,207,91,0.58), 0 0 10px rgba(255,207,91,0.14);
   }
   .replay-drawer {
@@ -855,9 +911,9 @@
   /* Hand */
   .hand {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     justify-content: center;
-    padding: 4px 8px 0;
+    padding: 0 8px;
     position: relative;
     min-height: calc(var(--hand-card-h) + 10px);
     --hand-scale: 1;
@@ -894,6 +950,22 @@
   .hand .hand-card-motion:hover > .card {
     transform: translateY(-10px) scale(calc(var(--hand-scale) * 1.05));
     z-index: 5;
+  }
+  [data-drag-source][data-drag-enabled="true"] {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .drag-source-active {
+    opacity: 0.18;
+  }
+  .pointer-drag-ghost {
+    pointer-events: none !important;
+    cursor: grabbing;
+    box-sizing: border-box;
+  }
+  .pointer-drag-ghost:hover {
+    box-shadow: 0 18px 42px rgba(0,0,0,0.55), 0 0 22px rgba(255,207,91,0.2);
   }
 
   @keyframes hand-slot-reserve {
@@ -963,6 +1035,79 @@
     display: flex;
     justify-content: center;
     pointer-events: none;
+  }
+  /*
+   * Canonical /play match HUD.
+   *
+   * The outer header remains one fixed grid row. Opponent resources occupy
+   * the flexible center track and cannot move either portrait or the board.
+   */
+  .play-frame > .match-hud {
+    --match-hud-control: var(--play-control-size);
+    display: grid;
+    grid-template-columns: var(--match-hud-control) minmax(0, 1fr) var(--match-hud-control);
+    grid-template-rows: var(--match-hud-control);
+    align-content: center;
+    justify-content: stretch;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+  }
+  .match-hud__identity {
+    display: flex;
+    align-items: center;
+    height: var(--match-hud-control);
+    min-width: 0;
+  }
+  .match-hud__identity--local {
+    justify-content: flex-start;
+  }
+  .match-hud__identity--remote {
+    justify-content: flex-end;
+  }
+  .match-hud .portrait-menu-anchor,
+  .match-hud .portrait-trigger {
+    width: var(--match-hud-control);
+    height: var(--match-hud-control);
+  }
+  .match-hud .portrait-trigger__face {
+    font-size: 12px;
+  }
+  .match-hud__opponent-resources {
+    display: grid;
+    grid-template-columns: repeat(3, 62px);
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: var(--match-hud-control);
+    min-width: 0;
+  }
+  .match-hud__resource {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 62px;
+    height: var(--match-hud-control);
+    min-width: 0;
+  }
+  .match-hud__opponent-resources .energy-badge {
+    justify-content: center;
+    min-width: 44px;
+    height: var(--play-control-size);
+    padding: 2px 7px;
+    gap: 3px;
+  }
+  .match-hud__opponent-resources .energy-badge__value {
+    min-width: 14px;
+    font-size: 12px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .match-hud__opponent-resources .energy-badge__bolt {
+    width: 10px;
+    height: 10px;
   }
   .turn-orb {
     width: 56px;
@@ -1119,7 +1264,70 @@
     text-align: center;
     font-family: var(--font-mono);
     font-size: 10px;
+    font-variant-numeric: tabular-nums;
     color: var(--text);
+  }
+  .match-hud .hidden-hand {
+    gap: 3.5px;
+    height: var(--play-control-size);
+  }
+  .match-hud .hidden-hand__backs {
+    width: 43px;
+    height: var(--play-control-size);
+  }
+  .match-hud .hidden-hand__back {
+    width: 21px;
+    height: var(--play-control-size);
+    border-radius: 4px;
+  }
+  .match-hud .hidden-hand__count {
+    min-width: 14px;
+    font-size: 10px;
+  }
+  .mini-deck {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: var(--play-control-size, 30px);
+    color: var(--text);
+  }
+  .mini-deck__stack {
+    position: relative;
+    width: 25px;
+    height: var(--play-control-size, 30px);
+  }
+  .mini-deck__back {
+    position: absolute;
+    width: 21px;
+    height: var(--play-control-size, 30px);
+    border-radius: 4px;
+    border: 1px solid rgba(210, 225, 255, 0.16);
+    background:
+      radial-gradient(circle at 50% 30%, rgba(255, 207, 91, 0.12), transparent 38%),
+      repeating-linear-gradient(45deg, #1a1f3a 0 4px, #12172a 4px 8px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.24);
+  }
+  .mini-deck__back--rear {
+    left: 4px;
+    top: 0;
+    opacity: 0.45;
+  }
+  .mini-deck__back--middle {
+    left: 2px;
+    top: 0;
+    opacity: 0.72;
+  }
+  .mini-deck__back--front {
+    left: 0;
+    top: 0;
+  }
+  .mini-deck__count {
+    min-width: 18px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .opponent-stat {
     display: flex;
@@ -1142,6 +1350,21 @@
     font-size: 13px;
     color: var(--text);
     line-height: 1;
+  }
+  .replay-float-toggle {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 240;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 8px;
+    opacity: 0.72;
+    backdrop-filter: blur(8px);
+  }
+  .replay-float-toggle:hover,
+  .replay-float-toggle:focus-visible {
+    opacity: 1;
   }
   .energy-badge {
     display: inline-flex;
@@ -1169,11 +1392,11 @@
   /* ── Bottom action bar ──────────────────────────────────────────── */
   .action-bar {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
     align-items: center;
-    padding: 6px 8px 8px;
+    padding: 6px 2px 8px;
     flex: 0 0 auto;
-    gap: 8px;
+    gap: 13px;
     border-top: 1px solid rgba(255,255,255,0.07);
     background: linear-gradient(180deg, transparent, rgba(0,0,0,0.28));
   }
@@ -1182,12 +1405,13 @@
   .retreat-btn {
     justify-self: start;
     min-width: 90px;
-    font-family: var(--font-display); letter-spacing: 0.14em;
+    height: 32px;
+    font-family: var(--font-display); letter-spacing: 0.10em;
     background: transparent;
     color: var(--danger);
     border: 1px solid rgba(255, 77, 109, 0.38);
-    padding: 7px 14px; border-radius: 6px;
-    cursor: pointer; font-size: 11px;
+    padding: 4px 6px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
     transition: all 0.15s;
     white-space: nowrap;
     text-align: center;
@@ -1197,7 +1421,27 @@
     border-color: var(--danger);
   }
 
-  /* Energy / Undo control — centre */
+  /* Player command/status controls — centre */
+  .action-bar > .turn-orb {
+    width: 30px;
+    height: 30px;
+    pointer-events: none;
+    box-shadow: 0 5px 12px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .action-bar > .turn-orb .turn-orb__label {
+    font-size: 6px;
+    letter-spacing: 0.14em;
+  }
+  .action-bar > .turn-orb .turn-orb__value {
+    margin-top: 1px;
+    font-size: 16px;
+  }
+  .action-bar > .mini-deck {
+    flex: 0 0 auto;
+  }
+  .action-bar > .mini-deck .mini-deck__count {
+    font-size: 10px;
+  }
   .energy-button {
     display: flex;
     align-items: center;
@@ -1225,10 +1469,11 @@
   .end-turn {
     justify-self: end;
     min-width: 90px;
-    font-family: var(--font-display); letter-spacing: 0.15em;
+    height: 32px;
+    font-family: var(--font-display); letter-spacing: 0.12em;
     background: linear-gradient(160deg, var(--accent) 0%, #6a32c0 100%);
-    color: #fff; border: none; padding: 7px 14px; border-radius: 6px;
-    cursor: pointer; font-size: 12px;
+    color: #fff; border: none; padding: 4px 6px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
     box-shadow: 0 0 14px rgba(166,109,255,0.35);
     white-space: nowrap;
     transition: filter 0.15s;
@@ -1722,15 +1967,19 @@
      while the board itself is still hidden. */
   .board > .hud-top,
   .board > .board-game-area,
-  .board > .hand,
-  .board > .action-bar {
+  .board > .player-footer {
     transition: opacity 600ms ease;
   }
   .playgame-root.board-hidden .board > .hud-top,
   .playgame-root.board-hidden .board > .board-game-area,
-  .playgame-root.board-hidden .board > .hand,
-  .playgame-root.board-hidden .board > .action-bar {
+  .playgame-root.board-hidden .board > .player-footer {
     opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane-column {
+      transition-duration: 1ms !important;
+    }
   }
 
   /* --------------------------------------------------------------------
@@ -1751,8 +2000,8 @@
     .turn-orb__value { font-size: 20px; }
     .hidden-hand__backs { width: 32px; }
     .hidden-hand__back { width: 16px; height: 22px; }
-    .retreat-btn { font-size: 9px; padding: 5px 10px; }
-    .end-turn   { font-size: 9px; padding: 5px 12px; }
+    .retreat-btn { font-size: 12px; padding: 4px 6px; }
+    .end-turn   { font-size: 12px; padding: 4px 6px; }
     .energy-button .energy-badge { padding: 6px 10px; }
   }
 

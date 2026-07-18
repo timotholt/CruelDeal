@@ -5,6 +5,7 @@ import {
   composeCardFlightTransform,
 } from '@/services/vfx/animations/card-resting-transform';
 import { revealCardCinematic } from '@/services/vfx/animations/reveal-cinematic';
+import { createPlayMotionSurface } from './playMotionSurface';
 
 describe('card resting rotation composition', () => {
   it('composes a direct owner once and does not double a nested owner', () => {
@@ -27,23 +28,40 @@ describe('card resting rotation composition', () => {
     vi.useFakeTimers();
     try {
       const boardWrap = document.createElement('div');
+      const overlay = document.createElement('div');
       const card = document.createElement('div');
       card.className = 'card lane-card facedown pending';
       card.dataset.cardRestingRotation = '-1.8deg';
       card.style.setProperty('--card-tilt', '-1.8deg');
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
-      card.getBoundingClientRect = () => new DOMRect(100, 240, 70, 100);
-      boardWrap.append(card);
+      // The visible bounding box is larger than the card's layout box because
+      // it already includes the resting rotation.
+      card.getBoundingClientRect = () => new DOMRect(98, 238, 74, 104);
+      Object.defineProperty(card, 'offsetWidth', { configurable: true, value: 70 });
+      Object.defineProperty(card, 'offsetHeight', { configurable: true, value: 100 });
+      boardWrap.append(card, overlay);
       document.body.append(boardWrap);
+      const cardElMap = new Map([['rotated-card', card]]);
+      const motionSurface = createPlayMotionSurface({
+        frame: boardWrap,
+        overlay,
+        cardRefs: cardElMap,
+        zoneRefs: new Map(),
+      });
 
       const animation = revealCardCinematic({
         cardId: 'rotated-card',
-        cardElMap: new Map([['rotated-card', card]]),
-        boardWrap,
+        cardElMap,
+        motionSurface,
       });
-      const wrapper = boardWrap.querySelector('.reveal-flyer') as HTMLElement;
+      const wrapper = overlay.querySelector('.reveal-flyer') as HTMLElement;
       const clone = wrapper.querySelector('.lane-card') as HTMLElement;
 
+      expect(wrapper.classList.contains('lane-slots')).toBe(false);
+      expect(wrapper.style.left).toBe('100px');
+      expect(wrapper.style.top).toBe('240px');
+      expect(wrapper.style.width).toBe('70px');
+      expect(wrapper.style.height).toBe('100px');
       expect(clone.style.transform).toBe('');
       expect(wrapper.style.transform).toContain('rotate(0deg)');
 
@@ -55,10 +73,9 @@ describe('card resting rotation composition', () => {
       await vi.runAllTimersAsync();
       await animation;
       expect(card.style.visibility).toBe('');
-      expect(boardWrap.querySelector('.reveal-flyer')).toBeNull();
+      expect(overlay.querySelector('.reveal-flyer')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
   });
 });
-

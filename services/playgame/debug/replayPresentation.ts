@@ -282,10 +282,12 @@ export function describeReplayStep(
       summary = `${locationName(event.locationId)} was revealed in the ${laneLabel(event.lane)}.`;
       break;
     case 'LOCATION_REPLACED':
-      summary = `${locationName(event.oldId)} was replaced by ${locationName(event.newId)} in the ${laneLabel(event.lane)}.`;
+      summary = event.newDefId === 'ruin'
+        ? `${locationName(event.oldId)} was destroyed and replaced by Ruin in the ${laneLabel(event.lane)}.`
+        : `${locationName(event.oldId)} was replaced by ${locationName(event.newId)} in the ${laneLabel(event.lane)}.`;
       break;
-    case 'LOCATION_DESTROYED':
-      summary = `${locationName(event.locationId)} was destroyed in the ${laneLabel(event.lane)}.`;
+    case 'LOCATIONS_SWAPPED':
+      summary = `${locationName(event.left.locationId)} and ${locationName(event.right.locationId)} swapped lanes.`;
       break;
     case 'LOCATION_SHIFTED':
       summary = `${locationName(event.locationId)} moved from the ${laneLabel(event.fromLane)} to the ${laneLabel(event.toLane)}.`;
@@ -298,6 +300,18 @@ export function describeReplayStep(
       break;
     case 'LOCATION_COUNTER_CHANGED':
       summary = `The ${laneLabel(event.lane)}'s ${event.name} counter ${signedChange(event.delta, 'increased by', 'decreased by')}${event.owner ? ` for ${player(event.owner)}` : ''}.`;
+      break;
+    case 'LANE_DESTRUCTION_STARTED':
+      summary = `Destruction of the ${laneLabel(event.lane)} began.`;
+      break;
+    case 'LANE_DESTROYED':
+      summary = `The ${laneLabel(event.lane)} was destroyed.`;
+      break;
+    case 'LANE_CREATION_STARTED':
+      summary = `Creation of lane ${event.lane} began.`;
+      break;
+    case 'LANE_CREATED':
+      summary = `Lane ${event.lane} entered play at position ${event.position + 1}.`;
       break;
     case 'TURN_RESOLUTION_STARTED':
       summary = `Turn ${event.turn} began resolving.`;

@@ -12,6 +12,7 @@
  *     revealed when the flyer disappears, giving a clean swap.
  */
 import type { StartRect } from './fly-face-down';
+import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 
 export interface SlideFromDeckOpts {
   /** ID of the target card already rendered in the hand. */
@@ -24,8 +25,8 @@ export interface SlideFromDeckOpts {
   flipDur?: number;
   /** ID -> element map (one per card, populated via refs). */
   cardElMap: Map<string, HTMLElement>;
-  /** Board container (the flyer is appended here, positioned absolute). */
-  boardWrap: HTMLElement;
+  /** Canonical frame-relative mount and coordinate system. */
+  motionSurface: PlayMotionSurface;
   /** Optional sfx hook for the 'draw' effect. */
   sfx?: (name: string) => void;
 }
@@ -38,14 +39,14 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
     flyDur = 360,
     flipDur = 220,
     cardElMap,
-    boardWrap,
+    motionSurface,
     sfx,
   } = opts;
 
   const slotEl = cardElMap.get(cardId);
-  if (!slotEl?.isConnected || !boardWrap.isConnected) return Promise.resolve();
+  if (!slotEl?.isConnected || !motionSurface.overlay.isConnected) return Promise.resolve();
 
-  const boardRect = boardWrap.getBoundingClientRect();
+  const boardRect = motionSurface.frameRect();
   const destRect = slotEl.getBoundingClientRect();
 
   // Hide the real target while the flyer stands in for it.
@@ -67,7 +68,7 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
   const back = document.createElement('div');
   back.className = 'face back';
   flyer.appendChild(back);
-  boardWrap.appendChild(flyer);
+  const unmountFlyer = motionSurface.mountTemporary(flyer);
 
   return new Promise<void>((resolve) => {
     let settled = false;
@@ -80,7 +81,7 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
       if (flyTimer) clearTimeout(flyTimer);
       if (flipTimer) clearTimeout(flipTimer);
       clearTimeout(fallbackTimer);
-      flyer.remove();
+      unmountFlyer();
       if (slotEl.isConnected) slotEl.style.visibility = prevVisibility;
       resolve();
     };

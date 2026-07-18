@@ -18,8 +18,8 @@
  *  - After appending the wrapper we force a reflow (`void wrapper.offsetWidth`)
  *    before setting the transition + target transform; `requestAnimationFrame`
  *    alone is not sufficient because it fires before paint.
- *  - The clone is wrapped in a `.lane-slots` element so `.lane-slots .card ...`
- *    CSS rules (size, fonts, tilt) apply exactly as they do in the slot.
+ *  - The cloned card carries `.lane-card`, so it keeps the same card sizing,
+ *    typography, and resting tilt without inheriting the lane grid's padding.
  *
  * Ported from ccg/vfx-engine/project/ui/animations/reveal-cinematic.js.
  */
@@ -28,44 +28,57 @@ import {
   cardRestingRotationDegrees,
   composeCardFlightTransform,
 } from './card-resting-transform';
+import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface RevealCinematicOpts {
   cardId: string;
   cardElMap: Map<string, HTMLElement>;
-  boardWrap: HTMLElement;
+  motionSurface: PlayMotionSurface;
   sfx?: (name: string) => void;
 }
 
 export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<void> {
-  const { cardId, cardElMap, boardWrap, sfx } = opts;
+  const { cardId, cardElMap, motionSurface, sfx } = opts;
   const el = cardElMap.get(cardId);
   if (!el) return;
 
-  const boardRect = boardWrap.getBoundingClientRect();
+  const boardRect = motionSurface.frameRect();
   const slotRect = el.getBoundingClientRect();
+  const computedStyle = getComputedStyle(el);
+  const computedWidth = Number.parseFloat(computedStyle.width);
+  const computedHeight = Number.parseFloat(computedStyle.height);
+  const cardWidth = computedWidth > 0
+    ? computedWidth
+    : el.offsetWidth || slotRect.width;
+  const cardHeight = computedHeight > 0
+    ? computedHeight
+    : el.offsetHeight || slotRect.height;
 
-  // Board-relative start and center positions.
-  const startLeft = slotRect.left - boardRect.left;
-  const startTop = slotRect.top - boardRect.top;
-  const slotCenterX = startLeft + slotRect.width / 2;
-  const slotCenterY = startTop + slotRect.height / 2;
+  // getBoundingClientRect() is the axis-aligned box around the already-tilted
+  // card. Reusing that enlarged box as the flyer's layout box makes its final
+  // rotated frame differ from the real card by a few pixels. Restore the
+  // untransformed card dimensions around the exact same visual center.
+  const slotCenterX = slotRect.left - boardRect.left + slotRect.width / 2;
+  const slotCenterY = slotRect.top - boardRect.top + slotRect.height / 2;
+  const startLeft = slotCenterX - cardWidth / 2;
+  const startTop = slotCenterY - cardHeight / 2;
   const boardCenterX = boardRect.width / 2;
   const boardCenterY = boardRect.height / 2;
   const dx = boardCenterX - slotCenterX;
   const dy = boardCenterY - slotCenterY;
 
-  // Build the flyer: face-up clone wrapped in .lane-slots so lane-scoped
-  // CSS (size, fonts) applies exactly as it does in the slot.
+  // Build the flyer without `.lane-slots`: that class owns the 2×2 grid and
+  // lane padding, neither of which belongs to a single flying card.
   const wrapper = document.createElement('div');
-  wrapper.className = 'lane-slots reveal-flyer';
+  wrapper.className = 'reveal-flyer';
   wrapper.style.cssText = [
     'position: absolute',
     `left: ${startLeft}px`,
     `top: ${startTop}px`,
-    `width: ${slotRect.width}px`,
-    `height: ${slotRect.height}px`,
+    `width: ${cardWidth}px`,
+    `height: ${cardHeight}px`,
     'transform-origin: center center',
     'pointer-events: none',
     'z-index: 200',
@@ -89,7 +102,7 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
   // Thin vertical sliver. Every phase keeps the same function list so the
   // resting angle is part of the flight rather than appearing after landing.
   wrapper.style.transform = flightTransform('0px, 0px', '0.02, 1');
-  boardWrap.appendChild(wrapper);
+  const unmountWrapper = motionSurface.mountTemporary(wrapper);
 
   // Hide the real slot card for the duration of the reveal.
   el.style.visibility = 'hidden';
@@ -120,13 +133,13 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
     n.style.visibility = '';
   });
   el.style.visibility = '';
-  wrapper.remove();
+  unmountWrapper();
 }
 
 export interface RevealPendingCinematicOpts {
   pendingIds: string[];
   cardElMap: Map<string, HTMLElement>;
-  boardWrap: HTMLElement;
+  motionSurface: PlayMotionSurface;
   sfx?: (name: string) => void;
   /**
    * Invoked after each card finishes its flip cinematic. The loop awaits
@@ -138,10 +151,10 @@ export interface RevealPendingCinematicOpts {
 }
 
 export async function revealPendingCinematic(opts: RevealPendingCinematicOpts): Promise<void> {
-  const { pendingIds, cardElMap, boardWrap, sfx, onRevealed } = opts;
+  const { pendingIds, cardElMap, motionSurface, sfx, onRevealed } = opts;
   if (!pendingIds.length) return;
   for (const id of pendingIds) {
-    await revealCardCinematic({ cardId: id, cardElMap, boardWrap, sfx });
+    await revealCardCinematic({ cardId: id, cardElMap, motionSurface, sfx });
     await onRevealed?.(id);
   }
 }

@@ -10,7 +10,7 @@ import { expect, test } from 'vitest';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneIdx } from '../engine/types/ids';
+import type { CardId, LaneId } from '../engine/types/ids';
 import type { EffectRef } from '../engine/types/ability';
 import { assertTransferCoverage, deriveCardTransfers } from './cardTransfers';
 
@@ -56,7 +56,7 @@ const stateWithHandCard = () => {
 
 {
   const { state: s0, cardId } = stateWithHandCard();
-  const e = event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 1 as LaneIdx, owner: 'P0', cost: 1 });
+  const e = event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 1 as LaneId, owner: 'P0', cost: 1 });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(s0, e, s1);
   assertTransferCoverage(s0, e, s1, transfers);
@@ -75,7 +75,7 @@ const stateWithHandCard = () => {
 
 {
   const { state: handState, cardId } = stateWithHandCard();
-  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneIdx, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
+  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
   const e = event({ type: 'CARD_MOVED_TO_ZONE', cardId, destination: { kind: 'HAND' }, cause: source });
   const s1 = apply(staged, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(staged, e, s1);
@@ -93,9 +93,9 @@ const stateWithHandCard = () => {
 
 {
   const { state: handState, cardId } = stateWithHandCard();
-  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneIdx, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
+  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
   const destroyed = apply(staged, event({ type: 'CARD_DESTROYED', cardId, cause: source }), BOOTSTRAP_MANIFEST);
-  const e = event({ type: 'CARD_RETURNED_TO_LANE', cardId, lane: 2 as LaneIdx, revealed: true, cause: source });
+  const e = event({ type: 'CARD_RETURNED_TO_LANE', cardId, lane: 2 as LaneId, revealed: true, cause: source });
   const s1 = apply(destroyed, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(destroyed, e, s1);
   assertTransferCoverage(destroyed, e, s1, transfers);
@@ -118,7 +118,7 @@ const stateWithHandCard = () => {
     type: 'CARD_ADDED_TO_LANE',
     owner: 'P1',
     cardId: 'spawned' as CardId,
-    lane: 2 as LaneIdx,
+    lane: 2 as LaneId,
     defId: 'drone',
     spawnSource: { kind: 'SYSTEM' },
   });

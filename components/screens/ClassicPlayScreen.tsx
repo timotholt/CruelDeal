@@ -8,7 +8,6 @@
 import { createSignal, Show } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
 import { PlayGameProvider } from '@/contexts/PlayGameContext';
-import { BoardSizer } from './play/BoardSizer';
 import { PlayBoard } from './play/PlayBoard';
 import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
 import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
@@ -50,7 +49,6 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
         {(matchSession) => (
           <VfxHost class="board-wrap" id="boardWrap">
             <PlayGameProvider session={matchSession}>
-              <BoardSizer />
               <PlayBoard onExit={props.onExit} />
             </PlayGameProvider>
           </VfxHost>

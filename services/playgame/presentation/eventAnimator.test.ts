@@ -5,8 +5,9 @@ import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
-import type { LaneIdx } from '../engine/types/ids';
+import type { LaneId } from '../engine/types/ids';
 import { animateEvent, fallbackRectForZone } from './eventAnimator';
+import { createPlayMotionSurface } from './playMotionSurface';
 
 describe('event animator transfer origins', () => {
   it('falls remote hand transfers back to the opponent hand region at board top-center', () => {
@@ -44,14 +45,14 @@ describe('event animator transfer origins', () => {
         intentId: 'stage',
         owner: 'P0',
         cardId,
-        lane: 0 as LaneIdx,
+        lane: 0 as LaneId,
         cost: 1,
       }, BOOTSTRAP_MANIFEST);
       const event = {
         type: 'CARD_MOVED' as const,
         cardId,
-        fromLane: 0 as LaneIdx,
-        toLane: 2 as LaneIdx,
+        fromLane: 0 as LaneId,
+        toLane: 2 as LaneId,
         cause: { sourceId: 'skyrail-instance' as never, effectKind: 'LOCATION' as const },
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
@@ -73,6 +74,7 @@ describe('event animator transfer origins', () => {
 
       const boardWrap = document.createElement('div');
       const boardEl = document.createElement('div');
+      const overlay = document.createElement('div');
       const toastArea = document.createElement('div');
       const cardEl = document.createElement('div');
       cardEl.className = 'card lane-card';
@@ -85,10 +87,17 @@ describe('event animator transfer origins', () => {
       cardEl.getBoundingClientRect = () => adopted
         ? new DOMRect(430, 300, 70, 100)
         : new DOMRect(90, 300, 70, 100);
-      boardWrap.append(boardEl, toastArea, cardEl);
+      boardWrap.append(boardEl, toastArea, cardEl, overlay);
       document.body.append(boardWrap);
 
       const calls: string[] = [];
+      const cardRefs = new Map([[cardId as string, cardEl]]);
+      const motionSurface = createPlayMotionSurface({
+        frame: boardWrap,
+        overlay,
+        cardRefs,
+        zoneRefs: new Map(),
+      });
       const ctx = {
         state: before,
         ui: {
@@ -103,9 +112,9 @@ describe('event animator transfer origins', () => {
         localSeat: 'P0',
         remoteSeat: 'P1',
         boardEl,
-        boardWrap,
+        motionSurface,
         toastArea,
-        cardRefs: new Map([[cardId as string, cardEl]]),
+        cardRefs,
         zoneRefs: new Map(),
         presentCommittedFrame: vi.fn(),
         finishTurnPresentation: vi.fn(),

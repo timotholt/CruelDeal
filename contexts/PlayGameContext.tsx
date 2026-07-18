@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
-import type { CardId, LaneIdx, Seat } from '@/services/playgame/engine/types/ids';
+import type { CardId, LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import {
   foldFramedEvents,
@@ -157,7 +157,7 @@ export const PlayGameProvider = (props: {
     const result = await submit({
       type: 'STAGE_CARD',
       cardId: cardId as CardId,
-      lane: laneIdx as LaneIdx,
+      lane: laneIdx as LaneId,
     });
     if (result.status !== 'accepted') return false;
     syncFromRuntime();

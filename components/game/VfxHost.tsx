@@ -1,10 +1,10 @@
 /**
  * VfxHost — owns the VFXEngine instance and provides it via context.
  *
- * Renders a positioned `<div>` that becomes both:
- *   - the `boardWrap` anchor for imperative animations (flying card, reveal
- *     clone) — they append into it and position against its bounding rect.
- *   - the `root` for `VFXEngine`, which inserts an overlay canvas inside it.
+ * Renders the fixed-frame root plus a dedicated `.play-vfx-layer`:
+ *   - PlayMotionSurface converts viewport geometry into frame coordinates and
+ *     owns every temporary flying/reveal node in that layer.
+ *   - VFXEngine mounts against the frame root for its canvas effects.
  *
  * Also owns `cardRefs: Map<string, HTMLElement>` so animations can look up
  * a card's current DOM element by `instanceId`. Card components bind into
@@ -21,6 +21,7 @@
 
 import {
   createContext,
+  createMemo,
   createSignal,
   onCleanup,
   onMount,
@@ -31,12 +32,18 @@ import {
 import { VFXEngine, vfxSfx } from '@/services/vfx';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { ZoneAnchorKey } from '@/services/playgame/presentation/cardTransfers';
+import {
+  createPlayMotionSurface,
+  type PlayMotionSurface,
+} from '@/services/playgame/presentation/playMotionSurface';
 
 export interface VfxContextValue {
   /** The live engine once mounted (null until then). */
   engine: Accessor<VFXEngine | null>;
   /** The board container element (null until mounted). */
   boardRef: Accessor<HTMLElement | null>;
+  /** Canonical frame-relative mount and geometry adapter for /play motion. */
+  motionSurface: Accessor<PlayMotionSurface | null>;
   /** Live map of card instanceId -> current DOM element. */
   cardRefs: Map<string, HTMLElement>;
   /** Live map of logical card zone anchor -> current DOM element. */
@@ -62,14 +69,28 @@ export interface VfxHostProps {
 
 export const VfxHost = (props: VfxHostProps) => {
   let boardEl: HTMLDivElement | undefined;
+  let overlayEl: HTMLDivElement | undefined;
   const [engine, setEngine] = createSignal<VFXEngine | null>(null);
   const [board, setBoard] = createSignal<HTMLElement | null>(null);
+  const [overlay, setOverlay] = createSignal<HTMLElement | null>(null);
   const cardRefs = new Map<string, HTMLElement>();
   const zoneRefs = new Map<ZoneAnchorKey, HTMLElement>();
+  const motionSurface = createMemo<PlayMotionSurface | null>(() => {
+    const frame = board();
+    const motionOverlay = overlay();
+    if (!frame || !motionOverlay) return null;
+    return createPlayMotionSurface({
+      frame,
+      overlay: motionOverlay,
+      cardRefs,
+      zoneRefs,
+    });
+  });
 
   onMount(() => {
     if (!boardEl) return;
     setBoard(boardEl);
+    setOverlay(overlayEl ?? null);
     const eng = new VFXEngine(boardEl, { sfx: vfxSfx });
     setEngine(eng);
 
@@ -81,6 +102,7 @@ export const VfxHost = (props: VfxHostProps) => {
       eng.destroy();
       setEngine(null);
       setBoard(null);
+      setOverlay(null);
     });
   });
 
@@ -103,6 +125,7 @@ export const VfxHost = (props: VfxHostProps) => {
   const value: VfxContextValue = {
     engine,
     boardRef: board,
+    motionSurface,
     cardRefs,
     zoneRefs,
     bindCardRef,
@@ -111,8 +134,24 @@ export const VfxHost = (props: VfxHostProps) => {
 
   return (
     <VfxCtx.Provider value={value}>
-      <div ref={boardEl} id={props.id} class={props.class ?? 'relative w-full h-full'}>
+      <div
+        ref={(element) => {
+          boardEl = element;
+          setBoard(element);
+        }}
+        id={props.id}
+        class={props.class ?? 'relative w-full h-full'}
+      >
         {props.children}
+        <div
+          ref={(element) => {
+            overlayEl = element;
+            setOverlay(element);
+          }}
+          class="play-vfx-layer"
+          data-play-vfx-layer
+          aria-hidden="true"
+        />
       </div>
     </VfxCtx.Provider>
   );

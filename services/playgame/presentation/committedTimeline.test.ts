@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import { frameAndFoldEvents } from '../engine/transactionTimeline';
 import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneIdx } from '../engine/types/ids';
+import type { CardId, LaneId } from '../engine/types/ids';
 import { buildRuntimeFixture } from '../engine/testkit';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
 import { planCommittedResolutionWalk } from './committedTimeline';
@@ -36,7 +36,7 @@ describe('committed END TURN choreography', () => {
         type: 'CARD_STAGED',
         intentId: 'remote-stage',
         cardId: 'remote-priority' as CardId,
-        lane: 0 as LaneIdx,
+        lane: 0 as LaneId,
         owner: 'P1',
         cost: 1,
       },
@@ -44,7 +44,7 @@ describe('committed END TURN choreography', () => {
         type: 'CARD_STAGED',
         intentId: 'local-stage-now',
         cardId: 'local-now' as CardId,
-        lane: 1 as LaneIdx,
+        lane: 1 as LaneId,
         owner: 'P0',
         cost: 1,
       },
@@ -52,7 +52,7 @@ describe('committed END TURN choreography', () => {
         type: 'CARD_STAGED',
         intentId: 'local-stage-delayed',
         cardId: 'local-delayed' as CardId,
-        lane: 2 as LaneIdx,
+        lane: 2 as LaneId,
         owner: 'P0',
         cost: 1,
       },

@@ -107,9 +107,12 @@ describe('replay debug presentation', () => {
     }), names)).toBe('caused by Bone Market (P0)');
 
     expect(describeReplayCause(step({
-      type: 'LOCATION_DESTROYED',
+      type: 'LOCATION_REPLACED',
       lane: 0,
-      locationId: location.id,
+      oldId: location.id,
+      newId: `ruin:${location.id}` as LocationId,
+      newDefId: 'ruin',
+      revealed: true,
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
 
@@ -139,6 +142,20 @@ describe('replay debug presentation', () => {
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names, actors).summary).toBe(
       `P0 - Bone Market's cost decreased by 1 - caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}.`,
+    );
+  });
+
+  it('presents location destruction as the atomic Ruin replacement', () => {
+    expect(describeReplayStep(step({
+      type: 'LOCATION_REPLACED',
+      lane: 0,
+      oldId: location.id,
+      newId: `ruin:${location.id}` as LocationId,
+      newDefId: 'ruin',
+      revealed: true,
+      cause: { sourceId: location.id, effectKind: 'SYSTEM' },
+    }), names, actors).summary).toBe(
+      `${BOOTSTRAP_MANIFEST.locations[location.defId].name} was destroyed and replaced by Ruin in the left lane - caused by game rules.`,
     );
   });
 

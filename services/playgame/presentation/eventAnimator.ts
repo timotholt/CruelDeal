@@ -44,7 +44,7 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   if (ctx.deckEl && ctx.deckEl.isConnected) return ctx.deckEl.getBoundingClientRect();
-  const b = ctx.boardEl.getBoundingClientRect();
+  const b = ctx.motionSurface.frameRect();
   const w = 70;
   const h = 100;
   return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
@@ -185,12 +185,12 @@ const playVfx = (ctx: PlayScriptCtx, choreography: EventChoreography): void => {
 
 const rectForZone = (ctx: PlayScriptCtx, zone: CardZoneRef): DOMRect => {
   const key = zoneAnchorKey(zone);
-  const el = key ? ctx.zoneRefs?.get(key) : null;
-  if (el && el.isConnected) return el.getBoundingClientRect();
+  const registeredRect = key ? ctx.motionSurface.zoneRect(key) : null;
+  if (registeredRect) return registeredRect;
   if (zone.kind === 'DECK' && zone.owner === ctx.localSeat && ctx.deckEl?.isConnected) {
     return ctx.deckEl.getBoundingClientRect();
   }
-  return fallbackRectForZone(ctx.boardEl.getBoundingClientRect(), zone, ctx.remoteSeat);
+  return fallbackRectForZone(ctx.motionSurface.frameRect(), zone, ctx.remoteSeat);
 };
 
 const rectForTransferEndpoint = (
@@ -205,7 +205,10 @@ const rectForTransferEndpoint = (
     return { rect: captured, el: null, visibleCard: true };
   }
   const el = isVisibleZone(zone) ? ctx.cardRefs.get(transfer.cardId as string) ?? null : null;
-  if (el && el.isConnected) return { rect: el.getBoundingClientRect(), el, visibleCard: true };
+  const registeredRect = isVisibleZone(zone)
+    ? ctx.motionSurface.cardRect(transfer.cardId as string)
+    : null;
+  if (el && registeredRect) return { rect: registeredRect, el, visibleCard: true };
   if (captured && isVisibleZone(zone)) return { rect: captured, el: null, visibleCard: true };
   return { rect: rectForZone(ctx, zone), el: null, visibleCard: false };
 };
@@ -242,11 +245,11 @@ type PreparedTransfer = {
 };
 
 const placeFlyerAtRect = (ctx: PlayScriptCtx, flyer: HTMLElement, rect: DOMRect): void => {
-  const boardRect = ctx.boardWrap.getBoundingClientRect();
-  flyer.style.left = rect.left - boardRect.left + 'px';
-  flyer.style.top = rect.top - boardRect.top + 'px';
-  flyer.style.width = rect.width + 'px';
-  flyer.style.height = rect.height + 'px';
+  const localRect = ctx.motionSurface.toLocalRect(rect);
+  flyer.style.left = localRect.left + 'px';
+  flyer.style.top = localRect.top + 'px';
+  flyer.style.width = localRect.width + 'px';
+  flyer.style.height = localRect.height + 'px';
 };
 
 const shouldPrepareSourceBeforeDispatch = (transfer: CardTransfer): boolean => (
@@ -274,7 +277,7 @@ const prepareTransferBeforeDispatch = (
     String(transfer.style.scale.from),
   );
   placeFlyerAtRect(ctx, flyer, source.rect);
-  ctx.boardWrap.appendChild(flyer);
+  ctx.motionSurface.mountTemporary(flyer);
 
   const sourceVisibility = sourceEl?.style.visibility ?? null;
   if (sourceEl) sourceEl.style.visibility = 'hidden';
@@ -307,7 +310,7 @@ const animateOneTransfer = async (
       cardId: transfer.cardId as string,
       startRect,
       cardElMap: ctx.cardRefs,
-      boardWrap: ctx.boardWrap,
+      motionSurface: ctx.motionSurface,
       sfx: useTransferSfx ? ctx.sfx : undefined,
     });
     return;
@@ -331,7 +334,7 @@ const animateOneTransfer = async (
   const destinationVisibility = destination.el?.style.visibility;
   if (destination.el) destination.el.style.visibility = 'hidden';
 
-  const boardRect = ctx.boardWrap.getBoundingClientRect();
+  const boardRect = ctx.motionSurface.frameRect();
   const flyer = prepared?.flyer ?? cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? source.el, destination.el);
   const sourceRotationDegrees = prepared?.sourceRotationDegrees
     ?? cardRestingRotationDegrees(source.el);
@@ -345,7 +348,7 @@ const animateOneTransfer = async (
       null,
       String(transfer.style.scale.from),
     );
-    ctx.boardWrap.appendChild(flyer);
+    ctx.motionSurface.mountTemporary(flyer);
   }
 
   if (useTransferSfx && transfer.style.sfx) ctx.sfx?.(transfer.style.sfx);

@@ -1,181 +1,386 @@
 /**
- * Delegated drag-and-drop setup for the /play board.
+ * Unified Pointer Events drag controller for /play.
  *
- * Lives in its own module so it can be maintained independently of the
- * engine or PlayScreen layout. Pure DOM wiring — no Solid reactivity, no
- * engine imports. Callers feed it accessors so it always reads fresh
- * state when a drag event fires.
- *
- * `dragState` is module-level because the native HTML5 DnD API doesn't
- * expose a good place to stash per-drag metadata; HandCard writes the id
- * on dragstart, the delegated drop handler reads it.
+ * Mouse, pen, and touch share one state machine. The original card keeps its
+ * layout slot while a visual clone moves on the canonical PlayMotionSurface,
+ * so dragging never causes reflow. On a successful drop, that same clone
+ * lands on the newly rendered destination before ownership returns to DOM.
  */
 
-import type { LaneIdx } from '@/services/playgame/engine/types/ids';
-import type { Seat } from '@/services/playgame/engine/types/ids';
+import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
+import { isActiveLane } from '@/services/playgame/engine/laneTopology';
 import type { MatchState } from '@/services/playgame/engine/types/state';
+import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 
-/** Shared mutable drag state. Do not read inside Solid reactive scopes. */
-export const dragState: { id: string | null } = { id: null };
+const DRAG_THRESHOLD_PX = 6;
+const LANDING_DURATION_MS = 260;
+
+type DragOrigin = 'hand' | 'lane';
+
+interface ActivePointerDrag {
+  pointerId: number;
+  cardId: string;
+  origin: DragOrigin;
+  sourceEl: HTMLElement;
+  visualSourceEl: HTMLElement;
+  sourceRect: DOMRect;
+  offsetX: number;
+  offsetY: number;
+  started: boolean;
+  ghost: HTMLElement | null;
+  cleanupGhost: (() => void) | null;
+  target: DropTarget | null;
+}
+
+type DropTarget =
+  | { kind: 'lane'; element: HTMLElement; laneId: LaneId }
+  | { kind: 'hand'; element: HTMLElement };
 
 export interface DragDropOpts {
   boardEl: HTMLElement;
   localSeat: Seat;
-  /** Fresh getter for the engine state (called per-event). */
   engineState: MatchState;
   isResolving: () => boolean;
-  /** Fresh getter for interactive local hand cards (reserved hidden slots excluded). */
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
-  /** Returns true on success; false if the engine rejected the stage intent. */
+  motionSurface: PlayMotionSurface;
   stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
-  /** Undo a pending (just-staged) card by dragging it back to hand. */
   undoPendingCard: (cardId: string) => Promise<boolean>;
 }
 
-/**
- * Register the drag-and-drop handlers on `boardEl`. Returns a cleanup
- * function that removes them. Typical usage inside `onMount`:
- *
- *   onCleanup(setupDragDrop({ ... }));
- */
+const nextPaint = (): Promise<void> => new Promise((resolve) => {
+  queueMicrotask(() => {
+    try {
+      requestAnimationFrame(() => resolve());
+    } catch {
+      resolve();
+    }
+  });
+});
+
+const closestHTMLElement = (
+  target: EventTarget | null,
+  selector: string,
+): HTMLElement | null => (
+  target instanceof Element ? target.closest<HTMLElement>(selector) : null
+);
+
+const visualCardElement = (source: HTMLElement): HTMLElement => (
+  source.matches('.hand-card-motion')
+    ? source.querySelector<HTMLElement>(':scope > .card') ?? source
+    : source
+);
+
+const waitForTransition = (element: HTMLElement, durationMs: number): Promise<void> => (
+  new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      element.removeEventListener('transitionend', onEnd);
+      clearTimeout(timeout);
+      resolve();
+    };
+    const onEnd = (event: TransitionEvent): void => {
+      if (event.propertyName === 'left') finish();
+    };
+    const timeout = setTimeout(finish, durationMs + 100);
+    element.addEventListener('transitionend', onEnd);
+  })
+);
+
 export function setupDragDrop(opts: DragDropOpts): () => void {
-  const { boardEl, localSeat, engineState, isResolving, localHand, cardRefs, stageCardInLane, undoPendingCard } = opts;
-
-  const getBottomLaneSlots = (target: EventTarget | null): HTMLElement | null => {
-    let el = target as HTMLElement | null;
-    while (el && el !== boardEl) {
-      if (el.classList?.contains('lane-slots') && el.dataset.side === 'bottom') return el;
-      el = el.parentElement;
-    }
-    return null;
-  };
-
-  const getHandEl = (target: EventTarget | null): HTMLElement | null => {
-    let el = target as HTMLElement | null;
-    while (el && el !== boardEl) {
-      if (el.classList?.contains('hand')) return el;
-      el = el.parentElement;
-    }
-    return null;
-  };
-
-  /** True if the currently-dragged card is a local pending card (can be undone). */
-  const dragIsPending = (): boolean => {
-    if (!dragState.id) return false;
-    return engineState.stagingOrder.includes(dragState.id as never);
-  };
+  const {
+    boardEl,
+    localSeat,
+    engineState,
+    isResolving,
+    localHand,
+    cardRefs,
+    motionSurface,
+    stageCardInLane,
+    undoPendingCard,
+  } = opts;
+  let active: ActivePointerDrag | null = null;
+  let disposed = false;
+  let moveFrame: number | null = null;
+  let pendingMove: { drag: ActivePointerDrag; clientX: number; clientY: number } | null = null;
 
   const clearDropState = (): void => {
-    boardEl.querySelectorAll('.lane-slots.drop-target').forEach((s) => s.classList.remove('drop-target'));
-    boardEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
-    boardEl.querySelectorAll('.hand.drop-target').forEach((h) => h.classList.remove('drop-target'));
+    boardEl.querySelectorAll('.drop-target').forEach((element) => element.classList.remove('drop-target'));
+    boardEl.querySelectorAll('.next-drop').forEach((element) => element.classList.remove('next-drop'));
   };
 
-  const onDragOver = (e: DragEvent): void => {
-    if (!dragState.id || isResolving()) return;
+  const isPending = (cardId: string): boolean => engineState.stagingOrder.includes(cardId as never);
 
-    // Lane drop (stage from hand → lane). Only valid when the drag is NOT
-    // already a pending card; pending cards are dragged back to hand.
-    const slotEl = getBottomLaneSlots(e.target);
-    if (slotEl && !dragIsPending()) {
-      const lane = Number(slotEl.dataset.lane) as LaneIdx;
-      if (engineState.lanes[lane].cards[localSeat].length >= 4) return;
-      e.preventDefault();
-      clearDropState();
-      slotEl.classList.add('drop-target');
-      const nextSlot = [...slotEl.querySelectorAll('.slot')].find(
-        (s) => !s.querySelector('.card'),
-      ) as HTMLElement | undefined;
-      nextSlot?.classList.add('next-drop');
-      return;
-    }
+  const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
+    if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
+    const hit = document.elementFromPoint(clientX, clientY);
+    const zone = hit?.closest<HTMLElement>('[data-drop-zone]');
+    if (!zone || !boardEl.contains(zone)) return null;
 
-    // Hand drop (undo pending card → back to hand). Only valid when the drag
-    // IS a pending card.
-    const handEl = getHandEl(e.target);
-    if (handEl && dragIsPending()) {
-      e.preventDefault();
-      clearDropState();
-      handEl.classList.add('drop-target');
+    if (active.origin === 'lane') {
+      return zone.dataset.dropZone === 'hand' ? { kind: 'hand', element: zone } : null;
     }
+    if (zone.dataset.dropZone !== 'lane') return null;
+    const laneId = Number(zone.dataset.laneId) as LaneId;
+    const lane = engineState.lanes[laneId];
+    if (!isActiveLane(engineState, laneId) || !lane) return null;
+    if (lane.cards[localSeat].length >= 4) return null;
+    return { kind: 'lane', element: zone, laneId };
   };
 
-  const onDragLeave = (e: DragEvent): void => {
-    const related = e.relatedTarget as Node | null;
-    const slotEl = getBottomLaneSlots(e.target);
-    if (slotEl && !slotEl.contains(related)) {
-      slotEl.classList.remove('drop-target');
-      slotEl.querySelectorAll('.slot.next-drop').forEach((s) => s.classList.remove('next-drop'));
-    }
-    const handEl = getHandEl(e.target);
-    if (handEl && !handEl.contains(related)) {
-      handEl.classList.remove('drop-target');
-    }
-  };
-
-  const onDrop = async (e: DragEvent): Promise<void> => {
-    e.preventDefault();
-    const slotEl = getBottomLaneSlots(e.target);
-    const handEl = getHandEl(e.target);
+  const showTarget = (target: DropTarget | null): void => {
     clearDropState();
-    boardEl.classList.remove('dragging-card');
-    if (isResolving() || !dragState.id) return;
-
-    // Undo: dropping a pending card back on the hand.
-    if (handEl && dragIsPending()) {
-      // Capture rects for the dragged card (currently in lane) PLUS every
-      // card already in hand, so FLIP slides the lane card into its hand
-      // slot while hand siblings shuffle over to make room. This mirrors
-      // the hex-button undo animation.
-      const pendingIds = [...engineState.stagingOrder];
-      const handIds = localHand().map((c) => c.id);
-      const allIds = [...pendingIds, ...handIds];
-      const oldRects = captureHandRects(allIds, cardRefs);
-      const ok = await undoPendingCard(dragState.id);
-      if (!ok) return;
-      queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
-      return;
-    }
-
-    // Stage: dropping a hand card on a player lane slot.
-    if (slotEl && !dragIsPending()) {
-      const lane = Number(slotEl.dataset.lane);
-      const handIds = localHand().map((c) => c.id);
-      const oldRects = captureHandRects(handIds, cardRefs);
-      const ok = await stageCardInLane(dragState.id, lane);
-      if (!ok) return;
-      queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
+    if (!target) return;
+    target.element.classList.add('drop-target');
+    if (target.kind === 'lane') {
+      const nextSlot = [...target.element.querySelectorAll<HTMLElement>('.slot')]
+        .find((slot) => !slot.querySelector('.card'));
+      nextSlot?.classList.add('next-drop');
     }
   };
 
-  const onDragStart = (e: DragEvent): void => {
-    if (isResolving()) {
-      e.preventDefault();
-      dragState.id = null;
-      clearDropState();
-      return;
-    }
+  const placeGhost = (ghost: HTMLElement, rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>): void => {
+    const local = motionSurface.toLocalRect(rect);
+    ghost.style.left = `${local.left}px`;
+    ghost.style.top = `${local.top}px`;
+    ghost.style.width = `${local.width}px`;
+    ghost.style.height = `${local.height}px`;
+  };
+
+  const beginVisualDrag = (drag: ActivePointerDrag): void => {
+    const ghost = drag.visualSourceEl.cloneNode(true) as HTMLElement;
+    ghost.classList.add('pointer-drag-ghost');
+    ghost.classList.remove('drag-source-active');
+    ghost.removeAttribute('draggable');
+    ghost.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+    Object.assign(ghost.style, {
+      position: 'absolute',
+      margin: '0',
+      pointerEvents: 'none',
+      zIndex: '460',
+      transform: getComputedStyle(drag.visualSourceEl).transform,
+      transformOrigin: 'center center',
+      transition: 'none',
+      willChange: 'left, top, width, height, transform, opacity',
+    });
+    placeGhost(ghost, drag.sourceRect);
+    drag.cleanupGhost = motionSurface.mountTemporary(ghost);
+    drag.ghost = ghost;
+    drag.started = true;
+    drag.sourceEl.classList.add('drag-source-active');
     boardEl.classList.add('dragging-card');
   };
-  const onDragEnd = (): void => {
-    boardEl.classList.remove('dragging-card');
-    clearDropState();
+
+  const moveGhost = (drag: ActivePointerDrag, clientX: number, clientY: number): void => {
+    if (!drag.ghost) return;
+    const frame = motionSurface.frameRect();
+    drag.ghost.style.left = `${clientX - drag.offsetX - frame.left}px`;
+    drag.ghost.style.top = `${clientY - drag.offsetY - frame.top}px`;
   };
 
-  boardEl.addEventListener('dragstart', onDragStart);
-  boardEl.addEventListener('dragend', onDragEnd);
-  boardEl.addEventListener('dragover', onDragOver);
-  boardEl.addEventListener('dragleave', onDragLeave);
-  boardEl.addEventListener('drop', onDrop);
+  const flushPointerMove = (
+    drag: ActivePointerDrag,
+    clientX: number,
+    clientY: number,
+  ): void => {
+    moveGhost(drag, clientX, clientY);
+    drag.target = validTargetAt(clientX, clientY);
+    showTarget(drag.target);
+  };
+
+  const schedulePointerMove = (
+    drag: ActivePointerDrag,
+    clientX: number,
+    clientY: number,
+  ): void => {
+    pendingMove = { drag, clientX, clientY };
+    if (moveFrame !== null) return;
+    const run = (): void => {
+      moveFrame = null;
+      const move = pendingMove;
+      pendingMove = null;
+      if (!move || active !== move.drag) return;
+      flushPointerMove(move.drag, move.clientX, move.clientY);
+    };
+    try {
+      moveFrame = requestAnimationFrame(run);
+    } catch {
+      run();
+    }
+  };
+
+  const cancelScheduledMove = (): void => {
+    if (moveFrame !== null) cancelAnimationFrame(moveFrame);
+    moveFrame = null;
+    pendingMove = null;
+  };
+
+  const suppressSyntheticClick = (source: HTMLElement): void => {
+    source.dataset.suppressDragClick = 'true';
+    setTimeout(() => {
+      delete source.dataset.suppressDragClick;
+    }, 0);
+  };
+
+  const cleanup = (drag: ActivePointerDrag): void => {
+    cancelScheduledMove();
+    drag.cleanupGhost?.();
+    drag.sourceEl.classList.remove('drag-source-active');
+    boardEl.classList.remove('dragging-card');
+    clearDropState();
+    active = null;
+  };
+
+  const animateGhostTo = async (
+    drag: ActivePointerDrag,
+    destination: HTMLElement | null,
+    fallbackRect: DOMRect,
+  ): Promise<void> => {
+    const ghost = drag.ghost;
+    if (!ghost) return;
+    const destinationVisual = destination ? visualCardElement(destination) : null;
+    const destinationRect = destinationVisual?.getBoundingClientRect() ?? fallbackRect;
+    const previousVisibility = destinationVisual?.style.visibility;
+    if (destinationVisual) destinationVisual.style.visibility = 'hidden';
+    ghost.style.transition = [
+      `left ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
+      `top ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
+      `width ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
+      `height ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
+      `transform ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
+      `opacity ${LANDING_DURATION_MS}ms ease`,
+    ].join(', ');
+    void ghost.offsetWidth;
+    placeGhost(ghost, destinationRect);
+    if (destinationVisual) ghost.style.transform = getComputedStyle(destinationVisual).transform;
+    await waitForTransition(ghost, LANDING_DURATION_MS);
+    if (destinationVisual?.isConnected) destinationVisual.style.visibility = previousVisibility ?? '';
+  };
+
+  const returnToSource = async (drag: ActivePointerDrag): Promise<void> => {
+    await animateGhostTo(drag, drag.sourceEl.isConnected ? drag.sourceEl : null, drag.sourceRect);
+  };
+
+  const performDrop = async (drag: ActivePointerDrag): Promise<void> => {
+    const target = drag.target;
+    const siblingIds = [
+      ...engineState.stagingOrder.map(String),
+      ...localHand().map((card) => card.id),
+    ].filter((id) => id !== drag.cardId);
+    const oldRects = captureCardRects(siblingIds, cardRefs);
+
+    let accepted = false;
+    if (target?.kind === 'lane' && drag.origin === 'hand') {
+      accepted = await stageCardInLane(drag.cardId, target.laneId);
+    } else if (target?.kind === 'hand' && drag.origin === 'lane') {
+      accepted = await undoPendingCard(drag.cardId);
+    }
+
+    if (!accepted) {
+      await returnToSource(drag);
+      return;
+    }
+
+    await nextPaint();
+    playCardLayoutSlide(oldRects, cardRefs);
+    await animateGhostTo(drag, cardRefs.get(drag.cardId) ?? null, drag.sourceRect);
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    if (active || isResolving() || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const source = closestHTMLElement(event.target, '[data-drag-source]');
+    if (!source || !boardEl.contains(source) || source.dataset.dragEnabled !== 'true') return;
+    const cardId = source.dataset.cardId;
+    const origin = source.dataset.dragSource as DragOrigin | undefined;
+    if (!cardId || (origin !== 'hand' && origin !== 'lane')) return;
+    if (origin === 'hand' && !localHand().some((card) => card.id === cardId)) return;
+    if (origin === 'lane' && !isPending(cardId)) return;
+
+    const visual = visualCardElement(source);
+    const sourceRect = visual.getBoundingClientRect();
+    active = {
+      pointerId: event.pointerId,
+      cardId,
+      origin,
+      sourceEl: source,
+      visualSourceEl: visual,
+      sourceRect,
+      offsetX: event.clientX - sourceRect.left,
+      offsetY: event.clientY - sourceRect.top,
+      started: false,
+      ghost: null,
+      cleanupGhost: null,
+      target: null,
+    };
+    source.setPointerCapture?.(event.pointerId);
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    const drag = active;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.started) {
+      const distance = Math.hypot(
+        event.clientX - (drag.sourceRect.left + drag.offsetX),
+        event.clientY - (drag.sourceRect.top + drag.offsetY),
+      );
+      if (distance < DRAG_THRESHOLD_PX) return;
+      beginVisualDrag(drag);
+    }
+    event.preventDefault();
+    schedulePointerMove(drag, event.clientX, event.clientY);
+  };
+
+  const finishPointer = (event: PointerEvent, cancelled: boolean): void => {
+    const drag = active;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.sourceEl.releasePointerCapture?.(event.pointerId);
+    if (!drag.started) {
+      active = null;
+      return;
+    }
+    event.preventDefault();
+    cancelScheduledMove();
+    if (!cancelled) flushPointerMove(drag, event.clientX, event.clientY);
+    suppressSyntheticClick(drag.sourceEl);
+    void (cancelled ? returnToSource(drag) : performDrop(drag))
+      .finally(() => {
+        if (!disposed) cleanup(drag);
+        else drag.cleanupGhost?.();
+      });
+  };
+
+  const onPointerUp = (event: PointerEvent): void => finishPointer(event, false);
+  const onPointerCancel = (event: PointerEvent): void => finishPointer(event, true);
+  const onClickCapture = (event: MouseEvent): void => {
+    const source = closestHTMLElement(event.target, '[data-suppress-drag-click="true"]');
+    if (!source) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    delete source.dataset.suppressDragClick;
+  };
+
+  boardEl.addEventListener('pointerdown', onPointerDown);
+  boardEl.addEventListener('pointermove', onPointerMove);
+  boardEl.addEventListener('pointerup', onPointerUp);
+  boardEl.addEventListener('pointercancel', onPointerCancel);
+  boardEl.addEventListener('click', onClickCapture, true);
 
   return (): void => {
-    boardEl.removeEventListener('dragstart', onDragStart);
-    boardEl.removeEventListener('dragend', onDragEnd);
-    boardEl.removeEventListener('dragover', onDragOver);
-    boardEl.removeEventListener('dragleave', onDragLeave);
-    boardEl.removeEventListener('drop', onDrop);
+    disposed = true;
+    cancelScheduledMove();
+    active?.cleanupGhost?.();
+    active?.sourceEl.classList.remove('drag-source-active');
+    clearDropState();
+    boardEl.classList.remove('dragging-card');
+    active = null;
+    boardEl.removeEventListener('pointerdown', onPointerDown);
+    boardEl.removeEventListener('pointermove', onPointerMove);
+    boardEl.removeEventListener('pointerup', onPointerUp);
+    boardEl.removeEventListener('pointercancel', onPointerCancel);
+    boardEl.removeEventListener('click', onClickCapture, true);
   };
 }

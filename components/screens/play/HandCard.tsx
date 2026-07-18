@@ -12,7 +12,6 @@
 import { createEffect, createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { dragState } from './useDragDrop';
 import { openInspect } from './inspector';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import type { CardId } from '@/services/playgame/engine/types/ids';
@@ -47,22 +46,6 @@ export const HandCard = (props: HandCardProps) => {
     return '';
   };
 
-  const onDragStart = (e: DragEvent): void => {
-    if (!isInteractive()) {
-      e.preventDefault();
-      return;
-    }
-    dragState.id = props.card.id;
-    (e.currentTarget as HTMLElement).classList.add('dragging');
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', props.card.id);
-    }
-  };
-  const onDragEnd = (e: DragEvent): void => {
-    (e.currentTarget as HTMLElement).classList.remove('dragging');
-    dragState.id = null;
-  };
   const onClick = (e: MouseEvent): void => {
     if (!isInspectable()) return;
     e.stopPropagation();
@@ -80,14 +63,13 @@ export const HandCard = (props: HandCardProps) => {
       ref={bindCardRef(props.card.id)}
       class={'hand-card-motion' + (isHidden() ? ' hand-card-motion--reserved' : '')}
       data-card-id={props.card.id}
+      data-drag-source="hand"
+      data-drag-enabled={String(isInteractive())}
       style={{
         visibility: isHidden() ? 'hidden' : 'visible',
         'pointer-events': isHidden() ? 'none' : 'auto',
         cursor: isInspectable() ? 'pointer' : 'default',
       }}
-      draggable={isInteractive()}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       onClick={onClick}
     >
       <div

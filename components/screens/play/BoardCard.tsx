@@ -13,7 +13,6 @@ import { usePlayGame } from '@/contexts/PlayGameContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { CardId, Seat } from '@/services/playgame/engine/types/ids';
 import { openInspect } from './inspector';
-import { dragState } from './useDragDrop';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
@@ -58,19 +57,6 @@ export const BoardCard = (props: BoardCardProps) => {
     if (props.card.owner !== viewerSeat()) return false;
     if (isResolving()) return false;
     return stagingOrder().includes(props.card.id);
-  };
-
-  const onDragStart = (e: DragEvent): void => {
-    if (!isDraggablePending()) {
-      e.preventDefault();
-      return;
-    }
-    dragState.id = props.card.id;
-    e.dataTransfer?.setData('text/plain', props.card.id);
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-  };
-  const onDragEnd = (): void => {
-    dragState.id = null;
   };
 
   const isFaceDown = (): boolean => {
@@ -130,14 +116,13 @@ export const BoardCard = (props: BoardCardProps) => {
       }
       data-card-id={props.card.id}
       data-card-resting-rotation={tilt()}
-      draggable={isDraggablePending()}
+      data-drag-source="lane"
+      data-drag-enabled={String(isDraggablePending())}
       style={{
         '--card-tilt': tilt(),
         cursor: isDraggablePending() ? 'grab' : isFaceDown() ? 'default' : 'pointer',
       }}
       onClick={onClick}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
     >
       <CardVfxStack cardId={cardId()}>
         <div class="cost">{props.card.cost}</div>

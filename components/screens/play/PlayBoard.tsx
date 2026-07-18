@@ -2,9 +2,9 @@
  * PlayBoard — the interactive /play surface.
  *
  * Orchestrates (not implements):
- *   - hand / lanes / locations / HUD layout
- *   - lane-map overlays  (useLaneMaps)
- *   - drag-and-drop      (useDragDrop)
+ *   - fixed header / board stage / player footer shell
+ *   - stable vertical LaneColumn rendering
+ *   - Pointer Events drag-and-drop (useDragDrop)
  *   - opening sequence + turn-resolve flow (script/runner)
  *
  * Gameplay mutations go through typed runtime-backed context commands. The
@@ -30,7 +30,7 @@ import {
   getLanePower,
 } from '@/services/playgame/view';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
-import type { LaneIdx } from '@/services/playgame/engine/types/ids';
+import type { LaneId } from '@/services/playgame/engine/types/ids';
 import type { CardZone } from '@/services/playgame/engine/types/state';
 import { renderRuntimeReplay } from '@/services/playgame/runtime/replayExport';
 import { createScript, type Script } from '@/services/playgame/script/runner';
@@ -39,11 +39,10 @@ import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flo
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { ZoomInspector } from '../ZoomInspector';
 import { HandRow } from './HandRow';
-import { LaneSlots } from './LaneSlots';
-import { LocationTile } from './LocationTile';
+import { LaneColumn } from './LaneColumn';
 import { setupDragDrop } from './useDragDrop';
-import { setupLaneMaps } from './useLaneMaps';
 import { useLaneHighlight } from './useLaneHighlight';
+import { useLaneTopologyMotion } from './useLaneTopologyMotion';
 import { inspectTarget, closeInspect } from './inspector';
 import { ReplayDrawer } from './ReplayDrawer';
 import { EnergyBadge } from './EnergyBadge';
@@ -51,22 +50,23 @@ import { HiddenHandIndicator } from './HiddenHandIndicator';
 import { PlayerPortraitMenu } from './PlayerPortraitMenu';
 import { PileViewer } from './PileViewer';
 import { TurnOrb } from './TurnOrb';
+import { MiniDeckIndicator } from './MiniDeckIndicator';
 import { selectInteractiveHand } from './handInteractivity';
 import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
+import { activeLaneIds } from '@/services/playgame/engine/laneTopology';
 
 interface PlayBoardProps {
   onExit?: () => void;
 }
 
 export const PlayBoard = (props: PlayBoardProps) => {
-  const isDev = import.meta.env.DEV;
   const pg = usePlayGame();
   const {
     engineState, manifest, ui, setUi, isResolving, actions,
     localSeat, remoteSeat, seatMeta, openingTimeline,
   } = pg;
-  const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
+  const { cardRefs, zoneRefs, motionSurface, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
   const [replayCursor, setReplayCursor] = createSignal(0);
   const [replayFollowingLive, setReplayFollowingLive] = createSignal(true);
@@ -75,7 +75,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
 
   const runtimeReplay = createMemo(() => {
-    if (!isDev) return null;
     // Track committed presentation progress; the export itself remains a
     // read-only bootstrap + genesis + transaction-record snapshot.
     void engineState.log.length;
@@ -103,6 +102,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     phase: presentedState().phase,
     liveResolutionLocked: ui.isFlipped,
   }));
+  const laneIds = createMemo<readonly LaneId[]>(() => activeLaneIds(presentedState()));
 
   createEffect(() => {
     const maxIndex = replayLastCursor();
@@ -131,13 +131,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return selectInteractiveHand(hand(), reserved);
   });
 
-  const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
-  const topLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
-  const laneLoc = (i: LaneIdx): ResolvedLocation => getLocation(presentedState(), i, manifest);
-  const bottomPower = (i: LaneIdx): number => getLanePower(presentedState(), i, localSeat, manifest);
-  const topPower = (i: LaneIdx): number => getLanePower(presentedState(), i, remoteSeat, manifest);
-  const bottomBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);
-  const topBreakdown = (i: LaneIdx): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, remoteSeat, manifest);
+  const bottomLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
+  const topLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
+  const laneLoc = (i: LaneId): ResolvedLocation => getLocation(presentedState(), i, manifest);
+  const bottomPower = (i: LaneId): number => getLanePower(presentedState(), i, localSeat, manifest);
+  const topPower = (i: LaneId): number => getLanePower(presentedState(), i, remoteSeat, manifest);
+  const bottomBreakdown = (i: LaneId): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);
+  const topBreakdown = (i: LaneId): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, remoteSeat, manifest);
   const localHasPriority = createMemo(() => presentedState().priority === localSeat);
 
   useLaneHighlight({
@@ -149,6 +149,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
       { local: bottomPower(2), remote: topPower(2) },
     ],
   });
+  useLaneTopologyMotion({
+    boardEl: () => boardEl,
+    laneIds,
+  });
   const localDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DISCARD', manifest));
   const localDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DESTROYED', manifest));
   const localBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'BANISHED', manifest));
@@ -156,11 +160,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const remoteDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'DESTROYED', manifest));
   const remoteBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'BANISHED', manifest));
   const remoteHandSize = createMemo(() => presentedState().hand[remoteSeat].length);
+  const localDeckSize = createMemo(() => presentedState().deck[localSeat].length);
   const remoteDeckSize = createMemo(() => presentedState().deck[remoteSeat].length);
   const recordedOutcomeLabel = createMemo(() => {
     const result = ui.lockedResult;
     if (!result) return null;
-    return result.winner === localSeat ? 'WIN' : result.winner === remoteSeat ? 'LOSS' : 'DRAW';
+    return result.winner === localSeat ? 'WIN' : result.winner === remoteSeat ? 'LOSE' : 'DRAW';
   });
 
   // ── Undo (one-card) ──────────────────────────────────────────────────────
@@ -198,17 +203,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
     if (!boardEl || !toastAreaEl) return;
     boardEl.classList.add('ready');
 
-    // Lane overlay art comes from the locations the engine already assigned
-    // in createInitialEngineState. NO RNG here — each lane's map must match
-    // the lane's location def, otherwise the revealed tile shows one name
-    // and the background shows a different biome.
-    const lanePaths: [string | null, string | null, string | null] = [
-      laneLoc(0).mapArt,
-      laneLoc(1).mapArt,
-      laneLoc(2).mapArt,
-    ];
-    const maps = setupLaneMaps(boardEl, lanePaths);
-    onCleanup(maps.dispose);
+    const motion = motionSurface();
+    if (!motion) return;
 
     const unbindDnd = setupDragDrop({
       boardEl,
@@ -217,6 +213,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       isResolving,
       localHand: interactiveHand,
       cardRefs,
+      motionSurface: motion,
       stageCardInLane: actions.stageCardInLane,
       undoPendingCard: actions.undoPendingCard,
     });
@@ -224,9 +221,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
     // Opening authority is already committed by the runtime. The script is a
     // presentation-only reader of committed transitions plus the UI sidecar.
-    const boardWrapEl = boardRef();
-    if (!boardWrapEl) return;
-
     const ctx: PlayScriptCtx = {
       state: engineState,
       ui,
@@ -235,7 +229,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       localSeat,
       remoteSeat,
       boardEl,
-      boardWrap: boardWrapEl,
+      motionSurface: motion,
       toastArea: toastAreaEl,
       cardRefs,
       zoneRefs,
@@ -292,10 +286,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   return (
     <>
-      <div class="board" id="board" ref={(element) => { boardEl = element; }}>
+      <div class="board play-frame" id="board" ref={(element) => { boardEl = element; }}>
         {/* TOP HUD */}
-        <div class="hud-top">
-          <div class="hud-top__side hud-top__side--left">
+        <header class="hud-top opponent-header match-hud">
+          <div class="match-hud__identity match-hud__identity--local">
             <PlayerPortraitMenu
               owner={localSeat}
               name={seatMeta[localSeat].name}
@@ -312,9 +306,49 @@ export const PlayBoard = (props: PlayBoardProps) => {
             />
           </div>
 
-          <Show when={isDev && replayTimeline()}>
+          <div class="match-hud__opponent-resources" aria-label="Opponent resources">
+            <div class="match-hud__resource match-hud__resource--deck">
+              <MiniDeckIndicator
+                count={remoteDeckSize()}
+                anchorRef={bindZoneRef(`${remoteSeat}:deck`)}
+              />
+            </div>
+            <div class="match-hud__resource match-hud__resource--hand">
+              <HiddenHandIndicator
+                count={remoteHandSize()}
+                anchorRef={bindZoneRef(`${remoteSeat}:hand`)}
+              />
+            </div>
+            <div class="match-hud__resource match-hud__resource--energy">
+              <EnergyBadge
+                value={presentedState().energy[remoteSeat]}
+                title={`Opponent energy ${presentedState().energy[remoteSeat]}`}
+              />
+            </div>
+          </div>
+
+          <div class="match-hud__identity match-hud__identity--remote">
+            <PlayerPortraitMenu
+              owner={remoteSeat}
+              name={seatMeta[remoteSeat].name}
+              side="right"
+              hasPriority={!localHasPriority()}
+              open={openMenuSeat() === remoteSeat}
+              counts={{
+                discard: remoteDiscard().length,
+                destroyed: remoteDestroyed().length,
+                banished: remoteBanished().length,
+              }}
+              onToggle={() => togglePlayerMenu(remoteSeat)}
+              onOpenPile={(zone) => handleOpenPile(remoteSeat, zone)}
+            />
+          </div>
+        </header>
+
+        <main class="board-stage board-game-area">
+          <Show when={replayTimeline()}>
             <button
-              class="replay-toggle hud-replay-toggle"
+              class="replay-toggle replay-float-toggle"
               type="button"
               onClick={() => setReplayOpen((open) => !open)}
             >
@@ -322,179 +356,87 @@ export const PlayBoard = (props: PlayBoardProps) => {
             </button>
           </Show>
 
-          <div class="hud-top__center">
+          <div class="lane-track" data-active-lane-count={laneIds().length}>
+            <For each={laneIds()}>
+              {(laneId, order) => (
+                <LaneColumn
+                  laneId={laneId}
+                  order={order()}
+                  activeLaneCount={laneIds().length}
+                  location={laneLoc(laneId)}
+                  topCards={topLane(laneId)}
+                  bottomCards={bottomLane(laneId)}
+                  topPower={topPower(laneId)}
+                  bottomPower={bottomPower(laneId)}
+                  topBreakdown={topBreakdown(laneId)}
+                  bottomBreakdown={bottomBreakdown(laneId)}
+                  interactive={boardInteractive()}
+                  inspectable={boardInspectable()}
+                  viewerSeat={localSeat}
+                  stagingOrder={presentedState().stagingOrder}
+                  resolutionLocked={boardCardResolutionLocked()}
+                />
+              )}
+            </For>
+          </div>
+        </main>
+
+        <footer class="player-footer">
+          <HandRow
+            owner={localSeat}
+            cards={hand()}
+            reservedIds={reservedHandIds()}
+            energy={presentedState().energy[localSeat]}
+            interactive={boardInteractive()}
+            inspectable={boardInspectable()}
+          />
+
+          <div class="action-bar">
+            <button
+              class={`retreat-btn${ui.lockedResult ? ' result-locked' : ''}`}
+              disabled={!ui.lockedResult && (!boardInteractive() || isResolving())}
+              onClick={() => {
+                if (!ui.lockedResult && !boardInteractive()) return;
+                props.onExit?.();
+              }}
+            >
+              {recordedOutcomeLabel()
+                ? `CLOSE (${recordedOutcomeLabel()})`
+                : 'RETREAT'}
+            </button>
             <TurnOrb turn={presentedState().turn} />
+            <MiniDeckIndicator
+              count={localDeckSize()}
+              label="Your deck"
+              anchorRef={(element) => {
+                deckEl = element;
+                bindZoneRef(`${localSeat}:deck`)(element);
+              }}
+            />
+            <button
+              class="energy-button"
+              title="Tap to undo last played card"
+              disabled={!boardInteractive()}
+              onClick={handleUndoPending}
+            >
+              <EnergyBadge value={presentedState().energy[localSeat]} title={`Your energy ${presentedState().energy[localSeat]}`} />
+            </button>
+            <button
+              class="end-turn"
+              disabled={!boardInteractive()}
+              onClick={() => {
+                if (!boardInteractive() || !script || turnFlowRunning()) return;
+                setTurnFlowRunning(true);
+                void actions.endTurn()
+                  .then((timeline) => timeline ? script?.run(resolveTurnFlow(timeline)) : undefined)
+                  .finally(() => setTurnFlowRunning(false));
+              }}
+            >
+              END TURN
+            </button>
           </div>
+        </footer>
 
-          <div class="hud-top__side hud-top__side--right">
-            <div class="opponent-cluster">
-              <HiddenHandIndicator count={remoteHandSize()} />
-              <div class="opponent-stat" title={`Deck ${remoteDeckSize()}`}>
-                <span class="opponent-stat__label">Deck</span>
-                <span class="opponent-stat__value">{remoteDeckSize()}</span>
-              </div>
-              <EnergyBadge value={presentedState().energy[remoteSeat]} title={`Opponent energy ${presentedState().energy[remoteSeat]}`} />
-              <PlayerPortraitMenu
-                owner={remoteSeat}
-                name={seatMeta[remoteSeat].name}
-                side="right"
-                hasPriority={!localHasPriority()}
-                open={openMenuSeat() === remoteSeat}
-                counts={{
-                  discard: remoteDiscard().length,
-                  destroyed: remoteDestroyed().length,
-                  banished: remoteBanished().length,
-                }}
-                onToggle={() => togglePlayerMenu(remoteSeat)}
-                onOpenPile={(zone) => handleOpenPile(remoteSeat, zone)}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="board-game-area">
-          <div class="row enemy-row">
-            <For each={[0, 1, 2] as const}>
-              {(i) => (
-                <LaneSlots
-                  side="top"
-                  laneIdx={i}
-                  cards={topLane(i)}
-                  interactive={boardInteractive()}
-                  inspectable={boardInspectable()}
-                  viewerSeat={localSeat}
-                  stagingOrder={presentedState().stagingOrder}
-                  resolutionLocked={boardCardResolutionLocked()}
-                />
-              )}
-            </For>
-          </div>
-
-          <div class="row locations">
-            <For each={[0, 1, 2] as const}>
-              {(i) => (
-                <LocationTile
-                  location={laneLoc(i)}
-                  laneIdx={i}
-                  bottomPower={bottomPower(i)}
-                  topPower={topPower(i)}
-                  bottomBreakdown={bottomBreakdown(i)}
-                  topBreakdown={topBreakdown(i)}
-                  interactive={boardInspectable()}
-                />
-              )}
-            </For>
-          </div>
-
-          <div class="row player-row">
-            <For each={[0, 1, 2] as const}>
-              {(i) => (
-                <LaneSlots
-                  side="bottom"
-                  laneIdx={i}
-                  cards={bottomLane(i)}
-                  interactive={boardInteractive()}
-                  inspectable={boardInspectable()}
-                  viewerSeat={localSeat}
-                  stagingOrder={presentedState().stagingOrder}
-                  resolutionLocked={boardCardResolutionLocked()}
-                />
-              )}
-            </For>
-          </div>
-        </div>
-
-        <HandRow
-          owner={localSeat}
-          cards={hand()}
-          reservedIds={reservedHandIds()}
-          energy={presentedState().energy[localSeat]}
-          interactive={boardInteractive()}
-          inspectable={boardInspectable()}
-        />
-
-        <div class="action-bar">
-          <button
-            class={`retreat-btn${ui.lockedResult ? ' result-locked' : ''}`}
-            disabled={!boardInteractive() || isResolving()}
-            onClick={() => {
-              if (!boardInteractive()) return;
-              props.onExit?.();
-            }}
-          >
-            {recordedOutcomeLabel()
-              ? `RETREAT (${recordedOutcomeLabel()})`
-              : 'RETREAT'}
-          </button>
-          <button
-            class="energy-button"
-            title="Tap to undo last played card"
-            disabled={!boardInteractive()}
-            onClick={handleUndoPending}
-          >
-            <EnergyBadge value={presentedState().energy[localSeat]} title={`Your energy ${presentedState().energy[localSeat]}`} />
-          </button>
-          <button
-            class="end-turn"
-            disabled={!boardInteractive()}
-            onClick={() => {
-              if (!boardInteractive() || !script || turnFlowRunning()) return;
-              setTurnFlowRunning(true);
-              void actions.endTurn()
-                .then((timeline) => timeline ? script?.run(resolveTurnFlow(timeline)) : undefined)
-                .finally(() => setTurnFlowRunning(false));
-            }}
-          >
-            END TURN
-          </button>
-        </div>
-
-        <div
-          ref={(el) => {
-            deckEl = el;
-            bindZoneRef(`${localSeat}:deck`)(el);
-          }}
-          class="deck-anchor"
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            right: '-80px',
-            bottom: '120px',
-            width: '48px',
-            height: '68px',
-            visibility: 'hidden',
-            'pointer-events': 'none',
-          }}
-        />
-        <div
-          ref={bindZoneRef(`${remoteSeat}:deck`)}
-          class="deck-anchor deck-anchor--remote"
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            right: '-80px',
-            top: '120px',
-            width: '48px',
-            height: '68px',
-            visibility: 'hidden',
-            'pointer-events': 'none',
-          }}
-        />
-        <div
-          ref={bindZoneRef(`${remoteSeat}:hand`)}
-          class="hand-anchor hand-anchor--remote"
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '64px',
-            width: '70px',
-            height: '100px',
-            transform: 'translateX(-50%)',
-            visibility: 'hidden',
-            'pointer-events': 'none',
-          }}
-        />
         <div
           ref={bindZoneRef('generated')}
           class="generated-anchor"
@@ -512,7 +454,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
         <div class="toast-area" id="toastArea" ref={(element) => { toastAreaEl = element; }} />
 
-        <Show when={isDev && replayTimeline()}>
+        <Show when={replayTimeline()}>
           {(timeline) => (
             <ReplayDrawer
               open={replayOpen()}
@@ -564,7 +506,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               <div class="mt-3 font-black uppercase tracking-[0.12em] text-2xl">
                 {recordedOutcomeLabel() === 'WIN'
                   ? 'You Won On Turn 6'
-                  : recordedOutcomeLabel() === 'LOSS'
+                  : recordedOutcomeLabel() === 'LOSE'
                     ? 'You Lost On Turn 6'
                     : 'Draw Locked On Turn 6'}
               </div>

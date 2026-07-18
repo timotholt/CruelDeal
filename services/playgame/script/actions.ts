@@ -6,6 +6,7 @@ import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
 import type { ZoneAnchorKey } from '../presentation/cardTransfers';
+import type { PlayMotionSurface } from '../presentation/playMotionSurface';
 import { animateEvent } from '../presentation/eventAnimator';
 import {
   planCommittedEventPacing,
@@ -24,7 +25,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   localSeat: Seat;
   remoteSeat: Seat;
   boardEl: HTMLElement;
-  boardWrap: HTMLElement;
+  motionSurface: PlayMotionSurface;
   toastArea: HTMLElement;
   cardRefs: Map<string, HTMLElement>;
   zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
@@ -124,6 +125,13 @@ const paceLocationReveal = async (
     freshTile.style.transform = 'rotateY(0deg) scale(1)';
   }
   await waitFor(600);
+  const canonicalLaneElement = c.boardEl.querySelector(
+    `.lane-map[data-lane="${lane}"]`,
+  ) as HTMLElement | null;
+  if (canonicalLaneElement) {
+    canonicalLaneElement.style.removeProperty('opacity');
+    canonicalLaneElement.style.removeProperty('transition');
+  }
 };
 
 const paceFrame = async (
@@ -145,7 +153,7 @@ const paceFrame = async (
     await revealPendingCinematic({
       pendingIds: [frame.event.cardId],
       cardElMap: c.cardRefs,
-      boardWrap: c.boardWrap,
+      motionSurface: c.motionSurface,
       sfx: c.sfx,
     });
   }

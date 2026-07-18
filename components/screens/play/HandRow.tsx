@@ -61,6 +61,7 @@ export const HandRow = (props: HandRowProps) => {
       ref={bindZoneRef(`${props.owner}:hand`)}
       class="hand"
       id="hand"
+      data-drop-zone="hand"
       style={{
         '--hand-scale': handScale().toFixed(3),
         '--hand-slot-reserve-ms': `${HAND_SLOT_RESERVE_MS}ms`,
