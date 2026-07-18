@@ -2,8 +2,10 @@ import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { ReplayFrame } from '@/services/playgame/engine/replay';
+import type { MatchRuntimeReplayExport } from '@/services/playgame/runtime/contracts';
 import {
   annotateReplayEventJson,
+  createReplayActorResolver,
   createReplayNameResolver,
   describeReplayFrame,
 } from '@/services/playgame/debug/replayPresentation';
@@ -16,6 +18,7 @@ interface ReplayDrawerProps {
   seed: string;
   frames: readonly ReplayFrame[];
   manifest: Manifest;
+  replay: MatchRuntimeReplayExport;
   selectedFrame: ReplayFrame | null;
   onToggleOpen: () => void;
   onToggleReplay: () => void;
@@ -28,7 +31,8 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   let stopDrag: (() => void) | null = null;
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
   const names = createMemo(() => createReplayNameResolver(props.frames, props.manifest));
-  const selectedDescription = createMemo(() => describeReplayFrame(props.selectedFrame, names()));
+  const actors = createMemo(() => createReplayActorResolver(props.replay));
+  const selectedDescription = createMemo(() => describeReplayFrame(props.selectedFrame, names(), actors()));
 
   const beginDrag = (event: PointerEvent): void => {
     if (event.button !== 0) return;
@@ -94,7 +98,9 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
               <div>
                 <div class="replay-panel__eyebrow">Dev Replay</div>
                 <div class="replay-panel__title">
-                  {props.replayEnabled ? `Frame ${props.frameIndex}/${Math.max(props.frameCount - 1, 0)}` : 'Live State'}
+                  {props.replayEnabled
+                    ? `Frame ${props.frameIndex}/${Math.max(props.frameCount - 1, 0)} · ${selectedDescription().actor}`
+                    : `Live State · ${selectedDescription().actor}`}
                 </div>
               </div>
               <button class="replay-chip" type="button" onClick={() => props.onToggleReplay()}>

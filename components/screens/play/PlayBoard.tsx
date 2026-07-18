@@ -73,12 +73,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
   const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
 
-  const replayTimeline = createMemo(() => {
+  const runtimeReplay = createMemo(() => {
     if (!isDev) return null;
-    // Track committed presentation progress; rendering itself consumes only
-    // the runtime export (bootstrap + genesis + transaction records).
+    // Track committed presentation progress; the export itself remains a
+    // read-only bootstrap + genesis + transaction-record snapshot.
     void engineState.log.length;
-    return renderRuntimeReplay(pg.exportRuntimeReplay(), manifest);
+    return pg.exportRuntimeReplay();
+  });
+  const replayTimeline = createMemo(() => {
+    const replay = runtimeReplay();
+    return replay ? renderRuntimeReplay(replay, manifest) : null;
   });
   const replayFrame = createMemo(() => {
     const timeline = replayTimeline();
@@ -460,6 +464,21 @@ export const PlayBoard = (props: PlayBoardProps) => {
           }}
         />
         <div
+          ref={bindZoneRef(`${remoteSeat}:hand`)}
+          class="hand-anchor hand-anchor--remote"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '64px',
+            width: '70px',
+            height: '100px',
+            transform: 'translateX(-50%)',
+            visibility: 'hidden',
+            'pointer-events': 'none',
+          }}
+        />
+        <div
           ref={bindZoneRef('generated')}
           class="generated-anchor"
           aria-hidden="true"
@@ -486,6 +505,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               seed={engineState.seed}
               frames={timeline().frames}
               manifest={manifest}
+              replay={runtimeReplay()!}
               selectedFrame={replayEnabled() ? replayFrame() : timeline().frames[timeline().frames.length - 1]}
               onToggleOpen={() => setReplayOpen((open) => !open)}
               onToggleReplay={toggleReplayMode}

@@ -4,9 +4,10 @@ import type { EffectRef } from '../engine/types/ability';
 import type { CardId, LocationId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
+import type { MatchRuntimeReplayExport } from '../runtime/contracts';
 
 export interface ReplayNameResolver {
-  cardName: (state: MatchState, id: CardId) => string;
+  cardNameWithOwner: (state: MatchState, id: CardId) => string;
   cardLabel: (state: MatchState, id: CardId) => string;
   cardType: (state: MatchState, id: CardId) => string | undefined;
   locationName: (state: MatchState, id: LocationId) => string;
@@ -14,10 +15,23 @@ export interface ReplayNameResolver {
 }
 
 export interface ReplayFrameDescription {
+  readonly actor: string;
   readonly summary: string;
   readonly cause: string | null;
 }
 
+export interface ReplayActorResolver {
+  actorLabel: (frame: ReplayFrame | null) => string;
+}
+
+const cardLabel = (id: string, name: string | undefined, owner: string | undefined): string => {
+  if (!name) return id;
+  return owner ? `${id} (${name}, ${owner})` : `${id} (${name})`;
+};
+const nameWithOwner = (id: string, name: string | undefined, owner: string | undefined): string => {
+  const resolved = name ?? id;
+  return owner ? `${resolved} (${owner})` : resolved;
+};
 const label = (id: string, name: string | undefined): string => name ? `${id} (${name})` : id;
 
 /**
@@ -30,11 +44,13 @@ export function createReplayNameResolver(
   manifest: Manifest,
 ): ReplayNameResolver {
   const historicalCardDefIds = new Map<string, string>();
+  const historicalCardOwners = new Map<string, string>();
   const historicalLocationDefIds = new Map<string, string>();
 
   for (const frame of frames) {
     for (const card of Object.values(frame.state.cards)) {
       historicalCardDefIds.set(card.id, card.defId);
+      historicalCardOwners.set(card.id, card.owner);
     }
     for (const lane of frame.state.lanes) {
       if (lane.location) historicalLocationDefIds.set(lane.location.id, lane.location.defId);
@@ -50,17 +66,35 @@ export function createReplayNameResolver(
     const defId = current?.defId ?? historicalLocationDefIds.get(id);
     return defId ? manifest.locations[defId] : undefined;
   };
+  const cardOwner = (state: MatchState, id: CardId) => (
+    state.cards[id]?.owner ?? historicalCardOwners.get(id)
+  );
 
   return {
-    cardName: (state, id) => cardDef(state, id)?.name ?? id,
-    cardLabel: (state, id) => label(id, cardDef(state, id)?.name),
+    cardNameWithOwner: (state, id) => nameWithOwner(id, cardDef(state, id)?.name, cardOwner(state, id)),
+    cardLabel: (state, id) => cardLabel(id, cardDef(state, id)?.name, cardOwner(state, id)),
     cardType: (state, id) => cardDef(state, id)?.cardType,
     locationName: (state, id) => locationDef(state, id)?.name ?? id,
     locationLabel: (state, id) => label(id, locationDef(state, id)?.name),
   };
 }
 
-const CARD_ID_FIELDS = new Set(['cardId', 'sourceCardId']);
+/** Resolve a runtime replay frame through its committed transaction identity. */
+export function createReplayActorResolver(replay: MatchRuntimeReplayExport): ReplayActorResolver {
+  const actorByTransaction = new Map(
+    replay.transactions.map((transaction) => [transaction.transactionId, transaction.intent.seat]),
+  );
+  return {
+    actorLabel: (frame) => {
+      if (!frame?.transactionId) return 'SYSTEM';
+      const seat = actorByTransaction.get(frame.transactionId);
+      if (!seat || seat === 'SYSTEM') return 'SYSTEM';
+      return `${seat} (${replay.bootstrap.participants[seat].displayName})`;
+    },
+  };
+}
+
+const CARD_ID_FIELDS = new Set(['cardId', 'sourceCardId', 'targetId', 'newCardId']);
 const LOCATION_ID_FIELDS = new Set(['locationId', 'oldId', 'newId', 'sourceLocationId']);
 
 function displayValue(
@@ -113,7 +147,7 @@ export function describeReplayCause(
   if (!cause) return null;
 
   if (cause.effectKind === 'ON_REVEAL' || cause.effectKind === 'ONGOING') {
-    return `effect of ${names.cardName(frame.state, cause.sourceId as CardId)}`;
+    return `effect of ${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)}`;
   }
   if (cause.effectKind === 'LOCATION') {
     return `effect of ${names.locationName(frame.state, cause.sourceId as LocationId)}`;
@@ -124,7 +158,7 @@ export function describeReplayCause(
     eventCardId === cause.sourceId
     && names.cardType(frame.state, cause.sourceId as CardId) === 'spell'
   ) {
-    return `${names.cardName(frame.state, cause.sourceId as CardId)}: spell resolved — banished by game rules`;
+    return `${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)}: spell resolved — banished by game rules`;
   }
   return cause.systemReason ? `game rules (${cause.systemReason})` : 'game rules';
 }
@@ -132,8 +166,10 @@ export function describeReplayCause(
 export function describeReplayFrame(
   frame: ReplayFrame | null,
   names: ReplayNameResolver,
+  actors: ReplayActorResolver,
 ): ReplayFrameDescription {
-  if (!frame?.event) return { summary: 'Initial seeded state', cause: null };
+  const actor = actors.actorLabel(frame);
+  if (!frame?.event) return { actor, summary: `${actor} · Initial seeded state`, cause: null };
   const event = frame.event;
   const details = Object.entries(event)
     .filter(([key]) => key !== 'type')
@@ -150,7 +186,10 @@ export function describeReplayFrame(
     });
 
   return {
-    summary: details.length > 0 ? `${event.type} · ${details.join(' · ')}` : event.type,
+    actor,
+    summary: details.length > 0
+      ? `${actor} · ${event.type} · ${details.join(' · ')}`
+      : `${actor} · ${event.type}`,
     cause: describeReplayCause(frame, names),
   };
 }
@@ -174,7 +213,7 @@ export function annotateReplayEventJson(
       const [, key, id] = m;
       const name = key === 'locationId'
         ? names.locationName(frame.state, id as LocationId)
-        : names.cardName(frame.state, id as CardId);
+        : names.cardNameWithOwner(frame.state, id as CardId);
       return name && name !== id ? `${line}  // ${name}` : line;
     })
     .join('\n');

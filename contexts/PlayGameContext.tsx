@@ -1,4 +1,5 @@
 import {
+  batch,
   createContext,
   createSignal,
   onCleanup,
@@ -209,16 +210,21 @@ export const PlayGameProvider = (props: {
       undoPendingCard,
       endTurn,
       presentCommittedFrame: (frame) => {
-        if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
-          // Presentation-only lock: staged cards remain mechanically
-          // unrevealed, but the owner was allowed to see their faces while
-          // planning. Lock that facing before the reveal walk advances.
-          setUi('isFlipped', true);
-        }
         const capturedProjection = frame.transactionId === activeProjectedTransactionId
           ? projectedFrameStates.get(frame)
           : undefined;
-        adoptWorkingProjection(frame.after, capturedProjection);
+        // Solid store writes propagate synchronously. Batch the lock and the
+        // committed projection so BoardCard can never observe (and render)
+        // the RESOLVING frame without its presentation-facing lock.
+        batch(() => {
+          if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
+            // Presentation-only lock: staged cards remain mechanically
+            // unrevealed, but the owner was allowed to see their faces while
+            // planning. Lock that facing before the reveal walk advances.
+            setUi('isFlipped', true);
+          }
+          adoptWorkingProjection(frame.after, capturedProjection);
+        });
       },
       finishTurnPresentation: () => {
         // Normal completion is already at the final frame. Cancellation or a

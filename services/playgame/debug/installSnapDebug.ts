@@ -6,6 +6,7 @@ import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
 import {
   createReplayNameResolver,
+  createReplayActorResolver,
   describeReplayFrame,
   type ReplayFrameDescription,
 } from './replayPresentation';
@@ -40,10 +41,15 @@ export function installSnapDebug(
     getReplayTimeline: timeline,
     getFrame: (index) => timeline().frames[index] ?? null,
     getFrameDescription: (index) => {
-      const replay = timeline();
+      const bundle = exportReplay();
+      const replay = renderRuntimeReplay(bundle, manifest);
       const frame = replay.frames[index] ?? null;
       if (!frame) return null;
-      return describeReplayFrame(frame, createReplayNameResolver(replay.frames, manifest));
+      return describeReplayFrame(
+        frame,
+        createReplayNameResolver(replay.frames, manifest),
+        createReplayActorResolver(bundle),
+      );
     },
     copyReplayJson: async () => {
       const json = JSON.stringify(exportReplay(), null, 2);

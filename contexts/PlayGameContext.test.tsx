@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createRenderEffect, createSignal, onMount } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -166,9 +166,17 @@ describe('PlayGameProvider runtime synchronization', () => {
 
   it('locks every staged card face-down at resolution start, then presents reveals in frame order', async () => {
     let pg!: PlayGameContextValue;
+    const facingObservations: Array<{ phase: string; locked: boolean }> = [];
 
     const Probe = () => {
-      onMount(() => { pg = usePlayGame(); });
+      const context = usePlayGame();
+      onMount(() => { pg = context; });
+      createRenderEffect(() => {
+        facingObservations.push({
+          phase: context.engineState.phase,
+          locked: context.ui.isFlipped,
+        });
+      });
       return null;
     };
 
@@ -195,13 +203,16 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(resolutionStartIndex).toBeGreaterThanOrEqual(0);
     const resolutionStart = timeline.frames[resolutionStartIndex]!;
 
+    const observationsBeforeLock = facingObservations.length;
     pg.actions.presentCommittedFrame(resolutionStart);
+    const lockObservations = facingObservations.slice(observationsBeforeLock);
 
     const stagedIds = [...pg.engineState.stagingOrder];
     expect(stagedIds).toContain(localCardId);
     expect(new Set(stagedIds.map((id) => pg.engineState.cards[id]?.owner)))
       .toEqual(new Set(['P0', 'P1']));
     expect(pg.ui.isFlipped, 'local owner-facing presentation lock').toBe(true);
+    expect(lockObservations).toEqual([{ phase: 'RESOLVING', locked: true }]);
     expect(stagedIds.every((id) => pg.engineState.cards[id]?.revealed === false))
       .toBe(true);
 

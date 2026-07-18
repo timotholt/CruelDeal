@@ -230,3 +230,26 @@ server-adapter work; none was started here.
   and `npm run build` (1,186 modules transformed). All passed; focused ESLint,
   `git diff --check`, and the production-bundle debug-global grep also
   passed.
+- Removed the staged-card lock flicker by batching the presentation-only
+  `isFlipped` lock with adoption of the committed
+  `TURN_RESOLUTION_STARTED` projection. Solid observers now see one atomic
+  `{ phase: RESOLVING, locked: true }` update, so `BoardCard` cannot paint an
+  intermediate owner-visible face between the committed fold and the lock.
+  A `createRenderEffect` regression asserts that exact facing boundary.
+- Anchored hidden opponent-hand transfers at the board's top center and added
+  the same opponent-hand-region fallback to `eventAnimator`. Remote
+  `CARD_STAGED` flyers no longer use the neutral board-center fallback when
+  their source hand card has no visible DOM element.
+- Added transaction actor and card ownership to replay presentation. Runtime
+  replay frames retain their transaction id for read-only debug lookup;
+  summaries and the drawer header show `P0 (YOU)`, `P1 (OPPONENT)`, or
+  `SYSTEM` from the committed intent identity and bootstrap display name.
+  Card labels now use `instance (name, owner)`, decoded card causes include
+  the source owner, and event JSON remains raw apart from extended comments
+  such as `// Leon (P1)`. Historical card-owner fallback mirrors historical
+  definition/name resolution.
+- Verified this follow-up with focused presentation/provider Vitest (3 files,
+  10 tests), focused ESLint, and `git diff --check`, plus all requested gates:
+  `npm run test:playgame:phase0` (9 files, 53 tests, 200 property cases),
+  `npx vitest run services/playgame/runtime contexts` (10 files, 57 tests),
+  and `npm run build` (1,186 modules transformed). All passed.

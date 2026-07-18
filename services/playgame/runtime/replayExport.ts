@@ -41,7 +41,12 @@ export function renderRuntimeReplay(
       manifest,
     });
     for (const frame of built.frames) {
-      frames.push({ index: frames.length, event: frame.event, state: frame.after });
+      frames.push({
+        index: frames.length,
+        transactionId: transaction.transactionId,
+        event: frame.event,
+        state: frame.after,
+      });
     }
     state = built.finalState;
     previousRevision = transaction.revision;

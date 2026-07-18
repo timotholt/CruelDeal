@@ -20,6 +20,8 @@ export interface ReplayBundle {
 
 export interface ReplayFrame {
   readonly index: number;
+  /** Present on runtime-record replays so debug UI can resolve the actor. */
+  readonly transactionId?: string;
   readonly event: MatchEvent | null;
   readonly state: MatchState;
 }

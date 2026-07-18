@@ -46,10 +46,16 @@ const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
   return new DOMRect(b.right + 20, b.bottom - h - 40, w, h);
 };
 
-const fallbackRect = (ctx: PlayScriptCtx): DOMRect => {
-  const b = ctx.boardEl.getBoundingClientRect();
+export const fallbackRectForZone = (
+  b: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
+  zone: CardZoneRef,
+  remoteSeat: PlayScriptCtx['remoteSeat'],
+): DOMRect => {
   const w = 70;
   const h = 100;
+  if (zone.kind === 'HAND' && zone.owner === remoteSeat) {
+    return new DOMRect(b.left + b.width / 2 - w / 2, b.top + 16, w, h);
+  }
   return new DOMRect(b.left + b.width / 2 - w / 2, b.top + b.height / 2 - h / 2, w, h);
 };
 
@@ -160,7 +166,7 @@ const rectForZone = (ctx: PlayScriptCtx, zone: CardZoneRef): DOMRect => {
   if (zone.kind === 'DECK' && zone.owner === ctx.localSeat && ctx.deckEl?.isConnected) {
     return ctx.deckEl.getBoundingClientRect();
   }
-  return fallbackRect(ctx);
+  return fallbackRectForZone(ctx.boardEl.getBoundingClientRect(), zone, ctx.remoteSeat);
 };
 
 const rectForTransferEndpoint = (
