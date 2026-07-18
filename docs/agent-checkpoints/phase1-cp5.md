@@ -295,3 +295,4 @@ server-adapter work; none was started here.
   `npx vitest run services/playgame/runtime contexts services/playgame/presentation services/playgame/engine/testkit`
   (16 files, 67 tests), `npm run build` (1,188 modules transformed), and
   `git diff --check`; all requested gates passed.
+- Composed each board card's deterministic resting rotation into reveal and shared card-transfer flight transforms, including nested-wrapper ownership without double rotation; `npx vitest run services/playgame/presentation contexts` (8 files, 16 tests) and `npm run build` (1,189 modules transformed) passed.

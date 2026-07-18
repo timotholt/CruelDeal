@@ -4,6 +4,10 @@ import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
 import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import {
+  cardRestingRotationDegrees,
+  composeCardFlightTransform,
+} from '@/services/vfx/animations/card-resting-transform';
 import { Timeline } from '@/services/vfx/timeline';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
 import { HAND_SLOT_RESERVE_MS } from './handPresentation';
@@ -234,6 +238,7 @@ type PreparedTransfer = {
   sourceRect: DOMRect;
   sourceEl: HTMLElement | null;
   sourceVisibility: string | null;
+  sourceRotationDegrees: number;
 };
 
 const placeFlyerAtRect = (ctx: PlayScriptCtx, flyer: HTMLElement, rect: DOMRect): void => {
@@ -260,15 +265,21 @@ const prepareTransferBeforeDispatch = (
   const source = rectForTransferEndpoint(ctx, transfer, transfer.from, capturedCardRects, 'from');
   const sourceEl = ctx.cardRefs.get(transfer.cardId as string) ?? source.el;
   const flyer = cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? sourceEl ?? null, null);
+  const sourceRotationDegrees = cardRestingRotationDegrees(sourceEl);
   flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
-  flyer.style.transform = `scale(${transfer.style.scale.from})`;
+  flyer.style.transform = composeCardFlightTransform(
+    flyer,
+    sourceRotationDegrees,
+    null,
+    String(transfer.style.scale.from),
+  );
   placeFlyerAtRect(ctx, flyer, source.rect);
   ctx.boardWrap.appendChild(flyer);
 
   const sourceVisibility = sourceEl?.style.visibility ?? null;
   if (sourceEl) sourceEl.style.visibility = 'hidden';
 
-  return { transfer, flyer, sourceRect: source.rect, sourceEl, sourceVisibility };
+  return { transfer, flyer, sourceRect: source.rect, sourceEl, sourceVisibility, sourceRotationDegrees };
 };
 
 const restorePreparedSource = (prepared: PreparedTransfer | null): void => {
@@ -322,10 +333,18 @@ const animateOneTransfer = async (
 
   const boardRect = ctx.boardWrap.getBoundingClientRect();
   const flyer = prepared?.flyer ?? cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? source.el, destination.el);
+  const sourceRotationDegrees = prepared?.sourceRotationDegrees
+    ?? cardRestingRotationDegrees(source.el);
+  const destinationRotationDegrees = cardRestingRotationDegrees(destination.el);
   if (!prepared) {
     placeFlyerAtRect(ctx, flyer, source.rect);
     flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
-    flyer.style.transform = `scale(${transfer.style.scale.from})`;
+    flyer.style.transform = composeCardFlightTransform(
+      flyer,
+      sourceRotationDegrees,
+      null,
+      String(transfer.style.scale.from),
+    );
     ctx.boardWrap.appendChild(flyer);
   }
 
@@ -344,7 +363,12 @@ const animateOneTransfer = async (
   flyer.style.top = destination.rect.top - boardRect.top + 'px';
   flyer.style.width = destination.rect.width + 'px';
   flyer.style.height = destination.rect.height + 'px';
-  flyer.style.transform = `scale(${transfer.style.scale.to})`;
+  flyer.style.transform = composeCardFlightTransform(
+    flyer,
+    destinationRotationDegrees,
+    null,
+    String(transfer.style.scale.to),
+  );
   flyer.style.opacity = transfer.style.opacity === 'fadeOut' ? '0' : '1';
 
   await wait(transfer.style.durationMs + 30);

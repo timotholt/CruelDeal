@@ -69,6 +69,8 @@ describe('event animator transfer origins', () => {
       const cardEl = document.createElement('div');
       cardEl.className = 'card lane-card';
       cardEl.dataset.cardId = cardId;
+      cardEl.dataset.cardRestingRotation = '1.7deg';
+      cardEl.style.setProperty('--card-tilt', '1.7deg');
       let adopted = false;
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
       boardEl.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
@@ -109,6 +111,11 @@ describe('event animator transfer origins', () => {
           calls.push(`transfer:${transfer.reason}:${transfer.from.kind}->${transfer.to.kind}`);
         },
       });
+      expect((document.querySelector('.transfer-flyer') as HTMLElement).style.transform)
+        .toBe('rotate(1.7deg) scale(1)');
+      await vi.advanceTimersByTimeAsync(20);
+      expect((document.querySelector('.transfer-flyer') as HTMLElement).style.transform)
+        .toBe('rotate(1.7deg) scale(1)');
       await vi.runAllTimersAsync();
       await animation;
 

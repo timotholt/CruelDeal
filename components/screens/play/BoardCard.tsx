@@ -130,6 +130,7 @@ export const BoardCard = (props: BoardCardProps) => {
         (props.card.textDisabled ? ' text-disabled' : '')
       }
       data-card-id={props.card.id}
+      data-card-resting-rotation={tilt()}
       draggable={isDraggablePending()}
       style={{
         '--card-tilt': tilt(),

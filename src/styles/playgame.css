@@ -1522,9 +1522,9 @@
 
   /* Timeline primitives — applied directly to card elements by Timeline.play() */
   @keyframes vfx-pop-anim {
-    0%   { transform: scale(var(--vfx-scale-start, 0)); opacity: 0; }
-    60%  { transform: scale(1.08); opacity: 1; }
-    100% { transform: scale(1); opacity: 1; }
+    0%   { scale: var(--vfx-scale-start, 0); opacity: 0; }
+    60%  { scale: 1.08; opacity: 1; }
+    100% { scale: 1; opacity: 1; }
   }
   @keyframes vfx-flash-anim {
     0%, 100% { filter: none; }

@@ -11,7 +11,8 @@
  *                    un-hide it, discard the clone.
  *
  * Gotchas (kept for port fidelity):
- *  - Start and target transforms use the SAME `translate(...) scale(X, Y)`
+ *  - Start and target transforms use the SAME
+ *    `translate(...) rotate(...) scale(X, Y)`
  *    function list, otherwise CSS falls back to matrix interpolation and
  *    the grow reads as a pop to the target.
  *  - After appending the wrapper we force a reflow (`void wrapper.offsetWidth`)
@@ -22,6 +23,11 @@
  *
  * Ported from ccg/vfx-engine/project/ui/animations/reveal-cinematic.js.
  */
+
+import {
+  cardRestingRotationDegrees,
+  composeCardFlightTransform,
+} from './card-resting-transform';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -63,19 +69,26 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
     'transform-origin: center center',
     'pointer-events: none',
     'z-index: 200',
-    // Thin vertical sliver. Same function list as Phase 1 target.
-    'transform: translate(0px, 0px) scale(0.02, 1)',
   ].join(';');
 
   const clone = el.cloneNode(true) as HTMLElement;
   clone.classList.remove('facedown', 'pending');
   clone.style.visibility = '';
   clone.style.margin = '0';
-  clone.style.transform = 'none';
+  // Let the clone's own resting transform apply. When the rotation lives on
+  // an ancestor outside the cloned subtree, the wrapper composes it below.
+  clone.style.removeProperty('transform');
   clone.querySelectorAll<HTMLElement>('.name, .type, .cost, .power, .bar').forEach((n) => {
     n.style.visibility = '';
   });
   wrapper.appendChild(clone);
+  const restingRotation = cardRestingRotationDegrees(el);
+  const flightTransform = (translate: string, scale: string): string => (
+    composeCardFlightTransform(wrapper, restingRotation, translate, scale)
+  );
+  // Thin vertical sliver. Every phase keeps the same function list so the
+  // resting angle is part of the flight rather than appearing after landing.
+  wrapper.style.transform = flightTransform('0px, 0px', '0.02, 1');
   boardWrap.appendChild(wrapper);
 
   // Hide the real slot card for the duration of the reveal.
@@ -90,7 +103,7 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
 
   // Phase 1 — grow + move to center.
   wrapper.style.transition = 'transform 350ms cubic-bezier(.2,.8,.3,1)';
-  wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(2.2, 2.2)`;
+  wrapper.style.transform = flightTransform(`${dx}px, ${dy}px`, '2.2, 2.2');
   await wait(380);
 
   // Phase 2 — hold so the player can read the card.
@@ -98,7 +111,7 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
 
   // Phase 3 — shrink back to slot. Same function list.
   wrapper.style.transition = 'transform 320ms cubic-bezier(.4,0,.2,1)';
-  wrapper.style.transform = 'translate(0px, 0px) scale(1, 1)';
+  wrapper.style.transform = flightTransform('0px, 0px', '1, 1');
   await wait(340);
 
   // Finalize — reveal the real slot card (now face-up), discard the clone.
