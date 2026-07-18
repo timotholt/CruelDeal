@@ -7,8 +7,8 @@
  *                    center of the board at ~2.2x scale (reads as a flip + zoom).
  *   Phase 2 (350ms): hold at center so the player can read the card.
  *   Phase 3 (320ms): clone shrinks back to the slot position.
- *   Finalize:        strip `.facedown` / `.pending` from the real slot card,
- *                    un-hide it, discard the clone.
+ *   Finalize:        adopt the renderer-owned face-up frame and perform the
+ *                    governed handoff to the canonical card.
  *
  * Gotchas (kept for port fidelity):
  *  - Start and target transforms use the SAME
@@ -24,11 +24,12 @@
  * Ported from ccg/vfx-engine/project/ui/animations/reveal-cinematic.js.
  */
 
-import {
-  cardRestingRotationDegrees,
-  composeCardFlightTransform,
-} from './card-resting-transform';
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+import type { CardId } from '@/services/playgame/engine/types/ids';
+import {
+  captureCardVisual,
+  type LogicalCardEndpoint,
+} from '@/services/playgame/presentation/cardMotion';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -37,103 +38,71 @@ export interface RevealCinematicOpts {
   cardElMap: Map<string, HTMLElement>;
   motionSurface: PlayMotionSurface;
   sfx?: (name: string) => void;
+  /** Commits the renderer-owned face-up canonical frame before handoff. */
+  adoptCanonicalFace?: () => void;
 }
 
 export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<void> {
-  const { cardId, cardElMap, motionSurface, sfx } = opts;
+  const { cardId, cardElMap, motionSurface, sfx, adoptCanonicalFace } = opts;
   const el = cardElMap.get(cardId);
-  if (!el) return;
+  if (!el?.isConnected) return;
 
-  const boardRect = motionSurface.frameRect();
-  const slotRect = el.getBoundingClientRect();
-  const computedStyle = getComputedStyle(el);
-  const computedWidth = Number.parseFloat(computedStyle.width);
-  const computedHeight = Number.parseFloat(computedStyle.height);
-  const cardWidth = computedWidth > 0
-    ? computedWidth
-    : el.offsetWidth || slotRect.width;
-  const cardHeight = computedHeight > 0
-    ? computedHeight
-    : el.offsetHeight || slotRect.height;
-
-  // getBoundingClientRect() is the axis-aligned box around the already-tilted
-  // card. Reusing that enlarged box as the flyer's layout box makes its final
-  // rotated frame differ from the real card by a few pixels. Restore the
-  // untransformed card dimensions around the exact same visual center.
-  const slotCenterX = slotRect.left - boardRect.left + slotRect.width / 2;
-  const slotCenterY = slotRect.top - boardRect.top + slotRect.height / 2;
-  const startLeft = slotCenterX - cardWidth / 2;
-  const startTop = slotCenterY - cardHeight / 2;
-  const boardCenterX = boardRect.width / 2;
-  const boardCenterY = boardRect.height / 2;
-  const dx = boardCenterX - slotCenterX;
-  const dy = boardCenterY - slotCenterY;
-
-  // Build the flyer without `.lane-slots`: that class owns the 2×2 grid and
-  // lane padding, neither of which belongs to a single flying card.
-  const wrapper = document.createElement('div');
-  wrapper.className = 'reveal-flyer';
-  wrapper.style.cssText = [
-    'position: absolute',
-    `left: ${startLeft}px`,
-    `top: ${startTop}px`,
-    `width: ${cardWidth}px`,
-    `height: ${cardHeight}px`,
-    'transform-origin: center center',
-    'pointer-events: none',
-    'z-index: 200',
-  ].join(';');
-
-  const clone = el.cloneNode(true) as HTMLElement;
-  clone.classList.remove('facedown', 'pending');
-  clone.style.visibility = '';
-  clone.style.margin = '0';
-  // Let the clone's own resting transform apply. When the rotation lives on
-  // an ancestor outside the cloned subtree, the wrapper composes it below.
-  clone.style.removeProperty('transform');
-  clone.querySelectorAll<HTMLElement>('.name, .type, .cost, .power, .bar').forEach((n) => {
-    n.style.visibility = '';
+  const typedCardId = cardId as CardId;
+  const snapshot = captureCardVisual(typedCardId, el);
+  const session = motionSurface.cardMotion.begin({
+    cardId: typedCardId,
+    route: 'reveal',
+    basis: { kind: 'clone', snapshot },
+    startRect: snapshot.rect,
+    rotationDegrees: snapshot.rotationDegrees,
+    face: 'faceUp',
+    sourceElement: el,
+    zIndex: 200,
+    className: 'reveal-flyer',
   });
-  wrapper.appendChild(clone);
-  const restingRotation = cardRestingRotationDegrees(el);
-  const flightTransform = (translate: string, scale: string): string => (
-    composeCardFlightTransform(wrapper, restingRotation, translate, scale)
+  const boardRect = motionSurface.frameRect();
+  const centerRect = new DOMRect(
+    boardRect.left + boardRect.width / 2 - snapshot.rect.width / 2,
+    boardRect.top + boardRect.height / 2 - snapshot.rect.height / 2,
+    snapshot.rect.width,
+    snapshot.rect.height,
   );
-  // Thin vertical sliver. Every phase keeps the same function list so the
-  // resting angle is part of the flight rather than appearing after landing.
-  wrapper.style.transform = flightTransform('0px, 0px', '0.02, 1');
-  const unmountWrapper = motionSurface.mountTemporary(wrapper);
-
-  // Hide the real slot card for the duration of the reveal.
-  el.style.visibility = 'hidden';
+  const centerEndpoint: LogicalCardEndpoint = {
+    rect: centerRect,
+    rotationDegrees: snapshot.rotationDegrees,
+    face: 'faceUp',
+  };
 
   sfx?.('reveal');
 
-  // Force a reflow so the wrapper's INITIAL transform commits before we
-  // apply the transition + target transform. `rAF` alone fires BEFORE paint
-  // and is not sufficient.
-  void wrapper.offsetWidth;
-
   // Phase 1 — grow + move to center.
-  wrapper.style.transition = 'transform 350ms cubic-bezier(.2,.8,.3,1)';
-  wrapper.style.transform = flightTransform(`${dx}px, ${dy}px`, '2.2, 2.2');
-  await wait(380);
+  const centerResult = await session.animateTo(centerEndpoint, {
+    durationMs: 350,
+    easing: 'cubic-bezier(.2,.8,.3,1)',
+    scaleFrom: 0.02,
+    scaleTo: 2.2,
+    faceAtLanding: 'faceUp',
+  });
+  if (centerResult) return;
 
   // Phase 2 — hold so the player can read the card.
   await wait(350);
 
-  // Phase 3 — shrink back to slot. Same function list.
-  wrapper.style.transition = 'transform 320ms cubic-bezier(.4,0,.2,1)';
-  wrapper.style.transform = flightTransform('0px, 0px', '1, 1');
-  await wait(340);
-
-  // Finalize — reveal the real slot card (now face-up), discard the clone.
-  el.classList.remove('facedown', 'pending');
-  el.querySelectorAll<HTMLElement>('.name, .type, .cost, .power, .bar').forEach((n) => {
-    n.style.visibility = '';
+  // Phase 3 — return to the current canonical layout box.
+  const endpoint = motionSurface.cardMotion.endpoint(typedCardId);
+  const returnResult = await session.animateTo(endpoint, {
+    durationMs: 320,
+    easing: 'cubic-bezier(.4,0,.2,1)',
+    scaleFrom: 2.2,
+    scaleTo: 1,
+    faceAtLanding: 'faceUp',
   });
-  el.style.visibility = '';
-  unmountWrapper();
+  if (returnResult) return;
+
+  // Renderer state—not animation code—owns the canonical face.
+  adoptCanonicalFace?.();
+  await Promise.resolve();
+  await session.handoffTo(endpoint);
 }
 
 export interface RevealPendingCinematicOpts {
@@ -141,6 +110,7 @@ export interface RevealPendingCinematicOpts {
   cardElMap: Map<string, HTMLElement>;
   motionSurface: PlayMotionSurface;
   sfx?: (name: string) => void;
+  adoptCanonicalFace?: (id: string) => void;
   /**
    * Invoked after each card finishes its flip cinematic. The loop awaits
    * whatever the callback returns, so callers can inject per-card follow-
@@ -151,10 +121,16 @@ export interface RevealPendingCinematicOpts {
 }
 
 export async function revealPendingCinematic(opts: RevealPendingCinematicOpts): Promise<void> {
-  const { pendingIds, cardElMap, motionSurface, sfx, onRevealed } = opts;
+  const { pendingIds, cardElMap, motionSurface, sfx, adoptCanonicalFace, onRevealed } = opts;
   if (!pendingIds.length) return;
   for (const id of pendingIds) {
-    await revealCardCinematic({ cardId: id, cardElMap, motionSurface, sfx });
+    await revealCardCinematic({
+      cardId: id,
+      cardElMap,
+      motionSurface,
+      sfx,
+      adoptCanonicalFace: () => adoptCanonicalFace?.(id),
+    });
     await onRevealed?.(id);
   }
 }

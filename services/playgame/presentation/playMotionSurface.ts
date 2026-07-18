@@ -1,4 +1,8 @@
 import type { ZoneAnchorKey } from './cardTransfers';
+import {
+  createCardMotionScope,
+  type CardMotionScope,
+} from './cardMotion';
 
 /**
  * The one coordinate system used by every temporary /play animation.
@@ -12,11 +16,13 @@ export interface PlayMotionSurface {
   readonly overlay: HTMLElement;
   readonly cardRefs: Map<string, HTMLElement>;
   readonly zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
+  readonly cardMotion: CardMotionScope;
   frameRect: () => DOMRect;
   toLocalRect: (viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>) => DOMRect;
   cardRect: (cardId: string) => DOMRect | null;
   zoneRect: (key: ZoneAnchorKey) => DOMRect | null;
   mountTemporary: (element: HTMLElement) => () => void;
+  dispose: () => void;
 }
 
 interface CreatePlayMotionSurfaceOptions {
@@ -29,6 +35,8 @@ interface CreatePlayMotionSurfaceOptions {
 export const createPlayMotionSurface = (
   options: CreatePlayMotionSurfaceOptions,
 ): PlayMotionSurface => {
+  const temporaryElements = new Set<HTMLElement>();
+  let disposed = false;
   const frameRect = (): DOMRect => options.frame.getBoundingClientRect();
   const toLocalRect = (
     viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
@@ -45,18 +53,41 @@ export const createPlayMotionSurface = (
     element?.isConnected ? element.getBoundingClientRect() : null
   );
 
-  return {
+  const mountTemporary = (element: HTMLElement): (() => void) => {
+    if (disposed) return () => element.remove();
+    options.overlay.appendChild(element);
+    temporaryElements.add(element);
+    let mounted = true;
+    return () => {
+      if (!mounted) return;
+      mounted = false;
+      temporaryElements.delete(element);
+      element.remove();
+    };
+  };
+  const cardMotion = createCardMotionScope({
+    cardRefs: options.cardRefs,
+    toLocalRect,
+    mountTemporary,
+  });
+  const surface: PlayMotionSurface = {
     frame: options.frame,
     overlay: options.overlay,
     cardRefs: options.cardRefs,
     zoneRefs: options.zoneRefs,
+    cardMotion,
     frameRect,
     toLocalRect,
     cardRect: (cardId) => connectedRect(options.cardRefs.get(cardId)),
     zoneRect: (key) => connectedRect(options.zoneRefs.get(key)),
-    mountTemporary: (element) => {
-      options.overlay.appendChild(element);
-      return () => element.remove();
+    mountTemporary,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      cardMotion.dispose();
+      for (const element of [...temporaryElements]) element.remove();
+      temporaryElements.clear();
     },
   };
+  return surface;
 };

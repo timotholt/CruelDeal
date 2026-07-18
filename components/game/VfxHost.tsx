@@ -99,6 +99,7 @@ export const VfxHost = (props: VfxHostProps) => {
     onCleanup(() => {
       clearInterval(tickInterval);
       cardVfxRegistry.clearAll('screen-unmounted');
+      motionSurface()?.dispose();
       eng.destroy();
       setEngine(null);
       setBoard(null);

@@ -128,11 +128,13 @@ describe('event animator transfer origins', () => {
           calls.push(`transfer:${transfer.reason}:${transfer.from.kind}->${transfer.to.kind}`);
         },
       });
-      expect((document.querySelector('.transfer-flyer') as HTMLElement).style.transform)
-        .toBe('rotate(1.7deg) scale(1)');
+      const transferSession = document.querySelector('.transfer-flyer') as HTMLElement;
+      expect(transferSession.dataset.cardMotionSession).toBeTruthy();
+      expect(transferSession.style.transform).toBe('');
+      expect((transferSession.querySelector('.card-motion-resting-shell') as HTMLElement).style.transform)
+        .toBe('rotate(1.7deg)');
       await vi.advanceTimersByTimeAsync(20);
-      expect((document.querySelector('.transfer-flyer') as HTMLElement).style.transform)
-        .toBe('rotate(1.7deg) scale(1)');
+      expect(document.querySelectorAll('.transfer-flyer')).toHaveLength(1);
       await vi.runAllTimersAsync();
       await animation;
 
@@ -142,6 +144,116 @@ describe('event animator transfer origins', () => {
       ]);
       expect(cardEl.style.visibility).toBe('');
       expect(document.querySelector('.transfer-flyer')).toBeNull();
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hands a protected remote play to its facedown destination without a landing flash', async () => {
+    vi.useFakeTimers();
+    try {
+      let before = createInitialMatchState('remote-stage-handoff', BOOTSTRAP_MANIFEST);
+      const cardId = before.deck.P1[0].id;
+      before = apply(before, {
+        type: 'CARD_DRAWN',
+        owner: 'P1',
+        cardId,
+        toHand: true,
+      }, BOOTSTRAP_MANIFEST);
+      const event = {
+        type: 'CARD_STAGED' as const,
+        intentId: 'remote-stage',
+        owner: 'P1' as const,
+        cardId,
+        lane: 1 as LaneId,
+        cost: 1,
+      };
+      const after = apply(before, event, BOOTSTRAP_MANIFEST);
+      const framedEvent = {
+        frame: after.log[after.log.length - 1].frame,
+        scope: after.log[after.log.length - 1].scope,
+        event,
+      };
+      const frame: EventTransition = {
+        transactionId: 'remote-stage-handoff:tx',
+        index: 0,
+        framedEvent,
+        frame: framedEvent.frame,
+        scope: framedEvent.scope,
+        event,
+        before,
+        after,
+      };
+
+      const boardWrap = document.createElement('div');
+      const boardEl = document.createElement('div');
+      const overlay = document.createElement('div');
+      const toastArea = document.createElement('div');
+      const remoteHand = document.createElement('div');
+      const destination = document.createElement('div');
+      destination.className = 'card lane-card enemy facedown pending';
+      destination.dataset.cardId = cardId;
+      destination.textContent = 'PROTECTED CARD IDENTITY';
+      boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+      remoteHand.getBoundingClientRect = () => new DOMRect(180, 20, 70, 100);
+      destination.getBoundingClientRect = () => new DOMRect(180, 220, 70, 100);
+      boardWrap.append(boardEl, toastArea, remoteHand, overlay);
+      document.body.append(boardWrap);
+
+      const cardRefs = new Map<string, HTMLElement>();
+      const zoneRefs = new Map([['P1:hand' as const, remoteHand]]);
+      const motionSurface = createPlayMotionSurface({
+        frame: boardWrap,
+        overlay,
+        cardRefs,
+        zoneRefs,
+      });
+      const ctx = {
+        state: before,
+        ui: {
+          handReservations: [],
+          history: [],
+          isFlipped: true,
+          lockedResult: null,
+          showEndGamePrompt: false,
+        },
+        setUi: vi.fn(),
+        manifest: BOOTSTRAP_MANIFEST,
+        localSeat: 'P0',
+        remoteSeat: 'P1',
+        boardEl,
+        motionSurface,
+        toastArea,
+        cardRefs,
+        zoneRefs,
+        presentCommittedFrame: vi.fn(),
+        finishTurnPresentation: vi.fn(),
+      } as unknown as PlayScriptCtx;
+
+      const animation = animateEvent(ctx, frame, () => {
+        boardEl.append(destination);
+        cardRefs.set(cardId, destination);
+      });
+      const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
+      expect(surrogate).not.toBeNull();
+      expect(surrogate.querySelector('.card-motion-synthetic-back')).not.toBeNull();
+      expect(surrogate.textContent).not.toContain('PROTECTED CARD IDENTITY');
+      expect(destination.style.visibility).toBe('hidden');
+      expect(destination.classList.contains('vfx-pop')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(300);
+      expect(surrogate.isConnected).toBe(true);
+      expect(destination.style.visibility).toBe('hidden');
+
+      await vi.runAllTimersAsync();
+      await animation;
+      expect(destination.style.visibility).toBe('');
+      expect(destination.classList.contains('vfx-pop')).toBe(false);
+      expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
     } finally {
       vi.useRealTimers();
     }

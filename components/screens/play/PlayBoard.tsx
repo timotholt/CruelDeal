@@ -237,7 +237,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
       presentCommittedFrame: actions.presentCommittedFrame,
       finishTurnPresentation: actions.finishTurnPresentation,
     };
-    ctx.onCancel = () => releaseAllHandSlots(ctx);
+    ctx.onCancel = () => {
+      releaseAllHandSlots(ctx);
+      ctx.motionSurface.cardMotion.cancelAll('presentation-invalidated');
+    };
     script = createScript(ctx);
     void script.run(openingSequence(openingTimeline));
     onCleanup(() => script?.cancel());

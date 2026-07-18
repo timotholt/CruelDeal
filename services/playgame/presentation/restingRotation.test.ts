@@ -53,22 +53,28 @@ describe('card resting rotation composition', () => {
         cardId: 'rotated-card',
         cardElMap,
         motionSurface,
+        adoptCanonicalFace: () => {
+          card.classList.remove('facedown', 'pending');
+        },
       });
       const wrapper = overlay.querySelector('.reveal-flyer') as HTMLElement;
       const clone = wrapper.querySelector('.lane-card') as HTMLElement;
+      const restingShell = wrapper.querySelector('.card-motion-resting-shell') as HTMLElement;
 
       expect(wrapper.classList.contains('lane-slots')).toBe(false);
-      expect(wrapper.style.left).toBe('100px');
-      expect(wrapper.style.top).toBe('240px');
+      expect(wrapper.style.left).toBe('265px');
+      expect(wrapper.style.top).toBe('350px');
       expect(wrapper.style.width).toBe('70px');
       expect(wrapper.style.height).toBe('100px');
-      expect(clone.style.transform).toBe('');
-      expect(wrapper.style.transform).toContain('rotate(0deg)');
+      expect(clone.style.transform).toContain('scale(2.2)');
+      expect(restingShell.style.transform).toBe('rotate(-1.8deg)');
+      expect(wrapper.style.transform).toBe('');
 
       await vi.advanceTimersByTimeAsync(730);
 
-      expect(wrapper.style.transform)
-        .toBe('translate(0px, 0px) rotate(0deg) scale(1, 1)');
+      expect(wrapper.style.left).toBe('100px');
+      expect(wrapper.style.top).toBe('240px');
+      expect(restingShell.style.transform).toBe('rotate(-1.8deg)');
 
       await vi.runAllTimersAsync();
       await animation;

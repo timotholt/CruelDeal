@@ -155,6 +155,7 @@ const paceFrame = async (
       cardElMap: c.cardRefs,
       motionSurface: c.motionSurface,
       sfx: c.sfx,
+      adoptCanonicalFace: presentFrame,
     });
   }
   await animateEvent(c, frame, presentFrame);
@@ -200,7 +201,12 @@ const paceTimeline = async (
       // late continuation from replaying this older projection out of order.
       presentFrame();
       acceptingAnimationDispatch = false;
-      if (outcome !== 'completed') releaseAllHandSlots(c);
+      if (outcome !== 'completed') {
+        c.motionSurface?.cardMotion.cancelAll(
+          outcome === 'timed-out' ? 'presentation-timeout' : 'presentation-invalidated',
+        );
+        releaseAllHandSlots(c);
+      }
     }
   } finally {
     // A completed, failed, or cancelled presentation cannot permanently

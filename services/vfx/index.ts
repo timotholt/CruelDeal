@@ -26,9 +26,6 @@ export type { VfxTheme, EasingFn, QualityLevel, ShakeConfig } from './theme';
 
 export { vfxSfx } from './sfx';
 
-export { flyFaceDownToSlot } from './animations/fly-face-down';
-export type { FlyFaceDownOpts, StartRect } from './animations/fly-face-down';
-
 export { revealCardCinematic, revealPendingCinematic } from './animations/reveal-cinematic';
 export type {
   RevealCinematicOpts,

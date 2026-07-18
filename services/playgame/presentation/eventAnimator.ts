@@ -2,44 +2,27 @@ import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
-import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
-import {
-  cardRestingRotationDegrees,
-  composeCardFlightTransform,
-} from '@/services/vfx/animations/card-resting-transform';
 import { Timeline } from '@/services/vfx/timeline';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
 import { HAND_SLOT_RESERVE_MS } from './handPresentation';
-import { withHandReservations } from './handReservations';
+import { releaseHandSlots, withHandReservations } from './handReservations';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardId } from '../engine/types/ids';
 import {
+  canonicalVisualElement,
+  captureCardVisual,
+  type CardMotionSession,
+  type SurrogateBasis,
+} from './cardMotion';
+import {
   assertTransferCoverage,
   deriveCardTransfers,
-  isVisibleZone,
   zoneAnchorKey,
   type CardTransfer,
   type CardZoneRef,
 } from './cardTransfers';
 
-const nextFrame = (timeoutMs = 100): Promise<void> => new Promise((resolve) => {
-  let settled = false;
-  let frameId: number | undefined;
-  const finish = (): void => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timeoutId);
-    if (frameId !== undefined) cancelAnimationFrame(frameId);
-    resolve();
-  };
-  const timeoutId = setTimeout(finish, timeoutMs);
-  try {
-    frameId = requestAnimationFrame(finish);
-  } catch {
-    finish();
-  }
-});
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
@@ -64,14 +47,6 @@ export const fallbackRectForZone = (
 };
 
 const cardIdsWithRefs = (ctx: PlayScriptCtx): string[] => [...ctx.cardRefs.keys()];
-
-const cloneCurrentCardElements = (ctx: PlayScriptCtx): Map<string, HTMLElement> => {
-  const clones = new Map<string, HTMLElement>();
-  for (const [id, el] of ctx.cardRefs) {
-    if (el.isConnected) clones.set(id, el.cloneNode(true) as HTMLElement);
-  }
-  return clones;
-};
 
 const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['timing']): void => {
   if (!ctx.sfx) return;
@@ -200,60 +175,32 @@ const rectForTransferEndpoint = (
   capturedCardRects: Map<string, DOMRect>,
   endpoint: 'from' | 'to',
 ): { rect: DOMRect; el: HTMLElement | null; visibleCard: boolean } => {
+  const isCanonicalCardZone = zone.kind === 'LANE'
+    || (zone.kind === 'HAND' && zone.owner === ctx.localSeat);
   const captured = capturedCardRects.get(transfer.cardId as string);
-  if (endpoint === 'from' && captured && isVisibleZone(zone)) {
+  if (endpoint === 'from' && captured && isCanonicalCardZone) {
     return { rect: captured, el: null, visibleCard: true };
   }
-  const el = isVisibleZone(zone) ? ctx.cardRefs.get(transfer.cardId as string) ?? null : null;
-  const registeredRect = isVisibleZone(zone)
+  const el = isCanonicalCardZone ? ctx.cardRefs.get(transfer.cardId as string) ?? null : null;
+  const registeredRect = isCanonicalCardZone
     ? ctx.motionSurface.cardRect(transfer.cardId as string)
     : null;
   if (el && registeredRect) return { rect: registeredRect, el, visibleCard: true };
-  if (captured && isVisibleZone(zone)) return { rect: captured, el: null, visibleCard: true };
+  if (captured && isCanonicalCardZone) return { rect: captured, el: null, visibleCard: true };
   return { rect: rectForZone(ctx, zone), el: null, visibleCard: false };
-};
-
-const cloneForTransfer = (
-  transfer: CardTransfer,
-  sourceEl: HTMLElement | null,
-  destinationEl: HTMLElement | null,
-): HTMLElement => {
-  const basis = sourceEl ?? destinationEl;
-  const flyer = basis
-    ? (basis.cloneNode(true) as HTMLElement)
-    : document.createElement('div');
-  if (!basis) flyer.className = 'card transfer-flyer-card facedown';
-  flyer.classList.add('transfer-flyer');
-  flyer.removeAttribute('ref');
-  flyer.removeAttribute('draggable');
-  flyer.style.pointerEvents = 'none';
-  flyer.style.position = 'absolute';
-  flyer.style.margin = '0';
-  flyer.style.zIndex = String(transfer.style.zIndex);
-  flyer.style.willChange = 'left, top, width, height, transform, opacity';
-  if (transfer.face === 'faceDown') flyer.classList.add('facedown');
-  return flyer;
 };
 
 type PreparedTransfer = {
   transfer: CardTransfer;
-  flyer: HTMLElement;
-  sourceRect: DOMRect;
-  sourceEl: HTMLElement | null;
-  sourceVisibility: string | null;
-  sourceRotationDegrees: number;
+  session: CardMotionSession;
 };
 
-const placeFlyerAtRect = (ctx: PlayScriptCtx, flyer: HTMLElement, rect: DOMRect): void => {
-  const localRect = ctx.motionSurface.toLocalRect(rect);
-  flyer.style.left = localRect.left + 'px';
-  flyer.style.top = localRect.top + 'px';
-  flyer.style.width = localRect.width + 'px';
-  flyer.style.height = localRect.height + 'px';
-};
-
-const shouldPrepareSourceBeforeDispatch = (transfer: CardTransfer): boolean => (
-  isVisibleZone(transfer.from)
+const shouldPrepareSourceBeforeDispatch = (
+  ctx: PlayScriptCtx,
+  transfer: CardTransfer,
+): boolean => (
+  (transfer.from.kind === 'LANE'
+    || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.localSeat))
   && transfer.style.route !== 'layout-only'
   && !(transfer.from.kind === 'DECK' && transfer.to.kind === 'HAND')
 );
@@ -262,60 +209,54 @@ const prepareTransferBeforeDispatch = (
   ctx: PlayScriptCtx,
   transfer: CardTransfer,
   capturedCardRects: Map<string, DOMRect>,
-  capturedCardClones: Map<string, HTMLElement>,
 ): PreparedTransfer | null => {
-  if (!shouldPrepareSourceBeforeDispatch(transfer)) return null;
+  if (!shouldPrepareSourceBeforeDispatch(ctx, transfer)) return null;
   const source = rectForTransferEndpoint(ctx, transfer, transfer.from, capturedCardRects, 'from');
-  const sourceEl = ctx.cardRefs.get(transfer.cardId as string) ?? source.el;
-  const flyer = cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? sourceEl ?? null, null);
-  const sourceRotationDegrees = cardRestingRotationDegrees(sourceEl);
-  flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
-  flyer.style.transform = composeCardFlightTransform(
-    flyer,
-    sourceRotationDegrees,
-    null,
-    String(transfer.style.scale.from),
+  const sourceEl = canonicalVisualElement(
+    ctx.cardRefs.get(transfer.cardId as string) ?? source.el,
   );
-  placeFlyerAtRect(ctx, flyer, source.rect);
-  ctx.motionSurface.mountTemporary(flyer);
-
-  const sourceVisibility = sourceEl?.style.visibility ?? null;
-  if (sourceEl) sourceEl.style.visibility = 'hidden';
-
-  return { transfer, flyer, sourceRect: source.rect, sourceEl, sourceVisibility, sourceRotationDegrees };
+  if (!sourceEl?.isConnected) return null;
+  const snapshot = captureCardVisual(transfer.cardId, sourceEl);
+  const session = ctx.motionSurface.cardMotion.begin({
+    cardId: transfer.cardId,
+    route: `${transfer.from.kind}->${transfer.to.kind}`,
+    basis: { kind: 'clone', snapshot },
+    startRect: snapshot.rect,
+    rotationDegrees: snapshot.rotationDegrees,
+    face: snapshot.face,
+    sourceElement: sourceEl,
+    zIndex: transfer.style.zIndex,
+    className: 'transfer-flyer',
+  });
+  return { transfer, session };
 };
 
-const restorePreparedSource = (prepared: PreparedTransfer | null): void => {
-  if (!prepared?.sourceEl?.isConnected) return;
-  prepared.sourceEl.style.visibility = prepared.sourceVisibility ?? '';
-};
-
-const isLocalHandEntryOverride = (ctx: PlayScriptCtx, transfer: CardTransfer): boolean => (
+const isLocalHandEntry = (ctx: PlayScriptCtx, transfer: CardTransfer): boolean => (
   transfer.to.kind === 'HAND'
   && transfer.to.owner === ctx.localSeat
-  && (transfer.from.kind === 'DECK' || transfer.from.kind === 'GENERATED')
 );
+
+const basisForLogicalSource = (
+  ctx: PlayScriptCtx,
+  transfer: CardTransfer,
+): SurrogateBasis => {
+  const endpoint = ctx.motionSurface.cardMotion.endpoint(transfer.cardId);
+  const protectedSource = transfer.face === 'faceDown'
+    || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.remoteSeat)
+    || (transfer.from.kind === 'DECK' && transfer.from.owner === ctx.remoteSeat)
+    || (transfer.to.kind === 'HAND' && transfer.to.owner === ctx.remoteSeat);
+  return protectedSource
+    ? { kind: 'synthetic-back', owner: transfer.owner }
+    : { kind: 'destination-clone', endpoint };
+};
 
 const animateOneTransfer = async (
   ctx: PlayScriptCtx,
   transfer: CardTransfer,
   capturedCardRects: Map<string, DOMRect>,
-  capturedCardClones: Map<string, HTMLElement>,
   useTransferSfx: boolean,
   prepared: PreparedTransfer | null = null,
 ): Promise<void> => {
-  if (isLocalHandEntryOverride(ctx, transfer)) {
-    const startRect = transfer.from.kind === 'DECK' ? rectForZone(ctx, transfer.from) : deckSourceRect(ctx);
-    await slideFromDeckToHand({
-      cardId: transfer.cardId as string,
-      startRect,
-      cardElMap: ctx.cardRefs,
-      motionSurface: ctx.motionSurface,
-      sfx: useTransferSfx ? ctx.sfx : undefined,
-    });
-    return;
-  }
-
   const source = rectForTransferEndpoint(ctx, transfer, transfer.from, capturedCardRects, 'from');
   const destination = rectForTransferEndpoint(ctx, transfer, transfer.to, capturedCardRects, 'to');
 
@@ -331,60 +272,52 @@ const animateOneTransfer = async (
     return;
   }
 
-  const destinationVisibility = destination.el?.style.visibility;
-  if (destination.el) destination.el.style.visibility = 'hidden';
-
-  const boardRect = ctx.motionSurface.frameRect();
-  const flyer = prepared?.flyer ?? cloneForTransfer(transfer, capturedCardClones.get(transfer.cardId as string) ?? source.el, destination.el);
-  const sourceRotationDegrees = prepared?.sourceRotationDegrees
-    ?? cardRestingRotationDegrees(source.el);
-  const destinationRotationDegrees = cardRestingRotationDegrees(destination.el);
-  if (!prepared) {
-    placeFlyerAtRect(ctx, flyer, source.rect);
-    flyer.style.opacity = transfer.style.opacity === 'fadeIn' ? '0' : '1';
-    flyer.style.transform = composeCardFlightTransform(
-      flyer,
-      sourceRotationDegrees,
-      null,
-      String(transfer.style.scale.from),
-    );
-    ctx.motionSurface.mountTemporary(flyer);
+  // A reserved hand slot has already completed its sibling layout shift.
+  // Release it before acquiring the session's destination lease so the lease
+  // records the canonical visible value it must restore at handoff.
+  if (isLocalHandEntry(ctx, transfer)) {
+    releaseHandSlots(ctx, [transfer.cardId as string]);
   }
 
+  const endpoint = transfer.to.kind === 'LANE'
+    || (transfer.to.kind === 'HAND' && transfer.to.owner === ctx.localSeat)
+    ? ctx.motionSurface.cardMotion.endpoint(transfer.cardId)
+    : null;
+  const sourceRect = transfer.from.kind === 'GENERATED'
+    ? deckSourceRect(ctx)
+    : source.rect;
+  const sourceIsProtected = transfer.face === 'faceDown'
+    || transfer.from.kind === 'DECK'
+    || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.remoteSeat)
+    || (transfer.to.kind === 'HAND' && transfer.to.owner === ctx.remoteSeat);
+  const session = prepared?.session ?? ctx.motionSurface.cardMotion.begin({
+    cardId: transfer.cardId,
+    route: `${transfer.from.kind}->${transfer.to.kind}`,
+    basis: basisForLogicalSource(ctx, transfer),
+    startRect: sourceRect,
+    face: sourceIsProtected ? 'faceDown' : endpoint?.resolveFace() ?? 'faceUp',
+    zIndex: transfer.style.zIndex,
+    className: 'transfer-flyer',
+  });
   if (useTransferSfx && transfer.style.sfx) ctx.sfx?.(transfer.style.sfx);
 
-  await nextFrame();
-  flyer.style.transition = [
-    `left ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-    `top ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-    `width ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-    `height ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-    `transform ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-    `opacity ${transfer.style.durationMs}ms ${transfer.style.easing}`,
-  ].join(', ');
-  flyer.style.left = destination.rect.left - boardRect.left + 'px';
-  flyer.style.top = destination.rect.top - boardRect.top + 'px';
-  flyer.style.width = destination.rect.width + 'px';
-  flyer.style.height = destination.rect.height + 'px';
-  flyer.style.transform = composeCardFlightTransform(
-    flyer,
-    destinationRotationDegrees,
-    null,
-    String(transfer.style.scale.to),
-  );
-  flyer.style.opacity = transfer.style.opacity === 'fadeOut' ? '0' : '1';
-
-  await wait(transfer.style.durationMs + 30);
-  flyer.remove();
-  if (destination.el) destination.el.style.visibility = destinationVisibility ?? '';
-  restorePreparedSource(prepared);
-
-  if (destination.el && isVisibleZone(transfer.to)) {
-    const tl = new Timeline();
-    tl.add(destination.el, 'vfx-pop', { 'scale-start': '0.88' }, 180, 0);
-    tl.play();
-    await wait(200);
-  }
+  const target = endpoint ?? {
+    rect: destination.rect,
+    rotationDegrees: 0,
+    ...(transfer.face === 'preserve' ? {} : { face: transfer.face }),
+  };
+  const motionResult = await session.animateTo(target, {
+    durationMs: transfer.style.durationMs,
+    easing: transfer.style.easing,
+    opacityFrom: transfer.style.opacity === 'fadeIn' ? 0 : 1,
+    opacityTo: transfer.style.opacity === 'fadeOut' ? 0 : 1,
+    scaleFrom: transfer.style.scale.from,
+    scaleTo: transfer.style.scale.to,
+    ...(transfer.face === 'preserve' ? {} : { faceAtLanding: transfer.face }),
+  });
+  if (motionResult) return;
+  if (endpoint) await session.handoffTo(endpoint);
+  else await session.finishAtLogicalZone();
 };
 
 const reserveVisibleHandDestinations = (
@@ -427,10 +360,9 @@ export async function animateEvent(
   }
 
   const oldRects = captureCardRects(cardIdsWithRefs(ctx), ctx.cardRefs);
-  const oldClones = cloneCurrentCardElements(ctx);
   const preparedTransfers = new Map<CardTransfer, PreparedTransfer>();
   for (const transfer of transfers) {
-    const prepared = prepareTransferBeforeDispatch(ctx, transfer, oldRects, oldClones);
+    const prepared = prepareTransferBeforeDispatch(ctx, transfer, oldRects);
     if (prepared) preparedTransfers.set(transfer, prepared);
   }
 
@@ -446,7 +378,7 @@ export async function animateEvent(
 
     for (const transfer of transfers) {
       hooks.onTransferAnimation?.(transfer);
-      await animateOneTransfer(ctx, transfer, oldRects, oldClones, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
+      await animateOneTransfer(ctx, transfer, oldRects, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
     }
   });
 

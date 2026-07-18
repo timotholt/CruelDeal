@@ -7,10 +7,14 @@
  * lands on the newly rendered destination before ownership returns to DOM.
  */
 
-import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
+import type { CardId, LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import { isActiveLane } from '@/services/playgame/engine/laneTopology';
 import type { MatchState } from '@/services/playgame/engine/types/state';
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+import {
+  captureCardVisual,
+  type CardMotionSession,
+} from '@/services/playgame/presentation/cardMotion';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 
@@ -30,7 +34,7 @@ interface ActivePointerDrag {
   offsetY: number;
   started: boolean;
   ghost: HTMLElement | null;
-  cleanupGhost: (() => void) | null;
+  motionSession: CardMotionSession | null;
   target: DropTarget | null;
 }
 
@@ -71,24 +75,6 @@ const visualCardElement = (source: HTMLElement): HTMLElement => (
   source.matches('.hand-card-motion')
     ? source.querySelector<HTMLElement>(':scope > .card') ?? source
     : source
-);
-
-const waitForTransition = (element: HTMLElement, durationMs: number): Promise<void> => (
-  new Promise((resolve) => {
-    let settled = false;
-    const finish = (): void => {
-      if (settled) return;
-      settled = true;
-      element.removeEventListener('transitionend', onEnd);
-      clearTimeout(timeout);
-      resolve();
-    };
-    const onEnd = (event: TransitionEvent): void => {
-      if (event.propertyName === 'left') finish();
-    };
-    const timeout = setTimeout(finish, durationMs + 100);
-    element.addEventListener('transitionend', onEnd);
-  })
 );
 
 export function setupDragDrop(opts: DragDropOpts): () => void {
@@ -143,33 +129,22 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
   };
 
-  const placeGhost = (ghost: HTMLElement, rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>): void => {
-    const local = motionSurface.toLocalRect(rect);
-    ghost.style.left = `${local.left}px`;
-    ghost.style.top = `${local.top}px`;
-    ghost.style.width = `${local.width}px`;
-    ghost.style.height = `${local.height}px`;
-  };
-
   const beginVisualDrag = (drag: ActivePointerDrag): void => {
-    const ghost = drag.visualSourceEl.cloneNode(true) as HTMLElement;
-    ghost.classList.add('pointer-drag-ghost');
-    ghost.classList.remove('drag-source-active');
-    ghost.removeAttribute('draggable');
-    ghost.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
-    Object.assign(ghost.style, {
-      position: 'absolute',
-      margin: '0',
-      pointerEvents: 'none',
-      zIndex: '460',
-      transform: getComputedStyle(drag.visualSourceEl).transform,
-      transformOrigin: 'center center',
-      transition: 'none',
-      willChange: 'left, top, width, height, transform, opacity',
+    const cardId = drag.cardId as CardId;
+    const snapshot = captureCardVisual(cardId, drag.visualSourceEl);
+    const motionSession = motionSurface.cardMotion.begin({
+      cardId,
+      route: `pointer-${drag.origin}`,
+      basis: { kind: 'clone', snapshot },
+      startRect: snapshot.rect,
+      rotationDegrees: snapshot.rotationDegrees,
+      face: snapshot.face,
+      sourceElement: drag.visualSourceEl,
+      zIndex: 460,
+      className: 'pointer-drag-ghost',
     });
-    placeGhost(ghost, drag.sourceRect);
-    drag.cleanupGhost = motionSurface.mountTemporary(ghost);
-    drag.ghost = ghost;
+    drag.motionSession = motionSession;
+    drag.ghost = motionSession.surrogate;
     drag.started = true;
     drag.sourceEl.classList.add('drag-source-active');
     boardEl.classList.add('dragging-card');
@@ -228,7 +203,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
   const cleanup = (drag: ActivePointerDrag): void => {
     cancelScheduledMove();
-    drag.cleanupGhost?.();
+    drag.motionSession?.dispose();
     drag.sourceEl.classList.remove('drag-source-active');
     boardEl.classList.remove('dragging-card');
     clearDropState();
@@ -237,28 +212,19 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
   const animateGhostTo = async (
     drag: ActivePointerDrag,
-    destination: HTMLElement | null,
-    fallbackRect: DOMRect,
+    _destination: HTMLElement | null,
+    _fallbackRect: DOMRect,
   ): Promise<void> => {
-    const ghost = drag.ghost;
-    if (!ghost) return;
-    const destinationVisual = destination ? visualCardElement(destination) : null;
-    const destinationRect = destinationVisual?.getBoundingClientRect() ?? fallbackRect;
-    const previousVisibility = destinationVisual?.style.visibility;
-    if (destinationVisual) destinationVisual.style.visibility = 'hidden';
-    ghost.style.transition = [
-      `left ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
-      `top ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
-      `width ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
-      `height ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
-      `transform ${LANDING_DURATION_MS}ms cubic-bezier(.4,0,.2,1)`,
-      `opacity ${LANDING_DURATION_MS}ms ease`,
-    ].join(', ');
-    void ghost.offsetWidth;
-    placeGhost(ghost, destinationRect);
-    if (destinationVisual) ghost.style.transform = getComputedStyle(destinationVisual).transform;
-    await waitForTransition(ghost, LANDING_DURATION_MS);
-    if (destinationVisual?.isConnected) destinationVisual.style.visibility = previousVisibility ?? '';
+    const session = drag.motionSession;
+    if (!session) return;
+    const endpoint = motionSurface.cardMotion.endpoint(drag.cardId as CardId);
+    const result = await session.animateTo(endpoint, {
+      durationMs: LANDING_DURATION_MS,
+      easing: 'cubic-bezier(.4,0,.2,1)',
+      scaleFrom: 1,
+      scaleTo: 1,
+    });
+    if (!result) await session.handoffTo(endpoint);
   };
 
   const returnToSource = async (drag: ActivePointerDrag): Promise<void> => {
@@ -313,7 +279,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       offsetY: event.clientY - sourceRect.top,
       started: false,
       ghost: null,
-      cleanupGhost: null,
+      motionSession: null,
       target: null,
     };
     source.setPointerCapture?.(event.pointerId);
@@ -349,7 +315,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     void (cancelled ? returnToSource(drag) : performDrop(drag))
       .finally(() => {
         if (!disposed) cleanup(drag);
-        else drag.cleanupGhost?.();
+        else void drag.motionSession?.cancel('screen-disposed');
       });
   };
 
@@ -372,7 +338,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   return (): void => {
     disposed = true;
     cancelScheduledMove();
-    active?.cleanupGhost?.();
+    if (active?.motionSession) void active.motionSession.cancel('screen-disposed');
     active?.sourceEl.classList.remove('drag-source-active');
     clearDropState();
     boardEl.classList.remove('dragging-card');

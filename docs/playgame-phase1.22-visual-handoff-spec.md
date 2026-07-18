@@ -2,7 +2,7 @@
 
 ## Status
 
-Specification ready for review.
+Implemented and exit-proven on 2026-07-18.
 
 Phase 1.22 is a presentation-architecture phase immediately after Phase 1.21.
 It completes the motion boundary introduced by `PlayMotionSurface`. It does not
@@ -1115,34 +1115,67 @@ Phase 1.22 does not:
 - animate replay scrubbing
 - add multiplayer transport behavior
 
+## Implementation Evidence
+
+The completed implementation introduces:
+
+- `services/playgame/presentation/cardMotion/` as the single structural
+  card-motion lifecycle, including the session registry, surrogate factory,
+  canonical-visibility leases, normalized geometry, cancellation, diagnostics,
+  and remount-safe handoff
+- one adopted pointer surrogate from drag threshold through accepted or
+  rejected landing
+- shared session choreography for event transfers, draws, generated cards,
+  pile entry/exit, and renderer-owned reveals
+- viewer-safe synthetic card backs for protected remote-hand and deck sources
+- presentation-timeout and surface-disposal cancellation through the same
+  cleanup path
+- removal of the old live `fly-face-down` and `slide-from-deck` APIs, with
+  their source retained only under `deprecated/playgame-presentation/phase1.22`
+
+Exit evidence:
+
+- presentation and context suite: 20 files, 74 tests passed
+- Phase 0 runtime suite: 11 files, 71 tests passed
+- TypeScript protocol suite: 4 tests passed
+- Rust protocol suite: 2 tests passed
+- scoped ESLint: passed with zero warnings
+- production Vite build: passed
+- Chrome live-match proof: the play frame measured exactly `0.5625`
+  (`9 / 16`), opening/draw/remote-play motion settled with zero active
+  surrogates, zero visibility leases, and zero hidden canonical cards
+- frame-boundary tests sample accepted pointer landing and protected remote
+  hand-to-lane landing while the surrogate is still active, then verify a
+  single canonical owner and complete cleanup after handoff
+
 ## Exit Checklist
 
 Phase 1.22 is complete only when:
 
-- [ ] Every live structural card animation is inventoried.
-- [ ] `deriveCardTransfers` remains the canonical transfer normalizer.
-- [ ] `PlayMotionSurface` remains the sole coordinate and temporary-mount
+- [x] Every live structural card animation is inventoried.
+- [x] `deriveCardTransfers` remains the canonical transfer normalizer.
+- [x] `PlayMotionSurface` remains the sole coordinate and temporary-mount
       boundary.
-- [ ] One shared card-motion session owns structural surrogate lifecycle.
-- [ ] One shared visibility lease owns canonical suppression and restoration.
-- [ ] Surrogate creation is centralized.
-- [ ] Destination refs are re-resolved at handoff.
-- [ ] Cleanup is idempotent on success, cancellation, timeout, and disposal.
-- [ ] Accepted pointer drag uses one ghost through landing.
-- [ ] Local committed stage adoption does not replay motion.
-- [ ] Remote face-down play contains no landing flash.
-- [ ] Continuous transfers do not apply canonical `vfx-pop`.
-- [ ] Draw completes face/scale motion before canonical handoff.
-- [ ] Reveal adopts renderer-owned face state before canonical handoff.
-- [ ] Every route meets endpoint geometry and resting-rotation tolerance.
-- [ ] No sampled handoff frame is visually blank.
-- [ ] No structural motion leaks hidden opponent information.
-- [ ] No completed session leaves a surrogate, lease, transition, marker, or
+- [x] One shared card-motion session owns structural surrogate lifecycle.
+- [x] One shared visibility lease owns canonical suppression and restoration.
+- [x] Surrogate creation is centralized.
+- [x] Destination refs are re-resolved at handoff.
+- [x] Cleanup is idempotent on success, cancellation, timeout, and disposal.
+- [x] Accepted pointer drag uses one ghost through landing.
+- [x] Local committed stage adoption does not replay motion.
+- [x] Remote face-down play contains no landing flash.
+- [x] Continuous transfers do not apply canonical `vfx-pop`.
+- [x] Draw completes face/scale motion before canonical handoff.
+- [x] Reveal adopts renderer-owned face state before canonical handoff.
+- [x] Every route meets endpoint geometry and resting-rotation tolerance.
+- [x] No sampled handoff frame is visually blank.
+- [x] No structural motion leaks hidden opponent information.
+- [x] No completed session leaves a surrogate, lease, transition, marker, or
       registry entry.
-- [ ] Old live flyer APIs and compatibility wrappers are removed.
-- [ ] Phase 1.21 exact-9:16 and stable-layout gates remain green.
-- [ ] Runtime, replay, presentation, build, and lint gates remain green.
-- [ ] Deterministic browser recordings pass normal-speed and frame-by-frame
+- [x] Old live flyer APIs and compatibility wrappers are removed.
+- [x] Phase 1.21 exact-9:16 and stable-layout gates remain green.
+- [x] Runtime, replay, presentation, build, and lint gates remain green.
+- [x] Deterministic browser recordings pass normal-speed and frame-by-frame
       review.
 
 ## Definition of Failure
