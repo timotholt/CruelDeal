@@ -11,21 +11,26 @@ import { PlayGameProvider } from '@/contexts/PlayGameContext';
 import { BoardSizer } from './play/BoardSizer';
 import { PlayBoard } from './play/PlayBoard';
 import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
-import { buildDebugMatchState } from '@/services/playgame/debug/buildDebugState';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
-import type { Deck } from '@/services/playgame/engine/manifest/types';
-import type { MatchState } from '@/services/playgame/engine/types/state';
+import { validateMatchBootstrap } from '@/services/playgame/runtime/bootstrapValidation';
+import type { MatchBootstrap, ValidatedMatchBootstrap } from '@/services/playgame/runtime/contracts';
 
 interface ClassicPlayScreenProps {
   onExit?: () => void;
 }
 
 export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
-  const [initialState, setInitialState] = createSignal<MatchState | null>(null);
+  const [bootstrap, setBootstrap] = createSignal<ValidatedMatchBootstrap | null>(null);
+  const [setupError, setSetupError] = createSignal<string | null>(null);
 
-  const handleDeckConfirmed = (playerCards: Deck, oppCards: Deck) => {
-    const seed = `debug-${Date.now().toString(36)}`;
-    setInitialState(buildDebugMatchState(playerCards, oppCards, BOOTSTRAP_MANIFEST, seed));
+  const handleDeckConfirmed = (candidate: MatchBootstrap) => {
+    const validation = validateMatchBootstrap(candidate, BOOTSTRAP_MANIFEST);
+    if (!validation.ok) {
+      setSetupError(validation.issues.map((issue) => issue.message).join('\n'));
+      return;
+    }
+    setSetupError(null);
+    setBootstrap(validation.value);
   };
 
   return (
@@ -33,14 +38,18 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
       class="playgame-root board-hidden"
       style={{ width: '100%', height: '100%', background: '#000' }}
     >
-      <Show when={initialState() === null}>
+      <Show when={bootstrap() === null}>
         <DebugDeckPicker onConfirm={handleDeckConfirmed} />
       </Show>
 
-      <Show when={initialState() ?? false} keyed>
-        {(state) => (
+      <Show when={setupError()}>
+        {(message) => <pre class="fixed bottom-4 left-4 right-4 z-[10000] whitespace-pre-wrap bg-red-950 p-4 text-red-100">{message()}</pre>}
+      </Show>
+
+      <Show when={bootstrap() ?? false} keyed>
+        {(validatedBootstrap) => (
           <VfxHost class="board-wrap" id="boardWrap">
-            <PlayGameProvider initialState={state}>
+            <PlayGameProvider bootstrap={validatedBootstrap}>
               <BoardSizer />
               <PlayBoard onExit={props.onExit} />
             </PlayGameProvider>

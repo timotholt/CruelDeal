@@ -9,18 +9,13 @@
 
 import { serial, wait, type Step } from './runner';
 import {
-  autoPlayRemoteSeat,
-  advanceTurnFromEngine,
-  captureEngineEndTurn,
-  dealPlayerCard,
+  commitTurnResolution,
   fadeInLocationTile,
-  finishResolving,
   flipPlayerCardsFaceDown,
   hideLocationTiles,
-  revealByPriorityFromEngine,
-  revealNextLocation,
+  paceCommittedOpening,
+  paceCommittedTurn,
   setBoardVisible,
-  startResolving,
   toast,
 } from './actions';
 
@@ -62,26 +57,10 @@ export const openingSequence = (): Step =>
     ),
     wait(150),
 
-    // Deal 3 cards, one at a time, with a pause between each
-    serial(
-      dealPlayerCard(),
-      wait(200),
-      dealPlayerCard(),
-      wait(200),
-      dealPlayerCard(),
-    ),
-    wait(500),
-
-    // TURN 1
+    // Opening authority was committed by MatchRuntime as revision 1 before
+    // this storyboard mounted. This step only paces those immutable frames.
+    paceCommittedOpening(),
     toast('TURN 1', { duration: 1800 }),
-    wait(300),
-
-    // Draw the turn-1 card
-    dealPlayerCard(),
-    wait(300),
-
-    // Reveal the first location
-    revealNextLocation(),
   );
 
 /**
@@ -101,23 +80,11 @@ export const openingSequence = (): Step =>
  */
 export const resolveTurnFlow = (): Step =>
   serial(
-    startResolving(),
     flipPlayerCardsFaceDown(),
     wait(200),
-    // Remote seat commits plays face-down. autoPlayRemoteSeat also stages them
-    // card through the bridge so the engine sees it in staging order.
-    autoPlayRemoteSeat(),
-    // Run the engine's turn resolution — returns the authoritative event
-    // stream (CARD_FLIPPED in priority order, TURN_STARTED with new priority).
-    // Must be called AFTER all cards are staged through the bridge.
-    captureEngineEndTurn(),
+    // END_TURN locks the local private plan. Runtime-owned AI intents lock the
+    // remote seat, then one SYSTEM transaction commits the canonical merge.
+    commitTurnResolution(),
     wait(250),
-    // Reveal cards in the order the engine dictated (priority-first).
-    revealByPriorityFromEngine(),
-    wait(200),
-    // Advance turn/energy/priority from the engine's TURN_STARTED event.
-    advanceTurnFromEngine(),
-    wait(200),
-    revealNextLocation(),
-    finishResolving(),
+    paceCommittedTurn(),
   );

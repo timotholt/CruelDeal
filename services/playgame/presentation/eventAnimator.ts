@@ -1,17 +1,15 @@
-import type { MatchEvent } from '../engine/types/events';
 import type { MatchState as EngineMatchState } from '../engine/types/state';
+import type { MatchEventFrame } from '../runtime/contracts';
 import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
 import { slideFromDeckToHand } from '@/services/vfx/animations/slide-from-deck';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Timeline } from '@/services/vfx/timeline';
-import { unwrap } from 'solid-js/store';
-import { batch } from 'solid-js';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
 import { HAND_SLOT_RESERVE_MS } from './handPresentation';
+import { withHandReservations } from './handReservations';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardId } from '../engine/types/ids';
-import { apply } from '../engine/apply';
 import {
   assertTransferCoverage,
   deriveCardTransfers,
@@ -21,7 +19,23 @@ import {
   type CardZoneRef,
 } from './cardTransfers';
 
-const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const nextFrame = (timeoutMs = 100): Promise<void> => new Promise((resolve) => {
+  let settled = false;
+  let frameId: number | undefined;
+  const finish = (): void => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeoutId);
+    if (frameId !== undefined) cancelAnimationFrame(frameId);
+    resolve();
+  };
+  const timeoutId = setTimeout(finish, timeoutMs);
+  try {
+    frameId = requestAnimationFrame(finish);
+  } catch {
+    finish();
+  }
+});
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const deckSourceRect = (ctx: PlayScriptCtx): DOMRect => {
@@ -37,16 +51,6 @@ const fallbackRect = (ctx: PlayScriptCtx): DOMRect => {
   const w = 70;
   const h = 100;
   return new DOMRect(b.left + b.width / 2 - w / 2, b.top + b.height / 2 - h / 2, w, h);
-};
-
-const reserveHandSlot = (ctx: PlayScriptCtx, card: ResolvedCard): void => {
-  ctx.setUi('handReservations', (prev: ResolvedCard[]) => (
-    prev.some((item) => item.id === card.id) ? prev : [...prev, card]
-  ));
-};
-
-const releaseHandSlot = (ctx: PlayScriptCtx, cardId: string): void => {
-  ctx.setUi('handReservations', (prev: ResolvedCard[]) => prev.filter((item) => item.id !== cardId));
 };
 
 const cardIdsWithRefs = (ctx: PlayScriptCtx): string[] => [...ctx.cardRefs.keys()];
@@ -334,30 +338,32 @@ const reserveVisibleHandDestinations = (
   ctx: PlayScriptCtx,
   transfers: readonly CardTransfer[],
   afterState: EngineMatchState,
-): string[] => {
-  const reserved: string[] = [];
+): ResolvedCard[] => {
+  const reserved: ResolvedCard[] = [];
   for (const transfer of transfers) {
     if (transfer.to.kind !== 'HAND' || transfer.to.owner !== ctx.localSeat) continue;
     const resolved = resolveCard(transfer.cardId, afterState, ctx.manifest);
     if (!resolved) continue;
-    reserveHandSlot(ctx, resolved);
-    reserved.push(resolved.id);
+    reserved.push(resolved);
   }
   return reserved;
 };
 
-export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promise<void> {
+export async function animateEvent(
+  ctx: PlayScriptCtx,
+  frame: MatchEventFrame,
+  dispatchPresentedFrame: () => void = () => undefined,
+): Promise<void> {
+  const { event, before, after } = frame;
   const choreography = describeEventChoreography(event);
   playSfx(ctx, choreography.sfx, 'on-start');
 
-  const before = unwrap(ctx.state) as EngineMatchState;
-  const after = apply(before, event, ctx.manifest) as EngineMatchState;
   const transfers = deriveCardTransfers(before, event, after);
   if (import.meta.env.DEV) assertTransferCoverage(before, event, after, transfers);
 
   if (transfers.length === 0) {
     playSfx(ctx, choreography.sfx, 'on-dispatch');
-    ctx.dispatch(event);
+    dispatchPresentedFrame();
     playVfx(ctx, choreography);
     playSfx(ctx, choreography.sfx, 'after-dispatch');
     playSfx(ctx, choreography.sfx, 'on-complete');
@@ -373,21 +379,19 @@ export async function animateEvent(ctx: PlayScriptCtx, event: MatchEvent): Promi
   }
 
   playSfx(ctx, choreography.sfx, 'on-dispatch');
-  let reservedHandIds: string[] = [];
-  batch(() => {
-    ctx.dispatch(event);
-    reservedHandIds = reserveVisibleHandDestinations(ctx, transfers, after);
+  dispatchPresentedFrame();
+  const reservedHandCards = reserveVisibleHandDestinations(ctx, transfers, after);
+
+  await withHandReservations(ctx, reservedHandCards, async () => {
+    playVfx(ctx, choreography);
+    playSfx(ctx, choreography.sfx, 'after-dispatch');
+    playCardLayoutSlide(oldRects, ctx.cardRefs);
+    if (reservedHandCards.length > 0) await wait(HAND_SLOT_RESERVE_MS);
+
+    for (const transfer of transfers) {
+      await animateOneTransfer(ctx, transfer, oldRects, oldClones, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
+    }
   });
-
-  playVfx(ctx, choreography);
-  playSfx(ctx, choreography.sfx, 'after-dispatch');
-  playCardLayoutSlide(oldRects, ctx.cardRefs);
-  if (reservedHandIds.length > 0) await wait(HAND_SLOT_RESERVE_MS);
-
-  for (const transfer of transfers) {
-    await animateOneTransfer(ctx, transfer, oldRects, oldClones, choreography.sfx.length === 0, preparedTransfers.get(transfer) ?? null);
-  }
-  for (const id of reservedHandIds) releaseHandSlot(ctx, id);
 
   playSfx(ctx, choreography.sfx, 'on-complete');
 }

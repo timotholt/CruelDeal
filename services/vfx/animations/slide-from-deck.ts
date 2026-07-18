@@ -43,7 +43,7 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
   } = opts;
 
   const slotEl = cardElMap.get(cardId);
-  if (!slotEl) return Promise.resolve();
+  if (!slotEl?.isConnected || !boardWrap.isConnected) return Promise.resolve();
 
   const boardRect = boardWrap.getBoundingClientRect();
   const destRect = slotEl.getBoundingClientRect();
@@ -70,7 +70,28 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
   boardWrap.appendChild(flyer);
 
   return new Promise<void>((resolve) => {
-    requestAnimationFrame(() => {
+    let settled = false;
+    let flyTimer: ReturnType<typeof setTimeout> | undefined;
+    let flipTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      if (flyTimer) clearTimeout(flyTimer);
+      if (flipTimer) clearTimeout(flipTimer);
+      clearTimeout(fallbackTimer);
+      flyer.remove();
+      if (slotEl.isConnected) slotEl.style.visibility = prevVisibility;
+      resolve();
+    };
+
+    // requestAnimationFrame may be throttled or never delivered in a
+    // background/headless-visible browser. The animation is presentation
+    // only, so its promise must still settle without a paint callback.
+    const fallbackTimer = setTimeout(finish, flyDur + flipDur + 250);
+
+    const start = (): void => {
+      if (settled) return;
       sfx?.('draw');
       // Stage 1: slide + scale into the hand slot (still face-down).
       flyer.style.transition = [
@@ -87,15 +108,18 @@ export function slideFromDeckToHand(opts: SlideFromDeckOpts): Promise<void> {
       flyer.style.transform = 'rotateY(180deg) scale(1)';
 
       // Stage 2: flip face-up in place, then reveal the real slot card.
-      setTimeout(() => {
+      flyTimer = setTimeout(() => {
+        if (settled) return;
         flyer.style.transition = `transform ${flipDur}ms cubic-bezier(.2,0,.4,1)`;
         flyer.style.transform = 'rotateY(0deg) scale(1)';
-        setTimeout(() => {
-          flyer.remove();
-          slotEl.style.visibility = prevVisibility;
-          resolve();
-        }, flipDur + 20);
+        flipTimer = setTimeout(finish, flipDur + 20);
       }, flyDur + 20);
-    });
+    };
+
+    try {
+      requestAnimationFrame(start);
+    } catch {
+      finish();
+    }
   });
 }

@@ -76,10 +76,9 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
 
     const results = await Promise.all([first, second]);
     expect(results.map((result) => result.status)).toEqual(['accepted', 'accepted']);
-    expect(runtime.transactions().slice(-2).map((record) => record.intent.intentId)).toEqual([
-      'fifo-first',
-      'fifo-second',
-    ]);
+    // The trusted local projection exposes only the viewer's private plan.
+    expect(runtime.state().stagingOrder).toHaveLength(1);
+    expect(runtime.transactions()).toHaveLength(1);
     expect(runtime.revision()).toBe(baseRevision + 2);
   });
 
@@ -100,7 +99,8 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       code: 'RULES_INVALID',
       currentRevision: baseRevision + 1,
     });
-    expect(runtime.transactions().slice(-1)[0]?.intent.intentId).toBe('legal-first');
+    expect(runtime.state().stagingOrder).toEqual([cardId]);
+    expect(runtime.transactions()).toHaveLength(1);
     expect(runtime.revision()).toBe(baseRevision + 1);
   });
 
@@ -120,7 +120,8 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       intentId: 'retry-me',
       original: { status: 'accepted', revision: baseRevision + 1 },
     });
-    expect(runtime.transactions().filter((record) => record.intent.intentId === 'retry-me')).toHaveLength(1);
+    expect(runtime.transactions().filter((record) => record.intent.intentId === 'retry-me')).toHaveLength(0);
+    expect(runtime.state().stagingOrder).toHaveLength(1);
     expect(runtime.revision()).toBe(baseRevision + 1);
   });
 
@@ -139,10 +140,19 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       stageEnvelope(runtime, 'P0', 'exactly-once', baseRevision),
     );
     expect(result.status).toBe('accepted');
-    if (result.status !== 'accepted') return;
+    expect([...counts.values()]).toEqual([]);
 
-    expect([...counts.values()]).toEqual(result.transaction.events.map(() => 1));
-    expect(runtime.state().log.slice(-result.transaction.events.length).map((entry) => entry.event))
-      .toEqual(result.transaction.events);
+    await runtime.submitIntent({
+      matchId: 'phase1-contract-match',
+      seat: 'P0',
+      intentId: 'exactly-once-end',
+      expectedRevision: runtime.revision(),
+      intent: { type: 'END_TURN' },
+    });
+    const committed = runtime.transactions().at(-1)!;
+    expect(committed.intent.seat).toBe('SYSTEM');
+    expect([...counts.values()]).toEqual(committed.events.map(() => 1));
+    expect(runtime.state().log.slice(-committed.events.length).map((entry) => entry.event))
+      .toEqual(committed.events);
   });
 });

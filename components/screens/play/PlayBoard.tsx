@@ -31,8 +31,7 @@ import {
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
 import type { CardZone } from '@/services/playgame/engine/types/state';
-import type { MatchEvent } from '@/services/playgame/engine/types/events';
-import { exportReplayBundle, replayMatch } from '@/services/playgame/engine/replay';
+import { replayMatch } from '@/services/playgame/engine/replay';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
@@ -51,6 +50,8 @@ import { HiddenHandIndicator } from './HiddenHandIndicator';
 import { PlayerPortraitMenu } from './PlayerPortraitMenu';
 import { PileViewer } from './PileViewer';
 import { TurnOrb } from './TurnOrb';
+import { selectInteractiveHand } from './handInteractivity';
+import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
 
 interface PlayBoardProps {
   onExit?: () => void;
@@ -60,13 +61,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const isDev = import.meta.env.DEV;
   const pg = usePlayGame();
   const {
-    engineState, setEngineState, dispatch, manifest, ui, setUi,
-    initialState, engineRng, isResolving, actions, localSeat, remoteSeat, seatMeta,
+    engineState, manifest, ui, setUi, initialState, isResolving, actions,
+    localSeat, remoteSeat, seatMeta, openingTimeline, replayEvents,
   } = pg;
   const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
   const [replayEnabled, setReplayEnabled] = createSignal(false);
   const [replayFrameIndex, setReplayFrameIndex] = createSignal(0);
+  const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
   const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
 
@@ -76,7 +78,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       seed: engineState.seed,
       manifest,
       initialState,
-      events: engineState.log.map((entry) => entry.event as MatchEvent),
+      events: replayEvents(),
     });
   });
   const replayFrame = createMemo(() => {
@@ -85,7 +87,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return timeline.frames[replayFrameIndex()] ?? null;
   });
   const presentedState = createMemo<EngineMatchState>(() => replayFrame()?.state ?? engineState);
-  const boardLocked = createMemo(() => isResolving() || presentedState().phase === 'RESOLVING');
+  const boardLocked = createMemo(() => turnFlowRunning() || isResolving() || presentedState().phase === 'RESOLVING');
   const boardInteractive = createMemo(() => !replayEnabled() && !boardLocked());
   const boardInspectable = createMemo(() => replayEnabled() || boardInteractive());
 
@@ -110,7 +112,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   ));
   const interactiveHand = createMemo<ResolvedCard[]>(() => {
     const reserved = reservedHandIds();
-    return hand().filter((card) => !reserved.has(card.id));
+    return selectInteractiveHand(hand(), reserved);
   });
 
   const bottomLane = (i: LaneIdx): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
@@ -146,7 +148,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
 
   // ── Undo (one-card) ──────────────────────────────────────────────────────
-  const handleUndoPending = (): void => {
+  const handleUndoPending = async (): Promise<void> => {
     if (!boardInteractive() || isResolving()) return;
     const lastStaged = [...engineState.stagingOrder]
       .reverse()
@@ -157,7 +159,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
     // both the restored card and the shuffled hand into place.
     const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
     const oldRects = captureHandRects(allIds, cardRefs);
-    actions.undoPending();
+    const undone = await actions.undoPending();
+    if (!undone) return;
     queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
   };
 
@@ -203,36 +206,30 @@ export const PlayBoard = (props: PlayBoardProps) => {
     });
     onCleanup(unbindDnd);
 
-    // Opening sequence — hand the script runner a ctx bound to the engine
-    // store + UI sidecar. `drawQueue` stays empty in live play so opening
-    // deals come from the seeded engine deck through CARD_DRAWN.
-    const drawQueue: PlayScriptCtx['drawQueue'] = [];
+    // Opening authority is already committed by the runtime. The script is a
+    // presentation-only reader of committed frames plus the UI sidecar.
     const boardWrapEl = boardRef();
     if (!boardWrapEl) return;
 
-    const setPhase = (phase: EngineMatchState['phase']): void => {
-      setEngineState('phase', phase);
-    };
-
     const ctx: PlayScriptCtx = {
       state: engineState,
-      setState: setEngineState as unknown as PlayScriptCtx['setState'],
-      dispatch,
-      setPhase,
       ui,
       setUi,
       manifest,
       localSeat,
       remoteSeat,
-      engineRng,
       boardEl,
       boardWrap: boardWrapEl,
       toastArea: toastAreaEl,
       cardRefs,
       zoneRefs,
-      drawQueue,
       deckEl,
+      openingTimeline,
+      submitEndTurn: actions.endTurn,
+      presentCommittedFrame: actions.presentCommittedFrame,
+      finishTurnPresentation: actions.finishTurnPresentation,
     };
+    ctx.onCancel = () => releaseAllHandSlots(ctx);
     script = createScript(ctx);
     void script.run(openingSequence());
     onCleanup(() => script?.cancel());
@@ -271,19 +268,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
 
   const copyReplayJson = async (): Promise<void> => {
-    const json = JSON.stringify(
-      exportReplayBundle(engineState as EngineMatchState, manifest, {
-        localSeat,
-      }, initialState),
-      null,
-      2,
-    );
+    const json = JSON.stringify(pg.exportRuntimeReplay(), null, 2);
     await navigator.clipboard.writeText(json);
   };
 
   return (
     <>
-      <div class="board" id="board" ref={boardEl}>
+      <div class="board" id="board" ref={(element) => { boardEl = element; }}>
         {/* TOP HUD */}
         <div class="hud-top">
           <div class="hud-top__side hud-top__side--left">
@@ -429,8 +420,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
             class="end-turn"
             disabled={!boardInteractive()}
             onClick={() => {
-              if (!boardInteractive() || !script) return;
-              void script.run(resolveTurnFlow());
+              if (!boardInteractive() || !script || turnFlowRunning()) return;
+              setTurnFlowRunning(true);
+              void script.run(resolveTurnFlow()).finally(() => setTurnFlowRunning(false));
             }}
           >
             END TURN
@@ -483,7 +475,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
           }}
         />
 
-        <div class="toast-area" id="toastArea" ref={toastAreaEl} />
+        <div class="toast-area" id="toastArea" ref={(element) => { toastAreaEl = element; }} />
 
         <Show when={isDev && replayTimeline()}>
           {(timeline) => (

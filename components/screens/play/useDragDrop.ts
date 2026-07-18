@@ -30,9 +30,9 @@ export interface DragDropOpts {
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
   /** Returns true on success; false if the engine rejected the stage intent. */
-  stageCardInLane: (cardId: string, laneIdx: number) => boolean;
+  stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
   /** Undo a pending (just-staged) card by dragging it back to hand. */
-  undoPendingCard: (cardId: string) => boolean;
+  undoPendingCard: (cardId: string) => Promise<boolean>;
 }
 
 /**
@@ -116,7 +116,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
   };
 
-  const onDrop = (e: DragEvent): void => {
+  const onDrop = async (e: DragEvent): Promise<void> => {
     e.preventDefault();
     const slotEl = getBottomLaneSlots(e.target);
     const handEl = getHandEl(e.target);
@@ -134,7 +134,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       const handIds = localHand().map((c) => c.id);
       const allIds = [...pendingIds, ...handIds];
       const oldRects = captureHandRects(allIds, cardRefs);
-      const ok = undoPendingCard(dragState.id);
+      const ok = await undoPendingCard(dragState.id);
       if (!ok) return;
       queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
       return;
@@ -145,7 +145,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       const lane = Number(slotEl.dataset.lane);
       const handIds = localHand().map((c) => c.id);
       const oldRects = captureHandRects(handIds, cardRefs);
-      const ok = stageCardInLane(dragState.id, lane);
+      const ok = await stageCardInLane(dragState.id, lane);
       if (!ok) return;
       queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
     }

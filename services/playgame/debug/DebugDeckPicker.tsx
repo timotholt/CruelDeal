@@ -15,10 +15,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DEBUG_DECKS, type DebugDeck } from './debugDecks';
-import type { Deck } from '../engine/manifest/types';
+import type { MatchBootstrap } from '../runtime/contracts';
+import { buildDebugMatchBootstrap } from './buildDebugBootstrap';
 
 interface Props {
-  onConfirm: (playerCards: Deck, oppCards: Deck) => void;
+  onConfirm: (bootstrap: MatchBootstrap) => void;
 }
 
 type Step = 'player' | 'opp';
@@ -49,7 +50,7 @@ export const DebugDeckPicker = (props: Props) => {
     const p = playerDeck();
     const o = oppDeck();
     if (!p || !o) return;
-    props.onConfirm(p.cards, o.cards);
+    props.onConfirm(buildDebugMatchBootstrap(p, o, `debug-${Date.now().toString(36)}`));
   };
 
   const goBack = () => {

@@ -193,7 +193,9 @@ describe('card variants and opening initialization', () => {
     const second = buildOpeningTransaction(secondGenesis, manifest);
 
     expect(first).toEqual(second);
-    expect(first.events.map((event) => event.owner)).toEqual([
+    expect(first.events
+      .filter((event) => event.type === 'CARD_DRAWN')
+      .map((event) => event.owner)).toEqual([
       'P0', 'P0', 'P0', 'P1', 'P1', 'P1',
     ]);
     const opened = first.events.reduce(

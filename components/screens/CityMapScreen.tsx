@@ -5,14 +5,13 @@
  * on the three-lane board at `/play`.
  */
 
-import { For, createMemo, createSignal } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
 import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
-import { apply } from '@/services/playgame/engine/apply';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
-import { createInitialMatchState } from '@/services/playgame/engine/cli/initState';
-import type { MatchState } from '@/services/playgame/engine/types/state';
-import type { CardId, Owner } from '@/services/playgame/engine/types/ids';
+import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
+import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
+import { validateMatchBootstrap } from '@/services/playgame/runtime/bootstrapValidation';
 import { getHandForSeat } from '@/services/playgame/view';
 import { BoardSizer } from './play/BoardSizer';
 import { EnergyBadge } from './play/EnergyBadge';
@@ -27,18 +26,6 @@ interface CityMapScreenProps {
 
 function makeMatchSeed() {
   return `match-${Date.now().toString(36)}`;
-}
-
-function drawOpeningHands(seed: string): MatchState {
-  let state = createInitialMatchState(seed, BOOTSTRAP_MANIFEST);
-  for (const owner of ['P0', 'P1'] as Owner[]) {
-    for (let i = 0; i < 4; i++) {
-      const top = state.deck[owner][0];
-      if (!top) break;
-      state = apply(state, { type: 'CARD_DRAWN', owner, cardId: top.id as CardId, toHand: true }, BOOTSTRAP_MANIFEST);
-    }
-  }
-  return state;
 }
 
 const CityGameBoard = (props: CityMapScreenProps) => {
@@ -110,7 +97,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
       </div>
 
       <div class="action-bar city-action-bar">
-        <button class="retreat-btn" type="button" onClick={props.onExit}>
+        <button class="retreat-btn" type="button" onClick={() => props.onExit?.()}>
           RETREAT
         </button>
         <button class="energy-button" type="button" title={`Your energy ${engineState.energy[localSeat]}`}>
@@ -125,16 +112,14 @@ const CityGameBoard = (props: CityMapScreenProps) => {
 };
 
 export const CityMapScreen = (props: CityMapScreenProps) => {
-  const [seed] = createSignal(makeMatchSeed());
-  const [initialState] = createSignal(drawOpeningHands(seed()));
+  const candidate = buildDebugMatchBootstrap(DEBUG_DECKS[0], DEBUG_DECKS[1], makeMatchSeed());
+  const validation = validateMatchBootstrap(candidate, BOOTSTRAP_MANIFEST);
+  if (!validation.ok) throw new Error(JSON.stringify(validation.issues));
 
   return (
     <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
       <VfxHost class="board-wrap" id="boardWrap">
-        <PlayGameProvider
-          initialState={initialState()}
-          seatMeta={{ P0: { name: 'V_KOJIMA' }, P1: { name: 'ZAIBATSU' } }}
-        >
+        <PlayGameProvider bootstrap={validation.value}>
           <BoardSizer />
           <CityGameBoard onExit={props.onExit} />
         </PlayGameProvider>

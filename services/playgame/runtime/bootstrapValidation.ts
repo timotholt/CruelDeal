@@ -10,7 +10,7 @@ import type {
 } from './contracts';
 
 const SEATS = ['P0', 'P1'] as const satisfies readonly Seat[];
-const MODES = new Set(['CONQUEST', 'LADDER']);
+const MODES = new Set(['CONQUEST', 'LADDER', 'DEBUG']);
 const CONTROLLERS = new Set(['LOCAL_HUMAN', 'LOCAL_AI', 'REMOTE_PLAYER']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

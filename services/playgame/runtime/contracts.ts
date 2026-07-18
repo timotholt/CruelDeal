@@ -5,7 +5,7 @@ import type { MatchIntent } from '../engine/types/intents';
 import type { MatchState } from '../engine/types/state';
 
 /** Descriptive match modes. They do not select reducer rules in Phase 1. */
-export type MatchMode = 'CONQUEST' | 'LADDER';
+export type MatchMode = 'CONQUEST' | 'LADDER' | 'DEBUG';
 
 /** Participant execution is session metadata, not reducer state. */
 export type ParticipantController = 'LOCAL_HUMAN' | 'LOCAL_AI' | 'REMOTE_PLAYER';
@@ -159,7 +159,9 @@ interface AcceptanceIdentity {
 export interface AcceptedIntentResult extends AcceptanceIdentity {
   readonly status: 'accepted';
   readonly revision: MatchRevision;
-  readonly transaction: CommittedTransactionRecord;
+  /** Private planning edits have no canonical transaction until both seats lock. */
+  readonly commit: 'PRIVATE' | 'COMMITTED';
+  readonly transaction?: CommittedTransactionRecord;
 }
 
 export type IntentIllegalityCode =

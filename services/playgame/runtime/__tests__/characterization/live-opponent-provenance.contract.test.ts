@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { createRng } from '../../../engine/rng';
-import { planLiveRemoteSeat } from '../../../script/liveRemoteSeatPlanner';
+import { planEnemyTurnFromHand } from '../../../engine/ai';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -8,7 +8,7 @@ import {
 } from '../../../engine/testkit';
 
 describe('current live opponent deck provenance', () => {
-  test.fails('plays existing cards from the remote hand instead of minting manifest-pool cards', async () => {
+  test('plays existing cards from the remote hand instead of minting manifest-pool cards', async () => {
     const deckDefs = Array.from({ length: 12 }, (_, index) =>
       testCardDef(`remote-deck-${index}`, { cost: index === 0 ? 1 : 7 }));
     const outside = testCardDef('outside-remote-deck', { cost: 1 });
@@ -39,26 +39,16 @@ describe('current live opponent deck provenance', () => {
       maxEnergy: { P0: 1, P1: 1 },
     });
 
-    // Find a reproducible seed where the live production planning seam chooses
-    // the one affordable definition outside the selected deck.
-    const plannerSeed = Array.from({ length: 128 }, (_, index) => `pool-seed-${index}`)
-      .find((seed) => planLiveRemoteSeat(
-        fixture.state,
-        'P1',
-        manifest,
-        createRng(seed),
-      )[0]?.defId === outside.defId);
-    expect(plannerSeed).toBeDefined();
-
-    const selectedDeckDefIds = new Set(deckDefs.map((def) => def.defId));
-    const livePlan = planLiveRemoteSeat(
+    const remoteHandIds = new Set(openingHandSpecs.map((card) => card.id));
+    const livePlan = planEnemyTurnFromHand(
       fixture.state,
       'P1',
       manifest,
-      createRng(plannerSeed!),
+      createRng('live-hand-plan'),
+      { forkTag: 'live-ai:1:P1' },
     );
 
     expect(livePlan).not.toHaveLength(0);
-    expect(livePlan.every((play) => selectedDeckDefIds.has(play.defId))).toBe(true);
+    expect(livePlan.every((play) => remoteHandIds.has(play.cardId))).toBe(true);
   });
 });

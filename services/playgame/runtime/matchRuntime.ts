@@ -1,4 +1,6 @@
 import { createInitialMatchState } from '../engine/cli/initState';
+import { apply } from '../engine/apply';
+import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { Manifest } from '../engine/manifest/types';
 import { createRng } from '../engine/rng';
@@ -31,6 +33,8 @@ export type MatchTransactionSubscriber = (timeline: MatchTransactionFrames) => v
 
 export interface MatchRuntime {
   state(): MatchState;
+  /** Read-only private-plan projection over a committed presentation base. */
+  projectWorkingState(baseState?: MatchState): MatchState;
   genesis(): MatchState;
   revision(): MatchRevision;
   transactions(): readonly CommittedTransactionRecord[];
@@ -42,6 +46,7 @@ export interface MatchRuntime {
 interface QueuedIntent {
   readonly envelope: IntentEnvelope;
   readonly resolve: (result: IntentAcceptanceResult) => void;
+  readonly after?: (result: IntentAcceptanceResult) => void;
 }
 
 interface CommitCandidate {
@@ -53,6 +58,11 @@ interface CommitCandidate {
 interface CommittedCandidate {
   readonly result?: AcceptedIntentResult;
   readonly timeline: MatchTransactionFrames;
+}
+
+interface PlannedStage {
+  readonly intent: Extract<MatchIntent, { type: 'STAGE_CARD' }>;
+  readonly events: readonly MatchEvent[];
 }
 
 const MUTATION_OPTIONAL_EVENTS = new Set<MatchEvent['type']>([
@@ -208,10 +218,32 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   const subscribers = new Set<MatchTransactionSubscriber>();
   const resolutionRng = forkResolutionRng(createRng(validatedBootstrap.seed));
   let authoritativeState = genesisState;
+  const planning: Record<Seat, PlannedStage[]> = { P0: [], P1: [] };
+  const locked: Record<Seat, boolean> = { P0: false, P1: false };
   let currentRevision: MatchRevision = 0;
   let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
   let drainScheduled = false;
   let draining = false;
+
+  const foldPlannedStages = (
+    seat: Seat,
+    baseState: MatchState = authoritativeState,
+  ): MatchState => {
+    let state = baseState;
+    for (const planned of planning[seat]) {
+      // Presentation frames at or after this stage already contain its whole
+      // event batch, including lane-entry effects. Never fold it twice.
+      if (state.cards[planned.intent.cardId]?.zone !== 'HAND') continue;
+      for (const event of planned.events) state = apply(state, event, manifest);
+    }
+    return state;
+  };
+
+  const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
+    foldPlannedStages(validatedBootstrap.viewerSeat, baseState)
+  );
+
+  const visibleState = (): MatchState => projectWorkingState();
 
   const commit = (candidate: CommitCandidate): CommittedCandidate => {
     const baseRevision = currentRevision;
@@ -246,6 +278,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
           seat: candidate.identity.seat as Seat,
           intentId: candidate.identity.intentId,
           revision,
+          commit: 'COMMITTED',
           transaction,
         })
       : undefined;
@@ -286,6 +319,117 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   ): IntentAcceptanceResult => {
     receipts.set(key, rejection);
     return rejection;
+  };
+
+  const acceptPrivate = (
+    key: IntentReceiptKey,
+    envelope: IntentEnvelope,
+  ): AcceptedIntentResult => {
+    currentRevision += 1;
+    const result: AcceptedIntentResult = Object.freeze({
+      status: 'accepted',
+      matchId: envelope.matchId,
+      seat: envelope.seat,
+      intentId: envelope.intentId,
+      revision: currentRevision,
+      commit: 'PRIVATE',
+    });
+    receipts.set(key, result);
+    return result;
+  };
+
+  const commitLockedTurn = (): void => {
+    let mergedState = authoritativeState;
+    const events: MatchEvent[] = [];
+    const ownerOrder: readonly Seat[] = authoritativeState.priority === 'P0'
+      ? ['P0', 'P1']
+      : ['P1', 'P0'];
+
+    for (const owner of ownerOrder) {
+      for (const planned of planning[owner]) {
+        const stageEvents = resolve(
+          mergedState,
+          planned.intent,
+          forkSemanticRng(
+            resolutionRng,
+            `stage:${authoritativeState.turn}:${owner}:${planned.intent.intentId}`,
+          ),
+          manifest,
+        );
+        const rejection = stageEvents[0]?.type === 'INTENT_REJECTED' ? stageEvents[0] : null;
+        if (rejection) continue;
+        events.push(...stageEvents);
+        for (const event of stageEvents) mergedState = apply(mergedState, event, manifest);
+      }
+    }
+
+    const resolutionEvents = resolve(
+      mergedState,
+      {
+        type: 'END_TURN',
+        intentId: `system-resolve-turn-${authoritativeState.turn}`,
+        owner: authoritativeState.priority,
+      },
+      forkSemanticRng(resolutionRng, `system-turn:${authoritativeState.turn}`),
+      manifest,
+    );
+    events.push(...resolutionEvents);
+
+    const committed = commit({
+      identity: {
+        matchId: validatedBootstrap.matchId,
+        seat: 'SYSTEM',
+        intentId: `resolve-turn-${authoritativeState.turn}`,
+      },
+      events,
+    });
+    // The synchronous presentation subscriber captures each frame with the
+    // viewer's just-consumed private plan still available as an overlay.
+    // Authority is already committed; this only prevents staged cards from
+    // disappearing before their canonical CARD_STAGED frame is presented.
+    publish(committed.timeline);
+    planning.P0 = [];
+    planning.P1 = [];
+    locked.P0 = false;
+    locked.P1 = false;
+  };
+
+  const enqueueAiTurn = (seat: Seat): void => {
+    const aiState = foldPlannedStages(seat);
+    const plays = planEnemyTurnFromHand(
+      aiState,
+      seat,
+      manifest,
+      forkSemanticRng(
+        resolutionRng,
+        `ai-plan:${aiState.turn}:${seat}:${currentRevision}`,
+      ),
+      { forkTag: `live-ai:${aiState.turn}:${seat}` },
+    );
+    let index = 0;
+
+    const enqueueNext = (): void => {
+      const play = plays[index++];
+      const intentId = play
+        ? `ai-${aiState.turn}-${seat}-stage-${index}-${play.cardId}`
+        : `ai-${aiState.turn}-${seat}-end`;
+      const envelope: IntentEnvelope = {
+        matchId: validatedBootstrap.matchId,
+        seat,
+        intentId,
+        expectedRevision: currentRevision,
+        intent: play
+          ? { type: 'STAGE_CARD', cardId: play.cardId, lane: play.lane }
+          : { type: 'END_TURN' },
+      };
+      queue.unshift({
+        envelope,
+        resolve: () => undefined,
+        ...(play ? { after: enqueueNext } : {}),
+      });
+    };
+
+    enqueueNext();
   };
 
   const acceptAtDequeue = (envelope: IntentEnvelope): IntentAcceptanceResult => {
@@ -339,11 +483,89 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
     }
 
     try {
-      const rng = forkSemanticRng(
-        resolutionRng,
-        `${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`,
+      if (engineIntent.type === 'STAGE_CARD') {
+        if (locked[envelope.seat]) {
+          return storeRejection(key, illegalResult(
+            envelope,
+            currentRevision,
+            'PHASE_INVALID',
+            'seat is locked',
+          ));
+        }
+        const planningState = foldPlannedStages(envelope.seat);
+        const events = resolve(
+          planningState,
+          engineIntent,
+          forkSemanticRng(
+            resolutionRng,
+            `stage:${planningState.turn}:${envelope.seat}:${envelope.intentId}`,
+          ),
+          manifest,
+        );
+        const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
+        if (events.length === 0 || engineRejection) {
+          return storeRejection(key, illegalResult(
+            envelope,
+            currentRevision,
+            'RULES_INVALID',
+            engineRejection?.reason ?? 'intent produced no planning events',
+          ));
+        }
+        planning[envelope.seat].push({ intent: engineIntent, events: Object.freeze([...events]) });
+        return acceptPrivate(key, envelope);
+      }
+
+      if (engineIntent.type === 'UNSTAGE_CARD') {
+        if (locked[envelope.seat]) {
+          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is locked'));
+        }
+        const index = planning[envelope.seat].findIndex(
+          (planned) => planned.intent.cardId === engineIntent.cardId,
+        );
+        if (index < 0) {
+          return storeRejection(key, illegalResult(
+            envelope,
+            currentRevision,
+            'RULES_INVALID',
+            'card is not in the private planning stack',
+          ));
+        }
+        planning[envelope.seat].splice(index);
+        return acceptPrivate(key, envelope);
+      }
+
+      if (engineIntent.type === 'UNDO_TURN') {
+        if (locked[envelope.seat]) {
+          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is locked'));
+        }
+        if (planning[envelope.seat].length === 0) {
+          return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID', 'planning stack is empty'));
+        }
+        planning[envelope.seat] = [];
+        return acceptPrivate(key, envelope);
+      }
+
+      if (engineIntent.type === 'END_TURN') {
+        if (locked[envelope.seat]) {
+          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is already locked'));
+        }
+        locked[envelope.seat] = true;
+        const result = acceptPrivate(key, envelope);
+        const other: Seat = envelope.seat === 'P0' ? 'P1' : 'P0';
+        if (locked[other]) {
+          commitLockedTurn();
+        } else if (validatedBootstrap.participants[other].controller === 'LOCAL_AI') {
+          enqueueAiTurn(other);
+        }
+        return result;
+      }
+
+      const events = resolve(
+        authoritativeState,
+        engineIntent,
+        forkSemanticRng(resolutionRng, `commit:${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`),
+        manifest,
       );
-      const events = resolve(authoritativeState, engineIntent, rng, manifest);
       const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
       if (events.length === 0 || engineRejection) {
         return storeRejection(key, illegalResult(
@@ -353,7 +575,6 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
           engineRejection?.reason ?? 'intent produced no authoritative events',
         ));
       }
-
       const committed = commit({
         identity: {
           matchId: envelope.matchId,
@@ -364,6 +585,12 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
         events,
         receiptKey: key,
       });
+      if (engineIntent.type === 'CONCEDE') {
+        planning.P0 = [];
+        planning.P1 = [];
+        locked.P0 = false;
+        locked.P1 = false;
+      }
       publish(committed.timeline);
       return committed.result!;
     } catch (error) {
@@ -386,6 +613,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
         const queued = queue.shift()!;
         const result = acceptAtDequeue(queued.envelope);
         queued.resolve(result);
+        queued.after?.(result);
       }
     } finally {
       draining = false;
@@ -409,7 +637,8 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   };
 
   return Object.freeze({
-    state: () => authoritativeState,
+    state: visibleState,
+    projectWorkingState,
     genesis: () => genesisState,
     revision: () => currentRevision,
     transactions: () => committedTransactions,

@@ -15,6 +15,7 @@
 
 export interface ScriptCtx {
   cancelled?: boolean;
+  onCancel?: () => void;
   onStep?: (name: string) => void;
   // Flow-specific fields are attached per-caller; typed as `any` here on
   // purpose so actions can pluck out what they need without a heavy
@@ -67,7 +68,9 @@ export function createScript(ctx: ScriptCtx = {}): Script {
     ctx,
     run: (step) => run(step, ctx),
     cancel() {
+      if (ctx.cancelled) return;
       ctx.cancelled = true;
+      ctx.onCancel?.();
     },
   };
 }

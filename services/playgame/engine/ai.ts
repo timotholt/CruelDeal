@@ -8,13 +8,13 @@
  * Two planners, covering the UI-today and CLI/multiplayer-future flows:
  *
  *   planEnemyTurnFromPool():
- *     Picks affordable card DEFS from the manifest pool. Used by the live UI
- *     while the enemy deck isn't pre-populated (pre-Tier 1.2 deck model).
+ *     Picks affordable card DEFS from the manifest pool. Retained for engine
+ *     tests and legacy simulations; it is not used by live play.
  *     Emits `{ defId, lane, cost }` — the caller mints a CardInstance.
  *
  *   planEnemyTurnFromHand():
  *     Picks affordable CARDS from `state.hand[owner]`. Used by the headless
- *     CLI today and by the UI once opp hands are real. Emits
+ *     CLI and the live runtime. Emits
  *     `{ cardId, lane }` — caller stages the existing card.
  *
  * Both are deterministic (same seed → same plan) and use the query system
@@ -59,7 +59,7 @@ export interface PlanOptions {
 /**
  * Plan an enemy's turn by picking affordable card DEFS from the manifest.
  *
- * Stopgap planner used while the enemy deck isn't pre-populated. Iterates:
+ * Legacy pool planner retained for tests and non-live simulations. Iterates:
  *   1. If `owner.energy <= 0` or no lane has capacity → stop.
  *   2. Find card defs with `cost <= energy` (via query system).
  *   3. Pick one uniformly at random from the seeded RNG.

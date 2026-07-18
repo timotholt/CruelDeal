@@ -510,6 +510,8 @@ Commit and presentation behavior:
   - hand-slot reservations
   - VFX/SFX choreography
 - **[BUILD AFTER]** Consolidate redundant structural choreography with card-transfer derivation.
+- **[BUILD AFTER]** Choreography selects VFX/SFX from event causality — keyed by `(event.type, cause.effectKind)` with `cause.sourceId` as the effect-origin anchor — never from state-diff shape alone. State diffing supplies geometry (rects) only.
+- **[BUILD AFTER]** Make `cause: EffectRef` mandatory on every effect-originated mutating event (`ENERGY_CHANGED`'s optional cause and the tag events are the known gaps) so presentation never guesses a mutation's origin.
 - **[BUILD AFTER]** Implement generation-safe failure snap and queued-intent fast-forward.
 - **[BUILD AFTER]** Enforce the no-submission hook capability and defer presentation-triggered commands.
 - **[BUILD AFTER]** On provider disposal abort/invalidate/unsubscribe, prevent stale writes, and remount from latest projection.
