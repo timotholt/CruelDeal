@@ -603,6 +603,13 @@ Extract cohesive units without changing the visual design:
   - `HandCard`
   - `PileViewer`
   - inspector content where appropriate
+- **[BUILD LAST]** Spell card silhouette (designer spec 2026-07-18): the
+  shared renderer supports a shape variant keyed by `cardType`. Spells
+  render as the Snap-style lollipop — circle head at full card width,
+  stem body at ~80% card width — inside the SAME 9:16 bounding box as a
+  rectangular card, so slots, drag, transfers, and rect-capture animation
+  are untouched (clip-path/layout only). The energy-cost badge sits on
+  the circle's upper-left; spells still show no power stat.
 - **[BUILD LAST]** Keep zone-specific interaction/visibility in small adapters, use one explicit presentation model, and bind refs through the host.
 
 ### Board Sizing
