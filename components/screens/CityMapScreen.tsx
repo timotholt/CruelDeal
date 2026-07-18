@@ -8,10 +8,9 @@
 import { For, createMemo } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
 import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
-import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
-import { validateMatchBootstrap } from '@/services/playgame/runtime/bootstrapValidation';
+import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { getHandForSeat } from '@/services/playgame/view';
 import { BoardSizer } from './play/BoardSizer';
 import { EnergyBadge } from './play/EnergyBadge';
@@ -113,13 +112,12 @@ const CityGameBoard = (props: CityMapScreenProps) => {
 
 export const CityMapScreen = (props: CityMapScreenProps) => {
   const candidate = buildDebugMatchBootstrap(DEBUG_DECKS[0], DEBUG_DECKS[1], makeMatchSeed());
-  const validation = validateMatchBootstrap(candidate, BOOTSTRAP_MANIFEST);
-  if (!validation.ok) throw new Error(JSON.stringify(validation.issues));
+  const session = MatchSession.fromBootstrap(candidate);
 
   return (
     <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
       <VfxHost class="board-wrap" id="boardWrap">
-        <PlayGameProvider bootstrap={validation.value}>
+        <PlayGameProvider session={session}>
           <BoardSizer />
           <CityGameBoard onExit={props.onExit} />
         </PlayGameProvider>

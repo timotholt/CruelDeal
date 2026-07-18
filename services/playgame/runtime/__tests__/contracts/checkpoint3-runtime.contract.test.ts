@@ -46,7 +46,21 @@ function runtimeFixture(): MatchRuntime {
   };
   const validation = validateMatchBootstrap(bootstrap, BOOTSTRAP_MANIFEST);
   if (!validation.ok) throw new Error(JSON.stringify(validation.issues));
-  return createMatchRuntime(validation.value);
+  return createMatchRuntime({
+    matchId: validation.value.matchId,
+    seed: validation.value.seed,
+    rulesetId: validation.value.rulesetId,
+    manifestVersion: validation.value.manifestVersion,
+    viewerSeat: validation.value.viewerSeat,
+    controllers: {
+      P0: validation.value.participants.P0.controller,
+      P1: validation.value.participants.P1.controller,
+    },
+    decks: {
+      P0: validation.value.decks.P0.entries,
+      P1: validation.value.decks.P1.entries,
+    },
+  });
 }
 
 function stageEnvelope(

@@ -1,0 +1,194 @@
+# Phase 1 Checkpoint 5 — Final Adapters and Authority Removal
+
+Status: complete. All Phase 1 **BUILD NOW** authority-migration work is landed.
+`MatchSession` owns validated setup and `MatchRuntime` remains the only live
+gameplay authority. The plan's explicitly **BUILD AFTER**, **BUILD LAST**, and
+**DEFER** exit items remain future work and are identified below; no Phase 2
+provider split was started.
+
+## Session and replay adapters
+
+- Added `MatchSession.fromBootstrap(...)`. It validates and defensively copies
+  the candidate, retains the frozen validated bootstrap, resolves the manifest
+  and ruleset, and constructs the sole `MatchRuntime` from mechanical and local
+  scheduling inputs only: match/seed/rules identity, viewer/controller roles,
+  and deck entries. Display names, participant/deck IDs, avatars, deck names,
+  revisions, hashes, and mode remain session-owned.
+- `/play`, the city-map experiment, and provider tests now mount
+  `PlayGameProvider` with a `MatchSession`; the provider no longer constructs a
+  second setup/runtime path from a bootstrap prop.
+- `MatchRuntime.exportReplay()` returns genesis plus committed records;
+  `MatchSession.exportReplay()` adds its retained bootstrap to form the UI/debug
+  replay export. Added `renderRuntimeReplay(...)`, a read-only fold over that
+  bootstrap, genesis, and ordered committed transaction shape. It validates
+  match identity, seed/manifest compatibility, transaction ordering, and
+  commit revision shape without mutating the export.
+- `PlayBoard` replay rendering and ReplayDrawer's Copy Replay JSON action now
+  consume `exportRuntimeReplay()`. The old UI reconstruction from
+  `initialState + replayEvents()` was deleted, as were those context surfaces.
+- Added session/replay tests proving setup rejection precedes runtime creation,
+  the validated bootstrap is frozen and retained, the runtime is the sole
+  session authority, replay reaches runtime state, and rendering leaves the
+  export unchanged.
+
+## Development-only debug adapter
+
+- Moved the complete `window.__snapDebug` declaration and installer to
+  `services/playgame/debug/installSnapDebug.ts`.
+- `PlayGameProvider` loads that module only inside `import.meta.env.DEV` and
+  unregisters the exact installed API on cleanup. The production build has no
+  `__snapDebug` or `installSnapDebug` symbol.
+- Debug replay inspection and JSON copy use the same runtime export and
+  read-only runtime replay renderer as ReplayDrawer.
+
+## Deletion inventory
+
+The final tree has no production definition, import, call, or retained state
+for these former authority paths:
+
+- `PlayScriptCtx._engineEvents`, `_engineFinalState`, and
+  `_revealsConsumedUpTo`;
+- `liveRevealHandoff.ts` and `liveRemoteSeatPlanner.ts`;
+- `captureEngineEndTurn`, `revealByPriorityFromEngine`, and
+  `advanceTurnFromEngine`;
+- `dispatchLocationRevealEffects`, `autoPlayRemoteSeat`, `startResolving`, and
+  `finishResolving`;
+- live `planEnemyTurnFromPool` imports/calls (the legacy engine planner remains
+  only as an engine definition and engine-test subject);
+- context `initialState`, `replayEvents`, and the inline debug-global block;
+- the provider's `setEngineState` name/surface; the internal Solid adapter is
+  explicitly `setPresentedState` and is not exposed;
+- script `commitTurnResolution`, `submitEndTurn`, and mutable
+  `presentationTimeline` handoff.
+
+END_TURN is now submitted through the typed context command before the script
+starts. `resolveTurnFlow(timeline)` and `openingSequence(timeline)` accept only
+already-committed timelines and perform presentation pacing/UI-sidecar work.
+No script action originates, selects, slices, suppresses, or applies gameplay
+events.
+
+## Grep proofs
+
+All commands below were run from the repository root. Empty results are the
+expected proof.
+
+Legacy authority symbols and script command handoffs — no matches:
+
+```sh
+rg -n -g '*.ts' -g '*.tsx' '_engineEvents|_engineFinalState|_revealsConsumedUpTo|liveRevealHandoff|liveRemoteSeatPlanner|captureEngineEndTurn|revealByPriorityFromEngine|advanceTurnFromEngine|dispatchLocationRevealEffects|autoPlayRemoteSeat|startResolving|finishResolving|commitTurnResolution|submitEndTurn|presentationTimeline' contexts components services
+```
+
+Removed seam files — no matches:
+
+```sh
+rg --files services/playgame | rg 'liveRevealHandoff|liveRemoteSeatPlanner'
+```
+
+Raw gameplay mutation surfaces in the runtime/context/play components — no
+matches:
+
+```sh
+rg -n -g '*.ts' -g '*.tsx' '\bdispatch\s*\(|\bsetEngineState\b|\bsetState\b' contexts/PlayGameContext.tsx components/screens/play services/playgame/runtime
+```
+
+Component gameplay dispatch — no matches:
+
+```sh
+rg -n -g '*.tsx' -g '*.ts' '\bdispatch\s*\(' components
+```
+
+Live pool-planner imports/calls outside its engine definition and tests — no
+matches:
+
+```sh
+rg -n -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' 'import[^;]*planEnemyTurnFromPool|planEnemyTurnFromPool\s*\(' contexts components services/playgame | rg -v '^services/playgame/engine/ai\.ts:'
+```
+
+Replay UI/debug routing — every match is runtime-export based; there is no
+`replayMatch(...)` call in these UI/debug paths:
+
+```sh
+rg -n -g '*.ts' -g '*.tsx' 'renderRuntimeReplay|exportRuntimeReplay|replayMatch\(' contexts components/screens/play services/playgame/debug services/playgame/runtime/replayExport.ts
+```
+
+Development-only debug source and production output:
+
+```sh
+rg -n 'import\.meta\.env\.DEV|installSnapDebug' contexts/PlayGameContext.tsx services/playgame/debug/installSnapDebug.ts
+rg -n '__snapDebug|installSnapDebug' dist
+```
+
+The first command shows the guarded dynamic import and adapter definition. The
+second returns no matches after `npm run build`.
+
+## Final gates
+
+- `npm run test:playgame:phase0` — **pass** with
+  `PLAYGAME_PROPERTY_CASES=200`: 9 files, 52 tests. The five named properties
+  each ran at the configured 200-case depth.
+- `npx vitest run services/playgame/runtime contexts` — **pass**: 10 files,
+  55 tests.
+- `npm run build` — **pass**: Vite production build, 1,184 modules transformed.
+- `npm run lint` — expected repository-baseline exit 1: 608 problems,
+  **266 errors**, 342 warnings. This is three fewer errors than the recorded
+  269-error baseline in `phase0-taskE-baseline.md`; there are no new errors by
+  baseline count. Focused ESLint over every CP5 production/test file passes
+  with zero warnings.
+- `npx vitest run services/playgame/engine` — baseline-shaped collection
+  result: 22 file-level failures (legacy no-suite files plus the recorded
+  manifest drift), 6 files passed, **131 tests passed and 0 test-level
+  failures**. This exactly preserves the baseline test-level failure count.
+- `git diff --check` — **pass**.
+- Production debug-global grep over `dist` — **pass**, no matches.
+
+## Phase 1 exit-criteria checklist
+
+1. **MET — complete DOM-free turn and exact live/headless parity.** Runtime
+   characterization and P-PARITY cover full turns without DOM/director; CP4
+   routes live play through the same runtime.
+2. **MET — P-PARITY, P-EXACTLY-ONCE, P-PROVENANCE, P-FOLD, and P-NO-TIME.**
+   All pass at 200 generated cases in the Phase 0 gate.
+3. **MET — no raw setter and no authoritative presentation/script cursor.**
+   Runtime exposes read methods, typed intent submission, subscription, and
+   export only. The deletion greps above are empty.
+4. **MET — one live/replay frame builder; presentation cannot partially apply
+   authority.** Runtime commits with `buildEventTransactionFrames`; runtime
+   replay rendering uses the same builder. CP4 presentation tests prove frame
+   pacing is over already-committed state and failure fast-forwards display.
+5. **MET — shared opening size and provenance.** Both seats draw
+   `startingHandSize`; P-PROVENANCE and the live-opponent contract prove AI
+   plans from authoritative hand instances rather than manifest-pool minting.
+6. **MET — invalid setup rejects without deck shortening.** Tests explicitly
+   cover manifest version, ruleset, length, unknown/disabled definition,
+   variant, uniqueness, copy limit, and content hash.
+7. **MET — canonical local replay export shape.** Export contains the frozen
+   bootstrap, pre-opening genesis, and ordered non-overlapping committed
+   records; both fold and read-only-render tests reach runtime state.
+8. **MET — typed rejection/idempotency and FIFO continuity.** Runtime contracts
+   cover duplicate, stale, phase/rules invalidity, dequeue-time illegality,
+   malformed work, no event/frame additions, and continued drain.
+9. **MET — first lock waits and system reveal uses decided order.** The
+   two-non-AI lock test proves no first-lock transaction; runtime merges the
+   priority owner's retained private order first in one SYSTEM transaction.
+10. **NOT MET — normal UI/presentation projected types only.** The opaque
+    projected contracts and trusted-local adapter seam exist, but the current
+    unsplit compatibility provider still exposes trusted local canonical state
+    and frame types. Migrating its consumers belongs to the plan's explicit
+    BUILD AFTER provider/projection integration and was not pulled into this
+    checkpoint.
+11. **NOT MET — H1–H7/P-INTERLEAVE provider/director integration.** Explicitly
+    BUILD AFTER. CP4 has local provider/pacing regressions, but the general
+    director/cursor harness is not claimed.
+12. **NOT MET — bounded frame retention, log-free materialized state, bounded
+    gameplay indexes.** Explicitly BUILD LAST; Phase 1 preserves the named
+    seams and does not claim this later hardening.
+13. **NOT MET — durable recovery/receipt/checksum/CAS and exhaustive wire
+    redaction.** Explicitly DEFER until live-server storage/transport exists.
+14. **MET — complete BUILD NOW authority migration.** Live setup, intents, AI,
+    locks, resolution, opening, replay export, and every authoritative state
+    transition have one owner (`MatchRuntime`); no second live authority path
+    remains.
+
+Phase 1's complete BUILD NOW authority migration is therefore closed. The four
+not-met entries are the plan's explicitly later integration, hardening, and
+server-adapter work; none was started here.

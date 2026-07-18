@@ -2,7 +2,7 @@ import { createInitialMatchState } from '../engine/cli/initState';
 import { apply } from '../engine/apply';
 import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
-import type { Manifest } from '../engine/manifest/types';
+import type { Deck, Manifest } from '../engine/manifest/types';
 import { createRng } from '../engine/rng';
 import { resolve } from '../engine/resolve';
 import { buildEventTransactionFrames } from '../engine/transactionFrames';
@@ -21,10 +21,10 @@ import type {
   IntentReceipt,
   IntentReceiptKey,
   MatchRevision,
-  MatchRuntimeReplayExport,
+  MatchRuntimeRecordExport,
   MatchTransactionFrames,
+  ParticipantController,
   RuntimeIntent,
-  ValidatedMatchBootstrap,
 } from './contracts';
 import { buildOpeningTransaction } from './opening';
 import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
@@ -40,7 +40,17 @@ export interface MatchRuntime {
   transactions(): readonly CommittedTransactionRecord[];
   submitIntent(envelope: IntentEnvelope): Promise<IntentAcceptanceResult>;
   subscribeCommittedTransactions(subscriber: MatchTransactionSubscriber): () => void;
-  exportReplay(): MatchRuntimeReplayExport;
+  exportReplay(): MatchRuntimeRecordExport;
+}
+
+export interface MatchRuntimeConfig {
+  readonly matchId: string;
+  readonly seed: string;
+  readonly rulesetId: string;
+  readonly manifestVersion: number;
+  readonly viewerSeat: Seat;
+  readonly controllers: Readonly<Record<Seat, ParticipantController>>;
+  readonly decks: Readonly<Record<Seat, Deck>>;
 }
 
 interface QueuedIntent {
@@ -198,25 +208,22 @@ function illegalResult(
  * Creates the local, non-DOM match authority from an already validated and
  * frozen bootstrap. The bootstrap manifest is the only Phase 1 rules source.
  */
-export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap): MatchRuntime {
+export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const manifest: Manifest = BOOTSTRAP_MANIFEST;
-  if (validatedBootstrap.manifestVersion !== manifest.version) {
+  if (config.manifestVersion !== manifest.version) {
     throw new Error(
-      `createMatchRuntime: bootstrap manifest ${validatedBootstrap.manifestVersion} does not match ${manifest.version}`,
+      `createMatchRuntime: bootstrap manifest ${config.manifestVersion} does not match ${manifest.version}`,
     );
   }
-  if (!manifest.rulesets[validatedBootstrap.rulesetId]) {
-    throw new Error(`createMatchRuntime: unknown ruleset "${validatedBootstrap.rulesetId}"`);
+  if (!manifest.rulesets[config.rulesetId]) {
+    throw new Error(`createMatchRuntime: unknown ruleset "${config.rulesetId}"`);
   }
 
-  const genesisState = createInitialMatchState(validatedBootstrap.seed, manifest, {
-    P0: validatedBootstrap.decks.P0.entries,
-    P1: validatedBootstrap.decks.P1.entries,
-  });
+  const genesisState = createInitialMatchState(config.seed, manifest, config.decks);
   const receipts: InMemoryIntentReceiptMap = new Map();
   const queue: QueuedIntent[] = [];
   const subscribers = new Set<MatchTransactionSubscriber>();
-  const resolutionRng = forkResolutionRng(createRng(validatedBootstrap.seed));
+  const resolutionRng = forkResolutionRng(createRng(config.seed));
   let authoritativeState = genesisState;
   const planning: Record<Seat, PlannedStage[]> = { P0: [], P1: [] };
   const locked: Record<Seat, boolean> = { P0: false, P1: false };
@@ -240,7 +247,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   };
 
   const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
-    foldPlannedStages(validatedBootstrap.viewerSeat, baseState)
+    foldPlannedStages(config.viewerSeat, baseState)
   );
 
   const visibleState = (): MatchState => projectWorkingState();
@@ -248,11 +255,11 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   const commit = (candidate: CommitCandidate): CommittedCandidate => {
     const baseRevision = currentRevision;
     const revision = baseRevision + 1;
-    const transactionId = `${validatedBootstrap.matchId}:tx:${revision}`;
+    const transactionId = `${config.matchId}:tx:${revision}`;
     const events = Object.freeze([...candidate.events]);
     const transaction: CommittedTransactionRecord = Object.freeze({
       transactionId,
-      matchId: validatedBootstrap.matchId,
+      matchId: config.matchId,
       baseRevision,
       revision,
       intent: Object.freeze({ ...candidate.identity }),
@@ -305,7 +312,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
   const opening = buildOpeningTransaction(genesisState, manifest);
   const opened = commit({
     identity: {
-      matchId: validatedBootstrap.matchId,
+      matchId: config.matchId,
       seat: 'SYSTEM',
       intentId: opening.transactionId,
     },
@@ -377,7 +384,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
 
     const committed = commit({
       identity: {
-        matchId: validatedBootstrap.matchId,
+        matchId: config.matchId,
         seat: 'SYSTEM',
         intentId: `resolve-turn-${authoritativeState.turn}`,
       },
@@ -414,7 +421,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
         ? `ai-${aiState.turn}-${seat}-stage-${index}-${play.cardId}`
         : `ai-${aiState.turn}-${seat}-end`;
       const envelope: IntentEnvelope = {
-        matchId: validatedBootstrap.matchId,
+        matchId: config.matchId,
         seat,
         intentId,
         expectedRevision: currentRevision,
@@ -445,7 +452,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
       };
     }
 
-    if (envelope.matchId !== validatedBootstrap.matchId) {
+    if (envelope.matchId !== config.matchId) {
       return storeRejection(key, illegalResult(envelope, currentRevision, 'MATCH_MISMATCH'));
     }
     if (!isSeat(envelope.seat)) {
@@ -554,7 +561,7 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
         const other: Seat = envelope.seat === 'P0' ? 'P1' : 'P0';
         if (locked[other]) {
           commitLockedTurn();
-        } else if (validatedBootstrap.participants[other].controller === 'LOCAL_AI') {
+        } else if (config.controllers[other] === 'LOCAL_AI') {
           enqueueAiTurn(other);
         }
         return result;
@@ -649,7 +656,6 @@ export function createMatchRuntime(validatedBootstrap: ValidatedMatchBootstrap):
     },
     exportReplay: () => Object.freeze({
       version: 1 as const,
-      bootstrap: validatedBootstrap,
       genesis: genesisState,
       transactions: committedTransactions,
     }),

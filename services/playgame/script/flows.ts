@@ -9,7 +9,6 @@
 
 import { serial, wait, type Step } from './runner';
 import {
-  commitTurnResolution,
   fadeInLocationTile,
   flipPlayerCardsFaceDown,
   hideLocationTiles,
@@ -18,6 +17,7 @@ import {
   setBoardVisible,
   toast,
 } from './actions';
+import type { MatchTransactionFrames } from '../runtime/contracts';
 
 /**
  * Opening sequence for a new match.
@@ -26,14 +26,10 @@ import {
  *   2. CRUEL DEAL banner
  *   3. board UI fades in
  *   4. 3 ??? location tiles fade in left -> right
- *   5. deal 1 card to player x3 (with pauses)
+ *   5. walk the runtime's committed opening frames
  *   6. TURN 1 banner
- *   7. deal 1 more card to player
- *   8. reveal the first location
- *
- * Expects `ctx.drawQueue` to be pre-seeded with at least 4 cards.
  */
-export const openingSequence = (): Step =>
+export const openingSequence = (timeline: MatchTransactionFrames): Step =>
   serial(
     setBoardVisible(false),
     hideLocationTiles(),
@@ -59,7 +55,7 @@ export const openingSequence = (): Step =>
 
     // Opening authority was committed by MatchRuntime as revision 1 before
     // this storyboard mounted. This step only paces those immutable frames.
-    paceCommittedOpening(),
+    paceCommittedOpening(timeline),
     toast('TURN 1', { duration: 1800 }),
   );
 
@@ -67,24 +63,21 @@ export const openingSequence = (): Step =>
  * Turn-resolution sequence, triggered by END TURN.
  *
  * Follows the Marvel Snap reveal cadence:
- *   1. Lock the UI (`startResolving`).
- *   2. Flip the player's this-turn plays face-down — they were sitting
+ * Runtime has already accepted END_TURN and committed the complete timeline
+ * before this presentation-only flow starts.
+ *
+ *   1. Flip the player's this-turn plays face-down — they were sitting
  *      face-up in lane since the player dropped them.
- *   3. Enemy commits its plays face-down (fly-in, no reveal yet).
- *   4. Priority-ordered reveal: whichever side has higher total power
+ *   2. Pace the committed enemy plays face-down (fly-in, no reveal yet).
+ *   3. Priority-ordered reveal: whichever side has higher total power
  *      flips its cards face-up first, then the other side follows.
- *   5. Turn bookkeeping (counter + energy + TURN N banner).
- *   6. Apply event-driven turn bookkeeping, including CARD_DRAWN.
- *   7. Reveal next location on turns 2 / 3.
- *   8. Unlock the UI.
+ *   4. Pace turn bookkeeping, draws, and location reveals in frame order.
+ *   5. Unlock the UI presentation sidecar.
  */
-export const resolveTurnFlow = (): Step =>
+export const resolveTurnFlow = (timeline: MatchTransactionFrames): Step =>
   serial(
     flipPlayerCardsFaceDown(),
     wait(200),
-    // END_TURN locks the local private plan. Runtime-owned AI intents lock the
-    // remote seat, then one SYSTEM transaction commits the canonical merge.
-    commitTurnResolution(),
     wait(250),
-    paceCommittedTurn(),
+    paceCommittedTurn(timeline),
   );

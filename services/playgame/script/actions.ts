@@ -28,11 +28,8 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   sfx?: (name: string) => void;
   cancelled?: boolean;
   onCancel?: () => void;
-  openingTimeline: MatchTransactionFrames;
-  submitEndTurn: () => Promise<MatchTransactionFrames | null>;
   presentCommittedFrame: (frame: MatchEventFrame) => void;
   finishTurnPresentation: () => void;
-  presentationTimeline?: MatchTransactionFrames;
 }
 
 const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -178,8 +175,8 @@ const paceTimeline = async (c: PlayScriptCtx, timeline: MatchTransactionFrames):
   }
 };
 
-export const paceCommittedOpening = (): Step => async (ctx) => {
-  await paceTimeline(ctx as PlayScriptCtx, (ctx as PlayScriptCtx).openingTimeline);
+export const paceCommittedOpening = (timeline: MatchTransactionFrames): Step => async (ctx) => {
+  await paceTimeline(ctx as PlayScriptCtx, timeline);
 };
 
 export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
@@ -190,15 +187,10 @@ export const flipPlayerCardsFaceDown = (): Step => async (ctx) => {
   await waitFor(250);
 };
 
-export const commitTurnResolution = (): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  c.presentationTimeline = await c.submitEndTurn() ?? undefined;
-};
-
-export const paceCommittedTurn = (): Step => async (ctx) => {
+export const paceCommittedTurn = (timeline: MatchTransactionFrames): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   try {
-    if (c.presentationTimeline) await paceTimeline(c, c.presentationTimeline);
+    await paceTimeline(c, timeline);
     c.setUi('isFlipped', false);
     if (c.state.phase === 'ENDED' && c.state.result && !c.ui.lockedResult) {
       c.setUi('lockedResult', c.state.result);
@@ -209,7 +201,6 @@ export const paceCommittedTurn = (): Step => async (ctx) => {
       await waitFor(1200);
     }
   } finally {
-    c.presentationTimeline = undefined;
     c.finishTurnPresentation();
   }
 };

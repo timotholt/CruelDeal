@@ -11,26 +11,26 @@ import { PlayGameProvider } from '@/contexts/PlayGameContext';
 import { BoardSizer } from './play/BoardSizer';
 import { PlayBoard } from './play/PlayBoard';
 import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
-import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
-import { validateMatchBootstrap } from '@/services/playgame/runtime/bootstrapValidation';
-import type { MatchBootstrap, ValidatedMatchBootstrap } from '@/services/playgame/runtime/contracts';
+import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
+import { MatchSession, MatchSessionSetupError } from '@/services/playgame/runtime/matchSession';
 
 interface ClassicPlayScreenProps {
   onExit?: () => void;
 }
 
 export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
-  const [bootstrap, setBootstrap] = createSignal<ValidatedMatchBootstrap | null>(null);
+  const [session, setSession] = createSignal<MatchSession | null>(null);
   const [setupError, setSetupError] = createSignal<string | null>(null);
 
   const handleDeckConfirmed = (candidate: MatchBootstrap) => {
-    const validation = validateMatchBootstrap(candidate, BOOTSTRAP_MANIFEST);
-    if (!validation.ok) {
-      setSetupError(validation.issues.map((issue) => issue.message).join('\n'));
-      return;
+    try {
+      setSession(MatchSession.fromBootstrap(candidate));
+      setSetupError(null);
+    } catch (error) {
+      setSetupError(error instanceof MatchSessionSetupError
+        ? error.issues.map((issue) => issue.message).join('\n')
+        : error instanceof Error ? error.message : String(error));
     }
-    setSetupError(null);
-    setBootstrap(validation.value);
   };
 
   return (
@@ -38,7 +38,7 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
       class="playgame-root board-hidden"
       style={{ width: '100%', height: '100%', background: '#000' }}
     >
-      <Show when={bootstrap() === null}>
+      <Show when={session() === null}>
         <DebugDeckPicker onConfirm={handleDeckConfirmed} />
       </Show>
 
@@ -46,10 +46,10 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
         {(message) => <pre class="fixed bottom-4 left-4 right-4 z-[10000] whitespace-pre-wrap bg-red-950 p-4 text-red-100">{message()}</pre>}
       </Show>
 
-      <Show when={bootstrap() ?? false} keyed>
-        {(validatedBootstrap) => (
+      <Show when={session() ?? false} keyed>
+        {(matchSession) => (
           <VfxHost class="board-wrap" id="boardWrap">
-            <PlayGameProvider bootstrap={validatedBootstrap}>
+            <PlayGameProvider session={matchSession}>
               <BoardSizer />
               <PlayBoard onExit={props.onExit} />
             </PlayGameProvider>

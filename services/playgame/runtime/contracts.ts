@@ -202,10 +202,14 @@ export type IntentReceiptKey = string & { readonly [intentReceiptKeyBrand]: true
 /** Local-only receipt storage. Durability, watermarks, and compaction are deferred. */
 export type InMemoryIntentReceiptMap = Map<IntentReceiptKey, IntentReceipt>;
 
-/** Canonical local replay source; transaction events never overlap genesis. */
-export interface MatchRuntimeReplayExport {
+/** Runtime-owned replay records; transaction events never overlap genesis. */
+export interface MatchRuntimeRecordExport {
   readonly version: 1;
-  readonly bootstrap: ValidatedMatchBootstrap;
   readonly genesis: MatchState;
   readonly transactions: readonly CommittedTransactionRecord[];
+}
+
+/** Session-owned replay export adds the retained descriptive bootstrap. */
+export interface MatchRuntimeReplayExport extends MatchRuntimeRecordExport {
+  readonly bootstrap: ValidatedMatchBootstrap;
 }

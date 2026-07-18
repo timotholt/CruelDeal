@@ -5,7 +5,6 @@ const actionSpies = vi.hoisted(() => {
   const step = (): Promise<void> => Promise.resolve();
   const action = () => vi.fn((): Step => step);
   return {
-    commitTurnResolution: action(),
     fadeInLocationTile: action(),
     flipPlayerCardsFaceDown: action(),
     hideLocationTiles: action(),
@@ -26,7 +25,7 @@ describe('current live opening contract', () => {
   });
 
   test('uses a symmetric runtime opening transaction instead of local-only deal actions', () => {
-    openingSequence();
+    openingSequence({} as never);
 
     expect(actionSpies.paceCommittedOpening).toHaveBeenCalledTimes(1);
   });

@@ -7,8 +7,9 @@
  *   - drag-and-drop      (useDragDrop)
  *   - opening sequence + turn-resolve flow (script/runner)
  *
- * Mutations go through `actions.*` (engine events) or the script engine
- * context. Rendering goes through `services/playgame/view.ts` selectors.
+ * Gameplay mutations go through typed runtime-backed context commands. The
+ * script context is presentation-only. Rendering goes through
+ * `services/playgame/view.ts` selectors.
  * UI primitives (HandCard, BoardCard, etc.) live in sibling files so they
  * can change without touching engine-coupled code.
  */
@@ -31,7 +32,7 @@ import {
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { LaneIdx } from '@/services/playgame/engine/types/ids';
 import type { CardZone } from '@/services/playgame/engine/types/state';
-import { replayMatch } from '@/services/playgame/engine/replay';
+import { renderRuntimeReplay } from '@/services/playgame/runtime/replayExport';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
@@ -61,8 +62,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const isDev = import.meta.env.DEV;
   const pg = usePlayGame();
   const {
-    engineState, manifest, ui, setUi, initialState, isResolving, actions,
-    localSeat, remoteSeat, seatMeta, openingTimeline, replayEvents,
+    engineState, manifest, ui, setUi, isResolving, actions,
+    localSeat, remoteSeat, seatMeta, openingTimeline,
   } = pg;
   const { cardRefs, zoneRefs, boardRef, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
@@ -74,12 +75,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   const replayTimeline = createMemo(() => {
     if (!isDev) return null;
-    return replayMatch({
-      seed: engineState.seed,
-      manifest,
-      initialState,
-      events: replayEvents(),
-    });
+    // Track committed presentation progress; rendering itself consumes only
+    // the runtime export (bootstrap + genesis + transaction records).
+    void engineState.log.length;
+    return renderRuntimeReplay(pg.exportRuntimeReplay(), manifest);
   });
   const replayFrame = createMemo(() => {
     const timeline = replayTimeline();
@@ -224,14 +223,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
       cardRefs,
       zoneRefs,
       deckEl,
-      openingTimeline,
-      submitEndTurn: actions.endTurn,
       presentCommittedFrame: actions.presentCommittedFrame,
       finishTurnPresentation: actions.finishTurnPresentation,
     };
     ctx.onCancel = () => releaseAllHandSlots(ctx);
     script = createScript(ctx);
-    void script.run(openingSequence());
+    void script.run(openingSequence(openingTimeline));
     onCleanup(() => script?.cancel());
   });
 
@@ -422,7 +419,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
             onClick={() => {
               if (!boardInteractive() || !script || turnFlowRunning()) return;
               setTurnFlowRunning(true);
-              void script.run(resolveTurnFlow()).finally(() => setTurnFlowRunning(false));
+              void actions.endTurn()
+                .then((timeline) => timeline ? script?.run(resolveTurnFlow(timeline)) : undefined)
+                .finally(() => setTurnFlowRunning(false));
             }}
           >
             END TURN

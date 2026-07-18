@@ -7,7 +7,7 @@ import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import type { CardId, LaneIdx } from '@/services/playgame/engine/types/ids';
-import { validateMatchBootstrap } from '@/services/playgame/runtime/bootstrapValidation';
+import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { paceCommittedOpening, type PlayScriptCtx } from '@/services/playgame/script/actions';
 import { getHandForSeat } from '@/services/playgame/view';
 import { selectInteractiveHand } from '@/components/screens/play/handInteractivity';
@@ -20,15 +20,13 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function debugBootstrap() {
+function debugSession() {
   const candidate = buildDebugMatchBootstrap(
     DEBUG_DECKS[0],
     DEBUG_DECKS[7],
     'provider-0',
   );
-  const validation = validateMatchBootstrap(candidate, BOOTSTRAP_MANIFEST);
-  if (!validation.ok) throw new Error(JSON.stringify(validation.issues));
-  return validation.value;
+  return MatchSession.fromBootstrap(candidate);
 }
 
 function firstPlayableCard(pg: PlayGameContextValue): CardId {
@@ -75,7 +73,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     document.body.append(host);
     disposers.push(render(
       () => (
-        <PlayGameProvider bootstrap={debugBootstrap()}>
+        <PlayGameProvider session={debugSession()}>
           <Probe />
         </PlayGameProvider>
       ),
@@ -139,7 +137,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     document.body.append(host);
     disposers.push(render(
       () => (
-        <PlayGameProvider bootstrap={debugBootstrap()}>
+        <PlayGameProvider session={debugSession()}>
           <Probe />
         </PlayGameProvider>
       ),
@@ -179,7 +177,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     document.body.append(host);
     disposers.push(render(
       () => (
-        <PlayGameProvider bootstrap={debugBootstrap()}>
+        <PlayGameProvider session={debugSession()}>
           <Probe />
         </PlayGameProvider>
       ),
@@ -207,8 +205,6 @@ describe('PlayGameProvider runtime synchronization', () => {
       toastArea,
       cardRefs: new Map(),
       zoneRefs: new Map(),
-      openingTimeline: pg.openingTimeline,
-      submitEndTurn: async () => null,
       presentCommittedFrame: (frame) => {
         pg.actions.presentCommittedFrame(frame);
         presentedFrames.push({
@@ -219,7 +215,7 @@ describe('PlayGameProvider runtime synchronization', () => {
       },
       finishTurnPresentation: () => undefined,
     };
-    const openingStep = paceCommittedOpening();
+    const openingStep = paceCommittedOpening(pg.openingTimeline);
     if (typeof openingStep !== 'function') throw new Error('opening presentation must be a step');
     const presentation = Promise.resolve(openingStep(presentationCtx));
 

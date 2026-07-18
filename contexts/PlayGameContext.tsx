@@ -8,12 +8,9 @@ import {
   type JSX,
 } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
-import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { CardId, LaneIdx, Seat } from '@/services/playgame/engine/types/ids';
-import type { MatchEvent } from '@/services/playgame/engine/types/events';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
-import { replayMatch } from '@/services/playgame/engine/replay';
 import { buildEventTransactionFrames } from '@/services/playgame/engine/transactionFrames';
 import type {
   IntentAcceptanceResult,
@@ -21,33 +18,18 @@ import type {
   MatchRuntimeReplayExport,
   MatchTransactionFrames,
   RuntimeIntent,
-  ValidatedMatchBootstrap,
 } from '@/services/playgame/runtime/contracts';
-import { createMatchRuntime } from '@/services/playgame/runtime/matchRuntime';
+import type { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { otherSeat } from '@/services/playgame/engine/types/ids';
 import type { UiState } from '@/services/playgame/view';
 export type { UiState } from '@/services/playgame/view';
 
-type EngineStateStore = {
+type PresentedStateStore = {
   -readonly [K in keyof EngineMatchState]: EngineMatchState[K];
 };
 
-declare global {
-  interface Window {
-    __snapDebug?: {
-      getLiveState: () => EngineMatchState;
-      getLiveLog: () => readonly import('@/services/playgame/engine/types/state').MatchLogEntry[];
-      getReplayBundle: () => MatchRuntimeReplayExport;
-      getReplayTimeline: () => ReturnType<typeof replayMatch>;
-      getFrame: (index: number) => import('@/services/playgame/engine/replay').ReplayFrame | null;
-      copyReplayJson: () => Promise<string>;
-    };
-  }
-}
-
 export interface PlayGameContextValue {
   engineState: EngineMatchState;
-  initialState: EngineMatchState;
   manifest: Manifest;
   localSeat: Seat;
   remoteSeat: Seat;
@@ -56,7 +38,6 @@ export interface PlayGameContextValue {
   setUi: SetStoreFunction<UiState>;
   isResolving: Accessor<boolean>;
   openingTimeline: MatchTransactionFrames;
-  replayEvents: () => readonly MatchEvent[];
   exportRuntimeReplay: () => MatchRuntimeReplayExport;
   actions: {
     stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
@@ -72,11 +53,12 @@ const Ctx = createContext<PlayGameContextValue>();
 
 export const PlayGameProvider = (props: {
   children: JSX.Element;
-  bootstrap: ValidatedMatchBootstrap;
+  session: MatchSession;
 }) => {
-  const bootstrap = untrack(() => props.bootstrap);
-  const manifest = BOOTSTRAP_MANIFEST;
-  const runtime = createMatchRuntime(bootstrap);
+  const session = untrack(() => props.session);
+  const bootstrap = session.bootstrap;
+  const manifest = session.manifest;
+  const runtime = session.runtime;
   const localSeat = bootstrap.viewerSeat;
   const remoteSeat = otherSeat(localSeat);
   const seatMeta: Record<Seat, { name: string }> = {
@@ -97,8 +79,8 @@ export const PlayGameProvider = (props: {
     finalState: builtOpening.finalState,
   };
 
-  const [engineState, setEngineState] = createStore<EngineStateStore>(
-    structuredClone(runtime.genesis()) as EngineStateStore,
+  const [engineState, setPresentedState] = createStore<PresentedStateStore>(
+    structuredClone(runtime.genesis()) as PresentedStateStore,
   );
   const [ui, setUi] = createStore<UiState>({
     handReservations: [],
@@ -118,7 +100,7 @@ export const PlayGameProvider = (props: {
     // newly inserted array members by reference, which lets a later runtime
     // projection alias store-owned nodes and skip Solid writes by identity.
     // Replace every top-level branch with a private clone instead.
-    setEngineState(() => structuredClone(state) as EngineStateStore);
+    setPresentedState(() => structuredClone(state) as PresentedStateStore);
   };
 
   const adoptWorkingProjection = (
@@ -210,13 +192,8 @@ export const PlayGameProvider = (props: {
     return timelinePromise;
   };
 
-  const replayEvents = (): readonly MatchEvent[] => runtime.transactions().flatMap(
-    (transaction) => transaction.events,
-  );
-
   const value: PlayGameContextValue = {
     engineState: engineState as unknown as EngineMatchState,
-    initialState: runtime.genesis(),
     manifest,
     localSeat,
     remoteSeat,
@@ -225,8 +202,7 @@ export const PlayGameProvider = (props: {
     setUi,
     isResolving: () => presentationBusy() || engineState.phase === 'RESOLVING',
     openingTimeline,
-    replayEvents,
-    exportRuntimeReplay: runtime.exportReplay,
+    exportRuntimeReplay: session.exportReplay,
     actions: {
       stageCardInLane,
       undoPending,
@@ -248,29 +224,17 @@ export const PlayGameProvider = (props: {
     },
   };
 
-  if (typeof window !== 'undefined') {
-    const timeline = () => replayMatch({
-      seed: runtime.genesis().seed,
-      manifest,
-      initialState: runtime.genesis(),
-      events: replayEvents(),
-    });
-    window.__snapDebug = {
-      getLiveState: () => structuredClone(runtime.state()),
-      getLiveLog: () => structuredClone(runtime.state().log),
-      getReplayBundle: runtime.exportReplay,
-      getReplayTimeline: timeline,
-      getFrame: (index) => timeline().frames[index] ?? null,
-      copyReplayJson: async () => {
-        const json = JSON.stringify(runtime.exportReplay(), null, 2);
-        await navigator.clipboard.writeText(json);
-        return json;
-      },
-    };
-    onCleanup(() => {
-      delete window.__snapDebug;
+  let providerDisposed = false;
+  let uninstallDebug = (): void => undefined;
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    void import('@/services/playgame/debug/installSnapDebug').then(({ installSnapDebug }) => {
+      if (!providerDisposed) uninstallDebug = installSnapDebug(runtime, manifest, session.exportReplay);
     });
   }
+  onCleanup(() => {
+    providerDisposed = true;
+    uninstallDebug();
+  });
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 };

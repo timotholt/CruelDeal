@@ -103,12 +103,43 @@ describe('validateMatchBootstrap', () => {
     expect(issueCodes(result)).toContain('INVALID_DECK_SIZE');
   });
 
+  it('rejects a mismatched manifest version', () => {
+    const manifest = manifestFixture();
+    const result = validateMatchBootstrap({
+      ...bootstrapFixture(manifest),
+      manifestVersion: manifest.version + 1,
+    }, manifest);
+
+    expect(issueCodes(result)).toContain('MANIFEST_VERSION_MISMATCH');
+  });
+
+  it('rejects an unknown ruleset', () => {
+    const manifest = manifestFixture();
+    const result = validateMatchBootstrap({
+      ...bootstrapFixture(manifest),
+      rulesetId: 'missing-ruleset',
+    }, manifest);
+
+    expect(issueCodes(result)).toContain('UNKNOWN_RULESET');
+  });
+
   it('rejects an unknown definition', () => {
     const manifest = manifestFixture();
     const entries = deckFixture().map((entry, index) => index === 5 ? { defId: 'missing-def' } : entry);
     const result = validateMatchBootstrap(bootstrapFixture(manifest, entries), manifest);
 
     expect(issueCodes(result)).toContain('UNKNOWN_CARD_DEFINITION');
+  });
+
+  it('rejects a definition disabled by the manifest', () => {
+    const base = manifestFixture();
+    const manifest: Manifest = {
+      ...base,
+      disabled: { ...base.disabled, cards: ['card-5'] },
+    };
+    const result = validateMatchBootstrap(bootstrapFixture(manifest), manifest);
+
+    expect(issueCodes(result)).toContain('DISABLED_CARD_DEFINITION');
   });
 
   it('rejects an unknown selected variant', () => {
@@ -127,6 +158,23 @@ describe('validateMatchBootstrap', () => {
     const result = validateMatchBootstrap(bootstrapFixture(manifest, entries), manifest);
 
     expect(issueCodes(result)).toContain('COPY_LIMIT_EXCEEDED');
+  });
+
+  it('rejects duplicates of a manifest-declared unique definition', () => {
+    const base = manifestFixture();
+    const manifest: Manifest = {
+      ...base,
+      rulesets: {
+        standard: {
+          rulesetId: 'standard',
+          deckConstruction: { uniqueCardDefIds: ['card-0'] },
+        },
+      },
+    };
+    const entries = deckFixture().map((entry, index) => index === 11 ? { defId: 'card-0' } : entry);
+    const result = validateMatchBootstrap(bootstrapFixture(manifest, entries), manifest);
+
+    expect(issueCodes(result)).toContain('UNIQUENESS_RULE_VIOLATION');
   });
 
   it('does not invent a copy rule when the manifest omits one', () => {
