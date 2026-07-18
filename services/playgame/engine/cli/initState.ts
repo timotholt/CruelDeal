@@ -40,7 +40,7 @@ function buildDeck(
   if (defs.length === 0) {
     throw new Error('initState: manifest has no cards');
   }
-  const entries = deckList ?? Array.from({ length: manifest.constants.deckSize }, () => {
+  const entries: Deck = deckList ?? Array.from({ length: manifest.constants.deckSize }, () => {
     const def = defs[rng.int(0, defs.length - 1)];
     return { defId: def.defId };
   });
@@ -54,6 +54,7 @@ function buildDeck(
     const inst: CardInstance = {
       id: mintId(rng, `${owner}:card:${i}`) as CardId,
       defId: def.defId,
+      ...(entry.variantId === undefined ? {} : { variantId: entry.variantId }),
       version: def.version,
       owner,
       lane: null,

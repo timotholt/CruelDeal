@@ -13,6 +13,7 @@ import {
   type Owner,
   type Rng,
 } from '../../../engine';
+import { buildOpeningTransaction } from '../../opening';
 
 export interface GeneratedMatchCase {
   readonly generatorSeed: string;
@@ -29,7 +30,6 @@ export interface OpenedMatch {
 
 const OWNERS = ['P0', 'P1'] as const;
 const LANES = [0, 1, 2] as const satisfies readonly LaneIdx[];
-const OPENING_HAND_SIZE = 3;
 
 function applyAll(
   state: MatchState,
@@ -87,23 +87,8 @@ export function createOpenedMatch(
   manifest: Manifest = BOOTSTRAP_MANIFEST,
 ): OpenedMatch {
   const genesis = createInitialMatchState(input.matchSeed, manifest, input.decks);
-  const openingEvents: MatchEvent[] = [];
-  let state = genesis;
-
-  for (const owner of OWNERS) {
-    for (let draw = 0; draw < OPENING_HAND_SIZE; draw++) {
-      const card = state.deck[owner][0];
-      if (!card) break;
-      const event: MatchEvent = {
-        type: 'CARD_DRAWN',
-        owner,
-        cardId: card.id,
-        toHand: true,
-      };
-      openingEvents.push(event);
-      state = apply(state, event, manifest);
-    }
-  }
+  const openingEvents = buildOpeningTransaction(genesis, manifest).events;
+  const state = applyAll(genesis, openingEvents, manifest);
 
   return { genesis, openingEvents, state };
 }

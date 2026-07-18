@@ -20,6 +20,7 @@ import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
 import { createInitialMatchState } from './initState';
 import { planEnemyTurnFromHand } from '../ai';
+import { buildOpeningTransaction } from '../../runtime/opening';
 
 export interface RunMatchOptions {
   readonly seed: string;
@@ -112,20 +113,11 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
 
   let state = createInitialMatchState(seed, manifest);
 
-  // Opening draws — `manifest.constants` doesn't define a starting hand
-  // size yet, so just draw 3 per side via the normal CARD_DRAWN pipeline.
-  // Pull off each deck's top without going through `resolve` (no intent
-  // exists for initial draws).
-  const OPENING_DRAW = 3;
-  for (const owner of ['P0', 'P1'] as const) {
-    for (let i = 0; i < OPENING_DRAW; i++) {
-      const top = state.deck[owner][0];
-      if (!top) break;
-      const drawEvt: MatchEvent = { type: 'CARD_DRAWN', owner, cardId: top.id, toHand: true };
-      events.push(drawEvt);
-      onEvent(drawEvt, state);
-      state = apply(state, drawEvt, manifest);
-    }
+  const opening = buildOpeningTransaction(state, manifest);
+  for (const event of opening.events) {
+    events.push(event);
+    onEvent(event, state);
+    state = apply(state, event, manifest);
   }
 
   let turnsPlayed = 0;

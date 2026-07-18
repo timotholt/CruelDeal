@@ -12,7 +12,7 @@
  * match from a different version (spec §3.5).
  */
 
-import type { CardDef, LocationDef, Manifest } from './types';
+import type { LocationDef, Manifest } from './types';
 import { loadCardsFromSets } from './card-set-loader';
 import { DISABLED_LOCATION_IDS, LOCATIONS_INDEX } from './content/locations';
 
@@ -28,7 +28,7 @@ const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<strin
 };
 
 export const BOOTSTRAP_MANIFEST: Manifest = {
-  version: 1,
+  version: 2,
   protocolVersion: 1,
   constants: {
     energyCurve: [1, 2, 3, 4, 5, 6],
@@ -36,6 +36,15 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     handCap: 7,
     laneCapacity: 4,
     deckSize: 12,
+    startingHandSize: 3,
+  },
+  rulesets: {
+    standard: {
+      rulesetId: 'standard',
+      deckConstruction: {
+        defaultCopyLimit: 1,
+      },
+    },
   },
   cards: loadCardsFromSets(['core-v1']),
   locations: byDefId<LocationDef>(LOCATIONS_INDEX),

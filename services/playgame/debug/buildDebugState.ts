@@ -31,12 +31,12 @@ function buildDeckFromDefIds(
     const entry = deckList[i];
     const def = manifest.cards[entry.defId];
     if (!def) {
-      console.warn(`[debug] buildDebugState: defId "${entry.defId}" not in manifest — skipped`);
-      continue;
+      throw new Error(`[debug] buildDebugState: defId "${entry.defId}" not in manifest`);
     }
     deck.push({
       id: mintId(rng, `${owner}:card:${i}`) as CardId,
       defId: def.defId,
+      ...(entry.variantId === undefined ? {} : { variantId: entry.variantId }),
       version: def.version,
       owner,
       lane: null,

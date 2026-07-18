@@ -240,6 +240,7 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
       if (!card) return state;
       return patchCard(state, event.cardId, {
         defId: event.newDefId,
+        variantId: undefined,
         ...(event.resetStats ? {
           powerDelta: 0,
           costDelta: 0,
@@ -367,6 +368,7 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
           });
           return addToLane(s, card.owner, event.destination.lane, event.cardId);
       }
+      return s;
     }
 
     case 'DECK_SHUFFLED': {

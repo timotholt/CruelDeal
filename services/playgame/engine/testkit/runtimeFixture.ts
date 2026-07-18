@@ -17,6 +17,7 @@ import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 export interface RuntimeCardSpec {
   readonly id: string;
   readonly defId: string;
+  readonly variantId?: string;
   readonly revealed?: boolean;
   readonly powerDelta?: number;
   readonly costDelta?: number;
@@ -73,6 +74,7 @@ function buildCard(
   return {
     id: spec.id as CardId,
     defId: spec.defId,
+    ...(spec.variantId === undefined ? {} : { variantId: spec.variantId }),
     version: 1,
     owner,
     lane,
@@ -233,7 +235,14 @@ export function testManifest(
       handCap: 7,
       laneCapacity: 4,
       deckSize: 12,
+      startingHandSize: 3,
       ...constants,
+    },
+    rulesets: {
+      standard: {
+        rulesetId: 'standard',
+        deckConstruction: { defaultCopyLimit: 1 },
+      },
     },
     cards: Object.fromEntries(cards.map((card) => [card.defId, card])),
     locations: Object.fromEntries(locations.map((location) => [location.defId, location])),

@@ -217,6 +217,8 @@ export type SpawnSource =
 export interface CardInstance {
   readonly id: CardId;
   readonly defId: string;
+  /** Selected cosmetic variant from the frozen bootstrap deck entry. */
+  readonly variantId?: string;
   readonly version: number;
   readonly owner: Owner;
   readonly lane: LaneIdx | null;

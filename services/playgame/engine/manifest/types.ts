@@ -123,6 +123,29 @@ export interface MatchConstants {
   handCap: number;
   laneCapacity: number;
   deckSize: number;
+  startingHandSize: number;
+}
+
+// ---- Rulesets / deck construction -----------------------------------------
+
+/**
+ * Deck-construction policy is data, not adapter behavior. An omitted limit
+ * means that the manifest does not impose that rule.
+ */
+export interface DeckConstructionRules {
+  /** Default number of copies allowed for a definition. */
+  defaultCopyLimit?: number;
+  /** Per-definition overrides of defaultCopyLimit. */
+  copyLimits?: Readonly<Record<string, number>>;
+  /** Definitions that are explicitly unique even if the copy limit is higher. */
+  uniqueCardDefIds?: readonly string[];
+}
+
+export interface MatchRuleset {
+  rulesetId: string;
+  /** When present, only these globally enabled definitions are enabled here. */
+  enabledCardDefIds?: readonly string[];
+  deckConstruction: DeckConstructionRules;
 }
 
 // ---- Full manifest ---------------------------------------------------------
@@ -131,6 +154,7 @@ export interface Manifest {
   version: number;
   protocolVersion: number;
   constants: MatchConstants;
+  rulesets: Readonly<Record<string, MatchRuleset>>;
   cards: Readonly<Record<string, CardDef>>;             // defId → def
   locations: Readonly<Record<string, LocationDef>>;     // defId → def
   disabled: {

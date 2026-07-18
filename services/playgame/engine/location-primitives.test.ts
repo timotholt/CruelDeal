@@ -31,7 +31,8 @@ const basicCard = (defId: string, abilities: CardDef['abilities'] = {}): CardDef
 const manifest = (locations: LocationDef[], cards: CardDef[]): Manifest => ({
   version: 1,
   protocolVersion: 1,
-  constants: { energyCurve: [0, 1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12 },
+  constants: { energyCurve: [0, 1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3 },
+  rulesets: { standard: { rulesetId: 'standard', deckConstruction: { defaultCopyLimit: 1 } } },
   cards: Object.fromEntries(cards.map(c => [c.defId, c])),
   locations: Object.fromEntries(locations.map(l => [l.defId, l])),
   disabled: { cards: [], locations: [] },

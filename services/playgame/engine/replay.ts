@@ -135,8 +135,16 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
 
 function assertReplayInitialState(initialState: MatchState, manifest: Manifest): void {
   for (const card of Object.values(initialState.cards)) {
-    if (!manifest.cards[card.defId]) {
+    const def = manifest.cards[card.defId];
+    if (!def) {
       throw new Error(`Replay initialState references missing card def "${card.defId}" for card ${card.id}`);
+    }
+    if (card.variantId !== undefined && !def.cosmetic.variants?.some(
+      (variant) => variant.variantId === card.variantId,
+    )) {
+      throw new Error(
+        `Replay initialState references missing variant "${card.variantId}" for card ${card.id}`,
+      );
     }
   }
   for (const lane of initialState.lanes) {
