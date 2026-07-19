@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { CardId } from '../types/ids';
+import { replaceCardText } from '../operations/cardMutations';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -164,6 +165,85 @@ describe('live InternalCardRecord queries', () => {
       cost: 3,
       hasOnEndOfTurn: true,
     }).map(card => card.defId)).toEqual(['ender']);
+  });
+
+  it('never assigns board geometry to cards outside a lane', () => {
+    expect(findCards(state, manifest, {
+      slot: [1, 2, 3, 4],
+    }).map(card => card.id)).toEqual([
+      'board-vanilla',
+      'enemy-device',
+      'created-ender',
+      'enemy-revealer',
+    ]);
+    expect(findCards(state, manifest, {
+      zone: ['DECK', 'HAND'],
+      row: [1, 2],
+    })).toEqual([]);
+  });
+
+  it('requires every supplied position axis to agree', () => {
+    expect(findCards(state, manifest, {
+      lane: 0,
+      slot: 1,
+      row: 2,
+    })).toEqual([]);
+    expect(findCards(state, manifest, {
+      lane: 0,
+      slot: 1,
+      row: 1,
+      column: 1,
+    }).map(card => card.id)).toEqual([
+      'board-vanilla',
+      'enemy-device',
+    ]);
+  });
+
+  it('queries effective replaced or blanked text without changing template queries', () => {
+    const source = {
+      sourceId: 'text-boundary-source' as CardId,
+      effectKind: 'SYSTEM' as const,
+      reason: 'QUERY_EFFECTIVE_TEXT_BOUNDARY',
+    };
+    const blanked = replaceCardText(
+      state,
+      'hand-revealer' as CardId,
+      { kind: 'BLANK_ALL' },
+      source,
+      manifest,
+    );
+    const copied = replaceCardText(
+      blanked.state,
+      'hand-vanilla' as CardId,
+      {
+        kind: 'COPIED_TEXT',
+        sourceCardId: 'hand-revealer' as CardId,
+        sourceDefId: 'revealer',
+        scope: 'ALL',
+        abilities: { onReveal: [selfPower] },
+        rulesText: 'On Reveal: Gain +1 Power.',
+      },
+      source,
+      manifest,
+    );
+
+    expect(findCards(copied.state, manifest, {
+      zone: 'HAND',
+      hasAnyAbility: false,
+    }).map(card => card.id)).toEqual(['hand-revealer']);
+    expect(findCards(copied.state, manifest, {
+      zone: 'HAND',
+      hasOnReveal: true,
+    }).map(card => card.id)).toEqual(['hand-vanilla']);
+    expect(findCardDefs(manifest, {
+      hasOnReveal: true,
+    }).map(card => card.defId)).toEqual(['revealer']);
+  });
+
+  it('treats empty position sets as matching nothing', () => {
+    expect(findCards(state, manifest, { slot: [] })).toEqual([]);
+    expect(findCards(state, manifest, { row: [] })).toEqual([]);
+    expect(findCards(state, manifest, { column: [] })).toEqual([]);
   });
 });
 

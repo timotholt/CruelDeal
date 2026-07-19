@@ -1497,8 +1497,12 @@ export function applyHandEntryDebuffs(
 // ============================================================================
 
 function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(entry => entry.expr.kind === 'BLOCK_MOVE');
+  return ongoingsTargeting(
+    state,
+    manifest,
+    cardId,
+    ['BLOCK_MOVE'],
+  ).length > 0;
 }
 
 function effectSourceOwner(

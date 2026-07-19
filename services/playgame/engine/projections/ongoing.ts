@@ -249,9 +249,12 @@ export function ongoingsTargeting(
   state: MatchState,
   manifest: Manifest,
   cardId: import('../types/ids').CardId,
+  kinds: readonly OngoingExpr['kind'][],
 ): SourcedOngoing[] {
   const all = collectAllOngoings(state, manifest);
-  return all.filter(entry => targetIncludes(entry, cardId, state, manifest));
+  return all.filter(entry =>
+    kinds.includes(entry.expr.kind)
+    && targetIncludes(entry, cardId, state, manifest));
 }
 
 function targetIncludes(

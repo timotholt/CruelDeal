@@ -56,13 +56,27 @@ export interface FrameAndFoldEventsOptions {
 export function foldFramedEvents(
   options: FoldFramedEventsOptions,
 ): EventTransactionFold {
-  const framedEvents = assertFramedEventSequence(options.initialState, options.framedEvents);
+  const inputFrames = assertFramedEventSequence(
+    options.initialState,
+    options.framedEvents,
+  );
+  const framedEvents: FramedEvent[] = [];
   const transitions: EventTransition[] = [];
   let state = options.initialState;
 
-  framedEvents.forEach((framedEvent, eventIndex) => {
+  inputFrames.forEach((inputFrame, eventIndex) => {
     const before = state;
-    const after = applyFramed(before, framedEvent, options.manifest);
+    const after = applyFramed(before, inputFrame, options.manifest);
+    const appended = after.log.at(-1);
+    if (!appended || appended.frame !== inputFrame.frame) {
+      throw new Error(`reducer did not append canonical frame ${inputFrame.frame}`);
+    }
+    const framedEvent: FramedEvent = Object.freeze({
+      frame: appended.frame,
+      scope: appended.scope,
+      event: appended.event as MatchEvent,
+    });
+    framedEvents.push(framedEvent);
     transitions.push(Object.freeze({
       index: eventIndex,
       transactionId: options.transactionId,
@@ -79,7 +93,7 @@ export function foldFramedEvents(
   return Object.freeze({
     transactionId: options.transactionId,
     initialState: options.initialState,
-    framedEvents,
+    framedEvents: Object.freeze(framedEvents),
     transitions: Object.freeze(transitions),
     finalState: state,
   });

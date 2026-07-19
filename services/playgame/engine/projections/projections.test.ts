@@ -84,6 +84,35 @@ const mkLoc = (defId: string, extra: Partial<LocationCardDef> = {}): LocationCar
 const CARDS: Record<string, CardDef> = {
   // Plain vanilla.
   grunt: mkCard('grunt', 3, 2),
+  cheapGrunt: mkCard('cheapGrunt', 2, 1),
+  expensiveGrunt: mkCard('expensiveGrunt', 4, 4),
+
+  // Ongoing: friendly 1-Cost cards have +1 Power. Its target predicate reads
+  // projected cost, so cost projection must ignore this POWER_ADD before
+  // evaluating the predicate or the two projections recurse forever.
+  signalRally: mkCard('signalRally', 3, 3, {
+    abilities: {
+      ongoing: [{
+        kind: 'POWER_ADD',
+        target: {
+          kind: 'WHERE',
+          of: {
+            kind: 'ALL_CARDS',
+            ownerFilter: 'SELF_OWNER',
+            zoneFilter: 'LANE',
+          },
+          pred: {
+            kind: 'COST_CMP',
+            target: { kind: 'SELF' },
+            op: '==',
+            value: { kind: 'LIT', n: 1 },
+          },
+        },
+        delta: { kind: 'LIT', n: 1 },
+        stack: 'ADDITIVE',
+      }],
+    },
+  }),
 
   // Ongoing: LANE_POWER_ADD same-lane self-owner +1 (Sentinel-like lane bonus).
   sentinel: mkCard('sentinel', 5, 3, {
@@ -340,6 +369,20 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
   eq(getCardCost(s, mine[0], MANIFEST), 2, 'quartermaster reduces own cost 3->2');
   eq(getCardCost(s, mine[1], MANIFEST), 1, 'quartermaster reduces friendly grunt cost 2->1');
   eq(getCardCost(s, opp, MANIFEST), 2, 'quartermaster does not reduce opponent cost');
+}
+
+// -- Cross-stat Ongoing target predicates do not recurse --------------------
+
+{
+  const s = buildState([
+    { def: 'signalRally', owner: 'P0', lane: 0 },
+    { def: 'cheapGrunt', owner: 'P0', lane: 0 },
+    { def: 'expensiveGrunt', owner: 'P0', lane: 0 },
+  ]);
+  const cards = s.lanesById[0].cards.P0;
+  eq(getCardCost(s, cards[1], MANIFEST), 1, 'cost query ignores POWER_ADD predicates before target evaluation');
+  eq(getCardPower(s, cards[1], MANIFEST), 3, 'cost-sensitive POWER_ADD buffs the matching 1-Cost card');
+  eq(getCardPower(s, cards[2], MANIFEST), 4, 'cost-sensitive POWER_ADD skips a non-matching card');
 }
 
 // -- Sentinel adds +1 to its lane total, not to cards -----------------------

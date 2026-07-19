@@ -15,10 +15,13 @@ import { createRng } from '../rng';
 import { apply } from '../apply';
 import { evalEffect, revealPlayedCard } from '../effects/evaluator';
 import {
+  addLocationTag,
+  changeLocationCounter,
   createLane,
   destroyLocationCard,
   moveLocation,
   removeLocation,
+  removeLocationTag,
   replaceLocationCard,
   returnLocationToDeck,
   revealLocation,
@@ -254,6 +257,87 @@ const destroyOthers = (input: MatchState, survivor: LaneId) =>
   );
 
 describe('location card lifecycle', () => {
+  it('hard-fails missing provenance on every governed location mutation surface', () => {
+    const input = state();
+    const blankReason = { ...systemCause, reason: ' \n\t ' };
+    const blankSource = { ...systemCause, sourceId: '' as CardId };
+    const locationId = locationCardAtLane(input, 0)!.id;
+    const calls = [
+      () => scheduleLocationSlotReveal(input, 0, 2, blankReason, manifest),
+      () => revealLocation(input, 0, blankReason, manifest),
+      () => turnLocationFaceDown(input, 0, blankReason, manifest),
+      () => showLocationToSeats(input, 0, ['P0'], blankReason, manifest),
+      () => moveLocation(input, 0, 1, blankReason, manifest),
+      () => removeLocation(input, 0, 'DISCARD', blankReason, manifest),
+      () => returnLocationToDeck(input, locationId, 'TOP', blankReason, manifest),
+      () => addLocationTag(input, 0, { kind: 'FLOODED' }, blankReason, manifest),
+      () => removeLocationTag(input, 0, 'FLOODED', blankReason, manifest),
+      () => changeLocationCounter(input, 0, 'uses', 1, blankReason, manifest),
+      () => replaceLocationCard(input, 0, {
+        cause: blankReason,
+        newId: 'blank-replacement' as LocationCardInstanceId,
+        newDefId: 'delta',
+        oldDestination: 'DISCARD',
+        revealPolicy: 'FACE_DOWN_UNSCHEDULED',
+      }, manifest),
+      () => swapLocations(input, 0, 1, blankReason, manifest),
+      () => destroyLocationCard(input, 0, blankReason, manifest),
+      () => destroyLaneWithNormalRules(
+        input,
+        0,
+        blankReason,
+        createRng('blank-destroy-lane'),
+        manifest,
+      ),
+      () => destroyAllOtherLanesWithNormalRules(
+        input,
+        0,
+        blankReason,
+        createRng('blank-destroy-other-lanes'),
+        manifest,
+      ),
+      () => createLane(input, {
+        cause: blankReason,
+        position: 0,
+      }, manifest),
+    ];
+    for (const call of calls) {
+      expect(call).toThrow(/reason must be non-empty/);
+    }
+    expect(() => revealLocation(input, 0, blankSource, manifest))
+      .toThrow(/sourceId must be non-empty/);
+  });
+
+  it('validates location counters before no-op handling and retains signed values', () => {
+    const input = state();
+    for (const value of [Number.NaN, Infinity, -Infinity, 1.5]) {
+      expect(() => changeLocationCounter(input, 0, 'uses', value, systemCause, manifest))
+        .toThrow(/finite integer/);
+    }
+    expect(() => changeLocationCounter(input, 0, ' \t', 0, systemCause, manifest))
+      .toThrow(/counter name must be non-empty/);
+
+    const raised = changeLocationCounter(input, 0, 'uses', 3, systemCause, manifest);
+    expect(raised.ok).toBe(true);
+    const lowered = changeLocationCounter(raised.state, 0, 'uses', -5, systemCause, manifest);
+    expect(lowered.ok).toBe(true);
+    expect(locationCardAtLane(lowered.state, 0)?.counters.uses).toBe(-2);
+  });
+
+  it('snapshots caller-owned location provenance before event logging', () => {
+    const input = state();
+    const mutableCause = { ...systemCause };
+    const result = revealLocation(input, 0, mutableCause, manifest);
+    expect(result.ok).toBe(true);
+    mutableCause.reason = 'mutated-after-write';
+    expect(result.events[0]).toMatchObject({
+      cause: { reason: 'location-lifecycle-test' },
+    });
+    expect(result.state.log.at(-1)?.event).toMatchObject({
+      cause: { reason: 'location-lifecycle-test' },
+    });
+  });
+
   it('reveals only a face-down active location and clears its lane-owned schedule', () => {
     const input = state();
     const location = locationCardAtLane(input, 0)!;

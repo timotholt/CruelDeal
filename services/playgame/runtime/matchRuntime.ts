@@ -163,6 +163,10 @@ function hasMechanicalChange(before: MatchState, after: MatchState): boolean {
   );
 }
 
+function eventsHaveSameValue(left: MatchEvent, right: MatchEvent): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 function assertValidTimeline(
   timeline: CommittedTransactionTimeline,
   initialState: MatchState,
@@ -174,7 +178,14 @@ function assertValidTimeline(
 
   let expectedBefore = initialState;
   timeline.transitions.forEach((frame, index) => {
-    if (frame.index !== index || frame.before !== expectedBefore || frame.event !== events[index]) {
+    const inputEvent = events[index];
+    if (
+      frame.index !== index
+      || frame.before !== expectedBefore
+      || frame.event !== frame.framedEvent.event
+      || inputEvent === undefined
+      || !eventsHaveSameValue(frame.event, inputEvent)
+    ) {
       throw new Error(`transaction frame sequence is not contiguous at index ${index}`);
     }
     const expectedFrame = nextFrame(currentFrame(frame.before));

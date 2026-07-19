@@ -98,6 +98,19 @@ function applyEvents(
   return events.reduce((current, event) => apply(current, event, manifest), state);
 }
 
+function requireCause(cause: EffectRef): void {
+  if (String(cause.sourceId).trim().length === 0) {
+    throw new Error('location mutation sourceId must be non-empty');
+  }
+  if (cause.reason.trim().length === 0) {
+    throw new Error('location mutation reason must be non-empty');
+  }
+}
+
+function snapshotCause(cause: EffectRef): EffectRef {
+  return { ...cause };
+}
+
 function acceptSingle(
   state: MatchState,
   event: MatchEvent,
@@ -113,6 +126,7 @@ export function scheduleLocationSlotReveal(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   const lane = laneById(state, laneId);
   if (!lane) {
     return rejected(state, 'LANE_NOT_FOUND', `lane ${laneId} does not exist`);
@@ -134,7 +148,7 @@ export function scheduleLocationSlotReveal(
     type: 'LOCATION_SLOT_REVEAL_SCHEDULED',
     lane: laneId,
     revealAtTurn,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -144,6 +158,7 @@ export function revealLocation(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -162,7 +177,7 @@ export function revealLocation(
     type: 'LOCATION_REVEALED',
     lane: laneId,
     locationId: location.id,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -172,6 +187,7 @@ export function turnLocationFaceDown(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -190,7 +206,7 @@ export function turnLocationFaceDown(
     type: 'LOCATION_TURNED_FACE_DOWN',
     lane: laneId,
     locationId: location.id,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -201,6 +217,7 @@ export function showLocationToSeats(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -224,7 +241,7 @@ export function showLocationToSeats(
     lane: laneId,
     locationId: location.id,
     seats: uniqueSeats,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -235,6 +252,7 @@ export function moveLocation(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (fromLaneId === toLaneId) {
     return rejected(state, 'SAME_LANE', 'location move requires two distinct lanes');
   }
@@ -261,7 +279,7 @@ export function moveLocation(
     fromLane: fromLaneId,
     toLane: toLaneId,
     locationId: location.id,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -272,6 +290,7 @@ export function removeLocation(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   const lane = laneById(state, laneId);
   if (!lane || (laneStatus(lane) !== 'ACTIVE' && laneStatus(lane) !== 'DESTROYING')) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
@@ -285,7 +304,7 @@ export function removeLocation(
     lane: laneId,
     locationId: location.id,
     destination,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -296,6 +315,7 @@ export function returnLocationToDeck(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   const location = getLocationState(state, locationId);
   if (!location) {
     return rejected(state, 'LOCATION_NOT_FOUND', `location ${locationId} does not exist`);
@@ -316,7 +336,7 @@ export function returnLocationToDeck(
     locationId,
     from: location.zone,
     placement,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -327,6 +347,7 @@ export function addLocationTag(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -340,8 +361,8 @@ export function addLocationTag(
   return acceptSingle(state, {
     type: 'LOCATION_TAG_ADDED',
     lane: laneId,
-    tag,
-    cause,
+    tag: { ...tag },
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -352,6 +373,7 @@ export function removeLocationTag(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -366,7 +388,7 @@ export function removeLocationTag(
     type: 'LOCATION_TAG_REMOVED',
     lane: laneId,
     tag,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -379,6 +401,13 @@ export function changeLocationCounter(
   manifest: Manifest,
   owner?: Owner,
 ): LocationLifecycleResult {
+  requireCause(cause);
+  if (!Number.isFinite(delta) || !Number.isInteger(delta)) {
+    throw new Error('location counter delta must be a finite integer');
+  }
+  if (name.trim().length === 0) {
+    throw new Error('location counter name must be non-empty');
+  }
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -392,7 +421,7 @@ export function changeLocationCounter(
     name,
     ...(owner ? { owner } : {}),
     delta,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -414,6 +443,7 @@ export function replaceLocationCard(
   options: ReplaceLocationCardOptions,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(options.cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -454,7 +484,7 @@ export function replaceLocationCard(
     oldId: current.id,
     newId: options.newId,
     newDefId: options.newDefId,
-    cause: options.cause,
+    cause: snapshotCause(options.cause),
     oldDestination: options.oldDestination,
     revealPolicy: options.revealPolicy,
     ...(options.revealAtTurn === undefined
@@ -471,6 +501,7 @@ export function swapLocations(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (leftLaneId === rightLaneId) {
     return rejected(state, 'SAME_LANE', 'location swap requires two distinct lanes');
   }
@@ -494,7 +525,7 @@ export function swapLocations(
       fromLane: rightLaneId,
       toLane: leftLaneId,
     },
-    cause,
+    cause: snapshotCause(cause),
   };
   return accepted(apply(state, event, manifest), [event]);
 }
@@ -509,6 +540,7 @@ export function destroyLocationCard(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(cause);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
@@ -559,6 +591,8 @@ export function destroyLane(
   options: DestroyLaneOptions,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(options.cause);
+  const cause = snapshotCause(options.cause);
   const active = activeLaneIds(state);
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
@@ -575,7 +609,7 @@ export function destroyLane(
     type: 'LANE_DESTRUCTION_STARTED',
     lane: laneId,
     priorPosition,
-    cause: options.cause,
+    cause,
   };
   let working = apply(state, started, manifest);
   const events: MatchEvent[] = [started];
@@ -585,7 +619,7 @@ export function destroyLane(
     working,
     occupants,
     laneId,
-    options.cause,
+    cause,
     options.rng.fork(`lane:${laneId}:occupants`),
     manifest,
   );
@@ -608,7 +642,7 @@ export function destroyLane(
     working,
     laneId,
     'DESTROYED',
-    options.cause,
+    cause,
     manifest,
   );
   if (!removal.ok) {
@@ -621,7 +655,7 @@ export function destroyLane(
     type: 'LANE_DESTROYED',
     lane: laneId,
     priorPosition,
-    cause: options.cause,
+    cause: snapshotCause(cause),
   };
   events.push(destroyed);
   working = apply(working, destroyed, manifest);
@@ -638,6 +672,7 @@ export function destroyAllOtherLanes(
   options: DestroyLaneOptions,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(options.cause);
   if (!isActiveLane(state, survivor)) {
     return rejected(state, 'SURVIVOR_NOT_ACTIVE', `survivor lane ${survivor} is not active`);
   }
@@ -674,6 +709,8 @@ export function createLane(
   options: CreateLaneOptions,
   manifest: Manifest,
 ): LocationLifecycleResult {
+  requireCause(options.cause);
+  const cause = snapshotCause(options.cause);
   const active = activeLaneIds(state);
   if (active.length >= MAXIMUM_ACTIVE_LANES) {
     return rejected(state, 'MAXIMUM_ACTIVE_LANES', 'no lane vacancy is available');
@@ -692,7 +729,7 @@ export function createLane(
     type: 'LANE_CREATION_STARTED',
     lane: laneId,
     position: options.position,
-    cause: options.cause,
+    cause,
   };
   const locationCreated: MatchEvent = {
     type: 'LOCATION_CARD_CREATED',
@@ -709,14 +746,14 @@ export function createLane(
     type: 'LANE_CREATED',
     lane: laneId,
     position: options.position,
-    cause: options.cause,
+    cause: snapshotCause(cause),
   };
   const reveal: MatchEvent | null = (options.revealed ?? true)
     ? {
         type: 'LOCATION_REVEALED',
         lane: laneId,
         locationId,
-        cause: options.cause,
+        cause: snapshotCause(cause),
       }
     : null;
   const events = reveal

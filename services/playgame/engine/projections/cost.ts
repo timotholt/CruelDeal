@@ -30,7 +30,7 @@ export function getCardCostModifiers(
   const card = getCardRuntime(state, cardId, manifest);
   if (!card) return [];
 
-  const targeting = ongoingsTargeting(state, manifest, cardId);
+  const targeting = ongoingsTargeting(state, manifest, cardId, ['COST_ADD']);
   const targetCtx = ctxForTargetCard(state, manifest, cardId);
   const out: CostModifierEntry[] = [];
 

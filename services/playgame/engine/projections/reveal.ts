@@ -20,8 +20,12 @@ export function getOnRevealMultiplier(
   manifest: Manifest,
 ): number {
   const ctx = ctxForTargetCard(state, manifest, cardId);
-  const applicable = ongoingsTargeting(state, manifest, cardId)
-    .filter(e => e.expr.kind === 'ON_REVEAL_MULTIPLIER');
+  const applicable = ongoingsTargeting(
+    state,
+    manifest,
+    cardId,
+    ['ON_REVEAL_MULTIPLIER'],
+  );
   if (applicable.length === 0) return 1;
   let mult = 1;
   for (const entry of applicable) {
@@ -37,6 +41,10 @@ export function isOnRevealDisabled(
   cardId: CardId,
   manifest: Manifest,
 ): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(e => e.expr.kind === 'DISABLE_ON_REVEAL');
+  return ongoingsTargeting(
+    state,
+    manifest,
+    cardId,
+    ['DISABLE_ON_REVEAL'],
+  ).length > 0;
 }

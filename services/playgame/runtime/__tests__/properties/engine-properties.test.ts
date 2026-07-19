@@ -23,7 +23,8 @@ const PROPERTY_FILE = 'services/playgame/runtime/__tests__/properties/engine-pro
 const DEFAULT_LOCAL_CASES = 8;
 const MINIMUM_CI_CASES = 200;
 const DEFAULT_SUITE_SEED = 'phase0-task-b-properties-v1';
-const PROPERTY_TIMEOUT_MS = 120_000;
+const MINIMUM_PROPERTY_TIMEOUT_MS = 120_000;
+const PROPERTY_TIMEOUT_PER_CASE_MS = 400;
 
 interface CommitRecord {
   readonly label: string;
@@ -70,6 +71,12 @@ const runningInCi = /^(1|true|yes)$/i.test(process.env.CI ?? '');
 const caseCount = runningInCi
   ? Math.max(configuredCases ?? MINIMUM_CI_CASES, MINIMUM_CI_CASES)
   : configuredCases ?? DEFAULT_LOCAL_CASES;
+// Large, explicitly requested stress corpora must not be reported as product
+// failures merely because they outgrow the timeout sized for the CI minimum.
+const PROPERTY_TIMEOUT_MS = Math.max(
+  MINIMUM_PROPERTY_TIMEOUT_MS,
+  caseCount * PROPERTY_TIMEOUT_PER_CASE_MS,
+);
 
 function propertyCases(): readonly PropertyCaseRef[] {
   if (exactCaseSeed) return [{ index: 0, seed: exactCaseSeed }];

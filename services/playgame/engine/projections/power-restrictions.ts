@@ -17,8 +17,12 @@ export function isPowerIncreaseBlocked(
   cardId: CardId,
   manifest: Manifest,
 ): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(entry => entry.expr.kind === 'BLOCK_POWER_INCREASE');
+  return ongoingsTargeting(
+    state,
+    manifest,
+    cardId,
+    ['BLOCK_POWER_INCREASE'],
+  ).length > 0;
 }
 
 /**

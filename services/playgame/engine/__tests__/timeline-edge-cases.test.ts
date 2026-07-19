@@ -234,7 +234,7 @@ describe('Canonical framing edge cases', () => {
     expect(framed[0].scope).toEqual({ turn: 3, phase: 'MATCH_END' });
   });
 
-  it('preserves one envelope identity through framing, folding, and logging', () => {
+  it('canonicalizes caller-owned frames once, then preserves internal identity', () => {
     const framedEvents = frameEventSequence(
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
@@ -246,12 +246,24 @@ describe('Canonical framing edge cases', () => {
       manifest,
     });
 
-    expect(folded.framedEvents[0]).toBe(framedEvents[0]);
-    expect(folded.transitions[0].framedEvent).toBe(framedEvents[0]);
+    expect(folded.framedEvents[0]).not.toBe(framedEvents[0]);
+    expect(folded.framedEvents[0].event).not.toBe(framedEvents[0].event);
+    expect(folded.transitions[0].framedEvent).toBe(folded.framedEvents[0]);
+    expect(folded.transitions[0].event).toBe(folded.framedEvents[0].event);
+    expect(folded.finalState.log[0].event).toBe(folded.framedEvents[0].event);
     expect(folded.finalState.log[0]).toMatchObject({
       frame: framedEvents[0].frame,
       scope: framedEvents[0].scope,
       event: framedEvents[0].event,
+    });
+    const callerEvent = framedEvents[0].event as Extract<
+      MatchEvent,
+      { type: 'TURN_RESOLUTION_STARTED' }
+    >;
+    callerEvent.turn = 99;
+    expect(folded.framedEvents[0].event).toMatchObject({
+      type: 'TURN_RESOLUTION_STARTED',
+      turn: 3,
     });
   });
 

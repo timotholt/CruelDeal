@@ -306,4 +306,187 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   expectTrue(afterSeven.events.some((event) => event.type === 'MATCH_ENDED'), 'extended game ends after real turn 7');
 }
 
+{
+  const oneTurn = loc('one-turn', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 1 },
+      stack: 'MAX',
+    }],
+  });
+  const threeTurns = loc('three-turns', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 3 },
+      stack: 'MAX',
+    }],
+  });
+  const hiddenTenTurns = loc('hidden-ten-turns', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 10 },
+      stack: 'MAX',
+    }],
+  });
+  const m = manifest([oneTurn, threeTurns, hiddenTenTurns], []);
+  let s = stateWith([], oneTurn, 6);
+  s = withTestLocation(s, 1, 'three-turns', true, 'three-turns-1' as any);
+  s = withTestLocation(s, 2, 'hidden-ten-turns', false, 'hidden-ten-turns-2' as any);
+  expectEq(getFinalTurn(s, m), 9, 'multiple extensions use MAX instead of adding together');
+}
+
+{
+  const backwards = loc('backwards-time', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: -5 },
+      stack: 'MAX',
+    }],
+  });
+  const m = manifest([backwards], []);
+  expectEq(getFinalTurn(stateWith([], backwards, 6), m), 6, 'negative turn extensions cannot shorten the match');
+}
+
+{
+  const timeCard = basicCard('time-card', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 2 },
+      stack: 'MAX',
+    }],
+  });
+  const street = loc('street', {});
+  const c = card('time-card', 'P0', 'LANE', 0);
+  const m = manifest([street], [timeCard]);
+  expectEq(getFinalTurn(stateWith([c], street, 6), m), 8, 'card-sourced turn extensions participate in the live final-turn query');
+}
+
+{
+  const revealer = basicCard('mobile-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
+  });
+  const bank = loc('mobile-bank', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
+  });
+  const c = card('mobile-revealer', 'P0', 'HAND');
+  const m = manifest([bank], [revealer]);
+  let s = stateWith([c], bank, 5);
+  s = replay(s, resolve(s, {
+    type: 'STAGE_CARD',
+    intentId: 'mobile-delay',
+    owner: 'P0',
+    cardId: c.id,
+    lane: 0,
+  }, createRng('mobile-delay'), m), m);
+  s = apply(s, {
+    type: 'CARD_MOVED',
+    cardId: c.id,
+    fromLane: 0,
+    toLane: 1,
+    cause: { sourceId: c.id, effectKind: 'SYSTEM', reason: 'BOUNDARY_MOVE' },
+  }, m);
+  const afterFive = resolveCurrentTurn(s, m, 'mobile-turn-5');
+  const end = resolveCurrentTurn(afterFive.state, m, 'mobile-turn-6');
+  expectEq(getCardState(end.state, c.id)!?.lane, 1, 'end-game schedule follows a card that moved out of Cryobank');
+  expectEq(getCardState(end.state, c.id)!?.revealed, true, 'moved Cryobank card still reveals at actual end game');
+}
+
+{
+  const revealer = basicCard('orphaned-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
+  });
+  const bank = loc('orphaned-bank', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
+  });
+  const ruin = loc('orphaned-ruin', {});
+  const c = card('orphaned-revealer', 'P0', 'HAND');
+  const m = manifest([bank, ruin], [revealer]);
+  let s = stateWith([c], bank, 5);
+  s = replay(s, resolve(s, {
+    type: 'STAGE_CARD',
+    intentId: 'orphaned-delay',
+    owner: 'P0',
+    cardId: c.id,
+    lane: 0,
+  }, createRng('orphaned-delay'), m), m);
+  s = withTestLocation(s, 0, 'orphaned-ruin', true, 'orphaned-ruin-0' as any);
+  const afterFive = resolveCurrentTurn(s, m, 'orphaned-turn-5');
+  const end = resolveCurrentTurn(afterFive.state, m, 'orphaned-turn-6');
+  expectEq(getCardState(end.state, c.id)!?.revealed, true, 'destroying Cryobank does not erase schedules already written to cards');
+}
+
+{
+  const revealer = basicCard('last-moment-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
+  });
+  const bank = loc('last-moment-bank', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
+  });
+  const c = card('last-moment-revealer', 'P0', 'HAND');
+  const m = manifest([bank], [revealer]);
+  let s = stateWith([c], bank, 6);
+  s = replay(s, resolve(s, {
+    type: 'STAGE_CARD',
+    intentId: 'last-moment',
+    owner: 'P0',
+    cardId: c.id,
+    lane: 0,
+  }, createRng('last-moment-stage'), m), m);
+  const end = resolveCurrentTurn(s, m, 'last-moment-end');
+  expectEq(getCardState(end.state, c.id)!?.revealed, true, 'card entering Cryobank on the final turn reveals in that same end-game window');
+  expectEq(getStoredCardPowerDelta(end.state, c.id, m), 2, 'last-turn Cryobank reveal executes On Reveal before scoring');
+  expectTrue(end.events.some((event) => event.type === 'MATCH_ENDED'), 'last-turn Cryobank boundary still ends the match');
+}
+
+{
+  const revealer = basicCard('paired-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 1 } }],
+  });
+  const bank = loc('paired-bank', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
+  });
+  const p0 = card('paired-revealer', 'P0', 'HAND');
+  const p1 = card('paired-revealer', 'P1', 'HAND');
+  const m = manifest([bank], [revealer]);
+  let s = stateWith([p0, p1], bank, 6);
+  s = replay(s, resolve(s, {
+    type: 'STAGE_CARD',
+    intentId: 'paired-p0',
+    owner: 'P0',
+    cardId: p0.id,
+    lane: 0,
+  }, createRng('paired-p0'), m), m);
+  s = replay(s, resolve(s, {
+    type: 'STAGE_CARD',
+    intentId: 'paired-p1',
+    owner: 'P1',
+    cardId: p1.id,
+    lane: 0,
+  }, createRng('paired-p1'), m), m);
+  const end = resolveCurrentTurn(s, m, 'paired-end');
+  expectEq(getCardState(end.state, p0.id)!?.revealed, true, 'end-game window reveals the first player scheduled card');
+  expectEq(getCardState(end.state, p1.id)!?.revealed, true, 'end-game window reveals the second player scheduled card');
+  expectEq(
+    end.events.filter((event) => event.type === 'CARD_FLIPPED').length,
+    2,
+    'end-game window reveals every scheduled card exactly once',
+  );
+}
+
 console.log('\nAll location primitive tests passed.');

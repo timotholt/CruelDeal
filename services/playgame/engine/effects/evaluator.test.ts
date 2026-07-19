@@ -11,6 +11,7 @@ import { getCardState } from '../projections/cardRuntime';
  */
 
 import { createRng } from '../rng';
+import { apply } from '../apply';
 import {
   evalEffect,
   revealPlayedCard,
@@ -826,6 +827,42 @@ function buildState(
         event.type === 'CARD_COST_CHANGED' && event.cardId === copyId && event.delta === -1),
       'Illegal Clone: copy receives a permanent -1 cost adjustment',
     );
+    const replayed = apply(res.state, {
+      type: 'CARD_STAGED',
+      intentId: 'illegal-clone-second-life',
+      cardId: copyId,
+      lane: 1,
+      owner: 'P0',
+      cost: 0,
+    }, manifest);
+    const secondDeath = revealPlayedCard(
+      replayed,
+      copyId,
+      manifest,
+      createRng('illegal-clone-second-life'),
+    );
+    const secondCopyId = secondDeath.state.hand.P0[0];
+    truthy(
+      secondCopyId !== undefined && secondCopyId !== copyId,
+      'Illegal Clone: a zero-cost copy can die and create exactly one new identity',
+    );
+    eq(
+      secondDeath.state.hand.P0.length,
+      1,
+      'Illegal Clone: repeated destruction does not duplicate extra hand copies',
+    );
+    if (secondCopyId !== undefined) {
+      eq(
+        getCardCost(secondDeath.state, secondCopyId, manifest),
+        0,
+        'Illegal Clone: every later destroyed copy is reset to cost 0',
+      );
+      eq(
+        getCardState(secondDeath.state, secondCopyId)?.owner,
+        'P0',
+        'Illegal Clone: repeated copies retain the destroyed card owner',
+      );
+    }
   }
 }
 

@@ -26,9 +26,22 @@ function commit(
 }
 
 function requireCause(cause: EffectRef): void {
+  if (String(cause.sourceId).trim().length === 0) {
+    throw new Error('card mutation sourceId must be non-empty');
+  }
   if (cause.reason.trim().length === 0) {
     throw new Error('card mutation reason must be non-empty');
   }
+}
+
+function requireFiniteInteger(value: number, label: string): void {
+  if (!Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`${label} must be a finite integer`);
+  }
+}
+
+function snapshotCause(cause: EffectRef): EffectRef {
+  return { ...cause };
 }
 
 /**
@@ -44,6 +57,7 @@ export function adjustCardCost(
   manifest: Manifest,
 ): CardMutationResult {
   requireCause(cause);
+  requireFiniteInteger(delta, 'card cost delta');
   if (delta === 0 || !getCardRuntime(state, cardId, manifest)) {
     return { events: [], state };
   }
@@ -51,7 +65,7 @@ export function adjustCardCost(
     type: 'CARD_COST_CHANGED',
     cardId,
     delta,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -63,7 +77,8 @@ export function setCardCost(
   manifest: Manifest,
 ): CardMutationResult {
   requireCause(cause);
-  const desired = Math.max(0, Math.floor(value));
+  requireFiniteInteger(value, 'card cost');
+  const desired = Math.max(0, value);
   return adjustCardCost(
     state,
     cardId,
@@ -81,6 +96,7 @@ export function setCardPower(
   manifest: Manifest,
 ): PowerMutationResult {
   requireCause(cause);
+  requireFiniteInteger(value, 'card power');
   return resolveCardPowerMutation(
     state,
     cardId,
@@ -98,6 +114,7 @@ export function adjustCardPower(
   manifest: Manifest,
 ): PowerMutationResult {
   requireCause(cause);
+  requireFiniteInteger(delta, 'card power delta');
   return resolveCardPowerAdd(state, cardId, delta, cause, manifest);
 }
 
@@ -125,15 +142,18 @@ export function replaceCardText(
   manifest: Manifest,
 ): CardMutationResult {
   requireCause(cause);
+  const overrideSnapshot = override === null
+    ? null
+    : structuredClone(override);
   const card = getCardRuntime(state, cardId, manifest);
-  if (!card || JSON.stringify(card.text.override) === JSON.stringify(override)) {
+  if (!card || JSON.stringify(card.text.override) === JSON.stringify(overrideSnapshot)) {
     return { events: [], state };
   }
   return commit(state, {
     type: 'CARD_TEXT_OVERRIDDEN',
     cardId,
-    override,
-    cause,
+    override: overrideSnapshot,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -153,7 +173,7 @@ export function addCardTag(
     type: 'CARD_TAG_ADDED',
     cardId,
     tag,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -173,7 +193,7 @@ export function removeCardTag(
     type: 'CARD_TAG_REMOVED',
     cardId,
     tag,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }
 
@@ -186,6 +206,10 @@ export function changeCardCounter(
   manifest: Manifest,
 ): CardMutationResult {
   requireCause(cause);
+  requireFiniteInteger(delta, 'card counter delta');
+  if (name.trim().length === 0) {
+    throw new Error('card counter name must be non-empty');
+  }
   if (delta === 0 || !getCardRuntime(state, cardId, manifest)) {
     return { events: [], state };
   }
@@ -194,6 +218,6 @@ export function changeCardCounter(
     cardId,
     name,
     delta,
-    cause,
+    cause: snapshotCause(cause),
   }, manifest);
 }

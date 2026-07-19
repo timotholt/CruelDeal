@@ -106,7 +106,7 @@ export function getCardPowerModifiers(
   const card = getCardRuntime(state, cardId, manifest);
   if (!card || !isPowerBearingCard(state, cardId, manifest)) return [];
 
-  const targeting = ongoingsTargeting(state, manifest, cardId);
+  const targeting = ongoingsTargeting(state, manifest, cardId, ['POWER_ADD']);
   const targetCtx = ctxForTargetCard(state, manifest, cardId);
   const out: PowerModifierEntry[] = [];
 

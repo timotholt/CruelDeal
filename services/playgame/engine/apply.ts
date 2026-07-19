@@ -72,12 +72,32 @@ export function applyFramed(
   if (framed.frame !== expected) {
     throw new Error(`applyFramed: expected frame ${expected}, received ${framed.frame}`);
   }
-  const next = applyBody(state, framed.event, framed.frame, _manifest);
+  // The reducer is the final write boundary, including for replay and tests
+  // that construct events directly. Snapshot caller-owned payloads before
+  // either state or the append-only frame log can retain them.
+  const canonicalFramed = structuredClone(framed);
+  requireEventProvenance(canonicalFramed.event);
+  const next = applyBody(
+    state,
+    canonicalFramed.event,
+    canonicalFramed.frame,
+    _manifest,
+  );
   // Every event is appended to the log, regardless of whether the body
   // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
   // INTENT_REJECTED) only contribute to the log.
-  const next2 = applyTrackedVars(next, state, framed.event);
-  return appendLog(next2, framed);
+  const next2 = applyTrackedVars(next, state, canonicalFramed.event);
+  return appendLog(next2, canonicalFramed);
+}
+
+function requireEventProvenance(event: MatchEvent): void {
+  if (!('cause' in event) || event.cause === undefined) return;
+  if (String(event.cause.sourceId).trim().length === 0) {
+    throw new Error(`${event.type} cause sourceId must be non-empty`);
+  }
+  if (event.cause.reason.trim().length === 0) {
+    throw new Error(`${event.type} cause reason must be non-empty`);
+  }
 }
 
 function applyBody(

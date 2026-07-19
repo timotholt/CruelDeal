@@ -28,8 +28,22 @@ export function resolveCardPowerMutation(
   cause: EffectRef,
   manifest: Manifest,
 ): PowerMutationResult {
+  if (String(cause.sourceId).trim().length === 0) {
+    throw new Error('card power mutation sourceId must be non-empty');
+  }
   if (cause.reason.trim().length === 0) {
     throw new Error('card power mutation reason must be non-empty');
+  }
+  const numericValue = mutation.kind === 'RESET'
+    ? null
+    : mutation.kind === 'ADD'
+      ? mutation.delta
+      : mutation.value;
+  if (
+    numericValue !== null
+    && (!Number.isFinite(numericValue) || !Number.isInteger(numericValue))
+  ) {
+    throw new Error('card power mutation value must be a finite integer');
   }
   if (!isPowerBearingCard(state, cardId, manifest)) {
     return { events: [], state };
@@ -55,8 +69,8 @@ export function resolveCardPowerMutation(
   const event: MatchEvent = {
     type: 'CARD_POWER_CHANGED',
     cardId,
-    mutation,
-    cause,
+    mutation: { ...mutation },
+    cause: { ...cause },
   };
   const candidate = apply(state, event, manifest);
   if (
