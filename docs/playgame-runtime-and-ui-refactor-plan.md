@@ -6,6 +6,12 @@ Amended after Phase 1 completion with a review-ready Phase 1.5 engine-capability
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
+Phase 1.5 Checkpoints 1 through 3 are complete. Phase 1.5 Checkpoints 4 and 5
+and the permanent engine/content rule-control plane are now governed by
+`docs/playgame-transactional-rules-kernel-spec.md`. Where that specification
+conflicts with the older Phase 1.5 implementation detail in this roadmap, the
+transactional-rules-kernel specification wins.
+
 ## Cost Model
 
 The tags are delivery commitments, not importance labels. The round-6 census remains the historical Phase 0/1 baseline; this amendment adds tagged Phase 1.5 requirements that require a fresh review census. A tagged parent item owns any untagged examples or field lists nested beneath it.
@@ -14,7 +20,7 @@ The tags are delivery commitments, not importance labels. The round-6 census rem
 - **[BUILD NOW]** Phase 0/1 is roughly **8–10 review-commit units**: characterization and generated parity/provenance/fold tests; bootstrap validation; shared opening and frame construction; hand-based AI; one local single-writer intent queue; simultaneous lock/reveal; and complete migration of authoritative live mutations. The tier gate is `P-PARITY`, `P-EXACTLY-ONCE`, `P-PROVENANCE`, `P-FOLD`, and `P-NO-TIME` green at the configured CI depth, plus the named opening/reveal regressions and a DOM-free complete turn.
 - **[BUILD AFTER]** Implement during Phase 1.5 and Phases 2–4. Phase 1.5 stabilizes governed engine operations, committed reactions, and location authoring before provider or presentation consumers bind to them. The tier gate includes the Phase 1.5 capability/reaction/location gates plus H1–H7 and `P-INTERLEAVE` when the director exists.
 - **[BUILD LAST]** Implement during Phases 5–7 or a final hardening pass; these items have local value but no ordering dependency. The tier gate is transaction-bound, retention-release, bounded-index, mutation-check, component/layout, mobile, CSS, content, and browser proofs green for the touched slice.
-- **[DEFER]** Record only; perform no implementation work in this plan. The future live-server gate is durable recovery/idempotency and checksum parity under injected failures, exhaustive wire redaction/version compatibility, reconnect race coverage, fencing, clocks, backpressure, and an approved retention policy.
+- **[DEFER]** Record only; perform no implementation work in this plan. The future live-server gate is durable recovery/idempotency and checksum parity under injected failures, exhaustive wire redaction/version rejection and cutover, reconnect race coverage, fencing, clocks, backpressure, and an approved retention policy.
 
 ## Executive Decision
 
@@ -330,7 +336,8 @@ Commit and presentation behavior:
 1. **[SEAM]** Migrate vertically, one end-to-end behavior at a time.
 2. **[BUILD NOW]** Add characterization tests before moving authority.
 3. **[BUILD NOW]** Preserve semantic engine events and replay format only if Phase 0 proves that the vocabulary reconstructs every gameplay-visible transition.
-4. **[SEAM]** Keep compatibility adapters temporary and visibly marked.
+4. **[SEAM]** Cut each migrated slice over cleanly; update current callers and
+   tests in the same checkpoint and retain no compatibility adapter.
 5. **[SEAM]** Never maintain two authoritative live states.
 6. **[SEAM]** Do not combine the runtime migration with a visual CSS rewrite.
 7. **[BUILD NOW]** Delete old control paths when their replacement passes; do not leave two active turn-resolution systems.
@@ -539,8 +546,8 @@ event vocabulary.
 - **[SEAM]** Recognize every event discriminant now, but defer exhaustive
   payload closure for events whose envelope is being redesigned by Phase 1.5.
 - **[DEFER]** Full match-state/replay serialization, multiplayer redaction,
-  durable storage, compatibility adapters, and Rust simulation wait for their
-  owning server phases.
+  durable storage, and Rust simulation wait for their owning server phases.
+  No compatibility adapter is planned for the current internal protocol.
 
 See `docs/agent-checkpoints/phase1.15-cross-language-validation.md`.
 
@@ -551,7 +558,8 @@ reorder, stage, reveal, replace, and zone lifecycle rules. Every lifecycle
 coordinate uses the Phase 1.1 `Frame`; Phase 1.2 must not introduce
 `FrameStamp` or another timeline implementation.
 
-See `docs/playgame-phase1.2-location-deck-spec.md`.
+See the completed historical specification at
+`docs/_deprecated/playgame/playgame-phase1.2-location-deck-spec.md`.
 
 ## Phase 1.5: Capability Kernel, Committed Reactions, and Location Authoring
 
@@ -656,7 +664,15 @@ Courthouse is the acceptance slice:
 
 Removed or moved cards cannot rely on a post-state lookup to recover these facts.
 
-If the serialized replay/event format changes, version it explicitly and update compatibility fixtures at this boundary. Old events are either migrated deterministically or rejected by version; presentation and replay may not fabricate missing context heuristically.
+The dispatcher uses event-local discovery over before/after state snapshots. It
+does not maintain a dependency graph, mutable subscription registry, or runtime
+registration lifecycle.
+
+If the serialized replay/event format changes during this active-development
+phase, replace the current format, callers, schemas, and fixtures atomically.
+Do not preserve old internal events through aliases, fallback reads, adapters,
+or dual schemas. Presentation and replay may not fabricate missing context
+heuristically.
 
 **[SEAM]** Friendly authoring hooks lower to generic typed subscriptions in this dispatcher; they are not separate imperative call sites:
 
@@ -722,7 +738,8 @@ Phase 2 is a consumer migration. It may expose projected committed events, react
 - **[BUILD AFTER]** Replace component `dispatch`/`setEngineState` with typed commands and route undo through the chosen engine intent.
 - **[BUILD AFTER]** Expose effective projected values and committed power-history/debug data through explicit read models; components never evaluate `BLOCK_POWER_INCREASE` or other capabilities.
 - **[BUILD AFTER]** Keep all card/location reaction dispatch inside the engine transaction. Providers publish results and never duplicate, delay, or manually invoke reactions.
-- **[BUILD AFTER]** Use a compatibility facade only transiently and remove it within this phase.
+- **[BUILD AFTER]** Replace the provider contract and migrate all current
+  callers in one checkpoint; do not add a compatibility facade.
 
 ### Exit Criteria
 
@@ -953,7 +970,8 @@ Extract cohesive units without changing the visual design:
 - **[DEFER] Reconnect:** rejoin authentication, projected snapshot/tail resume, durable recent-intent disposition, and timeout/reconnect/player race coverage.
 - **[DEFER] Horizontal ownership:** production routing, leases, fencing tokens, and multi-owner CAS.
 - **[DEFER] Transport backpressure:** websocket byte/message bounds and slow/disconnected subscriber policy.
-- **[DEFER] Rolling compatibility:** protocol/projection compatibility windows, deploy sequencing, and fail-closed wire fallback tests.
+- **[DEFER] Protocol cutover:** deploy sequencing, version mismatch rejection,
+  and fail-closed wire tests for the single supported protocol version.
 - **[DEFER] Server observability:** recovery/redaction/reconnect-size metrics and access-controlled per-match traces, with no sensitive labels in general metrics.
 - **[DEFER] Receipt archival and operational retention:** receipt TTL/archive, terminal retention, snapshot cadence, transaction/trace retention, deletion, and compaction watermarks.
 - **[DEFER] Collection integration:** collection ID migration, collection-to-match wiring, and ownership/possession validation remain separate from this runtime plan.
@@ -1094,7 +1112,8 @@ Stop and reassess rather than layering patches if:
 - **[BUILD AFTER]** an event/envelope lacks the historical facts needed after a card moves or disappears and a consumer compensates with post-state guessing
 - **[BUILD AFTER]** a continuous projection emits a mutation/reaction, or stored contributions must be erased to suppress their effective value
 - **[BUILD AFTER]** Phase 2 begins before Phase 1.5 exits, a provider imports the capability/operation kernel, or Phase 3 invents presentation-only semantic fields
-- **[BUILD AFTER]** presentation still dispatches, sinks submit reentrantly, stale generations mutate cursors, or a compatibility facade becomes permanent
+- **[BUILD AFTER]** presentation still dispatches, sinks submit reentrantly,
+  stale generations mutate cursors, or old and new provider contracts coexist
 - **[SEAM]** engine semantics change only to animate an event
 - **[BUILD LAST]** frame retention is unbounded, frames copy canonical history, or a full-log gameplay scan remains after the hardening tier
 - **[DEFER]** durable recovery cannot fold genesis/snapshot plus tail when persistence is implemented
@@ -1119,7 +1138,9 @@ Decided:
 - **[DEFER]** Deadline readiness waits for authoritative clocks.
 - **[SEAM]** Gameplay RNG namespaces and no-time boundaries are fixed now.
 - **[BUILD LAST]** Log-free state, retention bounds, and tracked gameplay indexes are final hardening.
-- **[DEFER]** Collection possession wiring, clocks/reconnect, fencing, transport backpressure, wire compatibility, and retention operations remain deferred.
+- **[DEFER]** Collection possession wiring, clocks/reconnect, fencing,
+  transport backpressure, protocol cutover, and retention operations remain
+  deferred.
 - **[BUILD NOW]** Script-originated gameplay, including location reveal/effects, moves behind runtime resolution.
 - **[BUILD AFTER]** Phase 1.5 precedes Phase 2; it strengthens engine extension seams without reopening Phase 1 authority.
 - **[SEAM]** Cards and locations remain distinct definitions but share typed rule-source abilities; locations become folder-authored neutral-deck content.

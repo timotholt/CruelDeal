@@ -1,5 +1,11 @@
 # Card Authoring Manifest Refactor Spec
 
+> Status: deprecated / implemented. The per-card `core-v1` authoring layout,
+> generated index, validators, and deprecated-set quarantine are established in
+> code. This document is retained as migration history, not active authority.
+> Current engine/content execution rules are governed by
+> `docs/playgame-transactional-rules-kernel-spec.md`.
+
 ## Goal
 
 Replace the monolithic `cyberpunk-cards.ts` card catalog with a phone-friendly, per-card authoring system that can be safely edited by Tim, Codex, Claude, or another agent without opening a laptop.

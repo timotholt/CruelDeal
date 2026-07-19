@@ -7,6 +7,7 @@ import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
 import type { DebugMatchCheckpoint } from '../runtime/contracts';
 import type { MatchReconciliationResult } from '../runtime/replayExport';
+import type { MatchPerformanceProfile } from '../runtime/performanceTelemetry';
 import {
   createReplayNameResolver,
   createReplayActorResolver,
@@ -22,6 +23,7 @@ export interface SnapDebugApi {
   getStep: (cursor: number) => ReplayStep | null;
   getStepDescription: (cursor: number) => ReplayStepDescription | null;
   getCheckpoints: () => readonly DebugMatchCheckpoint[];
+  getPerformanceProfile: () => MatchPerformanceProfile;
   reconcile: () => MatchReconciliationResult;
   copyReplayJson: () => Promise<string>;
 }
@@ -59,6 +61,7 @@ export function installSnapDebug(
       );
     },
     getCheckpoints: runtime.debugCheckpoints,
+    getPerformanceProfile: runtime.performanceProfile,
     reconcile: runtime.reconcile,
     copyReplayJson: async () => {
       const json = JSON.stringify(exportReplay(), null, 2);

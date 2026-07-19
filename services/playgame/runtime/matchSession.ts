@@ -8,6 +8,7 @@ import type {
 } from './contracts';
 import { validateMatchBootstrap } from './bootstrapValidation';
 import { createMatchRuntime, type MatchRuntime } from './matchRuntime';
+import { MatchPerformanceTelemetry } from './performanceTelemetry';
 
 export class MatchSessionSetupError extends Error {
   readonly issues: readonly MatchBootstrapValidationIssue[];
@@ -28,6 +29,7 @@ export class MatchSession {
   readonly manifest: Manifest;
   readonly ruleset: MatchRuleset;
   readonly runtime: MatchRuntime;
+  readonly performanceTelemetry: MatchPerformanceTelemetry;
 
   private constructor(bootstrap: ValidatedMatchBootstrap, manifest: Manifest) {
     const ruleset = manifest.rulesets[bootstrap.rulesetId];
@@ -35,6 +37,7 @@ export class MatchSession {
     this.bootstrap = bootstrap;
     this.manifest = manifest;
     this.ruleset = ruleset;
+    this.performanceTelemetry = new MatchPerformanceTelemetry();
     this.runtime = createMatchRuntime({
       matchId: bootstrap.matchId,
       seed: bootstrap.seed,
@@ -51,6 +54,7 @@ export class MatchSession {
       },
       locationDeck: bootstrap.decks.LOCATIONS.entries,
       debugDeterminism: bootstrap.mode === 'DEBUG',
+      performanceTelemetry: this.performanceTelemetry,
     });
     Object.freeze(this);
   }

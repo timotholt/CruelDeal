@@ -2,11 +2,11 @@
  * Marvel-Snap-style cinematic reveal for a single pending card.
  *
  * Phases (~1.1s total):
- *   Phase 1 (350ms): face-down slot card is hidden; a face-up clone expands
+ *   Phase 1: face-down slot card is hidden; a face-up clone expands
  *                    from a thin sliver at the slot position out to the
  *                    center of the board at ~2.2x scale (reads as a flip + zoom).
- *   Phase 2 (350ms): hold at center so the player can read the card.
- *   Phase 3 (320ms): clone shrinks back to the slot position.
+ *   Phase 2: hold at center so the player can read the card.
+ *   Phase 3: clone shrinks back to the slot position.
  *   Finalize:        adopt the renderer-owned face-up frame and perform the
  *                    governed handoff to the canonical card.
  *
@@ -30,6 +30,7 @@ import {
   captureCardVisual,
   type LogicalCardEndpoint,
 } from '@/services/playgame/presentation/cardMotion';
+import { REVEAL_CINEMATIC_TIMING } from '@/services/playgame/presentation/timing';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -77,7 +78,7 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
 
   // Phase 1 — grow + move to center.
   const centerResult = await session.animateTo(centerEndpoint, {
-    durationMs: 350,
+    durationMs: REVEAL_CINEMATIC_TIMING.enterMs,
     easing: 'cubic-bezier(.2,.8,.3,1)',
     scaleFrom: 0.02,
     scaleTo: 2.2,
@@ -86,12 +87,12 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
   if (centerResult) return;
 
   // Phase 2 — hold so the player can read the card.
-  await wait(350);
+  await wait(REVEAL_CINEMATIC_TIMING.holdMs);
 
   // Phase 3 — return to the current canonical layout box.
   const endpoint = motionSurface.cardMotion.endpoint(typedCardId);
   const returnResult = await session.animateTo(endpoint, {
-    durationMs: 320,
+    durationMs: REVEAL_CINEMATIC_TIMING.returnMs,
     easing: 'cubic-bezier(.4,0,.2,1)',
     scaleFrom: 2.2,
     scaleTo: 1,

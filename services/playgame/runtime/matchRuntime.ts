@@ -1,5 +1,5 @@
 import { createMatchGenesis } from '../engine/cli/initState';
-import { apply } from '../engine/apply';
+import { apply, applyFramed } from '../engine/apply';
 import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { Deck, Manifest } from '../engine/manifest/types';
@@ -45,6 +45,12 @@ import {
   reconcileRuntimeRecord,
   type MatchReconciliationResult,
 } from './replayExport';
+import {
+  elapsed,
+  MatchPerformanceTelemetry,
+  monotonicNow,
+  type MatchPerformanceProfile,
+} from './performanceTelemetry';
 
 export type MatchTransactionSubscriber = (timeline: CommittedTransactionTimeline) => void;
 
@@ -69,6 +75,8 @@ export interface MatchRuntime {
   debugCheckpoints(): readonly DebugMatchCheckpoint[];
   /** Replays genesis + canonical transactions and compares the full state. */
   reconcile(): MatchReconciliationResult;
+  /** Non-canonical, bounded timing sidecar for live diagnostics. */
+  performanceProfile(): MatchPerformanceProfile;
 }
 
 export interface MatchRuntimeConfig {
@@ -82,6 +90,8 @@ export interface MatchRuntimeConfig {
   readonly locationDeck: readonly LocationCardDeckEntry[];
   /** Expensive invariant: replay and compare after every committed transaction. */
   readonly debugDeterminism?: boolean;
+  /** Optional shared recorder so presentation timings can join runtime spans. */
+  readonly performanceTelemetry?: MatchPerformanceTelemetry;
 }
 
 interface QueuedIntent {
@@ -93,6 +103,7 @@ interface QueuedIntent {
 interface CommitCandidate {
   readonly identity: CommittedIntentIdentity;
   readonly events: readonly MatchEvent[];
+  readonly resolveMs?: number;
   readonly initialTimelinePhase?: TimelinePhase;
   readonly receiptKey?: IntentReceiptKey;
 }
@@ -110,6 +121,11 @@ interface PlannedStage {
 interface PlanningPrelude {
   readonly baseDraws: number;
   readonly events: readonly MatchEvent[];
+}
+
+interface ResolvedEventBatch {
+  readonly events: readonly MatchEvent[];
+  readonly durationMs: number;
 }
 
 const MUTATION_OPTIONAL_EVENTS = new Set<MatchEvent['type']>([
@@ -269,6 +285,7 @@ function illegalResult(
  */
 export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const manifest: Manifest = BOOTSTRAP_MANIFEST;
+  const performanceTelemetry = config.performanceTelemetry ?? new MatchPerformanceTelemetry();
   if (config.manifestVersion !== manifest.version) {
     throw new Error(
       `createMatchRuntime: bootstrap manifest ${config.manifestVersion} does not match ${manifest.version}`,
@@ -300,10 +317,25 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     state: MatchState,
     intent: MatchIntent,
     purpose: string,
-  ): readonly MatchEvent[] => {
+  ): ResolvedEventBatch => {
+    const startedAtMs = monotonicNow();
     const rng = createRng(state.rng).scope(purpose);
     const events = resolve(state, intent, rng, manifest);
-    return appendGameplayRngAdvance(state, rng, events);
+    const committedEvents = appendGameplayRngAdvance(state, rng, events);
+    const endedAtMs = monotonicNow();
+    performanceTelemetry.recordResolve({
+      purpose,
+      turn: state.turn,
+      intentType: intent.type,
+      eventCount: committedEvents.length,
+      startedAtMs,
+      endedAtMs,
+      durationMs: elapsed(startedAtMs, endedAtMs),
+    });
+    return {
+      events: committedEvents,
+      durationMs: elapsed(startedAtMs, endedAtMs),
+    };
   };
 
   const foldPlannedStages = (
@@ -338,17 +370,37 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const visibleState = (): MatchState => projectWorkingState();
 
   const commit = (candidate: CommitCandidate): CommittedCandidate => {
+    const commitStartedAtMs = monotonicNow();
     const baseRevision = currentRevision;
     const revision = baseRevision + 1;
     const transactionId = `${config.matchId}:tx:${revision}`;
     const events = Object.freeze([...candidate.events]);
+    let applyMs = 0;
+    const foldStartedAtMs = monotonicNow();
     const built = frameAndFoldEvents({
       transactionId,
       initialState: authoritativeState,
       events,
       manifest,
       initialPhase: candidate.initialTimelinePhase,
+      reduceFramedEvent: (state, framedEvent, activeManifest) => {
+        const startedAtMs = monotonicNow();
+        const after = applyFramed(state, framedEvent, activeManifest);
+        const endedAtMs = monotonicNow();
+        const durationMs = elapsed(startedAtMs, endedAtMs);
+        applyMs += durationMs;
+        performanceTelemetry.recordFrameApply({
+          transactionId,
+          frame: framedEvent.frame,
+          eventType: framedEvent.event.type,
+          startedAtMs,
+          endedAtMs,
+          durationMs,
+        });
+        return after;
+      },
     });
+    const foldEndedAtMs = monotonicNow();
     const transaction: CommittedTransactionRecord = Object.freeze({
       transactionId,
       matchId: config.matchId,
@@ -359,13 +411,17 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       rngDrawsBefore: authoritativeState.rng.draws,
       rngDrawsAfter: built.finalState.rng.draws,
     });
+    const protocolStartedAtMs = monotonicNow();
     assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
+    const protocolEndedAtMs = monotonicNow();
     const timeline: CommittedTransactionTimeline = Object.freeze({
       transaction,
       transitions: built.transitions,
       finalState: built.finalState,
     });
+    const invariantStartedAtMs = monotonicNow();
     assertValidTimeline(timeline, authoritativeState, events);
+    const invariantEndedAtMs = monotonicNow();
 
     const result: AcceptedIntentResult | undefined = candidate.receiptKey
       ? Object.freeze({
@@ -398,14 +454,34 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     }
     const endsMatch = built.transitions
       .some(transition => transition.event.type === 'MATCH_ENDED');
+    let reconciliationMs = 0;
     if (config.debugDeterminism || endsMatch) {
+      const reconciliationStartedAtMs = monotonicNow();
       const reconciliation = reconcileRuntimeRecord({
         version: 3,
         genesis: genesisState,
         transactions: nextTransactions,
       }, config.matchId, manifest, built.finalState, nextCheckpoints);
+      const reconciliationEndedAtMs = monotonicNow();
+      reconciliationMs = elapsed(reconciliationStartedAtMs, reconciliationEndedAtMs);
       if (!reconciliation.ok) throw new DeterminismDriftError(reconciliation);
     }
+
+    const commitEndedAtMs = monotonicNow();
+    performanceTelemetry.recordTransaction({
+      transactionId,
+      revision,
+      eventCount: events.length,
+      startedAtMs: commitStartedAtMs,
+      endedAtMs: commitEndedAtMs,
+      durationMs: elapsed(commitStartedAtMs, commitEndedAtMs),
+      resolveMs: candidate.resolveMs ?? 0,
+      foldMs: elapsed(foldStartedAtMs, foldEndedAtMs),
+      applyMs,
+      protocolValidationMs: elapsed(protocolStartedAtMs, protocolEndedAtMs),
+      invariantValidationMs: elapsed(invariantStartedAtMs, invariantEndedAtMs),
+      reconciliationMs,
+    });
 
     // Local atomic commit: no callbacks, promises, awaits, or fallible
     // reconciliation may enter this block.
@@ -419,6 +495,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   };
 
   const publish = (timeline: CommittedTransactionTimeline): void => {
+    const startedAtMs = monotonicNow();
     for (const subscriber of [...subscribers]) {
       try {
         subscriber(timeline);
@@ -426,6 +503,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         // Read-only observer failures cannot roll back or halt authority.
       }
     }
+    performanceTelemetry.recordPublish(
+      timeline.transaction.transactionId,
+      elapsed(startedAtMs, monotonicNow()),
+    );
   };
 
   const setup = buildLocationSetupTransaction(
@@ -488,6 +569,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const commitLockedTurn = (): void => {
     let mergedState = authoritativeState;
     const events: MatchEvent[] = [];
+    let resolveMs = 0;
     const ownerOrder: readonly Seat[] = authoritativeState.priority === 'P0'
       ? ['P0', 'P1']
       : ['P1', 'P0'];
@@ -507,11 +589,13 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
     for (const owner of ownerOrder) {
       for (const planned of planning[owner]) {
-        const stageEvents = resolveWithStateRng(
+        const stageBatch = resolveWithStateRng(
           mergedState,
           planned.intent,
           `stage:${authoritativeState.turn}:${owner}:${planned.intent.intentId}`,
         );
+        const stageEvents = stageBatch.events;
+        resolveMs += stageBatch.durationMs;
         const rejection = stageEvents[0]?.type === 'INTENT_REJECTED' ? stageEvents[0] : null;
         if (rejection) continue;
         events.push(...stageEvents);
@@ -519,7 +603,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       }
     }
 
-    const resolutionEvents = resolveWithStateRng(
+    const resolutionBatch = resolveWithStateRng(
       mergedState,
       {
         type: 'END_TURN',
@@ -528,6 +612,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       },
       `system-turn:${authoritativeState.turn}`,
     );
+    const resolutionEvents = resolutionBatch.events;
+    resolveMs += resolutionBatch.durationMs;
     events.push(...resolutionEvents);
 
     const committed = commit({
@@ -537,6 +623,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         intentId: `resolve-turn-${authoritativeState.turn}`,
       },
       events,
+      resolveMs,
     });
     // The synchronous presentation subscriber captures each frame with the
     // viewer's just-consumed private plan still available as an overlay.
@@ -668,7 +755,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           planningState,
           engineIntent,
           `stage:${planningState.turn}:${envelope.seat}:${envelope.intentId}`,
-        );
+        ).events;
         const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
         if (events.length === 0 || engineRejection) {
           return storeRejection(key, illegalResult(
@@ -728,11 +815,12 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         return result;
       }
 
-      const events = resolveWithStateRng(
+      const resolved = resolveWithStateRng(
         authoritativeState,
         engineIntent,
         `commit:${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`,
       );
+      const events = resolved.events;
       const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
       if (events.length === 0 || engineRejection) {
         return storeRejection(key, illegalResult(
@@ -750,6 +838,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           ...(envelope.intentSeq === undefined ? {} : { intentSeq: envelope.intentSeq }),
         },
         events,
+        resolveMs: resolved.durationMs,
         receiptKey: key,
       });
       if (engineIntent.type === 'CONCEDE') {
@@ -829,5 +918,6 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       genesis: genesisState,
       transactions: committedTransactions,
     }, config.matchId, manifest, authoritativeState, checkpoints),
+    performanceProfile: () => performanceTelemetry.snapshot(),
   });
 }

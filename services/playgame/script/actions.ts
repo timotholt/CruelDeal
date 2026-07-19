@@ -22,6 +22,11 @@ import type {
 import { showToast } from '../toast';
 import type { UiState } from '../view';
 import type { Step } from './runner';
+import {
+  elapsed,
+  monotonicNow,
+  type FramePresentationTiming,
+} from '../runtime/performanceTelemetry';
 
 export interface PlayScriptCtx extends Record<string, unknown> {
   state: EngineMatchState;
@@ -40,6 +45,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   cancelled?: boolean;
   onCancel?: () => void;
   presentCommittedFrame: (frame: EventTransition) => void;
+  recordFramePresentationTiming?: (timing: FramePresentationTiming) => void;
   finishTurnPresentation: () => void;
   presentPlayfieldEvent: PlayfieldEventPresenter;
 }
@@ -204,6 +210,7 @@ const paceTimeline = async (
       }
 
       const frame = beat.frame;
+      const startedAtMs = monotonicNow();
       let acceptingAnimationDispatch = true;
       let framePresented = false;
       const presentFrame = (): void => {
@@ -223,6 +230,17 @@ const paceTimeline = async (
       // late continuation from replaying this older projection out of order.
       presentFrame();
       acceptingAnimationDispatch = false;
+      const endedAtMs = monotonicNow();
+      c.recordFramePresentationTiming?.({
+        transactionId: frame.transactionId,
+        frame: frame.frame,
+        eventType: frame.event.type,
+        beatKind: beat.kind,
+        outcome,
+        startedAtMs,
+        endedAtMs,
+        durationMs: elapsed(startedAtMs, endedAtMs),
+      });
       if (outcome !== 'completed') {
         c.motionSurface?.cardMotion.cancelAll(
           outcome === 'timed-out' ? 'presentation-timeout' : 'presentation-invalidated',

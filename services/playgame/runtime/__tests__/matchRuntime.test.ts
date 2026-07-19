@@ -157,6 +157,32 @@ describe('createMatchRuntime', () => {
     expect(runtime.state()).toBe(initialization.opening.finalState);
   });
 
+  it('records bounded live timing metadata without contaminating canonical replay frames', () => {
+    const runtime = runtimeFixture('runtime-performance-sidecar');
+    const profile = runtime.performanceProfile();
+    const committedFrameCount = runtime.transactions().reduce(
+      (count, transaction) => count + transaction.framedEvents.length,
+      0,
+    );
+
+    expect(profile.frameApplies).toHaveLength(committedFrameCount);
+    expect(profile.transactions).toHaveLength(runtime.transactions().length);
+    expect(profile.frameApplies.every(timing => (
+      timing.endedAtMs >= timing.startedAtMs
+      && timing.durationMs === timing.endedAtMs - timing.startedAtMs
+    ))).toBe(true);
+    expect(profile.transactions.every(timing => (
+      timing.durationMs >= 0
+      && timing.resolveMs === 0
+      && timing.applyMs >= 0
+      && timing.foldMs >= timing.applyMs
+    ))).toBe(true);
+    expect(profile.framePresentations).toEqual([]);
+    expect(JSON.stringify(runtime.exportReplay())).not.toMatch(
+      /startedAtMs|endedAtMs|durationMs|resolveMs|applyMs|presentation/i,
+    );
+  });
+
   it('keeps planning private, then publishes one complete system resolution timeline', async () => {
     const runtime = runtimeFixture();
     const baseRevision = runtime.revision();

@@ -624,6 +624,31 @@
   .replay-panel__summary {
     margin: 10px 0;
   }
+  .replay-panel__timings {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(94, 234, 212, 0.14);
+    border-radius: 10px;
+    background: rgba(2, 12, 18, 0.72);
+  }
+  .replay-panel__timing-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px 14px;
+    color: rgba(226, 232, 240, 0.66);
+    font: 600 10px/1.3 var(--font-mono);
+  }
+  .replay-panel__timing-grid strong {
+    color: #67e8f9;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .replay-panel__timing-note {
+    margin-top: 7px;
+    color: rgba(148, 163, 184, 0.7);
+    font: 600 9px/1.35 var(--font-mono);
+  }
   .replay-panel__event {
     color: var(--text);
     font-family: var(--font-body);

@@ -2,7 +2,8 @@
 
 ## Status
 
-Implemented and exit-proven on 2026-07-18.
+Deprecated / implemented and exit-proven on 2026-07-18. Retained as historical
+motion-contract evidence; it is no longer an active implementation plan.
 
 Phase 1.22 is a presentation-architecture phase immediately after Phase 1.21.
 It completes the motion boundary introduced by `PlayMotionSurface`. It does not

@@ -9,6 +9,12 @@ import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
 import type { Frame, FramedEvent, TemporalScope } from './types/timeline';
 
+export type FramedEventReducer = (
+  state: MatchState,
+  framedEvent: FramedEvent,
+  manifest: Manifest,
+) => MatchState;
+
 /**
  * A materialized state transition for one canonical FramedEvent.
  *
@@ -39,6 +45,11 @@ export interface FoldFramedEventsOptions {
   readonly initialState: MatchState;
   readonly framedEvents: readonly FramedEvent[];
   readonly manifest: Manifest;
+  /**
+   * Runtime instrumentation seam. The engine supplies no clock, and callers
+   * must preserve applyFramed semantics.
+   */
+  readonly reduceFramedEvent?: FramedEventReducer;
 }
 
 export interface FrameAndFoldEventsOptions {
@@ -47,6 +58,7 @@ export interface FrameAndFoldEventsOptions {
   readonly events: readonly MatchEvent[];
   readonly manifest: Manifest;
   readonly initialPhase?: FrameEventSequenceOptions['initialPhase'];
+  readonly reduceFramedEvent?: FramedEventReducer;
 }
 
 /**
@@ -62,6 +74,7 @@ export function foldFramedEvents(
   );
   const framedEvents: FramedEvent[] = [];
   const transitions: EventTransition[] = [];
+  const reduceFramedEvent = options.reduceFramedEvent ?? applyFramed;
   let state = options.initialState;
 
   inputFrames.forEach((inputFrame, eventIndex) => {
@@ -72,7 +85,7 @@ export function foldFramedEvents(
       scope: Object.freeze({ ...canonicalInput.scope }),
       event: canonicalInput.event,
     });
-    const after = applyFramed(before, framedEvent, options.manifest);
+    const after = reduceFramedEvent(before, framedEvent, options.manifest);
     if (
       after.timeline.frame !== framedEvent.frame
       || after.timeline.scope?.turn !== framedEvent.scope.turn
@@ -115,5 +128,6 @@ export function frameAndFoldEvents(
     initialState: options.initialState,
     framedEvents,
     manifest: options.manifest,
+    reduceFramedEvent: options.reduceFramedEvent,
   });
 }

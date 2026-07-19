@@ -246,6 +246,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       zoneRefs,
       deckEl,
       presentCommittedFrame: actions.presentCommittedFrame,
+      recordFramePresentationTiming: actions.recordFramePresentationTiming,
       finishTurnPresentation: actions.finishTurnPresentation,
       presentPlayfieldEvent: createPlayfieldEventPresenter(playRoot),
     };
@@ -480,6 +481,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}
+              performanceProfile={pg.performanceProfile()}
               selectedStep={replayStep()}
               onCursorChange={selectReplayCursor}
               onCopyFrameJson={copyFrameJson}

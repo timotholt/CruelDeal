@@ -23,6 +23,12 @@ import type { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { otherSeat } from '@/services/playgame/engine/types/ids';
 import type { UiState } from '@/services/playgame/view';
 import { getCardRuntime } from '@/services/playgame/engine/projections';
+import {
+  elapsed,
+  monotonicNow,
+  type FramePresentationTiming,
+  type MatchPerformanceProfile,
+} from '@/services/playgame/runtime/performanceTelemetry';
 export type { UiState } from '@/services/playgame/view';
 
 export interface PlayGameContextValue {
@@ -36,12 +42,14 @@ export interface PlayGameContextValue {
   isResolving: Accessor<boolean>;
   openingTimeline: CommittedTransactionTimeline;
   exportRuntimeReplay: () => MatchRuntimeReplayExport;
+  performanceProfile: Accessor<MatchPerformanceProfile>;
   actions: {
     stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
     undoPendingCard: (cardId: string) => Promise<boolean>;
     endTurn: () => Promise<CommittedTransactionTimeline | null>;
     presentCommittedFrame: (frame: EventTransition) => void;
+    recordFramePresentationTiming: (timing: FramePresentationTiming) => void;
     finishTurnPresentation: () => void;
   };
 }
@@ -77,6 +85,7 @@ export const PlayGameProvider = (props: {
     showEndGamePrompt: false,
   });
   const [presentationBusy, setPresentationBusy] = createSignal(false);
+  const [performanceRevision, setPerformanceRevision] = createSignal(0);
   const resolutionWaiters = new Set<(timeline: CommittedTransactionTimeline) => void>();
   const projectedFrameStates = new WeakMap<EventTransition, EngineMatchState>();
   let activeProjectedTransactionId: string | null = null;
@@ -100,8 +109,19 @@ export const PlayGameProvider = (props: {
 
   const captureTimelineProjection = (timeline: CommittedTransactionTimeline): void => {
     for (const frame of timeline.transitions) {
+      const startedAtMs = monotonicNow();
       projectedFrameStates.set(frame, runtime.projectWorkingState(frame.after));
+      const endedAtMs = monotonicNow();
+      session.performanceTelemetry.recordFrameProjection({
+        transactionId: frame.transactionId,
+        frame: frame.frame,
+        eventType: frame.event.type,
+        startedAtMs,
+        endedAtMs,
+        durationMs: elapsed(startedAtMs, endedAtMs),
+      });
     }
+    setPerformanceRevision((revision) => revision + 1);
   };
 
   captureTimelineProjection(openingTimeline);
@@ -189,6 +209,10 @@ export const PlayGameProvider = (props: {
     isResolving: () => presentationBusy() || engineState().phase === 'RESOLVING',
     openingTimeline,
     exportRuntimeReplay: session.exportReplay,
+    performanceProfile: () => {
+      void performanceRevision();
+      return runtime.performanceProfile();
+    },
     actions: {
       stageCardInLane,
       undoPending,
@@ -210,6 +234,10 @@ export const PlayGameProvider = (props: {
           }
           adoptWorkingProjection(frame.after, capturedProjection);
         });
+      },
+      recordFramePresentationTiming: (timing) => {
+        session.performanceTelemetry.recordFramePresentation(timing);
+        setPerformanceRevision((revision) => revision + 1);
       },
       finishTurnPresentation: () => {
         // Normal completion is already at the final frame. Cancellation or a

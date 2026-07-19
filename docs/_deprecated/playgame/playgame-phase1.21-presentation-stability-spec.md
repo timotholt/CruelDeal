@@ -2,7 +2,8 @@
 
 ## Status
 
-Implemented and exit-proven on 2026-07-18.
+Deprecated / implemented and exit-proven on 2026-07-18. Retained as historical
+layout-contract evidence; it is no longer an active implementation plan.
 
 Phase 1.21 is a presentation-architecture phase after Phase 1.2. It does not
 change match rules, engine authority, lane identity, location lifecycle, or

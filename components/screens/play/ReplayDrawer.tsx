@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { ReplayStep } from '@/services/playgame/engine/replay';
 import type { MatchRuntimeReplayExport } from '@/services/playgame/runtime/contracts';
+import type { MatchPerformanceProfile } from '@/services/playgame/runtime/performanceTelemetry';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
@@ -19,6 +20,7 @@ interface ReplayDrawerProps {
   steps: readonly ReplayStep[];
   manifest: Manifest;
   replay: MatchRuntimeReplayExport;
+  performanceProfile: MatchPerformanceProfile;
   selectedStep: ReplayStep | null;
   onCursorChange: (cursor: number) => void;
   onCopyFrameJson: () => Promise<void>;
@@ -36,6 +38,31 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   const humanPhase = createMemo(() => props.selectedStep?.state.phase
     .toLowerCase()
     .replaceAll('_', ' ') ?? '');
+  const selectedTiming = createMemo(() => {
+    const step = props.selectedStep;
+    if (!step?.transactionId) return null;
+    const matchesFrame = <T extends { transactionId: string; frame: number }>(entry: T): boolean => (
+      entry.transactionId === step.transactionId && entry.frame === step.frame
+    );
+    return {
+      apply: props.performanceProfile.frameApplies.find(matchesFrame) ?? null,
+      projection: props.performanceProfile.frameProjections.find(matchesFrame) ?? null,
+      presentation: props.performanceProfile.framePresentations.find(matchesFrame) ?? null,
+      transaction: props.performanceProfile.transactions.find(
+        entry => entry.transactionId === step.transactionId,
+      ) ?? null,
+    };
+  });
+  const formatDuration = (durationMs: number | undefined): string => (
+    durationMs === undefined
+      ? '—'
+      : durationMs < 1
+        ? `${durationMs.toFixed(3)} ms`
+        : `${durationMs.toFixed(1)} ms`
+  );
+  const copyTimingJson = async (): Promise<void> => {
+    await navigator.clipboard.writeText(JSON.stringify(props.performanceProfile, null, 2));
+  };
 
   const beginDrag = (event: PointerEvent): void => {
     if (event.button !== 0) return;
@@ -204,6 +231,34 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
             </Show>
 
             <Show when={props.selectedStep?.event}>
+              <div class="replay-panel__timings">
+                <div class="replay-panel__section-title">Live frame timing</div>
+                <div class="replay-panel__timing-grid">
+                  <span>Engine apply</span>
+                  <strong>{formatDuration(selectedTiming()?.apply?.durationMs)}</strong>
+                  <span>UI projection</span>
+                  <strong>{formatDuration(selectedTiming()?.projection?.durationMs)}</strong>
+                  <span>Presentation</span>
+                  <strong>{formatDuration(selectedTiming()?.presentation?.durationMs)}</strong>
+                  <span>Resolver batch</span>
+                  <strong>{formatDuration(selectedTiming()?.transaction?.resolveMs)}</strong>
+                  <span>Transaction commit</span>
+                  <strong>{formatDuration(selectedTiming()?.transaction?.durationMs)}</strong>
+                </div>
+                <Show when={selectedTiming()?.presentation}>
+                  {(timing) => (
+                    <div class="replay-panel__timing-note">
+                      {timing().beatKind} · {timing().outcome}
+                    </div>
+                  )}
+                </Show>
+                <div class="replay-panel__timing-note">
+                  Diagnostic sidecar only; canonical replay data remains clock-free.
+                </div>
+              </div>
+            </Show>
+
+            <Show when={props.selectedStep?.event}>
               <pre class="replay-panel__json">{eventJson()}</pre>
             </Show>
 
@@ -213,6 +268,9 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
               </button>
               <button class="replay-chip" type="button" onClick={() => void props.onCopyGameJson()}>
                 Copy Game JSON
+              </button>
+              <button class="replay-chip" type="button" onClick={() => void copyTimingJson()}>
+                Copy Timing JSON
               </button>
             </div>
           </div>

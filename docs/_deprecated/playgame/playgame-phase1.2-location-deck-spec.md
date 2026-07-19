@@ -2,7 +2,10 @@
 
 ## Status
 
-Implementation complete. Checkpoints 1 through 5 are complete.
+Deprecated / implemented. Checkpoints 1 through 5 are complete. This document
+is historical implementation evidence, not active authority. Current
+card/location rule execution is governed by
+`docs/playgame-transactional-rules-kernel-spec.md`.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before
 Phase 1.5 governed operations, reactions, and folder-based location authoring.
@@ -1025,7 +1028,7 @@ Exit gate:
 ### Checkpoint 2 — Location Deck and Lane-Slot State
 
 Status: complete. See
-[`docs/agent-checkpoints/phase1.2-cp2.md`](agent-checkpoints/phase1.2-cp2.md).
+[`docs/agent-checkpoints/phase1.2-cp2.md`](../../agent-checkpoints/phase1.2-cp2.md).
 
 - rename `LocationDef` to `LocationCardDef`
 - rename `LocationInstance` to `LocationCardInstance`
@@ -1053,7 +1056,7 @@ Exit gate:
 ### Checkpoint 3 — Canonical Setup
 
 Status: complete. See
-[`docs/agent-checkpoints/phase1.2-cp3.md`](agent-checkpoints/phase1.2-cp3.md).
+[`docs/agent-checkpoints/phase1.2-cp3.md`](../../agent-checkpoints/phase1.2-cp3.md).
 
 - add location deck initialization, draw, and play operations/events
 - build initial lanes through the setup transaction
@@ -1073,7 +1076,7 @@ Exit gate:
 ### Checkpoint 4 — Lifecycle Migration
 
 Status: complete. See
-[`docs/agent-checkpoints/phase1.2-cp4.md`](agent-checkpoints/phase1.2-cp4.md).
+[`docs/agent-checkpoints/phase1.2-cp4.md`](../../agent-checkpoints/phase1.2-cp4.md).
 
 - migrate reveal to the governed operation
 - migrate face-down and reveal-rescheduling effects
@@ -1097,7 +1100,7 @@ Exit gate:
 ### Checkpoint 5 — Cleanup and Architecture Fences
 
 Status: complete. See
-[`docs/agent-checkpoints/phase1.2-cp5.md`](agent-checkpoints/phase1.2-cp5.md).
+[`docs/agent-checkpoints/phase1.2-cp5.md`](../../agent-checkpoints/phase1.2-cp5.md).
 
 - remove `pickLaneLocations` from runtime/initial-state construction
 - remove manifest-enumeration selection from the engine

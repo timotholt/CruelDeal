@@ -1,5 +1,10 @@
 # Playgame Card Transfer Animation Spec
 
+> Status: deprecated / implemented and superseded by the completed Phase 1.22
+> governed visual-handoff architecture. This document is retained as historical
+> design context. Current motion behavior is implemented under
+> `services/playgame/presentation/cardMotion/`.
+
 ## Goal
 
 Every card zone change must produce a predictable base animation, regardless of:

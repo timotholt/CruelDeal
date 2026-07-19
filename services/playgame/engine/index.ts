@@ -136,6 +136,7 @@ export {
 } from './transactionTimeline';
 export type {
   FoldFramedEventsOptions,
+  FramedEventReducer,
   EventTransition,
   EventTransactionFold,
   FrameAndFoldEventsOptions,
