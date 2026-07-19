@@ -2,6 +2,7 @@ import { getCardState } from '../../../engine/projections/cardRuntime';
 import {
   BOOTSTRAP_MANIFEST,
   apply,
+  appendGameplayRngAdvance,
   createSetupMatch,
   createRng,
   frameAndFoldEvents,
@@ -125,8 +126,19 @@ export function createOpenedMatch(
   };
 }
 
-export function intentRng(matchSeed: string, intentIndex: number, intentType: MatchIntent['type']): Rng {
-  return createRng(matchSeed).scope(`property-intent:${intentIndex}:${intentType}`);
+export function resolvePropertyIntent(
+  state: MatchState,
+  intent: MatchIntent,
+  intentIndex: number,
+  manifest: Manifest,
+): readonly MatchEvent[] {
+  const rng = createRng(state.rng)
+    .scope(`property-intent:${intentIndex}:${intent.type}`);
+  return appendGameplayRngAdvance(
+    state,
+    rng,
+    resolve(state, intent, rng, manifest),
+  );
 }
 
 function isAccepted(events: readonly MatchEvent[]): boolean {
@@ -137,7 +149,6 @@ function acceptedStageIntents(
   state: MatchState,
   owner: Owner,
   intentIndex: number,
-  matchSeed: string,
   manifest: Manifest,
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
@@ -150,10 +161,10 @@ function acceptedStageIntents(
         cardId,
         lane,
       };
-      const events = resolve(
+      const events = resolvePropertyIntent(
         state,
         intent,
-        intentRng(matchSeed, intentIndex, intent.type),
+        intentIndex,
         manifest,
       );
       if (isAccepted(events)) candidates.push(intent);
@@ -166,7 +177,6 @@ function acceptedUnstageIntents(
   state: MatchState,
   owner: Owner,
   intentIndex: number,
-  matchSeed: string,
   manifest: Manifest,
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
@@ -178,10 +188,10 @@ function acceptedUnstageIntents(
       owner,
       cardId,
     };
-    const events = resolve(
+    const events = resolvePropertyIntent(
       state,
       intent,
-      intentRng(matchSeed, intentIndex, intent.type),
+      intentIndex,
       manifest,
     );
     if (isAccepted(events)) candidates.push(intent);
@@ -193,12 +203,11 @@ function chooseLegalAction(
   state: MatchState,
   owner: Owner,
   intentIndex: number,
-  matchSeed: string,
   rng: Rng,
   manifest: Manifest,
 ): MatchIntent | null {
-  const stages = acceptedStageIntents(state, owner, intentIndex, matchSeed, manifest);
-  const unstages = acceptedUnstageIntents(state, owner, intentIndex, matchSeed, manifest);
+  const stages = acceptedStageIntents(state, owner, intentIndex, manifest);
+  const unstages = acceptedUnstageIntents(state, owner, intentIndex, manifest);
   const hasStagedCard = state.stagingOrder.some((cardId) => getCardState(state, cardId)?.owner === owner);
   const undo: MatchIntent | null = hasStagedCard
     ? {
@@ -249,15 +258,14 @@ export function generateMatchCase(
           state,
           owner,
           intentIndex,
-          matchSeed,
           decisions,
           manifest,
         );
         if (!intent) break;
-        const events = resolve(
+        const events = resolvePropertyIntent(
           state,
           intent,
-          intentRng(matchSeed, intentIndex, intent.type),
+          intentIndex,
           manifest,
         );
         if (!isAccepted(events)) {
@@ -274,10 +282,10 @@ export function generateMatchCase(
       intentId: `property-${intentIndex}-end-turn-${state.turn}`,
       owner: state.priority,
     });
-    const endEvents = resolve(
+    const endEvents = resolvePropertyIntent(
       state,
       endTurn,
-      intentRng(matchSeed, intentIndex, endTurn.type),
+      intentIndex,
       manifest,
     );
     if (!isAccepted(endEvents)) {

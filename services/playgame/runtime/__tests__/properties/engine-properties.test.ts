@@ -6,7 +6,6 @@ import {
   createRng,
   frameAndFoldEvents,
   replayMatch,
-  resolve,
   type MatchEvent,
   type MatchState,
   type Owner,
@@ -16,7 +15,7 @@ import {
   assertManifestValidDeck,
   createOpenedMatch,
   generateMatchCase,
-  intentRng,
+  resolvePropertyIntent,
   type GeneratedMatchCase,
 } from './generator';
 
@@ -144,10 +143,10 @@ function executeGeneratedMatch(
   input.intents.forEach((intent, intentIndex) => {
     beforeIntent?.(intentIndex, intent);
     const eventStart = events.length;
-    const batch = resolve(
+    const batch = resolvePropertyIntent(
       state,
       intent,
-      intentRng(input.matchSeed, intentIndex, intent.type),
+      intentIndex,
       BOOTSTRAP_MANIFEST,
     );
     if (batch.length === 0 || batch[0].type === 'INTENT_REJECTED') {
