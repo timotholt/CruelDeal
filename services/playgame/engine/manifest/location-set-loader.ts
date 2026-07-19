@@ -75,6 +75,7 @@ const ABILITY_KEYS = new Set([
   'onCardPlayedHere',
   'onCardEnteredHere',
   'onCardDestroyedHere',
+  'onCardBanishedHere',
 ]);
 
 const COSMETIC_KEYS = new Set(['displayName', 'description', 'accent', 'art', 'destroyedArt']);

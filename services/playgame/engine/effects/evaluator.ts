@@ -25,7 +25,7 @@ import { select, selectLanes } from '../projections/select';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
-import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
+import { ongoingsTargeting } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
@@ -35,6 +35,10 @@ import {
   addStoredPower,
   changeStoredPower,
 } from '../kernel/powerTransaction';
+import {
+  resolveDestructionLifecycleTransaction,
+  type FrozenLifecycleEffectContext,
+} from '../kernel/lifecycleTransaction';
 import {
   addCardTag,
   adjustCardCost,
@@ -183,7 +187,6 @@ export interface DestroyCardsOptions {
   readonly source: EffectRef;
   readonly rng: Rng;
   readonly sourceLane: LaneId | null;
-  readonly sourceOwner?: Owner | null;
   readonly depth?: number;
 }
 
@@ -201,69 +204,92 @@ export function destroyCards(
   options: DestroyCardsOptions,
   manifest: Manifest,
 ): EvalResult {
-  const events: MatchEvent[] = [];
-  let s = state;
-  const ctx: EffectCtx = {
-    state: s,
-    manifest,
-    self: options.source.sourceId,
-    selfKind: getCardRuntime(state, options.source.sourceId as CardId, manifest)
-      ? 'card'
-      : 'location',
-    selfLane: options.sourceLane,
-    selfOwner: options.sourceOwner ?? effectSourceOwner(s, options.source, manifest),
-    rng: options.rng,
-    source: options.source,
-    depth: options.depth ?? 0,
-  };
-
-  for (const id of cardIds) {
-    const preCard = getCardRuntime(s, id, manifest);
-    const preLane = preCard?.lane ?? null;
-    const preOwner = preCard?.owner ?? null;
-    if (!preCard || preCard.zone !== 'LANE') continue;
-    const liveCtx = { ...ctx, state: s };
-    if (preCard.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
-    if (isDestroyBlocked(s, id, manifest)) continue;
-    if (isFriendlyDestroyBlocked(s, id, liveCtx, manifest)) continue;
-
-    const event: MatchEvent = {
-      type: 'CARD_DESTROYED',
-      cardId: id,
-      cause: options.source,
-    };
-    events.push(event);
-    s = apply(s, event, manifest);
-
-    const trigger = fireCardTrigger(
-      s,
-      id,
-      preLane,
-      preOwner,
-      'onDestroyed',
-      options.rng.scope(`destroyed:${id}`),
-      options.depth ?? 0,
+  const commands = cardIds.map((cardId) => ({
+    type: 'DESTROY_CARD' as const,
+    cardId,
+    cause: { ...options.source },
+  }));
+  const transaction = resolveDestructionLifecycleTransaction(
+    state,
+    commands,
+    {
       manifest,
-    );
-    events.push(...trigger.events);
-    s = trigger.state;
+      baseDepth: options.depth ?? 0,
+      interpretEffect: (candidate, effect, frozen) =>
+        evalEffect(
+          candidate,
+          effect,
+          effectContextFromLifecycle(
+            candidate,
+            frozen,
+            options.rng,
+            manifest,
+          ),
+          manifest,
+        ),
+    },
+  );
+  return { events: transaction.events, state: transaction.state };
+}
 
-    if (preLane !== null) {
-      const locationTrigger = fireLocationTrigger(
-        s,
-        preLane,
-        'onCardDestroyedHere',
-        options.rng.scope(`locDestroyed:${id}`),
-        manifest,
-        id,
-        preOwner,
-        options.depth ?? 0,
-      );
-      events.push(...locationTrigger.events);
-      s = locationTrigger.state;
-    }
-  }
-  return { events, state: s };
+export function banishCards(
+  state: MatchState,
+  cardIds: readonly CardId[],
+  options: DestroyCardsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const commands = cardIds.map((cardId) => ({
+    type: 'BANISH_CARD' as const,
+    cardId,
+    cause: { ...options.source },
+  }));
+  const transaction = resolveDestructionLifecycleTransaction(
+    state,
+    commands,
+    {
+      manifest,
+      baseDepth: options.depth ?? 0,
+      interpretEffect: (candidate, effect, frozen) =>
+        evalEffect(
+          candidate,
+          effect,
+          effectContextFromLifecycle(
+            candidate,
+            frozen,
+            options.rng,
+            manifest,
+          ),
+          manifest,
+        ),
+    },
+  );
+  return { events: transaction.events, state: transaction.state };
+}
+
+function effectContextFromLifecycle(
+  state: MatchState,
+  context: FrozenLifecycleEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): EffectCtx {
+  const rng = context.scopePath.reduce(
+    (scoped, purpose) => scoped.scope(purpose),
+    rootRng,
+  );
+  return {
+    state,
+    manifest,
+    self: context.self,
+    selfKind: context.selfKind,
+    selfLane: context.selfLane,
+    selfOwner: context.selfOwner,
+    eventCard: context.eventCard,
+    eventLane: context.eventLane,
+    eventOwner: context.eventOwner,
+    source: context.source,
+    depth: context.depth,
+    rng,
+  };
 }
 
 const normalLaneOccupantDestruction = (
@@ -316,21 +342,27 @@ type CardRevealOptions = {
   readonly firePlayedTriggers: boolean;
 };
 
-function banishResolvedSpell(state: MatchState, cardId: CardId, manifest: Manifest): EvalResult {
+function banishResolvedSpell(
+  state: MatchState,
+  cardId: CardId,
+  manifest: Manifest,
+  rng: Rng,
+  depth: number,
+): EvalResult {
   const card = getCardRuntime(state, cardId, manifest);
   if (!card || card.domain !== 'spell' || card.zone !== 'LANE') {
     return { events: [], state };
   }
-  const banish: MatchEvent = {
-    type: 'CARD_BANISHED',
-    cardId,
-    cause: {
+  return banishCards(state, [cardId], {
+    source: {
       sourceId: cardId,
       effectKind: 'SYSTEM',
       reason: 'SPELL_RESOLVED',
     },
-  };
-  return { events: [banish], state: apply(state, banish, manifest) };
+    rng,
+    sourceLane: card.lane,
+    depth,
+  }, manifest);
 }
 
 /**
@@ -437,7 +469,13 @@ function resolveCardReveal(
   }
 
   if (suppressed) {
-    const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+    const spellCleanup = banishResolvedSpell(
+      s,
+      cardId,
+      manifest,
+      rng.scope(`spell-cleanup:${cardId}`),
+      depth,
+    );
     events.push(...spellCleanup.events);
     s = spellCleanup.state;
     return { events, state: s };
@@ -453,7 +491,13 @@ function resolveCardReveal(
       events.push(...post.events);
       s = post.state;
     }
-    const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+    const spellCleanup = banishResolvedSpell(
+      s,
+      cardId,
+      manifest,
+      rng.scope(`spell-cleanup:${cardId}`),
+      depth,
+    );
     events.push(...spellCleanup.events);
     s = spellCleanup.state;
     return { events, state: s };
@@ -513,7 +557,13 @@ function resolveCardReveal(
     s = post.state;
   }
 
-  const spellCleanup = banishResolvedSpell(s, cardId, manifest);
+  const spellCleanup = banishResolvedSpell(
+    s,
+    cardId,
+    manifest,
+    rng.scope(`spell-cleanup:${cardId}`),
+    depth,
+  );
   events.push(...spellCleanup.events);
   s = spellCleanup.state;
 
@@ -679,7 +729,6 @@ export function evalEffect(
         source: ctx.source,
         rng: ctx.rng,
         sourceLane: ctx.selfLane,
-        sourceOwner: ctx.selfOwner,
         depth: ctx.depth,
       }, manifest);
     }
@@ -700,14 +749,12 @@ export function evalEffect(
 
     case 'BANISH': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of targets) {
-        const e: MatchEvent = { type: 'CARD_BANISHED', cardId: id, cause: ctx.source };
-        events.push(e);
-        s = apply(s, e, manifest);
-      }
-      return { events, state: s };
+      return banishCards(state, targets, {
+        source: ctx.source,
+        rng: ctx.rng,
+        sourceLane: ctx.selfLane,
+        depth: ctx.depth,
+      }, manifest);
     }
 
     case 'DISCARD': {
@@ -1465,7 +1512,14 @@ export function evalEffect(
     // ---- Escape hatch ----------------------------------------------------
 
     case 'CALL_BUILTIN':
-      return invokeBuiltin(state, effect.fn, effect.args ?? {}, ctx, manifest);
+      return invokeBuiltin(
+        state,
+        effect.fn,
+        effect.args ?? {},
+        ctx,
+        manifest,
+        { destroyCards, banishCards },
+      );
   }
 }
 
@@ -1519,61 +1573,6 @@ function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): b
     cardId,
     ['BLOCK_MOVE'],
   ).length > 0;
-}
-
-function effectSourceOwner(
-  state: MatchState,
-  source: EffectRef,
-  manifest: Manifest,
-): Owner | null {
-  const sourceCard = getCardRuntime(state, source.sourceId as CardId, manifest);
-  return sourceCard?.owner ?? null;
-}
-
-function isDestroyBlocked(
-  state: MatchState,
-  victimId: CardId,
-  manifest: Manifest,
-): boolean {
-  for (const entry of collectAllOngoings(state, manifest)) {
-    if (entry.expr.kind !== 'BLOCK_DESTROY') continue;
-    const ongoingCtx = sourceCtx(entry, state, manifest);
-    if (!ongoingCtx) continue;
-    if (select(entry.expr.target, ongoingCtx).includes(victimId)) return true;
-  }
-  return false;
-}
-
-function isFriendlyDestroyBlocked(
-  state: MatchState,
-  victimId: CardId,
-  ctx: EffectCtx,
-  manifest: Manifest,
-): boolean {
-  const victim = getCardRuntime(state, victimId, manifest);
-  if (!victim || victim.lane === null) return false;
-
-  const destroySourceOwner = effectSourceOwner(state, ctx.source, manifest);
-  if (destroySourceOwner === null) return false;
-
-  for (const entry of collectAllOngoings(state, manifest)) {
-    if (entry.expr.kind !== 'BLOCK_FRIENDLY_DESTROY') continue;
-    if (entry.sourceOwner === null) continue;
-    if (entry.sourceOwner !== victim.owner) continue;
-    if (entry.sourceOwner !== destroySourceOwner) continue;
-
-    const ongoingCtx = sourceCtx(entry, state, manifest);
-    if (!ongoingCtx) continue;
-    const laneMatches = entry.expr.laneOf === undefined ||
-      selectLanes(entry.expr.laneOf, ongoingCtx).includes(victim.lane);
-    const targetMatches = entry.expr.target === undefined ||
-      select(entry.expr.target, ongoingCtx).includes(victimId);
-    if (laneMatches && targetMatches) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /**

@@ -324,7 +324,13 @@ export function resolveKernelTransaction<
         event: item.event,
         semantics: captured.value,
       };
-      const discovered = handlers.collectReactions(before, after, transition);
+      const discovered = item.reactionPolicy === 'ALREADY_RESOLVED'
+        ? kernelStepSuccess<readonly KernelReaction<
+          WorkShape<C, E, X, M>,
+          M,
+          Semantics
+        >[]>([])
+        : handlers.collectReactions(before, after, transition);
       if (discovered.ok === false) return fail(discovered.fault);
 
       const reactions = [...discovered.value];

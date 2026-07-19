@@ -17,6 +17,7 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { InternalCardRecord, MatchState } from '../types/state';
 import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import { getStoredCardPowerDelta } from '../powerLedger';
+import { locationCardAtLane } from '../laneTopology';
 
 /**
  * Phase 1.5 checkpoint-1 characterization.
@@ -333,7 +334,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(0);
   });
 
-  it('freezes generic DESTROY reactions versus Corporate Climber direct destruction', () => {
+  it('routes generic DESTROY and Corporate Climber through identical reactions', () => {
     const victimDefinition = cardDef('victim', {
       onDestroyed: [{
         kind: 'ADD_POWER',
@@ -382,13 +383,219 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(builtin.events.map(event => event.type)).toEqual([
       'CARD_DESTROYED',
       'CARD_POWER_CHANGED',
+      'CARD_POWER_CHANGED',
+      'CARD_POWER_CHANGED',
     ]);
     expect(getCardState(builtin.state, builtinVictim.id)!).toMatchObject({
       zone: 'DESTROYED',
-      powerLedger: [],
     });
+    expect(getStoredCardPowerDelta(
+      builtin.state,
+      builtinVictim.id,
+      gameManifest,
+    )).toBe(3);
     expect(getStoredCardPowerDelta(builtin.state, climber.id, gameManifest)).toBe(2);
   });
+
+  it('keeps the original location reaction frozen across nested replacement', () => {
+    const replacement = locationDef('replacement-location', {});
+    const original = locationDef('original-location', {
+      onCardDestroyedHere: [{
+        kind: 'ADJUST_ENERGY',
+        owner: 'EVENT_OWNER',
+        delta: { kind: 'LIT', n: 2 },
+      }],
+    });
+    const victimDefinition = cardDef('replacing-victim', {
+      onDestroyed: [{
+        kind: 'REPLACE_LOCATION',
+        lane: { kind: 'SELF' },
+        newDefId: replacement.defId,
+      }],
+    });
+    const gameManifest = manifest([
+      cardDef('destroy-source'),
+      victimDefinition,
+    ], [original, replacement]);
+    const source = card('destroy-source', 'destroy-source', 'P0', 'LANE', 0);
+    const victim = card(
+      'replacing-victim',
+      victimDefinition.defId,
+      'P0',
+      'LANE',
+      0,
+    );
+    const initial = stateWith([source, victim], {
+      energy: 4,
+      locations: [{ lane: 0, defId: original.defId }],
+    });
+
+    const result = evaluate(initial, gameManifest, source, {
+      kind: 'DESTROY',
+      target: { kind: 'EVENT_CARD' },
+    }, victim.id);
+
+    expect(locationCardAtLane(result.state, 0)?.defId).toBe(replacement.defId);
+    expect(result.state.energy.P0).toBe(6);
+    expect(result.events.filter((event) =>
+      event.type === 'ENERGY_CHANGED'
+      && event.cause.sourceId === 'location-0'
+      && event.cause.reason === 'onCardDestroyedHere',
+    )).toHaveLength(1);
+  });
+
+  for (const owner of ['P0', 'P1'] as const) {
+    it(`dispatches onCardBanishedHere with frozen ${owner} event ownership`, () => {
+      const banishLocation = locationDef('banish-location', {
+        onCardBanishedHere: [{
+          kind: 'ADJUST_ENERGY',
+          owner: 'EVENT_OWNER',
+          delta: { kind: 'LIT', n: 2 },
+        }],
+      });
+      const gameManifest = manifest([
+        cardDef('banish-source'),
+        cardDef('banish-victim'),
+      ], [banishLocation]);
+      const source = card(
+        `banish-source-${owner}`,
+        'banish-source',
+        owner,
+        'LANE',
+        0,
+      );
+      const victim = card(
+        `banish-victim-${owner}`,
+        'banish-victim',
+        owner,
+        'LANE',
+        0,
+      );
+      const initial = stateWith([source, victim], {
+        energy: 4,
+        locations: [{ lane: 0, defId: banishLocation.defId }],
+      });
+
+      const result = evaluate(initial, gameManifest, source, {
+        kind: 'BANISH',
+        target: { kind: 'EVENT_CARD' },
+      }, victim.id);
+
+      expect(getCardState(result.state, victim.id)?.zone).toBe('BANISHED');
+      expect(result.state.energy[owner]).toBe(6);
+      expect(result.events.map((event) => event.type)).toEqual([
+        'CARD_BANISHED',
+        'ENERGY_CHANGED',
+      ]);
+    });
+  }
+
+  it('resolves nested destruction depth-first without duplicate reactions', () => {
+    const nestedVictim = cardDef('nested-victim', {
+      onDestroyed: [{
+        kind: 'ADJUST_ENERGY',
+        owner: 'SELF_OWNER',
+        delta: { kind: 'LIT', n: 1 },
+      }],
+    });
+    const firstVictim = cardDef('first-victim', {
+      onDestroyed: [{
+        kind: 'DESTROY',
+        target: {
+          kind: 'SAME_LANE',
+          of: { kind: 'SELF' },
+          ownerFilter: 'SELF_OWNER',
+        },
+      }],
+    });
+    const location = locationDef('nested-destroy-location', {
+      onCardDestroyedHere: [{
+        kind: 'ADJUST_ENERGY',
+        owner: 'EVENT_OWNER',
+        delta: { kind: 'LIT', n: 10 },
+      }],
+    });
+    const gameManifest = manifest(
+      [firstVictim, nestedVictim],
+      [location],
+    );
+    const first = card('first', firstVictim.defId, 'P0', 'LANE', 0);
+    const nested = card('nested', nestedVictim.defId, 'P0', 'LANE', 0);
+    const initial = stateWith([first, nested], {
+      energy: 1,
+      locations: [{ lane: 0, defId: location.defId }],
+    });
+
+    const result = evaluate(initial, gameManifest, first, {
+      kind: 'DESTROY',
+      target: { kind: 'SELF' },
+    });
+
+    expect(result.events.map((event) => event.type)).toEqual([
+      'CARD_DESTROYED',
+      'CARD_DESTROYED',
+      'ENERGY_CHANGED',
+      'ENERGY_CHANGED',
+      'ENERGY_CHANGED',
+    ]);
+    expect(result.state.energy.P0).toBe(22);
+    expect(result.events.filter((event) =>
+      event.type === 'CARD_DESTROYED'
+      && event.cardId === nested.id,
+    )).toHaveLength(1);
+  });
+
+  for (const protectedOwner of ['P0', 'P1'] as const) {
+    const enemyOwner = protectedOwner === 'P0' ? 'P1' : 'P0';
+    for (const sourceOwner of [protectedOwner, enemyOwner] as const) {
+      const expected = sourceOwner === protectedOwner
+        ? 'blocks friendly'
+        : 'allows enemy';
+      it(`${expected} destruction for protected ${protectedOwner} cards`, () => {
+        const protection = {
+          kind: 'BLOCK_FRIENDLY_DESTROY',
+          laneOf: { kind: 'SELF' },
+          stack: 'SINGLE',
+        } as OngoingExpr;
+        const gameManifest = manifest([
+          cardDef('protection', { ongoing: [protection] }),
+          cardDef('destroy-source'),
+          cardDef('protected-victim'),
+        ]);
+        const guard = card(
+          `guard-${protectedOwner}`,
+          'protection',
+          protectedOwner,
+          'LANE',
+          0,
+        );
+        const victim = card(
+          `victim-${protectedOwner}`,
+          'protected-victim',
+          protectedOwner,
+          'LANE',
+          0,
+        );
+        const source = card(
+          `source-${protectedOwner}-${sourceOwner}`,
+          'destroy-source',
+          sourceOwner,
+          'LANE',
+          0,
+        );
+        const initial = stateWith([guard, victim, source]);
+
+        const result = evaluate(initial, gameManifest, source, {
+          kind: 'DESTROY',
+          target: { kind: 'EVENT_CARD' },
+        }, victim.id);
+
+        expect(getCardState(result.state, victim.id)?.zone).toBe(
+          sourceOwner === protectedOwner ? 'LANE' : 'DESTROYED',
+        );
+      });
+    }
+  }
 
   it('freezes generic lane creation reactions versus builtin token creation', () => {
     const entryLocation = locationDef('creation-entry', {

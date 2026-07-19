@@ -8,6 +8,7 @@ export const LOCATION_ABILITY_LABEL_BY_SLOT = {
   onCardPlayedHere: 'AFTER_CARD_PLAYED_HERE',
   onCardEnteredHere: 'AFTER_CARD_ENTERED_HERE',
   onCardDestroyedHere: 'AFTER_CARD_DESTROYED_HERE',
+  onCardBanishedHere: 'AFTER_CARD_BANISHED_HERE',
 } as const satisfies Readonly<Record<keyof LocationAbilities, string>>;
 
 export type LocationAbilitySlot = keyof LocationAbilities;

@@ -176,6 +176,13 @@ export interface EffectWork<
 export interface CommitWork<E = MatchEvent> {
   readonly kind: 'COMMIT';
   readonly event: E;
+  /**
+   * Effects interpreted through a still-migrating evaluator return an event
+   * batch whose nested governed lifecycle reactions have already resolved.
+   * Replaying that batch into the private candidate must not discover those
+   * reactions a second time. Governed operations omit this field.
+   */
+  readonly reactionPolicy?: 'DISCOVER' | 'ALREADY_RESOLVED';
 }
 
 /**

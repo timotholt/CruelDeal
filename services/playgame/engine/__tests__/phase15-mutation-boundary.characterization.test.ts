@@ -33,8 +33,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/effects/builtins.ts': {
     CARD_ADDED_TO_HAND: 6,
     CARD_ADDED_TO_LANE: 1,
-    CARD_BANISHED: 3,
-    CARD_DESTROYED: 1,
     CARD_DRAWN: 1,
     CARD_MOVED: 4,
     CARD_MOVED_TO_ZONE: 1,
@@ -46,8 +44,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_ADDED_TO_DECK: 1,
     CARD_ADDED_TO_HAND: 1,
     CARD_ADDED_TO_LANE: 2,
-    CARD_BANISHED: 2,
-    CARD_DESTROYED: 1,
     CARD_DISCARDED: 1,
     CARD_DRAWN: 1,
     CARD_FLIPPED: 1,
@@ -100,6 +96,10 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
   },
+  'services/playgame/engine/kernel/operations/lifecycle.ts': {
+    CARD_BANISHED: 1,
+    CARD_DESTROYED: 1,
+  },
   'services/playgame/engine/resolve.ts': {
     CARD_STAGED: 1,
     CARD_UNSTAGED: 2,
@@ -120,8 +120,8 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
 const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {
   'services/playgame/engine/effects/evaluator.ts': {
     applyHandEntryDebuffs: 3,
-    fireCardTrigger: 4,
-    fireLocationTrigger: 7,
+    fireCardTrigger: 3,
+    fireLocationTrigger: 6,
     fireOnAnyCardPlayedHere: 2,
   },
   'services/playgame/engine/resolve.ts': {
@@ -233,12 +233,12 @@ function logicalConstructionSurface(file: string): string {
 }
 
 describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
-  it('locks the eight governed logical production mutation-construction surfaces', () => {
+  it('locks the nine governed logical production mutation-construction surfaces', () => {
     const { mutationConstructions } = collectCurrentInventory();
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(8);
+      .toBe(9);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

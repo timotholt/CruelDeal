@@ -142,6 +142,21 @@ describe('location-set loader', () => {
     );
   });
 
+  it('accepts the governed onCardBanishedHere authoring hook', () => {
+    const source = getActiveLocationModules(['core-v1'])[0];
+    const location = cloneLocation(source.location);
+    location.abilities.onCardBanishedHere = [{
+      kind: 'ADJUST_ENERGY',
+      owner: 'EVENT_OWNER',
+      delta: { kind: 'LIT', n: 1 },
+    }];
+
+    expect(validateLocationModule({
+      folder: source.folder,
+      location,
+    })).toEqual([]);
+  });
+
   it('rejects folder drift, malformed parameters, and non-pool system rarity', () => {
     const source = getActiveLocationModules(['core-v1']).find(
       (module) => module.location.defId === 'ruin',

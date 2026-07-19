@@ -47,12 +47,37 @@ import {
 
 type BuiltinArgs = Record<string, unknown>;
 type BuiltinResult = { events: readonly MatchEvent[]; state: MatchState };
+export interface BuiltinLifecycleCapabilities {
+  readonly destroyCards: (
+    state: MatchState,
+    cardIds: readonly CardId[],
+    options: {
+      readonly source: EffectCtx['source'];
+      readonly rng: EffectCtx['rng'];
+      readonly sourceLane: LaneId | null;
+      readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly banishCards: (
+    state: MatchState,
+    cardIds: readonly CardId[],
+    options: {
+      readonly source: EffectCtx['source'];
+      readonly rng: EffectCtx['rng'];
+      readonly sourceLane: LaneId | null;
+      readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+}
 type BuiltinHandler = (
   state: MatchState,
   fn: string,
   args: BuiltinArgs,
   ctx: EffectCtx,
   manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ) => BuiltinResult;
 
 function noop(state: MatchState): BuiltinResult {
@@ -113,6 +138,7 @@ function powerToDestroyer(
 function replaceHandCardHigherCost(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const costDelta = (args.costDelta as number) ?? 1;
   const owner = ctx.selfOwner;
@@ -136,13 +162,14 @@ function replaceHandCardHigherCost(
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
 
-  const events: MatchEvent[] = [];
-  let s = state;
-
-  // Remove old card (banish it — it's being "replaced", not destroyed/discarded)
-  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: handCard.id, cause: ctx.source };
-  events.push(banishEvt);
-  s = apply(s, banishEvt, manifest);
+  const banished = lifecycle.banishCards(state, [handCard.id], {
+    source: ctx.source,
+    rng: ctx.rng.scope(`replace-hand:${handCard.id}`),
+    sourceLane: ctx.selfLane,
+    depth: ctx.depth,
+  }, manifest);
+  const events: MatchEvent[] = [...banished.events];
+  let s = banished.state;
 
   // Add new card
   const addEvt: MatchEvent = {
@@ -164,6 +191,7 @@ function replaceHandCardHigherCost(
 function replaceLowestPowerHandWithCost(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const targetCost = (args.targetCost as number) ?? 3;
   const owner = ctx.selfOwner;
@@ -188,12 +216,14 @@ function replaceLowestPowerHandWithCost(
   const newDefId = ctx.rng.scope('def').pick(candidates);
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
-  const events: MatchEvent[] = [];
-  let s = state;
-
-  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: weakest.id, cause: ctx.source };
-  events.push(banishEvt);
-  s = apply(s, banishEvt, manifest);
+  const banished = lifecycle.banishCards(state, [weakest.id], {
+    source: ctx.source,
+    rng: ctx.rng.scope(`replace-lowest:${weakest.id}`),
+    sourceLane: ctx.selfLane,
+    depth: ctx.depth,
+  }, manifest);
+  const events: MatchEvent[] = [...banished.events];
+  let s = banished.state;
 
   const addEvt: MatchEvent = {
     type: 'CARD_ADDED_TO_HAND',
@@ -210,6 +240,7 @@ function replaceLowestPowerHandWithCost(
 function replaceCreatedHandCardHigherCost(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const costDelta = (args.costDelta as number) ?? 1;
   const owner = ctx.selfOwner;
@@ -237,12 +268,14 @@ function replaceCreatedHandCardHigherCost(
   const newDefId = ctx.rng.scope('def').pick(candidates);
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
-  const events: MatchEvent[] = [];
-  let s = state;
-
-  const banishEvt: MatchEvent = { type: 'CARD_BANISHED', cardId: picked.id, cause: ctx.source };
-  events.push(banishEvt);
-  s = apply(s, banishEvt, manifest);
+  const banished = lifecycle.banishCards(state, [picked.id], {
+    source: ctx.source,
+    rng: ctx.rng.scope(`replace-created:${picked.id}`),
+    sourceLane: ctx.selfLane,
+    depth: ctx.depth,
+  }, manifest);
+  const events: MatchEvent[] = [...banished.events];
+  let s = banished.state;
 
   const addEvt: MatchEvent = {
     type: 'CARD_ADDED_TO_HAND',
@@ -749,6 +782,7 @@ function riotSquad(
 function corporateClimber(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
@@ -756,20 +790,25 @@ function corporateClimber(
   if (owner === null || lane === null || !self) return noop(state);
   const victims = state.lanesById[lane].cards[owner].filter(id => id !== self);
   if (victims.length === 0) return noop(state);
-  const gainedPower = victims
-    .filter(id => isPowerBearingCard(state, id, manifest))
-    .reduce((sum, id) => sum + getCardPower(state, id, manifest), 0);
-
-  const events: MatchEvent[] = [];
-  let s = state;
-  for (const cardId of victims) {
-    const card = getCardRuntime(s, cardId, manifest);
-    if (!card || card.zone !== 'LANE') continue;
-    if (card.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
-    const destroyEvent: MatchEvent = { type: 'CARD_DESTROYED', cardId, cause: ctx.source };
-    events.push(destroyEvent);
-    s = apply(s, destroyEvent, manifest);
-  }
+  const priorPower = new Map(
+    victims
+      .filter((id) => isPowerBearingCard(state, id, manifest))
+      .map((id) => [id, getCardPower(state, id, manifest)] as const),
+  );
+  const destroyed = lifecycle.destroyCards(state, victims, {
+    source: ctx.source,
+    rng: ctx.rng.scope(`corporate-climber:${self}`),
+    sourceLane: lane,
+    depth: ctx.depth,
+  }, manifest);
+  const events: MatchEvent[] = [...destroyed.events];
+  let s = destroyed.state;
+  const gainedPower = destroyed.events.reduce(
+    (sum, event) => event.type === 'CARD_DESTROYED'
+      ? sum + (priorPower.get(event.cardId) ?? 0)
+      : sum,
+    0,
+  );
   if (gainedPower > 0 && getCardRuntime(s, self, manifest)?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
     const powerChange = addStoredPower(s, self, gainedPower, ctx.source, manifest);
     events.push(...powerChange.events);
@@ -947,10 +986,11 @@ export function invokeBuiltin(
   args: BuiltinArgs,
   ctx: EffectCtx,
   manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const handler = REGISTRY.get(fn);
   if (!handler) {
     throw new Error(`CALL_BUILTIN: no handler registered for "${fn}"`);
   }
-  return handler(state, fn, args, ctx, manifest);
+  return handler(state, fn, args, ctx, manifest, lifecycle);
 }

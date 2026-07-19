@@ -98,6 +98,7 @@ export interface LocationAbilities {
   onCardPlayedHere?: EffectExpr[];
   onCardEnteredHere?: EffectExpr[];
   onCardDestroyedHere?: EffectExpr[];
+  onCardBanishedHere?: EffectExpr[];
 }
 
 export interface LocationCardDef {

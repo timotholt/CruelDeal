@@ -48,6 +48,12 @@ const commit = (label: string, amount = 1): TestWork => ({
   event: { type: 'ADD', amount, label },
 });
 
+const resolvedCommit = (label: string, amount = 1): TestWork => ({
+  kind: 'COMMIT',
+  event: { type: 'ADD', amount, label },
+  reactionPolicy: 'ALREADY_RESOLVED',
+});
+
 const effect = (label: string, work: readonly TestWork[]): TestWork => ({
   kind: 'EFFECT',
   effect: { type: 'EXPAND', label, work },
@@ -197,6 +203,30 @@ describe('transactional rules kernel foundation', () => {
     expect(smokeDiscoveryCount).toBe(1);
     expect(result.value.state.log).toEqual(['parent', 'smoke', 'later']);
     expect(result.value.usage.reactionsScheduled).toBe(2);
+  });
+
+  it('replays an already-resolved evaluator batch without double dispatch', () => {
+    let discoveries = 0;
+    const result = resolveKernelTransaction(
+      {
+        initialState: { total: 0, log: [] },
+        initialWork: [resolvedCommit('nested-lifecycle')],
+      },
+      handlers((transition) => {
+        discoveries += 1;
+        return [
+          reaction(transition, 100, 'must-not-run', [
+            commit('duplicate-reaction'),
+          ]),
+        ];
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(discoveries).toBe(0);
+    expect(result.value.state.log).toEqual(['nested-lifecycle']);
+    expect(result.value.usage.reactionsScheduled).toBe(0);
   });
 
   it('executes a closed stored-power command through the same work loop', () => {

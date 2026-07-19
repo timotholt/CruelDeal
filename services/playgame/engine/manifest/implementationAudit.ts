@@ -25,6 +25,7 @@ const LOCATION_ABILITY_SLOTS = new Set<keyof LocationAbilities>([
   'onCardPlayedHere',
   'onCardEnteredHere',
   'onCardDestroyedHere',
+  'onCardBanishedHere',
 ]);
 
 const EFFECT_KINDS = new Set([
