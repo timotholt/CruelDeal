@@ -1,7 +1,7 @@
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { runMatch } from './cli/runMatch';
 import { exportReplayBundle, replayMatch, validateReplayBundle } from './replay';
-import { createInitialMatchState } from './cli/initState';
+import { createMatchGenesis, createSetupMatch } from './cli/initState';
 import { apply } from './apply';
 import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
@@ -25,7 +25,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }));
 
 {
-  const initialState = createInitialMatchState('replay-seed-1', BOOTSTRAP_MANIFEST);
+  const initialState = createMatchGenesis('replay-seed-1', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-1',
     manifest: BOOTSTRAP_MANIFEST,
@@ -42,7 +42,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }
 
 {
-  const initialState = createInitialMatchState('replay-seed-2', BOOTSTRAP_MANIFEST);
+  const initialState = createMatchGenesis('replay-seed-2', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-2',
     manifest: BOOTSTRAP_MANIFEST,
@@ -58,14 +58,15 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }
 
 {
-  const initialState = createInitialMatchState('replay-custom-initial', BOOTSTRAP_MANIFEST, {
+  const setup = createSetupMatch('replay-custom-initial', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'drill-instructor' }],
     P1: [{ defId: 'junk-card' }],
   });
+  const initialState = setup.genesis;
   const initialSnapshot = clone(initialState);
   const cardId = initialState.deck.P0[0].id;
   const draw: MatchEvent = { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true };
-  const finalState = apply(initialState, draw, BOOTSTRAP_MANIFEST);
+  const finalState = apply(setup.state, draw, BOOTSTRAP_MANIFEST);
   const replayed = replayMatch({
     seed: finalState.seed,
     manifest: BOOTSTRAP_MANIFEST,
@@ -78,7 +79,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }
 
 {
-  const initialState = createInitialMatchState('replay-seed-3', BOOTSTRAP_MANIFEST);
+  const initialState = createMatchGenesis('replay-seed-3', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-3',
     manifest: BOOTSTRAP_MANIFEST,
@@ -100,7 +101,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }
 
 {
-  const initialState = createInitialMatchState('replay-seed-4', BOOTSTRAP_MANIFEST);
+  const initialState = createMatchGenesis('replay-seed-4', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-4',
     manifest: BOOTSTRAP_MANIFEST,
@@ -137,7 +138,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
 }
 
 {
-  const currentState = createInitialMatchState('replay-bad-export', BOOTSTRAP_MANIFEST);
+  const currentState = createMatchGenesis('replay-bad-export', BOOTSTRAP_MANIFEST);
   const badInitial = { ...currentState, seed: 'different-seed' } as MatchState;
   let threw = false;
   try {

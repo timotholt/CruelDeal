@@ -55,6 +55,7 @@ import { selectInteractiveHand } from './handInteractivity';
 import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
 import { activeLaneIds } from '@/services/playgame/engine/laneTopology';
+import { createPlayfieldEventPresenter } from '@/services/playgame/presentation/playfieldEvents';
 
 interface PlayBoardProps {
   onExit?: () => void;
@@ -206,6 +207,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
     const motion = motionSurface();
     if (!motion) return;
+    const playRoot = boardEl.closest<HTMLElement>('.playgame-root');
+    if (!playRoot) return;
 
     const unbindDnd = setupDragDrop({
       boardEl,
@@ -237,6 +240,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       deckEl,
       presentCommittedFrame: actions.presentCommittedFrame,
       finishTurnPresentation: actions.finishTurnPresentation,
+      presentPlayfieldEvent: createPlayfieldEventPresenter(playRoot),
     };
     ctx.onCancel = () => {
       releaseAllHandSlots(ctx);

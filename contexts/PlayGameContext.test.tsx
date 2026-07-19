@@ -7,6 +7,7 @@ import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import type { CardId, LaneId } from '@/services/playgame/engine/types/ids';
+import { locationCardAtLane } from '@/services/playgame/engine/laneTopology';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import {
   paceCommittedOpeningDeal,
@@ -49,7 +50,43 @@ function presentOpeningImmediately(pg: PlayGameContextValue): void {
   }
 }
 
+function firstLocationRevealed(pg: PlayGameContextValue): boolean {
+  return locationCardAtLane(pg.engineState, 0)?.face === 'FACE_UP';
+}
+
 describe('PlayGameProvider runtime synchronization', () => {
+  it('mounts the completed three-lane setup and presents the real opening deal', () => {
+    let pg!: PlayGameContextValue;
+
+    const Probe = () => {
+      const context = usePlayGame();
+      onMount(() => { pg = context; });
+      return null;
+    };
+
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(render(
+      () => (
+        <PlayGameProvider session={debugSession('provider-opening-boundary')}>
+          <Probe />
+        </PlayGameProvider>
+      ),
+      host,
+    ));
+
+    expect(pg.engineState.activeLaneOrder).toEqual([0, 1, 2]);
+    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(0);
+    expect(pg.openingTimeline.transitions[0]?.event.type).toBe('CARD_DRAWN');
+    expect(pg.openingTimeline.transitions.some(
+      ({ event }) => event.type === 'LANE_CREATED',
+    )).toBe(false);
+
+    presentOpeningImmediately(pg);
+    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(4);
+    expect(pg.engineState.deck[pg.localSeat]).toHaveLength(8);
+  });
+
   it('notifies Solid observers after accepted stage, unstage, and end-turn projections', async () => {
     let pg!: PlayGameContextValue;
     const observed: string[] = [];
@@ -68,7 +105,9 @@ describe('PlayGameProvider runtime synchronization', () => {
           energy: state.energy[context.localSeat],
           stagingOrder: [...state.stagingOrder],
           hand: state.hand[context.localSeat].map((card) => card.id),
-          lanes: state.lanes.map((lane) => [...lane.cards[context.localSeat]]),
+          lanes: state.activeLaneOrder.map(
+            (laneId) => [...state.lanesById[laneId].cards[context.localSeat]],
+          ),
         }));
       });
       return null;
@@ -119,7 +158,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(pg.engineState.turn, 'display does not snap before presentation').toBe(1);
     expect(pg.engineState.stagingOrder, 'staged projection survives the system commit')
       .toContain(turnOneCard);
-    expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(turnOneCard);
+    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(turnOneCard);
     for (const frame of timeline?.transitions ?? []) pg.actions.presentCommittedFrame(frame);
     expect(pg.engineState.turn).toBe(2);
     expect(pg.engineState.stagingOrder).toHaveLength(0);
@@ -153,7 +192,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     const cardId = firstPlayableCard(pg);
     await expect(pg.actions.stageCardInLane(cardId, 0)).resolves.toBe(true);
     expect(pg.engineState.hand[pg.localSeat].map((card) => card.id)).not.toContain(cardId);
-    expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(cardId);
+    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
 
     const committedFinalFrame = pg.openingTimeline.transitions.at(-1);
     if (!committedFinalFrame) throw new Error('opening timeline has no final frame');
@@ -161,7 +200,7 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     expect(pg.engineState.stagingOrder).toContain(cardId);
     expect(pg.engineState.hand[pg.localSeat].map((card) => card.id)).not.toContain(cardId);
-    expect(pg.engineState.lanes[0].cards[pg.localSeat]).toContain(cardId);
+    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
   });
 
   it('locks every staged card face-down at resolution start, then presents reveals in frame order', async () => {
@@ -272,7 +311,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     ));
 
     expect(pg.engineState.hand[pg.localSeat]).toHaveLength(0);
-    expect(pg.engineState.lanes[0].locationRevealed).toBe(false);
+    expect(firstLocationRevealed(pg)).toBe(false);
 
     const boardWrap = document.createElement('div');
     const boardEl = document.createElement('div');
@@ -292,12 +331,13 @@ describe('PlayGameProvider runtime synchronization', () => {
       toastArea,
       cardRefs: new Map(),
       zoneRefs: new Map(),
+      presentPlayfieldEvent: async () => undefined,
       presentCommittedFrame: (frame) => {
         pg.actions.presentCommittedFrame(frame);
         presentedFrames.push({
           type: frame.event.type,
           localHandSize: pg.engineState.hand[pg.localSeat].length,
-          laneOneRevealed: pg.engineState.lanes[0].locationRevealed,
+          laneOneRevealed: firstLocationRevealed(pg),
         });
       },
       finishTurnPresentation: () => undefined,
@@ -311,11 +351,11 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     await runOpeningBeat(paceCommittedOpeningDeal(pg.openingTimeline));
     expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
-    expect(pg.engineState.lanes[0].locationRevealed).toBe(false);
+    expect(firstLocationRevealed(pg)).toBe(false);
 
     await runOpeningBeat(paceCommittedOpeningLocationReveal(pg.openingTimeline));
     expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
-    expect(pg.engineState.lanes[0].locationRevealed).toBe(true);
+    expect(firstLocationRevealed(pg)).toBe(true);
 
     await runOpeningBeat(paceCommittedOpeningTurnStart(pg.openingTimeline));
 
@@ -331,7 +371,7 @@ describe('PlayGameProvider runtime synchronization', () => {
       .every((frame) => !frame.laneOneRevealed)).toBe(true);
     expect(pg.engineState.hand[pg.localSeat]).toHaveLength(4);
     expect(pg.engineState.deck[pg.localSeat]).toHaveLength(8);
-    expect(pg.engineState.lanes[0].locationRevealed).toBe(true);
+    expect(firstLocationRevealed(pg)).toBe(true);
 
     expect(pg.ui.handReservations).toEqual([]);
     const hand = getHandForSeat(pg.engineState, pg.localSeat, pg.manifest);

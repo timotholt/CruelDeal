@@ -41,6 +41,9 @@ export function resolve(
   rng: Rng,
   manifest: Manifest,
 ): MatchEvent[] {
+  if (state.phase === 'SETUP') {
+    return reject(intent.intentId, 'match setup is not complete');
+  }
   switch (intent.type) {
     case 'STAGE_CARD':   return resolveStage(state, intent, rng, manifest);
     case 'UNSTAGE_CARD': return resolveUnstage(state, intent, manifest);

@@ -16,22 +16,29 @@
 import type {
   MatchState,
   CardInstance,
-  LaneState,
-  LocationCardInstance,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { Deck, Manifest } from '../manifest/types';
 import type {
   CardId,
-  LaneId,
-  LocationCardInstanceId,
   Owner,
 } from '../types/ids';
 import { createRng, type Rng } from '../rng';
-import { GENESIS_FRAME } from '../types/timeline';
+import {
+  buildLocationSetupTransaction,
+  type LocationSetupDeck,
+} from '../locationSetup';
+import { frameAndFoldEvents } from '../transactionTimeline';
+import type { EventTransactionFold } from '../transactionTimeline';
 
 export type InitialDecks = Partial<Record<Owner, Deck>>;
-export type InitialLocationDeck = readonly { readonly defId: string }[];
+export type InitialLocationDeck = LocationSetupDeck;
+
+export interface CreatedMatchSetup {
+  readonly genesis: MatchState;
+  readonly transaction: EventTransactionFold;
+  readonly state: MatchState;
+}
 
 /** Short id derived from a seeded RNG. 8 alphanumerics — enough for a match. */
 function mintId(rng: Rng, tag: string): string {
@@ -130,88 +137,15 @@ function pickLocationDeck(manifest: Manifest, rng: Rng): InitialLocationDeck {
   }));
 }
 
-function buildLocationState(
-  manifest: Manifest,
-  entries: InitialLocationDeck,
-  rng: Rng,
-): {
-  readonly lanesById: Readonly<Record<LaneId, LaneState>>;
-  readonly locationCards: Readonly<Record<LocationCardInstanceId, LocationCardInstance>>;
-  readonly locationDeck: MatchState['locationDeck'];
-} {
-  if (entries.length < 3) {
-    throw new Error(`initState: location deck requires at least 3 entries; received ${entries.length}`);
-  }
-  const locationCards: Record<LocationCardInstanceId, LocationCardInstance> = {};
-  const laneLocationIds: LocationCardInstanceId[] = [];
-  const drawPile: LocationCardInstanceId[] = [];
-  entries.forEach((entry, index) => {
-    const definition = manifest.locations[entry.defId];
-    if (!definition) {
-      throw new Error(`initState: location deck references unknown defId "${entry.defId}"`);
-    }
-    const id = mintId(rng, `location-card:${index}`) as LocationCardInstanceId;
-    const laneId = index < 3 ? index as LaneId : null;
-    locationCards[id] = {
-      id,
-      defId: definition.defId,
-      sourceDeckEntry: index,
-      zone: laneId === null ? 'DECK' : 'LANE',
-      laneId,
-      pendingLaneId: null,
-      face: 'FACE_DOWN',
-      identityKnownTo: [],
-      revealCount: 0,
-      tags: [],
-      counters: {},
-      createdAt: GENESIS_FRAME,
-    };
-    if (laneId === null) drawPile.push(id);
-    else laneLocationIds.push(id);
-  });
-
-  const lanesById = Object.fromEntries(
-    [0, 1, 2].map((value) => {
-      const laneId = value as LaneId;
-      const lane: LaneState = {
-        id: laneId,
-        status: 'ACTIVE',
-        locationSlot: {
-          laneId,
-          locationCardId: laneLocationIds[value],
-          revealAtTurn: value + 1,
-        },
-        cards: { P0: [], P1: [] },
-        createdAt: GENESIS_FRAME,
-      };
-      return [laneId, lane];
-    }),
-  ) as Readonly<Record<LaneId, LaneState>>;
-
-  return {
-    lanesById,
-    locationCards,
-    locationDeck: {
-      drawPile,
-      staging: [],
-      discardPile: [],
-      destroyed: [],
-      banished: [],
-    },
-  };
-}
-
 /**
- * Build a fresh match state. Both decks are pre-populated; both hands
- * start empty; energy is set to the turn-1 curve value; priority is a
- * seeded coin flip. If `decks` is omitted, each owner gets a deterministic
- * random deck for CLI/test convenience.
+ * Build frame-zero match genesis. Genesis contains immutable player-card
+ * instances but no lanes or location-card instances; those enter history
+ * through the canonical setup transaction.
  */
-export function createInitialMatchState(
+export function createMatchGenesis(
   seed: string,
   manifest: Manifest,
   decks: InitialDecks = {},
-  locationDeck?: InitialLocationDeck,
 ): MatchState {
   const rng = createRng(seed);
   const deckRng = rng.fork('deck');
@@ -223,12 +157,6 @@ export function createInitialMatchState(
   for (const c of playerDeck) cards[c.id] = c;
   for (const c of oppDeck) cards[c.id] = c;
 
-  const locationState = buildLocationState(
-    manifest,
-    locationDeck ?? pickLocationDeck(manifest, rng.fork('locations')),
-    rng.fork('location-instances'),
-  );
-
   const startEnergy = manifest.constants.energyCurve[0] ?? 1;
   const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
 
@@ -239,16 +167,24 @@ export function createInitialMatchState(
     // and both owners sit at 1. Subsequent turns ramp via MAX_ENERGY_CHANGED.
     maxEnergy: { P0: 1, P1: 1 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT',
+    phase: 'SETUP',
     seed,
     priority,
     energy: { P0: startEnergy, P1: startEnergy },
     deck: { P0: playerDeck, P1: oppDeck },
     hand: { P0: [], P1: [] },
     cards,
-    ...locationState,
-    activeLaneOrder: [0, 1, 2],
-    nextLaneId: 3,
+    lanesById: {},
+    activeLaneOrder: [],
+    nextLaneId: 0,
+    locationCards: {},
+    locationDeck: {
+      drawPile: [],
+      staging: [],
+      discardPile: [],
+      destroyed: [],
+      banished: [],
+    },
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
@@ -258,4 +194,46 @@ export function createInitialMatchState(
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
+}
+
+/**
+ * Convenience for engine tests and CLI callers that need the canonical
+ * setup-complete state. The returned lanes and locations are produced only by
+ * framed setup events; replay/runtime authority should retain
+ * `createMatchGenesis()` as frame zero and commit the returned transaction.
+ */
+export function createInitialMatchState(
+  seed: string,
+  manifest: Manifest,
+  decks: InitialDecks = {},
+  locationDeck?: InitialLocationDeck,
+): MatchState {
+  return createSetupMatch(seed, manifest, decks, locationDeck).state;
+}
+
+/** Materialize genesis plus its canonical framed location-setup transaction. */
+export function createSetupMatch(
+  seed: string,
+  manifest: Manifest,
+  decks: InitialDecks = {},
+  locationDeck?: InitialLocationDeck,
+): CreatedMatchSetup {
+  const genesis = createMatchGenesis(seed, manifest, decks);
+  const setup = buildLocationSetupTransaction(
+    genesis,
+    manifest,
+    locationDeck ?? pickLocationDeck(manifest, createRng(seed).fork('locations')),
+  );
+  const transaction = frameAndFoldEvents({
+    transactionId: setup.transactionId,
+    initialState: genesis,
+    events: setup.events,
+    manifest,
+    initialPhase: 'SETUP',
+  });
+  return Object.freeze({
+    genesis,
+    transaction,
+    state: transaction.finalState,
+  });
 }

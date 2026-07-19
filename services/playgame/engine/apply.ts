@@ -427,6 +427,154 @@ function applyBody(
 
     // ---- Location ---------------------------------------------------------
 
+    case 'LOCATION_DECK_INITIALIZED': {
+      if (
+        Object.keys(state.locationCards).length > 0
+        || state.locationDeck.drawPile.length > 0
+      ) {
+        return state;
+      }
+      const locationCards: Record<LocationCardInstanceId, LocationCardInstance> = {};
+      const drawPile: LocationCardInstanceId[] = [];
+      for (const location of event.locations) {
+        locationCards[location.id] = {
+          id: location.id,
+          defId: location.defId,
+          sourceDeckEntry: location.sourceDeckEntry,
+          zone: 'DECK',
+          laneId: null,
+          pendingLaneId: null,
+          face: 'FACE_DOWN',
+          identityKnownTo: [],
+          revealCount: 0,
+          tags: [],
+          counters: {},
+          createdAt: eventFrame,
+        };
+        drawPile.push(location.id);
+      }
+      return {
+        ...state,
+        locationCards,
+        locationDeck: {
+          drawPile,
+          staging: [],
+          discardPile: [],
+          destroyed: [],
+          banished: [],
+        },
+      };
+    }
+
+    case 'LOCATION_CARD_CREATED': {
+      if (state.locationCards[event.locationId]) return state;
+      const lane = state.lanesById[event.pendingLane];
+      if (!lane || laneStatus(lane) !== 'CREATING') return state;
+      const location: LocationCardInstance = {
+        id: event.locationId,
+        defId: event.defId,
+        sourceDeckEntry: -1,
+        zone: 'STAGING',
+        laneId: null,
+        pendingLaneId: event.pendingLane,
+        face: 'FACE_DOWN',
+        identityKnownTo: [],
+        revealCount: 0,
+        tags: [],
+        counters: {},
+        createdAt: eventFrame,
+        drawnAt: eventFrame,
+      };
+      return {
+        ...state,
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: location,
+        },
+        locationDeck: {
+          ...state.locationDeck,
+          staging: [...state.locationDeck.staging, location.id],
+        },
+      };
+    }
+
+    case 'LOCATION_CARD_DRAWN': {
+      const location = state.locationCards[event.locationId];
+      const lane = state.lanesById[event.pendingLane];
+      if (
+        !location
+        || location.zone !== 'DECK'
+        || !lane
+        || laneStatus(lane) !== 'CREATING'
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: {
+            ...location,
+            zone: 'STAGING',
+            pendingLaneId: event.pendingLane,
+            drawnAt: eventFrame,
+          },
+        },
+        locationDeck: {
+          ...state.locationDeck,
+          drawPile: state.locationDeck.drawPile.filter(id => id !== location.id),
+          staging: [...state.locationDeck.staging, location.id],
+        },
+      };
+    }
+
+    case 'LOCATION_CARD_PLAYED': {
+      const location = state.locationCards[event.locationId];
+      const lane = state.lanesById[event.lane];
+      if (
+        !location
+        || location.zone !== 'STAGING'
+        || location.pendingLaneId !== event.lane
+        || !lane
+        || laneStatus(lane) !== 'CREATING'
+        || lane.locationSlot.locationCardId !== null
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: {
+            ...location,
+            zone: 'LANE',
+            laneId: event.lane,
+            pendingLaneId: null,
+            face: event.revealed ? 'FACE_UP' : 'FACE_DOWN',
+            identityKnownTo: event.revealed ? ['P0', 'P1'] : [],
+            revealCount: event.revealed ? 1 : 0,
+            playedAt: eventFrame,
+            ...(event.revealed ? { revealedAt: eventFrame } : {}),
+          },
+        },
+        locationDeck: {
+          ...state.locationDeck,
+          staging: state.locationDeck.staging.filter(id => id !== location.id),
+        },
+        lanesById: {
+          ...state.lanesById,
+          [lane.id]: {
+            ...lane,
+            locationSlot: {
+              ...lane.locationSlot,
+              locationCardId: location.id,
+              revealAtTurn: event.revealAtTurn,
+            },
+          },
+        },
+      };
+    }
+
     case 'LOCATION_REVEALED': {
       const location = locationAtLane(state, event.lane);
       if (!location || location.id !== event.locationId) return state;
@@ -657,7 +805,13 @@ function applyBody(
 
     case 'LANE_CREATED': {
       const lane = state.lanesById[event.lane];
-      if (!lane || laneStatus(lane) !== 'CREATING') return state;
+      if (
+        !lane
+        || laneStatus(lane) !== 'CREATING'
+        || lane.locationSlot.locationCardId === null
+      ) {
+        return state;
+      }
       const active = activeLaneIds(state);
       const insertion = Math.min(Math.max(0, event.position), active.length);
       const activeLaneOrder = [
@@ -665,22 +819,6 @@ function applyBody(
         event.lane,
         ...active.slice(insertion),
       ];
-      const location: LocationCardInstance = {
-        id: event.location.id,
-        defId: event.location.defId,
-        sourceDeckEntry: -1,
-        zone: 'LANE',
-        laneId: event.lane,
-        pendingLaneId: null,
-        face: event.location.revealed ? 'FACE_UP' : 'FACE_DOWN',
-        identityKnownTo: event.location.revealed ? ['P0', 'P1'] : [],
-        revealCount: event.location.revealed ? 1 : 0,
-        tags: [],
-        counters: {},
-        createdAt: eventFrame,
-        playedAt: eventFrame,
-        ...(event.location.revealed ? { revealedAt: eventFrame } : {}),
-      };
       return {
         ...state,
         lanesById: {
@@ -688,21 +826,32 @@ function applyBody(
           [event.lane]: {
             ...lane,
             status: 'ACTIVE',
-            locationSlot: {
-              ...lane.locationSlot,
-              locationCardId: location.id,
-            },
           },
-        },
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: location,
         },
         activeLaneOrder,
       };
     }
 
     // ---- Turn flow --------------------------------------------------------
+
+    case 'MATCH_SETUP_COMPLETED': {
+      if (
+        state.phase !== 'SETUP'
+        || state.activeLaneOrder.length !== 3
+        || state.activeLaneOrder.some((laneId) => {
+          const lane = state.lanesById[laneId];
+          const locationId = lane?.locationSlot.locationCardId;
+          const location = locationId ? state.locationCards[locationId] : null;
+          return lane?.status !== 'ACTIVE'
+            || !location
+            || location.zone !== 'LANE'
+            || location.face !== 'FACE_DOWN';
+        })
+      ) {
+        return state;
+      }
+      return { ...state, phase: 'AWAITING_INTENT' };
+    }
 
     case 'TURN_RESOLUTION_STARTED':
       if (event.turn !== state.turn) return state;

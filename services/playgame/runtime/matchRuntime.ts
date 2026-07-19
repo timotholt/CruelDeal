@@ -1,4 +1,4 @@
-import { createInitialMatchState } from '../engine/cli/initState';
+import { createMatchGenesis } from '../engine/cli/initState';
 import { apply } from '../engine/apply';
 import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
@@ -35,9 +35,15 @@ import type {
   LocationCardDeckEntry,
 } from './contracts';
 import { buildOpeningTransaction } from './opening';
+import { buildLocationSetupTransaction } from '../engine/locationSetup';
 import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
 
 export type MatchTransactionSubscriber = (timeline: CommittedTransactionTimeline) => void;
+
+export interface MatchInitializationTimelines {
+  readonly setup: CommittedTransactionTimeline;
+  readonly opening: CommittedTransactionTimeline;
+}
 
 export interface MatchRuntime {
   state(): MatchState;
@@ -46,6 +52,7 @@ export interface MatchRuntime {
   /** Read-only private-plan projection over a committed presentation base. */
   projectWorkingState(baseState?: MatchState): MatchState;
   genesis(): MatchState;
+  initialization(): MatchInitializationTimelines;
   revision(): MatchRevision;
   transactions(): readonly CommittedTransactionRecord[];
   submitIntent(envelope: IntentEnvelope): Promise<IntentAcceptanceResult>;
@@ -235,11 +242,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     throw new Error(`createMatchRuntime: unknown ruleset "${config.rulesetId}"`);
   }
 
-  const genesisState = createInitialMatchState(
+  const genesisState = createMatchGenesis(
     config.seed,
     manifest,
     config.decks,
-    config.locationDeck,
   );
   const receipts: InMemoryIntentReceiptMap = new Map();
   const queue: QueuedIntent[] = [];
@@ -335,7 +341,23 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     }
   };
 
-  const opening = buildOpeningTransaction(genesisState, manifest);
+  const setup = buildLocationSetupTransaction(
+    genesisState,
+    manifest,
+    config.locationDeck,
+  );
+  const setupCommit = commit({
+    identity: {
+      matchId: config.matchId,
+      seat: 'SYSTEM',
+      intentId: setup.transactionId,
+    },
+    events: setup.events,
+    initialTimelinePhase: 'SETUP',
+  });
+  publish(setupCommit.timeline);
+
+  const opening = buildOpeningTransaction(authoritativeState, manifest);
   const opened = commit({
     identity: {
       matchId: config.matchId,
@@ -346,6 +368,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     initialTimelinePhase: 'SETUP',
   });
   publish(opened.timeline);
+  const initialization = Object.freeze({
+    setup: setupCommit.timeline,
+    opening: opened.timeline,
+  });
 
   const storeRejection = (
     key: IntentReceiptKey,
@@ -687,6 +713,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     frame: () => currentFrame(authoritativeState),
     projectWorkingState,
     genesis: () => genesisState,
+    initialization: () => initialization,
     revision: () => currentRevision,
     transactions: () => committedTransactions,
     submitIntent,

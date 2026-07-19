@@ -55,15 +55,15 @@ describe('Runtime frame replay edge cases', () => {
     const replay: MatchRuntimeReplayExport = {
       ...exported,
       transactions: exported.transactions.map((transaction, index) => (
-        index === 0
-          ? { ...transaction, baseRevision: 4, revision: 5 }
-          : transaction
+        { ...transaction, baseRevision: 4 + index, revision: 5 + index }
       )),
     };
 
     const rendered = renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST);
     expect(rendered.finalState.log.map(({ frame }) => frame))
-      .toEqual(replay.transactions[0].framedEvents.map(({ frame }) => frame));
+      .toEqual(replay.transactions.flatMap(
+        transaction => transaction.framedEvents.map(({ frame }) => frame),
+      ));
   });
 
   it('rejects transaction revisions that move backward', async () => {

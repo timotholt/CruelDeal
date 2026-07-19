@@ -78,7 +78,17 @@ export type {
 export { revealPlayedCard, forceRevealPlayedCard, triggerOnReveal, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
 
 // ---- CLI (headless match driver) -----------------------------------------
-export { createInitialMatchState } from './cli/initState';
+export {
+  createInitialMatchState,
+  createMatchGenesis,
+  createSetupMatch,
+  type CreatedMatchSetup,
+} from './cli/initState';
+export {
+  buildLocationSetupTransaction,
+  type LocationSetupDeck,
+  type LocationSetupTransaction,
+} from './locationSetup';
 export { runMatch, type RunMatchOptions, type RunMatchResult } from './cli/runMatch';
 export {
   replayMatch,

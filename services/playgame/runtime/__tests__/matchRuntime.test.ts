@@ -94,15 +94,41 @@ function stageEnvelope(
 }
 
 describe('createMatchRuntime', () => {
-  it('commits the symmetric opening as a system transaction over canonical genesis', () => {
+  it('commits canonical setup before the symmetric opening', () => {
     const runtime = runtimeFixture();
-    const [opening] = runtime.transactions();
+    const [setup, opening] = runtime.transactions();
+    const initialization = runtime.initialization();
+    const setupEvents = setup.framedEvents.map(({ event }) => event);
     const openingEvents = opening.framedEvents.map(({ event }) => event);
 
-    expect(runtime.revision()).toBe(1);
+    expect(initialization.setup.transaction).toBe(setup);
+    expect(initialization.opening.transaction).toBe(opening);
+    expect(initialization.setup.finalState.activeLaneOrder).toEqual([0, 1, 2]);
+    expect(initialization.setup.finalState.hand.P0).toHaveLength(0);
+    expect(initialization.opening.transitions[0]?.event.type).toBe('CARD_DRAWN');
+    expect(runtime.revision()).toBe(2);
+    expect(setup.intent.seat).toBe('SYSTEM');
     expect(opening.intent.seat).toBe('SYSTEM');
-    expect(opening.framedEvents.map(({ frame }) => frame))
-      .toEqual(openingEvents.map((_, index) => index + 1));
+    expect(setupEvents[0]?.type).toBe('LOCATION_DECK_INITIALIZED');
+    const initialized = setupEvents[0];
+    if (initialized.type !== 'LOCATION_DECK_INITIALIZED') {
+      throw new Error('setup must initialize the location deck first');
+    }
+    const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard!;
+    expect(initialized.locations.map(location => location.defId)).toEqual(
+      defaultLocationDeckFactory.build({
+        manifest: BOOTSTRAP_MANIFEST,
+        ruleset,
+        seed: 'phase1-checkpoint3-runtime',
+      }).entries.map(entry => entry.defId),
+    );
+    expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_DRAWN')).toHaveLength(3);
+    expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_PLAYED')).toHaveLength(3);
+    expect(setupEvents.at(-1)?.type).toBe('MATCH_SETUP_COMPLETED');
+    expect(setup.framedEvents.map(({ frame }) => frame))
+      .toEqual(setupEvents.map((_, index) => index + 1));
+    expect(opening.framedEvents[0]?.frame).toBe(setup.framedEvents.at(-1)!.frame + 1);
+    expect(setup.framedEvents.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
     expect(opening.framedEvents.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
     expect(runtime.frame()).toBe(opening.framedEvents.at(-1)?.frame);
     const openingHandSize = BOOTSTRAP_MANIFEST.constants.startingHandSize
@@ -117,6 +143,9 @@ describe('createMatchRuntime', () => {
       .toHaveLength(BOOTSTRAP_MANIFEST.constants.turnStartDraw * 2);
     expect(runtime.genesis().hand.P0).toHaveLength(0);
     expect(runtime.genesis().hand.P1).toHaveLength(0);
+    expect(runtime.genesis().phase).toBe('SETUP');
+    expect(runtime.genesis().activeLaneOrder).toEqual([]);
+    expect(runtime.genesis().locationCards).toEqual({});
     expect(runtime.state().hand.P0).toHaveLength(openingHandSize);
     expect(runtime.state().hand.P1).toHaveLength(openingHandSize);
     expect(runtime.state().deck.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
@@ -220,7 +249,7 @@ describe('createMatchRuntime', () => {
     ))).resolves.toMatchObject({ status: 'illegal', code: 'TERMINAL_MATCH' });
 
     expect(initialLogLength).toBeGreaterThan(0);
-    expect(initialTransactionCount).toBe(1);
+    expect(initialTransactionCount).toBe(2);
   });
 
   it('returns the original rejected receipt on retry before evaluating staleness', async () => {
@@ -297,6 +326,7 @@ describe('createMatchRuntime', () => {
   it('turns malformed dequeue work into a typed receipt and continues draining', async () => {
     const runtime = runtimeFixture();
     const revision = runtime.revision();
+    const initialTransactionCount = runtime.transactions().length;
     const malformed = {
       ...stageEnvelope(runtime, 'malformed', revision),
       intent: null as unknown as RuntimeIntent,
@@ -310,11 +340,12 @@ describe('createMatchRuntime', () => {
     expect(rejected).toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
     expect(accepted).toMatchObject({ status: 'accepted', revision: revision + 1 });
     expect(runtime.state().stagingOrder).not.toHaveLength(0);
-    expect(runtime.transactions()).toHaveLength(1);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
   });
 
   it('rejects non-contract envelope fields before rules resolution', async () => {
     const runtime = runtimeFixture();
+    const initialTransactionCount = runtime.transactions().length;
     const envelope = {
       ...stageEnvelope(runtime, 'schema-invalid-envelope'),
       clientAuthority: 'P0',
@@ -325,7 +356,7 @@ describe('createMatchRuntime', () => {
       code: 'RULES_INVALID',
       message: expect.stringContaining('additional properties'),
     });
-    expect(runtime.transactions()).toHaveLength(1);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
   });
 
   it('exports bootstrap, genesis, and a non-overlapping transaction log that folds to current state', async () => {

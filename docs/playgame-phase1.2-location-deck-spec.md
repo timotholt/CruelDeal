@@ -2,7 +2,8 @@
 
 ## Status
 
-Implementation active. Checkpoints 1 and 2 are complete; checkpoint 3 is next.
+Implementation active. Checkpoints 1 through 3 are complete; checkpoint 4 is
+next.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before
 Phase 1.5 governed operations, reactions, and folder-based location authoring.
@@ -1059,6 +1060,9 @@ Exit gate:
 - no duplicated embedded location state remains
 
 ### Checkpoint 3 — Canonical Setup
+
+Status: complete. See
+[`docs/agent-checkpoints/phase1.2-cp3.md`](agent-checkpoints/phase1.2-cp3.md).
 
 - add location deck initialization, draw, and play operations/events
 - build initial lanes through the setup transaction

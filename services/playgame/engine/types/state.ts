@@ -180,6 +180,7 @@ export interface EnergyLogEntry {
 // ---- Match phase -----------------------------------------------------------
 
 export type MatchPhase =
+  | 'SETUP'           // canonical setup events are still being committed
   | 'AWAITING_INTENT' // player can stage/unstage
   | 'RESOLVING'       // turn is resolving; no intents accepted
   | 'BETWEEN_TURNS'   // draw / location-reveal animations

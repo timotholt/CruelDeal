@@ -18,7 +18,7 @@ import type { Owner } from '../types/ids';
 import { apply } from '../apply';
 import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
-import { createInitialMatchState } from './initState';
+import { createSetupMatch } from './initState';
 import { planEnemyTurnFromHand } from '../ai';
 import { buildOpeningTransaction } from '../../runtime/opening';
 
@@ -111,7 +111,13 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
   const events: MatchEvent[] = [];
   const onEvent = opts.onEvent ?? ((): void => undefined);
 
-  let state = createInitialMatchState(seed, manifest);
+  const setup = createSetupMatch(seed, manifest);
+  let state = setup.genesis;
+  for (const framed of setup.transaction.framedEvents) {
+    events.push(framed.event);
+    onEvent(framed.event, state);
+    state = apply(state, framed.event, manifest);
+  }
 
   const opening = buildOpeningTransaction(state, manifest);
   for (const event of opening.events) {

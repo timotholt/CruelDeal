@@ -34,7 +34,7 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
 
   return (
     <div
-      class="playgame-root board-hidden"
+      class="playgame-root playfield-hidden"
       style={{ width: '100%', height: '100%', background: '#000' }}
     >
       <Show when={session() === null}>

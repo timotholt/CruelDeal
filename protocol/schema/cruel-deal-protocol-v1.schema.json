@@ -246,6 +246,10 @@
             "DECK_SHUFFLED",
             "PENDING_EFFECT_ADDED",
             "PENDING_EFFECT_REMOVED",
+            "LOCATION_DECK_INITIALIZED",
+            "LOCATION_CARD_CREATED",
+            "LOCATION_CARD_DRAWN",
+            "LOCATION_CARD_PLAYED",
             "LOCATION_REVEALED",
             "LOCATION_REPLACED",
             "LOCATIONS_SWAPPED",
@@ -257,6 +261,7 @@
             "LANE_DESTROYED",
             "LANE_CREATION_STARTED",
             "LANE_CREATED",
+            "MATCH_SETUP_COMPLETED",
             "RECURSION_LIMIT_HIT",
             "INTENT_REJECTED"
           ]

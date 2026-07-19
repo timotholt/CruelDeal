@@ -1,7 +1,7 @@
 import {
   BOOTSTRAP_MANIFEST,
   apply,
-  createInitialMatchState,
+  createSetupMatch,
   createRng,
   resolve,
   type Deck,
@@ -86,11 +86,15 @@ export function createOpenedMatch(
   input: Pick<GeneratedMatchCase, 'matchSeed' | 'decks'>,
   manifest: Manifest = BOOTSTRAP_MANIFEST,
 ): OpenedMatch {
-  const genesis = createInitialMatchState(input.matchSeed, manifest, input.decks);
-  const openingEvents = buildOpeningTransaction(genesis, manifest).events;
-  const state = applyAll(genesis, openingEvents, manifest);
+  const setup = createSetupMatch(input.matchSeed, manifest, input.decks);
+  const opening = buildOpeningTransaction(setup.state, manifest);
+  const openingEvents = [
+    ...setup.transaction.framedEvents.map(event => event.event),
+    ...opening.events,
+  ];
+  const state = applyAll(setup.genesis, openingEvents, manifest);
 
-  return { genesis, openingEvents, state };
+  return { genesis: setup.genesis, openingEvents, state };
 }
 
 export function intentRng(matchSeed: string, intentIndex: number, intentType: MatchIntent['type']): Rng {

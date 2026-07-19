@@ -12,10 +12,7 @@ import { createStore, type SetStoreFunction } from 'solid-js/store';
 import type { Manifest } from '@/services/playgame/engine/manifest/types';
 import type { CardId, LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
-import {
-  foldFramedEvents,
-  type EventTransition,
-} from '@/services/playgame/engine/transactionTimeline';
+import type { EventTransition } from '@/services/playgame/engine/transactionTimeline';
 import type {
   CommittedTransactionTimeline,
   IntentAcceptanceResult,
@@ -68,22 +65,11 @@ export const PlayGameProvider = (props: {
     P0: { name: bootstrap.participants.P0.displayName },
     P1: { name: bootstrap.participants.P1.displayName },
   };
-  const opening = runtime.transactions()[0];
-  if (!opening) throw new Error('PlayGameProvider: runtime did not commit opening transaction');
-  const builtOpening = foldFramedEvents({
-    transactionId: opening.transactionId,
-    initialState: runtime.genesis(),
-    framedEvents: opening.framedEvents,
-    manifest,
-  });
-  const openingTimeline: CommittedTransactionTimeline = {
-    transaction: opening,
-    transitions: builtOpening.transitions,
-    finalState: builtOpening.finalState,
-  };
+  const initialization = runtime.initialization();
+  const openingTimeline = initialization.opening;
 
   const [engineState, setPresentedState] = createStore<PresentedStateStore>(
-    structuredClone(runtime.genesis()) as PresentedStateStore,
+    structuredClone(initialization.setup.finalState) as PresentedStateStore,
   );
   const [ui, setUi] = createStore<UiState>({
     handReservations: [],

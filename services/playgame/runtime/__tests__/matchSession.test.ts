@@ -19,7 +19,12 @@ describe('MatchSession', () => {
     expect(Object.isFrozen(session.bootstrap)).toBe(true);
     expect(session.manifest).toBe(BOOTSTRAP_MANIFEST);
     expect(session.ruleset).toBe(BOOTSTRAP_MANIFEST.rulesets.standard);
-    expect(session.runtime.transactions()).toHaveLength(1);
+    expect(session.runtime.transactions()).toHaveLength(2);
+    expect(session.runtime.transactions().map(transaction => transaction.intent.intentId))
+      .toEqual([
+        `setup:${session.bootstrap.seed}`,
+        `opening:${session.bootstrap.seed}`,
+      ]);
     expect(session.exportReplay().bootstrap).toBe(session.bootstrap);
   });
 

@@ -79,8 +79,15 @@ export function validateLocationState(state: MatchState): readonly string[] {
   if (new Set(state.activeLaneOrder).size !== state.activeLaneOrder.length) {
     issues.push('activeLaneOrder contains duplicate lane IDs');
   }
-  if (state.activeLaneOrder.length < 1 || state.activeLaneOrder.length > 3) {
-    issues.push(`active lane count must be between 1 and 3; found ${state.activeLaneOrder.length}`);
+  const minimumActiveLanes = state.phase === 'SETUP' ? 0 : 1;
+  if (
+    state.activeLaneOrder.length < minimumActiveLanes
+    || state.activeLaneOrder.length > 3
+  ) {
+    issues.push(
+      `active lane count must be between ${minimumActiveLanes} and 3; `
+      + `found ${state.activeLaneOrder.length}`,
+    );
   }
   for (const laneId of state.activeLaneOrder) {
     const lane = state.lanesById[laneId as LaneId];

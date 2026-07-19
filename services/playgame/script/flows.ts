@@ -9,13 +9,11 @@
 
 import { serial, wait, type Step } from './runner';
 import {
-  fadeInLocationTile,
-  hideLocationTiles,
   paceCommittedOpeningDeal,
   paceCommittedOpeningLocationReveal,
   paceCommittedOpeningTurnStart,
   paceCommittedTurn,
-  setBoardVisible,
+  presentPlayfieldEvent,
   toast,
 } from './actions';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
@@ -23,37 +21,25 @@ import type { CommittedTransactionTimeline } from '../runtime/contracts';
 /**
  * Opening sequence for a new match.
  *
- *   1. black board
+ *   1. completed three-lane playfield remains concealed
  *   2. CRUEL DEAL banner
- *   3. board UI fades in
- *   4. 3 ??? location tiles fade in left -> right
- *   5. pace the committed three-card deal
- *   6. TURN 1 banner
- *   7. pace the committed location reveal
- *   8. pace the committed turn-start draw
+ *   3. all 3 lanes fade in together
+ *   4. pace the committed three-card deal
+ *   5. TURN 1 banner
+ *   6. pace the committed location reveal
+ *   7. pace the committed turn-start draw
  */
 export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
   serial(
-    setBoardVisible(false),
-    hideLocationTiles(),
+    presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' }),
     wait(200),
 
     // CRUEL DEAL banner
     toast('CRUEL DEAL', { duration: 2500 }),
     wait(200),
 
-    // Reveal the UI (location tiles stay hidden until the fade-in loop below)
-    setBoardVisible(true),
-    wait(400),
-
-    // Location tiles: left -> right with a short gap
-    serial(
-      fadeInLocationTile(0, 400),
-      wait(120),
-      fadeInLocationTile(1, 400),
-      wait(120),
-      fadeInLocationTile(2, 400),
-    ),
+    // Setup is already fully mounted. Reveal all three lanes as one surface.
+    presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' }),
     wait(150),
 
     // Opening authority was committed by MatchRuntime as revision 1 before

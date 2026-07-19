@@ -296,18 +296,26 @@ export function createLane(
     position: options.position,
     cause: options.cause,
   };
+  const locationCreated: MatchEvent = {
+    type: 'LOCATION_CARD_CREATED',
+    locationId,
+    defId: locationDefId,
+    pendingLane: laneId,
+  };
+  const locationPlayed: MatchEvent = {
+    type: 'LOCATION_CARD_PLAYED',
+    locationId,
+    lane: laneId,
+    revealed: options.revealed ?? true,
+    revealAtTurn: null,
+  };
   const created: MatchEvent = {
     type: 'LANE_CREATED',
     lane: laneId,
     position: options.position,
-    location: {
-      id: locationId,
-      defId: locationDefId,
-      revealed: options.revealed ?? true,
-    },
     cause: options.cause,
   };
-  const events = [started, created] as const;
+  const events = [started, locationCreated, locationPlayed, created] as const;
   return accepted(applyEvents(state, events, manifest), events);
 }
 
@@ -316,7 +324,9 @@ export function validateLaneTopology(state: MatchState): readonly string[] {
   const active = activeLaneIds(state);
   const unique = new Set(active);
   if (unique.size !== active.length) issues.push('activeLaneOrder contains duplicate lane IDs');
-  if (active.length < MINIMUM_ACTIVE_LANES) issues.push('at least one lane must remain active');
+  if (state.phase !== 'SETUP' && active.length < MINIMUM_ACTIVE_LANES) {
+    issues.push('at least one lane must remain active');
+  }
   if (active.length > MAXIMUM_ACTIVE_LANES) issues.push('at most three lanes may be active');
 
   for (const laneId of active) {

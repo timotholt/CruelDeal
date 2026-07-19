@@ -1982,18 +1982,14 @@
     to   { opacity: 0; }
   }
 
-  /* Script Engine: game-UI fade used by setBoardVisible().
-     The toast area stays visible so banners (e.g. GALACTIC SNAP) can appear
-     while the board itself is still hidden. */
-  .board > .hud-top,
-  .board > .board-game-area,
-  .board > .player-footer {
-    transition: opacity 600ms ease;
+  /* Presentation events own playfield visibility. Setup can therefore build
+     canonical lane history without exposing its intermediate topology. */
+  .board > .board-game-area {
+    transition: opacity 2000ms ease;
   }
-  .playgame-root.board-hidden .board > .hud-top,
-  .playgame-root.board-hidden .board > .board-game-area,
-  .playgame-root.board-hidden .board > .player-footer {
+  .playgame-root.playfield-hidden .board > .board-game-area {
     opacity: 0;
+    pointer-events: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

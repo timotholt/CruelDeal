@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { apply } from '../../engine/apply';
 import { buildDebugMatchState } from '../../debug/buildDebugState';
-import { createInitialMatchState } from '../../engine/cli/initState';
+import {
+  createInitialMatchState,
+  createSetupMatch,
+} from '../../engine/cli/initState';
 import { runMatch } from '../../engine/cli/runMatch';
 import { replayMatch } from '../../engine/replay';
 import { testCardDef, testLocationDef, testManifest } from '../../engine/testkit';
@@ -239,15 +242,16 @@ describe('card variants and opening initialization', () => {
   it('retains a selected variant through genesis, opening draws, and replay', () => {
     const manifest = manifestFixture();
     const decks = { P0: deckFixture(true), P1: deckFixture() } as const;
-    const genesis = createInitialMatchState('variant-genesis-replay', manifest, decks);
+    const setup = createSetupMatch('variant-genesis-replay', manifest, decks);
+    const genesis = setup.genesis;
     const selected = Object.values(genesis.cards).find((card) => card.variantId === 'holo');
 
     expect(selected).toBeDefined();
     expect(selected?.defId).toBe('card-0');
-    const opening = buildOpeningTransaction(genesis, manifest);
+    const opening = buildOpeningTransaction(setup.state, manifest);
     const finalState = opening.events.reduce(
       (state, event) => apply(state, event, manifest),
-      genesis,
+      setup.state,
     );
     const replayed = replayMatch({
       seed: genesis.seed,

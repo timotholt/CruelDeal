@@ -13,6 +13,10 @@ import {
   planCommittedResolutionWalk,
 } from '../presentation/committedTimeline';
 import { releaseAllHandSlots } from '../presentation/handReservations';
+import type {
+  PlayfieldEventPresenter,
+  PlayfieldPresentationEvent,
+} from '../presentation/playfieldEvents';
 import { showToast } from '../toast';
 import type { UiState } from '../view';
 import type { Step } from './runner';
@@ -35,6 +39,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   onCancel?: () => void;
   presentCommittedFrame: (frame: EventTransition) => void;
   finishTurnPresentation: () => void;
+  presentPlayfieldEvent: PlayfieldEventPresenter;
 }
 
 const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -61,11 +66,11 @@ const settlePresentationWithin = (
   );
 });
 
-export const setBoardVisible = (on: boolean): Step => async (ctx) => {
+export const presentPlayfieldEvent = (
+  event: PlayfieldPresentationEvent,
+): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const root = c.boardEl.closest('.playgame-root') as HTMLElement | null;
-  root?.classList.toggle('board-hidden', !on);
-  await waitFor(620);
+  await c.presentPlayfieldEvent(event);
 };
 
 export const toast = (text: string, opts: { duration?: number } = {}): Step => async (ctx) => {
@@ -73,27 +78,6 @@ export const toast = (text: string, opts: { duration?: number } = {}): Step => a
   const duration = opts.duration ?? 1400;
   showToast(c.toastArea, text, { duration });
   await waitFor(duration + 100);
-};
-
-export const hideLocationTiles = (): Step => (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  for (let lane = 0; lane < 3; lane++) {
-    const element = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
-    if (!element) continue;
-    element.style.transition = 'none';
-    element.style.opacity = '0';
-  }
-};
-
-export const fadeInLocationTile = (lane: number, ms = 400): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const element = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
-  if (!element) return;
-  element.style.opacity = '0';
-  void element.offsetWidth;
-  element.style.transition = `opacity ${ms}ms ease`;
-  element.style.opacity = '1';
-  await waitFor(ms);
 };
 
 const paceLocationReveal = async (

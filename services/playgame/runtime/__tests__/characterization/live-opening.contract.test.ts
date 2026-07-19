@@ -5,14 +5,12 @@ const actionSpies = vi.hoisted(() => {
   const step = (): Promise<void> => Promise.resolve();
   const action = () => vi.fn((): Step => step);
   return {
-    fadeInLocationTile: action(),
     flipPlayerCardsFaceDown: action(),
-    hideLocationTiles: action(),
     paceCommittedOpeningDeal: action(),
     paceCommittedOpeningLocationReveal: action(),
     paceCommittedOpeningTurnStart: action(),
     paceCommittedTurn: action(),
-    setBoardVisible: action(),
+    presentPlayfieldEvent: action(),
     toast: action(),
   };
 });
@@ -29,6 +27,12 @@ describe('current live opening contract', () => {
   test('uses a symmetric runtime opening transaction instead of local-only deal actions', () => {
     openingSequence({} as never);
 
+    expect(actionSpies.presentPlayfieldEvent).toHaveBeenNthCalledWith(1, {
+      type: 'HIDE_PLAYFIELD',
+    });
+    expect(actionSpies.presentPlayfieldEvent).toHaveBeenNthCalledWith(2, {
+      type: 'SHOW_PLAYFIELD',
+    });
     expect(actionSpies.paceCommittedOpeningDeal).toHaveBeenCalledTimes(1);
     expect(actionSpies.paceCommittedOpeningLocationReveal).toHaveBeenCalledTimes(1);
     expect(actionSpies.paceCommittedOpeningTurnStart).toHaveBeenCalledTimes(1);

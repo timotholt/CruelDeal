@@ -95,6 +95,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
   test('drains concurrently submitted work in FIFO order', async () => {
     const runtime = runtimeFixture();
     const baseRevision = runtime.revision();
+    const initialTransactionCount = runtime.transactions().length;
 
     const first = runtime.submitIntent(stageEnvelope(runtime, 'P0', 'fifo-first', baseRevision));
     const second = runtime.submitIntent(stageEnvelope(runtime, 'P1', 'fifo-second', baseRevision + 1));
@@ -103,13 +104,14 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     expect(results.map((result) => result.status)).toEqual(['accepted', 'accepted']);
     // The trusted local projection exposes only the viewer's private plan.
     expect(runtime.state().stagingOrder).toHaveLength(1);
-    expect(runtime.transactions()).toHaveLength(1);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
     expect(runtime.revision()).toBe(baseRevision + 2);
   });
 
   test('validates legality against authoritative state when dequeued (H2)', async () => {
     const runtime = runtimeFixture();
     const baseRevision = runtime.revision();
+    const initialTransactionCount = runtime.transactions().length;
     const cardId = runtime.state().hand.P0[0].id;
 
     const first = runtime.submitIntent(stageEnvelope(runtime, 'P0', 'legal-first', baseRevision, cardId));
@@ -125,7 +127,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       currentRevision: baseRevision + 1,
     });
     expect(runtime.state().stagingOrder).toEqual([cardId]);
-    expect(runtime.transactions()).toHaveLength(1);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
     expect(runtime.revision()).toBe(baseRevision + 1);
   });
 

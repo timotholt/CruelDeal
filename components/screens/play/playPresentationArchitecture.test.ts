@@ -22,6 +22,21 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(playBoard).not.toContain('player-row');
   });
 
+  it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
+    const classicPlay = source('../ClassicPlayScreen.tsx');
+    const playBoard = source('./PlayBoard.tsx');
+    const flows = source('../../../services/playgame/script/flows.ts');
+    const css = source('../../../src/styles/playgame.css');
+
+    expect(classicPlay).toContain('class="playgame-root playfield-hidden"');
+    expect(playBoard).toContain('createPlayfieldEventPresenter(playRoot)');
+    expect(flows).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
+    expect(flows).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
+    expect(flows).not.toContain('fadeInLocationTile');
+    expect(css).toContain('.playgame-root.playfield-hidden .board > .board-game-area');
+    expect(css).toContain('transition: opacity 2000ms ease');
+  });
+
   it('keeps opponent telemetry in one fixed header row with visible zone anchors', () => {
     const playBoard = source('./PlayBoard.tsx');
     const css = source('../../../src/styles/playgame.css');

@@ -87,6 +87,32 @@ export type MatchEvent =
   | { type: 'PENDING_EFFECT_REMOVED'; effect: PendingEffect }
 
   // --- Location ---
+  | {
+      type: 'LOCATION_DECK_INITIALIZED';
+      locations: readonly {
+        id: LocationCardInstanceId;
+        defId: string;
+        sourceDeckEntry: number;
+      }[];
+    }
+  | {
+      type: 'LOCATION_CARD_CREATED';
+      locationId: LocationCardInstanceId;
+      defId: string;
+      pendingLane: LaneId;
+    }
+  | {
+      type: 'LOCATION_CARD_DRAWN';
+      locationId: LocationCardInstanceId;
+      pendingLane: LaneId;
+    }
+  | {
+      type: 'LOCATION_CARD_PLAYED';
+      locationId: LocationCardInstanceId;
+      lane: LaneId;
+      revealed: boolean;
+      revealAtTurn: number | null;
+    }
   | { type: 'LOCATION_REVEALED'; lane: LaneId; locationId: LocationCardInstanceId }
   | {
       type: 'LOCATION_REPLACED';
@@ -121,15 +147,11 @@ export type MatchEvent =
       type: 'LANE_CREATED';
       lane: LaneId;
       position: number;
-      location: {
-        id: LocationCardInstanceId;
-        defId: string;
-        revealed: boolean;
-      };
       cause: EffectRef;
     }
 
   // --- Turn flow ---
+  | { type: 'MATCH_SETUP_COMPLETED' }
   | { type: 'TURN_RESOLUTION_STARTED'; turn: number }
   | { type: 'TURN_STARTED'; turn: number; priority: Owner; priorityReason: PriorityReason }
   | { type: 'TURN_ENDED'; turn: number }
