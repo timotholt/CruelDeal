@@ -1,5 +1,5 @@
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest';
-import type { CardDef, LocationDef } from '@/services/playgame/engine/manifest';
+import type { CardDef, LocationCardDef } from '@/services/playgame/engine/manifest';
 
 export type AssetKind = 'card-front' | 'card-back' | 'location-lane';
 export type AssetProvider = 'openai' | 'leonardo';
@@ -74,7 +74,7 @@ export const LANE_RUNTIME_SPEC: AssetSpec = {
 
 const cardTargetPath = (defId: string): string => `/art/cards/${defId}/portrait.webp`;
 
-const locationTargetPath = (location: LocationDef): string => {
+const locationTargetPath = (location: LocationCardDef): string => {
   const current = location.cosmetic.art.map.path;
   const base = current.split('/').pop()?.replace(/\.[^.]+$/, '') || location.defId;
   return `/art/maps/${base}.webp`;
@@ -110,7 +110,7 @@ export const buildWorkbenchAssets = (): WorkbenchAsset[] => {
 
   const locations = Object.values(BOOTSTRAP_MANIFEST.locations)
     .sort((a, b) => a.defId.localeCompare(b.defId))
-    .map((location: LocationDef): WorkbenchAsset => ({
+    .map((location: LocationCardDef): WorkbenchAsset => ({
       id: `location-lane:${location.defId}`,
       kind: 'location-lane',
       defId: location.defId,

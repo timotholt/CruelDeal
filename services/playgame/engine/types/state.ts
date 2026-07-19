@@ -10,7 +10,14 @@
  * Mystique / Super Skrull enter the picture.
  */
 
-import type { CardId, LaneId, LocationId, Owner } from './ids';
+import type {
+  CardId,
+  LaneId,
+  LocationCardInstanceId,
+  Owner,
+  Seat,
+} from './ids';
+import type { Frame } from './timeline';
 import type { TextOverride, EffectRef, TrackedStatKey, TrackedFlagKey } from './ability';
 
 // ---- Tracked variables (game-history summary, updated by apply()) ----------
@@ -209,7 +216,7 @@ export type CardZone =
 export type SpawnSource =
   | { readonly kind: 'DECK_CREATION' }
   | { readonly kind: 'CARD_CREATED';     readonly sourceCardId: CardId }
-  | { readonly kind: 'LOCATION_CREATED'; readonly sourceLocationId: LocationId }
+  | { readonly kind: 'LOCATION_CREATED'; readonly sourceLocationId: LocationCardInstanceId }
   | { readonly kind: 'ENEMY_CREATED';    readonly sourceCardId: CardId }
   | { readonly kind: 'COPY_OF';          readonly sourceCardId: CardId }
   | { readonly kind: 'SYSTEM' };          // test fixtures / debug scaffolding
@@ -245,12 +252,43 @@ export interface CardInstance {
   readonly spawnSource: SpawnSource;
 }
 
-export interface LocationInstance {
-  readonly id: LocationId;
+export type LocationZone =
+  | 'DECK'
+  | 'STAGING'
+  | 'LANE'
+  | 'DISCARD'
+  | 'DESTROYED'
+  | 'BANISHED';
+
+export type LocationCardFace = 'FACE_DOWN' | 'FACE_UP';
+
+export interface LocationCardInstance {
+  readonly id: LocationCardInstanceId;
   readonly defId: string;
-  readonly lane: LaneId;
+  /** Immutable position in the frozen bootstrap location deck. */
+  readonly sourceDeckEntry: number;
+  readonly zone: LocationZone;
+  readonly laneId: LaneId | null;
+  readonly pendingLaneId: LaneId | null;
+  readonly face: LocationCardFace;
+  /** Seats entitled to know identity while the card remains face-down. */
+  readonly identityKnownTo: readonly Seat[];
+  readonly revealCount: number;
   readonly tags: readonly LaneTag[];
-  readonly counters?: Readonly<Record<string, number>>;
+  readonly counters: Readonly<Record<string, number>>;
+  readonly createdAt: Frame;
+  readonly drawnAt?: Frame;
+  readonly playedAt?: Frame;
+  readonly revealedAt?: Frame;
+}
+
+export interface LocationDeckState {
+  /** Top-to-bottom draw order. */
+  readonly drawPile: readonly LocationCardInstanceId[];
+  readonly staging: readonly LocationCardInstanceId[];
+  readonly discardPile: readonly LocationCardInstanceId[];
+  readonly destroyed: readonly LocationCardInstanceId[];
+  readonly banished: readonly LocationCardInstanceId[];
 }
 
 // ---- Tags (concrete runtime shapes, distinct from EffectExpr-authoring specs) --
@@ -302,15 +340,19 @@ export type LaneStatus = 'CREATING' | 'ACTIVE' | 'DESTROYING' | 'DESTROYED';
 
 export interface LaneState {
   /** Stable identity. This value never changes or gets reused. */
-  readonly idx: LaneId;
-  /**
-   * Lifecycle status. Older fixtures that predate dynamic topology omit this
-   * field and are interpreted as ACTIVE; engine-created states always set it.
-   */
-  readonly status?: LaneStatus;
-  readonly location: LocationInstance | null;
-  readonly locationRevealed: boolean;
+  readonly id: LaneId;
+  readonly status: LaneStatus;
+  readonly locationSlot: LocationSlotState;
   readonly cards: Readonly<Record<Owner, readonly CardId[]>>;
+  readonly createdAt: Frame;
+  readonly destroyedAt?: Frame;
+}
+
+export interface LocationSlotState {
+  readonly laneId: LaneId;
+  readonly locationCardId: LocationCardInstanceId | null;
+  /** Mechanical schedule; not a hidden-information projection. */
+  readonly revealAtTurn: number | null;
 }
 
 // ---- Match result ----------------------------------------------------------
@@ -360,18 +402,15 @@ export interface MatchState {
   readonly deck: Readonly<Record<Owner, readonly CardInstance[]>>;
   readonly hand: Readonly<Record<Owner, readonly CardInstance[]>>;
   readonly cards: Readonly<Record<CardId, CardInstance>>;
-  /**
-   * Stable lane registry in allocation order. Destroyed lanes remain here as
-   * tombstones; this array is never reordered and IDs are never reused.
-   */
-  readonly lanes: readonly LaneState[];
-  /**
-   * Current left-to-right playable order. Position is derived from this list.
-   * Optional only while pre-Phase-1.2 test fixtures are migrated.
-   */
-  readonly activeLaneOrder?: readonly LaneId[];
-  /** Next monotonic stable lane ID. Engine-created states always supply it. */
-  readonly nextLaneId?: LaneId;
+  /** Stable lane registry. Destroyed lanes remain as permanent tombstones. */
+  readonly lanesById: Readonly<Record<LaneId, LaneState>>;
+  /** Current left-to-right playable order. */
+  readonly activeLaneOrder: readonly LaneId[];
+  /** Next monotonic stable lane ID. */
+  readonly nextLaneId: LaneId;
+  /** Every location card instance, regardless of current zone. */
+  readonly locationCards: Readonly<Record<LocationCardInstanceId, LocationCardInstance>>;
+  readonly locationDeck: LocationDeckState;
   readonly pending: readonly CardId[];
   readonly stagingOrder: readonly CardId[];
   readonly pendingEffects: readonly PendingEffect[];

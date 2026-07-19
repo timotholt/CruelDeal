@@ -87,7 +87,7 @@ export function planEnemyTurnFromPool(
   // Mutable lane-fill simulation so successive plays respect earlier ones
   // without needing to call `apply()` per iteration.
   const laneFill = new Map(
-    activeLaneIds(state).map(laneId => [laneId, state.lanes[laneId].cards[owner].length]),
+    activeLaneIds(state).map(laneId => [laneId, state.lanesById[laneId].cards[owner].length]),
   );
   const cap = manifest.constants.laneCapacity;
 
@@ -153,7 +153,7 @@ export function planEnemyTurnFromHand(
   const plays: HandPlay[] = [];
   let energy = state.energy[owner];
   const laneFill = new Map(
-    activeLaneIds(state).map(laneId => [laneId, state.lanes[laneId].cards[owner].length]),
+    activeLaneIds(state).map(laneId => [laneId, state.lanesById[laneId].cards[owner].length]),
   );
   const cap = manifest.constants.laneCapacity;
 

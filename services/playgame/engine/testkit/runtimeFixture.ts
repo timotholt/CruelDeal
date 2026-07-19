@@ -1,18 +1,19 @@
 import type { EffectExpr } from '../types/ability';
-import type { CardId, LaneId, LocationId, Owner, Seat } from '../types/ids';
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
+import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from '../types/ids';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
   CardTag,
   CardZone,
   LaneState,
-  LocationInstance,
+  LocationCardInstance,
   MatchPhase,
   MatchState,
   PendingEffect,
   SpawnSource,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import { GENESIS_FRAME } from '../types/timeline';
 
 export interface RuntimeCardSpec {
   readonly id: string;
@@ -34,8 +35,8 @@ export interface RuntimeLocationSpec {
   readonly id: string;
   readonly defId: string;
   readonly revealed: boolean;
-  readonly tags?: LocationInstance['tags'];
-  readonly counters?: LocationInstance['counters'];
+  readonly tags?: LocationCardInstance['tags'];
+  readonly counters?: LocationCardInstance['counters'];
 }
 
 export interface RuntimeFixtureOptions {
@@ -60,6 +61,130 @@ export interface RuntimeFixture {
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly state: MatchState;
+}
+
+export function testLaneState(
+  id: LaneId,
+  cards: Readonly<Record<Owner, readonly CardId[]>> = { P0: [], P1: [] },
+): LaneState {
+  return {
+    id,
+    status: 'ACTIVE',
+    locationSlot: {
+      laneId: id,
+      locationCardId: null,
+      revealAtTurn: id + 1,
+    },
+    cards,
+    createdAt: GENESIS_FRAME,
+  };
+}
+
+export function testLaneRegistry(
+  lanes: readonly LaneState[] = [
+    testLaneState(0),
+    testLaneState(1),
+    testLaneState(2),
+  ],
+): Readonly<Record<LaneId, LaneState>> {
+  return Object.fromEntries(lanes.map(lane => [lane.id, lane]));
+}
+
+export function emptyTestMatchState(
+  overrides: Partial<MatchState> = {},
+): MatchState {
+  const turn = overrides.turn ?? 1;
+  return {
+    turn,
+    maxEnergy: { P0: turn, P1: turn },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
+    phase: 'AWAITING_INTENT',
+    seed: 'test-match-state',
+    priority: 'P0',
+    energy: { P0: turn, P1: turn },
+    deck: { P0: [], P1: [] },
+    hand: { P0: [], P1: [] },
+    cards: {},
+    lanesById: testLaneRegistry(),
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
+    locationCards: {},
+    locationDeck: {
+      drawPile: [],
+      staging: [],
+      discardPile: [],
+      destroyed: [],
+      banished: [],
+    },
+    pending: [],
+    stagingOrder: [],
+    pendingEffects: [],
+    log: [],
+    lastPlayedBy: { P0: null, P1: null },
+    result: null,
+    energyLog: { P0: [], P1: [] },
+    trackedVariables: EMPTY_TRACKED_VARIABLES,
+    ...overrides,
+  };
+}
+
+export function withTestLocation(
+  state: MatchState,
+  laneId: LaneId,
+  defId: string,
+  revealed = true,
+  id = `test-location-${laneId}` as LocationCardInstanceId,
+): MatchState {
+  const lane = state.lanesById[laneId];
+  if (!lane) throw new Error(`withTestLocation: missing lane ${laneId}`);
+  const priorId = lane.locationSlot.locationCardId;
+  const prior = priorId ? state.locationCards[priorId] : null;
+  const location: LocationCardInstance = {
+    id,
+    defId,
+    sourceDeckEntry: -1,
+    zone: 'LANE',
+    laneId,
+    pendingLaneId: null,
+    face: revealed ? 'FACE_UP' : 'FACE_DOWN',
+    identityKnownTo: revealed ? ['P0', 'P1'] : [],
+    revealCount: revealed ? 1 : 0,
+    tags: [],
+    counters: {},
+    createdAt: GENESIS_FRAME,
+    ...(revealed ? { revealedAt: GENESIS_FRAME } : {}),
+  };
+  return {
+    ...state,
+    lanesById: {
+      ...state.lanesById,
+      [laneId]: {
+        ...lane,
+        locationSlot: {
+          ...lane.locationSlot,
+          locationCardId: id,
+        },
+      },
+    },
+    locationCards: {
+      ...state.locationCards,
+      ...(prior ? {
+        [prior.id]: {
+          ...prior,
+          zone: 'DISCARD' as const,
+          laneId: null,
+          pendingLaneId: null,
+        },
+      } : {}),
+      [id]: location,
+    },
+    locationDeck: prior
+      ? {
+          ...state.locationDeck,
+          discardPile: [...state.locationDeck.discardPile, prior.id],
+        }
+      : state.locationDeck,
+  };
 }
 
 const EMPTY_POWER_LOG = [] as const;
@@ -112,28 +237,43 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     P1: options.hands.P1.map((spec) => register(buildCard(spec, 'P1', 'HAND', null))),
   };
 
-  const lanes = options.lanes.map((laneSpec, laneNumber) => {
+  const locationCards: Record<LocationCardInstanceId, LocationCardInstance> = {};
+  const lanesById = Object.fromEntries(options.lanes.map((laneSpec, laneNumber) => {
     const lane = laneNumber as LaneId;
     const locationSpec = options.locations[lane];
-    const location: LocationInstance | null = locationSpec
-      ? {
-          id: locationSpec.id as LocationId,
-          defId: locationSpec.defId,
-          lane,
-          tags: locationSpec.tags ?? [],
-          ...(locationSpec.counters ? { counters: locationSpec.counters } : {}),
-        }
-      : null;
+    const locationCardId = locationSpec?.id as LocationCardInstanceId | undefined;
+    if (locationSpec && locationCardId) {
+      locationCards[locationCardId] = {
+        id: locationCardId,
+        defId: locationSpec.defId,
+        sourceDeckEntry: laneNumber,
+        zone: 'LANE',
+        laneId: lane,
+        pendingLaneId: null,
+        face: locationSpec.revealed ? 'FACE_UP' : 'FACE_DOWN',
+        identityKnownTo: locationSpec.revealed ? ['P0', 'P1'] : [],
+        revealCount: locationSpec.revealed ? 1 : 0,
+        tags: locationSpec.tags ?? [],
+        counters: locationSpec.counters ?? {},
+        createdAt: GENESIS_FRAME,
+        ...(locationSpec.revealed ? { revealedAt: GENESIS_FRAME } : {}),
+      };
+    }
     const P0 = laneSpec.P0.map((spec) => register(buildCard(spec, 'P0', 'LANE', lane)).id);
     const P1 = laneSpec.P1.map((spec) => register(buildCard(spec, 'P1', 'LANE', lane)).id);
-    return {
-      idx: lane,
+    const laneState: LaneState = {
+      id: lane,
       status: 'ACTIVE',
-      location,
-      locationRevealed: locationSpec?.revealed ?? false,
+      locationSlot: {
+        laneId: lane,
+        locationCardId: locationCardId ?? null,
+        revealAtTurn: locationSpec?.revealed ? null : laneNumber + 1,
+      },
       cards: { P0, P1 },
-    } satisfies LaneState;
-  }) as LaneState[];
+      createdAt: GENESIS_FRAME,
+    };
+    return [lane, laneState];
+  })) as Readonly<Record<LaneId, LaneState>>;
 
   const stagingOrder = (options.stagingOrder ?? []).map((id) => id as CardId);
   for (const id of stagingOrder) {
@@ -156,9 +296,17 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     deck,
     hand,
     cards,
-    lanes,
+    lanesById,
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
+    locationCards,
+    locationDeck: {
+      drawPile: [],
+      staging: [],
+      discardPile: [],
+      destroyed: [],
+      banished: [],
+    },
     pending: [],
     stagingOrder,
     pendingEffects: options.pendingEffects ?? [],
@@ -209,7 +357,7 @@ export function testCardDef(
 export function testLocationDef(
   defId: string,
   onReveal: EffectExpr[] = [],
-): LocationDef {
+): LocationCardDef {
   return {
     defId,
     version: 1,
@@ -226,7 +374,7 @@ export function testLocationDef(
 
 export function testManifest(
   cards: readonly CardDef[],
-  locations: readonly LocationDef[] = [],
+  locations: readonly LocationCardDef[] = [],
   constants: Partial<Manifest['constants']> = {},
 ): Manifest {
   return {

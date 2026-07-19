@@ -5,6 +5,7 @@ import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { createInitialMatchState } from '../../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../../engine/manifest/bootstrap';
 import type { Manifest } from '../../engine/manifest/types';
+import { activeLaneIds, locationCardAtLane } from '../../engine/laneTopology';
 import {
   computeDeckContentHash,
   computeLocationDeckContentHash,
@@ -73,17 +74,18 @@ describe('Phase 1.2 location deck bootstrap', () => {
     expect(first.entries.every(Object.isFrozen)).toBe(true);
   });
 
-  it('preserves the legacy first-three picks across a fixed seed corpus', () => {
+  it('preserves the first-three weighted picks across a fixed seed corpus', () => {
     for (let index = 0; index < 128; index++) {
       const seed = `location-parity-${index}`;
-      const legacy = createInitialMatchState(seed, BOOTSTRAP_MANIFEST)
-        .lanes.map((lane) => lane.location?.defId);
+      const state = createInitialMatchState(seed, BOOTSTRAP_MANIFEST);
+      const selected = activeLaneIds(state)
+        .map((laneId) => locationCardAtLane(state, laneId)?.defId);
       const ordered = defaultLocationDeckFactory.build({
         manifest: BOOTSTRAP_MANIFEST,
         ruleset,
         seed,
       }).entries.slice(0, 3).map((entry) => entry.defId);
-      expect(ordered, seed).toEqual(legacy);
+      expect(ordered, seed).toEqual(selected);
     }
   });
 
@@ -113,10 +115,10 @@ describe('Phase 1.2 location deck bootstrap', () => {
       locationDeck.entries,
     );
 
-    expect(original.lanes.map((lane) => lane.location?.defId))
+    expect(activeLaneIds(original).map((laneId) => locationCardAtLane(original, laneId)?.defId))
       .toEqual(locationDeck.entries.slice(0, 3).map((entry) => entry.defId));
-    expect(reversed.lanes.map((lane) => lane.location?.defId))
-      .toEqual(original.lanes.map((lane) => lane.location?.defId));
+    expect(activeLaneIds(reversed).map((laneId) => locationCardAtLane(reversed, laneId)?.defId))
+      .toEqual(activeLaneIds(original).map((laneId) => locationCardAtLane(original, laneId)?.defId));
   });
 
   it('rejects a missing location deck before runtime construction', () => {

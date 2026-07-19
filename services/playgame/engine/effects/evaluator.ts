@@ -29,6 +29,7 @@ import { type EvalCtx } from '../projections/context';
 import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
 import { findLanes } from '../projections/query';
+import { getCardCost } from '../projections/cost';
 import { getCardPower } from '../projections/power';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { isPowerIncreaseBlocked } from '../projections/power-restrictions';
@@ -40,7 +41,7 @@ import {
   destroyLane,
   type LocationLifecycleResult,
 } from '../locationLifecycle';
-import { isActiveLane } from '../laneTopology';
+import { isActiveLane, locationCardAtLane } from '../laneTopology';
 
 export const MAX_REVEAL_RECURSION = 16;
 
@@ -108,8 +109,8 @@ export function fireLocationTrigger(
   eventOwner: Owner | null = eventCard ? state.cards[eventCard]?.owner ?? null : null,
   parentDepth: number = 0,
 ): EvalResult {
-  const loc = state.lanes[lane].location;
-  if (!loc || !state.lanes[lane].locationRevealed) return { events: [], state };
+  const loc = locationCardAtLane(state, lane);
+  if (!loc || loc.face !== 'FACE_UP') return { events: [], state };
   const locDef = manifest.locations[loc.defId];
   const effs = locDef?.abilities[slot];
   if (!effs || effs.length === 0) return { events: [], state };
@@ -502,7 +503,7 @@ function fireOnAnyCardPlayedHere(
   }
   const events: MatchEvent[] = [];
   let s = state;
-  const laneState = s.lanes[lane];
+  const laneState = s.lanesById[lane];
   for (const owner of ['P0', 'P1'] as const) {
     for (const id of laneState.cards[owner]) {
       if (id === cardId) continue;
@@ -719,9 +720,9 @@ export function evalEffect(
         const subRng = ctx.rng.fork(`move:${id}`);
         // Valid destination = candidate lane, not current lane, has capacity for owner.
         const filtered = findLanes(s, manifest, {
-          idx: destLanes,
+          laneId: destLanes,
           hasCapacity: card.owner,
-          not: { idx: card.lane },
+          not: { laneId: card.lane },
         });
         if (filtered.length === 0) continue;
         const toLane = filtered.length === 1 ? filtered[0] : subRng.pick(filtered);
@@ -789,6 +790,28 @@ export function evalEffect(
       if (!defId) return { events: [], state };
       const newId = mintCardId(ctx.rng.fork('id'));
       const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
+      const setCreatedCost = (
+        currentState: MatchState,
+        precedingEvents: MatchEvent[],
+      ): EvalResult => {
+        if (!effect.setCost) return { events: precedingEvents, state: currentState };
+        const desiredCost = Math.max(
+          0,
+          Math.floor(evalNum(effect.setCost, { ...liveCtx, state: currentState })),
+        );
+        const delta = desiredCost - getCardCost(currentState, newId, manifest);
+        if (delta === 0) return { events: precedingEvents, state: currentState };
+        const costEvent: MatchEvent = {
+          type: 'CARD_COST_CHANGED',
+          cardId: newId,
+          delta,
+          cause: ctx.source,
+        };
+        return {
+          events: [...precedingEvents, costEvent],
+          state: apply(currentState, costEvent, manifest),
+        };
+      };
 
       switch (effect.destination.kind) {
         case 'HAND': {
@@ -803,7 +826,7 @@ export function evalEffect(
           let s = apply(state, e, manifest);
           const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.fork('debuff'), manifest);
           s = debuff.state;
-          return { events: [e, ...debuff.events], state: s };
+          return setCreatedCost(s, [e, ...debuff.events]);
         }
 
         case 'DECK': {
@@ -815,14 +838,14 @@ export function evalEffect(
             spawnSource,
             position: effect.destination.position,
           };
-          return { events: [e], state: apply(state, e, manifest) };
+          return setCreatedCost(apply(state, e, manifest), [e]);
         }
 
         case 'LANE': {
           const lanes = selectLanes(effect.destination.lane, liveCtx);
           if (lanes.length === 0) return { events: [], state };
           const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
-          if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return { events: [], state };
+          if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return { events: [], state };
           const e: MatchEvent = {
             type: 'CARD_ADDED_TO_LANE',
             owner,
@@ -831,9 +854,9 @@ export function evalEffect(
             defId,
             spawnSource,
           };
-          const s = apply(state, e, manifest);
+          const created = setCreatedCost(apply(state, e, manifest), [e]);
           const locTrig = fireLocationTrigger(
-            s,
+            created.state,
             lane,
             'onCardEnteredHere',
             ctx.rng.fork(`locEnteredCreate:${newId}`),
@@ -841,7 +864,7 @@ export function evalEffect(
             newId,
             owner,
           );
-          return { events: [e, ...locTrig.events], state: locTrig.state };
+          return { events: [...created.events, ...locTrig.events], state: locTrig.state };
         }
 
         default:
@@ -861,7 +884,7 @@ export function evalEffect(
           const lanes = selectLanes(effect.destination.lane, { ...liveCtx, state: s });
           if (lanes.length === 0) continue;
           const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork(`moveZone:${id}`).pick(lanes);
-          if (s.lanes[lane].cards[card.owner].length >= manifest.constants.laneCapacity) continue;
+          if (s.lanesById[lane].cards[card.owner].length >= manifest.constants.laneCapacity) continue;
           const e: MatchEvent = {
             type: 'CARD_MOVED_TO_ZONE',
             cardId: id,
@@ -910,7 +933,7 @@ export function evalEffect(
       const lanes = selectLanes(effect.to, liveCtx);
       if (lanes.length === 0) return { events: [], state };
       const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
-      if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) {
+      if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) {
         return { events: [], state };
       }
       const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.fork('pool'), ctx.eventOwner ?? null);
@@ -954,7 +977,7 @@ export function evalEffect(
         const card = s.cards[id];
         if (!card) continue;
         const candidates = findLanes(s, manifest, {
-          idx: lanes,
+          laneId: lanes,
           hasCapacity: card.owner,
         });
         if (candidates.length === 0) continue;
@@ -1069,9 +1092,9 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const lane of lanes) {
-        const prev = s.lanes[lane].location;
+        const prev = locationCardAtLane(s, lane);
         if (!prev) continue;
-        const newId = `loc-${lane}-${ctx.rng.fork(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationId;
+        const newId = `loc-${lane}-${ctx.rng.fork(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId;
         const e: MatchEvent = {
           type: 'LOCATION_REPLACED',
           lane,
@@ -1079,6 +1102,7 @@ export function evalEffect(
           newId,
           newDefId: effect.newDefId,
           cause: ctx.source,
+          oldDestination: 'DISCARD',
           revealed: false,
         };
         events.push(e);
@@ -1419,7 +1443,7 @@ function isFriendlyDestroyBlocked(
  */
 function spawnSourceForSource(source: EffectRef, toOurSide: boolean): SpawnSource {
   if (source.effectKind === 'LOCATION') {
-    return { kind: 'LOCATION_CREATED', sourceLocationId: source.sourceId as import('../types/ids').LocationId };
+    return { kind: 'LOCATION_CREATED', sourceLocationId: source.sourceId as import('../types/ids').LocationCardInstanceId };
   }
   const sourceCardId = source.sourceId as CardId;
   return toOurSide

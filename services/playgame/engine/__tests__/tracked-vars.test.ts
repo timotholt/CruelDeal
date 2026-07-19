@@ -12,6 +12,11 @@ import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { MatchState, CardInstance } from '../types/state';
 import type { CardId, Owner } from '../types/ids';
 import type { MatchEvent } from '../types/events';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+} from '../testkit/runtimeFixture';
 
 // ---- Minimal manifest (no card effects needed) ----------------------------
 
@@ -47,7 +52,7 @@ const SYSTEM_SOURCE = {
 function baseState(): MatchState {
   const c1 = mkCard('c1', 'P0');
   const c2 = mkCard('c2', 'P1');
-  return {
+  return emptyTestMatchState({
     turn: 3,
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -58,24 +63,26 @@ function baseState(): MatchState {
     deck: { P0: [], P1: [] },
     hand: { P0: [], P1: [] },
     cards: { c1, c2 } as Record<CardId, CardInstance>,
-    lanes: [
-      { idx: 0, location: null, locationRevealed: false, cards: { P0: ['c1' as CardId], P1: ['c2' as CardId] } },
-      { idx: 1, location: null, locationRevealed: false, cards: { P0: [], P1: [] } },
-      { idx: 2, location: null, locationRevealed: false, cards: { P0: [], P1: [] } },
-    ],
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
+    lanesById: testLaneRegistry([
+      testLaneState(0, { P0: ['c1' as CardId], P1: ['c2' as CardId] }),
+      testLaneState(1),
+      testLaneState(2),
+    ]),
     trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+  });
 }
 
 function run(state: MatchState, ...events: MatchEvent[]): MatchState {
-  return events.reduce((s, e) => apply(s, e, MANIFEST), state);
+  return events.reduce((current, event) => {
+    const prepared = event.type === 'TURN_ENDED' && current.phase !== 'RESOLVING'
+      ? apply(
+          current,
+          { type: 'TURN_RESOLUTION_STARTED', turn: current.turn },
+          MANIFEST,
+        )
+      : current;
+    return apply(prepared, event, MANIFEST);
+  }, state);
 }
 
 // ---- CARD_DESTROYED --------------------------------------------------------

@@ -12,7 +12,7 @@
  * match from a different version (spec §3.5).
  */
 
-import type { LocationDef, Manifest } from './types';
+import type { LocationCardDef, Manifest } from './types';
 import { loadCardsFromSets } from './card-set-loader';
 import { DISABLED_LOCATION_IDS, LOCATIONS_INDEX } from './content/locations';
 
@@ -56,7 +56,7 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     },
   },
   cards: loadCardsFromSets(['core-v1']),
-  locations: byDefId<LocationDef>(LOCATIONS_INDEX),
+  locations: byDefId<LocationCardDef>(LOCATIONS_INDEX),
   disabled: {
     cards: [],
     locations: DISABLED_LOCATION_IDS,

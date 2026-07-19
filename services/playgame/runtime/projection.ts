@@ -53,35 +53,68 @@ export interface ProjectedTransaction {
   readonly [transactionPayload]: TrustedProjectedTransactionPayload;
 }
 
-/** Plan-name compatibility while projected payload policy remains deferred. */
-export type SeatBootstrap = ProjectedBootstrap;
-export type SeatMatchState = ProjectedState;
-
-/**
- * TRUSTED LOCAL PASS-THROUGH — the only projection implementation in CP1.
- * It performs no redaction. Hidden-information policy and serialization are
- * deferred; normal APIs still receive only the opaque ProjectedBootstrap type.
- */
-export function projectBootstrapForTrustedLocalPlay(
+export function projectBootstrapForSeat(
   bootstrap: MatchBootstrap,
   viewerSeat: Seat = bootstrap.viewerSeat,
 ): ProjectedBootstrap {
+  const projectedBootstrap: MatchBootstrap = {
+    ...bootstrap,
+    viewerSeat,
+    decks: {
+      ...bootstrap.decks,
+      LOCATIONS: {
+        ...bootstrap.decks.LOCATIONS,
+        entries: [],
+        contentHash: '',
+      },
+    },
+  };
   return {
     kind: 'projected-bootstrap',
     viewerSeat,
-    [bootstrapPayload]: bootstrap,
+    [bootstrapPayload]: projectedBootstrap,
   };
 }
 
-/** TRUSTED LOCAL PASS-THROUGH — performs no redaction and does not clone. */
-export function projectStateForTrustedLocalPlay(
+/**
+ * Seat-safe location projection. Card-hand policy remains a later checkpoint;
+ * this function closes the complete location identity/order surface now.
+ */
+export function projectStateForSeat(
   state: MatchState,
   viewerSeat: Seat,
 ): ProjectedState {
+  const locationCards = Object.fromEntries(
+    Object.values(state.locationCards).map((location) => {
+      const canKnowIdentity = location.face === 'FACE_UP'
+        || location.identityKnownTo.includes(viewerSeat);
+      return [
+        location.id,
+        canKnowIdentity
+          ? location
+          : {
+              ...location,
+              defId: '',
+              sourceDeckEntry: -1,
+              tags: [],
+              counters: {},
+            },
+      ];
+    }),
+  ) as MatchState['locationCards'];
+  const hiddenDrawOrder = [...state.locationDeck.drawPile].sort();
+  const projectedState: MatchState = {
+    ...state,
+    locationCards,
+    locationDeck: {
+      ...state.locationDeck,
+      drawPile: hiddenDrawOrder,
+    },
+  };
   return {
     kind: 'projected-state',
     viewerSeat,
-    [statePayload]: state,
+    [statePayload]: projectedState,
   };
 }
 
@@ -113,12 +146,11 @@ export function projectTransactionForTrustedLocalPlay(
 }
 
 /** Explicit trusted/debug escape hatch; never expose through a player API. */
-export function readTrustedLocalBootstrap(projected: ProjectedBootstrap): MatchBootstrap {
+export function readProjectedBootstrap(projected: ProjectedBootstrap): MatchBootstrap {
   return projected[bootstrapPayload];
 }
 
-/** Explicit trusted/debug escape hatch; never expose through a player API. */
-export function readTrustedLocalState(projected: ProjectedState): MatchState {
+export function readProjectedState(projected: ProjectedState): MatchState {
   return projected[statePayload];
 }
 

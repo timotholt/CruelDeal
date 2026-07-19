@@ -33,7 +33,7 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardPositionCriteria } from '../types/cardPosition';
 import { getCardPower } from './power';
 import { isPowerBearingDef } from './power-bearing';
-import { activeLaneIds, isActiveLane } from '../laneTopology';
+import { activeLaneIds, isActiveLane, locationCardAtLane } from '../laneTopology';
 import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
 import { matchesCardPosition } from './cardPosition';
 
@@ -413,7 +413,7 @@ export function matchesCardDef(
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface LaneFilter {
-  idx?: LaneId | readonly LaneId[];
+  laneId?: LaneId | readonly LaneId[];
 
   hasCapacity?: boolean | Owner;
   isFull?: boolean | Owner;
@@ -425,7 +425,7 @@ export interface LaneFilter {
   );
   containsCard?: CardFilter;
 
-  locationRevealed?: boolean;
+  locationFace?: 'FACE_DOWN' | 'FACE_UP';
   hasLocation?: StringComparison;
   locationTag?: LaneTag['kind'] | readonly LaneTag['kind'][];
 
@@ -435,21 +435,22 @@ export interface LaneFilter {
 }
 
 export function matchesLane(
-  idx: LaneId,
+  laneId: LaneId,
   filter: LaneFilter,
   state: MatchState,
   manifest: Manifest,
 ): boolean {
-  const lane = state.lanes[idx];
-  if (!lane || !isActiveLane(state, idx)) return false;
+  const lane = state.lanesById[laneId];
+  if (!lane || !isActiveLane(state, laneId)) return false;
+  const location = locationCardAtLane(state, laneId);
   const cap = manifest.constants.laneCapacity;
   const playerCount = lane.cards.P0.length;
   const oppCount = lane.cards.P1.length;
   const total = playerCount + oppCount;
 
-  if (filter.idx !== undefined) {
-    const idxs = arrayOrOne(filter.idx);
-    if (!idxs.includes(idx)) return false;
+  if (filter.laneId !== undefined) {
+    const laneIds = arrayOrOne(filter.laneId);
+    if (!laneIds.includes(laneId)) return false;
   }
 
   // hasCapacity / isFull / isEmpty — boolean OR Owner variants
@@ -497,28 +498,31 @@ export function matchesLane(
     if (!hit) return false;
   }
 
-  if (filter.locationRevealed !== undefined && lane.locationRevealed !== filter.locationRevealed) return false;
+  if (
+    filter.locationFace !== undefined
+    && location?.face !== filter.locationFace
+  ) return false;
   if (filter.hasLocation !== undefined) {
-    if (!lane.location || !matchesString(lane.location.defId, filter.hasLocation)) return false;
+    if (!location || !matchesString(location.defId, filter.hasLocation)) return false;
   }
   if (filter.locationTag !== undefined) {
     const tagKinds = arrayOrOne(filter.locationTag);
-    const tags = lane.location?.tags ?? [];
+    const tags = location?.tags ?? [];
     const hit = tagKinds.some((k) => tags.some((t) => t.kind === k));
     if (!hit) return false;
   }
 
   if (filter.and !== undefined) {
     for (const sub of filter.and) {
-      if (!matchesLane(idx, sub, state, manifest)) return false;
+      if (!matchesLane(laneId, sub, state, manifest)) return false;
     }
   }
   if (filter.or !== undefined && filter.or.length > 0) {
-    const hit = filter.or.some((sub) => matchesLane(idx, sub, state, manifest));
+    const hit = filter.or.some((sub) => matchesLane(laneId, sub, state, manifest));
     if (!hit) return false;
   }
   if (filter.not !== undefined) {
-    if (matchesLane(idx, filter.not, state, manifest)) return false;
+    if (matchesLane(laneId, filter.not, state, manifest)) return false;
   }
 
   return true;

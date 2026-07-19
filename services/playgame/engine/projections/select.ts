@@ -383,7 +383,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       return ids.some(id => {
         const c = ctx.state.cards[id];
         if (!c || c.lane === null) return false;
-        const lane = ctx.state.lanes[c.lane];
+        const lane = ctx.state.lanesById[c.lane];
         return lane.cards[c.owner].length >= 4;
       });
     }
@@ -393,7 +393,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       // ctx.selfOwner's slots in that lane are full (>= 4 cards).
       const lane = resolveLaneOf(pred.laneOf, ctx);
       if (lane === null) return false;
-      const laneState = ctx.state.lanes[lane];
+      const laneState = ctx.state.lanesById[lane];
       if (ctx.selfOwner === null) return false;
       return laneState.cards[ctx.selfOwner].length >= 4;
     }
@@ -461,7 +461,7 @@ function collectInLane(
   lane: LaneId,
   ownerFilter: OwnerFilter,
 ): CardId[] {
-  const laneState = ctx.state.lanes[lane];
+  const laneState = ctx.state.lanesById[lane];
   const out: CardId[] = [];
   for (const owner of ['P0', 'P1'] as const) {
     if (!ownerMatches(ownerFilter, ctx.selfOwner, owner, ctx.eventOwner ?? null)) continue;

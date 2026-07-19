@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import type { CardAbilities } from '../manifest/types';
 import type { EffectExpr, OngoingExpr } from '../types/ability';
-import type { CardId, LocationId } from '../types/ids';
-import { EMPTY_TRACKED_VARIABLES, type CardInstance, type MatchState } from '../types/state';
+import type { CardId } from '../types/ids';
+import { type CardInstance, type MatchState } from '../types/state';
 import { CARD_ABILITY_SLOTS, hasAnyCardAbility } from './abilityPresence';
 import { getCardPower } from './power';
 import { findCards } from './query';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+  withTestLocation,
+} from '../testkit/runtimeFixture';
 
 const effect: EffectExpr = {
   kind: 'CALL_BUILTIN',
@@ -45,56 +51,19 @@ function civilCourtState(): MatchState {
   const riot = card('riot' as CardId, 'riot-squad', 2);
   const junk = card('junk' as CardId, 'junk-card');
 
-  return {
+  const base = emptyTestMatchState({
     turn: 2,
     maxEnergy: { P0: 2, P1: 2 },
-    nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT',
     seed: 'civil-court-no-ability-regression',
-    priority: 'P0',
     energy: { P0: 2, P1: 2 },
-    deck: { P0: [], P1: [] },
-    hand: { P0: [], P1: [] },
     cards: { [riot.id]: riot, [junk.id]: junk },
-    lanes: [
-      {
-        idx: 0,
-        status: 'ACTIVE',
-        location: {
-          id: 'civil-court@0' as LocationId,
-          defId: 'civil-court',
-          lane: 0,
-          tags: [],
-        },
-        locationRevealed: true,
-        cards: { P0: [riot.id, junk.id], P1: [] },
-      },
-      {
-        idx: 1,
-        status: 'ACTIVE',
-        location: null,
-        locationRevealed: false,
-        cards: { P0: [], P1: [] },
-      },
-      {
-        idx: 2,
-        status: 'ACTIVE',
-        location: null,
-        locationRevealed: false,
-        cards: { P0: [], P1: [] },
-      },
-    ],
-    activeLaneOrder: [0, 1, 2],
-    nextLaneId: 3,
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
-    trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+    lanesById: testLaneRegistry([
+      testLaneState(0, { P0: [riot.id, junk.id], P1: [] }),
+      testLaneState(1),
+      testLaneState(2),
+    ]),
+  });
+  return withTestLocation(base, 0, 'civil-court', true);
 }
 
 describe('canonical ability presence', () => {

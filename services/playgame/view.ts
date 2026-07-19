@@ -20,6 +20,7 @@ import {
   getCardPowerModifiers,
   getLanePower as getEngineLanePower,
 } from './engine/projections';
+import { laneById, locationCardAtLane } from './engine/laneTopology';
 import { newShortId } from '@/utils/id';
 
 // ── UI-only sidecar state (re-exported here to avoid a circular dep between
@@ -175,7 +176,7 @@ export function getLaneCardsForSeat(
   seat: Seat,
   manifest: Manifest,
 ): ResolvedCard[] {
-  return state.lanes[laneIdx].cards[seat]
+  return (laneById(state, laneIdx)?.cards[seat] ?? [])
     .map((id) => resolveCard(id, state, manifest))
     .filter((c): c is ResolvedCard => c !== null);
 }
@@ -197,21 +198,22 @@ export function getLocation(
   state: EngineMatchState,
   laneIdx: LaneId,
   manifest: Manifest,
+  viewerSeat: Seat,
 ): ResolvedLocation {
-  const lane = state.lanes[laneIdx];
-  const locInst = lane.location;
+  const locInst = locationCardAtLane(state, laneIdx);
   const def = locInst ? manifest.locations[locInst.defId] : null;
-  const revealed = lane.locationRevealed;
+  const identityKnown = Boolean(
+    locInst
+    && (locInst.face === 'FACE_UP' || locInst.identityKnownTo.includes(viewerSeat)),
+  );
 
-  const mapArt = def?.cosmetic.art.map.path ?? null;
-
-  if (!locInst || !def || !revealed) {
+  if (!locInst || !def || !identityKnown) {
     return {
-      defId: locInst?.defId ?? '',
+      defId: '',
       name: '???',
       desc: '',
-      art: def?.cosmetic.accent ?? '#2d3748',
-      mapArt,
+      art: '#2d3748',
+      mapArt: null,
       revealed: false,
     };
   }
@@ -220,8 +222,8 @@ export function getLocation(
     name: def.cosmetic.displayName,
     desc: def.cosmetic.description,
     art: def.cosmetic.accent ?? '#2d3748',
-    mapArt,
-    revealed: true,
+    mapArt: def.cosmetic.art.map.path,
+    revealed: locInst.face === 'FACE_UP',
   };
 }
 

@@ -49,7 +49,7 @@ function mintCardId(ctx: EffectCtx, salt: string): CardId {
 
 function spawnSource(ctx: EffectCtx, forOwner: Owner): SpawnSource {
   if (ctx.source.effectKind === 'LOCATION') {
-    return { kind: 'LOCATION_CREATED', sourceLocationId: ctx.source.sourceId as import('../types/ids').LocationId };
+    return { kind: 'LOCATION_CREATED', sourceLocationId: ctx.source.sourceId as import('../types/ids').LocationCardInstanceId };
   }
   const sourceCardId = ctx.source.sourceId as CardId;
   return forOwner === ctx.selfOwner
@@ -329,7 +329,7 @@ function overclockChip(
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
 
-  const friendliesHere = state.lanes[ctx.selfLane].cards[owner]
+  const friendliesHere = state.lanesById[ctx.selfLane].cards[owner]
     .filter(id => id !== (ctx.self as CardId) && isPowerBearingCard(state, id, manifest));
   if (friendliesHere.length === 0) return noop(state);
 
@@ -374,12 +374,12 @@ function moveEnemyCardToOtherLane(
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
   const oppOwner: Owner = owner === 'P0' ? 'P1' : 'P0';
-  const enemiesHere = state.lanes[ctx.selfLane].cards[oppOwner];
+  const enemiesHere = state.lanesById[ctx.selfLane].cards[oppOwner];
   if (enemiesHere.length === 0) return noop(state);
 
   const targetId = ctx.rng.fork('target').pick([...enemiesHere]);
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
-    state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
+    state.lanesById[l].cards[oppOwner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
@@ -402,7 +402,7 @@ function moveSelfToRandomOtherLane(
   if (!self || owner === null || ctx.selfLane === null) return noop(state);
 
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
-    state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
+    state.lanesById[l].cards[owner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
@@ -423,13 +423,13 @@ function moveRandomFriendlyToOtherLane(
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
 
-  const others = state.lanes[ctx.selfLane].cards[owner]
+  const others = state.lanesById[ctx.selfLane].cards[owner]
     .filter(id => id !== (ctx.self as CardId));
   if (others.length === 0) return noop(state);
 
   const targetId = ctx.rng.fork('target').pick([...others]);
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
-    state.lanes[l].cards[owner].length < manifest.constants.laneCapacity,
+    state.lanesById[l].cards[owner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
@@ -451,7 +451,7 @@ function moveLowestPowerEnemyToOtherLane(
   if (owner === null || ctx.selfLane === null) return noop(state);
   const oppOwner: Owner = owner === 'P0' ? 'P1' : 'P0';
 
-  const enemies = state.lanes[ctx.selfLane].cards[oppOwner]
+  const enemies = state.lanesById[ctx.selfLane].cards[oppOwner]
     .filter(id => isPowerBearingCard(state, id, manifest));
   if (enemies.length === 0) return noop(state);
 
@@ -461,7 +461,7 @@ function moveLowestPowerEnemyToOtherLane(
   const targetId = sorted[0];
 
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
-    state.lanes[l].cards[oppOwner].length < manifest.constants.laneCapacity,
+    state.lanesById[l].cards[oppOwner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
@@ -540,8 +540,8 @@ function disableOngoingsThisLaneThisTurn(
   const sourceId = ctx.self as CardId;
 
   const allInLane: CardId[] = [
-    ...state.lanes[ctx.selfLane].cards.P0,
-    ...state.lanes[ctx.selfLane].cards.P1,
+    ...state.lanesById[ctx.selfLane].cards.P0,
+    ...state.lanesById[ctx.selfLane].cards.P1,
   ];
 
   const events: MatchEvent[] = [];
@@ -579,7 +579,7 @@ function spawnTokenInLane(
   defId: string,
   salt: string,
 ): BuiltinResult {
-  if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
+  if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
   const cardId = mintCardId(ctx, salt);
   const event: MatchEvent = {
     type: 'CARD_ADDED_TO_LANE',
@@ -731,7 +731,7 @@ function corporateClimber(
   const lane = ctx.selfLane;
   const self = ctx.self as CardId;
   if (owner === null || lane === null || !self) return noop(state);
-  const victims = state.lanes[lane].cards[owner].filter(id => id !== self);
+  const victims = state.lanesById[lane].cards[owner].filter(id => id !== self);
   if (victims.length === 0) return noop(state);
   const gainedPower = victims
     .filter(id => isPowerBearingCard(state, id, manifest))
@@ -762,7 +762,7 @@ function traumaTeam(
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
   if (owner === null || lane === null) return noop(state);
-  if (state.lanes[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
+  if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
 
   let turn = 1;
   const destroyedLastTurn: CardId[] = [];
@@ -796,8 +796,8 @@ function socialWorker(
   const self = ctx.self as CardId;
   if (owner === null || lane === null || !self) return noop(state);
   const targets = [
-    ...state.lanes[lane].cards.P0,
-    ...state.lanes[lane].cards.P1,
+    ...state.lanesById[lane].cards.P0,
+    ...state.lanesById[lane].cards.P1,
   ].filter(id => id !== self);
 
   const events: MatchEvent[] = [];

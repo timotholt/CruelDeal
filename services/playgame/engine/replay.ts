@@ -194,9 +194,11 @@ function assertReplayInitialState(initialState: MatchState, manifest: Manifest):
       );
     }
   }
-  for (const lane of initialState.lanes) {
-    if (lane.location && !manifest.locations[lane.location.defId]) {
-      throw new Error(`Replay initialState references missing location def "${lane.location.defId}" at lane ${lane.idx}`);
+  for (const location of Object.values(initialState.locationCards)) {
+    if (!manifest.locations[location.defId]) {
+      throw new Error(
+        `Replay initialState references missing location def "${location.defId}" for location ${location.id}`,
+      );
     }
   }
 }

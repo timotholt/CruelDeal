@@ -14,7 +14,7 @@
  *     TRACKED_STAT / TRACKED_FLAG DSL atoms read from it at eval time.
  */
 
-import type { CardId, LocationId, Owner } from './ids';
+import type { CardId, LocationCardInstanceId, Owner } from './ids';
 import type { CardType } from '../manifest/types';
 import type { CardPositionCriteria } from './cardPosition';
 
@@ -210,7 +210,14 @@ export type EffectExpr =
   | { kind: 'MOVE'; target: Selector; to: Selector }
   | { kind: 'DRAW'; owner: OwnerRef; count: NumExpr }
   | { kind: 'DISCARD'; target: Selector }
-  | { kind: 'CREATE_CARD_IN_ZONE'; pool: PoolRef; owner: OwnerRef; destination: CardDestination }
+  | {
+      kind: 'CREATE_CARD_IN_ZONE';
+      pool: PoolRef;
+      owner: OwnerRef;
+      destination: CardDestination;
+      /** Permanently adjust the created card so its visible cost equals this value. */
+      setCost?: NumExpr;
+    }
   | { kind: 'MOVE_CARD_TO_ZONE'; target: Selector; destination: CardDestination }
   | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
   | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
@@ -381,7 +388,7 @@ export type PendingEffectSpec =
 // ---- Effect provenance (emitted on every mutation event) -------------------
 
 export interface EffectRef {
-  sourceId: CardId | LocationId;
+  sourceId: CardId | LocationCardInstanceId;
   effectKind: 'ON_REVEAL' | 'ONGOING' | 'LOCATION' | 'SYSTEM';
   exprIdx?: number;
   systemReason?: string;

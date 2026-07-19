@@ -10,6 +10,7 @@ import type { CardDef, Manifest } from './manifest/types';
 import type { CardInstance, LaneState, MatchState } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneId, Owner } from './types/ids';
+import { testLaneRegistry, testLaneState } from './testkit/runtimeFixture';
 
 // ── Shim ────────────────────────────────────────────────────────────────────
 let failures = 0;
@@ -43,9 +44,7 @@ const mkManifest = (cards: CardDef[], disabled: string[] = []): Manifest => ({
   disabled: { cards: disabled, locations: [] },
 });
 
-const blankLane = (i: LaneId): LaneState => ({
-  idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] },
-});
+const blankLane = (i: LaneId): LaneState => testLaneState(i);
 
 interface CardSpec {
   id?: string;
@@ -84,7 +83,14 @@ const buildState = (
   return {
     turn: 3, maxEnergy: { P0: 3, P1: 3 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
-    energy: eMap, deck, hand, cards, lanes,
+    energy: eMap, deck, hand, cards,
+    lanesById: testLaneRegistry(lanes),
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
+    locationCards: {},
+    locationDeck: {
+      drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
+    },
     pending: [], stagingOrder: [], pendingEffects: [], log: [],
     lastPlayedBy: { P0: null, P1: null }, result: null,
     energyLog: { P0: [], P1: [] },

@@ -99,7 +99,7 @@ export interface LocationAbilities {
   onCardDestroyedHere?: EffectExpr[];
 }
 
-export interface LocationDef {
+export interface LocationCardDef {
   defId: string;
   version: number;
   name: string;
@@ -175,7 +175,7 @@ export interface Manifest {
   constants: MatchConstants;
   rulesets: Readonly<Record<string, MatchRuleset>>;
   cards: Readonly<Record<string, CardDef>>;             // defId → def
-  locations: Readonly<Record<string, LocationDef>>;     // defId → def
+  locations: Readonly<Record<string, LocationCardDef>>; // defId → def
   disabled: {
     cards: readonly string[];
     locations: readonly string[];

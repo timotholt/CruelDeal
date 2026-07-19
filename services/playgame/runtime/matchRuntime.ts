@@ -16,6 +16,7 @@ import {
   assertProtocolPayload,
   validateIntentEnvelopeWire,
 } from '../protocol';
+import { projectStateForSeat, readProjectedState } from './projection';
 import type {
   AcceptedIntentResult,
   CommittedIntentIdentity,
@@ -428,7 +429,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   };
 
   const enqueueAiTurn = (seat: Seat): void => {
-    const aiState = foldPlannedStages(seat);
+    const authoritativeAiState = foldPlannedStages(seat);
+    const aiState = readProjectedState(
+      projectStateForSeat(authoritativeAiState, seat),
+    );
     const plays = planEnemyTurnFromHand(
       aiState,
       seat,

@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { ReplayStep } from '../engine/replay';
-import type { CardId, LocationId } from '../engine/types/ids';
+import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import { GENESIS_FRAME, asFrame } from '../engine/types/timeline';
+import { locationCardAtLane } from '../engine/laneTopology';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
@@ -19,7 +20,7 @@ const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST,
   P1: [{ defId: 'bone-market' }],
 });
 const cardId = state.deck.P0[0].id;
-const location = state.lanes[0].location!;
+const location = locationCardAtLane(state, 0)!;
 
 const step = (event: MatchEvent): ReplayStep => ({
   cursor: 1,
@@ -51,15 +52,23 @@ describe('replay debug presentation', () => {
       `${location.id} (${BOOTSTRAP_MANIFEST.locations[location.defId].name})`,
     );
     expect(names.cardLabel(state, 'missing-card' as CardId)).toBe('missing-card');
-    expect(names.locationLabel(state, 'missing-location' as LocationId)).toBe('missing-location');
+    expect(names.locationLabel(state, 'missing-location' as LocationCardInstanceId)).toBe('missing-location');
 
     const stateAfterRemoval = {
       ...state,
-      lanes: [
-        { ...state.lanes[0], location: null },
-        state.lanes[1],
-        state.lanes[2],
-      ] as const,
+      lanesById: {
+        ...state.lanesById,
+        0: {
+          ...state.lanesById[0],
+          locationSlot: {
+            ...state.lanesById[0].locationSlot,
+            locationCardId: null,
+          },
+        },
+      },
+      locationCards: Object.fromEntries(
+        Object.entries(state.locationCards).filter(([id]) => id !== location.id),
+      ) as typeof state.locationCards,
     };
     const historicalNames = createReplayNameResolver([
       ...steps,
@@ -110,8 +119,9 @@ describe('replay debug presentation', () => {
       type: 'LOCATION_REPLACED',
       lane: 0,
       oldId: location.id,
-      newId: `ruin:${location.id}` as LocationId,
+      newId: `ruin:${location.id}` as LocationCardInstanceId,
       newDefId: 'ruin',
+      oldDestination: 'DESTROYED',
       revealed: true,
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
@@ -150,8 +160,9 @@ describe('replay debug presentation', () => {
       type: 'LOCATION_REPLACED',
       lane: 0,
       oldId: location.id,
-      newId: `ruin:${location.id}` as LocationId,
+      newId: `ruin:${location.id}` as LocationCardInstanceId,
       newDefId: 'ruin',
+      oldDestination: 'DESTROYED',
       revealed: true,
       cause: { sourceId: location.id, effectKind: 'SYSTEM' },
     }), names, actors).summary).toBe(

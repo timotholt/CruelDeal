@@ -33,7 +33,7 @@ export function isLanePowerIncreaseBlocked(
   owner: Owner,
   manifest: Manifest,
 ): boolean {
-  return state.lanes[lane].cards[owner]
+  return state.lanesById[lane].cards[owner]
     .filter(cardId => isPowerBearingCard(state, cardId, manifest))
     .some(cardId => isPowerIncreaseBlocked(state, cardId, manifest));
 }

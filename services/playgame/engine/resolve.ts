@@ -29,7 +29,7 @@ import { isRevealDelayed } from './projections/reveal';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { buildCardDrawEvents } from './draw';
-import { activeLaneIds, isActiveLane } from './laneTopology';
+import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 
 // ============================================================================
 // resolve — intent → events
@@ -74,7 +74,7 @@ function resolveStage(
   const def = manifest.cards[card.defId];
   if (!def) return reject(intent.intentId, `unknown defId ${card.defId}`);
 
-  const lane = state.lanes[intent.lane];
+  const lane = state.lanesById[intent.lane];
   if (!lane || !isActiveLane(state, intent.lane)) {
     return reject(intent.intentId, 'lane is not active');
   }
@@ -254,7 +254,7 @@ export function resolveTurn(
     const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
     for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
-        const ids = s.lanes[lane].cards[owner];
+        const ids = s.lanesById[lane].cards[owner];
         for (const id of ids) {
           const card = s.cards[id];
           if (!card || !card.revealed) continue;
@@ -497,7 +497,7 @@ export function resolveTurn(
     const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
     for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
-        const ids = s.lanes[lane].cards[owner];
+        const ids = s.lanesById[lane].cards[owner];
         for (const id of ids) {
           const card = s.cards[id];
           if (!card || !card.revealed) continue;
@@ -563,8 +563,8 @@ export function resolveTurn(
   //          `s.turn === nextTurn` now, so the lane index is `turn - 1`.
   if (s.turn <= 3) {
     const laneIdx = (s.turn - 1) as LaneId;
-    const loc = s.lanes[laneIdx].location;
-    if (loc && !s.lanes[laneIdx].locationRevealed) {
+    const loc = locationCardAtLane(s, laneIdx);
+    if (loc?.face === 'FACE_DOWN') {
       const revealEvt: MatchEvent = {
         type: 'LOCATION_REVEALED',
         lane: laneIdx,
@@ -658,7 +658,7 @@ function revealDelayedCardsAtEndOfGame(
   // effect-spawned with DELAY_REVEAL), in lane-array order.
   for (const owner of ['P0', 'P1'] as const) {
     for (const lane of activeLaneIds(s)) {
-      for (const id of s.lanes[lane].cards[owner]) {
+      for (const id of s.lanesById[lane].cards[owner]) {
         if (seenInOrder.has(id)) continue;
         const card = s.cards[id];
         if (!card || card.zone !== 'LANE' || card.revealed) continue;

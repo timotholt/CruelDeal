@@ -134,7 +134,7 @@ describe('createMatchRuntime', () => {
       expect(runtime.transactions().at(-1)).toBe(timeline.transaction);
       expect(timeline.transitions).toHaveLength(timeline.transaction.framedEvents.length);
       expect(timeline.transitions.at(-1)?.after).toBe(timeline.finalState);
-      expect(timeline.transitions[0].before.lanes[1]).toBe(timeline.transitions[0].after.lanes[1]);
+      expect(timeline.transitions[0].before.lanesById[1]).toBe(timeline.transitions[0].after.lanesById[1]);
     });
 
     const result = await runtime.submitIntent(stageEnvelope(runtime, 'atomic-publication'));
@@ -238,7 +238,11 @@ describe('createMatchRuntime', () => {
 
   it('refolds private Gun Store stages for latest, suffix, and full-turn undo without replay residue', async () => {
     const runtime = Array.from({ length: 256 }, (_, index) => runtimeFixture(`gun-store-planning-${index}`))
-      .find((candidate) => candidate.state().lanes[0].location?.defId === 'gun-store');
+      .find((candidate) => {
+        const state = candidate.state();
+        const id = state.lanesById[0].locationSlot.locationCardId;
+        return id ? state.locationCards[id]?.defId === 'gun-store' : false;
+      });
     expect(runtime).toBeDefined();
     if (!runtime) return;
 

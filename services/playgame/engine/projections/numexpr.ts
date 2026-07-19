@@ -11,6 +11,7 @@ import type { EvalCtx } from './context';
 import { select, selectLanes, evalPredicate } from './select';
 import { getCardPower } from './power';
 import { getCardCost } from './cost';
+import { locationCardAtLane } from '../laneTopology';
 
 export function evalNum(expr: NumExpr, ctx: EvalCtx): number {
   switch (expr.kind) {
@@ -43,11 +44,11 @@ export function evalNum(expr: NumExpr, ctx: EvalCtx): number {
     case 'LOCATION_COUNTER': {
       const lanes = expr.lane ? selectLanes(expr.lane, ctx) : (ctx.selfLane !== null ? [ctx.selfLane] : []);
       if (lanes.length === 0) return 0;
-      const loc = ctx.state.lanes[lanes[0]].location;
+      const loc = locationCardAtLane(ctx.state, lanes[0]);
       if (!loc) return 0;
       const owner = expr.owner ? resolveOwnerRef(expr.owner, ctx) : null;
       if (expr.owner && owner === null) return 0;
-      return loc.counters?.[counterKey(expr.name, owner)] ?? 0;
+      return loc.counters[counterKey(expr.name, owner)] ?? 0;
     }
 
     case 'IF_ELSE': {

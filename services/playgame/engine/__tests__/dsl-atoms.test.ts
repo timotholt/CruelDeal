@@ -15,6 +15,7 @@ import type { MatchState, CardInstance, TrackedVariables } from '../types/state'
 import type { CardId, Owner } from '../types/ids';
 import type { CardDef, Manifest } from '../manifest/types';
 import type { EvalCtx } from '../projections/context';
+import { emptyTestMatchState, testLaneRegistry, testLaneState } from '../testkit/runtimeFixture';
 
 // ---- Fixture helpers -------------------------------------------------------
 
@@ -74,31 +75,20 @@ function buildState(
   for (const c of cards) {
     if (c.zone === 'LANE' && c.lane === 0) lanesCards[c.owner].push(c.id);
   }
-  return {
+  return emptyTestMatchState({
     turn: 3,
     maxEnergy: { P0: 3, P1: 3 },
-    nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT',
     seed: 'test',
-    priority: 'P0',
     energy,
-    deck: { P0: [], P1: [] },
     hand,
     cards: cardMap,
-    lanes: [
-      { idx: 0, location: null, locationRevealed: false, cards: lanesCards },
-      { idx: 1, location: null, locationRevealed: false, cards: { P0: [], P1: [] } },
-      { idx: 2, location: null, locationRevealed: false, cards: { P0: [], P1: [] } },
-    ],
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
+    lanesById: testLaneRegistry([
+      testLaneState(0, lanesCards),
+      testLaneState(1),
+      testLaneState(2),
+    ]),
     trackedVariables: { ...EMPTY_TRACKED_VARIABLES, ...tv },
-  };
+  });
 }
 
 function mkManifest(defs: CardDef[]): Manifest {

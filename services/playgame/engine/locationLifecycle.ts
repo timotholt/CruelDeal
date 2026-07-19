@@ -1,13 +1,25 @@
 import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
-import type { CardId, LaneId, LocationId } from './types/ids';
+import type { CardId, LaneId, LocationCardInstanceId } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { MatchState } from './types/state';
 import type { Rng } from './rng';
 import { apply } from './apply';
-import { activeLaneIds, isActiveLane, laneStatus } from './laneTopology';
+import {
+  activeLaneIds,
+  allocatedLanes,
+  isActiveLane,
+  laneById,
+  laneStatus,
+  locationCardAtLane,
+} from './laneTopology';
 
-export { activeLaneIds, isActiveLane, laneStatus } from './laneTopology';
+export {
+  activeLaneIds,
+  isActiveLane,
+  laneStatus,
+  locationCardAtLane,
+} from './laneTopology';
 
 export const RUIN_LOCATION_DEF_ID = 'ruin';
 export const MINIMUM_ACTIVE_LANES = 1;
@@ -77,8 +89,8 @@ export function swapLocations(
   if (!isActiveLane(state, leftLaneId) || !isActiveLane(state, rightLaneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', 'both location slots must belong to active lanes');
   }
-  const left = state.lanes[leftLaneId].location;
-  const right = state.lanes[rightLaneId].location;
+  const left = locationCardAtLane(state, leftLaneId);
+  const right = locationCardAtLane(state, rightLaneId);
   if (!left || !right) {
     return rejected(state, 'LOCATION_SLOT_EMPTY', 'both location slots must be occupied');
   }
@@ -112,7 +124,7 @@ export function destroyLocationCard(
   if (!isActiveLane(state, laneId)) {
     return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
   }
-  const current = state.lanes[laneId].location;
+  const current = locationCardAtLane(state, laneId);
   if (!current) {
     return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
   }
@@ -123,9 +135,10 @@ export function destroyLocationCard(
     type: 'LOCATION_REPLACED',
     lane: laneId,
     oldId: current.id,
-    newId: `ruin:${current.id}` as LocationId,
+    newId: `ruin:${current.id}` as LocationCardInstanceId,
     newDefId: RUIN_LOCATION_DEF_ID,
     cause,
+    oldDestination: 'DESTROYED',
     revealed: true,
   };
   return accepted(apply(state, event, manifest), [event]);
@@ -182,7 +195,7 @@ export function destroyLane(
   };
   let working = apply(state, started, manifest);
   const events: MatchEvent[] = [started];
-  const lane = working.lanes[laneId];
+  const lane = laneById(working, laneId)!;
   const occupants = [...lane.cards.P0, ...lane.cards.P1];
   const destruction = options.destroyOccupants(
     working,
@@ -251,7 +264,7 @@ export interface CreateLaneOptions {
   readonly cause: EffectRef;
   readonly position: number;
   readonly locationDefId?: string;
-  readonly locationRevealed?: boolean;
+  readonly revealed?: boolean;
 }
 
 /**
@@ -274,10 +287,9 @@ export function createLane(
       `lane position must be between 0 and ${active.length}`,
     );
   }
-  const laneId = state.nextLaneId
-    ?? state.lanes.reduce((maximum, lane) => Math.max(maximum, lane.idx + 1), 0);
+  const laneId = state.nextLaneId;
   const locationDefId = options.locationDefId ?? RUIN_LOCATION_DEF_ID;
-  const locationId = `${locationDefId}@lane-${laneId}` as LocationId;
+  const locationId = `${locationDefId}@lane-${laneId}` as LocationCardInstanceId;
   const started: MatchEvent = {
     type: 'LANE_CREATION_STARTED',
     lane: laneId,
@@ -291,7 +303,7 @@ export function createLane(
     location: {
       id: locationId,
       defId: locationDefId,
-      revealed: options.locationRevealed ?? true,
+      revealed: options.revealed ?? true,
     },
     cause: options.cause,
   };
@@ -308,15 +320,15 @@ export function validateLaneTopology(state: MatchState): readonly string[] {
   if (active.length > MAXIMUM_ACTIVE_LANES) issues.push('at most three lanes may be active');
 
   for (const laneId of active) {
-    const lane = state.lanes[laneId];
+    const lane = laneById(state, laneId);
     if (!lane) issues.push(`active lane ${laneId} is missing from the lane registry`);
     else if (laneStatus(lane) !== 'ACTIVE') {
       issues.push(`active lane ${laneId} has status ${laneStatus(lane)}`);
     }
   }
-  for (const lane of state.lanes) {
-    if (laneStatus(lane) === 'DESTROYED' && active.includes(lane.idx)) {
-      issues.push(`destroyed lane ${lane.idx} remains active`);
+  for (const lane of allocatedLanes(state)) {
+    if (laneStatus(lane) === 'DESTROYED' && active.includes(lane.id)) {
+      issues.push(`destroyed lane ${lane.id} remains active`);
     }
   }
   for (const card of Object.values(state.cards)) {
@@ -325,15 +337,13 @@ export function validateLaneTopology(state: MatchState): readonly string[] {
       issues.push(`lane card ${card.id} points to a non-active lane`);
     }
   }
-  const nextLaneId = state.nextLaneId
-    ?? state.lanes.reduce((maximum, lane) => Math.max(maximum, lane.idx + 1), 0);
-  if (state.lanes.some(lane => lane.idx >= nextLaneId)) {
+  if (allocatedLanes(state).some(lane => lane.id >= state.nextLaneId)) {
     issues.push('nextLaneId must be greater than every allocated lane ID');
   }
   return issues;
 }
 
 export function laneOccupantIds(state: MatchState, laneId: LaneId): readonly CardId[] {
-  const lane = state.lanes[laneId];
+  const lane = laneById(state, laneId);
   return lane ? [...lane.cards.P0, ...lane.cards.P1] : [];
 }

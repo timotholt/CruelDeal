@@ -9,16 +9,14 @@
  *   npx tsx services/playgame/engine/projections/projections.test.ts
  */
 
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
   CardTag,
   LaneState,
-  LocationInstance,
   MatchState,
 } from '../types/state';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   getCardCost,
   getCardPower,
@@ -29,6 +27,12 @@ import {
   isOnRevealDisabled,
   getPriority,
 } from './index';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+  withTestLocation,
+} from '../testkit/runtimeFixture';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -63,7 +67,7 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-const mkLoc = (defId: string, extra: Partial<LocationDef> = {}): LocationDef => ({
+const mkLoc = (defId: string, extra: Partial<LocationCardDef> = {}): LocationCardDef => ({
   defId,
   version: 1,
   name: defId,
@@ -171,7 +175,7 @@ const CARDS: Record<string, CardDef> = {
   }),
 };
 
-const LOCS: Record<string, LocationDef> = {
+const LOCS: Record<string, LocationCardDef> = {
   empty: mkLoc('empty'),
 
   // Cathedral: ON_REVEAL_MULTIPLIER x2 ANY_OWNER.
@@ -267,7 +271,7 @@ function buildState(
   idCounter = 0;
   const cards: Record<CardId, CardInstance> = {};
   const lanesCards: [LaneState, LaneState, LaneState] = [
-    blankLane(0), blankLane(1), blankLane(2),
+    testLaneState(0), testLaneState(1), testLaneState(2),
   ];
   for (const spec of cardSpecs) {
     const id = nextId();
@@ -291,55 +295,24 @@ function buildState(
     cards[id] = inst;
     (lanesCards[spec.lane].cards[spec.owner] as CardId[]).push(id);
   }
-  for (const laneStr of Object.keys(locSpecs)) {
-    const laneIdx = Number(laneStr) as LaneId;
-    const ls = locSpecs[laneIdx]!;
-    const loc: LocationInstance = {
-      id: `loc${laneIdx}` as LocationId,
-      defId: ls.def,
-      lane: laneIdx,
-      tags: [],
-    };
-    lanesCards[laneIdx] = {
-      ...lanesCards[laneIdx],
-      location: loc,
-      locationRevealed: ls.revealed ?? true,
-    };
-  }
-  return {
+  let state = emptyTestMatchState({
     turn: opts.turn ?? 3,
     maxEnergy: { P0: 3, P1: 3 },
-    nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT',
     seed: opts.seed ?? 'test-seed',
-    priority: 'P0',
     energy: { P0: 0, P1: 0 },
-    deck: { P0: [], P1: [] },
-    hand: { P0: [], P1: [] },
     cards,
-    lanes: lanesCards,
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
-    trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
-}
-
-function blankLane(i: LaneId): LaneState {
-  return {
-    idx: i,
-    location: null,
-    locationRevealed: false,
-    cards: { P0: [], P1: [] },
-  };
+    lanesById: testLaneRegistry(lanesCards),
+  });
+  for (const laneStr of Object.keys(locSpecs)) {
+    const laneIdx = Number(laneStr) as LaneId;
+    const location = locSpecs[laneIdx]!;
+    state = withTestLocation(state, laneIdx, location.def, location.revealed ?? true);
+  }
+  return state;
 }
 
 function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
-  return state.lanes[lane].cards[owner][0];
+  return state.lanesById[lane].cards[owner][0];
 }
 
 // ============================================================================
@@ -361,8 +334,8 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'grunt',         owner: 'P0', lane: 0 },
     { def: 'grunt',         owner: 'P1',    lane: 0 },
   ]);
-  const mine = s.lanes[0].cards.P0;
-  const opp = s.lanes[0].cards.P1[0];
+  const mine = s.lanesById[0].cards.P0;
+  const opp = s.lanesById[0].cards.P1[0];
   eq(getCardCost(s, mine[0], MANIFEST), 2, 'quartermaster reduces own cost 3->2');
   eq(getCardCost(s, mine[1], MANIFEST), 1, 'quartermaster reduces friendly grunt cost 2->1');
   eq(getCardCost(s, opp, MANIFEST), 2, 'quartermaster does not reduce opponent cost');
@@ -376,7 +349,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'grunt',    owner: 'P0', lane: 0 },
     { def: 'grunt',    owner: 'P0', lane: 0 },
   ]);
-  const cards = s.lanes[0].cards.P0;
+  const cards = s.lanesById[0].cards.P0;
   eq(getCardPower(s, cards[0], MANIFEST), 5, 'sentinel card power stays 5');
   eq(getCardPower(s, cards[1], MANIFEST), 3, 'friendly grunt card power stays 3');
   eq(getCardPower(s, cards[2], MANIFEST), 3, 'second friendly grunt card power stays 3');
@@ -395,7 +368,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'skyMarshal', owner: 'P0', lane: 0 },
     { def: 'grunt',      owner: 'P0', lane: 0 },
   ]);
-  const cards = s.lanes[0].cards.P0;
+  const cards = s.lanesById[0].cards.P0;
   eq(getCardPower(s, cards[0], MANIFEST), 8, 'sky marshal does NOT buff self');
   eq(getCardPower(s, cards[1], MANIFEST), 4, 'sky marshal buffs friendly (3->4)');
 }
@@ -405,8 +378,8 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'skyMarshal', owner: 'P0', lane: 0 },
     { def: 'grunt', owner: 'P0', lane: 0 },
   ]);
-  const skyMarshal = s.lanes[0].cards.P0[0];
-  const grunt = s.lanes[0].cards.P0[1];
+  const skyMarshal = s.lanesById[0].cards.P0[0];
+  const grunt = s.lanesById[0].cards.P0[1];
   const mods = getCardPowerModifiers(s, grunt, MANIFEST);
   eq(mods.length, 1, 'getCardPowerModifiers: one active modifier on friendly grunt');
   eq(mods[0].delta, 1, 'getCardPowerModifiers: Sky Marshal contributes +1');
@@ -420,7 +393,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'sentinel', owner: 'P0', lane: 0, revealed: false },
     { def: 'grunt',    owner: 'P0', lane: 0 },
   ]);
-  const grunt = s.lanes[0].cards.P0[1];
+  const grunt = s.lanesById[0].cards.P0[1];
   eq(getCardPower(s, grunt, MANIFEST), 3, 'face-down sentinel does NOT emit ongoings');
   eq(getLanePower(s, 0, 'P0', MANIFEST), 3, 'face-down sentinel does NOT add lane power');
 }
@@ -445,7 +418,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'grunt',   owner: 'P0', lane: 0 },
     { def: 'ironMan', owner: 'P0', lane: 0 },
   ]);
-  const grunt = s.lanes[0].cards.P0[0];
+  const grunt = s.lanesById[0].cards.P0[0];
   eq(getCardPower(s, grunt, MANIFEST), 3, 'per-card power ignores Iron Man lane mult (Shang-Chi check)');
 }
 
@@ -457,8 +430,8 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'grunt', owner: 'P0', lane: 0 },
     { def: 'grunt', owner: 'P1',    lane: 0 },
   ]);
-  const myGrunt  = s.lanes[0].cards.P0[1];
-  const oppGrunt = s.lanes[0].cards.P1[0];
+  const myGrunt  = s.lanesById[0].cards.P0[1];
+  const oppGrunt = s.lanesById[0].cards.P1[0];
   eq(getOnRevealMultiplier(s, myGrunt,  MANIFEST), 2, 'Wong gives friendlies ×2 OR');
   eq(getOnRevealMultiplier(s, oppGrunt, MANIFEST), 1, 'Wong does NOT buff opponent OR');
 }
@@ -470,8 +443,8 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     [{ def: 'grunt', owner: 'P0', lane: 1 }, { def: 'grunt', owner: 'P1', lane: 1 }],
     { 1: { def: 'cathedral' } },
   );
-  const p = s.lanes[1].cards.P0[0];
-  const o = s.lanes[1].cards.P1[0];
+  const p = s.lanesById[1].cards.P0[0];
+  const o = s.lanesById[1].cards.P1[0];
   eq(getOnRevealMultiplier(s, p, MANIFEST), 2, 'Cathedral ×2 OR for P0');
   eq(getOnRevealMultiplier(s, o, MANIFEST), 2, 'Cathedral ×2 OR for P1');
 }
@@ -506,8 +479,8 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     ],
     { 0: { def: 'jungleTrail' } },
   );
-  const p0 = s.lanes[0].cards.P0[0];
-  const o0 = s.lanes[0].cards.P1[0];
+  const p0 = s.lanesById[0].cards.P0[0];
+  const o0 = s.lanesById[0].cards.P1[0];
   eq(getCardPower(s, p0, MANIFEST), 3 + 2, 'Jungle Trail: player card +2 (3 friendlies, -1 self)');
   eq(getCardPower(s, o0, MANIFEST), 3 + 0, 'Jungle Trail: lone opp card +0');
 }
@@ -553,7 +526,7 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     ],
     { 0: { def: 'citadel' } },
   );
-  const grunt = s.lanes[0].cards.P0[1];
+  const grunt = s.lanesById[0].cards.P0[1];
   eq(getOnRevealMultiplier(s, grunt, MANIFEST), 4, 'Citadel × Wong ⇒ OR multiplier = 4');
 }
 
@@ -592,9 +565,9 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
     { def: 'grunt', owner: 'P1',    lane: 0 },
     { def: 'grunt', owner: 'P0', lane: 1 },
   ]);
-  const hereP  = s.lanes[0].cards.P0[1];
-  const hereO  = s.lanes[0].cards.P1[0];
-  const other  = s.lanes[1].cards.P0[0];
+  const hereP  = s.lanesById[0].cards.P0[1];
+  const hereO  = s.lanesById[0].cards.P1[0];
+  const other  = s.lanesById[1].cards.P0[0];
   truthy(isOnRevealDisabled(s, hereP, MANIFEST),  'Cosmo disables P0 OR at this lane');
   truthy(isOnRevealDisabled(s, hereO, MANIFEST),  'Cosmo disables P1 OR at this lane');
   truthy(!isOnRevealDisabled(s, other, MANIFEST), 'Cosmo does NOT reach other lanes');

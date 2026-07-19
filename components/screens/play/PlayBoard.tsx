@@ -133,7 +133,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   const bottomLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
   const topLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
-  const laneLoc = (i: LaneId): ResolvedLocation => getLocation(presentedState(), i, manifest);
+  const laneLoc = (i: LaneId): ResolvedLocation =>
+    getLocation(presentedState(), i, manifest, localSeat);
   const bottomPower = (i: LaneId): number => getLanePower(presentedState(), i, localSeat, manifest);
   const topPower = (i: LaneId): number => getLanePower(presentedState(), i, remoteSeat, manifest);
   const bottomBreakdown = (i: LaneId): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);

@@ -3,7 +3,7 @@
   "version": 1,
   "name": "Illegal Clone",
   "basePower": 2,
-  "cost": 2,
+  "cost": 1,
   "abilities": {
     "onDestroyed": [
       {
@@ -17,6 +17,10 @@
         "owner": "SELF_OWNER",
         "destination": {
           "kind": "HAND"
+        },
+        "setCost": {
+          "kind": "LIT",
+          "n": 0
         }
       }
     ]
@@ -24,7 +28,7 @@
   "cosmetic": {
     "displayName": "ILLEGAL CLONE",
     "flavorText": "The copy protests just as loudly.",
-    "rulesText": "When Destroyed: Add a copy of this to your hand.",
+    "rulesText": "When Destroyed: Add a copy to your hand. Reduce its Cost to 0.",
     "accent": "#80ed99",
     "frame": "rare",
     "art": {

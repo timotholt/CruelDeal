@@ -112,7 +112,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
     if (zone.dataset.dropZone !== 'lane') return null;
     const laneId = Number(zone.dataset.laneId) as LaneId;
-    const lane = engineState.lanes[laneId];
+    const lane = engineState.lanesById[laneId];
     if (!isActiveLane(engineState, laneId) || !lane) return null;
     if (lane.cards[localSeat].length >= 4) return null;
     return { kind: 'lane', element: zone, laneId };

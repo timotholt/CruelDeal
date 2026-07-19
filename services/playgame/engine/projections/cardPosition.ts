@@ -13,7 +13,7 @@ export function getCardBoardPosition(
   state: MatchState,
 ): CardBoardPosition | null {
   if (card.zone !== 'LANE' || card.lane === null) return null;
-  const lane = state.lanes[card.lane];
+  const lane = state.lanesById[card.lane];
   if (!lane) return null;
 
   const index = lane.cards[card.owner].indexOf(card.id);

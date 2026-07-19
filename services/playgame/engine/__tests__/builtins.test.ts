@@ -12,9 +12,15 @@ import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
 import type { MatchState, CardInstance } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type { EffectCtx } from '../effects/evaluator';
 import type { EffectExpr } from '../types/ability';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+  withTestLocation,
+} from '../testkit/runtimeFixture';
 
 // ---- Helpers ---------------------------------------------------------------
 
@@ -27,7 +33,7 @@ function mkDef(defId: string, basePower: number, cost: number): CardDef {
   };
 }
 
-function mkLocation(defId: string, abilities: LocationDef['abilities']): LocationDef {
+function mkLocation(defId: string, abilities: LocationCardDef['abilities']): LocationCardDef {
   return {
     defId,
     version: 1,
@@ -84,7 +90,7 @@ function buildState(
     ...deckCards.P0, ...deckCards.P1,
   ];
   const cards = Object.fromEntries(all.map(c => [c.id, c])) as Record<CardId, CardInstance>;
-  return {
+  return emptyTestMatchState({
     turn: 3, maxEnergy: { P0: 5, P1: 5 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
     energy: { P0: 5, P1: 5 },
@@ -97,19 +103,16 @@ function buildState(
       P1: handCards.P1,
     },
     cards,
-    lanes: [
-      { idx: 0, location: null, locationRevealed: false, cards: {
+    lanesById: testLaneRegistry([
+      testLaneState(0, {
         P0: laneCards.P0.map(c => c.id),
         P1: laneCards.P1.map(c => c.id),
-      }},
-      { idx: 1, location: null, locationRevealed: false, cards: { P0: [], P1: [] }},
-      { idx: 2, location: null, locationRevealed: false, cards: { P0: [], P1: [] }},
-    ],
-    pending: [], stagingOrder: [], pendingEffects: [], log: [],
-    lastPlayedBy: { P0: null, P1: null }, result: null,
-    energyLog: { P0: [], P1: [] },
+      }),
+      testLaneState(1),
+      testLaneState(2),
+    ]),
     trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+  });
 }
 
 function makeCtx(
@@ -213,11 +216,11 @@ describe('CALL_BUILTIN: MOVE_SELF_TO_RANDOM_OTHER_LANE', () => {
     const state: MatchState = {
       ...base,
       cards: cardMap,
-      lanes: [
-        { idx: 0, location: null, locationRevealed: false, cards: { P0: ['self' as CardId], P1: [] } },
-        { idx: 1, location: null, locationRevealed: false, cards: { P0: l1cards.map(c => c.id), P1: [] } },
-        { idx: 2, location: null, locationRevealed: false, cards: { P0: l2cards.map(c => c.id), P1: [] } },
-      ],
+      lanesById: testLaneRegistry([
+        testLaneState(0, { P0: ['self' as CardId], P1: [] }),
+        testLaneState(1, { P0: l1cards.map(c => c.id), P1: [] }),
+        testLaneState(2, { P0: l2cards.map(c => c.id), P1: [] }),
+      ]),
     };
     const { state: after } = runBuiltin('MOVE_SELF_TO_RANDOM_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
     expect(after.cards['self' as CardId]!.lane).toBe(0); // didn't move
@@ -235,7 +238,7 @@ describe('CALL_BUILTIN: MOVE_ENEMY_CARD_TO_OTHER_LANE', () => {
     const { state: after } = runBuiltin('MOVE_ENEMY_CARD_TO_OTHER_LANE', { selector: 'RANDOM_ENEMY_HERE' }, state, manifest, 'self' as CardId, 'P0', 0);
 
     expect(after.cards['enemy' as CardId]!.lane).not.toBe(0);
-    expect(after.lanes[0].cards.P1).not.toContain('enemy');
+    expect(after.lanesById[0].cards.P1).not.toContain('enemy');
   });
 
   it('does nothing when no enemies in lane', () => {
@@ -367,21 +370,16 @@ describe('CALL_BUILTIN: SECURITY_DETAIL', () => {
       locations: { 'black-halo': blackHalo },
     };
     const base = buildState({ P0: [self], P1: [] });
-    const state: MatchState = {
-      ...base,
-      lanes: [
-        {
-          ...base.lanes[0],
-          location: { id: 'loc0' as any, defId: 'black-halo', lane: 0, tags: [] },
-          locationRevealed: true,
-        },
-        base.lanes[1],
-        base.lanes[2],
-      ],
-    };
+    const state = withTestLocation(
+      base,
+      0,
+      'black-halo',
+      true,
+      'loc0' as never,
+    );
 
     const { state: after } = runBuiltin('SECURITY_DETAIL', {}, state, manifest, 'self' as CardId, 'P0', 0);
-    const guards = after.lanes[0].cards.P0.filter(id => id !== 'self');
+    const guards = after.lanesById[0].cards.P0.filter(id => id !== 'self');
 
     expect(getCardPower(after, 'self' as CardId, manifest)).toBe(4);
     expect(guards).toHaveLength(2);

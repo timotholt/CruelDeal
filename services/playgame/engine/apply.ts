@@ -20,7 +20,7 @@ import type {
   CostLogEntry,
   EnergyLogEntry,
   LaneState,
-  LocationInstance,
+  LocationCardInstance,
   MatchLogEntry,
   MatchState,
   PendingEffect,
@@ -29,7 +29,12 @@ import type {
   SpawnSource,
   TrackedVariables,
 } from './types/state';
-import type { CardId, LaneId, Owner } from './types/ids';
+import type {
+  CardId,
+  LaneId,
+  LocationCardInstanceId,
+  Owner,
+} from './types/ids';
 import type { Manifest } from './manifest/types';
 import { currentFrame, frameSingleEvent } from './timeline';
 import { nextFrame, type FramedEvent } from './types/timeline';
@@ -55,7 +60,7 @@ export function applyFramed(
   if (framed.frame !== expected) {
     throw new Error(`applyFramed: expected frame ${expected}, received ${framed.frame}`);
   }
-  const next = applyBody(state, framed.event, _manifest);
+  const next = applyBody(state, framed.event, framed.frame, _manifest);
   // Every event is appended to the log, regardless of whether the body
   // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
   // INTENT_REJECTED) only contribute to the log.
@@ -63,7 +68,12 @@ export function applyFramed(
   return appendLog(next2, framed);
 }
 
-function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): MatchState {
+function applyBody(
+  state: MatchState,
+  event: MatchEvent,
+  eventFrame: FramedEvent['frame'],
+  manifest: Manifest,
+): MatchState {
   switch (event.type) {
     // ---- Staging / play ---------------------------------------------------
 
@@ -239,7 +249,7 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     case 'CARD_RETURNED_TO_LANE': {
       const card = state.cards[event.cardId];
       if (!card) return state;
-      if (state.lanes[event.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
+      if (state.lanesById[event.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
       let s: MatchState = state;
       if (card.lane !== null) {
         s = removeFromLane(s, card.owner, card.lane, event.cardId);
@@ -382,7 +392,7 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
             },
           };
         case 'LANE':
-          if (s.lanes[event.destination.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
+          if (s.lanesById[event.destination.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
           s = patchCard(s, event.cardId, {
             zone: 'LANE',
             lane: event.destination.lane,
@@ -418,115 +428,174 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     // ---- Location ---------------------------------------------------------
 
     case 'LOCATION_REVEALED': {
-      const lane = state.lanes[event.lane];
-      if (!lane.location || lane.location.id !== event.locationId) return state;
-      return patchLane(state, event.lane, { locationRevealed: true });
-    }
-
-    case 'LOCATION_REPLACED': {
-      const lane = state.lanes[event.lane];
-      if (!lane.location || lane.location.id !== event.oldId) return state;
-      const newLoc: LocationInstance = {
-        id: event.newId,
-        defId: event.newDefId,
-        lane: event.lane,
-        tags: [],
-      };
-      return patchLane(state, event.lane, {
-        location: newLoc,
-        locationRevealed: event.revealed,
+      const location = locationAtLane(state, event.lane);
+      if (!location || location.id !== event.locationId) return state;
+      const revealed = patchLocationCard(state, location.id, {
+        face: 'FACE_UP',
+        identityKnownTo: ['P0', 'P1'],
+        revealCount: location.revealCount + 1,
+        revealedAt: eventFrame,
+      });
+      const lane = revealed.lanesById[event.lane];
+      return patchLane(revealed, event.lane, {
+        locationSlot: {
+          ...lane.locationSlot,
+          revealAtTurn: null,
+        },
       });
     }
 
+    case 'LOCATION_REPLACED': {
+      const lane = state.lanesById[event.lane];
+      const oldLocation = locationAtLane(state, event.lane);
+      if (!lane || !oldLocation || oldLocation.id !== event.oldId) return state;
+      const newLoc: LocationCardInstance = {
+        id: event.newId,
+        defId: event.newDefId,
+        sourceDeckEntry: -1,
+        zone: 'LANE',
+        laneId: event.lane,
+        pendingLaneId: null,
+        face: event.revealed ? 'FACE_UP' : 'FACE_DOWN',
+        identityKnownTo: event.revealed ? ['P0', 'P1'] : [],
+        revealCount: event.revealed ? 1 : 0,
+        tags: [],
+        counters: {},
+        createdAt: eventFrame,
+        playedAt: eventFrame,
+        ...(event.revealed ? { revealedAt: eventFrame } : {}),
+      };
+      const withoutOld = moveLocationToZone(state, oldLocation.id, event.oldDestination);
+      return {
+        ...withoutOld,
+        locationCards: {
+          ...withoutOld.locationCards,
+          [newLoc.id]: newLoc,
+        },
+        lanesById: {
+          ...withoutOld.lanesById,
+          [event.lane]: {
+            ...lane,
+            locationSlot: {
+              ...lane.locationSlot,
+              locationCardId: newLoc.id,
+              revealAtTurn: event.revealed ? null : lane.locationSlot.revealAtTurn,
+            },
+          },
+        },
+      };
+    }
+
     case 'LOCATIONS_SWAPPED': {
-      const leftLane = state.lanes[event.left.fromLane];
-      const rightLane = state.lanes[event.right.fromLane];
+      const leftLane = state.lanesById[event.left.fromLane];
+      const rightLane = state.lanesById[event.right.fromLane];
+      const leftLocation = locationAtLane(state, event.left.fromLane);
+      const rightLocation = locationAtLane(state, event.right.fromLane);
       if (
-        !leftLane?.location
-        || !rightLane?.location
-        || leftLane.location.id !== event.left.locationId
-        || rightLane.location.id !== event.right.locationId
+        !leftLane
+        || !rightLane
+        || !leftLocation
+        || !rightLocation
+        || leftLocation.id !== event.left.locationId
+        || rightLocation.id !== event.right.locationId
         || event.left.toLane !== event.right.fromLane
         || event.right.toLane !== event.left.fromLane
       ) {
         return state;
       }
-      const leftLocation = {
-        ...leftLane.location,
-        lane: event.left.toLane,
+      return {
+        ...state,
+        lanesById: {
+          ...state.lanesById,
+          [leftLane.id]: {
+            ...leftLane,
+            locationSlot: {
+              ...leftLane.locationSlot,
+              locationCardId: rightLocation.id,
+            },
+          },
+          [rightLane.id]: {
+            ...rightLane,
+            locationSlot: {
+              ...rightLane.locationSlot,
+              locationCardId: leftLocation.id,
+            },
+          },
+        },
+        locationCards: {
+          ...state.locationCards,
+          [leftLocation.id]: { ...leftLocation, laneId: rightLane.id },
+          [rightLocation.id]: { ...rightLocation, laneId: leftLane.id },
+        },
       };
-      const rightLocation = {
-        ...rightLane.location,
-        lane: event.right.toLane,
-      };
-      const afterLeft = patchLane(state, event.left.fromLane, {
-        location: rightLocation,
-        locationRevealed: rightLane.locationRevealed,
-      });
-      return patchLane(afterLeft, event.right.fromLane, {
-        location: leftLocation,
-        locationRevealed: leftLane.locationRevealed,
-      });
     }
 
     case 'LOCATION_SHIFTED': {
-      // A pure move requires an empty destination. It may never evict an
-      // occupied location as an implicit destruction/replacement path.
-      const fromLane = state.lanes[event.fromLane];
-      const toLane = state.lanes[event.toLane];
+      const fromLane = state.lanesById[event.fromLane];
+      const toLane = state.lanesById[event.toLane];
+      const location = locationAtLane(state, event.fromLane);
       if (
-        !fromLane?.location
-        || fromLane.location.id !== event.locationId
+        !fromLane
         || !toLane
-        || toLane.location
+        || !location
+        || location.id !== event.locationId
+        || toLane.locationSlot.locationCardId !== null
       ) {
         return state;
       }
-      const loc = fromLane.location;
-      const relocated: LocationInstance = { ...loc, lane: event.toLane };
-      const s1 = patchLane(state, event.fromLane, {
-        location: null,
-        locationRevealed: false,
-      });
-      return patchLane(s1, event.toLane, {
-        location: relocated,
-        locationRevealed: fromLane.locationRevealed,
-      });
+      return {
+        ...state,
+        lanesById: {
+          ...state.lanesById,
+          [fromLane.id]: {
+            ...fromLane,
+            locationSlot: {
+              ...fromLane.locationSlot,
+              locationCardId: null,
+            },
+          },
+          [toLane.id]: {
+            ...toLane,
+            locationSlot: {
+              ...toLane.locationSlot,
+              locationCardId: location.id,
+            },
+          },
+        },
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: { ...location, laneId: toLane.id },
+        },
+      };
     }
 
     case 'LOCATION_TAG_ADDED': {
-      const lane = state.lanes[event.lane];
-      if (!lane.location) return state;
-      const exists = lane.location.tags.some(t => t.kind === event.tag.kind);
+      const location = locationAtLane(state, event.lane);
+      if (!location) return state;
+      const exists = location.tags.some(t => t.kind === event.tag.kind);
       if (exists) return state;
-      return patchLane(state, event.lane, {
-        location: { ...lane.location, tags: [...lane.location.tags, event.tag] },
+      return patchLocationCard(state, location.id, {
+        tags: [...location.tags, event.tag],
       });
     }
 
     case 'LOCATION_TAG_REMOVED': {
-      const lane = state.lanes[event.lane];
-      if (!lane.location) return state;
-      return patchLane(state, event.lane, {
-        location: {
-          ...lane.location,
-          tags: lane.location.tags.filter(t => t.kind !== event.tag),
-        },
+      const location = locationAtLane(state, event.lane);
+      if (!location) return state;
+      return patchLocationCard(state, location.id, {
+        tags: location.tags.filter(t => t.kind !== event.tag),
       });
     }
 
     case 'LOCATION_COUNTER_CHANGED': {
-      const lane = state.lanes[event.lane];
-      if (!lane.location) return state;
+      const location = locationAtLane(state, event.lane);
+      if (!location) return state;
       const key = event.owner ? `${event.owner}:${event.name}` : event.name;
-      const prev = lane.location.counters?.[key] ?? 0;
-      return patchLane(state, event.lane, {
-        location: {
-          ...lane.location,
-          counters: {
-            ...(lane.location.counters ?? {}),
-            [key]: prev + event.delta,
-          },
+      const prev = location.counters[key] ?? 0;
+      return patchLocationCard(state, location.id, {
+        counters: {
+          ...location.counters,
+          [key]: prev + event.delta,
         },
       });
     }
@@ -534,21 +603,29 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     // ---- Lane lifecycle --------------------------------------------------
 
     case 'LANE_DESTRUCTION_STARTED': {
-      const lane = state.lanes[event.lane];
+      const lane = state.lanesById[event.lane];
       if (!lane || laneStatus(lane) !== 'ACTIVE') return state;
       return patchLane(state, event.lane, { status: 'DESTROYING' });
     }
 
     case 'LANE_DESTROYED': {
-      const lane = state.lanes[event.lane];
+      const lane = state.lanesById[event.lane];
       if (!lane || laneStatus(lane) !== 'DESTROYING') return state;
       const activeLaneOrder = activeLaneIds(state).filter(id => id !== event.lane);
+      const locationId = lane.locationSlot.locationCardId;
+      const withoutLocation = locationId === null
+        ? state
+        : moveLocationToZone(state, locationId, 'DESTROYED');
       return {
-        ...patchLane(state, event.lane, {
+        ...patchLane(withoutLocation, event.lane, {
           status: 'DESTROYED',
-          location: null,
-          locationRevealed: false,
+          locationSlot: {
+            ...lane.locationSlot,
+            locationCardId: null,
+            revealAtTurn: null,
+          },
           cards: { P0: [], P1: [] },
+          destroyedAt: eventFrame,
         }),
         activeLaneOrder,
         pendingEffects: state.pendingEffects.filter(effect =>
@@ -559,23 +636,27 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
     }
 
     case 'LANE_CREATION_STARTED': {
-      if (state.lanes[event.lane]) return state;
+      if (state.lanesById[event.lane]) return state;
       const lane: LaneState = {
-        idx: event.lane,
+        id: event.lane,
         status: 'CREATING',
-        location: null,
-        locationRevealed: false,
+        locationSlot: {
+          laneId: event.lane,
+          locationCardId: null,
+          revealAtTurn: null,
+        },
         cards: { P0: [], P1: [] },
+        createdAt: eventFrame,
       };
       return {
         ...state,
-        lanes: [...state.lanes, lane],
+        lanesById: { ...state.lanesById, [event.lane]: lane },
         nextLaneId: event.lane + 1,
       };
     }
 
     case 'LANE_CREATED': {
-      const lane = state.lanes[event.lane];
+      const lane = state.lanesById[event.lane];
       if (!lane || laneStatus(lane) !== 'CREATING') return state;
       const active = activeLaneIds(state);
       const insertion = Math.min(Math.max(0, event.position), active.length);
@@ -584,18 +665,39 @@ function applyBody(state: MatchState, event: MatchEvent, manifest: Manifest): Ma
         event.lane,
         ...active.slice(insertion),
       ];
-      const location: LocationInstance = {
+      const location: LocationCardInstance = {
         id: event.location.id,
         defId: event.location.defId,
-        lane: event.lane,
+        sourceDeckEntry: -1,
+        zone: 'LANE',
+        laneId: event.lane,
+        pendingLaneId: null,
+        face: event.location.revealed ? 'FACE_UP' : 'FACE_DOWN',
+        identityKnownTo: event.location.revealed ? ['P0', 'P1'] : [],
+        revealCount: event.location.revealed ? 1 : 0,
         tags: [],
+        counters: {},
+        createdAt: eventFrame,
+        playedAt: eventFrame,
+        ...(event.location.revealed ? { revealedAt: eventFrame } : {}),
       };
       return {
-        ...patchLane(state, event.lane, {
-          status: 'ACTIVE',
-          location,
-          locationRevealed: event.location.revealed,
-        }),
+        ...state,
+        lanesById: {
+          ...state.lanesById,
+          [event.lane]: {
+            ...lane,
+            status: 'ACTIVE',
+            locationSlot: {
+              ...lane.locationSlot,
+              locationCardId: location.id,
+            },
+          },
+        },
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: location,
+        },
         activeLaneOrder,
       };
     }
@@ -709,16 +811,19 @@ function patchCard(state: MatchState, id: CardId, patch: Partial<CardInstance>):
   };
 }
 
-function patchLane(state: MatchState, idx: LaneId, patch: Partial<LaneState>): MatchState {
-  const prev = state.lanes[idx];
+function patchLane(state: MatchState, laneId: LaneId, patch: Partial<LaneState>): MatchState {
+  const prev = state.lanesById[laneId];
   if (!prev) return state;
   const next: LaneState = { ...prev, ...patch };
-  const lanes = state.lanes.map(lane => lane.idx === idx ? next : lane);
-  return { ...state, lanes };
+  return {
+    ...state,
+    lanesById: { ...state.lanesById, [laneId]: next },
+  };
 }
 
 function addToLane(state: MatchState, owner: Owner, lane: LaneId, cardId: CardId): MatchState {
-  const prev = state.lanes[lane];
+  const prev = state.lanesById[lane];
+  if (!prev) return state;
   if (prev.cards[owner].includes(cardId)) return state;
   return patchLane(state, lane, {
     cards: { ...prev.cards, [owner]: [...prev.cards[owner], cardId] },
@@ -726,7 +831,8 @@ function addToLane(state: MatchState, owner: Owner, lane: LaneId, cardId: CardId
 }
 
 function removeFromLane(state: MatchState, owner: Owner, lane: LaneId, cardId: CardId): MatchState {
-  const prev = state.lanes[lane];
+  const prev = state.lanesById[lane];
+  if (!prev) return state;
   return patchLane(state, lane, {
     cards: {
       ...prev.cards,
@@ -751,8 +857,8 @@ function removeFromHand(state: MatchState, owner: Owner, cardId: CardId): MatchS
 
 function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId): MatchState {
   let s = state;
-  for (let lane = 0; lane < s.lanes.length; lane++) {
-    s = removeFromLane(s, owner, lane as LaneId, cardId);
+  for (const laneId of Object.keys(s.lanesById).map(Number) as LaneId[]) {
+    s = removeFromLane(s, owner, laneId, cardId);
   }
   s = removeFromHand(s, owner, cardId);
   return {
@@ -782,14 +888,74 @@ function appendLog(state: MatchState, framed: FramedEvent): MatchState {
 }
 
 function laneStatus(lane: LaneState): NonNullable<LaneState['status']> {
-  return lane.status ?? 'ACTIVE';
+  return lane.status;
 }
 
 function activeLaneIds(state: MatchState): readonly LaneId[] {
-  return state.activeLaneOrder
-    ?? state.lanes
-      .filter(lane => laneStatus(lane) === 'ACTIVE')
-      .map(lane => lane.idx);
+  return state.activeLaneOrder;
+}
+
+function locationAtLane(
+  state: MatchState,
+  laneId: LaneId,
+): LocationCardInstance | null {
+  const id = state.lanesById[laneId]?.locationSlot.locationCardId;
+  return id ? state.locationCards[id] ?? null : null;
+}
+
+function patchLocationCard(
+  state: MatchState,
+  id: LocationCardInstanceId,
+  patch: Partial<LocationCardInstance>,
+): MatchState {
+  const previous = state.locationCards[id];
+  if (!previous) return state;
+  return {
+    ...state,
+    locationCards: {
+      ...state.locationCards,
+      [id]: { ...previous, ...patch },
+    },
+  };
+}
+
+function moveLocationToZone(
+  state: MatchState,
+  id: LocationCardInstanceId,
+  destination: 'DISCARD' | 'DESTROYED' | 'BANISHED',
+): MatchState {
+  const location = state.locationCards[id];
+  if (!location) return state;
+  const withoutId = (ids: readonly LocationCardInstanceId[]) =>
+    ids.filter(candidate => candidate !== id);
+  const locationDeck = {
+    drawPile: withoutId(state.locationDeck.drawPile),
+    staging: withoutId(state.locationDeck.staging),
+    discardPile: withoutId(state.locationDeck.discardPile),
+    destroyed: withoutId(state.locationDeck.destroyed),
+    banished: withoutId(state.locationDeck.banished),
+  };
+  const target = destination === 'DISCARD'
+    ? 'discardPile'
+    : destination === 'DESTROYED'
+      ? 'destroyed'
+      : 'banished';
+  return {
+    ...state,
+    locationCards: {
+      ...state.locationCards,
+      [id]: {
+        ...location,
+        zone: destination,
+        laneId: null,
+        pendingLaneId: null,
+      },
+    },
+    locationDeck: {
+      ...locationDeck,
+      [target]: [...locationDeck[target], id],
+    },
+  };
 }
 
 // ---- trackedVariables maintenance ------------------------------------------

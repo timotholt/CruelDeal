@@ -142,7 +142,7 @@ function zoneOfInstance(state: MatchState, card: CardInstance): CardZoneRef {
     }
     case 'LANE': {
       const lane = card.lane ?? 0;
-      const index = state.lanes[lane].cards[card.owner].findIndex(id => id === card.id);
+      const index = state.lanesById[lane].cards[card.owner].findIndex(id => id === card.id);
       return { kind: 'LANE', owner: card.owner, lane: lane as LaneId, ...(index >= 0 ? { index } : {}) };
     }
     case 'DISCARD':

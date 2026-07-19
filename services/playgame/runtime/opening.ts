@@ -7,6 +7,7 @@ import type { LaneId } from '../engine/types/ids';
 import type { MatchState } from '../engine/types/state';
 import { buildCardDrawEvents } from '../engine/draw';
 import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
+import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -59,12 +60,16 @@ export function buildOpeningTransaction(
     }
   }
 
-  const lane = state.lanes.findIndex((candidate) => !candidate.locationRevealed) as LaneId;
-  const location = lane >= 0 && lane <= 2 ? state.lanes[lane].location : null;
+  const lane = activeLaneIds(state).find((laneId) => {
+    const location = locationCardAtLane(state, laneId);
+    return location?.face === 'FACE_DOWN'
+      && state.lanesById[laneId].locationSlot.revealAtTurn === 1;
+  });
+  const location = lane === undefined ? null : locationCardAtLane(state, lane);
   if (location) {
     const reveal: MatchEvent = {
       type: 'LOCATION_REVEALED',
-      lane,
+      lane: lane!,
       locationId: location.id,
     };
     events.push(reveal);
@@ -78,7 +83,7 @@ export function buildOpeningTransaction(
         manifest,
         self: location.id,
         selfKind: 'location',
-        selfLane: lane,
+        selfLane: lane!,
         selfOwner: null,
         rng: locationRng.fork(`effect:${index}`),
         source: { sourceId: location.id, effectKind: 'LOCATION', exprIdx: index },

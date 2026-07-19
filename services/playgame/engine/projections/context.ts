@@ -6,17 +6,17 @@
  * state to figure out where an Ongoing came from.
  */
 
-import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
-import type { CardInstance, LocationInstance, MatchState } from '../types/state';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
+import type { CardInstance, LocationCardInstance, MatchState } from '../types/state';
 import type { OngoingExpr } from '../types/ability';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
-import { activeLaneIds } from '../laneTopology';
+import { activeLaneIds, locationCardAtLane } from '../laneTopology';
 
 /** Ongoing with its provenance resolved. */
 export interface SourcedOngoing {
   readonly sourceCardId: CardId | null;      // null for location Ongoings
-  readonly sourceLocationId: LocationId | null;
+  readonly sourceLocationId: LocationCardInstanceId | null;
   readonly sourceLane: LaneId;
   readonly sourceOwner: Owner | null;        // null for locations
   readonly expr: OngoingExpr;                // numeric params already boosted
@@ -30,7 +30,7 @@ export interface EvalCtx {
    *  selector this is the source; for per-target numeric evaluation (a
    *  POWER_ADD's delta computed against each target card) this is the
    *  target card. See spec §5.2 note on SELF semantics. */
-  readonly self: CardId | LocationId | null;
+  readonly self: CardId | LocationCardInstanceId | null;
   readonly selfKind: 'card' | 'location' | 'none';
   /** Lane in which `self` lives. Pre-resolved for both cards and
    *  locations because locations don't have a lane field reachable from
@@ -71,14 +71,14 @@ export function ctxForCard(
 export function ctxForLocation(
   state: MatchState,
   manifest: Manifest,
-  loc: LocationInstance,
+  loc: LocationCardInstance,
 ): EvalCtx {
   return {
     state,
     manifest,
     self: loc.id,
     selfKind: 'location',
-    selfLane: loc.lane,
+    selfLane: loc.laneId,
     selfOwner: null,
   };
 }
@@ -115,11 +115,11 @@ export function liveCardSources(state: MatchState): CardInstance[] {
 }
 
 /** All revealed locations currently capable of emitting Ongoings. */
-export function liveLocationSources(state: MatchState): LocationInstance[] {
-  const out: LocationInstance[] = [];
+export function liveLocationSources(state: MatchState): LocationCardInstance[] {
+  const out: LocationCardInstance[] = [];
   for (const laneId of activeLaneIds(state)) {
-    const lane = state.lanes[laneId];
-    if (lane.location && lane.locationRevealed) out.push(lane.location);
+    const location = locationCardAtLane(state, laneId);
+    if (location?.face === 'FACE_UP') out.push(location);
   }
   return out;
 }

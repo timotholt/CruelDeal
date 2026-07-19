@@ -8,7 +8,7 @@
  * multipliers (Iron Man / Science Lab / similar).
  */
 
-import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import { collectAllOngoings, ongoingsTargeting } from './ongoing';
@@ -16,13 +16,14 @@ import { ctxForCard, ctxForLocation, ctxForTargetCard, type SourcedOngoing } fro
 import { evalNum } from './numexpr';
 import { ownerMatches } from './select';
 import { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
+import { locationCardAtLane } from '../laneTopology';
 import {
   isLanePowerIncreaseBlocked,
   isPowerIncreaseBlocked,
 } from './power-restrictions';
 
 export interface PowerModifierEntry {
-  readonly sourceId: CardId | LocationId;
+  readonly sourceId: CardId | LocationCardInstanceId;
   readonly delta: number;
 }
 
@@ -36,12 +37,12 @@ export interface LaneCardContribution {
 }
 
 export interface LanePowerAddEntry {
-  readonly sourceId: CardId | LocationId;
+  readonly sourceId: CardId | LocationCardInstanceId;
   readonly delta: number;
 }
 
 export interface LanePowerMultiplierEntry {
-  readonly sourceId: CardId | LocationId;
+  readonly sourceId: CardId | LocationCardInstanceId;
   readonly factor: number;
 }
 
@@ -136,7 +137,7 @@ export function getLanePowerBreakdown(
   owner: Owner,
   manifest: Manifest,
 ): LanePowerBreakdown {
-  const cardIds = state.lanes[lane].cards[owner].filter(id => {
+  const cardIds = state.lanesById[lane].cards[owner].filter(id => {
     const c = state.cards[id];
     return !!c && c.revealed && c.zone === 'LANE' && isPowerBearingCard(state, id, manifest);
   });
@@ -233,7 +234,7 @@ function getOngoingEvalCtx(
     return sourceCard ? ctxForCard(state, manifest, sourceCard) : null;
   }
   if (entry.sourceLocationId) {
-    const loc = state.lanes[entry.sourceLane].location;
+    const loc = locationCardAtLane(state, entry.sourceLane);
     return loc && loc.id === entry.sourceLocationId ? ctxForLocation(state, manifest, loc) : null;
   }
   return null;

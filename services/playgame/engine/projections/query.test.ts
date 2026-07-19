@@ -6,7 +6,6 @@
 
 import type { CardDef, Manifest } from '../manifest/types';
 import type { CardInstance, LaneState, MatchState } from '../types/state';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   matchesNum,
@@ -24,6 +23,11 @@ import {
   findLanes,
   findLane,
 } from './query';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+} from '../testkit/runtimeFixture';
 
 // ── Tiny assertion shim ──────────────────────────────────────────────────────
 let failures = 0;
@@ -58,10 +62,6 @@ const mkManifest = (cards: CardDef[]): Manifest => ({
   disabled: { cards: [], locations: [] },
 });
 
-const blankLane = (i: LaneId): LaneState => ({
-  idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] },
-});
-
 interface CardSpec {
   id?: string;
   def: string;
@@ -82,7 +82,11 @@ const buildState = (specs: CardSpec[]): MatchState => {
   const cards: Record<CardId, CardInstance> = {};
   const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
   const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
-  const lanes: [LaneState, LaneState, LaneState] = [blankLane(0), blankLane(1), blankLane(2)];
+  const lanes: [LaneState, LaneState, LaneState] = [
+    testLaneState(0),
+    testLaneState(1),
+    testLaneState(2),
+  ];
   for (const s of specs) {
     const id = (s.id ?? `c${++idCounter}`) as CardId;
     const zone = s.zone ?? 'LANE';
@@ -104,16 +108,13 @@ const buildState = (specs: CardSpec[]): MatchState => {
     else if (zone === 'HAND') hand[s.owner].push(inst);
     else if (zone === 'DECK') deck[s.owner].push(inst);
   }
-  return {
+  return emptyTestMatchState({
     turn: 1, maxEnergy: { P0: 1, P1: 1 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
     energy: { P0: 1, P1: 1 },
-    deck, hand, cards, lanes,
-    pending: [], stagingOrder: [], pendingEffects: [], log: [],
-    lastPlayedBy: { P0: null, P1: null }, result: null,
-    energyLog: { P0: [], P1: [] },
-    trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+    deck, hand, cards,
+    lanesById: testLaneRegistry(lanes),
+  });
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -356,7 +357,7 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 
   // findLane
   truthy(findLane(state, manifest, { isEmpty: true }) === 0, 'Lane: findLane first match');
-  truthy(findLane(state, manifest, { idx: 99 as LaneId }) === null, 'Lane: findLane no match');
+  truthy(findLane(state, manifest, { laneId: 99 as LaneId }) === null, 'Lane: findLane no match');
 }
 
 // ════════════════════════════════════════════════════════════════════════════

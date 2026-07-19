@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation active. Checkpoint 1 is complete; checkpoint 2 is next.
+Implementation active. Checkpoints 1 and 2 are complete; checkpoint 3 is next.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before
 Phase 1.5 governed operations, reactions, and folder-based location authoring.
@@ -161,6 +161,10 @@ Phase 1.2 does not:
 - make reducers responsible for location policy
 
 Phase 1.2 establishes the representation and lifecycle that Phase 1.5 will use.
+
+CruelDeal has no backward-compatibility requirement during this migration.
+Each checkpoint performs a clean cutover: superseded state fields, type names,
+fallback reads, aliases, and dual-write paths are removed once callers migrate.
 
 ## Terminology
 
@@ -1027,6 +1031,9 @@ Exit gate:
 - the compatibility factory's first three entries match the old selector
 
 ### Checkpoint 2 — Location Deck and Lane-Slot State
+
+Status: complete. See
+[`docs/agent-checkpoints/phase1.2-cp2.md`](agent-checkpoints/phase1.2-cp2.md).
 
 - rename `LocationDef` to `LocationCardDef`
 - rename `LocationInstance` to `LocationCardInstance`

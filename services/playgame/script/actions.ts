@@ -39,6 +39,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
 
 const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const PRESENTATION_FRAME_TIMEOUT_MS = 5_000;
+const LOCATION_REVEAL_DURATION_MS = 700;
 
 type PresentationOutcome = 'completed' | 'failed' | 'timed-out';
 
@@ -102,29 +103,63 @@ const paceLocationReveal = async (
 ): Promise<void> => {
   if (frame.event.type !== 'LOCATION_REVEALED') return;
   const lane = frame.event.lane;
+  const halfDuration = LOCATION_REVEAL_DURATION_MS / 2;
   const laneElement = c.boardEl.querySelector(`.lane-map[data-lane="${lane}"]`) as HTMLElement | null;
   const tileElement = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
-  if (tileElement) {
-    tileElement.style.transition = 'none';
-    tileElement.style.opacity = '0';
-  }
+
+  const location = frame.after.locationCards[frame.event.locationId];
+  const mapPath = location
+    ? c.manifest.locations[location.defId]?.cosmetic.art.map.path
+    : undefined;
+
+  // The map begins its complete fade while the still-visible hidden tile
+  // turns edge-on. Preinstall the committed artwork so the fade starts at
+  // frame zero rather than popping in when canonical state is adopted.
   if (laneElement) {
-    laneElement.style.transition = 'opacity 600ms ease';
+    if (mapPath) laneElement.style.backgroundImage = `url(${JSON.stringify(mapPath)})`;
+    laneElement.style.transition = 'none';
+    laneElement.style.opacity = '0';
+    void laneElement.offsetWidth;
+    laneElement.style.transition = `opacity ${LOCATION_REVEAL_DURATION_MS}ms ease`;
     laneElement.style.opacity = '1';
   }
-  await waitFor(650);
+
+  // Keep the tile continuously mounted and opaque. The canonical face changes
+  // only while the card is edge-on, then the revealed face completes the
+  // second half of the same flip.
+  if (tileElement) {
+    tileElement.style.transition = 'none';
+    tileElement.style.opacity = '1';
+    tileElement.style.transformOrigin = '50% 50%';
+    tileElement.style.willChange = 'transform';
+    tileElement.style.transform = 'rotateY(0deg)';
+    void tileElement.offsetWidth;
+    tileElement.style.transition = `transform ${halfDuration}ms cubic-bezier(.4,0,.7,1)`;
+    tileElement.style.transform = 'rotateY(90deg)';
+  }
+
+  await waitFor(halfDuration);
   presentFrame();
+
   const freshTile = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
   if (freshTile) {
     freshTile.style.transition = 'none';
-    freshTile.style.opacity = '0';
-    freshTile.style.transform = 'rotateY(90deg) scale(0.85)';
-    freshTile.getBoundingClientRect();
-    freshTile.style.transition = 'opacity 500ms ease, transform 500ms cubic-bezier(.2,0,.4,1)';
     freshTile.style.opacity = '1';
-    freshTile.style.transform = 'rotateY(0deg) scale(1)';
+    freshTile.style.transform = 'rotateY(-90deg)';
+    void freshTile.offsetWidth;
+    freshTile.style.transition = `transform ${halfDuration}ms cubic-bezier(.3,0,.2,1)`;
+    freshTile.style.transform = 'rotateY(0deg)';
   }
-  await waitFor(600);
+
+  await waitFor(halfDuration);
+
+  if (freshTile) {
+    freshTile.style.removeProperty('transition');
+    freshTile.style.removeProperty('transform');
+    freshTile.style.removeProperty('transform-origin');
+    freshTile.style.removeProperty('will-change');
+    freshTile.style.removeProperty('opacity');
+  }
   const canonicalLaneElement = c.boardEl.querySelector(
     `.lane-map[data-lane="${lane}"]`,
   ) as HTMLElement | null;

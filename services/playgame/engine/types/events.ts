@@ -9,7 +9,7 @@
  * subscribes to this event stream and maps each to a CSS class / animation.
  */
 
-import type { CardId, LaneId, LocationId, Owner } from './ids';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from './ids';
 import type { CardTag, EnergyReason, LaneTag, PendingEffect, SpawnSource } from './state';
 import type { EffectRef, TextOverride } from './ability';
 
@@ -87,27 +87,28 @@ export type MatchEvent =
   | { type: 'PENDING_EFFECT_REMOVED'; effect: PendingEffect }
 
   // --- Location ---
-  | { type: 'LOCATION_REVEALED'; lane: LaneId; locationId: LocationId }
+  | { type: 'LOCATION_REVEALED'; lane: LaneId; locationId: LocationCardInstanceId }
   | {
       type: 'LOCATION_REPLACED';
       lane: LaneId;
-      oldId: LocationId;
-      newId: LocationId;
+      oldId: LocationCardInstanceId;
+      newId: LocationCardInstanceId;
       newDefId: string;
       cause: EffectRef;
+      oldDestination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
       /** Every replacement declares the incoming location's face state. */
       revealed: boolean;
     }
   /** Atomic simultaneous swap; no observable invalid intermediate state. */
   | {
       type: 'LOCATIONS_SWAPPED';
-      left: { locationId: LocationId; fromLane: LaneId; toLane: LaneId };
-      right: { locationId: LocationId; fromLane: LaneId; toLane: LaneId };
+      left: { locationId: LocationCardInstanceId; fromLane: LaneId; toLane: LaneId };
+      right: { locationId: LocationCardInstanceId; fromLane: LaneId; toLane: LaneId };
       cause: EffectRef;
     }
   /** Location migrates to a different lane (e.g. Mobius M. Mobius effect).
    *  Both `fromLane` and `toLane` are always present. */
-  | { type: 'LOCATION_SHIFTED'; fromLane: LaneId; toLane: LaneId; locationId: LocationId; cause: EffectRef }
+  | { type: 'LOCATION_SHIFTED'; fromLane: LaneId; toLane: LaneId; locationId: LocationCardInstanceId; cause: EffectRef }
   | { type: 'LOCATION_TAG_ADDED'; lane: LaneId; tag: LaneTag }
   | { type: 'LOCATION_TAG_REMOVED'; lane: LaneId; tag: LaneTag['kind'] }
   | { type: 'LOCATION_COUNTER_CHANGED'; lane: LaneId; name: string; owner?: Owner; delta: number }
@@ -121,7 +122,7 @@ export type MatchEvent =
       lane: LaneId;
       position: number;
       location: {
-        id: LocationId;
+        id: LocationCardInstanceId;
         defId: string;
         revealed: boolean;
       };

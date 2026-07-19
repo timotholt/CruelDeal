@@ -1,10 +1,17 @@
-import type { CardDef, LocationDef, Manifest } from './manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type { CardId, LaneId, Owner } from './types/ids';
 import type { CardInstance, MatchState } from './types/state';
 import type { MatchEvent } from './types/events';
 import { apply } from './apply';
 import { resolve, resolveTurn } from './resolve';
 import { createRng } from './rng';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+  withTestLocation,
+} from './testkit/runtimeFixture';
+import { locationCardAtLane } from './laneTopology';
 
 const pass = (label: string) => console.log(`PASS: ${label}`);
 const fail = (label: string, extra?: unknown): never => {
@@ -28,7 +35,7 @@ const basicCard = (defId: string, abilities: CardDef['abilities'] = {}): CardDef
   cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
 });
 
-const manifest = (locations: LocationDef[], cards: CardDef[]): Manifest => ({
+const manifest = (locations: LocationCardDef[], cards: CardDef[]): Manifest => ({
   version: 1,
   protocolVersion: 1,
   constants: { energyCurve: [0, 1, 2, 3, 4, 5, 6], turnLimit: 6, handCap: 7, laneCapacity: 4, deckSize: 12, startingHandSize: 3, turnStartDraw: 1 },
@@ -43,7 +50,7 @@ const manifest = (locations: LocationDef[], cards: CardDef[]): Manifest => ({
   disabled: { cards: [], locations: [] },
 });
 
-const loc = (defId: string, abilities: LocationDef['abilities']): LocationDef => ({
+const loc = (defId: string, abilities: LocationCardDef['abilities']): LocationCardDef => ({
   defId,
   version: 1,
   name: defId,
@@ -71,18 +78,13 @@ const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: Lan
   spawnSource: { kind: 'DECK_CREATION' },
 });
 
-const stateWith = (cards: CardInstance[], location: LocationDef, turn = 1): MatchState => {
-  const lane = (idx: LaneId) => ({
-    idx: idx as LaneId,
-    location: idx === 0 ? { id: 'loc-0' as any, defId: location.defId, lane: 0 as LaneId, tags: [] } : null,
-    locationRevealed: idx === 0,
-    cards: {
-      P0: cards.filter(c => c.zone === 'LANE' && c.lane === idx && c.owner === 'P0').map(c => c.id),
-      P1: cards.filter(c => c.zone === 'LANE' && c.lane === idx && c.owner === 'P1').map(c => c.id),
-    },
+const stateWith = (cards: CardInstance[], location: LocationCardDef, turn = 1): MatchState => {
+  const lane = (id: LaneId) => testLaneState(id, {
+      P0: cards.filter(c => c.zone === 'LANE' && c.lane === id && c.owner === 'P0').map(c => c.id),
+      P1: cards.filter(c => c.zone === 'LANE' && c.lane === id && c.owner === 'P1').map(c => c.id),
   });
-  const lanes: MatchState['lanes'] = [lane(0), lane(1), lane(2)];
-  return {
+  const lanes = [lane(0), lane(1), lane(2)];
+  return withTestLocation(emptyTestMatchState({
     turn,
     maxEnergy: { P0: turn, P1: turn },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -96,14 +98,7 @@ const stateWith = (cards: CardInstance[], location: LocationDef, turn = 1): Matc
       P1: cards.filter(c => c.zone === 'HAND' && c.owner === 'P1'),
     },
     cards: Object.fromEntries(cards.map(c => [c.id, c])),
-    lanes,
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
+    lanesById: testLaneRegistry(lanes),
     trackedVariables: {
       totalCardsDestroyed: 0,
       P0: {
@@ -121,11 +116,17 @@ const stateWith = (cards: CardInstance[], location: LocationDef, turn = 1): Matc
         spentNoEnergyLastTurn: false, reducedAnyCostThisGame: false,
       },
     },
-  };
+  }), 0, location.defId, true, 'loc-0' as any);
 };
 
 const replay = (state: MatchState, events: readonly MatchEvent[], m: Manifest) =>
   events.reduce((s, e) => apply(s, e, m), state);
+const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
+  resolveTurn(
+    apply(state, { type: 'TURN_RESOLUTION_STARTED', turn: state.turn }, m),
+    m,
+    createRng(seed),
+  );
 
 {
   const grunt = basicCard('grunt');
@@ -145,7 +146,7 @@ const replay = (state: MatchState, events: readonly MatchEvent[], m: Manifest) =
   let s = stateWith([c1, c2], meat);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'a', owner: 'P0', cardId: c1.id, lane: 0 }, createRng('a'), m), m);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'b', owner: 'P0', cardId: c2.id, lane: 0 }, createRng('b'), m), m);
-  const out = resolveTurn(s, m, createRng('meat'));
+  const out = resolveCurrentTurn(s, m, 'meat');
   expectEq(out.state.cards[c1.id]?.zone, 'DESTROYED', 'location onCardPlayedHere can destroy EVENT_CARD');
   expectEq(out.state.cards[c2.id]?.zone, 'LANE', 'location counter prevents second destroy');
 }
@@ -168,9 +169,13 @@ const replay = (state: MatchState, events: readonly MatchEvent[], m: Manifest) =
   const m = manifest([backdoor], [spark]);
   let s = stateWith([c], backdoor);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'backdoor', owner: 'P0', cardId: c.id, lane: 0 }, createRng('backdoor-stage'), m), m);
-  const out = resolveTurn(s, m, createRng('backdoor-turn'));
+  const out = resolveCurrentTurn(s, m, 'backdoor-turn');
   expectEq(out.state.cards[c.id]?.powerDelta, 4, 'TRIGGER_ON_REVEAL re-fires On Reveal once without replaying location play trigger');
-  expectEq(out.state.lanes[0].location?.counters?.['P0:played-here'], 1, 'location play counter increments once after retrigger');
+  expectEq(
+    locationCardAtLane(out.state, 0)?.counters['P0:played-here'],
+    1,
+    'location play counter increments once after retrigger',
+  );
 }
 
 {
@@ -201,9 +206,9 @@ const replay = (state: MatchState, events: readonly MatchEvent[], m: Manifest) =
   const m = manifest([bank], [revealer]);
   let s = stateWith([c], bank, 5);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'delay', owner: 'P0', cardId: c.id, lane: 0 }, createRng('delay'), m), m);
-  const beforeEnd = resolveTurn(s, m, createRng('delay-turn-5'));
+  const beforeEnd = resolveCurrentTurn(s, m, 'delay-turn-5');
   expectEq(beforeEnd.state.cards[c.id]?.revealed, false, 'DELAY_REVEAL keeps card face-down before end game');
-  const end = resolveTurn(beforeEnd.state, m, createRng('delay-turn-6'));
+  const end = resolveCurrentTurn(beforeEnd.state, m, 'delay-turn-6');
   expectEq(end.state.cards[c.id]?.revealed, true, 'DELAY_REVEAL force-reveals at end game');
   expectEq(end.state.cards[c.id]?.powerDelta, 2, 'end-game force reveal fires On Reveal');
 }

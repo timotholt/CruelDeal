@@ -237,7 +237,8 @@ describe('Phase 0 runtime characterization', () => {
 
     expect(startedIndex).toBeLessThan(revealIndex);
     expect(revealIndex).toBeLessThan(effectIndex);
-    expect(state.lanes[1].locationRevealed).toBe(true);
+    const locationId = state.lanesById[1].locationSlot.locationCardId!;
+    expect(state.locationCards[locationId].face).toBe('FACE_UP');
     expect(state.cards['rally-target'].powerDelta).toBe(2);
   });
 

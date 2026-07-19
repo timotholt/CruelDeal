@@ -11,17 +11,22 @@
 
 import { createRng } from '../rng';
 import { evalEffect, revealPlayedCard, MAX_REVEAL_RECURSION } from './evaluator';
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
   CardInstance,
   LaneState,
-  LocationInstance,
+  LocationCardInstance,
   MatchState,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
-import { getCardPower } from '../projections';
+import { getCardCost, getCardPower } from '../projections';
+import {
+  testLaneRegistry,
+  testLaneState,
+  withTestLocation,
+} from '../testkit/runtimeFixture';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -45,14 +50,14 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-const mkLoc = (defId: string, extra: Partial<LocationDef> = {}): LocationDef => ({
+const mkLoc = (defId: string, extra: Partial<LocationCardDef> = {}): LocationCardDef => ({
   defId, version: 1, name: defId, rarity: 1, abilities: {},
   cosmetic: { displayName: defId, description: '', art: { map: { path: '' } } },
   ...extra,
 });
 
 /** Compile a cards array into a valid Manifest shell. */
-function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
+function mkManifest(cards: CardDef[], locations: LocationCardDef[] = []): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -75,7 +80,7 @@ let idCounter = 0;
 const nextCardId = (): CardId => `c${++idCounter}` as CardId;
 
 function blankLane(i: LaneId): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
+  return testLaneState(i);
 }
 
 interface CardSpec {
@@ -127,17 +132,7 @@ function buildState(
       deck[spec.owner].push(inst);
     }
   }
-  for (const laneStr of Object.keys(locSpecs)) {
-    const laneIdx = Number(laneStr) as LaneId;
-    const loc: LocationInstance = {
-      id: `loc${laneIdx}` as LocationId,
-      defId: locSpecs[laneIdx]!,
-      lane: laneIdx,
-      tags: [],
-    };
-    lanes[laneIdx] = { ...lanes[laneIdx], location: loc, locationRevealed: true };
-  }
-  return {
+  let state: MatchState = {
     turn: opts.turn ?? 3,
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -148,7 +143,13 @@ function buildState(
     deck,
     hand,
     cards,
-    lanes,
+    lanesById: testLaneRegistry(lanes),
+    activeLaneOrder: [0, 1, 2],
+    nextLaneId: 3,
+    locationCards: {},
+    locationDeck: {
+      drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
+    },
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
@@ -158,6 +159,17 @@ function buildState(
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,
   };
+  for (const laneStr of Object.keys(locSpecs)) {
+    const laneIdx = Number(laneStr) as LaneId;
+    state = withTestLocation(
+      state,
+      laneIdx,
+      locSpecs[laneIdx]!,
+      true,
+      `loc${laneIdx}` as LocationCardInstanceId,
+    );
+  }
+  return state;
 }
 
 // ============================================================================
@@ -317,7 +329,7 @@ function buildState(
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
   truthy(moved.toLane !== 0 && (moved.toLane === 1 || moved.toLane === 2), 'MOVE: toLane is another lane');
   eq(res.state.cards['c1' as CardId]?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
-  eq(res.state.lanes[0].cards.P0.length, 0, 'MOVE: card removed from old lane');
+  eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE: card removed from old lane');
 }
 
 // -- DESTROY + DISCARD ------------------------------------------------------
@@ -342,7 +354,7 @@ function buildState(
   const destroyed = res.events.filter(e => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 2, 'DESTROY: both opp grunts destroyed');
   eq(res.state.cards['c2' as CardId]?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
-  eq(res.state.lanes[0].cards.P1.length, 0, 'opp lane cleared');
+  eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
 // -- SPAWN_AND_REVEAL: nested cascade with spawnSource propagation ---------
@@ -693,12 +705,12 @@ function buildState(
   const ctx = {
     state: s0,
     manifest,
-    self: 'loc0' as LocationId,
+    self: 'loc0' as LocationCardInstanceId,
     selfKind: 'location' as const,
     selfLane: 0 as LaneId,
     selfOwner: null,
     rng: createRng('ice-box'),
-    source: { sourceId: 'loc0' as LocationId, effectKind: 'LOCATION' as const },
+    source: { sourceId: 'loc0' as LocationCardInstanceId, effectKind: 'LOCATION' as const },
     depth: 0,
   };
   const res = evalEffect(s0, effect, ctx, manifest);
@@ -765,6 +777,39 @@ function buildState(
   eq(getCardPower(res.state, 'c2' as CardId, manifest), 1, 'onDestroyed: enemy 6 - 5 = 1');
   const destroyed = res.events.filter((e) => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 1, 'onDestroyed: exactly 1 CARD_DESTROYED');
+}
+
+// -- CREATE_CARD_IN_ZONE: created hand card can have its cost set -----------
+
+{
+  const illegalClone = mkCard('illegal-clone', 2, 1, {
+    abilities: {
+      onReveal: [{ kind: 'DESTROY', target: { kind: 'SELF' } }],
+      onDestroyed: [{
+        kind: 'CREATE_CARD_IN_ZONE',
+        pool: { kind: 'DEF_ID_LIST', ids: ['illegal-clone'] },
+        owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
+        setCost: { kind: 'LIT', n: 0 },
+      }],
+    },
+  });
+  const manifest = mkManifest([illegalClone]);
+  const s0 = buildState([{ def: 'illegal-clone', owner: 'P0', lane: 0, revealed: false }]);
+  eq(getCardCost(s0, 'c1' as CardId, manifest), 1, 'Illegal Clone: fresh card costs 1');
+
+  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('illegal-clone'));
+  const copy = res.state.hand.P0[0];
+  truthy(copy !== undefined, 'Illegal Clone: destruction adds a copy to its owner hand');
+  eq(copy?.defId, 'illegal-clone', 'Illegal Clone: hand card uses the same definition');
+  if (copy) {
+    eq(getCardCost(res.state, copy.id, manifest), 0, 'Illegal Clone: destroyed copy costs 0');
+    truthy(
+      res.events.some((event) =>
+        event.type === 'CARD_COST_CHANGED' && event.cardId === copy.id && event.delta === -1),
+      'Illegal Clone: copy receives a permanent -1 cost adjustment',
+    );
+  }
 }
 
 // -- onAnyCardPlayedHere trigger: Iron-Fist-style +1 power per play -------
@@ -922,7 +967,7 @@ function buildState(
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-zone'));
   truthy(res.events.some((e) => e.type === 'CARD_MOVED_TO_ZONE'), 'MOVE_CARD_TO_ZONE: emits CARD_MOVED_TO_ZONE');
   eq(res.state.cards['c1' as CardId]?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
-  eq(res.state.lanes[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
+  eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
   eq(res.state.hand.P0.map(c => c.id), ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
 }
 
@@ -950,7 +995,7 @@ function buildState(
     'SPELL: records its game-rules cleanup reason',
   );
   eq(res.state.cards['c1' as CardId]?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
-  eq(res.state.lanes[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
+  eq(res.state.lanesById[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
 }
 
 // -- Exit -------------------------------------------------------------------

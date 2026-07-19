@@ -249,13 +249,13 @@ function assertZoneReferences(state: MatchState): void {
       expect(card.owner).toBe(owner);
       expect(card.zone).toBe('HAND');
     }
-    for (const lane of state.lanes) {
+    for (const lane of Object.values(state.lanesById)) {
       for (const cardId of lane.cards[owner]) {
         const card = state.cards[cardId];
         expect(card).toBeDefined();
         expect(card.owner).toBe(owner);
         expect(card.zone).toBe('LANE');
-        expect(card.lane).toBe(lane.idx);
+        expect(card.lane).toBe(lane.id);
       }
     }
   }

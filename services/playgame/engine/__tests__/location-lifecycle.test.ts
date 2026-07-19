@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectRef } from '../types/ability';
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
-import type { CardId, LaneId, LocationId, Owner } from '../types/ids';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
+import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardInstance, MatchState } from '../types/state';
 import { createInitialMatchState } from '../cli/initState';
 import { createRng } from '../rng';
@@ -19,8 +19,11 @@ import {
 } from '../effects/evaluator';
 import { computeMatchResult, resolve } from '../resolve';
 import { planEnemyTurnFromHand } from '../ai';
+import { allocatedLanes, locationCardAtLane } from '../laneTopology';
+import { validateLocationState } from '../locationState';
+import { withTestLocation } from '../testkit/runtimeFixture';
 
-const noEffectLocation = (defId: string): LocationDef => ({
+const noEffectLocation = (defId: string): LocationCardDef => ({
   defId,
   version: 1,
   name: defId,
@@ -148,7 +151,7 @@ function withLaneCard(
     counters: {},
     spawnSource: { kind: 'SYSTEM' },
   };
-  const lane = input.lanes[laneId];
+  const lane = input.lanesById[laneId];
   const nextLane = {
     ...lane,
     cards: {
@@ -161,7 +164,10 @@ function withLaneCard(
     state: {
       ...input,
       cards: { ...input.cards, [cardId]: instance },
-      lanes: input.lanes.map(candidate => candidate.idx === laneId ? nextLane : candidate),
+      lanesById: {
+        ...input.lanesById,
+        [laneId]: nextLane,
+      },
       stagingOrder: options.staged
         ? [...input.stagingOrder, cardId]
         : input.stagingOrder,
@@ -175,21 +181,38 @@ function withLocation(
   defId: keyof typeof locations,
   revealed: boolean,
 ): MatchState {
-  const lane = input.lanes[laneId];
+  return withTestLocation(input, laneId, defId, revealed);
+}
+
+function withoutLocation(input: MatchState, laneId: LaneId): MatchState {
+  const lane = input.lanesById[laneId];
+  const location = locationCardAtLane(input, laneId);
+  if (!lane || !location) return input;
   return {
     ...input,
-    lanes: input.lanes.map(candidate => candidate.idx === laneId
-      ? {
-          ...lane,
-          location: {
-            id: `${defId}@${laneId}` as LocationId,
-            defId,
-            lane: laneId,
-            tags: [],
-          },
-          locationRevealed: revealed,
-        }
-      : candidate),
+    lanesById: {
+      ...input.lanesById,
+      [laneId]: {
+        ...lane,
+        locationSlot: {
+          ...lane.locationSlot,
+          locationCardId: null,
+        },
+      },
+    },
+    locationCards: {
+      ...input.locationCards,
+      [location.id]: {
+        ...location,
+        zone: 'DISCARD',
+        laneId: null,
+        pendingLaneId: null,
+      },
+    },
+    locationDeck: {
+      ...input.locationDeck,
+      discardPile: [...input.locationDeck.discardPile, location.id],
+    },
   };
 }
 
@@ -217,33 +240,32 @@ describe('location card lifecycle', () => {
     const result = swapLocations(input, 0, 1, systemCause, manifest);
     expect(result.ok).toBe(true);
     expect(result.events.map(event => event.type)).toEqual(['LOCATIONS_SWAPPED']);
-    expect(result.state.lanes[0].location?.defId).toBe('beta');
-    expect(result.state.lanes[1].location?.defId).toBe('alpha');
-    expect(result.state.lanes[0].locationRevealed).toBe(false);
-    expect(result.state.lanes[1].locationRevealed).toBe(true);
-    expect(result.state.lanes[0].location?.lane).toBe(0);
-    expect(result.state.lanes[1].location?.lane).toBe(1);
+    expect(locationCardAtLane(result.state, 0)?.defId).toBe('beta');
+    expect(locationCardAtLane(result.state, 1)?.defId).toBe('alpha');
+    expect(locationCardAtLane(result.state, 0)?.face).toBe('FACE_DOWN');
+    expect(locationCardAtLane(result.state, 1)?.face).toBe('FACE_UP');
+    expect(locationCardAtLane(result.state, 0)?.laneId).toBe(0);
+    expect(locationCardAtLane(result.state, 1)?.laneId).toBe(1);
+    expect(validateLocationState(result.state)).toEqual([]);
   });
 
   it('preserves tags and counters on the swapped instances', () => {
     const initial = state();
-    const location = initial.lanes[0].location!;
+    const location = locationCardAtLane(initial, 0)!;
     const tagged: MatchState = {
       ...initial,
-      lanes: initial.lanes.map(lane => lane.idx === 0
-        ? {
-            ...lane,
-            location: {
-              ...location,
-              tags: [{ kind: 'FLOODED' }],
-              counters: { visits: 2 },
-            },
-          }
-        : lane),
+      locationCards: {
+        ...initial.locationCards,
+        [location.id]: {
+          ...location,
+          tags: [{ kind: 'FLOODED' }],
+          counters: { visits: 2 },
+        },
+      },
     };
     const result = swapLocations(tagged, 0, 2, systemCause, manifest);
-    expect(result.state.lanes[2].location?.tags).toEqual([{ kind: 'FLOODED' }]);
-    expect(result.state.lanes[2].location?.counters).toEqual({ visits: 2 });
+    expect(locationCardAtLane(result.state, 2)?.tags).toEqual([{ kind: 'FLOODED' }]);
+    expect(locationCardAtLane(result.state, 2)?.counters).toEqual({ visits: 2 });
   });
 
   it('rejects swapping a lane with itself atomically', () => {
@@ -254,13 +276,7 @@ describe('location card lifecycle', () => {
   });
 
   it('rejects a swap when either location slot is empty', () => {
-    const initial = state();
-    const input: MatchState = {
-      ...initial,
-      lanes: initial.lanes.map(lane => lane.idx === 2
-        ? { ...lane, location: null, locationRevealed: false }
-        : lane),
-    };
+    const input = withoutLocation(state(), 2);
     const result = swapLocations(input, 0, 2, systemCause, manifest);
     expect(result).toMatchObject({ ok: false, code: 'LOCATION_SLOT_EMPTY' });
     expect(result.state).toBe(input);
@@ -268,7 +284,7 @@ describe('location card lifecycle', () => {
 
   it('turns location destruction into replacement by inert Ruin', () => {
     const input = withLaneCard(state(), 0).state;
-    const priorLocation = input.lanes[0].location!;
+    const priorLocation = locationCardAtLane(input, 0)!;
     const result = destroyLocationCard(input, 0, systemCause, manifest);
     expect(result.ok).toBe(true);
     expect(result.events.map(event => event.type)).toEqual(['LOCATION_REPLACED']);
@@ -279,12 +295,14 @@ describe('location card lifecycle', () => {
       newId: `ruin:${priorLocation.id}`,
       newDefId: 'ruin',
       cause: systemCause,
+      oldDestination: 'DESTROYED',
       revealed: true,
     }]);
-    expect(result.state.lanes[0].location?.id).not.toBe(priorLocation.id);
-    expect(result.state.lanes[0].location?.defId).toBe('ruin');
-    expect(result.state.lanes[0].locationRevealed).toBe(true);
-    expect(result.state.lanes[0].cards.P0).toEqual(input.lanes[0].cards.P0);
+    expect(locationCardAtLane(result.state, 0)?.id).not.toBe(priorLocation.id);
+    expect(locationCardAtLane(result.state, 0)?.defId).toBe('ruin');
+    expect(locationCardAtLane(result.state, 0)?.face).toBe('FACE_UP');
+    expect(result.state.locationDeck.destroyed).toContain(priorLocation.id);
+    expect(result.state.lanesById[0].cards.P0).toEqual(input.lanesById[0].cards.P0);
     expect(result.state.activeLaneOrder).toEqual([0, 1, 2]);
     expect(manifest.locations.ruin.abilities).toEqual({});
   });
@@ -302,10 +320,11 @@ describe('lane destruction invariants', () => {
     const result = destroyLane(state(), 0);
     expect(result.ok).toBe(true);
     expect(result.state.activeLaneOrder).toEqual([1, 2]);
-    expect(result.state.lanes[0].status).toBe('DESTROYED');
-    expect(result.state.lanes[0].location).toBeNull();
-    expect(result.state.lanes).toHaveLength(3);
+    expect(result.state.lanesById[0].status).toBe('DESTROYED');
+    expect(result.state.lanesById[0].locationSlot.locationCardId).toBeNull();
+    expect(allocatedLanes(result.state)).toHaveLength(3);
     expect(validateLaneTopology(result.state)).toEqual([]);
+    expect(validateLocationState(result.state)).toEqual([]);
   });
 
   it('destroys face-up and face-down occupants through CARD_DESTROYED', () => {
@@ -339,7 +358,7 @@ describe('lane destruction invariants', () => {
     });
     expect(result.state).toBe(placed.state);
     expect(result.state.cards[placed.cardId].zone).toBe('LANE');
-    expect(result.state.lanes[0].status).toBe('ACTIVE');
+    expect(result.state.lanesById[0].status).toBe('ACTIVE');
   });
 
   it('allows two lane destructions but refuses destruction of the third', () => {
@@ -362,9 +381,10 @@ describe('lane destruction invariants', () => {
       const result = destroyOthers(state(), survivor);
       expect(result.ok).toBe(true);
       expect(result.state.activeLaneOrder).toEqual([survivor]);
-      expect(result.state.lanes[survivor].status).toBe('ACTIVE');
-      expect(result.state.lanes.filter(lane => lane.status === 'DESTROYED')).toHaveLength(2);
+      expect(result.state.lanesById[survivor].status).toBe('ACTIVE');
+      expect(allocatedLanes(result.state).filter(lane => lane.status === 'DESTROYED')).toHaveLength(2);
       expect(validateLaneTopology(result.state)).toEqual([]);
+      expect(validateLocationState(result.state)).toEqual([]);
     });
   }
 
@@ -382,7 +402,7 @@ describe('lane destruction invariants', () => {
 
   it('a location onReveal can author destroy-all-other-lanes', () => {
     const input = withLocation(state(), 2, 'singularity', true);
-    const location = input.lanes[2].location!;
+    const location = locationCardAtLane(input, 2)!;
     const result = evalEffect(input, locations.singularity.abilities.onReveal![0], {
       state: input,
       manifest,
@@ -491,10 +511,11 @@ describe('destroy/create sequencing', () => {
     }, manifest);
     expect(created.ok).toBe(true);
     expect(created.state.activeLaneOrder).toEqual([0, 3, 2]);
-    expect(created.state.lanes[1].status).toBe('DESTROYED');
-    expect(created.state.lanes[3].status).toBe('ACTIVE');
-    expect(created.state.lanes[3].location?.defId).toBe('delta');
+    expect(created.state.lanesById[1].status).toBe('DESTROYED');
+    expect(created.state.lanesById[3].status).toBe('ACTIVE');
+    expect(locationCardAtLane(created.state, 3)?.defId).toBe('delta');
     expect(created.state.nextLaneId).toBe(4);
+    expect(validateLocationState(created.state)).toEqual([]);
   });
 
   it('destroys two lanes, adds one, then adds another with monotonic IDs', () => {
@@ -515,10 +536,10 @@ describe('destroy/create sequencing', () => {
     }, manifest);
     expect(addTwo.ok).toBe(true);
     expect(addTwo.state.activeLaneOrder).toEqual([3, 1, 4]);
-    expect(addTwo.state.lanes[0].status).toBe('DESTROYED');
-    expect(addTwo.state.lanes[2].status).toBe('DESTROYED');
-    expect(addTwo.state.lanes[3].status).toBe('ACTIVE');
-    expect(addTwo.state.lanes[4].status).toBe('ACTIVE');
+    expect(addTwo.state.lanesById[0].status).toBe('DESTROYED');
+    expect(addTwo.state.lanesById[2].status).toBe('DESTROYED');
+    expect(addTwo.state.lanesById[3].status).toBe('ACTIVE');
+    expect(addTwo.state.lanesById[4].status).toBe('ACTIVE');
     expect(addTwo.state.nextLaneId).toBe(5);
     expect(validateLaneTopology(addTwo.state)).toEqual([]);
   });
@@ -533,7 +554,7 @@ describe('destroy/create sequencing', () => {
     const addAgain = createLane(removeNew.state, { cause: systemCause, position: 2 }, manifest);
     expect(addAgain.ok).toBe(true);
     expect(addAgain.state.activeLaneOrder).toContain(4);
-    expect(addAgain.state.lanes[3].status).toBe('DESTROYED');
+    expect(addAgain.state.lanesById[3].status).toBe('DESTROYED');
     expect(addAgain.state.nextLaneId).toBe(5);
   });
 
@@ -569,9 +590,10 @@ describe('destroy/create sequencing', () => {
       position: 2,
     }, manifest);
     expect(created.ok).toBe(true);
-    const newLaneId = created.state.activeLaneOrder![2];
-    expect(created.state.lanes[newLaneId].location?.defId).toBe('ruin');
-    expect(created.state.lanes[newLaneId].locationRevealed).toBe(true);
+    const newLaneId = created.state.activeLaneOrder[2];
+    expect(locationCardAtLane(created.state, newLaneId)?.defId).toBe('ruin');
+    expect(locationCardAtLane(created.state, newLaneId)?.face).toBe('FACE_UP');
+    expect(validateLocationState(created.state)).toEqual([]);
   });
 
   it('cancels pending lane-bound effects when their lane is destroyed', () => {

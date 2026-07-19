@@ -12,10 +12,14 @@
 import { apply } from './apply';
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import type { MatchEvent } from './types/events';
-import type { CardId, LaneId, LocationId, Owner } from './types/ids';
-import type { CardInstance, LaneState, MatchState } from './types/state';
-import { EMPTY_TRACKED_VARIABLES } from './types/state';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
+import type { CardInstance, MatchState } from './types/state';
 import { getCardPower } from './projections';
+import {
+  emptyTestMatchState,
+  withTestLocation,
+} from './testkit/runtimeFixture';
+import { locationCardAtLane } from './laneTopology';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -32,10 +36,6 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
 
 // ---- Fixture builders ------------------------------------------------------
-
-function blankLane(i: LaneId): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
-}
 
 function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardInstance {
   return {
@@ -58,27 +58,9 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardIns
 }
 
 function emptyState(): MatchState {
-  return {
-    turn: 1,
-    maxEnergy: { P0: 1, P1: 1 },
-    nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT',
+  return emptyTestMatchState({
     seed: 'test-seed',
-    priority: 'P0',
-    energy: { P0: 1, P1: 1 },
-    deck: { P0: [], P1: [] },
-    hand: { P0: [], P1: [] },
-    cards: {},
-    lanes: [blankLane(0), blankLane(1), blankLane(2)],
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
-    trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+  });
 }
 
 /** Seed a state with one Armored Van (5/3, no abilities) in hand (already deck-drawn). */
@@ -123,7 +105,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.lane, 0, 'CARD_STAGED: lane set');
   eq(c.revealed, false, 'CARD_STAGED: not revealed (face-down pre-reveal)');
   eq(s1.hand.P0.length, 0, 'CARD_STAGED: hand drained');
-  eq(s1.lanes[0].cards.P0, ['s1'] as CardId[], 'CARD_STAGED: card in lane 0 player');
+  eq(s1.lanesById[0].cards.P0, ['s1'] as CardId[], 'CARD_STAGED: card in lane 0 player');
   eq(s1.stagingOrder, ['s1'] as CardId[], 'CARD_STAGED: pushed onto stagingOrder');
   eq(s1.lastPlayedBy.P0, 's1' as CardId, 'CARD_STAGED: updates lastPlayedBy.P0');
   eq(s1.log.length, 1, 'CARD_STAGED: appended to log');
@@ -142,7 +124,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.zone, 'HAND', 'CARD_UNSTAGED: zone back to HAND');
   eq(c.lane, null, 'CARD_UNSTAGED: lane cleared');
   eq(s2.hand.P0.length, 1, 'CARD_UNSTAGED: hand restored');
-  eq(s2.lanes[0].cards.P0.length, 0, 'CARD_UNSTAGED: removed from lane');
+  eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_UNSTAGED: removed from lane');
   eq(s2.stagingOrder.length, 0, 'CARD_UNSTAGED: removed from stagingOrder');
 }
 
@@ -207,7 +189,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const c = destroyed.cards['s1' as CardId]!;
   eq(c.zone, 'DESTROYED', 'CARD_DESTROYED: zone=DESTROYED (separate from DISCARD)');
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
-  eq(destroyed.lanes[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
+  eq(destroyed.lanesById[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
   truthy(c.tags.some(t => t.kind === 'DESTROYED_THIS_TURN'), 'CARD_DESTROYED: tagged DESTROYED_THIS_TURN');
 }
 
@@ -221,8 +203,8 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     { type: 'CARD_MOVED', cardId: 's1' as CardId, fromLane: 0, toLane: 2,
       cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL' } },
   );
-  eq(moved.lanes[0].cards.P0.length, 0, 'CARD_MOVED: gone from lane 0');
-  eq(moved.lanes[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
+  eq(moved.lanesById[0].cards.P0.length, 0, 'CARD_MOVED: gone from lane 0');
+  eq(moved.lanesById[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
   eq(moved.cards['s1' as CardId]!.lane, 2, 'CARD_MOVED: card.lane updated');
   truthy(moved.cards['s1' as CardId]!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
 }
@@ -295,7 +277,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
   );
   eq(s2.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
-  eq(s2.lanes[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
+  eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
 }
 
 // -- CARD_ADDED_TO_HAND: mints with spawnSource (Agent 13 / Collector)
@@ -319,7 +301,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s0 = emptyState();
-  const spawn = { kind: 'LOCATION_CREATED' as const, sourceLocationId: 'bar-sinister' as LocationId };
+  const spawn = { kind: 'LOCATION_CREATED' as const, sourceLocationId: 'bar-sinister' as LocationCardInstanceId };
   const s1 = run(s0, {
     type: 'CARD_ADDED_TO_LANE',
     owner: 'P0',
@@ -330,7 +312,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   });
   eq(s1.cards['spawn2' as CardId]?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
   eq(s1.cards['spawn2' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
-  eq(s1.lanes[1].cards.P0, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
+  eq(s1.lanesById[1].cards.P0, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
 }
 
 // -- DECK_SHUFFLED: reorders deck per newOrder
@@ -363,38 +345,23 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 // -- LOCATION_REVEALED: flips revealed bit on the matching lane
 
 {
-  const s = emptyState();
-  const locId = 'loc0' as LocationId;
-  const s0: MatchState = {
-    ...s,
-    lanes: [
-      { ...blankLane(0), location: { id: locId, defId: 'cathedral', lane: 0, tags: [] }, locationRevealed: false },
-      blankLane(1),
-      blankLane(2),
-    ],
-  };
+  const locId = 'loc0' as LocationCardInstanceId;
+  const s0 = withTestLocation(emptyState(), 0, 'cathedral', false, locId);
   const s1 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: locId });
-  eq(s1.lanes[0].locationRevealed, true, 'LOCATION_REVEALED: lane 0 revealed');
-  eq(s1.lanes[1].locationRevealed, false, 'LOCATION_REVEALED: lane 1 unaffected');
+  eq(locationCardAtLane(s1, 0)?.face, 'FACE_UP', 'LOCATION_REVEALED: lane 0 revealed');
+  eq(locationCardAtLane(s1, 1), null, 'LOCATION_REVEALED: lane 1 unaffected');
 
   // Mismatched locationId → no-op
-  const s2 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: 'other' as LocationId });
-  eq(s2.lanes[0].locationRevealed, false, 'LOCATION_REVEALED: id mismatch is a no-op');
+  const s2 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: 'other' as LocationCardInstanceId });
+  eq(locationCardAtLane(s2, 0)?.face, 'FACE_DOWN', 'LOCATION_REVEALED: id mismatch is a no-op');
 }
 
 // -- LOCATION_REPLACED: preserves the new definition identity for replay
 
 {
-  const oldId = 'old-location' as LocationId;
-  const newId = 'new-location' as LocationId;
-  const s0: MatchState = {
-    ...emptyState(),
-    lanes: [
-      { ...blankLane(0), location: { id: oldId, defId: 'old-def', lane: 0, tags: [] }, locationRevealed: true },
-      blankLane(1),
-      blankLane(2),
-    ],
-  };
+  const oldId = 'old-location' as LocationCardInstanceId;
+  const newId = 'new-location' as LocationCardInstanceId;
+  const s0 = withTestLocation(emptyState(), 0, 'old-def', true, oldId);
   const s1 = run(s0, {
     type: 'LOCATION_REPLACED',
     lane: 0,
@@ -402,80 +369,60 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     newId,
     newDefId: 'new-def',
     cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+    oldDestination: 'DISCARD',
     revealed: false,
   });
-  eq(s1.lanes[0].location?.id, newId, 'LOCATION_REPLACED: new instance id recorded');
-  eq(s1.lanes[0].location?.defId, 'new-def', 'LOCATION_REPLACED: new definition id recorded');
-  eq(s1.lanes[0].locationRevealed, false, 'LOCATION_REPLACED: new location starts hidden');
+  eq(locationCardAtLane(s1, 0)?.id, newId, 'LOCATION_REPLACED: new instance id recorded');
+  eq(locationCardAtLane(s1, 0)?.defId, 'new-def', 'LOCATION_REPLACED: new definition id recorded');
+  eq(locationCardAtLane(s1, 0)?.face, 'FACE_DOWN', 'LOCATION_REPLACED: new location starts hidden');
+  truthy(s1.locationDeck.discardPile.includes(oldId), 'LOCATION_REPLACED: old instance conserved in destination');
   const mismatched = run(s0, {
     type: 'LOCATION_REPLACED',
     lane: 0,
-    oldId: 'not-the-current-location' as LocationId,
+    oldId: 'not-the-current-location' as LocationCardInstanceId,
     newId,
     newDefId: 'new-def',
     cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+    oldDestination: 'DISCARD',
     revealed: false,
   });
-  eq(mismatched.lanes[0].location?.id, oldId, 'LOCATION_REPLACED: old instance mismatch is a no-op');
+  eq(locationCardAtLane(mismatched, 0)?.id, oldId, 'LOCATION_REPLACED: old instance mismatch is a no-op');
 }
 
 // -- LOCATION_TAG_ADDED / REMOVED: on lane.location.tags
 
 {
-  const s = emptyState();
-  const locId = 'loc1' as LocationId;
-  const s0: MatchState = {
-    ...s,
-    lanes: [
-      blankLane(0),
-      { ...blankLane(1), location: { id: locId, defId: 'jungle-trail', lane: 1, tags: [] }, locationRevealed: true },
-      blankLane(2),
-    ],
-  };
+  const locId = 'loc1' as LocationCardInstanceId;
+  const s0 = withTestLocation(emptyState(), 1, 'jungle-trail', true, locId);
   const s1 = run(s0,
     { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' } },
     { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' } }, // dup
   );
-  eq(s1.lanes[1].location!.tags.length, 1, 'LOCATION_TAG_ADDED: idempotent');
+  eq(locationCardAtLane(s1, 1)!.tags.length, 1, 'LOCATION_TAG_ADDED: idempotent');
   const s2 = run(s1, { type: 'LOCATION_TAG_REMOVED', lane: 1, tag: 'ON_FIRE' });
-  eq(s2.lanes[1].location!.tags.length, 0, 'LOCATION_TAG_REMOVED: removed');
+  eq(locationCardAtLane(s2, 1)!.tags.length, 0, 'LOCATION_TAG_REMOVED: removed');
 }
 
 // -- LOCATION_SHIFTED: moves the location from one lane to another
 
 {
-  const locId = 'wander' as LocationId;
-  const s0: MatchState = {
-    ...emptyState(),
-    lanes: [
-      { idx: 0, location: { id: locId, defId: 'wander', lane: 0, tags: [] }, locationRevealed: true, cards: { P0: [], P1: [] } },
-      blankLane(1),
-      blankLane(2),
-    ],
-  };
+  const locId = 'wander' as LocationCardInstanceId;
+  const s0 = withTestLocation(emptyState(), 0, 'wander', true, locId);
   const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL' as const };
   const s1 = run(s0, { type: 'LOCATION_SHIFTED', fromLane: 0, toLane: 2, locationId: locId, cause });
-  truthy(s1.lanes[0].location === null, 'LOCATION_SHIFTED: source lane cleared');
-  truthy(s1.lanes[2].location !== null, 'LOCATION_SHIFTED: dest lane has location');
-  eq(s1.lanes[2].location!.lane, 2, 'LOCATION_SHIFTED: location.lane updated');
-  eq(s1.lanes[2].location!.id, locId, 'LOCATION_SHIFTED: same location id preserved');
-  eq(s1.lanes[2].locationRevealed, true, 'LOCATION_SHIFTED: revealed state preserved');
+  truthy(locationCardAtLane(s1, 0) === null, 'LOCATION_SHIFTED: source lane cleared');
+  truthy(locationCardAtLane(s1, 2) !== null, 'LOCATION_SHIFTED: dest lane has location');
+  eq(locationCardAtLane(s1, 2)!.laneId, 2, 'LOCATION_SHIFTED: location.lane updated');
+  eq(locationCardAtLane(s1, 2)!.id, locId, 'LOCATION_SHIFTED: same location id preserved');
+  eq(locationCardAtLane(s1, 2)!.face, 'FACE_UP', 'LOCATION_SHIFTED: revealed state preserved');
 
-  const occupied: MatchState = {
-    ...s0,
-    lanes: s0.lanes.map(lane => lane.idx === 2
-      ? {
-          ...lane,
-          location: {
-            id: 'occupied' as LocationId,
-            defId: 'occupied',
-            lane: 2,
-            tags: [],
-          },
-          locationRevealed: true,
-        }
-      : lane),
-  };
+  const occupied = withTestLocation(
+    s0,
+    2,
+    'occupied',
+    true,
+    'occupied' as LocationCardInstanceId,
+  );
   const rejected = run(occupied, {
     type: 'LOCATION_SHIFTED',
     fromLane: 0,
@@ -484,13 +431,13 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     cause,
   });
   eq(
-    rejected.lanes[0].location?.id,
+    locationCardAtLane(rejected, 0)?.id,
     locId,
     'LOCATION_SHIFTED: occupied destination preserves the source',
   );
   eq(
-    rejected.lanes[2].location?.id,
-    'occupied' as LocationId,
+    locationCardAtLane(rejected, 2)?.id,
+    'occupied' as LocationCardInstanceId,
     'LOCATION_SHIFTED: occupied destination is never evicted',
   );
 }

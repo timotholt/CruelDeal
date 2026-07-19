@@ -12,7 +12,7 @@
  */
 
 import type { EffectExpr, OngoingExpr, OwnerFilter, OwnerRef, Predicate, Selector } from '../../types/ability';
-import type { LocationDef } from '../types';
+import type { LocationCardDef } from '../types';
 
 export const CRUEL_DEAL_CITY = {
   name: 'Vantaris',
@@ -22,13 +22,13 @@ export const CRUEL_DEAL_CITY = {
 } as const;
 
 type LocationStatus = 'playable' | 'unimplemented';
-type LocationAbilities = LocationDef['abilities'];
+type LocationAbilities = LocationCardDef['abilities'];
 
 export interface LocationDesignEntry {
   status: LocationStatus;
   /** Short reason this is disabled, or the implementation primitive used. */
   implementationNote: string;
-  def: LocationDef;
+  def: LocationCardDef;
 }
 
 interface LocationSpec {
@@ -736,11 +736,11 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
 
 export const LOCATION_CATALOG: readonly LocationDesignEntry[] = LOCATION_SPECS.map(toCatalogEntry);
 
-export const PLAYABLE_LOCATION_DEFS: readonly LocationDef[] = LOCATION_CATALOG
+export const PLAYABLE_LOCATION_DEFS: readonly LocationCardDef[] = LOCATION_CATALOG
   .filter((entry) => entry.status === 'playable')
   .map((entry) => entry.def);
 
-export const UNIMPLEMENTED_LOCATION_DEFS: readonly LocationDef[] = LOCATION_CATALOG
+export const UNIMPLEMENTED_LOCATION_DEFS: readonly LocationCardDef[] = LOCATION_CATALOG
   .filter((entry) => entry.status === 'unimplemented')
   .map((entry) => entry.def);
 
@@ -751,7 +751,7 @@ export const DISABLED_LOCATION_IDS: readonly string[] = UNIMPLEMENTED_LOCATION_D
  * Rarity 0 keeps it out of the bootstrap location deck; it enters play only
  * through the governed destroy/replace operation.
  */
-export const RUIN_LOCATION_DEF: LocationDef = {
+export const RUIN_LOCATION_DEF: LocationCardDef = {
   defId: 'ruin',
   version: 1,
   name: 'Ruin',
@@ -765,7 +765,7 @@ export const RUIN_LOCATION_DEF: LocationDef = {
   },
 };
 
-export const LOCATIONS_INDEX: readonly LocationDef[] = [
+export const LOCATIONS_INDEX: readonly LocationCardDef[] = [
   ...LOCATION_CATALOG.map((entry) => entry.def),
   RUIN_LOCATION_DEF,
 ];

@@ -27,6 +27,7 @@ import {
 } from './context';
 import { ownerMatches, select } from './select';
 import { evalNum } from './numexpr';
+import { locationCardAtLane } from '../laneTopology';
 
 /** All currently-active Ongoings, with numeric parameters already scaled
  *  by any applicable BOOST_ONGOINGS auras. */
@@ -44,7 +45,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
       if (b.kind === 'CALL_BUILTIN') {
         if (b.fn === 'FULL_LANES_POWER') {
           // Only active when the card's lane is full for its owner.
-          const laneCards = state.lanes[card.lane!].cards[card.owner];
+          const laneCards = state.lanesById[card.lane!].cards[card.owner];
           if (laneCards.length >= manifest.constants.laneCapacity) {
             const delta: number = b.args?.delta ?? 0;
             if (delta !== 0) {
@@ -88,7 +89,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
       raw.push({
         sourceCardId: null,
         sourceLocationId: loc.id,
-        sourceLane: loc.lane,
+        sourceLane: loc.laneId!,
         sourceOwner: null,
         expr,
       });
@@ -220,17 +221,16 @@ function computeDisabledOngoingSources(
   const disabled = new Set<import('../types/ids').CardId>();
   for (const entry of raw) {
     if (entry.expr.kind !== 'DISABLE_ONGOING') continue;
-    const sourceLike = entry.sourceCardId
-      ? state.cards[entry.sourceCardId]
+    const sourceCard = entry.sourceCardId ? state.cards[entry.sourceCardId] : null;
+    const sourceLocation = entry.sourceLocationId
+      ? state.locationCards[entry.sourceLocationId]
       : null;
-    const ctx: EvalCtx = sourceLike
-      ? ctxForCard(state, manifest, sourceLike)
-      : ctxForLocation(state, manifest, {
-          id: entry.sourceLocationId!,
-          defId: '',
-          lane: entry.sourceLane,
-          tags: [],
-        });
+    const ctx: EvalCtx | null = sourceCard
+      ? ctxForCard(state, manifest, sourceCard)
+      : sourceLocation
+        ? ctxForLocation(state, manifest, sourceLocation)
+        : null;
+    if (!ctx) continue;
     for (const id of select(entry.expr.target, ctx)) {
       disabled.add(id);
     }
@@ -297,7 +297,7 @@ export function sourceCtx(
     return ctxForCard(state, manifest, c);
   }
   if (entry.sourceLocationId) {
-    const loc = state.lanes[entry.sourceLane].location;
+    const loc = locationCardAtLane(state, entry.sourceLane);
     if (!loc) return null;
     return ctxForLocation(state, manifest, loc);
   }

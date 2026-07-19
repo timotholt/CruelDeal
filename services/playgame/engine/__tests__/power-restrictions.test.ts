@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { evalEffect, type EffectCtx } from '../effects/evaluator';
 import { BOOTSTRAP_MANIFEST } from '../manifest';
-import type { CardDef, LocationDef, Manifest } from '../manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardPower, getLanePower } from '../projections/power';
 import { createRng } from '../rng';
 import {
@@ -20,7 +20,7 @@ import type { MatchState } from '../types/state';
 const SELF = { kind: 'SELF' } as const;
 const COURTHOUSE_ID = 'courthouse';
 
-function courthouseDef(): LocationDef {
+function courthouseDef(): LocationCardDef {
   return {
     ...testLocationDef(COURTHOUSE_ID),
     abilities: {

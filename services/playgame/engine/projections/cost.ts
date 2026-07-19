@@ -1,4 +1,4 @@
-import type { CardId, LocationId } from '../types/ids';
+import type { CardId, LocationCardInstanceId } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { MatchState } from '../types/state';
 import { ongoingsTargeting } from './ongoing';
@@ -6,7 +6,7 @@ import { ctxForTargetCard } from './context';
 import { evalNum } from './numexpr';
 
 export interface CostModifierEntry {
-  readonly sourceId: CardId | LocationId;
+  readonly sourceId: CardId | LocationCardInstanceId;
   readonly delta: number;
 }
 

@@ -1,23 +1,28 @@
 /**
- * resolve() + resolveTurn() tests.
+ * resolve() + resolveCurrentTurn() tests.
  *
  * Run:
  *   npx tsx services/playgame/engine/resolve.test.ts
  */
 
-import { resolve, resolveTurn } from './resolve';
+import { resolve, resolveTurn as resolveEngineTurn } from './resolve';
 import { apply } from './apply';
 import { createRng } from './rng';
 import { getCardPower, getLanePower } from './projections';
-import type { CardDef, LocationDef, Manifest } from './manifest/types';
+import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type {
   CardInstance,
   LaneState,
-  LocationInstance,
+  LocationCardInstance,
   MatchState,
 } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
-import type { CardId, LaneId, LocationId, Owner } from './types/ids';
+import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
+import {
+  emptyTestMatchState,
+  testLaneState,
+  withTestLocation,
+} from './testkit/runtimeFixture';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -41,7 +46,7 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
   ...extra,
 });
 
-function mkManifest(cards: CardDef[], locations: LocationDef[] = []): Manifest {
+function mkManifest(cards: CardDef[], locations: LocationCardDef[] = []): Manifest {
   const byId = <T extends { defId: string }>(arr: T[]): Record<string, T> =>
     Object.fromEntries(arr.map(e => [e.defId, e]));
   return {
@@ -64,7 +69,7 @@ let idCounter = 0;
 const nextCardId = (): CardId => `r${++idCounter}` as CardId;
 
 function blankLane(i: LaneId): LaneState {
-  return { idx: i, location: null, locationRevealed: false, cards: { P0: [], P1: [] } };
+  return testLaneState(i);
 }
 
 function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
@@ -90,7 +95,7 @@ function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
 function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}): MatchState {
   idCounter = 0;
   const t = opts.turn ?? 1;
-  return {
+  return emptyTestMatchState({
     turn: t,
     maxEnergy: { P0: t, P1: t },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -101,16 +106,7 @@ function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}
     deck: { P0: [], P1: [] },
     hand: { P0: [], P1: [] },
     cards: {},
-    lanes: [blankLane(0), blankLane(1), blankLane(2)],
-    pending: [],
-    stagingOrder: [],
-    pendingEffects: [],
-    log: [],
-    lastPlayedBy: { P0: null, P1: null },
-    result: null,
-    energyLog: { P0: [], P1: [] },
-    trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+  });
 }
 
 function withCardInHand(state: MatchState, defId: string, owner: Owner = 'P0'): { state: MatchState; cardId: CardId } {
@@ -138,18 +134,30 @@ function withCardInDeck(state: MatchState, defId: string, owner: Owner = 'P0'): 
 }
 
 function withLocation(state: MatchState, lane: LaneId, defId: string, revealed: boolean = false): MatchState {
-  const loc: LocationInstance = { id: `loc${lane}` as LocationId, defId, lane, tags: [] };
-  const newLane = { ...state.lanes[lane], location: loc, locationRevealed: revealed };
-  const lanes: [LaneState, LaneState, LaneState] = [
-    lane === 0 ? newLane : state.lanes[0],
-    lane === 1 ? newLane : state.lanes[1],
-    lane === 2 ? newLane : state.lanes[2],
-  ];
-  return { ...state, lanes };
+  return withTestLocation(
+    state,
+    lane,
+    defId,
+    revealed,
+    `loc${lane}` as LocationCardInstanceId,
+  );
 }
 
 function runEvents(s: MatchState, events: readonly import('./types/events').MatchEvent[], manifest: Manifest): MatchState {
   return events.reduce((st, e) => apply(st, e, manifest), s);
+}
+
+function resolveCurrentTurn(
+  state: MatchState,
+  manifest: Manifest,
+  rng: ReturnType<typeof createRng>,
+) {
+  const resolving = apply(
+    state,
+    { type: 'TURN_RESOLUTION_STARTED', turn: state.turn },
+    manifest,
+  );
+  return resolveEngineTurn(resolving, manifest, rng);
 }
 
 // ============================================================================
@@ -170,7 +178,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   eq((events[1] as { delta: number }).delta, -2, 'ENERGY_CHANGED: delta = -cost');
   const after = runEvents(state, events, manifest);
   eq(after.energy.P0, 1, 'energy: 3 - 2 = 1');
-  eq(after.lanes[0].cards.P0.length, 1, 'card staged into lane 0');
+  eq(after.lanesById[0].cards.P0.length, 1, 'card staged into lane 0');
 }
 
 // -- STAGE_CARD uses projected current cost, not manifest base cost ---------
@@ -195,10 +203,10 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     ...s,
     energy: { P0: 1, P1: 1 },
     cards: { ...s.cards, [aura.id]: { ...aura, zone: 'LANE', lane: 0, revealed: true } },
-    lanes: [
-      { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, aura.id] } },
-      s.lanes[1], s.lanes[2],
-    ],
+    lanesById: {
+      ...s.lanesById,
+      0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, aura.id] } },
+    },
   };
   const hand = withCardInHand(s, 'grunt');
   s = hand.state;
@@ -235,10 +243,10 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     s = {
       ...s,
       cards: { ...s.cards, [fill.id]: { ...fill, zone: 'LANE', lane: 0, revealed: true } },
-      lanes: [
-        { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, fill.id] } },
-        s.lanes[1], s.lanes[2],
-      ],
+      lanesById: {
+        ...s.lanesById,
+        0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, fill.id] } },
+      },
     };
   }
   const events = resolve(s, {
@@ -298,7 +306,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
 }
 
 // ============================================================================
-// resolveTurn() — full cascade
+// resolveCurrentTurn() — full cascade
 // ============================================================================
 
 // -- Basic cascade: single card revealed, TURN_ENDED → TURN_STARTED ---------
@@ -318,7 +326,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
 
-  const { events, state: after } = resolveTurn(s, manifest, createRng('rt'));
+  const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('rt'));
 
   truthy(events.some(e => e.type === 'CARD_FLIPPED'), 'cascade: CARD_FLIPPED present');
   truthy(events.some(e => e.type === 'OR_WINDOW_OPEN'), 'cascade: OR_WINDOW_OPEN present');
@@ -364,7 +372,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     s = runEvents(s, resolve(s, {
       type: 'STAGE_CARD', intentId: 'sb', owner: 'P1', cardId: b.cardId, lane: 0,
     }, createRng('r'), manifest), manifest);
-    const { events } = resolveTurn(s, manifest, createRng('prio'));
+    const { events } = resolveCurrentTurn(s, manifest, createRng('prio'));
     const flipOrder = events
       .filter(e => e.type === 'CARD_FLIPPED')
       .map(e => (e as { cardId: CardId }).cardId);
@@ -386,7 +394,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   // Simulate fully-spent energy to confirm refill.
   s = { ...s, energy: { P0: 0, P1: 0 } };
 
-  const { events, state: after } = resolveTurn(s, manifest, createRng('rt-draws'));
+  const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('rt-draws'));
   const draws = events.filter(e => e.type === 'CARD_DRAWN');
   eq(draws.length, 2, 'draws: one per owner');
   eq(after.hand.P0.length, 1, 'P0 drew to hand');
@@ -403,19 +411,20 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   const manifest = mkManifest([]);
   let s = baseState({ turn: 1, priority: 'P0' });
   s = withLocation(s, 1, 'some-loc', false);
-  const { events, state: after } = resolveTurn(s, manifest, createRng('loc'));
+  const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('loc'));
   truthy(
     events.some(e => e.type === 'LOCATION_REVEALED' && (e as { lane: LaneId }).lane === 1),
     'LOCATION_REVEALED for lane 1 at start of turn 2',
   );
-  eq(after.lanes[1].locationRevealed, true, 'lane 1 location flipped face-up');
+  const locationId = after.lanesById[1].locationSlot.locationCardId!;
+  eq(after.locationCards[locationId].face, 'FACE_UP', 'lane 1 location flipped face-up');
 }
 
 // -- Location reveal fires the location onReveal effects --------------------
 
 {
   const grunt = mkCard('grunt', 1, 1);
-  const rallyPoint: LocationDef = {
+  const rallyPoint: LocationCardDef = {
     defId: 'rally-point',
     version: 1,
     name: 'Rally Point',
@@ -439,14 +448,13 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = {
     ...s,
     cards: { ...s.cards, [inst.id]: inst },
-    lanes: [
-      s.lanes[0],
-      { ...s.lanes[1], cards: { ...s.lanes[1].cards, P0: [inst.id] } },
-      s.lanes[2],
-    ],
+    lanesById: {
+      ...s.lanesById,
+      1: { ...s.lanesById[1], cards: { ...s.lanesById[1].cards, P0: [inst.id] } },
+    },
   };
 
-  const { events, state: after } = resolveTurn(s, mkManifest([grunt], [rallyPoint]), createRng('loc-reveal-fires'));
+  const { events, state: after } = resolveCurrentTurn(s, mkManifest([grunt], [rallyPoint]), createRng('loc-reveal-fires'));
   truthy(events.some(e => e.type === 'CARD_POWER_CHANGED'), 'location onReveal emits CARD_POWER_CHANGED');
   eq(getCardPower(after, inst.id, mkManifest([grunt], [rallyPoint])), 3, 'location onReveal buff applied');
 }
@@ -462,23 +470,23 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     s = {
       ...s,
       cards: { ...s.cards, [inst.id]: inst },
-      lanes: [
-        { ...s.lanes[0], cards: { ...s.lanes[0].cards, P0: [...s.lanes[0].cards.P0, inst.id] } },
-        s.lanes[1], s.lanes[2],
-      ],
+      lanesById: {
+        ...s.lanesById,
+        0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, inst.id] } },
+      },
     };
   }
   const opp = { ...mkCardInstance('grunt', 'P1'), zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
   s = {
     ...s,
     cards: { ...s.cards, [opp.id]: opp },
-    lanes: [
-      { ...s.lanes[0], cards: { ...s.lanes[0].cards, P1: [...s.lanes[0].cards.P1, opp.id] } },
-      s.lanes[1], s.lanes[2],
-    ],
+    lanesById: {
+      ...s.lanesById,
+      0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P1: [...s.lanesById[0].cards.P1, opp.id] } },
+    },
   };
 
-  const { events, state: after } = resolveTurn(s, manifest, createRng('end'));
+  const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('end'));
   truthy(events.some(e => e.type === 'MATCH_ENDED'), 'turn 6: MATCH_ENDED emitted');
   truthy(!events.some(e => e.type === 'TURN_STARTED'), 'turn 6: NO TURN_STARTED');
   eq(after.phase, 'ENDED', 'phase=ENDED');
@@ -499,7 +507,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = runEvents(s, resolve(s, {
     type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
-  const { events } = resolveTurn(s, manifest, createRng('prio-recompute'));
+  const { events } = resolveCurrentTurn(s, manifest, createRng('prio-recompute'));
   const started = events.find(e => e.type === 'TURN_STARTED') as
     { priority: Owner; priorityReason: string };
   eq(started.priority, 'P0', 'P0 keeps priority (more lanes)');
@@ -535,8 +543,8 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
     s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'c', owner: 'P0', cardId: h.cardId, lane: 0 }, createRng('r'), manifest), manifest);
     return s;
   };
-  const rA = resolveTurn(build(), manifest, createRng('det-seed'));
-  const rB = resolveTurn(build(), manifest, createRng('det-seed'));
+  const rA = resolveCurrentTurn(build(), manifest, createRng('det-seed'));
+  const rB = resolveCurrentTurn(build(), manifest, createRng('det-seed'));
   eq(JSON.stringify(rA.events), JSON.stringify(rB.events), 'determinism: same seed → identical events');
 }
 
@@ -575,7 +583,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = runEvents(s, resolve(s, {
     type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
-  const { state: after } = resolveTurn(s, manifest, createRng('proj'));
+  const { state: after } = resolveCurrentTurn(s, manifest, createRng('proj'));
   eq(getCardPower(after, h.cardId, manifest), 5, 'Sentinel post-reveal: card power stays 5');
   eq(getLanePower(after, 0, 'P0', manifest), 6, 'lane 0 power = 6');
 }
@@ -600,7 +608,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   s = runEvents(s, resolve(s, {
     type: 'STAGE_CARD', intentId: 'stg', owner: 'P0', cardId: h.cardId, lane: 0,
   }, createRng('r'), manifest), manifest);
-  const { state: after, events } = resolveTurn(s, manifest, createRng('kraven'));
+  const { state: after, events } = resolveCurrentTurn(s, manifest, createRng('kraven'));
   // Power: base(3) + onEndOfTurn(+2) = 5. Kraven was staged this turn, so
   // the reveal fires first (no onReveal ability), then onEndOfTurn ticks.
   eq(getCardPower(after, h.cardId, manifest), 5, 'onEndOfTurn: 3 + 2 = 5');
@@ -641,7 +649,7 @@ function runEvents(s: MatchState, events: readonly import('./types/events').Matc
   // Before resolveTurn, P0 energy = turn(2) - 2(cost) = 0.
   eq(s.energy['P0'], 0, 'pre-resolveTurn: P0 energy spent on psy');
 
-  const { state: after, events } = resolveTurn(s, manifest, createRng('sched'));
+  const { state: after, events } = resolveCurrentTurn(s, manifest, createRng('sched'));
   // Turn advanced to 3. Vanilla refill would land energy at maxEnergy=3.
   // SCHEDULED effect adds +1 on top → 4.
   eq(after.turn, 3, 'resolveTurn advanced to turn 3');

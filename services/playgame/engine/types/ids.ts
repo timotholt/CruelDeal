@@ -1,13 +1,15 @@
 /**
  * Brand types for engine identifiers. See spec §3.1.
  *
- * Branded strings prevent accidental swaps between CardId and LocationId at
+ * Branded strings prevent accidental swaps between CardId and LocationCardInstanceId at
  * type-check time. Use `mkCardId(...)` etc. at the boundary; internal engine
  * code just passes them around as opaque.
  */
 
 export type CardId = string & { readonly __brand: 'CardId' };
-export type LocationId = string & { readonly __brand: 'LocationId' };
+export type LocationCardInstanceId = string & {
+  readonly __brand: 'LocationCardInstanceId';
+};
 
 export type Seat = 'P0' | 'P1';
 export type Owner = Seat;
@@ -23,5 +25,6 @@ export type LaneId = number;
 export const otherSeat = (seat: Seat): Seat => (seat === 'P0' ? 'P1' : 'P0');
 
 export const mkCardId = (s: string): CardId => s as CardId;
-export const mkLocationId = (s: string): LocationId => s as LocationId;
+export const mkLocationCardInstanceId = (s: string): LocationCardInstanceId =>
+  s as LocationCardInstanceId;
 export const mkLaneId = (value: number): LaneId => value;

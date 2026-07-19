@@ -17,7 +17,7 @@ import {
   type Frame,
   type FramedEvent,
 } from '../types/timeline';
-import type { CardId, LocationId } from '../types/ids';
+import type { CardId, LocationCardInstanceId } from '../types/ids';
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
 import { buildRuntimeFixture, testCardDef, testManifest } from '../testkit/runtimeFixture';
@@ -184,7 +184,7 @@ describe('Canonical framing edge cases', () => {
       [{
         type: 'LOCATION_REVEALED',
         lane: 0,
-        locationId: 'opening-location' as LocationId,
+        locationId: 'opening-location' as LocationCardInstanceId,
       }],
       { initialPhase: 'SETUP' },
     );

@@ -11,8 +11,10 @@ import { createInitialMatchState } from './cli/initState';
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { createRng } from './rng';
 import type { MatchEvent } from './types/events';
-import type { CardId, LocationId } from './types/ids';
+import type { CardId, LocationCardInstanceId } from './types/ids';
 import type { MatchState } from './types/state';
+import { withTestLocation } from './testkit/runtimeFixture';
+import { locationCardAtLane } from './laneTopology';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -38,16 +40,13 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
     P0: [{ defId: 'street-kid' }],
     P1: [],
   });
-  state = {
-    ...state,
-    lanes: state.lanes.map((lane, idx) => idx === 0
-      ? {
-        ...lane,
-        location: { id: 'loc-meat-market' as LocationId, defId: 'the-meat-market', lane: 0, tags: [] },
-        locationRevealed: true,
-      }
-      : lane),
-  };
+  state = withTestLocation(
+    state,
+    0,
+    'the-meat-market',
+    true,
+    'loc-meat-market' as LocationCardInstanceId,
+  );
 
   const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
@@ -180,23 +179,20 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
     P0: [{ defId: 'street-kid' }],
     P1: [{ defId: 'drone-pup' }],
   });
-  state = {
-    ...state,
-    lanes: state.lanes.map((lane, idx) => idx === 0
-      ? {
-        ...lane,
-        location: { id: 'loc-pineapple-club' as LocationId, defId: 'the-pineapple-club', lane: 0, tags: [] },
-        locationRevealed: true,
-      }
-      : lane),
-  };
+  state = withTestLocation(
+    state,
+    0,
+    'the-pineapple-club',
+    true,
+    'loc-pineapple-club' as LocationCardInstanceId,
+  );
 
   const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
   const pup = state.deck.P1.find((card) => card.defId === 'drone-pup')!.id as CardId;
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, toHand: true });
 
-  const loc = state.lanes[0].location!;
+  const loc = locationCardAtLane(state, 0)!;
   let s = state;
   const events: MatchEvent[] = [];
   const effects = BOOTSTRAP_MANIFEST.locations['the-pineapple-club']!.abilities.onReveal ?? [];
