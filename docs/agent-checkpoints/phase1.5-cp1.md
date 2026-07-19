@@ -1,8 +1,10 @@
 # Phase 1.5 Checkpoint 1 — Capability-Kernel Contracts and Inventory
 
-Status: audit complete; contract decisions recorded for review. No producer,
-reaction, manifest, reducer, runtime, provider, presentation, or UI migration
-has started.
+Status: complete. The contract decisions, producer/reaction inventory,
+collision characterization, architecture inventory fence, and canonical
+live/replay Frame proof are committed as executable evidence. No producer,
+reaction, reducer, runtime, provider, presentation, or UI migration has
+started.
 
 Baseline:
 
@@ -281,12 +283,23 @@ Final direct-`apply()` allowlist:
 `evaluator.ts`, `builtins.ts`, `resolve.ts`, `draw.ts`, and
 `runtime/opening.ts` are migration sources, not permanent exceptions.
 
-## Checkpoint-1 verification still required
+## Checkpoint-1 verification
 
-- add Vitest characterization for the current collision matrix before changing
-  behavior
-- add target contract tests for mutually classified lifecycle reactions
-- prove `Frame` continuity across live and replay folds
-- prove the modifier-ledger `+4, -2` Courthouse case
-- prove `SET` and `RESET` policy semantics before implementation
-- run Phase 0/1 property gates and record the unchanged baseline
+- `lifecycle-reaction-characterization.test.ts` freezes seven current
+  producer-specific collisions: stage/unstage, generic versus built-in move,
+  destroy, create, return, hand entry, and spawn-and-reveal.
+- `phase15-mutation-boundary.characterization.test.ts` uses the TypeScript AST
+  to lock every current mutation-event constructor and manual reaction call
+  surface. Any new bypass surface fails the inventory fence.
+- `phase15-frame-continuity.test.ts` proves that transaction-local indexes may
+  reset while canonical `Frame` values continue, and that replay consumes the
+  exact live `FramedEvent` sequence without a second chronology.
+- The three focused Checkpoint-1 files pass 10/10 tests.
+- The Phase 0 runtime/property gate remains green at 71/71 tests with 200
+  generated cases.
+
+The modifier-ledger `+4, -2`, `SET`, and `RESET` acceptance cases belong to
+Checkpoint 3, where the scalar `powerDelta` source of truth is removed. They
+must be executable target tests before that migration begins and green before
+Checkpoint 3 exits; Checkpoint 1 intentionally does not add a second temporary
+power representation.
