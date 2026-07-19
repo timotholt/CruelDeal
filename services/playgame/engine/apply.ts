@@ -219,7 +219,7 @@ function applyEventBody(
     case 'CARD_REVEAL_SCHEDULED':
       return patchCard(state, event.cardId, { revealTiming: event.timing });
 
-    case 'CARD_FLIPPED': {
+    case 'CARD_REVEALED': {
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       return patchCard(state, event.cardId, {
@@ -228,6 +228,7 @@ function applyEventBody(
       });
     }
 
+    case 'CARD_PLAY_COMPLETED':
     case 'OR_WINDOW_OPEN':
     case 'OR_WINDOW_CLOSE':
       // Observational — purely for the presentation layer. No state mut.
@@ -1298,8 +1299,8 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
 
   switch (event.type) {
 
-    case 'CARD_STAGED': {
-      // Card was played; increment cardsPlayedThisTurn for owner.
+    case 'CARD_PLAY_COMPLETED': {
+      // Only committed hand-origin plays count. Private staging and undo do not.
       const owner = event.owner;
       const prev = tv[owner];
       tv = patchOwnerVars(tv, owner, { cardsPlayedThisTurn: prev.cardsPlayedThisTurn + 1 });

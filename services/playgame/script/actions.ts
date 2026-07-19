@@ -199,7 +199,7 @@ const paceFrame = async (
     await paceLocationReveal(c, frame, presentFrame);
     return;
   }
-  if (frame.event.type === 'CARD_FLIPPED') {
+  if (frame.event.type === 'CARD_REVEALED') {
     await revealPendingCinematic({
       pendingIds: [frame.event.cardId],
       cardElMap: c.cardRefs,

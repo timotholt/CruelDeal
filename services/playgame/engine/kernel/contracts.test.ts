@@ -192,7 +192,7 @@ describe('C4A kernel contract readiness', () => {
   it('does not preserve the create/deploy conflation', () => {
     expect(SPAWN_AND_REVEAL_CLEAN_CUTOVER).toEqual({
       supersededEffect: 'SPAWN_AND_REVEAL',
-      createNewInstance: ['CREATE_CARD', 'INVOKE_ON_REVEAL'],
+      createNewInstance: ['CREATE_CARD', 'REVEAL_CARD'],
       deployExistingDeckInstance: ['DEPLOY_FROM_DECK'],
       preserveLegacyPrimitive: false,
     });

@@ -243,7 +243,7 @@ const addPowerToEventCard = (delta: number): EffectExpr => ({
 });
 
 describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
-  it('freezes stage/unstage phantom location-entry mutations in the raw engine API', () => {
+  it('keeps private stage and unstage free of gameplay reactions', () => {
     const stagedCard = card('staged-card', 'plain', 'P0', 'HAND');
     const gunStore = locationDef('gun-store', {
       onCardEnteredHere: [addPowerToEventCard(2)],
@@ -272,7 +272,6 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(stageEvents.map(event => event.type)).toEqual([
       'CARD_STAGED',
       'ENERGY_CHANGED',
-      'CARD_POWER_CHANGED',
     ]);
     expect(unstageEvents.map(event => event.type)).toEqual([
       'CARD_UNSTAGED',
@@ -282,7 +281,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       zone: 'HAND',
       lane: null,
     });
-    expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(2);
+    expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(0);
   });
 
   it('routes generic and builtin MOVE through identical reactions', () => {
@@ -652,6 +651,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(generic.events.map(event => event.type)).toEqual([
       'CARD_CREATED',
       'CARD_POWER_CHANGED',
+      'CARD_REVEALED',
     ]);
     expect(genericCreated).toBeDefined();
     expect(getStoredCardPowerDelta(
@@ -823,14 +823,24 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(result.events.map(event => event.type)).toEqual([
       'CARD_CREATED',
       'CARD_POWER_CHANGED',
+      'CARD_REVEALED',
+      'OR_WINDOW_OPEN',
+      'CARD_POWER_CHANGED',
+      'OR_WINDOW_CLOSE',
     ]);
-    expect(result.events.some(event => event.type === 'CARD_FLIPPED')).toBe(false);
+    expect(result.events.some(event => event.type === 'CARD_PLAY_COMPLETED')).toBe(false);
     expect(spawned).toBeDefined();
     expect(getStoredCardPowerDelta(
       result.state,
       spawned!.cardId,
       gameManifest,
-    )).toBe(1);
+    )).toBe(5);
+    expect(getCardState(result.state, spawned!.cardId)).toMatchObject({
+      zone: 'LANE',
+      lane: 0,
+      revealed: true,
+      revealTiming: null,
+    });
   });
 
   it('deploys an existing deck instance without recreating or resetting it', () => {
@@ -864,6 +874,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       type: 'DEPLOY_FROM_DECK',
       owner: 'P0',
       lane: 1,
+      depth: 0,
       selection: { kind: 'TOP' },
       cause: {
         sourceId: deployer.id,

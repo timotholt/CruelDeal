@@ -26,6 +26,8 @@ export type GameCommand =
   | ChangeCardZoneCommand
   | DeployFromDeckCommand
   | InvokeOnRevealCommand
+  | InvokeCardTriggerCommand
+  | InvokeLocationTriggerCommand
   | DrawCardCommand
   | DiscardCardCommand
   | ChangeStoredPowerCommand
@@ -42,11 +44,14 @@ export interface PlayCardCommand extends CausedCommand {
   readonly type: 'PLAY_CARD';
   readonly cardId: CardId;
   readonly lane: LaneId;
+  readonly depth: number;
 }
 
 export interface RevealCardCommand extends CausedCommand {
   readonly type: 'REVEAL_CARD';
   readonly cardId: CardId;
+  readonly depth: number;
+  readonly cleanupSpell: boolean;
 }
 
 export interface MoveCardCommand extends CausedCommand {
@@ -77,6 +82,7 @@ export interface CreateCardCommand extends CausedCommand {
   readonly cardId: CardId;
   readonly defId: string;
   readonly owner: Owner;
+  readonly depth: number;
   readonly destination:
     | { readonly kind: 'DECK'; readonly position?: 'TOP' | 'BOTTOM' }
     | { readonly kind: 'HAND' }
@@ -105,6 +111,7 @@ export interface DeployFromDeckCommand extends CausedCommand {
   readonly type: 'DEPLOY_FROM_DECK';
   readonly owner: Owner;
   readonly lane: LaneId;
+  readonly depth: number;
   readonly selection:
     | { readonly kind: 'TOP' }
     | { readonly kind: 'FIRST_MATCHING'; readonly selector: Selector };
@@ -114,6 +121,22 @@ export interface InvokeOnRevealCommand extends CausedCommand {
   readonly type: 'INVOKE_ON_REVEAL';
   readonly cardId: CardId;
   readonly reason: 'NATURAL_REVEAL' | 'RETRIGGER';
+  readonly depth: number;
+}
+
+export interface InvokeCardTriggerCommand extends CausedCommand {
+  readonly type: 'INVOKE_CARD_TRIGGER';
+  readonly cardId: CardId;
+  readonly slot: 'TURN_START' | 'TURN_END';
+  readonly depth: number;
+}
+
+export interface InvokeLocationTriggerCommand extends CausedCommand {
+  readonly type: 'INVOKE_LOCATION_TRIGGER';
+  readonly locationId: LocationCardInstanceId;
+  readonly lane: LaneId;
+  readonly slot: 'REVEAL' | 'TURN_START' | 'TURN_END';
+  readonly depth: number;
 }
 
 export interface DrawCardCommand extends CausedCommand {

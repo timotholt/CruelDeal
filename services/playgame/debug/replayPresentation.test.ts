@@ -210,9 +210,16 @@ describe('replay debug presentation', () => {
       .toContain('"lane": 2,  // right lane');
 
     expect(describeReplayStep(step({
-      type: 'CARD_FLIPPED',
+      type: 'CARD_REVEALED',
       cardId,
-    }), names, actors).summary).toBe('Player 1 — Bone Market — Revealed.');
+      cause: {
+        sourceId: cardId,
+        effectKind: 'SYSTEM',
+        reason: 'TEST_REVEAL',
+      },
+    }), names, actors).summary).toBe(
+      'Player 1 — Bone Market — Revealed - caused by Bone Market (P0) resolving under the game rules.',
+    );
 
     expect(describeReplayStep(step({
       type: 'MATCH_ENDED',

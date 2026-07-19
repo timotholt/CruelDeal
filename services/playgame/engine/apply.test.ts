@@ -148,7 +148,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.energy.P1, 1, 'ENERGY_CHANGED: opponent unchanged');
 }
 
-// -- CARD_FLIPPED: revealed := true
+// -- CARD_REVEALED: revealed := true
 
 {
   const s0 = stateWithSentinelInHand();
@@ -169,10 +169,10 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(getCardState(delayed, 's1' as CardId)!.revealTiming, { kind: 'END_OF_GAME' }, 'CARD_REVEAL_SCHEDULED: replaces the reveal timing');
   const s2 = run(
     delayed,
-    { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
+    { type: 'CARD_REVEALED', cardId: 's1' as CardId, cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
   );
-  eq(getCardState(s2, 's1' as CardId)!.revealed, true, 'CARD_FLIPPED: revealed=true');
-  eq(getCardState(s2, 's1' as CardId)!.revealTiming, null, 'CARD_FLIPPED: clears reveal timing');
+  eq(getCardState(s2, 's1' as CardId)!.revealed, true, 'CARD_REVEALED: revealed=true');
+  eq(getCardState(s2, 's1' as CardId)!.revealTiming, null, 'CARD_REVEALED: clears reveal timing');
 }
 
 // -- CARD_POWER_CHANGED: appends semantic ledger entries and affects getCardPower
@@ -181,7 +181,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const staged = run(s0,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
-    { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
+    { type: 'CARD_REVEALED', cardId: 's1' as CardId, cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
   );
   // Armored Van has no ongoing; just check basePower to the lane total, not to any card's own power.
   eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 5, 'pre-delta: Armored Van card power = 5');

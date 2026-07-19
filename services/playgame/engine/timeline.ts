@@ -160,10 +160,10 @@ export function cardLifecycleFrames(
       case 'CARD_CREATED':
         created.push(entry.frame);
         break;
-      case 'CARD_STAGED':
+      case 'CARD_PLAY_COMPLETED':
         played.push(entry.frame);
         break;
-      case 'CARD_FLIPPED':
+      case 'CARD_REVEALED':
         revealed.push(entry.frame);
         break;
       case 'CARD_MOVED':

@@ -10,14 +10,13 @@ import type { CardId, LaneId } from '@/services/playgame/engine/types/ids';
 import { locationCardAtLane } from '@/services/playgame/engine/laneTopology';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import {
-  paceCommittedOpeningDeal,
-  paceCommittedOpeningLocationReveal,
-  paceCommittedOpeningTurnStart,
+  paceCommittedOpening,
   type PlayScriptCtx,
 } from '@/services/playgame/script/actions';
 import { getHandForSeat } from '@/services/playgame/view';
 import { selectInteractiveHand } from '@/components/screens/play/handInteractivity';
 import { getCardCost, getCardRuntime } from '@/services/playgame/engine/projections';
+import { createPlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 
 const disposers: Array<() => void> = [];
 
@@ -261,10 +260,10 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     const revealFrames = timeline.transitions
       .slice(resolutionStartIndex + 1)
-      .filter((frame) => frame.event.type === 'CARD_FLIPPED');
+      .filter((frame) => frame.event.type === 'CARD_REVEALED');
     const expectedRevealOrder = revealFrames.map((frame) => {
-      if (frame.event.type !== 'CARD_FLIPPED') {
-        throw new Error('reveal frame lost its CARD_FLIPPED event');
+      if (frame.event.type !== 'CARD_REVEALED') {
+        throw new Error('reveal frame lost its CARD_REVEALED event');
       }
       return frame.event.cardId;
     });
@@ -273,7 +272,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     const presentedRevealOrder: CardId[] = [];
     for (const frame of timeline.transitions.slice(resolutionStartIndex + 1)) {
       pg.actions.presentCommittedFrame(frame);
-      if (frame.event.type !== 'CARD_FLIPPED') continue;
+      if (frame.event.type !== 'CARD_REVEALED') continue;
       presentedRevealOrder.push(frame.event.cardId);
       expect(getCardRuntime(
         pg.engineState(),
@@ -327,9 +326,18 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     const boardWrap = document.createElement('div');
     const boardEl = document.createElement('div');
+    const motionOverlay = document.createElement('div');
     const toastArea = document.createElement('div');
-    boardWrap.append(boardEl, toastArea);
+    boardWrap.append(boardEl, motionOverlay, toastArea);
     document.body.append(boardWrap);
+    const cardRefs = new Map<string, HTMLElement>();
+    const zoneRefs = new Map();
+    const motionSurface = createPlayMotionSurface({
+      frame: boardWrap,
+      overlay: motionOverlay,
+      cardRefs,
+      zoneRefs,
+    });
 
     const presentationCtx: PlayScriptCtx = {
       get state() {
@@ -342,9 +350,10 @@ describe('PlayGameProvider runtime synchronization', () => {
       remoteSeat: pg.remoteSeat,
       boardEl,
       boardWrap,
+      motionSurface,
       toastArea,
-      cardRefs: new Map(),
-      zoneRefs: new Map(),
+      cardRefs,
+      zoneRefs,
       presentPlayfieldEvent: async () => undefined,
       presentCommittedFrame: (frame) => {
         pg.actions.presentCommittedFrame(frame);
@@ -356,22 +365,14 @@ describe('PlayGameProvider runtime synchronization', () => {
       },
       finishTurnPresentation: () => undefined,
     };
-    const runOpeningBeat = async (step: ReturnType<typeof paceCommittedOpeningDeal>) => {
+    const runOpeningBeat = async (step: ReturnType<typeof paceCommittedOpening>) => {
       if (typeof step !== 'function') throw new Error('opening presentation must be a step');
       const presentation = Promise.resolve(step(presentationCtx));
       await vi.runAllTimersAsync();
       await presentation;
     };
 
-    await runOpeningBeat(paceCommittedOpeningDeal(pg.openingTimeline));
-    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(3);
-    expect(firstLocationRevealed(pg)).toBe(false);
-
-    await runOpeningBeat(paceCommittedOpeningLocationReveal(pg.openingTimeline));
-    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(3);
-    expect(firstLocationRevealed(pg)).toBe(true);
-
-    await runOpeningBeat(paceCommittedOpeningTurnStart(pg.openingTimeline));
+    await runOpeningBeat(paceCommittedOpening(pg.openingTimeline));
 
     const localDealHandSizes = presentedFrames
       .filter((frame, index) => frame.type === 'CARD_DRAWN'

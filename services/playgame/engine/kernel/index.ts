@@ -4,5 +4,6 @@ export * from './failure';
 export * from './kernel';
 export * from './lifecycleTransaction';
 export * from './placementTransaction';
+export * from './revealTransaction';
 export * from './powerTransaction';
 export * from './types';

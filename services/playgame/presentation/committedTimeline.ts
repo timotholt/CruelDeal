@@ -47,7 +47,7 @@ export function planCommittedEventPacing(
  * frames are adopted. Local staging is already visible from the private plan,
  * so those frames are adopted without replaying a hand-to-lane flight. Remote
  * staging is the one face-down fly-in beat. Reveal ownership is read from the
- * committed frame, which means delayed cards (no CARD_FLIPPED frame this turn)
+ * committed frame, which means delayed cards (no CARD_REVEALED frame this turn)
  * are never accidentally added to the reveal walk.
  */
 export function planCommittedResolutionWalk(
@@ -76,7 +76,7 @@ export function planCommittedResolutionWalk(
       continue;
     }
 
-    if (frame.event.type === 'CARD_FLIPPED') {
+    if (frame.event.type === 'CARD_REVEALED') {
       const owner = getCardPlacement(frame.before, frame.event.cardId)?.owner
         ?? getCardPlacement(frame.after, frame.event.cardId)?.owner;
       const isPriority = owner === frame.before.priority;

@@ -6,6 +6,7 @@ export const LOCATION_ABILITY_LABEL_BY_SLOT = {
   atTurnStart: 'TURN_START',
   atTurnEnd: 'END_OF_TURN',
   onCardPlayedHere: 'AFTER_CARD_PLAYED_HERE',
+  onCardRevealedHere: 'AFTER_CARD_REVEALED_HERE',
   onCardEnteredHere: 'AFTER_CARD_ENTERED_HERE',
   onCardLeftHere: 'AFTER_CARD_LEFT_HERE',
   onCardCreatedHere: 'AFTER_CARD_CREATED_HERE',

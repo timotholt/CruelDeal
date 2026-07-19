@@ -5,7 +5,7 @@
  * fields on MatchState for every event that should affect them.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { apply } from '../apply';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
@@ -153,16 +153,16 @@ describe('trackedVariables: CARD_DISCARDED', () => {
   });
 });
 
-// ---- CARD_STAGED (cardsPlayedThisTurn) ------------------------------------
+// ---- CARD_PLAY_COMPLETED (cardsPlayedThisTurn) ----------------------------
 
-describe('trackedVariables: CARD_STAGED', () => {
-  it('increments cardsPlayedThisTurn for staged owner', () => {
+describe('trackedVariables: CARD_PLAY_COMPLETED', () => {
+  it('counts only a completed hand-origin play, not private staging', () => {
     const handCard = mkCard('h1', 'P0', 'HAND');
     const s0: MatchState = upsertTestCard({
       ...baseState(),
       hand: { P0: [handCard.id], P1: [] },
     }, handCard);
-    const s = run(s0, {
+    const staged = run(s0, {
       type: 'CARD_STAGED',
       intentId: 'i1',
       cardId: 'h1' as CardId,
@@ -170,8 +170,16 @@ describe('trackedVariables: CARD_STAGED', () => {
       owner: 'P0',
       cost: 3,
     });
-    expect(s.trackedVariables.P0.cardsPlayedThisTurn).toBe(1);
-    expect(s.trackedVariables.P1.cardsPlayedThisTurn).toBe(0);
+    expect(staged.trackedVariables.P0.cardsPlayedThisTurn).toBe(0);
+    const completed = run(staged, {
+      type: 'CARD_PLAY_COMPLETED',
+      cardId: 'h1' as CardId,
+      lane: 1,
+      owner: 'P0',
+      cause: SYSTEM_SOURCE,
+    });
+    expect(completed.trackedVariables.P0.cardsPlayedThisTurn).toBe(1);
+    expect(completed.trackedVariables.P1.cardsPlayedThisTurn).toBe(0);
   });
 });
 
@@ -250,9 +258,17 @@ describe('trackedVariables: TURN_ENDED', () => {
       type: 'CARD_STAGED',
       intentId: 'i1', cardId: 'h1' as CardId, lane: 1, owner: 'P0', cost: 3,
     });
-    expect(s1.trackedVariables.P0.cardsPlayedThisTurn).toBe(1);
+    expect(s1.trackedVariables.P0.cardsPlayedThisTurn).toBe(0);
+    const completed = run(s1, {
+      type: 'CARD_PLAY_COMPLETED',
+      cardId: 'h1' as CardId,
+      lane: 1,
+      owner: 'P0',
+      cause: SYSTEM_SOURCE,
+    });
+    expect(completed.trackedVariables.P0.cardsPlayedThisTurn).toBe(1);
 
-    const s2 = run(s1, { type: 'TURN_ENDED', turn: 3 });
+    const s2 = run(completed, { type: 'TURN_ENDED', turn: 3 });
     expect(s2.trackedVariables.P0.cardsPlayedLastTurn).toBe(1);
     expect(s2.trackedVariables.P0.cardsPlayedThisTurn).toBe(0);
   });

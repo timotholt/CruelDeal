@@ -429,6 +429,8 @@ export const REACTION_ORDER_PLANS = {
  * not move cards, invoke text, or construct events themselves.
  */
 export const REQUIRED_KERNEL_COMMAND_TYPES = [
+  'PLAY_CARD',
+  'REVEAL_CARD',
   'CHANGE_STORED_POWER',
   'MOVE_CARD',
   'RETURN_CARD',
@@ -436,6 +438,8 @@ export const REQUIRED_KERNEL_COMMAND_TYPES = [
   'CHANGE_CARD_ZONE',
   'DEPLOY_FROM_DECK',
   'INVOKE_ON_REVEAL',
+  'INVOKE_CARD_TRIGGER',
+  'INVOKE_LOCATION_TRIGGER',
 ] as const;
 
 export type RequiredKernelCommandType =
@@ -504,7 +508,7 @@ export const ON_REVEAL_INVOCATION_CONTRACT = {
  */
 export const SPAWN_AND_REVEAL_CLEAN_CUTOVER = {
   supersededEffect: 'SPAWN_AND_REVEAL',
-  createNewInstance: ['CREATE_CARD', 'INVOKE_ON_REVEAL'],
+  createNewInstance: ['CREATE_CARD', 'REVEAL_CARD'],
   deployExistingDeckInstance: ['DEPLOY_FROM_DECK'],
   preserveLegacyPrimitive: false,
 } as const satisfies {

@@ -354,10 +354,10 @@ describe('current card API', () => {
       { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', cost: 3 },
       { type: 'CARD_POWER_CHANGED', cardId, mutation: { kind: 'ADD', delta: 2 }, cause },
       { type: 'CARD_COST_CHANGED', cardId, delta: -1, cause },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', cost: 2 },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
 
     const card = getCurrentCard(current, cardId, manifest);
@@ -408,13 +408,13 @@ describe('current card API', () => {
     const current = fold([
       { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
       { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', cost: 3 },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'TURN_RESOLUTION_STARTED', turn: 1 },
       { type: 'TURN_ENDED', turn: 1 },
       { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' },
       { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', cost: 3 },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
     const lifecycle = getCardLifecycle(current, cardId);
     expect(lifecycle).toMatchObject({
@@ -451,7 +451,8 @@ describe('current card API', () => {
       events: [
       { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
       { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', cost: 3 },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+      { type: 'CARD_PLAY_COMPLETED', cardId, owner: 'P0', lane: 0, cause },
       { type: 'CARD_DESTROYED', cardId, cause },
       ],
       manifest,

@@ -330,7 +330,7 @@ function resolveCurrentTurn(
 
   const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('rt'));
 
-  truthy(events.some(e => e.type === 'CARD_FLIPPED'), 'cascade: CARD_FLIPPED present');
+  truthy(events.some(e => e.type === 'CARD_REVEALED'), 'cascade: CARD_REVEALED present');
   truthy(events.some(e => e.type === 'OR_WINDOW_OPEN'), 'cascade: OR_WINDOW_OPEN present');
   truthy(events.some(e => e.type === 'OR_WINDOW_CLOSE'), 'cascade: OR_WINDOW_CLOSE present');
   truthy(events.some(e => e.type === 'TURN_ENDED'), 'cascade: TURN_ENDED');
@@ -352,7 +352,7 @@ function resolveCurrentTurn(
 // -- Priority order: priority holder reveals FIRST --------------------------
 
 {
-  // Two cards, one per side. Record the order of CARD_FLIPPED events.
+  // Two cards, one per side. Record the order of CARD_REVEALED events.
   const pyro = mkCard('pyro', 4, 3, {
     abilities: {
       onReveal: [{
@@ -376,7 +376,7 @@ function resolveCurrentTurn(
     }, createRng('r'), manifest), manifest);
     const { events } = resolveCurrentTurn(s, manifest, createRng('prio'));
     const flipOrder = events
-      .filter(e => e.type === 'CARD_FLIPPED')
+      .filter(e => e.type === 'CARD_REVEALED')
       .map(e => (e as { cardId: CardId }).cardId);
     const expected = prio === 'P0' ? [a.cardId, b.cardId] : [b.cardId, a.cardId];
     eq(flipOrder, expected, `priority=${prio}: reveal order ${expected.join(' → ')}`);

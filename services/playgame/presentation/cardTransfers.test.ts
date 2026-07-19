@@ -92,7 +92,7 @@ const stateWithHandCard = () => {
 {
   const { state: handState, cardId } = stateWithHandCard();
   const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
-  const revealed = apply(staged, event({ type: 'CARD_FLIPPED', cardId }), BOOTSTRAP_MANIFEST);
+  const revealed = apply(staged, event({ type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }), BOOTSTRAP_MANIFEST);
   const e = event({ type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause: source });
   const s1 = apply(revealed, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(revealed, e, s1);

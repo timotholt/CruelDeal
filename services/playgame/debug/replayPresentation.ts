@@ -231,8 +231,11 @@ export function describeReplayStep(
         ? `${cardName(event.cardId)} was scheduled to reveal at the end of the game.`
         : `${cardName(event.cardId)} was scheduled to reveal on turn ${event.timing.turn}.`;
       break;
-    case 'CARD_FLIPPED':
+    case 'CARD_REVEALED':
       summary = `${cardPlayer(event.cardId)} — ${cardName(event.cardId)} — Revealed.`;
+      break;
+    case 'CARD_PLAY_COMPLETED':
+      summary = `${cardPlayer(event.cardId)} — ${cardName(event.cardId)} — Completed its play in lane ${event.lane + 1}.`;
       break;
     case 'OR_WINDOW_OPEN':
       summary = `${cardName(event.cardId)} began resolving its reveal effect${event.multiplier === 1 ? '' : ` ${event.multiplier} times`}.`;

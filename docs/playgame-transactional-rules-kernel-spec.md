@@ -766,7 +766,27 @@ Two different actions must remain distinct:
 
 The current `SPAWN_AND_REVEAL` primitive conflates these actions. C4C/C4D
 deletes that primitive. New-instance behavior lowers to `CREATE_CARD` followed
-by `INVOKE_ON_REVEAL`; deck behavior lowers to `DEPLOY_FROM_DECK`.
+by `REVEAL_CARD`; the resulting committed `CARD_REVEALED` transition discovers
+`INVOKE_ON_REVEAL` with reason `NATURAL_REVEAL`. Deck behavior lowers to
+`DEPLOY_FROM_DECK`.
+
+### Create And Reveal
+
+Create-and-reveal schedules `CREATE_CARD` and `REVEAL_CARD` as ordered sibling
+work. The creation command commits `CARD_CREATED`, and all reactions caused by
+that transition finish depth-first before `REVEAL_CARD` runs. The reveal command
+then commits `CARD_REVEALED`, which schedules the card's natural On Reveal
+invocation through the ordinary reaction dispatcher.
+
+The complete created card reveal lifecycle, including its On Reveal effects and
+nested work, finishes before the parent effect's next sibling continues. A
+created card with no On Reveal ability still commits `CARD_REVEALED`, becomes
+face-up, and contributes Power immediately. Create-and-reveal never emits
+`CARD_PLAY_COMPLETED` and never counts as a hand-origin play.
+
+If creation is a normal no-op because the lane is full or the definition is
+invalid, the paired reveal is also a normal no-op because no matching card
+instance exists. No reveal or invocation event is fabricated.
 
 ### Deploy From Deck
 
@@ -800,6 +820,12 @@ directly by card/location effect work. A retrigger does not fabricate another
 `CARD_REVEALED` or `CARD_PLAY_COMPLETED` fact and does not re-fire played-here
 reactions.
 
+`INVOKE_ON_REVEAL` is not authored as the second half of create-and-reveal.
+Doing so would bypass the reveal transition and could double-invoke the card
+once `CARD_REVEALED` reactions are dispatched. `REVEAL_CARD` is the required
+second command; natural invocation is exclusively discovered from its committed
+`CARD_REVEALED` transition.
+
 At the start of each invocation, the kernel snapshots:
 
 - the card's whole authored On Reveal ability list;
@@ -820,6 +846,24 @@ Nested commands resolve depth-first before the next sibling effect or
 repetition. Deck order, capacity, active rule sources, and projection values
 are therefore always read from the candidate state produced by all earlier
 work.
+
+### Mandatory Create-And-Reveal Contract
+
+C4D must include a Drone Pilot-style golden trace in which a revealing parent
+creates an inert token in its lane:
+
+1. the parent begins its natural On Reveal invocation;
+2. `CREATE_CARD` commits `CARD_CREATED`;
+3. created-here reactions finish;
+4. `REVEAL_CARD` commits `CARD_REVEALED`;
+5. the token's natural On Reveal invocation finishes, if it has one;
+6. revealed-here reactions finish in canonical order;
+7. only then does the parent's next authored sibling effect continue.
+
+The trace must prove that the token is face-up and contributes Power in the
+same resolution transaction, emits no `CARD_PLAY_COMPLETED`, and is not left on
+the turn reveal schedule. A full lane must instead prove a clean no-op with no
+created identity, reveal, invocation, or partial presentation fact.
 
 ### Mandatory Cascade Contract
 

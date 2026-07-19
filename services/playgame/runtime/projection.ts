@@ -422,7 +422,7 @@ function projectAnimationEvent(
       };
     }
 
-    case 'CARD_FLIPPED': {
+    case 'CARD_REVEALED': {
       const cardState = getAllCardStates(transition.after)
         .find(candidate => candidate.id === event.cardId);
       return {
@@ -433,6 +433,15 @@ function projectAnimationEvent(
         },
       };
     }
+    case 'CARD_PLAY_COMPLETED':
+      return {
+        type: event.type,
+        data: {
+          owner: event.owner,
+          lane: event.lane,
+          card: card(event.cardId),
+        },
+      };
     case 'CARD_REVEAL_SCHEDULED':
       return cardEventVisible(transition, event.cardId, viewerSeat)
         ? { type: event.type, data: { card: card(event.cardId), timing: event.timing } }

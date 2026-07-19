@@ -25,7 +25,6 @@ import { select, selectLanes } from '../projections/select';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
-import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
@@ -42,6 +41,13 @@ import {
   resolvePlacementTransaction,
   type FrozenPlacementEffectContext,
 } from '../kernel/placementTransaction';
+import {
+  resolveRevealTransaction,
+  type FrozenRevealEffectContext,
+  type RevealCommand,
+  type RevealWork,
+} from '../kernel/revealTransaction';
+import type { KernelWorkExpansion } from '../kernel/kernel';
 import type { PlacementCommand } from '../kernel/operations/placement';
 import {
   addCardTag,
@@ -59,19 +65,17 @@ import {
   replaceLocationCard,
   type LocationLifecycleResult,
 } from '../locationLifecycle';
-import { isActiveLane, locationCardAtLane } from '../laneTopology';
+import { locationCardAtLane } from '../laneTopology';
 import {
   getAllCardIds,
   getCardRuntime,
 } from '../projections/cardRuntime';
-import { getLocationRuntime } from '../projections/locationRuntime';
 
 export const MAX_REVEAL_RECURSION = 16;
 
 /** Names of per-card triggered ability slots that fire outside the reveal
  *  cascade. Each slot is a `readonly EffectExpr[]` on `CardAbilities`. */
 type TriggerSlot = 'onMove' | 'onDestroyed' | 'onDiscarded' | 'onAnyCardPlayedHere';
-type LocationTriggerSlot = 'atTurnStart' | 'atTurnEnd' | 'onCardPlayedHere' | 'onCardEnteredHere' | 'onCardDestroyedHere';
 
 /**
  * Fire a named trigger slot for one card, with a frozen self-context
@@ -118,51 +122,6 @@ function fireCardTrigger(
         reason: slot,
       },
       depth: parentDepth + 1,
-    };
-    const res = evalEffect(s, effs[j], subCtx, manifest);
-    events.push(...res.events);
-    s = res.state;
-  }
-  return { events, state: s };
-}
-
-export function fireLocationTrigger(
-  state: MatchState,
-  lane: LaneId,
-  slot: LocationTriggerSlot,
-  parentRng: Rng,
-  manifest: Manifest,
-  eventCard: CardId | null = null,
-  eventOwner: Owner | null = eventCard ? getCardRuntime(state, eventCard, manifest)?.owner ?? null : null,
-  parentDepth: number = 0,
-): EvalResult {
-  const loc = locationCardAtLane(state, lane);
-  if (!loc || loc.face !== 'FACE_UP') return { events: [], state };
-  const location = getLocationRuntime(state, loc.id, manifest);
-  const effs = location?.abilities[slot];
-  if (!effs || effs.length === 0) return { events: [], state };
-
-  const events: MatchEvent[] = [];
-  let s = state;
-  for (let j = 0; j < effs.length; j++) {
-    const subCtx: EffectCtx = {
-      state: s,
-      manifest,
-      self: loc.id,
-      selfKind: 'location',
-      selfLane: lane,
-      selfOwner: null,
-      eventCard,
-      eventLane: lane,
-      eventOwner,
-      rng: parentRng.scope(`${slot}:${loc.id}:${j}`),
-      source: {
-        sourceId: loc.id,
-        effectKind: 'LOCATION',
-        exprIdx: j,
-        reason: slot,
-      },
-      depth: parentDepth,
     };
     const res = evalEffect(s, effs[j], subCtx, manifest);
     events.push(...res.events);
@@ -409,11 +368,6 @@ export function destroyAllOtherLanesWithNormalRules(
 // Reveal cascade
 // ============================================================================
 
-type CardRevealOptions = {
-  readonly window: 'TURN' | 'END_OF_GAME';
-  readonly firePlayedTriggers: boolean;
-};
-
 function banishResolvedSpell(
   state: MatchState,
   cardId: CardId,
@@ -448,10 +402,32 @@ export function revealPlayedCard(
   rng: Rng,
   depth: number = 0,
 ): EvalResult {
-  return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    window: 'TURN',
-    firePlayedTriggers: true,
-  });
+  const card = getCardRuntime(state, cardId, manifest);
+  if (!card || card.lane === null) return { events: [], state };
+  const cause: EffectRef = {
+    sourceId: cardId,
+    effectKind: 'SYSTEM',
+    reason: card.lifecycle.framePlayed === undefined
+      ? 'SCHEDULED_REVEAL'
+      : 'COMMITTED_HAND_PLAY',
+  };
+  return executeRevealCommands(state, [
+    card.lifecycle.framePlayed === undefined
+      ? {
+          type: 'REVEAL_CARD',
+          cardId,
+          depth,
+          cleanupSpell: true,
+          cause,
+        }
+      : {
+          type: 'PLAY_CARD',
+          cardId,
+          lane: card.lane,
+          depth,
+          cause,
+        },
+  ], { rng }, manifest);
 }
 
 /**
@@ -464,10 +440,7 @@ export function revealPlayedCardAtEndOfGame(
   rng: Rng,
   depth: number = 0,
 ): EvalResult {
-  return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    window: 'END_OF_GAME',
-    firePlayedTriggers: true,
-  });
+  return revealPlayedCard(state, cardId, manifest, rng, depth);
 }
 
 /**
@@ -481,216 +454,254 @@ export function triggerOnReveal(
   rng: Rng,
   depth: number = 0,
 ): EvalResult {
-  return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    window: 'TURN',
-    firePlayedTriggers: false,
-  });
-}
-
-/**
- * Core reveal implementation: fire a card's On Reveal abilities
- * OR-multiplier-many times, threading events+state through the recursion.
- * Emits OR_WINDOW bracket events and a CARD_FLIPPED if the card wasn't
- * already revealed.
- *
- * Upstream callers (Step 7's resolveTurn) iterate over pending cards in
- * priority order and invoke revealPlayedCard per card. The depth cap protects
- * against pathological spawn loops (Sera → Sera → ...).
- */
-function resolveCardReveal(
-  state: MatchState,
-  cardId: CardId,
-  manifest: Manifest,
-  rng: Rng,
-  depth: number,
-  options: CardRevealOptions,
-): EvalResult {
-  const card = getCardRuntime(state, cardId, manifest);
-  if (
-    !card
-    || card.zone !== 'LANE'
-    || card.lane === null
-    || !isActiveLane(state, card.lane)
-  ) {
-    return { events: [], state };
-  }
-
-  if (!card.revealed) {
-    const timing = card.revealTiming;
-    const due = options.window === 'END_OF_GAME'
-      ? timing?.kind === 'END_OF_GAME'
-        || (timing?.kind === 'TURN' && timing.turn <= state.turn)
-      : timing?.kind === 'TURN' && timing.turn <= state.turn;
-    if (!due) return { events: [], state };
-  }
-
-  // Cosmo-style suppression: silently drop the OR, no window, no flip.
-  // Spec §6.1: the card still flips face-up in real Snap, but its
-  // abilities don't fire. We emit CARD_FLIPPED for the face-up flip and
-  // skip the rest.
-  const suppressed = isOnRevealDisabled(state, cardId, manifest);
-
-  const events: MatchEvent[] = [];
-  let s = state;
-
-  // Flip face-up if needed (even when suppressed).
-  if (!card.revealed) {
-    const flip: MatchEvent = { type: 'CARD_FLIPPED', cardId };
-    events.push(flip);
-    s = apply(s, flip, manifest);
-  }
-
-  if (suppressed) {
-    const spellCleanup = banishResolvedSpell(
-      s,
-      cardId,
-      manifest,
-      rng.scope(`spell-cleanup:${cardId}`),
-      depth,
-    );
-    events.push(...spellCleanup.events);
-    s = spellCleanup.state;
-    return { events, state: s };
-  }
-
-  const onReveal = card.text.abilities.onReveal ?? [];
-  if (onReveal.length === 0) {
-    // No OR abilities, but `onAnyCardPlayedHere` on OTHER same-lane cards
-    // must still fire — "played" = revealed, independent of the revealing
-    // card's own abilities.
-    if (options.firePlayedTriggers) {
-      const post = fireOnAnyCardPlayedHere(s, cardId, rng, depth, manifest);
-      events.push(...post.events);
-      s = post.state;
-    }
-    const spellCleanup = banishResolvedSpell(
-      s,
-      cardId,
-      manifest,
-      rng.scope(`spell-cleanup:${cardId}`),
-      depth,
-    );
-    events.push(...spellCleanup.events);
-    s = spellCleanup.state;
-    return { events, state: s };
-  }
-
-  // Depth cap — emit a diagnostic and return without firing any effects.
-  if (depth >= MAX_REVEAL_RECURSION) {
-    const diag: MatchEvent = { type: 'RECURSION_LIMIT_HIT', cardId, depth };
-    events.push(diag);
-    s = apply(s, diag, manifest);
-    return { events, state: s };
-  }
-
-  const orMult = getOnRevealMultiplier(s, cardId, manifest);
-
-  const open: MatchEvent = { type: 'OR_WINDOW_OPEN', cardId, multiplier: orMult };
-  events.push(open);
-  s = apply(s, open, manifest);
-
-  // OR multiplier semantics (spec §5.3): the WHOLE ability list repeats
-  // orMult times. Nested reveal command work moves into the kernel in C4D.
-  for (let rep = 0; rep < orMult; rep++) {
-    for (let idx = 0; idx < onReveal.length; idx++) {
-      const effect = onReveal[idx];
-      const subRng = rng.scope(`or:${cardId}:rep${rep}:eff${idx}`);
-      const ctx: EffectCtx = {
-        state: s,  // snapshot; evalEffect doesn't actually read this field
-                   // because it receives state as its first arg.
-        manifest,
-        self: cardId,
-        selfKind: 'card',
-        selfLane: getCardRuntime(s, cardId, manifest)?.lane ?? null,
-        selfOwner: getCardRuntime(s, cardId, manifest)?.owner ?? null,
-        rng: subRng,
-        source: {
-          sourceId: cardId,
-          effectKind: 'ON_REVEAL',
-          exprIdx: idx,
-          reason: 'ON_REVEAL',
-        },
-        depth,
-      };
-      const res = evalEffect(s, effect, ctx, manifest);
-      events.push(...res.events);
-      s = res.state;
-    }
-  }
-
-  const close: MatchEvent = { type: 'OR_WINDOW_CLOSE', cardId };
-  events.push(close);
-  s = apply(s, close, manifest);
-
-  if (options.firePlayedTriggers) {
-    const post = fireOnAnyCardPlayedHere(s, cardId, rng, depth, manifest);
-    events.push(...post.events);
-    s = post.state;
-  }
-
-  const spellCleanup = banishResolvedSpell(
-    s,
+  return executeRevealCommands(state, [{
+    type: 'INVOKE_ON_REVEAL',
     cardId,
-    manifest,
-    rng.scope(`spell-cleanup:${cardId}`),
+    reason: 'RETRIGGER',
     depth,
-  );
-  events.push(...spellCleanup.events);
-  s = spellCleanup.state;
-
-  return { events, state: s };
+    cause: {
+      sourceId: cardId,
+      effectKind: 'ON_REVEAL',
+      reason: 'RETRIGGER',
+    },
+  }], { rng }, manifest);
 }
 
 /**
- * Fire `onAnyCardPlayedHere` for every OTHER revealed card in the same
- * lane as `cardId`. "Played" in Snap means revealed, so this is the
- * correct firing point — invoked whenever a card is newly revealed,
- * whether or not that card has its own On Reveal abilities.
+ * Execute committed play/reveal/deploy/retrigger work through the canonical
+ * kernel. Nested work stays on the same depth-first queue.
  */
-function fireOnAnyCardPlayedHere(
+export function executeRevealCommands(
   state: MatchState,
-  cardId: CardId,
-  parentRng: Rng,
-  parentDepth: number,
+  commands: readonly RevealCommand[],
+  options: { readonly rng: Rng },
   manifest: Manifest,
 ): EvalResult {
-  const flipped = getCardRuntime(state, cardId, manifest);
-  const lane = flipped?.lane;
-  if (!flipped || lane === null || lane === undefined) {
-    return { events: [], state };
-  }
-  const events: MatchEvent[] = [];
-  let s = state;
-  const laneState = s.lanesById[lane];
-  for (const owner of ['P0', 'P1'] as const) {
-    for (const id of laneState.cards[owner]) {
-      if (id === cardId) continue;
-      const other = getCardRuntime(s, id, manifest);
-      if (!other || !other.revealed) continue;
-      const trig = fireCardTrigger(
-        s, id, lane, owner,
-        'onAnyCardPlayedHere',
-        parentRng.scope(`onPlay:${cardId}:${id}`),
-        parentDepth,
-        manifest,
-      );
-      events.push(...trig.events);
-      s = trig.state;
-    }
-  }
-  const locTrig = fireLocationTrigger(
-    s,
-    lane,
-    'onCardPlayedHere',
-    parentRng.scope(`locOnPlay:${cardId}:${lane}`),
+  const transaction = resolveRevealTransaction(state, commands, {
     manifest,
-    cardId,
-    flipped.owner,
-    parentDepth,
+    expandAuthoredEffect: (candidate, effect, context) =>
+      expandRevealAuthoredEffect(
+        candidate,
+        effect,
+        context,
+        options.rng,
+        manifest,
+      ),
+    interpretAtomicEffect: (candidate, effect, context) =>
+      evalEffect(
+        candidate,
+        effect,
+        {
+          ...context,
+          state: candidate,
+          rng: revealRng(options.rng, context),
+        },
+        manifest,
+      ),
+    cleanupSpell: (candidate, cardId, _cause, context) =>
+      banishResolvedSpell(
+        candidate,
+        cardId,
+        manifest,
+        revealRng(options.rng, context).scope(`spell-cleanup:${cardId}`),
+        context.depth,
+      ),
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+/**
+ * Execute card/location trigger invocations through the same depth-first
+ * transaction queue used by play, reveal, create-and-reveal, and retriggers.
+ */
+export const executeReactionCommands = executeRevealCommands;
+
+function revealRng(
+  root: Rng,
+  context: FrozenRevealEffectContext,
+): Rng {
+  return context.scopePath.reduce(
+    (rng, purpose) => rng.scope(purpose),
+    root,
   );
-  events.push(...locTrig.events);
-  s = locTrig.state;
-  return { events, state: s };
+}
+
+function scopedRevealContext(
+  context: FrozenRevealEffectContext,
+  state: MatchState,
+  suffix: string,
+): FrozenRevealEffectContext {
+  return {
+    ...context,
+    state,
+    scopePath: [...context.scopePath, suffix],
+  };
+}
+
+function expandRevealAuthoredEffect(
+  state: MatchState,
+  effect: EffectExpr,
+  context: FrozenRevealEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): KernelWorkExpansion<RevealWork> | null {
+  const rng = revealRng(rootRng, context);
+  const liveContext: EffectCtx = {
+    ...context,
+    state,
+    rng,
+  };
+  if (effect.kind === 'SEQUENCE') {
+    return {
+      work: effect.items.map((item, index) => {
+        const child = scopedRevealContext(
+          context,
+          state,
+          `sequence:${index}`,
+        );
+        return {
+          kind: 'EFFECT',
+          effect: { kind: 'AUTHORED', effect: item },
+          context: child,
+          depth: context.depth,
+        };
+      }),
+    };
+  }
+  if (effect.kind === 'CONDITIONAL') {
+    const branch = evalPredicate(effect.if, liveContext)
+      ? effect.then
+      : effect.else ?? [];
+    return {
+      work: branch.map((item, index) => {
+        const child = scopedRevealContext(
+          context,
+          state,
+          `conditional:${index}`,
+        );
+        return {
+          kind: 'EFFECT',
+          effect: { kind: 'AUTHORED', effect: item },
+          context: child,
+          depth: context.depth,
+        };
+      }),
+    };
+  }
+  if (effect.kind === 'FOREACH') {
+    const targets = select(effect.over, liveContext);
+    return {
+      work: targets.flatMap((cardId, targetIndex) => {
+        const card = getCardRuntime(state, cardId, manifest);
+        return effect.do.map((item, effectIndex) => {
+          const child = scopedRevealContext(
+            {
+              ...context,
+              self: cardId,
+              selfKind: 'card',
+              selfLane: card?.lane ?? null,
+              selfOwner: card?.owner ?? null,
+              it: cardId,
+            },
+            state,
+            `foreach:${targetIndex}:${effectIndex}`,
+          );
+          return {
+            kind: 'EFFECT' as const,
+            effect: { kind: 'AUTHORED' as const, effect: item },
+            context: child,
+            depth: context.depth,
+          };
+        });
+      }),
+    };
+  }
+  if (effect.kind === 'TRIGGER_ON_REVEAL') {
+    return {
+      work: select(effect.target, liveContext).map((cardId) => ({
+        kind: 'COMMAND',
+        command: {
+          type: 'INVOKE_ON_REVEAL',
+          cardId,
+          reason: 'RETRIGGER',
+          depth: context.depth + 1,
+          cause: { ...context.source, reason: 'RETRIGGER' },
+        },
+      })),
+    };
+  }
+  if (effect.kind === 'DEPLOY_FROM_DECK') {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return { work: [] };
+    return {
+      work: selectLanes(effect.lane, liveContext).map((lane) => ({
+        kind: 'COMMAND',
+        command: {
+          type: 'DEPLOY_FROM_DECK',
+          owner,
+          lane,
+          depth: context.depth + 1,
+          selection: effect.selection,
+          cause: { ...context.source, reason: 'DEPLOY_FROM_DECK' },
+        },
+      })),
+    };
+  }
+  if (
+    effect.kind === 'CREATE_CARD_IN_ZONE'
+    && effect.destination.kind === 'LANE'
+    && !effect.setCost
+    && !effect.adjustCost
+  ) {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return { work: [] };
+    const defId = pickDefIdFromPool(
+      effect.pool,
+      state,
+      manifest,
+      liveContext.selfOwner,
+      rng.scope('create:pool'),
+      liveContext.eventOwner ?? null,
+    );
+    if (!defId) return { work: [] };
+    const lanes = selectLanes(effect.destination.lane, liveContext);
+    if (lanes.length === 0) return { work: [] };
+    const lane = lanes.length === 1
+      ? lanes[0]
+      : rng.scope('create:lane').pick(lanes);
+    const cardId = mintCardId(rng.scope('create:id'));
+    return {
+      work: [{
+        kind: 'COMMAND',
+        command: {
+          type: 'CREATE_CARD',
+          cardId,
+          defId,
+          owner,
+          depth: context.depth + 1,
+          destination: {
+            kind: 'LANE',
+            lane,
+            revealed: effect.destination.revealed ?? true,
+          },
+          spawnSource: spawnSourceForSource(
+            context.source,
+            owner === context.selfOwner,
+          ),
+          cause: { ...context.source, reason: 'CREATE_AND_REVEAL' },
+        },
+      }],
+    };
+  }
+  return null;
 }
 
 // ============================================================================
@@ -980,6 +991,7 @@ export function evalEffect(
             owner,
             cardId: newId,
             defId,
+            depth: ctx.depth,
             spawnSource,
             destination: { kind: 'HAND' },
             cause: ctx.source,
@@ -993,6 +1005,7 @@ export function evalEffect(
             owner,
             cardId: newId,
             defId,
+            depth: ctx.depth,
             spawnSource,
             destination: {
               kind: 'DECK',
@@ -1007,15 +1020,20 @@ export function evalEffect(
           const lanes = selectLanes(effect.destination.lane, liveCtx);
           if (lanes.length === 0) return { events: [], state };
           const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope('lane').pick(lanes);
-          const created = executePlacementCommands(state, [{
+          const created = executeRevealCommands(state, [{
             type: 'CREATE_CARD',
             owner,
             cardId: newId,
             defId,
+            depth: ctx.depth,
             spawnSource,
-            destination: { kind: 'LANE', lane, revealed: false },
+            destination: {
+              kind: 'LANE',
+              lane,
+              revealed: effect.destination.revealed ?? true,
+            },
             cause: ctx.source,
-          }], { rng: ctx.rng.scope('createLane'), depth: ctx.depth }, manifest);
+          }], { rng: ctx.rng.scope('createLane') }, manifest);
           return setCreatedCost(created.state, [...created.events]);
         }
 
@@ -1099,6 +1117,30 @@ export function evalEffect(
         s = returned.state;
       }
       return { events, state: s };
+    }
+
+    case 'DEPLOY_FROM_DECK': {
+      const owner = resolveOwnerRef(
+        effect.owner,
+        liveCtx.selfOwner,
+        liveCtx.eventOwner ?? null,
+      );
+      if (!owner) return { events: [], state };
+      const lanes = selectLanes(effect.lane, liveCtx);
+      if (lanes.length === 0) return { events: [], state };
+      return executeRevealCommands(
+        state,
+        lanes.map((lane) => ({
+          type: 'DEPLOY_FROM_DECK',
+          owner,
+          lane,
+          selection: effect.selection,
+          depth: ctx.depth + 1,
+          cause: { ...ctx.source, reason: 'DEPLOY_FROM_DECK' },
+        })),
+        { rng: ctx.rng.scope('deploy-from-deck') },
+        manifest,
+      );
     }
 
     case 'TRANSFORM_CARD': {

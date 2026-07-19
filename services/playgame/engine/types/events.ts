@@ -71,7 +71,14 @@ export type MatchEvent =
 
   // --- Reveal + OR windows ---
   | { type: 'CARD_REVEAL_SCHEDULED'; cardId: CardId; timing: CardRevealTiming; cause: EffectRef }
-  | { type: 'CARD_FLIPPED'; cardId: CardId }
+  | { type: 'CARD_REVEALED'; cardId: CardId; cause: EffectRef }
+  | {
+      type: 'CARD_PLAY_COMPLETED';
+      cardId: CardId;
+      owner: Owner;
+      lane: LaneId;
+      cause: EffectRef;
+    }
   | { type: 'OR_WINDOW_OPEN'; cardId: CardId; multiplier: number }
   | { type: 'OR_WINDOW_CLOSE'; cardId: CardId }
 

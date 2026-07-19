@@ -326,7 +326,7 @@ describe('createMatchRuntime', () => {
     }
   });
 
-  it('refolds private Gun Store stages for latest, suffix, and full-turn undo without replay residue', async () => {
+  it('keeps private Gun Store stages reaction-free across suffix and full-turn undo', async () => {
     const runtime = Array.from({ length: 256 }, (_, index) => runtimeFixture(`gun-store-planning-${index}`))
       .find((candidate) => {
         const state = candidate.state();
@@ -357,7 +357,7 @@ describe('createMatchRuntime', () => {
       runtime.state(),
       firstCardId,
       BOOTSTRAP_MANIFEST,
-    )).toBe(2);
+    )).toBe(0);
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P0',

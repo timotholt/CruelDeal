@@ -222,6 +222,14 @@ export type EffectExpr =
     }
   | { kind: 'MOVE_CARD_TO_ZONE'; target: Selector; destination: CardDestination }
   | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
+  | {
+      kind: 'DEPLOY_FROM_DECK';
+      owner: OwnerRef;
+      lane: Selector;
+      selection:
+        | { kind: 'TOP' }
+        | { kind: 'FIRST_MATCHING'; selector: Selector };
+    }
   | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
   /** Schedule unresolved board cards to perform their real reveal later. */
   | {

@@ -25,8 +25,8 @@ import { apply } from './apply';
 import {
   revealPlayedCard,
   revealPlayedCardAtEndOfGame,
+  executeReactionCommands,
   evalEffect,
-  fireLocationTrigger,
   applyHandEntryDebuffs,
   type EffectCtx,
 } from './effects/evaluator';
@@ -44,7 +44,6 @@ import {
   getCardRuntime,
 } from './projections/cardRuntime';
 import { getCardTemplate } from './projections/cardTemplate';
-import { getLocationRuntime } from './projections/locationRuntime';
 
 // ============================================================================
 // resolve — intent → events
@@ -108,7 +107,6 @@ function resolveStage(
   }
 
   const events: MatchEvent[] = [];
-  let s = state;
   const staged: MatchEvent = {
       type: 'CARD_STAGED',
       intentId: intent.intentId,
@@ -118,7 +116,6 @@ function resolveStage(
       cost,
   };
   events.push(staged);
-  s = apply(s, staged, manifest);
   const spent: MatchEvent = {
     type: 'ENERGY_CHANGED',
     owner: intent.owner,
@@ -126,18 +123,7 @@ function resolveStage(
     reason: 'CARD_PLAYED',
   };
   events.push(spent);
-  s = apply(s, spent, manifest);
 
-  const locTrig = fireLocationTrigger(
-    s,
-    intent.lane,
-    'onCardEnteredHere',
-    rng.scope(`stage-enter:${intent.cardId}`),
-    manifest,
-    intent.cardId,
-    intent.owner,
-  );
-  events.push(...locTrig.events);
   return events;
 }
 
@@ -252,61 +238,52 @@ export function resolveTurn(
   //            pending (face-down) cards do not. Each trigger runs with
   //            the card as SELF and a forked RNG keyed on cardId + exprIdx.
   {
-    const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
+    const commands: import('./kernel/revealTransaction').RevealCommand[] = [];
     for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
-        const ids = s.lanesById[lane].cards[owner];
-        for (const id of ids) {
-          const card = getCardRuntime(s, id, manifest);
-          if (!card || !card.revealed) continue;
-          const effs = card.text.abilities.onEndOfTurn;
-          if (!effs || effs.length === 0) continue;
-          triggerFires.push({ cardId: id, effects: effs });
+        for (const cardId of s.lanesById[lane].cards[owner]) {
+          const card = getCardRuntime(s, cardId, manifest);
+          if (!card?.revealed || !card.text.abilities.onEndOfTurn?.length) {
+            continue;
+          }
+          commands.push({
+            type: 'INVOKE_CARD_TRIGGER',
+            cardId,
+            slot: 'TURN_END',
+            depth: 0,
+            cause: {
+              sourceId: cardId,
+              effectKind: 'ON_REVEAL',
+              reason: 'TURN_END',
+            },
+          });
         }
       }
     }
-    for (let i = 0; i < triggerFires.length; i++) {
-      const { cardId, effects: effs } = triggerFires[i];
-      for (let j = 0; j < effs.length; j++) {
-        const card = getCardRuntime(s, cardId, manifest);
-        if (!card) break; // destroyed by a previous trigger this phase
-        const subCtx: EffectCtx = {
-          state: s,
-          manifest,
-          self: cardId,
-          selfKind: 'card',
-          selfLane: card.lane,
-          selfOwner: card.owner,
-          rng: rng.scope(`eot:${cardId}:${j}`),
-          source: {
-            sourceId: cardId,
-            effectKind: 'ON_REVEAL',
-            exprIdx: j,
-            reason: 'END_OF_TURN',
-          },
-          depth: 0,
-        };
-        const res = evalEffect(s, effs[j], subCtx, manifest);
-        events.push(...res.events);
-        s = res.state;
-      }
-    }
-  }
-
-  // Phase 1.92  Location end-of-turn triggers. These run after card EOT
-  // triggers and before TURN_ENDED cleanup clears transient play/move tags.
-  {
     for (const lane of activeLaneIds(s)) {
-      const trig = fireLocationTrigger(
-        s,
+      const location = locationCardAtLane(s, lane);
+      if (location?.face !== 'FACE_UP') continue;
+      commands.push({
+        type: 'INVOKE_LOCATION_TRIGGER',
+        locationId: location.id,
         lane,
-        'atTurnEnd',
-        rng.scope(`loc-eot:${lane}`),
-        manifest,
-      );
-      events.push(...trig.events);
-      s = trig.state;
+        slot: 'TURN_END',
+        depth: 0,
+        cause: {
+          sourceId: location.id,
+          effectKind: 'LOCATION',
+          reason: 'TURN_END',
+        },
+      });
     }
+    const triggered = executeReactionCommands(
+      s,
+      commands,
+      { rng: rng.scope('turn-end-reactions') },
+      manifest,
+    );
+    events.push(...triggered.events);
+    s = triggered.state;
   }
 
   // Phase 1.93  Fire SCHEDULED END_OF_NEXT_TURN effects whose target turn
@@ -511,61 +488,52 @@ export function resolveTurn(
   // Phase 5.6  Card start-of-turn triggers, after TURN_STARTED and scheduled
   // start effects, before location triggers and normal draws.
   {
-    const triggerFires: { cardId: CardId; effects: readonly import('./types/ability').EffectExpr[] }[] = [];
+    const commands: import('./kernel/revealTransaction').RevealCommand[] = [];
     for (const lane of activeLaneIds(s)) {
       for (const owner of ['P0', 'P1'] as const) {
-        const ids = s.lanesById[lane].cards[owner];
-        for (const id of ids) {
-          const card = getCardRuntime(s, id, manifest);
-          if (!card || !card.revealed) continue;
-          const effs = card.text.abilities.onTurnStart;
-          if (!effs || effs.length === 0) continue;
-          triggerFires.push({ cardId: id, effects: effs });
+        for (const cardId of s.lanesById[lane].cards[owner]) {
+          const card = getCardRuntime(s, cardId, manifest);
+          if (!card?.revealed || !card.text.abilities.onTurnStart?.length) {
+            continue;
+          }
+          commands.push({
+            type: 'INVOKE_CARD_TRIGGER',
+            cardId,
+            slot: 'TURN_START',
+            depth: 0,
+            cause: {
+              sourceId: cardId,
+              effectKind: 'ON_REVEAL',
+              reason: 'TURN_START',
+            },
+          });
         }
       }
     }
-    for (let i = 0; i < triggerFires.length; i++) {
-      const { cardId, effects: effs } = triggerFires[i];
-      for (let j = 0; j < effs.length; j++) {
-        const card = getCardRuntime(s, cardId, manifest);
-        if (!card || card.zone !== 'LANE') break;
-        const subCtx: EffectCtx = {
-          state: s,
-          manifest,
-          self: cardId,
-          selfKind: 'card',
-          selfLane: card.lane,
-          selfOwner: card.owner,
-          rng: rng.scope(`turn-start:${cardId}:${j}`),
-          source: {
-            sourceId: cardId,
-            effectKind: 'ON_REVEAL',
-            exprIdx: j,
-            reason: 'TURN_START',
-          },
-          depth: 0,
-        };
-        const res = evalEffect(s, effs[j], subCtx, manifest);
-        events.push(...res.events);
-        s = res.state;
-      }
-    }
-  }
-
-  // Phase 5.7  Location start-of-turn triggers, after card start triggers,
-  // before normal draws.
-  {
     for (const lane of activeLaneIds(s)) {
-      const trig = fireLocationTrigger(
-        s,
+      const location = locationCardAtLane(s, lane);
+      if (location?.face !== 'FACE_UP') continue;
+      commands.push({
+        type: 'INVOKE_LOCATION_TRIGGER',
+        locationId: location.id,
         lane,
-        'atTurnStart',
-        rng.scope(`loc-start:${lane}`),
-        manifest,
-      );
-      events.push(...trig.events);
-      s = trig.state;
+        slot: 'TURN_START',
+        depth: 0,
+        cause: {
+          sourceId: location.id,
+          effectKind: 'LOCATION',
+          reason: 'TURN_START',
+        },
+      });
     }
+    const triggered = executeReactionCommands(
+      s,
+      commands,
+      { rng: rng.scope('turn-start-reactions') },
+      manifest,
+    );
+    events.push(...triggered.events);
+    s = triggered.state;
   }
 
   // Phase 6  Manifest-declared turn-start draws per owner, hand-cap permitting.
@@ -606,29 +574,22 @@ export function resolveTurn(
       events.push(...reveal.events);
       s = reveal.state;
 
-      const location = getLocationRuntime(s, loc.id, manifest);
-      const locReveal = location?.abilities.onReveal ?? [];
-      for (let idx = 0; idx < locReveal.length; idx++) {
-        const ctx: EffectCtx = {
-          state: s,
-          manifest,
-          self: loc.id,
-          selfKind: 'location',
-          selfLane: laneId,
-          selfOwner: null,
-          rng: rng.scope(`location-reveal:${loc.id}:${idx}`),
-          source: {
-            sourceId: loc.id,
-            effectKind: 'LOCATION',
-            exprIdx: idx,
-            reason: 'LOCATION_ON_REVEAL',
-          },
-          depth: 0,
-        };
-        const res = evalEffect(s, locReveal[idx], ctx, manifest);
-        events.push(...res.events);
-        s = res.state;
-      }
+      const locationTrigger = executeReactionCommands(s, [{
+        type: 'INVOKE_LOCATION_TRIGGER',
+        locationId: loc.id,
+        lane: laneId,
+        slot: 'REVEAL',
+        depth: 0,
+        cause: {
+          sourceId: loc.id,
+          effectKind: 'LOCATION',
+          reason: 'LOCATION_ON_REVEAL',
+        },
+      }], {
+        rng: rng.scope(`location-reveal:${loc.id}`),
+      }, manifest);
+      events.push(...locationTrigger.events);
+      s = locationTrigger.state;
     }
   }
 

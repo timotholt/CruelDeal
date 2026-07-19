@@ -485,7 +485,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   expectEq(getCardState(end.state, p0.id)!?.revealed, true, 'end-game window reveals the first player scheduled card');
   expectEq(getCardState(end.state, p1.id)!?.revealed, true, 'end-game window reveals the second player scheduled card');
   expectEq(
-    end.events.filter((event) => event.type === 'CARD_FLIPPED').length,
+    end.events.filter((event) => event.type === 'CARD_REVEALED').length,
     2,
     'end-game window reveals every scheduled card exactly once',
   );

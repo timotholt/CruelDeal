@@ -50,7 +50,8 @@ describe('Phase 1.1 canonical timeline', () => {
         cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
       { type: 'CARD_STAGED', intentId: 'play-1', owner: 'P0', cardId, lane: 0, cost: 1 },
-      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+      { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_PLAY' } },
       {
         type: 'CARD_MOVED',
         cardId,
@@ -78,17 +79,18 @@ describe('Phase 1.1 canonical timeline', () => {
       asFrame(3),
       asFrame(4),
       asFrame(5),
+      asFrame(6),
     ]);
     expect(built.transitions.map(({ frame }) => frame))
       .toEqual(built.framedEvents.map(({ frame }) => frame));
-    expect(built.transitions.map(({ index }) => index)).toEqual([0, 1, 2, 3, 4]);
-    expect(currentFrame(built.finalState)).toBe(asFrame(5));
+    expect(built.transitions.map(({ index }) => index)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(currentFrame(built.finalState)).toBe(asFrame(6));
     expect(cardLifecycleFrames(built.framedEvents, cardId)).toEqual({
       created: [asFrame(1)],
-      played: [asFrame(2)],
+      played: [asFrame(4)],
       revealed: [asFrame(3)],
-      moved: [asFrame(4)],
-      destroyed: [asFrame(5)],
+      moved: [asFrame(5)],
+      destroyed: [asFrame(6)],
       banished: [],
     });
   });

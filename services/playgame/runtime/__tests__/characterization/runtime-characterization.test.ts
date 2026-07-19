@@ -115,7 +115,7 @@ describe('Phase 0 runtime characterization', () => {
     assertRuntimeParity({ finalState: authoritative.state, events }, folded);
     expect(folded.transitions[0].before.phase).toBe('AWAITING_INTENT');
     expect(folded.transitions[0].after.phase).toBe('RESOLVING');
-    expect(events.some((event) => event.type === 'CARD_FLIPPED')).toBe(false);
+    expect(events.some((event) => event.type === 'CARD_REVEALED')).toBe(false);
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
     expect(folded.transitions).toHaveLength(events.length);
     folded.transitions.forEach((frame) => {
@@ -135,7 +135,7 @@ describe('Phase 0 runtime characterization', () => {
       testManifest([eotBuffer]),
     );
 
-    expect(events.some((event) => event.type === 'CARD_FLIPPED')).toBe(false);
+    expect(events.some((event) => event.type === 'CARD_REVEALED')).toBe(false);
     const buffIndex = events.findIndex((event) => event.type === 'CARD_POWER_CHANGED');
     const endedIndex = events.findIndex((event) => event.type === 'TURN_ENDED');
     expect(buffIndex).toBeGreaterThanOrEqual(0);
@@ -158,11 +158,11 @@ describe('Phase 0 runtime characterization', () => {
       testManifest([revealCascade]),
     );
     const eventTypes = events.map((event) => event.type);
-    const flip = eventTypes.indexOf('CARD_FLIPPED');
+    const flip = eventTypes.indexOf('CARD_REVEALED');
     const close = eventTypes.indexOf('OR_WINDOW_CLOSE');
 
     expect(eventTypes.slice(flip, close + 1)).toEqual([
-      'CARD_FLIPPED',
+      'CARD_REVEALED',
       'OR_WINDOW_OPEN',
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
@@ -194,7 +194,7 @@ describe('Phase 0 runtime characterization', () => {
     );
 
     expect(events
-      .filter((event): event is Extract<MatchEvent, { type: 'CARD_FLIPPED' }> => event.type === 'CARD_FLIPPED')
+      .filter((event): event is Extract<MatchEvent, { type: 'CARD_REVEALED' }> => event.type === 'CARD_REVEALED')
       .map((event) => event.cardId))
       .toEqual(['p1-priority', 'p0-first', 'p0-second']);
   });
@@ -212,7 +212,7 @@ describe('Phase 0 runtime characterization', () => {
       fixture('effects-after-final-flip', { lanes, stagingOrder: ['final-flip'] }),
       testManifest([plain, eotBuffer]),
     );
-    const flipIndex = events.findIndex((event) => event.type === 'CARD_FLIPPED');
+    const flipIndex = events.findIndex((event) => event.type === 'CARD_REVEALED');
     const effectIndex = events.findIndex(
       (event) => event.type === 'CARD_POWER_CHANGED' && event.cardId === 'eot-after-flip',
     );
@@ -340,8 +340,8 @@ describe('Phase 0 runtime characterization', () => {
 
     expect(runtimeFixture.remoteSeat).toBe(localSeat === 'P0' ? 'P1' : 'P0');
     expect(getCardState(state, 'local-card')!.owner).toBe(localSeat);
-    expect(events.find((event) => event.type === 'CARD_FLIPPED')).toMatchObject({
-      type: 'CARD_FLIPPED',
+    expect(events.find((event) => event.type === 'CARD_REVEALED')).toMatchObject({
+      type: 'CARD_REVEALED',
       cardId: 'local-card',
     });
   });

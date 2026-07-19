@@ -1,6 +1,6 @@
 import type { Manifest } from '../engine/manifest/types';
 import { apply } from '../engine/apply';
-import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
+import { executeReactionCommands } from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
 import { appendGameplayRngAdvance } from '../engine/rng/transaction';
 import type { MatchEvent } from '../engine/types/events';
@@ -9,7 +9,6 @@ import { buildCardDrawEvents } from '../engine/draw';
 import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
 import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
 import { revealLocation } from '../engine/locationLifecycle';
-import { getLocationRuntime } from '../engine/projections/locationRuntime';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -88,30 +87,22 @@ export function buildOpeningTransaction(
     events.push(...reveal.events);
     state = reveal.state;
 
-    const effects = getLocationRuntime(state, location.id, manifest)
-      ?.abilities.onReveal ?? [];
-    const locationRng = openingRng.scope(`opening:location:${location.id}`);
-    for (let index = 0; index < effects.length; index++) {
-      const context: EffectCtx = {
-        state,
-        manifest,
-        self: location.id,
-        selfKind: 'location',
-        selfLane: lane,
-        selfOwner: null,
-        rng: locationRng.scope(`effect:${index}`),
-        source: {
+    const locationTrigger = executeReactionCommands(state, [{
+      type: 'INVOKE_LOCATION_TRIGGER',
+      locationId: location.id,
+      lane,
+      slot: 'REVEAL',
+      depth: 0,
+      cause: {
           sourceId: location.id,
           effectKind: 'LOCATION',
-          exprIdx: index,
           reason: 'OPENING_LOCATION_ON_REVEAL',
-        },
-        depth: 0,
-      };
-      const result = evalEffect(state, effects[index], context, manifest);
-      events.push(...result.events);
-      state = result.state;
-    }
+      },
+    }], {
+      rng: openingRng.scope(`opening:location:${location.id}`),
+    }, manifest);
+    events.push(...locationTrigger.events);
+    state = locationTrigger.state;
   }
 
   // Turn 1 begins after the initial location is live. Use the same normal

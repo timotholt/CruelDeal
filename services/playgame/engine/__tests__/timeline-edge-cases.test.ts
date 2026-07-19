@@ -450,7 +450,8 @@ describe('Timeline query and lifecycle edge cases', () => {
       events: [
         addToHand(cardId),
         { type: 'CARD_STAGED', intentId: 'first', owner: 'P0', cardId, lane: 0, cost: 1 },
-        { type: 'CARD_FLIPPED', cardId },
+        { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+        { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: systemCause },
         {
           type: 'CARD_ZONE_CHANGED',
           cardId,
@@ -458,17 +459,18 @@ describe('Timeline query and lifecycle edge cases', () => {
           cause: systemCause,
         },
         { type: 'CARD_STAGED', intentId: 'second', owner: 'P0', cardId, lane: 1, cost: 1 },
-        { type: 'CARD_FLIPPED', cardId },
+        { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+        { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 1, cause: systemCause },
         { type: 'CARD_BANISHED', cardId, cause: systemCause },
       ],
       manifest,
     });
     const lifecycle = cardLifecycleFrames(folded.framedEvents, cardId);
 
-    expect(lifecycle.played).toEqual([asFrame(2), asFrame(5)]);
-    expect(lifecycle.revealed).toEqual([asFrame(3), asFrame(6)]);
-    expect(lifecycle.moved).toEqual([asFrame(4)]);
-    expect(lifecycle.banished).toEqual([asFrame(7)]);
+    expect(lifecycle.played).toEqual([asFrame(4), asFrame(8)]);
+    expect(lifecycle.revealed).toEqual([asFrame(3), asFrame(7)]);
+    expect(lifecycle.moved).toEqual([asFrame(5)]);
+    expect(lifecycle.banished).toEqual([asFrame(9)]);
   });
 
   it('records return-to-lane and repeated destruction as distinct occurrences', () => {

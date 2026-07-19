@@ -15,7 +15,6 @@ import { apply } from '../apply';
 import {
   evalEffect,
   revealPlayedCard,
-  MAX_REVEAL_RECURSION,
   type EffectCtx,
 } from './evaluator';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
@@ -27,6 +26,7 @@ import type {
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
+import { GENESIS_FRAME } from '../types/timeline';
 import { getCardCost, getCardPower } from '../projections';
 import {
   testLaneRegistry,
@@ -97,6 +97,7 @@ interface CardSpec {
   lane: LaneId | null;
   zone?: 'LANE' | 'HAND' | 'DECK';
   revealed?: boolean;
+  played?: boolean;
   powerMutations?: InternalCardRecord['powerLedger'][number]['mutation'][];
 }
 
@@ -126,7 +127,13 @@ function buildState(
       revealTiming: !revealed && spec.lane !== null
         ? { kind: 'TURN', turn: opts.turn ?? 1 }
         : null,
-      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
+      lifecycle: spec.played
+        ? {
+            framePlayed: GENESIS_FRAME,
+            turnPlayed: opts.turn ?? 3,
+            ...(spec.lane === null ? {} : { lanePlayed: spec.lane }),
+          }
+        : { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: testPowerLedger(id, spec.powerMutations ?? []),
       costDelta: 0,
       costLog: [],
@@ -220,8 +227,8 @@ function buildState(
   const rng = createRng('hex-test');
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, rng);
 
-  const flips = res.events.filter(e => e.type === 'CARD_FLIPPED');
-  eq(flips.length, 1, 'Hex Witch: CARD_FLIPPED emitted once');
+  const flips = res.events.filter(e => e.type === 'CARD_REVEALED');
+  eq(flips.length, 1, 'Hex Witch: CARD_REVEALED emitted once');
 
   const powerChanges = res.events.filter(e => e.type === 'CARD_POWER_CHANGED');
   eq(powerChanges.length, 1, 'Hex Witch: exactly one POWER_CHANGED (random 1 target)');
@@ -275,7 +282,7 @@ function buildState(
   const res = revealPlayedCard(s0, 'c2' as CardId, manifest, rng);
 
   // The card still flips face-up but no OR window opens and no effects fire.
-  eq(res.events.filter(e => e.type === 'CARD_FLIPPED').length, 1, 'Cosmo: CARD_FLIPPED still emitted');
+  eq(res.events.filter(e => e.type === 'CARD_REVEALED').length, 1, 'Cosmo: CARD_REVEALED still emitted');
   eq(res.events.filter(e => e.type === 'OR_WINDOW_OPEN').length, 0, 'Cosmo: no OR_WINDOW_OPEN');
   eq(res.events.filter(e => e.type === 'CARD_POWER_CHANGED').length, 0, 'Cosmo: OR effects suppressed');
 }
@@ -373,7 +380,7 @@ function buildState(
   eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
-// -- CREATE_CARD_IN_ZONE: creation is distinct from reveal -----------------
+// -- CREATE_CARD_IN_ZONE: lane creation reveals and resolves the child ------
 
 {
   const grunt = mkCard('grunt', 2, 1, {
@@ -410,11 +417,11 @@ function buildState(
 
   eq(
     res.events.filter(e => e.type === 'OR_WINDOW_OPEN').length,
-    1,
-    'creation does not fabricate a nested reveal',
+    2,
+    'created lane card resolves its own nested reveal',
   );
-  eq(getCardPower(res.state, 'c1' as CardId, manifest), 2, 'creator remains at base power');
-  eq(getCardPower(res.state, added!.cardId, manifest), 2, 'created card remains at base power');
+  eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'created card buffs its creator');
+  eq(getCardPower(res.state, added!.cardId, manifest), 3, 'created card buffs itself');
 }
 
 // -- DRAW: pulls from top of deck ------------------------------------------
@@ -840,8 +847,8 @@ function buildState(
 // -- onAnyCardPlayedHere trigger: Iron-Fist-style +1 power per play -------
 
 {
-  // A card that gains +1 power every time ANY other card is revealed in
-  // its lane. A fresh reveal here should bump it by 1.
+  // A card that gains +1 power every time another hand-origin play completes
+  // in its lane.
   const watcher = mkCard('watcher', 2, 2, {
     abilities: {
       onAnyCardPlayedHere: [{
@@ -855,7 +862,7 @@ function buildState(
   const manifest = mkManifest([watcher, grunt]);
   const s0 = buildState([
     { def: 'watcher', owner: 'P0', lane: 0, revealed: true },
-    { def: 'grunt',   owner: 'P0', lane: 0, revealed: false },
+    { def: 'grunt',   owner: 'P0', lane: 0, revealed: false, played: true },
   ]);
   const res = revealPlayedCard(s0, 'c2' as CardId, manifest, createRng('on-play'));
   // Watcher starts at 2, grunt reveals, +1 to watcher → 3.

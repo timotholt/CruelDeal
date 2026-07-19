@@ -57,9 +57,9 @@ describe('committed END TURN choreography', () => {
         cost: 1,
       },
       { type: 'TURN_RESOLUTION_STARTED', turn: 2 },
-      { type: 'CARD_FLIPPED', cardId: 'remote-priority' as CardId },
-      { type: 'CARD_FLIPPED', cardId: 'local-now' as CardId },
-      // local-delayed deliberately has no CARD_FLIPPED frame this turn. The
+      { type: 'CARD_REVEALED', cardId: 'remote-priority' as CardId, cause: { sourceId: 'remote-priority' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+      { type: 'CARD_REVEALED', cardId: 'local-now' as CardId, cause: { sourceId: 'local-now' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
+      // local-delayed deliberately has no CARD_REVEALED frame this turn. The
       // The engine's per-card reveal schedule expresses eligibility this way.
       { type: 'TURN_ENDED', turn: 2 },
     ];
@@ -95,7 +95,7 @@ describe('committed END TURN choreography', () => {
       .map((beat) => beat.kind);
     const revealedIds = walk.flatMap((beat) => (
       beat.kind === 'priority-reveal' || beat.kind === 'non-priority-reveal'
-        ? [beat.frame.event.type === 'CARD_FLIPPED' ? beat.frame.event.cardId : null]
+        ? [beat.frame.event.type === 'CARD_REVEALED' ? beat.frame.event.cardId : null]
         : []
     )).filter(Boolean);
 

@@ -686,7 +686,7 @@ describe('lane destruction invariants', () => {
     expect(getCardState(result.state, faceDown.cardId)!.zone).toBe('DESTROYED');
     expect(result.state.stagingOrder).not.toContain(faceDown.cardId);
     expect(result.events.filter(event => event.type === 'CARD_DESTROYED')).toHaveLength(2);
-    expect(result.events.some(event => event.type === 'CARD_FLIPPED')).toBe(false);
+    expect(result.events.some(event => event.type === 'CARD_REVEALED')).toBe(false);
   });
 
   it('runs normal onDestroyed reactions while destroying lane occupants', () => {
@@ -783,7 +783,7 @@ describe('lane destruction invariants', () => {
       createRng('post-destruction-turn'),
     );
     expect(resolved.events.some(event =>
-      event.type === 'CARD_FLIPPED' && event.cardId === staged.cardId,
+      event.type === 'CARD_REVEALED' && event.cardId === staged.cardId,
     )).toBe(false);
     expect(getCardState(resolved.state, staged.cardId)!.zone).toBe('DESTROYED');
   });

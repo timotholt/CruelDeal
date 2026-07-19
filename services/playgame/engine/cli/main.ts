@@ -47,7 +47,7 @@ function fmtEvent(e: MatchEvent): string {
       return `  << TURN ${e.turn} ends`;
     case 'CARD_STAGED':
       return `     ${e.owner} stages ${e.cardId} -> lane ${e.lane} (cost ${e.cost})`;
-    case 'CARD_FLIPPED':
+    case 'CARD_REVEALED':
       return `     reveal ${e.cardId}`;
     case 'CARD_DRAWN':
       return `     ${e.owner} draws ${e.cardId}`;

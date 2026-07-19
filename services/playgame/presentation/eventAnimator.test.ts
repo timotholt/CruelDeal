@@ -186,7 +186,7 @@ describe('event animator transfer origins', () => {
         lane: 0 as LaneId,
         cost: 1,
       }, BOOTSTRAP_MANIFEST);
-      before = apply(before, { type: 'CARD_FLIPPED', cardId }, BOOTSTRAP_MANIFEST);
+      before = apply(before, { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }, BOOTSTRAP_MANIFEST);
       const event = {
         type: 'CARD_ZONE_CHANGED',
         cardId,

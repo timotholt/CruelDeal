@@ -202,6 +202,7 @@ function replaceHandCardHigherCost(
     owner,
     cardId: newId,
     defId: newDefId,
+    depth: ctx.depth,
     spawnSource: ss,
     destination: { kind: 'HAND' },
     cause: ctx.source,
@@ -254,7 +255,7 @@ function replaceLowestPowerHandWithCost(
 
   const created = runPlacement(s, [{
     type: 'CREATE_CARD',
-    owner, cardId: newId, defId: newDefId, spawnSource: ss,
+    owner, cardId: newId, defId: newDefId, depth: ctx.depth, spawnSource: ss,
     destination: { kind: 'HAND' },
     cause: ctx.source,
   }], ctx, manifest, lifecycle);
@@ -308,7 +309,7 @@ function replaceCreatedHandCardHigherCost(
 
   const created = runPlacement(s, [{
     type: 'CREATE_CARD',
-    owner, cardId: newId, defId: newDefId, spawnSource: ss,
+    owner, cardId: newId, defId: newDefId, depth: ctx.depth, spawnSource: ss,
     destination: { kind: 'HAND' },
     cause: ctx.source,
   }], ctx, manifest, lifecycle);
@@ -347,7 +348,7 @@ function addDiscountedCardToHand(
 
   const created = runPlacement(s, [{
     type: 'CREATE_CARD',
-    owner, cardId: newId, defId: chosenDef.defId, spawnSource: ss,
+    owner, cardId: newId, defId: chosenDef.defId, depth: ctx.depth, spawnSource: ss,
     destination: { kind: 'HAND' },
     cause: ctx.source,
   }], ctx, manifest, lifecycle);
@@ -589,7 +590,7 @@ function copyTopEnemyDeckCardToHand(
 
   return runPlacement(state, [{
     type: 'CREATE_CARD',
-    owner, cardId: newId, defId: topCard.defId, spawnSource: ss,
+    owner, cardId: newId, defId: topCard.defId, depth: ctx.depth, spawnSource: ss,
     destination: { kind: 'HAND' },
     cause: ctx.source,
   }], ctx, manifest, lifecycle);
@@ -686,6 +687,7 @@ function spawnTokenInLane(
     owner,
     cardId,
     defId,
+    depth: ctx.depth,
     spawnSource: spawnSource(ctx, owner),
     destination: { kind: 'LANE', lane, revealed: false },
     cause: ctx.source,

@@ -408,9 +408,18 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
   const stagingOrder = (options.stagingOrder ?? []).map((id) => id as CardId);
   for (const id of stagingOrder) {
     const card = cards[id];
-    if (!card || card.zone !== 'LANE') {
+    if (!card || card.zone !== 'LANE' || card.lane === null) {
       throw new Error(`stagingOrder references non-lane fixture card: ${id}`);
     }
+    cards[id] = {
+      ...card,
+      lifecycle: {
+        ...card.lifecycle,
+        framePlayed: GENESIS_FRAME,
+        turnPlayed: options.turn,
+        lanePlayed: card.lane,
+      },
+    };
   }
 
   const energy = options.energy ?? { P0: options.turn, P1: options.turn };

@@ -38,7 +38,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/effects/evaluator.ts': {
     CARD_DISCARDED: 1,
     CARD_DRAWN: 1,
-    CARD_FLIPPED: 1,
     CARD_REVEAL_SCHEDULED: 1,
     CARD_TRANSFORMED: 1,
     ENERGY_CHANGED: 1,
@@ -85,6 +84,10 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
   },
+  'services/playgame/engine/kernel/revealTransaction.ts': {
+    CARD_PLAY_COMPLETED: 1,
+    CARD_REVEALED: 1,
+  },
   'services/playgame/engine/kernel/operations/lifecycle.ts': {
     CARD_BANISHED: 1,
     CARD_DESTROYED: 1,
@@ -115,13 +118,10 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
 const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {
   'services/playgame/engine/effects/evaluator.ts': {
     applyHandEntryDebuffs: 2,
-    fireCardTrigger: 2,
-    fireLocationTrigger: 1,
-    fireOnAnyCardPlayedHere: 2,
+    fireCardTrigger: 1,
   },
   'services/playgame/engine/resolve.ts': {
     applyHandEntryDebuffs: 2,
-    fireLocationTrigger: 3,
     hasPowerGainDrawTrigger: 1,
   },
   'services/playgame/runtime/opening.ts': {
@@ -233,7 +233,7 @@ describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(10);
+      .toBe(11);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {
