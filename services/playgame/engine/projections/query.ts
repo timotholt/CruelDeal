@@ -8,7 +8,7 @@
  * selection should fork an RNG and call `.pick()` on the result.
  *
  * Three entity types:
- *   - CardFilter:    live CardInstance queries (board state)
+ *   - CardFilter:    live InternalCardRecord queries (board state)
  *   - CardDefFilter: manifest-wide CardDef queries ("all 2-cost cards")
  *   - LaneFilter:    lane queries (capacity, location, tags)
  *
@@ -22,21 +22,30 @@
 
 import type {
   MatchState,
-  CardInstance,
   CardZone,
   CardTag,
   LaneTag,
   SpawnSource,
 } from '../types/state';
 import { storedPowerDelta } from '../powerLedger';
-import type { CardDef, CardType, Manifest } from '../manifest/types';
+import type { CardAbilities, CardDomain, Manifest } from '../manifest/types';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardPositionCriteria } from '../types/cardPosition';
 import { getCardPower } from './power';
-import { isPowerBearingDef } from './power-bearing';
+import { getCardCost } from './cost';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from '../laneTopology';
 import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
-import { matchesCardPosition } from './cardPosition';
+import { matchesBoardPosition } from './cardPosition';
+import {
+  getAllCardIds,
+  getCardRuntime,
+  type CardRuntime,
+} from './cardRuntime';
+import {
+  getAllCardTemplates,
+  getCardTemplate,
+  type CardTemplate,
+} from './cardTemplate';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Comparison primitives
@@ -127,7 +136,7 @@ export interface CardFilter extends CardPositionCriteria {
   storedPowerDelta?: NumComparison;
 
   // Taxonomy
-  cardType?: CardType | readonly CardType[];
+  cardType?: CardDomain | readonly CardDomain[];
 
   // Abilities
   hasOnReveal?: boolean;
@@ -161,21 +170,21 @@ export interface CardFilter extends CardPositionCriteria {
   not?: CardFilter;
 
   // Escape hatch
-  custom?: (card: CardInstance, state: MatchState, manifest: Manifest) => boolean;
+  custom?: (card: CardRuntime, state: MatchState, manifest: Manifest) => boolean;
 }
 
 function arrayOrOne<T>(v: T | readonly T[]): readonly T[] {
   return Array.isArray(v) ? (v as readonly T[]) : [v as T];
 }
 
-/** Check if a CardInstance matches a CardFilter. */
+/** Check if the public current-card projection matches a CardFilter. */
 export function matchesCard(
-  card: CardInstance,
+  card: CardRuntime,
   filter: CardFilter,
   state: MatchState,
   manifest: Manifest,
 ): boolean {
-  const def = manifest.cards[card.defId];
+  const template = getCardTemplate(manifest, card.defId);
 
   // ── Identity ──────────────────────────────────────────────────────────
   if (filter.id !== undefined && !matchesString(card.id, filter.id)) return false;
@@ -200,39 +209,49 @@ export function matchesCard(
   if (filter.owner !== undefined && filter.owner !== 'any') {
     if (card.owner !== filter.owner) return false;
   }
-  if (
-    (filter.slot !== undefined || filter.row !== undefined || filter.column !== undefined) &&
-    !matchesCardPosition(card, state, filter)
-  ) return false;
+  if (filter.slot !== undefined || filter.row !== undefined || filter.column !== undefined) {
+    const position = card.position.zone === 'LANE'
+      && card.position.slot !== null
+      && card.position.row !== null
+      && card.position.column !== null
+      ? {
+          slot: card.position.slot,
+          row: card.position.row,
+          column: card.position.column,
+        }
+      : null;
+    if (!matchesBoardPosition(position, filter)) return false;
+  }
 
   // ── Stats ─────────────────────────────────────────────────────────────
   if (filter.cost !== undefined) {
-    if (!def || !matchesNum(def.cost, filter.cost)) return false;
+    if (!matchesNum(getCardCost(state, card.id, manifest), filter.cost)) return false;
   }
   if (filter.basePower !== undefined) {
-    if (!isPowerBearingDef(def) || !matchesNum(def.basePower, filter.basePower)) return false;
+    if (template?.basePower === null || template?.basePower === undefined ||
+        !matchesNum(template.basePower, filter.basePower)) return false;
   }
   if (filter.power !== undefined) {
-    if (!isPowerBearingDef(def)) return false;
+    if (template?.basePower === null || template?.basePower === undefined) return false;
     const p = getCardPower(state, card.id, manifest);
     if (!matchesNum(p, filter.power)) return false;
   }
   if (filter.storedPowerDelta !== undefined) {
     if (
-      !isPowerBearingDef(def)
-      || !matchesNum(storedPowerDelta(card, def.basePower), filter.storedPowerDelta)
+      template?.basePower === null
+      || template?.basePower === undefined
+      || !matchesNum(storedPowerDelta(card, template.basePower), filter.storedPowerDelta)
     ) return false;
   }
 
   // ── Taxonomy ──────────────────────────────────────────────────────────
   if (filter.cardType !== undefined) {
-    if (!def) return false;
     const cardTypes = arrayOrOne(filter.cardType);
-    if (!cardTypes.includes(def.cardType)) return false;
+    if (!cardTypes.includes(card.domain)) return false;
   }
 
   // ── Abilities ─────────────────────────────────────────────────────────
-  if (!matchesAbilityFlags(def, filter)) return false;
+  if (!matchesAbilityFlags(card.text.abilities, filter)) return false;
 
   // ── Runtime state ─────────────────────────────────────────────────────
   if (filter.revealed !== undefined && card.revealed !== filter.revealed) return false;
@@ -297,9 +316,9 @@ export function matchesCard(
   return true;
 }
 
-/** Check ability-flag fields against a CardDef. Shared by CardFilter and CardDefFilter. */
+/** Check ability-flag fields against a card's effective or printed abilities. */
 function matchesAbilityFlags(
-  def: CardDef | undefined,
+  abilities: CardAbilities | undefined,
   filter: {
     hasOnReveal?: boolean;
     hasOngoing?: boolean;
@@ -314,10 +333,10 @@ function matchesAbilityFlags(
 ): boolean {
   const check = (
     flag: boolean | undefined,
-    key: keyof NonNullable<CardDef['abilities']>,
+    key: keyof CardAbilities,
   ): boolean => {
     if (flag === undefined) return true;
-    const has = hasCardAbility(def?.abilities, key);
+    const has = hasCardAbility(abilities, key);
     return has === flag;
   };
 
@@ -331,7 +350,7 @@ function matchesAbilityFlags(
   if (!check(filter.hasActivate, 'activate')) return false;
 
   if (filter.hasAnyAbility !== undefined) {
-    const any = hasAnyCardAbility(def?.abilities);
+    const any = hasAnyCardAbility(abilities);
     if (any !== filter.hasAnyAbility) return false;
   }
 
@@ -347,7 +366,7 @@ export interface CardDefFilter {
   cost?: NumComparison;
   basePower?: NumComparison;
 
-  cardType?: CardType | readonly CardType[];
+  cardType?: CardDomain | readonly CardDomain[];
 
   hasOnReveal?: boolean;
   hasOngoing?: boolean;
@@ -366,28 +385,28 @@ export interface CardDefFilter {
   or?: readonly CardDefFilter[];
   not?: CardDefFilter;
 
-  custom?: (def: CardDef, manifest: Manifest) => boolean;
+  custom?: (template: CardTemplate, manifest: Manifest) => boolean;
 }
 
 export function matchesCardDef(
-  def: CardDef,
+  def: CardTemplate,
   filter: CardDefFilter,
   manifest: Manifest,
 ): boolean {
   if (filter.defId !== undefined && !matchesString(def.defId, filter.defId)) return false;
-  if (filter.cost !== undefined && !matchesNum(def.cost, filter.cost)) return false;
-  if (filter.basePower !== undefined && (!isPowerBearingDef(def) || !matchesNum(def.basePower, filter.basePower))) return false;
+  if (filter.cost !== undefined && !matchesNum(def.baseCost, filter.cost)) return false;
+  if (filter.basePower !== undefined &&
+      (def.basePower === null || !matchesNum(def.basePower, filter.basePower))) return false;
 
   if (filter.cardType !== undefined) {
     const cardTypes = arrayOrOne(filter.cardType);
-    if (!cardTypes.includes(def.cardType)) return false;
+    if (!cardTypes.includes(def.domain)) return false;
   }
 
-  if (!matchesAbilityFlags(def, filter)) return false;
+  if (!matchesAbilityFlags(def.abilities, filter)) return false;
 
   if (filter.frame !== undefined) {
-    const frame = def.cosmetic.frame;
-    if (frame === undefined || !matchesString(frame, filter.frame)) return false;
+    if (def.frame === null || !matchesString(def.frame, filter.frame)) return false;
   }
   if (filter.disabled !== undefined) {
     const isDisabled = manifest.disabled.cards.includes(def.defId);
@@ -496,7 +515,7 @@ export function matchesLane(
   if (filter.containsCard !== undefined) {
     const ids: CardId[] = [...lane.cards.P0, ...lane.cards.P1];
     const hit = ids.some((id) => {
-      const c = state.cards[id];
+      const c = getCardRuntime(state, id, manifest);
       return c && matchesCard(c, filter.containsCard!, state, manifest);
     });
     if (!hit) return false;
@@ -540,9 +559,11 @@ export function findCards(
   state: MatchState,
   manifest: Manifest,
   filter: CardFilter,
-): CardInstance[] {
-  const out: CardInstance[] = [];
-  for (const card of Object.values(state.cards)) {
+): CardRuntime[] {
+  const out: CardRuntime[] = [];
+  for (const id of getAllCardIds(state)) {
+    const card = getCardRuntime(state, id, manifest);
+    if (!card) continue;
     if (matchesCard(card, filter, state, manifest)) out.push(card);
   }
   return out;
@@ -552,8 +573,10 @@ export function findCard(
   state: MatchState,
   manifest: Manifest,
   filter: CardFilter,
-): CardInstance | null {
-  for (const card of Object.values(state.cards)) {
+): CardRuntime | null {
+  for (const id of getAllCardIds(state)) {
+    const card = getCardRuntime(state, id, manifest);
+    if (!card) continue;
     if (matchesCard(card, filter, state, manifest)) return card;
   }
   return null;
@@ -561,7 +584,9 @@ export function findCard(
 
 export function countCards(state: MatchState, manifest: Manifest, filter: CardFilter): number {
   let n = 0;
-  for (const card of Object.values(state.cards)) {
+  for (const id of getAllCardIds(state)) {
+    const card = getCardRuntime(state, id, manifest);
+    if (!card) continue;
     if (matchesCard(card, filter, state, manifest)) n++;
   }
   return n;
@@ -571,16 +596,16 @@ export function hasCards(state: MatchState, manifest: Manifest, filter: CardFilt
   return findCard(state, manifest, filter) !== null;
 }
 
-export function findCardDefs(manifest: Manifest, filter: CardDefFilter): CardDef[] {
-  const out: CardDef[] = [];
-  for (const def of Object.values(manifest.cards)) {
+export function findCardDefs(manifest: Manifest, filter: CardDefFilter): CardTemplate[] {
+  const out: CardTemplate[] = [];
+  for (const def of getAllCardTemplates(manifest)) {
     if (matchesCardDef(def, filter, manifest)) out.push(def);
   }
   return out;
 }
 
-export function findCardDef(manifest: Manifest, filter: CardDefFilter): CardDef | null {
-  for (const def of Object.values(manifest.cards)) {
+export function findCardDef(manifest: Manifest, filter: CardDefFilter): CardTemplate | null {
+  for (const def of getAllCardTemplates(manifest)) {
     if (matchesCardDef(def, filter, manifest)) return def;
   }
   return null;
@@ -588,7 +613,7 @@ export function findCardDef(manifest: Manifest, filter: CardDefFilter): CardDef 
 
 export function countCardDefs(manifest: Manifest, filter: CardDefFilter): number {
   let n = 0;
-  for (const def of Object.values(manifest.cards)) {
+  for (const def of getAllCardTemplates(manifest)) {
     if (matchesCardDef(def, filter, manifest)) n++;
   }
   return n;

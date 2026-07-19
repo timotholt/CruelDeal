@@ -1,6 +1,7 @@
 import type { MatchState } from '../engine/types/state';
 import type { Frame } from '../engine/types/timeline';
 import type { Seat } from '../engine/types/ids';
+import { redactLocationsForSeat } from '../engine/projections/locationRuntime';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type {
   CommittedTransactionRecord,
@@ -84,33 +85,7 @@ export function projectStateForSeat(
   state: MatchState,
   viewerSeat: Seat,
 ): ProjectedState {
-  const locationCards = Object.fromEntries(
-    Object.values(state.locationCards).map((location) => {
-      const canKnowIdentity = location.face === 'FACE_UP'
-        || location.identityKnownTo.includes(viewerSeat);
-      return [
-        location.id,
-        canKnowIdentity
-          ? location
-          : {
-              ...location,
-              defId: '',
-              sourceDeckEntry: -1,
-              tags: [],
-              counters: {},
-            },
-      ];
-    }),
-  ) as MatchState['locationCards'];
-  const hiddenDrawOrder = [...state.locationDeck.drawPile].sort();
-  const projectedState: MatchState = {
-    ...state,
-    locationCards,
-    locationDeck: {
-      ...state.locationDeck,
-      drawPile: hiddenDrawOrder,
-    },
-  };
+  const projectedState = redactLocationsForSeat(state, viewerSeat);
   return {
     kind: 'projected-state',
     viewerSeat,

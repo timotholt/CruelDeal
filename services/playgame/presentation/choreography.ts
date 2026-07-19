@@ -23,6 +23,7 @@ export type VfxCue =
       cardId: CardId;
       effectKind: Extract<MatchEvent, { type: 'CARD_MOVED' }>['cause']['effectKind'];
       sourceId: string;
+      reason: string;
     }
   | { kind: 'none' };
 
@@ -52,6 +53,7 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
           kind: 'move-trail',
           cardId: event.cardId,
           effectKind: event.cause.effectKind,
+          reason: event.cause.reason,
           sourceId: event.cause.sourceId,
         }],
         sfx: [{ name: 'move', timing: 'on-dispatch' }],
@@ -64,6 +66,7 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
           kind: 'move-trail',
           cardId: event.cardId,
           effectKind: event.cause.effectKind,
+          reason: event.cause.reason,
           sourceId: event.cause.sourceId,
         }],
         sfx: [{ name: 'move', timing: 'on-dispatch' }],

@@ -39,7 +39,7 @@ describe('event animator transfer origins', () => {
         {},
         orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
       );
-      const cardId = before.deck.P0[0].id;
+      const cardId = before.deck.P0[0];
       before = apply(before, {
         type: 'CARD_DRAWN',
         owner: 'P0',
@@ -59,8 +59,12 @@ describe('event animator transfer origins', () => {
         cardId,
         fromLane: 0 as LaneId,
         toLane: 2 as LaneId,
-        cause: { sourceId: 'skyrail-instance' as never, effectKind: 'LOCATION' as const },
-      };
+        cause: {
+          sourceId: 'skyrail-instance' as import('../engine/types/ids').LocationCardInstanceId,
+          effectKind: 'LOCATION',
+          reason: 'TEST',
+        },
+      } as const satisfies MatchEvent;
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
         frame: after.log[after.log.length - 1].frame,
@@ -166,7 +170,7 @@ describe('event animator transfer origins', () => {
         {},
         orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
       );
-      const cardId = before.deck.P1[0].id;
+      const cardId = before.deck.P1[0];
       before = apply(before, {
         type: 'CARD_DRAWN',
         owner: 'P1',

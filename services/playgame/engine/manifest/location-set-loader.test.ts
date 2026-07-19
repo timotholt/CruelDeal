@@ -67,8 +67,18 @@ describe('location-set loader', () => {
     expect(locations.map((location) => location.defId)).toEqual(EXPECTED_LOCATION_ORDER);
     expect(loaded.disabledLocationIds).toEqual([]);
     expect(createHash('sha256').update(normalized).digest('hex')).toBe(
-      'a28d7f13a8a6b2d7fa3b8b3df1367ac742c646a2f5d9984a0e9de1e4cef44188',
+      '5ece5ce3ae7f719d85b750df493d7fc86aa56487e176b2657ba7991c63c647e4',
     );
+  });
+
+  it('authors Cryobank with the canonical end-game card schedule', () => {
+    const cryobank = loadLocationsFromSets(['core-v1']).locations.cryobank;
+    expect(cryobank?.abilities.ongoing).toBeUndefined();
+    expect(cryobank?.abilities.onCardEnteredHere).toEqual([{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }]);
   });
 
   it('gives every definition one unique contiguous poolOrder', () => {

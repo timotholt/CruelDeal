@@ -1,3 +1,4 @@
+import { getAllLocationStates, getLocationState } from '../projections/locationRuntime';
 import { describe, expect, it } from 'vitest';
 
 import { createMatchGenesis } from '../cli/initState';
@@ -34,7 +35,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     expect(genesis.phase).toBe('SETUP');
     expect(genesis.lanesById).toEqual({});
     expect(genesis.activeLaneOrder).toEqual([]);
-    expect(genesis.locationCards).toEqual({});
+    expect(getAllLocationStates(genesis)).toEqual([]);
     expect(genesis.locationDeck.drawPile).toEqual([]);
     expect(validateLocationState(genesis)).toEqual([]);
   });
@@ -76,7 +77,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     expect(state.phase).toBe('AWAITING_INTENT');
     expect(state.activeLaneOrder).toEqual([0, 1, 2]);
     expect(state.locationDeck.staging).toEqual([]);
-    expect(state.locationDeck.drawPile.map(id => state.locationCards[id].defId))
+    expect(state.locationDeck.drawPile.map(id => getLocationState(state, id)!.defId))
       .toEqual(['delta', 'epsilon']);
     expect(state.activeLaneOrder.map(lane => locationCardAtLane(state, lane)?.defId))
       .toEqual(['alpha', 'beta', 'gamma']);

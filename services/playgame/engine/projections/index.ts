@@ -7,6 +7,65 @@
  */
 
 export { getCardPower, getCardPowerModifiers, getLanePower, getLanePowerBreakdown } from './power';
+export {
+  getCurrentCard,
+  type CurrentCard,
+} from './card';
+export {
+  getAllCardIds,
+  getCardDomain,
+  getCardLifecycle,
+  getCardRuntime,
+  getCardsInZone,
+  getCurrentCardAbilityEffects,
+  getCurrentCardAbilityLabels,
+  getEffectiveCardText,
+  type CardLifecycle,
+  type CardLifecycleOccurrence,
+  type CardRuntime,
+  type CurrentCardPosition,
+  type EffectiveCardText,
+} from './cardRuntime';
+export {
+  getAllCardTemplates,
+  getCardTemplate,
+  getCardTemplateAbilityLabels,
+  getCardTemplateDomain,
+  type CardTemplate,
+} from './cardTemplate';
+export {
+  CARD_ABILITY_LABEL_BY_SLOT,
+  CARD_ABILITY_SLOTS,
+  getCardAbilityLabels,
+  hasAnyCardAbility,
+  hasCardAbility,
+  type CardAbilityLabel,
+  type CardAbilitySlot,
+} from './abilityPresence';
+export {
+  LOCATION_ABILITY_LABEL_BY_SLOT,
+  getLocationAbilityLabels,
+  type LocationAbilityLabel,
+  type LocationAbilitySlot,
+} from './locationAbilityPresence';
+export {
+  getAllLocationTemplates,
+  getLocationTemplate,
+  type LocationTemplate,
+} from './locationTemplate';
+export {
+  getAllLocationIds,
+  getAllLocationStates,
+  getLocationLifecycle,
+  getLocationRuntime,
+  getLocationState,
+  redactLocationsForSeat,
+  type CurrentLocationPosition,
+  type LocationLifecycle,
+  type LocationLifecycleOccurrence,
+  type LocationRuntime,
+  type LocationState,
+} from './locationRuntime';
 export { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
 export type {
   PowerModifierEntry,
@@ -19,6 +78,7 @@ export { getCardCost, getCardCostModifiers } from './cost';
 export type { CostModifierEntry } from './cost';
 export { getOnRevealMultiplier, isOnRevealDisabled } from './reveal';
 export { getPriority } from './priority';
+export { getFinalTurn } from './gameEnd';
 export type { PriorityResult } from './priority';
 export { collectAllOngoings, ongoingsTargeting } from './ongoing';
 export { select, evalPredicate } from './select';

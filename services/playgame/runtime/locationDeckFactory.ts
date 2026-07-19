@@ -5,6 +5,7 @@ import type {
   LocationDeckBootstrap,
 } from './contracts';
 import { computeLocationDeckContentHash } from './bootstrapValidation';
+import { getAllLocationTemplates } from '../engine/projections/locationTemplate';
 
 export interface LocationDeckFactoryInput {
   readonly manifest: Manifest;
@@ -54,7 +55,7 @@ export const defaultLocationDeckFactory: LocationDeckFactory = Object.freeze({
     const rulesetEnabled = ruleset.enabledLocationDefIds
       ? new Set(ruleset.enabledLocationDefIds)
       : null;
-    const eligible = Object.values(manifest.locations).filter(
+    const eligible = getAllLocationTemplates(manifest).filter(
       (definition) => definition.rarity > 0
         && !globallyDisabled.has(definition.defId)
         && (!rulesetEnabled || rulesetEnabled.has(definition.defId)),

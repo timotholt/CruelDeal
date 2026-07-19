@@ -16,7 +16,7 @@
  */
 
 import type { OngoingExpr } from '../types/ability';
-import type { CardInstance, MatchState } from '../types/state';
+import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import type { EvalCtx, SourcedOngoing } from './context';
 import {
@@ -28,18 +28,22 @@ import {
 import { ownerMatches, select } from './select';
 import { evalNum } from './numexpr';
 import { locationCardAtLane } from '../laneTopology';
+import {
+  getCardRuntime,
+  type CardRuntime,
+} from './cardRuntime';
+import { getCardTemplate } from './cardTemplate';
+import { getLocationRuntime, getLocationState } from './locationRuntime';
 
 /** All currently-active Ongoings, with numeric parameters already scaled
  *  by any applicable BOOST_ONGOINGS auras. */
 export function collectAllOngoings(state: MatchState, manifest: Manifest): SourcedOngoing[] {
   // --- Step 1: raw gather -------------------------------------------------
   const raw: SourcedOngoing[] = [];
-  const copyExpanders: CardInstance[] = [];
+  const copyExpanders: CardRuntime[] = [];
 
-  for (const card of liveCardSources(state)) {
-    const def = manifest.cards[card.defId];
-    if (!def) continue;
-    const ongoings = def.abilities.ongoing ?? [];
+  for (const card of liveCardSources(state, manifest)) {
+    const ongoings = card.text.abilities.ongoing ?? [];
     for (const expr of ongoings) {
       const b = expr as any;
       if (b.kind === 'CALL_BUILTIN') {
@@ -83,9 +87,9 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
   }
 
   for (const loc of liveLocationSources(state)) {
-    const def = manifest.locations[loc.defId];
-    if (!def) continue;
-    for (const expr of def.abilities.ongoing ?? []) {
+    const location = getLocationRuntime(state, loc.id, manifest);
+    if (!location) continue;
+    for (const expr of location.abilities.ongoing ?? []) {
       raw.push({
         sourceCardId: null,
         sourceLocationId: loc.id,
@@ -100,22 +104,19 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
   // cheapest friendly Ongoing card in the same lane (excluding self and
   // other CALL_BUILTIN-only cards), re-attributed to the copier card.
   for (const copier of copyExpanders) {
-    const candidates = liveCardSources(state).filter(c => {
+    const candidates = liveCardSources(state, manifest).filter(c => {
       if (c.id === copier.id || c.lane !== copier.lane || c.owner !== copier.owner) return false;
-      const def = manifest.cards[c.defId];
-      return (def?.abilities.ongoing ?? []).some(e => (e as any).kind !== 'CALL_BUILTIN');
+      return (c.text.abilities.ongoing ?? []).some(e => (e as any).kind !== 'CALL_BUILTIN');
     });
     if (candidates.length === 0) continue;
     // Use def.cost + costDelta to avoid importing getCardCost (circular dep via cost.ts → ongoing.ts).
     candidates.sort((a, b) => {
-      const ca = (manifest.cards[a.defId]?.cost ?? 999) + a.costDelta;
-      const cb = (manifest.cards[b.defId]?.cost ?? 999) + b.costDelta;
+      const ca = (getCardTemplate(manifest, a.defId)?.baseCost ?? 999) + a.costDelta;
+      const cb = (getCardTemplate(manifest, b.defId)?.baseCost ?? 999) + b.costDelta;
       return ca - cb;
     });
     const cheapest = candidates[0];
-    const cheapestDef = manifest.cards[cheapest.defId];
-    if (!cheapestDef) continue;
-    for (const expr of cheapestDef.abilities.ongoing ?? []) {
+    for (const expr of cheapest.text.abilities.ongoing ?? []) {
       if ((expr as any).kind === 'CALL_BUILTIN') continue;
       raw.push({
         sourceCardId: copier.id,
@@ -173,7 +174,8 @@ function applyBoostIfAny(
 
   // Aggregate factor: 1 + Σ (factor - 1). Matches spec §13 math for
   // Iron Man+Onslaught, Iron Man+Onslaught+Citadel, etc.
-  const sourceCard = state.cards[entry.sourceCardId];
+  const sourceCard = getCardRuntime(state, entry.sourceCardId, manifest);
+  if (!sourceCard) return entry.expr;
   const ctx: EvalCtx = ctxForCard(state, manifest, sourceCard);
   const agg = boosts.reduce((sum, b) => {
     if (b.expr.kind !== 'BOOST_ONGOINGS') return sum;
@@ -197,6 +199,7 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'ON_REVEAL_MULTIPLIER':
       return { ...expr, factor: { kind: 'MUL', a: expr.factor, b: { kind: 'LIT', n: agg } } };
     // Boolean auras unaffected.
+    case 'EXTEND_GAME_TURNS':
     case 'DISABLE_ON_REVEAL':
     case 'DISABLE_ONGOING':
     case 'BLOCK_PLAY':
@@ -204,7 +207,6 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'BLOCK_POWER_INCREASE':
     case 'BLOCK_DESTROY':
     case 'BLOCK_FRIENDLY_DESTROY':
-    case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF':
     case 'BOOST_ONGOINGS':
       return expr;
@@ -221,9 +223,11 @@ function computeDisabledOngoingSources(
   const disabled = new Set<import('../types/ids').CardId>();
   for (const entry of raw) {
     if (entry.expr.kind !== 'DISABLE_ONGOING') continue;
-    const sourceCard = entry.sourceCardId ? state.cards[entry.sourceCardId] : null;
+    const sourceCard = entry.sourceCardId
+      ? getCardRuntime(state, entry.sourceCardId, manifest)
+      : null;
     const sourceLocation = entry.sourceLocationId
-      ? state.locationCards[entry.sourceLocationId]
+      ? getLocationState(state, entry.sourceLocationId)
       : null;
     const ctx: EvalCtx | null = sourceCard
       ? ctxForCard(state, manifest, sourceCard)
@@ -272,7 +276,6 @@ function targetIncludes(
     case 'BLOCK_MOVE':
     case 'BLOCK_POWER_INCREASE':
     case 'BLOCK_DESTROY':
-    case 'DELAY_REVEAL':
     case 'COPY_ONGOING_OF': {
       const target = (expr as { target?: import('../types/ability').Selector }).target;
       if (!target) return false;
@@ -280,6 +283,7 @@ function targetIncludes(
     }
     case 'LANE_POWER_ADD':
     case 'LANE_POWER_MULTIPLIER':
+    case 'EXTEND_GAME_TURNS':
     case 'BOOST_ONGOINGS':
     case 'BLOCK_FRIENDLY_DESTROY':
       return false;
@@ -292,7 +296,7 @@ export function sourceCtx(
   manifest: Manifest,
 ): EvalCtx | null {
   if (entry.sourceCardId) {
-    const c = state.cards[entry.sourceCardId];
+    const c = getCardRuntime(state, entry.sourceCardId, manifest);
     if (!c) return null;
     return ctxForCard(state, manifest, c);
   }

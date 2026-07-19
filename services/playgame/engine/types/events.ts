@@ -11,6 +11,7 @@
 
 import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from './ids';
 import type {
+  CardRevealTiming,
   CardTag,
   EnergyReason,
   LaneTag,
@@ -58,6 +59,7 @@ export type MatchEvent =
   | { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED'; owner: Owner; delta: number }
 
   // --- Reveal + OR windows ---
+  | { type: 'CARD_REVEAL_SCHEDULED'; cardId: CardId; timing: CardRevealTiming; cause: EffectRef }
   | { type: 'CARD_FLIPPED'; cardId: CardId }
   | { type: 'OR_WINDOW_OPEN'; cardId: CardId; multiplier: number }
   | { type: 'OR_WINDOW_CLOSE'; cardId: CardId }
@@ -71,10 +73,10 @@ export type MatchEvent =
   | { type: 'CARD_MOVED'; cardId: CardId; fromLane: LaneId; toLane: LaneId; cause: EffectRef }
   | { type: 'CARD_RETURNED_TO_LANE'; cardId: CardId; lane: LaneId; revealed: boolean; cause: EffectRef }
   | { type: 'CARD_TRANSFORMED'; cardId: CardId; oldDefId: string; newDefId: string; cause: EffectRef; resetStats?: boolean }
-  | { type: 'CARD_TAG_ADDED'; cardId: CardId; tag: CardTag }
-  | { type: 'CARD_TAG_REMOVED'; cardId: CardId; tag: CardTag['kind'] }
-  | { type: 'CARD_TEXT_OVERRIDDEN'; cardId: CardId; override: TextOverride | null }
-  | { type: 'CARD_COUNTER_CHANGED'; cardId: CardId; name: string; delta: number }
+  | { type: 'CARD_TAG_ADDED'; cardId: CardId; tag: CardTag; cause: EffectRef }
+  | { type: 'CARD_TAG_REMOVED'; cardId: CardId; tag: CardTag['kind']; cause: EffectRef }
+  | { type: 'CARD_TEXT_OVERRIDDEN'; cardId: CardId; override: TextOverride | null; cause: EffectRef }
+  | { type: 'CARD_COUNTER_CHANGED'; cardId: CardId; name: string; delta: number; cause: EffectRef }
 
   // --- Deck / hand ---
   // New-card events carry their spawnSource so the provenance is recorded

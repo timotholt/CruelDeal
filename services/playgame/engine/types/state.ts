@@ -153,10 +153,19 @@ export interface PowerLedgerEntry {
  * Ongoing COST_ADD contributions are NOT here — they're computed live.
  */
 export interface CostLogEntry {
+  readonly frame: Frame;
   readonly turn: number;
   readonly delta: number;
   /** card.costDelta AFTER applying this entry (base not included). */
   readonly runningDelta: number;
+  readonly cause: EffectRef;
+}
+
+/** Append-only history of every governed card-text replacement. */
+export interface TextLogEntry {
+  readonly frame: Frame;
+  readonly turn: number;
+  readonly override: TextOverride | null;
   readonly cause: EffectRef;
 }
 
@@ -203,6 +212,10 @@ export type CardZone =
   | 'DESTROYED'   // destroyed from board
   | 'BANISHED';   // removed from game, no effect can touch
 
+export type CardRevealTiming =
+  | { readonly kind: 'TURN'; readonly turn: number }
+  | { readonly kind: 'END_OF_GAME' };
+
 /**
  * Provenance: why does this card exist in this match?
  *
@@ -219,7 +232,7 @@ export type SpawnSource =
   | { readonly kind: 'COPY_OF';          readonly sourceCardId: CardId }
   | { readonly kind: 'SYSTEM' };          // test fixtures / debug scaffolding
 
-export interface CardInstance {
+export interface InternalCardRecord {
   readonly id: CardId;
   readonly defId: string;
   /** Selected cosmetic variant from the frozen bootstrap deck entry. */
@@ -229,6 +242,8 @@ export interface CardInstance {
   readonly lane: LaneId | null;
   readonly zone: CardZone;
   readonly revealed: boolean;
+  /** Authoritative reveal schedule while this card is unresolved on board. */
+  readonly revealTiming: CardRevealTiming | null;
   /**
    * Authoritative semantic history of permanent power mutations.
    * Active contributions and stored/effective deltas are derived by folding
@@ -243,9 +258,20 @@ export interface CardInstance {
   readonly costLog: readonly CostLogEntry[];
   readonly tags: readonly CardTag[];
   readonly textOverride: TextOverride | null;
+  readonly textLog: readonly TextLogEntry[];
   readonly counters: Readonly<Record<string, number>>;
   /** Where this card came from. Immutable across the card's lifetime. */
   readonly spawnSource: SpawnSource;
+}
+
+declare const CARD_STORE: unique symbol;
+
+/**
+ * Opaque normalized card-record storage. Only the reducer/setup boundary and
+ * canonical card projections can unwrap this value.
+ */
+export interface CardStore {
+  readonly [CARD_STORE]: 'CARD_STORE';
 }
 
 export type LocationZone =
@@ -258,7 +284,7 @@ export type LocationZone =
 
 export type LocationCardFace = 'FACE_DOWN' | 'FACE_UP';
 
-export interface LocationCardInstance {
+export interface InternalLocationRecord {
   readonly id: LocationCardInstanceId;
   readonly defId: string;
   /** Immutable position in the frozen bootstrap location deck. */
@@ -272,10 +298,11 @@ export interface LocationCardInstance {
   readonly revealCount: number;
   readonly tags: readonly LaneTag[];
   readonly counters: Readonly<Record<string, number>>;
-  readonly createdAt: Frame;
-  readonly drawnAt?: Frame;
-  readonly playedAt?: Frame;
-  readonly revealedAt?: Frame;
+}
+
+declare const LOCATION_STORE: unique symbol;
+export interface LocationStore {
+  readonly [LOCATION_STORE]: 'LOCATION_STORE';
 }
 
 export interface LocationDeckState {
@@ -395,9 +422,9 @@ export interface MatchState {
   readonly priority: Owner;
   /** Per-owner current energy pool. Replenished to `maxEnergy + bonus` on TURN_STARTED. */
   readonly energy: Readonly<Record<Owner, number>>;
-  readonly deck: Readonly<Record<Owner, readonly CardInstance[]>>;
-  readonly hand: Readonly<Record<Owner, readonly CardInstance[]>>;
-  readonly cards: Readonly<Record<CardId, CardInstance>>;
+  readonly deck: Readonly<Record<Owner, readonly CardId[]>>;
+  readonly hand: Readonly<Record<Owner, readonly CardId[]>>;
+  readonly cardStore: CardStore;
   /** Stable lane registry. Destroyed lanes remain as permanent tombstones. */
   readonly lanesById: Readonly<Record<LaneId, LaneState>>;
   /** Current left-to-right playable order. */
@@ -405,7 +432,7 @@ export interface MatchState {
   /** Next monotonic stable lane ID. */
   readonly nextLaneId: LaneId;
   /** Every location card instance, regardless of current zone. */
-  readonly locationCards: Readonly<Record<LocationCardInstanceId, LocationCardInstance>>;
+  readonly locationStore: LocationStore;
   readonly locationDeck: LocationDeckState;
   readonly pending: readonly CardId[];
   readonly stagingOrder: readonly CardId[];

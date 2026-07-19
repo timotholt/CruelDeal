@@ -1,9 +1,10 @@
 import type { LaneId, LocationCardInstanceId } from './types/ids';
 import type {
   LaneState,
-  LocationCardInstance,
+  InternalLocationRecord,
   MatchState,
 } from './types/state';
+import { getLocationState } from './projections/locationRuntime';
 
 export function laneStatus(lane: LaneState): LaneState['status'] {
   return lane.status;
@@ -41,7 +42,7 @@ export function locationCardIdAtLane(
 export function locationCardAtLane(
   state: MatchState,
   laneId: LaneId,
-): LocationCardInstance | null {
+): InternalLocationRecord | null {
   const id = locationCardIdAtLane(state, laneId);
-  return id === null ? null : state.locationCards[id] ?? null;
+  return id === null ? null : getLocationState(state, id);
 }

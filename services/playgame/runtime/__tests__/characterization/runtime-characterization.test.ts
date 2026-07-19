@@ -1,3 +1,5 @@
+import { getLocationState } from '../../../engine/projections/locationRuntime';
+import { getCardState } from '../../../engine/projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../../../engine/rng';
 import { resolve, resolveTurn } from '../../../engine/resolve';
@@ -247,7 +249,7 @@ describe('Phase 0 runtime characterization', () => {
     expect(startedIndex).toBeLessThan(revealIndex);
     expect(revealIndex).toBeLessThan(effectIndex);
     const locationId = state.lanesById[1].locationSlot.locationCardId!;
-    expect(state.locationCards[locationId].face).toBe('FACE_UP');
+    expect(getLocationState(state, locationId)!.face).toBe('FACE_UP');
     expect(getStoredCardPowerDelta(
       state,
       'rally-target' as never,
@@ -292,7 +294,7 @@ describe('Phase 0 runtime characterization', () => {
 
     expect(events.some((event) => event.type === 'CARD_DRAWN' && event.owner === 'P1')).toBe(false);
     expect(state.hand.P1).toHaveLength(7);
-    expect(state.deck.P1.map((card) => card.id)).toEqual(['p1-top-deck']);
+    expect(state.deck.P1).toEqual(['p1-top-deck']);
   });
 
   it('ends the match once and leaves the captured result stable', () => {
@@ -338,7 +340,7 @@ describe('Phase 0 runtime characterization', () => {
     const { events, state } = characterizeTurn(runtimeFixture, testManifest([plain]));
 
     expect(runtimeFixture.remoteSeat).toBe(localSeat === 'P0' ? 'P1' : 'P0');
-    expect(state.cards['local-card'].owner).toBe(localSeat);
+    expect(getCardState(state, 'local-card')!.owner).toBe(localSeat);
     expect(events.find((event) => event.type === 'CARD_FLIPPED')).toMatchObject({
       type: 'CARD_FLIPPED',
       cardId: 'local-card',

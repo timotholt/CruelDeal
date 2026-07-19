@@ -1,7 +1,7 @@
 /**
  * Presentation-layer types and selectors (Step 8c).
  *
- * Bridges the engine's data model (CardInstance + Manifest) to the
+ * Bridges the engine's data model (InternalCardRecord + Manifest) to the
  * flat "ResolvedCard / ResolvedLocation" shapes the UI components consume.
  * All helpers are pure functions — no Solid reactivity here.
  *
@@ -17,18 +17,16 @@ import type {
   PowerLedgerEntry,
 } from './engine/types/state';
 import type { CardId, LaneId, Seat } from './engine/types/ids';
-import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
+import type { Manifest } from './engine/manifest/types';
 import type { CostModifierEntry, PowerModifierEntry } from './engine/projections';
 import {
-  getCardCost,
-  getCardCostModifiers,
-  getCardPower,
-  getCardPowerModifiers,
   getLanePower as getEngineLanePower,
+  getAllCardIds,
+  getCurrentCard,
+  getCardTemplate,
+  getLocationTemplate,
 } from './engine/projections';
 import { laneById, locationCardAtLane } from './engine/laneTopology';
-import { storedPowerDelta } from './engine/powerLedger';
-import { newShortId } from '@/utils/id';
 
 // ── UI-only sidecar state (re-exported here to avoid a circular dep between
 //    PlayGameContext and script/actions) ────────────────────────────────────
@@ -99,7 +97,7 @@ export interface ResolvedLocation {
   art: string;
   /**
    * Path to the wide-format map art shipped in `public/art/maps/`.
-   * Pulled verbatim from `manifest.locations[defId].cosmetic.art.map.path`.
+   * Resolved through the canonical location-template API.
    * Populated for BOTH revealed and unrevealed locations so the lane
    * overlay can render the correct art from the moment the match starts
    * (the tile itself still shows "???" until revealed).
@@ -120,33 +118,35 @@ export function resolveCard(
   state: EngineMatchState,
   manifest: Manifest,
 ): ResolvedCard | null {
-  const inst = state.cards[cardId as CardId];
+  const inst = getCurrentCard(state, cardId as CardId, manifest);
   if (!inst) return null;
-  const def = manifest.cards[inst.defId];
+  const def = getCardTemplate(manifest, inst.defId);
   if (!def) return null;
   return {
     id: cardId,
     defId: inst.defId,
-    name: def.cosmetic.displayName || def.name,
-    cost: getCardCost(state, cardId as CardId, manifest),
-    baseCost: def.cost,
-    power: getCardPower(state, cardId as CardId, manifest),
-    basePower: def.basePower,
-    art: def.cosmetic.accent ?? '#4a5568',
-    portraitPath: def.cosmetic.art.portrait.path || null,
-    type: def.cardType,
-    text: def.cosmetic.rulesText ?? '',
-    textDisabled: inst.textOverride?.kind === 'BLANK_ONGOING' ||
-      inst.textOverride?.kind === 'BLANK_ALL' ||
+    name: inst.name,
+    cost: inst.cost.current,
+    baseCost: inst.cost.base,
+    power: inst.power?.current ?? 0,
+    basePower: inst.power?.base ?? 0,
+    art: def.accent ?? '#4a5568',
+    portraitPath: def.portraitPath,
+    type: inst.domain,
+    text: inst.text.rulesText,
+    textDisabled: inst.text.override?.kind === 'BLANK_ONGOING' ||
+      inst.text.override?.kind === 'BLANK_ALL' ||
       inst.tags.some((tag) => tag.kind === 'ONGOING_DISABLED'),
     owner: inst.owner,
     zone: inst.zone,
     revealed: inst.revealed,
-    storedPowerDelta: storedPowerDelta(inst, def.basePower),
+    storedPowerDelta: inst.power === null
+      ? 0
+      : inst.power.current - inst.power.base,
     powerLedger: inst.powerLedger,
-    powerModifiers: getCardPowerModifiers(state, cardId as CardId, manifest),
-    costLog: getCardCostModifiers(state, cardId as CardId, manifest),
-    costHistory: inst.costLog,
+    powerModifiers: inst.power?.modifiers ?? [],
+    costLog: inst.cost.modifiers,
+    costHistory: inst.costHistory,
   };
 }
 
@@ -164,7 +164,7 @@ export function getHandForSeat(
   manifest: Manifest,
 ): ResolvedCard[] {
   return state.hand[seat]
-    .map((c) => resolveCard(c.id, state, manifest))
+    .map((id) => resolveCard(id, state, manifest))
     .filter((c): c is ResolvedCard => c !== null);
 }
 
@@ -208,7 +208,7 @@ export function getLocation(
   viewerSeat: Seat,
 ): ResolvedLocation {
   const locInst = locationCardAtLane(state, laneIdx);
-  const def = locInst ? manifest.locations[locInst.defId] : null;
+  const def = locInst ? getLocationTemplate(manifest, locInst.defId) : null;
   const identityKnown = Boolean(
     locInst
     && (locInst.face === 'FACE_UP' || locInst.identityKnownTo.includes(viewerSeat)),
@@ -226,10 +226,10 @@ export function getLocation(
   }
   return {
     defId: locInst.defId,
-    name: def.cosmetic.displayName,
-    desc: def.cosmetic.description,
-    art: def.cosmetic.accent ?? '#2d3748',
-    mapArt: def.cosmetic.art.map.path,
+    name: def.name,
+    desc: def.description,
+    art: def.accent ?? '#2d3748',
+    mapArt: def.mapArtPath,
     revealed: locInst.face === 'FACE_UP',
   };
 }
@@ -251,39 +251,11 @@ export function getCardsInZoneForSeat(
   zone: CardZone,
   manifest: Manifest,
 ): ResolvedCard[] {
-  return Object.values(state.cards)
-    .filter((card) => card.owner === seat && card.zone === zone)
+  return getAllCardIds(state)
+    .map((id) => getCurrentCard(state, id, manifest))
+    .filter((card): card is NonNullable<typeof card> =>
+      card !== null && card.owner === seat && card.zone === zone)
     .map((card) => resolveCard(card.id, state, manifest))
     .filter((card): card is ResolvedCard => card !== null)
     .reverse();
-}
-
-// ── Card creation helpers ────────────────────────────────────────────────────
-
-
-/**
- * Create a new engine CardInstance from a manifest def.
- * ID uses the same `newShortId()` wall as the old model so DOM refs
- * are short and unique.
- */
-export function newEngineCardInstance(
-  def: ManifestCardDef,
-  owner: Seat,
-): import('./engine/types/state').CardInstance {
-  return {
-    id: newShortId() as CardId,
-    defId: def.defId,
-    version: def.version,
-    owner,
-    lane: null,
-    zone: 'HAND',
-    revealed: false,
-    powerLedger: [],
-    costDelta: 0,
-    costLog: [],
-    tags: [],
-    textOverride: null,
-    counters: {},
-    spawnSource: { kind: 'DECK_CREATION' },
-  };
 }

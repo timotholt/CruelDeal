@@ -14,13 +14,14 @@
  */
 
 import type { MatchEvent } from './types/events';
+import { getCardTemplate } from './projections/cardTemplate';
 import type {
-  CardInstance,
+  InternalCardRecord,
   CardTag,
   CostLogEntry,
   EnergyLogEntry,
   LaneState,
-  LocationCardInstance,
+  InternalLocationRecord,
   MatchLogEntry,
   MatchState,
   PendingEffect,
@@ -38,6 +39,17 @@ import type {
 import type { Manifest } from './manifest/types';
 import { currentFrame, frameSingleEvent } from './timeline';
 import { nextFrame, type FramedEvent } from './types/timeline';
+import {
+  cardRecordsInternal,
+  createCardStoreInternal,
+  readCardInternal,
+  writeCardRecordsInternal,
+} from './internal/cardStore';
+import {
+  locationRecordsInternal,
+  readLocationInternal,
+  writeLocationRecordsInternal,
+} from './internal/locationStore';
 
 export function apply(
   state: MatchState,
@@ -80,11 +92,12 @@ function applyBody(
     case 'CARD_STAGED': {
       // Move card from HAND -> LANE (face-up to owner, not yet revealed).
       const s1 = removeFromHand(state, event.owner, event.cardId);
-      const card1 = s1.cards[event.cardId];
+      const card1 = readCardInternal(s1, event.cardId);
       const s2 = patchCard(s1, event.cardId, {
         zone: 'LANE',
         lane: event.lane,
         revealed: false,
+        revealTiming: { kind: 'TURN', turn: state.turn },
         tags: card1 ? addTagUnique(card1.tags, { kind: 'PLAYED_THIS_TURN' }) : [],
       });
       const s3 = addToLane(s2, event.owner, event.lane, event.cardId);
@@ -96,13 +109,14 @@ function applyBody(
     }
 
     case 'CARD_UNSTAGED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card || card.lane === null) return state;
       const s1 = removeFromLane(state, card.owner, card.lane, event.cardId);
       const s2 = patchCard(s1, event.cardId, {
         zone: 'HAND',
         lane: null,
         revealed: false,
+        revealTiming: null,
       });
       const s3 = addToHand(s2, card.owner, event.cardId);
       return {
@@ -147,8 +161,11 @@ function applyBody(
 
     // ---- Reveal + OR windows ---------------------------------------------
 
+    case 'CARD_REVEAL_SCHEDULED':
+      return patchCard(state, event.cardId, { revealTiming: event.timing });
+
     case 'CARD_FLIPPED':
-      return patchCard(state, event.cardId, { revealed: true });
+      return patchCard(state, event.cardId, { revealed: true, revealTiming: null });
 
     case 'OR_WINDOW_OPEN':
     case 'OR_WINDOW_CLOSE':
@@ -158,10 +175,10 @@ function applyBody(
     // ---- Card mutations ---------------------------------------------------
 
     case 'CARD_POWER_CHANGED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
-      const def = manifest.cards[card.defId];
-      if (!def || def.cardType === 'spell') return state;
+      const def = getCardTemplate(manifest, card.defId);
+      if (!def || def.domain === 'spell') return state;
       const entry: PowerLedgerEntry = {
         id: `${event.cardId}:power:${eventFrame}`,
         frame: eventFrame,
@@ -175,10 +192,11 @@ function applyBody(
     }
 
     case 'CARD_COST_CHANGED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       const newDelta = card.costDelta + event.delta;
       const cEntry: CostLogEntry = {
+        frame: eventFrame,
         turn: state.turn,
         delta: event.delta,
         runningDelta: newDelta,
@@ -193,7 +211,7 @@ function applyBody(
     case 'CARD_DESTROYED': {
       // Board → DESTROYED pile. Distinguished from CARD_DISCARDED so
       // Hela / Knull can target this specifically.
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       let s: MatchState = state;
       if (card.lane !== null) {
@@ -202,6 +220,7 @@ function applyBody(
       s = patchCard(s, event.cardId, {
         zone: 'DESTROYED',
         lane: null,
+        revealTiming: null,
         tags: addTagUnique(card.tags, { kind: 'DESTROYED_THIS_TURN' }),
       });
       return {
@@ -212,15 +231,15 @@ function applyBody(
 
     case 'CARD_DISCARDED': {
       // Hand → DISCARD pile. Morbius / Apocalypse subscribe to this.
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       const s1 = removeFromHand(state, card.owner, event.cardId);
-      return patchCard(s1, event.cardId, { zone: 'DISCARD', lane: null });
+      return patchCard(s1, event.cardId, { zone: 'DISCARD', lane: null, revealTiming: null });
     }
 
     case 'CARD_BANISHED': {
       // Anywhere → BANISHED (permanent exile, no effect can see it again).
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       let s: MatchState = state;
       if (card.lane !== null) {
@@ -229,13 +248,13 @@ function applyBody(
       s = removeFromHand(s, card.owner, event.cardId);
       s = {
         ...s,
-        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(c => c.id !== event.cardId) },
+        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(id => id !== event.cardId) },
       };
-      return patchCard(s, event.cardId, { zone: 'BANISHED', lane: null });
+      return patchCard(s, event.cardId, { zone: 'BANISHED', lane: null, revealTiming: null });
     }
 
     case 'CARD_MOVED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       const s1 = removeFromLane(state, card.owner, event.fromLane, event.cardId);
       const s2 = addToLane(s1, card.owner, event.toLane, event.cardId);
@@ -248,7 +267,7 @@ function applyBody(
     }
 
     case 'CARD_RETURNED_TO_LANE': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       if (state.lanesById[event.lane].cards[card.owner].length >= manifest.constants.laneCapacity) return state;
       let s: MatchState = state;
@@ -258,18 +277,19 @@ function applyBody(
       s = removeFromHand(s, card.owner, event.cardId);
       s = {
         ...s,
-        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(c => c.id !== event.cardId) },
+        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(id => id !== event.cardId) },
       };
       const s2 = patchCard(s, event.cardId, {
         zone: 'LANE',
         lane: event.lane,
         revealed: event.revealed,
+        revealTiming: event.revealed ? null : { kind: 'TURN', turn: state.turn },
       });
       return addToLane(s2, card.owner, event.lane, event.cardId);
     }
 
     case 'CARD_TRANSFORMED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       return patchCard(state, event.cardId, {
         defId: event.newDefId,
@@ -290,12 +310,13 @@ function applyBody(
           counters: {},
           tags: [],
           textOverride: null,
+          textLog: [],
         } : {}),
       });
     }
 
     case 'CARD_TAG_ADDED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       return patchCard(state, event.cardId, {
         tags: addTagUnique(card.tags, event.tag),
@@ -303,18 +324,32 @@ function applyBody(
     }
 
     case 'CARD_TAG_REMOVED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       return patchCard(state, event.cardId, {
         tags: card.tags.filter(t => t.kind !== event.tag),
       });
     }
 
-    case 'CARD_TEXT_OVERRIDDEN':
-      return patchCard(state, event.cardId, { textOverride: event.override });
+    case 'CARD_TEXT_OVERRIDDEN': {
+      const card = readCardInternal(state, event.cardId);
+      if (!card) return state;
+      return patchCard(state, event.cardId, {
+        textOverride: event.override,
+        textLog: [
+          ...card.textLog,
+          {
+            frame: eventFrame,
+            turn: state.turn,
+            override: event.override,
+            cause: event.cause,
+          },
+        ],
+      });
+    }
 
     case 'CARD_COUNTER_CHANGED': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       const prev = card.counters[event.name] ?? 0;
       return patchCard(state, event.cardId, {
@@ -326,44 +361,43 @@ function applyBody(
 
     case 'CARD_DRAWN': {
       const deck = state.deck[event.owner];
-      const drawn = deck.find(c => c.id === event.cardId);
-      if (!drawn) return state;
+      if (!deck.includes(event.cardId)) return state;
       const s1 = {
         ...state,
-        deck: { ...state.deck, [event.owner]: deck.filter(c => c.id !== event.cardId) },
+        deck: { ...state.deck, [event.owner]: deck.filter(id => id !== event.cardId) },
       };
-      const s2 = patchCard(s1, event.cardId, { zone: 'HAND' });
+      const s2 = patchCard(s1, event.cardId, { zone: 'HAND', revealTiming: null });
       return addToHand(s2, event.owner, event.cardId);
     }
 
     case 'CARD_ADDED_TO_DECK': {
       // May be creating a brand-new card or repositioning an existing one.
-      const existing = state.cards[event.cardId];
+      const existing = readCardInternal(state, event.cardId);
       const s1 = existing
         ? patchCard(state, event.cardId, {
             zone: 'DECK',
             lane: null,
+            revealTiming: null,
             spawnSource: event.spawnSource,
           })
         : event.defId
           ? mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'DECK')
           : state;
-      const instance = s1.cards[event.cardId];
-      if (!instance) return state; // caller must have minted the instance first
+      if (!readCardInternal(s1, event.cardId)) return state;
       return {
         ...s1,
         deck: {
           ...s1.deck,
           [event.owner]: event.position === 'TOP'
-            ? [instance, ...s1.deck[event.owner].filter(c => c.id !== event.cardId)]
-            : [...s1.deck[event.owner].filter(c => c.id !== event.cardId), instance],
+            ? [event.cardId, ...s1.deck[event.owner].filter(id => id !== event.cardId)]
+            : [...s1.deck[event.owner].filter(id => id !== event.cardId), event.cardId],
         },
       };
     }
 
     case 'CARD_ADDED_TO_HAND': {
       // Mint-to-hand: Agent 13, Collector, "add a card to your hand" effects.
-      // This creates a fresh CardInstance with the supplied defId and
+      // This creates a fresh InternalCardRecord with the supplied defId and
       // spawnSource. If an instance already exists at that id, update it.
       const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'HAND');
       return addToHand(minted, event.owner, event.cardId);
@@ -371,33 +405,33 @@ function applyBody(
 
     case 'CARD_ADDED_TO_LANE': {
       // Mint-to-lane: Brood, Jubilee spawn, Bar Sinister. Creates a fresh
-      // CardInstance directly in a lane. Effect-spawned cards are face-up
+      // InternalCardRecord directly in a lane. Effect-spawned cards are face-up
       // immediately (revealed: true); On Reveal effects do NOT fire —
       // use SPAWN_AND_REVEAL for that.
       const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'LANE', event.lane);
-      const revealed = patchCard(minted, event.cardId, { revealed: true });
+      const revealed = patchCard(minted, event.cardId, { revealed: true, revealTiming: null });
       return addToLane(revealed, event.owner, event.lane, event.cardId);
     }
 
     case 'CARD_MOVED_TO_ZONE': {
-      const card = state.cards[event.cardId];
+      const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       let s = removeFromAllCardZones(state, card.owner, event.cardId);
 
       switch (event.destination.kind) {
         case 'HAND':
           if (s.hand[card.owner].length >= manifest.constants.handCap) return state;
-          s = patchCard(s, event.cardId, { zone: 'HAND', lane: null });
+          s = patchCard(s, event.cardId, { zone: 'HAND', lane: null, revealTiming: null });
           return addToHand(s, card.owner, event.cardId);
         case 'DECK':
-          s = patchCard(s, event.cardId, { zone: 'DECK', lane: null });
+          s = patchCard(s, event.cardId, { zone: 'DECK', lane: null, revealTiming: null });
           return {
             ...s,
             deck: {
               ...s.deck,
               [card.owner]: event.destination.position === 'TOP'
-                ? [s.cards[event.cardId], ...s.deck[card.owner]]
-                : [...s.deck[card.owner], s.cards[event.cardId]],
+                ? [event.cardId, ...s.deck[card.owner]]
+                : [...s.deck[card.owner], event.cardId],
             },
           };
         case 'LANE':
@@ -406,6 +440,9 @@ function applyBody(
             zone: 'LANE',
             lane: event.destination.lane,
             revealed: event.destination.revealed ?? card.revealed,
+            revealTiming: (event.destination.revealed ?? card.revealed)
+              ? null
+              : { kind: 'TURN', turn: state.turn },
           });
           return addToLane(s, card.owner, event.destination.lane, event.cardId);
       }
@@ -414,11 +451,10 @@ function applyBody(
 
     case 'DECK_SHUFFLED': {
       const pool = state.deck[event.owner];
-      const byId = new Map(pool.map(c => [c.id, c] as const));
-      const reordered: CardInstance[] = [];
+      const poolIds = new Set(pool);
+      const reordered: CardId[] = [];
       for (const id of event.newOrder) {
-        const c = byId.get(id);
-        if (c) reordered.push(c);
+        if (poolIds.has(id)) reordered.push(id);
       }
       return { ...state, deck: { ...state.deck, [event.owner]: reordered } };
     }
@@ -438,12 +474,12 @@ function applyBody(
 
     case 'LOCATION_DECK_INITIALIZED': {
       if (
-        Object.keys(state.locationCards).length > 0
+        Object.keys(locationRecordsInternal(state)).length > 0
         || state.locationDeck.drawPile.length > 0
       ) {
         return state;
       }
-      const locationCards: Record<LocationCardInstanceId, LocationCardInstance> = {};
+      const locationCards: Record<LocationCardInstanceId, InternalLocationRecord> = {};
       const drawPile: LocationCardInstanceId[] = [];
       for (const location of event.locations) {
         locationCards[location.id] = {
@@ -458,13 +494,11 @@ function applyBody(
           revealCount: 0,
           tags: [],
           counters: {},
-          createdAt: eventFrame,
         };
         drawPile.push(location.id);
       }
-      return {
+      return writeLocationRecordsInternal({
         ...state,
-        locationCards,
         locationDeck: {
           drawPile,
           staging: [],
@@ -472,14 +506,14 @@ function applyBody(
           destroyed: [],
           banished: [],
         },
-      };
+      }, locationCards);
     }
 
     case 'LOCATION_CARD_CREATED': {
-      if (state.locationCards[event.locationId]) return state;
+      if (readLocationInternal(state, event.locationId)) return state;
       const lane = state.lanesById[event.pendingLane];
       if (!lane || laneStatus(lane) !== 'CREATING') return state;
-      const location: LocationCardInstance = {
+      const location: InternalLocationRecord = {
         id: event.locationId,
         defId: event.defId,
         sourceDeckEntry: -1,
@@ -491,24 +525,21 @@ function applyBody(
         revealCount: 0,
         tags: [],
         counters: {},
-        createdAt: eventFrame,
-        drawnAt: eventFrame,
       };
-      return {
+      return writeLocationRecordsInternal({
         ...state,
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: location,
-        },
         locationDeck: {
           ...state.locationDeck,
           staging: [...state.locationDeck.staging, location.id],
         },
-      };
+      }, {
+        ...locationRecordsInternal(state),
+        [location.id]: location,
+      });
     }
 
     case 'LOCATION_CARD_DRAWN': {
-      const location = state.locationCards[event.locationId];
+      const location = readLocationInternal(state, event.locationId);
       const lane = state.lanesById[event.pendingLane];
       if (
         !location
@@ -518,27 +549,21 @@ function applyBody(
       ) {
         return state;
       }
-      return {
+      return patchLocationCard({
         ...state,
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: {
-            ...location,
-            zone: 'STAGING',
-            pendingLaneId: event.pendingLane,
-            drawnAt: eventFrame,
-          },
-        },
         locationDeck: {
           ...state.locationDeck,
           drawPile: state.locationDeck.drawPile.filter(id => id !== location.id),
           staging: [...state.locationDeck.staging, location.id],
         },
-      };
+      }, location.id, {
+        zone: 'STAGING',
+        pendingLaneId: event.pendingLane,
+      });
     }
 
     case 'LOCATION_CARD_PLAYED': {
-      const location = state.locationCards[event.locationId];
+      const location = readLocationInternal(state, event.locationId);
       const lane = state.lanesById[event.lane];
       if (
         !location
@@ -550,21 +575,8 @@ function applyBody(
       ) {
         return state;
       }
-      return {
+      return patchLocationCard({
         ...state,
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: {
-            ...location,
-            zone: 'LANE',
-            laneId: event.lane,
-            pendingLaneId: null,
-            face: 'FACE_DOWN',
-            identityKnownTo: [],
-            revealCount: 0,
-            playedAt: eventFrame,
-          },
-        },
         locationDeck: {
           ...state.locationDeck,
           staging: state.locationDeck.staging.filter(id => id !== location.id),
@@ -579,7 +591,14 @@ function applyBody(
             },
           },
         },
-      };
+      }, location.id, {
+        zone: 'LANE',
+        laneId: event.lane,
+        pendingLaneId: null,
+        face: 'FACE_DOWN',
+        identityKnownTo: [],
+        revealCount: 0,
+      });
     }
 
     case 'LOCATION_SLOT_REVEAL_SCHEDULED': {
@@ -606,7 +625,6 @@ function applyBody(
         face: 'FACE_UP',
         identityKnownTo: ['P0', 'P1'],
         revealCount: location.revealCount + 1,
-        revealedAt: eventFrame,
       });
       const lane = revealed.lanesById[event.lane];
       return patchLane(revealed, event.lane, {
@@ -651,7 +669,7 @@ function applyBody(
         : event.revealPolicy === 'SCHEDULE_AT_TURN'
           ? event.revealAtTurn ?? null
           : null;
-      const newLoc: LocationCardInstance = {
+      const newLoc: InternalLocationRecord = {
         id: event.newId,
         defId: event.newDefId,
         sourceDeckEntry: -1,
@@ -663,17 +681,10 @@ function applyBody(
         revealCount: revealed ? 1 : 0,
         tags: [],
         counters: {},
-        createdAt: eventFrame,
-        playedAt: eventFrame,
-        ...(revealed ? { revealedAt: eventFrame } : {}),
       };
       const withoutOld = moveLocationToZone(state, oldLocation.id, event.oldDestination);
-      return {
+      return writeLocationRecordsInternal({
         ...withoutOld,
-        locationCards: {
-          ...withoutOld.locationCards,
-          [newLoc.id]: newLoc,
-        },
         lanesById: {
           ...withoutOld.lanesById,
           [event.lane]: {
@@ -685,7 +696,10 @@ function applyBody(
             },
           },
         },
-      };
+      }, {
+        ...locationRecordsInternal(withoutOld),
+        [newLoc.id]: newLoc,
+      });
     }
 
     case 'LOCATIONS_SWAPPED': {
@@ -705,7 +719,7 @@ function applyBody(
       ) {
         return state;
       }
-      return {
+      return writeLocationRecordsInternal({
         ...state,
         lanesById: {
           ...state.lanesById,
@@ -724,12 +738,11 @@ function applyBody(
             },
           },
         },
-        locationCards: {
-          ...state.locationCards,
-          [leftLocation.id]: { ...leftLocation, laneId: rightLane.id },
-          [rightLocation.id]: { ...rightLocation, laneId: leftLane.id },
-        },
-      };
+      }, {
+        ...locationRecordsInternal(state),
+        [leftLocation.id]: { ...leftLocation, laneId: rightLane.id },
+        [rightLocation.id]: { ...rightLocation, laneId: leftLane.id },
+      });
     }
 
     case 'LOCATION_MOVED': {
@@ -745,7 +758,7 @@ function applyBody(
       ) {
         return state;
       }
-      return {
+      return patchLocationCard({
         ...state,
         lanesById: {
           ...state.lanesById,
@@ -764,11 +777,7 @@ function applyBody(
             },
           },
         },
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: { ...location, laneId: toLane.id },
-        },
-      };
+      }, location.id, { laneId: toLane.id });
     }
 
     case 'LOCATION_REMOVED_FROM_LANE': {
@@ -789,25 +798,15 @@ function applyBody(
     }
 
     case 'LOCATION_RETURNED_TO_DECK': {
-      const location = state.locationCards[event.locationId];
+      const location = readLocationInternal(state, event.locationId);
       if (!location || location.zone !== event.from) return state;
       const withoutId = (ids: readonly LocationCardInstanceId[]) =>
         ids.filter(id => id !== location.id);
       const drawPile = event.placement === 'TOP'
         ? [location.id, ...withoutId(state.locationDeck.drawPile)]
         : [...withoutId(state.locationDeck.drawPile), location.id];
-      return {
+      return patchLocationCard({
         ...state,
-        locationCards: {
-          ...state.locationCards,
-          [location.id]: {
-            ...location,
-            zone: 'DECK',
-            laneId: null,
-            pendingLaneId: null,
-            face: 'FACE_DOWN',
-          },
-        },
         locationDeck: {
           drawPile,
           staging: withoutId(state.locationDeck.staging),
@@ -815,7 +814,12 @@ function applyBody(
           destroyed: withoutId(state.locationDeck.destroyed),
           banished: withoutId(state.locationDeck.banished),
         },
-      };
+      }, location.id, {
+        zone: 'DECK',
+        laneId: null,
+        pendingLaneId: null,
+        face: 'FACE_DOWN',
+      });
     }
 
     case 'LOCATION_TAG_ADDED': {
@@ -944,7 +948,7 @@ function applyBody(
         || state.activeLaneOrder.some((laneId) => {
           const lane = state.lanesById[laneId];
           const locationId = lane?.locationSlot.locationCardId;
-          const location = locationId ? state.locationCards[locationId] : null;
+          const location = locationId ? readLocationInternal(state, locationId) : null;
           return lane?.status !== 'ACTIVE'
             || !location
             || location.zone !== 'LANE'
@@ -977,8 +981,8 @@ function applyBody(
       // End-of-turn housekeeping: DESTROYED_THIS_TURN / MOVED_THIS_TURN tags
       // are transient — clear them so they don't leak into next turn's
       // projections. Also clear stagingOrder.
-      const cards: Record<string, CardInstance> = {};
-      for (const [id, c] of Object.entries(state.cards)) {
+      const cards: Record<string, InternalCardRecord> = {};
+      for (const [id, c] of Object.entries(cardRecordsInternal(state))) {
         cards[id] = {
           ...c,
           tags: c.tags.filter(t =>
@@ -990,7 +994,7 @@ function applyBody(
       }
       return {
         ...state,
-        cards,
+        cardStore: createCardStoreInternal(cards),
         stagingOrder: [],
         phase: 'BETWEEN_TURNS',
       };
@@ -1018,7 +1022,7 @@ function applyBody(
 
 // ---- Structural helpers ----------------------------------------------------
 
-/** Create a new CardInstance if none exists at `id`, or update the
+/** Create a new InternalCardRecord if none exists at `id`, or update the
  *  existing one's zone/lane/owner/spawnSource. Used by the mint-style
  *  ADDED_TO_HAND / ADDED_TO_LANE events. */
 function mintOrUpdate(
@@ -1030,11 +1034,18 @@ function mintOrUpdate(
   zone: 'HAND' | 'LANE' | 'DECK',
   lane: LaneId | null = null,
 ): MatchState {
-  const existing = state.cards[id];
+  const existing = readCardInternal(state, id);
   if (existing) {
-    return patchCard(state, id, { defId, owner, zone, lane, spawnSource });
+    return patchCard(state, id, {
+      defId,
+      owner,
+      zone,
+      lane,
+      revealTiming: null,
+      spawnSource,
+    });
   }
-  const fresh: CardInstance = {
+  const fresh: InternalCardRecord = {
     id,
     defId,
     version: 1,
@@ -1042,24 +1053,29 @@ function mintOrUpdate(
     lane,
     zone,
     revealed: zone === 'LANE' ? false : false,
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource,
   };
-  return { ...state, cards: { ...state.cards, [id]: fresh } };
+  return writeCardRecordsInternal(state, {
+    ...cardRecordsInternal(state),
+    [id]: fresh,
+  });
 }
 
-function patchCard(state: MatchState, id: CardId, patch: Partial<CardInstance>): MatchState {
-  const prev = state.cards[id];
+function patchCard(state: MatchState, id: CardId, patch: Partial<InternalCardRecord>): MatchState {
+  const prev = readCardInternal(state, id);
   if (!prev) return state;
-  return {
-    ...state,
-    cards: { ...state.cards, [id]: { ...prev, ...patch } },
-  };
+  return writeCardRecordsInternal(state, {
+    ...cardRecordsInternal(state),
+    [id]: { ...prev, ...patch },
+  });
 }
 
 function patchLane(state: MatchState, laneId: LaneId, patch: Partial<LaneState>): MatchState {
@@ -1093,16 +1109,15 @@ function removeFromLane(state: MatchState, owner: Owner, lane: LaneId, cardId: C
 }
 
 function addToHand(state: MatchState, owner: Owner, cardId: CardId): MatchState {
-  const card = state.cards[cardId];
-  if (!card) return state;
-  if (state.hand[owner].some(c => c.id === cardId)) return state;
-  return { ...state, hand: { ...state.hand, [owner]: [...state.hand[owner], card] } };
+  if (!readCardInternal(state, cardId)) return state;
+  if (state.hand[owner].includes(cardId)) return state;
+  return { ...state, hand: { ...state.hand, [owner]: [...state.hand[owner], cardId] } };
 }
 
 function removeFromHand(state: MatchState, owner: Owner, cardId: CardId): MatchState {
   return {
     ...state,
-    hand: { ...state.hand, [owner]: state.hand[owner].filter(c => c.id !== cardId) },
+    hand: { ...state.hand, [owner]: state.hand[owner].filter(id => id !== cardId) },
   };
 }
 
@@ -1114,7 +1129,7 @@ function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId)
   s = removeFromHand(s, owner, cardId);
   return {
     ...s,
-    deck: { ...s.deck, [owner]: s.deck[owner].filter(c => c.id !== cardId) },
+    deck: { ...s.deck, [owner]: s.deck[owner].filter(id => id !== cardId) },
     stagingOrder: s.stagingOrder.filter(id => id !== cardId),
   };
 }
@@ -1149,25 +1164,22 @@ function activeLaneIds(state: MatchState): readonly LaneId[] {
 function locationAtLane(
   state: MatchState,
   laneId: LaneId,
-): LocationCardInstance | null {
+): InternalLocationRecord | null {
   const id = state.lanesById[laneId]?.locationSlot.locationCardId;
-  return id ? state.locationCards[id] ?? null : null;
+  return id ? readLocationInternal(state, id) ?? null : null;
 }
 
 function patchLocationCard(
   state: MatchState,
   id: LocationCardInstanceId,
-  patch: Partial<LocationCardInstance>,
+  patch: Partial<InternalLocationRecord>,
 ): MatchState {
-  const previous = state.locationCards[id];
+  const previous = readLocationInternal(state, id);
   if (!previous) return state;
-  return {
-    ...state,
-    locationCards: {
-      ...state.locationCards,
-      [id]: { ...previous, ...patch },
-    },
-  };
+  return writeLocationRecordsInternal(state, {
+    ...locationRecordsInternal(state),
+    [id]: { ...previous, ...patch },
+  });
 }
 
 function moveLocationToZone(
@@ -1175,7 +1187,7 @@ function moveLocationToZone(
   id: LocationCardInstanceId,
   destination: 'DISCARD' | 'DESTROYED' | 'BANISHED',
 ): MatchState {
-  const location = state.locationCards[id];
+  const location = readLocationInternal(state, id);
   if (!location) return state;
   const withoutId = (ids: readonly LocationCardInstanceId[]) =>
     ids.filter(candidate => candidate !== id);
@@ -1191,29 +1203,24 @@ function moveLocationToZone(
     : destination === 'DESTROYED'
       ? 'destroyed'
       : 'banished';
-  return {
+  return patchLocationCard({
     ...state,
-    locationCards: {
-      ...state.locationCards,
-      [id]: {
-        ...location,
-        zone: destination,
-        laneId: null,
-        pendingLaneId: null,
-      },
-    },
     locationDeck: {
       ...locationDeck,
       [target]: [...locationDeck[target], id],
     },
-  };
+  }, id, {
+    zone: destination,
+    laneId: null,
+    pendingLaneId: null,
+  });
 }
 
 // ---- trackedVariables maintenance ------------------------------------------
 
 /** Resolve source card owner from an EffectRef (null if source is a location or unknown). */
 function sourceOwnerOf(state: MatchState, cause: { sourceId: CardId | string }): Owner | null {
-  const src = state.cards[cause.sourceId as CardId];
+  const src = readCardInternal(state, cause.sourceId as CardId);
   return src ? src.owner : null;
 }
 
@@ -1256,7 +1263,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
     }
 
     case 'CARD_DESTROYED': {
-      const card = next.cards[event.cardId];
+      const card = readCardInternal(next, event.cardId);
       if (!card) break;
       const victimOwner = card.owner;
       const actorOwner = sourceOwnerOf(next, event.cause);
@@ -1282,7 +1289,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
     }
 
     case 'CARD_DISCARDED': {
-      const card = next.cards[event.cardId];
+      const card = readCardInternal(next, event.cardId);
       if (!card) break;
       const owner = card.owner;
       const prev = tv[owner];
@@ -1291,7 +1298,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
     }
 
     case 'CARD_MOVED': {
-      const card = next.cards[event.cardId];
+      const card = readCardInternal(next, event.cardId);
       if (!card) break;
       const owner = card.owner;
       const prev = tv[owner];
@@ -1325,7 +1332,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
     case 'CARD_COST_CHANGED': {
       // Track cumulative cost reduction (negative deltas only).
       if (event.delta >= 0) break;
-      const card = next.cards[event.cardId];
+      const card = readCardInternal(next, event.cardId);
       if (!card) break;
       // The actor reducing cost is the source of the effect (cause.sourceId → owner).
       const actorOwner = sourceOwnerOf(next, event.cause);

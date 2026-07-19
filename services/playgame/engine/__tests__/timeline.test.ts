@@ -54,12 +54,12 @@ describe('Phase 1.1 canonical timeline', () => {
         cardId,
         fromLane: 0,
         toLane: 1,
-        cause: { sourceId: cardId, effectKind: 'SYSTEM' },
+        cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
       {
         type: 'CARD_DESTROYED',
         cardId,
-        cause: { sourceId: cardId, effectKind: 'SYSTEM' },
+        cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
     ];
 

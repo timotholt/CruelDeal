@@ -1,3 +1,4 @@
+import { getCardState } from './projections/cardRuntime';
 /**
  * Engine AI tests.
  *
@@ -7,10 +8,14 @@
 import { createRng } from './rng';
 import { planEnemyTurnFromPool, planEnemyTurnFromHand } from './ai';
 import type { CardDef, Manifest } from './manifest/types';
-import type { CardInstance, LaneState, MatchState } from './types/state';
+import type { InternalCardRecord, LaneState, MatchState } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneId, Owner } from './types/ids';
-import { testLaneRegistry, testLaneState } from './testkit/runtimeFixture';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+} from './testkit/runtimeFixture';
 
 // ── Shim ────────────────────────────────────────────────────────────────────
 let failures = 0;
@@ -51,7 +56,7 @@ interface CardSpec {
   def: string;
   owner: Owner;
   lane: LaneId | null;
-  zone?: CardInstance['zone'];
+  zone?: InternalCardRecord['zone'];
 }
 
 let idCounter = 0;
@@ -60,34 +65,35 @@ const buildState = (
   opts: { energy?: Record<Owner, number> } = {},
 ): MatchState => {
   idCounter = 0;
-  const cards: Record<CardId, CardInstance> = {};
-  const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
-  const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
+  const cards: Record<CardId, InternalCardRecord> = {};
+  const hand: Record<Owner, CardId[]> = { P0: [], P1: [] };
+  const deck: Record<Owner, CardId[]> = { P0: [], P1: [] };
   const lanes: [LaneState, LaneState, LaneState] = [blankLane(0), blankLane(1), blankLane(2)];
   for (const s of specs) {
     const id = (s.id ?? `c${++idCounter}`) as CardId;
     const zone = s.zone ?? 'HAND';
-    const inst: CardInstance = {
+    const inst: InternalCardRecord = {
       id, defId: s.def, version: 1, owner: s.owner,
       lane: zone === 'LANE' ? s.lane : null, zone,
       revealed: zone === 'LANE',
-      powerLedger: [], costDelta: 0, costLog: [], tags: [], textOverride: null, counters: {},
+      revealTiming: null,
+      powerLedger: [], costDelta: 0, costLog: [], tags: [], textOverride: null,
+    textLog: [], counters: {},
       spawnSource: { kind: 'DECK_CREATION' },
     };
     cards[id] = inst;
     if (zone === 'LANE' && s.lane !== null) (lanes[s.lane].cards[s.owner] as CardId[]).push(id);
-    else if (zone === 'HAND') hand[s.owner].push(inst);
-    else if (zone === 'DECK') deck[s.owner].push(inst);
+    else if (zone === 'HAND') hand[s.owner].push(id);
+    else if (zone === 'DECK') deck[s.owner].push(id);
   }
   const eMap = opts.energy ?? { P0: 3, P1: 3 };
-  return {
+  return emptyTestMatchState({
     turn: 3, maxEnergy: { P0: 3, P1: 3 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
-    energy: eMap, deck, hand, cards,
+    energy: eMap, deck, hand,
     lanesById: testLaneRegistry(lanes),
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
-    locationCards: {},
     locationDeck: {
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },
@@ -95,7 +101,8 @@ const buildState = (
     lastPlayedBy: { P0: null, P1: null }, result: null,
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+    cards,
+  });
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -201,10 +208,10 @@ const buildState = (
   );
   const plays = planEnemyTurnFromHand(state, 'P1', manifest, createRng('hand'));
   // Total cost <= energy
-  const total = plays.reduce((s, p) => s + (manifest.cards[state.cards[p.cardId].defId]?.cost ?? 0), 0);
+  const total = plays.reduce((s, p) => s + (manifest.cards[getCardState(state, p.cardId)!.defId]?.cost ?? 0), 0);
   truthy(total <= 3, `hand: total cost <= energy (got ${total})`);
   // Should play cheap + mid (1+2=3), skip big (5>3)
-  const defIds = plays.map((p) => state.cards[p.cardId].defId).sort();
+  const defIds = plays.map((p) => getCardState(state, p.cardId)!.defId).sort();
   eq(defIds, ['cheap', 'mid'], 'hand: plays cheap+mid, skips unaffordable big');
 }
 

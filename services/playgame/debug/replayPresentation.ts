@@ -5,6 +5,16 @@ import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from '../engine/projections/cardRuntime';
+import { getCardTemplate } from '../engine/projections/cardTemplate';
+import {
+  getAllLocationStates,
+  getLocationState,
+} from '../engine/projections/locationRuntime';
+import { getLocationTemplate } from '../engine/projections/locationTemplate';
 
 export interface ReplayNameResolver {
   cardName: (state: MatchState, id: CardId) => string;
@@ -54,11 +64,13 @@ export function createReplayNameResolver(
   const historicalLocationLanes = new Map<string, number>();
 
   for (const step of steps) {
-    for (const card of Object.values(step.state.cards)) {
+    for (const id of getAllCardIds(step.state)) {
+      const card = getCardRuntime(step.state, id, manifest);
+      if (!card) continue;
       historicalCardDefIds.set(card.id, card.defId);
       historicalCardOwners.set(card.id, card.owner);
     }
-    for (const location of Object.values(step.state.locationCards)) {
+    for (const location of getAllLocationStates(step.state)) {
       historicalLocationDefIds.set(location.id, location.defId);
       if (location.laneId !== null) {
         historicalLocationLanes.set(location.id, location.laneId);
@@ -67,31 +79,32 @@ export function createReplayNameResolver(
   }
 
   const cardDef = (state: MatchState, id: CardId) => {
-    const defId = state.cards[id]?.defId ?? historicalCardDefIds.get(id);
-    return defId ? manifest.cards[defId] : undefined;
+    const defId = getCardRuntime(state, id, manifest)?.defId ??
+      historicalCardDefIds.get(id);
+    return defId ? getCardTemplate(manifest, defId) ?? undefined : undefined;
   };
   const locationDef = (state: MatchState, id: LocationCardInstanceId) => {
-    const current = state.locationCards[id];
+    const current = getLocationState(state, id);
     const defId = current?.defId ?? historicalLocationDefIds.get(id);
-    return defId ? manifest.locations[defId] : undefined;
+    return defId ? getLocationTemplate(manifest, defId) ?? undefined : undefined;
   };
   const cardOwner = (state: MatchState, id: CardId) => (
-    state.cards[id]?.owner ?? historicalCardOwners.get(id)
+    getCardRuntime(state, id, manifest)?.owner ?? historicalCardOwners.get(id)
   );
 
   return {
-    cardName: (state, id) => cardDef(state, id)?.name ?? id,
-    cardNameWithOwner: (state, id) => nameWithOwner(id, cardDef(state, id)?.name, cardOwner(state, id)),
+    cardName: (state, id) => cardDef(state, id)?.canonicalName ?? id,
+    cardNameWithOwner: (state, id) => nameWithOwner(id, cardDef(state, id)?.canonicalName, cardOwner(state, id)),
     cardOwner,
-    cardLabel: (state, id) => cardLabel(id, cardDef(state, id)?.name, cardOwner(state, id)),
-    cardType: (state, id) => cardDef(state, id)?.cardType,
-    definitionName: (defId) => manifest.cards[defId]?.name ?? defId,
+    cardLabel: (state, id) => cardLabel(id, cardDef(state, id)?.canonicalName, cardOwner(state, id)),
+    cardType: (state, id) => cardDef(state, id)?.domain,
+    definitionName: (defId) => getCardTemplate(manifest, defId)?.canonicalName ?? defId,
     locationLane: (state, id) => (
-      state.locationCards[id]?.laneId
+      getLocationState(state, id)?.laneId
       ?? historicalLocationLanes.get(id)
     ),
-    locationName: (state, id) => locationDef(state, id)?.name ?? id,
-    locationLabel: (state, id) => label(id, locationDef(state, id)?.name),
+    locationName: (state, id) => locationDef(state, id)?.canonicalName ?? id,
+    locationLabel: (state, id) => label(id, locationDef(state, id)?.canonicalName),
   };
 }
 
@@ -148,9 +161,13 @@ export function describeReplayCause(
   ) {
     return `caused by ${names.cardNameWithOwner(frame.state, cause.sourceId as CardId)} resolving under the game rules`;
   }
-  return cause.systemReason
-    ? `caused by game rules: ${humanizeToken(cause.systemReason)}`
-    : 'caused by game rules';
+  if (
+    frame.event.type === 'LOCATION_REPLACED'
+    && frame.event.oldId === cause.sourceId
+  ) {
+    return 'caused by game rules';
+  }
+  return `caused by game rules: ${humanizeToken(cause.reason)}`;
 }
 
 const humanizeToken = (value: string): string => value
@@ -208,6 +225,11 @@ export function describeReplayStep(
       break;
     case 'NEXT_TURN_ENERGY_BONUS_CHANGED':
       summary = `${player(event.owner)}'s next-turn energy bonus ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      break;
+    case 'CARD_REVEAL_SCHEDULED':
+      summary = event.timing.kind === 'END_OF_GAME'
+        ? `${cardName(event.cardId)} was scheduled to reveal at the end of the game.`
+        : `${cardName(event.cardId)} was scheduled to reveal on turn ${event.timing.turn}.`;
       break;
     case 'CARD_FLIPPED':
       summary = `${cardPlayer(event.cardId)} — ${cardName(event.cardId)} — Revealed.`;

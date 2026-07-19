@@ -10,6 +10,13 @@ import {
 } from './types/timeline';
 import { foldFramedEvents } from './transactionTimeline';
 import { assertProtocolPayload } from '../protocol';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from './projections/cardRuntime';
+import { getCardTemplate } from './projections/cardTemplate';
+import { getAllLocationStates } from './projections/locationRuntime';
+import { getLocationTemplate } from './projections/locationTemplate';
 
 export interface ReplayBundle {
   readonly version: 2;
@@ -181,21 +188,21 @@ function assertReplayInitialState(initialState: MatchState, manifest: Manifest):
       `Replay initialState must be frame 0; received frame ${currentFrame(initialState)}`,
     );
   }
-  for (const card of Object.values(initialState.cards)) {
-    const def = manifest.cards[card.defId];
+  for (const id of getAllCardIds(initialState)) {
+    const card = getCardRuntime(initialState, id, manifest);
+    if (!card) continue;
+    const def = getCardTemplate(manifest, card.defId);
     if (!def) {
       throw new Error(`Replay initialState references missing card def "${card.defId}" for card ${card.id}`);
     }
-    if (card.variantId !== undefined && !def.cosmetic.variants?.some(
-      (variant) => variant.variantId === card.variantId,
-    )) {
+    if (card.variantId !== undefined && !def.variantIds.includes(card.variantId)) {
       throw new Error(
         `Replay initialState references missing variant "${card.variantId}" for card ${card.id}`,
       );
     }
   }
-  for (const location of Object.values(initialState.locationCards)) {
-    if (!manifest.locations[location.defId]) {
+  for (const location of getAllLocationStates(initialState)) {
+    if (!getLocationTemplate(manifest, location.defId)) {
       throw new Error(
         `Replay initialState references missing location def "${location.defId}" for location ${location.id}`,
       );

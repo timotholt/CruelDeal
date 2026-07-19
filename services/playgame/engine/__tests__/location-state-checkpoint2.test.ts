@@ -1,3 +1,9 @@
+import {
+  getAllLocationIds,
+  getAllLocationStates,
+  getLocationLifecycle,
+  getLocationState,
+} from '../projections/locationRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { createInitialMatchState } from '../cli/initState';
@@ -42,7 +48,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
   it('instantiates every frozen deck entry into exactly one normalized zone', () => {
     const state = initialState();
 
-    expect(Object.keys(state.locationCards)).toHaveLength(orderedLocationDeck.length);
+    expect(getAllLocationIds(state)).toHaveLength(orderedLocationDeck.length);
     expect(state.activeLaneOrder).toEqual([0, 1, 2]);
     expect(Object.keys(state.lanesById)).toHaveLength(3);
     expect(state.locationDeck.drawPile).toHaveLength(3);
@@ -52,10 +58,10 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
     expect(locationCardAtLane(state, 1)?.defId).toBe('beta');
     expect(locationCardAtLane(state, 2)?.defId).toBe('gamma');
     expect(
-      state.locationDeck.drawPile.map(id => state.locationCards[id].defId),
+      state.locationDeck.drawPile.map(id => getLocationState(state, id)!.defId),
     ).toEqual(['delta', 'epsilon', 'zeta']);
 
-    for (const location of Object.values(state.locationCards)) {
+    for (const location of getAllLocationStates(state)) {
       expect(location.id).not.toContain(location.defId);
     }
   });
@@ -73,14 +79,14 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
       type: 'LOCATION_REVEALED',
       lane: 0,
       locationId: location.id,
-      cause: { sourceId: location.id, effectKind: 'SYSTEM' },
+      cause: { sourceId: location.id, effectKind: 'SYSTEM', reason: 'TEST' },
     }, manifest);
     const after = locationCardAtLane(revealed, 0)!;
 
     expect(after.face).toBe('FACE_UP');
     expect(after.identityKnownTo).toEqual(['P0', 'P1']);
     expect(after.revealCount).toBe(1);
-    expect(after.revealedAt).toBeDefined();
+    expect(getLocationLifecycle(revealed, after.id).frameRevealed).not.toBeNull();
     expect(revealed.lanesById[0].locationSlot.revealAtTurn).toBeNull();
     expect(validateLocationState(revealed)).toEqual([]);
   });
@@ -89,7 +95,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
     const authoritative = initialState();
     const projected = readProjectedState(projectStateForSeat(authoritative, 'P0'));
     const hiddenLaneId = projected.lanesById[0].locationSlot.locationCardId!;
-    const hidden = projected.locationCards[hiddenLaneId];
+    const hidden = getLocationState(projected, hiddenLaneId)!;
 
     expect(hidden.defId).toBe('');
     expect(hidden.sourceDeckEntry).toBe(-1);
@@ -105,7 +111,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
 
     expect(locationCardAtLane(authoritative, 0)?.defId).toBe('alpha');
     expect(authoritative.locationDeck.drawPile.map(
-      id => authoritative.locationCards[id].defId,
+      id => getLocationState(authoritative, id)!.defId,
     )).toEqual(['delta', 'epsilon', 'zeta']);
   });
 
@@ -119,12 +125,12 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
       oldId: oldLocation.id,
       newId,
       newDefId: 'zeta',
-      cause: { sourceId: oldLocation.id, effectKind: 'LOCATION', exprIdx: 0 },
+      cause: { sourceId: oldLocation.id, effectKind: 'LOCATION', reason: 'TEST', exprIdx: 0 },
       oldDestination: 'DESTROYED',
       revealPolicy: 'REVEAL_IMMEDIATELY',
     }, manifest);
 
-    expect(replaced.locationCards[oldLocation.id]).toMatchObject({
+    expect(getLocationState(replaced, oldLocation.id)!).toMatchObject({
       zone: 'DESTROYED',
       laneId: null,
     });

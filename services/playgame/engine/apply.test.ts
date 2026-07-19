@@ -1,3 +1,4 @@
+import { getCardState } from './projections/cardRuntime';
 /**
  * apply() reducer tests.
  *
@@ -12,11 +13,13 @@
 import { apply } from './apply';
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import type { MatchEvent } from './types/events';
+import type { EffectRef } from './types/ability';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
-import type { CardInstance, MatchState } from './types/state';
+import type { InternalCardRecord, MatchState } from './types/state';
 import { getCardPower } from './projections';
 import {
   emptyTestMatchState,
+  replaceTestCardRecords,
   withTestLocation,
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
@@ -37,12 +40,13 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
 const locationCause = {
   sourceId: 'system:apply-test' as CardId,
-  effectKind: 'SYSTEM' as const,
-};
+  effectKind: 'SYSTEM',
+  reason: 'TEST',
+} as const satisfies EffectRef;
 
 // ---- Fixture builders ------------------------------------------------------
 
-function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardInstance {
+function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): InternalCardRecord {
   return {
     id: id as CardId,
     defId,
@@ -51,11 +55,13 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardIns
     lane: null,
     zone: 'DECK',
     revealed: false,
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
   };
@@ -70,16 +76,15 @@ function emptyState(): MatchState {
 /** Seed a state with one Armored Van (5/3, no abilities) in hand (already deck-drawn). */
 function stateWithSentinelInHand(): MatchState {
   const s = emptyState();
-  const armoredVan: CardInstance = {
+  const armoredVan: InternalCardRecord = {
     ...mkCardInstance('s1', 'armored-van', 'P0'),
     zone: 'HAND',
   };
-  return {
+  return replaceTestCardRecords({
     ...s,
     energy: { P0: 5, P1: 0 },
-    cards: { s1: armoredVan } as Record<CardId, CardInstance>,
-    hand: { P0: [armoredVan], P1: [] },
-  };
+    hand: { P0: [armoredVan.id], P1: [] },
+  }, { s1: armoredVan } as Record<CardId, InternalCardRecord>);
 }
 
 // ---- Helper: run a list of events through apply ---------------------------
@@ -104,7 +109,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     owner: 'P0',
     cost: 3,
   });
-  const c = s1.cards['s1' as CardId]!;
+  const c = getCardState(s1, 's1' as CardId)!!;
   eq(c.zone, 'LANE', 'CARD_STAGED: zone becomes LANE');
   eq(c.lane, 0, 'CARD_STAGED: lane set');
   eq(c.revealed, false, 'CARD_STAGED: not revealed (face-down pre-reveal)');
@@ -124,7 +129,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_UNSTAGED', intentId: 'i2', cardId: 's1' as CardId },
   );
-  const c = s2.cards['s1' as CardId]!;
+  const c = getCardState(s2, 's1' as CardId)!!;
   eq(c.zone, 'HAND', 'CARD_UNSTAGED: zone back to HAND');
   eq(c.lane, null, 'CARD_UNSTAGED: lane cleared');
   eq(s2.hand.P0.length, 1, 'CARD_UNSTAGED: hand restored');
@@ -145,12 +150,27 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s0 = stateWithSentinelInHand();
-  const s2 = run(
+  const staged = run(
     s0,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+  );
+  eq(getCardState(staged, 's1' as CardId)!!.revealTiming, { kind: 'TURN', turn: 1 }, 'CARD_STAGED: schedules reveal for the current turn');
+  const delayed = run(
+    staged,
+    {
+      type: 'CARD_REVEAL_SCHEDULED',
+      cardId: 's1' as CardId,
+      timing: { kind: 'END_OF_GAME' },
+      cause: locationCause,
+    },
+  );
+  eq(getCardState(delayed, 's1' as CardId)!!.revealTiming, { kind: 'END_OF_GAME' }, 'CARD_REVEAL_SCHEDULED: replaces the reveal timing');
+  const s2 = run(
+    delayed,
     { type: 'CARD_FLIPPED', cardId: 's1' as CardId },
   );
-  eq(s2.cards['s1' as CardId]!.revealed, true, 'CARD_FLIPPED: revealed=true');
+  eq(getCardState(s2, 's1' as CardId)!!.revealed, true, 'CARD_FLIPPED: revealed=true');
+  eq(getCardState(s2, 's1' as CardId)!!.revealTiming, null, 'CARD_FLIPPED: clears reveal timing');
 }
 
 // -- CARD_POWER_CHANGED: appends semantic ledger entries and affects getCardPower
@@ -166,7 +186,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const bumped = run(
     staged,
     { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, mutation: { kind: 'ADD', delta: 3 },
-      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
+      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } },
   );
   eq(getStoredCardPowerDelta(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 3, 'CARD_POWER_CHANGED: stored delta = 3');
   eq(getCardPower(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 8, 'projected power picks up delta: 5+3=8');
@@ -175,7 +195,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const bumpedAgain = run(
     bumped,
     { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, mutation: { kind: 'ADD', delta: -2 },
-      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
+      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } },
   );
   eq(getStoredCardPowerDelta(bumpedAgain, 's1' as CardId, BOOTSTRAP_MANIFEST), 1, 'CARD_POWER_CHANGED: deltas stack (3 + -2 = 1)');
 }
@@ -188,9 +208,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     s0,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_DESTROYED', cardId: 's1' as CardId,
-      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
+      cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } },
   );
-  const c = destroyed.cards['s1' as CardId]!;
+  const c = getCardState(destroyed, 's1' as CardId)!!;
   eq(c.zone, 'DESTROYED', 'CARD_DESTROYED: zone=DESTROYED (separate from DISCARD)');
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
   eq(destroyed.lanesById[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
@@ -205,25 +225,40 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     s0,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_MOVED', cardId: 's1' as CardId, fromLane: 0, toLane: 2,
-      cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL' } },
+      cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' } },
   );
   eq(moved.lanesById[0].cards.P0.length, 0, 'CARD_MOVED: gone from lane 0');
   eq(moved.lanesById[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
-  eq(moved.cards['s1' as CardId]!.lane, 2, 'CARD_MOVED: card.lane updated');
-  truthy(moved.cards['s1' as CardId]!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
+  eq(getCardState(moved, 's1' as CardId)!!.lane, 2, 'CARD_MOVED: card.lane updated');
+  truthy(getCardState(moved, 's1' as CardId)!!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
 }
 
 // -- CARD_TAG_ADDED / REMOVED: uniqueness + removal
 
 {
   const s0 = stateWithSentinelInHand();
-  const s1 = run(s0, { type: 'CARD_TAG_ADDED', cardId: 's1' as CardId, tag: { kind: 'SHURI_DOUBLED' } });
-  truthy(s1.cards['s1' as CardId]!.tags.some(t => t.kind === 'SHURI_DOUBLED'), 'CARD_TAG_ADDED: tag present');
+  const s1 = run(s0, {
+    type: 'CARD_TAG_ADDED',
+    cardId: 's1' as CardId,
+    tag: { kind: 'SHURI_DOUBLED' },
+    cause: locationCause,
+  });
+  truthy(getCardState(s1, 's1' as CardId)!!.tags.some(t => t.kind === 'SHURI_DOUBLED'), 'CARD_TAG_ADDED: tag present');
   // Adding the same tag again should be idempotent.
-  const s2 = run(s1, { type: 'CARD_TAG_ADDED', cardId: 's1' as CardId, tag: { kind: 'SHURI_DOUBLED' } });
-  eq(s2.cards['s1' as CardId]!.tags.filter(t => t.kind === 'SHURI_DOUBLED').length, 1, 'CARD_TAG_ADDED: idempotent');
-  const s3 = run(s2, { type: 'CARD_TAG_REMOVED', cardId: 's1' as CardId, tag: 'SHURI_DOUBLED' });
-  truthy(!s3.cards['s1' as CardId]!.tags.some(t => t.kind === 'SHURI_DOUBLED'), 'CARD_TAG_REMOVED: tag gone');
+  const s2 = run(s1, {
+    type: 'CARD_TAG_ADDED',
+    cardId: 's1' as CardId,
+    tag: { kind: 'SHURI_DOUBLED' },
+    cause: locationCause,
+  });
+  eq(getCardState(s2, 's1' as CardId)!!.tags.filter(t => t.kind === 'SHURI_DOUBLED').length, 1, 'CARD_TAG_ADDED: idempotent');
+  const s3 = run(s2, {
+    type: 'CARD_TAG_REMOVED',
+    cardId: 's1' as CardId,
+    tag: 'SHURI_DOUBLED',
+    cause: locationCause,
+  });
+  truthy(!getCardState(s3, 's1' as CardId)!!.tags.some(t => t.kind === 'SHURI_DOUBLED'), 'CARD_TAG_REMOVED: tag gone');
 }
 
 // -- CARD_COUNTER_CHANGED: per-name accumulator
@@ -231,12 +266,12 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const s1 = run(s0,
-    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'bishop', delta: 2 },
-    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'bishop', delta: 3 },
-    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'other',  delta: 1 },
+    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'bishop', delta: 2, cause: locationCause },
+    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'bishop', delta: 3, cause: locationCause },
+    { type: 'CARD_COUNTER_CHANGED', cardId: 's1' as CardId, name: 'other',  delta: 1, cause: locationCause },
   );
-  eq(s1.cards['s1' as CardId]!.counters['bishop'], 5, 'CARD_COUNTER_CHANGED: accumulates by name (2+3=5)');
-  eq(s1.cards['s1' as CardId]!.counters['other'],  1, 'CARD_COUNTER_CHANGED: separate names independent');
+  eq(getCardState(s1, 's1' as CardId)!!.counters['bishop'], 5, 'CARD_COUNTER_CHANGED: accumulates by name (2+3=5)');
+  eq(getCardState(s1, 's1' as CardId)!!.counters['other'],  1, 'CARD_COUNTER_CHANGED: separate names independent');
 }
 
 // -- CARD_DRAWN: deck -> hand, preserves spawnSource
@@ -244,25 +279,24 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s = emptyState();
   const cardInst = mkCardInstance('d1', 'grunt', 'P0');
-  const s0: MatchState = {
+  const s0: MatchState = replaceTestCardRecords({
     ...s,
-    cards: { d1: cardInst } as Record<CardId, CardInstance>,
-    deck: { P0: [cardInst], P1: [] },
-  };
+    deck: { P0: [cardInst.id], P1: [] },
+  }, { d1: cardInst } as Record<CardId, InternalCardRecord>);
   const s1 = run(s0, { type: 'CARD_DRAWN', owner: 'P0', cardId: 'd1' as CardId, toHand: true });
   eq(s1.deck.P0.length, 0, 'CARD_DRAWN: removed from deck');
   eq(s1.hand.P0.length, 1, 'CARD_DRAWN: added to hand');
-  eq(s1.cards['d1' as CardId]!.zone, 'HAND', 'CARD_DRAWN: zone=HAND');
-  eq(s1.cards['d1' as CardId]!.spawnSource, { kind: 'DECK_CREATION' }, 'CARD_DRAWN: preserves spawnSource');
+  eq(getCardState(s1, 'd1' as CardId)!!.zone, 'HAND', 'CARD_DRAWN: zone=HAND');
+  eq(getCardState(s1, 'd1' as CardId)!!.spawnSource, { kind: 'DECK_CREATION' }, 'CARD_DRAWN: preserves spawnSource');
 }
 
 // -- CARD_DISCARDED: hand -> DISCARD pile (Morbius target)
 
 {
   const s0 = stateWithSentinelInHand();
-  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM' as const };
+  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } as const;
   const s1 = run(s0, { type: 'CARD_DISCARDED', cardId: 's1' as CardId, reason: 'FORCED_EFFECT', cause });
-  eq(s1.cards['s1' as CardId]!.zone, 'DISCARD', 'CARD_DISCARDED: zone=DISCARD');
+  eq(getCardState(s1, 's1' as CardId)!!.zone, 'DISCARD', 'CARD_DISCARDED: zone=DISCARD');
   eq(s1.hand.P0.length, 0, 'CARD_DISCARDED: removed from hand');
 }
 
@@ -270,17 +304,17 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
 {
   const s0 = stateWithSentinelInHand();
-  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM' as const };
+  const cause = { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } as const;
   // From hand:
   const s1 = run(s0, { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause });
-  eq(s1.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from hand): zone=BANISHED');
+  eq(getCardState(s1, 's1' as CardId)!!.zone, 'BANISHED', 'CARD_BANISHED (from hand): zone=BANISHED');
   eq(s1.hand.P0.length, 0, 'CARD_BANISHED: gone from hand');
   // From lane:
   const s2 = run(s0,
     { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
   );
-  eq(s2.cards['s1' as CardId]!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
+  eq(getCardState(s2, 's1' as CardId)!!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
   eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
 }
 
@@ -296,8 +330,8 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     defId: 'grunt',
     spawnSource: spawn,
   });
-  eq(s1.cards['spawn1' as CardId]?.zone, 'HAND', 'CARD_ADDED_TO_HAND: zone=HAND');
-  eq(s1.cards['spawn1' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_HAND: spawnSource recorded');
+  eq(getCardState(s1, 'spawn1' as CardId)!?.zone, 'HAND', 'CARD_ADDED_TO_HAND: zone=HAND');
+  eq(getCardState(s1, 'spawn1' as CardId)!?.spawnSource, spawn, 'CARD_ADDED_TO_HAND: spawnSource recorded');
   eq(s1.hand.P0.length, 1, 'CARD_ADDED_TO_HAND: in hand list');
 }
 
@@ -314,8 +348,8 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     defId: 'grunt',
     spawnSource: spawn,
   });
-  eq(s1.cards['spawn2' as CardId]?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
-  eq(s1.cards['spawn2' as CardId]?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
+  eq(getCardState(s1, 'spawn2' as CardId)!?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
+  eq(getCardState(s1, 'spawn2' as CardId)!?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
   eq(s1.lanesById[1].cards.P0, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
 }
 
@@ -326,13 +360,12 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const a = mkCardInstance('a', 'grunt', 'P0');
   const b = mkCardInstance('b', 'grunt', 'P0');
   const c = mkCardInstance('c', 'grunt', 'P0');
-  const s0: MatchState = {
+  const s0: MatchState = replaceTestCardRecords({
     ...s,
-    cards: { a, b, c } as Record<CardId, CardInstance>,
-    deck: { P0: [a, b, c], P1: [] },
-  };
+    deck: { P0: [a.id, b.id, c.id], P1: [] },
+  }, { a, b, c } as Record<CardId, InternalCardRecord>);
   const s1 = run(s0, { type: 'DECK_SHUFFLED', owner: 'P0', newOrder: ['c', 'a', 'b'] as CardId[] });
-  eq(s1.deck.P0.map(x => x.id), ['c', 'a', 'b'] as CardId[], 'DECK_SHUFFLED: order matches newOrder');
+  eq(s1.deck.P0, ['c', 'a', 'b'] as CardId[], 'DECK_SHUFFLED: order matches newOrder');
 }
 
 // -- PENDING_EFFECT_ADDED / REMOVED
@@ -351,7 +384,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const locId = 'loc0' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 0, 'cathedral', false, locId);
-  const cause = { sourceId: locId, effectKind: 'SYSTEM' as const };
+  const cause = { sourceId: locId, effectKind: 'SYSTEM', reason: 'TEST' } as const;
   const s1 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: locId, cause });
   eq(locationCardAtLane(s1, 0)?.face, 'FACE_UP', 'LOCATION_REVEALED: lane 0 revealed');
   eq(locationCardAtLane(s1, 1), null, 'LOCATION_REVEALED: lane 1 unaffected');
@@ -378,7 +411,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     oldId,
     newId,
     newDefId: 'new-def',
-    cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+    cause: { sourceId: oldId, effectKind: 'SYSTEM', reason: 'TEST' },
     oldDestination: 'DISCARD',
     revealPolicy: 'FACE_DOWN_UNSCHEDULED',
   });
@@ -392,7 +425,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     oldId: 'not-the-current-location' as LocationCardInstanceId,
     newId,
     newDefId: 'new-def',
-    cause: { sourceId: oldId, effectKind: 'SYSTEM' },
+    cause: { sourceId: oldId, effectKind: 'SYSTEM', reason: 'TEST' },
     oldDestination: 'DISCARD',
     revealPolicy: 'FACE_DOWN_UNSCHEDULED',
   });
@@ -423,7 +456,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const locId = 'wander' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 0, 'wander', true, locId);
-  const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL' as const };
+  const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' } as const;
   const s1 = run(s0, { type: 'LOCATION_MOVED', fromLane: 0, toLane: 2, locationId: locId, cause });
   truthy(locationCardAtLane(s1, 0) === null, 'LOCATION_MOVED: source lane cleared');
   truthy(locationCardAtLane(s1, 2) !== null, 'LOCATION_MOVED: dest lane has location');
@@ -467,10 +500,15 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s1 = run(resolving,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
     // Give the card a transient tag...
-    { type: 'CARD_TAG_ADDED', cardId: 's1' as CardId, tag: { kind: 'MOVED_THIS_TURN' } },
+    {
+      type: 'CARD_TAG_ADDED',
+      cardId: 's1' as CardId,
+      tag: { kind: 'MOVED_THIS_TURN' },
+      cause: locationCause,
+    },
     { type: 'TURN_ENDED', turn: 1 },
   );
-  truthy(!s1.cards['s1' as CardId]!.tags.some(t => t.kind === 'MOVED_THIS_TURN'),
+  truthy(!getCardState(s1, 's1' as CardId)!!.tags.some(t => t.kind === 'MOVED_THIS_TURN'),
     'TURN_ENDED: transient tags cleared');
   eq(s1.stagingOrder.length, 0, 'TURN_ENDED: stagingOrder cleared');
   eq(s1.phase, 'BETWEEN_TURNS', 'TURN_ENDED: phase = BETWEEN_TURNS');

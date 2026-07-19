@@ -106,12 +106,16 @@ describe('Phase 1.21 presentation architecture fences', () => {
     }
   });
 
-  it('keeps deck counts tight while giving footer status controls more separation', () => {
+  it('keeps top counts tight while giving footer status controls more separation', () => {
     const css = source('../../../src/styles/playgame.css');
     const miniDeckRule = css.match(/\.mini-deck\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const miniDeckCountRule = css.match(/\.mini-deck__count\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const hudHandRule = css.match(/\.match-hud \.hidden-hand\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
     const actionBarRule = css.match(/\.action-bar\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
     expect(miniDeckRule).toContain('gap: 0');
-    expect(actionBarRule).toContain('gap: 13px');
+    expect(miniDeckCountRule).toContain('margin-left: -1px');
+    expect(hudHandRule).toContain('gap: 3px');
+    expect(actionBarRule).toContain('gap: 16px');
   });
 
   it('uses one full-surface purple card back without a split gold overlay', () => {

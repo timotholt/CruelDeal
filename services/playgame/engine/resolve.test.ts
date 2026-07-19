@@ -1,3 +1,5 @@
+import { getLocationState } from './projections/locationRuntime';
+import { getCardState } from './projections/cardRuntime';
 /**
  * resolve() + resolveCurrentTurn() tests.
  *
@@ -11,9 +13,9 @@ import { createRng } from './rng';
 import { getCardPower, getLanePower } from './projections';
 import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type {
-  CardInstance,
+  InternalCardRecord,
   LaneState,
-  LocationCardInstance,
+  InternalLocationRecord,
   MatchState,
 } from './types/state';
 import { EMPTY_TRACKED_VARIABLES } from './types/state';
@@ -21,6 +23,7 @@ import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids'
 import {
   emptyTestMatchState,
   testLaneState,
+  upsertTestCard,
   withTestLocation,
 } from './testkit/runtimeFixture';
 
@@ -72,7 +75,7 @@ function blankLane(i: LaneId): LaneState {
   return testLaneState(i);
 }
 
-function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
+function mkCardInstance(defId: string, owner: Owner = 'P0'): InternalCardRecord {
   return {
     id: nextCardId(),
     defId,
@@ -81,11 +84,13 @@ function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
     lane: null,
     zone: 'DECK',
     revealed: false,
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
   };
@@ -104,18 +109,16 @@ function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}
     energy: { P0: t, P1: t },
     deck: { P0: [], P1: [] },
     hand: { P0: [], P1: [] },
-    cards: {},
   });
 }
 
 function withCardInHand(state: MatchState, defId: string, owner: Owner = 'P0'): { state: MatchState; cardId: CardId } {
-  const inst: CardInstance = { ...mkCardInstance(defId, owner), zone: 'HAND' };
+  const inst: InternalCardRecord = { ...mkCardInstance(defId, owner), zone: 'HAND' };
   return {
-    state: {
+    state: upsertTestCard({
       ...state,
-      cards: { ...state.cards, [inst.id]: inst },
-      hand: { ...state.hand, [owner]: [...state.hand[owner], inst] },
-    },
+      hand: { ...state.hand, [owner]: [...state.hand[owner], inst.id] },
+    }, inst),
     cardId: inst.id,
   };
 }
@@ -123,11 +126,10 @@ function withCardInHand(state: MatchState, defId: string, owner: Owner = 'P0'): 
 function withCardInDeck(state: MatchState, defId: string, owner: Owner = 'P0'): { state: MatchState; cardId: CardId } {
   const inst = mkCardInstance(defId, owner);
   return {
-    state: {
+    state: upsertTestCard({
       ...state,
-      cards: { ...state.cards, [inst.id]: inst },
-      deck: { ...state.deck, [owner]: [...state.deck[owner], inst] },
-    },
+      deck: { ...state.deck, [owner]: [...state.deck[owner], inst.id] },
+    }, inst),
     cardId: inst.id,
   };
 }
@@ -198,15 +200,15 @@ function resolveCurrentTurn(
   ]);
   let s = baseState({ turn: 1 });
   const aura = mkCardInstance('discountLord', 'P0');
-  s = {
+  const placedAura = { ...aura, zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
+  s = upsertTestCard({
     ...s,
     energy: { P0: 1, P1: 1 },
-    cards: { ...s.cards, [aura.id]: { ...aura, zone: 'LANE', lane: 0, revealed: true } },
     lanesById: {
       ...s.lanesById,
       0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, aura.id] } },
     },
-  };
+  }, placedAura);
   const hand = withCardInHand(s, 'grunt');
   s = hand.state;
   const events = resolve(s, {
@@ -239,14 +241,14 @@ function resolveCurrentTurn(
   // Pre-fill lane 0 to capacity.
   for (let i = 0; i < manifest.constants.laneCapacity; i++) {
     const fill = mkCardInstance('grunt', 'P0');
-    s = {
+    const placedFill = { ...fill, zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
+    s = upsertTestCard({
       ...s,
-      cards: { ...s.cards, [fill.id]: { ...fill, zone: 'LANE', lane: 0, revealed: true } },
       lanesById: {
         ...s.lanesById,
         0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, fill.id] } },
       },
-    };
+    }, placedFill);
   }
   const events = resolve(s, {
     type: 'STAGE_CARD', intentId: 'i-full', owner: 'P0', cardId: h.cardId, lane: 0,
@@ -343,7 +345,7 @@ function resolveCurrentTurn(
   eq(started.turn, 4, 'TURN_STARTED: turn = 4');
   eq(after.turn, 4, 'state.turn advanced');
   eq(after.stagingOrder.length, 0, 'stagingOrder cleared by TURN_ENDED');
-  eq(after.cards[cardId].revealed, true, 'card is revealed after reveal phase');
+  eq(getCardState(after, cardId)!.revealed, true, 'card is revealed after reveal phase');
 }
 
 // -- Priority order: priority holder reveals FIRST --------------------------
@@ -416,7 +418,7 @@ function resolveCurrentTurn(
     'LOCATION_REVEALED for lane 1 at start of turn 2',
   );
   const locationId = after.lanesById[1].locationSlot.locationCardId!;
-  eq(after.locationCards[locationId].face, 'FACE_UP', 'lane 1 location flipped face-up');
+  eq(getLocationState(after, locationId)!.face, 'FACE_UP', 'lane 1 location flipped face-up');
 }
 
 // -- Location reveal fires the location onReveal effects --------------------
@@ -444,14 +446,13 @@ function resolveCurrentTurn(
   let s = baseState({ turn: 1, priority: 'P0' });
   s = withLocation(s, 1, 'rally-point', false);
   const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 1 as LaneId, revealed: true };
-  s = {
+  s = upsertTestCard({
     ...s,
-    cards: { ...s.cards, [inst.id]: inst },
     lanesById: {
       ...s.lanesById,
       1: { ...s.lanesById[1], cards: { ...s.lanesById[1].cards, P0: [inst.id] } },
     },
-  };
+  }, inst);
 
   const { events, state: after } = resolveCurrentTurn(s, mkManifest([grunt], [rallyPoint]), createRng('loc-reveal-fires'));
   truthy(events.some(e => e.type === 'CARD_POWER_CHANGED'), 'location onReveal emits CARD_POWER_CHANGED');
@@ -466,24 +467,22 @@ function resolveCurrentTurn(
   // Give P0 two grunts on board; P1 one.
   for (let i = 0; i < 2; i++) {
     const inst = { ...mkCardInstance('grunt', 'P0'), zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
-    s = {
+    s = upsertTestCard({
       ...s,
-      cards: { ...s.cards, [inst.id]: inst },
       lanesById: {
         ...s.lanesById,
         0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P0: [...s.lanesById[0].cards.P0, inst.id] } },
       },
-    };
+    }, inst);
   }
   const opp = { ...mkCardInstance('grunt', 'P1'), zone: 'LANE' as const, lane: 0 as LaneId, revealed: true };
-  s = {
+  s = upsertTestCard({
     ...s,
-    cards: { ...s.cards, [opp.id]: opp },
     lanesById: {
       ...s.lanesById,
       0: { ...s.lanesById[0], cards: { ...s.lanesById[0].cards, P1: [...s.lanesById[0].cards.P1, opp.id] } },
     },
-  };
+  }, opp);
 
   const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('end'));
   truthy(events.some(e => e.type === 'MATCH_ENDED'), 'turn 6: MATCH_ENDED emitted');

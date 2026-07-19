@@ -34,6 +34,7 @@ import type {
   RuntimeIntent,
   LocationCardDeckEntry,
 } from './contracts';
+import { getCardPlacement } from '../engine/projections/cardRuntime';
 import { buildOpeningTransaction } from './opening';
 import { buildLocationSetupTransaction } from '../engine/locationSetup';
 import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
@@ -267,7 +268,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     for (const planned of planning[seat]) {
       // Presentation frames at or after this stage already contain its whole
       // event batch, including lane-entry effects. Never fold it twice.
-      if (state.cards[planned.intent.cardId]?.zone !== 'HAND') continue;
+      if (getCardPlacement(state, planned.intent.cardId)?.zone !== 'HAND') continue;
       for (const event of planned.events) state = apply(state, event, manifest);
     }
     // Private plans are hypothetical branches, not committed chronology.

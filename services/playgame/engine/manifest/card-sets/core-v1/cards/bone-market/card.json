@@ -20,6 +20,10 @@
             "owner": "SELF_OWNER",
             "destination": {
               "kind": "HAND"
+            },
+            "adjustCost": {
+              "kind": "LIT",
+              "n": -1
             }
           },
           {
@@ -42,7 +46,7 @@
   "cosmetic": {
     "displayName": "BONE MARKET",
     "flavorText": "Fair exchange is no robbery.",
-    "rulesText": "On Reveal: Add a random card to your hand, then destroy your lowest-Power card here.",
+    "rulesText": "On Reveal: Add a random card to your hand, reduce its Cost by 1, then destroy your lowest-Power card here.",
     "accent": "#b5838d",
     "frame": "rare",
     "art": {

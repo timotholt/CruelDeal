@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { foldFramedEvents, frameAndFoldEvents } from '../transactionTimeline';
 import {
@@ -15,7 +16,7 @@ import type { CardId } from '../types/ids';
 
 const CARD_ID = 'ledger-card' as CardId;
 const SOURCE_ID = 'ledger-source' as CardId;
-const CAUSE = { sourceId: SOURCE_ID, effectKind: 'SYSTEM' } as const;
+const CAUSE = { sourceId: SOURCE_ID, effectKind: 'SYSTEM', reason: 'TEST' } as const;
 const manifest = testManifest([testCardDef('ledger-card-def', { power: 3 })]);
 
 function initialState() {
@@ -62,7 +63,7 @@ describe('semantic power ledger', () => {
       ],
       manifest,
     });
-    const card = folded.finalState.cards[CARD_ID]!;
+    const card = getCardState(folded.finalState, CARD_ID)!!;
 
     expect(card.powerLedger).toHaveLength(6);
     expect(card.powerLedger.map((entry) => entry.mutation.kind))
@@ -93,8 +94,8 @@ describe('semantic power ledger', () => {
       manifest,
     });
 
-    expect(replay.finalState.cards[CARD_ID]?.powerLedger)
-      .toEqual(live.finalState.cards[CARD_ID]?.powerLedger);
+    expect(getCardState(replay.finalState, CARD_ID)!?.powerLedger)
+      .toEqual(getCardState(live.finalState, CARD_ID)!?.powerLedger);
     expect(getStoredCardPowerDelta(replay.finalState, CARD_ID, manifest)).toBe(0);
     expect(replay.finalState).toEqual(live.finalState);
   });

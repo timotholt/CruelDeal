@@ -1,10 +1,12 @@
 import type {
-  CardInstance,
+  InternalCardRecord,
   MatchState,
   PowerLedgerEntry,
 } from './types/state';
 import type { CardId } from './types/ids';
 import type { Manifest } from './manifest/types';
+import { getCardRuntime } from './projections/cardRuntime';
+import { getCardTemplate } from './projections/cardTemplate';
 
 export interface ActivePowerContribution {
   readonly id: string;
@@ -18,7 +20,7 @@ export interface ActivePowerContribution {
  * history.
  */
 export function activePowerContributions(
-  card: Pick<CardInstance, 'powerLedger'>,
+  card: Pick<InternalCardRecord, 'powerLedger'>,
   basePower: number,
 ): readonly ActivePowerContribution[] {
   let active: ActivePowerContribution[] = [];
@@ -43,7 +45,7 @@ export function activePowerContributions(
 }
 
 export function storedPowerDelta(
-  card: Pick<CardInstance, 'powerLedger'>,
+  card: Pick<InternalCardRecord, 'powerLedger'>,
   basePower: number,
 ): number {
   return activePowerContributions(card, basePower)
@@ -56,15 +58,15 @@ export function getStoredCardPowerDelta(
   cardId: CardId,
   manifest: Manifest,
 ): number {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return 0;
-  const definition = manifest.cards[card.defId];
-  if (!definition) return 0;
-  return storedPowerDelta(card, definition.basePower);
+  const template = getCardTemplate(manifest, card.defId);
+  if (!template || template.basePower === null) return 0;
+  return storedPowerDelta(card, template.basePower);
 }
 
 export function effectivePermanentPowerDelta(
-  card: Pick<CardInstance, 'powerLedger'>,
+  card: Pick<InternalCardRecord, 'powerLedger'>,
   basePower: number,
   suppressPositive: boolean,
 ): number {

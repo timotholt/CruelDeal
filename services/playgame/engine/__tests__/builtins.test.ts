@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 /**
  * Tests for CALL_BUILTIN handlers in builtins.ts.
  * Each test fires an On Reveal / onDestroyed effect that delegates to a
@@ -11,15 +12,17 @@ import { getCardPower } from '../projections/power';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
-import type { MatchState, CardInstance } from '../types/state';
+import type { MatchState, InternalCardRecord } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type { EffectCtx } from '../effects/evaluator';
 import type { EffectExpr } from '../types/ability';
 import {
   emptyTestMatchState,
+  replaceTestCardRecords,
   testLaneRegistry,
   testLaneState,
+  upsertTestCard,
   withTestLocation,
 } from '../testkit/runtimeFixture';
 
@@ -51,16 +54,18 @@ function mkLocation(defId: string, abilities: LocationCardDef['abilities']): Loc
 
 function mkCard(
   id: string, defId: string, owner: Owner,
-  zone: CardInstance['zone'] = 'LANE',
+  zone: InternalCardRecord['zone'] = 'LANE',
   lane: LaneId | null = 0,
-  extra: Partial<CardInstance> = {},
-): CardInstance {
+  extra: Partial<InternalCardRecord> = {},
+): InternalCardRecord {
   return {
     id: id as CardId, defId, version: 1, owner, lane, zone,
-    revealed: zone === 'LANE', powerLedger: [], costDelta: 0,
-    costLog: [], tags: [], textOverride: null, counters: {},
+    revealed: zone === 'LANE', revealTiming: null, powerLedger: [], costDelta: 0,
+    costLog: [], tags: [], textOverride: null,
+    counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
     ...extra,
+    textLog: extra.textLog ?? [],
   };
 }
 
@@ -81,27 +86,27 @@ function buildManifest(defs: CardDef[]): Manifest {
 }
 
 function buildState(
-  laneCards: { P0: CardInstance[]; P1: CardInstance[] },
-  handCards: { P0: CardInstance[]; P1: CardInstance[] } = { P0: [], P1: [] },
-  deckCards: { P0: CardInstance[]; P1: CardInstance[] } = { P0: [], P1: [] },
+  laneCards: { P0: InternalCardRecord[]; P1: InternalCardRecord[] },
+  handCards: { P0: InternalCardRecord[]; P1: InternalCardRecord[] } = { P0: [], P1: [] },
+  deckCards: { P0: InternalCardRecord[]; P1: InternalCardRecord[] } = { P0: [], P1: [] },
 ): MatchState {
   const all = [
     ...laneCards.P0, ...laneCards.P1,
     ...handCards.P0, ...handCards.P1,
     ...deckCards.P0, ...deckCards.P1,
   ];
-  const cards = Object.fromEntries(all.map(c => [c.id, c])) as Record<CardId, CardInstance>;
+  const cards = Object.fromEntries(all.map(c => [c.id, c])) as Record<CardId, InternalCardRecord>;
   return emptyTestMatchState({
     turn: 3, maxEnergy: { P0: 5, P1: 5 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
     energy: { P0: 5, P1: 5 },
     deck: {
-      P0: deckCards.P0,
-      P1: deckCards.P1,
+      P0: deckCards.P0.map(card => card.id),
+      P1: deckCards.P1.map(card => card.id),
     },
     hand: {
-      P0: handCards.P0,
-      P1: handCards.P1,
+      P0: handCards.P0.map(card => card.id),
+      P1: handCards.P1.map(card => card.id),
     },
     cards,
     lanesById: testLaneRegistry([
@@ -123,7 +128,7 @@ function makeCtx(
   return {
     state, manifest,
     self: selfId, selfKind: 'card', selfLane, selfOwner,
-    source: { sourceId: selfId, effectKind: 'ON_REVEAL' },
+    source: { sourceId: selfId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     rng: createRng('test'),
     depth: 0,
   };
@@ -152,7 +157,7 @@ describe('CALL_BUILTIN: POWER_TO_DESTROYER', () => {
     const effect: EffectExpr = { kind: 'CALL_BUILTIN', fn: 'POWER_TO_DESTROYER', args: { delta: 2 } };
     const ctx: EffectCtx = {
       ...makeCtx(state, manifest, 'vic' as CardId, 'P0'),
-      source: { sourceId: 'src' as CardId, effectKind: 'ON_REVEAL' },
+      source: { sourceId: 'src' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     };
     const { state: after } = evalEffect(state, effect, ctx, manifest);
     expect(getStoredCardPowerDelta(after, 'src' as CardId, manifest)).toBe(2);
@@ -174,7 +179,7 @@ describe('CALL_BUILTIN: DRAW_LOWEST_COST_CARD', () => {
     const { state: after } = runBuiltin('DRAW_LOWEST_COST_CARD', {}, state, manifest, 'self' as CardId, 'P0');
 
     expect(after.hand.P0.length).toBe(1);
-    expect(after.hand.P0[0].id).toBe('d2'); // cost 1 is lowest
+    expect(after.hand.P0[0]).toBe('d2'); // cost 1 is lowest
     expect(after.deck.P0.length).toBe(2);
   });
 
@@ -198,7 +203,7 @@ describe('CALL_BUILTIN: MOVE_SELF_TO_RANDOM_OTHER_LANE', () => {
     const state = buildState({ P0: [self], P1: [] });
     const { state: after } = runBuiltin('MOVE_SELF_TO_RANDOM_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const newLane = after.cards['self' as CardId]!.lane;
+    const newLane = getCardState(after, 'self' as CardId)!!.lane;
     expect(newLane).not.toBe(0); // moved away from lane 0
     expect(newLane).not.toBeNull();
   });
@@ -213,18 +218,17 @@ describe('CALL_BUILTIN: MOVE_SELF_TO_RANDOM_OTHER_LANE', () => {
 
     // Manually build state with full lanes 1 and 2
     const allCards = [self, ...l1cards, ...l2cards];
-    const cardMap = Object.fromEntries(allCards.map(c => [c.id, c])) as Record<CardId, CardInstance>;
-    const state: MatchState = {
+    const cardMap = Object.fromEntries(allCards.map(c => [c.id, c])) as Record<CardId, InternalCardRecord>;
+    const state: MatchState = replaceTestCardRecords({
       ...base,
-      cards: cardMap,
       lanesById: testLaneRegistry([
         testLaneState(0, { P0: ['self' as CardId], P1: [] }),
         testLaneState(1, { P0: l1cards.map(c => c.id), P1: [] }),
         testLaneState(2, { P0: l2cards.map(c => c.id), P1: [] }),
       ]),
-    };
+    }, cardMap);
     const { state: after } = runBuiltin('MOVE_SELF_TO_RANDOM_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
-    expect(after.cards['self' as CardId]!.lane).toBe(0); // didn't move
+    expect(getCardState(after, 'self' as CardId)!!.lane).toBe(0); // didn't move
   });
 });
 
@@ -238,7 +242,7 @@ describe('CALL_BUILTIN: MOVE_ENEMY_CARD_TO_OTHER_LANE', () => {
     const state = buildState({ P0: [self], P1: [enemy] });
     const { state: after } = runBuiltin('MOVE_ENEMY_CARD_TO_OTHER_LANE', { selector: 'RANDOM_ENEMY_HERE' }, state, manifest, 'self' as CardId, 'P0', 0);
 
-    expect(after.cards['enemy' as CardId]!.lane).not.toBe(0);
+    expect(getCardState(after, 'enemy' as CardId)!!.lane).not.toBe(0);
     expect(after.lanesById[0].cards.P1).not.toContain('enemy');
   });
 
@@ -274,8 +278,8 @@ describe('CALL_BUILTIN: MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', () => {
       0,
     );
 
-    expect(after.cards['spell' as CardId]?.lane).toBe(0);
-    expect(after.cards['operative' as CardId]?.lane).not.toBe(0);
+    expect(getCardState(after, 'spell' as CardId)!?.lane).toBe(0);
+    expect(getCardState(after, 'operative' as CardId)!?.lane).not.toBe(0);
   });
 });
 
@@ -289,7 +293,7 @@ describe('CALL_BUILTIN: MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', () => {
     const state = buildState({ P0: [self, friendly], P1: [] });
     const { state: after } = runBuiltin('MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    expect(after.cards['friend' as CardId]!.lane).not.toBe(0);
+    expect(getCardState(after, 'friend' as CardId)!!.lane).not.toBe(0);
   });
 });
 
@@ -304,8 +308,9 @@ describe('CALL_BUILTIN: COPY_TOP_ENEMY_DECK_CARD_TO_HAND', () => {
     const { state: after } = runBuiltin('COPY_TOP_ENEMY_DECK_CARD_TO_HAND', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
     expect(after.hand.P0.length).toBe(1);
-    expect(after.hand.P0[0].defId).toBe('b');
-    expect(after.hand.P0[0].spawnSource.kind).toBe('COPY_OF');
+    const copied = getCardState(after, after.hand.P0[0]);
+    expect(copied?.defId).toBe('b');
+    expect(copied?.spawnSource.kind).toBe('COPY_OF');
   });
 
   it('does nothing when enemy deck is empty', () => {
@@ -326,13 +331,10 @@ describe('CALL_BUILTIN: ADD_DISCARDED_CARD_TO_HAND', () => {
     const manifest = buildManifest([mkDef('a', 3, 2), mkDef('b', 2, 1)]);
     // Discarded cards live in state.cards but zone='DISCARD'
     const base = buildState({ P0: [self], P1: [] });
-    const state: MatchState = {
-      ...base,
-      cards: { ...base.cards, 'dis1': discarded } as Record<CardId, CardInstance>,
-    };
+    const state: MatchState = upsertTestCard(base, discarded);
     const { state: after } = runBuiltin('ADD_DISCARDED_CARD_TO_HAND', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    expect(after.hand.P0.some(c => c.id === 'dis1')).toBe(true);
+    expect(after.hand.P0).toContain('dis1');
   });
 
   it('does nothing when no cards discarded', () => {
@@ -402,7 +404,7 @@ describe('CALL_BUILTIN: DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', () => {
     const state = buildState({ P0: [self], P1: [enemy] });
     const { state: after } = runBuiltin('DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const enemyTags = after.cards['enemy' as CardId]!.tags;
+    const enemyTags = getCardState(after, 'enemy' as CardId)!!.tags;
     expect(enemyTags.some(t => t.kind === 'ONGOING_DISABLED')).toBe(true);
   });
 
@@ -413,7 +415,7 @@ describe('CALL_BUILTIN: DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', () => {
     const state = buildState({ P0: [self], P1: [plain] });
     const { state: after } = runBuiltin('DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const plainTags = after.cards['plain' as CardId]!.tags;
+    const plainTags = getCardState(after, 'plain' as CardId)!!.tags;
     expect(plainTags.some(t => t.kind === 'ONGOING_DISABLED')).toBe(false);
   });
 });
@@ -428,7 +430,7 @@ describe('CALL_BUILTIN: OVERCLOCK_CHIP', () => {
     const state = buildState({ P0: [self, target], P1: [] });
     const { state: after } = runBuiltin('OVERCLOCK_CHIP', { delta: 5 }, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const targetAfter = after.cards['target' as CardId]!;
+    const targetAfter = getCardState(after, 'target' as CardId)!!;
     expect(getStoredCardPowerDelta(after, targetAfter.id, manifest)).toBe(5);
     // Should have a SCHEDULED pending effect for end-of-next-turn destruction
     expect(after.pendingEffects.some(pe => pe.kind === 'SCHEDULED' && pe.when === 'END_OF_NEXT_TURN')).toBe(true);
@@ -449,8 +451,8 @@ describe('CALL_BUILTIN: REPLACE_HAND_CARD_HIGHER_COST', () => {
     const { state: after } = runBuiltin('REPLACE_HAND_CARD_HIGHER_COST', { costDelta: 1 }, state, manifest, 'self' as CardId, 'P0', 0);
 
     // Original h1 banished, new card in hand
-    expect(after.hand.P0.some(c => c.id === 'h1')).toBe(false);
+    expect(after.hand.P0).not.toContain('h1');
     expect(after.hand.P0.length).toBe(1);
-    expect(manifest.cards[after.hand.P0[0].defId]?.cost).toBe(3);
+    expect(getCardState(after, after.hand.P0[0])?.defId).toBe('cost3');
   });
 });

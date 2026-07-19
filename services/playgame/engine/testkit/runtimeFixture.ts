@@ -2,11 +2,12 @@ import type { EffectExpr } from '../types/ability';
 import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from '../types/ids';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
-  CardInstance,
+  InternalCardRecord,
+  CardRevealTiming,
   CardTag,
   CardZone,
   LaneState,
-  LocationCardInstance,
+  InternalLocationRecord,
   MatchPhase,
   MatchState,
   PendingEffect,
@@ -17,6 +18,15 @@ import type {
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { asFrame, GENESIS_FRAME } from '../types/timeline';
 import type { LocationSetupDeck } from '../locationSetup';
+import {
+  cardRecordsInternal,
+  createCardStoreInternal,
+} from '../internal/cardStore';
+import {
+  createLocationStoreInternal,
+  locationRecordsInternal,
+} from '../internal/locationStore';
+import { getLocationState } from '../projections/locationRuntime';
 
 /**
  * Test-only deterministic location input. Production selection belongs to a
@@ -38,6 +48,7 @@ export interface RuntimeCardSpec {
   readonly defId: string;
   readonly variantId?: string;
   readonly revealed?: boolean;
+  readonly revealTiming?: CardRevealTiming | null;
   readonly powerMutations?: readonly PowerMutation[];
   readonly costDelta?: number;
   readonly tags?: readonly CardTag[];
@@ -53,8 +64,8 @@ export interface RuntimeLocationSpec {
   readonly id: string;
   readonly defId: string;
   readonly revealed: boolean;
-  readonly tags?: LocationCardInstance['tags'];
-  readonly counters?: LocationCardInstance['counters'];
+  readonly tags?: InternalLocationRecord['tags'];
+  readonly counters?: InternalLocationRecord['counters'];
 }
 
 export interface RuntimeFixtureOptions {
@@ -109,9 +120,12 @@ export function testLaneRegistry(
 }
 
 export function emptyTestMatchState(
-  overrides: Partial<MatchState> = {},
+  overrides: Omit<Partial<MatchState>, 'cardStore'> & {
+    readonly cards?: Readonly<Record<CardId, InternalCardRecord>>;
+  } = {},
 ): MatchState {
   const turn = overrides.turn ?? 1;
+  const { cards = {}, ...stateOverrides } = overrides;
   return {
     turn,
     maxEnergy: { P0: turn, P1: turn },
@@ -122,11 +136,11 @@ export function emptyTestMatchState(
     energy: { P0: turn, P1: turn },
     deck: { P0: [], P1: [] },
     hand: { P0: [], P1: [] },
-    cards: {},
+    cardStore: createCardStoreInternal(cards),
     lanesById: testLaneRegistry(),
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
-    locationCards: {},
+    locationStore: createLocationStoreInternal(),
     locationDeck: {
       drawPile: [],
       staging: [],
@@ -142,8 +156,69 @@ export function emptyTestMatchState(
     result: null,
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,
-    ...overrides,
+    ...stateOverrides,
   };
+}
+
+/** Test-only construction boundary; production callers cannot replace stores. */
+export function replaceTestCardRecords(
+  state: MatchState | Omit<MatchState, 'cardStore'>,
+  cards: Readonly<Record<CardId, InternalCardRecord>>,
+): MatchState {
+  return { ...state, cardStore: createCardStoreInternal(cards) };
+}
+
+export function upsertTestCard(
+  state: MatchState,
+  card: InternalCardRecord,
+): MatchState {
+  return replaceTestCardRecords(state, {
+    ...cardRecordsInternal(state),
+    [card.id]: card,
+  });
+}
+
+export function removeTestCard(
+  state: MatchState,
+  cardId: CardId,
+): MatchState {
+  return replaceTestCardRecords(
+    state,
+    Object.fromEntries(
+      Object.entries(cardRecordsInternal(state))
+        .filter(([id]) => id !== cardId),
+    ) as Readonly<Record<CardId, InternalCardRecord>>,
+  );
+}
+
+export function replaceTestLocationRecords(
+  state: MatchState | Omit<MatchState, 'locationStore'>,
+  locations: Readonly<Record<LocationCardInstanceId, InternalLocationRecord>>,
+): MatchState {
+  return { ...state, locationStore: createLocationStoreInternal(locations) };
+}
+
+export function upsertTestLocation(
+  state: MatchState,
+  location: InternalLocationRecord,
+): MatchState {
+  return replaceTestLocationRecords(state, {
+    ...locationRecordsInternal(state),
+    [location.id]: location,
+  });
+}
+
+export function removeTestLocation(
+  state: MatchState,
+  locationId: LocationCardInstanceId,
+): MatchState {
+  return replaceTestLocationRecords(
+    state,
+    Object.fromEntries(
+      Object.entries(locationRecordsInternal(state))
+        .filter(([id]) => id !== locationId),
+    ) as Readonly<Record<LocationCardInstanceId, InternalLocationRecord>>,
+  );
 }
 
 export function withTestLocation(
@@ -156,8 +231,8 @@ export function withTestLocation(
   const lane = state.lanesById[laneId];
   if (!lane) throw new Error(`withTestLocation: missing lane ${laneId}`);
   const priorId = lane.locationSlot.locationCardId;
-  const prior = priorId ? state.locationCards[priorId] : null;
-  const location: LocationCardInstance = {
+  const prior = priorId ? getLocationState(state, priorId) : null;
+  const location: InternalLocationRecord = {
     id,
     defId,
     sourceDeckEntry: -1,
@@ -169,11 +244,22 @@ export function withTestLocation(
     revealCount: revealed ? 1 : 0,
     tags: [],
     counters: {},
-    createdAt: GENESIS_FRAME,
-    ...(revealed ? { revealedAt: GENESIS_FRAME } : {}),
   };
+  const locationStore = createLocationStoreInternal({
+    ...locationRecordsInternal(state),
+    ...(prior ? {
+      [prior.id]: {
+        ...prior,
+        zone: 'DISCARD' as const,
+        laneId: null,
+        pendingLaneId: null,
+      },
+    } : {}),
+    [id]: location,
+  });
   return {
     ...state,
+    locationStore,
     lanesById: {
       ...state.lanesById,
       [laneId]: {
@@ -183,18 +269,6 @@ export function withTestLocation(
           locationCardId: id,
         },
       },
-    },
-    locationCards: {
-      ...state.locationCards,
-      ...(prior ? {
-        [prior.id]: {
-          ...prior,
-          zone: 'DISCARD' as const,
-          laneId: null,
-          pendingLaneId: null,
-        },
-      } : {}),
-      [id]: location,
     },
     locationDeck: prior
       ? {
@@ -216,7 +290,11 @@ export function testPowerLedger(
     frame: asFrame(index + 1),
     turn: 0,
     mutation,
-    cause: { sourceId: cardId as CardId, effectKind: 'SYSTEM' },
+    cause: {
+      sourceId: cardId as CardId,
+      effectKind: 'SYSTEM',
+      reason: 'TEST_FIXTURE_POWER',
+    },
   }));
 }
 
@@ -225,7 +303,9 @@ function buildCard(
   owner: Owner,
   zone: CardZone,
   lane: LaneId | null,
-): CardInstance {
+  turn: number,
+): InternalCardRecord {
+  const revealed = spec.revealed ?? false;
   return {
     id: spec.id as CardId,
     defId: spec.defId,
@@ -234,12 +314,15 @@ function buildCard(
     owner,
     lane,
     zone,
-    revealed: spec.revealed ?? false,
+    revealed,
+    revealTiming: spec.revealTiming
+      ?? (zone === 'LANE' && !revealed ? { kind: 'TURN', turn } : null),
     powerLedger: testPowerLedger(spec.id, spec.powerMutations ?? []),
     costDelta: spec.costDelta ?? 0,
     costLog: EMPTY_COST_LOG,
     tags: spec.tags ?? [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: spec.spawnSource ?? { kind: 'DECK_CREATION' },
   };
@@ -250,23 +333,27 @@ function buildCard(
  * randomness, the bootstrap manifest, or presentation state.
  */
 export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixture {
-  const cards: Record<string, CardInstance> = {};
-  const register = (card: CardInstance): CardInstance => {
+  const cards: Record<string, InternalCardRecord> = {};
+  const register = (card: InternalCardRecord): InternalCardRecord => {
     if (cards[card.id]) throw new Error(`duplicate fixture card id: ${card.id}`);
     cards[card.id] = card;
     return card;
   };
 
   const deck = {
-    P0: options.decks.P0.map((spec) => register(buildCard(spec, 'P0', 'DECK', null))),
-    P1: options.decks.P1.map((spec) => register(buildCard(spec, 'P1', 'DECK', null))),
+    P0: options.decks.P0.map((spec) =>
+      register(buildCard(spec, 'P0', 'DECK', null, options.turn)).id),
+    P1: options.decks.P1.map((spec) =>
+      register(buildCard(spec, 'P1', 'DECK', null, options.turn)).id),
   };
   const hand = {
-    P0: options.hands.P0.map((spec) => register(buildCard(spec, 'P0', 'HAND', null))),
-    P1: options.hands.P1.map((spec) => register(buildCard(spec, 'P1', 'HAND', null))),
+    P0: options.hands.P0.map((spec) =>
+      register(buildCard(spec, 'P0', 'HAND', null, options.turn)).id),
+    P1: options.hands.P1.map((spec) =>
+      register(buildCard(spec, 'P1', 'HAND', null, options.turn)).id),
   };
 
-  const locationCards: Record<LocationCardInstanceId, LocationCardInstance> = {};
+  const locationCards: Record<LocationCardInstanceId, InternalLocationRecord> = {};
   const lanesById = Object.fromEntries(options.lanes.map((laneSpec, laneNumber) => {
     const lane = laneNumber as LaneId;
     const locationSpec = options.locations[lane];
@@ -284,12 +371,10 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
         revealCount: locationSpec.revealed ? 1 : 0,
         tags: locationSpec.tags ?? [],
         counters: locationSpec.counters ?? {},
-        createdAt: GENESIS_FRAME,
-        ...(locationSpec.revealed ? { revealedAt: GENESIS_FRAME } : {}),
       };
     }
-    const P0 = laneSpec.P0.map((spec) => register(buildCard(spec, 'P0', 'LANE', lane)).id);
-    const P1 = laneSpec.P1.map((spec) => register(buildCard(spec, 'P1', 'LANE', lane)).id);
+    const P0 = laneSpec.P0.map((spec) => register(buildCard(spec, 'P0', 'LANE', lane, options.turn)).id);
+    const P1 = laneSpec.P1.map((spec) => register(buildCard(spec, 'P1', 'LANE', lane, options.turn)).id);
     const laneState: LaneState = {
       id: lane,
       status: 'ACTIVE',
@@ -324,11 +409,11 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     energy: { ...energy },
     deck,
     hand,
-    cards,
+    cardStore: createCardStoreInternal(cards),
     lanesById,
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
-    locationCards,
+    locationStore: createLocationStoreInternal(locationCards),
     locationDeck: {
       drawPile: [],
       staging: [],

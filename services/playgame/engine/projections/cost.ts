@@ -4,6 +4,8 @@ import type { MatchState } from '../types/state';
 import { ongoingsTargeting } from './ongoing';
 import { ctxForTargetCard } from './context';
 import { evalNum } from './numexpr';
+import { getCardRuntime } from './cardRuntime';
+import { getCardTemplate } from './cardTemplate';
 
 export interface CostModifierEntry {
   readonly sourceId: CardId | LocationCardInstanceId;
@@ -11,13 +13,13 @@ export interface CostModifierEntry {
 }
 
 export function getCardCost(state: MatchState, cardId: CardId, manifest: Manifest): number {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return 0;
-  const def = manifest.cards[card.defId];
-  if (!def) return 0;
+  const template = getCardTemplate(manifest, card.defId);
+  if (!template) return 0;
   const delta = card.costDelta + getCardCostModifiers(state, cardId, manifest)
     .reduce((sum, entry) => sum + entry.delta, 0);
-  return Math.max(0, def.cost + delta);
+  return Math.max(0, template.baseCost + delta);
 }
 
 export function getCardCostModifiers(
@@ -25,7 +27,7 @@ export function getCardCostModifiers(
   cardId: CardId,
   manifest: Manifest,
 ): CostModifierEntry[] {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return [];
 
   const targeting = ongoingsTargeting(state, manifest, cardId);

@@ -9,13 +9,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { apply } from '../apply';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { MatchState, CardInstance } from '../types/state';
+import type { MatchState, InternalCardRecord } from '../types/state';
 import type { CardId, Owner } from '../types/ids';
 import type { MatchEvent } from '../types/events';
 import {
   emptyTestMatchState,
   testLaneRegistry,
   testLaneState,
+  upsertTestCard,
 } from '../testkit/runtimeFixture';
 
 // ---- Minimal manifest (no card effects needed) ----------------------------
@@ -24,7 +25,7 @@ const MANIFEST = BOOTSTRAP_MANIFEST;
 
 // ---- Helpers ---------------------------------------------------------------
 
-function mkCard(id: string, owner: Owner, zone: CardInstance['zone'] = 'LANE'): CardInstance {
+function mkCard(id: string, owner: Owner, zone: InternalCardRecord['zone'] = 'LANE'): InternalCardRecord {
   return {
     id: id as CardId,
     defId: 'armored-van',
@@ -33,11 +34,13 @@ function mkCard(id: string, owner: Owner, zone: CardInstance['zone'] = 'LANE'): 
     lane: zone === 'LANE' ? 0 : null,
     zone,
     revealed: zone === 'LANE',
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
   };
@@ -45,8 +48,9 @@ function mkCard(id: string, owner: Owner, zone: CardInstance['zone'] = 'LANE'): 
 
 const SYSTEM_SOURCE = {
   sourceId: 'sys' as CardId,
-  effectKind: 'SYSTEM' as const,
-};
+  effectKind: 'SYSTEM',
+  reason: 'TEST',
+} as const;
 
 function baseState(): MatchState {
   const c1 = mkCard('c1', 'P0');
@@ -61,7 +65,7 @@ function baseState(): MatchState {
     energy: { P0: 3, P1: 3 },
     deck: { P0: [], P1: [] },
     hand: { P0: [], P1: [] },
-    cards: { c1, c2 } as Record<CardId, CardInstance>,
+    cards: { c1, c2 } as Record<CardId, InternalCardRecord>,
     lanesById: testLaneRegistry([
       testLaneState(0, { P0: ['c1' as CardId], P1: ['c2' as CardId] }),
       testLaneState(1),
@@ -121,7 +125,7 @@ describe('trackedVariables: CARD_DESTROYED', () => {
     const s = run(baseState(), {
       type: 'CARD_DESTROYED',
       cardId: 'c1' as CardId,
-      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL' },
+      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     });
     expect(s.trackedVariables.P1.cardsYouDestroyed).toBe(1);
     expect(s.trackedVariables.P0.cardsYouDestroyed).toBe(0);
@@ -133,11 +137,10 @@ describe('trackedVariables: CARD_DESTROYED', () => {
 describe('trackedVariables: CARD_DISCARDED', () => {
   it('increments cardsYouDiscarded for card owner', () => {
     const handCard = mkCard('h1', 'P0', 'HAND');
-    const s0: MatchState = {
+    const s0: MatchState = upsertTestCard({
       ...baseState(),
-      cards: { ...baseState().cards, h1: handCard } as Record<CardId, CardInstance>,
-      hand: { P0: [handCard], P1: [] },
-    };
+      hand: { P0: [handCard.id], P1: [] },
+    }, handCard);
     const s = run(s0, {
       type: 'CARD_DISCARDED',
       cardId: 'h1' as CardId,
@@ -154,11 +157,10 @@ describe('trackedVariables: CARD_DISCARDED', () => {
 describe('trackedVariables: CARD_STAGED', () => {
   it('increments cardsPlayedThisTurn for staged owner', () => {
     const handCard = mkCard('h1', 'P0', 'HAND');
-    const s0: MatchState = {
+    const s0: MatchState = upsertTestCard({
       ...baseState(),
-      cards: { ...baseState().cards, h1: handCard } as Record<CardId, CardInstance>,
-      hand: { P0: [handCard], P1: [] },
-    };
+      hand: { P0: [handCard.id], P1: [] },
+    }, handCard);
     const s = run(s0, {
       type: 'CARD_STAGED',
       intentId: 'i1',
@@ -235,11 +237,10 @@ describe('trackedVariables: ENERGY_CHANGED', () => {
 describe('trackedVariables: TURN_ENDED', () => {
   it('snapshots cardsPlayedLastTurn from cardsPlayedThisTurn and resets', () => {
     const handCard = mkCard('h1', 'P0', 'HAND');
-    const s0: MatchState = {
+    const s0: MatchState = upsertTestCard({
       ...baseState(),
-      cards: { ...baseState().cards, h1: handCard } as Record<CardId, CardInstance>,
-      hand: { P0: [handCard], P1: [] },
-    };
+      hand: { P0: [handCard.id], P1: [] },
+    }, handCard);
     const s1 = run(s0, {
       type: 'CARD_STAGED',
       intentId: 'i1', cardId: 'h1' as CardId, lane: 1, owner: 'P0', cost: 3,
@@ -292,7 +293,7 @@ describe('trackedVariables: CARD_COST_CHANGED', () => {
       type: 'CARD_COST_CHANGED',
       cardId: 'c1' as CardId,
       delta: -2,
-      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL' },
+      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     });
     expect(s.trackedVariables.P1.totalCostReduced).toBe(2);
     expect(s.trackedVariables.P0.totalCostReduced).toBe(0);
@@ -303,7 +304,7 @@ describe('trackedVariables: CARD_COST_CHANGED', () => {
       type: 'CARD_COST_CHANGED',
       cardId: 'c1' as CardId,
       delta: 2,
-      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL' },
+      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     });
     expect(s.trackedVariables.P1.totalCostReduced).toBe(0);
   });
@@ -313,7 +314,7 @@ describe('trackedVariables: CARD_COST_CHANGED', () => {
       type: 'CARD_COST_CHANGED',
       cardId: 'c1' as CardId,
       delta: -1,
-      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL' },
+      cause: { sourceId: 'c2' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     });
     const s1 = run(s0, { type: 'TURN_ENDED', turn: 3 });
     expect(s1.trackedVariables.P1.reducedAnyCostThisGame).toBe(true);

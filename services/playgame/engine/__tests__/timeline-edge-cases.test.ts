@@ -26,7 +26,11 @@ const cardDef = testCardDef('frame-edge-card');
 const manifest = testManifest([cardDef]);
 const cardId = 'frame-edge-instance' as CardId;
 const otherCardId = 'frame-edge-other' as CardId;
-const systemCause = { sourceId: cardId, effectKind: 'SYSTEM' as const };
+const systemCause = {
+  sourceId: cardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST',
+} as const;
 
 function fixtureState(
   overrides: Partial<Pick<MatchState, 'turn' | 'phase'>> = {},

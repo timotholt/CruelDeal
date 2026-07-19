@@ -22,6 +22,7 @@ import type {
 import type { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { otherSeat } from '@/services/playgame/engine/types/ids';
 import type { UiState } from '@/services/playgame/view';
+import { getCardRuntime } from '@/services/playgame/engine/projections';
 export type { UiState } from '@/services/playgame/view';
 
 type PresentedStateStore = {
@@ -160,7 +161,7 @@ export const PlayGameProvider = (props: {
   const undoPending = async (): Promise<boolean> => {
     const lastStaged = [...runtime.state().stagingOrder]
       .reverse()
-      .find((id) => runtime.state().cards[id]?.owner === localSeat);
+      .find((id) => getCardRuntime(runtime.state(), id, manifest)?.owner === localSeat);
     return lastStaged ? undoPendingCard(lastStaged) : false;
   };
 

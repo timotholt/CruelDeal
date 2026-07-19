@@ -34,13 +34,11 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_ADDED_TO_HAND: 6,
     CARD_ADDED_TO_LANE: 1,
     CARD_BANISHED: 3,
-    CARD_COST_CHANGED: 2,
     CARD_DESTROYED: 1,
     CARD_DRAWN: 1,
     CARD_MOVED: 4,
     CARD_MOVED_TO_ZONE: 1,
     CARD_RETURNED_TO_LANE: 1,
-    CARD_TAG_ADDED: 1,
     CARD_TRANSFORMED: 1,
     PENDING_EFFECT_ADDED: 2,
   },
@@ -49,19 +47,15 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_ADDED_TO_HAND: 1,
     CARD_ADDED_TO_LANE: 2,
     CARD_BANISHED: 2,
-    CARD_COST_CHANGED: 2,
     CARD_DESTROYED: 1,
     CARD_DISCARDED: 1,
     CARD_DRAWN: 1,
     CARD_FLIPPED: 1,
+    CARD_REVEAL_SCHEDULED: 1,
     CARD_MOVED: 1,
     CARD_MOVED_TO_ZONE: 2,
     CARD_RETURNED_TO_LANE: 1,
-    CARD_TAG_ADDED: 1,
-    CARD_TAG_REMOVED: 1,
-    CARD_TEXT_OVERRIDDEN: 3,
     CARD_TRANSFORMED: 1,
-    CARD_COUNTER_CHANGED: 1,
     ENERGY_CHANGED: 1,
     MAX_ENERGY_CHANGED: 1,
     NEXT_TURN_ENERGY_BONUS_CHANGED: 1,
@@ -95,6 +89,13 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LOCATION_DECK_INITIALIZED: 1,
     LOCATION_SLOT_REVEAL_SCHEDULED: 1,
     MATCH_SETUP_COMPLETED: 1,
+  },
+  'services/playgame/engine/operations/cardMutations.ts': {
+    CARD_COST_CHANGED: 1,
+    CARD_COUNTER_CHANGED: 1,
+    CARD_TAG_ADDED: 1,
+    CARD_TAG_REMOVED: 1,
+    CARD_TEXT_OVERRIDDEN: 1,
   },
   'services/playgame/engine/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
@@ -229,12 +230,12 @@ function logicalConstructionSurface(file: string): string {
 }
 
 describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
-  it('locks the six existing logical production mutation-construction surfaces', () => {
+  it('locks the seven governed logical production mutation-construction surfaces', () => {
     const { mutationConstructions } = collectCurrentInventory();
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(6);
+      .toBe(7);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

@@ -23,10 +23,22 @@ import type { EffectCtx } from './evaluator';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
-import { isPowerBearingCard, isPowerBearingDef } from '../projections/power-bearing';
+import { isPowerBearingCard } from '../projections/power-bearing';
 import { resolveCardPowerAdd } from '../operations/power';
+import {
+  addCardTag,
+  adjustCardCost,
+} from '../operations/cardMutations';
 import { activeLaneIds } from '../laneTopology';
 import { storedPowerDelta } from '../powerLedger';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from '../projections/cardRuntime';
+import {
+  getAllCardTemplates,
+  getCardTemplate,
+} from '../projections/cardTemplate';
 
 type BuiltinArgs = Record<string, unknown>;
 type BuiltinResult = { events: readonly MatchEvent[]; state: MatchState };
@@ -63,10 +75,10 @@ function otherLanes(state: MatchState, lane: LaneId): LaneId[] {
 }
 
 function getPermanentCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return 0;
-  const def = manifest.cards[card.defId];
-  if (!isPowerBearingDef(def)) return 0;
+  const def = getCardTemplate(manifest, card.defId);
+  if (!def || def.basePower === null) return 0;
 
   let power = def.basePower + storedPowerDelta(card, def.basePower);
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
@@ -84,7 +96,7 @@ function powerToDestroyer(
 ): BuiltinResult {
   const delta = (args.delta as number) ?? 0;
   const sourceId = ctx.source.sourceId as CardId;
-  const srcCard = state.cards[sourceId];
+  const srcCard = getCardRuntime(state, sourceId, manifest);
   if (!srcCard || !delta || !isPowerBearingCard(state, sourceId, manifest)) return noop(state);
   return resolveCardPowerAdd(state, sourceId, delta, ctx.source, manifest);
 }
@@ -103,13 +115,15 @@ function replaceHandCardHigherCost(
   if (state.hand[owner].length === 0) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
-  const handCard = ctx.rng.fork('pick').pick([...state.hand[owner]]);
-  const handCardDef = manifest.cards[handCard.defId];
+  const handCardId = ctx.rng.fork('pick').pick([...state.hand[owner]]);
+  const handCard = getCardRuntime(state, handCardId, manifest);
+  if (!handCard) return noop(state);
+  const handCardDef = getCardTemplate(manifest, handCard.defId);
   if (!handCardDef) return noop(state);
-  const targetCost = handCardDef.cost + costDelta;
+  const targetCost = handCardDef.baseCost + costDelta;
 
-  const candidates = Object.values(manifest.cards)
-    .filter(def => def.cost === targetCost && def.defId !== handCard.defId)
+  const candidates = getAllCardTemplates(manifest)
+    .filter(def => def.baseCost === targetCost && def.defId !== handCard.defId)
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
@@ -152,15 +166,17 @@ function replaceLowestPowerHandWithCost(
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
   const sorted = state.hand[owner]
-    .filter(card => isPowerBearingCard(state, card.id, manifest))
+    .map(cardId => getCardRuntime(state, cardId, manifest))
+    .filter((card): card is NonNullable<typeof card> =>
+      card !== null && isPowerBearingCard(state, card.id, manifest))
     .sort((a, b) =>
       getCardPower(state, a.id, manifest) - getCardPower(state, b.id, manifest),
     );
   if (sorted.length === 0) return noop(state);
   const weakest = sorted[0];
 
-  const candidates = Object.values(manifest.cards)
-    .filter(def => def.cost === targetCost && def.defId !== weakest.defId)
+  const candidates = getAllCardTemplates(manifest)
+    .filter(def => def.baseCost === targetCost && def.defId !== weakest.defId)
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
@@ -194,19 +210,22 @@ function replaceCreatedHandCardHigherCost(
   const owner = ctx.selfOwner;
   if (owner === null) return noop(state);
 
-  const createdCards = state.hand[owner].filter(c =>
-    c.spawnSource.kind !== 'DECK_CREATION' && c.spawnSource.kind !== 'SYSTEM',
-  );
+  const createdCards = state.hand[owner]
+    .map(cardId => getCardRuntime(state, cardId, manifest))
+    .filter((card): card is NonNullable<typeof card> =>
+      card !== null
+      && card.spawnSource.kind !== 'DECK_CREATION'
+      && card.spawnSource.kind !== 'SYSTEM');
   if (createdCards.length === 0) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
   const picked = ctx.rng.fork('pick').pick(createdCards);
-  const pickedDef = manifest.cards[picked.defId];
+  const pickedDef = getCardTemplate(manifest, picked.defId);
   if (!pickedDef) return noop(state);
-  const targetCost = pickedDef.cost + costDelta;
+  const targetCost = pickedDef.baseCost + costDelta;
 
-  const candidates = Object.values(manifest.cards)
-    .filter(def => def.cost === targetCost && def.defId !== picked.defId)
+  const candidates = getAllCardTemplates(manifest)
+    .filter(def => def.baseCost === targetCost && def.defId !== picked.defId)
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
@@ -243,9 +262,9 @@ function addDiscountedCardToHand(
   if (owner === null) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
-  const allDefs = Object.values(manifest.cards);
+  const allDefs = getAllCardTemplates(manifest);
   const validDefs = allDefs.filter(def => {
-    const discountedCost = def.cost + costDelta;
+    const discountedCost = def.baseCost + costDelta;
     return discountedCost >= 0;
   });
   if (validDefs.length === 0) return noop(state);
@@ -265,14 +284,15 @@ function addDiscountedCardToHand(
 
   // Apply temporary cost discount
   if (costDelta !== 0) {
-    const costEvt: MatchEvent = {
-      type: 'CARD_COST_CHANGED',
-      cardId: newId,
-      delta: costDelta,
-      cause: ctx.source,
-    };
-    events.push(costEvt);
-    s = apply(s, costEvt, manifest);
+    const mutation = adjustCardCost(
+      s,
+      newId,
+      costDelta,
+      ctx.source,
+      manifest,
+    );
+    events.push(...mutation.events);
+    s = mutation.state;
 
     // Schedule reversal at end of next turn
     const revertEffect: import('../types/ability').EffectExpr = {
@@ -311,10 +331,10 @@ function drawLowestCostCard(
   if (state.deck[owner].length === 0) return noop(state);
 
   const sorted = [...state.deck[owner]].sort((a, b) =>
-    getCardCost(state, a.id, manifest) - getCardCost(state, b.id, manifest),
+    getCardCost(state, a, manifest) - getCardCost(state, b, manifest),
   );
   const target = sorted[0];
-  const e: MatchEvent = { type: 'CARD_DRAWN', owner, cardId: target.id, toHand: true };
+  const e: MatchEvent = { type: 'CARD_DRAWN', owner, cardId: target, toHand: true };
   return { events: [e], state: apply(state, e, manifest) };
 }
 
@@ -488,9 +508,11 @@ function copyTopEnemyDeckCardToHand(
   const oppDeck = state.deck[oppOwner];
   if (oppDeck.length === 0) return noop(state);
 
-  const topCard = oppDeck[oppDeck.length - 1]; // top = last in array
+  const topCardId = oppDeck[oppDeck.length - 1]; // top = last in array
+  const topCard = getCardRuntime(state, topCardId, manifest);
+  if (!topCard) return noop(state);
   const newId = mintCardId(ctx, 'copy');
-  const ss: SpawnSource = { kind: 'COPY_OF', sourceCardId: topCard.id };
+  const ss: SpawnSource = { kind: 'COPY_OF', sourceCardId: topCardId };
 
   const e: MatchEvent = {
     type: 'CARD_ADDED_TO_HAND',
@@ -510,8 +532,10 @@ function addDiscardedCardToHand(
   if (owner === null) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
-  const discarded = Object.values(state.cards)
-    .filter(c => c.owner === owner && c.zone === 'DISCARD');
+  const discarded = getAllCardIds(state)
+    .map((id) => getCardRuntime(state, id, manifest))
+    .filter((card): card is NonNullable<typeof card> =>
+      card !== null && card.owner === owner && card.zone === 'DISCARD');
   if (discarded.length === 0) return noop(state);
 
   const picked = ctx.rng.fork('pick').pick(discarded);
@@ -549,24 +573,25 @@ function disableOngoingsThisLaneThisTurn(
   let s = state;
   for (const id of allInLane) {
     if (id === sourceId) continue; // don't disable yourself
-    const card = s.cards[id];
+    const card = getCardRuntime(s, id, manifest);
     if (!card) continue;
     // Only disable cards that have an ongoing
-    const def = manifest.cards[card.defId];
-    if ((def?.abilities?.ongoing?.length ?? 0) === 0) continue;
+    if ((card.text.abilities.ongoing?.length ?? 0) === 0) continue;
 
     const alreadyDisabled = card.tags.some(
       t => t.kind === 'ONGOING_DISABLED' && (t as { kind: 'ONGOING_DISABLED'; sourceId: CardId }).sourceId === sourceId,
     );
     if (alreadyDisabled) continue;
 
-    const e: MatchEvent = {
-      type: 'CARD_TAG_ADDED',
-      cardId: id,
-      tag: { kind: 'ONGOING_DISABLED', sourceId },
-    };
-    events.push(e);
-    s = apply(s, e, manifest);
+    const mutation = addCardTag(
+      s,
+      id,
+      { kind: 'ONGOING_DISABLED', sourceId },
+      ctx.source,
+      manifest,
+    );
+    events.push(...mutation.events);
+    s = mutation.state;
   }
   return { events, state: s };
 }
@@ -602,7 +627,7 @@ function securityDetail(
   const sourceId = ctx.self as CardId;
   if (owner === null || lane === null || !sourceId) return noop(state);
   const sourcePower = getPermanentCardPower(state, sourceId, manifest);
-  const guardBasePower = manifest.cards['guard']?.basePower ?? sourcePower;
+  const guardBasePower = getCardTemplate(manifest, 'guard')?.basePower ?? sourcePower;
 
   const events: MatchEvent[] = [];
   let s = state;
@@ -631,20 +656,15 @@ function recklessRecruiter(
 
   const events: MatchEvent[] = [];
   let s = state;
-  for (const card of state.deck[owner]) {
-    const giveCost = ctx.rng.fork(`recruit:${card.id}`).int(0, 1) === 0;
-    if (!giveCost && !isPowerBearingCard(state, card.id, manifest)) continue;
+  for (const cardId of state.deck[owner]) {
+    const giveCost = ctx.rng.fork(`recruit:${cardId}`).int(0, 1) === 0;
+    if (!giveCost && !isPowerBearingCard(state, cardId, manifest)) continue;
     if (giveCost) {
-      const event: MatchEvent = {
-        type: 'CARD_COST_CHANGED',
-        cardId: card.id,
-        delta: -1,
-        cause: ctx.source,
-      };
-      events.push(event);
-      s = apply(s, event, manifest);
+      const mutation = adjustCardCost(s, cardId, -1, ctx.source, manifest);
+      events.push(...mutation.events);
+      s = mutation.state;
     } else {
-      const powerChange = resolveCardPowerAdd(s, card.id, 2, ctx.source, manifest);
+      const powerChange = resolveCardPowerAdd(s, cardId, 2, ctx.source, manifest);
       events.push(...powerChange.events);
       s = powerChange.state;
     }
@@ -672,7 +692,7 @@ function barracadeCheck(
   const self = ctx.self as CardId;
   const lane = ctx.selfLane;
   if (!self || lane === null) return noop(state);
-  const card = state.cards[self];
+  const card = getCardRuntime(state, self, manifest);
   if (!card || card.zone !== 'LANE' || !isPowerBearingCard(state, self, manifest)) return noop(state);
   if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
 
@@ -686,7 +706,7 @@ function leonReturn(
 ): BuiltinResult {
   const self = ctx.self as CardId;
   if (!self) return noop(state);
-  const card = state.cards[self];
+  const card = getCardRuntime(state, self, manifest);
   if (!card || card.zone !== 'LANE') return noop(state);
 
   const events: MatchEvent[] = [];
@@ -699,7 +719,7 @@ function leonReturn(
   };
   events.push(moveEvent);
   s = apply(s, moveEvent, manifest);
-  if (s.cards[self]?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
+  if (getCardRuntime(s, self, manifest)?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
   const delta = (args.delta as number) ?? 2;
   const powerChange = resolveCardPowerAdd(s, self, delta, ctx.source, manifest);
@@ -741,14 +761,14 @@ function corporateClimber(
   const events: MatchEvent[] = [];
   let s = state;
   for (const cardId of victims) {
-    const card = s.cards[cardId];
+    const card = getCardRuntime(s, cardId, manifest);
     if (!card || card.zone !== 'LANE') continue;
     if (card.tags.some(t => t.kind === 'DESTROY_IMMUNE')) continue;
     const destroyEvent: MatchEvent = { type: 'CARD_DESTROYED', cardId, cause: ctx.source };
     events.push(destroyEvent);
     s = apply(s, destroyEvent, manifest);
   }
-  if (gainedPower > 0 && s.cards[self]?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
+  if (gainedPower > 0 && getCardRuntime(s, self, manifest)?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
     const powerChange = resolveCardPowerAdd(s, self, gainedPower, ctx.source, manifest);
     events.push(...powerChange.events);
     s = powerChange.state;
@@ -771,7 +791,7 @@ function traumaTeam(
     const event = entry.event as MatchEvent;
     if (event.type === 'TURN_STARTED') turn = event.turn;
     if (event.type === 'CARD_DESTROYED' && turn === state.turn - 1) {
-      const card = state.cards[event.cardId];
+      const card = getCardRuntime(state, event.cardId, manifest);
       if (card?.owner === owner && card.zone === 'DESTROYED') destroyedLastTurn.push(event.cardId);
     }
   }
@@ -804,11 +824,11 @@ function socialWorker(
   const events: MatchEvent[] = [];
   let s = state;
   for (const cardId of targets) {
-    const card = s.cards[cardId];
+    const card = getCardRuntime(s, cardId, manifest);
     if (!card) continue;
     const currentCost = getCardCost(s, cardId, manifest);
-    const candidates = Object.values(manifest.cards)
-      .filter(def => def.cardType === 'character' && def.cost === currentCost + 1)
+    const candidates = getAllCardTemplates(manifest)
+      .filter(def => def.domain === 'character' && def.baseCost === currentCost + 1)
       .map(def => def.defId);
     if (candidates.length === 0) continue;
     const newDefId = ctx.rng.fork(`social:${cardId}`).pick(candidates);
@@ -909,6 +929,10 @@ const REGISTRY = new Map<string, BuiltinHandler>([
   ['SOCIAL_WORKER',                    socialWorker],
   ['RIFF_RAFF',                        riffRaff],
 ]);
+
+export function registeredBuiltinNames(): readonly string[] {
+  return [...REGISTRY.keys()].sort();
+}
 
 export function invokeBuiltin(
   state: MatchState,

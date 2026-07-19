@@ -30,6 +30,59 @@ export { createRng } from './rng';
 export { apply, applyFramed } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
+export { getFinalTurn } from './projections/gameEnd';
+export {
+  getCurrentCard,
+  getAllCardIds,
+  getCardDomain,
+  getCardLifecycle,
+  getCardRuntime,
+  getCardsInZone,
+  getCurrentCardAbilityEffects,
+  getCurrentCardAbilityLabels,
+  getEffectiveCardText,
+  getAllCardTemplates,
+  getCardTemplate,
+  getCardTemplateAbilityLabels,
+  getCardTemplateDomain,
+  CARD_ABILITY_LABEL_BY_SLOT,
+  CARD_ABILITY_SLOTS,
+  getCardAbilityLabels,
+  getAllLocationIds,
+  getAllLocationTemplates,
+  getLocationAbilityLabels,
+  getLocationLifecycle,
+  getLocationRuntime,
+  getLocationTemplate,
+  type CardAbilityLabel,
+  type CardAbilitySlot,
+  type CardLifecycle,
+  type CardLifecycleOccurrence,
+  type CardRuntime,
+  type CardTemplate,
+  type CurrentCard,
+  type CurrentCardPosition,
+  type EffectiveCardText,
+  type CurrentLocationPosition,
+  type LocationAbilityLabel,
+  type LocationAbilitySlot,
+  type LocationLifecycle,
+  type LocationLifecycleOccurrence,
+  type LocationRuntime,
+  type LocationTemplate,
+} from './projections';
+export {
+  addCardTag,
+  adjustCardCost,
+  adjustCardPower,
+  changeCardCounter,
+  removeCardTag,
+  replaceCardText,
+  resetCardPower,
+  setCardCost,
+  setCardPower,
+  type CardMutationResult,
+} from './operations/cardMutations';
 export {
   activeLaneIds,
   addLocationTag,
@@ -87,7 +140,13 @@ export type {
 } from './transactionTimeline';
 
 // ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
-export { revealPlayedCard, forceRevealPlayedCard, triggerOnReveal, evalEffect, MAX_REVEAL_RECURSION } from './effects/evaluator';
+export {
+  revealPlayedCard,
+  revealPlayedCardAtEndOfGame,
+  triggerOnReveal,
+  evalEffect,
+  MAX_REVEAL_RECURSION,
+} from './effects/evaluator';
 
 // ---- CLI (headless match driver) -----------------------------------------
 export {

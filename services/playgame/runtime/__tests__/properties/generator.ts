@@ -1,3 +1,4 @@
+import { getCardState } from '../../../engine/projections/cardRuntime';
 import {
   BOOTSTRAP_MANIFEST,
   apply,
@@ -126,13 +127,13 @@ function acceptedStageIntents(
   manifest: Manifest,
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
-  for (const card of state.hand[owner]) {
+  for (const cardId of state.hand[owner]) {
     for (const lane of LANES) {
       const intent: MatchIntent = {
         type: 'STAGE_CARD',
-        intentId: `property-${intentIndex}-${owner}-${card.id}-${lane}`,
+        intentId: `property-${intentIndex}-${owner}-${cardId}-${lane}`,
         owner,
-        cardId: card.id,
+        cardId,
         lane,
       };
       const events = resolve(
@@ -156,7 +157,7 @@ function acceptedUnstageIntents(
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
   for (const cardId of state.stagingOrder) {
-    if (state.cards[cardId]?.owner !== owner) continue;
+    if (getCardState(state, cardId)!?.owner !== owner) continue;
     const intent: MatchIntent = {
       type: 'UNSTAGE_CARD',
       intentId: `property-${intentIndex}-${owner}-unstage-${cardId}`,
@@ -184,7 +185,7 @@ function chooseLegalAction(
 ): MatchIntent | null {
   const stages = acceptedStageIntents(state, owner, intentIndex, matchSeed, manifest);
   const unstages = acceptedUnstageIntents(state, owner, intentIndex, matchSeed, manifest);
-  const hasStagedCard = state.stagingOrder.some((cardId) => state.cards[cardId]?.owner === owner);
+  const hasStagedCard = state.stagingOrder.some((cardId) => getCardState(state, cardId)!?.owner === owner);
   const undo: MatchIntent | null = hasStagedCard
     ? {
         type: 'UNDO_TURN',

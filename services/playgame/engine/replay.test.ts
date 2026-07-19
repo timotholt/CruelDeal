@@ -1,3 +1,4 @@
+import { getCardState } from './projections/cardRuntime';
 import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { runMatch } from './cli/runMatch';
 import { exportReplayBundle, replayMatch, validateReplayBundle } from './replay';
@@ -68,7 +69,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   }, locationDeck);
   const initialState = setup.genesis;
   const initialSnapshot = clone(initialState);
-  const cardId = initialState.deck.P0[0].id;
+  const cardId = initialState.deck.P0[0];
   const draw: MatchEvent = { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true };
   const finalState = apply(setup.state, draw, BOOTSTRAP_MANIFEST);
   const replayed = replayMatch({
@@ -77,7 +78,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     initialState,
     framedEvents: framedEvents(finalState),
   });
-  eq(replayed.initialState.cards[cardId]!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
+  eq(getCardState(replayed.initialState, cardId)!!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
   eq(replayed.finalState, finalState, 'replayMatch: supplied initial state reaches expected final state');
   eq(initialState, initialSnapshot, 'apply/replayMatch: supplied initial state remains unmutated');
 }

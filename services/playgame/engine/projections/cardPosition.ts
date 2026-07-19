@@ -2,14 +2,14 @@ import type {
   CardBoardPosition,
   CardPositionCriteria,
 } from '../types/cardPosition';
-import type { CardInstance, MatchState } from '../types/state';
+import type { InternalCardRecord, MatchState } from '../types/state';
 
 const arrayOrOne = <T>(value: T | readonly T[]): readonly T[] =>
   Array.isArray(value) ? value as readonly T[] : [value as T];
 
 /** Resolve a live lane card's owner-relative 2×2 position. */
 export function getCardBoardPosition(
-  card: CardInstance,
+  card: InternalCardRecord,
   state: MatchState,
 ): CardBoardPosition | null {
   if (card.zone !== 'LANE' || card.lane === null) return null;
@@ -28,11 +28,17 @@ export function getCardBoardPosition(
 }
 
 export function matchesCardPosition(
-  card: CardInstance,
+  card: InternalCardRecord,
   state: MatchState,
   criteria: CardPositionCriteria,
 ): boolean {
-  const position = getCardBoardPosition(card, state);
+  return matchesBoardPosition(getCardBoardPosition(card, state), criteria);
+}
+
+export function matchesBoardPosition(
+  position: CardBoardPosition | null,
+  criteria: CardPositionCriteria,
+): boolean {
   if (!position) return false;
 
   if (criteria.slot !== undefined &&

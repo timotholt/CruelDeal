@@ -45,11 +45,26 @@ describe('Cruel Deal protocol v1 TypeScript validator', () => {
         type: 'LOCATION_DESTROYED',
         lane: 0,
         locationId: 'location-0',
-        cause: { sourceId: 'rules', effectKind: 'SYSTEM' },
+        cause: { sourceId: 'rules', effectKind: 'SYSTEM', reason: 'TEST' },
       },
     });
 
     expect(result.ok).toBe(false);
+  });
+
+  it('accepts a reveal scheduling event at the runtime boundary', () => {
+    const result = validateFramedEventWire({
+      frame: 1,
+      scope: { turn: 1, phase: 'ACTION' },
+      event: {
+        type: 'CARD_REVEAL_SCHEDULED',
+        cardId: 'card-0',
+        timing: { kind: 'END_OF_GAME' },
+        cause: { sourceId: 'cryobank-0', effectKind: 'LOCATION', reason: 'TEST' },
+      },
+    });
+
+    expect(result.ok).toBe(true);
   });
 
   it('throws a typed boundary error from the assertion API', () => {

@@ -1,5 +1,11 @@
 import { createSignal } from 'solid-js';
 import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import {
+  getCardRuntime,
+  getCardTemplate,
+  getLocationTemplate,
+} from '@/services/playgame/engine/projections';
+import type { CardId } from '@/services/playgame/engine/types/ids';
 import { usePlayGame } from '@/contexts/PlayGameContext';
 
 interface LanePowerPanelProps {
@@ -13,14 +19,13 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
   let panelRef: HTMLDivElement | undefined;
 
   const resolveName = (sourceId: string): string => {
-    const card = engineState.cards[sourceId as never];
+    const card = getCardRuntime(engineState, sourceId as CardId, manifest);
     if (card) {
-      const def = manifest.cards[card.defId];
-      return def?.cosmetic.displayName ?? card.defId;
+      return getCardTemplate(manifest, card.defId)?.name ?? card.defId;
     }
     const defId = sourceId.split('@')[0];
-    const locDef = manifest.locations[defId];
-    if (locDef) return locDef.cosmetic.displayName;
+    const location = getLocationTemplate(manifest, defId);
+    if (location) return location.name;
     return sourceId;
   };
 

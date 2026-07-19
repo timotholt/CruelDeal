@@ -1,6 +1,7 @@
 import type { CardDef, Manifest } from '../manifest/types';
 import type { CardId } from '../types/ids';
 import type { MatchState } from '../types/state';
+import { getCardDomain } from './cardRuntime';
 
 /** Spells resolve effects, but never participate in card-power rules. */
 export function isPowerBearingDef(def: CardDef | undefined): def is CardDef {
@@ -13,6 +14,6 @@ export function isPowerBearingCard(
   cardId: CardId,
   manifest: Manifest,
 ): boolean {
-  const card = state.cards[cardId];
-  return !!card && isPowerBearingDef(manifest.cards[card.defId]);
+  const domain = getCardDomain(state, cardId, manifest);
+  return domain !== null && domain !== 'spell';
 }

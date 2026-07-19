@@ -9,8 +9,8 @@
  *     `INTENT_REJECTED` entry when the intent is invalid.
  *   - `resolveTurn` is the full turn-end cascade: flip priority-ordered
  *     reveals, run OR evaluators, reveal next location, refill energy,
- *     draw, and emit `TURN_ENDED`/`TURN_STARTED` bookends. At turn 6 it
- *     emits `MATCH_ENDED` instead of restarting.
+ *     draw, and emit `TURN_ENDED`/`TURN_STARTED` bookends. On the live final
+ *     turn it emits `MATCH_ENDED` instead of restarting.
  *
  * See spec §7 and §6.1.
  */
@@ -22,15 +22,28 @@ import type { CardId, LaneId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
-import { revealPlayedCard, forceRevealPlayedCard, evalEffect, fireLocationTrigger, applyHandEntryDebuffs, type EffectCtx } from './effects/evaluator';
+import {
+  revealPlayedCard,
+  revealPlayedCardAtEndOfGame,
+  evalEffect,
+  fireLocationTrigger,
+  applyHandEntryDebuffs,
+  type EffectCtx,
+} from './effects/evaluator';
 import { getCardCost } from './projections/cost';
 import { getCardPower, getLanePower } from './projections/power';
-import { isRevealDelayed } from './projections/reveal';
+import { getFinalTurn } from './projections/gameEnd';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { buildCardDrawEvents } from './draw';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 import { revealLocation } from './locationLifecycle';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from './projections/cardRuntime';
+import { getCardTemplate } from './projections/cardTemplate';
+import { getLocationRuntime } from './projections/locationRuntime';
 
 // ============================================================================
 // resolve — intent → events
@@ -71,11 +84,11 @@ function resolveStage(
   rng: Rng,
   manifest: Manifest,
 ): MatchEvent[] {
-  const card = state.cards[intent.cardId];
+  const card = getCardRuntime(state, intent.cardId, manifest);
   if (!card) return reject(intent.intentId, `unknown card ${intent.cardId}`);
   if (card.owner !== intent.owner) return reject(intent.intentId, 'card owner mismatch');
   if (card.zone !== 'HAND') return reject(intent.intentId, 'card not in hand');
-  const def = manifest.cards[card.defId];
+  const def = getCardTemplate(manifest, card.defId);
   if (!def) return reject(intent.intentId, `unknown defId ${card.defId}`);
 
   const lane = state.lanesById[intent.lane];
@@ -132,7 +145,7 @@ function resolveUnstage(
   intent: Extract<MatchIntent, { type: 'UNSTAGE_CARD' }>,
   manifest: Manifest,
 ): MatchEvent[] {
-  const card = state.cards[intent.cardId];
+  const card = getCardRuntime(state, intent.cardId, manifest);
   if (!card) return reject(intent.intentId, `unknown card ${intent.cardId}`);
   if (card.owner !== intent.owner) return reject(intent.intentId, 'card owner mismatch');
   if (card.revealed) return reject(intent.intentId, 'cannot unstage a revealed card');
@@ -155,12 +168,12 @@ function resolveUndoTurn(
   // Iterate in REVERSE stage order so each unstage's lane-capacity
   // precondition stays satisfied during replay.
   const mine = state.stagingOrder
-    .filter(id => state.cards[id]?.owner === intent.owner)
+    .filter(id => getCardRuntime(state, id, manifest)?.owner === intent.owner)
     .slice()
     .reverse();
   const events: MatchEvent[] = [];
   for (const id of mine) {
-    const card = state.cards[id];
+    const card = getCardRuntime(state, id, manifest);
     if (!card) continue;
     events.push({ type: 'CARD_UNSTAGED', intentId: intent.intentId, cardId: id });
     events.push({
@@ -194,17 +207,17 @@ function resolveConcede(
 // resolveTurn — full turn cascade
 // ============================================================================
 
-function hasPowerGainDrawTrigger(def: { abilities: import('./manifest/types').CardAbilities } | null | undefined): boolean {
-  if (!def) return false;
+function hasPowerGainDrawTrigger(abilities: import('./manifest/types').CardAbilities | null | undefined): boolean {
+  if (!abilities) return false;
   const has = (list: readonly import('./types/ability').EffectExpr[] | undefined) =>
     (list ?? []).some(e => (e as any).kind === 'CALL_BUILTIN' && (e as any).fn === 'DRAW_ON_POWER_GAIN');
-  return has(def.abilities.onReveal)
-    || has(def.abilities.onEndOfTurn)
-    || has(def.abilities.onTurnStart)
-    || has(def.abilities.onDestroyed)
-    || has(def.abilities.onMove)
-    || has(def.abilities.onDiscarded)
-    || has(def.abilities.onAnyCardPlayedHere);
+  return has(abilities.onReveal)
+    || has(abilities.onEndOfTurn)
+    || has(abilities.onTurnStart)
+    || has(abilities.onDestroyed)
+    || has(abilities.onMove)
+    || has(abilities.onDiscarded)
+    || has(abilities.onAnyCardPlayedHere);
 }
 
 export interface ResolveTurnResult {
@@ -222,26 +235,9 @@ export function resolveTurn(
 
   // ─── Phase 1  Reveals (priority-ordered) ─────────────────────────────────
   // Priority holder's cards flip first, in stage order; then the other side.
-  const priorityOwner = s.priority;
-  const order: Owner[] = priorityOwner === 'P0' ? ['P0', 'P1'] : ['P1', 'P0'];
-  for (const owner of order) {
-    const mine = s.stagingOrder.filter(id => s.cards[id]?.owner === owner);
-    for (const cardId of mine) {
-      const card = s.cards[cardId];
-      if (
-        !card
-        || card.zone !== 'LANE'
-        || card.lane === null
-        || !isActiveLane(s, card.lane)
-      ) {
-        continue;
-      }
-      const subRng = rng.fork(`reveal:${owner}:${cardId}`);
-      const res = revealPlayedCard(s, cardId, manifest, subRng);
-      events.push(...res.events);
-      s = res.state;
-    }
-  }
+  const turnReveals = revealScheduledCards(s, manifest, rng.fork('turn-reveals'), 'TURN');
+  events.push(...turnReveals.events);
+  s = turnReveals.state;
 
   // ─── END-OF-TURN BOOKKEEPING ─────────────────────────────────────────────
   // Finish the current turn BEFORE checking for a winner. End-of-turn
@@ -260,10 +256,9 @@ export function resolveTurn(
       for (const owner of ['P0', 'P1'] as const) {
         const ids = s.lanesById[lane].cards[owner];
         for (const id of ids) {
-          const card = s.cards[id];
+          const card = getCardRuntime(s, id, manifest);
           if (!card || !card.revealed) continue;
-          const def = manifest.cards[card.defId];
-          const effs = def?.abilities.onEndOfTurn;
+          const effs = card.text.abilities.onEndOfTurn;
           if (!effs || effs.length === 0) continue;
           triggerFires.push({ cardId: id, effects: effs });
         }
@@ -272,7 +267,7 @@ export function resolveTurn(
     for (let i = 0; i < triggerFires.length; i++) {
       const { cardId, effects: effs } = triggerFires[i];
       for (let j = 0; j < effs.length; j++) {
-        const card = s.cards[cardId];
+        const card = getCardRuntime(s, cardId, manifest);
         if (!card) break; // destroyed by a previous trigger this phase
         const subCtx: EffectCtx = {
           state: s,
@@ -282,7 +277,12 @@ export function resolveTurn(
           selfLane: card.lane,
           selfOwner: card.owner,
           rng: rng.fork(`eot:${cardId}:${j}`),
-          source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+          source: {
+            sourceId: cardId,
+            effectKind: 'ON_REVEAL',
+            exprIdx: j,
+            reason: 'END_OF_TURN',
+          },
           depth: 0,
         };
         const res = evalEffect(s, effs[j], subCtx, manifest);
@@ -328,7 +328,11 @@ export function resolveTurn(
         selfLane: pe.sourceLane,
         selfOwner: pe.sourceOwner,
         rng: rng.fork(`scheduled-end:${pe.sourceId}:${i}`),
-        source: { sourceId: pe.sourceId, effectKind: 'ON_REVEAL' },
+        source: {
+          sourceId: pe.sourceId,
+          effectKind: 'ON_REVEAL',
+          reason: 'SCHEDULED_END_OF_NEXT_TURN',
+        },
         depth: 0,
       };
       const res = evalEffect(s, pe.effect, subCtx, manifest);
@@ -354,10 +358,9 @@ export function resolveTurn(
         e.type !== 'CARD_POWER_CHANGED'
         || getCardPower(scanState, e.cardId, manifest) <= before
       ) continue;
-      const card = s.cards[e.cardId];
+      const card = getCardRuntime(s, e.cardId, manifest);
       if (!card || !card.revealed) continue;
-      const def = manifest.cards[card.defId];
-      if (!hasPowerGainDrawTrigger(def)) continue;
+      if (!hasPowerGainDrawTrigger(card.text.abilities)) continue;
       const draws = buildCardDrawEvents(s, card.owner, 1, manifest);
       for (const drawEvt of draws) {
         events.push(drawEvt);
@@ -373,9 +376,6 @@ export function resolveTurn(
   //          MOVED_THIS_TURN) + stagingOrder. `@migrate:atTurnEnd` is where
   //          location `atTurnEnd` abilities will be dispatched in a later
   //          tier; they must run BEFORE this cleanup event.
-  // Capture stagingOrder BEFORE TURN_ENDED clears it — needed for end-game
-  // ordered reveal of face-down cards.
-  const preCleanupStagingOrder = [...s.stagingOrder];
   const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
   events.push(turnEnded);
   s = apply(s, turnEnded, manifest);
@@ -383,8 +383,8 @@ export function resolveTurn(
   // Phase 3  Winner check — only after all end-of-turn bookkeeping has
   //          settled. If the last turn just finished, the match ends here
   //          and NO start-of-turn bookkeeping runs.
-  if (s.turn >= manifest.constants.turnLimit) {
-    const delayed = revealDelayedCardsAtEndOfGame(s, manifest, rng.fork('endgame-reveal'), preCleanupStagingOrder);
+  if (s.turn >= getFinalTurn(s, manifest)) {
+    const delayed = revealScheduledCards(s, manifest, rng.fork('endgame-reveal'), 'END_OF_GAME');
     events.push(...delayed.events);
     s = delayed.state;
     const result = computeMatchResult(s, manifest);
@@ -490,7 +490,11 @@ export function resolveTurn(
         selfLane: pe.sourceLane,
         selfOwner: pe.sourceOwner,
         rng: rng.fork(`scheduled:${pe.sourceId}:${i}`),
-        source: { sourceId: pe.sourceId, effectKind: 'ON_REVEAL' },
+        source: {
+          sourceId: pe.sourceId,
+          effectKind: 'ON_REVEAL',
+          reason: 'SCHEDULED_START_OF_NEXT_TURN',
+        },
         depth: 0,
       };
       const res = evalEffect(s, pe.effect, subCtx, manifest);
@@ -511,10 +515,9 @@ export function resolveTurn(
       for (const owner of ['P0', 'P1'] as const) {
         const ids = s.lanesById[lane].cards[owner];
         for (const id of ids) {
-          const card = s.cards[id];
+          const card = getCardRuntime(s, id, manifest);
           if (!card || !card.revealed) continue;
-          const def = manifest.cards[card.defId];
-          const effs = def?.abilities.onTurnStart;
+          const effs = card.text.abilities.onTurnStart;
           if (!effs || effs.length === 0) continue;
           triggerFires.push({ cardId: id, effects: effs });
         }
@@ -523,7 +526,7 @@ export function resolveTurn(
     for (let i = 0; i < triggerFires.length; i++) {
       const { cardId, effects: effs } = triggerFires[i];
       for (let j = 0; j < effs.length; j++) {
-        const card = s.cards[cardId];
+        const card = getCardRuntime(s, cardId, manifest);
         if (!card || card.zone !== 'LANE') break;
         const subCtx: EffectCtx = {
           state: s,
@@ -533,7 +536,12 @@ export function resolveTurn(
           selfLane: card.lane,
           selfOwner: card.owner,
           rng: rng.fork(`turn-start:${cardId}:${j}`),
-          source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+          source: {
+            sourceId: cardId,
+            effectKind: 'ON_REVEAL',
+            exprIdx: j,
+            reason: 'TURN_START',
+          },
           depth: 0,
         };
         const res = evalEffect(s, effs[j], subCtx, manifest);
@@ -589,7 +597,7 @@ export function resolveTurn(
       const reveal = revealLocation(s, laneId, {
         sourceId: loc.id,
         effectKind: 'SYSTEM',
-        systemReason: 'TURN_START_LOCATION_REVEAL',
+        reason: 'TURN_START_LOCATION_REVEAL',
       }, manifest);
       if (!reveal.ok) {
         throw new Error(`turn-start location reveal failed: ${reveal.message}`);
@@ -597,8 +605,8 @@ export function resolveTurn(
       events.push(...reveal.events);
       s = reveal.state;
 
-      const locDef = manifest.locations[loc.defId];
-      const locReveal = locDef?.abilities.onReveal ?? [];
+      const location = getLocationRuntime(s, loc.id, manifest);
+      const locReveal = location?.abilities.onReveal ?? [];
       for (let idx = 0; idx < locReveal.length; idx++) {
         const ctx: EffectCtx = {
           state: s,
@@ -608,7 +616,12 @@ export function resolveTurn(
           selfLane: laneId,
           selfOwner: null,
           rng: rng.fork(`location-reveal:${loc.id}:${idx}`),
-          source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: idx },
+          source: {
+            sourceId: loc.id,
+            effectKind: 'LOCATION',
+            exprIdx: idx,
+            reason: 'LOCATION_ON_REVEAL',
+          },
           depth: 0,
         };
         const res = evalEffect(s, locReveal[idx], ctx, manifest);
@@ -654,49 +667,52 @@ function isPlayBlocked(
   return false;
 }
 
-function revealDelayedCardsAtEndOfGame(
+function latestStageIndex(state: MatchState, cardId: CardId): number {
+  for (let index = state.log.length - 1; index >= 0; index--) {
+    const event = state.log[index]?.event as Partial<MatchEvent> | undefined;
+    if (event?.type === 'CARD_STAGED' && event.cardId === cardId) return index;
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function revealScheduledCards(
   state: MatchState,
   manifest: Manifest,
   rng: Rng,
-  stagingOrder: readonly CardId[],
+  window: 'TURN' | 'END_OF_GAME',
 ): ResolveTurnResult {
   const events: MatchEvent[] = [];
   let s = state;
-
-  // Reveal in the order cards were staged (play order), per owner interleaved
-  // as in the reveal phase: priority owner first, then opponent. Fall back to
-  // lane-array order for any face-down cards not in stagingOrder (edge cases).
-  const seenInOrder = new Set<CardId>();
-  const ordered: CardId[] = [];
-
-  // Staged cards in play order
-  for (const id of stagingOrder) {
-    const card = s.cards[id];
-    if (!card || card.zone !== 'LANE' || card.revealed) continue;
-    if (!isRevealDelayed(s, id, manifest)) continue;
-    ordered.push(id);
-    seenInOrder.add(id);
-  }
-
-  // Any remaining face-down lane cards not captured by stagingOrder (e.g.
-  // effect-spawned with DELAY_REVEAL), in lane-array order.
-  for (const owner of ['P0', 'P1'] as const) {
-    for (const lane of activeLaneIds(s)) {
-      for (const id of s.lanesById[lane].cards[owner]) {
-        if (seenInOrder.has(id)) continue;
-        const card = s.cards[id];
-        if (!card || card.zone !== 'LANE' || card.revealed) continue;
-        if (!isRevealDelayed(s, id, manifest)) continue;
-        ordered.push(id);
-        seenInOrder.add(id);
-      }
+  const due = getAllCardIds(s)
+    .map((id) => getCardRuntime(s, id, manifest))
+    .filter((card): card is NonNullable<typeof card> => card !== null)
+    .filter((card) => {
+    if (
+      card.zone !== 'LANE'
+      || card.lane === null
+      || card.revealed
+      || !isActiveLane(s, card.lane)
+    ) return false;
+    if (window === 'END_OF_GAME') {
+      return card.revealTiming?.kind === 'END_OF_GAME'
+        || (card.revealTiming?.kind === 'TURN' && card.revealTiming.turn <= s.turn);
     }
-  }
+    return card.revealTiming?.kind === 'TURN' && card.revealTiming.turn <= s.turn;
+    });
+  const ownerOrder: readonly Owner[] = s.priority === 'P0' ? ['P0', 'P1'] : ['P1', 'P0'];
+  const ordered = ownerOrder.flatMap((owner) =>
+    due
+      .filter((card) => card.owner === owner)
+      .sort((a, b) => latestStageIndex(s, a.id) - latestStageIndex(s, b.id))
+      .map((card) => card.id),
+  );
 
   for (const id of ordered) {
-    const card = s.cards[id];
+    const card = getCardRuntime(s, id, manifest);
     if (!card) continue; // may have been destroyed by a prior reveal
-    const res = forceRevealPlayedCard(s, id, manifest, rng.fork(`delayed:${id}`));
+    const res = window === 'END_OF_GAME'
+      ? revealPlayedCardAtEndOfGame(s, id, manifest, rng.fork(`end-game:${id}`))
+      : revealPlayedCard(s, id, manifest, rng.fork(`turn:${id}`));
     events.push(...res.events);
     s = res.state;
   }

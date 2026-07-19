@@ -26,7 +26,7 @@ const eq = <T>(actual: T, expected: T, label: string) => {
   else fail(label, { actual, expected });
 };
 
-const source: EffectRef = { sourceId: 'sys' as CardId, effectKind: 'SYSTEM' };
+const source: EffectRef = { sourceId: 'sys' as CardId, effectKind: 'SYSTEM', reason: 'TEST' };
 const event = <T extends MatchEvent>(e: T): T => e;
 
 const stateWithHandCard = () => {
@@ -36,7 +36,7 @@ const stateWithHandCard = () => {
     {},
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
-  const cardId = s.deck.P0[0].id;
+  const cardId = s.deck.P0[0];
   const draw = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
   s = apply(s, draw, BOOTSTRAP_MANIFEST);
   return { state: s, cardId };
@@ -49,7 +49,7 @@ const stateWithHandCard = () => {
     {},
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
-  const cardId = s0.deck.P0[0].id;
+  const cardId = s0.deck.P0[0];
   const e = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(s0, e, s1);

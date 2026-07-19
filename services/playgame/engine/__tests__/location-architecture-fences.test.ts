@@ -111,7 +111,10 @@ describe('Phase 1.2 location architecture fences', () => {
     expect(violations(
       productionFiles,
       /Object\.(?:values|keys|entries)\(manifest\.locations\)/,
-      new Set(['runtime/locationDeckFactory.ts']),
+      new Set([
+        'engine/manifest/implementationAudit.ts',
+        'engine/projections/locationTemplate.ts',
+      ]),
     )).toEqual([]);
   });
 

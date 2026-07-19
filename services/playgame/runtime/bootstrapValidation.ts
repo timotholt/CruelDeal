@@ -1,5 +1,7 @@
 import type { Deck, Manifest, MatchRuleset } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
+import { getCardTemplate } from '../engine/projections/cardTemplate';
+import { getLocationTemplate } from '../engine/projections/locationTemplate';
 import { validateMatchBootstrapWire } from '../protocol';
 import type {
   LocationCardDeckEntry,
@@ -145,14 +147,14 @@ function validateDeckContents(
   const counts = new Map<string, number>();
 
   deck.entries.forEach((entry, entryIndex) => {
-    const def = manifest.cards[entry.defId];
+    const def = getCardTemplate(manifest, entry.defId);
     if (!def) {
       issues.push({
-        code: manifest.locations[entry.defId]
+        code: getLocationTemplate(manifest, entry.defId)
           ? 'LOCATION_CARD_IN_PLAYER_DECK'
           : 'UNKNOWN_CARD_DEFINITION',
         path: `${path}.${entryIndex}.defId`,
-        message: manifest.locations[entry.defId]
+        message: getLocationTemplate(manifest, entry.defId)
           ? `location card definition "${entry.defId}" cannot enter player deck ${seat}`
           : `unknown card definition "${entry.defId}"`,
         seat,
@@ -170,9 +172,7 @@ function validateDeckContents(
       });
     }
     if (entry.variantId !== undefined) {
-      const variantExists = def.cosmetic.variants?.some(
-        (variant) => variant.variantId === entry.variantId,
-      ) ?? false;
+      const variantExists = def.variantIds.includes(entry.variantId);
       if (!variantExists) {
         issues.push({
           code: 'UNKNOWN_CARD_VARIANT',
@@ -248,14 +248,14 @@ function validateLocationDeckContents(
   const counts = new Map<string, number>();
 
   deck.entries.forEach((entry, entryIndex) => {
-    const definition = manifest.locations[entry.defId];
+    const definition = getLocationTemplate(manifest, entry.defId);
     if (!definition) {
       issues.push({
-        code: manifest.cards[entry.defId]
+        code: getCardTemplate(manifest, entry.defId)
           ? 'PLAYER_CARD_IN_LOCATION_DECK'
           : 'UNKNOWN_LOCATION_DEFINITION',
         path: `${path}.${entryIndex}.defId`,
-        message: manifest.cards[entry.defId]
+        message: getCardTemplate(manifest, entry.defId)
           ? `player card definition "${entry.defId}" cannot enter the location deck`
           : `unknown location card definition "${entry.defId}"`,
         entryIndex,

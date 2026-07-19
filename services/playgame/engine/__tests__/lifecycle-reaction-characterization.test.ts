@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { evalEffect, type EffectCtx } from '../effects/evaluator';
@@ -13,7 +14,7 @@ import {
 import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId, LaneId, Owner } from '../types/ids';
-import type { CardInstance, MatchState } from '../types/state';
+import type { InternalCardRecord, MatchState } from '../types/state';
 import { asFrame } from '../types/timeline';
 import { getStoredCardPowerDelta } from '../powerLedger';
 
@@ -71,9 +72,9 @@ function card(
   id: string,
   defId: string,
   owner: Owner,
-  zone: CardInstance['zone'],
+  zone: InternalCardRecord['zone'],
   lane: LaneId | null = null,
-): CardInstance {
+): InternalCardRecord {
   return {
     id: id as CardId,
     defId,
@@ -82,11 +83,13 @@ function card(
     lane,
     zone,
     revealed: zone === 'LANE',
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
   };
@@ -123,7 +126,7 @@ function manifest(
 }
 
 function stateWith(
-  cards: readonly CardInstance[],
+  cards: readonly InternalCardRecord[],
   options: {
     readonly turn?: number;
     readonly energy?: number;
@@ -156,12 +159,12 @@ function stateWith(
     },
     cards: cardsById,
     hand: {
-      P0: cards.filter(instance => instance.zone === 'HAND' && instance.owner === 'P0'),
-      P1: cards.filter(instance => instance.zone === 'HAND' && instance.owner === 'P1'),
+      P0: cards.filter(instance => instance.zone === 'HAND' && instance.owner === 'P0').map(instance => instance.id),
+      P1: cards.filter(instance => instance.zone === 'HAND' && instance.owner === 'P1').map(instance => instance.id),
     },
     deck: {
-      P0: cards.filter(instance => instance.zone === 'DECK' && instance.owner === 'P0'),
-      P1: cards.filter(instance => instance.zone === 'DECK' && instance.owner === 'P1'),
+      P0: cards.filter(instance => instance.zone === 'DECK' && instance.owner === 'P0').map(instance => instance.id),
+      P1: cards.filter(instance => instance.zone === 'DECK' && instance.owner === 'P1').map(instance => instance.id),
     },
     lanesById: testLaneRegistry([
       laneState(0),
@@ -184,7 +187,7 @@ function stateWith(
 function effectCtx(
   state: MatchState,
   gameManifest: Manifest,
-  source: CardInstance,
+  source: InternalCardRecord,
   eventCard?: CardId,
 ): EffectCtx {
   return {
@@ -194,8 +197,8 @@ function effectCtx(
     selfKind: 'card',
     selfLane: source.lane,
     selfOwner: source.owner,
-    ...(eventCard ? { eventCard, eventOwner: state.cards[eventCard]?.owner ?? null } : {}),
-    source: { sourceId: source.id, effectKind: 'ON_REVEAL' },
+    ...(eventCard ? { eventCard, eventOwner: getCardState(state, eventCard)!?.owner ?? null } : {}),
+    source: { sourceId: source.id, effectKind: 'ON_REVEAL', reason: 'TEST' },
     rng: createRng(`characterize:${source.id}`),
     depth: 0,
   };
@@ -204,7 +207,7 @@ function effectCtx(
 function evaluate(
   state: MatchState,
   gameManifest: Manifest,
-  source: CardInstance,
+  source: InternalCardRecord,
   effect: EffectExpr,
   eventCard?: CardId,
 ) {
@@ -269,7 +272,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_UNSTAGED',
       'ENERGY_CHANGED',
     ]);
-    expect(unstaged.cards[stagedCard.id]).toMatchObject({
+    expect(getCardState(unstaged, stagedCard.id)!).toMatchObject({
       zone: 'HAND',
       lane: null,
     });
@@ -308,7 +311,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[mover.id]).toMatchObject({ lane: 1 });
+    expect(getCardState(generic.state, mover.id)!).toMatchObject({ lane: 1 });
     expect(getStoredCardPowerDelta(generic.state, mover.id, gameManifest)).toBe(3);
 
     let builtinState = stateWith([mover], {
@@ -325,7 +328,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     builtinState = builtin.state;
 
     expect(builtin.events.map(event => event.type)).toEqual(['CARD_MOVED']);
-    expect(builtinState.cards[mover.id]?.lane).not.toBe(0);
+    expect(getCardState(builtinState, mover.id)!?.lane).not.toBe(0);
     expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(0);
   });
 
@@ -361,7 +364,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[victim.id]).toMatchObject({ zone: 'DESTROYED' });
+    expect(getCardState(generic.state, victim.id)!).toMatchObject({ zone: 'DESTROYED' });
     expect(getStoredCardPowerDelta(generic.state, victim.id, gameManifest)).toBe(3);
 
     const climber = card('climber', 'climber', 'P0', 'LANE', 0);
@@ -379,7 +382,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_DESTROYED',
       'CARD_POWER_CHANGED',
     ]);
-    expect(builtin.state.cards[builtinVictim.id]).toMatchObject({
+    expect(getCardState(builtin.state, builtinVictim.id)!).toMatchObject({
       zone: 'DESTROYED',
       powerLedger: [],
     });
@@ -473,7 +476,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_RETURNED_TO_LANE',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[returning.id]).toMatchObject({
+    expect(getCardState(generic.state, returning.id)!).toMatchObject({
       zone: 'LANE',
       lane: 0,
     });
@@ -504,7 +507,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
           event: {
             type: 'CARD_DESTROYED',
             cardId: priorVictim.id,
-            cause: { sourceId: trauma.id, effectKind: 'ON_REVEAL' },
+            cause: { sourceId: trauma.id, effectKind: 'ON_REVEAL', reason: 'TEST' },
           } satisfies MatchEvent,
         },
       ],
@@ -519,7 +522,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(builtin.events.map(event => event.type)).toEqual([
       'CARD_RETURNED_TO_LANE',
     ]);
-    expect(builtin.state.cards[priorVictim.id]).toMatchObject({
+    expect(getCardState(builtin.state, priorVictim.id)!).toMatchObject({
       zone: 'LANE',
       lane: 0,
       powerLedger: [],

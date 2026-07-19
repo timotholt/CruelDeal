@@ -7,7 +7,11 @@ import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import { GENESIS_FRAME, asFrame } from '../engine/types/timeline';
 import { locationCardAtLane } from '../engine/laneTopology';
-import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
+import {
+  orderedTestLocationDeck,
+  removeTestCard,
+  removeTestLocation,
+} from '../engine/testkit/runtimeFixture';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
@@ -20,7 +24,7 @@ const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST,
   P0: [{ defId: 'bone-market' }],
   P1: [{ defId: 'bone-market' }],
 }, orderedTestLocationDeck(BOOTSTRAP_MANIFEST));
-const cardId = state.deck.P0[0].id;
+const cardId = state.deck.P0[0];
 const location = locationCardAtLane(state, 0)!;
 
 const step = (event: MatchEvent): ReplayStep => ({
@@ -55,7 +59,7 @@ describe('replay debug presentation', () => {
     expect(names.cardLabel(state, 'missing-card' as CardId)).toBe('missing-card');
     expect(names.locationLabel(state, 'missing-location' as LocationCardInstanceId)).toBe('missing-location');
 
-    const stateAfterRemoval = {
+    const stateAfterRemoval = removeTestLocation({
       ...state,
       lanesById: {
         ...state.lanesById,
@@ -67,10 +71,7 @@ describe('replay debug presentation', () => {
           },
         },
       },
-      locationCards: Object.fromEntries(
-        Object.entries(state.locationCards).filter(([id]) => id !== location.id),
-      ) as typeof state.locationCards,
-    };
+    }, location.id);
     const historicalNames = createReplayNameResolver([
       ...steps,
       { ...steps[0], state: stateAfterRemoval },
@@ -79,12 +80,7 @@ describe('replay debug presentation', () => {
       `${location.id} (${BOOTSTRAP_MANIFEST.locations[location.defId].name})`,
     );
 
-    const stateAfterCardRemoval = {
-      ...state,
-      cards: Object.fromEntries(
-        Object.entries(state.cards).filter(([id]) => id !== cardId),
-      ) as typeof state.cards,
-    };
+    const stateAfterCardRemoval = removeTestCard(state, cardId);
     const historicalCardNames = createReplayNameResolver([
       ...steps,
       { ...steps[0], state: stateAfterCardRemoval },
@@ -98,7 +94,7 @@ describe('replay debug presentation', () => {
       type: 'CARD_POWER_CHANGED',
       cardId,
       mutation: { kind: 'ADD', delta: 2 },
-      cause: { sourceId: cardId, effectKind: 'ON_REVEAL' },
+      cause: { sourceId: cardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     };
     const snapshot = structuredClone(event);
 
@@ -113,7 +109,7 @@ describe('replay debug presentation', () => {
       type: 'CARD_POWER_CHANGED',
       cardId,
       mutation: { kind: 'ADD', delta: 1 },
-      cause: { sourceId: cardId, effectKind: 'ONGOING' },
+      cause: { sourceId: cardId, effectKind: 'ONGOING', reason: 'TEST' },
     }), names)).toBe('caused by Bone Market (P0)');
 
     expect(describeReplayCause(step({
@@ -124,33 +120,33 @@ describe('replay debug presentation', () => {
       newDefId: 'ruin',
       oldDestination: 'DESTROYED',
       revealPolicy: 'REVEAL_IMMEDIATELY',
-      cause: { sourceId: location.id, effectKind: 'LOCATION' },
+      cause: { sourceId: location.id, effectKind: 'LOCATION', reason: 'TEST' },
     }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
 
     expect(describeReplayCause(step({
       type: 'CARD_BANISHED',
       cardId,
-      cause: { sourceId: cardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
+      cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'SPELL_RESOLVED' },
     }), names)).toBe('caused by Bone Market (P0) resolving under the game rules');
 
     expect(describeReplayCause(step({
       type: 'CARD_BANISHED',
       cardId,
-      cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', systemReason: 'ROUND_CLEANUP' },
+      cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', reason: 'ROUND_CLEANUP' },
     }), names)).toBe('caused by game rules: Round cleanup');
 
     const locationJson = annotateReplayEventJson(step({
       type: 'CARD_COST_CHANGED',
       cardId,
       delta: -1,
-      cause: { sourceId: location.id, effectKind: 'LOCATION' },
+      cause: { sourceId: location.id, effectKind: 'LOCATION', reason: 'TEST' },
     }), names);
     expect(locationJson).toContain(`// ${BOOTSTRAP_MANIFEST.locations[location.defId].name}, left lane`);
     expect(describeReplayStep(step({
       type: 'CARD_COST_CHANGED',
       cardId,
       delta: -1,
-      cause: { sourceId: location.id, effectKind: 'LOCATION' },
+      cause: { sourceId: location.id, effectKind: 'LOCATION', reason: 'TEST' },
     }), names, actors).summary).toBe(
       `P0 - Bone Market's cost decreased by 1 - caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}.`,
     );
@@ -165,7 +161,7 @@ describe('replay debug presentation', () => {
       newDefId: 'ruin',
       oldDestination: 'DESTROYED',
       revealPolicy: 'REVEAL_IMMEDIATELY',
-      cause: { sourceId: location.id, effectKind: 'SYSTEM' },
+      cause: { sourceId: location.id, effectKind: 'SYSTEM', reason: 'TEST' },
     }), names, actors).summary).toBe(
       `${BOOTSTRAP_MANIFEST.locations[location.defId].name} was destroyed and replaced by Ruin in the left lane - caused by game rules.`,
     );

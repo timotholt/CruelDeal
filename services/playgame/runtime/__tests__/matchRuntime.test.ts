@@ -1,3 +1,5 @@
+import { getCardCost } from '../../engine/projections/cost';
+import { getAllLocationStates, getLocationState } from '../../engine/projections/locationRuntime';
 import { describe, expect, it } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine';
@@ -83,7 +85,7 @@ function stageEnvelope(
   intentId: string,
   expectedRevision = runtime.revision(),
   seat: Seat = 'P0',
-  cardId: CardId = runtime.state().hand[seat][0].id,
+  cardId: CardId = runtime.state().hand[seat][0],
 ): IntentEnvelope {
   return {
     matchId: 'phase1-runtime-match',
@@ -146,7 +148,7 @@ describe('createMatchRuntime', () => {
     expect(runtime.genesis().hand.P1).toHaveLength(0);
     expect(runtime.genesis().phase).toBe('SETUP');
     expect(runtime.genesis().activeLaneOrder).toEqual([]);
-    expect(runtime.genesis().locationCards).toEqual({});
+    expect(getAllLocationStates(runtime.genesis())).toEqual([]);
     expect(runtime.state().hand.P0).toHaveLength(openingHandSize);
     expect(runtime.state().hand.P1).toHaveLength(openingHandSize);
     expect(runtime.state().deck.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
@@ -214,7 +216,7 @@ describe('createMatchRuntime', () => {
       currentRevision: initialRevision,
     });
 
-    const cardId = runtime.state().hand.P0[0].id;
+    const cardId = runtime.state().hand.P0[0];
     await expect(runtime.submitIntent(stageEnvelope(runtime, 'first-stage', initialRevision, 'P0', cardId)))
       .resolves.toMatchObject({ status: 'accepted' });
     const afterAcceptedRevision = runtime.revision();
@@ -271,7 +273,7 @@ describe('createMatchRuntime', () => {
       .find((candidate) => {
         const state = candidate.state();
         const id = state.lanesById[0].locationSlot.locationCardId;
-        return id ? state.locationCards[id]?.defId === 'gun-store' : false;
+        return id ? getLocationState(state, id)!?.defId === 'gun-store' : false;
       });
     expect(runtime).toBeDefined();
     if (!runtime) return;
@@ -286,15 +288,16 @@ describe('createMatchRuntime', () => {
 
     const turnBase = structuredClone(runtime.state());
     const transactionCount = runtime.transactions().length;
-    const [firstCard, secondCard] = [...runtime.state().hand.P0].sort((a, b) =>
-      BOOTSTRAP_MANIFEST.cards[a.defId].cost - BOOTSTRAP_MANIFEST.cards[b.defId].cost);
-    expect(firstCard).toBeDefined();
-    expect(secondCard).toBeDefined();
+    const [firstCardId, secondCardId] = [...runtime.state().hand.P0].sort((a, b) =>
+      getCardCost(runtime.state(), a, BOOTSTRAP_MANIFEST)
+      - getCardCost(runtime.state(), b, BOOTSTRAP_MANIFEST));
+    expect(firstCardId).toBeDefined();
+    expect(secondCardId).toBeDefined();
 
-    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-first', runtime.revision(), 'P0', firstCard.id));
+    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-first', runtime.revision(), 'P0', firstCardId));
     expect(getStoredCardPowerDelta(
       runtime.state(),
-      firstCard.id,
+      firstCardId,
       BOOTSTRAP_MANIFEST,
     )).toBe(2);
     await runtime.submitIntent({
@@ -302,21 +305,21 @@ describe('createMatchRuntime', () => {
       seat: 'P0',
       intentId: 'gun-store-second',
       expectedRevision: runtime.revision(),
-      intent: { type: 'STAGE_CARD', cardId: secondCard.id, lane: 1 },
+      intent: { type: 'STAGE_CARD', cardId: secondCardId, lane: 1 },
     });
-    expect(runtime.state().stagingOrder).toEqual([firstCard.id, secondCard.id]);
+    expect(runtime.state().stagingOrder).toEqual([firstCardId, secondCardId]);
 
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'undo-older-suffix',
       expectedRevision: runtime.revision(),
-      intent: { type: 'UNSTAGE_CARD', cardId: firstCard.id },
+      intent: { type: 'UNSTAGE_CARD', cardId: firstCardId },
     });
     expect(runtime.state()).toEqual(turnBase);
     expect(runtime.transactions()).toHaveLength(transactionCount);
 
-    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-restage', runtime.revision(), 'P0', firstCard.id));
+    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-restage', runtime.revision(), 'P0', firstCardId));
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P0',

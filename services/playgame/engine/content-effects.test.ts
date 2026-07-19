@@ -1,3 +1,8 @@
+import {
+  getCardRuntime,
+  getCardsInZone,
+  getCardState,
+} from './projections/cardRuntime';
 /**
  * Authored content effect regression tests.
  *
@@ -19,6 +24,8 @@ import {
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
 import { getStoredCardPowerDelta } from './powerLedger';
+import { getCardCost } from './projections/cost';
+import { getCardTemplate } from './projections/cardTemplate';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -37,6 +44,66 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 const run = (state: MatchState, event: MatchEvent): MatchState =>
   apply(state, event, BOOTSTRAP_MANIFEST);
 const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
+const cardIdInDeck = (
+  state: MatchState,
+  owner: 'P0' | 'P1',
+  defId: string,
+): CardId => {
+  const card = getCardsInZone(state, BOOTSTRAP_MANIFEST, 'DECK', owner)
+    .find(candidate => candidate.defId === defId);
+  if (!card) throw new Error(`missing ${owner} deck card ${defId}`);
+  return card.id;
+};
+
+// ---- Bone Market -----------------------------------------------------------
+
+{
+  let state = createInitialMatchState('content-bone-market', BOOTSTRAP_MANIFEST, {
+    P0: [{ defId: 'bone-market' }, { defId: 'street-kid' }],
+    P1: [],
+  }, locationDeck);
+  const boneMarket = cardIdInDeck(state, 'P0', 'bone-market');
+  const victim = cardIdInDeck(state, 'P0', 'street-kid');
+  for (const cardId of [victim, boneMarket]) {
+    state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
+    state = run(state, {
+      type: 'CARD_STAGED',
+      intentId: `play-${cardId}`,
+      cardId,
+      lane: 0,
+      owner: 'P0',
+      cost: getCardCost(state, cardId, BOOTSTRAP_MANIFEST),
+    });
+  }
+
+  const result = revealPlayedCard(
+    state,
+    boneMarket,
+    BOOTSTRAP_MANIFEST,
+    createRng('content-bone-market'),
+  );
+  const created = result.events.find(event =>
+    event.type === 'CARD_ADDED_TO_HAND');
+  truthy(
+    created?.type === 'CARD_ADDED_TO_HAND',
+    'Bone Market creates a card in hand',
+  );
+  if (created?.type === 'CARD_ADDED_TO_HAND') {
+    const template = getCardTemplate(BOOTSTRAP_MANIFEST, created.defId)!;
+    eq(
+      getCardCost(result.state, created.cardId, BOOTSTRAP_MANIFEST),
+      Math.max(0, template.baseCost - 1),
+      'Bone Market reduces the created card cost by 1',
+    );
+    truthy(
+      result.events.some(event =>
+        event.type === 'CARD_COST_CHANGED'
+        && event.cardId === created.cardId
+        && event.delta === -1),
+      'Bone Market emits a negative cost adjustment',
+    );
+  }
+}
 
 // ---- The Meat Market -------------------------------------------------------
 
@@ -53,14 +120,14 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     'loc-meat-market' as LocationCardInstanceId,
   );
 
-  const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
+  const kid = cardIdInDeck(state, 'P0', 'street-kid');
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-kid', cardId: kid, lane: 0, owner: 'P0', cost: 1 });
 
   const result = revealPlayedCard(state, kid, BOOTSTRAP_MANIFEST, createRng('content-meat-market'));
 
   truthy(result.events.some((event) => event.type === 'CARD_DESTROYED' && event.cardId === kid), 'The Meat Market destroys the first card played here');
-  eq(result.state.cards[kid]?.zone, 'DESTROYED', 'The Meat Market victim zone is DESTROYED');
+  eq(getCardState(result.state, kid)!?.zone, 'DESTROYED', 'The Meat Market victim zone is DESTROYED');
 }
 
 // ---- Meat Grinder ----------------------------------------------------------
@@ -71,7 +138,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [],
   }, locationDeck);
 
-  const grinder = state.deck.P0.find((card) => card.defId === 'grinder-crew')!.id as CardId;
+  const grinder = cardIdInDeck(state, 'P0', 'grinder-crew');
 
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, toHand: true });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-grinder-crew', cardId: grinder, lane: 0, owner: 'P0', cost: 2 });
@@ -88,8 +155,8 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [{ defId: 'drone-pup' }],
   }, locationDeck);
 
-  const grinder = state.deck.P0.find((card) => card.defId === 'meat-grinder')!.id as CardId;
-  const pup = state.deck.P1.find((card) => card.defId === 'drone-pup')!.id as CardId;
+  const grinder = cardIdInDeck(state, 'P0', 'meat-grinder');
+  const pup = cardIdInDeck(state, 'P1', 'drone-pup');
 
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, toHand: true });
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, toHand: true });
@@ -100,7 +167,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const result = revealPlayedCard(state, grinder, BOOTSTRAP_MANIFEST, createRng('content-meat-grinder'));
 
   truthy(result.events.some((event) => event.type === 'CARD_DESTROYED' && event.cardId === pup), 'Meat Grinder destroys enemy 1-cost cards here');
-  eq(result.state.cards[pup]?.zone, 'DESTROYED', 'Meat Grinder enemy victim zone is DESTROYED');
+  eq(getCardState(result.state, pup)!?.zone, 'DESTROYED', 'Meat Grinder enemy victim zone is DESTROYED');
   eq(getStoredCardPowerDelta(result.state, grinder, BOOTSTRAP_MANIFEST), 2, 'Meat Grinder gains +2 per destroyed 1-cost card');
 }
 
@@ -112,9 +179,9 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [],
   }, locationDeck);
 
-  const unionRep = state.deck.P0.find((card) => card.defId === 'union-rep')!.id as CardId;
-  const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
-  const chopDoc = state.deck.P0.find((card) => card.defId === 'chop-doc')!.id as CardId;
+  const unionRep = cardIdInDeck(state, 'P0', 'union-rep');
+  const kid = cardIdInDeck(state, 'P0', 'street-kid');
+  const chopDoc = cardIdInDeck(state, 'P0', 'chop-doc');
 
   for (const cardId of [unionRep, kid, chopDoc]) {
     state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
@@ -128,9 +195,9 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const result = revealPlayedCard(state, chopDoc, BOOTSTRAP_MANIFEST, createRng('content-union-rep'));
 
   truthy(!result.events.some((event) => event.type === 'CARD_DESTROYED'), 'Union Rep blocks friendly card-sourced destroy effects here');
-  eq(result.state.cards[unionRep]?.zone, 'LANE', 'Union Rep remains in lane after blocked destroy');
-  eq(result.state.cards[kid]?.zone, 'LANE', 'Friendly target remains in lane after blocked destroy');
-  eq(result.state.cards[chopDoc]?.zone, 'LANE', 'Destroy source remains in lane after blocked destroy');
+  eq(getCardState(result.state, unionRep)!?.zone, 'LANE', 'Union Rep remains in lane after blocked destroy');
+  eq(getCardState(result.state, kid)!?.zone, 'LANE', 'Friendly target remains in lane after blocked destroy');
+  eq(getCardState(result.state, chopDoc)!?.zone, 'LANE', 'Destroy source remains in lane after blocked destroy');
 }
 
 // ---- Destroyed-card destinations ------------------------------------------
@@ -141,8 +208,8 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [],
   }, locationDeck);
 
-  const parachute = state.deck.P0.find((card) => card.defId === 'golden-parachute')!.id as CardId;
-  const acquisition = state.deck.P0.find((card) => card.defId === 'acquisition-team')!.id as CardId;
+  const parachute = cardIdInDeck(state, 'P0', 'golden-parachute');
+  const acquisition = cardIdInDeck(state, 'P0', 'acquisition-team');
 
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: parachute, toHand: true });
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: acquisition, toHand: true });
@@ -154,8 +221,59 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
   truthy(result.events.some((event) => event.type === 'CARD_DESTROYED' && event.cardId === parachute), 'Acquisition Team destroys Golden Parachute through normal destroy');
   truthy(result.events.some((event) => event.type === 'CARD_ADDED_TO_HAND' && event.defId === 'golden-parachute'), 'Golden Parachute creates a copy in hand after being destroyed');
-  eq(result.state.cards[parachute]?.zone, 'DESTROYED', 'Original Golden Parachute remains in destroyed pile');
-  truthy(result.state.hand.P0.some((card) => card.defId === 'golden-parachute'), 'Created Golden Parachute copy is in hand');
+  eq(getCardState(result.state, parachute)!?.zone, 'DESTROYED', 'Original Golden Parachute remains in destroyed pile');
+  truthy(
+    getCardsInZone(result.state, BOOTSTRAP_MANIFEST, 'HAND', 'P0')
+      .some(card => card.defId === 'golden-parachute'),
+    'Created Golden Parachute copy is in hand',
+  );
+
+  const recipient = getCardRuntime(
+    result.state,
+    acquisition,
+    BOOTSTRAP_MANIFEST,
+  );
+  truthy(
+    (recipient?.text.abilities.onDestroyed?.length ?? 0) > 0,
+    'Acquisition Team keeps the destroyed donor text as an immutable snapshot',
+  );
+  eq(
+    recipient?.textHistory.length,
+    1,
+    'Acquisition Team records one framed text replacement',
+  );
+  truthy(
+    recipient?.textHistory[0]?.frame !== undefined
+      && recipient.textHistory[0].cause.reason.length > 0,
+    'Acquisition Team text history records frame and mutation reason',
+  );
+
+  const copiedTrigger = evalEffect(
+    result.state,
+    { kind: 'DESTROY', target: { kind: 'SELF' } },
+    {
+      state: result.state,
+      manifest: BOOTSTRAP_MANIFEST,
+      self: acquisition,
+      selfKind: 'card',
+      selfLane: 0,
+      selfOwner: 'P0',
+      rng: createRng('content-acquisition-copied-trigger'),
+      source: {
+        sourceId: acquisition,
+        effectKind: 'SYSTEM',
+        reason: 'VERIFY_COPIED_DESTROY_TRIGGER',
+      },
+      depth: 0,
+    },
+    BOOTSTRAP_MANIFEST,
+  );
+  truthy(
+    copiedTrigger.events.some(event =>
+      event.type === 'CARD_ADDED_TO_HAND'
+      && event.defId === 'golden-parachute'),
+    'Acquisition Team executes copied text after the donor no longer exists in play',
+  );
 }
 
 // ---- Junk Packet -----------------------------------------------------------
@@ -166,7 +284,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [{ defId: 'junk-packet' }],
   }, locationDeck);
 
-  const junkPacket = state.deck.P1.find((card) => card.defId === 'junk-packet')!.id as CardId;
+  const junkPacket = cardIdInDeck(state, 'P1', 'junk-packet');
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: junkPacket, toHand: true });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-junk-packet', cardId: junkPacket, lane: 0, owner: 'P1', cost: 1 });
 
@@ -174,7 +292,11 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
   truthy(result.events.some((event) => event.type === 'CARD_ADDED_TO_DECK' && event.owner === 'P0'), 'Junk Packet adds Junk to opponent deck');
   truthy(!result.events.some((event) => event.type === 'CARD_ADDED_TO_HAND'), 'Junk Packet does not add Junk directly to hand');
-  truthy(result.state.deck.P0.some((card) => card.defId === 'junk-card'), 'Junk card is present in opponent deck');
+  truthy(
+    getCardsInZone(result.state, BOOTSTRAP_MANIFEST, 'DECK', 'P0')
+      .some(card => card.defId === 'junk-card'),
+    'Junk card is present in opponent deck',
+  );
 }
 
 // ---- The Pineapple Club ----------------------------------------------------
@@ -192,8 +314,8 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     'loc-pineapple-club' as LocationCardInstanceId,
   );
 
-  const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
-  const pup = state.deck.P1.find((card) => card.defId === 'drone-pup')!.id as CardId;
+  const kid = cardIdInDeck(state, 'P0', 'street-kid');
+  const pup = cardIdInDeck(state, 'P1', 'drone-pup');
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, toHand: true });
 
@@ -210,7 +332,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
       selfLane: 0,
       selfOwner: null,
       rng: createRng(`content-pineapple-club:${idx}`),
-      source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: idx },
+      source: { sourceId: loc.id, effectKind: 'LOCATION', reason: 'TEST', exprIdx: idx },
       depth: 0,
     }, BOOTSTRAP_MANIFEST);
     events.push(...result.events);
@@ -231,8 +353,8 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     P1: [{ defId: 'redline-bruiser' }],
   }, locationDeck);
 
-  const blackIce = state.deck.P0.find((card) => card.defId === 'black-ice')!.id as CardId;
-  const bruiser = state.deck.P1.find((card) => card.defId === 'redline-bruiser')!.id as CardId;
+  const blackIce = cardIdInDeck(state, 'P0', 'black-ice');
+  const bruiser = cardIdInDeck(state, 'P1', 'redline-bruiser');
 
   state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: blackIce, toHand: true });
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: bruiser, toHand: true });
@@ -243,7 +365,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const result = revealPlayedCard(state, blackIce, BOOTSTRAP_MANIFEST, createRng('content-black-ice'));
 
   truthy(result.events.some((event) => event.type === 'CARD_TEXT_OVERRIDDEN' && event.cardId === bruiser), 'Black ICE removes enemy Ongoing text here');
-  eq(result.state.cards[bruiser]?.textOverride?.kind, 'BLANK_ONGOING', 'Black ICE marks target Ongoing text as blanked');
+  eq(getCardState(result.state, bruiser)!?.textOverride?.kind, 'BLANK_ONGOING', 'Black ICE marks target Ongoing text as blanked');
 }
 
 if (failures > 0) {

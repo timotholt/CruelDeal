@@ -20,8 +20,14 @@ import { getCardCost } from './cost';
 import { isPowerBearingCard } from './power-bearing';
 import { activeLaneIds } from '../laneTopology';
 import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
-import { matchesCardPosition } from './cardPosition';
+import { matchesBoardPosition } from './cardPosition';
 import { storedPowerDelta } from '../powerLedger';
+import {
+  getAllCardIds,
+  getCardRuntime,
+  getEffectiveCardText,
+} from './cardRuntime';
+import { getCardTemplate } from './cardTemplate';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -58,7 +64,9 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
       const owner = sel.ownerFilter ?? 'ANY_OWNER';
       const zone = sel.zoneFilter ?? 'ANY';
       const out: CardId[] = [];
-      for (const card of Object.values(ctx.state.cards)) {
+      for (const id of getAllCardIds(ctx.state)) {
+        const card = getCardRuntime(ctx.state, id, ctx.manifest);
+        if (!card) continue;
         if (!ownerMatches(owner, ctx.selfOwner, card.owner, ctx.eventOwner ?? null)) continue;
         if (!zoneMatches(zone, card.zone)) continue;
         out.push(card.id);
@@ -67,13 +75,11 @@ export function select(sel: Selector, ctx: EvalCtx): CardId[] {
     }
 
     case 'HAND_OF': {
-      const cards = ctx.state.hand[sel.owner];
-      return cards.map(c => c.id);
+      return [...ctx.state.hand[sel.owner]];
     }
 
     case 'DECK_OF': {
-      const cards = ctx.state.deck[sel.owner];
-      return cards.map(c => c.id);
+      return [...ctx.state.deck[sel.owner]];
     }
 
     case 'WHERE': {
@@ -227,7 +233,7 @@ export function selectLanes(sel: Selector, ctx: EvalCtx): LaneId[] {
       const seen = new Set<LaneId>();
       const out: LaneId[] = [];
       for (const id of ids) {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         if (c?.lane !== null && c?.lane !== undefined && !seen.has(c.lane)) {
           seen.add(c.lane);
           out.push(c.lane);
@@ -242,7 +248,7 @@ function laneOfSelector(sel: Selector, ctx: EvalCtx): LaneId | null {
   if (sel.kind === 'SELF') return ctx.selfLane;
   const ids = select(sel, ctx);
   for (const id of ids) {
-    const c = ctx.state.cards[id];
+    const c = getCardRuntime(ctx.state, id, ctx.manifest);
     if (c?.lane !== null && c?.lane !== undefined) return c.lane;
   }
   return null;
@@ -260,7 +266,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'HAS_TAG': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         return !!c && c.tags.some(t => t.kind === pred.tag);
       });
     }
@@ -286,12 +292,12 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       if (ids.length === 0) return false;
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         if (!c) return false;
-        const def = ctx.manifest.cards[c.defId];
-        if (!def) return false;
         if (pred.kind === 'POWER_CMP' && !isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
-        const stat = pred.kind === 'POWER_CMP' ? getCardPower(ctx.state, id, ctx.manifest) : def.cost;
+        const stat = pred.kind === 'POWER_CMP'
+          ? getCardPower(ctx.state, id, ctx.manifest)
+          : getCardCost(ctx.state, id, ctx.manifest);
         return compareNum(stat, pred.op, value);
       });
     }
@@ -305,7 +311,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'WAS_CREATED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         return c?.spawnSource.kind !== 'DECK_CREATION' && c?.spawnSource.kind !== 'SYSTEM';
       });
     }
@@ -313,9 +319,8 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'HAS_COPIED_TEXT': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
-        return c?.textOverride?.kind === 'COPY_OF_CARD' ||
-               c?.textOverride?.kind === 'COPY_ON_REVEAL_OF_CARD';
+        const override = getEffectiveCardText(ctx.state, id, ctx.manifest)?.override;
+        return override?.kind === 'COPIED_TEXT';
       });
     }
 
@@ -323,9 +328,11 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
         if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
-        const c = ctx.state.cards[id];
-        const def = c ? ctx.manifest.cards[c.defId] : undefined;
-        return !!c && !!def && storedPowerDelta(c, def.basePower) > 0;
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
+        const template = c ? getCardTemplate(ctx.manifest, c.defId) : null;
+        return !!c && template?.basePower !== null &&
+          template?.basePower !== undefined &&
+          storedPowerDelta(c, template.basePower) > 0;
       });
     }
 
@@ -333,16 +340,18 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
         if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
-        const c = ctx.state.cards[id];
-        const def = c ? ctx.manifest.cards[c.defId] : undefined;
-        return !!c && !!def && storedPowerDelta(c, def.basePower) < 0;
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
+        const template = c ? getCardTemplate(ctx.manifest, c.defId) : null;
+        return !!c && template?.basePower !== null &&
+          template?.basePower !== undefined &&
+          storedPowerDelta(c, template.basePower) < 0;
       });
     }
 
     case 'COST_REDUCED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         return (c?.costDelta ?? 0) < 0;
       });
     }
@@ -350,11 +359,11 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'TEXT_DISABLED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         if (!c) return false;
         return c.tags.some(t => t.kind === 'ONGOING_DISABLED') ||
-               c.textOverride?.kind === 'BLANK_ONGOING' ||
-               c.textOverride?.kind === 'BLANK_ALL';
+               c.text.override?.kind === 'BLANK_ONGOING' ||
+               c.text.override?.kind === 'BLANK_ALL';
       });
     }
 
@@ -376,15 +385,25 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'CARD_POSITION': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const card = ctx.state.cards[id];
-        return card ? matchesCardPosition(card, ctx.state, pred) : false;
+        const card = getCardRuntime(ctx.state, id, ctx.manifest);
+        const position = card?.position.zone === 'LANE'
+          && card.position.slot !== null
+          && card.position.row !== null
+          && card.position.column !== null
+          ? {
+              slot: card.position.slot,
+              row: card.position.row,
+              column: card.position.column,
+            }
+          : null;
+        return matchesBoardPosition(position, pred);
       });
     }
 
     case 'IN_FULL_LANE': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         if (!c || c.lane === null) return false;
         const lane = ctx.state.lanesById[c.lane];
         return lane.cards[c.owner].length >= 4;
@@ -422,7 +441,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'EVER_MOVED': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const c = ctx.state.cards[id];
+        const c = getCardRuntime(ctx.state, id, ctx.manifest);
         return c?.tags.some(t => t.kind === 'EVER_MOVED') ?? false;
       });
     }
@@ -439,7 +458,7 @@ function resolveLaneOf(of: Selector, ctx: EvalCtx): LaneId | null {
   if (of.kind === 'SELF') return ctx.selfLane;
   const ids = select(of, ctx);
   for (const id of ids) {
-    const c = ctx.state.cards[id];
+    const c = getCardRuntime(ctx.state, id, ctx.manifest);
     if (c?.lane !== null && c?.lane !== undefined) return c.lane;
   }
   return null;
@@ -448,14 +467,14 @@ function resolveLaneOf(of: Selector, ctx: EvalCtx): LaneId | null {
 function laneOfFirst(sel: Selector, ctx: EvalCtx): LaneId | null {
   const ids = select(sel, ctx);
   if (ids.length === 0) return null;
-  const c = ctx.state.cards[ids[0]];
+  const c = getCardRuntime(ctx.state, ids[0], ctx.manifest);
   return c?.lane ?? null;
 }
 
 function ownerOfFirst(sel: Selector, ctx: EvalCtx): 'P0' | 'P1' | null {
   const ids = select(sel, ctx);
   if (ids.length === 0) return null;
-  const c = ctx.state.cards[ids[0]];
+  const c = getCardRuntime(ctx.state, ids[0], ctx.manifest);
   return c?.owner ?? null;
 }
 
@@ -524,49 +543,11 @@ function hasEffectiveAbility(
   ctx: EvalCtx,
   slot: 'ON_REVEAL' | 'ONGOING' | 'ACTIVATE' | 'ANY',
 ): boolean {
-  const card = ctx.state.cards[id];
-  if (!card) return false;
-
-  const printed = ctx.manifest.cards[card.defId]?.abilities ?? {};
-  const printedHas = (s: typeof slot): boolean => {
-    if (s === 'ANY') return hasAnyCardAbility(printed);
-    if (s === 'ON_REVEAL') return hasCardAbility(printed, 'onReveal');
-    if (s === 'ONGOING') return hasCardAbility(printed, 'ongoing');
-    return hasCardAbility(printed, 'activate');
-  };
-
-  const ov = card.textOverride;
-  if (!ov) return printedHas(slot);
-  if (ov.kind === 'BLANK_ALL') return false;
-  if (ov.kind === 'BLANK_ONGOING') {
-    if (slot === 'ONGOING') return false;
-    if (slot === 'ANY') return hasAnyCardAbility(printed, ['ongoing']);
-    return printedHas(slot);
-  }
-
-  const sourceDefId = ov.kind === 'COPY_OF_DEF'
-    ? ov.defId
-    : 'cardId' in ov
-      ? ctx.state.cards[ov.cardId]?.defId
-      : undefined;
-  const source = sourceDefId ? ctx.manifest.cards[sourceDefId]?.abilities : undefined;
-  if (!source) return false;
-
-  if (ov.kind === 'COPY_ON_REVEAL_OF_CARD') {
-    return slot === 'ON_REVEAL' || slot === 'ANY'
-      ? hasCardAbility(source, 'onReveal')
-      : false;
-  }
-  if (ov.kind === 'COPY_ONGOING_OF_CARD') {
-    return slot === 'ONGOING' || slot === 'ANY'
-      ? hasCardAbility(source, 'ongoing')
-      : false;
-  }
-
-  if (slot === 'ANY') return hasAnyCardAbility(source);
-  if (slot === 'ON_REVEAL') return hasCardAbility(source, 'onReveal');
-  if (slot === 'ONGOING') return hasCardAbility(source, 'ongoing');
-  return hasCardAbility(source, 'activate');
+  const abilities = getEffectiveCardText(ctx.state, id, ctx.manifest)?.abilities;
+  if (slot === 'ANY') return hasAnyCardAbility(abilities);
+  if (slot === 'ON_REVEAL') return hasCardAbility(abilities, 'onReveal');
+  if (slot === 'ONGOING') return hasCardAbility(abilities, 'ongoing');
+  return hasCardAbility(abilities, 'activate');
 }
 
 export function compareNum(a: number, op: CmpOp, b: number): boolean {

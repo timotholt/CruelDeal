@@ -18,7 +18,7 @@ describe('known live reveal event-loss contracts', () => {
     const events: MatchEvent[] = [
       { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'EFFECT' },
       { type: 'CARD_FLIPPED', cardId: 'card-1' as never },
-      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 2 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL' } },
+      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 2 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL', reason: 'TEST' } },
       { type: 'TURN_ENDED', turn: 2 },
     ];
     const { consumedUpTo, dispatched } = dispatchCurrentLiveRevealHandoff(events, new Set());
@@ -30,7 +30,7 @@ describe('known live reveal event-loss contracts', () => {
   test('does not lose pre-TURN_ENDED events when every engine flip is already revealed in UI state', async () => {
     const events: MatchEvent[] = [
       { type: 'CARD_FLIPPED', cardId: 'card-1' as never },
-      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 2 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL' } },
+      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 2 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL', reason: 'TEST' } },
       { type: 'TURN_ENDED', turn: 2 },
     ];
     const { consumedUpTo, dispatched } = dispatchCurrentLiveRevealHandoff(
@@ -44,7 +44,7 @@ describe('known live reveal event-loss contracts', () => {
 
   test('does not lose pre-TURN_ENDED effects when the engine emitted no flips', async () => {
     const events: MatchEvent[] = [
-      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 3 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL' } },
+      { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 3 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL', reason: 'TEST' } },
       { type: 'TURN_ENDED', turn: 2 },
     ];
     const { consumedUpTo, dispatched } = dispatchCurrentLiveRevealHandoff(

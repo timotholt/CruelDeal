@@ -3,12 +3,12 @@ import { apply } from '../engine/apply';
 import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
 import type { MatchEvent } from '../engine/types/events';
-import type { LaneId } from '../engine/types/ids';
 import type { MatchState } from '../engine/types/state';
 import { buildCardDrawEvents } from '../engine/draw';
 import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
 import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
 import { revealLocation } from '../engine/locationLifecycle';
+import { getLocationRuntime } from '../engine/projections/locationRuntime';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -79,7 +79,7 @@ export function buildOpeningTransaction(
     const reveal = revealLocation(state, lane, {
       sourceId: location.id,
       effectKind: 'SYSTEM',
-      systemReason: 'OPENING_LOCATION_REVEAL',
+      reason: 'OPENING_LOCATION_REVEAL',
     }, manifest);
     if (!reveal.ok) {
       throw new Error(`opening location reveal failed: ${reveal.message}`);
@@ -87,7 +87,8 @@ export function buildOpeningTransaction(
     events.push(...reveal.events);
     state = reveal.state;
 
-    const effects = manifest.locations[location.defId]?.abilities.onReveal ?? [];
+    const effects = getLocationRuntime(state, location.id, manifest)
+      ?.abilities.onReveal ?? [];
     const locationRng = openingRng.fork(`opening:location:${location.id}`);
     for (let index = 0; index < effects.length; index++) {
       const context: EffectCtx = {
@@ -98,7 +99,12 @@ export function buildOpeningTransaction(
         selfLane: lane,
         selfOwner: null,
         rng: locationRng.fork(`effect:${index}`),
-        source: { sourceId: location.id, effectKind: 'LOCATION', exprIdx: index },
+        source: {
+          sourceId: location.id,
+          effectKind: 'LOCATION',
+          exprIdx: index,
+          reason: 'OPENING_LOCATION_ON_REVEAL',
+        },
         depth: 0,
       };
       const result = evalEffect(state, effects[index], context, manifest);

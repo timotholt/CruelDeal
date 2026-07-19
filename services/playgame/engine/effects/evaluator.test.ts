@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 /**
  * Effect evaluator + revealPlayedCard tests.
  *
@@ -10,12 +11,17 @@
  */
 
 import { createRng } from '../rng';
-import { evalEffect, revealPlayedCard, MAX_REVEAL_RECURSION } from './evaluator';
+import {
+  evalEffect,
+  revealPlayedCard,
+  MAX_REVEAL_RECURSION,
+  type EffectCtx,
+} from './evaluator';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
-  CardInstance,
+  InternalCardRecord,
   LaneState,
-  LocationCardInstance,
+  InternalLocationRecord,
   MatchState,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
@@ -26,6 +32,7 @@ import {
   testLaneRegistry,
   testLaneState,
   testPowerLedger,
+  emptyTestMatchState,
   withTestLocation,
 } from '../testkit/runtimeFixture';
 
@@ -90,7 +97,7 @@ interface CardSpec {
   lane: LaneId | null;
   zone?: 'LANE' | 'HAND' | 'DECK';
   revealed?: boolean;
-  powerMutations?: CardInstance['powerLedger'][number]['mutation'][];
+  powerMutations?: InternalCardRecord['powerLedger'][number]['mutation'][];
 }
 
 function buildState(
@@ -99,27 +106,32 @@ function buildState(
   opts: { seed?: string; turn?: number } = {},
 ): MatchState {
   idCounter = 0;
-  const cards: Record<CardId, CardInstance> = {};
-  const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
-  const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
+  const cards: Record<CardId, InternalCardRecord> = {};
+  const hand: Record<Owner, CardId[]> = { P0: [], P1: [] };
+  const deck: Record<Owner, CardId[]> = { P0: [], P1: [] };
   const lanes: [LaneState, LaneState, LaneState] = [blankLane(0), blankLane(1), blankLane(2)];
 
   for (const spec of cardSpecs) {
     const id = nextCardId();
     const zone = spec.zone ?? 'LANE';
-    const inst: CardInstance = {
+    const revealed = spec.revealed ?? (zone === 'LANE');
+    const inst: InternalCardRecord = {
       id,
       defId: spec.def,
       version: 1,
       owner: spec.owner,
       lane: zone === 'LANE' ? spec.lane : null,
       zone,
-      revealed: spec.revealed ?? (zone === 'LANE'),
+      revealed,
+      revealTiming: !revealed && spec.lane !== null
+        ? { kind: 'TURN', turn: opts.turn ?? 1 }
+        : null,
       powerLedger: testPowerLedger(id, spec.powerMutations ?? []),
       costDelta: 0,
       costLog: [],
       tags: [],
       textOverride: null,
+    textLog: [],
       counters: {},
       spawnSource: { kind: 'DECK_CREATION' },
     };
@@ -127,12 +139,12 @@ function buildState(
     if (zone === 'LANE' && spec.lane !== null) {
       (lanes[spec.lane].cards[spec.owner] as CardId[]).push(id);
     } else if (zone === 'HAND') {
-      hand[spec.owner].push(inst);
+      hand[spec.owner].push(id);
     } else if (zone === 'DECK') {
-      deck[spec.owner].push(inst);
+      deck[spec.owner].push(id);
     }
   }
-  let state: MatchState = {
+  let state: MatchState = emptyTestMatchState({
     turn: opts.turn ?? 3,
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -142,11 +154,9 @@ function buildState(
     energy: { P0: 0, P1: 0 },
     deck,
     hand,
-    cards,
     lanesById: testLaneRegistry(lanes),
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
-    locationCards: {},
     locationDeck: {
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },
@@ -158,7 +168,8 @@ function buildState(
     result: null,
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,
-  };
+    cards,
+  });
   for (const laneStr of Object.keys(locSpecs)) {
     const laneIdx = Number(laneStr) as LaneId;
     state = withTestLocation(
@@ -333,7 +344,7 @@ function buildState(
   truthy(!!moved, 'MOVE: CARD_MOVED emitted');
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
   truthy(moved.toLane !== 0 && (moved.toLane === 1 || moved.toLane === 2), 'MOVE: toLane is another lane');
-  eq(res.state.cards['c1' as CardId]?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
+  eq(getCardState(res.state, 'c1' as CardId)!?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE: card removed from old lane');
 }
 
@@ -358,7 +369,7 @@ function buildState(
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('destroy'));
   const destroyed = res.events.filter(e => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 2, 'DESTROY: both opp grunts destroyed');
-  eq(res.state.cards['c2' as CardId]?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
+  eq(getCardState(res.state, 'c2' as CardId)!?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
   eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
@@ -601,7 +612,7 @@ function buildState(
     target: { kind: 'SAME_LANE', of: { kind: 'SELF' }, ownerFilter: 'SELF_OWNER' },
     delta: { kind: 'LIT', n: 2 },
   };
-  const ctx = {
+  const ctx: EffectCtx = {
     state: s0,
     manifest,
     self: 'c1' as CardId,
@@ -609,7 +620,7 @@ function buildState(
     selfLane: 0 as LaneId,
     selfOwner: 'P0' as Owner,
     rng,
-    source: { sourceId: 'c1' as CardId, effectKind: 'ON_REVEAL' as const },
+    source: { sourceId: 'c1' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     depth: 0,
   };
   const res = evalEffect(s0, effect, ctx, manifest);
@@ -707,7 +718,7 @@ function buildState(
     { 0: 'iceBox' },
   );
   const effect = manifest.locations.iceBox?.abilities.onReveal?.[0] as EffectExpr;
-  const ctx = {
+  const ctx: EffectCtx = {
     state: s0,
     manifest,
     self: 'loc0' as LocationCardInstanceId,
@@ -715,14 +726,14 @@ function buildState(
     selfLane: 0 as LaneId,
     selfOwner: null,
     rng: createRng('ice-box'),
-    source: { sourceId: 'loc0' as LocationCardInstanceId, effectKind: 'LOCATION' as const },
+    source: { sourceId: 'loc0' as LocationCardInstanceId, effectKind: 'LOCATION', reason: 'TEST' },
     depth: 0,
   };
   const res = evalEffect(s0, effect, ctx, manifest);
   eq(res.events.filter((e) => e.type === 'CARD_COST_CHANGED').length, 1, 'ADJUST_COST emits one CARD_COST_CHANGED');
   const hitId = (res.events.find((e) => e.type === 'CARD_COST_CHANGED') as { cardId: CardId }).cardId;
-  eq(res.state.cards[hitId]?.costDelta, 1, 'ADJUST_COST persists costDelta on the target');
-  eq(res.state.cards[hitId]?.costLog.length, 1, 'ADJUST_COST appends one cost log entry');
+  eq(getCardState(res.state, hitId)!?.costDelta, 1, 'ADJUST_COST persists costDelta on the target');
+  eq(getCardState(res.state, hitId)!?.costLog.length, 1, 'ADJUST_COST appends one cost log entry');
 }
 
 // -- onMove trigger: Void Hound gains +2 when moved -----------------------
@@ -804,14 +815,15 @@ function buildState(
   eq(getCardCost(s0, 'c1' as CardId, manifest), 1, 'Illegal Clone: fresh card costs 1');
 
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('illegal-clone'));
-  const copy = res.state.hand.P0[0];
-  truthy(copy !== undefined, 'Illegal Clone: destruction adds a copy to its owner hand');
+  const copyId = res.state.hand.P0[0];
+  const copy = copyId === undefined ? null : getCardState(res.state, copyId);
+  truthy(copy !== null, 'Illegal Clone: destruction adds a copy to its owner hand');
   eq(copy?.defId, 'illegal-clone', 'Illegal Clone: hand card uses the same definition');
-  if (copy) {
-    eq(getCardCost(res.state, copy.id, manifest), 0, 'Illegal Clone: destroyed copy costs 0');
+  if (copyId !== undefined) {
+    eq(getCardCost(res.state, copyId, manifest), 0, 'Illegal Clone: destroyed copy costs 0');
     truthy(
       res.events.some((event) =>
-        event.type === 'CARD_COST_CHANGED' && event.cardId === copy.id && event.delta === -1),
+        event.type === 'CARD_COST_CHANGED' && event.cardId === copyId && event.delta === -1),
       'Illegal Clone: copy receives a permanent -1 cost adjustment',
     );
   }
@@ -872,7 +884,7 @@ function buildState(
   ]);
   
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('sapper-move-1'));
-  const sappCard = res.state.cards['c1' as CardId];
+  const sappCard = getCardState(res.state, 'c1' as CardId)!;
   // Sapper should move to lane 0 or 2 (both have capacity, not lane 1)
   truthy(sappCard.lane === 0 || sappCard.lane === 2, 'MOVE: sapper moved to lane 0 or 2 (not current lane 1)');
   const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
@@ -909,7 +921,7 @@ function buildState(
   ]);
   
   const res = revealPlayedCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-2'));
-  const sappCard = res.state.cards['c5' as CardId];
+  const sappCard = getCardState(res.state, 'c5' as CardId)!;
   eq(sappCard.lane, 2, 'MOVE: sapper moved to lane 2 (only non-full lane besides current)');
   const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
   truthy(moveEvent !== undefined, 'MOVE: CARD_MOVED event emitted');
@@ -949,7 +961,7 @@ function buildState(
   ]);
   
   const res = revealPlayedCard(s0, 'c5' as CardId, manifest, createRng('sapper-move-3'));
-  const sappCard = res.state.cards['c5' as CardId];
+  const sappCard = getCardState(res.state, 'c5' as CardId)!;
   eq(sappCard.lane, 1, 'MOVE: sapper stays in lane 1 (no empty lanes)');
   const moveEvent = res.events.find((e) => e.type === 'CARD_MOVED');
   truthy(moveEvent === undefined, 'MOVE: no CARD_MOVED event (no valid move)');
@@ -971,9 +983,9 @@ function buildState(
   const s0 = buildState([{ def: 'bouncer', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-zone'));
   truthy(res.events.some((e) => e.type === 'CARD_MOVED_TO_ZONE'), 'MOVE_CARD_TO_ZONE: emits CARD_MOVED_TO_ZONE');
-  eq(res.state.cards['c1' as CardId]?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
+  eq(getCardState(res.state, 'c1' as CardId)!?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
-  eq(res.state.hand.P0.map(c => c.id), ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
+  eq(res.state.hand.P0, ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
 }
 
 // -- SPELL cards resolve, then banish ---------------------------------------
@@ -996,10 +1008,10 @@ function buildState(
   truthy(banish !== undefined, 'SPELL: emits CARD_BANISHED after reveal');
   eq(
     banish?.cause,
-    { sourceId: 'c1' as CardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
+    { sourceId: 'c1' as CardId, effectKind: 'SYSTEM', reason: 'SPELL_RESOLVED' },
     'SPELL: records its game-rules cleanup reason',
   );
-  eq(res.state.cards['c1' as CardId]?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
+  eq(getCardState(res.state, 'c1' as CardId)!?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
 }
 

@@ -560,14 +560,13 @@ export const LOCATION_SPECS: readonly LocationSpec[] = [
     map: '/art/maps/IcyRoad.png',
     accent: '#8fd5e8',
     abilities: {
-      ongoing: [{
-        kind: 'DELAY_REVEAL',
-        target: sameLane(),
-        until: 'END_OF_GAME',
-        stack: 'SINGLE',
+      onCardEnteredHere: [{
+        kind: 'SCHEDULE_REVEAL',
+        target: eventCard,
+        timing: { kind: 'END_OF_GAME' },
       }],
     },
-    note: 'Implemented with DELAY_REVEAL and end-game force reveal.',
+    note: 'Implemented with an explicit END_OF_GAME reveal schedule.',
   }),
 
   p({

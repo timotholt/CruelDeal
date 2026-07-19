@@ -40,12 +40,3 @@ export function isOnRevealDisabled(
   return ongoingsTargeting(state, manifest, cardId)
     .some(e => e.expr.kind === 'DISABLE_ON_REVEAL');
 }
-
-export function isRevealDelayed(
-  state: MatchState,
-  cardId: CardId,
-  manifest: Manifest,
-): boolean {
-  return ongoingsTargeting(state, manifest, cardId)
-    .some(e => e.expr.kind === 'DELAY_REVEAL');
-}

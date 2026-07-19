@@ -79,7 +79,7 @@ function stageEnvelope(
   seat: Seat,
   intentId: string,
   expectedRevision: number,
-  cardId: CardId = runtime.state().hand[seat][0].id,
+  cardId: CardId = runtime.state().hand[seat][0],
 ): IntentEnvelope {
   const intent: RuntimeIntent = { type: 'STAGE_CARD', cardId, lane: 0 };
   return {
@@ -112,7 +112,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     const runtime = runtimeFixture();
     const baseRevision = runtime.revision();
     const initialTransactionCount = runtime.transactions().length;
-    const cardId = runtime.state().hand.P0[0].id;
+    const cardId = runtime.state().hand.P0[0];
 
     const first = runtime.submitIntent(stageEnvelope(runtime, 'P0', 'legal-first', baseRevision, cardId));
     const submittedWhileCardWasInHand = runtime.submitIntent(

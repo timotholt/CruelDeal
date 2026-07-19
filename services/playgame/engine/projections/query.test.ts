@@ -5,7 +5,7 @@
  */
 
 import type { CardDef, Manifest } from '../manifest/types';
-import type { CardInstance, LaneState, MatchState } from '../types/state';
+import type { InternalCardRecord, LaneState, MatchState } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   matchesNum,
@@ -68,21 +68,21 @@ interface CardSpec {
   def: string;
   owner: Owner;
   lane: LaneId | null;
-  zone?: CardInstance['zone'];
+  zone?: InternalCardRecord['zone'];
   revealed?: boolean;
   storedPowerDelta?: number;
   costDelta?: number;
-  tags?: CardInstance['tags'];
+  tags?: InternalCardRecord['tags'];
   counters?: Record<string, number>;
-  spawnSource?: CardInstance['spawnSource'];
+  spawnSource?: InternalCardRecord['spawnSource'];
 }
 
 let idCounter = 0;
 const buildState = (specs: CardSpec[]): MatchState => {
   idCounter = 0;
-  const cards: Record<CardId, CardInstance> = {};
-  const hand: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
-  const deck: Record<Owner, CardInstance[]> = { P0: [], P1: [] };
+  const cards: Record<CardId, InternalCardRecord> = {};
+  const hand: Record<Owner, CardId[]> = { P0: [], P1: [] };
+  const deck: Record<Owner, CardId[]> = { P0: [], P1: [] };
   const lanes: [LaneState, LaneState, LaneState] = [
     testLaneState(0),
     testLaneState(1),
@@ -91,10 +91,14 @@ const buildState = (specs: CardSpec[]): MatchState => {
   for (const s of specs) {
     const id = (s.id ?? `c${++idCounter}`) as CardId;
     const zone = s.zone ?? 'LANE';
-    const inst: CardInstance = {
+    const revealed = s.revealed ?? (zone === 'LANE');
+    const inst: InternalCardRecord = {
       id, defId: s.def, version: 1, owner: s.owner,
       lane: zone === 'LANE' ? s.lane : null, zone,
-      revealed: s.revealed ?? (zone === 'LANE'),
+      revealed,
+      revealTiming: !revealed && s.lane !== null
+        ? { kind: 'TURN', turn: 1 }
+        : null,
       powerLedger: testPowerLedger(
         id,
         s.storedPowerDelta === undefined
@@ -105,13 +109,14 @@ const buildState = (specs: CardSpec[]): MatchState => {
       costLog: [],
       tags: s.tags ?? [],
       textOverride: null,
+    textLog: [],
       counters: s.counters ?? {},
       spawnSource: s.spawnSource ?? { kind: 'DECK_CREATION' },
     };
     cards[id] = inst;
     if (zone === 'LANE' && s.lane !== null) (lanes[s.lane].cards[s.owner] as CardId[]).push(id);
-    else if (zone === 'HAND') hand[s.owner].push(inst);
-    else if (zone === 'DECK') deck[s.owner].push(inst);
+    else if (zone === 'HAND') hand[s.owner].push(id);
+    else if (zone === 'DECK') deck[s.owner].push(id);
   }
   return emptyTestMatchState({
     turn: 1, maxEnergy: { P0: 1, P1: 1 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },

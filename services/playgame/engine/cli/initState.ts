@@ -15,7 +15,7 @@
 
 import type {
   MatchState,
-  CardInstance,
+  InternalCardRecord,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { Deck, Manifest } from '../manifest/types';
@@ -30,6 +30,12 @@ import {
 } from '../locationSetup';
 import { frameAndFoldEvents } from '../transactionTimeline';
 import type { EventTransactionFold } from '../transactionTimeline';
+import { createCardStoreInternal } from '../internal/cardStore';
+import { createLocationStoreInternal } from '../internal/locationStore';
+import {
+  getAllCardTemplates,
+  getCardTemplate,
+} from '../projections/cardTemplate';
 
 export type InitialDecks = Partial<Record<Owner, Deck>>;
 export type InitialLocationDeck = LocationSetupDeck;
@@ -54,8 +60,8 @@ function buildDeck(
   manifest: Manifest,
   rng: Rng,
   deckList?: Deck,
-): CardInstance[] {
-  const defs = Object.values(manifest.cards);
+): InternalCardRecord[] {
+  const defs = getAllCardTemplates(manifest);
   if (defs.length === 0) {
     throw new Error('initState: manifest has no cards');
   }
@@ -63,14 +69,14 @@ function buildDeck(
     const def = defs[rng.int(0, defs.length - 1)];
     return { defId: def.defId };
   });
-  const deck: CardInstance[] = [];
+  const deck: InternalCardRecord[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    const def = manifest.cards[entry.defId];
+    const def = getCardTemplate(manifest, entry.defId);
     if (!def) {
       throw new Error(`initState: deck for ${owner} references unknown defId "${entry.defId}"`);
     }
-    const inst: CardInstance = {
+    const inst: InternalCardRecord = {
       id: mintId(rng, `${owner}:card:${i}`) as CardId,
       defId: def.defId,
       ...(entry.variantId === undefined ? {} : { variantId: entry.variantId }),
@@ -79,11 +85,13 @@ function buildDeck(
       lane: null,
       zone: 'DECK',
       revealed: false,
+      revealTiming: null,
       powerLedger: [],
       costDelta: 0,
       costLog: [],
       tags: [],
       textOverride: null,
+      textLog: [],
       counters: {},
       spawnSource: { kind: 'DECK_CREATION' },
     };
@@ -108,8 +116,8 @@ export function createMatchGenesis(
   const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'), decks.P0);
   const oppDeck = buildDeck('P1', manifest, deckRng.fork('P1'), decks.P1);
 
-  // Index every card by id so `state.cards[id]` lookups work for both decks.
-  const cards: Record<string, CardInstance> = {};
+  // Normalize every card into the opaque authoritative record store.
+  const cards: Record<string, InternalCardRecord> = {};
   for (const c of playerDeck) cards[c.id] = c;
   for (const c of oppDeck) cards[c.id] = c;
 
@@ -127,13 +135,16 @@ export function createMatchGenesis(
     seed,
     priority,
     energy: { P0: startEnergy, P1: startEnergy },
-    deck: { P0: playerDeck, P1: oppDeck },
+    deck: {
+      P0: playerDeck.map(card => card.id),
+      P1: oppDeck.map(card => card.id),
+    },
     hand: { P0: [], P1: [] },
-    cards,
+    cardStore: createCardStoreInternal(cards),
     lanesById: {},
     activeLaneOrder: [],
     nextLaneId: 0,
-    locationCards: {},
+    locationStore: createLocationStoreInternal(),
     locationDeck: {
       drawPile: [],
       staging: [],

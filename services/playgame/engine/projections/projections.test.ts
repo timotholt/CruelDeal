@@ -11,7 +11,7 @@
 
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
-  CardInstance,
+  InternalCardRecord,
   CardTag,
   LaneState,
   MatchState,
@@ -269,13 +269,13 @@ function buildState(
   opts: { seed?: string; turn?: number } = {},
 ): MatchState {
   idCounter = 0;
-  const cards: Record<CardId, CardInstance> = {};
+  const cards: Record<CardId, InternalCardRecord> = {};
   const lanesCards: [LaneState, LaneState, LaneState] = [
     testLaneState(0), testLaneState(1), testLaneState(2),
   ];
   for (const spec of cardSpecs) {
     const id = nextId();
-    const inst: CardInstance = {
+    const inst: InternalCardRecord = {
       id,
       defId: spec.def,
       version: 1,
@@ -283,11 +283,13 @@ function buildState(
       lane: spec.lane,
       zone: 'LANE',
       revealed: spec.revealed ?? true,
+      revealTiming: spec.revealed === false ? { kind: 'TURN', turn: opts.turn ?? 1 } : null,
       powerLedger: [],
       costDelta: 0,
       costLog: [],
       tags: spec.tags ?? [],
       textOverride: null,
+    textLog: [],
       counters: {},
       spawnSource: { kind: 'SYSTEM' },
     };

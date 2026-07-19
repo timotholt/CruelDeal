@@ -15,7 +15,7 @@
  */
 
 import type { CardId, LocationCardInstanceId, Owner } from './ids';
-import type { CardType } from '../manifest/types';
+import type { CardAbilities, CardDomain } from '../manifest/types';
 import type { CardPositionCriteria } from './cardPosition';
 
 export type OwnerRef = Owner | 'SELF_OWNER' | 'OPP_OWNER' | 'EVENT_OWNER' | 'EVENT_OPP_OWNER';
@@ -186,7 +186,7 @@ export type PoolRef =
    * Draw from the owner's deck filtered by the top-level card taxonomy.
    * `excludeInPlay` skips cards already on the board or in hand.
    */
-  | { kind: 'DECK_BY_CARD_TYPE'; ownerDeck: OwnerRef; cardType: CardType; excludeInPlay?: boolean };
+  | { kind: 'DECK_BY_CARD_TYPE'; ownerDeck: OwnerRef; cardType: CardDomain; excludeInPlay?: boolean };
 
 // ---- Effect expressions (On Reveal / Activate / triggered) -----------------
 
@@ -217,10 +217,20 @@ export type EffectExpr =
       destination: CardDestination;
       /** Permanently adjust the created card so its visible cost equals this value. */
       setCost?: NumExpr;
+      /** Permanently add this signed delta to the created card's printed cost. */
+      adjustCost?: NumExpr;
     }
   | { kind: 'MOVE_CARD_TO_ZONE'; target: Selector; destination: CardDestination }
   | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
   | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
+  /** Schedule unresolved board cards to perform their real reveal later. */
+  | {
+      kind: 'SCHEDULE_REVEAL';
+      target: Selector;
+      timing:
+        | { kind: 'TURN'; turn: NumExpr }
+        | { kind: 'END_OF_GAME' };
+    }
 
   // --- Text manipulation ---
   /**
@@ -285,6 +295,8 @@ export type OngoingExpr =
   // Lane-level effects (apply after summing card powers in the lane)
   | { kind: 'LANE_POWER_ADD'; laneScope: LaneScope; delta: NumExpr; stack: StackingPolicy }
   | { kind: 'LANE_POWER_MULTIPLIER'; laneScope: LaneScope; factor: NumExpr; stack: StackingPolicy }
+  /** Live Limbo-style rule. Multiple active sources use the largest extension. */
+  | { kind: 'EXTEND_GAME_TURNS'; turns: NumExpr; stack: 'MAX' }
 
   // On Reveal multiplier (affects how many times an OR fires)
   | { kind: 'ON_REVEAL_MULTIPLIER'; target: Selector; factor: NumExpr; stack: StackingPolicy }
@@ -300,7 +312,6 @@ export type OngoingExpr =
   | { kind: 'BLOCK_POWER_INCREASE'; target: Selector; stack: 'SINGLE' }
   /** Prevents any destruction source from destroying the selected cards. */
   | { kind: 'BLOCK_DESTROY'; target: Selector; stack: 'SINGLE' }
-  | { kind: 'DELAY_REVEAL'; target: Selector; until: 'END_OF_GAME'; stack: 'SINGLE' }
   /**
    * Prevents selected cards from being destroyed by effects sourced from the
    * same owner. `laneOf` preserves Union Rep's lane-wide rule; `target` allows
@@ -329,11 +340,14 @@ export type StackingPolicy = 'MULTIPLICATIVE' | 'ADDITIVE' | 'MAX' | 'SINGLE';
 // ---- Text override (Mystique / Super Skrull / Hacker Control) --------------
 
 export type TextOverride =
-  | { kind: 'COPY_OF_DEF'; defId: string }
-  | { kind: 'COPY_OF_CARD'; cardId: CardId }
-  | { kind: 'COPY_ONGOING_OF_CARD'; cardId: CardId }
-  /** Copies only the onReveal abilities of the source card. */
-  | { kind: 'COPY_ON_REVEAL_OF_CARD'; cardId: CardId }
+  | {
+      kind: 'COPIED_TEXT';
+      sourceCardId: CardId;
+      sourceDefId: string;
+      scope: 'ALL' | 'ON_REVEAL' | 'ONGOING';
+      abilities: CardAbilities;
+      rulesText: string;
+    }
   /** Ongoing text stripped (card behaves as if it has no Ongoing). */
   | { kind: 'BLANK_ONGOING' }
   /** All ability text stripped (card is a vanilla body). */
@@ -391,5 +405,5 @@ export interface EffectRef {
   sourceId: CardId | LocationCardInstanceId;
   effectKind: 'ON_REVEAL' | 'ONGOING' | 'LOCATION' | 'SYSTEM';
   exprIdx?: number;
-  systemReason?: string;
+  reason: string;
 }

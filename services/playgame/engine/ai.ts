@@ -10,7 +10,7 @@
  *   planEnemyTurnFromPool():
  *     Picks affordable card DEFS from the manifest pool. Retained for engine
  *     tests and legacy simulations; it is not used by live play.
- *     Emits `{ defId, lane, cost }` — the caller mints a CardInstance.
+ *     Emits `{ defId, lane, cost }` — the caller mints a InternalCardRecord.
  *
  *   planEnemyTurnFromHand():
  *     Picks affordable CARDS from `state.hand[owner]`. Used by the headless
@@ -110,8 +110,8 @@ export function planEnemyTurnFromPool(
     const def = picker.pick(pool);
     const lane = picker.pick(candidates);
 
-    plays.push({ defId: def.defId, lane, cost: def.cost });
-    energy -= def.cost;
+    plays.push({ defId: def.defId, lane, cost: def.baseCost });
+    energy -= def.baseCost;
     laneFill.set(lane, (laneFill.get(lane) ?? 0) + 1);
   }
 
@@ -144,10 +144,10 @@ export function planEnemyTurnFromHand(
 
   // Hand sorted by cost asc, tiebreak on card id.
   const hand = state.hand[owner].slice().sort((a, b) => {
-    const costA = getCardCost(state, a.id, manifest);
-    const costB = getCardCost(state, b.id, manifest);
+    const costA = getCardCost(state, a, manifest);
+    const costB = getCardCost(state, b, manifest);
     if (costA !== costB) return costA - costB;
-    return a.id < b.id ? -1 : 1;
+    return a < b ? -1 : 1;
   });
 
   const plays: HandPlay[] = [];
@@ -157,8 +157,8 @@ export function planEnemyTurnFromHand(
   );
   const cap = manifest.constants.laneCapacity;
 
-  for (const card of hand) {
-    const cost = getCardCost(state, card.id, manifest);
+  for (const cardId of hand) {
+    const cost = getCardCost(state, cardId, manifest);
     if (cost > energy) continue;
 
     const candidates = [...laneFill.entries()]
@@ -168,9 +168,9 @@ export function planEnemyTurnFromHand(
 
     // Per-card fork so adding/removing cards earlier in the hand doesn't
     // shift the RNG stream for later ones.
-    const lane = picker.fork(`lane:${card.id}`).pick(candidates);
+    const lane = picker.fork(`lane:${cardId}`).pick(candidates);
 
-    plays.push({ cardId: card.id, lane });
+    plays.push({ cardId, lane });
     energy -= cost;
     laneFill.set(lane, (laneFill.get(lane) ?? 0) + 1);
   }

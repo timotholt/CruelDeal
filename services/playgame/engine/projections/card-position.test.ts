@@ -1,3 +1,4 @@
+import { getCardState } from './cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { evalEffect, type EffectCtx } from '../effects/evaluator';
 import type { CardDef, Manifest } from '../manifest/types';
@@ -198,7 +199,7 @@ function destroyCtx(state: MatchState, manifest: Manifest): EffectCtx {
     selfLane: 0,
     selfOwner: 'P1',
     rng: createRng('row-destroy-attempt'),
-    source: { sourceId: destroyer, effectKind: 'ON_REVEAL' },
+    source: { sourceId: destroyer, effectKind: 'ON_REVEAL', reason: 'TEST' },
     depth: 0,
   };
 }
@@ -215,8 +216,8 @@ describe('row-targeted destruction protection', () => {
     const result = evalEffect(state, destroyRow(1), destroyCtx(state, manifest), manifest);
 
     expect(result.events.filter((event) => event.type === 'CARD_DESTROYED')).toEqual([]);
-    expect(result.state.cards['protector' as CardId].zone).toBe('LANE');
-    expect(result.state.cards['front-victim' as CardId].zone).toBe('LANE');
+    expect(getCardState(result.state, 'protector' as CardId)!.zone).toBe('LANE');
+    expect(getCardState(result.state, 'front-victim' as CardId)!.zone).toBe('LANE');
   });
 
   it('does not protect a matching card in the second row', () => {
@@ -224,6 +225,6 @@ describe('row-targeted destruction protection', () => {
     const result = evalEffect(state, destroyRow(2), destroyCtx(state, manifest), manifest);
 
     expect(result.events.filter((event) => event.type === 'CARD_DESTROYED')).toHaveLength(1);
-    expect(result.state.cards['rear-victim' as CardId].zone).toBe('DESTROYED');
+    expect(getCardState(result.state, 'rear-victim' as CardId)!.zone).toBe('DESTROYED');
   });
 });

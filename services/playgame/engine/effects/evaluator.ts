@@ -27,9 +27,8 @@ import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
 import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections/ongoing';
-import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
+import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
 import { findLanes } from '../projections/query';
-import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
@@ -37,6 +36,14 @@ import {
   resolveCardPowerAdd,
   resolveCardPowerMutation,
 } from '../operations/power';
+import {
+  addCardTag,
+  adjustCardCost,
+  changeCardCounter,
+  removeCardTag,
+  replaceCardText,
+  setCardCost,
+} from '../operations/cardMutations';
 import {
   addLocationTag,
   changeLocationCounter,
@@ -46,6 +53,11 @@ import {
   type LocationLifecycleResult,
 } from '../locationLifecycle';
 import { isActiveLane, locationCardAtLane } from '../laneTopology';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from '../projections/cardRuntime';
+import { getLocationRuntime } from '../projections/locationRuntime';
 
 export const MAX_REVEAL_RECURSION = 16;
 
@@ -73,10 +85,9 @@ function fireCardTrigger(
   parentDepth: number,
   manifest: Manifest,
 ): EvalResult {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return { events: [], state };
-  const def = manifest.cards[card.defId];
-  const effs = def?.abilities[slot];
+  const effs = card.text.abilities[slot];
   if (!effs || effs.length === 0) return { events: [], state };
   if (parentDepth >= MAX_REVEAL_RECURSION) {
     const diag: MatchEvent = { type: 'RECURSION_LIMIT_HIT', cardId, depth: parentDepth };
@@ -93,7 +104,12 @@ function fireCardTrigger(
       selfLane,
       selfOwner,
       rng: parentRng.fork(`${slot}:${cardId}:${j}`),
-      source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: j },
+      source: {
+        sourceId: cardId,
+        effectKind: 'ON_REVEAL',
+        exprIdx: j,
+        reason: slot,
+      },
       depth: parentDepth + 1,
     };
     const res = evalEffect(s, effs[j], subCtx, manifest);
@@ -110,13 +126,13 @@ export function fireLocationTrigger(
   parentRng: Rng,
   manifest: Manifest,
   eventCard: CardId | null = null,
-  eventOwner: Owner | null = eventCard ? state.cards[eventCard]?.owner ?? null : null,
+  eventOwner: Owner | null = eventCard ? getCardRuntime(state, eventCard, manifest)?.owner ?? null : null,
   parentDepth: number = 0,
 ): EvalResult {
   const loc = locationCardAtLane(state, lane);
   if (!loc || loc.face !== 'FACE_UP') return { events: [], state };
-  const locDef = manifest.locations[loc.defId];
-  const effs = locDef?.abilities[slot];
+  const location = getLocationRuntime(state, loc.id, manifest);
+  const effs = location?.abilities[slot];
   if (!effs || effs.length === 0) return { events: [], state };
 
   const events: MatchEvent[] = [];
@@ -133,7 +149,12 @@ export function fireLocationTrigger(
       eventLane: lane,
       eventOwner,
       rng: parentRng.fork(`${slot}:${loc.id}:${j}`),
-      source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: j },
+      source: {
+        sourceId: loc.id,
+        effectKind: 'LOCATION',
+        exprIdx: j,
+        reason: slot,
+      },
       depth: parentDepth,
     };
     const res = evalEffect(s, effs[j], subCtx, manifest);
@@ -187,16 +208,18 @@ export function destroyCards(
     state: s,
     manifest,
     self: options.source.sourceId,
-    selfKind: manifest.cards[options.source.sourceId] ? 'card' : 'location',
+    selfKind: getCardRuntime(state, options.source.sourceId as CardId, manifest)
+      ? 'card'
+      : 'location',
     selfLane: options.sourceLane,
-    selfOwner: options.sourceOwner ?? effectSourceOwner(s, options.source),
+    selfOwner: options.sourceOwner ?? effectSourceOwner(s, options.source, manifest),
     rng: options.rng,
     source: options.source,
     depth: options.depth ?? 0,
   };
 
   for (const id of cardIds) {
-    const preCard = s.cards[id];
+    const preCard = getCardRuntime(s, id, manifest);
     const preLane = preCard?.lane ?? null;
     const preOwner = preCard?.owner ?? null;
     if (!preCard || preCard.zone !== 'LANE') continue;
@@ -290,20 +313,23 @@ export function destroyAllOtherLanesWithNormalRules(
 // ============================================================================
 
 type CardRevealOptions = {
-  readonly ignoreDelay: boolean;
+  readonly window: 'TURN' | 'END_OF_GAME';
   readonly firePlayedTriggers: boolean;
 };
 
 function banishResolvedSpell(state: MatchState, cardId: CardId, manifest: Manifest): EvalResult {
-  const card = state.cards[cardId];
-  const def = card ? manifest.cards[card.defId] : undefined;
-  if (!card || !def || def.cardType !== 'spell' || card.zone !== 'LANE') {
+  const card = getCardRuntime(state, cardId, manifest);
+  if (!card || card.domain !== 'spell' || card.zone !== 'LANE') {
     return { events: [], state };
   }
   const banish: MatchEvent = {
     type: 'CARD_BANISHED',
     cardId,
-    cause: { sourceId: cardId, effectKind: 'SYSTEM', systemReason: 'SPELL_RESOLVED' },
+    cause: {
+      sourceId: cardId,
+      effectKind: 'SYSTEM',
+      reason: 'SPELL_RESOLVED',
+    },
   };
   return { events: [banish], state: apply(state, banish, manifest) };
 }
@@ -320,16 +346,15 @@ export function revealPlayedCard(
   depth: number = 0,
 ): EvalResult {
   return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    ignoreDelay: false,
+    window: 'TURN',
     firePlayedTriggers: true,
   });
 }
 
 /**
- * End-game reveal for delayed cards. It ignores DELAY_REVEAL but still counts
- * as the card's real played reveal, so played-here triggers fire afterward.
+ * Perform a card's real reveal during the explicit end-game reveal window.
  */
-export function forceRevealPlayedCard(
+export function revealPlayedCardAtEndOfGame(
   state: MatchState,
   cardId: CardId,
   manifest: Manifest,
@@ -337,7 +362,7 @@ export function forceRevealPlayedCard(
   depth: number = 0,
 ): EvalResult {
   return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    ignoreDelay: true,
+    window: 'END_OF_GAME',
     firePlayedTriggers: true,
   });
 }
@@ -354,7 +379,7 @@ export function triggerOnReveal(
   depth: number = 0,
 ): EvalResult {
   return resolveCardReveal(state, cardId, manifest, rng, depth, {
-    ignoreDelay: false,
+    window: 'TURN',
     firePlayedTriggers: false,
   });
 }
@@ -377,7 +402,7 @@ function resolveCardReveal(
   depth: number,
   options: CardRevealOptions,
 ): EvalResult {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (
     !card
     || card.zone !== 'LANE'
@@ -387,8 +412,13 @@ function resolveCardReveal(
     return { events: [], state };
   }
 
-  if (!options.ignoreDelay && !card.revealed && isRevealDelayed(state, cardId, manifest)) {
-    return { events: [], state };
+  if (!card.revealed) {
+    const timing = card.revealTiming;
+    const due = options.window === 'END_OF_GAME'
+      ? timing?.kind === 'END_OF_GAME'
+        || (timing?.kind === 'TURN' && timing.turn <= state.turn)
+      : timing?.kind === 'TURN' && timing.turn <= state.turn;
+    if (!due) return { events: [], state };
   }
 
   // Cosmo-style suppression: silently drop the OR, no window, no flip.
@@ -414,8 +444,7 @@ function resolveCardReveal(
     return { events, state: s };
   }
 
-  const def = manifest.cards[card.defId];
-  const onReveal = def?.abilities.onReveal ?? [];
+  const onReveal = card.text.abilities.onReveal ?? [];
   if (onReveal.length === 0) {
     // No OR abilities, but `onAnyCardPlayedHere` on OTHER same-lane cards
     // must still fire — "played" = revealed, independent of the revealing
@@ -458,10 +487,15 @@ function resolveCardReveal(
         manifest,
         self: cardId,
         selfKind: 'card',
-        selfLane: s.cards[cardId]?.lane ?? null,
-        selfOwner: s.cards[cardId]?.owner ?? null,
+        selfLane: getCardRuntime(s, cardId, manifest)?.lane ?? null,
+        selfOwner: getCardRuntime(s, cardId, manifest)?.owner ?? null,
         rng: subRng,
-        source: { sourceId: cardId, effectKind: 'ON_REVEAL', exprIdx: idx },
+        source: {
+          sourceId: cardId,
+          effectKind: 'ON_REVEAL',
+          exprIdx: idx,
+          reason: 'ON_REVEAL',
+        },
         depth,
       };
       const res = evalEffect(s, effect, ctx, manifest);
@@ -500,7 +534,7 @@ function fireOnAnyCardPlayedHere(
   parentDepth: number,
   manifest: Manifest,
 ): EvalResult {
-  const flipped = state.cards[cardId];
+  const flipped = getCardRuntime(state, cardId, manifest);
   const lane = flipped?.lane;
   if (!flipped || lane === null || lane === undefined) {
     return { events: [], state };
@@ -511,7 +545,7 @@ function fireOnAnyCardPlayedHere(
   for (const owner of ['P0', 'P1'] as const) {
     for (const id of laneState.cards[owner]) {
       if (id === cardId) continue;
-      const other = s.cards[id];
+      const other = getCardRuntime(s, id, manifest);
       if (!other || !other.revealed) continue;
       const trig = fireCardTrigger(
         s, id, lane, owner,
@@ -558,7 +592,7 @@ export function evalEffect(
   // the card's board position at the moment the effect was scheduled.
   // Preserving it is what makes deathrattles / on-discard-in-lane work.
   const self = ctx.self as CardId | null;
-  const liveSelf = self ? state.cards[self] : null;
+  const liveSelf = self ? getCardRuntime(state, self, manifest) : null;
   const onBoard = liveSelf && liveSelf.lane !== null;
   const liveCtx: EffectCtx = liveSelf
     ? {
@@ -583,8 +617,8 @@ export function evalEffect(
           state: s,
           self: id,
           selfKind: 'card',
-          selfLane: s.cards[id]?.lane ?? null,
-          selfOwner: s.cards[id]?.owner ?? null,
+          selfLane: getCardRuntime(s, id, manifest)?.lane ?? null,
+          selfOwner: getCardRuntime(s, id, manifest)?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
         const change = resolveCardPowerAdd(s, id, delta, ctx.source, manifest);
@@ -600,9 +634,8 @@ export function evalEffect(
       let s = state;
       for (const id of targets) {
         if (!isPowerBearingCard(s, id, manifest)) continue;
-        const card = s.cards[id];
-        const def = card ? manifest.cards[card.defId] : undefined;
-        if (!card || !def) continue;
+        const card = getCardRuntime(s, id, manifest);
+        if (!card) continue;
         const value = evalNum(effect.value, { ...liveCtx, state: s, self: id });
         const change = resolveCardPowerMutation(
           s,
@@ -627,19 +660,14 @@ export function evalEffect(
           state: s,
           self: id,
           selfKind: 'card',
-          selfLane: s.cards[id]?.lane ?? null,
-          selfOwner: s.cards[id]?.owner ?? null,
+          selfLane: getCardRuntime(s, id, manifest)?.lane ?? null,
+          selfOwner: getCardRuntime(s, id, manifest)?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
         if (delta === 0) continue;
-        const e: MatchEvent = {
-          type: 'CARD_COST_CHANGED',
-          cardId: id,
-          delta,
-          cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const mutation = adjustCardCost(s, id, delta, ctx.source, manifest);
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -688,7 +716,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const preCard = s.cards[id];
+        const preCard = getCardRuntime(s, id, manifest);
         const preOwner = preCard?.owner ?? null;
         const e: MatchEvent = {
           type: 'CARD_DISCARDED',
@@ -713,7 +741,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card || card.lane === null) continue;
         if (isMoveBlocked(s, id, manifest)) continue;
         // Per-target destination: forked off ctx.rng so two simultaneous
@@ -766,18 +794,24 @@ export function evalEffect(
       for (let i = 0; i < count; i++) {
         const deck = s.deck[owner];
         if (deck.length === 0) break;
-        const top = deck[0]; // top-of-deck is index 0; DECK_SHUFFLED
+        const topCardId = deck[0]; // top-of-deck is index 0; DECK_SHUFFLED
                               // established that convention.
         if (s.hand[owner].length >= manifest.constants.handCap) break;
         const e: MatchEvent = {
           type: 'CARD_DRAWN',
           owner,
-          cardId: top.id,
+          cardId: topCardId,
           toHand: true,
         };
         events.push(e);
         s = apply(s, e, manifest);
-        const debuff = applyHandEntryDebuffs(s, top.id, owner, ctx.rng.fork(`debuff:${top.id}`), manifest);
+        const debuff = applyHandEntryDebuffs(
+          s,
+          topCardId,
+          owner,
+          ctx.rng.fork(`debuff:${topCardId}`),
+          manifest,
+        );
         events.push(...debuff.events);
         s = debuff.state;
       }
@@ -795,22 +829,38 @@ export function evalEffect(
         currentState: MatchState,
         precedingEvents: MatchEvent[],
       ): EvalResult => {
-        if (!effect.setCost) return { events: precedingEvents, state: currentState };
-        const desiredCost = Math.max(
-          0,
-          Math.floor(evalNum(effect.setCost, { ...liveCtx, state: currentState })),
-        );
-        const delta = desiredCost - getCardCost(currentState, newId, manifest);
-        if (delta === 0) return { events: precedingEvents, state: currentState };
-        const costEvent: MatchEvent = {
-          type: 'CARD_COST_CHANGED',
-          cardId: newId,
-          delta,
-          cause: ctx.source,
-        };
+        if (effect.setCost && effect.adjustCost) {
+          throw new Error('CREATE_CARD_IN_ZONE cannot set and adjust cost together');
+        }
+        const mutation = effect.setCost
+          ? setCardCost(
+              currentState,
+              newId,
+              Math.max(
+                0,
+                Math.floor(evalNum(effect.setCost, {
+                  ...liveCtx,
+                  state: currentState,
+                })),
+              ),
+              ctx.source,
+              manifest,
+            )
+          : effect.adjustCost
+            ? adjustCardCost(
+                currentState,
+                newId,
+                Math.trunc(evalNum(effect.adjustCost, {
+                  ...liveCtx,
+                  state: currentState,
+                })),
+                ctx.source,
+                manifest,
+              )
+            : { events: [], state: currentState };
         return {
-          events: [...precedingEvents, costEvent],
-          state: apply(currentState, costEvent, manifest),
+          events: [...precedingEvents, ...mutation.events],
+          state: mutation.state,
         };
       };
 
@@ -878,7 +928,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
 
         if (effect.destination.kind === 'LANE') {
@@ -975,7 +1025,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const candidates = findLanes(s, manifest, {
           laneId: lanes,
@@ -1012,7 +1062,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.fork(`transform:${id}`), ctx.eventOwner ?? null);
         if (!defId || defId === card.defId) continue;
@@ -1026,6 +1076,39 @@ export function evalEffect(
         };
         events.push(e);
         s = apply(s, e, manifest);
+      }
+      return { events, state: s };
+    }
+
+    case 'SCHEDULE_REVEAL': {
+      const targets = select(effect.target, liveCtx);
+      const events: MatchEvent[] = [];
+      let s = state;
+      for (const id of targets) {
+        const card = getCardRuntime(s, id, manifest);
+        if (!card || card.zone !== 'LANE' || card.revealed) continue;
+        const perTargetCtx: EffectCtx = {
+          ...liveCtx,
+          state: s,
+          self: id,
+          selfKind: 'card',
+          selfLane: card.lane,
+          selfOwner: card.owner,
+        };
+        const timing = effect.timing.kind === 'END_OF_GAME'
+          ? { kind: 'END_OF_GAME' as const }
+          : {
+              kind: 'TURN' as const,
+              turn: Math.max(1, Math.floor(evalNum(effect.timing.turn, perTargetCtx))),
+            };
+        const event: MatchEvent = {
+          type: 'CARD_REVEAL_SCHEDULED',
+          cardId: id,
+          timing,
+          cause: ctx.source,
+        };
+        events.push(event);
+        s = apply(s, event, manifest);
       }
       return { events, state: s };
     }
@@ -1053,9 +1136,9 @@ export function evalEffect(
       const runtimeTag = resolveCardTagSpec(effect.tag, ctx.source);
       if (!runtimeTag) return { events, state };
       for (const id of targets) {
-        const e: MatchEvent = { type: 'CARD_TAG_ADDED', cardId: id, tag: runtimeTag };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const mutation = addCardTag(s, id, runtimeTag, ctx.source, manifest);
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -1065,13 +1148,15 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const e: MatchEvent = {
-          type: 'CARD_TAG_REMOVED',
-          cardId: id,
-          tag: effect.tag as never, // narrowed by tag registry at authoring time
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const mutation = removeCardTag(
+          s,
+          id,
+          effect.tag as never,
+          ctx.source,
+          manifest,
+        );
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -1124,14 +1209,16 @@ export function evalEffect(
       for (const id of targets) {
         const delta = evalNum(effect.delta, { ...liveCtx, state: s, self: id });
         if (delta === 0) continue;
-        const e: MatchEvent = {
-          type: 'CARD_COUNTER_CHANGED',
-          cardId: id,
-          name: effect.name,
+        const mutation = changeCardCounter(
+          s,
+          id,
+          effect.name,
           delta,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+          ctx.source,
+          manifest,
+        );
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -1165,22 +1252,35 @@ export function evalEffect(
       const into = select(effect.into, liveCtx);
       const source = select(effect.source, liveCtx);
       if (source.length === 0) return { events: [], state };
-      const srcCard = state.cards[source[0]];
+      const srcCard = getCardRuntime(state, source[0], manifest);
       if (!srcCard) return { events: [], state };
       const copyKind = effect.copyKind ?? 'FULL';
+      const abilities = copyKind === 'ON_REVEAL'
+        ? {
+            ...(srcCard.text.abilities.onReveal
+              ? { onReveal: srcCard.text.abilities.onReveal }
+              : {}),
+          }
+        : srcCard.text.abilities;
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of into) {
-        const override = copyKind === 'ON_REVEAL'
-          ? { kind: 'COPY_ON_REVEAL_OF_CARD' as const, cardId: source[0] }
-          : { kind: 'COPY_OF_CARD' as const, cardId: source[0] };
-        const e: MatchEvent = {
-          type: 'CARD_TEXT_OVERRIDDEN',
-          cardId: id,
-          override,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const mutation = replaceCardText(
+          s,
+          id,
+          {
+            kind: 'COPIED_TEXT',
+            sourceCardId: srcCard.id,
+            sourceDefId: srcCard.defId,
+            scope: copyKind === 'ON_REVEAL' ? 'ON_REVEAL' : 'ALL',
+            abilities,
+            rulesText: srcCard.text.rulesText,
+          },
+          ctx.source,
+          manifest,
+        );
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -1191,7 +1291,7 @@ export function evalEffect(
       let s = state;
       for (const id of targets) {
         if (!isPowerBearingCard(s, id, manifest)) continue;
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const change = resolveCardPowerMutation(
           s,
@@ -1211,47 +1311,51 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const textKind = effect.textKind;
         const override = textKind === 'ONGOING' ? { kind: 'BLANK_ONGOING' as const }
                        : textKind === 'ALL'     ? { kind: 'BLANK_ALL' as const }
                        : null; // 'ON_REVEAL' — no TextOverride kind for that yet; skip
         if (!override) continue;
-        const e: MatchEvent = {
-          type: 'CARD_TEXT_OVERRIDDEN',
-          cardId: id,
+        const mutation = replaceCardText(
+          s,
+          id,
           override,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+          ctx.source,
+          manifest,
+        );
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
 
     case 'REMOVE_COPIED_TEXT': {
-      // Clear any COPY_OF_CARD / COPY_ON_REVEAL_OF_CARD text override.
+      // Clear an immutable copied-text snapshot.
       const targets = select(effect.target, liveCtx);
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const card = s.cards[id];
+        const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
-        const ov = card.textOverride;
-        if (!ov || (ov.kind !== 'COPY_OF_CARD' && ov.kind !== 'COPY_ON_REVEAL_OF_CARD')) continue;
-        const e: MatchEvent = {
-          type: 'CARD_TEXT_OVERRIDDEN',
-          cardId: id,
-          override: null,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const ov = card.text.override;
+        if (ov?.kind !== 'COPIED_TEXT') continue;
+        const mutation = replaceCardText(
+          s,
+          id,
+          null,
+          ctx.source,
+          manifest,
+        );
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
 
     case 'ADD_PENDING': {
-      const runtime = resolvePendingEffectSpec(effect.effect, ctx, state);
+      const runtime = resolvePendingEffectSpec(effect.effect, ctx, state, manifest);
       if (!runtime) return { events: [], state };
       const e: MatchEvent = { type: 'PENDING_EFFECT_ADDED', effect: runtime };
       return { events: [e], state: apply(state, e, manifest) };
@@ -1294,7 +1398,7 @@ export function evalEffect(
         const it = iter[i];
         for (let j = 0; j < effect.do.length; j++) {
           const sub = effect.do[j];
-          const iterCard = s.cards[it];
+          const iterCard = getCardRuntime(s, it, manifest);
           const subCtx: EffectCtx = {
             ...ctx,
             state: s,
@@ -1362,11 +1466,10 @@ export function applyHandEntryDebuffs(
   const oppOwner: Owner = newOwner === 'P0' ? 'P1' : 'P0';
   const events: MatchEvent[] = [];
   let s = state;
-  for (const card of Object.values(s.cards)) {
+  for (const id of getAllCardIds(s)) {
+    const card = getCardRuntime(s, id, manifest);
     if (!card || card.owner !== oppOwner || card.zone !== 'LANE' || !card.revealed) continue;
-    const def = manifest.cards[card.defId];
-    if (!def) continue;
-    for (const expr of def.abilities.ongoing ?? []) {
+    for (const expr of card.text.abilities.ongoing ?? []) {
       const b = expr as any;
       if (b.kind !== 'CALL_BUILTIN' || b.fn !== 'DEBUFF_ENEMY_ON_HAND_ENTRY') continue;
       const delta: number = b.args?.delta ?? -1;
@@ -1375,7 +1478,11 @@ export function applyHandEntryDebuffs(
         s,
         cardId,
         delta,
-        { sourceId: card.id, effectKind: 'ONGOING' },
+        {
+          sourceId: card.id,
+          effectKind: 'ONGOING',
+          reason: 'DEBUFF_ENEMY_ON_HAND_ENTRY',
+        },
         manifest,
       );
       events.push(...change.events);
@@ -1394,8 +1501,12 @@ function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): b
     .some(entry => entry.expr.kind === 'BLOCK_MOVE');
 }
 
-function effectSourceOwner(state: MatchState, source: EffectRef): Owner | null {
-  const sourceCard = state.cards[source.sourceId as CardId];
+function effectSourceOwner(
+  state: MatchState,
+  source: EffectRef,
+  manifest: Manifest,
+): Owner | null {
+  const sourceCard = getCardRuntime(state, source.sourceId as CardId, manifest);
   return sourceCard?.owner ?? null;
 }
 
@@ -1419,10 +1530,10 @@ function isFriendlyDestroyBlocked(
   ctx: EffectCtx,
   manifest: Manifest,
 ): boolean {
-  const victim = state.cards[victimId];
+  const victim = getCardRuntime(state, victimId, manifest);
   if (!victim || victim.lane === null) return false;
 
-  const destroySourceOwner = effectSourceOwner(state, ctx.source);
+  const destroySourceOwner = effectSourceOwner(state, ctx.source, manifest);
   if (destroySourceOwner === null) return false;
 
   for (const entry of collectAllOngoings(state, manifest)) {
@@ -1496,9 +1607,10 @@ function resolvePendingEffectSpec(
   spec: import('../types/ability').PendingEffectSpec,
   ctx: EffectCtx,
   state: MatchState,
+  manifest: Manifest,
 ): import('../types/state').PendingEffect | null {
   const sourceId = ctx.source.sourceId as CardId;
-  const sourceCard = state.cards[sourceId];
+  const sourceCard = getCardRuntime(state, sourceId, manifest);
   const owner = ctx.selfOwner ?? sourceCard?.owner ?? null;
   const lane = ctx.selfLane ?? sourceCard?.lane ?? null;
   switch (spec.kind) {

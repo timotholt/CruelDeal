@@ -81,6 +81,7 @@ const fixture = buildRuntimeFixture({
         defId: 'ender',
         revealed: true,
         powerMutations: [{ kind: 'ADD', delta: 2 }],
+        costDelta: -2,
         tags: [{ kind: 'EVER_MOVED' }],
         spawnSource: {
           kind: 'CARD_CREATED',
@@ -96,7 +97,7 @@ const fixture = buildRuntimeFixture({
 
 const state = fixture.state;
 
-describe('live CardInstance queries', () => {
+describe('live InternalCardRecord queries', () => {
   it('findCard combines game-state and manifest-backed criteria', () => {
     const match = findCard(state, manifest, {
       zone: 'LANE',
@@ -151,6 +152,18 @@ describe('live CardInstance queries', () => {
     expect(findCard(state, manifest, {
       zone: 'DISCARD',
     })).toBeNull();
+  });
+
+  it('queries effective current cost rather than printed template cost', () => {
+    expect(findCards(state, manifest, {
+      cost: 1,
+      hasOnEndOfTurn: true,
+    }).map(card => card.id)).toEqual(['created-ender']);
+
+    expect(findCardDefs(manifest, {
+      cost: 3,
+      hasOnEndOfTurn: true,
+    }).map(card => card.defId)).toEqual(['ender']);
   });
 });
 

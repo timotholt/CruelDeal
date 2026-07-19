@@ -1,3 +1,4 @@
+import { getAllCardStates, getCardState } from '../../engine/projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 
 import { apply } from '../../engine/apply';
@@ -255,7 +256,7 @@ describe('card variants and opening initialization', () => {
       locationDeckFixture(manifest, 'variant-genesis-replay'),
     );
     const genesis = setup.genesis;
-    const selected = Object.values(genesis.cards).find((card) => card.variantId === 'holo');
+    const selected = getAllCardStates(genesis).find((card) => card.variantId === 'holo');
 
     expect(selected).toBeDefined();
     expect(selected?.defId).toBe('card-0');
@@ -275,9 +276,9 @@ describe('card variants and opening initialization', () => {
       })),
     });
 
-    expect(finalState.cards[selected!.id].variantId).toBe('holo');
+    expect(getCardState(finalState, selected!.id)!.variantId).toBe('holo');
     expect(replayed.finalState).toEqual(finalState);
-    expect(replayed.finalState.cards[selected!.id].variantId).toBe('holo');
+    expect(getCardState(replayed.finalState, selected!.id)!.variantId).toBe('holo');
   });
 
   it('builds the same symmetric opening transaction for the same genesis', () => {

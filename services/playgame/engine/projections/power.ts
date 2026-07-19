@@ -15,7 +15,7 @@ import { collectAllOngoings, ongoingsTargeting } from './ongoing';
 import { ctxForCard, ctxForLocation, ctxForTargetCard, type SourcedOngoing } from './context';
 import { evalNum } from './numexpr';
 import { ownerMatches } from './select';
-import { isPowerBearingCard, isPowerBearingDef } from './power-bearing';
+import { isPowerBearingCard } from './power-bearing';
 import { locationCardAtLane } from '../laneTopology';
 import {
   isLanePowerIncreaseBlocked,
@@ -25,6 +25,8 @@ import {
   effectivePermanentPowerDelta,
   storedPowerDelta,
 } from '../powerLedger';
+import { getCardRuntime } from './cardRuntime';
+import { getCardTemplate } from './cardTemplate';
 
 export interface PowerModifierEntry {
   readonly sourceId: CardId | LocationCardInstanceId;
@@ -63,12 +65,12 @@ export interface LanePowerBreakdown {
 }
 
 export function getCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card) return 0;
-  const def = manifest.cards[card.defId];
+  const def = getCardTemplate(manifest, card.defId);
   // This numeric API predates spell cards. Its boundary fallback is 0, but
   // callers that compare, select, or sum power must use the structural guard.
-  if (!isPowerBearingDef(def)) return 0;
+  if (!def || def.basePower === null) return 0;
 
   const increaseBlocked = isPowerIncreaseBlocked(state, cardId, manifest);
 
@@ -101,7 +103,7 @@ export function getCardPowerModifiers(
   cardId: CardId,
   manifest: Manifest,
 ): PowerModifierEntry[] {
-  const card = state.cards[cardId];
+  const card = getCardRuntime(state, cardId, manifest);
   if (!card || !isPowerBearingCard(state, cardId, manifest)) return [];
 
   const targeting = ongoingsTargeting(state, manifest, cardId);
@@ -139,14 +141,14 @@ export function getLanePowerBreakdown(
   manifest: Manifest,
 ): LanePowerBreakdown {
   const cardIds = state.lanesById[lane].cards[owner].filter(id => {
-    const c = state.cards[id];
+    const c = getCardRuntime(state, id, manifest);
     return !!c && c.revealed && c.zone === 'LANE' && isPowerBearingCard(state, id, manifest);
   });
   const cards: LaneCardContribution[] = cardIds.map((id) => {
-    const card = state.cards[id];
-    const def = card ? manifest.cards[card.defId] : null;
+    const card = getCardRuntime(state, id, manifest);
+    const def = card ? getCardTemplate(manifest, card.defId) : null;
     const basePower = def?.basePower ?? 0;
-    const permanentDelta = card && isPowerBearingDef(def ?? undefined)
+    const permanentDelta = card && def?.basePower !== null && def?.basePower !== undefined
       ? storedPowerDelta(card, basePower)
       : 0;
     const ongoingModifiers = getCardPowerModifiers(state, id, manifest);
@@ -233,7 +235,7 @@ function getOngoingEvalCtx(
   manifest: Manifest,
 ) {
   if (entry.sourceCardId) {
-    const sourceCard = state.cards[entry.sourceCardId];
+    const sourceCard = getCardRuntime(state, entry.sourceCardId, manifest);
     return sourceCard ? ctxForCard(state, manifest, sourceCard) : null;
   }
   if (entry.sourceLocationId) {

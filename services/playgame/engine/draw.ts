@@ -18,10 +18,10 @@ export function buildCardDrawEvents(
 ): CardDrawEvent[] {
   const availableHandSlots = Math.max(0, manifest.constants.handCap - state.hand[owner].length);
   const drawCount = Math.min(Math.max(0, count), state.deck[owner].length, availableHandSlots);
-  return state.deck[owner].slice(0, drawCount).map((card) => ({
+  return state.deck[owner].slice(0, drawCount).map((cardId) => ({
     type: 'CARD_DRAWN',
     owner,
-    cardId: card.id,
+    cardId,
     toHand: true,
   }));
 }

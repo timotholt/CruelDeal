@@ -2,6 +2,7 @@ import type { MatchEvent } from '../engine/types/events';
 import type { Seat } from '../engine/types/ids';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
+import { getCardPlacement } from '../engine/projections/cardRuntime';
 
 export interface CommittedEventPacingPlan {
   readonly orderedEventIndexes: readonly number[];
@@ -76,8 +77,8 @@ export function planCommittedResolutionWalk(
     }
 
     if (frame.event.type === 'CARD_FLIPPED') {
-      const owner = frame.before.cards[frame.event.cardId]?.owner
-        ?? frame.after.cards[frame.event.cardId]?.owner;
+      const owner = getCardPlacement(frame.before, frame.event.cardId)?.owner
+        ?? getCardPlacement(frame.after, frame.event.cardId)?.owner;
       const isPriority = owner === frame.before.priority;
       if (isPriority && nonPriorityRevealStarted && import.meta.env.DEV) {
         throw new Error('Committed reveal order returned to the priority player');

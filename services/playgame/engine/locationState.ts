@@ -1,6 +1,10 @@
 import type { LaneId, LocationCardInstanceId } from './types/ids';
 import type { LocationZone, MatchState } from './types/state';
 import { allocatedLanes } from './laneTopology';
+import {
+  getAllLocationStates,
+  getLocationState,
+} from './projections/locationRuntime';
 
 const LIST_ZONES = [
   ['DECK', 'drawPile'],
@@ -29,7 +33,7 @@ export function validateLocationState(state: MatchState): readonly string[] {
   for (const [zone, listName] of LIST_ZONES) {
     for (const id of state.locationDeck[listName]) {
       record(id, zone);
-      const location = state.locationCards[id];
+      const location = getLocationState(state, id);
       if (!location) {
         issues.push(`${listName} references missing location card ${id}`);
       } else if (location.zone !== zone) {
@@ -45,7 +49,7 @@ export function validateLocationState(state: MatchState): readonly string[] {
     const id = lane.locationSlot.locationCardId;
     if (id === null) continue;
     record(id, `LANE:${lane.id}`);
-    const location = state.locationCards[id];
+    const location = getLocationState(state, id);
     if (!location) {
       issues.push(`lane ${lane.id} references missing location card ${id}`);
       continue;
@@ -58,7 +62,7 @@ export function validateLocationState(state: MatchState): readonly string[] {
     }
   }
 
-  for (const location of Object.values(state.locationCards)) {
+  for (const location of getAllLocationStates(state)) {
     const zones = occurrences.get(location.id) ?? [];
     if (zones.length !== 1) {
       issues.push(

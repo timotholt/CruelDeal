@@ -1,3 +1,5 @@
+import { getLocationState } from '../projections/locationRuntime';
+import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import type { EffectRef } from '../types/ability';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
@@ -7,7 +9,7 @@ import type {
   LocationCardInstanceId,
   Owner,
 } from '../types/ids';
-import type { CardInstance, MatchState } from '../types/state';
+import type { InternalCardRecord, MatchState } from '../types/state';
 import { createInitialMatchState } from '../cli/initState';
 import { createRng } from '../rng';
 import { apply } from '../apply';
@@ -34,7 +36,11 @@ import { computeMatchResult, resolve } from '../resolve';
 import { planEnemyTurnFromHand } from '../ai';
 import { allocatedLanes, locationCardAtLane } from '../laneTopology';
 import { validateLocationState } from '../locationState';
-import { withTestLocation } from '../testkit/runtimeFixture';
+import {
+  upsertTestCard,
+  upsertTestLocation,
+  withTestLocation,
+} from '../testkit/runtimeFixture';
 import {
   projectStateForSeat,
   readProjectedState,
@@ -123,7 +129,7 @@ const manifest: Manifest = {
 const systemCause: EffectRef = {
   sourceId: 'system:test' as CardId,
   effectKind: 'SYSTEM',
-  systemReason: 'location-lifecycle-test',
+  reason: 'location-lifecycle-test',
 };
 
 const state = (): MatchState => createInitialMatchState(
@@ -151,7 +157,7 @@ function withLaneCard(
   const owner = options.owner ?? 'P0';
   const defId = options.defId ?? 'vanilla';
   const cardId = `lane-card-${++cardSequence}` as CardId;
-  const instance: CardInstance = {
+  const instance: InternalCardRecord = {
     id: cardId,
     defId,
     version: 1,
@@ -159,11 +165,13 @@ function withLaneCard(
     lane: laneId,
     zone: 'LANE',
     revealed: options.revealed ?? true,
+    revealTiming: options.revealed === false ? { kind: 'TURN', turn: input.turn } : null,
       powerLedger: [],
       costDelta: 0,
       costLog: [],
     tags: options.destroyImmune ? [{ kind: 'DESTROY_IMMUNE' }] : [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'SYSTEM' },
   };
@@ -177,9 +185,8 @@ function withLaneCard(
   };
   return {
     cardId,
-    state: {
+    state: upsertTestCard({
       ...input,
-      cards: { ...input.cards, [cardId]: instance },
       lanesById: {
         ...input.lanesById,
         [laneId]: nextLane,
@@ -187,7 +194,7 @@ function withLaneCard(
       stagingOrder: options.staged
         ? [...input.stagingOrder, cardId]
         : input.stagingOrder,
-    },
+    }, instance),
   };
 }
 
@@ -204,7 +211,7 @@ function withoutLocation(input: MatchState, laneId: LaneId): MatchState {
   const lane = input.lanesById[laneId];
   const location = locationCardAtLane(input, laneId);
   if (!lane || !location) return input;
-  return {
+  return upsertTestLocation({
     ...input,
     lanesById: {
       ...input.lanesById,
@@ -216,20 +223,16 @@ function withoutLocation(input: MatchState, laneId: LaneId): MatchState {
         },
       },
     },
-    locationCards: {
-      ...input.locationCards,
-      [location.id]: {
-        ...location,
-        zone: 'DISCARD',
-        laneId: null,
-        pendingLaneId: null,
-      },
-    },
     locationDeck: {
       ...input.locationDeck,
       discardPile: [...input.locationDeck.discardPile, location.id],
     },
-  };
+  }, {
+    ...location,
+    zone: 'DISCARD',
+    laneId: null,
+    pendingLaneId: null,
+  });
 }
 
 const destroyLane = (input: MatchState, laneId: LaneId) =>
@@ -349,12 +352,10 @@ describe('location card lifecycle', () => {
       revealCount: 0,
     });
     expect(
-      readProjectedState(projectStateForSeat(shown.state, 'P0'))
-        .locationCards[location.id].defId,
+      getLocationState(readProjectedState(projectStateForSeat(shown.state, 'P0')), location.id)!.defId,
     ).toBe(location.defId);
     expect(
-      readProjectedState(projectStateForSeat(shown.state, 'P1'))
-        .locationCards[location.id].defId,
+      getLocationState(readProjectedState(projectStateForSeat(shown.state, 'P1')), location.id)!.defId,
     ).toBe('');
     expect(shown.state.lanesById[2].locationSlot.revealAtTurn).toBe(3);
   });
@@ -391,7 +392,7 @@ describe('location card lifecycle', () => {
     const removed = removeLocation(input, 1, 'DISCARD', systemCause, manifest);
     expect(removed.ok).toBe(true);
     expect(locationCardAtLane(removed.state, 1)).toBeNull();
-    expect(removed.state.locationCards[location.id].zone).toBe('DISCARD');
+    expect(getLocationState(removed.state, location.id)!.zone).toBe('DISCARD');
     expect(removed.state.locationDeck.discardPile).toContain(location.id);
     const returned = returnLocationToDeck(
       removed.state,
@@ -402,7 +403,7 @@ describe('location card lifecycle', () => {
     );
     expect(returned.ok).toBe(true);
     expect(returned.state.locationDeck.drawPile[0]).toBe(location.id);
-    expect(returned.state.locationCards[location.id]).toMatchObject({
+    expect(getLocationState(returned.state, location.id)!).toMatchObject({
       zone: 'DECK',
       laneId: null,
       face: 'FACE_DOWN',
@@ -525,17 +526,11 @@ describe('location card lifecycle', () => {
   it('preserves tags and counters on the swapped instances', () => {
     const initial = state();
     const location = locationCardAtLane(initial, 0)!;
-    const tagged: MatchState = {
-      ...initial,
-      locationCards: {
-        ...initial.locationCards,
-        [location.id]: {
-          ...location,
-          tags: [{ kind: 'FLOODED' }],
-          counters: { visits: 2 },
-        },
-      },
-    };
+    const tagged = upsertTestLocation(initial, {
+      ...location,
+      tags: [{ kind: 'FLOODED' }],
+      counters: { visits: 2 },
+    });
     const result = swapLocations(tagged, 0, 2, systemCause, manifest);
     expect(locationCardAtLane(result.state, 2)?.tags).toEqual([{ kind: 'FLOODED' }]);
     expect(locationCardAtLane(result.state, 2)?.counters).toEqual({ visits: 2 });
@@ -605,8 +600,8 @@ describe('lane destruction invariants', () => {
     const faceDown = withLaneCard(faceUp.state, 1, { revealed: false, staged: true });
     const result = destroyLane(faceDown.state, 1);
     expect(result.ok).toBe(true);
-    expect(result.state.cards[faceUp.cardId].zone).toBe('DESTROYED');
-    expect(result.state.cards[faceDown.cardId].zone).toBe('DESTROYED');
+    expect(getCardState(result.state, faceUp.cardId)!.zone).toBe('DESTROYED');
+    expect(getCardState(result.state, faceDown.cardId)!.zone).toBe('DESTROYED');
     expect(result.state.stagingOrder).not.toContain(faceDown.cardId);
     expect(result.events.filter(event => event.type === 'CARD_DESTROYED')).toHaveLength(2);
     expect(result.events.some(event => event.type === 'CARD_FLIPPED')).toBe(false);
@@ -630,7 +625,7 @@ describe('lane destruction invariants', () => {
       events: [],
     });
     expect(result.state).toBe(placed.state);
-    expect(result.state.cards[placed.cardId].zone).toBe('LANE');
+    expect(getCardState(result.state, placed.cardId)!.zone).toBe('LANE');
     expect(result.state.lanesById[0].status).toBe('ACTIVE');
   });
 
@@ -684,7 +679,7 @@ describe('lane destruction invariants', () => {
       selfLane: 2,
       selfOwner: null,
       rng: createRng('singularity'),
-      source: { sourceId: location.id, effectKind: 'LOCATION' },
+      source: { sourceId: location.id, effectKind: 'LOCATION', reason: 'TEST' },
       depth: 0,
     }, manifest);
     expect(result.state.activeLaneOrder).toEqual([2]);
@@ -708,7 +703,7 @@ describe('lane destruction invariants', () => {
     expect(resolved.events.some(event =>
       event.type === 'CARD_FLIPPED' && event.cardId === staged.cardId,
     )).toBe(false);
-    expect(resolved.state.cards[staged.cardId].zone).toBe('DESTROYED');
+    expect(getCardState(resolved.state, staged.cardId)!.zone).toBe('DESTROYED');
   });
 
   it('scoring excludes destroyed lanes', () => {
@@ -723,23 +718,23 @@ describe('lane destruction invariants', () => {
 
   it('play intents cannot target a destroyed lane', () => {
     const initial = state();
-    const handCard = initial.deck.P0[0];
-    const inHand: MatchState = {
+    const handCardId = initial.deck.P0[0];
+    const handInstance = {
+      ...getCardState(initial, handCardId)!,
+      zone: 'HAND' as const,
+    };
+    const inHand: MatchState = upsertTestCard({
       ...initial,
       deck: { ...initial.deck, P0: [] },
-      hand: { ...initial.hand, P0: [{ ...handCard, zone: 'HAND' }] },
-      cards: {
-        ...initial.cards,
-        [handCard.id]: { ...handCard, zone: 'HAND' },
-      },
-    };
+      hand: { ...initial.hand, P0: [handCardId] },
+    }, handInstance);
     const destroyed = destroyLane(inHand, 0);
     expect(destroyed.ok).toBe(true);
     const events = resolve(destroyed.state, {
       type: 'STAGE_CARD',
       intentId: 'destroyed-lane',
       owner: 'P0',
-      cardId: handCard.id,
+      cardId: handCardId,
       lane: 0,
     }, createRng('stage-destroyed'), manifest);
     expect(events).toEqual([
@@ -749,17 +744,17 @@ describe('lane destruction invariants', () => {
 
   it('AI plans only into the sole active lane', () => {
     const initial = state();
-    const handCard = initial.deck.P1[0];
-    const inHand: MatchState = {
+    const handCardId = initial.deck.P1[0];
+    const handInstance = {
+      ...getCardState(initial, handCardId)!,
+      zone: 'HAND' as const,
+    };
+    const inHand: MatchState = upsertTestCard({
       ...initial,
       energy: { ...initial.energy, P1: 3 },
       deck: { ...initial.deck, P1: [] },
-      hand: { ...initial.hand, P1: [{ ...handCard, zone: 'HAND' }] },
-      cards: {
-        ...initial.cards,
-        [handCard.id]: { ...handCard, zone: 'HAND' },
-      },
-    };
+      hand: { ...initial.hand, P1: [handCardId] },
+    }, handInstance);
     const destroyed = destroyOthers(inHand, 1);
     expect(destroyed.ok).toBe(true);
     const plays = planEnemyTurnFromHand(

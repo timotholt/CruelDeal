@@ -1,6 +1,11 @@
 import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneId, Owner } from '../engine/types/ids';
-import type { CardInstance, CardZone, MatchState } from '../engine/types/state';
+import type { CardZone, MatchState } from '../engine/types/state';
+import {
+  getAllCardIds,
+  getCardPlacement,
+  type CardPlacement,
+} from '../engine/projections/cardRuntime';
 
 export type CardZoneRef =
   | { kind: 'DECK'; owner: Owner }
@@ -125,24 +130,26 @@ function styleFor(from: CardZoneRef, to: CardZoneRef, reason: MatchEvent['type']
 }
 
 function zoneOfCard(state: MatchState, cardId: CardId): CardZoneRef | null {
-  const card = state.cards[cardId];
+  const card = getCardPlacement(state, cardId);
   if (!card) return null;
-  return zoneOfInstance(state, card);
+  return zoneOfInstance(card);
 }
 
-function zoneOfInstance(state: MatchState, card: CardInstance): CardZoneRef {
+function zoneOfInstance(card: CardPlacement): CardZoneRef {
   switch (card.zone) {
     case 'DECK': {
-      const index = state.deck[card.owner].findIndex(c => c.id === card.id);
+      const index = card.position.zone === 'DECK' ? card.position.index : -1;
       return { kind: 'DECK', owner: card.owner, ...(index >= 0 ? { index } : {}) } as CardZoneRef;
     }
     case 'HAND': {
-      const index = state.hand[card.owner].findIndex(c => c.id === card.id);
+      const index = card.position.zone === 'HAND' ? card.position.index : -1;
       return { kind: 'HAND', owner: card.owner, ...(index >= 0 ? { index } : {}) };
     }
     case 'LANE': {
-      const lane = card.lane ?? 0;
-      const index = state.lanesById[lane].cards[card.owner].findIndex(id => id === card.id);
+      const lane = card.position.zone === 'LANE' ? card.position.laneId : 0 as LaneId;
+      const index = card.position.zone === 'LANE' && card.position.slot !== null
+        ? card.position.slot - 1
+        : -1;
       return { kind: 'LANE', owner: card.owner, lane: lane as LaneId, ...(index >= 0 ? { index } : {}) };
     }
     case 'DISCARD':
@@ -171,7 +178,7 @@ function transfer(
   to: CardZoneRef | null,
   face: CardTransfer['face'] = 'preserve',
 ): CardTransfer[] {
-  const card = after.cards[cardId] ?? before.cards[cardId];
+  const card = getCardPlacement(after, cardId) ?? getCardPlacement(before, cardId);
   if (!card || !from || !to) return [];
   const style = styleFor(from, to, event.type);
   const touched = [from, to].filter((zone) => zone.kind === 'HAND' || zone.kind === 'LANE');
@@ -203,7 +210,8 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), zoneOfCard(after, event.cardId), 'faceUp');
 
     case 'CARD_MOVED': {
-      const card = before.cards[event.cardId] ?? after.cards[event.cardId];
+      const card = getCardPlacement(before, event.cardId) ??
+        getCardPlacement(after, event.cardId);
       if (!card) return [];
       return transfer(
         before,
@@ -216,13 +224,15 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
     }
 
     case 'CARD_MOVED_TO_ZONE': {
-      const owner = before.cards[event.cardId]?.owner ?? after.cards[event.cardId]?.owner;
+      const owner = getCardPlacement(before, event.cardId)?.owner ??
+        getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), destinationZone(owner, event.destination));
     }
 
     case 'CARD_RETURNED_TO_LANE': {
-      const owner = before.cards[event.cardId]?.owner ?? after.cards[event.cardId]?.owner;
+      const owner = getCardPlacement(before, event.cardId)?.owner ??
+        getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'LANE', owner, lane: event.lane }, event.revealed ? 'faceUp' : 'faceDown');
     }
@@ -237,19 +247,22 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId) ?? { kind: 'GENERATED', owner: event.owner }, { kind: 'DECK', owner: event.owner });
 
     case 'CARD_DISCARDED': {
-      const owner = before.cards[event.cardId]?.owner ?? after.cards[event.cardId]?.owner;
+      const owner = getCardPlacement(before, event.cardId)?.owner ??
+        getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'DISCARD', owner });
     }
 
     case 'CARD_DESTROYED': {
-      const owner = before.cards[event.cardId]?.owner ?? after.cards[event.cardId]?.owner;
+      const owner = getCardPlacement(before, event.cardId)?.owner ??
+        getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'DESTROYED', owner });
     }
 
     case 'CARD_BANISHED': {
-      const owner = before.cards[event.cardId]?.owner ?? after.cards[event.cardId]?.owner;
+      const owner = getCardPlacement(before, event.cardId)?.owner ??
+        getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'BANISHED', owner });
     }
@@ -275,11 +288,11 @@ const structuralCardEventTypes = new Set<MatchEvent['type']>([
 ]);
 
 function changedCards(before: MatchState, after: MatchState): CardId[] {
-  const ids = new Set([...Object.keys(before.cards), ...Object.keys(after.cards)] as CardId[]);
+  const ids = new Set([...getAllCardIds(before), ...getAllCardIds(after)]);
   const changed: CardId[] = [];
   for (const id of ids) {
-    const a = before.cards[id];
-    const b = after.cards[id];
+    const a = getCardPlacement(before, id);
+    const b = getCardPlacement(after, id);
     if (!a || !b) {
       changed.push(id);
       continue;

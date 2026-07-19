@@ -8,6 +8,8 @@ import type { EffectRef } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
 import type { MatchState, PowerMutation } from '../types/state';
+import { getCardRuntime } from '../projections/cardRuntime';
+import { getCardTemplate } from '../projections/cardTemplate';
 
 export interface PowerMutationResult {
   readonly events: readonly MatchEvent[];
@@ -26,12 +28,15 @@ export function resolveCardPowerMutation(
   cause: EffectRef,
   manifest: Manifest,
 ): PowerMutationResult {
+  if (cause.reason.trim().length === 0) {
+    throw new Error('card power mutation reason must be non-empty');
+  }
   if (!isPowerBearingCard(state, cardId, manifest)) {
     return { events: [], state };
   }
-  const card = state.cards[cardId];
-  const def = card ? manifest.cards[card.defId] : undefined;
-  if (!card || !def || isNoOp(card, def.basePower, mutation)) {
+  const card = getCardRuntime(state, cardId, manifest);
+  const template = card ? getCardTemplate(manifest, card.defId) : null;
+  if (!card || template?.basePower === null || !template || isNoOp(card, template.basePower, mutation)) {
     return { events: [], state };
   }
 
@@ -81,7 +86,7 @@ export function resolveCardPowerAdd(
 }
 
 function isNoOp(
-  card: MatchState['cards'][CardId],
+  card: Pick<import('../types/state').InternalCardRecord, 'powerLedger'> | null,
   basePower: number,
   mutation: PowerMutation,
 ): boolean {

@@ -13,6 +13,14 @@ import type { MatchState } from '../types/state';
 import type { Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
+import {
+  getAllCardIds,
+  getCardRuntime,
+} from '../projections/cardRuntime';
+import {
+  getAllCardTemplates,
+  getCardTemplate,
+} from '../projections/cardTemplate';
 
 /**
  * Resolve an owner ref (literal, SELF_OWNER, or OPP_OWNER) to a concrete
@@ -67,14 +75,17 @@ export function listDefIdsFromPool(
     case 'DECK_OF_OWNER': {
       const owner = resolveOwnerRef(pool.owner, selfOwner, eventOwner);
       if (!owner) return [];
-      const deckCards = state.deck[owner];
-      const defIds = deckCards.map(c => c.defId);
+      const defIds = state.deck[owner]
+        .map(id => getCardRuntime(state, id, manifest)?.defId)
+        .filter((defId): defId is string => defId !== undefined);
       if (pool.excludeInPlay) {
         // "In play" = LANE or HAND — exclude defIds already present somewhere
         // other than DECK. Matches how "random card from deck, not in hand"
         // is interpreted in real Snap.
         const liveDefIds = new Set<string>();
-        for (const c of Object.values(state.cards)) {
+        for (const id of getAllCardIds(state)) {
+          const c = getCardRuntime(state, id, manifest);
+          if (!c) continue;
           if (c.owner === owner && c.zone !== 'DECK') liveDefIds.add(c.defId);
         }
         return defIds.filter(id => !liveDefIds.has(id));
@@ -85,32 +96,34 @@ export function listDefIdsFromPool(
     case 'DEF_ID_LIST':
       // Filter out any defIds that aren't present in the manifest
       // (disabled cards, typos, deprecated entries).
-      return pool.ids.filter(id => !!manifest.cards[id]);
+      return pool.ids.filter(id => getCardTemplate(manifest, id) !== null);
 
     case 'COST_RANGE': {
       // Sample from the whole manifest bucketed by cost. The `ownerDeck`
       // field is retained for future per-player pool biasing but is
       // unused today — all cost-range picks draw from the global set.
-      return Object.values(manifest.cards)
-        .filter(def => def.cost >= pool.min && def.cost <= pool.max)
+      return getAllCardTemplates(manifest)
+        .filter(def => def.baseCost >= pool.min && def.baseCost <= pool.max)
         .map(def => def.defId);
     }
 
     case 'ANY_RANDOM':
       // Every card in the manifest. ownerFilter is informational here;
       // pool membership is identical for both players.
-      return Object.values(manifest.cards).map(def => def.defId);
+      return getAllCardTemplates(manifest).map(def => def.defId);
 
     case 'DECK_BY_CARD_TYPE': {
       // Cards in the owner's deck that match the specified card type.
       const owner = resolveOwnerRef(pool.ownerDeck, selfOwner, eventOwner);
       if (!owner) return [];
       return state.deck[owner]
-        .filter(c => {
-          const def = manifest.cards[c.defId];
-          return def?.cardType === pool.cardType;
+        .map(id => getCardRuntime(state, id, manifest))
+        .filter((card): card is NonNullable<typeof card> => card !== null)
+        .filter(card => {
+          const def = getCardTemplate(manifest, card.defId);
+          return def?.domain === pool.cardType;
         })
-        .map(c => c.defId);
+        .map(card => card.defId);
     }
   }
 }

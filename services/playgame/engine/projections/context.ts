@@ -7,11 +7,16 @@
  */
 
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
-import type { CardInstance, LocationCardInstance, MatchState } from '../types/state';
+import type { InternalLocationRecord, MatchState } from '../types/state';
 import type { OngoingExpr } from '../types/ability';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
 import { activeLaneIds, locationCardAtLane } from '../laneTopology';
+import {
+  getCardRuntime,
+  getCardsInZone,
+  type CardRuntime,
+} from './cardRuntime';
 
 /** Ongoing with its provenance resolved. */
 export interface SourcedOngoing {
@@ -55,7 +60,7 @@ export interface EvalCtx {
 export function ctxForCard(
   state: MatchState,
   manifest: Manifest,
-  card: CardInstance,
+  card: Pick<CardRuntime, 'id' | 'lane' | 'owner'>,
 ): EvalCtx {
   return {
     state,
@@ -71,7 +76,7 @@ export function ctxForCard(
 export function ctxForLocation(
   state: MatchState,
   manifest: Manifest,
-  loc: LocationCardInstance,
+  loc: InternalLocationRecord,
 ): EvalCtx {
   return {
     state,
@@ -90,7 +95,7 @@ export function ctxForTargetCard(
   manifest: Manifest,
   targetId: CardId,
 ): EvalCtx {
-  const card = state.cards[targetId];
+  const card = getCardRuntime(state, targetId, manifest);
   return {
     state,
     manifest,
@@ -103,10 +108,12 @@ export function ctxForTargetCard(
 
 /** All cards currently "alive" and capable of emitting Ongoings —
  *  revealed, in a lane, not tagged as destroyed-this-turn. */
-export function liveCardSources(state: MatchState): CardInstance[] {
-  const out: CardInstance[] = [];
-  for (const card of Object.values(state.cards)) {
-    if (card.zone !== 'LANE') continue;
+export function liveCardSources(
+  state: MatchState,
+  manifest: Manifest,
+): CardRuntime[] {
+  const out: CardRuntime[] = [];
+  for (const card of getCardsInZone(state, manifest, 'LANE')) {
     if (!card.revealed) continue;
     if (card.tags.some(t => t.kind === 'DESTROYED_THIS_TURN')) continue;
     out.push(card);
@@ -115,8 +122,8 @@ export function liveCardSources(state: MatchState): CardInstance[] {
 }
 
 /** All revealed locations currently capable of emitting Ongoings. */
-export function liveLocationSources(state: MatchState): LocationCardInstance[] {
-  const out: LocationCardInstance[] = [];
+export function liveLocationSources(state: MatchState): InternalLocationRecord[] {
+  const out: InternalLocationRecord[] = [];
   for (const laneId of activeLaneIds(state)) {
     const location = locationCardAtLane(state, laneId);
     if (location?.face === 'FACE_UP') out.push(location);

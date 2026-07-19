@@ -1,3 +1,4 @@
+import { getAllCardStates, getCardState } from '../../../engine/projections/cardRuntime';
 import { describe, expect, test, vi } from 'vitest';
 
 import {
@@ -235,23 +236,19 @@ function explicitCreationOwner(event: MatchEvent): Owner | null {
 
 function assertZoneReferences(state: MatchState): void {
   for (const owner of ['P0', 'P1'] as const) {
-    for (const card of state.deck[owner]) {
-      expect(state.cards[card.id]).toBeDefined();
-      expect(state.cards[card.id].owner).toBe(owner);
-      expect(state.cards[card.id].zone).toBe('DECK');
-      expect(card.owner).toBe(owner);
-      expect(card.zone).toBe('DECK');
+    for (const cardId of state.deck[owner]) {
+      expect(getCardState(state, cardId)).toBeDefined();
+      expect(getCardState(state, cardId)!.owner).toBe(owner);
+      expect(getCardState(state, cardId)!.zone).toBe('DECK');
     }
-    for (const card of state.hand[owner]) {
-      expect(state.cards[card.id]).toBeDefined();
-      expect(state.cards[card.id].owner).toBe(owner);
-      expect(state.cards[card.id].zone).toBe('HAND');
-      expect(card.owner).toBe(owner);
-      expect(card.zone).toBe('HAND');
+    for (const cardId of state.hand[owner]) {
+      expect(getCardState(state, cardId)).toBeDefined();
+      expect(getCardState(state, cardId)!.owner).toBe(owner);
+      expect(getCardState(state, cardId)!.zone).toBe('HAND');
     }
     for (const lane of Object.values(state.lanesById)) {
       for (const cardId of lane.cards[owner]) {
-        const card = state.cards[cardId];
+        const card = getCardState(state, cardId)!;
         expect(card).toBeDefined();
         expect(card.owner).toBe(owner);
         expect(card.zone).toBe('LANE');
@@ -268,12 +265,13 @@ function assertProvenance(input: GeneratedMatchCase, execution: ExecutionResult)
     expect(Object.isFrozen(deck)).toBe(true);
     expect(deck.every((entry) => Object.isFrozen(entry))).toBe(true);
     assertManifestValidDeck(deck, BOOTSTRAP_MANIFEST);
-    expect(sortedDefIds(execution.genesis.deck[owner])).toEqual(sortedDefIds(deck));
+    expect(sortedDefIds(execution.genesis.deck[owner].map(cardId =>
+      getCardState(execution.genesis, cardId)!))).toEqual(sortedDefIds(deck));
   }
 
   const initialIds: Record<Owner, Set<string>> = {
-    P0: new Set(execution.genesis.deck.P0.map((card) => card.id)),
-    P1: new Set(execution.genesis.deck.P1.map((card) => card.id)),
+    P0: new Set(execution.genesis.deck.P0),
+    P1: new Set(execution.genesis.deck.P1),
   };
   const explicitlyCreatedFor = new Map<string, Owner>();
   const replay = replayMatch({
@@ -291,12 +289,12 @@ function assertProvenance(input: GeneratedMatchCase, execution: ExecutionResult)
     if (frame.event) {
       const previous = replay.steps[frameIndex - 1].state;
       const owner = explicitCreationOwner(frame.event);
-      if (owner && 'cardId' in frame.event && !previous.cards[frame.event.cardId]) {
+      if (owner && 'cardId' in frame.event && !getCardState(previous, frame.event.cardId)!) {
         explicitlyCreatedFor.set(frame.event.cardId, owner);
       }
     }
 
-    for (const card of Object.values(frame.state.cards)) {
+    for (const card of getAllCardStates(frame.state)) {
       const fromSeatDeck = initialIds[card.owner].has(card.id);
       const createdForSeat = explicitlyCreatedFor.get(card.id) === card.owner;
       expect(

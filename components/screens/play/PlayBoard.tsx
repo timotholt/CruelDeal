@@ -19,7 +19,11 @@ import { useVfx } from '../../game/VfxHost';
 import { Portal } from '../../ui/Portal';
 import { ModalBackdrop } from '../../ui/ModalBackdrop';
 import { usePlayGame } from '@/contexts/PlayGameContext';
-import { getLanePowerBreakdown, type LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import {
+  getCardRuntime,
+  getLanePowerBreakdown,
+  type LanePowerBreakdown,
+} from '@/services/playgame/engine/projections';
 import {
   getCardsInZoneForSeat,
   type ResolvedCard,
@@ -175,7 +179,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     if (!boardInteractive() || isResolving()) return;
     const lastStaged = [...engineState.stagingOrder]
       .reverse()
-      .find((id) => engineState.cards[id]?.owner === localSeat);
+      .find((id) => getCardRuntime(engineState, id, manifest)?.owner === localSeat);
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide

@@ -4,6 +4,8 @@ import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
 import type { LaneId, LocationCardInstanceId } from './types/ids';
 import type { MatchState } from './types/state';
+import { getAllLocationIds } from './projections/locationRuntime';
+import { getLocationTemplate } from './projections/locationTemplate';
 
 export type LocationSetupDeck = readonly { readonly defId: string }[];
 
@@ -15,7 +17,7 @@ export interface LocationSetupTransaction {
 const SETUP_CAUSE: EffectRef = {
   sourceId: 'system:match-setup' as LocationCardInstanceId,
   effectKind: 'SYSTEM',
-  systemReason: 'MATCH_SETUP',
+  reason: 'MATCH_SETUP',
 };
 
 function mintId(rng: Rng, tag: string): string {
@@ -46,7 +48,7 @@ export function buildLocationSetupTransaction(
   if (
     Object.keys(genesis.lanesById).length > 0
     || genesis.activeLaneOrder.length > 0
-    || Object.keys(genesis.locationCards).length > 0
+    || getAllLocationIds(genesis).length > 0
     || genesis.locationDeck.drawPile.length > 0
   ) {
     throw new Error('location setup requires an empty canonical genesis');
@@ -57,7 +59,7 @@ export function buildLocationSetupTransaction(
 
   const instanceRng = createRng(genesis.seed).fork('location-instances');
   const locations = entries.map((entry, sourceDeckEntry) => {
-    if (!manifest.locations[entry.defId]) {
+    if (!getLocationTemplate(manifest, entry.defId)) {
       throw new Error(`location setup references unknown defId "${entry.defId}"`);
     }
     return Object.freeze({

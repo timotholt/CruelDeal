@@ -6,6 +6,8 @@ import type { MatchState as EngineMatchState } from '../engine/types/state';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
 import type { ZoneAnchorKey } from '../presentation/cardTransfers';
+import { getLocationState } from '../engine/projections/locationRuntime';
+import { getLocationTemplate } from '../engine/projections/locationTemplate';
 import type { PlayMotionSurface } from '../presentation/playMotionSurface';
 import { animateEvent } from '../presentation/eventAnimator';
 import {
@@ -91,9 +93,9 @@ const paceLocationReveal = async (
   const laneElement = c.boardEl.querySelector(`.lane-map[data-lane="${lane}"]`) as HTMLElement | null;
   const tileElement = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
 
-  const location = frame.after.locationCards[frame.event.locationId];
+  const location = getLocationState(frame.after, frame.event.locationId);
   const mapPath = location
-    ? c.manifest.locations[location.defId]?.cosmetic.art.map.path
+    ? getLocationTemplate(c.manifest, location.defId)?.mapArtPath
     : undefined;
 
   // The map begins its complete fade while the still-visible hidden tile

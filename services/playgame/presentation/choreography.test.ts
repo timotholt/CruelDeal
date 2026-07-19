@@ -26,7 +26,7 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 
 const source: EffectRef = {
   sourceId: 'sys' as CardId,
-  effectKind: 'SYSTEM',
+  effectKind: 'SYSTEM', reason: 'TEST',
 };
 
 const event = <T extends MatchEvent>(e: T): T => e;
@@ -47,7 +47,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
     vfx: [{
       kind: 'move-trail',
       cardId: 'c1',
-      effectKind: 'SYSTEM',
+      effectKind: 'SYSTEM', reason: 'TEST',
       sourceId: 'sys',
     }],
     sfx: [{ name: 'move', timing: 'on-dispatch' }],
@@ -67,7 +67,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
     vfx: [{
       kind: 'move-trail',
       cardId: 'c1',
-      effectKind: 'SYSTEM',
+      effectKind: 'SYSTEM', reason: 'TEST',
       sourceId: 'sys',
     }],
     sfx: [{ name: 'move', timing: 'on-dispatch' }],

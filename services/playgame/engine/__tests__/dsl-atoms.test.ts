@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 /**
  * Tests for new DSL atoms added in the trackedVariables pass:
  *   NumExpr:   COST_OF, HAND_SIZE, IF_ELSE, TRACKED_STAT
@@ -11,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate, select } from '../projections/select';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import type { MatchState, CardInstance, TrackedVariables } from '../types/state';
+import type { MatchState, InternalCardRecord, TrackedVariables } from '../types/state';
 import type { CardId, Owner } from '../types/ids';
 import type { CardDef, Manifest } from '../manifest/types';
 import type { EvalCtx } from '../projections/context';
@@ -47,8 +48,8 @@ function mkCard(
   id: string,
   defId: string,
   owner: Owner,
-  opts: Partial<CardInstance> = {},
-): CardInstance {
+  opts: Partial<InternalCardRecord> = {},
+): InternalCardRecord {
   return {
     id: id as CardId,
     defId,
@@ -57,6 +58,7 @@ function mkCard(
     lane: 0,
     zone: 'LANE',
     revealed: true,
+    revealTiming: null,
     powerLedger: [],
     costDelta: 0,
     costLog: [],
@@ -65,16 +67,17 @@ function mkCard(
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
     ...opts,
+    textLog: opts.textLog ?? [],
   };
 }
 
 function buildState(
-  cards: CardInstance[],
+  cards: InternalCardRecord[],
   tv: Partial<TrackedVariables> = {},
-  hand: { P0: CardInstance[]; P1: CardInstance[] } = { P0: [], P1: [] },
+  hand: { P0: InternalCardRecord[]; P1: InternalCardRecord[] } = { P0: [], P1: [] },
   energy: { P0: number; P1: number } = { P0: 3, P1: 0 },
 ): MatchState {
-  const cardMap = Object.fromEntries(cards.map(c => [c.id, c])) as Record<CardId, CardInstance>;
+  const cardMap = Object.fromEntries(cards.map(c => [c.id, c])) as Record<CardId, InternalCardRecord>;
   const lanesCards: { P0: CardId[]; P1: CardId[] } = { P0: [], P1: [] };
   for (const c of cards) {
     if (c.zone === 'LANE' && c.lane === 0) lanesCards[c.owner].push(c.id);
@@ -84,7 +87,10 @@ function buildState(
     maxEnergy: { P0: 3, P1: 3 },
     seed: 'test',
     energy,
-    hand,
+    hand: {
+      P0: hand.P0.map(card => card.id),
+      P1: hand.P1.map(card => card.id),
+    },
     cards: cardMap,
     lanesById: testLaneRegistry([
       testLaneState(0, lanesCards),
@@ -116,7 +122,7 @@ function ctx(state: MatchState, manifest: Manifest, self: CardId, selfOwner: Own
     state, manifest,
     self,
     selfKind: 'card',
-    selfLane: state.cards[self]?.lane ?? null,
+    selfLane: getCardState(state, self)!?.lane ?? null,
     selfOwner,
   };
 }

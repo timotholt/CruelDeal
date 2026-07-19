@@ -22,7 +22,8 @@ export interface AssetRef {
 
 // ---- Card ------------------------------------------------------------------
 
-export type CardType = 'character' | 'device' | 'spell';
+/** Stable gameplay taxonomy. This is separate from ability labels. */
+export type CardDomain = 'character' | 'device' | 'spell';
 
 export interface CardAbilities {
   onReveal?: EffectExpr[];
@@ -53,7 +54,7 @@ export interface CardDef {
   defId: string;
   version: number;
   name: string;                         // display only; real display name is cosmetic
-  cardType: CardType;
+  cardType: CardDomain;
   /**
    * Schema-compatibility field. For spells this value is meaningless: spells
    * have no Power, and engine projections/selectors ignore it structurally.

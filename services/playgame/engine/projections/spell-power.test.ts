@@ -1,3 +1,4 @@
+import { getCardState } from './cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { buildRuntimeFixture, testCardDef, testManifest } from '../testkit';
 import type { CardDef } from '../manifest/types';
@@ -47,7 +48,7 @@ describe('spell cards have no power', () => {
   });
 
   it('does not choose a staged spell as the weakest card or match a power threshold', () => {
-    const context = ctxForCard(fixture.state, manifest, fixture.state.cards['operative-1' as CardId]);
+    const context = ctxForCard(fixture.state, manifest, getCardState(fixture.state, 'operative-1' as CardId)!);
     const laneCards = { kind: 'ALL_CARDS', ownerFilter: 'SELF_OWNER', zoneFilter: 'LANE' } as const;
 
     expect(select({ kind: 'MIN_POWER_OF', of: laneCards }, context)).toEqual(['operative-1']);
@@ -56,6 +57,6 @@ describe('spell cards have no power', () => {
       target: { kind: 'SELF' },
       op: '>=',
       value: { kind: 'LIT', n: 0 },
-    }, ctxForCard(fixture.state, manifest, fixture.state.cards['spell-1' as CardId]))).toBe(false);
+    }, ctxForCard(fixture.state, manifest, getCardState(fixture.state, 'spell-1' as CardId)!))).toBe(false);
   });
 });

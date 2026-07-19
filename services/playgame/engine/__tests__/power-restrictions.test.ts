@@ -1,3 +1,4 @@
+import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { evalEffect, type EffectCtx } from '../effects/evaluator';
@@ -136,7 +137,7 @@ function effectCtx(
     selfLane: lane,
     selfOwner: owner,
     rng: createRng('courthouse-effect'),
-    source: { sourceId: self, effectKind: 'ON_REVEAL' },
+    source: { sourceId: self, effectKind: 'ON_REVEAL', reason: 'TEST' },
     depth: 0,
   };
 }
@@ -169,7 +170,7 @@ describe('Courthouse Power contract', () => {
       cardId: 'subject' as CardId,
       fromLane: 0,
       toLane: 1,
-      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM' },
+      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM', reason: 'TEST' },
     }, manifest);
 
     expect(getStoredCardPowerDelta(moved, 'subject' as CardId, manifest)).toBe(4);
@@ -253,7 +254,7 @@ describe('Courthouse Power contract', () => {
     });
     expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(-2);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
-    expect(result.state.cards['subject' as CardId]?.powerLedger).toHaveLength(2);
+    expect(getCardState(result.state, 'subject' as CardId)!?.powerLedger).toHaveLength(2);
   });
 
   it('allows reductions while suppressing positive stored Power', () => {
@@ -299,13 +300,13 @@ describe('Courthouse Power contract', () => {
       cardId: 'subject' as CardId,
       fromLane: 0,
       toLane: 1,
-      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM' },
+      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM', reason: 'TEST' },
     }, manifest);
 
     expect(getStoredCardPowerDelta(moved, 'subject' as CardId, manifest)).toBe(2);
     expect(getCardPower(moved, 'subject' as CardId, manifest)).toBe(5);
-    expect(moved.cards['subject' as CardId]?.powerLedger)
-      .toEqual(state.cards['subject' as CardId]?.powerLedger);
+    expect(getCardState(moved, 'subject' as CardId)!?.powerLedger)
+      .toEqual(getCardState(state, 'subject' as CardId)!?.powerLedger);
   });
 
   it('rejects RESET_POWER when clearing a reduction would increase visible Power', () => {
@@ -329,8 +330,8 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.events).toEqual([]);
-    expect(result.state.cards['subject' as CardId]?.powerLedger)
-      .toEqual(state.cards['subject' as CardId]?.powerLedger);
+    expect(getCardState(result.state, 'subject' as CardId)!?.powerLedger)
+      .toEqual(getCardState(state, 'subject' as CardId)!?.powerLedger);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
   });
 
@@ -380,7 +381,7 @@ describe('Courthouse Power contract', () => {
       cardId: 'subject' as CardId,
       fromLane: 0,
       toLane: 2,
-      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM' },
+      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM', reason: 'TEST' },
     }, manifest);
     expect(getCardPower(moved, 'subject' as CardId, manifest)).toBe(5);
   });
@@ -404,7 +405,7 @@ describe('Courthouse Power contract', () => {
       BOOTSTRAP_MANIFEST,
     );
 
-    expect(result.state.cards['victim' as CardId]?.zone).toBe('DESTROYED');
+    expect(getCardState(result.state, 'victim' as CardId)!?.zone).toBe('DESTROYED');
     expect(getStoredCardPowerDelta(
       result.state,
       'climber' as CardId,

@@ -1288,7 +1288,7 @@
     color: var(--text);
   }
   .match-hud .hidden-hand {
-    gap: 3.5px;
+    gap: 3px;
     height: var(--play-control-size);
   }
   .match-hud .hidden-hand__backs {
@@ -1343,6 +1343,7 @@
   }
   .mini-deck__count {
     min-width: 18px;
+    margin-left: -1px;
     font-family: var(--font-mono);
     font-size: 10px;
     line-height: 1;
@@ -1416,7 +1417,7 @@
     align-items: center;
     padding: 6px 2px 8px;
     flex: 0 0 auto;
-    gap: 13px;
+    gap: 16px;
     border-top: 1px solid rgba(255,255,255,0.07);
     background: linear-gradient(180deg, transparent, rgba(0,0,0,0.28));
   }

@@ -1,5 +1,5 @@
 import type { MatchEvent } from './types/events';
-import type { CardId } from './types/ids';
+import type { CardId, LocationCardInstanceId } from './types/ids';
 import type { MatchLogEntry, MatchState } from './types/state';
 import {
   GENESIS_FRAME,
@@ -23,6 +23,15 @@ export interface CardLifecycleFrames {
   readonly moved: readonly Frame[];
   readonly destroyed: readonly Frame[];
   readonly banished: readonly Frame[];
+}
+
+export interface LocationLifecycleFrames {
+  readonly created: readonly Frame[];
+  readonly drawn: readonly Frame[];
+  readonly played: readonly Frame[];
+  readonly revealed: readonly Frame[];
+  readonly moved: readonly Frame[];
+  readonly removed: readonly Frame[];
 }
 
 /** The latest committed/provisional reducer frame represented by this state. */
@@ -185,6 +194,68 @@ export function cardLifecycleFrames(
     destroyed: Object.freeze(destroyed),
     banished: Object.freeze(banished),
   });
+}
+
+export function locationLifecycleFrames(
+  log: readonly MatchLogEntry[],
+  locationId: LocationCardInstanceId,
+): LocationLifecycleFrames {
+  const created: Frame[] = [];
+  const drawn: Frame[] = [];
+  const played: Frame[] = [];
+  const revealed: Frame[] = [];
+  const moved: Frame[] = [];
+  const removed: Frame[] = [];
+
+  for (const entry of log) {
+    const event = entry.event as MatchEvent;
+    switch (event.type) {
+      case 'LOCATION_CARD_CREATED':
+        if (event.locationId === locationId) created.push(entry.frame);
+        break;
+      case 'LOCATION_DECK_INITIALIZED':
+        if (event.locations.some((location) => location.id === locationId)) {
+          created.push(entry.frame);
+        }
+        break;
+      case 'LOCATION_CARD_DRAWN':
+        if (event.locationId === locationId) drawn.push(entry.frame);
+        break;
+      case 'LOCATION_CARD_PLAYED':
+        if (event.locationId === locationId) played.push(entry.frame);
+        break;
+      case 'LOCATION_REVEALED':
+        if (event.locationId === locationId) revealed.push(entry.frame);
+        break;
+      case 'LOCATION_MOVED':
+        if (event.locationId === locationId) moved.push(entry.frame);
+        break;
+      case 'LOCATIONS_SWAPPED':
+        if (
+          event.left.locationId === locationId
+          || event.right.locationId === locationId
+        ) {
+          moved.push(entry.frame);
+        }
+        break;
+      case 'LOCATION_REMOVED_FROM_LANE':
+      case 'LOCATION_RETURNED_TO_DECK':
+        if (event.locationId === locationId) removed.push(entry.frame);
+        break;
+      case 'LOCATION_REPLACED':
+        if (event.newId === locationId) {
+          created.push(entry.frame);
+          played.push(entry.frame);
+          if (event.revealPolicy === 'REVEAL_IMMEDIATELY') revealed.push(entry.frame);
+        }
+        if (event.oldId === locationId) removed.push(entry.frame);
+        break;
+      default:
+        break;
+    }
+  }
+
+  return { created, drawn, played, revealed, moved, removed };
 }
 
 function initialScope(state: MatchState, override?: TimelinePhase): TemporalScope {

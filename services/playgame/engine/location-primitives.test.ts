@@ -1,6 +1,7 @@
+import { getCardState } from './projections/cardRuntime';
 import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type { CardId, LaneId, Owner } from './types/ids';
-import type { CardInstance, MatchState } from './types/state';
+import type { InternalCardRecord, MatchState } from './types/state';
 import type { MatchEvent } from './types/events';
 import { apply } from './apply';
 import { resolve, resolveTurn } from './resolve';
@@ -13,6 +14,7 @@ import {
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
 import { getStoredCardPowerDelta } from './powerLedger';
+import { getFinalTurn } from './projections/gameEnd';
 
 const pass = (label: string) => console.log(`PASS: ${label}`);
 const fail = (label: string, extra?: unknown): never => {
@@ -61,7 +63,7 @@ const loc = (defId: string, abilities: LocationCardDef['abilities']): LocationCa
 });
 
 let idSeq = 0;
-const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: LaneId | null = null): CardInstance => ({
+const card = (defId: string, owner: Owner, zone: InternalCardRecord['zone'], lane: LaneId | null = null): InternalCardRecord => ({
   id: `${defId}-${++idSeq}` as CardId,
   defId,
   version: 1,
@@ -69,16 +71,18 @@ const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: Lan
   lane,
   zone,
   revealed: zone === 'LANE',
+  revealTiming: null,
   powerLedger: [],
   costDelta: 0,
     costLog: [],
   tags: [],
   textOverride: null,
+    textLog: [],
   counters: {},
   spawnSource: { kind: 'DECK_CREATION' },
 });
 
-const stateWith = (cards: CardInstance[], location: LocationCardDef, turn = 1): MatchState => {
+const stateWith = (cards: InternalCardRecord[], location: LocationCardDef, turn = 1): MatchState => {
   const lane = (id: LaneId) => testLaneState(id, {
       P0: cards.filter(c => c.zone === 'LANE' && c.lane === id && c.owner === 'P0').map(c => c.id),
       P1: cards.filter(c => c.zone === 'LANE' && c.lane === id && c.owner === 'P1').map(c => c.id),
@@ -94,8 +98,8 @@ const stateWith = (cards: CardInstance[], location: LocationCardDef, turn = 1): 
     energy: { P0: 10, P1: 10 },
     deck: { P0: [], P1: [] },
     hand: {
-      P0: cards.filter(c => c.zone === 'HAND' && c.owner === 'P0'),
-      P1: cards.filter(c => c.zone === 'HAND' && c.owner === 'P1'),
+      P0: cards.filter(c => c.zone === 'HAND' && c.owner === 'P0').map(c => c.id),
+      P1: cards.filter(c => c.zone === 'HAND' && c.owner === 'P1').map(c => c.id),
     },
     cards: Object.fromEntries(cards.map(c => [c.id, c])),
     lanesById: testLaneRegistry(lanes),
@@ -147,8 +151,8 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'a', owner: 'P0', cardId: c1.id, lane: 0 }, createRng('a'), m), m);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'b', owner: 'P0', cardId: c2.id, lane: 0 }, createRng('b'), m), m);
   const out = resolveCurrentTurn(s, m, 'meat');
-  expectEq(out.state.cards[c1.id]?.zone, 'DESTROYED', 'location onCardPlayedHere can destroy EVENT_CARD');
-  expectEq(out.state.cards[c2.id]?.zone, 'LANE', 'location counter prevents second destroy');
+  expectEq(getCardState(out.state, c1.id)!?.zone, 'DESTROYED', 'location onCardPlayedHere can destroy EVENT_CARD');
+  expectEq(getCardState(out.state, c2.id)!?.zone, 'LANE', 'location counter prevents second destroy');
 }
 
 {
@@ -196,21 +200,110 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
 }
 
 {
+  const revealer = basicCard('next-turn-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
+  });
+  const waitingRoom = loc('waiting-room', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: {
+        kind: 'TURN',
+        turn: {
+          kind: 'ADD',
+          a: { kind: 'CURRENT_TURN' },
+          b: { kind: 'LIT', n: 1 },
+        },
+      },
+    }],
+  });
+  const c = card('next-turn-revealer', 'P0', 'HAND');
+  const m = manifest([waitingRoom], [revealer]);
+  let s = stateWith([c], waitingRoom, 1);
+  s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'next-turn', owner: 'P0', cardId: c.id, lane: 0 }, createRng('next-turn'), m), m);
+  expectEq(getCardState(s, c.id)!?.revealTiming, { kind: 'TURN', turn: 2 }, 'location can schedule a card for a real future turn');
+  const afterOne = resolveCurrentTurn(s, m, 'next-turn-1');
+  expectEq(getCardState(afterOne.state, c.id)!?.revealed, false, 'future-turn card remains hidden before its scheduled turn');
+  const afterTwo = resolveCurrentTurn(afterOne.state, m, 'next-turn-2');
+  expectEq(getCardState(afterTwo.state, c.id)!?.revealed, true, 'future-turn card reveals during its scheduled real turn');
+}
+
+{
+  const limbo = loc('limbo', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 1 },
+      stack: 'MAX',
+    }],
+  });
+  const ruin = loc('ruin', {});
+  const m = manifest([limbo, ruin], []);
+  const extended = stateWith([], limbo, 6);
+  expectEq(getFinalTurn(extended, m), 7, 'live Limbo-style location extends the final turn to 7');
+  const turnSeven = resolveCurrentTurn(extended, m, 'limbo-active');
+  expectEq(turnSeven.state.turn, 7, 'active extension starts a real turn 7');
+  expectEq(turnSeven.state.result, null, 'active extension prevents the turn-6 match result');
+
+  const replaced = withTestLocation(extended, 0, 'ruin', true, 'ruin-0' as any);
+  expectEq(getFinalTurn(replaced, m), 6, 'replacing the extension restores the live final turn to 6');
+  const ended = resolveCurrentTurn(replaced, m, 'limbo-replaced');
+  expectTrue(ended.events.some((event) => event.type === 'MATCH_ENDED'), 'replaced extension lets the match end on turn 6');
+}
+
+{
   const revealer = basicCard('revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
   const bank = loc('bank', {
-    ongoing: [{ kind: 'DELAY_REVEAL', target: { kind: 'SAME_LANE', of: { kind: 'SELF' } }, until: 'END_OF_GAME', stack: 'SINGLE' }],
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
   });
   const c = card('revealer', 'P0', 'HAND');
   const m = manifest([bank], [revealer]);
   let s = stateWith([c], bank, 5);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'delay', owner: 'P0', cardId: c.id, lane: 0 }, createRng('delay'), m), m);
+  expectEq(getCardState(s, c.id)!?.revealTiming, { kind: 'END_OF_GAME' }, 'Cryobank stamps an explicit end-game reveal schedule');
   const beforeEnd = resolveCurrentTurn(s, m, 'delay-turn-5');
-  expectEq(beforeEnd.state.cards[c.id]?.revealed, false, 'DELAY_REVEAL keeps card face-down before end game');
+  expectEq(getCardState(beforeEnd.state, c.id)!?.revealed, false, 'end-game schedule keeps card face-down before end game');
   const end = resolveCurrentTurn(beforeEnd.state, m, 'delay-turn-6');
-  expectEq(end.state.cards[c.id]?.revealed, true, 'DELAY_REVEAL force-reveals at end game');
-  expectEq(getStoredCardPowerDelta(end.state, c.id, m), 2, 'end-game force reveal fires On Reveal');
+  expectEq(getCardState(end.state, c.id)!?.revealed, true, 'scheduled card reveals in the end-game window');
+  expectEq(getCardState(end.state, c.id)!?.revealTiming, null, 'reveal clears the card schedule');
+  expectEq(getStoredCardPowerDelta(end.state, c.id, m), 2, 'end-game reveal fires On Reveal');
+}
+
+{
+  const revealer = basicCard('extended-revealer', {
+    onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
+  });
+  const bank = loc('bank', {
+    onCardEnteredHere: [{
+      kind: 'SCHEDULE_REVEAL',
+      target: { kind: 'EVENT_CARD' },
+      timing: { kind: 'END_OF_GAME' },
+    }],
+  });
+  const limbo = loc('limbo', {
+    ongoing: [{
+      kind: 'EXTEND_GAME_TURNS',
+      turns: { kind: 'LIT', n: 1 },
+      stack: 'MAX',
+    }],
+  });
+  const c = card('extended-revealer', 'P0', 'HAND');
+  const m = manifest([bank, limbo], [revealer]);
+  let s = withTestLocation(stateWith([c], bank, 6), 1, 'limbo', true, 'limbo-1' as any);
+  s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'extended-delay', owner: 'P0', cardId: c.id, lane: 0 }, createRng('extended-delay'), m), m);
+
+  const afterSix = resolveCurrentTurn(s, m, 'extended-turn-6');
+  expectEq(afterSix.state.turn, 7, 'active extension postpones the end-game window');
+  expectEq(getCardState(afterSix.state, c.id)!?.revealed, false, 'Cryobank card stays hidden through extended turn 6');
+
+  const afterSeven = resolveCurrentTurn(afterSix.state, m, 'extended-turn-7');
+  expectEq(getCardState(afterSeven.state, c.id)!?.revealed, true, 'Cryobank card reveals when the extended game actually ends');
+  expectTrue(afterSeven.events.some((event) => event.type === 'MATCH_ENDED'), 'extended game ends after real turn 7');
 }
 
 console.log('\nAll location primitive tests passed.');

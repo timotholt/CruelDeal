@@ -3,7 +3,7 @@ import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import type { CardAbilities } from '../manifest/types';
 import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { CardId } from '../types/ids';
-import { type CardInstance, type MatchState } from '../types/state';
+import { type InternalCardRecord, type MatchState } from '../types/state';
 import { CARD_ABILITY_SLOTS, hasAnyCardAbility } from './abilityPresence';
 import { getCardPower } from './power';
 import { findCards } from './query';
@@ -28,7 +28,7 @@ const ongoing: OngoingExpr = {
   stack: 'ADDITIVE',
 };
 
-function card(id: CardId, defId: string, storedDelta = 0): CardInstance {
+function card(id: CardId, defId: string, storedDelta = 0): InternalCardRecord {
   return {
     id,
     defId,
@@ -37,6 +37,7 @@ function card(id: CardId, defId: string, storedDelta = 0): CardInstance {
     lane: 0,
     zone: 'LANE',
     revealed: true,
+    revealTiming: null,
     powerLedger: testPowerLedger(
       id,
       storedDelta === 0 ? [] : [{ kind: 'ADD', delta: storedDelta }],
@@ -45,6 +46,7 @@ function card(id: CardId, defId: string, storedDelta = 0): CardInstance {
     costLog: [],
     tags: [],
     textOverride: null,
+    textLog: [],
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
   };

@@ -19,6 +19,13 @@ import {
   laneStatus,
   locationCardAtLane,
 } from './laneTopology';
+import {
+  getAllCardIds,
+  getCardPlacement,
+  getCardRuntime,
+} from './projections/cardRuntime';
+import { getLocationState } from './projections/locationRuntime';
+import { getLocationTemplate } from './projections/locationTemplate';
 
 export {
   activeLaneIds,
@@ -289,7 +296,7 @@ export function returnLocationToDeck(
   cause: EffectRef,
   manifest: Manifest,
 ): LocationLifecycleResult {
-  const location = state.locationCards[locationId];
+  const location = getLocationState(state, locationId);
   if (!location) {
     return rejected(state, 'LOCATION_NOT_FOUND', `location ${locationId} does not exist`);
   }
@@ -414,14 +421,14 @@ export function replaceLocationCard(
   if (!current) {
     return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
   }
-  if (state.locationCards[options.newId]) {
+  if (getLocationState(state, options.newId)) {
     return rejected(
       state,
       'LOCATION_ID_EXISTS',
       `location ${options.newId} already exists`,
     );
   }
-  if (!manifest.locations[options.newDefId]) {
+  if (!getLocationTemplate(manifest, options.newDefId)) {
     return rejected(
       state,
       'UNKNOWN_LOCATION_DEFINITION',
@@ -585,9 +592,10 @@ export function destroyLane(
   events.push(...destruction.events);
   working = destruction.state;
 
-  const survivors = Object.values(working.cards).filter(
-    card => card.zone === 'LANE' && card.lane === laneId,
-  );
+  const survivors = getAllCardIds(working)
+    .map((id) => getCardRuntime(working, id, manifest))
+    .filter((card): card is NonNullable<typeof card> =>
+      card !== null && card.zone === 'LANE' && card.lane === laneId);
   if (survivors.length > 0) {
     return rejected(
       state,
@@ -739,7 +747,9 @@ export function validateLaneTopology(state: MatchState): readonly string[] {
       issues.push(`destroyed lane ${lane.id} remains active`);
     }
   }
-  for (const card of Object.values(state.cards)) {
+  for (const id of getAllCardIds(state)) {
+    const card = getCardPlacement(state, id);
+    if (!card) continue;
     if (card.zone !== 'LANE') continue;
     if (card.lane === null || !active.includes(card.lane)) {
       issues.push(`lane card ${card.id} points to a non-active lane`);

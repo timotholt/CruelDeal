@@ -60,7 +60,7 @@ describe('committed END TURN choreography', () => {
       { type: 'CARD_FLIPPED', cardId: 'remote-priority' as CardId },
       { type: 'CARD_FLIPPED', cardId: 'local-now' as CardId },
       // local-delayed deliberately has no CARD_FLIPPED frame this turn. The
-      // engine's DELAY_REVEAL projection expresses eligibility this way.
+      // The engine's per-card reveal schedule expresses eligibility this way.
       { type: 'TURN_ENDED', turn: 2 },
     ];
     const built = frameAndFoldEvents({

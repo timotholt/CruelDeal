@@ -17,6 +17,7 @@ import {
 } from '@/services/playgame/script/actions';
 import { getHandForSeat } from '@/services/playgame/view';
 import { selectInteractiveHand } from '@/components/screens/play/handInteractivity';
+import { getCardCost, getCardRuntime } from '@/services/playgame/engine/projections';
 
 const disposers: Array<() => void> = [];
 
@@ -37,11 +38,11 @@ function debugSession(seed = 'provider-0') {
 
 function firstPlayableCard(pg: PlayGameContextValue): CardId {
   const card = pg.engineState.hand[pg.localSeat].find(
-    (candidate) => BOOTSTRAP_MANIFEST.cards[candidate.defId].cost
+    (candidate) => getCardCost(pg.engineState, candidate, BOOTSTRAP_MANIFEST)
       <= pg.engineState.energy[pg.localSeat],
   );
   if (!card) throw new Error('fixture has no playable local card');
-  return card.id;
+  return card;
 }
 
 function presentOpeningImmediately(pg: PlayGameContextValue): void {
@@ -104,7 +105,7 @@ describe('PlayGameProvider runtime synchronization', () => {
           phase: state.phase,
           energy: state.energy[context.localSeat],
           stagingOrder: [...state.stagingOrder],
-          hand: state.hand[context.localSeat].map((card) => card.id),
+          hand: [...state.hand[context.localSeat]],
           lanes: state.activeLaneOrder.map(
             (laneId) => [...state.lanesById[laneId].cards[context.localSeat]],
           ),
@@ -127,7 +128,7 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     const stageAndExpectObservation = async (label: string) => {
       const cardId = firstPlayableCard(pg);
-      const cost = BOOTSTRAP_MANIFEST.cards[pg.engineState.cards[cardId].defId].cost;
+      const cost = getCardCost(pg.engineState, cardId, BOOTSTRAP_MANIFEST);
       const energyBefore = pg.engineState.energy[pg.localSeat];
       const observationsBefore = observed.length;
 
@@ -191,7 +192,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     presentOpeningImmediately(pg);
     const cardId = firstPlayableCard(pg);
     await expect(pg.actions.stageCardInLane(cardId, 0)).resolves.toBe(true);
-    expect(pg.engineState.hand[pg.localSeat].map((card) => card.id)).not.toContain(cardId);
+    expect(pg.engineState.hand[pg.localSeat]).not.toContain(cardId);
     expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
 
     const committedFinalFrame = pg.openingTimeline.transitions.at(-1);
@@ -199,7 +200,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     pg.actions.presentCommittedFrame(committedFinalFrame);
 
     expect(pg.engineState.stagingOrder).toContain(cardId);
-    expect(pg.engineState.hand[pg.localSeat].map((card) => card.id)).not.toContain(cardId);
+    expect(pg.engineState.hand[pg.localSeat]).not.toContain(cardId);
     expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
   });
 
@@ -248,11 +249,13 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     const stagedIds = [...pg.engineState.stagingOrder];
     expect(stagedIds).toContain(localCardId);
-    expect(new Set(stagedIds.map((id) => pg.engineState.cards[id]?.owner)))
+    expect(new Set(stagedIds.map((id) =>
+      getCardRuntime(pg.engineState, id, BOOTSTRAP_MANIFEST)?.owner)))
       .toEqual(new Set(['P0', 'P1']));
     expect(pg.ui.isFlipped, 'local owner-facing presentation lock').toBe(true);
     expect(lockObservations).toEqual([{ phase: 'RESOLVING', locked: true }]);
-    expect(stagedIds.every((id) => pg.engineState.cards[id]?.revealed === false))
+    expect(stagedIds.every((id) =>
+      getCardRuntime(pg.engineState, id, BOOTSTRAP_MANIFEST)?.revealed === false))
       .toBe(true);
 
     const revealFrames = timeline.transitions
@@ -271,9 +274,17 @@ describe('PlayGameProvider runtime synchronization', () => {
       pg.actions.presentCommittedFrame(frame);
       if (frame.event.type !== 'CARD_FLIPPED') continue;
       presentedRevealOrder.push(frame.event.cardId);
-      expect(pg.engineState.cards[frame.event.cardId]?.revealed).toBe(true);
+      expect(getCardRuntime(
+        pg.engineState,
+        frame.event.cardId,
+        BOOTSTRAP_MANIFEST,
+      )?.revealed).toBe(true);
       for (const pendingId of expectedRevealOrder.slice(presentedRevealOrder.length)) {
-        expect(pg.engineState.cards[pendingId]?.revealed).toBe(false);
+        expect(getCardRuntime(
+          pg.engineState,
+          pendingId,
+          BOOTSTRAP_MANIFEST,
+        )?.revealed).toBe(false);
       }
       expect(presentedRevealOrder).toEqual(
         expectedRevealOrder.slice(0, presentedRevealOrder.length),
