@@ -74,6 +74,9 @@ const ABILITY_KEYS = new Set([
   'atTurnEnd',
   'onCardPlayedHere',
   'onCardEnteredHere',
+  'onCardLeftHere',
+  'onCardCreatedHere',
+  'onCardReturnedHere',
   'onCardDestroyedHere',
   'onCardBanishedHere',
 ]);

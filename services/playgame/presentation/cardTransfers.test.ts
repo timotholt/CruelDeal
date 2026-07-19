@@ -93,7 +93,7 @@ const stateWithHandCard = () => {
   const { state: handState, cardId } = stateWithHandCard();
   const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
   const revealed = apply(staged, event({ type: 'CARD_FLIPPED', cardId }), BOOTSTRAP_MANIFEST);
-  const e = event({ type: 'CARD_MOVED_TO_ZONE', cardId, destination: { kind: 'HAND' }, cause: source });
+  const e = event({ type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause: source });
   const s1 = apply(revealed, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(revealed, e, s1);
   assertTransferCoverage(revealed, e, s1, transfers);
@@ -143,12 +143,13 @@ const stateWithHandCard = () => {
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
   const e = event({
-    type: 'CARD_ADDED_TO_LANE',
+    type: 'CARD_CREATED',
     owner: 'P1',
     cardId: 'spawned' as CardId,
-    lane: 2 as LaneId,
     defId: 'drone',
     spawnSource: { kind: 'SYSTEM' },
+    destination: { kind: 'LANE', lane: 2 as LaneId, revealed: false },
+    cause: source,
   });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(s0, e, s1);
@@ -161,7 +162,7 @@ const stateWithHandCard = () => {
     from: 'GENERATED',
     to: 'LANE',
     route: 'anchor-to-visible',
-  }, 'CARD_ADDED_TO_LANE normalizes generated -> lane');
+  }, 'CARD_CREATED normalizes generated -> lane');
 }
 
 if (failures > 0) {

@@ -97,6 +97,9 @@ export interface LocationAbilities {
   atTurnEnd?: EffectExpr[];
   onCardPlayedHere?: EffectExpr[];
   onCardEnteredHere?: EffectExpr[];
+  onCardLeftHere?: EffectExpr[];
+  onCardCreatedHere?: EffectExpr[];
+  onCardReturnedHere?: EffectExpr[];
   onCardDestroyedHere?: EffectExpr[];
   onCardBanishedHere?: EffectExpr[];
 }

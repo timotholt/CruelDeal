@@ -203,7 +203,7 @@ export function describeReplayStep(
     const slot = Math.max(0, step.state.lanesById[lane]?.cards[owner].indexOf(cardId) ?? 0);
     return slotLabel(slot);
   };
-  const destination = (value: Extract<MatchEvent, { type: 'CARD_MOVED_TO_ZONE' }>['destination']): string => {
+  const destination = (value: Extract<MatchEvent, { type: 'CARD_ZONE_CHANGED' }>['destination']): string => {
     if (value.kind === 'LANE') return `the ${laneLabel(value.lane)}`;
     if (value.kind === 'DECK') return `${value.position?.toLowerCase() ?? 'the'} deck`;
     return 'their hand';
@@ -283,16 +283,14 @@ export function describeReplayStep(
     case 'CARD_DRAWN':
       summary = `${player(event.owner)} drew ${cardName(event.cardId)}.`;
       break;
-    case 'CARD_ADDED_TO_DECK':
-      summary = `${cardName(event.cardId)} was added to ${player(event.owner)}'s deck${event.position ? ` at the ${event.position.toLowerCase()}` : ''}.`;
+    case 'CARD_CREATED':
+      summary = event.destination.kind === 'LANE'
+        ? `${names.definitionName(event.defId)} was created on ${player(event.owner)}'s side of the ${laneLabel(event.destination.lane)}.`
+        : event.destination.kind === 'HAND'
+          ? `${names.definitionName(event.defId)} was created in ${player(event.owner)}'s hand.`
+          : `${names.definitionName(event.defId)} was created in ${player(event.owner)}'s deck${event.destination.position ? ` at the ${event.destination.position.toLowerCase()}` : ''}.`;
       break;
-    case 'CARD_ADDED_TO_HAND':
-      summary = `${names.definitionName(event.defId)} was added to ${player(event.owner)}'s hand.`;
-      break;
-    case 'CARD_ADDED_TO_LANE':
-      summary = `${names.definitionName(event.defId)} was added to ${player(event.owner)}'s side of the ${laneLabel(event.lane)}.`;
-      break;
-    case 'CARD_MOVED_TO_ZONE':
+    case 'CARD_ZONE_CHANGED':
       summary = `${cardName(event.cardId)} moved to ${destination(event.destination)}.`;
       break;
     case 'DECK_SHUFFLED':
@@ -390,6 +388,9 @@ export function describeReplayStep(
       break;
     case 'INTENT_REJECTED':
       summary = `${actor}'s action was rejected: ${event.reason}.`;
+      break;
+    default:
+      summary = humanizeToken(event.type);
       break;
   }
 

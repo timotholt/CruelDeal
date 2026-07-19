@@ -181,7 +181,7 @@ function zoneOfInstance(card: CardPlacement): CardZoneRef {
   }
 }
 
-function destinationZone(owner: Owner, destination: Extract<MatchEvent, { type: 'CARD_MOVED_TO_ZONE' }>['destination']): CardZoneRef {
+function destinationZone(owner: Owner, destination: Extract<MatchEvent, { type: 'CARD_ZONE_CHANGED' }>['destination']): CardZoneRef {
   switch (destination.kind) {
     case 'HAND': return { kind: 'HAND', owner };
     case 'DECK': return { kind: 'DECK', owner };
@@ -245,7 +245,7 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
       );
     }
 
-    case 'CARD_MOVED_TO_ZONE': {
+    case 'CARD_ZONE_CHANGED': {
       const owner = getCardPlacement(before, event.cardId)?.owner ??
         getCardPlacement(after, event.cardId)?.owner;
       if (!owner) return [];
@@ -259,14 +259,18 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'LANE', owner, lane: event.lane }, event.revealed ? 'faceUp' : 'faceDown');
     }
 
-    case 'CARD_ADDED_TO_HAND':
-      return transfer(before, after, event, event.cardId, { kind: 'GENERATED', owner: event.owner }, zoneOfCard(after, event.cardId), 'faceUp');
-
-    case 'CARD_ADDED_TO_LANE':
-      return transfer(before, after, event, event.cardId, { kind: 'GENERATED', owner: event.owner }, { kind: 'LANE', owner: event.owner, lane: event.lane }, 'faceUp');
-
-    case 'CARD_ADDED_TO_DECK':
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId) ?? { kind: 'GENERATED', owner: event.owner }, { kind: 'DECK', owner: event.owner });
+    case 'CARD_CREATED':
+      return transfer(
+        before,
+        after,
+        event,
+        event.cardId,
+        { kind: 'GENERATED', owner: event.owner },
+        destinationZone(event.owner, event.destination),
+        event.destination.kind === 'LANE' && !event.destination.revealed
+          ? 'faceDown'
+          : 'faceUp',
+      );
 
     case 'CARD_DISCARDED': {
       const owner = getCardPlacement(before, event.cardId)?.owner ??
@@ -299,11 +303,9 @@ const structuralCardEventTypes = new Set<MatchEvent['type']>([
   'CARD_STAGED',
   'CARD_UNSTAGED',
   'CARD_MOVED',
-  'CARD_MOVED_TO_ZONE',
+  'CARD_ZONE_CHANGED',
   'CARD_RETURNED_TO_LANE',
-  'CARD_ADDED_TO_HAND',
-  'CARD_ADDED_TO_LANE',
-  'CARD_ADDED_TO_DECK',
+  'CARD_CREATED',
   'CARD_DISCARDED',
   'CARD_DESTROYED',
   'CARD_BANISHED',

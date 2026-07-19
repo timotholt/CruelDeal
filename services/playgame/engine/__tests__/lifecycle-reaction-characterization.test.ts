@@ -1,7 +1,11 @@
 import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
-import { evalEffect, type EffectCtx } from '../effects/evaluator';
+import {
+  evalEffect,
+  executePlacementCommands,
+  type EffectCtx,
+} from '../effects/evaluator';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { createRng } from '../rng';
 import { resolve } from '../resolve';
@@ -281,7 +285,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(2);
   });
 
-  it('freezes generic MOVE reactions versus the builtin move bypass', () => {
+  it('routes generic and builtin MOVE through identical reactions', () => {
     const moverDefinition = cardDef('mover', {
       onMove: [{
         kind: 'ADD_POWER',
@@ -292,15 +296,21 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     const entryLocation = locationDef('entry-location', {
       onCardEnteredHere: [addPowerToEventCard(1)],
     });
+    const exitLocation = locationDef('exit-location', {
+      onCardLeftHere: [addPowerToEventCard(4)],
+    });
     const gameManifest = manifest([
       moverDefinition,
       cardDef('anchor'),
-    ], [entryLocation]);
+    ], [entryLocation, exitLocation]);
 
     const mover = card('mover', 'mover', 'P0', 'LANE', 0);
     const anchor = card('anchor', 'anchor', 'P0', 'LANE', 1);
     const genericState = stateWith([mover, anchor], {
-      locations: [{ lane: 1, defId: entryLocation.defId }],
+      locations: [
+        { lane: 0, defId: exitLocation.defId },
+        { lane: 1, defId: entryLocation.defId },
+      ],
     });
     const generic = evaluate(genericState, gameManifest, mover, {
       kind: 'MOVE',
@@ -312,12 +322,17 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_MOVED',
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
+      'CARD_POWER_CHANGED',
     ]);
+    expect(generic.events.slice(1).map(event =>
+      'cause' in event ? event.cause?.reason : null,
+    )).toEqual(['onCardLeftHere', 'onCardEnteredHere', 'onMove']);
     expect(getCardState(generic.state, mover.id)!).toMatchObject({ lane: 1 });
-    expect(getStoredCardPowerDelta(generic.state, mover.id, gameManifest)).toBe(3);
+    expect(getStoredCardPowerDelta(generic.state, mover.id, gameManifest)).toBe(7);
 
     let builtinState = stateWith([mover], {
       locations: [
+        { lane: 0, defId: exitLocation.defId },
         { lane: 1, defId: entryLocation.defId },
         { lane: 2, defId: entryLocation.defId },
       ],
@@ -329,9 +344,17 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     });
     builtinState = builtin.state;
 
-    expect(builtin.events.map(event => event.type)).toEqual(['CARD_MOVED']);
+    expect(builtin.events.map(event => event.type)).toEqual([
+      'CARD_MOVED',
+      'CARD_POWER_CHANGED',
+      'CARD_POWER_CHANGED',
+      'CARD_POWER_CHANGED',
+    ]);
+    expect(builtin.events.slice(1).map(event =>
+      'cause' in event ? event.cause?.reason : null,
+    )).toEqual(['onCardLeftHere', 'onCardEnteredHere', 'onMove']);
     expect(getCardState(builtinState, mover.id)?.lane).not.toBe(0);
-    expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(0);
+    expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(7);
   });
 
   it('routes generic DESTROY and Corporate Climber through identical reactions', () => {
@@ -439,8 +462,8 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(result.state.energy.P0).toBe(6);
     expect(result.events.filter((event) =>
       event.type === 'ENERGY_CHANGED'
-      && event.cause.sourceId === 'location-0'
-      && event.cause.reason === 'onCardDestroyedHere',
+      && event.cause?.sourceId === 'location-0'
+      && event.cause?.reason === 'onCardDestroyedHere',
     )).toHaveLength(1);
   });
 
@@ -597,9 +620,9 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     }
   }
 
-  it('freezes generic lane creation reactions versus builtin token creation', () => {
+  it('routes generic and builtin lane creation through onCardCreatedHere', () => {
     const entryLocation = locationDef('creation-entry', {
-      onCardEnteredHere: [addPowerToEventCard(1)],
+      onCardCreatedHere: [addPowerToEventCard(1)],
     });
     const gameManifest = manifest([
       cardDef('creator'),
@@ -622,12 +645,12 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       },
     }, anchor.id);
     const genericCreated = generic.events.find(
-      (event): event is Extract<MatchEvent, { type: 'CARD_ADDED_TO_LANE' }> =>
-        event.type === 'CARD_ADDED_TO_LANE',
+      (event): event is Extract<MatchEvent, { type: 'CARD_CREATED' }> =>
+        event.type === 'CARD_CREATED',
     );
 
     expect(generic.events.map(event => event.type)).toEqual([
-      'CARD_ADDED_TO_LANE',
+      'CARD_CREATED',
       'CARD_POWER_CHANGED',
     ]);
     expect(genericCreated).toBeDefined();
@@ -650,19 +673,21 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     });
 
     expect(builtin.events.map(event => event.type)).toEqual([
-      'CARD_ADDED_TO_LANE',
-      'CARD_ADDED_TO_LANE',
+      'CARD_CREATED',
+      'CARD_POWER_CHANGED',
+      'CARD_CREATED',
+      'CARD_POWER_CHANGED',
     ]);
     for (const event of builtin.events) {
-      if (event.type === 'CARD_ADDED_TO_LANE') {
-        expect(getStoredCardPowerDelta(builtin.state, event.cardId, gameManifest)).toBe(0);
+      if (event.type === 'CARD_CREATED') {
+        expect(getStoredCardPowerDelta(builtin.state, event.cardId, gameManifest)).toBe(1);
       }
     }
   });
 
-  it('freezes generic return reactions versus Trauma Team direct return', () => {
+  it('routes generic and builtin returns through onCardReturnedHere', () => {
     const entryLocation = locationDef('return-entry', {
-      onCardEnteredHere: [addPowerToEventCard(1)],
+      onCardReturnedHere: [addPowerToEventCard(1)],
     });
     const gameManifest = manifest([
       cardDef('source'),
@@ -711,12 +736,17 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
 
     expect(builtin.events.map(event => event.type)).toEqual([
       'CARD_RETURNED_TO_LANE',
+      'CARD_POWER_CHANGED',
     ]);
     expect(getCardState(builtin.state, priorVictim.id)!).toMatchObject({
       zone: 'LANE',
       lane: 0,
-      powerLedger: [],
     });
+    expect(getStoredCardPowerDelta(
+      builtin.state,
+      priorVictim.id,
+      gameManifest,
+    )).toBe(1);
   });
 
   it('freezes generic hand-entry debuffs versus builtin draw bypass', () => {
@@ -755,8 +785,9 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getStoredCardPowerDelta(builtin.state, deckCard.id, gameManifest)).toBe(0);
   });
 
-  it('freezes SPAWN_AND_REVEAL as both location entry and played-here', () => {
+  it('keeps creation distinct from movement, play, and reveal', () => {
     const spawnLocation = locationDef('spawn-location', {
+      onCardCreatedHere: [addPowerToEventCard(1)],
       onCardEnteredHere: [addPowerToEventCard(1)],
       onCardPlayedHere: [addPowerToEventCard(2)],
     });
@@ -776,22 +807,21 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       locations: [{ lane: 0, defId: spawnLocation.defId }],
     });
     const result = evaluate(initial, gameManifest, spawner, {
-      kind: 'SPAWN_AND_REVEAL',
+      kind: 'CREATE_CARD_IN_ZONE',
       pool: { kind: 'DEF_ID_LIST', ids: ['spawned'] },
       owner: 'SELF_OWNER',
-      to: { kind: 'SELF' },
+      destination: {
+        kind: 'LANE',
+        lane: { kind: 'SELF' },
+      },
     });
     const spawned = result.events.find(
-      (event): event is Extract<MatchEvent, { type: 'CARD_ADDED_TO_LANE' }> =>
-        event.type === 'CARD_ADDED_TO_LANE',
+      (event): event is Extract<MatchEvent, { type: 'CARD_CREATED' }> =>
+        event.type === 'CARD_CREATED',
     );
 
     expect(result.events.map(event => event.type)).toEqual([
-      'CARD_ADDED_TO_LANE',
-      'CARD_POWER_CHANGED',
-      'OR_WINDOW_OPEN',
-      'CARD_POWER_CHANGED',
-      'OR_WINDOW_CLOSE',
+      'CARD_CREATED',
       'CARD_POWER_CHANGED',
     ]);
     expect(result.events.some(event => event.type === 'CARD_FLIPPED')).toBe(false);
@@ -800,6 +830,60 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       result.state,
       spawned!.cardId,
       gameManifest,
-    )).toBe(7);
+    )).toBe(1);
+  });
+
+  it('deploys an existing deck instance without recreating or resetting it', () => {
+    const gameManifest = manifest([
+      cardDef('deployer'),
+      cardDef('veteran'),
+    ]);
+    const deployer = card('deployer', 'deployer', 'P0', 'LANE', 0);
+    const veteran: InternalCardRecord = {
+      ...card('veteran', 'veteran', 'P0', 'DECK'),
+      costDelta: -1,
+      tags: [{ kind: 'EVER_MOVED' }],
+      spawnSource: {
+        kind: 'CARD_CREATED',
+        sourceCardId: deployer.id,
+      },
+      powerLedger: [{
+        id: 'veteran-ledger-1',
+        frame: 4 as never,
+        turn: 2,
+        mutation: { kind: 'ADD', delta: 3 },
+        cause: {
+          sourceId: deployer.id,
+          effectKind: 'ON_REVEAL',
+          reason: 'veteran-bonus',
+        },
+      }],
+    };
+    const initial = stateWith([deployer, veteran]);
+    const result = executePlacementCommands(initial, [{
+      type: 'DEPLOY_FROM_DECK',
+      owner: 'P0',
+      lane: 1,
+      selection: { kind: 'TOP' },
+      cause: {
+        sourceId: deployer.id,
+        effectKind: 'ON_REVEAL',
+        reason: 'deploy-test',
+      },
+    }], { rng: createRng('deploy-existing') }, gameManifest);
+
+    expect(result.events.map(event => event.type)).toEqual([
+      'CARD_ZONE_CHANGED',
+    ]);
+    expect(getCardState(result.state, veteran.id)).toMatchObject({
+      id: veteran.id,
+      zone: 'LANE',
+      lane: 1,
+      costDelta: -1,
+      tags: [{ kind: 'EVER_MOVED' }],
+      spawnSource: veteran.spawnSource,
+      powerLedger: veteran.powerLedger,
+    });
+    expect(result.state.deck.P0).not.toContain(veteran.id);
   });
 });

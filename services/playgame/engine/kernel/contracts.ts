@@ -220,7 +220,7 @@ export const SUPERSEDED_LIFECYCLE_EVENT_TYPES = [
   'CARD_ADDED_TO_HAND',
   'CARD_ADDED_TO_LANE',
   'CARD_MOVED_TO_ZONE',
-] as const satisfies readonly MatchEvent['type'][];
+] as const;
 
 export const CLEAN_CUTOVER_REPLACEMENTS = {
   CARD_FLIPPED: ['CARD_REVEALED', 'CARD_PLAY_COMPLETED'],
@@ -430,7 +430,10 @@ export const REACTION_ORDER_PLANS = {
  */
 export const REQUIRED_KERNEL_COMMAND_TYPES = [
   'CHANGE_STORED_POWER',
+  'MOVE_CARD',
+  'RETURN_CARD',
   'CREATE_CARD',
+  'CHANGE_CARD_ZONE',
   'DEPLOY_FROM_DECK',
   'INVOKE_ON_REVEAL',
 ] as const;

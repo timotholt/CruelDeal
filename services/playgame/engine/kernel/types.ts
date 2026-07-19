@@ -23,6 +23,7 @@ export type GameCommand =
   | BanishCardCommand
   | ReturnCardCommand
   | CreateCardCommand
+  | ChangeCardZoneCommand
   | DeployFromDeckCommand
   | InvokeOnRevealCommand
   | DrawCardCommand
@@ -79,8 +80,25 @@ export interface CreateCardCommand extends CausedCommand {
   readonly destination:
     | { readonly kind: 'DECK'; readonly position?: 'TOP' | 'BOTTOM' }
     | { readonly kind: 'HAND' }
-    | { readonly kind: 'LANE'; readonly lane: LaneId };
+    | {
+        readonly kind: 'LANE';
+        readonly lane: LaneId;
+        readonly revealed: boolean;
+      };
   readonly spawnSource: SpawnSource;
+}
+
+export interface ChangeCardZoneCommand extends CausedCommand {
+  readonly type: 'CHANGE_CARD_ZONE';
+  readonly cardId: CardId;
+  readonly destination:
+    | { readonly kind: 'DECK'; readonly position?: 'TOP' | 'BOTTOM' }
+    | { readonly kind: 'HAND' }
+    | {
+        readonly kind: 'LANE';
+        readonly lane: LaneId;
+        readonly revealed: boolean;
+      };
 }
 
 export interface DeployFromDeckCommand extends CausedCommand {

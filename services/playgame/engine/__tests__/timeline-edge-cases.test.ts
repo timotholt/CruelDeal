@@ -54,11 +54,17 @@ function fixtureState(
 
 function addToHand(id: CardId): MatchEvent {
   return {
-    type: 'CARD_ADDED_TO_HAND',
+    type: 'CARD_CREATED',
     owner: 'P0',
     cardId: id,
     defId: cardDef.defId,
     spawnSource: { kind: 'SYSTEM' },
+    destination: { kind: 'HAND' },
+    cause: {
+      sourceId: id,
+      effectKind: 'SYSTEM',
+      reason: 'TIMELINE_TEST',
+    },
   };
 }
 
@@ -446,7 +452,7 @@ describe('Timeline query and lifecycle edge cases', () => {
         { type: 'CARD_STAGED', intentId: 'first', owner: 'P0', cardId, lane: 0, cost: 1 },
         { type: 'CARD_FLIPPED', cardId },
         {
-          type: 'CARD_MOVED_TO_ZONE',
+          type: 'CARD_ZONE_CHANGED',
           cardId,
           destination: { kind: 'HAND' },
           cause: systemCause,
@@ -471,12 +477,13 @@ describe('Timeline query and lifecycle edge cases', () => {
       initialState: fixtureState(),
       events: [
         {
-          type: 'CARD_ADDED_TO_LANE',
+          type: 'CARD_CREATED',
           owner: 'P0',
           cardId,
-          lane: 0,
           defId: cardDef.defId,
           spawnSource: { kind: 'SYSTEM' },
+          destination: { kind: 'LANE', lane: 0, revealed: false },
+          cause: systemCause,
         },
         { type: 'CARD_DESTROYED', cardId, cause: systemCause },
         {

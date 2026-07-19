@@ -270,7 +270,6 @@ export type EffectExpr =
 
   // Re-entry combinators (cause nested reveal calls)
   | { kind: 'TRIGGER_ON_REVEAL'; target: Selector }
-  | { kind: 'SPAWN_AND_REVEAL'; pool: PoolRef; owner: OwnerRef; to: Selector }
 
   // Control flow
   | { kind: 'SEQUENCE'; items: EffectExpr[] }

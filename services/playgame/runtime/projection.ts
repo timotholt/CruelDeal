@@ -406,26 +406,17 @@ function projectAnimationEvent(
       };
     case 'DECK_SHUFFLED':
       return { type: event.type, data: { owner: event.owner } };
-    case 'CARD_ADDED_TO_DECK':
-      return {
-        type: event.type,
-        data: {
-          owner: event.owner,
-          ...(event.owner === viewerSeat ? { card: card(event.cardId) } : {}),
-          ...(event.owner === viewerSeat && event.defId ? { defId: event.defId } : {}),
-          ...(event.position ? { position: event.position } : {}),
-        },
-      };
-    case 'CARD_ADDED_TO_HAND':
-    case 'CARD_ADDED_TO_LANE': {
+    case 'CARD_CREATED': {
       const visible = event.owner === viewerSeat
         || cardEventVisible(transition, event.cardId, viewerSeat);
       return {
         type: event.type,
         data: {
           owner: event.owner,
-          card: card(event.cardId),
-          ...('lane' in event ? { lane: event.lane } : {}),
+          ...(event.destination.kind !== 'DECK' || event.owner === viewerSeat
+            ? { card: card(event.cardId) }
+            : {}),
+          destination: event.destination,
           ...(visible ? { defId: event.defId } : {}),
         },
       };
@@ -514,7 +505,7 @@ function projectAnimationEvent(
             data: { card: card(event.cardId), name: event.name, delta: event.delta },
           }
         : null;
-    case 'CARD_MOVED_TO_ZONE':
+    case 'CARD_ZONE_CHANGED':
       return cardEventVisible(transition, event.cardId, viewerSeat)
         ? {
             type: event.type,

@@ -32,6 +32,15 @@ export type DiscardReason =
 
 export type { EnergyReason };
 
+export type CardPlacementDestination =
+  | { readonly kind: 'DECK'; readonly position?: 'TOP' | 'BOTTOM' }
+  | { readonly kind: 'HAND' }
+  | {
+      readonly kind: 'LANE';
+      readonly lane: LaneId;
+      readonly revealed: boolean;
+    };
+
 export type LocationReplacementRevealPolicy =
   | 'KEEP_SLOT_SCHEDULE'
   | 'REVEAL_IMMEDIATELY'
@@ -81,20 +90,22 @@ export type MatchEvent =
   | { type: 'CARD_COUNTER_CHANGED'; cardId: CardId; name: string; delta: number; cause: EffectRef }
 
   // --- Deck / hand ---
-  // New-card events carry their spawnSource so the provenance is recorded
-  // on first insertion. CARD_DRAWN does NOT — a draw only moves an existing
-  // card from DECK to HAND, preserving its original spawnSource.
+  // CARD_CREATED is exclusively a new identity. Existing instances changing
+  // zones use CARD_ZONE_CHANGED and retain their original provenance.
   | { type: 'CARD_DRAWN'; owner: Owner; cardId: CardId; toHand: true }
-  | { type: 'CARD_ADDED_TO_DECK'; owner: Owner; cardId: CardId; spawnSource: SpawnSource; defId?: string; position?: 'TOP' | 'BOTTOM' }
-  | { type: 'CARD_ADDED_TO_HAND'; owner: Owner; cardId: CardId; defId: string; spawnSource: SpawnSource }
-  | { type: 'CARD_ADDED_TO_LANE'; owner: Owner; cardId: CardId; lane: LaneId; defId: string; spawnSource: SpawnSource }
   | {
-      type: 'CARD_MOVED_TO_ZONE';
+      type: 'CARD_CREATED';
+      owner: Owner;
       cardId: CardId;
-      destination:
-        | { kind: 'HAND' }
-        | { kind: 'DECK'; position?: 'TOP' | 'BOTTOM' }
-        | { kind: 'LANE'; lane: LaneId; revealed?: boolean };
+      defId: string;
+      spawnSource: SpawnSource;
+      destination: CardPlacementDestination;
+      cause: EffectRef;
+    }
+  | {
+      type: 'CARD_ZONE_CHANGED';
+      cardId: CardId;
+      destination: CardPlacementDestination;
       cause: EffectRef;
     }
   | { type: 'DECK_SHUFFLED'; owner: Owner; newOrder: readonly CardId[] }

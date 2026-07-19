@@ -8,7 +8,7 @@
  *
  * Both return BOTH the emitted events AND the post-event state. Effects
  * mutate-by-emission: they produce a MatchEvent list AND apply each one
- * as they go (so SPAWN_AND_REVEAL can recurse into the fresh card).
+ * as they go while each governed lifecycle transition remains explicit.
  *
  * Determinism: every effect-time randomness point consumes the one gameplay
  * stream through a purpose-labeled scope.
@@ -25,7 +25,6 @@ import { select, selectLanes } from '../projections/select';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
-import { ongoingsTargeting } from '../projections/ongoing';
 import { getOnRevealMultiplier, isOnRevealDisabled } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
@@ -39,6 +38,11 @@ import {
   resolveDestructionLifecycleTransaction,
   type FrozenLifecycleEffectContext,
 } from '../kernel/lifecycleTransaction';
+import {
+  resolvePlacementTransaction,
+  type FrozenPlacementEffectContext,
+} from '../kernel/placementTransaction';
+import type { PlacementCommand } from '../kernel/operations/placement';
 import {
   addCardTag,
   adjustCardCost,
@@ -264,6 +268,74 @@ export function banishCards(
     },
   );
   return { events: transaction.events, state: transaction.state };
+}
+
+export interface PlacementCommandsOptions {
+  readonly rng: Rng;
+  readonly depth?: number;
+}
+
+/** Execute move/create/return/zone-change work through the canonical kernel. */
+export function executePlacementCommands(
+  state: MatchState,
+  commands: readonly PlacementCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolvePlacementTransaction(state, commands, {
+    manifest,
+    baseDepth: options.depth ?? 0,
+    interpretEffect: (candidate, reaction, frozen) => {
+      if (reaction.kind === 'HAND_ENTRY') {
+        return applyHandEntryDebuffs(
+          candidate,
+          reaction.cardId,
+          reaction.owner,
+          placementRng(options.rng, frozen),
+          manifest,
+        );
+      }
+      return evalEffect(
+        candidate,
+        reaction.effect,
+        effectContextFromPlacement(candidate, frozen, options.rng, manifest),
+        manifest,
+      );
+    },
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+function placementRng(
+  root: Rng,
+  context: FrozenPlacementEffectContext,
+): Rng {
+  return context.scopePath.reduce(
+    (scoped, purpose) => scoped.scope(purpose),
+    root,
+  );
+}
+
+function effectContextFromPlacement(
+  state: MatchState,
+  context: FrozenPlacementEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): EffectCtx {
+  return {
+    state,
+    manifest,
+    self: context.self,
+    selfKind: context.selfKind,
+    selfLane: context.selfLane,
+    selfOwner: context.selfOwner,
+    eventCard: context.eventCard,
+    eventLane: context.eventLane,
+    eventOwner: context.eventOwner,
+    source: context.source,
+    depth: context.depth,
+    rng: placementRng(rootRng, context),
+  };
 }
 
 function effectContextFromLifecycle(
@@ -518,8 +590,7 @@ function resolveCardReveal(
   s = apply(s, open, manifest);
 
   // OR multiplier semantics (spec §5.3): the WHOLE ability list repeats
-  // orMult times. Sera-style chains are modeled with SPAWN_AND_REVEAL
-  // inside an ability, not by mutating the outer loop.
+  // orMult times. Nested reveal command work moves into the kernel in C4D.
   for (let rep = 0; rep < orMult; rep++) {
     for (let idx = 0; idx < onReveal.length; idx++) {
       const effect = onReveal[idx];
@@ -795,7 +866,6 @@ export function evalEffect(
       for (const id of targets) {
         const card = getCardRuntime(s, id, manifest);
         if (!card || card.lane === null) continue;
-        if (isMoveBlocked(s, id, manifest)) continue;
         // Per-target destination: forked off ctx.rng so two simultaneous
         // MOVEs don't collide deterministic-stream-wise.
         const subRng = ctx.rng.scope(`move:${id}`);
@@ -807,30 +877,17 @@ export function evalEffect(
         });
         if (filtered.length === 0) continue;
         const toLane = filtered.length === 1 ? filtered[0] : subRng.pick(filtered);
-        const e: MatchEvent = {
-          type: 'CARD_MOVED',
+        const moved = executePlacementCommands(s, [{
+          type: 'MOVE_CARD',
           cardId: id,
-          fromLane: card.lane,
           toLane,
           cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
-        const locTrig = fireLocationTrigger(
-          s,
-          toLane,
-          'onCardEnteredHere',
-          ctx.rng.scope(`locEnteredMove:${id}`),
-          manifest,
-          id,
-          card.owner,
-        );
-        events.push(...locTrig.events);
-        s = locTrig.state;
-        // Fire onMove; the card is now in `toLane` so selfLane resolves to it.
-        const trig = fireCardTrigger(s, id, toLane, card.owner, 'onMove', ctx.rng, ctx.depth, manifest);
-        events.push(...trig.events);
-        s = trig.state;
+        }], {
+          rng: ctx.rng.scope(`placementMove:${id}`),
+          depth: ctx.depth,
+        }, manifest);
+        events.push(...moved.events);
+        s = moved.state;
       }
       return { events, state: s };
     }
@@ -918,56 +975,48 @@ export function evalEffect(
 
       switch (effect.destination.kind) {
         case 'HAND': {
-          if (state.hand[owner].length >= manifest.constants.handCap) return { events: [], state };
-          const e: MatchEvent = {
-            type: 'CARD_ADDED_TO_HAND',
+          const created = executePlacementCommands(state, [{
+            type: 'CREATE_CARD',
             owner,
             cardId: newId,
             defId,
             spawnSource,
-          };
-          let s = apply(state, e, manifest);
-          const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.scope('debuff'), manifest);
-          s = debuff.state;
-          return setCreatedCost(s, [e, ...debuff.events]);
+            destination: { kind: 'HAND' },
+            cause: ctx.source,
+          }], { rng: ctx.rng.scope('createHand'), depth: ctx.depth }, manifest);
+          return setCreatedCost(created.state, [...created.events]);
         }
 
         case 'DECK': {
-          const e: MatchEvent = {
-            type: 'CARD_ADDED_TO_DECK',
+          const created = executePlacementCommands(state, [{
+            type: 'CREATE_CARD',
             owner,
             cardId: newId,
             defId,
             spawnSource,
-            position: effect.destination.position,
-          };
-          return setCreatedCost(apply(state, e, manifest), [e]);
+            destination: {
+              kind: 'DECK',
+              position: effect.destination.position,
+            },
+            cause: ctx.source,
+          }], { rng: ctx.rng.scope('createDeck'), depth: ctx.depth }, manifest);
+          return setCreatedCost(created.state, [...created.events]);
         }
 
         case 'LANE': {
           const lanes = selectLanes(effect.destination.lane, liveCtx);
           if (lanes.length === 0) return { events: [], state };
           const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope('lane').pick(lanes);
-          if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return { events: [], state };
-          const e: MatchEvent = {
-            type: 'CARD_ADDED_TO_LANE',
+          const created = executePlacementCommands(state, [{
+            type: 'CREATE_CARD',
             owner,
             cardId: newId,
-            lane,
             defId,
             spawnSource,
-          };
-          const created = setCreatedCost(apply(state, e, manifest), [e]);
-          const locTrig = fireLocationTrigger(
-            created.state,
-            lane,
-            'onCardEnteredHere',
-            ctx.rng.scope(`locEnteredCreate:${newId}`),
-            manifest,
-            newId,
-            owner,
-          );
-          return { events: [...created.events, ...locTrig.events], state: locTrig.state };
+            destination: { kind: 'LANE', lane, revealed: false },
+            cause: ctx.source,
+          }], { rng: ctx.rng.scope('createLane'), depth: ctx.depth }, manifest);
+          return setCreatedCost(created.state, [...created.events]);
         }
 
         default:
@@ -988,85 +1037,36 @@ export function evalEffect(
           if (lanes.length === 0) continue;
           const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope(`moveZone:${id}`).pick(lanes);
           if (s.lanesById[lane].cards[card.owner].length >= manifest.constants.laneCapacity) continue;
-          const e: MatchEvent = {
-            type: 'CARD_MOVED_TO_ZONE',
+          const moved = executePlacementCommands(s, [{
+            type: 'CHANGE_CARD_ZONE',
             cardId: id,
-            destination: { kind: 'LANE', lane, revealed: effect.destination.revealed },
+            destination: {
+              kind: 'LANE',
+              lane,
+              revealed: effect.destination.revealed ?? false,
+            },
             cause: ctx.source,
-          };
-          events.push(e);
-          s = apply(s, e, manifest);
-          const locTrig = fireLocationTrigger(
-            s,
-            lane,
-            'onCardEnteredHere',
-            ctx.rng.scope(`locEnteredMoveZone:${id}`),
-            manifest,
-            id,
-            card.owner,
-          );
-          events.push(...locTrig.events);
-          s = locTrig.state;
+          }], {
+            rng: ctx.rng.scope(`moveZone:${id}`),
+            depth: ctx.depth,
+          }, manifest);
+          events.push(...moved.events);
+          s = moved.state;
           continue;
         }
 
-        if (effect.destination.kind === 'HAND' && s.hand[card.owner].length >= manifest.constants.handCap) continue;
-        const e: MatchEvent = {
-          type: 'CARD_MOVED_TO_ZONE',
+        const moved = executePlacementCommands(s, [{
+          type: 'CHANGE_CARD_ZONE',
           cardId: id,
           destination: effect.destination,
           cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
-        if (effect.destination.kind === 'HAND') {
-          const debuff = applyHandEntryDebuffs(s, id, card.owner, ctx.rng.scope(`debuffMoveZone:${id}`), manifest);
-          events.push(...debuff.events);
-          s = debuff.state;
-        }
+        }], {
+          rng: ctx.rng.scope(`moveZone:${id}`),
+          depth: ctx.depth,
+        }, manifest);
+        events.push(...moved.events);
+        s = moved.state;
       }
-      return { events, state: s };
-    }
-
-    case 'SPAWN_AND_REVEAL': {
-      // CREATE_CARD_IN_ZONE(LANE) + immediate recursive reveal. Classic Jubilee
-      // /Bar-Sinister-spawned-card flow.
-      const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
-      if (!owner) return { events: [], state };
-      const lanes = selectLanes(effect.to, liveCtx);
-      if (lanes.length === 0) return { events: [], state };
-      const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope('lane').pick(lanes);
-      if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) {
-        return { events: [], state };
-      }
-      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.scope('pool'), ctx.eventOwner ?? null);
-      if (!defId) return { events: [], state };
-      const newId = mintCardId(ctx.rng.scope('id'));
-      const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
-      const spawnEvt: MatchEvent = {
-        type: 'CARD_ADDED_TO_LANE',
-        owner,
-        cardId: newId,
-        lane,
-        defId,
-        spawnSource,
-      };
-      let s = apply(state, spawnEvt, manifest);
-      const events: MatchEvent[] = [spawnEvt];
-      const locTrig = fireLocationTrigger(
-        s,
-        lane,
-        'onCardEnteredHere',
-        ctx.rng.scope(`locEnteredSpawn:${newId}`),
-        manifest,
-        newId,
-        owner,
-      );
-      events.push(...locTrig.events);
-      s = locTrig.state;
-      const nested = revealPlayedCard(s, newId, manifest, ctx.rng.scope(`reveal:${newId}`), ctx.depth + 1);
-      events.push(...nested.events);
-      s = nested.state;
       return { events, state: s };
     }
 
@@ -1085,26 +1085,18 @@ export function evalEffect(
         });
         if (candidates.length === 0) continue;
         const lane = candidates.length === 1 ? candidates[0] : ctx.rng.scope(`return:${id}`).pick(candidates);
-        const e: MatchEvent = {
-          type: 'CARD_RETURNED_TO_LANE',
+        const returned = executePlacementCommands(s, [{
+          type: 'RETURN_CARD',
           cardId: id,
           lane,
           revealed: effect.revealed ?? true,
           cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
-        const locTrig = fireLocationTrigger(
-          s,
-          lane,
-          'onCardEnteredHere',
-          ctx.rng.scope(`locEnteredReturn:${id}`),
-          manifest,
-          id,
-          card.owner,
-        );
-        events.push(...locTrig.events);
-        s = locTrig.state;
+        }], {
+          rng: ctx.rng.scope(`return:${id}`),
+          depth: ctx.depth,
+        }, manifest);
+        events.push(...returned.events);
+        s = returned.state;
       }
       return { events, state: s };
     }
@@ -1518,13 +1510,13 @@ export function evalEffect(
         effect.args ?? {},
         ctx,
         manifest,
-        { destroyCards, banishCards },
+        { destroyCards, banishCards, executePlacementCommands },
       );
   }
 }
 
 /** Apply DEBUFF_ENEMY_ON_HAND_ENTRY ongoings to a card that just entered hand.
- *  Call after every CARD_DRAWN / CARD_ADDED_TO_HAND event is applied. */
+ *  Call after every CARD_DRAWN or hand-destination CARD_CREATED event. */
 export function applyHandEntryDebuffs(
   state: MatchState,
   cardId: CardId,
@@ -1565,15 +1557,6 @@ export function applyHandEntryDebuffs(
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function isMoveBlocked(state: MatchState, cardId: CardId, manifest: Manifest): boolean {
-  return ongoingsTargeting(
-    state,
-    manifest,
-    cardId,
-    ['BLOCK_MOVE'],
-  ).length > 0;
-}
 
 /**
  * Compose a SpawnSource for cards minted by an effect.

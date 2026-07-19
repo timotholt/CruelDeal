@@ -14,11 +14,17 @@ const sapperId = 'sapper1' as CardId;
 
 // Add Sapper to hand and stage it
 let s = apply(s0, {
-  type: 'CARD_ADDED_TO_HAND',
+  type: 'CARD_CREATED',
   owner: 'P0',
   cardId: sapperId,
   defId: DUNE_SAPPER.defId,
   spawnSource: { kind: 'DECK_CREATION' },
+  destination: { kind: 'HAND' },
+  cause: {
+    sourceId: 'system:check-sapper' as CardId,
+    effectKind: 'SYSTEM',
+    reason: 'CHECK_SAPPER',
+  },
 }, BOOTSTRAP_MANIFEST);
 
 s = apply(s, {

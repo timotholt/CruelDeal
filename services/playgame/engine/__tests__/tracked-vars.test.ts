@@ -191,16 +191,18 @@ describe('trackedVariables: CARD_MOVED', () => {
   });
 });
 
-// ---- CARD_ADDED_TO_HAND / CARD_ADDED_TO_LANE (cardsYouCreated) ------------
+// ---- CARD_CREATED (cardsYouCreated) ---------------------------------------
 
 describe('trackedVariables: cardsYouCreated', () => {
   it('increments cardsYouCreated when spawnSource is CARD_CREATED', () => {
     const s = run(baseState(), {
-      type: 'CARD_ADDED_TO_HAND',
+      type: 'CARD_CREATED',
       owner: 'P0',
       cardId: 'new1' as CardId,
       defId: 'armored-van',
       spawnSource: { kind: 'CARD_CREATED', sourceCardId: 'c1' as CardId },
+      destination: { kind: 'HAND' },
+      cause: SYSTEM_SOURCE,
     });
     expect(s.trackedVariables.P0.cardsYouCreated).toBe(1);
     expect(s.trackedVariables.P1.cardsYouCreated).toBe(0);
@@ -208,11 +210,13 @@ describe('trackedVariables: cardsYouCreated', () => {
 
   it('does NOT increment cardsYouCreated for DECK_CREATION', () => {
     const s = run(baseState(), {
-      type: 'CARD_ADDED_TO_HAND',
+      type: 'CARD_CREATED',
       owner: 'P0',
       cardId: 'new1' as CardId,
       defId: 'armored-van',
       spawnSource: { kind: 'DECK_CREATION' },
+      destination: { kind: 'HAND' },
+      cause: SYSTEM_SOURCE,
     });
     expect(s.trackedVariables.P0.cardsYouCreated).toBe(0);
   });

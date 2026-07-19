@@ -157,9 +157,7 @@ export function cardLifecycleFrames(
     const event = entry.event;
     if (!('cardId' in event) || event.cardId !== cardId) continue;
     switch (event.type) {
-      case 'CARD_ADDED_TO_DECK':
-      case 'CARD_ADDED_TO_HAND':
-      case 'CARD_ADDED_TO_LANE':
+      case 'CARD_CREATED':
         created.push(entry.frame);
         break;
       case 'CARD_STAGED':
@@ -169,7 +167,7 @@ export function cardLifecycleFrames(
         revealed.push(entry.frame);
         break;
       case 'CARD_MOVED':
-      case 'CARD_MOVED_TO_ZONE':
+      case 'CARD_ZONE_CHANGED':
       case 'CARD_RETURNED_TO_LANE':
         moved.push(entry.frame);
         break;

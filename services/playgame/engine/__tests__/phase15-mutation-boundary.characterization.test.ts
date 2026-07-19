@@ -31,26 +31,15 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_DRAWN: 1,
   },
   'services/playgame/engine/effects/builtins.ts': {
-    CARD_ADDED_TO_HAND: 6,
-    CARD_ADDED_TO_LANE: 1,
     CARD_DRAWN: 1,
-    CARD_MOVED: 4,
-    CARD_MOVED_TO_ZONE: 1,
-    CARD_RETURNED_TO_LANE: 1,
     CARD_TRANSFORMED: 1,
     PENDING_EFFECT_ADDED: 2,
   },
   'services/playgame/engine/effects/evaluator.ts': {
-    CARD_ADDED_TO_DECK: 1,
-    CARD_ADDED_TO_HAND: 1,
-    CARD_ADDED_TO_LANE: 2,
     CARD_DISCARDED: 1,
     CARD_DRAWN: 1,
     CARD_FLIPPED: 1,
     CARD_REVEAL_SCHEDULED: 1,
-    CARD_MOVED: 1,
-    CARD_MOVED_TO_ZONE: 2,
-    CARD_RETURNED_TO_LANE: 1,
     CARD_TRANSFORMED: 1,
     ENERGY_CHANGED: 1,
     MAX_ENERGY_CHANGED: 1,
@@ -100,6 +89,12 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_BANISHED: 1,
     CARD_DESTROYED: 1,
   },
+  'services/playgame/engine/kernel/operations/placement.ts': {
+    CARD_CREATED: 1,
+    CARD_MOVED: 1,
+    CARD_RETURNED_TO_LANE: 1,
+    CARD_ZONE_CHANGED: 1,
+  },
   'services/playgame/engine/resolve.ts': {
     CARD_STAGED: 1,
     CARD_UNSTAGED: 2,
@@ -119,9 +114,9 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
 
 const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {
   'services/playgame/engine/effects/evaluator.ts': {
-    applyHandEntryDebuffs: 3,
-    fireCardTrigger: 3,
-    fireLocationTrigger: 6,
+    applyHandEntryDebuffs: 2,
+    fireCardTrigger: 2,
+    fireLocationTrigger: 1,
     fireOnAnyCardPlayedHere: 2,
   },
   'services/playgame/engine/resolve.ts': {
@@ -238,7 +233,7 @@ describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(9);
+      .toBe(10);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

@@ -260,9 +260,7 @@ function sortedDefIds(cards: readonly { readonly defId: string }[]): string[] {
 
 function explicitCreationOwner(event: MatchEvent): Owner | null {
   switch (event.type) {
-    case 'CARD_ADDED_TO_DECK':
-    case 'CARD_ADDED_TO_HAND':
-    case 'CARD_ADDED_TO_LANE':
+    case 'CARD_CREATED':
       return event.owner;
     default:
       return null;

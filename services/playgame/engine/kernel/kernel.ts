@@ -103,6 +103,7 @@ const COMMAND_TYPES = new Set<GameCommand['type']>([
   'BANISH_CARD',
   'RETURN_CARD',
   'CREATE_CARD',
+  'CHANGE_CARD_ZONE',
   'DEPLOY_FROM_DECK',
   'INVOKE_ON_REVEAL',
   'DRAW_CARD',

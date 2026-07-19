@@ -41,11 +41,13 @@ describe('Phase 1.1 canonical timeline', () => {
     const cardId = 'timeline-card-instance' as CardId;
     const events: readonly MatchEvent[] = [
       {
-        type: 'CARD_ADDED_TO_HAND',
+        type: 'CARD_CREATED',
         owner: 'P0',
         cardId,
         defId: 'timeline-card',
         spawnSource: { kind: 'SYSTEM' },
+        destination: { kind: 'HAND' },
+        cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
       { type: 'CARD_STAGED', intentId: 'play-1', owner: 'P0', cardId, lane: 0, cost: 1 },
       { type: 'CARD_FLIPPED', cardId },

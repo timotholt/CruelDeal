@@ -24,6 +24,9 @@ const LOCATION_ABILITY_SLOTS = new Set<keyof LocationAbilities>([
   'atTurnEnd',
   'onCardPlayedHere',
   'onCardEnteredHere',
+  'onCardLeftHere',
+  'onCardCreatedHere',
+  'onCardReturnedHere',
   'onCardDestroyedHere',
   'onCardBanishedHere',
 ]);
@@ -59,7 +62,6 @@ const EFFECT_KINDS = new Set([
   'ADJUST_NEXT_TURN_ENERGY_BONUS',
   'CALL_BUILTIN',
   'TRIGGER_ON_REVEAL',
-  'SPAWN_AND_REVEAL',
   'SEQUENCE',
   'CONDITIONAL',
   'FOREACH',

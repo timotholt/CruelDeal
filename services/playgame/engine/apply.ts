@@ -425,50 +425,47 @@ function applyEventBody(
       return addToHand(s2, event.owner, event.cardId);
     }
 
-    case 'CARD_ADDED_TO_DECK': {
-      // May be creating a brand-new card or repositioning an existing one.
-      const existing = readCardInternal(state, event.cardId);
-      const s1 = existing
-        ? patchCard(state, event.cardId, {
-            zone: 'DECK',
-            lane: null,
-            revealTiming: null,
-            spawnSource: event.spawnSource,
-          })
-        : event.defId
-          ? mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'DECK')
-          : state;
-      if (!readCardInternal(s1, event.cardId)) return state;
-      return {
-        ...s1,
-        deck: {
-          ...s1.deck,
-          [event.owner]: event.position === 'TOP'
-            ? [event.cardId, ...s1.deck[event.owner].filter(id => id !== event.cardId)]
-            : [...s1.deck[event.owner].filter(id => id !== event.cardId), event.cardId],
-        },
-      };
+    case 'CARD_CREATED': {
+      if (readCardInternal(state, event.cardId)) return state;
+      let s = mintOrUpdate(
+        state,
+        event.cardId,
+        event.defId,
+        event.owner,
+        event.spawnSource,
+        event.destination.kind,
+        event.destination.kind === 'LANE' ? event.destination.lane : null,
+      );
+      switch (event.destination.kind) {
+        case 'HAND':
+          return addToHand(s, event.owner, event.cardId);
+        case 'DECK':
+          return {
+            ...s,
+            deck: {
+              ...s.deck,
+              [event.owner]: event.destination.position === 'TOP'
+                ? [event.cardId, ...s.deck[event.owner]]
+                : [...s.deck[event.owner], event.cardId],
+            },
+          };
+        case 'LANE':
+          s = patchCard(s, event.cardId, {
+            revealed: event.destination.revealed,
+            revealTiming: event.destination.revealed
+              ? null
+              : { kind: 'TURN', turn: state.turn },
+          });
+          return addToLane(
+            s,
+            event.owner,
+            event.destination.lane,
+            event.cardId,
+          );
+      }
     }
 
-    case 'CARD_ADDED_TO_HAND': {
-      // Mint-to-hand: Agent 13, Collector, "add a card to your hand" effects.
-      // This creates a fresh InternalCardRecord with the supplied defId and
-      // spawnSource. If an instance already exists at that id, update it.
-      const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'HAND');
-      return addToHand(minted, event.owner, event.cardId);
-    }
-
-    case 'CARD_ADDED_TO_LANE': {
-      // Mint-to-lane: Brood, Jubilee spawn, Bar Sinister. Creates a fresh
-      // InternalCardRecord directly in a lane. Effect-spawned cards are face-up
-      // immediately (revealed: true); On Reveal effects do NOT fire —
-      // use SPAWN_AND_REVEAL for that.
-      const minted = mintOrUpdate(state, event.cardId, event.defId, event.owner, event.spawnSource, 'LANE', event.lane);
-      const revealed = patchCard(minted, event.cardId, { revealed: true, revealTiming: null });
-      return addToLane(revealed, event.owner, event.lane, event.cardId);
-    }
-
-    case 'CARD_MOVED_TO_ZONE': {
+    case 'CARD_ZONE_CHANGED': {
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       let s = removeFromAllCardZones(state, card.owner, event.cardId);
@@ -494,8 +491,8 @@ function applyEventBody(
           s = patchCard(s, event.cardId, {
             zone: 'LANE',
             lane: event.destination.lane,
-            revealed: event.destination.revealed ?? card.revealed,
-            revealTiming: (event.destination.revealed ?? card.revealed)
+            revealed: event.destination.revealed,
+            revealTiming: event.destination.revealed
               ? null
               : { kind: 'TURN', turn: state.turn },
           });
@@ -1353,9 +1350,7 @@ function applyTrackedVars(next: MatchState, _prev: MatchState, event: MatchEvent
       break;
     }
 
-    case 'CARD_ADDED_TO_DECK':
-    case 'CARD_ADDED_TO_HAND':
-    case 'CARD_ADDED_TO_LANE': {
+    case 'CARD_CREATED': {
       // cardsYouCreated if spawnSource is not DECK_CREATION or SYSTEM.
       if (
         event.spawnSource.kind !== 'DECK_CREATION' &&

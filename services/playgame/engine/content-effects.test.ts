@@ -83,12 +83,12 @@ const cardIdInDeck = (
     createRng('content-bone-market'),
   );
   const created = result.events.find(event =>
-    event.type === 'CARD_ADDED_TO_HAND');
+    event.type === 'CARD_CREATED' && event.destination.kind === 'HAND');
   truthy(
-    created?.type === 'CARD_ADDED_TO_HAND',
+    created?.type === 'CARD_CREATED',
     'Bone Market creates a card in hand',
   );
-  if (created?.type === 'CARD_ADDED_TO_HAND') {
+  if (created?.type === 'CARD_CREATED') {
     const template = getCardTemplate(BOOTSTRAP_MANIFEST, created.defId)!;
     eq(
       getCardCost(result.state, created.cardId, BOOTSTRAP_MANIFEST),
@@ -220,7 +220,7 @@ const cardIdInDeck = (
   const result = revealPlayedCard(state, acquisition, BOOTSTRAP_MANIFEST, createRng('content-golden-parachute-destroyed'));
 
   truthy(result.events.some((event) => event.type === 'CARD_DESTROYED' && event.cardId === parachute), 'Acquisition Team destroys Golden Parachute through normal destroy');
-  truthy(result.events.some((event) => event.type === 'CARD_ADDED_TO_HAND' && event.defId === 'golden-parachute'), 'Golden Parachute creates a copy in hand after being destroyed');
+  truthy(result.events.some((event) => event.type === 'CARD_CREATED' && event.destination.kind === 'HAND' && event.defId === 'golden-parachute'), 'Golden Parachute creates a copy in hand after being destroyed');
   eq(getCardState(result.state, parachute)!?.zone, 'DESTROYED', 'Original Golden Parachute remains in destroyed pile');
   truthy(
     getCardsInZone(result.state, BOOTSTRAP_MANIFEST, 'HAND', 'P0')
@@ -270,7 +270,8 @@ const cardIdInDeck = (
   );
   truthy(
     copiedTrigger.events.some(event =>
-      event.type === 'CARD_ADDED_TO_HAND'
+      event.type === 'CARD_CREATED'
+      && event.destination.kind === 'HAND'
       && event.defId === 'golden-parachute'),
     'Acquisition Team executes copied text after the donor no longer exists in play',
   );
@@ -290,8 +291,8 @@ const cardIdInDeck = (
 
   const result = revealPlayedCard(state, junkPacket, BOOTSTRAP_MANIFEST, createRng('content-junk-packet'));
 
-  truthy(result.events.some((event) => event.type === 'CARD_ADDED_TO_DECK' && event.owner === 'P0'), 'Junk Packet adds Junk to opponent deck');
-  truthy(!result.events.some((event) => event.type === 'CARD_ADDED_TO_HAND'), 'Junk Packet does not add Junk directly to hand');
+  truthy(result.events.some((event) => event.type === 'CARD_CREATED' && event.destination.kind === 'DECK' && event.owner === 'P0'), 'Junk Packet adds Junk to opponent deck');
+  truthy(!result.events.some((event) => event.type === 'CARD_CREATED' && event.destination.kind === 'HAND'), 'Junk Packet does not add Junk directly to hand');
   truthy(
     getCardsInZone(result.state, BOOTSTRAP_MANIFEST, 'DECK', 'P0')
       .some(card => card.defId === 'junk-card'),
@@ -340,7 +341,7 @@ const cardIdInDeck = (
   }
 
   eq(events.filter((event) => event.type === 'CARD_DISCARDED').length, 2, 'The Pineapple Club discards one card from each hand');
-  eq(events.filter((event) => event.type === 'CARD_ADDED_TO_HAND').length, 2, 'The Pineapple Club adds one random card to each hand');
+  eq(events.filter((event) => event.type === 'CARD_CREATED' && event.destination.kind === 'HAND').length, 2, 'The Pineapple Club adds one random card to each hand');
   eq(s.hand.P0.length, 1, 'P0 hand ends with one replacement card');
   eq(s.hand.P1.length, 1, 'P1 hand ends with one replacement card');
 }

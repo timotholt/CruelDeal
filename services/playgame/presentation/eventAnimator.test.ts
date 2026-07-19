@@ -188,12 +188,12 @@ describe('event animator transfer origins', () => {
       }, BOOTSTRAP_MANIFEST);
       before = apply(before, { type: 'CARD_FLIPPED', cardId }, BOOTSTRAP_MANIFEST);
       const event = {
-        type: 'CARD_MOVED_TO_ZONE',
+        type: 'CARD_ZONE_CHANGED',
         cardId,
         destination: { kind: 'HAND' },
         cause: {
           sourceId: cardId,
-          effectKind: 'CARD',
+          effectKind: 'ON_REVEAL',
           reason: 'LEON_RETURN_TEST',
         },
       } as const satisfies MatchEvent;

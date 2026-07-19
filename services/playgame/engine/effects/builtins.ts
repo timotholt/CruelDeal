@@ -20,6 +20,7 @@ import type { MatchState, SpawnSource } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { EffectCtx } from './evaluator';
+import type { PlacementCommand } from '../kernel/operations/placement';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
@@ -48,6 +49,15 @@ import {
 type BuiltinArgs = Record<string, unknown>;
 type BuiltinResult = { events: readonly MatchEvent[]; state: MatchState };
 export interface BuiltinLifecycleCapabilities {
+  readonly executePlacementCommands: (
+    state: MatchState,
+    commands: readonly PlacementCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
+      readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
   readonly destroyCards: (
     state: MatchState,
     cardIds: readonly CardId[],
@@ -70,6 +80,21 @@ export interface BuiltinLifecycleCapabilities {
     },
     manifest: Manifest,
   ) => BuiltinResult;
+}
+
+function runPlacement(
+  state: MatchState,
+  commands: readonly PlacementCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executePlacementCommands(
+    state,
+    commands,
+    { rng: ctx.rng, depth: ctx.depth },
+    manifest,
+  );
 }
 type BuiltinHandler = (
   state: MatchState,
@@ -172,15 +197,17 @@ function replaceHandCardHigherCost(
   let s = banished.state;
 
   // Add new card
-  const addEvt: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
+  const created = runPlacement(s, [{
+    type: 'CREATE_CARD',
     owner,
     cardId: newId,
     defId: newDefId,
     spawnSource: ss,
-  };
-  events.push(addEvt);
-  s = apply(s, addEvt, manifest);
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
+  events.push(...created.events);
+  s = created.state;
 
   return { events, state: s };
 }
@@ -225,12 +252,14 @@ function replaceLowestPowerHandWithCost(
   const events: MatchEvent[] = [...banished.events];
   let s = banished.state;
 
-  const addEvt: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
+  const created = runPlacement(s, [{
+    type: 'CREATE_CARD',
     owner, cardId: newId, defId: newDefId, spawnSource: ss,
-  };
-  events.push(addEvt);
-  s = apply(s, addEvt, manifest);
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
+  events.push(...created.events);
+  s = created.state;
   return { events, state: s };
 }
 
@@ -277,12 +306,14 @@ function replaceCreatedHandCardHigherCost(
   const events: MatchEvent[] = [...banished.events];
   let s = banished.state;
 
-  const addEvt: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
+  const created = runPlacement(s, [{
+    type: 'CREATE_CARD',
     owner, cardId: newId, defId: newDefId, spawnSource: ss,
-  };
-  events.push(addEvt);
-  s = apply(s, addEvt, manifest);
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
+  events.push(...created.events);
+  s = created.state;
   return { events, state: s };
 }
 
@@ -294,6 +325,7 @@ function replaceCreatedHandCardHigherCost(
 function addDiscountedCardToHand(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const costDelta = (args.costDelta as number) ?? -1;
   const owner = ctx.selfOwner;
@@ -313,12 +345,14 @@ function addDiscountedCardToHand(
   const events: MatchEvent[] = [];
   let s = state;
 
-  const addEvt: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
+  const created = runPlacement(s, [{
+    type: 'CREATE_CARD',
     owner, cardId: newId, defId: chosenDef.defId, spawnSource: ss,
-  };
-  events.push(addEvt);
-  s = apply(s, addEvt, manifest);
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
+  events.push(...created.events);
+  s = created.state;
 
   // Apply temporary cost discount
   if (costDelta !== 0) {
@@ -429,6 +463,7 @@ function overclockChip(
 function moveEnemyCardToOtherLane(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
@@ -443,10 +478,9 @@ function moveEnemyCardToOtherLane(
   if (toLaneCandidates.length === 0) return noop(state);
 
   const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
-  const e: MatchEvent = {
-    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+  return runPlacement(state, [{
+    type: 'MOVE_CARD', cardId: targetId, toLane, cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -455,6 +489,7 @@ function moveEnemyCardToOtherLane(
 function moveSelfToRandomOtherLane(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const self = ctx.self as CardId;
   const owner = ctx.selfOwner;
@@ -466,10 +501,9 @@ function moveSelfToRandomOtherLane(
   if (toLaneCandidates.length === 0) return noop(state);
 
   const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
-  const e: MatchEvent = {
-    type: 'CARD_MOVED', cardId: self, fromLane: ctx.selfLane, toLane, cause: ctx.source,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+  return runPlacement(state, [{
+    type: 'MOVE_CARD', cardId: self, toLane, cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -478,6 +512,7 @@ function moveSelfToRandomOtherLane(
 function moveRandomFriendlyToOtherLane(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
@@ -493,10 +528,9 @@ function moveRandomFriendlyToOtherLane(
   if (toLaneCandidates.length === 0) return noop(state);
 
   const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
-  const e: MatchEvent = {
-    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+  return runPlacement(state, [{
+    type: 'MOVE_CARD', cardId: targetId, toLane, cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -505,6 +539,7 @@ function moveRandomFriendlyToOtherLane(
 function moveLowestPowerEnemyToOtherLane(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
@@ -525,10 +560,9 @@ function moveLowestPowerEnemyToOtherLane(
   if (toLaneCandidates.length === 0) return noop(state);
 
   const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
-  const e: MatchEvent = {
-    type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+  return runPlacement(state, [{
+    type: 'MOVE_CARD', cardId: targetId, toLane, cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -537,6 +571,7 @@ function moveLowestPowerEnemyToOtherLane(
 function copyTopEnemyDeckCardToHand(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null) return noop(state);
@@ -552,11 +587,12 @@ function copyTopEnemyDeckCardToHand(
   const newId = mintCardId(ctx, 'copy');
   const ss: SpawnSource = { kind: 'COPY_OF', sourceCardId: topCardId };
 
-  const e: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
+  return runPlacement(state, [{
+    type: 'CREATE_CARD',
     owner, cardId: newId, defId: topCard.defId, spawnSource: ss,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -565,6 +601,7 @@ function copyTopEnemyDeckCardToHand(
 function addDiscardedCardToHand(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null) return noop(state);
@@ -577,14 +614,12 @@ function addDiscardedCardToHand(
   if (discarded.length === 0) return noop(state);
 
   const picked = ctx.rng.scope('pick').pick(discarded);
-  const e: MatchEvent = {
-    type: 'CARD_ADDED_TO_HAND',
-    owner,
+  return runPlacement(state, [{
+    type: 'CHANGE_CARD_ZONE',
     cardId: picked.id,
-    defId: picked.defId,
-    spawnSource: picked.spawnSource,
-  };
-  return { events: [e], state: apply(state, e, manifest) };
+    destination: { kind: 'HAND' },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -642,23 +677,25 @@ function spawnTokenInLane(
   lane: LaneId,
   defId: string,
   salt: string,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
   const cardId = mintCardId(ctx, salt);
-  const event: MatchEvent = {
-    type: 'CARD_ADDED_TO_LANE',
+  return runPlacement(state, [{
+    type: 'CREATE_CARD',
     owner,
     cardId,
-    lane,
     defId,
     spawnSource: spawnSource(ctx, owner),
-  };
-  return { events: [event], state: apply(state, event, manifest) };
+    destination: { kind: 'LANE', lane, revealed: false },
+    cause: ctx.source,
+  }], ctx, manifest, lifecycle);
 }
 
 function securityDetail(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
@@ -670,12 +707,12 @@ function securityDetail(
   const events: MatchEvent[] = [];
   let s = state;
   for (let i = 0; i < 2; i++) {
-    const spawned = spawnTokenInLane(s, ctx, manifest, owner, lane, 'guard', `guard:${i}`);
+    const spawned = spawnTokenInLane(s, ctx, manifest, owner, lane, 'guard', `guard:${i}`, lifecycle);
     if (spawned.events.length === 0) break;
     events.push(...spawned.events);
     s = spawned.state;
     const addEvent = spawned.events[0];
-    if (addEvent.type !== 'CARD_ADDED_TO_LANE') continue;
+    if (addEvent.type !== 'CARD_CREATED') continue;
     const delta = sourcePower - guardBasePower;
     if (delta === 0) continue;
     const powerChange = addStoredPower(s, addEvent.cardId, delta, ctx.source, manifest);
@@ -738,6 +775,7 @@ function barracadeCheck(
 function leonReturn(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const self = ctx.self as CardId;
   if (!self) return noop(state);
@@ -746,14 +784,14 @@ function leonReturn(
 
   const events: MatchEvent[] = [];
   let s = state;
-  const moveEvent: MatchEvent = {
-    type: 'CARD_MOVED_TO_ZONE',
+  const moved = runPlacement(s, [{
+    type: 'CHANGE_CARD_ZONE',
     cardId: self,
     destination: { kind: 'HAND' },
     cause: ctx.source,
-  };
-  events.push(moveEvent);
-  s = apply(s, moveEvent, manifest);
+  }], ctx, manifest, lifecycle);
+  events.push(...moved.events);
+  s = moved.state;
   if (getCardRuntime(s, self, manifest)?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
   const delta = (args.delta as number) ?? 2;
@@ -820,6 +858,7 @@ function corporateClimber(
 function traumaTeam(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
@@ -835,14 +874,13 @@ function traumaTeam(
   if (destroyedLastTurn.length === 0) return noop(state);
 
   const cardId = ctx.rng.scope('revive').pick(destroyedLastTurn);
-  const event: MatchEvent = {
-    type: 'CARD_RETURNED_TO_LANE',
+  return runPlacement(state, [{
+    type: 'RETURN_CARD',
     cardId,
     lane,
     revealed: true,
     cause: ctx.source,
-  };
-  return { events: [event], state: apply(state, event, manifest) };
+  }], ctx, manifest, lifecycle);
 }
 
 function socialWorker(
@@ -895,6 +933,7 @@ function socialWorker(
 function riffRaff(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
@@ -903,7 +942,7 @@ function riffRaff(
   const events: MatchEvent[] = [];
   let s = state;
   for (const targetLane of activeLaneIds(state).filter(laneId => laneId !== lane)) {
-    const spawned = spawnTokenInLane(s, ctx, manifest, owner, targetLane, 'riff-raff-token', `riff:${targetLane}`);
+    const spawned = spawnTokenInLane(s, ctx, manifest, owner, targetLane, 'riff-raff-token', `riff:${targetLane}`, lifecycle);
     events.push(...spawned.events);
     s = spawned.state;
   }

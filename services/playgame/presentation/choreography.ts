@@ -59,7 +59,7 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
         sfx: [{ name: 'move', timing: 'on-dispatch' }],
       };
 
-    case 'CARD_MOVED_TO_ZONE':
+    case 'CARD_ZONE_CHANGED':
       return {
         structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
         vfx: [{
@@ -85,7 +85,8 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
         sfx: [],
       };
 
-    case 'CARD_ADDED_TO_HAND':
+    case 'CARD_CREATED':
+      if (event.destination.kind !== 'HAND') return dispatchOnly();
       return {
         structural: {
           kind: 'card-enter-hand',

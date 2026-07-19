@@ -320,39 +320,42 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
 }
 
-// -- CARD_ADDED_TO_HAND: mints with spawnSource (Agent 13 / Collector)
+// -- CARD_CREATED in hand: mints with spawnSource (Agent 13 / Collector)
 
 {
   const s0 = emptyState();
   const spawn = { kind: 'CARD_CREATED' as const, sourceCardId: 'agent13' as CardId };
   const s1 = run(s0, {
-    type: 'CARD_ADDED_TO_HAND',
+    type: 'CARD_CREATED',
     owner: 'P0',
     cardId: 'spawn1' as CardId,
     defId: 'grunt',
     spawnSource: spawn,
+    destination: { kind: 'HAND' },
+    cause: locationCause,
   });
-  eq(getCardState(s1, 'spawn1' as CardId)?.zone, 'HAND', 'CARD_ADDED_TO_HAND: zone=HAND');
-  eq(getCardState(s1, 'spawn1' as CardId)?.spawnSource, spawn, 'CARD_ADDED_TO_HAND: spawnSource recorded');
-  eq(s1.hand.P0.length, 1, 'CARD_ADDED_TO_HAND: in hand list');
+  eq(getCardState(s1, 'spawn1' as CardId)?.zone, 'HAND', 'CARD_CREATED: zone=HAND');
+  eq(getCardState(s1, 'spawn1' as CardId)?.spawnSource, spawn, 'CARD_CREATED: spawnSource recorded');
+  eq(s1.hand.P0.length, 1, 'CARD_CREATED: in hand list');
 }
 
-// -- CARD_ADDED_TO_LANE: mints with spawnSource (Brood / Bar Sinister)
+// -- CARD_CREATED in lane: mints with spawnSource (Brood / Bar Sinister)
 
 {
   const s0 = emptyState();
   const spawn = { kind: 'LOCATION_CREATED' as const, sourceLocationId: 'bar-sinister' as LocationCardInstanceId };
   const s1 = run(s0, {
-    type: 'CARD_ADDED_TO_LANE',
+    type: 'CARD_CREATED',
     owner: 'P0',
     cardId: 'spawn2' as CardId,
-    lane: 1,
     defId: 'grunt',
     spawnSource: spawn,
+    destination: { kind: 'LANE', lane: 1, revealed: false },
+    cause: locationCause,
   });
-  eq(getCardState(s1, 'spawn2' as CardId)?.zone, 'LANE', 'CARD_ADDED_TO_LANE: zone=LANE');
-  eq(getCardState(s1, 'spawn2' as CardId)?.spawnSource, spawn, 'CARD_ADDED_TO_LANE: spawnSource recorded');
-  eq(s1.lanesById[1].cards.P0, ['spawn2'] as CardId[], 'CARD_ADDED_TO_LANE: in lane list');
+  eq(getCardState(s1, 'spawn2' as CardId)?.zone, 'LANE', 'CARD_CREATED: zone=LANE');
+  eq(getCardState(s1, 'spawn2' as CardId)?.spawnSource, spawn, 'CARD_CREATED: spawnSource recorded');
+  eq(s1.lanesById[1].cards.P0, ['spawn2'] as CardId[], 'CARD_CREATED: in lane list');
 }
 
 // -- DECK_SHUFFLED: reorders deck per newOrder

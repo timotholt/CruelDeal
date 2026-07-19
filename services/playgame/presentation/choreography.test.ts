@@ -56,7 +56,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
 
 {
   const choreography = describeEventChoreography(event({
-    type: 'CARD_MOVED_TO_ZONE',
+    type: 'CARD_ZONE_CHANGED',
     cardId: 'c1' as CardId,
     destination: { kind: 'HAND' },
     cause: source,
@@ -71,7 +71,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
       sourceId: 'sys',
     }],
     sfx: [{ name: 'move', timing: 'on-dispatch' }],
-  }, 'CARD_MOVED_TO_ZONE uses the same cause-keyed structural transfer path');
+  }, 'CARD_ZONE_CHANGED uses the same cause-keyed structural transfer path');
 }
 
 {
@@ -97,11 +97,13 @@ const event = <T extends MatchEvent>(e: T): T => e;
 
 {
   const choreography = describeEventChoreography(event({
-    type: 'CARD_ADDED_TO_HAND',
+    type: 'CARD_CREATED',
     owner: 'P0',
     cardId: 'c1' as CardId,
     defId: 'generated-card',
     spawnSource: { kind: 'DECK_CREATION' },
+    destination: { kind: 'HAND' },
+    cause: source,
   }));
 
   eq(choreography, {
@@ -114,7 +116,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
     },
     vfx: [],
     sfx: [],
-  }, 'CARD_ADDED_TO_HAND shares hand-entry presentation');
+  }, 'CARD_CREATED in hand shares hand-entry presentation');
 }
 
 {

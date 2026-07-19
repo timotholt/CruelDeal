@@ -373,11 +373,9 @@ function buildState(
   eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
-// -- SPAWN_AND_REVEAL: nested cascade with spawnSource propagation ---------
+// -- CREATE_CARD_IN_ZONE: creation is distinct from reveal -----------------
 
 {
-  // A "tinkerer" spawns a 'grunt' at its own lane and immediately reveals
-  // it. grunt's OR then buffs friendlies +1.
   const grunt = mkCard('grunt', 2, 1, {
     abilities: {
       onReveal: [{
@@ -390,10 +388,13 @@ function buildState(
   const tinkerer = mkCard('tinkerer', 2, 2, {
     abilities: {
       onReveal: [{
-        kind: 'SPAWN_AND_REVEAL',
+        kind: 'CREATE_CARD_IN_ZONE',
         pool: { kind: 'DEF_ID_LIST', ids: ['grunt'] },
         owner: 'SELF_OWNER',
-        to: { kind: 'LANE_OF', of: { kind: 'SELF' } },
+        destination: {
+          kind: 'LANE',
+          lane: { kind: 'LANE_OF', of: { kind: 'SELF' } },
+        },
       }],
     },
   });
@@ -401,48 +402,19 @@ function buildState(
   const s0 = buildState([{ def: 'tinkerer', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('spawn'));
 
-  const added = res.events.find(e => e.type === 'CARD_ADDED_TO_LANE') as
+  const added = res.events.find(e => e.type === 'CARD_CREATED') as
     | { cardId: CardId; defId: string; spawnSource: { kind: string } } | undefined;
-  truthy(!!added, 'SPAWN_AND_REVEAL: CARD_ADDED_TO_LANE emitted');
+  truthy(!!added, 'CREATE_CARD_IN_ZONE: CARD_CREATED emitted');
   eq(added!.defId, 'grunt', 'spawned defId = grunt');
   eq(added!.spawnSource.kind, 'CARD_CREATED', 'spawnSource = CARD_CREATED');
 
-  // The spawn's own OR fires — so TWO OR_WINDOW_OPEN events exist
-  // (tinkerer + grunt) and the grunt's ADD_POWER hits both tinkerer and grunt.
   eq(
     res.events.filter(e => e.type === 'OR_WINDOW_OPEN').length,
-    2,
-    'SPAWN_AND_REVEAL: nested OR window opened',
+    1,
+    'creation does not fabricate a nested reveal',
   );
-  // After: tinkerer power = 2 + 1 (grunt buff) = 3; grunt power = 2 + 1 = 3.
-  eq(getCardPower(res.state, 'c1' as CardId, manifest), 3, 'tinkerer = 2 + 1 (grunt buff) = 3');
-  eq(getCardPower(res.state, added!.cardId, manifest), 3, 'grunt = 2 + 1 (self buff) = 3');
-}
-
-// -- Recursion cap: SPAWN_AND_REVEAL that spawns itself forever -----------
-
-{
-  // A Sera-like card that spawns another of itself. Should stop at MAX_REVEAL_RECURSION.
-  const recur = mkCard('recur', 1, 1, {
-    abilities: {
-      onReveal: [{
-        kind: 'SPAWN_AND_REVEAL',
-        pool: { kind: 'DEF_ID_LIST', ids: ['recur'] },
-        owner: 'SELF_OWNER',
-        to: { kind: 'LANE_OF', of: { kind: 'SELF' } },
-      }],
-    },
-  });
-  const manifest = mkManifest([recur]);
-  // Use a big lane capacity to let it actually recurse.
-  manifest.constants = { ...manifest.constants, laneCapacity: 100 };
-  const s0 = buildState([{ def: 'recur', owner: 'P0', lane: 0, revealed: false }]);
-  const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('recur'));
-  const limitHits = res.events.filter(e => e.type === 'RECURSION_LIMIT_HIT');
-  truthy(limitHits.length >= 1, `Recursion cap: RECURSION_LIMIT_HIT emitted (${limitHits.length} times)`);
-  // Total spawns should be bounded by MAX_REVEAL_RECURSION.
-  const spawned = res.events.filter(e => e.type === 'CARD_ADDED_TO_LANE').length;
-  truthy(spawned <= MAX_REVEAL_RECURSION + 1, `Recursion cap: spawn count bounded (got ${spawned})`);
+  eq(getCardPower(res.state, 'c1' as CardId, manifest), 2, 'creator remains at base power');
+  eq(getCardPower(res.state, added!.cardId, manifest), 2, 'created card remains at base power');
 }
 
 // -- DRAW: pulls from top of deck ------------------------------------------
@@ -1018,7 +990,7 @@ function buildState(
   const manifest = mkManifest([bouncer]);
   const s0 = buildState([{ def: 'bouncer', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-zone'));
-  truthy(res.events.some((e) => e.type === 'CARD_MOVED_TO_ZONE'), 'MOVE_CARD_TO_ZONE: emits CARD_MOVED_TO_ZONE');
+  truthy(res.events.some((e) => e.type === 'CARD_ZONE_CHANGED'), 'MOVE_CARD_TO_ZONE: emits CARD_ZONE_CHANGED');
   eq(getCardState(res.state, 'c1' as CardId)?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
   eq(res.state.hand.P0, ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');

@@ -355,7 +355,7 @@ describe('current card API', () => {
       { type: 'CARD_POWER_CHANGED', cardId, mutation: { kind: 'ADD', delta: 2 }, cause },
       { type: 'CARD_COST_CHANGED', cardId, delta: -1, cause },
       { type: 'CARD_FLIPPED', cardId },
-      { type: 'CARD_MOVED_TO_ZONE', cardId, destination: { kind: 'HAND' }, cause },
+      { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', cost: 2 },
       { type: 'CARD_FLIPPED', cardId },
     ]);
@@ -409,7 +409,7 @@ describe('current card API', () => {
       { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
       { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', cost: 3 },
       { type: 'CARD_FLIPPED', cardId },
-      { type: 'CARD_MOVED_TO_ZONE', cardId, destination: { kind: 'HAND' }, cause },
+      { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'TURN_RESOLUTION_STARTED', turn: 1 },
       { type: 'TURN_ENDED', turn: 1 },
       { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' },
