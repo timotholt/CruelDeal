@@ -159,7 +159,7 @@ function toEngineIntent(envelope: IntentEnvelope): MatchIntent | null {
 
 function hasMechanicalChange(before: MatchState, after: MatchState): boolean {
   return (Object.keys(before) as (keyof MatchState)[]).some(
-    (key) => key !== 'log' && before[key] !== after[key],
+    (key) => key !== 'timeline' && before[key] !== after[key],
   );
 }
 
@@ -195,16 +195,12 @@ function assertValidTimeline(
     if (frame.after.seed !== initialState.seed) {
       throw new Error(`authoritative event changed the match seed at index ${index}`);
     }
-    if (frame.after.log.length !== frame.before.log.length + 1) {
-      throw new Error(`authoritative event did not append exactly one log entry at index ${index}`);
-    }
-    const appended = frame.after.log[frame.after.log.length - 1];
     if (
-      appended?.frame !== frame.frame
-      || appended.scope !== frame.scope
-      || appended.event !== frame.event
+      frame.after.timeline.frame !== frame.frame
+      || frame.after.timeline.scope?.turn !== frame.scope.turn
+      || frame.after.timeline.scope.phase !== frame.scope.phase
     ) {
-      throw new Error(`authoritative log is not contiguous at index ${index}`);
+      throw new Error(`authoritative timeline is not contiguous at index ${index}`);
     }
     if (!MUTATION_OPTIONAL_EVENTS.has(frame.event.type) && !hasMechanicalChange(frame.before, frame.after)) {
       throw new Error(`authoritative ${frame.event.type} event was a silent no-op at index ${index}`);
@@ -283,9 +279,11 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       for (const event of planned.events) state = apply(state, event, manifest);
     }
     // Private plans are hypothetical branches, not committed chronology.
-    // Preserve their mechanical projection while withholding candidate log
-    // entries (and therefore candidate frame numbers) from consumers.
-    return state.log === baseState.log ? state : { ...state, log: baseState.log };
+    // Preserve their mechanical projection while withholding candidate frame
+    // advancement from consumers.
+    return state.timeline === baseState.timeline
+      ? state
+      : { ...state, timeline: baseState.timeline };
   };
 
   const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
@@ -734,7 +732,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       return () => subscribers.delete(subscriber);
     },
     exportReplay: () => Object.freeze({
-      version: 2 as const,
+      version: 3 as const,
       genesis: genesisState,
       transactions: committedTransactions,
     }),

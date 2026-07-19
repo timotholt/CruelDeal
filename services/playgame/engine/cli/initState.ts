@@ -137,6 +137,10 @@ export function createMatchGenesis(
   const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
 
   return {
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     turn: 1,
     // Ramp model: maxEnergy starts at 0 and +1s each turn. Turn 1 is the
     // first playable turn, so the ramp for turn 1 has implicitly fired
@@ -167,7 +171,6 @@ export function createMatchGenesis(
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
-    log: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },

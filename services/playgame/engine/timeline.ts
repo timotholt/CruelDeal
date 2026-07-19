@@ -1,6 +1,6 @@
 import type { MatchEvent } from './types/events';
 import type { CardId, LocationCardInstanceId } from './types/ids';
-import type { MatchLogEntry, MatchState } from './types/state';
+import type { MatchState } from './types/state';
 import {
   GENESIS_FRAME,
   nextFrame,
@@ -35,10 +35,8 @@ export interface LocationLifecycleFrames {
 }
 
 /** The latest committed/provisional reducer frame represented by this state. */
-export function currentFrame(state: Pick<MatchState, 'log'>): Frame {
-  const last = state.log[state.log.length - 1];
-  if (!last) return GENESIS_FRAME;
-  return last.frame;
+export function currentFrame(state: Pick<MatchState, 'timeline'>): Frame {
+  return state.timeline.frame;
 }
 
 export function frameEventSequence(
@@ -50,7 +48,7 @@ export function frameEventSequence(
 
   let frame = currentFrame(initialState);
   const firstRawEvent = events[0];
-  const inferredOpeningPhase = initialState.log.length === 0
+  const inferredOpeningPhase = currentFrame(initialState) === GENESIS_FRAME
     && firstRawEvent.type === 'CARD_DRAWN'
     ? 'SETUP'
     : undefined;
@@ -75,7 +73,7 @@ export function assertFramedEventSequence(
   framedEvents: readonly FramedEvent[],
 ): readonly FramedEvent[] {
   let expected = nextFrame(currentFrame(initialState));
-  const validationInitialPhase = initialState.log.length === 0
+  const validationInitialPhase = currentFrame(initialState) === GENESIS_FRAME
     && framedEvents[0]?.scope.phase === 'SETUP'
     ? 'SETUP'
     : undefined;
@@ -111,9 +109,9 @@ export function frameSingleEvent(state: MatchState, event: MatchEvent): FramedEv
   return frameEventSequence(state, [event])[0];
 }
 
-export function turnSpans(log: readonly MatchLogEntry[]): readonly TurnFrameSpan[] {
+export function turnSpans(framedEvents: readonly FramedEvent[]): readonly TurnFrameSpan[] {
   const spans = new Map<number, { startFrame: Frame; endFrame: Frame }>();
-  for (const entry of log) {
+  for (const entry of framedEvents) {
     const existing = spans.get(entry.scope.turn);
     if (existing) {
       existing.endFrame = entry.frame;
@@ -127,16 +125,16 @@ export function turnSpans(log: readonly MatchLogEntry[]): readonly TurnFrameSpan
 }
 
 export function scopeAtFrame(
-  log: readonly MatchLogEntry[],
+  framedEvents: readonly FramedEvent[],
   frame: Frame,
 ): TemporalScope | null {
   if (frame === GENESIS_FRAME) return null;
-  const entry = log.find((candidate) => candidate.frame === frame);
+  const entry = framedEvents.find((candidate) => candidate.frame === frame);
   return entry?.scope ?? null;
 }
 
-export function turnAtFrame(log: readonly MatchLogEntry[], frame: Frame): number | null {
-  return scopeAtFrame(log, frame)?.turn ?? null;
+export function turnAtFrame(framedEvents: readonly FramedEvent[], frame: Frame): number | null {
+  return scopeAtFrame(framedEvents, frame)?.turn ?? null;
 }
 
 /**
@@ -145,7 +143,7 @@ export function turnAtFrame(log: readonly MatchLogEntry[], frame: Frame): number
  * into an ambiguous scalar timestamp.
  */
 export function cardLifecycleFrames(
-  log: readonly MatchLogEntry[],
+  framedEvents: readonly FramedEvent[],
   cardId: CardId,
 ): CardLifecycleFrames {
   const created: Frame[] = [];
@@ -155,8 +153,8 @@ export function cardLifecycleFrames(
   const destroyed: Frame[] = [];
   const banished: Frame[] = [];
 
-  for (const entry of log) {
-    const event = entry.event as MatchEvent;
+  for (const entry of framedEvents) {
+    const event = entry.event;
     if (!('cardId' in event) || event.cardId !== cardId) continue;
     switch (event.type) {
       case 'CARD_ADDED_TO_DECK':
@@ -197,7 +195,7 @@ export function cardLifecycleFrames(
 }
 
 export function locationLifecycleFrames(
-  log: readonly MatchLogEntry[],
+  framedEvents: readonly FramedEvent[],
   locationId: LocationCardInstanceId,
 ): LocationLifecycleFrames {
   const created: Frame[] = [];
@@ -207,8 +205,8 @@ export function locationLifecycleFrames(
   const moved: Frame[] = [];
   const removed: Frame[] = [];
 
-  for (const entry of log) {
-    const event = entry.event as MatchEvent;
+  for (const entry of framedEvents) {
+    const event = entry.event;
     switch (event.type) {
       case 'LOCATION_CARD_CREATED':
         if (event.locationId === locationId) created.push(entry.frame);
@@ -260,7 +258,7 @@ export function locationLifecycleFrames(
 
 function initialScope(state: MatchState, override?: TimelinePhase): TemporalScope {
   if (override) return { turn: state.turn, phase: override };
-  const prior = state.log[state.log.length - 1]?.scope;
+  const prior = state.timeline.scope;
   if (
     prior
     && prior.turn === state.turn

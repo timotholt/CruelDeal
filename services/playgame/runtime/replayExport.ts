@@ -12,7 +12,7 @@ export function renderRuntimeReplay(
   manifest: Manifest,
 ): ReplayResult {
   const serializedVersion = (replay as { readonly version: number }).version;
-  if (serializedVersion !== 2) {
+  if (serializedVersion !== 3) {
     throw new Error(`Unsupported runtime replay version: ${serializedVersion}`);
   }
   if (replay.bootstrap.manifestVersion !== manifest.version) {
@@ -25,7 +25,10 @@ export function renderRuntimeReplay(
       `Runtime replay seed mismatch: bootstrap=${replay.bootstrap.seed} genesis=${replay.genesis.seed}`,
     );
   }
-  if (currentFrame(replay.genesis) !== GENESIS_FRAME || replay.genesis.log.length !== 0) {
+  if (
+    currentFrame(replay.genesis) !== GENESIS_FRAME
+    || replay.genesis.timeline.scope !== null
+  ) {
     throw new Error(
       `Runtime replay genesis must be frame 0; received frame ${currentFrame(replay.genesis)}`,
     );

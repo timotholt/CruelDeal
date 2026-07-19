@@ -17,7 +17,7 @@ import type {
   Owner,
   Seat,
 } from './ids';
-import type { Frame } from './timeline';
+import type { Frame, TemporalScope } from './timeline';
 import type { TextOverride, EffectRef, TrackedStatKey, TrackedFlagKey } from './ability';
 
 // ---- Tracked variables (game-history summary, updated by apply()) ----------
@@ -479,19 +479,22 @@ export interface MatchResult {
   readonly totalPower: Readonly<Record<Owner, number>>;
 }
 
-// ---- Log entries -----------------------------------------------------------
+// ---- Current timeline coordinate ------------------------------------------
 
-export interface MatchLogEntry {
-  /** Canonical match-local event coordinate. Genesis is frame 0. */
-  readonly frame: import('./timeline').Frame;
-  /** Explicit turn/phase ownership; never reconstructed from wall time. */
-  readonly scope: import('./timeline').TemporalScope;
-  readonly event: unknown; // MatchEvent; untyped here to avoid circular import
+/**
+ * The latest committed/provisional reducer coordinate represented by this
+ * state. Canonical event history belongs to runtime transaction records, not
+ * MatchState.
+ */
+export interface MatchTimelinePosition {
+  readonly frame: Frame;
+  readonly scope: TemporalScope | null;
 }
 
 // ---- MatchState ------------------------------------------------------------
 
 export interface MatchState {
+  readonly timeline: MatchTimelinePosition;
   readonly turn: number;
   /**
    * Per-owner energy ceiling for the current turn. Starts at 0 at match
@@ -530,7 +533,6 @@ export interface MatchState {
   readonly pending: readonly CardId[];
   readonly stagingOrder: readonly CardId[];
   readonly pendingEffects: readonly PendingEffect[];
-  readonly log: readonly MatchLogEntry[];
   readonly lastPlayedBy: Readonly<Record<Owner, CardId | null>>;
   readonly result: MatchResult | null;
   /** Per-owner ordered history of every energy pool change.
@@ -540,7 +542,7 @@ export interface MatchState {
   /**
    * Pre-computed per-owner game-history stats. Updated by `apply()` on
    * relevant events so the evaluator can do O(1) lookups instead of
-   * scanning the full event log.
+   * scanning the runtime-owned event timeline.
    *
    * Cards query this via TRACKED_STAT / TRACKED_FLAG DSL atoms.
    * Initialized to EMPTY_TRACKED_VARIABLES at match genesis.

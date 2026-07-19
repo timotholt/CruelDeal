@@ -326,16 +326,13 @@ describe('location card lifecycle', () => {
     expect(locationCardAtLane(lowered.state, 0)?.counters.uses).toBe(-2);
   });
 
-  it('snapshots caller-owned location provenance before event logging', () => {
+  it('snapshots caller-owned location provenance before returning events', () => {
     const input = state();
     const mutableCause = { ...systemCause };
     const result = revealLocation(input, 0, mutableCause, manifest);
     expect(result.ok).toBe(true);
     mutableCause.reason = 'mutated-after-write';
     expect(result.events[0]).toMatchObject({
-      cause: { reason: 'location-lifecycle-test' },
-    });
-    expect(result.state.log.at(-1)?.event).toMatchObject({
       cause: { reason: 'location-lifecycle-test' },
     });
   });

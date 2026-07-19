@@ -24,7 +24,6 @@ import type {
   LaneState,
   InternalLocationRecord,
   LocationPositionSnapshot,
-  MatchLogEntry,
   MatchState,
   PendingEffect,
   PlayerTrackedVars,
@@ -80,7 +79,7 @@ export function applyFramed(
   }
   // The reducer is the final write boundary, including for replay and tests
   // that construct events directly. Snapshot caller-owned payloads before
-  // either state or the append-only frame log can retain them.
+  // either state or the runtime-owned event timeline can retain them.
   const canonicalFramed = structuredClone(framed);
   requireEventProvenance(canonicalFramed.event);
   const next = applyBody(
@@ -89,11 +88,17 @@ export function applyFramed(
     canonicalFramed.frame,
     _manifest,
   );
-  // Every event is appended to the log, regardless of whether the body
-  // also mutated state. Diagnostic events (RECURSION_LIMIT_HIT,
-  // INTENT_REJECTED) only contribute to the log.
+  // Every event advances the state's current timeline coordinate, regardless
+  // of whether the body also mutated mechanics. Runtime transaction records
+  // retain the canonical event itself.
   const next2 = applyTrackedVars(next, state, canonicalFramed.event);
-  return appendLog(next2, canonicalFramed);
+  return {
+    ...next2,
+    timeline: {
+      frame: canonicalFramed.frame,
+      scope: canonicalFramed.scope,
+    },
+  };
 }
 
 function requireEventProvenance(event: MatchEvent): void {
@@ -1050,7 +1055,7 @@ function applyEventBody(
       };
 
     case 'TURN_STARTED':
-      // Priority is stored in state; reason is log-only. Phase enters
+      // Priority is stored in state; reason is event-history-only. Phase enters
       // AWAITING_INTENT so players can stage again.
       return {
         ...state,
@@ -1097,7 +1102,7 @@ function applyEventBody(
 
     case 'RECURSION_LIMIT_HIT':
     case 'INTENT_REJECTED':
-      // Log-only; no state mutation beyond the log entry added in apply().
+      // Diagnostic-only; no mechanical mutation beyond timeline advancement.
       return state;
   }
 }
@@ -1384,15 +1389,6 @@ function addTagUnique(tags: readonly CardTag[], t: CardTag): readonly CardTag[] 
 function pendingEffectEq(a: PendingEffect, b: PendingEffect): boolean {
   // Simple structural compare; pending effects have small primitive payloads.
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function appendLog(state: MatchState, framed: FramedEvent): MatchState {
-  const entry: MatchLogEntry = {
-    frame: framed.frame,
-    scope: framed.scope,
-    event: framed.event,
-  };
-  return { ...state, log: [...state.log, entry] };
 }
 
 function laneStatus(lane: LaneState): NonNullable<LaneState['status']> {

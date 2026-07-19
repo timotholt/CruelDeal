@@ -169,7 +169,7 @@ describe('replay debug presentation', () => {
 
   it('maps replay steps to the accepted transaction actor and bootstrap display name', () => {
     const replay = {
-      version: 2 as const,
+      version: 3 as const,
       genesis: state,
       bootstrap: {
         viewerSeat: 'P0',

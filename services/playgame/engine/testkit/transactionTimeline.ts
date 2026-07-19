@@ -23,7 +23,6 @@ function parityProjection(subject: RuntimeParitySubject) {
   const state = subject.finalState;
   return {
     finalState: state,
-    orderedLog: state.log.map((entry) => entry.event),
     transactionEvents: subject.events,
     turn: state.turn,
     phase: state.phase,

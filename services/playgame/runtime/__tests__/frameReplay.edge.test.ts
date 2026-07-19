@@ -60,10 +60,8 @@ describe('Runtime frame replay edge cases', () => {
     };
 
     const rendered = renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST);
-    expect(rendered.finalState.log.map(({ frame }) => frame))
-      .toEqual(replay.transactions.flatMap(
-        transaction => transaction.framedEvents.map(({ frame }) => frame),
-      ));
+    expect(rendered.finalState.timeline.frame)
+      .toBe(replay.transactions.at(-1)?.framedEvents.at(-1)?.frame);
   });
 
   it('rejects transaction revisions that move backward', async () => {

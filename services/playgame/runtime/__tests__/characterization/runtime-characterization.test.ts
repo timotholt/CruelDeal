@@ -119,8 +119,7 @@ describe('Phase 0 runtime characterization', () => {
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
     expect(folded.transitions).toHaveLength(events.length);
     folded.transitions.forEach((frame) => {
-      expect(frame.before.log).toHaveLength(frame.index);
-      expect(frame.after.log).toHaveLength(frame.index + 1);
+      expect(frame.after.timeline.frame).toBe(frame.before.timeline.frame + 1);
       expect(frame.event).toEqual(events[frame.index]);
     });
   });

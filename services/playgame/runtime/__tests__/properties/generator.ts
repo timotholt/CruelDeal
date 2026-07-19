@@ -4,8 +4,10 @@ import {
   apply,
   createSetupMatch,
   createRng,
+  frameAndFoldEvents,
   resolve,
   type Deck,
+  type FramedEvent,
   type LaneId,
   type Manifest,
   type MatchEvent,
@@ -27,6 +29,7 @@ export interface GeneratedMatchCase {
 export interface OpenedMatch {
   readonly genesis: MatchState;
   readonly openingEvents: readonly MatchEvent[];
+  readonly openingFramedEvents: readonly FramedEvent[];
   readonly state: MatchState;
 }
 
@@ -106,9 +109,20 @@ export function createOpenedMatch(
     ...setup.transaction.framedEvents.map(event => event.event),
     ...opening.events,
   ];
-  const state = applyAll(setup.genesis, openingEvents, manifest);
+  const committedOpening = frameAndFoldEvents({
+    transactionId: `property-opening:${input.matchSeed}`,
+    initialState: setup.genesis,
+    events: openingEvents,
+    manifest,
+    initialPhase: 'SETUP',
+  });
 
-  return { genesis: setup.genesis, openingEvents, state };
+  return {
+    genesis: setup.genesis,
+    openingEvents,
+    openingFramedEvents: committedOpening.framedEvents,
+    state: committedOpening.finalState,
+  };
 }
 
 export function intentRng(matchSeed: string, intentIndex: number, intentType: MatchIntent['type']): Rng {
@@ -157,7 +171,7 @@ function acceptedUnstageIntents(
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
   for (const cardId of state.stagingOrder) {
-    if (getCardState(state, cardId)!?.owner !== owner) continue;
+    if (getCardState(state, cardId)?.owner !== owner) continue;
     const intent: MatchIntent = {
       type: 'UNSTAGE_CARD',
       intentId: `property-${intentIndex}-${owner}-unstage-${cardId}`,
@@ -185,7 +199,7 @@ function chooseLegalAction(
 ): MatchIntent | null {
   const stages = acceptedStageIntents(state, owner, intentIndex, matchSeed, manifest);
   const unstages = acceptedUnstageIntents(state, owner, intentIndex, matchSeed, manifest);
-  const hasStagedCard = state.stagingOrder.some((cardId) => getCardState(state, cardId)!?.owner === owner);
+  const hasStagedCard = state.stagingOrder.some((cardId) => getCardState(state, cardId)?.owner === owner);
   const undo: MatchIntent | null = hasStagedCard
     ? {
         type: 'UNDO_TURN',

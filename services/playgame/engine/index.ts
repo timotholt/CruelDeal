@@ -170,6 +170,7 @@ export {
   type ReplayResult,
   type ReplayMatchOptions,
   type ReplayValidationResult,
+  type ExportReplayBundleOptions,
 } from './replay';
 
 // ---- Projections -----------------------------------------------------------

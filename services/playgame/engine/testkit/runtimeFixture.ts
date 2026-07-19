@@ -131,6 +131,10 @@ export function emptyTestMatchState(
   const turn = overrides.turn ?? 1;
   const { cards = {}, ...stateOverrides } = overrides;
   return {
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     turn,
     maxEnergy: { P0: turn, P1: turn },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
@@ -155,7 +159,6 @@ export function emptyTestMatchState(
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
-    log: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
@@ -431,7 +434,10 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     pending: [],
     stagingOrder,
     pendingEffects: options.pendingEffects ?? [],
-    log: [],
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },

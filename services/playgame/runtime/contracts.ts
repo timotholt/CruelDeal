@@ -227,7 +227,7 @@ export type InMemoryIntentReceiptMap = Map<IntentReceiptKey, IntentReceipt>;
 
 /** Runtime-owned replay records; transaction events never overlap genesis. */
 export interface MatchRuntimeRecordExport {
-  readonly version: 2;
+  readonly version: 3;
   readonly genesis: MatchState;
   readonly transactions: readonly CommittedTransactionRecord[];
 }

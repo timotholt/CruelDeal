@@ -67,8 +67,8 @@ describe('event animator transfer origins', () => {
       } as const satisfies MatchEvent;
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
-        frame: after.log[after.log.length - 1].frame,
-        scope: after.log[after.log.length - 1].scope,
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
         event,
       };
       const frame: EventTransition = {
@@ -187,8 +187,8 @@ describe('event animator transfer origins', () => {
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
-        frame: after.log[after.log.length - 1].frame,
-        scope: after.log[after.log.length - 1].scope,
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
         event,
       };
       const frame: EventTransition = {

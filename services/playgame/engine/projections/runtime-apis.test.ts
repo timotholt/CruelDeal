@@ -30,6 +30,7 @@ import {
   getCardLifecycle,
   getCardPlacement,
   getCardRuntime,
+  getCardState,
   getCardsInZone,
 } from './cardRuntime';
 import { getCardTemplate } from './cardTemplate';
@@ -180,8 +181,7 @@ describe('current card API', () => {
     mutableEvent.override = null;
     mutableEvent.cause.reason = 'MUTATED_AFTER_APPLY';
     expect(getCurrentCard(next, cardId, manifest)?.text.abilityLabels).toEqual([]);
-    expect(next.log.at(-1)?.event).toMatchObject({
-      type: 'CARD_TEXT_OVERRIDDEN',
+    expect(getCardState(next, cardId)?.textLog.at(-1)).toMatchObject({
       override: { kind: 'BLANK_ALL' },
       cause: { reason: 'RUNTIME_API_TEST' },
     });
@@ -368,23 +368,20 @@ describe('current card API', () => {
     const initial = state();
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const locationId = initial.lanesById[0].locationSlot.locationCardId!;
-    const guarded = {
-      ...initial,
-      log: new Proxy(initial.log, {
-        get() {
-          throw new Error('historical log read');
-        },
-      }),
-    };
+    const forbiddenHistory = new Proxy([], {
+      get() {
+        throw new Error('historical record read');
+      },
+    });
 
-    expect(() => getCardRuntime(guarded, cardId, manifest)).not.toThrow();
-    expect(() => getCurrentCard(guarded, cardId, manifest)).not.toThrow();
-    expect(() => getCardPlacement(guarded, cardId)).not.toThrow();
-    expect(() => getLocationRuntime(guarded, locationId, manifest)).not.toThrow();
-    expect(() => getCardLifecycle(guarded, cardId)).not.toThrow();
-    expect(() => getLocationLifecycle(guarded, locationId)).not.toThrow();
-    expect(() => cardLifecycleFrames(guarded.log, cardId)).toThrow('historical log read');
-    expect(() => locationLifecycleFrames(guarded.log, locationId)).toThrow('historical log read');
+    expect(() => getCardRuntime(initial, cardId, manifest)).not.toThrow();
+    expect(() => getCurrentCard(initial, cardId, manifest)).not.toThrow();
+    expect(() => getCardPlacement(initial, cardId)).not.toThrow();
+    expect(() => getLocationRuntime(initial, locationId, manifest)).not.toThrow();
+    expect(() => getCardLifecycle(initial, cardId)).not.toThrow();
+    expect(() => getLocationLifecycle(initial, locationId)).not.toThrow();
+    expect(() => cardLifecycleFrames(forbiddenHistory, cardId)).toThrow('historical record read');
+    expect(() => locationLifecycleFrames(forbiddenHistory, locationId)).toThrow('historical record read');
   });
 
   it('indexes zone and position transitions for current-state lifecycle queries', () => {

@@ -31,7 +31,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     const genesis = createMatchGenesis('checkpoint-3-genesis', manifest, decks);
 
     expect(currentFrame(genesis)).toBe(GENESIS_FRAME);
-    expect(genesis.log).toEqual([]);
+    expect(genesis.timeline).toEqual({ frame: GENESIS_FRAME, scope: null });
     expect(genesis.phase).toBe('SETUP');
     expect(genesis.lanesById).toEqual({});
     expect(genesis.activeLaneOrder).toEqual([]);

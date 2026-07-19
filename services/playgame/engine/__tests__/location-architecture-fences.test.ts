@@ -60,19 +60,14 @@ function violations(
 }
 
 describe('Phase 1.2 location architecture fences', () => {
-  it('keeps event-log access out of gameplay projections, queries, and effects', () => {
+  it('keeps canonical event history out of MatchState and all state consumers', () => {
     expect(violations(
       productionFiles,
       /\b(?!console\b)[A-Za-z_$][\w$]*\.log\b/,
-      new Set([
-        'engine/apply.ts',
-        'engine/replay.ts',
-        'engine/timeline.ts',
-        'engine/transactionTimeline.ts',
-        'runtime/matchRuntime.ts',
-        'runtime/replayExport.ts',
-      ]),
+      new Set(),
     )).toEqual([]);
+    expect(readFileSync(resolve(engineRoot, 'types/state.ts'), 'utf8'))
+      .not.toMatch(/readonly\s+log\s*:/);
   });
 
   it('keeps lifecycle event production inside the governed operation modules', () => {

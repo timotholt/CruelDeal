@@ -186,10 +186,10 @@ describe('createMatchRuntime', () => {
     expect(runtime.frame()).toBeGreaterThan(committedFrameBeforeLock);
   });
 
-  it('returns stale, authority, match, rules, and terminal receipts without log events', async () => {
+  it('returns stale, authority, match, rules, and terminal receipts without committed events', async () => {
     const runtime = runtimeFixture();
     const initialRevision = runtime.revision();
-    const initialLogLength = runtime.state().log.length;
+    const initialFrame = runtime.frame();
     const initialTransactionCount = runtime.transactions().length;
 
     await expect(runtime.submitIntent({
@@ -215,12 +215,14 @@ describe('createMatchRuntime', () => {
       expectedRevision: initialRevision - 1,
       currentRevision: initialRevision,
     });
+    expect(runtime.frame()).toBe(initialFrame);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
 
     const cardId = runtime.state().hand.P0[0];
     await expect(runtime.submitIntent(stageEnvelope(runtime, 'first-stage', initialRevision, 'P0', cardId)))
       .resolves.toMatchObject({ status: 'accepted' });
     const afterAcceptedRevision = runtime.revision();
-    const afterAcceptedLogLength = runtime.state().log.length;
+    const afterAcceptedFrame = runtime.frame();
     const afterAcceptedTransactions = runtime.transactions().length;
     await expect(runtime.submitIntent(stageEnvelope(
       runtime,
@@ -230,11 +232,10 @@ describe('createMatchRuntime', () => {
       cardId,
     ))).resolves.toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
     expect(runtime.revision()).toBe(afterAcceptedRevision);
-    expect(runtime.state().log).toHaveLength(afterAcceptedLogLength);
+    expect(runtime.frame()).toBe(afterAcceptedFrame);
     expect(runtime.transactions()).toHaveLength(afterAcceptedTransactions);
-    expect(runtime.state().log.some(
-      (entry) => (entry.event as { type?: string }).type === 'INTENT_REJECTED',
-    )).toBe(false);
+    expect(runtime.transactions().flatMap(transaction => transaction.framedEvents)
+      .some(entry => entry.event.type === 'INTENT_REJECTED')).toBe(false);
 
     const concedeRevision = runtime.revision();
     await expect(runtime.submitIntent({
@@ -251,7 +252,7 @@ describe('createMatchRuntime', () => {
       'P0',
     ))).resolves.toMatchObject({ status: 'illegal', code: 'TERMINAL_MATCH' });
 
-    expect(initialLogLength).toBeGreaterThan(0);
+    expect(initialFrame).toBeGreaterThan(0);
     expect(initialTransactionCount).toBe(2);
   });
 
@@ -273,7 +274,7 @@ describe('createMatchRuntime', () => {
       .find((candidate) => {
         const state = candidate.state();
         const id = state.lanesById[0].locationSlot.locationCardId;
-        return id ? getLocationState(state, id)!?.defId === 'gun-store' : false;
+        return id ? getLocationState(state, id)?.defId === 'gun-store' : false;
       });
     expect(runtime).toBeDefined();
     if (!runtime) return;
@@ -371,7 +372,7 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture('phase1-runtime-replay-export');
     await runtime.submitIntent(stageEnvelope(runtime, 'replay-stage'));
     const exported = runtime.exportReplay();
-    expect(exported.version).toBe(2);
+    expect(exported.version).toBe(3);
     let replayed = exported.genesis;
 
     exported.transactions.forEach((transaction) => {
@@ -384,7 +385,7 @@ describe('createMatchRuntime', () => {
       }).finalState;
     });
 
-    expect(exported.genesis.log).toHaveLength(0);
+    expect(exported.genesis.timeline).toEqual({ frame: 0, scope: null });
     expect(replayed).not.toEqual(runtime.state());
 
     await runtime.submitIntent({
