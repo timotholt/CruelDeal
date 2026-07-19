@@ -17,7 +17,7 @@ import {
   assertProtocolPayload,
   validateIntentEnvelopeWire,
 } from '../protocol';
-import { projectStateForSeat, readProjectedState } from './projection';
+import { projectMechanicalStateForController } from './projection';
 import type {
   AcceptedIntentResult,
   CommittedIntentIdentity,
@@ -34,10 +34,17 @@ import type {
   ParticipantController,
   RuntimeIntent,
   LocationCardDeckEntry,
+  DebugMatchCheckpoint,
 } from './contracts';
 import { getCardPlacement } from '../engine/projections/cardRuntime';
 import { buildOpeningTransaction } from './opening';
 import { buildLocationSetupTransaction } from '../engine/locationSetup';
+import {
+  canonicalJson,
+  DeterminismDriftError,
+  reconcileRuntimeRecord,
+  type MatchReconciliationResult,
+} from './replayExport';
 
 export type MatchTransactionSubscriber = (timeline: CommittedTransactionTimeline) => void;
 
@@ -59,6 +66,9 @@ export interface MatchRuntime {
   submitIntent(envelope: IntentEnvelope): Promise<IntentAcceptanceResult>;
   subscribeCommittedTransactions(subscriber: MatchTransactionSubscriber): () => void;
   exportReplay(): MatchRuntimeRecordExport;
+  debugCheckpoints(): readonly DebugMatchCheckpoint[];
+  /** Replays genesis + canonical transactions and compares the full state. */
+  reconcile(): MatchReconciliationResult;
 }
 
 export interface MatchRuntimeConfig {
@@ -70,6 +80,8 @@ export interface MatchRuntimeConfig {
   readonly controllers: Readonly<Record<Seat, ParticipantController>>;
   readonly decks: Readonly<Record<Seat, Deck>>;
   readonly locationDeck: readonly LocationCardDeckEntry[];
+  /** Expensive invariant: replay and compare after every committed transaction. */
+  readonly debugDeterminism?: boolean;
 }
 
 interface QueuedIntent {
@@ -280,6 +292,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const locked: Record<Seat, boolean> = { P0: false, P1: false };
   let currentRevision: MatchRevision = 0;
   let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
+  let checkpoints: readonly DebugMatchCheckpoint[] = Object.freeze([]);
   let drainScheduled = false;
   let draining = false;
 
@@ -371,6 +384,29 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     committedTransactions = Object.freeze([...committedTransactions, transaction]);
     currentRevision = revision;
     if (candidate.receiptKey && result) receipts.set(candidate.receiptKey, result);
+    if (config.debugDeterminism) {
+      const additions = built.transitions
+        .filter(transition => (
+          transition.event.type === 'CARD_STAGED'
+          || transition.event.type === 'MATCH_ENDED'
+        ))
+        .map((transition): DebugMatchCheckpoint => Object.freeze({
+          frame: transition.frame,
+          rngDraws: transition.after.rng.draws,
+          stateJson: canonicalJson(transition.after),
+        }));
+      if (additions.length > 0) {
+        checkpoints = Object.freeze([...checkpoints, ...additions]);
+      }
+    }
+    if (config.debugDeterminism) {
+      const reconciliation = reconcileRuntimeRecord({
+        version: 3,
+        genesis: genesisState,
+        transactions: committedTransactions,
+      }, config.matchId, manifest, authoritativeState, checkpoints);
+      if (!reconciliation.ok) throw new DeterminismDriftError(reconciliation);
+    }
 
     return { result, timeline };
   };
@@ -510,9 +546,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
   const enqueueAiTurn = (seat: Seat): void => {
     const authoritativeAiState = foldPlannedStages(seat);
-    const aiState = readProjectedState(
-      projectStateForSeat(authoritativeAiState, seat),
-    );
+    const aiState = projectMechanicalStateForController(authoritativeAiState, seat);
     const aiRng = createRng(authoritativeAiState.rng).scope(
       `ai-plan:${aiState.turn}:${seat}:${currentRevision}`,
     );
@@ -782,5 +816,11 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       genesis: genesisState,
       transactions: committedTransactions,
     }),
+    debugCheckpoints: () => checkpoints,
+    reconcile: () => reconcileRuntimeRecord({
+      version: 3,
+      genesis: genesisState,
+      transactions: committedTransactions,
+    }, config.matchId, manifest, authoritativeState, checkpoints),
   });
 }

@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { buildDebugMatchBootstrap } from '../../debug/buildDebugBootstrap';
 import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { BOOTSTRAP_MANIFEST } from '../../engine/manifest/bootstrap';
+import { getCardCost } from '../../engine/projections/cost';
 import { MatchSession, MatchSessionSetupError } from '../matchSession';
-import { renderRuntimeReplay } from '../replayExport';
+import {
+  reconcileRuntimeRecord,
+  renderRuntimeReplay,
+} from '../replayExport';
 
 function candidate(seed = 'phase1-match-session') {
   return buildDebugMatchBootstrap(DEBUG_DECKS[0], DEBUG_DECKS[1], seed);
@@ -71,5 +75,62 @@ describe('MatchSession', () => {
       ),
     );
     expect(exported).toEqual(snapshot);
+  });
+
+  it('reconciles the entire DEBUG match and reports the first drift path', () => {
+    const session = MatchSession.fromBootstrap(candidate('debug-reconciliation'));
+    const reconciliation = session.runtime.reconcile();
+
+    expect(reconciliation).toMatchObject({
+      ok: true,
+      expectedFingerprint: reconciliation.replayedFingerprint,
+      transactionCount: 2,
+    });
+
+    const divergentExpected = structuredClone(session.runtime.state());
+    (divergentExpected.energy as { P0: number }).P0 = 7;
+    const drift = reconcileRuntimeRecord(
+      session.runtime.exportReplay(),
+      session.bootstrap.matchId,
+      session.manifest,
+      divergentExpected,
+    );
+
+    expect(drift.ok).toBe(false);
+    expect(drift.expectedFingerprint).not.toBe(drift.replayedFingerprint);
+    expect(drift.mismatchPath).toBe('/energy/P0');
+  });
+
+  it('captures full no-history evidence after each DEBUG card play', async () => {
+    const session = MatchSession.fromBootstrap(candidate('debug-checkpoints'));
+    const state = session.runtime.state();
+    const cardId = state.hand.P0.find(
+      id => getCardCost(state, id, session.manifest) <= state.energy.P0,
+    );
+    expect(cardId).toBeDefined();
+
+    await session.runtime.submitIntent({
+      matchId: session.bootstrap.matchId,
+      seat: 'P0',
+      intentId: 'checkpoint-stage',
+      expectedRevision: session.runtime.revision(),
+      intent: { type: 'STAGE_CARD', cardId: cardId!, lane: 0 },
+    });
+    await session.runtime.submitIntent({
+      matchId: session.bootstrap.matchId,
+      seat: 'P0',
+      intentId: 'checkpoint-end-turn',
+      expectedRevision: session.runtime.revision(),
+      intent: { type: 'END_TURN' },
+    });
+
+    const checkpoints = session.runtime.debugCheckpoints();
+    expect(checkpoints.length).toBeGreaterThan(0);
+    expect(checkpoints.every(checkpoint => !checkpoint.stateJson.includes('"log"')))
+      .toBe(true);
+    expect(session.runtime.reconcile()).toMatchObject({
+      ok: true,
+      checkpointCount: checkpoints.length,
+    });
   });
 });

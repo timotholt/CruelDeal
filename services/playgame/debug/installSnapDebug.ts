@@ -5,6 +5,8 @@ import type { FramedEvent } from '../engine/types/timeline';
 import type { MatchRuntime } from '../runtime/matchRuntime';
 import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
+import type { DebugMatchCheckpoint } from '../runtime/contracts';
+import type { MatchReconciliationResult } from '../runtime/replayExport';
 import {
   createReplayNameResolver,
   createReplayActorResolver,
@@ -19,6 +21,8 @@ export interface SnapDebugApi {
   getReplayTimeline: () => ReplayResult;
   getStep: (cursor: number) => ReplayStep | null;
   getStepDescription: (cursor: number) => ReplayStepDescription | null;
+  getCheckpoints: () => readonly DebugMatchCheckpoint[];
+  reconcile: () => MatchReconciliationResult;
   copyReplayJson: () => Promise<string>;
 }
 
@@ -54,6 +58,8 @@ export function installSnapDebug(
         createReplayActorResolver(bundle),
       );
     },
+    getCheckpoints: runtime.debugCheckpoints,
+    reconcile: runtime.reconcile,
     copyReplayJson: async () => {
       const json = JSON.stringify(exportReplay(), null, 2);
       await navigator.clipboard.writeText(json);

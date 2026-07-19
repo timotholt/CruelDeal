@@ -695,14 +695,6 @@
         },
         "rngDrawsAfter": {
           "$ref": "#/$defs/SafeInteger"
-        },
-        "preStateChecksum": {
-          "type": "string",
-          "minLength": 1
-        },
-        "postStateChecksum": {
-          "type": "string",
-          "minLength": 1
         }
       },
       "required": [
@@ -714,6 +706,620 @@
         "framedEvents",
         "rngDrawsBefore",
         "rngDrawsAfter"
+      ],
+      "additionalProperties": false
+    },
+    "SeatVisibleCard": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "$ref": "#/$defs/Seat"
+        },
+        "zone": {
+          "enum": [
+            "HAND",
+            "LANE",
+            "DISCARD",
+            "DESTROYED"
+          ]
+        },
+        "lane": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaneId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revealed": {
+          "type": "boolean"
+        },
+        "defId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cost": {
+          "$ref": "#/$defs/SafeSignedInteger"
+        },
+        "power": {
+          "$ref": "#/$defs/SafeSignedInteger"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "counters": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "$ref": "#/$defs/SafeSignedInteger"
+          }
+        }
+      },
+      "required": [
+        "token",
+        "owner",
+        "zone",
+        "lane",
+        "revealed"
+      ],
+      "additionalProperties": false
+    },
+    "SeatVisibleLocation": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "face": {
+          "enum": [
+            "FACE_DOWN",
+            "FACE_UP"
+          ]
+        },
+        "revealAtTurn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PositiveInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "token",
+        "face",
+        "revealAtTurn"
+      ],
+      "additionalProperties": false
+    },
+    "SeatVisibleLane": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "status": {
+          "enum": [
+            "CREATING",
+            "ACTIVE",
+            "DESTROYING",
+            "DESTROYED"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeatVisibleLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cards": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "P1": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "location",
+        "cards"
+      ],
+      "additionalProperties": false
+    },
+    "SeatVisibleMatchState": {
+      "type": "object",
+      "properties": {
+        "turn": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "phase": {
+          "enum": [
+            "SETUP",
+            "AWAITING_INTENT",
+            "RESOLVING",
+            "BETWEEN_TURNS",
+            "ENDED"
+          ]
+        },
+        "priority": {
+          "$ref": "#/$defs/Seat"
+        },
+        "energy": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "maxEnergy": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "nextTurnEnergyBonus": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "deckCounts": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "locationDeckCount": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "hands": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "P1": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeatVisibleCard"
+          }
+        },
+        "lanes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeatVisibleLane"
+          }
+        },
+        "stagedCards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "discard": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "P1": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "destroyed": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "P1": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "banishedCounts": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MatchResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "turn",
+        "phase",
+        "priority",
+        "energy",
+        "maxEnergy",
+        "nextTurnEnergyBonus",
+        "deckCounts",
+        "locationDeckCount",
+        "hands",
+        "cards",
+        "lanes",
+        "stagedCards",
+        "discard",
+        "destroyed",
+        "banishedCounts",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "SeatMatchSnapshot": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "matchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "frame": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "viewerSeat": {
+          "$ref": "#/$defs/Seat"
+        },
+        "state": {
+          "$ref": "#/$defs/SeatVisibleMatchState"
+        }
+      },
+      "required": [
+        "version",
+        "matchId",
+        "revision",
+        "frame",
+        "viewerSeat",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "SeatAnimationEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "GAMEPLAY_RNG_ADVANCED",
+            "CARD_STAGED",
+            "CARD_UNSTAGED",
+            "ENERGY_CHANGED",
+            "MAX_ENERGY_CHANGED",
+            "NEXT_TURN_ENERGY_BONUS_CHANGED",
+            "CARD_FLIPPED",
+            "CARD_REVEAL_SCHEDULED",
+            "OR_WINDOW_OPEN",
+            "OR_WINDOW_CLOSE",
+            "CARD_POWER_CHANGED",
+            "CARD_COST_CHANGED",
+            "CARD_DESTROYED",
+            "CARD_DISCARDED",
+            "CARD_BANISHED",
+            "CARD_MOVED",
+            "CARD_RETURNED_TO_LANE",
+            "CARD_TRANSFORMED",
+            "CARD_TAG_ADDED",
+            "CARD_TAG_REMOVED",
+            "CARD_TEXT_OVERRIDDEN",
+            "CARD_COUNTER_CHANGED",
+            "CARD_DRAWN",
+            "CARD_ADDED_TO_DECK",
+            "CARD_ADDED_TO_HAND",
+            "CARD_ADDED_TO_LANE",
+            "CARD_MOVED_TO_ZONE",
+            "DECK_SHUFFLED",
+            "PENDING_EFFECT_ADDED",
+            "PENDING_EFFECT_REMOVED",
+            "LOCATION_DECK_INITIALIZED",
+            "LOCATION_CARD_CREATED",
+            "LOCATION_CARD_DRAWN",
+            "LOCATION_CARD_PLAYED",
+            "LOCATION_SLOT_REVEAL_SCHEDULED",
+            "LOCATION_REVEALED",
+            "LOCATION_TURNED_FACE_DOWN",
+            "LOCATION_SHOWN_TO_SEATS",
+            "LOCATION_REPLACED",
+            "LOCATIONS_SWAPPED",
+            "LOCATION_MOVED",
+            "LOCATION_REMOVED_FROM_LANE",
+            "LOCATION_RETURNED_TO_DECK",
+            "LOCATION_TAG_ADDED",
+            "LOCATION_TAG_REMOVED",
+            "LOCATION_COUNTER_CHANGED",
+            "LANE_DESTRUCTION_STARTED",
+            "LANE_DESTROYED",
+            "LANE_CREATION_STARTED",
+            "LANE_CREATED",
+            "MATCH_SETUP_COMPLETED",
+            "TURN_RESOLUTION_STARTED",
+            "TURN_STARTED",
+            "TURN_ENDED",
+            "MATCH_ENDED",
+            "RECURSION_LIMIT_HIT",
+            "INTENT_REJECTED"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "SeatFramedAnimationEvent": {
+      "type": "object",
+      "properties": {
+        "frame": {
+          "$ref": "#/$defs/EventFrame"
+        },
+        "scope": {
+          "$ref": "#/$defs/TemporalScope"
+        },
+        "event": {
+          "$ref": "#/$defs/SeatAnimationEvent"
+        }
+      },
+      "required": [
+        "frame",
+        "scope",
+        "event"
+      ],
+      "additionalProperties": false
+    },
+    "SeatCommittedTransaction": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "transactionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "matchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseRevision": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "revision": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "frame": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "viewerSeat": {
+          "$ref": "#/$defs/Seat"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeatFramedAnimationEvent"
+          }
+        },
+        "postState": {
+          "$ref": "#/$defs/SeatVisibleMatchState"
+        }
+      },
+      "required": [
+        "version",
+        "transactionId",
+        "matchId",
+        "baseRevision",
+        "revision",
+        "frame",
+        "viewerSeat",
+        "events",
+        "postState"
+      ],
+      "additionalProperties": false
+    },
+    "SeatResyncRequest": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "matchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "viewerSeat": {
+          "$ref": "#/$defs/Seat"
+        },
+        "knownRevision": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "knownFrame": {
+          "$ref": "#/$defs/SafeInteger"
+        }
+      },
+      "required": [
+        "version",
+        "matchId",
+        "viewerSeat",
+        "knownRevision",
+        "knownFrame"
+      ],
+      "additionalProperties": false
+    },
+    "SeatResyncResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "snapshot": {
+          "$ref": "#/$defs/SeatMatchSnapshot"
+        },
+        "transactions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeatCommittedTransaction"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "snapshot",
+        "transactions"
       ],
       "additionalProperties": false
     },
@@ -790,6 +1396,86 @@
             },
             "payload": {
               "$ref": "#/$defs/CommittedTransaction"
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": 1
+            },
+            "kind": {
+              "const": "SEAT_MATCH_SNAPSHOT"
+            },
+            "payload": {
+              "$ref": "#/$defs/SeatMatchSnapshot"
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": 1
+            },
+            "kind": {
+              "const": "SEAT_COMMITTED_TRANSACTION"
+            },
+            "payload": {
+              "$ref": "#/$defs/SeatCommittedTransaction"
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": 1
+            },
+            "kind": {
+              "const": "SEAT_RESYNC_REQUEST"
+            },
+            "payload": {
+              "$ref": "#/$defs/SeatResyncRequest"
+            }
+          },
+          "required": [
+            "protocolVersion",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocolVersion": {
+              "const": 1
+            },
+            "kind": {
+              "const": "SEAT_RESYNC_RESPONSE"
+            },
+            "payload": {
+              "$ref": "#/$defs/SeatResyncResponse"
             }
           },
           "required": [

@@ -8,14 +8,18 @@ import { locationRecordsInternal } from '../../services/playgame/engine/internal
 import { replayMatch } from '../../services/playgame/engine/replay';
 import type { MatchState } from '../../services/playgame/engine/types/state';
 import { defaultLocationDeckFactory } from '../../services/playgame/runtime/locationDeckFactory';
+import { projectMatchStateForSeat } from '../../services/playgame/runtime/projection';
 
 const MATCH_COUNT = 20;
 const FINAL_STATE_AVERAGE_BUDGET_BYTES = 25_000;
+const SEAT_SNAPSHOT_AVERAGE_BUDGET_BYTES = 8_000;
 
 interface Sample {
   readonly genesisBytes: number;
   readonly finalStateBytes: number;
   readonly finalStateGzipBytes: number;
+  readonly seatSnapshotBytes: number;
+  readonly seatSnapshotGzipBytes: number;
   readonly replayRecordBytes: number;
   readonly replayRecordGzipBytes: number;
   readonly playCheckpointBytes: number;
@@ -118,11 +122,14 @@ function sample(seed: string): Sample {
     genesis,
     framedEvents: result.framedEvents,
   };
+  const seatSnapshot = projectMatchStateForSeat(result.finalState, 'P0', manifest);
 
   return {
     genesisBytes: bytes(genesis),
     finalStateBytes: bytes(result.finalState),
     finalStateGzipBytes: gzipBytes(result.finalState),
+    seatSnapshotBytes: bytes(seatSnapshot),
+    seatSnapshotGzipBytes: gzipBytes(seatSnapshot),
     replayRecordBytes: bytes(replayRecord),
     replayRecordGzipBytes: gzipBytes(replayRecord),
     playCheckpointBytes: bytes(checkpoints),
@@ -142,10 +149,13 @@ const samples = Array.from(
 const report = {
   matches: MATCH_COUNT,
   finalStateAverageBudgetBytes: FINAL_STATE_AVERAGE_BUDGET_BYTES,
+  seatSnapshotAverageBudgetBytes: SEAT_SNAPSHOT_AVERAGE_BUDGET_BYTES,
   plays: summarize(samples.map(value => value.plays)),
   genesisBytes: summarize(samples.map(value => value.genesisBytes)),
   finalStateBytes: summarize(samples.map(value => value.finalStateBytes)),
   finalStateGzipBytes: summarize(samples.map(value => value.finalStateGzipBytes)),
+  seatSnapshotBytes: summarize(samples.map(value => value.seatSnapshotBytes)),
+  seatSnapshotGzipBytes: summarize(samples.map(value => value.seatSnapshotGzipBytes)),
   replayRecordBytes: summarize(samples.map(value => value.replayRecordBytes)),
   replayRecordGzipBytes: summarize(samples.map(value => value.replayRecordGzipBytes)),
   playCheckpointBytes: summarize(samples.map(value => value.playCheckpointBytes)),
@@ -161,5 +171,12 @@ if (report.finalStateBytes.average > FINAL_STATE_AVERAGE_BUDGET_BYTES) {
   throw new Error(
     `average final MatchState is ${report.finalStateBytes.average} bytes; `
     + `budget is ${FINAL_STATE_AVERAGE_BUDGET_BYTES}`,
+  );
+}
+
+if (report.seatSnapshotBytes.average > SEAT_SNAPSHOT_AVERAGE_BUDGET_BYTES) {
+  throw new Error(
+    `average seat snapshot is ${report.seatSnapshotBytes.average} bytes; `
+    + `budget is ${SEAT_SNAPSHOT_AVERAGE_BUDGET_BYTES}`,
   );
 }

@@ -344,8 +344,6 @@ export const PROTOCOL_SCHEMA = {
         framedEvents: array(ref('FramedEvent'), { minItems: 1 }),
         rngDrawsBefore: ref('SafeInteger'),
         rngDrawsAfter: ref('SafeInteger'),
-        preStateChecksum: string(),
-        postStateChecksum: string(),
       },
       [
         'transactionId',
@@ -358,12 +356,211 @@ export const PROTOCOL_SCHEMA = {
         'rngDrawsAfter',
       ],
     ),
+    SeatVisibleCard: object(
+      {
+        token: string(),
+        owner: ref('Seat'),
+        zone: {
+          enum: ['HAND', 'LANE', 'DISCARD', 'DESTROYED'],
+        },
+        lane: {
+          anyOf: [ref('LaneId'), { type: 'null' }],
+        },
+        revealed: { type: 'boolean' },
+        defId: string(),
+        variantId: string(),
+        cost: ref('SafeSignedInteger'),
+        power: ref('SafeSignedInteger'),
+        tags: array(string()),
+        counters: object({}, [], {
+          additionalProperties: ref('SafeSignedInteger'),
+        }),
+      },
+      ['token', 'owner', 'zone', 'lane', 'revealed'],
+    ),
+    SeatVisibleLocation: object(
+      {
+        token: string(),
+        face: { enum: ['FACE_DOWN', 'FACE_UP'] },
+        revealAtTurn: {
+          anyOf: [ref('PositiveInteger'), { type: 'null' }],
+        },
+        defId: string(),
+      },
+      ['token', 'face', 'revealAtTurn'],
+    ),
+    SeatVisibleLane: object(
+      {
+        id: ref('LaneId'),
+        status: {
+          enum: ['CREATING', 'ACTIVE', 'DESTROYING', 'DESTROYED'],
+        },
+        location: {
+          anyOf: [ref('SeatVisibleLocation'), { type: 'null' }],
+        },
+        cards: object(
+          {
+            P0: array(string()),
+            P1: array(string()),
+          },
+          ['P0', 'P1'],
+        ),
+      },
+      ['id', 'status', 'location', 'cards'],
+    ),
+    SeatVisibleMatchState: object(
+      {
+        turn: ref('SafeInteger'),
+        phase: {
+          enum: [
+            'SETUP',
+            'AWAITING_INTENT',
+            'RESOLVING',
+            'BETWEEN_TURNS',
+            'ENDED',
+          ],
+        },
+        priority: ref('Seat'),
+        energy: object(
+          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
+          ['P0', 'P1'],
+        ),
+        maxEnergy: object(
+          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
+          ['P0', 'P1'],
+        ),
+        nextTurnEnergyBonus: object(
+          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
+          ['P0', 'P1'],
+        ),
+        deckCounts: object(
+          { P0: ref('SafeInteger'), P1: ref('SafeInteger') },
+          ['P0', 'P1'],
+        ),
+        locationDeckCount: ref('SafeInteger'),
+        hands: object(
+          { P0: array(string()), P1: array(string()) },
+          ['P0', 'P1'],
+        ),
+        cards: array(ref('SeatVisibleCard')),
+        lanes: array(ref('SeatVisibleLane')),
+        stagedCards: array(string()),
+        discard: object(
+          { P0: array(string()), P1: array(string()) },
+          ['P0', 'P1'],
+        ),
+        destroyed: object(
+          { P0: array(string()), P1: array(string()) },
+          ['P0', 'P1'],
+        ),
+        banishedCounts: object(
+          { P0: ref('SafeInteger'), P1: ref('SafeInteger') },
+          ['P0', 'P1'],
+        ),
+        result: {
+          anyOf: [ref('MatchResult'), { type: 'null' }],
+        },
+      },
+      [
+        'turn',
+        'phase',
+        'priority',
+        'energy',
+        'maxEnergy',
+        'nextTurnEnergyBonus',
+        'deckCounts',
+        'locationDeckCount',
+        'hands',
+        'cards',
+        'lanes',
+        'stagedCards',
+        'discard',
+        'destroyed',
+        'banishedCounts',
+        'result',
+      ],
+    ),
+    SeatMatchSnapshot: object(
+      {
+        version: { const: 1 },
+        matchId: string(),
+        revision: ref('SafeInteger'),
+        frame: ref('SafeInteger'),
+        viewerSeat: ref('Seat'),
+        state: ref('SeatVisibleMatchState'),
+      },
+      ['version', 'matchId', 'revision', 'frame', 'viewerSeat', 'state'],
+    ),
+    SeatAnimationEvent: object(
+      {
+        type: { enum: PROTOCOL_MATCH_EVENT_TYPES },
+        data: {
+          type: 'object',
+          additionalProperties: true,
+        },
+      },
+      ['type', 'data'],
+    ),
+    SeatFramedAnimationEvent: object(
+      {
+        frame: ref('EventFrame'),
+        scope: ref('TemporalScope'),
+        event: ref('SeatAnimationEvent'),
+      },
+      ['frame', 'scope', 'event'],
+    ),
+    SeatCommittedTransaction: object(
+      {
+        version: { const: 1 },
+        transactionId: string(),
+        matchId: string(),
+        baseRevision: ref('SafeInteger'),
+        revision: ref('SafeInteger'),
+        frame: ref('SafeInteger'),
+        viewerSeat: ref('Seat'),
+        events: array(ref('SeatFramedAnimationEvent')),
+        postState: ref('SeatVisibleMatchState'),
+      },
+      [
+        'version',
+        'transactionId',
+        'matchId',
+        'baseRevision',
+        'revision',
+        'frame',
+        'viewerSeat',
+        'events',
+        'postState',
+      ],
+    ),
+    SeatResyncRequest: object(
+      {
+        version: { const: 1 },
+        matchId: string(),
+        viewerSeat: ref('Seat'),
+        knownRevision: ref('SafeInteger'),
+        knownFrame: ref('SafeInteger'),
+      },
+      ['version', 'matchId', 'viewerSeat', 'knownRevision', 'knownFrame'],
+    ),
+    SeatResyncResponse: object(
+      {
+        version: { const: 1 },
+        snapshot: ref('SeatMatchSnapshot'),
+        transactions: array(ref('SeatCommittedTransaction')),
+      },
+      ['version', 'snapshot', 'transactions'],
+    ),
     ProtocolMessage: {
       oneOf: [
         protocolMessage('MATCH_BOOTSTRAP', 'MatchBootstrap'),
         protocolMessage('INTENT_ENVELOPE', 'IntentEnvelope'),
         protocolMessage('FRAMED_EVENT', 'FramedEvent'),
         protocolMessage('COMMITTED_TRANSACTION', 'CommittedTransaction'),
+        protocolMessage('SEAT_MATCH_SNAPSHOT', 'SeatMatchSnapshot'),
+        protocolMessage('SEAT_COMMITTED_TRANSACTION', 'SeatCommittedTransaction'),
+        protocolMessage('SEAT_RESYNC_REQUEST', 'SeatResyncRequest'),
+        protocolMessage('SEAT_RESYNC_RESPONSE', 'SeatResyncResponse'),
       ],
     },
   },

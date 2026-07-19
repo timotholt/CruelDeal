@@ -15,8 +15,7 @@ import {
 } from '../testkit/runtimeFixture';
 import type { LocationCardInstanceId } from '../types/ids';
 import {
-  projectStateForSeat,
-  readProjectedState,
+  projectMechanicalStateForController,
 } from '../../runtime/projection';
 import { getLocation } from '../../view';
 
@@ -91,7 +90,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
 
   it('redacts hidden identities, artwork, source order, and future draw order', () => {
     const authoritative = initialState();
-    const projected = readProjectedState(projectStateForSeat(authoritative, 'P0'));
+    const projected = projectMechanicalStateForController(authoritative, 'P0');
     const hiddenLaneId = projected.lanesById[0].locationSlot.locationCardId!;
     const hidden = getLocationState(projected, hiddenLaneId)!;
 

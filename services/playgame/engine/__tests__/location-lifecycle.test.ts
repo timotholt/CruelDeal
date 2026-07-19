@@ -46,8 +46,7 @@ import {
   withTestLocation,
 } from '../testkit/runtimeFixture';
 import {
-  projectStateForSeat,
-  readProjectedState,
+  projectMechanicalStateForController,
 } from '../../runtime/projection';
 
 const noEffectLocation = (defId: string): LocationCardDef => ({
@@ -435,10 +434,10 @@ describe('location card lifecycle', () => {
       revealCount: 0,
     });
     expect(
-      getLocationState(readProjectedState(projectStateForSeat(shown.state, 'P0')), location.id)!.defId,
+      getLocationState(projectMechanicalStateForController(shown.state, 'P0'), location.id)!.defId,
     ).toBe(location.defId);
     expect(
-      getLocationState(readProjectedState(projectStateForSeat(shown.state, 'P1')), location.id)!.defId,
+      getLocationState(projectMechanicalStateForController(shown.state, 'P1'), location.id)!.defId,
     ).toBe('');
     expect(shown.state.lanesById[2].locationSlot.revealAtTurn).toBe(3);
   });
