@@ -4,7 +4,8 @@
  * Real Snap rule (per ROADMAP Appendix Q1, now FIXED):
  *   1. Whoever has won more LANES this moment has priority.
  *   2. Tie in lanes → whoever has more TOTAL POWER.
- *   3. Full tie → coin flip via a deterministic fork of state.seed.
+ *   3. Full tie → retain the last authoritative priority. Only the
+ *      transaction resolver may consume gameplay RNG for a new coin flip.
  */
 
 import type { Owner } from '../types/ids';
@@ -12,7 +13,6 @@ import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import type { PriorityReason } from '../types/events';
 import { getLanePower } from './power';
-import { createRng } from '../rng';
 import { activeLaneIds } from '../laneTopology';
 
 export interface PriorityResult {
@@ -39,8 +39,5 @@ export function getPriority(state: MatchState, manifest: Manifest): PriorityResu
   if (totP !== totO) {
     return { owner: totP > totO ? 'P0' : 'P1', reason: 'MORE_POWER' };
   }
-  // Deterministic coin flip: a dedicated RNG fork pinned to the turn.
-  const rng = createRng(state.seed).fork(`priority:turn${state.turn}`);
-  const pick: Owner = rng.int(0, 1) === 0 ? 'P0' : 'P1';
-  return { owner: pick, reason: 'COIN_FLIP' };
+  return { owner: state.priority, reason: 'RETAINED' };
 }

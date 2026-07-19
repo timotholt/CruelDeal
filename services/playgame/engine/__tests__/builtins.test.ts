@@ -99,7 +99,7 @@ function buildState(
   const cards = Object.fromEntries(all.map(c => [c.id, c])) as Record<CardId, InternalCardRecord>;
   return emptyTestMatchState({
     turn: 3, maxEnergy: { P0: 5, P1: 5 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
+    phase: 'AWAITING_INTENT', rngSeed: 'test', priority: 'P0',
     energy: { P0: 5, P1: 5 },
     deck: {
       P0: deckCards.P0.map(card => card.id),

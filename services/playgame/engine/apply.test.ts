@@ -71,7 +71,7 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): Interna
 
 function emptyState(): MatchState {
   return emptyTestMatchState({
-    seed: 'test-seed',
+    rngSeed: 'test-seed',
   });
 }
 

@@ -68,7 +68,7 @@ export function resolve(
       const resolvingState = apply(state, started, manifest);
       return [
         started,
-        ...resolveTurn(resolvingState, manifest, rng.fork(`turn:${state.turn}`)).events,
+        ...resolveTurn(resolvingState, manifest, rng.scope(`turn:${state.turn}`)).events,
       ];
     }
     case 'CONCEDE':      return resolveConcede(state, intent);
@@ -132,7 +132,7 @@ function resolveStage(
     s,
     intent.lane,
     'onCardEnteredHere',
-    rng.fork(`stage-enter:${intent.cardId}`),
+    rng.scope(`stage-enter:${intent.cardId}`),
     manifest,
     intent.cardId,
     intent.owner,
@@ -236,7 +236,7 @@ export function resolveTurn(
 
   // ─── Phase 1  Reveals (priority-ordered) ─────────────────────────────────
   // Priority holder's cards flip first, in stage order; then the other side.
-  const turnReveals = revealScheduledCards(s, manifest, rng.fork('turn-reveals'), 'TURN');
+  const turnReveals = revealScheduledCards(s, manifest, rng.scope('turn-reveals'), 'TURN');
   events.push(...turnReveals.events);
   s = turnReveals.state;
 
@@ -277,7 +277,7 @@ export function resolveTurn(
           selfKind: 'card',
           selfLane: card.lane,
           selfOwner: card.owner,
-          rng: rng.fork(`eot:${cardId}:${j}`),
+          rng: rng.scope(`eot:${cardId}:${j}`),
           source: {
             sourceId: cardId,
             effectKind: 'ON_REVEAL',
@@ -301,7 +301,7 @@ export function resolveTurn(
         s,
         lane,
         'atTurnEnd',
-        rng.fork(`loc-eot:${lane}`),
+        rng.scope(`loc-eot:${lane}`),
         manifest,
       );
       events.push(...trig.events);
@@ -328,7 +328,7 @@ export function resolveTurn(
         selfKind: 'card',
         selfLane: pe.sourceLane,
         selfOwner: pe.sourceOwner,
-        rng: rng.fork(`scheduled-end:${pe.sourceId}:${i}`),
+        rng: rng.scope(`scheduled-end:${pe.sourceId}:${i}`),
         source: {
           sourceId: pe.sourceId,
           effectKind: 'ON_REVEAL',
@@ -366,7 +366,7 @@ export function resolveTurn(
       for (const drawEvt of draws) {
         events.push(drawEvt);
         s = apply(s, drawEvt, manifest);
-        const debuff = applyHandEntryDebuffs(s, drawEvt.cardId, drawEvt.owner, rng.fork(`pgdebuff:${drawEvt.cardId}`), manifest);
+        const debuff = applyHandEntryDebuffs(s, drawEvt.cardId, drawEvt.owner, rng.scope(`pgdebuff:${drawEvt.cardId}`), manifest);
         events.push(...debuff.events);
         s = debuff.state;
       }
@@ -385,7 +385,7 @@ export function resolveTurn(
   //          settled. If the last turn just finished, the match ends here
   //          and NO start-of-turn bookkeeping runs.
   if (s.turn >= getFinalTurn(s, manifest)) {
-    const delayed = revealScheduledCards(s, manifest, rng.fork('endgame-reveal'), 'END_OF_GAME');
+    const delayed = revealScheduledCards(s, manifest, rng.scope('endgame-reveal'), 'END_OF_GAME');
     events.push(...delayed.events);
     s = delayed.state;
     const result = computeMatchResult(s, manifest);
@@ -417,7 +417,7 @@ export function resolveTurn(
 
   // Phase 4  Compute priority, then emit the canonical turn boundary.
   //          `TURN_STARTED` advances `state.turn` to `nextTurn` via apply().
-  const newPriority = computePriorityForNextTurn(s, manifest, rng.fork(`priority:${nextTurn}`));
+  const newPriority = computePriorityForNextTurn(s, manifest, rng.scope(`priority:${nextTurn}`));
   const started: MatchEvent = {
     type: 'TURN_STARTED',
     turn: nextTurn,
@@ -490,7 +490,7 @@ export function resolveTurn(
         selfKind: 'card',
         selfLane: pe.sourceLane,
         selfOwner: pe.sourceOwner,
-        rng: rng.fork(`scheduled:${pe.sourceId}:${i}`),
+        rng: rng.scope(`scheduled:${pe.sourceId}:${i}`),
         source: {
           sourceId: pe.sourceId,
           effectKind: 'ON_REVEAL',
@@ -536,7 +536,7 @@ export function resolveTurn(
           selfKind: 'card',
           selfLane: card.lane,
           selfOwner: card.owner,
-          rng: rng.fork(`turn-start:${cardId}:${j}`),
+          rng: rng.scope(`turn-start:${cardId}:${j}`),
           source: {
             sourceId: cardId,
             effectKind: 'ON_REVEAL',
@@ -560,7 +560,7 @@ export function resolveTurn(
         s,
         lane,
         'atTurnStart',
-        rng.fork(`loc-start:${lane}`),
+        rng.scope(`loc-start:${lane}`),
         manifest,
       );
       events.push(...trig.events);
@@ -574,7 +574,7 @@ export function resolveTurn(
     for (const e of draws) {
       events.push(e);
       s = apply(s, e, manifest);
-      const debuff = applyHandEntryDebuffs(s, e.cardId, owner, rng.fork(`draw-debuff:${e.cardId}`), manifest);
+      const debuff = applyHandEntryDebuffs(s, e.cardId, owner, rng.scope(`draw-debuff:${e.cardId}`), manifest);
       events.push(...debuff.events);
       s = debuff.state;
     }
@@ -616,7 +616,7 @@ export function resolveTurn(
           selfKind: 'location',
           selfLane: laneId,
           selfOwner: null,
-          rng: rng.fork(`location-reveal:${loc.id}:${idx}`),
+          rng: rng.scope(`location-reveal:${loc.id}:${idx}`),
           source: {
             sourceId: loc.id,
             effectKind: 'LOCATION',
@@ -708,8 +708,8 @@ function revealScheduledCards(
     const card = getCardRuntime(s, id, manifest);
     if (!card) continue; // may have been destroyed by a prior reveal
     const res = window === 'END_OF_GAME'
-      ? revealPlayedCardAtEndOfGame(s, id, manifest, rng.fork(`end-game:${id}`))
-      : revealPlayedCard(s, id, manifest, rng.fork(`turn:${id}`));
+      ? revealPlayedCardAtEndOfGame(s, id, manifest, rng.scope(`end-game:${id}`))
+      : revealPlayedCard(s, id, manifest, rng.scope(`turn:${id}`));
     events.push(...res.events);
     s = res.state;
   }

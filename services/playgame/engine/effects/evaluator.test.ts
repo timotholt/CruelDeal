@@ -150,7 +150,7 @@ function buildState(
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: opts.seed ?? 'test-seed',
+    rngSeed: opts.seed ?? 'test-seed',
     priority: 'P0',
     energy: { P0: 0, P1: 0 },
     deck,

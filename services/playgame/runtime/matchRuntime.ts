@@ -4,6 +4,7 @@ import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { Deck, Manifest } from '../engine/manifest/types';
 import { createRng } from '../engine/rng';
+import { appendGameplayRngAdvance } from '../engine/rng/transaction';
 import { resolve } from '../engine/resolve';
 import { currentFrame } from '../engine/timeline';
 import { frameAndFoldEvents } from '../engine/transactionTimeline';
@@ -37,7 +38,6 @@ import type {
 import { getCardPlacement } from '../engine/projections/cardRuntime';
 import { buildOpeningTransaction } from './opening';
 import { buildLocationSetupTransaction } from '../engine/locationSetup';
-import { forkResolutionRng, forkSemanticRng } from './rngNamespaces';
 
 export type MatchTransactionSubscriber = (timeline: CommittedTransactionTimeline) => void;
 
@@ -92,6 +92,11 @@ interface CommittedCandidate {
 
 interface PlannedStage {
   readonly intent: Extract<MatchIntent, { type: 'STAGE_CARD' }>;
+  readonly events: readonly MatchEvent[];
+}
+
+interface PlanningPrelude {
+  readonly baseDraws: number;
   readonly events: readonly MatchEvent[];
 }
 
@@ -175,6 +180,17 @@ function assertValidTimeline(
   if (events.length === 0 || timeline.transitions.length !== events.length) {
     throw new Error('validated commit requires a non-empty contiguous event sequence');
   }
+  const rngDrawDelta = events.reduce(
+    (total, event) => total + (event.type === 'GAMEPLAY_RNG_ADVANCED' ? event.draws : 0),
+    0,
+  );
+  if (
+    timeline.transaction.rngDrawsBefore !== initialState.rng.draws
+    || timeline.transaction.rngDrawsAfter !== timeline.finalState.rng.draws
+    || timeline.transaction.rngDrawsAfter - timeline.transaction.rngDrawsBefore !== rngDrawDelta
+  ) {
+    throw new Error('transaction RNG coordinates do not match committed draw events');
+  }
 
   let expectedBefore = initialState;
   timeline.transitions.forEach((frame, index) => {
@@ -192,7 +208,7 @@ function assertValidTimeline(
     if (frame.frame !== expectedFrame || frame.framedEvent.frame !== frame.frame) {
       throw new Error(`canonical gameplay frame is not contiguous at transaction index ${index}`);
     }
-    if (frame.after.seed !== initialState.seed) {
+    if (frame.after.rng.seed !== initialState.rng.seed) {
       throw new Error(`authoritative event changed the match seed at index ${index}`);
     }
     if (
@@ -258,20 +274,36 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const receipts: InMemoryIntentReceiptMap = new Map();
   const queue: QueuedIntent[] = [];
   const subscribers = new Set<MatchTransactionSubscriber>();
-  const resolutionRng = forkResolutionRng(createRng(config.seed));
   let authoritativeState = genesisState;
   const planning: Record<Seat, PlannedStage[]> = { P0: [], P1: [] };
+  const planningPrelude: Record<Seat, PlanningPrelude | null> = { P0: null, P1: null };
   const locked: Record<Seat, boolean> = { P0: false, P1: false };
   let currentRevision: MatchRevision = 0;
   let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
   let drainScheduled = false;
   let draining = false;
 
+  const resolveWithStateRng = (
+    state: MatchState,
+    intent: MatchIntent,
+    purpose: string,
+  ): readonly MatchEvent[] => {
+    const rng = createRng(state.rng).scope(purpose);
+    const events = resolve(state, intent, rng, manifest);
+    return appendGameplayRngAdvance(state, rng, events);
+  };
+
   const foldPlannedStages = (
     seat: Seat,
     baseState: MatchState = authoritativeState,
   ): MatchState => {
     let state = baseState;
+    const prelude = planningPrelude[seat];
+    if (prelude && state.rng.draws === prelude.baseDraws) {
+      for (const event of prelude.events) {
+        state = apply(state, event, manifest);
+      }
+    }
     for (const planned of planning[seat]) {
       // Presentation frames at or after this stage already contain its whole
       // event batch, including lane-entry effects. Never fold it twice.
@@ -311,6 +343,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       revision,
       intent: Object.freeze({ ...candidate.identity }),
       framedEvents: built.framedEvents,
+      rngDrawsBefore: authoritativeState.rng.draws,
+      rngDrawsAfter: built.finalState.rng.draws,
     });
     assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
     const timeline: CommittedTransactionTimeline = Object.freeze({
@@ -415,16 +449,25 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       ? ['P0', 'P1']
       : ['P1', 'P0'];
 
+    // Controller decisions are part of the same canonical RNG sequence, but
+    // remain speculative until the locked turn commits. Apply their draw
+    // consumption before resolving the resulting staged intents.
+    for (const owner of ['P0', 'P1'] as const) {
+      const prelude = planningPrelude[owner];
+      if (prelude) {
+        for (const event of prelude.events) {
+          events.push(event);
+          mergedState = apply(mergedState, event, manifest);
+        }
+      }
+    }
+
     for (const owner of ownerOrder) {
       for (const planned of planning[owner]) {
-        const stageEvents = resolve(
+        const stageEvents = resolveWithStateRng(
           mergedState,
           planned.intent,
-          forkSemanticRng(
-            resolutionRng,
-            `stage:${authoritativeState.turn}:${owner}:${planned.intent.intentId}`,
-          ),
-          manifest,
+          `stage:${authoritativeState.turn}:${owner}:${planned.intent.intentId}`,
         );
         const rejection = stageEvents[0]?.type === 'INTENT_REJECTED' ? stageEvents[0] : null;
         if (rejection) continue;
@@ -433,15 +476,14 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       }
     }
 
-    const resolutionEvents = resolve(
+    const resolutionEvents = resolveWithStateRng(
       mergedState,
       {
         type: 'END_TURN',
         intentId: `system-resolve-turn-${authoritativeState.turn}`,
         owner: authoritativeState.priority,
       },
-      forkSemanticRng(resolutionRng, `system-turn:${authoritativeState.turn}`),
-      manifest,
+      `system-turn:${authoritativeState.turn}`,
     );
     events.push(...resolutionEvents);
 
@@ -460,6 +502,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     publish(committed.timeline);
     planning.P0 = [];
     planning.P1 = [];
+    planningPrelude.P0 = null;
+    planningPrelude.P1 = null;
     locked.P0 = false;
     locked.P1 = false;
   };
@@ -469,16 +513,20 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     const aiState = readProjectedState(
       projectStateForSeat(authoritativeAiState, seat),
     );
+    const aiRng = createRng(authoritativeAiState.rng).scope(
+      `ai-plan:${aiState.turn}:${seat}:${currentRevision}`,
+    );
     const plays = planEnemyTurnFromHand(
       aiState,
       seat,
       manifest,
-      forkSemanticRng(
-        resolutionRng,
-        `ai-plan:${aiState.turn}:${seat}:${currentRevision}`,
-      ),
+      aiRng,
       { forkTag: `live-ai:${aiState.turn}:${seat}` },
     );
+    planningPrelude[seat] = Object.freeze({
+      baseDraws: authoritativeAiState.rng.draws,
+      events: appendGameplayRngAdvance(authoritativeAiState, aiRng, []),
+    });
     let index = 0;
 
     const enqueueNext = (): void => {
@@ -575,14 +623,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           ));
         }
         const planningState = foldPlannedStages(envelope.seat);
-        const events = resolve(
+        const events = resolveWithStateRng(
           planningState,
           engineIntent,
-          forkSemanticRng(
-            resolutionRng,
-            `stage:${planningState.turn}:${envelope.seat}:${envelope.intentId}`,
-          ),
-          manifest,
+          `stage:${planningState.turn}:${envelope.seat}:${envelope.intentId}`,
         );
         const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
         if (events.length === 0 || engineRejection) {
@@ -624,6 +668,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID', 'planning stack is empty'));
         }
         planning[envelope.seat] = [];
+        planningPrelude[envelope.seat] = null;
         return acceptPrivate(key, envelope);
       }
 
@@ -642,11 +687,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         return result;
       }
 
-      const events = resolve(
+      const events = resolveWithStateRng(
         authoritativeState,
         engineIntent,
-        forkSemanticRng(resolutionRng, `commit:${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`),
-        manifest,
+        `commit:${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`,
       );
       const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
       if (events.length === 0 || engineRejection) {
@@ -670,6 +714,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       if (engineIntent.type === 'CONCEDE') {
         planning.P0 = [];
         planning.P1 = [];
+        planningPrelude.P0 = null;
+        planningPrelude.P1 = null;
         locked.P0 = false;
         locked.P1 = false;
       }

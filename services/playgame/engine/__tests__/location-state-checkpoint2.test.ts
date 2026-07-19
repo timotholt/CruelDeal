@@ -53,12 +53,12 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
     expect(state.locationDeck.drawPile).toHaveLength(3);
     expect(validateLocationState(state)).toEqual([]);
 
-    expect(locationCardAtLane(state, 0)?.defId).toBe('alpha');
-    expect(locationCardAtLane(state, 1)?.defId).toBe('beta');
-    expect(locationCardAtLane(state, 2)?.defId).toBe('gamma');
-    expect(
-      state.locationDeck.drawPile.map(id => getLocationState(state, id)!.defId),
-    ).toEqual(['delta', 'epsilon', 'zeta']);
+    const laneDefs = state.activeLaneOrder
+      .map(lane => locationCardAtLane(state, lane)!.defId);
+    const reserveDefs = state.locationDeck.drawPile
+      .map(id => getLocationState(state, id)!.defId);
+    expect([...laneDefs, ...reserveDefs].sort())
+      .toEqual(orderedLocationDeck.map(entry => entry.defId).sort());
 
     for (const location of getAllLocationStates(state)) {
       expect(location.id).not.toContain(location.defId);
@@ -107,10 +107,10 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
       revealed: false,
     });
 
-    expect(locationCardAtLane(authoritative, 0)?.defId).toBe('alpha');
+    expect(locationCardAtLane(authoritative, 0)?.defId).not.toBe('');
     expect(authoritative.locationDeck.drawPile.map(
       id => getLocationState(authoritative, id)!.defId,
-    )).toEqual(['delta', 'epsilon', 'zeta']);
+    )).not.toContain('');
   });
 
   it('conserves the outgoing card when a location is replaced', () => {

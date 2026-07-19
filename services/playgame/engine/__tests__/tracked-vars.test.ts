@@ -61,7 +61,7 @@ function baseState(): MatchState {
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: 'test',
+    rngSeed: 'test',
     priority: 'P0',
     energy: { P0: 3, P1: 3 },
     deck: { P0: [], P1: [] },

@@ -77,6 +77,8 @@ describe('committed END TURN choreography', () => {
         revision: 2,
         intent: { matchId: 'presentation-order', seat: 'SYSTEM', intentId: 'resolve' },
         framedEvents: built.framedEvents,
+        rngDrawsBefore: fixture.state.rng.draws,
+        rngDrawsAfter: built.finalState.rng.draws,
       },
       transitions: built.transitions,
       finalState: built.finalState,

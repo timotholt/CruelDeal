@@ -23,8 +23,14 @@ export type * from './manifest/types';
 export { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 
 // ---- RNG -------------------------------------------------------------------
-export type { Rng } from './rng';
-export { createRng } from './rng';
+export type { GameplayRngState, GameplayRngStep, Rng } from './rng';
+export {
+  advanceGameplayRng,
+  createGameplayRngState,
+  createRng,
+  stepGameplayRng,
+} from './rng';
+export { appendGameplayRngAdvance } from './rng/transaction';
 
 // ---- Reducer / resolvers ---------------------------------------------------
 export { apply, applyFramed } from './apply';

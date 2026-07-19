@@ -78,8 +78,8 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
   if (!opts.initialState) {
     throw new Error('replayMatch: initialState is required; refusing to rebuild replay state from seed');
   }
-  if (opts.initialState.seed !== opts.seed) {
-    throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.seed} replay=${opts.seed}`);
+  if (opts.initialState.rng.seed !== opts.seed) {
+    throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.rng.seed} replay=${opts.seed}`);
   }
   assertReplayInitialState(opts.initialState, opts.manifest);
   for (const framedEvent of opts.framedEvents) {
@@ -131,9 +131,9 @@ export function exportReplayBundle(
   if (!initialState) {
     throw new Error('exportReplayBundle: initialState is required');
   }
-  if (initialState.seed !== finalState.seed) {
+  if (initialState.rng.seed !== finalState.rng.seed) {
     throw new Error(
-      `exportReplayBundle: seed mismatch initialState=${initialState.seed} state=${finalState.seed}`,
+      `exportReplayBundle: seed mismatch initialState=${initialState.rng.seed} state=${finalState.rng.seed}`,
     );
   }
   for (const framedEvent of framedEvents) {
@@ -149,7 +149,7 @@ export function exportReplayBundle(
     version: 3,
     manifestVersion: manifest.version,
     protocolVersion: manifest.protocolVersion,
-    seed: finalState.seed,
+    seed: finalState.rng.seed,
     manifestSnapshot: manifest,
     initialState,
     framedEvents,
@@ -188,8 +188,8 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
   if (!bundle.initialState) {
     throw new Error('Replay bundle is missing initialState');
   }
-  if (bundle.initialState.seed !== bundle.seed) {
-    throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.seed}`);
+  if (bundle.initialState.rng.seed !== bundle.seed) {
+    throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.rng.seed}`);
   }
   if (!Array.isArray(bundle.framedEvents)) {
     throw new Error('Replay bundle framedEvents must be an array');

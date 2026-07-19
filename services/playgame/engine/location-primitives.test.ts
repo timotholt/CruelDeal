@@ -95,7 +95,7 @@ const stateWith = (cards: InternalCardRecord[], location: LocationCardDef, turn 
     maxEnergy: { P0: turn, P1: turn },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: 'location-primitives',
+    rngSeed: 'location-primitives',
     priority: 'P0',
     energy: { P0: 10, P1: 10 },
     deck: { P0: [], P1: [] },

@@ -5,7 +5,7 @@
  * and Manifest data. See `./QUERY_SYSTEM_DESIGN.md` for the full design.
  *
  * Pure: no RNG, no side effects, no caching. Callers that need random
- * selection should fork an RNG and call `.pick()` on the result.
+ * selection must consume the authoritative RNG stream outside this query.
  *
  * Three entity types:
  *   - CardFilter:    live InternalCardRecord queries (board state)

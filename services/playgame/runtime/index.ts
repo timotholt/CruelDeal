@@ -5,4 +5,3 @@ export * from './matchSession';
 export * from './opening';
 export * from './projection';
 export * from './replayExport';
-export * from './rngNamespaces';

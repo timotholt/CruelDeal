@@ -1,5 +1,6 @@
 import type { Manifest } from './manifest/types';
 import { createRng, type Rng } from './rng';
+import { appendGameplayRngAdvance } from './rng/transaction';
 import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
 import type { LaneId, LocationCardInstanceId } from './types/ids';
@@ -20,14 +21,38 @@ const SETUP_CAUSE: EffectRef = {
   reason: 'MATCH_SETUP',
 };
 
-function mintId(rng: Rng, tag: string): string {
-  const sub = rng.fork(tag);
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  for (let index = 0; index < 8; index++) {
-    out += alphabet[sub.int(0, alphabet.length - 1)];
+interface WeightedLocationEntry {
+  readonly defId: string;
+  readonly sourceDeckEntry: number;
+  readonly rarity: number;
+}
+
+function weightedPermutation(
+  entries: readonly WeightedLocationEntry[],
+  rng: Rng,
+): WeightedLocationEntry[] {
+  const ordered: WeightedLocationEntry[] = [];
+  const remaining = entries.slice();
+  while (remaining.length > 0) {
+    const scale = 1000;
+    const scaledTotal = remaining.reduce(
+      (total, entry) => total + Math.floor(entry.rarity * scale),
+      0,
+    );
+    const roll = rng.int(0, scaledTotal - 1);
+    let accumulated = 0;
+    let chosenIndex = remaining.length - 1;
+    for (let index = 0; index < remaining.length; index++) {
+      accumulated += Math.floor(remaining[index].rarity * scale);
+      if (roll < accumulated) {
+        chosenIndex = index;
+        break;
+      }
+    }
+    ordered.push(remaining[chosenIndex]);
+    remaining.splice(chosenIndex, 1);
   }
-  return out;
+  return ordered;
 }
 
 /**
@@ -57,17 +82,29 @@ export function buildLocationSetupTransaction(
     throw new Error(`location setup requires at least 3 entries; received ${entries.length}`);
   }
 
-  const instanceRng = createRng(genesis.seed).fork('location-instances');
-  const locations = entries.map((entry, sourceDeckEntry) => {
-    if (!getLocationTemplate(manifest, entry.defId)) {
+  const setupRng = createRng(genesis.rng).scope('location-order');
+  const eligible = entries.map((entry, sourceDeckEntry) => {
+    const definition = getLocationTemplate(manifest, entry.defId);
+    if (!definition) {
       throw new Error(`location setup references unknown defId "${entry.defId}"`);
     }
-    return Object.freeze({
-      id: mintId(instanceRng, `location-card:${sourceDeckEntry}`) as LocationCardInstanceId,
+    if (definition.rarity <= 0) {
+      throw new Error(`location setup references non-positive rarity for "${entry.defId}"`);
+    }
+    return {
       defId: entry.defId,
       sourceDeckEntry,
-    });
+      rarity: definition.rarity,
+    };
   });
+  const locations = weightedPermutation(eligible, setupRng)
+    .map((entry, deckPosition) => {
+      return Object.freeze({
+        id: `l${deckPosition}` as LocationCardInstanceId,
+        defId: entry.defId,
+        sourceDeckEntry: entry.sourceDeckEntry,
+      });
+    });
 
   const events: MatchEvent[] = [{
     type: 'LOCATION_DECK_INITIALIZED',
@@ -112,7 +149,7 @@ export function buildLocationSetupTransaction(
   events.push({ type: 'MATCH_SETUP_COMPLETED' });
 
   return Object.freeze({
-    transactionId: `setup:${genesis.seed}`,
-    events: Object.freeze(events),
+    transactionId: `setup:${genesis.rng.seed}`,
+    events: appendGameplayRngAdvance(genesis, setupRng, events),
   });
 }

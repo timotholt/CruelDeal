@@ -52,6 +52,7 @@ import {
   readLocationInternal,
   writeLocationRecordsInternal,
 } from './internal/locationStore';
+import { advanceGameplayRng } from './rng';
 
 export function apply(
   state: MatchState,
@@ -124,6 +125,15 @@ function applyEventBody(
   manifest: Manifest,
 ): MatchState {
   switch (event.type) {
+    // ---- Authority bookkeeping -------------------------------------------
+
+    case 'GAMEPLAY_RNG_ADVANCED': {
+      if (!Number.isSafeInteger(event.draws) || event.draws <= 0) {
+        throw new Error('GAMEPLAY_RNG_ADVANCED draws must be a positive safe integer');
+      }
+      return { ...state, rng: advanceGameplayRng(state.rng, event.draws) };
+    }
+
     // ---- Staging / play ---------------------------------------------------
 
     case 'CARD_STAGED': {

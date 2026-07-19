@@ -49,6 +49,7 @@ const CORE_BOUNDARY_EVENT_TYPES = [
 ] as const;
 
 export const PROTOCOL_MATCH_EVENT_TYPES = [
+  'GAMEPLAY_RNG_ADVANCED',
   'CARD_STAGED',
   'CARD_UNSTAGED',
   'ENERGY_CHANGED',
@@ -280,7 +281,7 @@ export const PROTOCOL_SCHEMA = {
     LocationDeckBootstrap: object(
       {
         kind: { const: 'LOCATION' },
-        order: { const: 'PRESERVE' },
+        order: { const: 'WEIGHTED_RANDOM' },
         deckId: string(),
         revision: ref('SafeInteger'),
         name: string(),
@@ -341,6 +342,8 @@ export const PROTOCOL_SCHEMA = {
         revision: ref('SafeInteger'),
         intent: ref('CommittedIntentIdentity'),
         framedEvents: array(ref('FramedEvent'), { minItems: 1 }),
+        rngDrawsBefore: ref('SafeInteger'),
+        rngDrawsAfter: ref('SafeInteger'),
         preStateChecksum: string(),
         postStateChecksum: string(),
       },
@@ -351,6 +354,8 @@ export const PROTOCOL_SCHEMA = {
         'revision',
         'intent',
         'framedEvents',
+        'rngDrawsBefore',
+        'rngDrawsAfter',
       ],
     ),
     ProtocolMessage: {

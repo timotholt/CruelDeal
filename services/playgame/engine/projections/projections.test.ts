@@ -330,7 +330,7 @@ function buildState(
   let state = emptyTestMatchState({
     turn: opts.turn ?? 3,
     maxEnergy: { P0: 3, P1: 3 },
-    seed: opts.seed ?? 'test-seed',
+    rngSeed: opts.seed ?? 'test-seed',
     energy: { P0: 0, P1: 0 },
     cards,
     lanesById: testLaneRegistry(lanesCards),
@@ -649,28 +649,26 @@ function firstCard(state: MatchState, owner: Owner, lane: LaneId): CardId {
   eq(pr.reason, 'MORE_POWER', 'priority reason: MORE_POWER');
 }
 
-// -- Priority: full tie → deterministic COIN_FLIP ---------------------------
+// -- Priority projection: full tie retains authoritative priority ------------
 
 {
   const s1 = buildState([], {}, { seed: 'tie-seed', turn: 1 });
   const s2 = buildState([], {}, { seed: 'tie-seed', turn: 1 });
   const pr1 = getPriority(s1, MANIFEST);
   const pr2 = getPriority(s2, MANIFEST);
-  eq(pr1.owner,  pr2.owner,   'priority COIN_FLIP is deterministic per (seed, turn)');
-  eq(pr1.reason, 'COIN_FLIP', 'priority reason: COIN_FLIP on full tie');
+  eq(pr1.owner,  pr2.owner,   'priority tie projection is deterministic');
+  eq(pr1.reason, 'RETAINED', 'priority reason: RETAINED on full tie');
 }
 
-// -- Priority: different turn → potentially different flip ------------------
+// -- Priority projection never consumes RNG ---------------------------------
 
 {
   const s1 = buildState([], {}, { seed: 'tie-seed', turn: 1 });
   const s2 = buildState([], {}, { seed: 'tie-seed', turn: 2 });
   const pr1 = getPriority(s1, MANIFEST);
   const pr2 = getPriority(s2, MANIFEST);
-  // Both deterministic; we don't assert WHICH owner — just that the
-  // fork tag meaningfully changes the RNG stream (may or may not differ).
-  eq(pr1.reason, 'COIN_FLIP', 'priority T1: COIN_FLIP');
-  eq(pr2.reason, 'COIN_FLIP', 'priority T2: COIN_FLIP');
+  eq(pr1.reason, 'RETAINED', 'priority T1: RETAINED');
+  eq(pr2.reason, 'RETAINED', 'priority T2: RETAINED');
   truthy(typeof pr1.owner === 'string' && typeof pr2.owner === 'string', 'both pick a concrete owner');
 }
 

@@ -38,7 +38,7 @@ export interface LocationCardDeckEntry {
 export interface LocationDeckBootstrap
   extends DeckBootstrapBase<LocationCardDeckEntry> {
   readonly kind: 'LOCATION';
-  readonly order: 'PRESERVE';
+  readonly order: 'WEIGHTED_RANDOM';
 }
 
 /** @deprecated Use PlayerDeckBootstrap. */
@@ -149,6 +149,8 @@ export interface CommittedTransactionRecord {
   readonly intent: CommittedIntentIdentity;
   /** Canonical committed event stream. Frames are match-global and contiguous. */
   readonly framedEvents: readonly FramedEvent[];
+  readonly rngDrawsBefore: number;
+  readonly rngDrawsAfter: number;
   readonly preStateChecksum?: string;
   readonly postStateChecksum?: string;
 }

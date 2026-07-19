@@ -126,7 +126,7 @@ export function createOpenedMatch(
 }
 
 export function intentRng(matchSeed: string, intentIndex: number, intentType: MatchIntent['type']): Rng {
-  return createRng(matchSeed).fork(`property-intent:${intentIndex}:${intentType}`);
+  return createRng(matchSeed).scope(`property-intent:${intentIndex}:${intentType}`);
 }
 
 function isAccepted(events: readonly MatchEvent[]): boolean {
@@ -227,16 +227,16 @@ export function generateMatchCase(
 ): GeneratedMatchCase {
   const generatorRng = createRng(generatorSeed);
   const decks = Object.freeze({
-    P0: generateDeck(generatorRng.fork('deck:P0'), manifest),
-    P1: generateDeck(generatorRng.fork('deck:P1'), manifest),
+    P0: generateDeck(generatorRng.scope('deck:P0'), manifest),
+    P1: generateDeck(generatorRng.scope('deck:P1'), manifest),
   });
   assertManifestValidDeck(decks.P0, manifest);
   assertManifestValidDeck(decks.P1, manifest);
 
-  const matchSeed = randomSeed(generatorRng.fork('match-seed'));
+  const matchSeed = randomSeed(generatorRng.scope('match-seed'));
   let state = createOpenedMatch({ matchSeed, decks }, manifest).state;
   const intents: MatchIntent[] = [];
-  const decisions = generatorRng.fork('intent-decisions');
+  const decisions = generatorRng.scope('intent-decisions');
   const safetyTurnLimit = manifest.constants.turnLimit + 2;
 
   while (state.result === null && state.phase !== 'ENDED' && state.turn <= safetyTurnLimit) {

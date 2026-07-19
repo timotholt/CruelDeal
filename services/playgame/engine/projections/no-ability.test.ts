@@ -64,7 +64,7 @@ function civilCourtState(): MatchState {
   const base = emptyTestMatchState({
     turn: 2,
     maxEnergy: { P0: 2, P1: 2 },
-    seed: 'civil-court-no-ability-regression',
+    rngSeed: 'civil-court-no-ability-regression',
     energy: { P0: 2, P1: 2 },
     cards: { [riot.id]: riot, [junk.id]: junk },
     lanesById: testLaneRegistry([

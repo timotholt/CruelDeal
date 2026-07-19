@@ -10,9 +10,8 @@
  * mutate-by-emission: they produce a MatchEvent list AND apply each one
  * as they go (so SPAWN_AND_REVEAL can recurse into the fresh card).
  *
- * Determinism: every effect-time randomness point forks `ctx.rng` with a
- * unique tag derived from (source, effect idx, iteration count). Same
- * seed + same call path → identical events on every JS runtime.
+ * Determinism: every effect-time randomness point consumes the one gameplay
+ * stream through a purpose-labeled scope.
  */
 
 import type { EffectExpr, EffectRef, PoolRef, Selector } from '../types/ability';
@@ -103,7 +102,7 @@ function fireCardTrigger(
       selfKind: 'card',
       selfLane,
       selfOwner,
-      rng: parentRng.fork(`${slot}:${cardId}:${j}`),
+      rng: parentRng.scope(`${slot}:${cardId}:${j}`),
       source: {
         sourceId: cardId,
         effectKind: 'ON_REVEAL',
@@ -148,7 +147,7 @@ export function fireLocationTrigger(
       eventCard,
       eventLane: lane,
       eventOwner,
-      rng: parentRng.fork(`${slot}:${loc.id}:${j}`),
+      rng: parentRng.scope(`${slot}:${loc.id}:${j}`),
       source: {
         sourceId: loc.id,
         effectKind: 'LOCATION',
@@ -242,7 +241,7 @@ export function destroyCards(
       preLane,
       preOwner,
       'onDestroyed',
-      options.rng.fork(`destroyed:${id}`),
+      options.rng.scope(`destroyed:${id}`),
       options.depth ?? 0,
       manifest,
     );
@@ -254,7 +253,7 @@ export function destroyCards(
         s,
         preLane,
         'onCardDestroyedHere',
-        options.rng.fork(`locDestroyed:${id}`),
+        options.rng.scope(`locDestroyed:${id}`),
         manifest,
         id,
         preOwner,
@@ -480,7 +479,7 @@ function resolveCardReveal(
   for (let rep = 0; rep < orMult; rep++) {
     for (let idx = 0; idx < onReveal.length; idx++) {
       const effect = onReveal[idx];
-      const subRng = rng.fork(`or:${cardId}:rep${rep}:eff${idx}`);
+      const subRng = rng.scope(`or:${cardId}:rep${rep}:eff${idx}`);
       const ctx: EffectCtx = {
         state: s,  // snapshot; evalEffect doesn't actually read this field
                    // because it receives state as its first arg.
@@ -550,7 +549,7 @@ function fireOnAnyCardPlayedHere(
       const trig = fireCardTrigger(
         s, id, lane, owner,
         'onAnyCardPlayedHere',
-        parentRng.fork(`onPlay:${cardId}:${id}`),
+        parentRng.scope(`onPlay:${cardId}:${id}`),
         parentDepth,
         manifest,
       );
@@ -562,7 +561,7 @@ function fireOnAnyCardPlayedHere(
     s,
     lane,
     'onCardPlayedHere',
-    parentRng.fork(`locOnPlay:${cardId}:${lane}`),
+    parentRng.scope(`locOnPlay:${cardId}:${lane}`),
     manifest,
     cardId,
     flipped.owner,
@@ -691,7 +690,7 @@ export function evalEffect(
         state,
         liveCtx.selfLane,
         ctx.source,
-        ctx.rng.fork(`destroy-other-lanes:${liveCtx.selfLane}`),
+        ctx.rng.scope(`destroy-other-lanes:${liveCtx.selfLane}`),
         manifest,
       );
       return result.ok
@@ -736,7 +735,13 @@ export function evalEffect(
 
     case 'MOVE': {
       const targets = select(effect.target, liveCtx);
-      const destLanes = selectLanes(effect.to, liveCtx);
+      // Capacity must be filtered before a random destination is sampled.
+      // Otherwise RANDOM_N can select a full lane and turn an otherwise legal
+      // move into a silent no-op.
+      const destinationSelector = effect.to.kind === 'RANDOM_N'
+        ? effect.to.of
+        : effect.to;
+      const destLanes = selectLanes(destinationSelector, liveCtx);
       if (destLanes.length === 0) return { events: [], state };
       const events: MatchEvent[] = [];
       let s = state;
@@ -746,7 +751,7 @@ export function evalEffect(
         if (isMoveBlocked(s, id, manifest)) continue;
         // Per-target destination: forked off ctx.rng so two simultaneous
         // MOVEs don't collide deterministic-stream-wise.
-        const subRng = ctx.rng.fork(`move:${id}`);
+        const subRng = ctx.rng.scope(`move:${id}`);
         // Valid destination = candidate lane, not current lane, has capacity for owner.
         const filtered = findLanes(s, manifest, {
           laneId: destLanes,
@@ -768,7 +773,7 @@ export function evalEffect(
           s,
           toLane,
           'onCardEnteredHere',
-          ctx.rng.fork(`locEnteredMove:${id}`),
+          ctx.rng.scope(`locEnteredMove:${id}`),
           manifest,
           id,
           card.owner,
@@ -809,7 +814,7 @@ export function evalEffect(
           s,
           topCardId,
           owner,
-          ctx.rng.fork(`debuff:${topCardId}`),
+          ctx.rng.scope(`debuff:${topCardId}`),
           manifest,
         );
         events.push(...debuff.events);
@@ -821,9 +826,9 @@ export function evalEffect(
     case 'CREATE_CARD_IN_ZONE': {
       const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
       if (!owner) return { events: [], state };
-      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.fork('pool'), ctx.eventOwner ?? null);
+      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.scope('pool'), ctx.eventOwner ?? null);
       if (!defId) return { events: [], state };
-      const newId = mintCardId(ctx.rng.fork('id'));
+      const newId = mintCardId(ctx.rng.scope('id'));
       const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
       const setCreatedCost = (
         currentState: MatchState,
@@ -875,7 +880,7 @@ export function evalEffect(
             spawnSource,
           };
           let s = apply(state, e, manifest);
-          const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.fork('debuff'), manifest);
+          const debuff = applyHandEntryDebuffs(s, newId, owner, ctx.rng.scope('debuff'), manifest);
           s = debuff.state;
           return setCreatedCost(s, [e, ...debuff.events]);
         }
@@ -895,7 +900,7 @@ export function evalEffect(
         case 'LANE': {
           const lanes = selectLanes(effect.destination.lane, liveCtx);
           if (lanes.length === 0) return { events: [], state };
-          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
+          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope('lane').pick(lanes);
           if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return { events: [], state };
           const e: MatchEvent = {
             type: 'CARD_ADDED_TO_LANE',
@@ -910,7 +915,7 @@ export function evalEffect(
             created.state,
             lane,
             'onCardEnteredHere',
-            ctx.rng.fork(`locEnteredCreate:${newId}`),
+            ctx.rng.scope(`locEnteredCreate:${newId}`),
             manifest,
             newId,
             owner,
@@ -934,7 +939,7 @@ export function evalEffect(
         if (effect.destination.kind === 'LANE') {
           const lanes = selectLanes(effect.destination.lane, { ...liveCtx, state: s });
           if (lanes.length === 0) continue;
-          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork(`moveZone:${id}`).pick(lanes);
+          const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope(`moveZone:${id}`).pick(lanes);
           if (s.lanesById[lane].cards[card.owner].length >= manifest.constants.laneCapacity) continue;
           const e: MatchEvent = {
             type: 'CARD_MOVED_TO_ZONE',
@@ -948,7 +953,7 @@ export function evalEffect(
             s,
             lane,
             'onCardEnteredHere',
-            ctx.rng.fork(`locEnteredMoveZone:${id}`),
+            ctx.rng.scope(`locEnteredMoveZone:${id}`),
             manifest,
             id,
             card.owner,
@@ -968,7 +973,7 @@ export function evalEffect(
         events.push(e);
         s = apply(s, e, manifest);
         if (effect.destination.kind === 'HAND') {
-          const debuff = applyHandEntryDebuffs(s, id, card.owner, ctx.rng.fork(`debuffMoveZone:${id}`), manifest);
+          const debuff = applyHandEntryDebuffs(s, id, card.owner, ctx.rng.scope(`debuffMoveZone:${id}`), manifest);
           events.push(...debuff.events);
           s = debuff.state;
         }
@@ -983,13 +988,13 @@ export function evalEffect(
       if (!owner) return { events: [], state };
       const lanes = selectLanes(effect.to, liveCtx);
       if (lanes.length === 0) return { events: [], state };
-      const lane = lanes.length === 1 ? lanes[0] : ctx.rng.fork('lane').pick(lanes);
+      const lane = lanes.length === 1 ? lanes[0] : ctx.rng.scope('lane').pick(lanes);
       if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) {
         return { events: [], state };
       }
-      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.fork('pool'), ctx.eventOwner ?? null);
+      const defId = pickDefIdFromPool(effect.pool, state, manifest, ctx.selfOwner, ctx.rng.scope('pool'), ctx.eventOwner ?? null);
       if (!defId) return { events: [], state };
-      const newId = mintCardId(ctx.rng.fork('id'));
+      const newId = mintCardId(ctx.rng.scope('id'));
       const spawnSource: SpawnSource = spawnSourceForSource(ctx.source, owner === ctx.selfOwner);
       const spawnEvt: MatchEvent = {
         type: 'CARD_ADDED_TO_LANE',
@@ -1005,14 +1010,14 @@ export function evalEffect(
         s,
         lane,
         'onCardEnteredHere',
-        ctx.rng.fork(`locEnteredSpawn:${newId}`),
+        ctx.rng.scope(`locEnteredSpawn:${newId}`),
         manifest,
         newId,
         owner,
       );
       events.push(...locTrig.events);
       s = locTrig.state;
-      const nested = revealPlayedCard(s, newId, manifest, ctx.rng.fork(`reveal:${newId}`), ctx.depth + 1);
+      const nested = revealPlayedCard(s, newId, manifest, ctx.rng.scope(`reveal:${newId}`), ctx.depth + 1);
       events.push(...nested.events);
       s = nested.state;
       return { events, state: s };
@@ -1032,7 +1037,7 @@ export function evalEffect(
           hasCapacity: card.owner,
         });
         if (candidates.length === 0) continue;
-        const lane = candidates.length === 1 ? candidates[0] : ctx.rng.fork(`return:${id}`).pick(candidates);
+        const lane = candidates.length === 1 ? candidates[0] : ctx.rng.scope(`return:${id}`).pick(candidates);
         const e: MatchEvent = {
           type: 'CARD_RETURNED_TO_LANE',
           cardId: id,
@@ -1046,7 +1051,7 @@ export function evalEffect(
           s,
           lane,
           'onCardEnteredHere',
-          ctx.rng.fork(`locEnteredReturn:${id}`),
+          ctx.rng.scope(`locEnteredReturn:${id}`),
           manifest,
           id,
           card.owner,
@@ -1064,7 +1069,7 @@ export function evalEffect(
       for (const id of targets) {
         const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
-        const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.fork(`transform:${id}`), ctx.eventOwner ?? null);
+        const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.scope(`transform:${id}`), ctx.eventOwner ?? null);
         if (!defId || defId === card.defId) continue;
         const e: MatchEvent = {
           type: 'CARD_TRANSFORMED',
@@ -1119,7 +1124,7 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
-        const subRng = ctx.rng.fork(`trigger:${id}`);
+        const subRng = ctx.rng.scope(`trigger:${id}`);
         const nested = triggerOnReveal(s, id, manifest, subRng, ctx.depth + 1);
         events.push(...nested.events);
         s = nested.state;
@@ -1187,7 +1192,7 @@ export function evalEffect(
       for (const lane of lanes) {
         const prev = locationCardAtLane(s, lane);
         if (!prev) continue;
-        const newId = `loc-${lane}-${ctx.rng.fork(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId;
+        const newId = `loc-${lane}-${ctx.rng.scope(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId;
         const replacement = replaceLocationCard(s, lane, {
           newId,
           newDefId: effect.newDefId,
@@ -1368,7 +1373,7 @@ export function evalEffect(
       let s = state;
       for (let i = 0; i < effect.items.length; i++) {
         const sub = effect.items[i];
-        const subCtx: EffectCtx = { ...ctx, rng: ctx.rng.fork(`seq${i}`) };
+        const subCtx: EffectCtx = { ...ctx, rng: ctx.rng.scope(`seq${i}`) };
         const res = evalEffect(s, sub, subCtx, manifest);
         events.push(...res.events);
         s = res.state;
@@ -1382,7 +1387,7 @@ export function evalEffect(
       let s = state;
       for (let i = 0; i < branch.length; i++) {
         const sub = branch[i];
-        const subCtx: EffectCtx = { ...ctx, rng: ctx.rng.fork(`cond${i}`) };
+        const subCtx: EffectCtx = { ...ctx, rng: ctx.rng.scope(`cond${i}`) };
         const res = evalEffect(s, sub, subCtx, manifest);
         events.push(...res.events);
         s = res.state;
@@ -1407,7 +1412,7 @@ export function evalEffect(
             selfLane: iterCard?.lane ?? null,
             selfOwner: iterCard?.owner ?? null,
             it,
-            rng: ctx.rng.fork(`fe:${it}:${j}`),
+            rng: ctx.rng.scope(`fe:${it}:${j}`),
           };
           const res = evalEffect(s, sub, subCtx, manifest);
           events.push(...res.events);

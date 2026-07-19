@@ -148,6 +148,22 @@ describe('Runtime frame replay edge cases', () => {
       .toThrow(/Non-contiguous framed event/);
   });
 
+  it('rejects RNG cursor drift at transaction boundaries', () => {
+    const match = session('frame-replay-rng-drift');
+    const exported = structuredClone(match.exportReplay());
+    const replay: MatchRuntimeReplayExport = {
+      ...exported,
+      transactions: exported.transactions.map((transaction, index) => (
+        index === 0
+          ? { ...transaction, rngDrawsAfter: transaction.rngDrawsAfter + 1 }
+          : transaction
+      )),
+    };
+
+    expect(() => renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST))
+      .toThrow(/wrong RNG end cursor/);
+  });
+
   it('materializes TURN_STARTED as the exact step that changes the turn', async () => {
     const replay = await twoTransactionReplay('frame-replay-turn-boundary');
     const rendered = renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST);

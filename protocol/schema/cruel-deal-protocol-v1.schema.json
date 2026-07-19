@@ -218,6 +218,7 @@
       "properties": {
         "type": {
           "enum": [
+            "GAMEPLAY_RNG_ADVANCED",
             "CARD_STAGED",
             "CARD_UNSTAGED",
             "ENERGY_CHANGED",
@@ -529,7 +530,7 @@
           "const": "LOCATION"
         },
         "order": {
-          "const": "PRESERVE"
+          "const": "WEIGHTED_RANDOM"
         },
         "deckId": {
           "type": "string",
@@ -689,6 +690,12 @@
           },
           "minItems": 1
         },
+        "rngDrawsBefore": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "rngDrawsAfter": {
+          "$ref": "#/$defs/SafeInteger"
+        },
         "preStateChecksum": {
           "type": "string",
           "minLength": 1
@@ -704,7 +711,9 @@
         "baseRevision",
         "revision",
         "intent",
-        "framedEvents"
+        "framedEvents",
+        "rngDrawsBefore",
+        "rngDrawsAfter"
       ],
       "additionalProperties": false
     },

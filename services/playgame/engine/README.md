@@ -14,7 +14,7 @@ Code in `engine/` MUST NOT import:
 - `@/components/**` (no UI)
 - `@/contexts/**` (no presentation state)
 - `@/services/vfx/**` (no animations)
-- `@/utils/id` (id generation goes through `rng.fork(tag)` instead)
+- `@/utils/id` (gameplay IDs use deterministic counters or the state-owned RNG)
 - `howler` (no audio libraries)
 
 Code in `engine/` MUST NOT use:

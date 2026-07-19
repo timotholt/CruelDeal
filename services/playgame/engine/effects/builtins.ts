@@ -57,8 +57,8 @@ function noop(state: MatchState): BuiltinResult {
 }
 
 function mintCardId(ctx: EffectCtx, salt: string): CardId {
-  const a = ctx.rng.fork(salt).int(0, 2 ** 31 - 1).toString(36);
-  const b = ctx.rng.fork(salt + '2').int(0, 2 ** 31 - 1).toString(36);
+  const a = ctx.rng.scope(salt).int(0, 2 ** 31 - 1).toString(36);
+  const b = ctx.rng.scope(salt + '2').int(0, 2 ** 31 - 1).toString(36);
   return `c-${a}${b}` as CardId;
 }
 
@@ -117,7 +117,7 @@ function replaceHandCardHigherCost(
   if (state.hand[owner].length === 0) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
-  const handCardId = ctx.rng.fork('pick').pick([...state.hand[owner]]);
+  const handCardId = ctx.rng.scope('pick').pick([...state.hand[owner]]);
   const handCard = getCardRuntime(state, handCardId, manifest);
   if (!handCard) return noop(state);
   const handCardDef = getCardTemplate(manifest, handCard.defId);
@@ -129,7 +129,7 @@ function replaceHandCardHigherCost(
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
-  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newDefId = ctx.rng.scope('def').pick(candidates);
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
 
@@ -182,7 +182,7 @@ function replaceLowestPowerHandWithCost(
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
-  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newDefId = ctx.rng.scope('def').pick(candidates);
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
   const events: MatchEvent[] = [];
@@ -221,7 +221,7 @@ function replaceCreatedHandCardHigherCost(
   if (createdCards.length === 0) return noop(state);
   if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
-  const picked = ctx.rng.fork('pick').pick(createdCards);
+  const picked = ctx.rng.scope('pick').pick(createdCards);
   const pickedDef = getCardTemplate(manifest, picked.defId);
   if (!pickedDef) return noop(state);
   const targetCost = pickedDef.baseCost + costDelta;
@@ -231,7 +231,7 @@ function replaceCreatedHandCardHigherCost(
     .map(def => def.defId);
   if (candidates.length === 0) return noop(state);
 
-  const newDefId = ctx.rng.fork('def').pick(candidates);
+  const newDefId = ctx.rng.scope('def').pick(candidates);
   const newId = mintCardId(ctx, 'replace');
   const ss = spawnSource(ctx, owner);
   const events: MatchEvent[] = [];
@@ -271,7 +271,7 @@ function addDiscountedCardToHand(
   });
   if (validDefs.length === 0) return noop(state);
 
-  const chosenDef = ctx.rng.fork('def').pick(validDefs);
+  const chosenDef = ctx.rng.scope('def').pick(validDefs);
   const newId = mintCardId(ctx, 'add');
   const ss = spawnSource(ctx, owner);
   const events: MatchEvent[] = [];
@@ -356,7 +356,7 @@ function overclockChip(
     .filter(id => id !== (ctx.self as CardId) && isPowerBearingCard(state, id, manifest));
   if (friendliesHere.length === 0) return noop(state);
 
-  const targetId = ctx.rng.fork('target').pick(friendliesHere);
+  const targetId = ctx.rng.scope('target').pick(friendliesHere);
   const events: MatchEvent[] = [];
   let s = state;
 
@@ -400,13 +400,13 @@ function moveEnemyCardToOtherLane(
   const enemiesHere = state.lanesById[ctx.selfLane].cards[oppOwner];
   if (enemiesHere.length === 0) return noop(state);
 
-  const targetId = ctx.rng.fork('target').pick([...enemiesHere]);
+  const targetId = ctx.rng.scope('target').pick([...enemiesHere]);
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanesById[l].cards[oppOwner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
-  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
   const e: MatchEvent = {
     type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
   };
@@ -429,7 +429,7 @@ function moveSelfToRandomOtherLane(
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
-  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
   const e: MatchEvent = {
     type: 'CARD_MOVED', cardId: self, fromLane: ctx.selfLane, toLane, cause: ctx.source,
   };
@@ -450,13 +450,13 @@ function moveRandomFriendlyToOtherLane(
     .filter(id => id !== (ctx.self as CardId));
   if (others.length === 0) return noop(state);
 
-  const targetId = ctx.rng.fork('target').pick([...others]);
+  const targetId = ctx.rng.scope('target').pick([...others]);
   const toLaneCandidates = otherLanes(state, ctx.selfLane).filter(l =>
     state.lanesById[l].cards[owner].length < manifest.constants.laneCapacity,
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
-  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
   const e: MatchEvent = {
     type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
   };
@@ -488,7 +488,7 @@ function moveLowestPowerEnemyToOtherLane(
   );
   if (toLaneCandidates.length === 0) return noop(state);
 
-  const toLane = ctx.rng.fork('lane').pick(toLaneCandidates);
+  const toLane = ctx.rng.scope('lane').pick(toLaneCandidates);
   const e: MatchEvent = {
     type: 'CARD_MOVED', cardId: targetId, fromLane: ctx.selfLane, toLane, cause: ctx.source,
   };
@@ -540,7 +540,7 @@ function addDiscardedCardToHand(
       card !== null && card.owner === owner && card.zone === 'DISCARD');
   if (discarded.length === 0) return noop(state);
 
-  const picked = ctx.rng.fork('pick').pick(discarded);
+  const picked = ctx.rng.scope('pick').pick(discarded);
   const e: MatchEvent = {
     type: 'CARD_ADDED_TO_HAND',
     owner,
@@ -659,7 +659,7 @@ function recklessRecruiter(
   const events: MatchEvent[] = [];
   let s = state;
   for (const cardId of state.deck[owner]) {
-    const giveCost = ctx.rng.fork(`recruit:${cardId}`).int(0, 1) === 0;
+    const giveCost = ctx.rng.scope(`recruit:${cardId}`).int(0, 1) === 0;
     if (!giveCost && !isPowerBearingCard(state, cardId, manifest)) continue;
     if (giveCost) {
       const mutation = adjustCardCost(s, cardId, -1, ctx.source, manifest);
@@ -792,7 +792,7 @@ function traumaTeam(
   });
   if (destroyedLastTurn.length === 0) return noop(state);
 
-  const cardId = ctx.rng.fork('revive').pick(destroyedLastTurn);
+  const cardId = ctx.rng.scope('revive').pick(destroyedLastTurn);
   const event: MatchEvent = {
     type: 'CARD_RETURNED_TO_LANE',
     cardId,
@@ -826,7 +826,7 @@ function socialWorker(
       .filter(def => def.domain === 'character' && def.baseCost === currentCost + 1)
       .map(def => def.defId);
     if (candidates.length === 0) continue;
-    const newDefId = ctx.rng.fork(`social:${cardId}`).pick(candidates);
+    const newDefId = ctx.rng.scope(`social:${cardId}`).pick(candidates);
     const event: MatchEvent = {
       type: 'CARD_TRANSFORMED',
       cardId,

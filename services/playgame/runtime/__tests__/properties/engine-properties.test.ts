@@ -363,13 +363,13 @@ function executeWithEntropyGuards(
 }
 
 function gameplayNamespaceProbe(seed: string, cosmeticForkOrder: readonly string[]): readonly number[] {
-  const root = createRng(seed);
+  const presentation = createRng(`${seed}:presentation`);
   for (const tag of cosmeticForkOrder) {
-    const cosmetic = root.fork(`cosmetic:${tag}`);
+    const cosmetic = presentation.scope(`cosmetic:${tag}`);
     cosmetic.int(0, 0x7fffffff);
     cosmetic.int(0, 0x7fffffff);
   }
-  const gameplay = root.fork('gameplay:probe');
+  const gameplay = createRng(seed).scope('gameplay:probe');
   return [
     gameplay.int(0, 0x7fffffff),
     gameplay.int(0, 0x7fffffff),
@@ -385,7 +385,7 @@ function executeWithCosmeticNoise(
   return executeGeneratedMatch(input, undefined, (intentIndex) => {
     for (const tag of cosmeticForkOrder) {
       cosmeticRoot
-        .fork(`${tag}:intent:${intentIndex}`)
+        .scope(`${tag}:intent:${intentIndex}`)
         .int(0, 0x7fffffff);
     }
   });

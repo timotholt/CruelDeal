@@ -20,9 +20,9 @@ export function renderRuntimeReplay(
       `Runtime replay manifest mismatch: export=${replay.bootstrap.manifestVersion} manifest=${manifest.version}`,
     );
   }
-  if (replay.genesis.seed !== replay.bootstrap.seed) {
+  if (replay.genesis.rng.seed !== replay.bootstrap.seed) {
     throw new Error(
-      `Runtime replay seed mismatch: bootstrap=${replay.bootstrap.seed} genesis=${replay.genesis.seed}`,
+      `Runtime replay seed mismatch: bootstrap=${replay.bootstrap.seed} genesis=${replay.genesis.rng.seed}`,
     );
   }
   if (
@@ -67,6 +67,9 @@ export function renderRuntimeReplay(
       throw new Error(`Runtime replay transaction ${transaction.transactionId} has no framed events`);
     }
     assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
+    if (transaction.rngDrawsBefore !== state.rng.draws) {
+      throw new Error(`Runtime replay transaction ${transaction.transactionId} has the wrong RNG start cursor`);
+    }
 
     const built = foldFramedEvents({
       transactionId: transaction.transactionId,
@@ -74,6 +77,9 @@ export function renderRuntimeReplay(
       framedEvents: transaction.framedEvents,
       manifest,
     });
+    if (transaction.rngDrawsAfter !== built.finalState.rng.draws) {
+      throw new Error(`Runtime replay transaction ${transaction.transactionId} has the wrong RNG end cursor`);
+    }
     for (const frame of built.transitions) {
       steps.push({
         cursor: steps.length,

@@ -620,7 +620,7 @@ export function destroyLane(
     occupants,
     laneId,
     cause,
-    options.rng.fork(`lane:${laneId}:occupants`),
+    options.rng.scope(`lane:${laneId}:occupants`),
     manifest,
   );
   events.push(...destruction.events);
@@ -682,7 +682,7 @@ export function destroyAllOtherLanes(
   for (const laneId of targets) {
     const result = destroyLane(working, laneId, {
       ...options,
-      rng: options.rng.fork(`destroy-other:${laneId}`),
+      rng: options.rng.scope(`destroy-other:${laneId}`),
     }, manifest);
     if (!result.ok) {
       return rejected(state, result.code, result.message);

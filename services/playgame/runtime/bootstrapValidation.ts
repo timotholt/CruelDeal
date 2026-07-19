@@ -322,7 +322,7 @@ function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
     deck: LocationDeckBootstrap,
   ): LocationDeckBootstrap => ({
     kind: 'LOCATION',
-    order: 'PRESERVE',
+    order: 'WEIGHTED_RANDOM',
     deckId: deck.deckId,
     revision: deck.revision,
     name: deck.name,

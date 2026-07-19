@@ -79,7 +79,7 @@ export function planEnemyTurnFromPool(
   opts: PlanOptions = {},
 ): PoolPlay[] {
   const maxPlays = opts.maxPlays ?? 6;
-  const picker = rng.fork(opts.forkTag ?? `ai:${owner}:pool`);
+  const picker = rng.scope(opts.forkTag ?? `ai:${owner}:pool`);
 
   const plays: PoolPlay[] = [];
   let energy = state.energy[owner];
@@ -140,7 +140,7 @@ export function planEnemyTurnFromHand(
   rng: Rng,
   opts: PlanOptions = {},
 ): HandPlay[] {
-  const picker = rng.fork(opts.forkTag ?? `ai:${owner}:hand`);
+  const picker = rng.scope(opts.forkTag ?? `ai:${owner}:hand`);
 
   // Hand sorted by cost asc, tiebreak on card id.
   const hand = state.hand[owner].slice().sort((a, b) => {
@@ -168,7 +168,7 @@ export function planEnemyTurnFromHand(
 
     // Per-card fork so adding/removing cards earlier in the hand doesn't
     // shift the RNG stream for later ones.
-    const lane = picker.fork(`lane:${cardId}`).pick(candidates);
+    const lane = picker.scope(`lane:${cardId}`).pick(candidates);
 
     plays.push({ cardId, lane });
     energy -= cost;

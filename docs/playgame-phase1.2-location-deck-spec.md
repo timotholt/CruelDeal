@@ -221,10 +221,10 @@ interface LocationDeckBootstrap
   extends DeckBootstrapBase<LocationCardDeckEntry> {
   readonly kind: 'LOCATION';
   /**
-   * Location entries are already in canonical draw order.
-   * MatchRuntime must not reshuffle them.
+   * Entries are a canonical eligible pool. Match setup performs the sole
+   * rarity-weighted ordering through MatchState.rng.
    */
-  readonly order: 'PRESERVE';
+  readonly order: 'WEIGHTED_RANDOM';
 }
 
 interface MatchBootstrap {
@@ -240,10 +240,10 @@ interface MatchBootstrap {
 `LOCATIONS` is a deck slot, not a third seat. It has no participant, readiness
 state, energy, hand, or player intent queue.
 
-The location deck's `entries` are an ordered draw list. This is deliberately
-more explicit than the current player-deck behavior: the producer of the
-bootstrap decides location membership and order, and `MatchRuntime` preserves
-it. This prevents the engine from applying a second hidden selection policy.
+The location deck's `entries` are a stable eligible pool. The bootstrap
+producer decides membership; canonical setup decides order exactly once using
+the state-owned gameplay RNG and records the draw advancement in its
+transaction. There is no pre-runtime gameplay generator.
 
 Player-deck shuffle semantics do not need to change in Phase 1.2.
 
@@ -262,26 +262,16 @@ interface LocationDeckFactory {
 }
 ```
 
-The default compatibility factory:
+The default factory:
 
 1. reads eligible location card definitions before the runtime is constructed
-2. performs the current seeded, rarity-weighted sampling without replacement
-3. continues sampling to produce a complete ordered permutation, not only the
-   first three entries
-4. freezes that exact order in `LocationDeckBootstrap.entries`
-5. computes `contentHash` over the canonical ordered entries and construction
-   policy version
+2. sorts them by canonical authored `poolOrder`
+3. freezes that pool in `LocationDeckBootstrap.entries`
+4. computes `contentHash` over the canonical candidate entries
 
-The first three entries must initially match the current three-location
-selection for the same manifest, ruleset, and seed. Remaining entries form the
-reserve used by replacement/draw effects.
-
-The compatibility factory is an entry adapter, not simulation authority. Once
-the bootstrap exists, the runtime must not enumerate `manifest.locations` to
-select substitutes.
-
-Future modes may supply a curated location deck, a scenario-defined order, or a
-different factory without changing runtime or reducer contracts.
+The factory is an entry adapter, not simulation authority. Setup performs the
+rarity-weighted permutation without replacement through `MatchState.rng`.
+Remaining ordered entries form the reserve used by replacement/draw effects.
 
 ## Validation
 
@@ -865,7 +855,8 @@ Its mechanical projection supplies:
 
 `MatchRuntime`:
 
-- creates stable location card instance IDs from ordered bootstrap entries
+- rarity-orders the eligible pool through the state-owned RNG
+- creates compact deterministic location instance IDs from the resulting order
 - commits setup and gameplay location transactions
 - owns all location zone state
 - assigns Phase 1.1 frames
@@ -921,11 +912,11 @@ The manifest remains the catalog of definitions:
 manifest.locations[defId] -> LocationCardDef
 ```
 
-The bootstrap determines which definitions participate in this match and in
-what order:
+The bootstrap determines which definitions participate in this match:
 
 ```text
-bootstrap.decks.LOCATIONS.entries -> ordered location deck
+bootstrap.decks.LOCATIONS.entries -> canonical eligible pool
+MatchState.rng + rarity weights -> ordered location deck
 ```
 
 The runtime owns the instantiated game pieces:
@@ -992,11 +983,12 @@ Destruction removes an ID from that order; it does not renumber or mutate the
 identity of surviving lanes. Future creation inserts a new ID into the order
 and may occur only below the three-active-lane maximum.
 
-### The bootstrap order is authoritative
+### Bootstrap membership and setup RNG are authoritative
 
-The default factory may use rarity and seeded randomness, but its output is
-frozen before runtime construction. The runtime preserves that order. This
-makes scenario decks, exact debug fixtures, and replay identity straightforward.
+The default factory freezes eligible membership before runtime construction.
+Canonical setup uses the one state-owned generator for rarity-weighted order.
+Scenario-specific exact ordering requires an explicit non-random setup policy,
+not a second generator.
 
 ### Swap is atomic; replacement is composed
 
@@ -1017,18 +1009,18 @@ bag of pre-populated state that exists outside replay chronology.
 
 ### Checkpoint 1 — Contracts and Characterization
 
-- capture current first-three-location selection across a large fixed seed set
+- capture state-owned first-three-location selection across a fixed seed set
 - capture current reveal timing and lane order
 - add the typed third deck to bootstrap and runtime configuration
 - add location-deck validation and content hashing
-- implement the compatibility location deck factory
+- implement the canonical location candidate-pool factory
 - keep current state initialization temporarily behind an adapter
 
 Exit gate:
 
 - existing seed/location behavior is characterized
 - a match cannot reach runtime construction without three valid decks
-- the compatibility factory's first three entries match the old selector
+- the same pool, match seed, and genesis cursor produce the same setup order
 
 ### Checkpoint 2 — Location Deck and Lane-Slot State
 
@@ -1042,7 +1034,7 @@ Status: complete. See
 - migrate card, location, event, selector, and replay lane references from
   positional indices to `LaneId`
 - add the `LocationCardInstance` registry and location deck zones
-- instantiate the ordered location deck deterministically
+- instantiate the state-RNG-ordered location deck deterministically
 - give every lane one persistent `LocationSlotState`
 - change slots to reference `locationCardId`
 - add mechanical face state, reveal schedule, and canonical seat knowledge

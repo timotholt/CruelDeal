@@ -112,18 +112,22 @@ describe('createMatchRuntime', () => {
     expect(runtime.revision()).toBe(2);
     expect(setup.intent.seat).toBe('SYSTEM');
     expect(opening.intent.seat).toBe('SYSTEM');
+    expect(setup.rngDrawsBefore).toBe(runtime.genesis().rng.draws);
+    expect(setup.rngDrawsAfter).toBe(initialization.setup.finalState.rng.draws);
+    expect(opening.rngDrawsBefore).toBe(initialization.setup.finalState.rng.draws);
+    expect(opening.rngDrawsAfter).toBe(initialization.opening.finalState.rng.draws);
     expect(setupEvents[0]?.type).toBe('LOCATION_DECK_INITIALIZED');
     const initialized = setupEvents[0];
     if (initialized.type !== 'LOCATION_DECK_INITIALIZED') {
       throw new Error('setup must initialize the location deck first');
     }
     const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard!;
-    expect(initialized.locations.map(location => location.defId)).toEqual(
+    expect(initialized.locations.map(location => location.defId).sort()).toEqual(
       defaultLocationDeckFactory.build({
         manifest: BOOTSTRAP_MANIFEST,
         ruleset,
         seed: 'phase1-checkpoint3-runtime',
-      }).entries.map(entry => entry.defId),
+      }).entries.map(entry => entry.defId).sort(),
     );
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_DRAWN')).toHaveLength(3);
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_PLAYED')).toHaveLength(3);
@@ -149,10 +153,7 @@ describe('createMatchRuntime', () => {
     expect(runtime.genesis().phase).toBe('SETUP');
     expect(runtime.genesis().activeLaneOrder).toEqual([]);
     expect(getAllLocationStates(runtime.genesis())).toEqual([]);
-    expect(runtime.state().hand.P0).toHaveLength(openingHandSize);
-    expect(runtime.state().hand.P1).toHaveLength(openingHandSize);
-    expect(runtime.state().deck.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
-    expect(runtime.state().deck.P1).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
+    expect(runtime.state()).toBe(initialization.opening.finalState);
   });
 
   it('keeps planning private, then publishes one complete system resolution timeline', async () => {
@@ -191,6 +192,7 @@ describe('createMatchRuntime', () => {
     const initialRevision = runtime.revision();
     const initialFrame = runtime.frame();
     const initialTransactionCount = runtime.transactions().length;
+    const initialRngDraws = runtime.transactions().at(-1)!.rngDrawsAfter;
 
     await expect(runtime.submitIntent({
       ...stageEnvelope(runtime, 'wrong-match'),
@@ -217,6 +219,7 @@ describe('createMatchRuntime', () => {
     });
     expect(runtime.frame()).toBe(initialFrame);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
+    expect(runtime.transactions().at(-1)!.rngDrawsAfter).toBe(initialRngDraws);
 
     const cardId = runtime.state().hand.P0[0];
     await expect(runtime.submitIntent(stageEnvelope(runtime, 'first-stage', initialRevision, 'P0', cardId)))

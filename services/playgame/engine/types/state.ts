@@ -19,6 +19,7 @@ import type {
 } from './ids';
 import type { Frame, TemporalScope } from './timeline';
 import type { TextOverride, EffectRef, TrackedStatKey, TrackedFlagKey } from './ability';
+import type { GameplayRngState } from '../rng';
 
 // ---- Tracked variables (game-history summary, updated by apply()) ----------
 
@@ -439,7 +440,8 @@ export interface MatchState {
    */
   readonly nextTurnEnergyBonus: Readonly<Record<Owner, number>>;
   readonly phase: MatchPhase;
-  readonly seed: string;
+  /** Exact state of the single authoritative stream at its next draw. */
+  readonly rng: GameplayRngState;
   readonly priority: Owner;
   /** Per-owner current energy pool. Replenished to `maxEnergy + bonus` on TURN_STARTED. */
   readonly energy: Readonly<Record<Owner, number>>;

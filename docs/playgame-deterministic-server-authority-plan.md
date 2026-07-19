@@ -5,6 +5,15 @@ Repository policy: active-development replacement; no compatibility layer
 Primary sequence: state/history separation, state compaction, canonical RNG,
 seat-safe wire protocol, persistence and reconciliation
 
+Implementation progress (2026-07-19):
+
+- Phase 0/1 complete: canonical history is runtime-owned, not state-owned.
+- Phase 2 complete: average final-state JSON reduced below the 25 KB budget.
+- Phase 3 complete: one serialized sfc32 stream, state-owned location ordering,
+  compact deterministic setup IDs, atomic draw-delta events, and transaction
+  RNG coordinates.
+- Phase 4 is next.
+
 ## Goal
 
 CruelDeal must have one authoritative deterministic match simulation that:
@@ -438,4 +447,3 @@ Do not start wire-state or checksum implementation while `MatchState.log`
 remains authoritative. Do not persist RNG checkpoints until RNG state lives in
 `MatchState`. Do not expose a snapshot message until complete state and event
 redaction exists.
-

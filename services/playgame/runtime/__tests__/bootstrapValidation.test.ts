@@ -270,7 +270,7 @@ describe('card variants and opening initialization', () => {
     });
     const finalState = openingTransaction.finalState;
     const replayed = replayMatch({
-      seed: genesis.seed,
+      seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
       framedEvents: [

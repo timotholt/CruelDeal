@@ -72,7 +72,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
       </div>
 
       <div class="board-game-area city-map-game-area">
-        <CityMapBoard seed={engineState().seed} interactive showVenueTooltips />
+        <CityMapBoard seed={engineState().rng.seed} interactive showVenueTooltips />
       </div>
 
       <div class="city-hand-row">

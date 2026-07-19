@@ -30,7 +30,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     locationDeck,
   });
   const replayed = replayMatch({
-    seed: result.finalState.seed,
+    seed: result.finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
     framedEvents: result.framedEvents,
@@ -57,7 +57,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     initialState,
     framedEvents: result.framedEvents,
   });
-  eq(bundle.seed, result.finalState.seed, 'exportReplayBundle: seed copied');
+  eq(bundle.seed, result.finalState.rng.seed, 'exportReplayBundle: seed copied');
   eq(bundle.framedEvents.length, result.framedEvents.length, 'exportReplayBundle: event count matches record');
   eq(bundle.manifestVersion, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifestVersion copied');
   eq(bundle.manifestSnapshot.version, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifest snapshot copied');
@@ -80,7 +80,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   });
   const finalState = drawTransaction.finalState;
   const replayed = replayMatch({
-    seed: finalState.seed,
+    seed: finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
     framedEvents: [
@@ -154,7 +154,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   let threw = false;
   try {
     replayMatch({
-      seed: result.finalState.seed,
+      seed: result.finalState.rng.seed,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: undefined as never,
       framedEvents: result.framedEvents,
@@ -167,7 +167,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 {
   const currentState = createMatchGenesis('replay-bad-export', BOOTSTRAP_MANIFEST);
-  const badInitial = { ...currentState, seed: 'different-seed' } as MatchState;
+  const badInitial = {
+    ...currentState,
+    rng: { ...currentState.rng, seed: 'different-seed' },
+  } as MatchState;
   let threw = false;
   try {
     exportReplayBundle({

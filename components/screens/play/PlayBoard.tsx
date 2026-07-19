@@ -476,7 +476,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               followingLive={replayFollowingLive()}
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
-              seed={engineState().seed}
+              seed={engineState().rng.seed}
               steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}

@@ -107,7 +107,7 @@
             },
             "LOCATIONS": {
               "kind": "LOCATION",
-              "order": "PRESERVE",
+              "order": "WEIGHTED_RANDOM",
               "deckId": "locations-0",
               "revision": 1,
               "name": "Locations",
@@ -133,6 +133,8 @@
           "matchId": "match-1",
           "baseRevision": 8,
           "revision": 9,
+          "rngDrawsBefore": 41,
+          "rngDrawsAfter": 42,
           "intent": {
             "matchId": "match-1",
             "seat": "SYSTEM",
@@ -289,7 +291,7 @@
             },
             "LOCATIONS": {
               "kind": "LOCATION",
-              "order": "PRESERVE",
+              "order": "WEIGHTED_RANDOM",
               "deckId": "locations-0",
               "revision": 1,
               "name": "Locations",

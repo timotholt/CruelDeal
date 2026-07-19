@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { defaultLocationDeckFactory } from '../../runtime/locationDeckFactory';
+import { createInitialMatchState } from '../cli/initState';
+import { activeLaneIds, locationCardAtLane } from '../laneTopology';
 import { BOOTSTRAP_MANIFEST } from './bootstrap';
 import {
   getActiveLocationModules,
@@ -92,27 +94,34 @@ describe('location-set loader', () => {
   it.each([
     {
       seed: 'location-parity-a',
-      first: ['the-cage', 'overclock-room', 'chip-tune'],
-      hash: 'sha256:08428233da481087a62b8880d2ec34ca11671afc588714617bb7301ddedd578e',
+      first: ['helixdyne-lab', 'the-meat-market', 'supercharging-station'],
+      hash: 'sha256:210ae722d8e42597b3eb0c72209f69065b1b523f051b11fa6450839a49e471f3',
     },
     {
       seed: 'location-parity-b',
-      first: ['the-meat-market', 'skyrail', 'data-chapel'],
-      hash: 'sha256:6c84af1c0ef7f3bd0c9cfe47073bd9df1deec94fee988a26d42f1952b26c4ae8',
+      first: ['data-chapel', 'helixdyne-lab', 'debt-alley'],
+      hash: 'sha256:210ae722d8e42597b3eb0c72209f69065b1b523f051b11fa6450839a49e471f3',
     },
     {
       seed: 'supplied-order-not-manifest-order',
-      first: ['supercharging-station', 'black-halo', 'civil-court'],
-      hash: 'sha256:b72cf702b655c0b7a72543ef5c80740eae929f3f16043ca7784e214fa41d23b2',
+      first: ['the-cage', 'skyrail', 'the-meat-market'],
+      hash: 'sha256:210ae722d8e42597b3eb0c72209f69065b1b523f051b11fa6450839a49e471f3',
     },
-  ])('preserves the seeded location selection for $seed', ({ seed, first, hash }) => {
+  ])('preserves the state-owned seeded location selection for $seed', ({ seed, first, hash }) => {
     const deck = defaultLocationDeckFactory.build({
       manifest: BOOTSTRAP_MANIFEST,
       ruleset: BOOTSTRAP_MANIFEST.rulesets.standard,
       seed,
     });
+    const state = createInitialMatchState(
+      seed,
+      BOOTSTRAP_MANIFEST,
+      {},
+      deck.entries,
+    );
 
-    expect(deck.entries.slice(0, 3).map((entry) => entry.defId)).toEqual(first);
+    expect(activeLaneIds(state).map((lane) => locationCardAtLane(state, lane)?.defId))
+      .toEqual(first);
     expect(deck.contentHash).toBe(hash);
   });
 

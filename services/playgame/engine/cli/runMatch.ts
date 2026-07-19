@@ -18,6 +18,7 @@ import type { Manifest } from '../manifest/types';
 import type { Owner } from '../types/ids';
 import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
+import { appendGameplayRngAdvance } from '../rng/transaction';
 import {
   createSetupMatch,
   type InitialLocationDeck,
@@ -53,12 +54,16 @@ function commitBatch(
   allEvents: MatchEvent[],
   allFramedEvents: FramedEvent[],
   initialPhase?: TimelinePhase,
+  rng?: Rng,
 ): MatchState {
-  if (events.length === 0) return state;
+  const committedEvents = rng
+    ? appendGameplayRngAdvance(state, rng, events)
+    : events;
+  if (committedEvents.length === 0) return state;
   const transaction = frameAndFoldEvents({
     transactionId,
     initialState: state,
-    events,
+    events: committedEvents,
     manifest,
     ...(initialPhase === undefined ? {} : { initialPhase }),
   });
@@ -100,7 +105,7 @@ function runOneTurn(
           cardId: step.cardId,
           lane: step.lane,
         },
-        rng.fork(`stage:${owner}:${step.cardId}`),
+        rng.scope(`stage:${owner}:${step.cardId}`),
         manifest,
       );
       if (events.length && events[0].type === 'INTENT_REJECTED') {
@@ -114,6 +119,8 @@ function runOneTurn(
           onEvent,
           allEvents,
           allFramedEvents,
+          undefined,
+          rng,
         );
         continue;
       }
@@ -125,6 +132,8 @@ function runOneTurn(
         onEvent,
         allEvents,
         allFramedEvents,
+        undefined,
+        rng,
       );
     }
   }
@@ -134,7 +143,7 @@ function runOneTurn(
   const endEvents = resolve(
     s,
     { type: 'END_TURN', intentId: `end-t${s.turn}`, owner: s.priority },
-    rng.fork(`endturn:${s.turn}`),
+    rng.scope(`endturn:${s.turn}`),
     manifest,
   );
   return commitBatch(
@@ -145,6 +154,8 @@ function runOneTurn(
     onEvent,
     allEvents,
     allFramedEvents,
+    undefined,
+    rng,
   );
 }
 
@@ -156,7 +167,6 @@ function runOneTurn(
 export function runMatch(opts: RunMatchOptions): RunMatchResult {
   const { seed, manifest, locationDeck } = opts;
   const cap = opts.maxTurns ?? manifest.constants.turnLimit + 2;
-  const rng = createRng(seed);
   const events: MatchEvent[] = [];
   const framedEvents: FramedEvent[] = [];
   const onEvent = opts.onEvent ?? ((): void => undefined);
@@ -180,6 +190,7 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
     framedEvents,
     'SETUP',
   );
+  const rng = createRng(state.rng);
 
   let turnsPlayed = 0;
   while (state.result === null && state.phase !== 'ENDED' && turnsPlayed < cap) {

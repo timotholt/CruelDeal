@@ -45,7 +45,7 @@ describe('replay snapshot parity stress', () => {
     const snapshots = [genesis, ...live.transitions.map(transition => transition.after)];
 
     const replayed = replayMatch({
-      seed: genesis.seed,
+      seed: genesis.rng.seed,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: genesis,
       framedEvents: live.framedEvents,
