@@ -18,13 +18,18 @@ import type { Owner } from '../types/ids';
 import { apply } from '../apply';
 import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
-import { createSetupMatch } from './initState';
+import {
+  createSetupMatch,
+  type InitialLocationDeck,
+} from './initState';
 import { planEnemyTurnFromHand } from '../ai';
 import { buildOpeningTransaction } from '../../runtime/opening';
 
 export interface RunMatchOptions {
   readonly seed: string;
   readonly manifest: Manifest;
+  /** Complete ordered third-deck input; the engine never selects locations. */
+  readonly locationDeck: InitialLocationDeck;
   /** Optional observer invoked for every emitted event, in order. */
   readonly onEvent?: (event: MatchEvent, state: MatchState) => void;
   /** Hard safety cap: abort if we somehow loop past this many turns. */
@@ -105,13 +110,13 @@ function runOneTurn(
  * turn limit if one side concedes — though the AI never concedes yet).
  */
 export function runMatch(opts: RunMatchOptions): RunMatchResult {
-  const { seed, manifest } = opts;
+  const { seed, manifest, locationDeck } = opts;
   const cap = opts.maxTurns ?? manifest.constants.turnLimit + 2;
   const rng = createRng(seed);
   const events: MatchEvent[] = [];
   const onEvent = opts.onEvent ?? ((): void => undefined);
 
-  const setup = createSetupMatch(seed, manifest);
+  const setup = createSetupMatch(seed, manifest, {}, locationDeck);
   let state = setup.genesis;
   for (const framed of setup.transaction.framedEvents) {
     events.push(framed.event);

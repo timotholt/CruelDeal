@@ -14,6 +14,22 @@ import type {
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { GENESIS_FRAME } from '../types/timeline';
+import type { LocationSetupDeck } from '../locationSetup';
+
+/**
+ * Test-only deterministic location input. Production selection belongs to a
+ * bootstrap-producing LocationDeckFactory; engine tests name their complete
+ * third-deck input explicitly through this helper.
+ */
+export function orderedTestLocationDeck(manifest: Manifest): LocationSetupDeck {
+  const disabled = new Set(manifest.disabled.locations);
+  return Object.values(manifest.locations)
+    .filter(definition =>
+      definition.rarity > 0 && !disabled.has(definition.defId),
+    )
+    .sort((left, right) => left.defId.localeCompare(right.defId))
+    .map(definition => ({ defId: definition.defId }));
+}
 
 export interface RuntimeCardSpec {
   readonly id: string;

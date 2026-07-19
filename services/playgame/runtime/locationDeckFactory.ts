@@ -17,7 +17,7 @@ export interface LocationDeckFactory {
 }
 
 /**
- * Produces the legacy rarity-weighted order before runtime construction.
+ * Produces the canonical rarity-weighted order before runtime construction.
  * Runtime receives and preserves this snapshot; it never samples the manifest.
  */
 function weightedPermutation<T extends { readonly rarity: number }>(

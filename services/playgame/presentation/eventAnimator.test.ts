@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { apply } from '../engine/apply';
 import { createInitialMatchState } from '../engine/cli/initState';
+import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
@@ -32,7 +33,12 @@ describe('event animator transfer origins', () => {
   it('routes CARD_MOVED adoption through a captured card transfer animation', async () => {
     vi.useFakeTimers();
     try {
-      let before = createInitialMatchState('moved-transfer', BOOTSTRAP_MANIFEST);
+      let before = createInitialMatchState(
+        'moved-transfer',
+        BOOTSTRAP_MANIFEST,
+        {},
+        orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+      );
       const cardId = before.deck.P0[0].id;
       before = apply(before, {
         type: 'CARD_DRAWN',
@@ -154,7 +160,12 @@ describe('event animator transfer origins', () => {
   it('hands a protected remote play to its facedown destination without a landing flash', async () => {
     vi.useFakeTimers();
     try {
-      let before = createInitialMatchState('remote-stage-handoff', BOOTSTRAP_MANIFEST);
+      let before = createInitialMatchState(
+        'remote-stage-handoff',
+        BOOTSTRAP_MANIFEST,
+        {},
+        orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+      );
       const cardId = before.deck.P1[0].id;
       before = apply(before, {
         type: 'CARD_DRAWN',

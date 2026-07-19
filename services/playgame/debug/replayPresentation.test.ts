@@ -7,6 +7,7 @@ import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import { GENESIS_FRAME, asFrame } from '../engine/types/timeline';
 import { locationCardAtLane } from '../engine/laneTopology';
+import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import {
   annotateReplayEventJson,
   createReplayActorResolver,
@@ -18,7 +19,7 @@ import {
 const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST, {
   P0: [{ defId: 'bone-market' }],
   P1: [{ defId: 'bone-market' }],
-});
+}, orderedTestLocationDeck(BOOTSTRAP_MANIFEST));
 const cardId = state.deck.P0[0].id;
 const location = locationCardAtLane(state, 0)!;
 

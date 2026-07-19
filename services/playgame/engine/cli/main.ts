@@ -15,6 +15,7 @@ import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
 import { runMatch } from './runMatch';
+import { defaultLocationDeckFactory } from '../../runtime/locationDeckFactory';
 
 interface CliArgs {
   seed: string;
@@ -92,6 +93,13 @@ function printSummary(finalState: MatchState): void {
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const manifest = BOOTSTRAP_MANIFEST;
+  const ruleset = manifest.rulesets.standard;
+  if (!ruleset) throw new Error('engine:cli requires the standard ruleset');
+  const locationDeck = defaultLocationDeckFactory.build({
+    manifest,
+    ruleset,
+    seed: args.seed,
+  });
 
   if (!args.quiet && !args.json) {
     process.stdout.write(
@@ -113,6 +121,7 @@ function main(): void {
   const result = runMatch({
     seed: args.seed,
     manifest,
+    locationDeck: locationDeck.entries,
     onEvent: (e) => onEvent(e),
   });
 

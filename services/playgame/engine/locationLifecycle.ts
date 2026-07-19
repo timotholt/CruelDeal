@@ -4,10 +4,11 @@ import type {
   CardId,
   LaneId,
   LocationCardInstanceId,
+  Owner,
   Seat,
 } from './types/ids';
 import type { Manifest } from './manifest/types';
-import type { MatchState } from './types/state';
+import type { LaneTag, MatchState } from './types/state';
 import type { Rng } from './rng';
 import { apply } from './apply';
 import {
@@ -308,6 +309,82 @@ export function returnLocationToDeck(
     locationId,
     from: location.zone,
     placement,
+    cause,
+  }, manifest);
+}
+
+export function addLocationTag(
+  state: MatchState,
+  laneId: LaneId,
+  tag: LaneTag,
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (location.tags.some(existing => existing.kind === tag.kind)) {
+    return accepted(state, []);
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_TAG_ADDED',
+    lane: laneId,
+    tag,
+    cause,
+  }, manifest);
+}
+
+export function removeLocationTag(
+  state: MatchState,
+  laneId: LaneId,
+  tag: LaneTag['kind'],
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (!location.tags.some(existing => existing.kind === tag)) {
+    return accepted(state, []);
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_TAG_REMOVED',
+    lane: laneId,
+    tag,
+    cause,
+  }, manifest);
+}
+
+export function changeLocationCounter(
+  state: MatchState,
+  laneId: LaneId,
+  name: string,
+  delta: number,
+  cause: EffectRef,
+  manifest: Manifest,
+  owner?: Owner,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  if (!locationCardAtLane(state, laneId)) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (delta === 0) return accepted(state, []);
+  return acceptSingle(state, {
+    type: 'LOCATION_COUNTER_CHANGED',
+    lane: laneId,
+    name,
+    ...(owner ? { owner } : {}),
+    delta,
     cause,
   }, manifest);
 }

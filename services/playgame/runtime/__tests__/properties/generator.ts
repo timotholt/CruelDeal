@@ -14,6 +14,7 @@ import {
   type Rng,
 } from '../../../engine';
 import { buildOpeningTransaction } from '../../opening';
+import { defaultLocationDeckFactory } from '../../locationDeckFactory';
 
 export interface GeneratedMatchCase {
   readonly generatorSeed: string;
@@ -86,7 +87,19 @@ export function createOpenedMatch(
   input: Pick<GeneratedMatchCase, 'matchSeed' | 'decks'>,
   manifest: Manifest = BOOTSTRAP_MANIFEST,
 ): OpenedMatch {
-  const setup = createSetupMatch(input.matchSeed, manifest, input.decks);
+  const ruleset = manifest.rulesets.standard;
+  if (!ruleset) throw new Error('property generator requires the standard ruleset');
+  const locationDeck = defaultLocationDeckFactory.build({
+    manifest,
+    ruleset,
+    seed: input.matchSeed,
+  });
+  const setup = createSetupMatch(
+    input.matchSeed,
+    manifest,
+    input.decks,
+    locationDeck.entries,
+  );
   const opening = buildOpeningTransaction(setup.state, manifest);
   const openingEvents = [
     ...setup.transaction.framedEvents.map(event => event.event),

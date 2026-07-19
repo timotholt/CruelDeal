@@ -37,6 +37,8 @@ import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
 import { resolveCardPowerChange } from './power-change';
 import {
+  addLocationTag,
+  changeLocationCounter,
   destroyAllOtherLanes,
   destroyLane,
   replaceLocationCard,
@@ -1081,9 +1083,16 @@ export function evalEffect(
       const events: MatchEvent[] = [];
       let s = state;
       for (const lane of lanes) {
-        const e: MatchEvent = { type: 'LOCATION_TAG_ADDED', lane, tag: effect.tag };
-        events.push(e);
-        s = apply(s, e, manifest);
+        const mutation = addLocationTag(
+          s,
+          lane,
+          effect.tag,
+          ctx.source,
+          manifest,
+        );
+        if (!mutation.ok) continue;
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }
@@ -1138,15 +1147,18 @@ export function evalEffect(
       for (const lane of lanes) {
         const delta = Math.trunc(evalNum(effect.delta, { ...liveCtx, state: s }));
         if (delta === 0) continue;
-        const e: MatchEvent = {
-          type: 'LOCATION_COUNTER_CHANGED',
+        const mutation = changeLocationCounter(
+          s,
           lane,
-          name: effect.name,
-          ...(owner ? { owner } : {}),
+          effect.name,
           delta,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+          ctx.source,
+          manifest,
+          owner ?? undefined,
+        );
+        if (!mutation.ok) continue;
+        events.push(...mutation.events);
+        s = mutation.state;
       }
       return { events, state: s };
     }

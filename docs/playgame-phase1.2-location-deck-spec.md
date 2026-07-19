@@ -2,8 +2,7 @@
 
 ## Status
 
-Implementation active. Checkpoints 1 through 4 are complete; checkpoint 5 is
-next.
+Implementation complete. Checkpoints 1 through 5 are complete.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before
 Phase 1.5 governed operations, reactions, and folder-based location authoring.
@@ -1081,6 +1080,9 @@ Exit gate:
 
 ### Checkpoint 4 — Lifecycle Migration
 
+Status: complete. See
+[`docs/agent-checkpoints/phase1.2-cp4.md`](agent-checkpoints/phase1.2-cp4.md).
+
 - migrate reveal to the governed operation
 - migrate face-down and reveal-rescheduling effects
 - migrate private location disclosure through seat-knowledge events/projections
@@ -1101,6 +1103,9 @@ Exit gate:
 - no destroyed lane remains on the playable board or participates in scoring
 
 ### Checkpoint 5 — Cleanup and Architecture Fences
+
+Status: complete. See
+[`docs/agent-checkpoints/phase1.2-cp5.md`](agent-checkpoints/phase1.2-cp5.md).
 
 - remove `pickLaneLocations` from runtime/initial-state construction
 - remove manifest-enumeration selection from the engine
@@ -1132,7 +1137,7 @@ Exit gate:
 
 ### Determinism and Parity
 
-- the compatibility factory preserves the current first three picks across the
+- the canonical bootstrap factory preserves the characterized first three picks across the
   characterization seed corpus
 - identical bootstrap/seed/intents produce identical instance IDs, events,
   frames, and checksums

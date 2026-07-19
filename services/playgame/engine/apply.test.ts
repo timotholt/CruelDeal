@@ -34,6 +34,10 @@ const eq = <T>(actual: T, expected: T, label: string) => {
   else fail(label, { actual, expected });
 };
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
+const locationCause = {
+  sourceId: 'system:apply-test' as CardId,
+  effectKind: 'SYSTEM' as const,
+};
 
 // ---- Fixture builders ------------------------------------------------------
 
@@ -401,11 +405,16 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const locId = 'loc1' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 1, 'jungle-trail', true, locId);
   const s1 = run(s0,
-    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' } },
-    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' } }, // dup
+    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' }, cause: locationCause },
+    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' }, cause: locationCause }, // dup
   );
   eq(locationCardAtLane(s1, 1)!.tags.length, 1, 'LOCATION_TAG_ADDED: idempotent');
-  const s2 = run(s1, { type: 'LOCATION_TAG_REMOVED', lane: 1, tag: 'ON_FIRE' });
+  const s2 = run(s1, {
+    type: 'LOCATION_TAG_REMOVED',
+    lane: 1,
+    tag: 'ON_FIRE',
+    cause: locationCause,
+  });
   eq(locationCardAtLane(s2, 1)!.tags.length, 0, 'LOCATION_TAG_REMOVED: removed');
 }
 

@@ -89,6 +89,12 @@ function issueCodes(result: ReturnType<typeof validateMatchBootstrap>): string[]
   return result.ok ? [] : result.issues.map((issue) => issue.code);
 }
 
+function locationDeckFixture(manifest: Manifest, seed: string) {
+  const ruleset = manifest.rulesets.standard;
+  if (!ruleset) throw new Error('fixture requires standard ruleset');
+  return defaultLocationDeckFactory.build({ manifest, ruleset, seed }).entries;
+}
+
 describe('validateMatchBootstrap', () => {
   it('accepts, defensively copies, hashes, and deeply freezes a valid bootstrap', () => {
     const manifest = manifestFixture();
@@ -242,7 +248,12 @@ describe('card variants and opening initialization', () => {
   it('retains a selected variant through genesis, opening draws, and replay', () => {
     const manifest = manifestFixture();
     const decks = { P0: deckFixture(true), P1: deckFixture() } as const;
-    const setup = createSetupMatch('variant-genesis-replay', manifest, decks);
+    const setup = createSetupMatch(
+      'variant-genesis-replay',
+      manifest,
+      decks,
+      locationDeckFixture(manifest, 'variant-genesis-replay'),
+    );
     const genesis = setup.genesis;
     const selected = Object.values(genesis.cards).find((card) => card.variantId === 'holo');
 
@@ -272,8 +283,19 @@ describe('card variants and opening initialization', () => {
   it('builds the same symmetric opening transaction for the same genesis', () => {
     const manifest = manifestFixture();
     const decks = { P0: deckFixture(), P1: deckFixture() } as const;
-    const firstGenesis = createInitialMatchState('symmetric-opening', manifest, decks);
-    const secondGenesis = createInitialMatchState('symmetric-opening', manifest, decks);
+    const locationDeck = locationDeckFixture(manifest, 'symmetric-opening');
+    const firstGenesis = createInitialMatchState(
+      'symmetric-opening',
+      manifest,
+      decks,
+      locationDeck,
+    );
+    const secondGenesis = createInitialMatchState(
+      'symmetric-opening',
+      manifest,
+      decks,
+      locationDeck,
+    );
     const first = buildOpeningTransaction(firstGenesis, manifest);
     const second = buildOpeningTransaction(secondGenesis, manifest);
 
@@ -296,7 +318,12 @@ describe('card variants and opening initialization', () => {
 
   it('makes the headless driver consume the shared 3+1 opening transaction', () => {
     const manifest = manifestFixture();
-    const result = runMatch({ seed: 'headless-shared-opening', manifest, maxTurns: 0 });
+    const result = runMatch({
+      seed: 'headless-shared-opening',
+      manifest,
+      locationDeck: locationDeckFixture(manifest, 'headless-shared-opening'),
+      maxTurns: 0,
+    });
     const openingHandSize = manifest.constants.startingHandSize + manifest.constants.turnStartDraw;
 
     expect(result.events.filter((event) => event.type === 'CARD_DRAWN'))
@@ -317,6 +344,7 @@ describe('card variants and opening initialization', () => {
       'manifest-turn-start-draw',
       manifest,
       { P0: deckFixture(), P1: deckFixture() },
+      locationDeckFixture(manifest, 'manifest-turn-start-draw'),
     );
     const opened = buildOpeningTransaction(genesis, manifest).events.reduce(
       (state, event) => apply(state, event, manifest),

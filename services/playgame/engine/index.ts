@@ -32,6 +32,8 @@ export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
 export {
   activeLaneIds,
+  addLocationTag,
+  changeLocationCounter,
   createLane,
   destroyLocationCard,
   isActiveLane,
@@ -39,8 +41,17 @@ export {
   laneStatus,
   MAXIMUM_ACTIVE_LANES,
   MINIMUM_ACTIVE_LANES,
+  moveLocation,
+  removeLocation,
+  removeLocationTag,
+  replaceLocationCard,
+  returnLocationToDeck,
+  revealLocation,
   RUIN_LOCATION_DEF_ID,
+  scheduleLocationSlotReveal,
+  showLocationToSeats,
   swapLocations,
+  turnLocationFaceDown,
   validateLaneTopology,
 } from './locationLifecycle';
 export type {
@@ -48,6 +59,7 @@ export type {
   DestroyLaneOptions,
   LocationLifecycleFailure,
   LocationLifecycleResult,
+  ReplaceLocationCardOptions,
 } from './locationLifecycle';
 export {
   destroyAllOtherLanesWithNormalRules as destroyAllOtherLanes,

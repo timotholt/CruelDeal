@@ -181,9 +181,16 @@ export type MatchEvent =
       placement: 'TOP' | 'BOTTOM';
       cause: EffectRef;
     }
-  | { type: 'LOCATION_TAG_ADDED'; lane: LaneId; tag: LaneTag }
-  | { type: 'LOCATION_TAG_REMOVED'; lane: LaneId; tag: LaneTag['kind'] }
-  | { type: 'LOCATION_COUNTER_CHANGED'; lane: LaneId; name: string; owner?: Owner; delta: number }
+  | { type: 'LOCATION_TAG_ADDED'; lane: LaneId; tag: LaneTag; cause: EffectRef }
+  | { type: 'LOCATION_TAG_REMOVED'; lane: LaneId; tag: LaneTag['kind']; cause: EffectRef }
+  | {
+      type: 'LOCATION_COUNTER_CHANGED';
+      lane: LaneId;
+      name: string;
+      owner?: Owner;
+      delta: number;
+      cause: EffectRef;
+    }
 
   // --- Lane lifecycle ---
   | { type: 'LANE_DESTRUCTION_STARTED'; lane: LaneId; priorPosition: number; cause: EffectRef }

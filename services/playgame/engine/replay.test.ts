@@ -5,6 +5,7 @@ import { createMatchGenesis, createSetupMatch } from './cli/initState';
 import { apply } from './apply';
 import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
+import { orderedTestLocationDeck } from './testkit/runtimeFixture';
 
 let failures = 0;
 const pass = (label: string) => { console.log(`PASS: ${label}`); };
@@ -23,12 +24,14 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   scope,
   event: event as MatchEvent,
 }));
+const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 {
   const initialState = createMatchGenesis('replay-seed-1', BOOTSTRAP_MANIFEST);
   const result = runMatch({
     seed: 'replay-seed-1',
     manifest: BOOTSTRAP_MANIFEST,
+    locationDeck,
   });
   const replayed = replayMatch({
     seed: result.finalState.seed,
@@ -46,6 +49,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   const result = runMatch({
     seed: 'replay-seed-2',
     manifest: BOOTSTRAP_MANIFEST,
+    locationDeck,
   });
   const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, {
     localSeat: 'P0',
@@ -61,7 +65,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   const setup = createSetupMatch('replay-custom-initial', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'drill-instructor' }],
     P1: [{ defId: 'junk-card' }],
-  });
+  }, locationDeck);
   const initialState = setup.genesis;
   const initialSnapshot = clone(initialState);
   const cardId = initialState.deck.P0[0].id;
@@ -83,6 +87,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   const result = runMatch({
     seed: 'replay-seed-3',
     manifest: BOOTSTRAP_MANIFEST,
+    locationDeck,
   });
   const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState);
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
@@ -105,6 +110,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   const result = runMatch({
     seed: 'replay-seed-4',
     manifest: BOOTSTRAP_MANIFEST,
+    locationDeck,
   });
   const bundle = {
     ...exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState),
@@ -122,6 +128,7 @@ const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event
   const result = runMatch({
     seed: 'replay-missing-initial',
     manifest: BOOTSTRAP_MANIFEST,
+    locationDeck,
   });
   let threw = false;
   try {

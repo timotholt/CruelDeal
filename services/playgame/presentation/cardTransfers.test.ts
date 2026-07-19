@@ -8,6 +8,7 @@
 import { apply } from '../engine/apply';
 import { expect, test } from 'vitest';
 import { createInitialMatchState } from '../engine/cli/initState';
+import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneId } from '../engine/types/ids';
@@ -29,7 +30,12 @@ const source: EffectRef = { sourceId: 'sys' as CardId, effectKind: 'SYSTEM' };
 const event = <T extends MatchEvent>(e: T): T => e;
 
 const stateWithHandCard = () => {
-  let s = createInitialMatchState('transfer-seed', BOOTSTRAP_MANIFEST);
+  let s = createInitialMatchState(
+    'transfer-seed',
+    BOOTSTRAP_MANIFEST,
+    {},
+    orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+  );
   const cardId = s.deck.P0[0].id;
   const draw = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
   s = apply(s, draw, BOOTSTRAP_MANIFEST);
@@ -37,7 +43,12 @@ const stateWithHandCard = () => {
 };
 
 {
-  const s0 = createInitialMatchState('transfer-draw', BOOTSTRAP_MANIFEST);
+  const s0 = createInitialMatchState(
+    'transfer-draw',
+    BOOTSTRAP_MANIFEST,
+    {},
+    orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+  );
   const cardId = s0.deck.P0[0].id;
   const e = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
@@ -113,7 +124,12 @@ const stateWithHandCard = () => {
 }
 
 {
-  const s0 = createInitialMatchState('transfer-add', BOOTSTRAP_MANIFEST);
+  const s0 = createInitialMatchState(
+    'transfer-add',
+    BOOTSTRAP_MANIFEST,
+    {},
+    orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+  );
   const e = event({
     type: 'CARD_ADDED_TO_LANE',
     owner: 'P1',

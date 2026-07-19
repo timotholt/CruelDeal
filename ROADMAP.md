@@ -15,9 +15,10 @@
 - ✅ Deterministic enemy AI module (`engine/ai.ts`); CLI + UI both use it; old `cli/ai.ts` deleted
 - ✅ `Math.random` eliminated — including the final holdouts in `PlayGameContext.createInitialEngineState` (priority coin-flip, location shuffle); UI now delegates to engine `createInitialMatchState`
 - ✅ UI draw consumes `state.deck[PLAYER]` via `CARD_DRAWN` — same pipeline as CLI; seeded, snapshot-able, deterministic
-- ✅ Location rarity weights respected — `pickLaneLocations` uses weighted random without replacement
+- ✅ Location rarity weights respected — the bootstrap location-deck factory
+  produces a seeded weighted permutation before engine construction
 - ✅ Location destruction canonically emits one atomic `LOCATION_REPLACED`
-  event that installs revealed `Ruin`; `LOCATION_SHIFTED` remains the distinct
+  event that installs revealed `Ruin`; `LOCATION_MOVED` remains the distinct
   pure-movement event
 - ✅ `trackedVariables` on `MatchState` — per-owner + global game-history stats maintained incrementally by `applyTrackedVars()` in `apply.ts`; queried via `TRACKED_STAT` / `TRACKED_FLAG` DSL atoms
 - ✅ Extended DSL atom set: `COST_OF`, `HAND_SIZE`, `IF_ELSE`, `MIN_POWER_OF`, `MAX_POWER_OF`, `MIN_COST_OF`, `MAX_COST_OF`, `NUM_CMP`, `WAS_CREATED`, `HAS_COPIED_TEXT`, `POWER_INCREASED`, `POWER_REDUCED`, `COST_REDUCED`, `TEXT_DISABLED`, `HAS_ONGOING`, `IN_FULL_LANE`, `LANE_FULL`, `TRACKED_FLAG`, `HAND_EMPTY`, `HAS_UNSPENT_ENERGY`, `EVER_MOVED`
@@ -131,11 +132,14 @@ Remaining debt carried forward (not required for 8c, gated on later tiers):
 ### 1.2 Card / Location Model Redesign — mostly shipped
 - ✅ **Cards:** `defId` + `version` implemented; `name` is display-only in `cosmetic.displayName`.
 - ✅ **Card authoring:** 106 cards (105 cyberpunk + junk-card token) in `manifest/content/cyberpunk-cards.ts`, loaded via `card-loader.ts`. Manifest `cards` field built from this.
-- ✅ **Location rarity weights:** `LocationDef.rarity` is now honored by `pickLaneLocations` via a seeded weighted-pick-without-replacement helper. `rarity: 2` gets picked twice as often as `rarity: 1`.
+- ✅ **Location rarity weights:** `LocationDef.rarity` is honored by the
+  bootstrap-producing location deck factory. The engine receives the complete
+  ordered third deck and never enumerates the manifest to select match content.
 - ✅ **Location events:** destruction has one canonical representation:
   `LOCATION_REPLACED` atomically installs revealed `Ruin`.
-  `LOCATION_SHIFTED` remains the separate pure-movement event and preserves
-  `locationRevealed` plus tags. Both retain `EffectRef` provenance.
+  `LOCATION_MOVED` remains the separate pure-movement event and preserves the
+  location instance's face state, seat knowledge, tags, and counters. Both
+  retain `EffectRef` provenance.
 - ✅ **Deck shape `{ defId; variantId? }[]`:** exposed as manifest `Deck`; debug/prebuilt decks and match init accept it.
 - ⬜ **Deck-builder/profile migration:** current profile services and editor screens still persist `string[]`; migrate to `Deck` entries in Tier 5.2.
 - ⬜ **Random fallback:** when no deck list is supplied, `createInitialMatchState` still builds deterministic random decks for CLI/tests.

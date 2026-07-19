@@ -95,49 +95,6 @@ function buildDeck(
 }
 
 /**
- * Weighted random pick WITHOUT replacement, using each def's `rarity`
- * as its weight. A def with `rarity: 2` is twice as likely to be picked
- * as `rarity: 1`. `rarity <= 0` is ignored. Deterministic via seeded Rng.
- */
-function weightedPickN<T extends { defId: string; rarity: number }>(
-  pool: readonly T[],
-  n: number,
-  rng: Rng,
-): T[] {
-  const picked: T[] = [];
-  const remaining = pool.filter((d) => d.rarity > 0).slice();
-  for (let i = 0; i < n && remaining.length > 0; i++) {
-    const totalWeight = remaining.reduce((s, d) => s + d.rarity, 0);
-    // rng.int range is [0, totalWeight-1]; scale up to integer space.
-    // Multiply weights by 1000 to tolerate fractional rarities while staying in int.
-    const scale = 1000;
-    const scaledTotal = Math.floor(totalWeight * scale);
-    const roll = rng.int(0, Math.max(0, scaledTotal - 1));
-    let acc = 0;
-    let chosenIdx = remaining.length - 1;
-    for (let j = 0; j < remaining.length; j++) {
-      acc += Math.floor(remaining[j].rarity * scale);
-      if (roll < acc) { chosenIdx = j; break; }
-    }
-    picked.push(remaining[chosenIdx]);
-    remaining.splice(chosenIdx, 1);
-  }
-  return picked;
-}
-
-/** Build a deterministic fallback order for CLI/test callers. */
-function pickLocationDeck(manifest: Manifest, rng: Rng): InitialLocationDeck {
-  const disabled = new Set(manifest.disabled.locations);
-  const defs = Object.values(manifest.locations).filter((d) => !disabled.has(d.defId));
-  if (defs.length < 3) {
-    throw new Error(`initState: manifest requires at least 3 enabled locations; received ${defs.length}`);
-  }
-  return weightedPickN(defs, defs.length, rng).map((definition) => ({
-    defId: definition.defId,
-  }));
-}
-
-/**
  * Build frame-zero match genesis. Genesis contains immutable player-card
  * instances but no lanes or location-card instances; those enter history
  * through the canonical setup transaction.
@@ -205,8 +162,8 @@ export function createMatchGenesis(
 export function createInitialMatchState(
   seed: string,
   manifest: Manifest,
-  decks: InitialDecks = {},
-  locationDeck?: InitialLocationDeck,
+  decks: InitialDecks,
+  locationDeck: InitialLocationDeck,
 ): MatchState {
   return createSetupMatch(seed, manifest, decks, locationDeck).state;
 }
@@ -215,14 +172,14 @@ export function createInitialMatchState(
 export function createSetupMatch(
   seed: string,
   manifest: Manifest,
-  decks: InitialDecks = {},
-  locationDeck?: InitialLocationDeck,
+  decks: InitialDecks,
+  locationDeck: InitialLocationDeck,
 ): CreatedMatchSetup {
   const genesis = createMatchGenesis(seed, manifest, decks);
   const setup = buildLocationSetupTransaction(
     genesis,
     manifest,
-    locationDeck ?? pickLocationDeck(manifest, createRng(seed).fork('locations')),
+    locationDeck,
   );
   const transaction = frameAndFoldEvents({
     transactionId: setup.transactionId,

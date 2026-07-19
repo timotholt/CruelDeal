@@ -74,10 +74,20 @@ describe('Phase 1.2 location deck bootstrap', () => {
     expect(first.entries.every(Object.isFrozen)).toBe(true);
   });
 
-  it('preserves the first-three weighted picks across a fixed seed corpus', () => {
+  it('preserves the supplied first three entries across a fixed seed corpus', () => {
     for (let index = 0; index < 128; index++) {
       const seed = `location-parity-${index}`;
-      const state = createInitialMatchState(seed, BOOTSTRAP_MANIFEST);
+      const orderedDeck = defaultLocationDeckFactory.build({
+        manifest: BOOTSTRAP_MANIFEST,
+        ruleset,
+        seed,
+      });
+      const state = createInitialMatchState(
+        seed,
+        BOOTSTRAP_MANIFEST,
+        {},
+        orderedDeck.entries,
+      );
       const selected = activeLaneIds(state)
         .map((laneId) => locationCardAtLane(state, laneId)?.defId);
       const ordered = defaultLocationDeckFactory.build({

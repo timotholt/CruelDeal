@@ -13,7 +13,10 @@ import { createRng } from './rng';
 import type { MatchEvent } from './types/events';
 import type { CardId, LocationCardInstanceId } from './types/ids';
 import type { MatchState } from './types/state';
-import { withTestLocation } from './testkit/runtimeFixture';
+import {
+  orderedTestLocationDeck,
+  withTestLocation,
+} from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
 
 // ---- Tiny assertion shim ---------------------------------------------------
@@ -32,6 +35,7 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 
 const run = (state: MatchState, event: MatchEvent): MatchState =>
   apply(state, event, BOOTSTRAP_MANIFEST);
+const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 // ---- The Meat Market -------------------------------------------------------
 
@@ -39,7 +43,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-meat-market', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'street-kid' }],
     P1: [],
-  });
+  }, locationDeck);
   state = withTestLocation(
     state,
     0,
@@ -64,7 +68,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-grinder-crew-empty', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'grinder-crew' }],
     P1: [],
-  });
+  }, locationDeck);
 
   const grinder = state.deck.P0.find((card) => card.defId === 'grinder-crew')!.id as CardId;
 
@@ -81,7 +85,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-meat-grinder', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'meat-grinder' }],
     P1: [{ defId: 'drone-pup' }],
-  });
+  }, locationDeck);
 
   const grinder = state.deck.P0.find((card) => card.defId === 'meat-grinder')!.id as CardId;
   const pup = state.deck.P1.find((card) => card.defId === 'drone-pup')!.id as CardId;
@@ -105,7 +109,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-union-rep', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'union-rep' }, { defId: 'street-kid' }, { defId: 'chop-doc' }],
     P1: [],
-  });
+  }, locationDeck);
 
   const unionRep = state.deck.P0.find((card) => card.defId === 'union-rep')!.id as CardId;
   const kid = state.deck.P0.find((card) => card.defId === 'street-kid')!.id as CardId;
@@ -134,7 +138,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-golden-parachute-destroyed', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'golden-parachute' }, { defId: 'acquisition-team' }],
     P1: [],
-  });
+  }, locationDeck);
 
   const parachute = state.deck.P0.find((card) => card.defId === 'golden-parachute')!.id as CardId;
   const acquisition = state.deck.P0.find((card) => card.defId === 'acquisition-team')!.id as CardId;
@@ -159,7 +163,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-junk-packet', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'street-kid' }],
     P1: [{ defId: 'junk-packet' }],
-  });
+  }, locationDeck);
 
   const junkPacket = state.deck.P1.find((card) => card.defId === 'junk-packet')!.id as CardId;
   state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: junkPacket, toHand: true });
@@ -178,7 +182,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-pineapple-club', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'street-kid' }],
     P1: [{ defId: 'drone-pup' }],
-  });
+  }, locationDeck);
   state = withTestLocation(
     state,
     0,
@@ -224,7 +228,7 @@ const run = (state: MatchState, event: MatchEvent): MatchState =>
   let state = createInitialMatchState('content-black-ice', BOOTSTRAP_MANIFEST, {
     P0: [{ defId: 'black-ice' }],
     P1: [{ defId: 'redline-bruiser' }],
-  });
+  }, locationDeck);
 
   const blackIce = state.deck.P0.find((card) => card.defId === 'black-ice')!.id as CardId;
   const bruiser = state.deck.P1.find((card) => card.defId === 'redline-bruiser')!.id as CardId;

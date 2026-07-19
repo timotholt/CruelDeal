@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createInitialMatchState } from '@/services/playgame/engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
+import { orderedTestLocationDeck } from '@/services/playgame/engine/testkit/runtimeFixture';
 import { createPlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { setupDragDrop } from './useDragDrop';
@@ -60,7 +61,12 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
       value: vi.fn(() => lane),
     });
 
-    const state = createInitialMatchState('pointer-drag', BOOTSTRAP_MANIFEST);
+    const state = createInitialMatchState(
+      'pointer-drag',
+      BOOTSTRAP_MANIFEST,
+      {},
+      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+    );
     const cardRefs = new Map<string, HTMLElement>([['pointer-card', source]]);
     const motionSurface = createPlayMotionSurface({
       frame,
@@ -133,7 +139,12 @@ describe('pointer visual handoff', () => {
       value: vi.fn(() => lane),
     });
 
-    const state = createInitialMatchState('pointer-handoff', BOOTSTRAP_MANIFEST);
+    const state = createInitialMatchState(
+      'pointer-handoff',
+      BOOTSTRAP_MANIFEST,
+      {},
+      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+    );
     const cardRefs = new Map<string, HTMLElement>([['pointer-card', source]]);
     const motionSurface = createPlayMotionSurface({
       frame,
