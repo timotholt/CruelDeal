@@ -17,7 +17,10 @@ import type {
   MatchState,
   InternalCardRecord,
 } from '../types/state';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import {
+  EMPTY_CARD_LIFECYCLE,
+  EMPTY_TRACKED_VARIABLES,
+} from '../types/state';
 import type { Deck, Manifest } from '../manifest/types';
 import type {
   CardId,
@@ -32,6 +35,7 @@ import { frameAndFoldEvents } from '../transactionTimeline';
 import type { EventTransactionFold } from '../transactionTimeline';
 import { createCardStoreInternal } from '../internal/cardStore';
 import { createLocationStoreInternal } from '../internal/locationStore';
+import { GENESIS_FRAME } from '../types/timeline';
 import {
   getAllCardTemplates,
   getCardTemplate,
@@ -86,6 +90,14 @@ function buildDeck(
       zone: 'DECK',
       revealed: false,
       revealTiming: null,
+      lifecycle: {
+        ...EMPTY_CARD_LIFECYCLE,
+        frameCreated: GENESIS_FRAME,
+        turnCreated: 1,
+        zoneEnteredAt: {
+          DECK: { frame: GENESIS_FRAME, turn: 1 },
+        },
+      },
       powerLedger: [],
       costDelta: 0,
       costLog: [],

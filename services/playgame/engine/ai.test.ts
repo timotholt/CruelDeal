@@ -9,7 +9,7 @@ import { createRng } from './rng';
 import { planEnemyTurnFromPool, planEnemyTurnFromHand } from './ai';
 import type { CardDef, Manifest } from './manifest/types';
 import type { InternalCardRecord, LaneState, MatchState } from './types/state';
-import { EMPTY_TRACKED_VARIABLES } from './types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneId, Owner } from './types/ids';
 import {
   emptyTestMatchState,
@@ -77,6 +77,7 @@ const buildState = (
       lane: zone === 'LANE' ? s.lane : null, zone,
       revealed: zone === 'LANE',
       revealTiming: null,
+      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: [], costDelta: 0, costLog: [], tags: [], textOverride: null,
     textLog: [], counters: {},
       spawnSource: { kind: 'DECK_CREATION' },

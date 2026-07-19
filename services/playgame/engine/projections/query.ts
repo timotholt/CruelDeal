@@ -38,6 +38,7 @@ import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
 import { matchesBoardPosition } from './cardPosition';
 import {
   getAllCardIds,
+  getCardPlacement,
   getCardRuntime,
   type CardRuntime,
 } from './cardRuntime';
@@ -157,6 +158,35 @@ export interface CardFilter extends CardPositionCriteria {
   counter?: { name: string } & (
     | { eq?: number; ne?: number; lt?: number; lte?: number; gt?: number; gte?: number; in?: readonly number[]; nin?: readonly number[]; between?: readonly [number, number] }
   );
+  frameCreated?: NumComparison;
+  turnCreated?: NumComparison;
+  framePlayed?: NumComparison;
+  turnPlayed?: NumComparison;
+  lanePlayed?: LaneId | readonly LaneId[];
+  frameRevealed?: NumComparison;
+  turnRevealed?: NumComparison;
+  frameDestroyed?: NumComparison;
+  turnDestroyed?: NumComparison;
+  enteredZone?: {
+    zone: CardZone;
+    frame?: NumComparison;
+    turn?: NumComparison;
+  };
+  leftZone?: {
+    zone: CardZone;
+    frame?: NumComparison;
+    turn?: NumComparison;
+  };
+  lastPositionChange?: {
+    frame?: NumComparison;
+    turn?: NumComparison;
+    fromZone?: CardZone;
+    toZone?: CardZone;
+    fromLane?: LaneId | null;
+    toLane?: LaneId | null;
+    fromIndex?: NumComparison;
+    toIndex?: NumComparison;
+  };
 
   // Provenance
   spawnKind?: SpawnSource['kind'] | readonly SpawnSource['kind'][];
@@ -210,14 +240,15 @@ export function matchesCard(
     if (card.owner !== filter.owner) return false;
   }
   if (filter.slot !== undefined || filter.row !== undefined || filter.column !== undefined) {
-    const position = card.position.zone === 'LANE'
-      && card.position.slot !== null
-      && card.position.row !== null
-      && card.position.column !== null
+    const placement = getCardPlacement(state, card.id);
+    const position = placement?.position.zone === 'LANE'
+      && placement.position.slot !== null
+      && placement.position.row !== null
+      && placement.position.column !== null
       ? {
-          slot: card.position.slot,
-          row: card.position.row,
-          column: card.position.column,
+          slot: placement.position.slot,
+          row: placement.position.row,
+          column: placement.position.column,
         }
       : null;
     if (!matchesBoardPosition(position, filter)) return false;
@@ -271,6 +302,60 @@ export function matchesCard(
     const val = card.counters[name];
     if (val === undefined) return false;
     if (!matchesNum(val, cmp as NumComparison)) return false;
+  }
+  const lifecycle = card.lifecycle;
+  if (filter.frameCreated !== undefined &&
+      (lifecycle.frameCreated === null || !matchesNum(lifecycle.frameCreated, filter.frameCreated))) return false;
+  if (filter.turnCreated !== undefined &&
+      (lifecycle.turnCreated === null || !matchesNum(lifecycle.turnCreated, filter.turnCreated))) return false;
+  if (filter.framePlayed !== undefined &&
+      (lifecycle.framePlayed === null || !matchesNum(lifecycle.framePlayed, filter.framePlayed))) return false;
+  if (filter.turnPlayed !== undefined &&
+      (lifecycle.turnPlayed === null || !matchesNum(lifecycle.turnPlayed, filter.turnPlayed))) return false;
+  if (filter.lanePlayed !== undefined) {
+    const lanes = arrayOrOne(filter.lanePlayed);
+    if (lifecycle.lanePlayed === null || !lanes.includes(lifecycle.lanePlayed)) return false;
+  }
+  if (filter.frameRevealed !== undefined &&
+      (lifecycle.frameRevealed === null || !matchesNum(lifecycle.frameRevealed, filter.frameRevealed))) return false;
+  if (filter.turnRevealed !== undefined &&
+      (lifecycle.turnRevealed === null || !matchesNum(lifecycle.turnRevealed, filter.turnRevealed))) return false;
+  if (filter.frameDestroyed !== undefined &&
+      (lifecycle.frameDestroyed === null || !matchesNum(lifecycle.frameDestroyed, filter.frameDestroyed))) return false;
+  if (filter.turnDestroyed !== undefined &&
+      (lifecycle.turnDestroyed === null || !matchesNum(lifecycle.turnDestroyed, filter.turnDestroyed))) return false;
+  if (filter.enteredZone !== undefined) {
+    const entered = lifecycle.zoneEnteredAt[filter.enteredZone.zone];
+    if (!entered) return false;
+    if (filter.enteredZone.frame !== undefined &&
+        !matchesNum(entered.frame, filter.enteredZone.frame)) return false;
+    if (filter.enteredZone.turn !== undefined &&
+        !matchesNum(entered.turn, filter.enteredZone.turn)) return false;
+  }
+  if (filter.leftZone !== undefined) {
+    const left = lifecycle.zoneLeftAt[filter.leftZone.zone];
+    if (!left) return false;
+    if (filter.leftZone.frame !== undefined &&
+        !matchesNum(left.frame, filter.leftZone.frame)) return false;
+    if (filter.leftZone.turn !== undefined &&
+        !matchesNum(left.turn, filter.leftZone.turn)) return false;
+  }
+  if (filter.lastPositionChange !== undefined) {
+    const transition = lifecycle.lastPositionTransition;
+    if (!transition) return false;
+    const criteria = filter.lastPositionChange;
+    if (criteria.frame !== undefined && !matchesNum(transition.frame, criteria.frame)) return false;
+    if (criteria.turn !== undefined && !matchesNum(transition.turn, criteria.turn)) return false;
+    if (criteria.fromZone !== undefined && transition.from?.zone !== criteria.fromZone) return false;
+    if (criteria.toZone !== undefined && transition.to.zone !== criteria.toZone) return false;
+    if (criteria.fromLane !== undefined && transition.from?.lane !== criteria.fromLane) return false;
+    if (criteria.toLane !== undefined && transition.to.lane !== criteria.toLane) return false;
+    if (criteria.fromIndex !== undefined &&
+        (transition.from?.index === null
+          || transition.from?.index === undefined
+          || !matchesNum(transition.from.index, criteria.fromIndex))) return false;
+    if (criteria.toIndex !== undefined &&
+        (transition.to.index === null || !matchesNum(transition.to.index, criteria.toIndex))) return false;
   }
 
   // ── Provenance ────────────────────────────────────────────────────────

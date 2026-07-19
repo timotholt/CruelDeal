@@ -60,6 +60,21 @@ function violations(
 }
 
 describe('Phase 1.2 location architecture fences', () => {
+  it('keeps event-log access out of gameplay projections, queries, and effects', () => {
+    expect(violations(
+      productionFiles,
+      /\b(?!console\b)[A-Za-z_$][\w$]*\.log\b/,
+      new Set([
+        'engine/apply.ts',
+        'engine/replay.ts',
+        'engine/timeline.ts',
+        'engine/transactionTimeline.ts',
+        'runtime/matchRuntime.ts',
+        'runtime/replayExport.ts',
+      ]),
+    )).toEqual([]);
+  });
+
   it('keeps lifecycle event production inside the governed operation modules', () => {
     const eventNames = [
       'LOCATION_SLOT_REVEAL_SCHEDULED',

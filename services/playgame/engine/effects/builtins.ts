@@ -33,6 +33,8 @@ import { activeLaneIds } from '../laneTopology';
 import { storedPowerDelta } from '../powerLedger';
 import {
   getAllCardIds,
+  getCardLifecycle,
+  getCardPlacement,
   getCardRuntime,
 } from '../projections/cardRuntime';
 import {
@@ -673,16 +675,13 @@ function recklessRecruiter(
 }
 
 function cardWasPlayedAtLaneThisTurn(state: MatchState, lane: LaneId, owner?: Owner): boolean {
-  let turn = 1;
-  for (const entry of state.log) {
-    const event = entry.event as MatchEvent;
-    if (event.type === 'TURN_STARTED') turn = event.turn;
-    if (event.type !== 'CARD_STAGED') continue;
-    if (turn !== state.turn || event.lane !== lane) continue;
-    if (owner && event.owner !== owner) continue;
-    return true;
-  }
-  return false;
+  return getAllCardIds(state).some((cardId) => {
+    const lifecycle = getCardLifecycle(state, cardId);
+    const placement = getCardPlacement(state, cardId);
+    return lifecycle?.turnPlayed === state.turn
+      && lifecycle.lanePlayed === lane
+      && (owner === undefined || placement?.owner === owner);
+  });
 }
 
 function barracadeCheck(
@@ -785,16 +784,12 @@ function traumaTeam(
   if (owner === null || lane === null) return noop(state);
   if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
 
-  let turn = 1;
-  const destroyedLastTurn: CardId[] = [];
-  for (const entry of state.log) {
-    const event = entry.event as MatchEvent;
-    if (event.type === 'TURN_STARTED') turn = event.turn;
-    if (event.type === 'CARD_DESTROYED' && turn === state.turn - 1) {
-      const card = getCardRuntime(state, event.cardId, manifest);
-      if (card?.owner === owner && card.zone === 'DESTROYED') destroyedLastTurn.push(event.cardId);
-    }
-  }
+  const destroyedLastTurn = getAllCardIds(state).filter((cardId) => {
+    const card = getCardRuntime(state, cardId, manifest);
+    return card?.owner === owner
+      && card.zone === 'DESTROYED'
+      && card.lifecycle.turnDestroyed === state.turn - 1;
+  });
   if (destroyedLastTurn.length === 0) return noop(state);
 
   const cardId = ctx.rng.fork('revive').pick(destroyedLastTurn);

@@ -57,7 +57,6 @@ export {
   type CardAbilityLabel,
   type CardAbilitySlot,
   type CardLifecycle,
-  type CardLifecycleOccurrence,
   type CardRuntime,
   type CardTemplate,
   type CurrentCard,
@@ -67,7 +66,6 @@ export {
   type LocationAbilityLabel,
   type LocationAbilitySlot,
   type LocationLifecycle,
-  type LocationLifecycleOccurrence,
   type LocationRuntime,
   type LocationTemplate,
 } from './projections';

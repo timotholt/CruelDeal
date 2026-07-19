@@ -18,10 +18,12 @@ import { getCardTemplate } from './projections/cardTemplate';
 import type {
   InternalCardRecord,
   CardTag,
+  CardPositionSnapshot,
   CostLogEntry,
   EnergyLogEntry,
   LaneState,
   InternalLocationRecord,
+  LocationPositionSnapshot,
   MatchLogEntry,
   MatchState,
   PendingEffect,
@@ -29,6 +31,10 @@ import type {
   PowerLedgerEntry,
   SpawnSource,
   TrackedVariables,
+} from './types/state';
+import {
+  EMPTY_CARD_LIFECYCLE,
+  EMPTY_LOCATION_LIFECYCLE,
 } from './types/state';
 import type {
   CardId,
@@ -106,6 +112,19 @@ function applyBody(
   eventFrame: FramedEvent['frame'],
   manifest: Manifest,
 ): MatchState {
+  return stampLifecycleTransitions(
+    state,
+    applyEventBody(state, event, eventFrame, manifest),
+    eventFrame,
+  );
+}
+
+function applyEventBody(
+  state: MatchState,
+  event: MatchEvent,
+  eventFrame: FramedEvent['frame'],
+  manifest: Manifest,
+): MatchState {
   switch (event.type) {
     // ---- Staging / play ---------------------------------------------------
 
@@ -118,6 +137,14 @@ function applyBody(
         lane: event.lane,
         revealed: false,
         revealTiming: { kind: 'TURN', turn: state.turn },
+        lifecycle: card1
+          ? {
+              ...card1.lifecycle,
+              framePlayed: eventFrame,
+              turnPlayed: state.turn,
+              lanePlayed: event.lane,
+            }
+          : EMPTY_CARD_LIFECYCLE,
         tags: card1 ? addTagUnique(card1.tags, { kind: 'PLAYED_THIS_TURN' }) : [],
       });
       const s3 = addToLane(s2, event.owner, event.lane, event.cardId);
@@ -184,8 +211,19 @@ function applyBody(
     case 'CARD_REVEAL_SCHEDULED':
       return patchCard(state, event.cardId, { revealTiming: event.timing });
 
-    case 'CARD_FLIPPED':
-      return patchCard(state, event.cardId, { revealed: true, revealTiming: null });
+    case 'CARD_FLIPPED': {
+      const card = readCardInternal(state, event.cardId);
+      if (!card) return state;
+      return patchCard(state, event.cardId, {
+        revealed: true,
+        revealTiming: null,
+        lifecycle: {
+          ...card.lifecycle,
+          frameRevealed: eventFrame,
+          turnRevealed: state.turn,
+        },
+      });
+    }
 
     case 'OR_WINDOW_OPEN':
     case 'OR_WINDOW_CLOSE':
@@ -241,6 +279,11 @@ function applyBody(
         zone: 'DESTROYED',
         lane: null,
         revealTiming: null,
+        lifecycle: {
+          ...card.lifecycle,
+          frameDestroyed: eventFrame,
+          turnDestroyed: state.turn,
+        },
         tags: addTagUnique(card.tags, { kind: 'DESTROYED_THIS_TURN' }),
       });
       return {
@@ -512,6 +555,7 @@ function applyBody(
           face: 'FACE_DOWN',
           identityKnownTo: [],
           revealCount: 0,
+          lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
           tags: [],
           counters: {},
         };
@@ -543,6 +587,7 @@ function applyBody(
         face: 'FACE_DOWN',
         identityKnownTo: [],
         revealCount: 0,
+        lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
         tags: [],
         counters: {},
       };
@@ -618,6 +663,11 @@ function applyBody(
         face: 'FACE_DOWN',
         identityKnownTo: [],
         revealCount: 0,
+        lifecycle: {
+          ...location.lifecycle,
+          framePlayed: eventFrame,
+          turnPlayed: state.turn,
+        },
       });
     }
 
@@ -645,6 +695,11 @@ function applyBody(
         face: 'FACE_UP',
         identityKnownTo: ['P0', 'P1'],
         revealCount: location.revealCount + 1,
+        lifecycle: {
+          ...location.lifecycle,
+          frameRevealed: eventFrame,
+          turnRevealed: state.turn,
+        },
       });
       const lane = revealed.lanesById[event.lane];
       return patchLane(revealed, event.lane, {
@@ -699,6 +754,13 @@ function applyBody(
         face: revealed ? 'FACE_UP' : 'FACE_DOWN',
         identityKnownTo: revealed ? ['P0', 'P1'] : [],
         revealCount: revealed ? 1 : 0,
+        lifecycle: {
+          ...EMPTY_LOCATION_LIFECYCLE,
+          framePlayed: eventFrame,
+          turnPlayed: state.turn,
+          frameRevealed: revealed ? eventFrame : null,
+          turnRevealed: revealed ? state.turn : null,
+        },
         tags: [],
         counters: {},
       };
@@ -1040,6 +1102,165 @@ function applyBody(
   }
 }
 
+function cardPosition(
+  state: MatchState,
+  card: InternalCardRecord,
+): CardPositionSnapshot {
+  if (card.zone === 'LANE' && card.lane !== null) {
+    const lane = state.lanesById[card.lane];
+    return {
+      zone: card.zone,
+      lane: card.lane,
+      index: lane?.cards[card.owner].indexOf(card.id) ?? -1,
+    };
+  }
+  if (card.zone === 'HAND') {
+    return { zone: card.zone, lane: null, index: state.hand[card.owner].indexOf(card.id) };
+  }
+  if (card.zone === 'DECK') {
+    return { zone: card.zone, lane: null, index: state.deck[card.owner].indexOf(card.id) };
+  }
+  return { zone: card.zone, lane: null, index: null };
+}
+
+function locationPile(
+  state: MatchState,
+  zone: Exclude<InternalLocationRecord['zone'], 'LANE'>,
+): readonly LocationCardInstanceId[] {
+  if (zone === 'DECK') return state.locationDeck.drawPile;
+  if (zone === 'STAGING') return state.locationDeck.staging;
+  if (zone === 'DISCARD') return state.locationDeck.discardPile;
+  if (zone === 'DESTROYED') return state.locationDeck.destroyed;
+  return state.locationDeck.banished;
+}
+
+function locationPosition(
+  state: MatchState,
+  location: InternalLocationRecord,
+): LocationPositionSnapshot {
+  return {
+    zone: location.zone,
+    lane: location.laneId,
+    pendingLane: location.pendingLaneId,
+    index: location.zone === 'LANE'
+      ? state.activeLaneOrder.indexOf(location.laneId!)
+      : locationPile(state, location.zone).indexOf(location.id),
+  };
+}
+
+function sameCardPosition(
+  left: CardPositionSnapshot | null,
+  right: CardPositionSnapshot,
+): boolean {
+  return left !== null
+    && left.zone === right.zone
+    && left.lane === right.lane
+    && left.index === right.index;
+}
+
+function sameLocationPosition(
+  left: LocationPositionSnapshot | null,
+  right: LocationPositionSnapshot,
+): boolean {
+  return left !== null
+    && left.zone === right.zone
+    && left.lane === right.lane
+    && left.pendingLane === right.pendingLane
+    && left.index === right.index;
+}
+
+/**
+ * Central transition indexer. Every reducer event passes through here, so
+ * zone/lane/slot timestamps cannot depend on individual card implementations.
+ */
+function stampLifecycleTransitions(
+  before: MatchState,
+  after: MatchState,
+  frame: FramedEvent['frame'],
+): MatchState {
+  const stamp = { frame, turn: before.turn };
+  const beforeCards = cardRecordsInternal(before);
+  const afterCards = cardRecordsInternal(after);
+  let cardRecords = afterCards;
+  let cardsChanged = false;
+
+  for (const [id, card] of Object.entries(afterCards)) {
+    const prior = beforeCards[id];
+    const from = prior ? cardPosition(before, prior) : null;
+    const to = cardPosition(after, card);
+    const created = prior === undefined && card.lifecycle.frameCreated === null;
+    const zoneChanged = prior === undefined || prior.zone !== card.zone;
+    const positionChanged = !sameCardPosition(from, to);
+    if (!created && !zoneChanged && !positionChanged) continue;
+
+    const lifecycle = {
+      ...card.lifecycle,
+      ...(created ? { frameCreated: frame, turnCreated: before.turn } : {}),
+      ...(zoneChanged ? {
+        zoneEnteredAt: {
+          ...card.lifecycle.zoneEnteredAt,
+          [card.zone]: stamp,
+        },
+        ...(prior ? {
+          zoneLeftAt: {
+            ...card.lifecycle.zoneLeftAt,
+            [prior.zone]: stamp,
+          },
+        } : {}),
+      } : {}),
+      ...(positionChanged ? {
+        lastPositionTransition: { ...stamp, from, to },
+      } : {}),
+    };
+    if (!cardsChanged) cardRecords = { ...afterCards };
+    cardRecords[id] = { ...card, lifecycle };
+    cardsChanged = true;
+  }
+
+  const beforeLocations = locationRecordsInternal(before);
+  const afterLocations = locationRecordsInternal(after);
+  let locationRecords = afterLocations;
+  let locationsChanged = false;
+
+  for (const [id, location] of Object.entries(afterLocations)) {
+    const prior = beforeLocations[id];
+    const from = prior ? locationPosition(before, prior) : null;
+    const to = locationPosition(after, location);
+    const created = prior === undefined && location.lifecycle.frameCreated === null;
+    const zoneChanged = prior === undefined || prior.zone !== location.zone;
+    const positionChanged = !sameLocationPosition(from, to);
+    if (!created && !zoneChanged && !positionChanged) continue;
+
+    const lifecycle = {
+      ...location.lifecycle,
+      ...(created ? { frameCreated: frame, turnCreated: before.turn } : {}),
+      ...(zoneChanged ? {
+        zoneEnteredAt: {
+          ...location.lifecycle.zoneEnteredAt,
+          [location.zone]: stamp,
+        },
+        ...(prior ? {
+          zoneLeftAt: {
+            ...location.lifecycle.zoneLeftAt,
+            [prior.zone]: stamp,
+          },
+        } : {}),
+      } : {}),
+      ...(positionChanged ? {
+        lastPositionTransition: { ...stamp, from, to },
+      } : {}),
+    };
+    if (!locationsChanged) locationRecords = { ...afterLocations };
+    locationRecords[id] = { ...location, lifecycle };
+    locationsChanged = true;
+  }
+
+  let stamped = after;
+  if (cardsChanged) stamped = writeCardRecordsInternal(stamped, cardRecords);
+  if (locationsChanged) stamped = writeLocationRecordsInternal(stamped, locationRecords);
+  return stamped;
+}
+
 // ---- Structural helpers ----------------------------------------------------
 
 /** Create a new InternalCardRecord if none exists at `id`, or update the
@@ -1074,6 +1295,7 @@ function mintOrUpdate(
     zone,
     revealed: zone === 'LANE' ? false : false,
     revealTiming: null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: [],
     costDelta: 0,
     costLog: [],

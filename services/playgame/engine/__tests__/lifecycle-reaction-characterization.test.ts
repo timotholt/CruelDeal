@@ -15,6 +15,7 @@ import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { InternalCardRecord, MatchState } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import { asFrame } from '../types/timeline';
 import { getStoredCardPowerDelta } from '../powerLedger';
 
@@ -84,6 +85,7 @@ function card(
     zone,
     revealed: zone === 'LANE',
     revealTiming: null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: [],
     costDelta: 0,
     costLog: [],
@@ -197,7 +199,7 @@ function effectCtx(
     selfKind: 'card',
     selfLane: source.lane,
     selfOwner: source.owner,
-    ...(eventCard ? { eventCard, eventOwner: getCardState(state, eventCard)!?.owner ?? null } : {}),
+    ...(eventCard ? { eventCard, eventOwner: getCardState(state, eventCard)?.owner ?? null } : {}),
     source: { sourceId: source.id, effectKind: 'ON_REVEAL', reason: 'TEST' },
     rng: createRng(`characterize:${source.id}`),
     depth: 0,
@@ -328,7 +330,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     builtinState = builtin.state;
 
     expect(builtin.events.map(event => event.type)).toEqual(['CARD_MOVED']);
-    expect(getCardState(builtinState, mover.id)!?.lane).not.toBe(0);
+    expect(getCardState(builtinState, mover.id)?.lane).not.toBe(0);
     expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(0);
   });
 
@@ -483,35 +485,18 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getStoredCardPowerDelta(generic.state, returning.id, gameManifest)).toBe(1);
 
     const trauma = card('trauma', 'source', 'P0', 'LANE', 0);
-    const priorVictim = card('prior-victim', 'returning', 'P0', 'DESTROYED');
-    const traumaStateBase = stateWith([trauma, priorVictim], {
+    const priorVictim: InternalCardRecord = {
+      ...card('prior-victim', 'returning', 'P0', 'DESTROYED'),
+      lifecycle: {
+        ...EMPTY_CARD_LIFECYCLE,
+        frameDestroyed: asFrame(2),
+        turnDestroyed: 2,
+      },
+    };
+    const traumaState = stateWith([trauma, priorVictim], {
       turn: 3,
       locations: [{ lane: 0, defId: entryLocation.defId }],
     });
-    const traumaState: MatchState = {
-      ...traumaStateBase,
-      log: [
-        {
-          frame: asFrame(1),
-          scope: { turn: 2, phase: 'START' },
-          event: {
-            type: 'TURN_STARTED',
-            turn: 2,
-            priority: 'P0',
-            priorityReason: 'RETAINED',
-          } satisfies MatchEvent,
-        },
-        {
-          frame: asFrame(2),
-          scope: { turn: 2, phase: 'RESOLUTION' },
-          event: {
-            type: 'CARD_DESTROYED',
-            cardId: priorVictim.id,
-            cause: { sourceId: trauma.id, effectKind: 'ON_REVEAL', reason: 'TEST' },
-          } satisfies MatchEvent,
-        },
-      ],
-    };
 
     const builtin = evaluate(traumaState, gameManifest, trauma, {
       kind: 'CALL_BUILTIN',

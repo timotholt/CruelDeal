@@ -15,7 +15,11 @@ import type {
   PowerMutation,
   SpawnSource,
 } from '../types/state';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import {
+  EMPTY_CARD_LIFECYCLE,
+  EMPTY_LOCATION_LIFECYCLE,
+  EMPTY_TRACKED_VARIABLES,
+} from '../types/state';
 import { asFrame, GENESIS_FRAME } from '../types/timeline';
 import type { LocationSetupDeck } from '../locationSetup';
 import {
@@ -242,6 +246,7 @@ export function withTestLocation(
     face: revealed ? 'FACE_UP' : 'FACE_DOWN',
     identityKnownTo: revealed ? ['P0', 'P1'] : [],
     revealCount: revealed ? 1 : 0,
+    lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
     tags: [],
     counters: {},
   };
@@ -317,6 +322,7 @@ function buildCard(
     revealed,
     revealTiming: spec.revealTiming
       ?? (zone === 'LANE' && !revealed ? { kind: 'TURN', turn } : null),
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: testPowerLedger(spec.id, spec.powerMutations ?? []),
     costDelta: spec.costDelta ?? 0,
     costLog: EMPTY_COST_LOG,
@@ -369,6 +375,7 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
         face: locationSpec.revealed ? 'FACE_UP' : 'FACE_DOWN',
         identityKnownTo: locationSpec.revealed ? ['P0', 'P1'] : [],
         revealCount: locationSpec.revealed ? 1 : 0,
+        lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
         tags: locationSpec.tags ?? [],
         counters: locationSpec.counters ?? {},
       };

@@ -9,6 +9,7 @@ import type {
   CardTag,
   CardZone,
   CostLogEntry,
+  CardLifecycleState,
   MatchState,
   PowerLedgerEntry,
   SpawnSource,
@@ -23,10 +24,8 @@ import type {
 import type {
   CardBoardPosition,
 } from '../types/cardPosition';
-import type { Frame } from '../types/timeline';
 import type { TextOverride } from '../types/ability';
 import { locationCardAtLane } from '../laneTopology';
-import { cardLifecycleFrames, turnAtFrame } from '../timeline';
 import { getCardBoardPosition } from './cardPosition';
 import {
   getCardAbilityLabels as labelsForAbilities,
@@ -66,19 +65,7 @@ export interface EffectiveCardText {
   readonly override: TextOverride | null;
 }
 
-export interface CardLifecycleOccurrence {
-  readonly frame: Frame;
-  readonly turn: number;
-}
-
-export interface CardLifecycle {
-  readonly played: readonly CardLifecycleOccurrence[];
-  readonly revealed: readonly CardLifecycleOccurrence[];
-  readonly framePlayed: Frame | null;
-  readonly turnPlayed: number | null;
-  readonly frameRevealed: Frame | null;
-  readonly turnRevealed: number | null;
-}
+export type CardLifecycle = CardLifecycleState;
 
 export interface CardRuntime {
   readonly id: CardId;
@@ -89,7 +76,6 @@ export interface CardRuntime {
   readonly domain: CardDomain;
   readonly zone: CardZone;
   readonly lane: LaneId | null;
-  readonly position: CurrentCardPosition;
   readonly revealed: boolean;
   readonly revealTiming: CardRevealTiming | null;
   readonly lifecycle: CardLifecycle;
@@ -122,28 +108,8 @@ export type CardState = Readonly<InternalCardRecord>;
 export function getCardLifecycle(
   state: MatchState,
   cardId: CardId,
-): CardLifecycle {
-  const frames = cardLifecycleFrames(state.log, cardId);
-  const occurrences = (values: readonly Frame[]): readonly CardLifecycleOccurrence[] =>
-    values.map((frame) => {
-      const turn = turnAtFrame(state.log, frame);
-      if (turn === null) {
-        throw new Error(`card ${cardId} frame ${frame} has no turn scope`);
-      }
-      return { frame, turn };
-    });
-  const played = occurrences(frames.played);
-  const revealed = occurrences(frames.revealed);
-  const latestPlayed = played.at(-1) ?? null;
-  const latestRevealed = revealed.at(-1) ?? null;
-  return {
-    played,
-    revealed,
-    framePlayed: latestPlayed?.frame ?? null,
-    turnPlayed: latestPlayed?.turn ?? null,
-    frameRevealed: latestRevealed?.frame ?? null,
-    turnRevealed: latestRevealed?.turn ?? null,
-  };
+): CardLifecycle | null {
+  return cardRecord(state, cardId)?.lifecycle ?? null;
 }
 
 function cardRecord(state: MatchState, cardId: CardId): InternalCardRecord | null {
@@ -288,10 +254,9 @@ export function getCardRuntime(
     domain: template.domain,
     zone: card.zone,
     lane: card.lane,
-    position: resolvePosition(state, card),
     revealed: card.revealed,
     revealTiming: card.revealTiming,
-    lifecycle: getCardLifecycle(state, cardId),
+    lifecycle: card.lifecycle,
     text,
     tags: card.tags,
     counters: card.counters,

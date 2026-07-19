@@ -25,7 +25,7 @@ import type {
   InternalLocationRecord,
   MatchState,
 } from '../types/state';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
 import { getCardCost, getCardPower } from '../projections';
@@ -127,6 +127,7 @@ function buildState(
       revealTiming: !revealed && spec.lane !== null
         ? { kind: 'TURN', turn: opts.turn ?? 1 }
         : null,
+      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: testPowerLedger(id, spec.powerMutations ?? []),
       costDelta: 0,
       costLog: [],

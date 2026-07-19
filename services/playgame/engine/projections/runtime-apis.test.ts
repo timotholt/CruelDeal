@@ -11,6 +11,10 @@ import {
 import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
 import {
+  cardLifecycleFrames,
+  locationLifecycleFrames,
+} from '../timeline';
+import {
   addCardTag,
   adjustCardCost,
   adjustCardPower,
@@ -22,10 +26,19 @@ import {
   setCardPower,
 } from '../operations/cardMutations';
 import { getCurrentCard } from './card';
-import { getCardRuntime, getCardsInZone } from './cardRuntime';
+import {
+  getCardLifecycle,
+  getCardPlacement,
+  getCardRuntime,
+  getCardsInZone,
+} from './cardRuntime';
 import { getCardTemplate } from './cardTemplate';
-import { getLocationRuntime } from './locationRuntime';
+import {
+  getLocationLifecycle,
+  getLocationRuntime,
+} from './locationRuntime';
 import { getLocationTemplate } from './locationTemplate';
+import { findCards } from './query';
 
 const effect = {
   kind: 'ADD_POWER',
@@ -271,7 +284,7 @@ describe('current card API', () => {
     )).toBe(true);
   });
 
-  it('returns effective stats, text, taxonomy, position, and repeated lifecycle history', () => {
+  it('keeps current values, placement, and lifecycle history available through focused APIs', () => {
     const initial = state();
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
@@ -305,28 +318,28 @@ describe('current card API', () => {
         base: 2,
         current: 4,
       },
-      position: {
-        zone: 'LANE',
-        laneId: 0,
-        slot: 1,
-        row: 1,
-        column: 1,
-      },
       text: {
         rulesText: 'End of Turn: Gain +1 Power.',
         abilityLabels: ['END_OF_TURN'],
       },
     });
+    expect(getCardPlacement(current, cardId)?.position).toMatchObject({
+      zone: 'LANE',
+      laneId: 0,
+      slot: 1,
+      row: 1,
+      column: 1,
+    });
     expect(card?.costHistory).toHaveLength(1);
     expect(card?.costHistory[0].cause.reason).toBe('RUNTIME_API_TEST');
-    expect(card?.lifecycle.played).toHaveLength(2);
-    expect(card?.lifecycle.revealed).toHaveLength(2);
-    expect(card?.lifecycle.framePlayed).toBe(
-      card?.lifecycle.played.at(-1)?.frame,
-    );
-    expect(card?.lifecycle.turnRevealed).toBe(
-      card?.lifecycle.revealed.at(-1)?.turn,
-    );
+    const lifecycle = getCardLifecycle(current, cardId);
+    expect(lifecycle).toMatchObject({
+      turnPlayed: 1,
+      lanePlayed: 0,
+      turnRevealed: 1,
+    });
+    expect(lifecycle?.framePlayed).not.toBeNull();
+    expect(lifecycle?.frameRevealed).not.toBeNull();
   });
 
   it('attributes repeated play and reveal occurrences to their actual turns', () => {
@@ -343,11 +356,85 @@ describe('current card API', () => {
       { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', cost: 3 },
       { type: 'CARD_FLIPPED', cardId },
     ]);
-    const lifecycle = getCurrentCard(current, cardId, manifest)?.lifecycle;
-    expect(lifecycle?.played.map(entry => entry.turn)).toEqual([1, 2]);
-    expect(lifecycle?.revealed.map(entry => entry.turn)).toEqual([1, 2]);
-    expect(lifecycle?.turnPlayed).toBe(2);
-    expect(lifecycle?.turnRevealed).toBe(2);
+    const lifecycle = getCardLifecycle(current, cardId);
+    expect(lifecycle).toMatchObject({
+      turnPlayed: 2,
+      lanePlayed: 1,
+      turnRevealed: 2,
+    });
+  });
+
+  it('does not read historical frames while projecting current card or location state', () => {
+    const initial = state();
+    const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
+    const locationId = initial.lanesById[0].locationSlot.locationCardId!;
+    const guarded = {
+      ...initial,
+      log: new Proxy(initial.log, {
+        get() {
+          throw new Error('historical log read');
+        },
+      }),
+    };
+
+    expect(() => getCardRuntime(guarded, cardId, manifest)).not.toThrow();
+    expect(() => getCurrentCard(guarded, cardId, manifest)).not.toThrow();
+    expect(() => getCardPlacement(guarded, cardId)).not.toThrow();
+    expect(() => getLocationRuntime(guarded, locationId, manifest)).not.toThrow();
+    expect(() => getCardLifecycle(guarded, cardId)).not.toThrow();
+    expect(() => getLocationLifecycle(guarded, locationId)).not.toThrow();
+    expect(() => cardLifecycleFrames(guarded.log, cardId)).toThrow('historical log read');
+    expect(() => locationLifecycleFrames(guarded.log, locationId)).toThrow('historical log read');
+  });
+
+  it('indexes zone and position transitions for current-state lifecycle queries', () => {
+    const initial = state();
+    const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
+    const current = fold([
+      { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
+      { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', cost: 3 },
+      { type: 'CARD_FLIPPED', cardId },
+      { type: 'CARD_DESTROYED', cardId, cause },
+    ]);
+
+    expect(getCardLifecycle(current, cardId)).toMatchObject({
+      frameCreated: 0,
+      turnCreated: 1,
+      turnPlayed: 1,
+      lanePlayed: 0,
+      turnRevealed: 1,
+      turnDestroyed: 1,
+      zoneEnteredAt: {
+        DECK: { frame: 0, turn: 1 },
+        HAND: { turn: 1 },
+        LANE: { turn: 1 },
+        DESTROYED: { turn: 1 },
+      },
+      zoneLeftAt: {
+        DECK: { turn: 1 },
+        HAND: { turn: 1 },
+        LANE: { turn: 1 },
+      },
+      lastPositionTransition: {
+        turn: 1,
+        from: { zone: 'LANE', lane: 0, index: 0 },
+        to: { zone: 'DESTROYED', lane: null, index: null },
+      },
+    });
+    expect(findCards(current, manifest, {
+      turnPlayed: 1,
+      lanePlayed: 0,
+      enteredZone: { zone: 'DESTROYED', turn: 1 },
+      lastPositionChange: {
+        fromZone: 'LANE',
+        toZone: 'DESTROYED',
+        fromLane: 0,
+        toLane: null,
+      },
+    }).map(card => card.id)).toEqual([cardId]);
+    expect(findCards(current, manifest, {
+      enteredZone: { zone: 'HAND', turn: 2 },
+    })).toEqual([]);
   });
 });
 
@@ -388,11 +475,18 @@ describe('current location API', () => {
       position: { zone: 'LANE', laneId: 0 },
       abilityLabels: ['TURN_START'],
     });
-    expect(location?.lifecycle.played).toHaveLength(1);
-    expect(location?.lifecycle.revealed).toHaveLength(2);
-    expect(location?.lifecycle.frameRevealed).toBe(
-      location?.lifecycle.revealed.at(-1)?.frame,
-    );
-    expect(location?.lifecycle.turnPlayed).toBe(1);
+    const lifecycle = getLocationLifecycle(revealedTwice, locationId);
+    expect(location?.revealCount).toBe(2);
+    expect(lifecycle).toMatchObject({
+      turnPlayed: 1,
+      turnRevealed: 1,
+    });
+    expect(lifecycle?.framePlayed).not.toBeNull();
+    expect(lifecycle?.frameRevealed).not.toBeNull();
+    expect(lifecycle?.zoneEnteredAt.LANE?.turn).toBe(1);
+    expect(lifecycle?.lastPositionTransition?.to).toMatchObject({
+      zone: 'LANE',
+      lane: 0,
+    });
   });
 });

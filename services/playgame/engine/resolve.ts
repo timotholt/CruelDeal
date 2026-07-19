@@ -40,6 +40,7 @@ import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology'
 import { revealLocation } from './locationLifecycle';
 import {
   getAllCardIds,
+  getCardLifecycle,
   getCardRuntime,
 } from './projections/cardRuntime';
 import { getCardTemplate } from './projections/cardTemplate';
@@ -668,11 +669,7 @@ function isPlayBlocked(
 }
 
 function latestStageIndex(state: MatchState, cardId: CardId): number {
-  for (let index = state.log.length - 1; index >= 0; index--) {
-    const event = state.log[index]?.event as Partial<MatchEvent> | undefined;
-    if (event?.type === 'CARD_STAGED' && event.cardId === cardId) return index;
-  }
-  return Number.MAX_SAFE_INTEGER;
+  return getCardLifecycle(state, cardId)?.framePlayed ?? Number.MAX_SAFE_INTEGER;
 }
 
 function revealScheduledCards(

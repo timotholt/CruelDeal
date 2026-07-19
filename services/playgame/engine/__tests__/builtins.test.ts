@@ -10,7 +10,7 @@ import { evalEffect } from '../effects/evaluator';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getStoredCardPowerDelta } from '../powerLedger';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
 import type { MatchState, InternalCardRecord } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
@@ -65,6 +65,7 @@ function mkCard(
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
     ...extra,
+    lifecycle: extra.lifecycle ?? { ...EMPTY_CARD_LIFECYCLE },
     textLog: extra.textLog ?? [],
   };
 }

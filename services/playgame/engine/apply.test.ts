@@ -16,6 +16,7 @@ import type { MatchEvent } from './types/events';
 import type { EffectRef } from './types/ability';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
 import type { InternalCardRecord, MatchState } from './types/state';
+import { EMPTY_CARD_LIFECYCLE } from './types/state';
 import { getCardPower } from './projections';
 import {
   emptyTestMatchState,
@@ -56,6 +57,7 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): Interna
     zone: 'DECK',
     revealed: false,
     revealTiming: null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: [],
     costDelta: 0,
     costLog: [],

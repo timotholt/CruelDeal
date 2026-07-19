@@ -2,13 +2,12 @@ import type { LocationAbilities, Manifest } from '../manifest/types';
 import type { LaneId, LocationCardInstanceId, Seat } from '../types/ids';
 import type {
   LaneTag,
+  LocationLifecycleState,
   LocationCardFace,
   InternalLocationRecord,
   LocationZone,
   MatchState,
 } from '../types/state';
-import type { Frame } from '../types/timeline';
-import { locationLifecycleFrames, turnAtFrame } from '../timeline';
 import {
   listLocationsInternal,
   readLocationInternal,
@@ -17,23 +16,7 @@ import {
 import type { LocationAbilityLabel } from './locationAbilityPresence';
 import { getLocationTemplate } from './locationTemplate';
 
-export interface LocationLifecycleOccurrence {
-  readonly frame: Frame;
-  readonly turn: number;
-}
-
-export interface LocationLifecycle {
-  readonly created: readonly LocationLifecycleOccurrence[];
-  readonly drawn: readonly LocationLifecycleOccurrence[];
-  readonly played: readonly LocationLifecycleOccurrence[];
-  readonly revealed: readonly LocationLifecycleOccurrence[];
-  readonly moved: readonly LocationLifecycleOccurrence[];
-  readonly removed: readonly LocationLifecycleOccurrence[];
-  readonly framePlayed: Frame | null;
-  readonly turnPlayed: number | null;
-  readonly frameRevealed: Frame | null;
-  readonly turnRevealed: number | null;
-}
+export type LocationLifecycle = LocationLifecycleState;
 
 export type CurrentLocationPosition =
   | { readonly zone: 'LANE'; readonly laneId: LaneId }
@@ -60,39 +43,11 @@ export interface LocationRuntime {
 
 export type LocationState = Readonly<InternalLocationRecord>;
 
-const occurrences = (
-  state: MatchState,
-  frames: readonly Frame[],
-): readonly LocationLifecycleOccurrence[] => frames.flatMap((frame) => {
-  const turn = turnAtFrame(state.log, frame);
-  return turn === null ? [] : [{ frame, turn }];
-});
-
 export function getLocationLifecycle(
   state: MatchState,
   locationId: LocationCardInstanceId,
-): LocationLifecycle {
-  const frames = locationLifecycleFrames(state.log, locationId);
-  const created = occurrences(state, frames.created);
-  const drawn = occurrences(state, frames.drawn);
-  const played = occurrences(state, frames.played);
-  const revealed = occurrences(state, frames.revealed);
-  const moved = occurrences(state, frames.moved);
-  const removed = occurrences(state, frames.removed);
-  const latestPlayed = played.at(-1) ?? null;
-  const latestRevealed = revealed.at(-1) ?? null;
-  return {
-    created,
-    drawn,
-    played,
-    revealed,
-    moved,
-    removed,
-    framePlayed: latestPlayed?.frame ?? null,
-    turnPlayed: latestPlayed?.turn ?? null,
-    frameRevealed: latestRevealed?.frame ?? null,
-    turnRevealed: latestRevealed?.turn ?? null,
-  };
+): LocationLifecycle | null {
+  return readLocationInternal(state, locationId)?.lifecycle ?? null;
 }
 
 function pile(
@@ -165,7 +120,7 @@ export function getLocationRuntime(
     position: resolvePosition(state, location),
     abilities: template.abilities,
     abilityLabels: template.abilityLabels,
-    lifecycle: getLocationLifecycle(state, locationId),
+    lifecycle: location.lifecycle,
   };
 }
 

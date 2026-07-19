@@ -24,6 +24,7 @@ import { matchesBoardPosition } from './cardPosition';
 import { storedPowerDelta } from '../powerLedger';
 import {
   getAllCardIds,
+  getCardPlacement,
   getCardRuntime,
   getEffectiveCardText,
 } from './cardRuntime';
@@ -385,15 +386,15 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
     case 'CARD_POSITION': {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
-        const card = getCardRuntime(ctx.state, id, ctx.manifest);
-        const position = card?.position.zone === 'LANE'
-          && card.position.slot !== null
-          && card.position.row !== null
-          && card.position.column !== null
+        const placement = getCardPlacement(ctx.state, id);
+        const position = placement?.position.zone === 'LANE'
+          && placement.position.slot !== null
+          && placement.position.row !== null
+          && placement.position.column !== null
           ? {
-              slot: card.position.slot,
-              row: card.position.row,
-              column: card.position.column,
+              slot: placement.position.slot,
+              row: placement.position.row,
+              column: placement.position.column,
             }
           : null;
         return matchesBoardPosition(position, pred);

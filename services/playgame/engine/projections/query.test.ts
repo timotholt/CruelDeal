@@ -6,6 +6,7 @@
 
 import type { CardDef, Manifest } from '../manifest/types';
 import type { InternalCardRecord, LaneState, MatchState } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   matchesNum,
@@ -99,6 +100,7 @@ const buildState = (specs: CardSpec[]): MatchState => {
       revealTiming: !revealed && s.lane !== null
         ? { kind: 'TURN', turn: 1 }
         : null,
+      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: testPowerLedger(
         id,
         s.storedPowerDelta === undefined

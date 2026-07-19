@@ -16,6 +16,7 @@ import type {
   LaneState,
   MatchState,
 } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   getCardCost,
@@ -313,6 +314,7 @@ function buildState(
       zone: 'LANE',
       revealed: spec.revealed ?? true,
       revealTiming: spec.revealed === false ? { kind: 'TURN', turn: opts.turn ?? 1 } : null,
+      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: [],
       costDelta: 0,
       costLog: [],

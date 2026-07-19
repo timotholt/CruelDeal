@@ -18,7 +18,7 @@ import type {
   InternalLocationRecord,
   MatchState,
 } from './types/state';
-import { EMPTY_TRACKED_VARIABLES } from './types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from './types/state';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
 import {
   emptyTestMatchState,
@@ -85,6 +85,7 @@ function mkCardInstance(defId: string, owner: Owner = 'P0'): InternalCardRecord 
     zone: 'DECK',
     revealed: false,
     revealTiming: null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: [],
     costDelta: 0,
     costLog: [],

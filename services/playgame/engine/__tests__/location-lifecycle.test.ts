@@ -10,6 +10,7 @@ import type {
   Owner,
 } from '../types/ids';
 import type { InternalCardRecord, MatchState } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import { createInitialMatchState } from '../cli/initState';
 import { createRng } from '../rng';
 import { apply } from '../apply';
@@ -169,6 +170,7 @@ function withLaneCard(
     zone: 'LANE',
     revealed: options.revealed ?? true,
     revealTiming: options.revealed === false ? { kind: 'TURN', turn: input.turn } : null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: [],
       costDelta: 0,
       costLog: [],

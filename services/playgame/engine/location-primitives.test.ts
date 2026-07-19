@@ -2,6 +2,7 @@ import { getCardState } from './projections/cardRuntime';
 import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type { CardId, LaneId, Owner } from './types/ids';
 import type { InternalCardRecord, MatchState } from './types/state';
+import { EMPTY_CARD_LIFECYCLE } from './types/state';
 import type { MatchEvent } from './types/events';
 import { apply } from './apply';
 import { resolve, resolveTurn } from './resolve';
@@ -72,6 +73,7 @@ const card = (defId: string, owner: Owner, zone: InternalCardRecord['zone'], lan
   zone,
   revealed: zone === 'LANE',
   revealTiming: null,
+  lifecycle: { ...EMPTY_CARD_LIFECYCLE },
   powerLedger: [],
   costDelta: 0,
     costLog: [],

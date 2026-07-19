@@ -11,7 +11,7 @@ import { getCardState } from '../projections/cardRuntime';
 import { describe, it, expect } from 'vitest';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate, select } from '../projections/select';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { MatchState, InternalCardRecord, TrackedVariables } from '../types/state';
 import type { CardId, Owner } from '../types/ids';
 import type { CardDef, Manifest } from '../manifest/types';
@@ -67,6 +67,7 @@ function mkCard(
     counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
     ...opts,
+    lifecycle: opts.lifecycle ?? { ...EMPTY_CARD_LIFECYCLE },
     textLog: opts.textLog ?? [],
   };
 }

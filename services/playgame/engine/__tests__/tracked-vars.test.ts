@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { apply } from '../apply';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
-import { EMPTY_TRACKED_VARIABLES } from '../types/state';
+import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { MatchState, InternalCardRecord } from '../types/state';
 import type { CardId, Owner } from '../types/ids';
 import type { MatchEvent } from '../types/events';
@@ -35,6 +35,7 @@ function mkCard(id: string, owner: Owner, zone: InternalCardRecord['zone'] = 'LA
     zone,
     revealed: zone === 'LANE',
     revealTiming: null,
+    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: [],
     costDelta: 0,
     costLog: [],
