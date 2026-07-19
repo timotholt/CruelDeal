@@ -25,12 +25,8 @@ import type { UiState } from '@/services/playgame/view';
 import { getCardRuntime } from '@/services/playgame/engine/projections';
 export type { UiState } from '@/services/playgame/view';
 
-type PresentedStateStore = {
-  -readonly [K in keyof EngineMatchState]: EngineMatchState[K];
-};
-
 export interface PlayGameContextValue {
-  engineState: EngineMatchState;
+  engineState: Accessor<EngineMatchState>;
   manifest: Manifest;
   localSeat: Seat;
   remoteSeat: Seat;
@@ -69,8 +65,9 @@ export const PlayGameProvider = (props: {
   const initialization = runtime.initialization();
   const openingTimeline = initialization.opening;
 
-  const [engineState, setPresentedState] = createStore<PresentedStateStore>(
-    structuredClone(initialization.setup.finalState) as PresentedStateStore,
+  const [engineState, setPresentedState] = createSignal<EngineMatchState>(
+    initialization.setup.finalState,
+    { equals: false },
   );
   const [ui, setUi] = createStore<UiState>({
     handReservations: [],
@@ -86,11 +83,10 @@ export const PlayGameProvider = (props: {
   let intentCounter = 0;
 
   const adoptRuntimeState = (state: EngineMatchState): void => {
-    // Runtime snapshots are immutable authority objects. Reconcile may retain
-    // newly inserted array members by reference, which lets a later runtime
-    // projection alias store-owned nodes and skip Solid writes by identity.
-    // Replace every top-level branch with a private clone instead.
-    setPresentedState(() => structuredClone(state) as PresentedStateStore);
+    // Runtime snapshots are immutable authority values. Replace the snapshot
+    // reference atomically; never recursively proxy/reconcile the complete
+    // game state and replay log through a presentation store.
+    setPresentedState(() => state);
   };
 
   const adoptWorkingProjection = (
@@ -183,14 +179,14 @@ export const PlayGameProvider = (props: {
   };
 
   const value: PlayGameContextValue = {
-    engineState: engineState as unknown as EngineMatchState,
+    engineState,
     manifest,
     localSeat,
     remoteSeat,
     seatMeta,
     ui,
     setUi,
-    isResolving: () => presentationBusy() || engineState.phase === 'RESOLVING',
+    isResolving: () => presentationBusy() || engineState().phase === 'RESOLVING',
     openingTimeline,
     exportRuntimeReplay: session.exportReplay,
     actions: {

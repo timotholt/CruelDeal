@@ -82,7 +82,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const runtimeReplay = createMemo(() => {
     // Track committed presentation progress; the export itself remains a
     // read-only bootstrap + genesis + transaction-record snapshot.
-    void engineState.log.length;
+    void engineState().log.length;
     return pg.exportRuntimeReplay();
   });
   const replayTimeline = createMemo(() => {
@@ -97,7 +97,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
   const inspectingReplayHistory = createMemo(() => replayCursor() < replayLastCursor());
   const presentedState = createMemo<EngineMatchState>(() => (
-    inspectingReplayHistory() ? replayStep()?.state ?? engineState : engineState
+    inspectingReplayHistory() ? replayStep()?.state ?? engineState() : engineState()
   ));
   const boardLocked = createMemo(() => turnFlowRunning() || isResolving() || presentedState().phase === 'RESOLVING');
   const boardInteractive = createMemo(() => !inspectingReplayHistory() && !boardLocked());
@@ -177,9 +177,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
   // ── Undo (one-card) ──────────────────────────────────────────────────────
   const handleUndoPending = async (): Promise<void> => {
     if (!boardInteractive() || isResolving()) return;
-    const lastStaged = [...engineState.stagingOrder]
+    const liveState = engineState();
+    const lastStaged = [...liveState.stagingOrder]
       .reverse()
-      .find((id) => getCardRuntime(engineState, id, manifest)?.owner === localSeat);
+      .find((id) => getCardRuntime(liveState, id, manifest)?.owner === localSeat);
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
@@ -230,7 +231,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
     // Opening authority is already committed by the runtime. The script is a
     // presentation-only reader of committed transitions plus the UI sidecar.
     const ctx: PlayScriptCtx = {
-      state: engineState,
+      get state() {
+        return engineState();
+      },
       ui,
       setUi,
       manifest,
@@ -473,7 +476,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               followingLive={replayFollowingLive()}
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
-              seed={engineState.seed}
+              seed={engineState().seed}
               steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}

@@ -19,7 +19,7 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
   let panelRef: HTMLDivElement | undefined;
 
   const resolveName = (sourceId: string): string => {
-    const card = getCardRuntime(engineState, sourceId as CardId, manifest);
+    const card = getCardRuntime(engineState(), sourceId as CardId, manifest);
     if (card) {
       return getCardTemplate(manifest, card.defId)?.name ?? card.defId;
     }

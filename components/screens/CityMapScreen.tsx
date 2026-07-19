@@ -30,10 +30,10 @@ function makeMatchSeed() {
 const CityGameBoard = (props: CityMapScreenProps) => {
   const pg = usePlayGame();
   const { engineState, manifest, localSeat, remoteSeat, seatMeta } = pg;
-  const localHand = createMemo(() => getHandForSeat(engineState, localSeat, manifest));
-  const remoteHandSize = createMemo(() => engineState.hand[remoteSeat].length);
-  const localDeckSize = createMemo(() => engineState.deck[localSeat].length);
-  const remoteDeckSize = createMemo(() => engineState.deck[remoteSeat].length);
+  const localHand = createMemo(() => getHandForSeat(engineState(), localSeat, manifest));
+  const remoteHandSize = createMemo(() => engineState().hand[remoteSeat].length);
+  const localDeckSize = createMemo(() => engineState().deck[localSeat].length);
+  const remoteDeckSize = createMemo(() => engineState().deck[remoteSeat].length);
 
   return (
     <div class="board city-game-board ready" id="board">
@@ -49,7 +49,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
         </div>
 
         <div class="hud-top__center">
-          <TurnOrb turn={engineState.turn} />
+          <TurnOrb turn={engineState().turn} />
         </div>
 
         <div class="hud-top__side hud-top__side--right">
@@ -59,7 +59,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
               <span class="opponent-stat__label">Deck</span>
               <span class="opponent-stat__value">{remoteDeckSize()}</span>
             </div>
-            <EnergyBadge value={engineState.energy[remoteSeat]} title={`Opponent energy ${engineState.energy[remoteSeat]}`} />
+            <EnergyBadge value={engineState().energy[remoteSeat]} title={`Opponent energy ${engineState().energy[remoteSeat]}`} />
             <div class="city-player-chip city-player-chip--remote">
               <span class="city-player-chip__meta city-player-chip__meta--right">
                 <span class="city-player-chip__name">{seatMeta[remoteSeat].name}</span>
@@ -72,7 +72,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
       </div>
 
       <div class="board-game-area city-map-game-area">
-        <CityMapBoard seed={engineState.seed} interactive showVenueTooltips />
+        <CityMapBoard seed={engineState().seed} interactive showVenueTooltips />
       </div>
 
       <div class="city-hand-row">
@@ -87,7 +87,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
             {(card) => (
               <HandCard
                 card={card}
-                playable={card.cost <= engineState.energy[localSeat]}
+                playable={card.cost <= engineState().energy[localSeat]}
                 interactive={false}
               />
             )}
@@ -99,8 +99,8 @@ const CityGameBoard = (props: CityMapScreenProps) => {
         <button class="retreat-btn" type="button" onClick={() => props.onExit?.()}>
           RETREAT
         </button>
-        <button class="energy-button" type="button" title={`Your energy ${engineState.energy[localSeat]}`}>
-          <EnergyBadge value={engineState.energy[localSeat]} />
+        <button class="energy-button" type="button" title={`Your energy ${engineState().energy[localSeat]}`}>
+          <EnergyBadge value={engineState().energy[localSeat]} />
         </button>
         <button class="end-turn" type="button">
           END TURN

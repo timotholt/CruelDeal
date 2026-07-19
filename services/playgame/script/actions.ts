@@ -47,6 +47,7 @@ export interface PlayScriptCtx extends Record<string, unknown> {
 const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const PRESENTATION_FRAME_TIMEOUT_MS = 5_000;
 const LOCATION_REVEAL_DURATION_MS = 700;
+const TURN_RESOLUTION_LOCK_HOLD_MS = 100;
 
 type PresentationOutcome = 'completed' | 'failed' | 'timed-out';
 
@@ -198,7 +199,7 @@ const paceTimeline = async (
         // flight. TURN_RESOLUTION_STARTED later reasserts this same value in
         // the provider's atomic committed projection adoption.
         c.setUi('isFlipped', true);
-        await waitFor(250);
+        await waitFor(TURN_RESOLUTION_LOCK_HOLD_MS);
         continue;
       }
 

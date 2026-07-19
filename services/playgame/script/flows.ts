@@ -18,6 +18,8 @@ import {
 } from './actions';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
 
+const TURN_RESOLUTION_ENTRY_DELAY_MS = 80;
+
 /**
  * Opening sequence for a new match.
  *
@@ -69,7 +71,6 @@ export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
  */
 export const resolveTurnFlow = (timeline: CommittedTransactionTimeline): Step =>
   serial(
-    wait(200),
-    wait(250),
+    wait(TURN_RESOLUTION_ENTRY_DELAY_MS),
     paceCommittedTurn(timeline),
   );

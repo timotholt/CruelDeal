@@ -37,9 +37,10 @@ function debugSession(seed = 'provider-0') {
 }
 
 function firstPlayableCard(pg: PlayGameContextValue): CardId {
-  const card = pg.engineState.hand[pg.localSeat].find(
-    (candidate) => getCardCost(pg.engineState, candidate, BOOTSTRAP_MANIFEST)
-      <= pg.engineState.energy[pg.localSeat],
+  const state = pg.engineState();
+  const card = state.hand[pg.localSeat].find(
+    (candidate) => getCardCost(state, candidate, BOOTSTRAP_MANIFEST)
+      <= state.energy[pg.localSeat],
   );
   if (!card) throw new Error('fixture has no playable local card');
   return card;
@@ -52,7 +53,7 @@ function presentOpeningImmediately(pg: PlayGameContextValue): void {
 }
 
 function firstLocationRevealed(pg: PlayGameContextValue): boolean {
-  return locationCardAtLane(pg.engineState, 0)?.face === 'FACE_UP';
+  return locationCardAtLane(pg.engineState(), 0)?.face === 'FACE_UP';
 }
 
 describe('PlayGameProvider runtime synchronization', () => {
@@ -76,16 +77,16 @@ describe('PlayGameProvider runtime synchronization', () => {
       host,
     ));
 
-    expect(pg.engineState.activeLaneOrder).toEqual([0, 1, 2]);
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(0);
+    expect(pg.engineState().activeLaneOrder).toEqual([0, 1, 2]);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(0);
     expect(pg.openingTimeline.transitions[0]?.event.type).toBe('CARD_DRAWN');
     expect(pg.openingTimeline.transitions.some(
       ({ event }) => event.type === 'LANE_CREATED',
     )).toBe(false);
 
     presentOpeningImmediately(pg);
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(4);
-    expect(pg.engineState.deck[pg.localSeat]).toHaveLength(8);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(4);
+    expect(pg.engineState().deck[pg.localSeat]).toHaveLength(8);
   });
 
   it('notifies Solid observers after accepted stage, unstage, and end-turn projections', async () => {
@@ -95,8 +96,8 @@ describe('PlayGameProvider runtime synchronization', () => {
     const Probe = () => {
       const context = usePlayGame();
       const [replayEnabled] = createSignal(false);
-      const replayFrame = createMemo(() => replayEnabled() ? context.engineState : null);
-      const presentedState = createMemo(() => replayFrame() ?? context.engineState);
+      const replayFrame = createMemo(() => replayEnabled() ? context.engineState() : null);
+      const presentedState = createMemo(() => replayFrame() ?? context.engineState());
       onMount(() => { pg = context; });
       createEffect(() => {
         const state = presentedState();
@@ -128,14 +129,14 @@ describe('PlayGameProvider runtime synchronization', () => {
 
     const stageAndExpectObservation = async (label: string) => {
       const cardId = firstPlayableCard(pg);
-      const cost = getCardCost(pg.engineState, cardId, BOOTSTRAP_MANIFEST);
-      const energyBefore = pg.engineState.energy[pg.localSeat];
+      const cost = getCardCost(pg.engineState(), cardId, BOOTSTRAP_MANIFEST);
+      const energyBefore = pg.engineState().energy[pg.localSeat];
       const observationsBefore = observed.length;
 
       await expect(pg.actions.stageCardInLane(cardId, 0 as LaneId)).resolves.toBe(true);
 
-      expect(pg.engineState.stagingOrder, `${label}: store projection`).toContain(cardId);
-      expect(pg.engineState.energy[pg.localSeat]).toBe(energyBefore - cost);
+      expect(pg.engineState().stagingOrder, `${label}: store projection`).toContain(cardId);
+      expect(pg.engineState().energy[pg.localSeat]).toBe(energyBefore - cost);
       expect(observed.length, `${label}: reactive notification`).toBeGreaterThan(observationsBefore);
       const lastObservation = JSON.parse(observed.at(-1)!);
       expect(lastObservation.stagingOrder).toContain(cardId);
@@ -148,7 +149,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     const turnOneCard = await stageAndExpectObservation('turn 1 stage');
     const beforeUndoObservations = observed.length;
     await expect(pg.actions.undoPendingCard(turnOneCard)).resolves.toBe(true);
-    expect(pg.engineState.stagingOrder).not.toContain(turnOneCard);
+    expect(pg.engineState().stagingOrder).not.toContain(turnOneCard);
     expect(observed.length, 'unstage reactive notification').toBeGreaterThan(beforeUndoObservations);
     expect(JSON.parse(observed.at(-1)!).stagingOrder).not.toContain(turnOneCard);
 
@@ -156,13 +157,13 @@ describe('PlayGameProvider runtime synchronization', () => {
     const beforeEndTurnObservations = observed.length;
     const timeline = await pg.actions.endTurn();
     expect(timeline).not.toBeNull();
-    expect(pg.engineState.turn, 'display does not snap before presentation').toBe(1);
-    expect(pg.engineState.stagingOrder, 'staged projection survives the system commit')
+    expect(pg.engineState().turn, 'display does not snap before presentation').toBe(1);
+    expect(pg.engineState().stagingOrder, 'staged projection survives the system commit')
       .toContain(turnOneCard);
-    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(turnOneCard);
+    expect(pg.engineState().lanesById[0].cards[pg.localSeat]).toContain(turnOneCard);
     for (const frame of timeline?.transitions ?? []) pg.actions.presentCommittedFrame(frame);
-    expect(pg.engineState.turn).toBe(2);
-    expect(pg.engineState.stagingOrder).toHaveLength(0);
+    expect(pg.engineState().turn).toBe(2);
+    expect(pg.engineState().stagingOrder).toHaveLength(0);
     expect(observed.length, 'end-turn reactive notification').toBeGreaterThan(beforeEndTurnObservations);
     expect(JSON.parse(observed.at(-1)!).turn).toBe(2);
     pg.actions.finishTurnPresentation();
@@ -192,16 +193,16 @@ describe('PlayGameProvider runtime synchronization', () => {
     presentOpeningImmediately(pg);
     const cardId = firstPlayableCard(pg);
     await expect(pg.actions.stageCardInLane(cardId, 0)).resolves.toBe(true);
-    expect(pg.engineState.hand[pg.localSeat]).not.toContain(cardId);
-    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
+    expect(pg.engineState().hand[pg.localSeat]).not.toContain(cardId);
+    expect(pg.engineState().lanesById[0].cards[pg.localSeat]).toContain(cardId);
 
     const committedFinalFrame = pg.openingTimeline.transitions.at(-1);
     if (!committedFinalFrame) throw new Error('opening timeline has no final frame');
     pg.actions.presentCommittedFrame(committedFinalFrame);
 
-    expect(pg.engineState.stagingOrder).toContain(cardId);
-    expect(pg.engineState.hand[pg.localSeat]).not.toContain(cardId);
-    expect(pg.engineState.lanesById[0].cards[pg.localSeat]).toContain(cardId);
+    expect(pg.engineState().stagingOrder).toContain(cardId);
+    expect(pg.engineState().hand[pg.localSeat]).not.toContain(cardId);
+    expect(pg.engineState().lanesById[0].cards[pg.localSeat]).toContain(cardId);
   });
 
   it('locks every staged card face-down at resolution start, then presents reveals in frame order', async () => {
@@ -213,7 +214,7 @@ describe('PlayGameProvider runtime synchronization', () => {
       onMount(() => { pg = context; });
       createRenderEffect(() => {
         facingObservations.push({
-          phase: context.engineState.phase,
+          phase: context.engineState().phase,
           locked: context.ui.isFlipped,
         });
       });
@@ -247,15 +248,15 @@ describe('PlayGameProvider runtime synchronization', () => {
     pg.actions.presentCommittedFrame(resolutionStart);
     const lockObservations = facingObservations.slice(observationsBeforeLock);
 
-    const stagedIds = [...pg.engineState.stagingOrder];
+    const stagedIds = [...pg.engineState().stagingOrder];
     expect(stagedIds).toContain(localCardId);
     expect(new Set(stagedIds.map((id) =>
-      getCardRuntime(pg.engineState, id, BOOTSTRAP_MANIFEST)?.owner)))
+      getCardRuntime(pg.engineState(), id, BOOTSTRAP_MANIFEST)?.owner)))
       .toEqual(new Set(['P0', 'P1']));
     expect(pg.ui.isFlipped, 'local owner-facing presentation lock').toBe(true);
     expect(lockObservations).toEqual([{ phase: 'RESOLVING', locked: true }]);
     expect(stagedIds.every((id) =>
-      getCardRuntime(pg.engineState, id, BOOTSTRAP_MANIFEST)?.revealed === false))
+      getCardRuntime(pg.engineState(), id, BOOTSTRAP_MANIFEST)?.revealed === false))
       .toBe(true);
 
     const revealFrames = timeline.transitions
@@ -275,13 +276,13 @@ describe('PlayGameProvider runtime synchronization', () => {
       if (frame.event.type !== 'CARD_FLIPPED') continue;
       presentedRevealOrder.push(frame.event.cardId);
       expect(getCardRuntime(
-        pg.engineState,
+        pg.engineState(),
         frame.event.cardId,
         BOOTSTRAP_MANIFEST,
       )?.revealed).toBe(true);
       for (const pendingId of expectedRevealOrder.slice(presentedRevealOrder.length)) {
         expect(getCardRuntime(
-          pg.engineState,
+          pg.engineState(),
           pendingId,
           BOOTSTRAP_MANIFEST,
         )?.revealed).toBe(false);
@@ -321,7 +322,7 @@ describe('PlayGameProvider runtime synchronization', () => {
       host,
     ));
 
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(0);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(0);
     expect(firstLocationRevealed(pg)).toBe(false);
 
     const boardWrap = document.createElement('div');
@@ -331,7 +332,9 @@ describe('PlayGameProvider runtime synchronization', () => {
     document.body.append(boardWrap);
 
     const presentationCtx: PlayScriptCtx = {
-      state: pg.engineState,
+      get state() {
+        return pg.engineState();
+      },
       ui: pg.ui,
       setUi: pg.setUi,
       manifest: pg.manifest,
@@ -347,7 +350,7 @@ describe('PlayGameProvider runtime synchronization', () => {
         pg.actions.presentCommittedFrame(frame);
         presentedFrames.push({
           type: frame.event.type,
-          localHandSize: pg.engineState.hand[pg.localSeat].length,
+          localHandSize: pg.engineState().hand[pg.localSeat].length,
           laneOneRevealed: firstLocationRevealed(pg),
         });
       },
@@ -361,11 +364,11 @@ describe('PlayGameProvider runtime synchronization', () => {
     };
 
     await runOpeningBeat(paceCommittedOpeningDeal(pg.openingTimeline));
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(3);
     expect(firstLocationRevealed(pg)).toBe(false);
 
     await runOpeningBeat(paceCommittedOpeningLocationReveal(pg.openingTimeline));
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(3);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(3);
     expect(firstLocationRevealed(pg)).toBe(true);
 
     await runOpeningBeat(paceCommittedOpeningTurnStart(pg.openingTimeline));
@@ -380,13 +383,13 @@ describe('PlayGameProvider runtime synchronization', () => {
     expect(locationFrame?.laneOneRevealed).toBe(true);
     expect(presentedFrames.slice(0, locationFrameIndex)
       .every((frame) => !frame.laneOneRevealed)).toBe(true);
-    expect(pg.engineState.hand[pg.localSeat]).toHaveLength(4);
-    expect(pg.engineState.deck[pg.localSeat]).toHaveLength(8);
+    expect(pg.engineState().hand[pg.localSeat]).toHaveLength(4);
+    expect(pg.engineState().deck[pg.localSeat]).toHaveLength(8);
     expect(firstLocationRevealed(pg)).toBe(true);
 
     expect(pg.ui.handReservations).toEqual([]);
-    const hand = getHandForSeat(pg.engineState, pg.localSeat, pg.manifest);
-    const affordable = hand.filter((card) => card.cost <= pg.engineState.energy[pg.localSeat]);
+    const hand = getHandForSeat(pg.engineState(), pg.localSeat, pg.manifest);
+    const affordable = hand.filter((card) => card.cost <= pg.engineState().energy[pg.localSeat]);
     const interactive = selectInteractiveHand(
       hand,
       new Set(pg.ui.handReservations.map((card) => card.id)),

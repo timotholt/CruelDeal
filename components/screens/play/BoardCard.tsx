@@ -41,7 +41,7 @@ export const BoardCard = (props: BoardCardProps) => {
       : [];
     cardVfxRegistry.reconcilePersistent(cardId(), sources);
   });
-  const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState.stagingOrder;
+  const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState().stagingOrder;
   const interactive = (): boolean => props.interactive ?? true;
   const inspectable = (): boolean => props.inspectable ?? interactive();
 

@@ -7,6 +7,14 @@ const source = (relativePath: string): string => readFileSync(
 );
 
 describe('Phase 1.21 presentation architecture fences', () => {
+  it('adopts immutable match snapshots by identity instead of deep-cloning them into a store', () => {
+    const context = source('../../../contexts/PlayGameContext.tsx');
+    expect(context).toContain('createSignal<EngineMatchState>');
+    expect(context).toContain('setPresentedState(() => state)');
+    expect(context).not.toContain('structuredClone(');
+    expect(context).not.toContain('createStore<PresentedStateStore>');
+  });
+
   it('does not install a second board-sizing authority on canonical /play', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
     const css = source('../../../src/styles/playgame.css');

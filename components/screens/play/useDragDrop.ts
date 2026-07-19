@@ -19,7 +19,7 @@ import type { ResolvedCard } from '@/services/playgame/view';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 
 const DRAG_THRESHOLD_PX = 6;
-const LANDING_DURATION_MS = 260;
+const LANDING_DURATION_MS = 120;
 
 type DragOrigin = 'hand' | 'lane';
 
@@ -45,7 +45,7 @@ type DropTarget =
 export interface DragDropOpts {
   boardEl: HTMLElement;
   localSeat: Seat;
-  engineState: MatchState;
+  engineState: () => MatchState;
   isResolving: () => boolean;
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
@@ -99,7 +99,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     boardEl.querySelectorAll('.next-drop').forEach((element) => element.classList.remove('next-drop'));
   };
 
-  const isPending = (cardId: string): boolean => engineState.stagingOrder.includes(cardId as never);
+  const isPending = (cardId: string): boolean => engineState().stagingOrder.includes(cardId as never);
 
   const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
     if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
@@ -112,8 +112,9 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
     if (zone.dataset.dropZone !== 'lane') return null;
     const laneId = Number(zone.dataset.laneId) as LaneId;
-    const lane = engineState.lanesById[laneId];
-    if (!isActiveLane(engineState, laneId) || !lane) return null;
+    const state = engineState();
+    const lane = state.lanesById[laneId];
+    if (!isActiveLane(state, laneId) || !lane) return null;
     if (lane.cards[localSeat].length >= 4) return null;
     return { kind: 'lane', element: zone, laneId };
   };
@@ -234,7 +235,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   const performDrop = async (drag: ActivePointerDrag): Promise<void> => {
     const target = drag.target;
     const siblingIds = [
-      ...engineState.stagingOrder.map(String),
+      ...engineState().stagingOrder.map(String),
       ...localHand().map((card) => card.id),
     ].filter((id) => id !== drag.cardId);
     const oldRects = captureCardRects(siblingIds, cardRefs);

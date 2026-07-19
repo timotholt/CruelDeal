@@ -78,7 +78,7 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     const dispose = setupDragDrop({
       boardEl: board,
       localSeat: 'P0',
-      engineState: state,
+      engineState: () => state,
       isResolving: () => false,
       localHand: () => [{ id: 'pointer-card' } as ResolvedCard],
       cardRefs,
@@ -160,7 +160,7 @@ describe('pointer visual handoff', () => {
     const dispose = setupDragDrop({
       boardEl: board,
       localSeat: 'P0',
-      engineState: state,
+      engineState: () => state,
       isResolving: () => false,
       localHand: () => [{ id: 'pointer-card' } as ResolvedCard],
       cardRefs,
