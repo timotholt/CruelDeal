@@ -57,12 +57,10 @@ export {
 export {
   getAllLocationIds,
   getAllLocationStates,
-  getLocationLifecycle,
   getLocationRuntime,
   getLocationState,
   redactLocationsForSeat,
   type CurrentLocationPosition,
-  type LocationLifecycle,
   type LocationRuntime,
   type LocationState,
 } from './locationRuntime';

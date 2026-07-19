@@ -232,59 +232,22 @@ export type SpawnSource =
   | { readonly kind: 'COPY_OF';          readonly sourceCardId: CardId }
   | { readonly kind: 'SYSTEM' };          // test fixtures / debug scaffolding
 
-export interface LifecycleStamp {
-  readonly frame: Frame;
-  readonly turn: number;
-}
-
-export interface CardPositionSnapshot {
-  readonly zone: CardZone;
-  readonly lane: LaneId | null;
-  /** Zero-based position in a lane, hand, or deck; null for unordered zones. */
-  readonly index: number | null;
-}
-
-export interface CardPositionTransition extends LifecycleStamp {
-  readonly from: CardPositionSnapshot | null;
-  readonly to: CardPositionSnapshot;
-}
-
 /**
- * Latest lifecycle facts carried by every current card snapshot.
- *
- * These values are reducer-maintained indexes, not projections of the replay
- * log. Gameplay may read them in O(1); complete occurrence history belongs to
- * replay/debug tooling.
+ * Compact lifecycle indexes with active mechanical readers. Complete
+ * occurrence history belongs to runtime-owned framed events.
  */
 export interface CardLifecycleState {
-  readonly frameCreated: Frame | null;
-  readonly turnCreated: number | null;
-  readonly framePlayed: Frame | null;
-  readonly turnPlayed: number | null;
-  readonly lanePlayed: LaneId | null;
-  readonly frameRevealed: Frame | null;
-  readonly turnRevealed: number | null;
-  readonly frameDestroyed: Frame | null;
-  readonly turnDestroyed: number | null;
-  readonly zoneEnteredAt: Readonly<Partial<Record<CardZone, LifecycleStamp>>>;
-  readonly zoneLeftAt: Readonly<Partial<Record<CardZone, LifecycleStamp>>>;
-  readonly lastPositionTransition: CardPositionTransition | null;
+  /** Orders unresolved cards staged within the same priority window. */
+  readonly framePlayed?: Frame;
+  /** Supports current-turn "played here" mechanics. */
+  readonly turnPlayed?: number;
+  /** Supports current-turn lane-specific play mechanics. */
+  readonly lanePlayed?: LaneId;
+  /** Supports "destroyed last turn" mechanics. */
+  readonly turnDestroyed?: number;
 }
 
-export const EMPTY_CARD_LIFECYCLE: CardLifecycleState = Object.freeze({
-  frameCreated: null,
-  turnCreated: null,
-  framePlayed: null,
-  turnPlayed: null,
-  lanePlayed: null,
-  frameRevealed: null,
-  turnRevealed: null,
-  frameDestroyed: null,
-  turnDestroyed: null,
-  zoneEnteredAt: Object.freeze({}),
-  zoneLeftAt: Object.freeze({}),
-  lastPositionTransition: null,
-});
+export const EMPTY_CARD_LIFECYCLE: CardLifecycleState = Object.freeze({});
 
 export interface InternalCardRecord {
   readonly id: CardId;
@@ -339,43 +302,6 @@ export type LocationZone =
 
 export type LocationCardFace = 'FACE_DOWN' | 'FACE_UP';
 
-export interface LocationPositionSnapshot {
-  readonly zone: LocationZone;
-  readonly lane: LaneId | null;
-  readonly pendingLane: LaneId | null;
-  readonly index: number | null;
-}
-
-export interface LocationPositionTransition extends LifecycleStamp {
-  readonly from: LocationPositionSnapshot | null;
-  readonly to: LocationPositionSnapshot;
-}
-
-/** Current location lifecycle facts, maintained atomically by the reducer. */
-export interface LocationLifecycleState {
-  readonly frameCreated: Frame | null;
-  readonly turnCreated: number | null;
-  readonly framePlayed: Frame | null;
-  readonly turnPlayed: number | null;
-  readonly frameRevealed: Frame | null;
-  readonly turnRevealed: number | null;
-  readonly zoneEnteredAt: Readonly<Partial<Record<LocationZone, LifecycleStamp>>>;
-  readonly zoneLeftAt: Readonly<Partial<Record<LocationZone, LifecycleStamp>>>;
-  readonly lastPositionTransition: LocationPositionTransition | null;
-}
-
-export const EMPTY_LOCATION_LIFECYCLE: LocationLifecycleState = Object.freeze({
-  frameCreated: null,
-  turnCreated: null,
-  framePlayed: null,
-  turnPlayed: null,
-  frameRevealed: null,
-  turnRevealed: null,
-  zoneEnteredAt: Object.freeze({}),
-  zoneLeftAt: Object.freeze({}),
-  lastPositionTransition: null,
-});
-
 export interface InternalLocationRecord {
   readonly id: LocationCardInstanceId;
   readonly defId: string;
@@ -385,7 +311,6 @@ export interface InternalLocationRecord {
   readonly laneId: LaneId | null;
   readonly pendingLaneId: LaneId | null;
   readonly face: LocationCardFace;
-  readonly lifecycle: LocationLifecycleState;
   /** Seats entitled to know identity while the card remains face-down. */
   readonly identityKnownTo: readonly Seat[];
   readonly revealCount: number;

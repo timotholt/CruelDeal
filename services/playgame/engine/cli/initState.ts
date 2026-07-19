@@ -90,14 +90,7 @@ function buildDeck(
       zone: 'DECK',
       revealed: false,
       revealTiming: null,
-      lifecycle: {
-        ...EMPTY_CARD_LIFECYCLE,
-        frameCreated: GENESIS_FRAME,
-        turnCreated: 1,
-        zoneEnteredAt: {
-          DECK: { frame: GENESIS_FRAME, turn: 1 },
-        },
-      },
+      lifecycle: EMPTY_CARD_LIFECYCLE,
       powerLedger: [],
       costDelta: 0,
       costLog: [],

@@ -51,7 +51,6 @@ export {
   getAllLocationIds,
   getAllLocationTemplates,
   getLocationAbilityLabels,
-  getLocationLifecycle,
   getLocationRuntime,
   getLocationTemplate,
   type CardAbilityLabel,
@@ -65,7 +64,6 @@ export {
   type CurrentLocationPosition,
   type LocationAbilityLabel,
   type LocationAbilitySlot,
-  type LocationLifecycle,
   type LocationRuntime,
   type LocationTemplate,
 } from './projections';

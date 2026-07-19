@@ -1,7 +1,6 @@
 import {
   getAllLocationIds,
   getAllLocationStates,
-  getLocationLifecycle,
   getLocationState,
 } from '../projections/locationRuntime';
 import { describe, expect, it } from 'vitest';
@@ -86,7 +85,6 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
     expect(after.face).toBe('FACE_UP');
     expect(after.identityKnownTo).toEqual(['P0', 'P1']);
     expect(after.revealCount).toBe(1);
-    expect(getLocationLifecycle(revealed, after.id).frameRevealed).not.toBeNull();
     expect(revealed.lanesById[0].locationSlot.revealAtTurn).toBeNull();
     expect(validateLocationState(revealed)).toEqual([]);
   });
