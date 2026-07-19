@@ -54,6 +54,8 @@ const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeo
 const PRESENTATION_FRAME_TIMEOUT_MS = 5_000;
 const LOCATION_REVEAL_DURATION_MS = 700;
 const TURN_RESOLUTION_LOCK_HOLD_MS = 100;
+const TURN_BANNER_DURATION_MS = 2_100;
+const TURN_BANNER_HOLD_MS = 1_200;
 
 type PresentationOutcome = 'completed' | 'failed' | 'timed-out';
 
@@ -171,6 +173,17 @@ const paceFrame = async (
     // The synthetic local-lock beat has already painted. This canonical frame
     // now adopts authority without introducing a second facing transition.
     presentFrame();
+    return;
+  }
+  if (frame.event.type === 'TURN_STARTED') {
+    // Bind the banner to the canonical turn boundary. Holding this frame keeps
+    // later bookkeeping and the location reveal behind the same cue order used
+    // by the opening storyboard.
+    presentFrame();
+    showToast(c.toastArea, `TURN ${frame.event.turn}`, {
+      duration: TURN_BANNER_DURATION_MS,
+    });
+    await waitFor(TURN_BANNER_HOLD_MS);
     return;
   }
   if (frame.event.type === 'LOCATION_REVEALED') {
@@ -301,10 +314,6 @@ export const paceCommittedTurn = (timeline: CommittedTransactionTimeline): Step 
     if (c.state.phase === 'ENDED' && c.state.result && !c.ui.lockedResult) {
       c.setUi('lockedResult', c.state.result);
       c.setUi('showEndGamePrompt', true);
-    }
-    if (c.state.phase !== 'ENDED') {
-      showToast(c.toastArea, `TURN ${c.state.turn}`, { duration: 2100 });
-      await waitFor(1200);
     }
   } finally {
     c.finishTurnPresentation();
