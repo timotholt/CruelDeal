@@ -9,9 +9,7 @@
 
 import { serial, wait, type Step } from './runner';
 import {
-  paceCommittedOpeningDeal,
-  paceCommittedOpeningLocationReveal,
-  paceCommittedOpeningTurnStart,
+  paceCommittedOpening,
   paceCommittedTurn,
   presentPlayfieldEvent,
   toast,
@@ -45,12 +43,9 @@ export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
     wait(150),
 
     // Opening authority was committed by MatchRuntime as revision 1 before
-    // this storyboard mounted. These steps only split the immutable frames
-    // into the designer's presentation beats.
-    paceCommittedOpeningDeal(timeline),
-    toast('TURN 1', { duration: 1800 }),
-    paceCommittedOpeningLocationReveal(timeline),
-    paceCommittedOpeningTurnStart(timeline),
+    // this storyboard mounted. The presentation hook walks those immutable
+    // frames once and inserts the Turn 1 cue at the location boundary.
+    paceCommittedOpening(timeline),
   );
 
 /**

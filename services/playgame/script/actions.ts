@@ -56,8 +56,11 @@ const LOCATION_REVEAL_DURATION_MS = 700;
 const TURN_RESOLUTION_LOCK_HOLD_MS = 100;
 const TURN_BANNER_DURATION_MS = 2_100;
 const TURN_BANNER_HOLD_MS = 1_200;
+const OPENING_TURN_BANNER_DURATION_MS = 1_800;
+const OPENING_TURN_BANNER_HOLD_MS = OPENING_TURN_BANNER_DURATION_MS + 100;
 
 type PresentationOutcome = 'completed' | 'failed' | 'timed-out';
+type BeforeFrameHook = (frame: EventTransition) => Promise<void> | void;
 
 const settlePresentationWithin = (
   presentation: Promise<void>,
@@ -186,6 +189,12 @@ const paceFrame = async (
     await waitFor(TURN_BANNER_HOLD_MS);
     return;
   }
+  if (frame.event.type === 'MATCH_ENDED') {
+    presentFrame();
+    c.setUi('lockedResult', frame.event.result);
+    c.setUi('showEndGamePrompt', true);
+    return;
+  }
   if (frame.event.type === 'LOCATION_REVEALED') {
     await paceLocationReveal(c, frame, presentFrame);
     return;
@@ -208,6 +217,7 @@ const paceTimeline = async (
   eventIndexes = planCommittedEventPacing(
     timeline.transaction.framedEvents.map(({ event }) => event),
   ).orderedEventIndexes,
+  beforeFrame?: BeforeFrameHook,
 ): Promise<void> => {
   try {
     const beats = planCommittedResolutionWalk(timeline, c.localSeat, eventIndexes);
@@ -223,6 +233,7 @@ const paceTimeline = async (
       }
 
       const frame = beat.frame;
+      await beforeFrame?.(frame);
       const startedAtMs = monotonicNow();
       let acceptingAnimationDispatch = true;
       let framePresented = false;
@@ -268,42 +279,21 @@ const paceTimeline = async (
   }
 };
 
-const openingRevealIndex = (timeline: CommittedTransactionTimeline): number =>
-  timeline.transaction.framedEvents.findIndex(({ event }) => event.type === 'LOCATION_REVEALED');
-
-const openingDealEndIndex = (c: PlayScriptCtx, timeline: CommittedTransactionTimeline): number => {
-  const revealIndex = openingRevealIndex(timeline);
-  if (revealIndex >= 0) return revealIndex;
-  return Math.min(timeline.transitions.length, c.manifest.constants.startingHandSize * 2);
-};
-
-export const paceCommittedOpeningDeal = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
+export const paceCommittedOpening = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
-  const end = openingDealEndIndex(c, timeline);
+  let turnBannerPresented = false;
   await paceTimeline(
     c,
     timeline,
-    Array.from({ length: end }, (_, index) => index),
-  );
-};
-
-export const paceCommittedOpeningLocationReveal = (
-  timeline: CommittedTransactionTimeline,
-): Step => async (ctx) => {
-  const revealIndex = openingRevealIndex(timeline);
-  await paceTimeline(ctx as PlayScriptCtx, timeline, revealIndex < 0 ? [] : [revealIndex]);
-};
-
-export const paceCommittedOpeningTurnStart = (
-  timeline: CommittedTransactionTimeline,
-): Step => async (ctx) => {
-  const c = ctx as PlayScriptCtx;
-  const revealIndex = openingRevealIndex(timeline);
-  const start = revealIndex < 0 ? openingDealEndIndex(c, timeline) : revealIndex + 1;
-  await paceTimeline(
-    c,
-    timeline,
-    Array.from({ length: timeline.transitions.length - start }, (_, index) => start + index),
+    undefined,
+    async (frame) => {
+      if (turnBannerPresented || frame.event.type !== 'LOCATION_REVEALED') return;
+      turnBannerPresented = true;
+      showToast(c.toastArea, 'TURN 1', {
+        duration: OPENING_TURN_BANNER_DURATION_MS,
+      });
+      await waitFor(OPENING_TURN_BANNER_HOLD_MS);
+    },
   );
 };
 
@@ -311,10 +301,6 @@ export const paceCommittedTurn = (timeline: CommittedTransactionTimeline): Step 
   const c = ctx as PlayScriptCtx;
   try {
     await paceTimeline(c, timeline);
-    if (c.state.phase === 'ENDED' && c.state.result && !c.ui.lockedResult) {
-      c.setUi('lockedResult', c.state.result);
-      c.setUi('showEndGamePrompt', true);
-    }
   } finally {
     c.finishTurnPresentation();
   }

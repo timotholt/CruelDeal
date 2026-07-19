@@ -570,10 +570,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
               </div>
               <div class="mt-3 font-black uppercase tracking-[0.12em] text-2xl">
                 {recordedOutcomeLabel() === 'WIN'
-                  ? 'You Won On Turn 6'
+                  ? `You Won On Turn ${presentedState().turn}`
                   : recordedOutcomeLabel() === 'LOSE'
-                    ? 'You Lost On Turn 6'
-                    : 'Draw Locked On Turn 6'}
+                    ? `You Lost On Turn ${presentedState().turn}`
+                    : `Draw Locked On Turn ${presentedState().turn}`}
               </div>
               <p class="mt-3 text-sm leading-6 text-slate-300">
                 The official result is already recorded. Do you want to keep playing just for fun?

@@ -45,6 +45,19 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(css).toContain('transition: opacity 2000ms ease');
   });
 
+  it('keeps opening on one committed frame walk and derives terminal copy from presented state', () => {
+    const actions = source('../../../services/playgame/script/actions.ts');
+    const flows = source('../../../services/playgame/script/flows.ts');
+    const playBoard = source('./PlayBoard.tsx');
+
+    expect(flows).toContain('paceCommittedOpening(timeline)');
+    expect(flows).not.toContain('paceCommittedOpeningDeal');
+    expect(flows).not.toContain('paceCommittedOpeningLocationReveal');
+    expect(actions).not.toContain('openingRevealIndex');
+    expect(playBoard).toContain('presentedState().turn');
+    expect(playBoard).not.toContain('Turn 6');
+  });
+
   it('keeps opponent telemetry in one fixed header row with visible zone anchors', () => {
     const playBoard = source('./PlayBoard.tsx');
     const css = source('../../../src/styles/playgame.css');
