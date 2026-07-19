@@ -18,6 +18,7 @@ import {
 import {
   assertTransferCoverage,
   deriveCardTransfers,
+  resolveCardTransferFace,
   zoneAnchorKey,
   type CardTransfer,
   type CardZoneRef,
@@ -217,13 +218,16 @@ const prepareTransferBeforeDispatch = (
   );
   if (!sourceEl?.isConnected) return null;
   const snapshot = captureCardVisual(transfer.cardId, sourceEl);
+  const initialFace = transfer.face === 'ownerVisible'
+    ? resolveCardTransferFace(transfer.face, transfer.owner, ctx.localSeat) ?? snapshot.face
+    : snapshot.face;
   const session = ctx.motionSurface.cardMotion.begin({
     cardId: transfer.cardId,
     route: `${transfer.from.kind}->${transfer.to.kind}`,
     basis: { kind: 'clone', snapshot },
     startRect: snapshot.rect,
     rotationDegrees: snapshot.rotationDegrees,
-    face: snapshot.face,
+    face: initialFace,
     sourceElement: sourceEl,
     zIndex: transfer.style.zIndex,
     className: 'transfer-flyer',
@@ -241,7 +245,11 @@ const basisForLogicalSource = (
   transfer: CardTransfer,
 ): SurrogateBasis => {
   const endpoint = ctx.motionSurface.cardMotion.endpoint(transfer.cardId);
-  const protectedSource = transfer.face === 'faceDown'
+  const protectedSource = resolveCardTransferFace(
+    transfer.face,
+    transfer.owner,
+    ctx.localSeat,
+  ) === 'faceDown'
     || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.remoteSeat)
     || (transfer.from.kind === 'DECK' && transfer.from.owner === ctx.remoteSeat)
     || (transfer.to.kind === 'HAND' && transfer.to.owner === ctx.remoteSeat);
@@ -286,7 +294,12 @@ const animateOneTransfer = async (
   const sourceRect = transfer.from.kind === 'GENERATED'
     ? deckSourceRect(ctx)
     : source.rect;
-  const sourceIsProtected = transfer.face === 'faceDown'
+  const transferFace = resolveCardTransferFace(
+    transfer.face,
+    transfer.owner,
+    ctx.localSeat,
+  );
+  const sourceIsProtected = transferFace === 'faceDown'
     || transfer.from.kind === 'DECK'
     || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.remoteSeat)
     || (transfer.to.kind === 'HAND' && transfer.to.owner === ctx.remoteSeat);
@@ -304,7 +317,7 @@ const animateOneTransfer = async (
   const target = endpoint ?? {
     rect: destination.rect,
     rotationDegrees: 0,
-    ...(transfer.face === 'preserve' ? {} : { face: transfer.face }),
+    ...(transferFace === null ? {} : { face: transferFace }),
   };
   const motionResult = await session.animateTo(target, {
     durationMs: transfer.style.durationMs,
@@ -313,7 +326,7 @@ const animateOneTransfer = async (
     opacityTo: transfer.style.opacity === 'fadeOut' ? 0 : 1,
     scaleFrom: transfer.style.scale.from,
     scaleTo: transfer.style.scale.to,
-    ...(transfer.face === 'preserve' ? {} : { faceAtLanding: transfer.face }),
+    ...(transferFace === null ? {} : { faceAtLanding: transferFace }),
   });
   if (motionResult) return;
   if (endpoint) await session.handoffTo(endpoint);
