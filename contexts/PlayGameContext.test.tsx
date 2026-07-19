@@ -27,7 +27,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function debugSession(seed = 'provider-0') {
+function debugSession(seed = 'provider-1') {
   const candidate = buildDebugMatchBootstrap(
     DEBUG_DECKS[0],
     DEBUG_DECKS[7],
