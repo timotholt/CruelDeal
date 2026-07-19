@@ -30,6 +30,7 @@ import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { buildCardDrawEvents } from './draw';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
+import { revealLocation } from './locationLifecycle';
 
 // ============================================================================
 // resolve — intent → events
@@ -562,19 +563,31 @@ export function resolveTurn(
     }
   }
 
-  // Phase 7  Reveal the location for the upcoming turn (turns 2–3).
-  //          `s.turn === nextTurn` now, so the lane index is `turn - 1`.
-  if (s.turn <= 3) {
-    const laneIdx = (s.turn - 1) as LaneId;
-    const loc = locationCardAtLane(s, laneIdx);
-    if (loc?.face === 'FACE_DOWN') {
-      const revealEvt: MatchEvent = {
-        type: 'LOCATION_REVEALED',
-        lane: laneIdx,
-        locationId: loc.id,
-      };
-      events.push(revealEvt);
-      s = apply(s, revealEvt, manifest);
+  // Phase 7  Reveal every active slot scheduled for this turn, in current
+  //          topology order. Reveal timing belongs to the slot; lane IDs are
+  //          stable identities and are never inferred from the turn number.
+  const scheduledLocationLanes = activeLaneIds(s).filter((laneId) => {
+    const location = locationCardAtLane(s, laneId);
+    return location?.face === 'FACE_DOWN'
+      && s.lanesById[laneId].locationSlot.revealAtTurn === s.turn;
+  });
+  for (const laneId of scheduledLocationLanes) {
+    const loc = locationCardAtLane(s, laneId);
+    if (
+      loc?.face === 'FACE_DOWN'
+      && s.lanesById[laneId]?.status === 'ACTIVE'
+      && s.lanesById[laneId].locationSlot.revealAtTurn === s.turn
+    ) {
+      const reveal = revealLocation(s, laneId, {
+        sourceId: loc.id,
+        effectKind: 'SYSTEM',
+        systemReason: 'TURN_START_LOCATION_REVEAL',
+      }, manifest);
+      if (!reveal.ok) {
+        throw new Error(`turn-start location reveal failed: ${reveal.message}`);
+      }
+      events.push(...reveal.events);
+      s = reveal.state;
 
       const locDef = manifest.locations[loc.defId];
       const locReveal = locDef?.abilities.onReveal ?? [];
@@ -584,7 +597,7 @@ export function resolveTurn(
           manifest,
           self: loc.id,
           selfKind: 'location',
-          selfLane: laneIdx,
+          selfLane: laneId,
           selfOwner: null,
           rng: rng.fork(`location-reveal:${loc.id}:${idx}`),
           source: { sourceId: loc.id, effectKind: 'LOCATION', exprIdx: idx },

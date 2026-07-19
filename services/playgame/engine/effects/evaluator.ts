@@ -39,6 +39,7 @@ import { resolveCardPowerChange } from './power-change';
 import {
   destroyAllOtherLanes,
   destroyLane,
+  replaceLocationCard,
   type LocationLifecycleResult,
 } from '../locationLifecycle';
 import { isActiveLane, locationCardAtLane } from '../laneTopology';
@@ -1095,18 +1096,16 @@ export function evalEffect(
         const prev = locationCardAtLane(s, lane);
         if (!prev) continue;
         const newId = `loc-${lane}-${ctx.rng.fork(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId;
-        const e: MatchEvent = {
-          type: 'LOCATION_REPLACED',
-          lane,
-          oldId: prev.id,
+        const replacement = replaceLocationCard(s, lane, {
           newId,
           newDefId: effect.newDefId,
           cause: ctx.source,
           oldDestination: 'DISCARD',
-          revealed: false,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+          revealPolicy: 'KEEP_SLOT_SCHEDULE',
+        }, manifest);
+        if (!replacement.ok) continue;
+        events.push(...replacement.events);
+        s = replacement.state;
       }
       return { events, state: s };
     }

@@ -550,11 +550,10 @@ function applyBody(
             zone: 'LANE',
             laneId: event.lane,
             pendingLaneId: null,
-            face: event.revealed ? 'FACE_UP' : 'FACE_DOWN',
-            identityKnownTo: event.revealed ? ['P0', 'P1'] : [],
-            revealCount: event.revealed ? 1 : 0,
+            face: 'FACE_DOWN',
+            identityKnownTo: [],
+            revealCount: 0,
             playedAt: eventFrame,
-            ...(event.revealed ? { revealedAt: eventFrame } : {}),
           },
         },
         locationDeck: {
@@ -568,16 +567,32 @@ function applyBody(
             locationSlot: {
               ...lane.locationSlot,
               locationCardId: location.id,
-              revealAtTurn: event.revealAtTurn,
             },
           },
         },
       };
     }
 
+    case 'LOCATION_SLOT_REVEAL_SCHEDULED': {
+      const lane = state.lanesById[event.lane];
+      if (!lane || lane.locationSlot.locationCardId === null) return state;
+      return patchLane(state, event.lane, {
+        locationSlot: {
+          ...lane.locationSlot,
+          revealAtTurn: event.revealAtTurn,
+        },
+      });
+    }
+
     case 'LOCATION_REVEALED': {
       const location = locationAtLane(state, event.lane);
-      if (!location || location.id !== event.locationId) return state;
+      if (
+        !location
+        || location.id !== event.locationId
+        || location.face !== 'FACE_DOWN'
+      ) {
+        return state;
+      }
       const revealed = patchLocationCard(state, location.id, {
         face: 'FACE_UP',
         identityKnownTo: ['P0', 'P1'],
@@ -593,10 +608,40 @@ function applyBody(
       });
     }
 
+    case 'LOCATION_TURNED_FACE_DOWN': {
+      const location = locationAtLane(state, event.lane);
+      if (
+        !location
+        || location.id !== event.locationId
+        || location.face !== 'FACE_UP'
+      ) {
+        return state;
+      }
+      return patchLocationCard(state, location.id, {
+        face: 'FACE_DOWN',
+      });
+    }
+
+    case 'LOCATION_SHOWN_TO_SEATS': {
+      const location = locationAtLane(state, event.lane);
+      if (!location || location.id !== event.locationId) return state;
+      return patchLocationCard(state, location.id, {
+        identityKnownTo: [
+          ...new Set([...location.identityKnownTo, ...event.seats]),
+        ],
+      });
+    }
+
     case 'LOCATION_REPLACED': {
       const lane = state.lanesById[event.lane];
       const oldLocation = locationAtLane(state, event.lane);
       if (!lane || !oldLocation || oldLocation.id !== event.oldId) return state;
+      const revealed = event.revealPolicy === 'REVEAL_IMMEDIATELY';
+      const revealAtTurn = event.revealPolicy === 'KEEP_SLOT_SCHEDULE'
+        ? lane.locationSlot.revealAtTurn
+        : event.revealPolicy === 'SCHEDULE_AT_TURN'
+          ? event.revealAtTurn ?? null
+          : null;
       const newLoc: LocationCardInstance = {
         id: event.newId,
         defId: event.newDefId,
@@ -604,14 +649,14 @@ function applyBody(
         zone: 'LANE',
         laneId: event.lane,
         pendingLaneId: null,
-        face: event.revealed ? 'FACE_UP' : 'FACE_DOWN',
-        identityKnownTo: event.revealed ? ['P0', 'P1'] : [],
-        revealCount: event.revealed ? 1 : 0,
+        face: revealed ? 'FACE_UP' : 'FACE_DOWN',
+        identityKnownTo: revealed ? ['P0', 'P1'] : [],
+        revealCount: revealed ? 1 : 0,
         tags: [],
         counters: {},
         createdAt: eventFrame,
         playedAt: eventFrame,
-        ...(event.revealed ? { revealedAt: eventFrame } : {}),
+        ...(revealed ? { revealedAt: eventFrame } : {}),
       };
       const withoutOld = moveLocationToZone(state, oldLocation.id, event.oldDestination);
       return {
@@ -627,7 +672,7 @@ function applyBody(
             locationSlot: {
               ...lane.locationSlot,
               locationCardId: newLoc.id,
-              revealAtTurn: event.revealed ? null : lane.locationSlot.revealAtTurn,
+              revealAtTurn,
             },
           },
         },
@@ -678,7 +723,7 @@ function applyBody(
       };
     }
 
-    case 'LOCATION_SHIFTED': {
+    case 'LOCATION_MOVED': {
       const fromLane = state.lanesById[event.fromLane];
       const toLane = state.lanesById[event.toLane];
       const location = locationAtLane(state, event.fromLane);
@@ -713,6 +758,53 @@ function applyBody(
         locationCards: {
           ...state.locationCards,
           [location.id]: { ...location, laneId: toLane.id },
+        },
+      };
+    }
+
+    case 'LOCATION_REMOVED_FROM_LANE': {
+      const lane = state.lanesById[event.lane];
+      const location = locationAtLane(state, event.lane);
+      if (!lane || !location || location.id !== event.locationId) return state;
+      const removed = moveLocationToZone(
+        state,
+        location.id,
+        event.destination,
+      );
+      return patchLane(removed, event.lane, {
+        locationSlot: {
+          ...lane.locationSlot,
+          locationCardId: null,
+        },
+      });
+    }
+
+    case 'LOCATION_RETURNED_TO_DECK': {
+      const location = state.locationCards[event.locationId];
+      if (!location || location.zone !== event.from) return state;
+      const withoutId = (ids: readonly LocationCardInstanceId[]) =>
+        ids.filter(id => id !== location.id);
+      const drawPile = event.placement === 'TOP'
+        ? [location.id, ...withoutId(state.locationDeck.drawPile)]
+        : [...withoutId(state.locationDeck.drawPile), location.id];
+      return {
+        ...state,
+        locationCards: {
+          ...state.locationCards,
+          [location.id]: {
+            ...location,
+            zone: 'DECK',
+            laneId: null,
+            pendingLaneId: null,
+            face: 'FACE_DOWN',
+          },
+        },
+        locationDeck: {
+          drawPile,
+          staging: withoutId(state.locationDeck.staging),
+          discardPile: withoutId(state.locationDeck.discardPile),
+          destroyed: withoutId(state.locationDeck.destroyed),
+          banished: withoutId(state.locationDeck.banished),
         },
       };
     }
@@ -758,14 +850,16 @@ function applyBody(
 
     case 'LANE_DESTROYED': {
       const lane = state.lanesById[event.lane];
-      if (!lane || laneStatus(lane) !== 'DESTROYING') return state;
+      if (
+        !lane
+        || laneStatus(lane) !== 'DESTROYING'
+        || lane.locationSlot.locationCardId !== null
+      ) {
+        return state;
+      }
       const activeLaneOrder = activeLaneIds(state).filter(id => id !== event.lane);
-      const locationId = lane.locationSlot.locationCardId;
-      const withoutLocation = locationId === null
-        ? state
-        : moveLocationToZone(state, locationId, 'DESTROYED');
       return {
-        ...patchLane(withoutLocation, event.lane, {
+        ...patchLane(state, event.lane, {
           status: 'DESTROYED',
           locationSlot: {
             ...lane.locationSlot,

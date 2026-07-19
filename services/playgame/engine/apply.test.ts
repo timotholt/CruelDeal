@@ -347,12 +347,18 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const locId = 'loc0' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 0, 'cathedral', false, locId);
-  const s1 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: locId });
+  const cause = { sourceId: locId, effectKind: 'SYSTEM' as const };
+  const s1 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: locId, cause });
   eq(locationCardAtLane(s1, 0)?.face, 'FACE_UP', 'LOCATION_REVEALED: lane 0 revealed');
   eq(locationCardAtLane(s1, 1), null, 'LOCATION_REVEALED: lane 1 unaffected');
 
   // Mismatched locationId → no-op
-  const s2 = run(s0, { type: 'LOCATION_REVEALED', lane: 0, locationId: 'other' as LocationCardInstanceId });
+  const s2 = run(s0, {
+    type: 'LOCATION_REVEALED',
+    lane: 0,
+    locationId: 'other' as LocationCardInstanceId,
+    cause,
+  });
   eq(locationCardAtLane(s2, 0)?.face, 'FACE_DOWN', 'LOCATION_REVEALED: id mismatch is a no-op');
 }
 
@@ -370,7 +376,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     newDefId: 'new-def',
     cause: { sourceId: oldId, effectKind: 'SYSTEM' },
     oldDestination: 'DISCARD',
-    revealed: false,
+    revealPolicy: 'FACE_DOWN_UNSCHEDULED',
   });
   eq(locationCardAtLane(s1, 0)?.id, newId, 'LOCATION_REPLACED: new instance id recorded');
   eq(locationCardAtLane(s1, 0)?.defId, 'new-def', 'LOCATION_REPLACED: new definition id recorded');
@@ -384,7 +390,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     newDefId: 'new-def',
     cause: { sourceId: oldId, effectKind: 'SYSTEM' },
     oldDestination: 'DISCARD',
-    revealed: false,
+    revealPolicy: 'FACE_DOWN_UNSCHEDULED',
   });
   eq(locationCardAtLane(mismatched, 0)?.id, oldId, 'LOCATION_REPLACED: old instance mismatch is a no-op');
 }
@@ -403,18 +409,18 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(locationCardAtLane(s2, 1)!.tags.length, 0, 'LOCATION_TAG_REMOVED: removed');
 }
 
-// -- LOCATION_SHIFTED: moves the location from one lane to another
+// -- LOCATION_MOVED: moves the location from one lane to another
 
 {
   const locId = 'wander' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 0, 'wander', true, locId);
   const cause = { sourceId: 's' as CardId, effectKind: 'ON_REVEAL' as const };
-  const s1 = run(s0, { type: 'LOCATION_SHIFTED', fromLane: 0, toLane: 2, locationId: locId, cause });
-  truthy(locationCardAtLane(s1, 0) === null, 'LOCATION_SHIFTED: source lane cleared');
-  truthy(locationCardAtLane(s1, 2) !== null, 'LOCATION_SHIFTED: dest lane has location');
-  eq(locationCardAtLane(s1, 2)!.laneId, 2, 'LOCATION_SHIFTED: location.lane updated');
-  eq(locationCardAtLane(s1, 2)!.id, locId, 'LOCATION_SHIFTED: same location id preserved');
-  eq(locationCardAtLane(s1, 2)!.face, 'FACE_UP', 'LOCATION_SHIFTED: revealed state preserved');
+  const s1 = run(s0, { type: 'LOCATION_MOVED', fromLane: 0, toLane: 2, locationId: locId, cause });
+  truthy(locationCardAtLane(s1, 0) === null, 'LOCATION_MOVED: source lane cleared');
+  truthy(locationCardAtLane(s1, 2) !== null, 'LOCATION_MOVED: dest lane has location');
+  eq(locationCardAtLane(s1, 2)!.laneId, 2, 'LOCATION_MOVED: location.lane updated');
+  eq(locationCardAtLane(s1, 2)!.id, locId, 'LOCATION_MOVED: same location id preserved');
+  eq(locationCardAtLane(s1, 2)!.face, 'FACE_UP', 'LOCATION_MOVED: revealed state preserved');
 
   const occupied = withTestLocation(
     s0,
@@ -424,7 +430,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     'occupied' as LocationCardInstanceId,
   );
   const rejected = run(occupied, {
-    type: 'LOCATION_SHIFTED',
+    type: 'LOCATION_MOVED',
     fromLane: 0,
     toLane: 2,
     locationId: locId,
@@ -433,12 +439,12 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(
     locationCardAtLane(rejected, 0)?.id,
     locId,
-    'LOCATION_SHIFTED: occupied destination preserves the source',
+    'LOCATION_MOVED: occupied destination preserves the source',
   );
   eq(
     locationCardAtLane(rejected, 2)?.id,
     'occupied' as LocationCardInstanceId,
-    'LOCATION_SHIFTED: occupied destination is never evicted',
+    'LOCATION_MOVED: occupied destination is never evicted',
   );
 }
 

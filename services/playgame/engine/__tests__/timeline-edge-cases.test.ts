@@ -185,6 +185,7 @@ describe('Canonical framing edge cases', () => {
         type: 'LOCATION_REVEALED',
         lane: 0,
         locationId: 'opening-location' as LocationCardInstanceId,
+        cause: systemCause,
       }],
       { initialPhase: 'SETUP' },
     );

@@ -9,7 +9,7 @@
  * subscribes to this event stream and maps each to a CSS class / animation.
  */
 
-import type { CardId, LaneId, LocationCardInstanceId, Owner } from './ids';
+import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from './ids';
 import type { CardTag, EnergyReason, LaneTag, PendingEffect, SpawnSource } from './state';
 import type { EffectRef, TextOverride } from './ability';
 
@@ -23,6 +23,12 @@ export type DiscardReason =
   | 'SURRENDER';      // end-of-match cleanup
 
 export type { EnergyReason };
+
+export type LocationReplacementRevealPolicy =
+  | 'KEEP_SLOT_SCHEDULE'
+  | 'REVEAL_IMMEDIATELY'
+  | 'FACE_DOWN_UNSCHEDULED'
+  | 'SCHEDULE_AT_TURN';
 
 export type PriorityReason =
   | 'MORE_LANES'
@@ -110,10 +116,32 @@ export type MatchEvent =
       type: 'LOCATION_CARD_PLAYED';
       locationId: LocationCardInstanceId;
       lane: LaneId;
-      revealed: boolean;
-      revealAtTurn: number | null;
     }
-  | { type: 'LOCATION_REVEALED'; lane: LaneId; locationId: LocationCardInstanceId }
+  | {
+      type: 'LOCATION_SLOT_REVEAL_SCHEDULED';
+      lane: LaneId;
+      revealAtTurn: number | null;
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_REVEALED';
+      lane: LaneId;
+      locationId: LocationCardInstanceId;
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_TURNED_FACE_DOWN';
+      lane: LaneId;
+      locationId: LocationCardInstanceId;
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_SHOWN_TO_SEATS';
+      lane: LaneId;
+      locationId: LocationCardInstanceId;
+      seats: readonly Seat[];
+      cause: EffectRef;
+    }
   | {
       type: 'LOCATION_REPLACED';
       lane: LaneId;
@@ -122,8 +150,8 @@ export type MatchEvent =
       newDefId: string;
       cause: EffectRef;
       oldDestination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
-      /** Every replacement declares the incoming location's face state. */
-      revealed: boolean;
+      revealPolicy: LocationReplacementRevealPolicy;
+      revealAtTurn?: number;
     }
   /** Atomic simultaneous swap; no observable invalid intermediate state. */
   | {
@@ -132,9 +160,27 @@ export type MatchEvent =
       right: { locationId: LocationCardInstanceId; fromLane: LaneId; toLane: LaneId };
       cause: EffectRef;
     }
-  /** Location migrates to a different lane (e.g. Mobius M. Mobius effect).
-   *  Both `fromLane` and `toLane` are always present. */
-  | { type: 'LOCATION_SHIFTED'; fromLane: LaneId; toLane: LaneId; locationId: LocationCardInstanceId; cause: EffectRef }
+  | {
+      type: 'LOCATION_MOVED';
+      fromLane: LaneId;
+      toLane: LaneId;
+      locationId: LocationCardInstanceId;
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_REMOVED_FROM_LANE';
+      lane: LaneId;
+      locationId: LocationCardInstanceId;
+      destination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_RETURNED_TO_DECK';
+      locationId: LocationCardInstanceId;
+      from: 'STAGING' | 'DISCARD' | 'DESTROYED';
+      placement: 'TOP' | 'BOTTOM';
+      cause: EffectRef;
+    }
   | { type: 'LOCATION_TAG_ADDED'; lane: LaneId; tag: LaneTag }
   | { type: 'LOCATION_TAG_REMOVED'; lane: LaneId; tag: LaneTag['kind'] }
   | { type: 'LOCATION_COUNTER_CHANGED'; lane: LaneId; name: string; owner?: Owner; delta: number }

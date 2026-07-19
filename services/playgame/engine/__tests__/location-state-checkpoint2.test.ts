@@ -73,6 +73,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
       type: 'LOCATION_REVEALED',
       lane: 0,
       locationId: location.id,
+      cause: { sourceId: location.id, effectKind: 'SYSTEM' },
     }, manifest);
     const after = locationCardAtLane(revealed, 0)!;
 
@@ -120,7 +121,7 @@ describe('Phase 1.2 checkpoint 2 canonical location state', () => {
       newDefId: 'zeta',
       cause: { sourceId: oldLocation.id, effectKind: 'LOCATION', exprIdx: 0 },
       oldDestination: 'DESTROYED',
-      revealed: true,
+      revealPolicy: 'REVEAL_IMMEDIATELY',
     }, manifest);
 
     expect(replaced.locationCards[oldLocation.id]).toMatchObject({

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectRef } from '../types/ability';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
-import type { CardId, LaneId, Owner } from '../types/ids';
+import type {
+  CardId,
+  LaneId,
+  LocationCardInstanceId,
+  Owner,
+} from '../types/ids';
 import type { CardInstance, MatchState } from '../types/state';
 import { createInitialMatchState } from '../cli/initState';
 import { createRng } from '../rng';
@@ -10,7 +15,15 @@ import { evalEffect, revealPlayedCard } from '../effects/evaluator';
 import {
   createLane,
   destroyLocationCard,
+  moveLocation,
+  removeLocation,
+  replaceLocationCard,
+  returnLocationToDeck,
+  revealLocation,
+  scheduleLocationSlotReveal,
+  showLocationToSeats,
   swapLocations,
+  turnLocationFaceDown,
   validateLaneTopology,
 } from '../locationLifecycle';
 import {
@@ -22,6 +35,10 @@ import { planEnemyTurnFromHand } from '../ai';
 import { allocatedLanes, locationCardAtLane } from '../laneTopology';
 import { validateLocationState } from '../locationState';
 import { withTestLocation } from '../testkit/runtimeFixture';
+import {
+  projectStateForSeat,
+  readProjectedState,
+} from '../../runtime/projection';
 
 const noEffectLocation = (defId: string): LocationCardDef => ({
   defId,
@@ -235,6 +252,263 @@ const destroyOthers = (input: MatchState, survivor: LaneId) =>
   );
 
 describe('location card lifecycle', () => {
+  it('reveals only a face-down active location and clears its lane-owned schedule', () => {
+    const input = state();
+    const location = locationCardAtLane(input, 0)!;
+    const result = revealLocation(input, 0, systemCause, manifest);
+    expect(result.ok).toBe(true);
+    expect(result.events).toEqual([{
+      type: 'LOCATION_REVEALED',
+      lane: 0,
+      locationId: location.id,
+      cause: systemCause,
+    }]);
+    expect(locationCardAtLane(result.state, 0)).toMatchObject({
+      face: 'FACE_UP',
+      identityKnownTo: ['P0', 'P1'],
+      revealCount: 1,
+    });
+    expect(result.state.lanesById[0].locationSlot.revealAtTurn).toBeNull();
+    const repeated = revealLocation(result.state, 0, systemCause, manifest);
+    expect(repeated).toMatchObject({
+      ok: false,
+      code: 'LOCATION_NOT_FACE_DOWN',
+      events: [],
+    });
+    expect(repeated.state).toBe(result.state);
+  });
+
+  it('turns a location face down without erasing knowledge and permits a later re-reveal', () => {
+    const opened = revealLocation(state(), 0, systemCause, manifest);
+    expect(opened.ok).toBe(true);
+    const hidden = turnLocationFaceDown(opened.state, 0, systemCause, manifest);
+    expect(hidden.ok).toBe(true);
+    expect(locationCardAtLane(hidden.state, 0)).toMatchObject({
+      face: 'FACE_DOWN',
+      identityKnownTo: ['P0', 'P1'],
+      revealCount: 1,
+    });
+    const revealedAgain = revealLocation(hidden.state, 0, systemCause, manifest);
+    expect(revealedAgain.ok).toBe(true);
+    expect(locationCardAtLane(revealedAgain.state, 0)?.revealCount).toBe(2);
+  });
+
+  it('schedules, reschedules, and cancels a slot reveal without changing card identity', () => {
+    const input = state();
+    const locationId = locationCardAtLane(input, 1)!.id;
+    const scheduled = scheduleLocationSlotReveal(input, 1, 6, systemCause, manifest);
+    expect(scheduled.ok).toBe(true);
+    expect(scheduled.state.lanesById[1].locationSlot).toMatchObject({
+      locationCardId: locationId,
+      revealAtTurn: 6,
+    });
+    const cancelled = scheduleLocationSlotReveal(
+      scheduled.state,
+      1,
+      null,
+      systemCause,
+      manifest,
+    );
+    expect(cancelled.ok).toBe(true);
+    expect(cancelled.state.lanesById[1].locationSlot.revealAtTurn).toBeNull();
+    const invalid = scheduleLocationSlotReveal(input, 1, 0, systemCause, manifest);
+    expect(invalid).toMatchObject({
+      ok: false,
+      code: 'INVALID_REVEAL_SCHEDULE',
+      events: [],
+    });
+    expect(invalid.state).toBe(input);
+  });
+
+  it('reveals every active slot scheduled for the same turn in topology order', () => {
+    const rescheduled = scheduleLocationSlotReveal(
+      state(),
+      2,
+      2,
+      systemCause,
+      manifest,
+    );
+    expect(rescheduled.ok).toBe(true);
+    const events = resolve(
+      rescheduled.state,
+      { type: 'END_TURN', intentId: 'multi-location-reveal', owner: 'P0' },
+      createRng('multi-location-reveal'),
+      manifest,
+    );
+    const reveals = events.filter(event => event.type === 'LOCATION_REVEALED');
+    expect(reveals.map(event => event.lane)).toEqual([1, 2]);
+  });
+
+  it('privately discloses a face-down location to selected seats only', () => {
+    const input = state();
+    const location = locationCardAtLane(input, 2)!;
+    const shown = showLocationToSeats(input, 2, ['P0'], systemCause, manifest);
+    expect(shown.ok).toBe(true);
+    expect(locationCardAtLane(shown.state, 2)).toMatchObject({
+      face: 'FACE_DOWN',
+      identityKnownTo: ['P0'],
+      revealCount: 0,
+    });
+    expect(
+      readProjectedState(projectStateForSeat(shown.state, 'P0'))
+        .locationCards[location.id].defId,
+    ).toBe(location.defId);
+    expect(
+      readProjectedState(projectStateForSeat(shown.state, 'P1'))
+        .locationCards[location.id].defId,
+    ).toBe('');
+    expect(shown.state.lanesById[2].locationSlot.revealAtTurn).toBe(3);
+  });
+
+  it('moves one location instance while reveal schedules remain owned by their slots', () => {
+    const input = withoutLocation(state(), 2);
+    const movedId = locationCardAtLane(input, 0)!.id;
+    const fromSchedule = input.lanesById[0].locationSlot.revealAtTurn;
+    const toSchedule = input.lanesById[2].locationSlot.revealAtTurn;
+    const result = moveLocation(input, 0, 2, systemCause, manifest);
+    expect(result.ok).toBe(true);
+    expect(result.events).toEqual([{
+      type: 'LOCATION_MOVED',
+      fromLane: 0,
+      toLane: 2,
+      locationId: movedId,
+      cause: systemCause,
+    }]);
+    expect(locationCardAtLane(result.state, 0)).toBeNull();
+    expect(locationCardAtLane(result.state, 2)?.id).toBe(movedId);
+    expect(result.state.lanesById[0].locationSlot.revealAtTurn).toBe(fromSchedule);
+    expect(result.state.lanesById[2].locationSlot.revealAtTurn).toBe(toSchedule);
+    const occupied = moveLocation(state(), 0, 2, systemCause, manifest);
+    expect(occupied).toMatchObject({
+      ok: false,
+      code: 'LOCATION_SLOT_OCCUPIED',
+      events: [],
+    });
+  });
+
+  it('removes a location to a governed zone and returns it deterministically to the deck', () => {
+    const input = state();
+    const location = locationCardAtLane(input, 1)!;
+    const removed = removeLocation(input, 1, 'DISCARD', systemCause, manifest);
+    expect(removed.ok).toBe(true);
+    expect(locationCardAtLane(removed.state, 1)).toBeNull();
+    expect(removed.state.locationCards[location.id].zone).toBe('DISCARD');
+    expect(removed.state.locationDeck.discardPile).toContain(location.id);
+    const returned = returnLocationToDeck(
+      removed.state,
+      location.id,
+      'TOP',
+      systemCause,
+      manifest,
+    );
+    expect(returned.ok).toBe(true);
+    expect(returned.state.locationDeck.drawPile[0]).toBe(location.id);
+    expect(returned.state.locationCards[location.id]).toMatchObject({
+      zone: 'DECK',
+      laneId: null,
+      face: 'FACE_DOWN',
+    });
+    expect(returned.state.locationDeck.discardPile).not.toContain(location.id);
+    expect(validateLocationState(returned.state)).toEqual([]);
+    const fromLane = returnLocationToDeck(
+      input,
+      location.id,
+      'BOTTOM',
+      systemCause,
+      manifest,
+    );
+    expect(fromLane).toMatchObject({
+      ok: false,
+      code: 'LOCATION_WRONG_ZONE',
+      events: [],
+    });
+  });
+
+  it.each([
+    {
+      policy: 'KEEP_SLOT_SCHEDULE' as const,
+      revealAtTurn: undefined,
+      expectedFace: 'FACE_DOWN',
+      expectedSchedule: 2,
+    },
+    {
+      policy: 'FACE_DOWN_UNSCHEDULED' as const,
+      revealAtTurn: undefined,
+      expectedFace: 'FACE_DOWN',
+      expectedSchedule: null,
+    },
+    {
+      policy: 'SCHEDULE_AT_TURN' as const,
+      revealAtTurn: 5,
+      expectedFace: 'FACE_DOWN',
+      expectedSchedule: 5,
+    },
+    {
+      policy: 'REVEAL_IMMEDIATELY' as const,
+      revealAtTurn: undefined,
+      expectedFace: 'FACE_UP',
+      expectedSchedule: null,
+    },
+  ])(
+    'applies $policy replacement reveal policy without an intermediate empty slot',
+    ({ policy, revealAtTurn, expectedFace, expectedSchedule }) => {
+      const input = state();
+      const oldLocation = locationCardAtLane(input, 1)!;
+      const newId = `replacement:${policy}` as LocationCardInstanceId;
+      const result = replaceLocationCard(input, 1, {
+        cause: systemCause,
+        newId,
+        newDefId: 'delta',
+        oldDestination: 'DISCARD',
+        revealPolicy: policy,
+        ...(revealAtTurn === undefined ? {} : { revealAtTurn }),
+      }, manifest);
+      expect(result.ok).toBe(true);
+      expect(locationCardAtLane(result.state, 1)).toMatchObject({
+        id: newId,
+        defId: 'delta',
+        face: expectedFace,
+      });
+      expect(result.state.lanesById[1].locationSlot.revealAtTurn)
+        .toBe(expectedSchedule);
+      expect(result.state.locationDeck.discardPile).toContain(oldLocation.id);
+      expect(validateLocationState(result.state)).toEqual([]);
+    },
+  );
+
+  it('rejects invalid replacement identity, definition, and schedules atomically', () => {
+    const input = state();
+    const existingId = locationCardAtLane(input, 0)!.id;
+    const duplicate = replaceLocationCard(input, 1, {
+      cause: systemCause,
+      newId: existingId,
+      newDefId: 'delta',
+      oldDestination: 'DISCARD',
+      revealPolicy: 'FACE_DOWN_UNSCHEDULED',
+    }, manifest);
+    const unknown = replaceLocationCard(input, 1, {
+      cause: systemCause,
+      newId: 'new:unknown' as LocationCardInstanceId,
+      newDefId: 'not-in-manifest',
+      oldDestination: 'DISCARD',
+      revealPolicy: 'FACE_DOWN_UNSCHEDULED',
+    }, manifest);
+    const invalidSchedule = replaceLocationCard(input, 1, {
+      cause: systemCause,
+      newId: 'new:scheduled' as LocationCardInstanceId,
+      newDefId: 'delta',
+      oldDestination: 'DISCARD',
+      revealPolicy: 'SCHEDULE_AT_TURN',
+      revealAtTurn: 0,
+    }, manifest);
+    expect(duplicate).toMatchObject({ ok: false, code: 'LOCATION_ID_EXISTS' });
+    expect(unknown).toMatchObject({ ok: false, code: 'UNKNOWN_LOCATION_DEFINITION' });
+    expect(invalidSchedule).toMatchObject({ ok: false, code: 'INVALID_REVEAL_SCHEDULE' });
+    expect(duplicate.state).toBe(input);
+    expect(unknown.state).toBe(input);
+    expect(invalidSchedule.state).toBe(input);
+  });
+
   it('swaps two occupied location cards atomically', () => {
     const input = withLocation(withLocation(state(), 0, 'alpha', true), 1, 'beta', false);
     const result = swapLocations(input, 0, 1, systemCause, manifest);
@@ -296,7 +570,7 @@ describe('location card lifecycle', () => {
       newDefId: 'ruin',
       cause: systemCause,
       oldDestination: 'DESTROYED',
-      revealed: true,
+      revealPolicy: 'REVEAL_IMMEDIATELY',
     }]);
     expect(locationCardAtLane(result.state, 0)?.id).not.toBe(priorLocation.id);
     expect(locationCardAtLane(result.state, 0)?.defId).toBe('ruin');

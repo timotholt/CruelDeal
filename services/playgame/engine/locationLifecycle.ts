@@ -1,6 +1,11 @@
 import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
-import type { CardId, LaneId, LocationCardInstanceId } from './types/ids';
+import type {
+  CardId,
+  LaneId,
+  LocationCardInstanceId,
+  Seat,
+} from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { MatchState } from './types/state';
 import type { Rng } from './rng';
@@ -30,6 +35,15 @@ export type LocationLifecycleFailure =
   | 'LANE_NOT_FOUND'
   | 'SAME_LANE'
   | 'LOCATION_SLOT_EMPTY'
+  | 'LOCATION_SLOT_OCCUPIED'
+  | 'LOCATION_NOT_FACE_DOWN'
+  | 'LOCATION_NOT_FACE_UP'
+  | 'LOCATION_NOT_FOUND'
+  | 'LOCATION_WRONG_ZONE'
+  | 'LOCATION_ID_EXISTS'
+  | 'UNKNOWN_LOCATION_DEFINITION'
+  | 'INVALID_REVEAL_SCHEDULE'
+  | 'INVALID_SEATS'
   | 'ALREADY_RUIN'
   | 'MINIMUM_ACTIVE_LANES'
   | 'MAXIMUM_ACTIVE_LANES'
@@ -74,6 +88,296 @@ function applyEvents(
   manifest: Manifest,
 ): MatchState {
   return events.reduce((current, event) => apply(current, event, manifest), state);
+}
+
+function acceptSingle(
+  state: MatchState,
+  event: MatchEvent,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  return accepted(apply(state, event, manifest), [event]);
+}
+
+export function scheduleLocationSlotReveal(
+  state: MatchState,
+  laneId: LaneId,
+  revealAtTurn: number | null,
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  const lane = laneById(state, laneId);
+  if (!lane) {
+    return rejected(state, 'LANE_NOT_FOUND', `lane ${laneId} does not exist`);
+  }
+  if (lane.locationSlot.locationCardId === null) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (
+    revealAtTurn !== null
+    && (!Number.isSafeInteger(revealAtTurn) || revealAtTurn < 1)
+  ) {
+    return rejected(
+      state,
+      'INVALID_REVEAL_SCHEDULE',
+      'location reveal turn must be a positive integer or null',
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_SLOT_REVEAL_SCHEDULED',
+    lane: laneId,
+    revealAtTurn,
+    cause,
+  }, manifest);
+}
+
+export function revealLocation(
+  state: MatchState,
+  laneId: LaneId,
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (location.face !== 'FACE_DOWN') {
+    return rejected(
+      state,
+      'LOCATION_NOT_FACE_DOWN',
+      `location ${location.id} is already face up`,
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_REVEALED',
+    lane: laneId,
+    locationId: location.id,
+    cause,
+  }, manifest);
+}
+
+export function turnLocationFaceDown(
+  state: MatchState,
+  laneId: LaneId,
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (location.face !== 'FACE_UP') {
+    return rejected(
+      state,
+      'LOCATION_NOT_FACE_UP',
+      `location ${location.id} is already face down`,
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_TURNED_FACE_DOWN',
+    lane: laneId,
+    locationId: location.id,
+    cause,
+  }, manifest);
+}
+
+export function showLocationToSeats(
+  state: MatchState,
+  laneId: LaneId,
+  seats: readonly Seat[],
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  const uniqueSeats = [...new Set(seats)];
+  if (
+    uniqueSeats.length === 0
+    || uniqueSeats.some(seat => seat !== 'P0' && seat !== 'P1')
+  ) {
+    return rejected(
+      state,
+      'INVALID_SEATS',
+      'location disclosure requires at least one valid seat',
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_SHOWN_TO_SEATS',
+    lane: laneId,
+    locationId: location.id,
+    seats: uniqueSeats,
+    cause,
+  }, manifest);
+}
+
+export function moveLocation(
+  state: MatchState,
+  fromLaneId: LaneId,
+  toLaneId: LaneId,
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (fromLaneId === toLaneId) {
+    return rejected(state, 'SAME_LANE', 'location move requires two distinct lanes');
+  }
+  if (!isActiveLane(state, fromLaneId) || !isActiveLane(state, toLaneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', 'location move requires two active lanes');
+  }
+  const location = locationCardAtLane(state, fromLaneId);
+  if (!location) {
+    return rejected(
+      state,
+      'LOCATION_SLOT_EMPTY',
+      `source lane ${fromLaneId} has no location card`,
+    );
+  }
+  if (locationCardAtLane(state, toLaneId)) {
+    return rejected(
+      state,
+      'LOCATION_SLOT_OCCUPIED',
+      `destination lane ${toLaneId} already has a location card`,
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_MOVED',
+    fromLane: fromLaneId,
+    toLane: toLaneId,
+    locationId: location.id,
+    cause,
+  }, manifest);
+}
+
+export function removeLocation(
+  state: MatchState,
+  laneId: LaneId,
+  destination: 'DISCARD' | 'DESTROYED' | 'BANISHED',
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  const lane = laneById(state, laneId);
+  if (!lane || (laneStatus(lane) !== 'ACTIVE' && laneStatus(lane) !== 'DESTROYING')) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const location = locationCardAtLane(state, laneId);
+  if (!location) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_REMOVED_FROM_LANE',
+    lane: laneId,
+    locationId: location.id,
+    destination,
+    cause,
+  }, manifest);
+}
+
+export function returnLocationToDeck(
+  state: MatchState,
+  locationId: LocationCardInstanceId,
+  placement: 'TOP' | 'BOTTOM',
+  cause: EffectRef,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  const location = state.locationCards[locationId];
+  if (!location) {
+    return rejected(state, 'LOCATION_NOT_FOUND', `location ${locationId} does not exist`);
+  }
+  if (
+    location.zone !== 'STAGING'
+    && location.zone !== 'DISCARD'
+    && location.zone !== 'DESTROYED'
+  ) {
+    return rejected(
+      state,
+      'LOCATION_WRONG_ZONE',
+      `location ${locationId} cannot return from ${location.zone}`,
+    );
+  }
+  return acceptSingle(state, {
+    type: 'LOCATION_RETURNED_TO_DECK',
+    locationId,
+    from: location.zone,
+    placement,
+    cause,
+  }, manifest);
+}
+
+export interface ReplaceLocationCardOptions {
+  readonly cause: EffectRef;
+  readonly newId: LocationCardInstanceId;
+  readonly newDefId: string;
+  readonly oldDestination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+  readonly revealPolicy: Extract<
+    MatchEvent,
+    { type: 'LOCATION_REPLACED' }
+  >['revealPolicy'];
+  readonly revealAtTurn?: number;
+}
+
+export function replaceLocationCard(
+  state: MatchState,
+  laneId: LaneId,
+  options: ReplaceLocationCardOptions,
+  manifest: Manifest,
+): LocationLifecycleResult {
+  if (!isActiveLane(state, laneId)) {
+    return rejected(state, 'LANE_NOT_ACTIVE', `lane ${laneId} is not active`);
+  }
+  const current = locationCardAtLane(state, laneId);
+  if (!current) {
+    return rejected(state, 'LOCATION_SLOT_EMPTY', `lane ${laneId} has no location card`);
+  }
+  if (state.locationCards[options.newId]) {
+    return rejected(
+      state,
+      'LOCATION_ID_EXISTS',
+      `location ${options.newId} already exists`,
+    );
+  }
+  if (!manifest.locations[options.newDefId]) {
+    return rejected(
+      state,
+      'UNKNOWN_LOCATION_DEFINITION',
+      `location definition ${options.newDefId} does not exist`,
+    );
+  }
+  if (
+    options.revealPolicy === 'SCHEDULE_AT_TURN'
+    && (
+      !Number.isSafeInteger(options.revealAtTurn)
+      || (options.revealAtTurn ?? 0) < 1
+    )
+  ) {
+    return rejected(
+      state,
+      'INVALID_REVEAL_SCHEDULE',
+      'scheduled replacement requires a positive reveal turn',
+    );
+  }
+  const event: MatchEvent = {
+    type: 'LOCATION_REPLACED',
+    lane: laneId,
+    oldId: current.id,
+    newId: options.newId,
+    newDefId: options.newDefId,
+    cause: options.cause,
+    oldDestination: options.oldDestination,
+    revealPolicy: options.revealPolicy,
+    ...(options.revealAtTurn === undefined
+      ? {}
+      : { revealAtTurn: options.revealAtTurn }),
+  };
+  return acceptSingle(state, event, manifest);
 }
 
 export function swapLocations(
@@ -131,17 +435,13 @@ export function destroyLocationCard(
   if (current.defId === RUIN_LOCATION_DEF_ID) {
     return rejected(state, 'ALREADY_RUIN', `lane ${laneId} is already Ruin`);
   }
-  const event: MatchEvent = {
-    type: 'LOCATION_REPLACED',
-    lane: laneId,
-    oldId: current.id,
+  return replaceLocationCard(state, laneId, {
+    cause,
     newId: `ruin:${current.id}` as LocationCardInstanceId,
     newDefId: RUIN_LOCATION_DEF_ID,
-    cause,
     oldDestination: 'DESTROYED',
-    revealed: true,
-  };
-  return accepted(apply(state, event, manifest), [event]);
+    revealPolicy: 'REVEAL_IMMEDIATELY',
+  }, manifest);
 }
 
 export interface DestroyLaneOptions {
@@ -218,6 +518,19 @@ export function destroyLane(
       `lane ${laneId} still contains ${survivors.length} card(s) after governed destruction`,
     );
   }
+
+  const removal = removeLocation(
+    working,
+    laneId,
+    'DESTROYED',
+    options.cause,
+    manifest,
+  );
+  if (!removal.ok) {
+    return rejected(state, removal.code, removal.message);
+  }
+  events.push(...removal.events);
+  working = removal.state;
 
   const destroyed: MatchEvent = {
     type: 'LANE_DESTROYED',
@@ -306,8 +619,6 @@ export function createLane(
     type: 'LOCATION_CARD_PLAYED',
     locationId,
     lane: laneId,
-    revealed: options.revealed ?? true,
-    revealAtTurn: null,
   };
   const created: MatchEvent = {
     type: 'LANE_CREATED',
@@ -315,7 +626,17 @@ export function createLane(
     position: options.position,
     cause: options.cause,
   };
-  const events = [started, locationCreated, locationPlayed, created] as const;
+  const reveal: MatchEvent | null = (options.revealed ?? true)
+    ? {
+        type: 'LOCATION_REVEALED',
+        lane: laneId,
+        locationId,
+        cause: options.cause,
+      }
+    : null;
+  const events = reveal
+    ? [started, locationCreated, locationPlayed, created, reveal] as const
+    : [started, locationCreated, locationPlayed, created] as const;
   return accepted(applyEvents(state, events, manifest), events);
 }
 

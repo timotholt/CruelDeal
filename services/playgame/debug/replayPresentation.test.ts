@@ -122,7 +122,7 @@ describe('replay debug presentation', () => {
       newId: `ruin:${location.id}` as LocationCardInstanceId,
       newDefId: 'ruin',
       oldDestination: 'DESTROYED',
-      revealed: true,
+      revealPolicy: 'REVEAL_IMMEDIATELY',
       cause: { sourceId: location.id, effectKind: 'LOCATION' },
     }), names)).toBe(`caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}`);
 
@@ -163,7 +163,7 @@ describe('replay debug presentation', () => {
       newId: `ruin:${location.id}` as LocationCardInstanceId,
       newDefId: 'ruin',
       oldDestination: 'DESTROYED',
-      revealed: true,
+      revealPolicy: 'REVEAL_IMMEDIATELY',
       cause: { sourceId: location.id, effectKind: 'SYSTEM' },
     }), names, actors).summary).toBe(
       `${BOOTSTRAP_MANIFEST.locations[location.defId].name} was destroyed and replaced by Ruin in the left lane - caused by game rules.`,

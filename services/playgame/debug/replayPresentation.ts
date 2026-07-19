@@ -278,8 +278,31 @@ export function describeReplayStep(
     case 'PENDING_EFFECT_REMOVED':
       summary = `The “${humanizeToken(event.effect.kind)}” effect finished.`;
       break;
+    case 'LOCATION_DECK_INITIALIZED':
+      summary = `The location deck was initialized with ${event.locations.length} cards.`;
+      break;
+    case 'LOCATION_CARD_CREATED':
+      summary = `${names.definitionName(event.defId)} was created for lane ${event.pendingLane}.`;
+      break;
+    case 'LOCATION_CARD_DRAWN':
+      summary = `${locationName(event.locationId)} was drawn for lane ${event.pendingLane}.`;
+      break;
+    case 'LOCATION_CARD_PLAYED':
+      summary = `${locationName(event.locationId)} was placed face down in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_SLOT_REVEAL_SCHEDULED':
+      summary = event.revealAtTurn === null
+        ? `The ${laneLabel(event.lane)} location reveal was unscheduled.`
+        : `The ${laneLabel(event.lane)} location was scheduled to reveal on turn ${event.revealAtTurn}.`;
+      break;
     case 'LOCATION_REVEALED':
       summary = `${locationName(event.locationId)} was revealed in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_TURNED_FACE_DOWN':
+      summary = `${locationName(event.locationId)} was turned face down in the ${laneLabel(event.lane)}.`;
+      break;
+    case 'LOCATION_SHOWN_TO_SEATS':
+      summary = `${locationName(event.locationId)} was privately shown to ${event.seats.map(player).join(' and ')}.`;
       break;
     case 'LOCATION_REPLACED':
       summary = event.newDefId === 'ruin'
@@ -289,8 +312,14 @@ export function describeReplayStep(
     case 'LOCATIONS_SWAPPED':
       summary = `${locationName(event.left.locationId)} and ${locationName(event.right.locationId)} swapped lanes.`;
       break;
-    case 'LOCATION_SHIFTED':
+    case 'LOCATION_MOVED':
       summary = `${locationName(event.locationId)} moved from the ${laneLabel(event.fromLane)} to the ${laneLabel(event.toLane)}.`;
+      break;
+    case 'LOCATION_REMOVED_FROM_LANE':
+      summary = `${locationName(event.locationId)} left the ${laneLabel(event.lane)} for ${event.destination.toLowerCase()}.`;
+      break;
+    case 'LOCATION_RETURNED_TO_DECK':
+      summary = `${locationName(event.locationId)} returned to the ${event.placement.toLowerCase()} of the location deck.`;
       break;
     case 'LOCATION_TAG_ADDED':
       summary = `The ${laneLabel(event.lane)} gained the “${humanizeToken(event.tag.kind)}” status.`;
@@ -312,6 +341,9 @@ export function describeReplayStep(
       break;
     case 'LANE_CREATED':
       summary = `Lane ${event.lane} entered play at position ${event.position + 1}.`;
+      break;
+    case 'MATCH_SETUP_COMPLETED':
+      summary = 'Match setup completed.';
       break;
     case 'TURN_RESOLUTION_STARTED':
       summary = `Turn ${event.turn} began resolving.`;

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation active. Checkpoints 1 through 3 are complete; checkpoint 4 is
+Implementation active. Checkpoints 1 through 4 are complete; checkpoint 5 is
 next.
 
 This phase sits after the Phase 1.1 canonical frame/chronology work and before

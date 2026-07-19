@@ -8,6 +8,7 @@ import type { MatchState } from '../engine/types/state';
 import { buildCardDrawEvents } from '../engine/draw';
 import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
 import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
+import { revealLocation } from '../engine/locationLifecycle';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -60,20 +61,31 @@ export function buildOpeningTransaction(
     }
   }
 
-  const lane = activeLaneIds(state).find((laneId) => {
+  const scheduledLocationLanes = activeLaneIds(state).filter((laneId) => {
     const location = locationCardAtLane(state, laneId);
     return location?.face === 'FACE_DOWN'
       && state.lanesById[laneId].locationSlot.revealAtTurn === 1;
   });
-  const location = lane === undefined ? null : locationCardAtLane(state, lane);
-  if (location) {
-    const reveal: MatchEvent = {
-      type: 'LOCATION_REVEALED',
-      lane: lane!,
-      locationId: location.id,
-    };
-    events.push(reveal);
-    state = apply(state, reveal, manifest);
+  for (const lane of scheduledLocationLanes) {
+    const location = locationCardAtLane(state, lane);
+    if (
+      !location
+      || location.face !== 'FACE_DOWN'
+      || state.lanesById[lane]?.status !== 'ACTIVE'
+      || state.lanesById[lane].locationSlot.revealAtTurn !== 1
+    ) {
+      continue;
+    }
+    const reveal = revealLocation(state, lane, {
+      sourceId: location.id,
+      effectKind: 'SYSTEM',
+      systemReason: 'OPENING_LOCATION_REVEAL',
+    }, manifest);
+    if (!reveal.ok) {
+      throw new Error(`opening location reveal failed: ${reveal.message}`);
+    }
+    events.push(...reveal.events);
+    state = reveal.state;
 
     const effects = manifest.locations[location.defId]?.abilities.onReveal ?? [];
     const locationRng = openingRng.fork(`opening:location:${location.id}`);
@@ -83,7 +95,7 @@ export function buildOpeningTransaction(
         manifest,
         self: location.id,
         selfKind: 'location',
-        selfLane: lane!,
+        selfLane: lane,
         selfOwner: null,
         rng: locationRng.fork(`effect:${index}`),
         source: { sourceId: location.id, effectKind: 'LOCATION', exprIdx: index },

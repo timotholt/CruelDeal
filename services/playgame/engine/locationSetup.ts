@@ -91,8 +91,12 @@ export function buildLocationSetupTransaction(
         type: 'LOCATION_CARD_PLAYED',
         locationId: location.id,
         lane,
-        revealed: false,
+      },
+      {
+        type: 'LOCATION_SLOT_REVEAL_SCHEDULED',
+        lane,
         revealAtTurn: position + 1,
+        cause: SETUP_CAUSE,
       },
       {
         type: 'LANE_CREATED',
