@@ -276,6 +276,47 @@ Fields may be specialized by event type. Required semantic facts must be
 represented by closed types rather than optional strings or presentation-time
 state guessing.
 
+### C4A Contract Authority
+
+The executable prework contract is:
+
+- `services/playgame/engine/kernel/contracts.ts`
+- `services/playgame/engine/kernel/contracts.test.ts`
+
+That contract is the exact C4A authority for:
+
+- the target lifecycle event vocabulary;
+- required prior/result zones and lane fields;
+- before/after rule-source snapshot edges;
+- deterministic reaction bands;
+- clean replacement of ambiguous current event families;
+- finite resolution budgets;
+- typed kernel failure codes and atomic publication behavior;
+- the permanent stored-power pilot.
+
+The contract is behavior-neutral until a lifecycle family enters the kernel.
+It does not extend the current reducer event union with parallel aliases.
+During each migration slice, the old shape and all its callers are replaced
+atomically.
+
+The target vocabulary separates facts that the current shapes conflate:
+
+| Target transition | Exact meaning |
+| --- | --- |
+| `CARD_REVEALED` | A card already in a lane committed its reveal |
+| `CARD_PLAY_COMPLETED` | A hand-origin play finished its reveal lifecycle, including when On Reveal was suppressed |
+| `CARD_CREATED` | A new card instance entered deck, hand, or lane |
+| `CARD_ZONE_CHANGED` | An existing card changed a non-specialized zone |
+| `CARD_MOVED` | An existing card moved lane-to-lane |
+| `CARD_RETURNED_TO_LANE` | A removed existing card returned to a lane |
+
+`CARD_FLIPPED` is replaced by `CARD_REVEALED` plus, only for a committed
+hand-origin play, `CARD_PLAY_COMPLETED`. `CARD_ADDED_TO_DECK`,
+`CARD_ADDED_TO_HAND`, and `CARD_ADDED_TO_LANE` collapse into the closed
+`CARD_CREATED` transition. `CARD_MOVED_TO_ZONE` becomes the unambiguous
+`CARD_ZONE_CHANGED` transition. There are no legacy aliases, fallback reads,
+or dual dispatch paths.
+
 ### Rule Source
 
 A rule source is an active card, active location, or system/ruleset entity whose
@@ -591,6 +632,24 @@ The kernel does not publish a prefix of a failed transaction. Diagnostic
 details may be returned to debug tooling but are not committed as partial
 gameplay mutations.
 
+Kernel failures are internal invariant failures, not player illegality. They
+must not be converted to or stored as `RULES_INVALID`. The submitted intent
+rejects with a typed kernel invariant error and remains retryable.
+
+For the second `END_TURN` lock specifically, candidate resolution occurs before
+the second lock receipt is accepted or stored. If resolution fails:
+
+- no event or Frame is published;
+- no receipt is stored for the second lock;
+- revision, canonical state, and serialized RNG are unchanged;
+- the second seat remains unlocked;
+- the first seat's previously accepted lock remains intact;
+- the failed intent ID may be retried.
+
+This is the required runtime cutover behavior even though the pre-C4A runtime
+currently accepts the second lock before resolving the turn. C4A must correct
+that seam; it must not preserve the old sequencing for compatibility.
+
 Normal policy denial is not a kernel failure. It produces the operation's
 defined typed denied/no-op result and no mutation event.
 
@@ -656,6 +715,21 @@ Within a multi-source card-reaction band:
 Any intentional change from characterized behavior requires a named target
 test and an explicit note in the checkpoint evidence.
 
+The initial timing bands are executable data in
+`REACTION_ORDER_PLANS`. In particular:
+
+- reveal: affected-card On Reveal at 100, revealed-here location at 200;
+- completed play: any-card-played-here cards at 100, played-here location at
+  200;
+- destroy: affected-card death at 100, original location at 200;
+- move: source-left at 100, destination-entered at 200, moved-card at 300;
+- stored power: affected-card gained-power at 100, location gained-power at
+  200, location lost-power at 300.
+
+Conditional bands that cannot both apply may still have distinct numbers.
+Within a band, the full canonical order key remains timing band, priority seat,
+lane, slot, authored rule index, and stable source instance ID.
+
 ## Friendly Reaction Vocabulary
 
 The initial authoring vocabulary lowers to generic compiled reactions:
@@ -679,6 +753,106 @@ dispatcher and immutable invocation representation.
 
 New friendly names are added only when existing semantic event filters cannot
 express the content rule unambiguously.
+
+## Nested On Reveal and Deck Deployment
+
+The kernel must support Wong/Jubilee/Odin-style nested resolution without
+recursion hidden inside the evaluator.
+
+Two different actions must remain distinct:
+
+1. create a new card instance and reveal it;
+2. move an existing card instance from deck to lane and reveal it.
+
+The current `SPAWN_AND_REVEAL` primitive conflates these actions. C4C/C4D
+deletes that primitive. New-instance behavior lowers to `CREATE_CARD` followed
+by `INVOKE_ON_REVEAL`; deck behavior lowers to `DEPLOY_FROM_DECK`.
+
+### Deploy From Deck
+
+`DEPLOY_FROM_DECK` is a governed command. At command execution time it:
+
+1. checks the current candidate lane capacity;
+2. selects from the current candidate deck using the effect's declared
+   deterministic selection rule;
+3. moves the selected existing instance from deck to lane;
+4. preserves instance ID, stored power/cost history, and provenance;
+5. commits the deck-to-lane semantic zone transition;
+6. enters the ordinary reveal lifecycle depth-first before the parent effect
+   continues.
+
+An empty deck or full lane is a normal no-op, not a kernel failure. A failed
+capacity check does not remove or reorder a deck card.
+
+Deck deployment spends no energy, is not card creation, and does not count as
+the hand-origin `CARD_PLAY_COMPLETED` transition. It therefore cannot
+accidentally fire played-from-hand, created-here, or stage/undo behavior.
+
+### Invoke On Reveal
+
+`INVOKE_ON_REVEAL` is semantic command work with one of two reasons:
+
+- `NATURAL_REVEAL`;
+- `RETRIGGER`.
+
+A natural reveal is discovered from `CARD_REVEALED`. A retrigger is issued
+directly by card/location effect work. A retrigger does not fabricate another
+`CARD_REVEALED` or `CARD_PLAY_COMPLETED` fact and does not re-fire played-here
+reactions.
+
+At the start of each invocation, the kernel snapshots:
+
+- the card's whole authored On Reveal ability list;
+- the effective Wong-style On Reveal multiplier.
+
+The whole ability list repeats by that captured multiplier. Removing the
+multiplier source during nested resolution does not cancel already scheduled
+repetitions.
+
+Each effect expression still executes against the current candidate state.
+Selectors resolve once at the start of each effect execution, producing an
+immutable ordered target list for that execution. Consequently, cards added by
+an earlier repetition can participate in a later repetition, but a target
+added while one target list is already running cannot splice itself into that
+list.
+
+Nested commands resolve depth-first before the next sibling effect or
+repetition. Deck order, capacity, active rule sources, and projection values
+are therefore always read from the candidate state produced by all earlier
+work.
+
+### Mandatory Cascade Contract
+
+C4D must include a golden trace for:
+
+- an active ×2 On Reveal multiplier;
+- a Jubilee-style card that deploys another card from its deck here;
+- an Odin-style repeater that invokes the other On Reveal cards here;
+- an otherwise inert deck;
+- both unlimited test capacity and the ordinary four-slot lane.
+
+With unlimited capacity, the exact depth-first trace produces six total deck
+deployments:
+
+1. Jubilee repetition one deploys the repeater;
+2. repeater repetition one retriggers Jubilee, whose captured ×2 invocation
+   deploys two cards;
+3. repeater repetition two retriggers Jubilee, deploying two more;
+4. Jubilee's original repetition two resumes and deploys one.
+
+The repeater excludes itself. Its two executions come from the active
+multiplier, not self-recursion.
+
+With four slots and Wong plus Jubilee already present, only two further cards
+can enter: the repeater and one nested deployment. Every later deployment is a
+normal no-op and leaves the remaining deck intact. If a different card enters
+before the repeater, the resulting trace changes deterministically because
+capacity is checked at execution time.
+
+The executable prework authority for these rules is
+`DECK_DEPLOYMENT_CONTRACT`, `ON_REVEAL_INVOCATION_CONTRACT`, and
+`WONG_JUBILEE_REPEATER_GOLDEN_TRACE` in
+`services/playgame/engine/kernel/contracts.ts`.
 
 ## RNG
 
@@ -857,6 +1031,21 @@ same checkpoint exit.
 
 ### C4A — Kernel Foundation
 
+Pilot:
+
+- govern permanent stored-power mutation first;
+- route `CHANGE_STORED_POWER` through the kernel;
+- apply the existing Courthouse positive-power prohibition as its precommit
+  policy;
+- preserve power-ledger provenance and exact replay;
+- prove one test-only smoke reaction through the queue without adding
+  content-specific production behavior.
+
+Stored power is the pilot because it already has one governed operation,
+Courthouse policy coverage, provenance history, Frame/replay tests, and a
+well-defined projection boundary. Lifecycle migration remains in C4B through
+C4D.
+
 Build:
 
 - closed `KernelWork` and `GameCommand` contracts;
@@ -874,11 +1063,15 @@ slice. Do not perform unrelated evaluator cleanup.
 
 Exit:
 
-- one operation enters the kernel and replays identically;
+- permanent stored power enters the kernel and replays identically;
 - no dependency graph or runtime subscriber registry exists;
 - a budget failure publishes nothing;
 - envelope closure validates;
 - runtime framing remains the only `Frame` authority.
+
+The prework required to begin C4A is complete when
+`docs/agent-checkpoints/phase1.5-cp4a-readiness.md` is green and
+`npm run verify:playgame:phase15` passes.
 
 ### C4B — Destroy and Banish
 
@@ -905,12 +1098,15 @@ Migrate:
 - zone movement;
 - return;
 - creation in deck, hand, and lane;
+- existing-instance deployment from deck to lane;
 - destination capacity and movement policies;
 - source-left, destination-entered, moved-card ordering.
 
 Exit:
 
 - create, move, and return cannot be confused by a shared event shape;
+- deck deployment preserves the existing instance and cannot masquerade as
+  creation;
 - new and removed rule sources participate at the specified snapshot edge;
 - lane topology changes do not invalidate stored subscriptions because none
   exist;
@@ -922,6 +1118,9 @@ Migrate:
 
 - committed hand-origin play classification;
 - card On Reveal;
+- natural and retriggered On Reveal invocation work;
+- invocation-start multiplier/ability snapshots;
+- depth-first nested invocation ordering;
 - played-here and any-card-played-here;
 - card/location turn-start and turn-end reactions;
 - location reveal reactions;
@@ -932,6 +1131,8 @@ Exit:
 
 - private stage/unstage/undo fire no gameplay reaction;
 - a committed play fires each eligible reaction exactly once;
+- retriggering text emits no fake reveal or completed-play transition;
+- Wong/Jubilee/repeater golden traces pass at unlimited and four-slot capacity;
 - opening and ordinary gameplay use the same kernel path;
 - existing reveal choreography consumes committed facts without controlling
   gameplay.

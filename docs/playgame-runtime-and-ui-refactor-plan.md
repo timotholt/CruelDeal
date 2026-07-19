@@ -12,6 +12,10 @@ and the permanent engine/content rule-control plane are now governed by
 conflicts with the older Phase 1.5 implementation detail in this roadmap, the
 transactional-rules-kernel specification wins.
 
+Checkpoint 4A prework is complete and executable at
+`docs/agent-checkpoints/phase1.5-cp4a-readiness.md`. Implementation may begin
+with the permanent stored-power kernel pilot.
+
 ## Cost Model
 
 The tags are delivery commitments, not importance labels. The round-6 census remains the historical Phase 0/1 baseline; this amendment adds tagged Phase 1.5 requirements that require a fresh review census. A tagged parent item owns any untagged examples or field lists nested beneath it.
