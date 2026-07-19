@@ -2,7 +2,6 @@ import type { LocationAbilities, Manifest } from '../manifest/types';
 import type { LaneId, LocationCardInstanceId, Seat } from '../types/ids';
 import type {
   LaneTag,
-  LocationLifecycleState,
   LocationCardFace,
   InternalLocationRecord,
   LocationZone,
@@ -15,8 +14,6 @@ import {
 } from '../internal/locationStore';
 import type { LocationAbilityLabel } from './locationAbilityPresence';
 import { getLocationTemplate } from './locationTemplate';
-
-export type LocationLifecycle = LocationLifecycleState;
 
 export type CurrentLocationPosition =
   | { readonly zone: 'LANE'; readonly laneId: LaneId }
@@ -38,17 +35,9 @@ export interface LocationRuntime {
   readonly counters: Readonly<Record<string, number>>;
   readonly abilities: LocationAbilities;
   readonly abilityLabels: readonly LocationAbilityLabel[];
-  readonly lifecycle: LocationLifecycle;
 }
 
 export type LocationState = Readonly<InternalLocationRecord>;
-
-export function getLocationLifecycle(
-  state: MatchState,
-  locationId: LocationCardInstanceId,
-): LocationLifecycle | null {
-  return readLocationInternal(state, locationId)?.lifecycle ?? null;
-}
 
 function pile(
   state: MatchState,
@@ -120,7 +109,6 @@ export function getLocationRuntime(
     position: resolvePosition(state, location),
     abilities: template.abilities,
     abilityLabels: template.abilityLabels,
-    lifecycle: location.lifecycle,
   };
 }
 

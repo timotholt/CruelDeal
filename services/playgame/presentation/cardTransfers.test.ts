@@ -13,7 +13,12 @@ import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneId } from '../engine/types/ids';
 import type { EffectRef } from '../engine/types/ability';
-import { assertTransferCoverage, deriveCardTransfers } from './cardTransfers';
+import { getCardRuntime } from '../engine/projections';
+import {
+  assertTransferCoverage,
+  deriveCardTransfers,
+  resolveCardTransferFace,
+} from './cardTransfers';
 
 let failures = 0;
 const pass = (label: string) => { console.log(`PASS: ${label}`); };
@@ -87,19 +92,26 @@ const stateWithHandCard = () => {
 {
   const { state: handState, cardId } = stateWithHandCard();
   const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', cost: 1 }), BOOTSTRAP_MANIFEST);
+  const revealed = apply(staged, event({ type: 'CARD_FLIPPED', cardId }), BOOTSTRAP_MANIFEST);
   const e = event({ type: 'CARD_MOVED_TO_ZONE', cardId, destination: { kind: 'HAND' }, cause: source });
-  const s1 = apply(staged, e, BOOTSTRAP_MANIFEST);
-  const transfers = deriveCardTransfers(staged, e, s1);
-  assertTransferCoverage(staged, e, s1, transfers);
+  const s1 = apply(revealed, e, BOOTSTRAP_MANIFEST);
+  const transfers = deriveCardTransfers(revealed, e, s1);
+  assertTransferCoverage(revealed, e, s1, transfers);
   eq({
+    beforeRevealed: getCardRuntime(revealed, cardId, BOOTSTRAP_MANIFEST)?.revealed,
+    afterRevealed: getCardRuntime(s1, cardId, BOOTSTRAP_MANIFEST)?.revealed,
     from: transfers[0]?.from.kind,
     to: transfers[0]?.to.kind,
     route: transfers[0]?.style.route,
+    face: transfers[0]?.face,
   }, {
+    beforeRevealed: true,
+    afterRevealed: true,
     from: 'LANE',
     to: 'HAND',
     route: 'visible-to-visible',
-  }, 'CARD_MOVED_TO_ZONE normalizes lane -> hand');
+    face: 'ownerVisible',
+  }, 'Leon-style lane -> hand preserves engine reveal state and owns an explicit face policy');
 }
 
 {
@@ -158,4 +170,9 @@ if (failures > 0) {
 
 test('card transfer mappings satisfy their legacy assertion matrix', () => {
   expect(failures).toBe(0);
+});
+
+test('owner-visible hand transfers resolve from the viewer seat, not DOM state', () => {
+  expect(resolveCardTransferFace('ownerVisible', 'P0', 'P0')).toBe('faceUp');
+  expect(resolveCardTransferFace('ownerVisible', 'P0', 'P1')).toBe('faceDown');
 });

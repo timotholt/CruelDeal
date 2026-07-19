@@ -81,10 +81,7 @@ describe('Phase 1.1 canonical timeline', () => {
       .toEqual(built.framedEvents.map(({ frame }) => frame));
     expect(built.transitions.map(({ index }) => index)).toEqual([0, 1, 2, 3, 4]);
     expect(currentFrame(built.finalState)).toBe(asFrame(5));
-    expect(built.finalState.log.map(({ frame }) => frame))
-      .toEqual(built.framedEvents.map(({ frame }) => frame));
-
-    expect(cardLifecycleFrames(built.finalState.log, cardId)).toEqual({
+    expect(cardLifecycleFrames(built.framedEvents, cardId)).toEqual({
       created: [asFrame(1)],
       played: [asFrame(2)],
       revealed: [asFrame(3)],
@@ -113,9 +110,9 @@ describe('Phase 1.1 canonical timeline', () => {
       { turn: 4, phase: 'START' },
       { turn: 4, phase: 'START' },
     ]);
-    expect(turnAtFrame(built.finalState.log, asFrame(2))).toBe(3);
-    expect(turnAtFrame(built.finalState.log, asFrame(3))).toBe(4);
-    expect(turnSpans(built.finalState.log)).toEqual([
+    expect(turnAtFrame(built.framedEvents, asFrame(2))).toBe(3);
+    expect(turnAtFrame(built.framedEvents, asFrame(3))).toBe(4);
+    expect(turnSpans(built.framedEvents)).toEqual([
       { turn: 3, startFrame: asFrame(1), endFrame: asFrame(2) },
       { turn: 4, startFrame: asFrame(3), endFrame: asFrame(4) },
     ]);

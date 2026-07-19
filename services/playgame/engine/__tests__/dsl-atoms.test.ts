@@ -86,7 +86,7 @@ function buildState(
   return emptyTestMatchState({
     turn: 3,
     maxEnergy: { P0: 3, P1: 3 },
-    seed: 'test',
+    rngSeed: 'test',
     energy,
     hand: {
       P0: hand.P0.map(card => card.id),

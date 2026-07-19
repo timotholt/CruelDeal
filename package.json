@@ -12,6 +12,7 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "test:playgame:phase0": "PLAYGAME_PROPERTY_CASES=200 vitest run services/playgame/runtime",
     "engine:cli": "tsx services/playgame/engine/cli/main.ts",
+    "engine:state-size": "tsx scripts/playgame/measure-match-state.ts",
     "cards:generate": "tsx scripts/cards/generate-card-modules.ts",
     "cards:generate:check": "tsx scripts/cards/generate-card-modules.ts --check",
     "locations:generate": "tsx scripts/locations/generate-location-modules.ts",

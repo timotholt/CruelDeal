@@ -66,16 +66,20 @@ export function foldFramedEvents(
 
   inputFrames.forEach((inputFrame, eventIndex) => {
     const before = state;
-    const after = applyFramed(before, inputFrame, options.manifest);
-    const appended = after.log.at(-1);
-    if (!appended || appended.frame !== inputFrame.frame) {
-      throw new Error(`reducer did not append canonical frame ${inputFrame.frame}`);
-    }
+    const canonicalInput = structuredClone(inputFrame);
     const framedEvent: FramedEvent = Object.freeze({
-      frame: appended.frame,
-      scope: appended.scope,
-      event: appended.event as MatchEvent,
+      frame: canonicalInput.frame,
+      scope: Object.freeze({ ...canonicalInput.scope }),
+      event: canonicalInput.event,
     });
+    const after = applyFramed(before, framedEvent, options.manifest);
+    if (
+      after.timeline.frame !== framedEvent.frame
+      || after.timeline.scope?.turn !== framedEvent.scope.turn
+      || after.timeline.scope.phase !== framedEvent.scope.phase
+    ) {
+      throw new Error(`reducer did not adopt canonical frame ${framedEvent.frame}`);
+    }
     framedEvents.push(framedEvent);
     transitions.push(Object.freeze({
       index: eventIndex,

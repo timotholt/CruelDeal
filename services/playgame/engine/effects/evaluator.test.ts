@@ -22,7 +22,6 @@ import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
   InternalCardRecord,
   LaneState,
-  InternalLocationRecord,
   MatchState,
 } from '../types/state';
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
@@ -151,7 +150,7 @@ function buildState(
     maxEnergy: { P0: 3, P1: 3 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: opts.seed ?? 'test-seed',
+    rngSeed: opts.seed ?? 'test-seed',
     priority: 'P0',
     energy: { P0: 0, P1: 0 },
     deck,
@@ -165,7 +164,6 @@ function buildState(
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
-    log: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
@@ -346,7 +344,7 @@ function buildState(
   truthy(!!moved, 'MOVE: CARD_MOVED emitted');
   eq(moved.fromLane, 0, 'MOVE: fromLane = 0');
   truthy(moved.toLane !== 0 && (moved.toLane === 1 || moved.toLane === 2), 'MOVE: toLane is another lane');
-  eq(getCardState(res.state, 'c1' as CardId)!?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
+  eq(getCardState(res.state, 'c1' as CardId)?.lane, moved.toLane, 'MOVE: state.cards.lane updated');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE: card removed from old lane');
 }
 
@@ -371,7 +369,7 @@ function buildState(
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('destroy'));
   const destroyed = res.events.filter(e => e.type === 'CARD_DESTROYED');
   eq(destroyed.length, 2, 'DESTROY: both opp grunts destroyed');
-  eq(getCardState(res.state, 'c2' as CardId)!?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
+  eq(getCardState(res.state, 'c2' as CardId)?.zone, 'DESTROYED', 'zone = DESTROYED (not DISCARD)');
   eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
@@ -734,8 +732,8 @@ function buildState(
   const res = evalEffect(s0, effect, ctx, manifest);
   eq(res.events.filter((e) => e.type === 'CARD_COST_CHANGED').length, 1, 'ADJUST_COST emits one CARD_COST_CHANGED');
   const hitId = (res.events.find((e) => e.type === 'CARD_COST_CHANGED') as { cardId: CardId }).cardId;
-  eq(getCardState(res.state, hitId)!?.costDelta, 1, 'ADJUST_COST persists costDelta on the target');
-  eq(getCardState(res.state, hitId)!?.costLog.length, 1, 'ADJUST_COST appends one cost log entry');
+  eq(getCardState(res.state, hitId)?.costDelta, 1, 'ADJUST_COST persists costDelta on the target');
+  eq(getCardState(res.state, hitId)?.costLog.length, 1, 'ADJUST_COST appends one cost log entry');
 }
 
 // -- onMove trigger: Void Hound gains +2 when moved -----------------------
@@ -1021,7 +1019,7 @@ function buildState(
   const s0 = buildState([{ def: 'bouncer', owner: 'P0', lane: 0, revealed: false }]);
   const res = revealPlayedCard(s0, 'c1' as CardId, manifest, createRng('move-zone'));
   truthy(res.events.some((e) => e.type === 'CARD_MOVED_TO_ZONE'), 'MOVE_CARD_TO_ZONE: emits CARD_MOVED_TO_ZONE');
-  eq(getCardState(res.state, 'c1' as CardId)!?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
+  eq(getCardState(res.state, 'c1' as CardId)?.zone, 'HAND', 'MOVE_CARD_TO_ZONE: card moved to hand');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'MOVE_CARD_TO_ZONE: card removed from lane');
   eq(res.state.hand.P0, ['c1'] as CardId[], 'MOVE_CARD_TO_ZONE: card appears in hand');
 }
@@ -1049,7 +1047,7 @@ function buildState(
     { sourceId: 'c1' as CardId, effectKind: 'SYSTEM', reason: 'SPELL_RESOLVED' },
     'SPELL: records its game-rules cleanup reason',
   );
-  eq(getCardState(res.state, 'c1' as CardId)!?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
+  eq(getCardState(res.state, 'c1' as CardId)?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
 }
 

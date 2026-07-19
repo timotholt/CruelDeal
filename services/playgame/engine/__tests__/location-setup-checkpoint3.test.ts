@@ -31,7 +31,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     const genesis = createMatchGenesis('checkpoint-3-genesis', manifest, decks);
 
     expect(currentFrame(genesis)).toBe(GENESIS_FRAME);
-    expect(genesis.log).toEqual([]);
+    expect(genesis.timeline).toEqual({ frame: GENESIS_FRAME, scope: null });
     expect(genesis.phase).toBe('SETUP');
     expect(genesis.lanesById).toEqual({});
     expect(genesis.activeLaneOrder).toEqual([]);
@@ -40,7 +40,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     expect(validateLocationState(genesis)).toEqual([]);
   });
 
-  it('initializes, draws, and plays three ordered face-down locations before opening intent', () => {
+  it('initializes, draws, and plays three state-randomized face-down locations before opening intent', () => {
     const genesis = createMatchGenesis('checkpoint-3-events', manifest, decks);
     const setup = buildLocationSetupTransaction(genesis, manifest, orderedLocations);
     const eventTypes = setup.events.map(event => event.type);
@@ -62,6 +62,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
       'LOCATION_CARD_PLAYED',
       'LOCATION_SLOT_REVEAL_SCHEDULED',
       'LANE_CREATED',
+      'GAMEPLAY_RNG_ADVANCED',
       'MATCH_SETUP_COMPLETED',
     ]);
 
@@ -77,10 +78,15 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     expect(state.phase).toBe('AWAITING_INTENT');
     expect(state.activeLaneOrder).toEqual([0, 1, 2]);
     expect(state.locationDeck.staging).toEqual([]);
+    const initialized = setup.events[0];
+    if (initialized.type !== 'LOCATION_DECK_INITIALIZED') {
+      throw new Error('setup must initialize the location deck first');
+    }
+    const orderedDefs = initialized.locations.map(location => location.defId);
     expect(state.locationDeck.drawPile.map(id => getLocationState(state, id)!.defId))
-      .toEqual(['delta', 'epsilon']);
+      .toEqual(orderedDefs.slice(3));
     expect(state.activeLaneOrder.map(lane => locationCardAtLane(state, lane)?.defId))
-      .toEqual(['alpha', 'beta', 'gamma']);
+      .toEqual(orderedDefs.slice(0, 3));
     expect(state.activeLaneOrder.map(lane => locationCardAtLane(state, lane)?.face))
       .toEqual(['FACE_DOWN', 'FACE_DOWN', 'FACE_DOWN']);
     expect(state.activeLaneOrder.map(lane => state.lanesById[lane].locationSlot.revealAtTurn))
@@ -117,7 +123,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
       type: 'END_TURN',
       intentId: 'too-early',
       owner: 'P0',
-    }, createRng(genesis.seed), manifest);
+    }, createRng(genesis.rng), manifest);
 
     expect(events).toEqual([{
       type: 'INTENT_REJECTED',

@@ -107,7 +107,7 @@
             },
             "LOCATIONS": {
               "kind": "LOCATION",
-              "order": "PRESERVE",
+              "order": "WEIGHTED_RANDOM",
               "deckId": "locations-0",
               "revision": 1,
               "name": "Locations",
@@ -133,6 +133,8 @@
           "matchId": "match-1",
           "baseRevision": 8,
           "revision": 9,
+          "rngDrawsBefore": 41,
+          "rngDrawsAfter": 42,
           "intent": {
             "matchId": "match-1",
             "seat": "SYSTEM",
@@ -153,6 +155,39 @@
               }
             }
           ]
+        }
+      }
+    },
+    {
+      "name": "valid seat-safe snapshot",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "SEAT_MATCH_SNAPSHOT",
+        "payload": {
+          "version": 1,
+          "matchId": "match-1",
+          "revision": 9,
+          "frame": 66,
+          "viewerSeat": "P0",
+          "state": {
+            "turn": 3,
+            "phase": "AWAITING_INTENT",
+            "priority": "P0",
+            "energy": { "P0": 3, "P1": 3 },
+            "maxEnergy": { "P0": 3, "P1": 3 },
+            "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
+            "deckCounts": { "P0": 5, "P1": 5 },
+            "locationDeckCount": 3,
+            "hands": { "P0": [], "P1": [] },
+            "cards": [],
+            "lanes": [],
+            "stagedCards": [],
+            "discard": { "P0": [], "P1": [] },
+            "destroyed": { "P0": [], "P1": [] },
+            "banishedCounts": { "P0": 0, "P1": 0 },
+            "result": null
+          }
         }
       }
     },
@@ -289,7 +324,7 @@
             },
             "LOCATIONS": {
               "kind": "LOCATION",
-              "order": "PRESERVE",
+              "order": "WEIGHTED_RANDOM",
               "deckId": "locations-0",
               "revision": 1,
               "name": "Locations",

@@ -1,9 +1,12 @@
 import type { Manifest } from '../engine/manifest/types';
 import type { ReplayResult, ReplayStep } from '../engine/replay';
-import type { MatchLogEntry, MatchState } from '../engine/types/state';
+import type { MatchState } from '../engine/types/state';
+import type { FramedEvent } from '../engine/types/timeline';
 import type { MatchRuntime } from '../runtime/matchRuntime';
 import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
+import type { DebugMatchCheckpoint } from '../runtime/contracts';
+import type { MatchReconciliationResult } from '../runtime/replayExport';
 import {
   createReplayNameResolver,
   createReplayActorResolver,
@@ -13,11 +16,13 @@ import {
 
 export interface SnapDebugApi {
   getLiveState: () => MatchState;
-  getLiveLog: () => readonly MatchLogEntry[];
+  getCommittedEvents: () => readonly FramedEvent[];
   getReplayBundle: () => MatchRuntimeReplayExport;
   getReplayTimeline: () => ReplayResult;
   getStep: (cursor: number) => ReplayStep | null;
   getStepDescription: (cursor: number) => ReplayStepDescription | null;
+  getCheckpoints: () => readonly DebugMatchCheckpoint[];
+  reconcile: () => MatchReconciliationResult;
   copyReplayJson: () => Promise<string>;
 }
 
@@ -36,7 +41,9 @@ export function installSnapDebug(
   const timeline = (): ReplayResult => renderRuntimeReplay(exportReplay(), manifest);
   const api: SnapDebugApi = {
     getLiveState: () => structuredClone(runtime.state()),
-    getLiveLog: () => structuredClone(runtime.state().log),
+    getCommittedEvents: () => structuredClone(
+      exportReplay().transactions.flatMap(transaction => transaction.framedEvents),
+    ),
     getReplayBundle: exportReplay,
     getReplayTimeline: timeline,
     getStep: (cursor) => timeline().steps[cursor] ?? null,
@@ -51,6 +58,8 @@ export function installSnapDebug(
         createReplayActorResolver(bundle),
       );
     },
+    getCheckpoints: runtime.debugCheckpoints,
+    reconcile: runtime.reconcile,
     copyReplayJson: async () => {
       const json = JSON.stringify(exportReplay(), null, 2);
       await navigator.clipboard.writeText(json);

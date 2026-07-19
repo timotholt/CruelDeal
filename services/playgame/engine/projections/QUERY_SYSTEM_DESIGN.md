@@ -221,7 +221,7 @@ export function matchesLane(idx: LaneId, filter: LaneFilter, state: MatchState, 
 - `findCardDefs`: iteration order of `manifest.cards` keys
 - `findLanes`: ascending `LaneId` (0, 1, 2)
 
-No RNG involved — callers that need random selection should fork an RNG and call `.pick()` on the result.
+No RNG involved — authoritative callers that need random selection consume the match RNG after querying.
 
 ---
 

@@ -7,7 +7,7 @@
  * same priority coin flip) on every runtime.
  *
  * No `Date.now()`, no `Math.random()`, no DOM. All randomness is drawn
- * from the seeded `Rng` forks.
+ * from the match's single seeded `Rng` stream.
  *
  * The UI layer calls this builder too; optional prebuilt decks use the same
  * manifest Deck shape that the eventual deck builder will save.
@@ -50,15 +50,6 @@ export interface CreatedMatchSetup {
   readonly state: MatchState;
 }
 
-/** Short id derived from a seeded RNG. 8 alphanumerics — enough for a match. */
-function mintId(rng: Rng, tag: string): string {
-  const sub = rng.fork(tag);
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  for (let i = 0; i < 8; i++) out += alphabet[sub.int(0, alphabet.length - 1)];
-  return out;
-}
-
 function buildDeck(
   owner: Owner,
   manifest: Manifest,
@@ -81,7 +72,9 @@ function buildDeck(
       throw new Error(`initState: deck for ${owner} references unknown defId "${entry.defId}"`);
     }
     const inst: InternalCardRecord = {
-      id: mintId(rng, `${owner}:card:${i}`) as CardId,
+      // Initial identities are deterministic counters, not random outcomes.
+      // Owner prefixes keep the two independent deck indexes collision-free.
+      id: `${owner === 'P0' ? 'a' : 'b'}${i}` as CardId,
       defId: def.defId,
       ...(entry.variantId === undefined ? {} : { variantId: entry.variantId }),
       version: def.version,
@@ -90,14 +83,7 @@ function buildDeck(
       zone: 'DECK',
       revealed: false,
       revealTiming: null,
-      lifecycle: {
-        ...EMPTY_CARD_LIFECYCLE,
-        frameCreated: GENESIS_FRAME,
-        turnCreated: 1,
-        zoneEnteredAt: {
-          DECK: { frame: GENESIS_FRAME, turn: 1 },
-        },
-      },
+      lifecycle: EMPTY_CARD_LIFECYCLE,
       powerLedger: [],
       costDelta: 0,
       costLog: [],
@@ -124,9 +110,9 @@ export function createMatchGenesis(
   decks: InitialDecks = {},
 ): MatchState {
   const rng = createRng(seed);
-  const deckRng = rng.fork('deck');
-  const playerDeck = buildDeck('P0', manifest, deckRng.fork('P0'), decks.P0);
-  const oppDeck = buildDeck('P1', manifest, deckRng.fork('P1'), decks.P1);
+  const deckRng = rng.scope('deck');
+  const playerDeck = buildDeck('P0', manifest, deckRng.scope('P0'), decks.P0);
+  const oppDeck = buildDeck('P1', manifest, deckRng.scope('P1'), decks.P1);
 
   // Normalize every card into the opaque authoritative record store.
   const cards: Record<string, InternalCardRecord> = {};
@@ -134,9 +120,13 @@ export function createMatchGenesis(
   for (const c of oppDeck) cards[c.id] = c;
 
   const startEnergy = manifest.constants.energyCurve[0] ?? 1;
-  const priority: Owner = rng.fork('priority').int(0, 1) === 0 ? 'P0' : 'P1';
+  const priority: Owner = rng.scope('priority').int(0, 1) === 0 ? 'P0' : 'P1';
 
   return {
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     turn: 1,
     // Ramp model: maxEnergy starts at 0 and +1s each turn. Turn 1 is the
     // first playable turn, so the ramp for turn 1 has implicitly fired
@@ -144,7 +134,7 @@ export function createMatchGenesis(
     maxEnergy: { P0: 1, P1: 1 },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'SETUP',
-    seed,
+    rng: rng.snapshot(),
     priority,
     energy: { P0: startEnergy, P1: startEnergy },
     deck: {
@@ -167,7 +157,6 @@ export function createMatchGenesis(
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
-    log: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },

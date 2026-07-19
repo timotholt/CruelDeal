@@ -90,7 +90,7 @@ const buildState = (
   const eMap = opts.energy ?? { P0: 3, P1: 3 };
   return emptyTestMatchState({
     turn: 3, maxEnergy: { P0: 3, P1: 3 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
+    phase: 'AWAITING_INTENT', rngSeed: 'test', priority: 'P0',
     energy: eMap, deck, hand,
     lanesById: testLaneRegistry(lanes),
     activeLaneOrder: [0, 1, 2],
@@ -98,7 +98,7 @@ const buildState = (
     locationDeck: {
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },
-    pending: [], stagingOrder: [], pendingEffects: [], log: [],
+    pending: [], stagingOrder: [], pendingEffects: [],
     lastPlayedBy: { P0: null, P1: null }, result: null,
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,

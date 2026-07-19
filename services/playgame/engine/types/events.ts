@@ -45,6 +45,8 @@ export type PriorityReason =
   | 'RETAINED';
 
 export type MatchEvent =
+  // --- Authority bookkeeping ---
+  | { type: 'GAMEPLAY_RNG_ADVANCED'; draws: number }
   // --- Staging / play ---
   | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneId; owner: Owner; cost: number }
   | { type: 'CARD_UNSTAGED'; intentId: string; cardId: CardId }

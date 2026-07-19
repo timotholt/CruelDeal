@@ -9,9 +9,9 @@ import {
 } from '../../engine/cli/initState';
 import { runMatch } from '../../engine/cli/runMatch';
 import { replayMatch } from '../../engine/replay';
+import { frameAndFoldEvents } from '../../engine/transactionTimeline';
 import { testCardDef, testLocationDef, testManifest } from '../../engine/testkit';
 import type { CardDef, Deck, Manifest } from '../../engine/manifest/types';
-import type { MatchEvent } from '../../engine/types/events';
 import type { MatchBootstrap } from '../contracts';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
 import { defaultLocationDeckFactory } from '../locationDeckFactory';
@@ -261,19 +261,22 @@ describe('card variants and opening initialization', () => {
     expect(selected).toBeDefined();
     expect(selected?.defId).toBe('card-0');
     const opening = buildOpeningTransaction(setup.state, manifest);
-    const finalState = opening.events.reduce(
-      (state, event) => apply(state, event, manifest),
-      setup.state,
-    );
+    const openingTransaction = frameAndFoldEvents({
+      transactionId: opening.transactionId,
+      initialState: setup.state,
+      events: opening.events,
+      manifest,
+      initialPhase: 'SETUP',
+    });
+    const finalState = openingTransaction.finalState;
     const replayed = replayMatch({
-      seed: genesis.seed,
+      seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
-      framedEvents: finalState.log.map(({ frame, scope, event }) => ({
-        frame,
-        scope,
-        event: event as MatchEvent,
-      })),
+      framedEvents: [
+        ...setup.transaction.framedEvents,
+        ...openingTransaction.framedEvents,
+      ],
     });
 
     expect(getCardState(finalState, selected!.id)!.variantId).toBe('holo');

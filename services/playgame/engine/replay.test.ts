@@ -3,7 +3,7 @@ import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { runMatch } from './cli/runMatch';
 import { exportReplayBundle, replayMatch, validateReplayBundle } from './replay';
 import { createMatchGenesis, createSetupMatch } from './cli/initState';
-import { apply } from './apply';
+import { frameAndFoldEvents } from './transactionTimeline';
 import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
 import { orderedTestLocationDeck } from './testkit/runtimeFixture';
@@ -20,11 +20,6 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 };
 const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label);
 const clone = <T>(value: T): T => structuredClone(value) as T;
-const framedEvents = (state: MatchState) => state.log.map(({ frame, scope, event }) => ({
-  frame,
-  scope,
-  event: event as MatchEvent,
-}));
 const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 {
@@ -35,10 +30,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     locationDeck,
   });
   const replayed = replayMatch({
-    seed: result.finalState.seed,
+    seed: result.finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    framedEvents: framedEvents(result.finalState),
+    framedEvents: result.framedEvents,
   });
 
   eq(replayed.steps.length, result.events.length + 1, 'replayMatch: step count = events + genesis');
@@ -52,12 +47,18 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     manifest: BOOTSTRAP_MANIFEST,
     locationDeck,
   });
-  const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, {
-    localSeat: 'P0',
-    notes: 'test bundle',
-  }, initialState);
-  eq(bundle.seed, result.finalState.seed, 'exportReplayBundle: seed copied');
-  eq(bundle.framedEvents.length, result.finalState.log.length, 'exportReplayBundle: event count matches log');
+  const bundle = exportReplayBundle({
+    finalState: result.finalState,
+    manifest: BOOTSTRAP_MANIFEST,
+    metadata: {
+      localSeat: 'P0',
+      notes: 'test bundle',
+    },
+    initialState,
+    framedEvents: result.framedEvents,
+  });
+  eq(bundle.seed, result.finalState.rng.seed, 'exportReplayBundle: seed copied');
+  eq(bundle.framedEvents.length, result.framedEvents.length, 'exportReplayBundle: event count matches record');
   eq(bundle.manifestVersion, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifestVersion copied');
   eq(bundle.manifestSnapshot.version, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifest snapshot copied');
 }
@@ -71,14 +72,23 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const initialSnapshot = clone(initialState);
   const cardId = initialState.deck.P0[0];
   const draw: MatchEvent = { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true };
-  const finalState = apply(setup.state, draw, BOOTSTRAP_MANIFEST);
+  const drawTransaction = frameAndFoldEvents({
+    transactionId: 'replay-custom-initial:draw',
+    initialState: setup.state,
+    events: [draw],
+    manifest: BOOTSTRAP_MANIFEST,
+  });
+  const finalState = drawTransaction.finalState;
   const replayed = replayMatch({
-    seed: finalState.seed,
+    seed: finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    framedEvents: framedEvents(finalState),
+    framedEvents: [
+      ...setup.transaction.framedEvents,
+      ...drawTransaction.framedEvents,
+    ],
   });
-  eq(getCardState(replayed.initialState, cardId)!!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
+  eq(getCardState(replayed.initialState, cardId)!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
   eq(replayed.finalState, finalState, 'replayMatch: supplied initial state reaches expected final state');
   eq(initialState, initialSnapshot, 'apply/replayMatch: supplied initial state remains unmutated');
 }
@@ -90,7 +100,12 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     manifest: BOOTSTRAP_MANIFEST,
     locationDeck,
   });
-  const bundle = exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState);
+  const bundle = exportReplayBundle({
+    finalState: result.finalState,
+    manifest: BOOTSTRAP_MANIFEST,
+    initialState,
+    framedEvents: result.framedEvents,
+  });
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
   truthy(validation.ok, 'validateReplayBundle: valid bundle passes');
   eq(validation.errors.length, 0, 'validateReplayBundle: valid bundle has no errors');
@@ -114,7 +129,12 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     locationDeck,
   });
   const bundle = {
-    ...exportReplayBundle(result.finalState, BOOTSTRAP_MANIFEST, undefined, initialState),
+    ...exportReplayBundle({
+      finalState: result.finalState,
+      manifest: BOOTSTRAP_MANIFEST,
+      initialState,
+      framedEvents: result.framedEvents,
+    }),
     manifestVersion: BOOTSTRAP_MANIFEST.version + 1,
   };
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
@@ -134,10 +154,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   let threw = false;
   try {
     replayMatch({
-      seed: result.finalState.seed,
+      seed: result.finalState.rng.seed,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: undefined as never,
-      framedEvents: framedEvents(result.finalState),
+      framedEvents: result.framedEvents,
     });
   } catch {
     threw = true;
@@ -147,10 +167,18 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 {
   const currentState = createMatchGenesis('replay-bad-export', BOOTSTRAP_MANIFEST);
-  const badInitial = { ...currentState, seed: 'different-seed' } as MatchState;
+  const badInitial = {
+    ...currentState,
+    rng: { ...currentState.rng, seed: 'different-seed' },
+  } as MatchState;
   let threw = false;
   try {
-    exportReplayBundle(currentState, BOOTSTRAP_MANIFEST, undefined, badInitial);
+    exportReplayBundle({
+      finalState: currentState,
+      manifest: BOOTSTRAP_MANIFEST,
+      initialState: badInitial,
+      framedEvents: [],
+    });
   } catch {
     threw = true;
   }

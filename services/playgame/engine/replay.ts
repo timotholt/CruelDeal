@@ -19,7 +19,7 @@ import { getAllLocationStates } from './projections/locationRuntime';
 import { getLocationTemplate } from './projections/locationTemplate';
 
 export interface ReplayBundle {
-  readonly version: 2;
+  readonly version: 3;
   readonly manifestVersion: number;
   readonly protocolVersion: number;
   readonly seed: string;
@@ -66,12 +66,20 @@ export interface ReplayValidationResult {
   readonly errors: readonly string[];
 }
 
+export interface ExportReplayBundleOptions {
+  readonly finalState: MatchState;
+  readonly manifest: Manifest;
+  readonly metadata?: ReplayBundle['metadata'];
+  readonly initialState: MatchState;
+  readonly framedEvents: readonly FramedEvent[];
+}
+
 export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
   if (!opts.initialState) {
     throw new Error('replayMatch: initialState is required; refusing to rebuild replay state from seed');
   }
-  if (opts.initialState.seed !== opts.seed) {
-    throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.seed} replay=${opts.seed}`);
+  if (opts.initialState.rng.seed !== opts.seed) {
+    throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.rng.seed} replay=${opts.seed}`);
   }
   assertReplayInitialState(opts.initialState, opts.manifest);
   for (const framedEvent of opts.framedEvents) {
@@ -111,34 +119,41 @@ export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
 }
 
 export function exportReplayBundle(
-  state: MatchState,
-  manifest: Manifest,
-  extras: ReplayBundle['metadata'] | undefined,
-  initialState: MatchState,
+  options: ExportReplayBundleOptions,
 ): ReplayBundle {
+  const {
+    finalState,
+    manifest,
+    metadata,
+    initialState,
+    framedEvents,
+  } = options;
   if (!initialState) {
     throw new Error('exportReplayBundle: initialState is required');
   }
-  if (initialState.seed !== state.seed) {
-    throw new Error(`exportReplayBundle: seed mismatch initialState=${initialState.seed} state=${state.seed}`);
+  if (initialState.rng.seed !== finalState.rng.seed) {
+    throw new Error(
+      `exportReplayBundle: seed mismatch initialState=${initialState.rng.seed} state=${finalState.rng.seed}`,
+    );
   }
-  const framedEvents = state.log.map((entry) => ({
-    frame: entry.frame,
-    scope: entry.scope,
-    event: entry.event as MatchEvent,
-  }));
   for (const framedEvent of framedEvents) {
     assertProtocolPayload('FRAMED_EVENT', framedEvent);
   }
+  const finalFrame = framedEvents.at(-1)?.frame ?? GENESIS_FRAME;
+  if (currentFrame(finalState) !== finalFrame) {
+    throw new Error(
+      `exportReplayBundle: final state frame ${currentFrame(finalState)} does not match event frame ${finalFrame}`,
+    );
+  }
   return {
-    version: 2,
+    version: 3,
     manifestVersion: manifest.version,
     protocolVersion: manifest.protocolVersion,
-    seed: state.seed,
+    seed: finalState.rng.seed,
     manifestSnapshot: manifest,
     initialState,
     framedEvents,
-    metadata: extras,
+    metadata,
   };
 }
 
@@ -154,7 +169,7 @@ export function replayBundle(bundle: ReplayBundle): ReplayResult {
 
 export function assertReplayBundle(bundle: ReplayBundle): void {
   const serializedVersion = (bundle as { readonly version: number }).version;
-  if (serializedVersion !== 2) {
+  if (serializedVersion !== 3) {
     throw new Error(`Unsupported replay bundle version: ${serializedVersion}`);
   }
   if (!bundle.manifestSnapshot) {
@@ -173,8 +188,8 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
   if (!bundle.initialState) {
     throw new Error('Replay bundle is missing initialState');
   }
-  if (bundle.initialState.seed !== bundle.seed) {
-    throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.seed}`);
+  if (bundle.initialState.rng.seed !== bundle.seed) {
+    throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.rng.seed}`);
   }
   if (!Array.isArray(bundle.framedEvents)) {
     throw new Error('Replay bundle framedEvents must be an array');
@@ -183,7 +198,10 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
 }
 
 function assertReplayInitialState(initialState: MatchState, manifest: Manifest): void {
-  if (currentFrame(initialState) !== GENESIS_FRAME || initialState.log.length !== 0) {
+  if (
+    currentFrame(initialState) !== GENESIS_FRAME
+    || initialState.timeline.scope !== null
+  ) {
     throw new Error(
       `Replay initialState must be frame 0; received frame ${currentFrame(initialState)}`,
     );
@@ -217,7 +235,7 @@ export function validateReplayBundle(
   const errors: string[] = [];
 
   const serializedVersion = (bundle as { readonly version: number }).version;
-  if (serializedVersion !== 2) {
+  if (serializedVersion !== 3) {
     errors.push(`Unsupported replay bundle version: ${serializedVersion}`);
   }
   if (bundle.manifestVersion !== manifest.version) {

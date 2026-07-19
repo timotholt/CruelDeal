@@ -60,10 +60,8 @@ describe('Runtime frame replay edge cases', () => {
     };
 
     const rendered = renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST);
-    expect(rendered.finalState.log.map(({ frame }) => frame))
-      .toEqual(replay.transactions.flatMap(
-        transaction => transaction.framedEvents.map(({ frame }) => frame),
-      ));
+    expect(rendered.finalState.timeline.frame)
+      .toBe(replay.transactions.at(-1)?.framedEvents.at(-1)?.frame);
   });
 
   it('rejects transaction revisions that move backward', async () => {
@@ -148,6 +146,22 @@ describe('Runtime frame replay edge cases', () => {
 
     expect(() => renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST))
       .toThrow(/Non-contiguous framed event/);
+  });
+
+  it('rejects RNG cursor drift at transaction boundaries', () => {
+    const match = session('frame-replay-rng-drift');
+    const exported = structuredClone(match.exportReplay());
+    const replay: MatchRuntimeReplayExport = {
+      ...exported,
+      transactions: exported.transactions.map((transaction, index) => (
+        index === 0
+          ? { ...transaction, rngDrawsAfter: transaction.rngDrawsAfter + 1 }
+          : transaction
+      )),
+    };
+
+    expect(() => renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST))
+      .toThrow(/wrong RNG end cursor/);
   });
 
   it('materializes TURN_STARTED as the exact step that changes the turn', async () => {

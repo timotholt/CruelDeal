@@ -112,18 +112,22 @@ describe('createMatchRuntime', () => {
     expect(runtime.revision()).toBe(2);
     expect(setup.intent.seat).toBe('SYSTEM');
     expect(opening.intent.seat).toBe('SYSTEM');
+    expect(setup.rngDrawsBefore).toBe(runtime.genesis().rng.draws);
+    expect(setup.rngDrawsAfter).toBe(initialization.setup.finalState.rng.draws);
+    expect(opening.rngDrawsBefore).toBe(initialization.setup.finalState.rng.draws);
+    expect(opening.rngDrawsAfter).toBe(initialization.opening.finalState.rng.draws);
     expect(setupEvents[0]?.type).toBe('LOCATION_DECK_INITIALIZED');
     const initialized = setupEvents[0];
     if (initialized.type !== 'LOCATION_DECK_INITIALIZED') {
       throw new Error('setup must initialize the location deck first');
     }
     const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard!;
-    expect(initialized.locations.map(location => location.defId)).toEqual(
+    expect(initialized.locations.map(location => location.defId).sort()).toEqual(
       defaultLocationDeckFactory.build({
         manifest: BOOTSTRAP_MANIFEST,
         ruleset,
         seed: 'phase1-checkpoint3-runtime',
-      }).entries.map(entry => entry.defId),
+      }).entries.map(entry => entry.defId).sort(),
     );
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_DRAWN')).toHaveLength(3);
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_PLAYED')).toHaveLength(3);
@@ -149,10 +153,7 @@ describe('createMatchRuntime', () => {
     expect(runtime.genesis().phase).toBe('SETUP');
     expect(runtime.genesis().activeLaneOrder).toEqual([]);
     expect(getAllLocationStates(runtime.genesis())).toEqual([]);
-    expect(runtime.state().hand.P0).toHaveLength(openingHandSize);
-    expect(runtime.state().hand.P1).toHaveLength(openingHandSize);
-    expect(runtime.state().deck.P0).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
-    expect(runtime.state().deck.P1).toHaveLength(BOOTSTRAP_MANIFEST.constants.deckSize - openingHandSize);
+    expect(runtime.state()).toBe(initialization.opening.finalState);
   });
 
   it('keeps planning private, then publishes one complete system resolution timeline', async () => {
@@ -186,11 +187,12 @@ describe('createMatchRuntime', () => {
     expect(runtime.frame()).toBeGreaterThan(committedFrameBeforeLock);
   });
 
-  it('returns stale, authority, match, rules, and terminal receipts without log events', async () => {
+  it('returns stale, authority, match, rules, and terminal receipts without committed events', async () => {
     const runtime = runtimeFixture();
     const initialRevision = runtime.revision();
-    const initialLogLength = runtime.state().log.length;
+    const initialFrame = runtime.frame();
     const initialTransactionCount = runtime.transactions().length;
+    const initialRngDraws = runtime.transactions().at(-1)!.rngDrawsAfter;
 
     await expect(runtime.submitIntent({
       ...stageEnvelope(runtime, 'wrong-match'),
@@ -215,12 +217,15 @@ describe('createMatchRuntime', () => {
       expectedRevision: initialRevision - 1,
       currentRevision: initialRevision,
     });
+    expect(runtime.frame()).toBe(initialFrame);
+    expect(runtime.transactions()).toHaveLength(initialTransactionCount);
+    expect(runtime.transactions().at(-1)!.rngDrawsAfter).toBe(initialRngDraws);
 
     const cardId = runtime.state().hand.P0[0];
     await expect(runtime.submitIntent(stageEnvelope(runtime, 'first-stage', initialRevision, 'P0', cardId)))
       .resolves.toMatchObject({ status: 'accepted' });
     const afterAcceptedRevision = runtime.revision();
-    const afterAcceptedLogLength = runtime.state().log.length;
+    const afterAcceptedFrame = runtime.frame();
     const afterAcceptedTransactions = runtime.transactions().length;
     await expect(runtime.submitIntent(stageEnvelope(
       runtime,
@@ -230,11 +235,10 @@ describe('createMatchRuntime', () => {
       cardId,
     ))).resolves.toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
     expect(runtime.revision()).toBe(afterAcceptedRevision);
-    expect(runtime.state().log).toHaveLength(afterAcceptedLogLength);
+    expect(runtime.frame()).toBe(afterAcceptedFrame);
     expect(runtime.transactions()).toHaveLength(afterAcceptedTransactions);
-    expect(runtime.state().log.some(
-      (entry) => (entry.event as { type?: string }).type === 'INTENT_REJECTED',
-    )).toBe(false);
+    expect(runtime.transactions().flatMap(transaction => transaction.framedEvents)
+      .some(entry => entry.event.type === 'INTENT_REJECTED')).toBe(false);
 
     const concedeRevision = runtime.revision();
     await expect(runtime.submitIntent({
@@ -251,7 +255,7 @@ describe('createMatchRuntime', () => {
       'P0',
     ))).resolves.toMatchObject({ status: 'illegal', code: 'TERMINAL_MATCH' });
 
-    expect(initialLogLength).toBeGreaterThan(0);
+    expect(initialFrame).toBeGreaterThan(0);
     expect(initialTransactionCount).toBe(2);
   });
 
@@ -273,7 +277,7 @@ describe('createMatchRuntime', () => {
       .find((candidate) => {
         const state = candidate.state();
         const id = state.lanesById[0].locationSlot.locationCardId;
-        return id ? getLocationState(state, id)!?.defId === 'gun-store' : false;
+        return id ? getLocationState(state, id)?.defId === 'gun-store' : false;
       });
     expect(runtime).toBeDefined();
     if (!runtime) return;
@@ -371,7 +375,7 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture('phase1-runtime-replay-export');
     await runtime.submitIntent(stageEnvelope(runtime, 'replay-stage'));
     const exported = runtime.exportReplay();
-    expect(exported.version).toBe(2);
+    expect(exported.version).toBe(3);
     let replayed = exported.genesis;
 
     exported.transactions.forEach((transaction) => {
@@ -384,7 +388,7 @@ describe('createMatchRuntime', () => {
       }).finalState;
     });
 
-    expect(exported.genesis.log).toHaveLength(0);
+    expect(exported.genesis.timeline).toEqual({ frame: 0, scope: null });
     expect(replayed).not.toEqual(runtime.state());
 
     await runtime.submitIntent({

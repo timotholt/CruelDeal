@@ -59,3 +59,38 @@ export function sfc32FromSeed(seed: string): () => number {
   const [a, b, c, d] = cyrb128(seed);
   return sfc32(a, b, c, d);
 }
+
+export interface Sfc32State {
+  readonly a: number;
+  readonly b: number;
+  readonly c: number;
+  readonly d: number;
+}
+
+export interface Sfc32Step {
+  readonly value: number;
+  readonly state: Sfc32State;
+}
+
+/** Pure, serializable form of one sfc32 transition. */
+export function stepSfc32(state: Sfc32State): Sfc32Step {
+  const a = state.a | 0;
+  const b = state.b | 0;
+  const c = state.c | 0;
+  const d = state.d | 0;
+  const t = (((a + b) | 0) + d) | 0;
+  const nextD = (d + 1) | 0;
+  const nextA = b ^ (b >>> 9);
+  const nextB = (c + (c << 3)) | 0;
+  const rotatedC = (c << 21) | (c >>> 11);
+  const nextC = (rotatedC + t) | 0;
+  return {
+    value: (t >>> 0) / 4294967296,
+    state: {
+      a: nextA >>> 0,
+      b: nextB >>> 0,
+      c: nextC >>> 0,
+      d: nextD >>> 0,
+    },
+  };
+}

@@ -5,6 +5,37 @@ Repository policy: active-development replacement; no compatibility layer
 Primary sequence: state/history separation, state compaction, canonical RNG,
 seat-safe wire protocol, persistence and reconciliation
 
+Implementation progress (2026-07-19):
+
+- Phase 0/1 complete: canonical history is runtime-owned, not state-owned.
+- Phase 2 complete: average final-state JSON reduced below the 25 KB budget.
+- Phase 3 complete: one serialized sfc32 stream, state-owned location ordering,
+  compact deterministic setup IDs, atomic draw-delta events, and transaction
+  RNG coordinates.
+- Phase 4 complete: explicit seat-safe JSON snapshots, opaque seat-scoped
+  tokens, filtered animation events, correction snapshots, resync contracts,
+  schemas, and reconnect folding.
+- Phase 5 reconciliation core complete: DEBUG play checkpoints, automatic
+  genesis-plus-events replay, exact state comparison, RNG cursor verification,
+  and first-drift diagnostics. Durable backend persistence remains backend
+  integration work.
+
+Current measured averages across 20 complete matches:
+
+| Artifact | JSON | gzip |
+| --- | ---: | ---: |
+| Genesis mechanical state | 8.5 KB | — |
+| Final mechanical state | 20.6 KB | 2.9 KB |
+| Seat-safe final snapshot | 3.5 KB | 1.0 KB |
+| Genesis plus canonical events | 33.9 KB | 4.1 KB |
+| Full DEBUG play checkpoints | 270.5 KB | 6.6 KB |
+
+Changing a TypeScript `number` to a nominal smaller integer type would not
+shrink a JavaScript object or JSON payload. The implemented savings come from
+removing duplicated history/default facts, using compact tuples where they
+remain readable, projecting counts instead of secret collections, and
+compressing repetitive debug evidence at persistence boundaries.
+
 ## Goal
 
 CruelDeal must have one authoritative deterministic match simulation that:
@@ -75,9 +106,7 @@ projection performs no player-data redaction.
 ### 5. Replay verifies folding, not complete causal correctness
 
 Current replay proves that recorded factual events reduce to the same state.
-It does not independently prove that the resolver produced the correct events
-from accepted intents or that all randomness was consumed from the canonical
-stream. Pre/post checksum fields exist but are not populated.
+It must also verify that all randomness was consumed from the canonical stream.
 
 ## Non-Negotiable Invariants
 
@@ -112,7 +141,7 @@ interface MatchTimelinePosition {
 }
 
 interface GameplayRngState {
-  readonly algorithm: 'sfc32-cyrb128-v1';
+  readonly algorithm: 'sfc32-v1';
   readonly seed: string;
   readonly words: readonly [number, number, number, number];
   readonly draws: number;
@@ -157,9 +186,8 @@ Each committed transaction contains:
 - accepted input identity;
 - ordered seat-authoritative framed events;
 - base and resulting revision;
-- pre-state and post-state checksum;
 - RNG draw count before and after;
-- previous transaction hash and transaction hash.
+- accepted intent identity.
 
 The runtime may materialize short-lived per-event transitions for animation.
 It must release them after presentation and never store them as match history.
@@ -176,21 +204,21 @@ interface SeatMatchSnapshotV1 {
   readonly frame: Frame;
   readonly viewerSeat: Seat;
   readonly state: SeatVisibleMatchStateV1;
-  readonly checksum: string;
 }
 
 interface SeatCommittedTransactionV1 {
   readonly matchId: string;
   readonly baseRevision: number;
   readonly revision: number;
-  readonly framedEvents: readonly SeatVisibleFramedEventV1[];
-  readonly postSnapshotChecksum: string;
+  readonly events: readonly SeatVisibleFramedEventV1[];
+  readonly postState: SeatVisibleMatchStateV1;
 }
 ```
 
-The client starts or reconnects from a snapshot, applies ordered projected
-events to its projected state, animates each transition, and checks the
-resulting projected checksum. A mismatch requests a new snapshot.
+The client starts or reconnects from a snapshot, animates ordered projected
+events, then adopts the transaction's authoritative seat-safe correction
+state. Filtered frame numbers intentionally contain gaps where authority-only
+events were removed.
 
 Competitive player payloads must not expose the root RNG seed/cursor, opponent
 hand identities, deck order, hidden location identities/order, server-only
@@ -201,7 +229,7 @@ pending effects, or authoritative internal ledgers.
 Debug mode may persist:
 
 - a compressed full mechanical snapshot after each committed card play;
-- snapshot frame, state checksum, and RNG draw count;
+- snapshot frame and RNG draw count;
 - an optional consumed-random audit tape containing draw index and semantic
   purpose;
 - intent-regeneration and event-fold reconciliation results.
@@ -230,7 +258,7 @@ it.
 
 ## Phase 1 — Remove canonical history from `MatchState`
 
-This phase is first because every later snapshot, checksum, projection, and
+This phase is first because every later snapshot, projection, and
 size result depends on having one history owner.
 
 ### Work
@@ -351,36 +379,33 @@ size result depends on having one history owner.
 - Hidden-information tests cover both snapshots and every event family.
 - Client projected event folding matches a freshly projected server snapshot.
 - Reconnect from snapshot plus event suffix reaches the current projected
-  checksum.
+  state.
 
-## Phase 5 — Persistence, checksums, and dual reconciliation
+## Phase 5 — Debug persistence and deterministic reconciliation
 
 ### Work
 
-1. Define one cross-language canonical checksum encoding and SHA-256 hashing.
-2. Populate transaction pre/post state checksums and hash-chain fields.
-3. Persist bootstrap, accepted intents, committed transactions, versions, and
-   hashes atomically.
-4. In debug mode, persist compressed no-history checkpoints after committed
+1. Persist bootstrap, accepted intents, committed transactions, and versions
+   atomically when the backend storage layer lands.
+2. In debug mode, persist compressed no-history checkpoints after committed
    card plays.
-5. Add event-fold reconciliation:
+3. Add event-fold reconciliation:
    - genesis plus recorded framed events;
-   - compare every stored checkpoint and final checksum.
-6. Add causal intent regeneration:
-   - bootstrap plus ordered accepted intents plus gameplay RNG;
-   - regenerate events;
-   - compare transaction bytes, RNG cursor, checkpoints, and final checksum.
-7. Persist a structured reconciliation report at match end.
-8. Add corruption, omission, duplicate, reorder, stale-content, and RNG-drift
-   failure fixtures.
+   - compare every stored checkpoint and final state directly;
+   - verify every transaction's RNG before/after cursor.
+4. Persist a structured reconciliation report at match end.
+
+The server is the sole creator of this record. Cryptographic state checksums,
+transaction hash chains, and hostile-tampering defenses are intentionally out
+of scope. A small diagnostic fingerprint may be included in a report, but
+exact state equality is the correctness test.
 
 ### Exit criteria
 
 - Every completed debug match produces a pass/fail reconciliation report.
-- A one-byte event, state, RNG, ordering, or version mutation is detected at
-  the first divergent transaction.
-- Event folding and intent regeneration independently agree with the live
-  result.
+- Event folding agrees with every captured play checkpoint and the live final
+  state.
+- RNG cursor drift is reported at the transaction where it occurs.
 - Persistence can restore authority after process restart without hidden
   process-local RNG or timeline state.
 
@@ -415,7 +440,6 @@ size result depends on having one history owner.
 | History separation | source fence plus constant-size diagnostic-state test |
 | Replay parity | every replay frame equals the captured live checkpoint |
 | RNG parity | golden vectors plus final draw cursor equality |
-| Causal correctness | accepted-intent regeneration equals recorded events |
 | Hidden information | schema/redaction test per state and event variant |
 | Reconnect correctness | snapshot + suffix equals current projected state |
 | Cross-language protocol | TypeScript/Rust shared conformance fixtures |
@@ -434,8 +458,7 @@ Each phase lands as a clean replacement:
 6. persistence and reconciliation;
 7. operational cleanup.
 
-Do not start wire-state or checksum implementation while `MatchState.log`
-remains authoritative. Do not persist RNG checkpoints until RNG state lives in
+Do not start wire-state implementation while `MatchState.log` remains
+authoritative. Do not persist RNG checkpoints until RNG state lives in
 `MatchState`. Do not expose a snapshot message until complete state and event
 redaction exists.
-

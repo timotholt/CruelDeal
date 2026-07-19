@@ -10,6 +10,12 @@ import type {
   IntentEnvelope,
   MatchBootstrap,
 } from '../runtime/contracts';
+import type {
+  SeatCommittedTransaction,
+  SeatMatchSnapshot,
+  SeatResyncRequest,
+  SeatResyncResponse,
+} from '../runtime/projection';
 
 export const CRUEL_DEAL_PROTOCOL_VERSION = 1 as const;
 
@@ -17,7 +23,11 @@ export type ProtocolContractKind =
   | 'MATCH_BOOTSTRAP'
   | 'INTENT_ENVELOPE'
   | 'FRAMED_EVENT'
-  | 'COMMITTED_TRANSACTION';
+  | 'COMMITTED_TRANSACTION'
+  | 'SEAT_MATCH_SNAPSHOT'
+  | 'SEAT_COMMITTED_TRANSACTION'
+  | 'SEAT_RESYNC_REQUEST'
+  | 'SEAT_RESYNC_RESPONSE';
 
 export interface ProtocolValidationIssue {
   readonly path: string;
@@ -62,6 +72,10 @@ const payloadSchemaNames: Record<ProtocolContractKind, string> = {
   INTENT_ENVELOPE: 'IntentEnvelope',
   FRAMED_EVENT: 'FramedEvent',
   COMMITTED_TRANSACTION: 'CommittedTransaction',
+  SEAT_MATCH_SNAPSHOT: 'SeatMatchSnapshot',
+  SEAT_COMMITTED_TRANSACTION: 'SeatCommittedTransaction',
+  SEAT_RESYNC_REQUEST: 'SeatResyncRequest',
+  SEAT_RESYNC_RESPONSE: 'SeatResyncResponse',
 };
 const payloadValidators = Object.fromEntries(
   Object.entries(payloadSchemaNames).map(([kind, schemaName]) => [
@@ -142,4 +156,28 @@ export const validateCommittedTransactionWire = (
   input: unknown,
 ): ProtocolValidationResult<CommittedTransactionRecord> => (
   validateProtocolPayload('COMMITTED_TRANSACTION', input)
+);
+
+export const validateSeatMatchSnapshotWire = (
+  input: unknown,
+): ProtocolValidationResult<SeatMatchSnapshot> => (
+  validateProtocolPayload('SEAT_MATCH_SNAPSHOT', input)
+);
+
+export const validateSeatCommittedTransactionWire = (
+  input: unknown,
+): ProtocolValidationResult<SeatCommittedTransaction> => (
+  validateProtocolPayload('SEAT_COMMITTED_TRANSACTION', input)
+);
+
+export const validateSeatResyncRequestWire = (
+  input: unknown,
+): ProtocolValidationResult<SeatResyncRequest> => (
+  validateProtocolPayload('SEAT_RESYNC_REQUEST', input)
+);
+
+export const validateSeatResyncResponseWire = (
+  input: unknown,
+): ProtocolValidationResult<SeatResyncResponse> => (
+  validateProtocolPayload('SEAT_RESYNC_RESPONSE', input)
 );

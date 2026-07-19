@@ -250,8 +250,7 @@ describe('Canonical framing edge cases', () => {
     expect(folded.framedEvents[0].event).not.toBe(framedEvents[0].event);
     expect(folded.transitions[0].framedEvent).toBe(folded.framedEvents[0]);
     expect(folded.transitions[0].event).toBe(folded.framedEvents[0].event);
-    expect(folded.finalState.log[0].event).toBe(folded.framedEvents[0].event);
-    expect(folded.finalState.log[0]).toMatchObject({
+    expect(folded.framedEvents[0]).toMatchObject({
       frame: framedEvents[0].frame,
       scope: framedEvents[0].scope,
       event: framedEvents[0].event,
@@ -398,11 +397,10 @@ describe('Canonical scope validation edge cases', () => {
 
 describe('Timeline query and lifecycle edge cases', () => {
   it('returns no scope or turn for genesis and unknown frames', () => {
-    const state = fixtureState();
-    expect(scopeAtFrame(state.log, GENESIS_FRAME)).toBeNull();
-    expect(turnAtFrame(state.log, GENESIS_FRAME)).toBeNull();
-    expect(scopeAtFrame(state.log, asFrame(99))).toBeNull();
-    expect(turnAtFrame(state.log, asFrame(99))).toBeNull();
+    expect(scopeAtFrame([], GENESIS_FRAME)).toBeNull();
+    expect(turnAtFrame([], GENESIS_FRAME)).toBeNull();
+    expect(scopeAtFrame([], asFrame(99))).toBeNull();
+    expect(turnAtFrame([], asFrame(99))).toBeNull();
   });
 
   it('builds exact spans across three consecutive turns', () => {
@@ -420,7 +418,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(turnSpans(folded.finalState.log)).toEqual([
+    expect(turnSpans(folded.framedEvents)).toEqual([
       { turn: 3, startFrame: asFrame(1), endFrame: asFrame(2) },
       { turn: 4, startFrame: asFrame(3), endFrame: asFrame(5) },
       { turn: 5, startFrame: asFrame(6), endFrame: asFrame(6) },
@@ -435,7 +433,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(cardLifecycleFrames(folded.finalState.log, cardId).created)
+    expect(cardLifecycleFrames(folded.framedEvents, cardId).created)
       .toEqual([asFrame(1)]);
   });
 
@@ -459,7 +457,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       ],
       manifest,
     });
-    const lifecycle = cardLifecycleFrames(folded.finalState.log, cardId);
+    const lifecycle = cardLifecycleFrames(folded.framedEvents, cardId);
 
     expect(lifecycle.played).toEqual([asFrame(2), asFrame(5)]);
     expect(lifecycle.revealed).toEqual([asFrame(3), asFrame(6)]);
@@ -493,7 +491,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(cardLifecycleFrames(folded.finalState.log, cardId)).toMatchObject({
+    expect(cardLifecycleFrames(folded.framedEvents, cardId)).toMatchObject({
       created: [asFrame(1)],
       moved: [asFrame(3)],
       destroyed: [asFrame(2), asFrame(4)],
@@ -501,7 +499,7 @@ describe('Timeline query and lifecycle edge cases', () => {
   });
 
   it('returns an empty lifecycle for an unknown card', () => {
-    expect(cardLifecycleFrames(fixtureState().log, cardId)).toEqual({
+    expect(cardLifecycleFrames([], cardId)).toEqual({
       created: [],
       played: [],
       revealed: [],

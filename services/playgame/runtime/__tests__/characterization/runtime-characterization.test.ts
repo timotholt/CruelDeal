@@ -86,7 +86,7 @@ describe('Phase 0 runtime characterization', () => {
   it('ends a turn with no staged cards and records every intermediate state', () => {
     const runtimeFixture = fixture('end-turn-empty', { phase: 'AWAITING_INTENT' });
     const manifest = testManifest([plain]);
-    const intentRng = createRng(runtimeFixture.seed);
+    const intentRng = createRng(runtimeFixture.state.rng);
     const events = resolve(runtimeFixture.state, {
       type: 'END_TURN',
       intentId: 'end-turn-empty-intent',
@@ -102,7 +102,7 @@ describe('Phase 0 runtime characterization', () => {
     const authoritative = resolveTurn(
       resolutionStart,
       manifest,
-      createRng(runtimeFixture.seed).fork(`turn:${runtimeFixture.state.turn}`),
+      createRng(runtimeFixture.state.rng).scope(`turn:${runtimeFixture.state.turn}`),
     );
     const folded = frameAndFoldEvents({
       transactionId: 'end-turn-empty:turn:2',
@@ -119,8 +119,7 @@ describe('Phase 0 runtime characterization', () => {
     expect(events.some((event) => event.type === 'TURN_ENDED')).toBe(true);
     expect(folded.transitions).toHaveLength(events.length);
     folded.transitions.forEach((frame) => {
-      expect(frame.before.log).toHaveLength(frame.index);
-      expect(frame.after.log).toHaveLength(frame.index + 1);
+      expect(frame.after.timeline.frame).toBe(frame.before.timeline.frame + 1);
       expect(frame.event).toEqual(events[frame.index]);
     });
   });

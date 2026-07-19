@@ -179,7 +179,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     const committed = runtime.transactions().at(-1)!;
     expect(committed.intent.seat).toBe('SYSTEM');
     expect([...counts.values()]).toEqual(committed.framedEvents.map(() => 1));
-    expect(runtime.state().log.slice(-committed.framedEvents.length).map((entry) => entry.event))
-      .toEqual(committed.framedEvents.map(({ event }) => event));
+    expect(runtime.state().timeline.frame)
+      .toBe(committed.framedEvents.at(-1)?.frame);
   });
 });

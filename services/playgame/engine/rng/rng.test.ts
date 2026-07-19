@@ -103,42 +103,42 @@ function truthy(cond: boolean, label: string): void {
   eq(a.shuffle(src), b.shuffle(src), 'shuffle is deterministic per seed');
 }
 
-// ---- fork(tag): deterministic per (seed, tag) -----------------------------
+// ---- Purpose scopes share one deterministic stream ------------------------
 
 {
   const parentA = createRng('parent');
   const parentB = createRng('parent');
-  const childA = parentA.fork('draw');
-  const childB = parentB.fork('draw');
+  const childA = parentA.scope('draw');
+  const childB = parentB.scope('draw');
   const seqA = Array.from({ length: 8 }, () => childA.int(0, 2 ** 16));
   const seqB = Array.from({ length: 8 }, () => childB.int(0, 2 ** 16));
-  eq(seqA, seqB, 'fork(tag) is deterministic: same (seed, tag) → same stream');
+  eq(seqA, seqB, 'purpose scopes preserve same-seed determinism');
 }
 
-// ---- fork(tag) is independent of parent's own consumption -----------------
+// ---- Scopes advance their parent's one global draw cursor ------------------
 
 {
-  const p1 = createRng('parent');
-  const p2 = createRng('parent');
-  // p2 advances its own generator first; fork should still match p1.
-  for (let i = 0; i < 100; i++) p2.int(0, 1_000_000);
-  const c1 = p1.fork('draw');
-  const c2 = p2.fork('draw');
-  const seq1 = Array.from({ length: 8 }, () => c1.int(0, 2 ** 16));
-  const seq2 = Array.from({ length: 8 }, () => c2.int(0, 2 ** 16));
-  eq(seq1, seq2, 'fork(tag) is independent of parent consumption order');
+  const root = createRng('shared-stream');
+  const reference = createRng('shared-stream');
+  const first = root.scope('first').int(0, 2 ** 16);
+  const second = root.scope('second').int(0, 2 ** 16);
+  eq(
+    [first, second],
+    [reference.int(0, 2 ** 16), reference.int(0, 2 ** 16)],
+    'all purpose scopes consume one sequence',
+  );
+  eq(root.draws, 2, 'root exposes the shared draw cursor');
 }
 
-// ---- Different fork tags → different streams ------------------------------
+// ---- A serialized checkpoint resumes at the exact next draw ----------------
 
 {
-  const parent = createRng('fork-tags');
-  const a = parent.fork('a');
-  const b = parent.fork('b');
-  const seqA = Array.from({ length: 8 }, () => a.int(0, 2 ** 30));
-  const seqB = Array.from({ length: 8 }, () => b.int(0, 2 ** 30));
-  const same = seqA.every((v, i) => v === seqB[i]);
-  truthy(!same, 'fork("a") and fork("b") produce distinct streams');
+  const original = createRng('resume');
+  Array.from({ length: 19 }, () => original.int(0, 2 ** 30));
+  const resumed = createRng(JSON.parse(JSON.stringify(original.snapshot())));
+  const seqA = Array.from({ length: 16 }, () => original.int(0, 2 ** 30));
+  const seqB = Array.from({ length: 16 }, () => resumed.int(0, 2 ** 30));
+  eq(seqA, seqB, 'serialized gameplay RNG resumes without drift');
 }
 
 // ---- sfc32 primitive test: manual golden sample ---------------------------

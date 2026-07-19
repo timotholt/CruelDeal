@@ -112,6 +112,9 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     TURN_RESOLUTION_STARTED: 1,
     TURN_STARTED: 1,
   },
+  'services/playgame/engine/rng/transaction.ts': {
+    GAMEPLAY_RNG_ADVANCED: 1,
+  },
 };
 
 const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {
@@ -230,12 +233,12 @@ function logicalConstructionSurface(file: string): string {
 }
 
 describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
-  it('locks the seven governed logical production mutation-construction surfaces', () => {
+  it('locks the eight governed logical production mutation-construction surfaces', () => {
     const { mutationConstructions } = collectCurrentInventory();
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(7);
+      .toBe(8);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

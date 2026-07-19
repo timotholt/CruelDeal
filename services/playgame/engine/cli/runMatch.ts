@@ -13,17 +13,19 @@
 
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
+import type { FramedEvent, TimelinePhase } from '../types/timeline';
 import type { Manifest } from '../manifest/types';
 import type { Owner } from '../types/ids';
-import { apply } from '../apply';
 import { resolve } from '../resolve';
 import { createRng, type Rng } from '../rng';
+import { appendGameplayRngAdvance } from '../rng/transaction';
 import {
   createSetupMatch,
   type InitialLocationDeck,
 } from './initState';
 import { planEnemyTurnFromHand } from '../ai';
 import { buildOpeningTransaction } from '../../runtime/opening';
+import { frameAndFoldEvents } from '../transactionTimeline';
 
 export interface RunMatchOptions {
   readonly seed: string;
@@ -39,7 +41,38 @@ export interface RunMatchOptions {
 export interface RunMatchResult {
   readonly finalState: MatchState;
   readonly events: readonly MatchEvent[];
+  readonly framedEvents: readonly FramedEvent[];
   readonly turnsPlayed: number;
+}
+
+function commitBatch(
+  transactionId: string,
+  state: MatchState,
+  events: readonly MatchEvent[],
+  manifest: Manifest,
+  onEvent: (e: MatchEvent, s: MatchState) => void,
+  allEvents: MatchEvent[],
+  allFramedEvents: FramedEvent[],
+  initialPhase?: TimelinePhase,
+  rng?: Rng,
+): MatchState {
+  const committedEvents = rng
+    ? appendGameplayRngAdvance(state, rng, events)
+    : events;
+  if (committedEvents.length === 0) return state;
+  const transaction = frameAndFoldEvents({
+    transactionId,
+    initialState: state,
+    events: committedEvents,
+    manifest,
+    ...(initialPhase === undefined ? {} : { initialPhase }),
+  });
+  for (const transition of transaction.transitions) {
+    allEvents.push(transition.event);
+    allFramedEvents.push(transition.framedEvent);
+    onEvent(transition.event, transition.before);
+  }
+  return transaction.finalState;
 }
 
 /** Drive one turn: both sides stage via AI, then END_TURN cascades. */
@@ -49,11 +82,12 @@ function runOneTurn(
   rng: Rng,
   onEvent: (e: MatchEvent, s: MatchState) => void,
   allEvents: MatchEvent[],
+  allFramedEvents: FramedEvent[],
 ): MatchState {
   let s = state;
 
   // Priority owner stages first — purely cosmetic here (resolveTurn decides
-  // the reveal order independently) but keeps the event log readable.
+  // the reveal order independently) but keeps the event timeline readable.
   const first: Owner = s.priority;
   const second: Owner = first === 'P0' ? 'P1' : 'P0';
 
@@ -71,20 +105,36 @@ function runOneTurn(
           cardId: step.cardId,
           lane: step.lane,
         },
-        rng.fork(`stage:${owner}:${step.cardId}`),
+        rng.scope(`stage:${owner}:${step.cardId}`),
         manifest,
       );
       if (events.length && events[0].type === 'INTENT_REJECTED') {
-        // AI emitted an invalid plan — skip and log; the match keeps moving.
-        allEvents.push(events[0]);
-        onEvent(events[0], s);
+        // AI emitted an invalid plan. Retain the diagnostic in canonical
+        // history without mutating mechanics beyond the timeline coordinate.
+        s = commitBatch(
+          `cli:stage-rejected:${owner}:${step.cardId}:turn:${s.turn}`,
+          s,
+          [events[0]],
+          manifest,
+          onEvent,
+          allEvents,
+          allFramedEvents,
+          undefined,
+          rng,
+        );
         continue;
       }
-      for (const e of events) {
-        allEvents.push(e);
-        onEvent(e, s);
-        s = apply(s, e, manifest);
-      }
+      s = commitBatch(
+        `cli:stage:${owner}:${step.cardId}:turn:${s.turn}`,
+        s,
+        events,
+        manifest,
+        onEvent,
+        allEvents,
+        allFramedEvents,
+        undefined,
+        rng,
+      );
     }
   }
 
@@ -93,53 +143,71 @@ function runOneTurn(
   const endEvents = resolve(
     s,
     { type: 'END_TURN', intentId: `end-t${s.turn}`, owner: s.priority },
-    rng.fork(`endturn:${s.turn}`),
+    rng.scope(`endturn:${s.turn}`),
     manifest,
   );
-  for (const e of endEvents) {
-    allEvents.push(e);
-    onEvent(e, s);
-    s = apply(s, e, manifest);
-  }
-  return s;
+  return commitBatch(
+    `cli:end-turn:${s.turn}`,
+    s,
+    endEvents,
+    manifest,
+    onEvent,
+    allEvents,
+    allFramedEvents,
+    undefined,
+    rng,
+  );
 }
 
 /**
- * Run a full match. Returns the final state, the complete event log, and
+ * Run a full match. Returns the final state, complete raw/framed events, and
  * the number of turns actually played (may be less than the manifest's
  * turn limit if one side concedes — though the AI never concedes yet).
  */
 export function runMatch(opts: RunMatchOptions): RunMatchResult {
   const { seed, manifest, locationDeck } = opts;
   const cap = opts.maxTurns ?? manifest.constants.turnLimit + 2;
-  const rng = createRng(seed);
   const events: MatchEvent[] = [];
+  const framedEvents: FramedEvent[] = [];
   const onEvent = opts.onEvent ?? ((): void => undefined);
 
   const setup = createSetupMatch(seed, manifest, {}, locationDeck);
-  let state = setup.genesis;
-  for (const framed of setup.transaction.framedEvents) {
-    events.push(framed.event);
-    onEvent(framed.event, state);
-    state = apply(state, framed.event, manifest);
+  for (const transition of setup.transaction.transitions) {
+    events.push(transition.event);
+    framedEvents.push(transition.framedEvent);
+    onEvent(transition.event, transition.before);
   }
+  let state = setup.transaction.finalState;
 
   const opening = buildOpeningTransaction(state, manifest);
-  for (const event of opening.events) {
-    events.push(event);
-    onEvent(event, state);
-    state = apply(state, event, manifest);
-  }
+  state = commitBatch(
+    opening.transactionId,
+    state,
+    opening.events,
+    manifest,
+    onEvent,
+    events,
+    framedEvents,
+    'SETUP',
+  );
+  const rng = createRng(state.rng);
 
   let turnsPlayed = 0;
   while (state.result === null && state.phase !== 'ENDED' && turnsPlayed < cap) {
     const startTurn = state.turn;
-    state = runOneTurn(state, manifest, rng, onEvent, events);
+    state = runOneTurn(
+      state,
+      manifest,
+      rng,
+      onEvent,
+      events,
+      framedEvents,
+    );
     turnsPlayed += 1;
     // Safety: if the turn counter failed to advance and the match didn't
     // end, bail out to avoid an infinite loop.
     if (state.turn === startTurn && state.result === null) break;
   }
 
-  return { finalState: state, events, turnsPlayed };
+  return { finalState: state, events, framedEvents, turnsPlayed };
 }

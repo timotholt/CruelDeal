@@ -122,7 +122,7 @@ const buildState = (specs: CardSpec[]): MatchState => {
   }
   return emptyTestMatchState({
     turn: 1, maxEnergy: { P0: 1, P1: 1 }, nextTurnEnergyBonus: { P0: 0, P1: 0 },
-    phase: 'AWAITING_INTENT', seed: 'test', priority: 'P0',
+    phase: 'AWAITING_INTENT', rngSeed: 'test', priority: 'P0',
     energy: { P0: 1, P1: 1 },
     deck, hand, cards,
     lanesById: testLaneRegistry(lanes),

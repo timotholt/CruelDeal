@@ -82,7 +82,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const runtimeReplay = createMemo(() => {
     // Track committed presentation progress; the export itself remains a
     // read-only bootstrap + genesis + transaction-record snapshot.
-    void engineState().log.length;
+    void engineState().timeline.frame;
     return pg.exportRuntimeReplay();
   });
   const replayTimeline = createMemo(() => {
@@ -476,7 +476,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               followingLive={replayFollowingLive()}
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
-              seed={engineState().seed}
+              seed={engineState().rng.seed}
               steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}

@@ -61,7 +61,7 @@ describe('Phase 1.5 preserves the Phase 1.1 chronology', () => {
     });
     const framedEvents = [...first.framedEvents, ...second.framedEvents];
     const replayed = replayMatch({
-      seed: genesis.seed,
+      seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
       framedEvents,

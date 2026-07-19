@@ -23,8 +23,14 @@ export type * from './manifest/types';
 export { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 
 // ---- RNG -------------------------------------------------------------------
-export type { Rng } from './rng';
-export { createRng } from './rng';
+export type { GameplayRngState, GameplayRngStep, Rng } from './rng';
+export {
+  advanceGameplayRng,
+  createGameplayRngState,
+  createRng,
+  stepGameplayRng,
+} from './rng';
+export { appendGameplayRngAdvance } from './rng/transaction';
 
 // ---- Reducer / resolvers ---------------------------------------------------
 export { apply, applyFramed } from './apply';
@@ -51,7 +57,6 @@ export {
   getAllLocationIds,
   getAllLocationTemplates,
   getLocationAbilityLabels,
-  getLocationLifecycle,
   getLocationRuntime,
   getLocationTemplate,
   type CardAbilityLabel,
@@ -65,7 +70,6 @@ export {
   type CurrentLocationPosition,
   type LocationAbilityLabel,
   type LocationAbilitySlot,
-  type LocationLifecycle,
   type LocationRuntime,
   type LocationTemplate,
 } from './projections';
@@ -170,6 +174,7 @@ export {
   type ReplayResult,
   type ReplayMatchOptions,
   type ReplayValidationResult,
+  type ExportReplayBundleOptions,
 } from './replay';
 
 // ---- Projections -----------------------------------------------------------

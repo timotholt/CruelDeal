@@ -47,7 +47,7 @@ function issueCodes(input: unknown, manifest: Manifest = BOOTSTRAP_MANIFEST): st
 }
 
 describe('Phase 1.2 location deck bootstrap', () => {
-  it('builds one deterministic, complete, deeply frozen ordered snapshot', () => {
+  it('builds one deterministic, complete, deeply frozen weighted candidate pool', () => {
     const first = defaultLocationDeckFactory.build({
       manifest: BOOTSTRAP_MANIFEST,
       ruleset,
@@ -65,7 +65,7 @@ describe('Phase 1.2 location deck bootstrap', () => {
 
     expect(first).toEqual(second);
     expect(first.kind).toBe('LOCATION');
-    expect(first.order).toBe('PRESERVE');
+    expect(first.order).toBe('WEIGHTED_RANDOM');
     expect(first.entries).toHaveLength(enabledCount);
     expect(new Set(first.entries.map((entry) => entry.defId)).size).toBe(enabledCount);
     expect(first.contentHash).toBe(computeLocationDeckContentHash(first.entries));
@@ -74,28 +74,32 @@ describe('Phase 1.2 location deck bootstrap', () => {
     expect(first.entries.every(Object.isFrozen)).toBe(true);
   });
 
-  it('preserves the supplied first three entries across a fixed seed corpus', () => {
+  it('selects the same state-owned weighted order for the same seed', () => {
     for (let index = 0; index < 128; index++) {
       const seed = `location-parity-${index}`;
-      const orderedDeck = defaultLocationDeckFactory.build({
+      const candidatePool = defaultLocationDeckFactory.build({
         manifest: BOOTSTRAP_MANIFEST,
         ruleset,
         seed,
       });
-      const state = createInitialMatchState(
+      const first = createInitialMatchState(
         seed,
         BOOTSTRAP_MANIFEST,
         {},
-        orderedDeck.entries,
+        candidatePool.entries,
       );
-      const selected = activeLaneIds(state)
-        .map((laneId) => locationCardAtLane(state, laneId)?.defId);
-      const ordered = defaultLocationDeckFactory.build({
-        manifest: BOOTSTRAP_MANIFEST,
-        ruleset,
+      const second = createInitialMatchState(
         seed,
-      }).entries.slice(0, 3).map((entry) => entry.defId);
-      expect(ordered, seed).toEqual(selected);
+        BOOTSTRAP_MANIFEST,
+        {},
+        candidatePool.entries,
+      );
+      const selected = activeLaneIds(first)
+        .map((laneId) => locationCardAtLane(first, laneId)?.defId);
+      expect(
+        activeLaneIds(second).map((laneId) => locationCardAtLane(second, laneId)?.defId),
+        seed,
+      ).toEqual(selected);
     }
   });
 
@@ -125,8 +129,6 @@ describe('Phase 1.2 location deck bootstrap', () => {
       locationDeck.entries,
     );
 
-    expect(activeLaneIds(original).map((laneId) => locationCardAtLane(original, laneId)?.defId))
-      .toEqual(locationDeck.entries.slice(0, 3).map((entry) => entry.defId));
     expect(activeLaneIds(reversed).map((laneId) => locationCardAtLane(reversed, laneId)?.defId))
       .toEqual(activeLaneIds(original).map((laneId) => locationCardAtLane(original, laneId)?.defId));
   });

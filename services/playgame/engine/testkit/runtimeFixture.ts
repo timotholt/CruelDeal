@@ -17,10 +17,10 @@ import type {
 } from '../types/state';
 import {
   EMPTY_CARD_LIFECYCLE,
-  EMPTY_LOCATION_LIFECYCLE,
   EMPTY_TRACKED_VARIABLES,
 } from '../types/state';
 import { asFrame, GENESIS_FRAME } from '../types/timeline';
+import { createGameplayRngState } from '../rng';
 import type { LocationSetupDeck } from '../locationSetup';
 import {
   cardRecordsInternal,
@@ -124,18 +124,30 @@ export function testLaneRegistry(
 }
 
 export function emptyTestMatchState(
-  overrides: Omit<Partial<MatchState>, 'cardStore'> & {
+  overrides: Omit<Partial<MatchState>, 'cardStore' | 'rng'> & {
     readonly cards?: Readonly<Record<CardId, InternalCardRecord>>;
+    readonly rng?: MatchState['rng'];
+    readonly rngSeed?: string;
   } = {},
 ): MatchState {
   const turn = overrides.turn ?? 1;
-  const { cards = {}, ...stateOverrides } = overrides;
+  const {
+    cards = {},
+    rng,
+    rngSeed,
+    ...stateOverrides
+  } = overrides;
+  const resolvedRng = rng ?? createGameplayRngState(rngSeed ?? 'test-match-state');
   return {
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     turn,
     maxEnergy: { P0: turn, P1: turn },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: 'test-match-state',
+    rng: resolvedRng,
     priority: 'P0',
     energy: { P0: turn, P1: turn },
     deck: { P0: [], P1: [] },
@@ -155,7 +167,6 @@ export function emptyTestMatchState(
     pending: [],
     stagingOrder: [],
     pendingEffects: [],
-    log: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },
@@ -246,7 +257,6 @@ export function withTestLocation(
     face: revealed ? 'FACE_UP' : 'FACE_DOWN',
     identityKnownTo: revealed ? ['P0', 'P1'] : [],
     revealCount: revealed ? 1 : 0,
-    lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
     tags: [],
     counters: {},
   };
@@ -375,7 +385,6 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
         face: locationSpec.revealed ? 'FACE_UP' : 'FACE_DOWN',
         identityKnownTo: locationSpec.revealed ? ['P0', 'P1'] : [],
         revealCount: locationSpec.revealed ? 1 : 0,
-        lifecycle: { ...EMPTY_LOCATION_LIFECYCLE },
         tags: locationSpec.tags ?? [],
         counters: locationSpec.counters ?? {},
       };
@@ -411,7 +420,7 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     maxEnergy: { ...maxEnergy },
     nextTurnEnergyBonus: { ...(options.nextTurnEnergyBonus ?? { P0: 0, P1: 0 }) },
     phase: options.phase,
-    seed: options.seed,
+    rng: createGameplayRngState(options.seed),
     priority: options.priority,
     energy: { ...energy },
     deck,
@@ -431,7 +440,10 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     pending: [],
     stagingOrder,
     pendingEffects: options.pendingEffects ?? [],
-    log: [],
+    timeline: {
+      frame: GENESIS_FRAME,
+      scope: null,
+    },
     lastPlayedBy: { P0: null, P1: null },
     result: null,
     energyLog: { P0: [], P1: [] },

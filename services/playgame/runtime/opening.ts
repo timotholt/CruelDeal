@@ -2,6 +2,7 @@ import type { Manifest } from '../engine/manifest/types';
 import { apply } from '../engine/apply';
 import { evalEffect, type EffectCtx } from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
+import { appendGameplayRngAdvance } from '../engine/rng/transaction';
 import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
 import { buildCardDrawEvents } from '../engine/draw';
@@ -45,7 +46,7 @@ export function buildOpeningTransaction(
 
   const events: MatchEvent[] = [];
   let state = genesis;
-  const openingRng = createRng(genesis.seed);
+  const openingRng = createRng(genesis.rng);
   for (const owner of ['P0', 'P1'] as const) {
     if (genesis.hand[owner].length !== 0) {
       throw new Error(`buildOpeningTransaction: ${owner} opening hand is not empty`);
@@ -89,7 +90,7 @@ export function buildOpeningTransaction(
 
     const effects = getLocationRuntime(state, location.id, manifest)
       ?.abilities.onReveal ?? [];
-    const locationRng = openingRng.fork(`opening:location:${location.id}`);
+    const locationRng = openingRng.scope(`opening:location:${location.id}`);
     for (let index = 0; index < effects.length; index++) {
       const context: EffectCtx = {
         state,
@@ -98,7 +99,7 @@ export function buildOpeningTransaction(
         selfKind: 'location',
         selfLane: lane,
         selfOwner: null,
-        rng: locationRng.fork(`effect:${index}`),
+        rng: locationRng.scope(`effect:${index}`),
         source: {
           sourceId: location.id,
           effectKind: 'LOCATION',
@@ -124,7 +125,7 @@ export function buildOpeningTransaction(
         state,
         event.cardId,
         owner,
-        openingRng.fork(`turn-start-draw:${owner}:${event.cardId}`),
+        openingRng.scope(`turn-start-draw:${owner}:${event.cardId}`),
         manifest,
       );
       events.push(...reactions.events);
@@ -133,7 +134,7 @@ export function buildOpeningTransaction(
   }
 
   return Object.freeze({
-    transactionId: `opening:${genesis.seed}`,
-    events: Object.freeze(events),
+    transactionId: `opening:${genesis.rng.seed}`,
+    events: appendGameplayRngAdvance(genesis, openingRng, events),
   });
 }

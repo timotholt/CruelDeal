@@ -1279,6 +1279,15 @@
       repeating-linear-gradient(45deg, #1a1f3a 0 5px, #12172a 5px 10px);
     box-shadow: 0 6px 16px rgba(0,0,0,0.26);
   }
+  .hidden-hand__transfer-anchor {
+    position: absolute;
+    top: 0;
+    display: block;
+    width: 18px;
+    height: 24px;
+    visibility: hidden;
+    pointer-events: none;
+  }
   .hidden-hand__count {
     min-width: 18px;
     text-align: center;
@@ -1299,6 +1308,10 @@
     width: 21px;
     height: var(--play-control-size);
     border-radius: 4px;
+  }
+  .match-hud .hidden-hand__transfer-anchor {
+    width: 21px;
+    height: var(--play-control-size);
   }
   .match-hud .hidden-hand__count {
     min-width: 14px;

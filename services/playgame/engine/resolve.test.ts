@@ -105,7 +105,7 @@ function baseState(opts: { turn?: number; priority?: Owner; seed?: string } = {}
     maxEnergy: { P0: t, P1: t },
     nextTurnEnergyBonus: { P0: 0, P1: 0 },
     phase: 'AWAITING_INTENT',
-    seed: opts.seed ?? 'resolve-test',
+    rngSeed: opts.seed ?? 'resolve-test',
     priority: opts.priority ?? 'P0',
     energy: { P0: t, P1: t },
     deck: { P0: [], P1: [] },

@@ -3,7 +3,7 @@
  *
  * RANDOM_INT is deliberately unsupported in projection context — projections
  * must be pure reads; randomness lives in resolve()/resolveTurn() via the
- * fork()ed Rng. It'll land in Step 6's effect evaluator.
+ * transaction-local view of the state-owned Rng.
  */
 
 import type { NumExpr } from '../types/ability';

@@ -1,6 +1,7 @@
 import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneId, Owner } from '../engine/types/ids';
 import type { CardZone, MatchState } from '../engine/types/state';
+import type { CardVisualFace } from './cardMotion';
 import {
   getAllCardIds,
   getCardPlacement,
@@ -45,13 +46,32 @@ export type TransferLayoutPlan = {
   slideAfter: readonly CardZoneRef[];
 };
 
+export type CardTransferFace =
+  | 'preserve'
+  | 'faceUp'
+  | 'faceDown'
+  | 'ownerVisible';
+
+export function resolveCardTransferFace(
+  face: CardTransferFace,
+  owner: Owner,
+  viewer: Owner,
+): CardVisualFace | null {
+  switch (face) {
+    case 'preserve': return null;
+    case 'faceUp': return 'faceUp';
+    case 'faceDown': return 'faceDown';
+    case 'ownerVisible': return owner === viewer ? 'faceUp' : 'faceDown';
+  }
+}
+
 export type CardTransfer = {
   cardId: CardId;
   owner: Owner;
   from: CardZoneRef;
   to: CardZoneRef;
   reason: MatchEvent['type'];
-  face: 'preserve' | 'faceUp' | 'faceDown';
+  face: CardTransferFace;
   timing: TransferTiming;
   style: TransferStyle;
   layout: TransferLayoutPlan;
@@ -188,7 +208,9 @@ function transfer(
     from,
     to,
     reason: event.type,
-    face,
+    // Hand visibility is a viewer-relative rule, not a property that may be
+    // inferred from a transient source or destination DOM node.
+    face: to.kind === 'HAND' ? 'ownerVisible' : face,
     timing: { dispatch: 'before-flight' },
     style,
     layout: {

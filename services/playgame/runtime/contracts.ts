@@ -38,7 +38,7 @@ export interface LocationCardDeckEntry {
 export interface LocationDeckBootstrap
   extends DeckBootstrapBase<LocationCardDeckEntry> {
   readonly kind: 'LOCATION';
-  readonly order: 'PRESERVE';
+  readonly order: 'WEIGHTED_RANDOM';
 }
 
 /** @deprecated Use PlayerDeckBootstrap. */
@@ -138,8 +138,8 @@ export interface CommittedIntentIdentity {
 }
 
 /**
- * Canonical append-only local transaction record. Persisted checksums and
- * durable atomic storage are deferred; their fields are reserved here.
+ * Canonical append-only local transaction record. Durable backend storage is
+ * a separate boundary.
  */
 export interface CommittedTransactionRecord {
   readonly transactionId: string;
@@ -149,8 +149,8 @@ export interface CommittedTransactionRecord {
   readonly intent: CommittedIntentIdentity;
   /** Canonical committed event stream. Frames are match-global and contiguous. */
   readonly framedEvents: readonly FramedEvent[];
-  readonly preStateChecksum?: string;
-  readonly postStateChecksum?: string;
+  readonly rngDrawsBefore: number;
+  readonly rngDrawsAfter: number;
 }
 
 /**
@@ -227,7 +227,7 @@ export type InMemoryIntentReceiptMap = Map<IntentReceiptKey, IntentReceipt>;
 
 /** Runtime-owned replay records; transaction events never overlap genesis. */
 export interface MatchRuntimeRecordExport {
-  readonly version: 2;
+  readonly version: 3;
   readonly genesis: MatchState;
   readonly transactions: readonly CommittedTransactionRecord[];
 }
@@ -235,4 +235,11 @@ export interface MatchRuntimeRecordExport {
 /** Session-owned replay export adds the retained descriptive bootstrap. */
 export interface MatchRuntimeReplayExport extends MatchRuntimeRecordExport {
   readonly bootstrap: ValidatedMatchBootstrap;
+}
+
+/** Optional DEBUG-only evidence; never part of MatchState or canonical history. */
+export interface DebugMatchCheckpoint {
+  readonly frame: number;
+  readonly rngDraws: number;
+  readonly stateJson: string;
 }

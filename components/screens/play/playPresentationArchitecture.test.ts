@@ -66,6 +66,19 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(css).toContain('min-width: 44px');
   });
 
+  it('registers single-card opponent transfer anchors instead of aggregate stack bounds', () => {
+    const deck = source('./MiniDeckIndicator.tsx');
+    const hand = source('./HiddenHandIndicator.tsx');
+    const css = source('../../../src/styles/playgame.css');
+
+    expect(deck).toContain('data-card-transfer-anchor="deck"');
+    expect(deck).toMatch(/ref=\{\(element\) => props\.anchorRef\?\.\(element\)\}[\s\S]*?mini-deck__back--front/);
+    expect(hand).toContain('data-card-transfer-anchor="hand"');
+    expect(hand).toContain('class="hidden-hand__transfer-anchor"');
+    expect(css).toMatch(/\.match-hud \.hidden-hand__transfer-anchor\s*\{[\s\S]*?width: 21px;[\s\S]*?height: var\(--play-control-size\)/);
+    expect(css).toMatch(/\.mini-deck__back\s*\{[\s\S]*?width: 21px;[\s\S]*?height: var\(--play-control-size/);
+  });
+
   it('orders the player footer as retreat, turn, deck, undo-energy, end turn', () => {
     const playBoard = source('./PlayBoard.tsx');
     expect(playBoard).toContain('count={localDeckSize()}');

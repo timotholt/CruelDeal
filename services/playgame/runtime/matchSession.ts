@@ -50,6 +50,7 @@ export class MatchSession {
         P1: bootstrap.decks.P1.entries,
       },
       locationDeck: bootstrap.decks.LOCATIONS.entries,
+      debugDeterminism: bootstrap.mode === 'DEBUG',
     });
     Object.freeze(this);
   }

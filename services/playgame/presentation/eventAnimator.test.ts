@@ -4,6 +4,7 @@ import { apply } from '../engine/apply';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
+import type { MatchEvent } from '../engine/types/events';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import type { LaneId } from '../engine/types/ids';
@@ -67,8 +68,8 @@ describe('event animator transfer origins', () => {
       } as const satisfies MatchEvent;
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
-        frame: after.log[after.log.length - 1].frame,
-        scope: after.log[after.log.length - 1].scope,
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
         event,
       };
       const frame: EventTransition = {
@@ -161,6 +162,131 @@ describe('event animator transfer origins', () => {
     }
   });
 
+  it('keeps a revealed local card face-up throughout a Leon-style lane-to-hand return', async () => {
+    vi.useFakeTimers();
+    try {
+      let before = createInitialMatchState(
+        'leon-return-facing',
+        BOOTSTRAP_MANIFEST,
+        {},
+        orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+      );
+      const cardId = before.deck.P0[0];
+      before = apply(before, {
+        type: 'CARD_DRAWN',
+        owner: 'P0',
+        cardId,
+        toHand: true,
+      }, BOOTSTRAP_MANIFEST);
+      before = apply(before, {
+        type: 'CARD_STAGED',
+        intentId: 'stage-leon',
+        owner: 'P0',
+        cardId,
+        lane: 0 as LaneId,
+        cost: 1,
+      }, BOOTSTRAP_MANIFEST);
+      before = apply(before, { type: 'CARD_FLIPPED', cardId }, BOOTSTRAP_MANIFEST);
+      const event = {
+        type: 'CARD_MOVED_TO_ZONE',
+        cardId,
+        destination: { kind: 'HAND' },
+        cause: {
+          sourceId: cardId,
+          effectKind: 'CARD',
+          reason: 'LEON_RETURN_TEST',
+        },
+      } as const satisfies MatchEvent;
+      const after = apply(before, event, BOOTSTRAP_MANIFEST);
+      const framedEvent = {
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
+        event,
+      };
+      const frame: EventTransition = {
+        transactionId: 'leon-return-facing:tx',
+        index: 0,
+        framedEvent,
+        frame: framedEvent.frame,
+        scope: framedEvent.scope,
+        event,
+        before,
+        after,
+      };
+
+      const boardWrap = document.createElement('div');
+      const boardEl = document.createElement('div');
+      const overlay = document.createElement('div');
+      const toastArea = document.createElement('div');
+      const source = document.createElement('div');
+      source.className = 'card lane-card facedown';
+      source.dataset.cardId = cardId;
+      source.getBoundingClientRect = () => new DOMRect(80, 280, 70, 100);
+      const handWrapper = document.createElement('div');
+      handWrapper.className = 'hand-card-motion';
+      handWrapper.dataset.cardId = cardId;
+      const destination = document.createElement('div');
+      destination.className = 'card';
+      destination.dataset.cardId = cardId;
+      destination.getBoundingClientRect = () => new DOMRect(180, 620, 70, 100);
+      boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+      boardEl.append(source);
+      boardWrap.append(boardEl, toastArea, overlay);
+      document.body.append(boardWrap);
+
+      const cardRefs = new Map<string, HTMLElement>([[cardId, source]]);
+      const motionSurface = createPlayMotionSurface({
+        frame: boardWrap,
+        overlay,
+        cardRefs,
+        zoneRefs: new Map(),
+      });
+      const ctx = {
+        state: before,
+        ui: {
+          handReservations: [],
+          history: [],
+          isFlipped: false,
+          lockedResult: null,
+          showEndGamePrompt: false,
+        },
+        setUi: vi.fn(),
+        manifest: BOOTSTRAP_MANIFEST,
+        localSeat: 'P0',
+        remoteSeat: 'P1',
+        boardEl,
+        motionSurface,
+        toastArea,
+        cardRefs,
+        zoneRefs: new Map(),
+        presentCommittedFrame: vi.fn(),
+        finishTurnPresentation: vi.fn(),
+      } as unknown as PlayScriptCtx;
+
+      const animation = animateEvent(ctx, frame, () => {
+        source.remove();
+        handWrapper.append(destination);
+        boardEl.append(handWrapper);
+        cardRefs.set(cardId, handWrapper);
+      });
+
+      const surrogate = overlay.querySelector('.transfer-flyer') as HTMLElement;
+      const surrogateVisual = surrogate.querySelector('.card-motion-visual') as HTMLElement;
+      expect(surrogateVisual.dataset.cardMotionFace).toBe('faceUp');
+      expect(surrogateVisual.classList.contains('facedown')).toBe(false);
+
+      await vi.runAllTimersAsync();
+      await animation;
+
+      expect(destination.style.visibility).toBe('');
+      expect(overlay.querySelector('.transfer-flyer')).toBeNull();
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('hands a protected remote play to its facedown destination without a landing flash', async () => {
     vi.useFakeTimers();
     try {
@@ -187,8 +313,8 @@ describe('event animator transfer origins', () => {
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
-        frame: after.log[after.log.length - 1].frame,
-        scope: after.log[after.log.length - 1].scope,
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
         event,
       };
       const frame: EventTransition = {

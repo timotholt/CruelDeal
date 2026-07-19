@@ -16,7 +16,6 @@ import type { MatchEvent } from '../types/events';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { InternalCardRecord, MatchState } from '../types/state';
 import { EMPTY_CARD_LIFECYCLE } from '../types/state';
-import { asFrame } from '../types/timeline';
 import { getStoredCardPowerDelta } from '../powerLedger';
 
 /**
@@ -489,7 +488,6 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       ...card('prior-victim', 'returning', 'P0', 'DESTROYED'),
       lifecycle: {
         ...EMPTY_CARD_LIFECYCLE,
-        frameDestroyed: asFrame(2),
         turnDestroyed: 2,
       },
     };
