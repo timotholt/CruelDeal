@@ -1,0 +1,69 @@
+{
+  "status": "playable",
+  "poolOrder": 10,
+  "implementationNote": "Implemented with COST_CMP predicates.",
+  "defId": "meridian-tower",
+  "version": 1,
+  "name": "Meridian Tower",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "AND",
+            "all": [
+              {
+                "kind": "COST_CMP",
+                "target": {
+                  "kind": "SELF"
+                },
+                "op": ">=",
+                "value": {
+                  "kind": "LIT",
+                  "n": 4
+                }
+              },
+              {
+                "kind": "COST_CMP",
+                "target": {
+                  "kind": "SELF"
+                },
+                "op": "<=",
+                "value": {
+                  "kind": "LIT",
+                  "n": 6
+                }
+              }
+            ]
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "MERIDIAN TOWER",
+    "description": "Cards that cost 4, 5, or 6 have +2 Power here.",
+    "accent": "#f7d06b",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral2.png",
+        "kind": "image"
+      }
+    }
+  }
+}

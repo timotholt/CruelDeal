@@ -1,0 +1,48 @@
+{
+  "status": "playable",
+  "poolOrder": 29,
+  "implementationNote": "Implemented with HAS_NO_ABILITY predicate.",
+  "defId": "civil-court",
+  "version": 1,
+  "name": "Civil Court",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "HAS_NO_ABILITY",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 3
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CIVIL COURT",
+    "description": "Cards with no ability have +3 Power here.",
+    "accent": "#d8dbe2",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral2.png",
+        "kind": "image"
+      }
+    }
+  }
+}

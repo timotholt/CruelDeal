@@ -1,0 +1,60 @@
+{
+  "status": "playable",
+  "poolOrder": 18,
+  "implementationNote": "Implemented with ADJUST_COST -1.",
+  "defId": "chip-tune",
+  "version": 1,
+  "name": "Chip Tune",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADJUST_COST",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "HAND_OF",
+            "owner": "P0"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        }
+      },
+      {
+        "kind": "ADJUST_COST",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "HAND_OF",
+            "owner": "P1"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHIP TUNE",
+    "description": "When revealed, reduce a random card in each player hand by 1 Cost.",
+    "accent": "#59ffa8",
+    "art": {
+      "map": {
+        "path": "/art/maps/HackersLair.png",
+        "kind": "image"
+      }
+    }
+  }
+}

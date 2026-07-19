@@ -1,0 +1,74 @@
+{
+  "status": "playable",
+  "poolOrder": 12,
+  "implementationNote": "Implemented with location atTurnEnd and concrete owner lane selectors.",
+  "defId": "organ-bank",
+  "version": 1,
+  "name": "Organ Bank",
+  "rarity": 1,
+  "abilities": {
+    "atTurnEnd": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "CURRENT_TURN"
+          },
+          "op": "==",
+          "b": {
+            "kind": "LIT",
+            "n": 4
+          }
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "MIN_POWER_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "P0"
+              }
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 3
+            }
+          },
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "MIN_POWER_OF",
+              "of": {
+                "kind": "SAME_LANE",
+                "of": {
+                  "kind": "SELF"
+                },
+                "ownerFilter": "P1"
+              }
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 3
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "ORGAN BANK",
+    "description": "After turn 4, give each player lowest-Power card here +3 Power.",
+    "accent": "#ff6f91",
+    "art": {
+      "map": {
+        "path": "/art/maps/Laboratory.png",
+        "kind": "image"
+      }
+    }
+  }
+}

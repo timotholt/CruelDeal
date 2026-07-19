@@ -1,0 +1,38 @@
+{
+  "status": "playable",
+  "poolOrder": 11,
+  "implementationNote": "Implemented with BOOST_ONGOINGS.",
+  "defId": "kurotek-atrium",
+  "version": 1,
+  "name": "KuroTek Atrium",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "BOOST_ONGOINGS",
+        "scope": {
+          "laneOf": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "factor": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "KUROTEK ATRIUM",
+    "description": "Ongoing cards here have their Ongoing abilities doubled.",
+    "accent": "#b88f57",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral2.png",
+        "kind": "image"
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "status": "playable",
+  "poolOrder": 28,
+  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and drone token.",
+  "defId": "drone-hive",
+  "version": 1,
+  "name": "Drone Hive",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "drone"
+          ]
+        },
+        "owner": "P0",
+        "destination": {
+          "kind": "LANE",
+          "lane": {
+            "kind": "SELF"
+          }
+        }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "drone"
+          ]
+        },
+        "owner": "P1",
+        "destination": {
+          "kind": "LANE",
+          "lane": {
+            "kind": "SELF"
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DRONE HIVE",
+    "description": "When revealed, add a 1-Power Drone here for each player.",
+    "accent": "#adb5bd",
+    "art": {
+      "map": {
+        "path": "/art/maps/Jungle.png",
+        "kind": "image"
+      }
+    }
+  }
+}

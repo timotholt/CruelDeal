@@ -1,0 +1,45 @@
+{
+  "status": "playable",
+  "poolOrder": 14,
+  "implementationNote": "Implemented with location onCardDestroyedHere and EVENT_OWNER.",
+  "defId": "red-needle",
+  "version": 1,
+  "name": "Red Needle",
+  "rarity": 1,
+  "abilities": {
+    "onCardDestroyedHere": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "EVENT_OWNER"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RED NEEDLE",
+    "description": "When a card is destroyed here, give a random friendly card here +2 Power.",
+    "accent": "#ff365f",
+    "art": {
+      "map": {
+        "path": "/art/maps/LavaFlow.png",
+        "kind": "image"
+      }
+    }
+  }
+}

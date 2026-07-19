@@ -1,0 +1,50 @@
+{
+  "status": "playable",
+  "poolOrder": 2,
+  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and COST_RANGE 1.",
+  "defId": "chrome-depot",
+  "version": 1,
+  "name": "Chrome Depot",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "COST_RANGE",
+          "ownerDeck": "P0",
+          "min": 1,
+          "max": 1
+        },
+        "owner": "P0",
+        "destination": {
+          "kind": "HAND"
+        }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "COST_RANGE",
+          "ownerDeck": "P1",
+          "min": 1,
+          "max": 1
+        },
+        "owner": "P1",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHROME DEPOT",
+    "description": "When revealed, each player adds a random 1-Cost card to their hand.",
+    "accent": "#d96c3c",
+    "art": {
+      "map": {
+        "path": "/art/maps/FoodCourt.png",
+        "kind": "image"
+      }
+    }
+  }
+}

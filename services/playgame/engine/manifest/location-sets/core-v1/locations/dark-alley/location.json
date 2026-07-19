@@ -1,0 +1,48 @@
+{
+  "status": "playable",
+  "poolOrder": 1,
+  "implementationNote": "Implemented with per-target friendly COUNT.",
+  "defId": "dark-alley",
+  "version": 1,
+  "name": "Dark Alley",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "delta": {
+          "kind": "COUNT",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "SELF_OWNER",
+            "exclude": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DARK ALLEY",
+    "description": "Cards here get +1 Power for each other friendly card here.",
+    "accent": "#31d28a",
+    "art": {
+      "map": {
+        "path": "/art/maps/Jungle.png",
+        "kind": "image"
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "status": "playable",
+  "poolOrder": 9,
+  "implementationNote": "Implemented with HAS_ONGOING predicate plus POWER_ADD.",
+  "defId": "charging-station",
+  "version": 1,
+  "name": "Charging Station",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "HAS_ONGOING",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHARGING STATION",
+    "description": "Ongoing cards here have +1 Power.",
+    "accent": "#44c6ff",
+    "art": {
+      "map": {
+        "path": "/art/maps/AlienStarship.png",
+        "kind": "image"
+      }
+    }
+  }
+}

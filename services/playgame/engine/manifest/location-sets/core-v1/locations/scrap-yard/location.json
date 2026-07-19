@@ -1,0 +1,52 @@
+{
+  "status": "playable",
+  "poolOrder": 31,
+  "implementationNote": "Implemented with atTurnStart, CURRENT_TURN, and RETURN_TO_LANE.",
+  "defId": "scrap-yard",
+  "version": 1,
+  "name": "Scrap Yard",
+  "rarity": 1,
+  "abilities": {
+    "atTurnStart": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "CURRENT_TURN"
+          },
+          "op": "==",
+          "b": {
+            "kind": "LIT",
+            "n": 5
+          }
+        },
+        "then": [
+          {
+            "kind": "RETURN_TO_LANE",
+            "target": {
+              "kind": "ALL_CARDS",
+              "ownerFilter": "ANY_OWNER",
+              "zoneFilter": "DESTROYED"
+            },
+            "to": {
+              "kind": "SELF"
+            },
+            "revealed": true
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SCRAP YARD",
+    "description": "Destroyed cards are returned here on turn 5.",
+    "accent": "#a47148",
+    "art": {
+      "map": {
+        "path": "/art/maps/LavaFlow.png",
+        "kind": "image"
+      }
+    }
+  }
+}

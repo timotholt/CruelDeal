@@ -1,0 +1,43 @@
+{
+  "status": "playable",
+  "poolOrder": 32,
+  "implementationNote": "Implemented with onCardPlayedHere, BANISH, and EVENT_OWNER energy bonus.",
+  "defId": "pawn-shop",
+  "version": 1,
+  "name": "Pawn Shop",
+  "rarity": 1,
+  "abilities": {
+    "onCardPlayedHere": [
+      {
+        "kind": "SEQUENCE",
+        "items": [
+          {
+            "kind": "BANISH",
+            "target": {
+              "kind": "EVENT_CARD"
+            }
+          },
+          {
+            "kind": "ADJUST_NEXT_TURN_ENERGY_BONUS",
+            "owner": "EVENT_OWNER",
+            "delta": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PAWN SHOP",
+    "description": "Banish each card you play here to earn +1 Energy next turn.",
+    "accent": "#b7a57a",
+    "art": {
+      "map": {
+        "path": "/art/maps/FoodCourt.png",
+        "kind": "image"
+      }
+    }
+  }
+}

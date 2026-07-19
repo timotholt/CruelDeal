@@ -1,0 +1,42 @@
+{
+  "status": "playable",
+  "poolOrder": 8,
+  "implementationNote": "Implemented with turn-aware BLOCK_PLAY.",
+  "defId": "chrome-beach",
+  "version": 1,
+  "name": "Chrome Beach",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "BLOCK_PLAY",
+        "laneOf": {
+          "kind": "SELF"
+        },
+        "when": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "CURRENT_TURN"
+          },
+          "op": ">",
+          "b": {
+            "kind": "LIT",
+            "n": 5
+          }
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "CHROME BEACH",
+    "description": "No cards can be played here after turn 5.",
+    "accent": "#f0c86a",
+    "art": {
+      "map": {
+        "path": "/art/maps/TropicalBeach.png",
+        "kind": "image"
+      }
+    }
+  }
+}

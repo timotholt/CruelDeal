@@ -1,0 +1,35 @@
+{
+  "status": "playable",
+  "poolOrder": 27,
+  "implementationNote": "Implemented with DISABLE_ONGOING aura.",
+  "defId": "signal-pit",
+  "version": 1,
+  "name": "Signal Pit",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "DISABLE_ONGOING",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SIGNAL PIT",
+    "description": "Disable Ongoing effects here.",
+    "accent": "#00f5d4",
+    "art": {
+      "map": {
+        "path": "/art/maps/HackersLair.png",
+        "kind": "image"
+      }
+    }
+  }
+}

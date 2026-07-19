@@ -29,8 +29,12 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 
 // ---- Counts ---------------------------------------------------------------
 
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 106, '106 cards in manifest (105 cyberpunk + junk-card token)');
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.locations).length, 37, '37 Vantaris locations in manifest');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 128, '128 active core-v1 cards in manifest');
+expectEq(
+  Object.keys(BOOTSTRAP_MANIFEST.locations).length,
+  38,
+  '37 playable Vantaris locations plus the system Ruin definition in manifest',
+);
 expectEq(BOOTSTRAP_MANIFEST.disabled.locations.length, 0, '0 design-only locations disabled');
 
 // ---- Locations are exactly the current map roster -------------------------
@@ -66,6 +70,7 @@ const expectedLocIds = [
   'public-pool',
   'red-needle',
   'rent-a-wreck',
+  'ruin',
   'scrap-yard',
   'signal-pit',
   'skyrail',

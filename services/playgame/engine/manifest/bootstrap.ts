@@ -12,20 +12,11 @@
  * match from a different version (spec §3.5).
  */
 
-import type { LocationCardDef, Manifest } from './types';
+import type { Manifest } from './types';
 import { loadCardsFromSets } from './card-set-loader';
-import { DISABLED_LOCATION_IDS, LOCATIONS_INDEX } from './content/locations';
+import { loadLocationsFromSets } from './location-set-loader';
 
-const byDefId = <T extends { defId: string }>(items: readonly T[]): Record<string, T> => {
-  const out: Record<string, T> = {};
-  for (const item of items) {
-    if (out[item.defId]) {
-      throw new Error(`BOOTSTRAP_MANIFEST: duplicate defId "${item.defId}"`);
-    }
-    out[item.defId] = item;
-  }
-  return out;
-};
+const loadedLocations = loadLocationsFromSets(['core-v1']);
 
 export const BOOTSTRAP_MANIFEST: Manifest = {
   version: 3,
@@ -56,9 +47,9 @@ export const BOOTSTRAP_MANIFEST: Manifest = {
     },
   },
   cards: loadCardsFromSets(['core-v1']),
-  locations: byDefId<LocationCardDef>(LOCATIONS_INDEX),
+  locations: loadedLocations.locations,
   disabled: {
     cards: [],
-    locations: DISABLED_LOCATION_IDS,
+    locations: loadedLocations.disabledLocationIds,
   },
 };

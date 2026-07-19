@@ -1,0 +1,58 @@
+{
+  "status": "playable",
+  "poolOrder": 33,
+  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and a curated move-card pool.",
+  "defId": "rent-a-wreck",
+  "version": 1,
+  "name": "Rent-A-Wreck",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "neon-courier",
+            "getaway-driver",
+            "rooftop-runner",
+            "traffic-spoofer",
+            "escape-route"
+          ]
+        },
+        "owner": "P0",
+        "destination": {
+          "kind": "HAND"
+        }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "DEF_ID_LIST",
+          "ids": [
+            "neon-courier",
+            "getaway-driver",
+            "rooftop-runner",
+            "traffic-spoofer",
+            "escape-route"
+          ]
+        },
+        "owner": "P1",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "RENT-A-WRECK",
+    "description": "When revealed, each player adds a move card to their hand.",
+    "accent": "#ff7a59",
+    "art": {
+      "map": {
+        "path": "/art/maps/AlienStarship.png",
+        "kind": "image"
+      }
+    }
+  }
+}

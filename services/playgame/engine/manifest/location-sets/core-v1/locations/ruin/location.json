@@ -1,0 +1,21 @@
+{
+  "status": "system",
+  "poolOrder": 37,
+  "implementationNote": "Inert system location created only by governed location destruction/replacement.",
+  "defId": "ruin",
+  "version": 1,
+  "name": "Ruin",
+  "rarity": 0,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "RUIN",
+    "description": "No effect.",
+    "accent": "#665f56",
+    "art": {
+      "map": {
+        "path": "/art/maps/LavaFlow.png",
+        "kind": "image"
+      }
+    }
+  }
+}

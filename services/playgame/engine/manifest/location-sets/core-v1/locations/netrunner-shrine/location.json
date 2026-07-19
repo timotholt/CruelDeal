@@ -1,0 +1,48 @@
+{
+  "status": "playable",
+  "poolOrder": 19,
+  "implementationNote": "Implemented with HAS_COPIED_TEXT predicate.",
+  "defId": "netrunner-shrine",
+  "version": 1,
+  "name": "Netrunner Shrine",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "HAS_COPIED_TEXT",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 4
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NETRUNNER SHRINE",
+    "description": "Cards with copied text have +4 Power here.",
+    "accent": "#b779ff",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral.png",
+        "kind": "image"
+      }
+    }
+  }
+}

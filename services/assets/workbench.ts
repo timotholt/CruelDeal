@@ -117,7 +117,8 @@ export const buildWorkbenchAssets = (): WorkbenchAsset[] => {
       displayName: location.cosmetic.displayName || location.name,
       currentPath: location.cosmetic.art.map.path,
       targetPath: locationTargetPath(location),
-      manifestFile: 'services/playgame/engine/manifest/content/locations.ts',
+      manifestFile:
+        `services/playgame/engine/manifest/location-sets/core-v1/locations/${location.defId}/location.json`,
       manifestField: 'cosmetic.art.map.path',
       statusHint: 'deprecated',
       spec: LANE_RUNTIME_SPEC,

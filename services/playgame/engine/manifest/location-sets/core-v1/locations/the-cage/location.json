@@ -1,0 +1,35 @@
+{
+  "status": "playable",
+  "poolOrder": 17,
+  "implementationNote": "Implemented with BLOCK_MOVE aura.",
+  "defId": "the-cage",
+  "version": 1,
+  "name": "The Cage",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "BLOCK_MOVE",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "THE CAGE",
+    "description": "Cards cannot move from this location.",
+    "accent": "#d4af37",
+    "art": {
+      "map": {
+        "path": "/art/maps/IcyRoad.png",
+        "kind": "image"
+      }
+    }
+  }
+}

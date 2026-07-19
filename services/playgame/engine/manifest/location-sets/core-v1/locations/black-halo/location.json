@@ -1,0 +1,49 @@
+{
+  "status": "playable",
+  "poolOrder": 16,
+  "implementationNote": "Implemented with HAS_ABILITY ON_REVEAL predicate.",
+  "defId": "black-halo",
+  "version": 1,
+  "name": "Black Halo",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "HAS_ABILITY",
+            "target": {
+              "kind": "SELF"
+            },
+            "slot": "ON_REVEAL"
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLACK HALO",
+    "description": "Cards with On Reveal have +2 Power here.",
+    "accent": "#7b2ff7",
+    "art": {
+      "map": {
+        "path": "/art/maps/HackersLair.png",
+        "kind": "image"
+      }
+    }
+  }
+}

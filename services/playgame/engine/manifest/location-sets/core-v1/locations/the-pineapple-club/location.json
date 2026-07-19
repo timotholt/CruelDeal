@@ -1,0 +1,74 @@
+{
+  "status": "playable",
+  "poolOrder": 15,
+  "implementationNote": "Implemented with DISCARD plus CREATE_CARD_IN_ZONE.",
+  "defId": "the-pineapple-club",
+  "version": 1,
+  "name": "The Pineapple Club",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "DISCARD",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "HAND_OF",
+            "owner": "P0"
+          }
+        }
+      },
+      {
+        "kind": "DISCARD",
+        "target": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "HAND_OF",
+            "owner": "P1"
+          }
+        }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "ANY_RANDOM",
+          "ownerFilter": "ANY_OWNER"
+        },
+        "owner": "P0",
+        "destination": {
+          "kind": "HAND"
+        }
+      },
+      {
+        "kind": "CREATE_CARD_IN_ZONE",
+        "pool": {
+          "kind": "ANY_RANDOM",
+          "ownerFilter": "ANY_OWNER"
+        },
+        "owner": "P1",
+        "destination": {
+          "kind": "HAND"
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "THE PINEAPPLE CLUB",
+    "description": "When revealed, each player discards a card, then adds a random card to their hand.",
+    "accent": "#ff9f43",
+    "art": {
+      "map": {
+        "path": "/art/maps/FoodCourt.png",
+        "kind": "image"
+      }
+    }
+  }
+}

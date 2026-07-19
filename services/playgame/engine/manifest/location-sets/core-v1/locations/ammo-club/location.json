@@ -1,0 +1,39 @@
+{
+  "status": "playable",
+  "poolOrder": 3,
+  "implementationNote": "Implemented with POWER_ADD.",
+  "defId": "ammo-club",
+  "version": 1,
+  "name": "Ammo Club",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "AMMO CLUB",
+    "description": "Cards here have +1 Power.",
+    "accent": "#f0c86a",
+    "art": {
+      "map": {
+        "path": "/art/maps/FoodCourt.png",
+        "kind": "image"
+      }
+    }
+  }
+}

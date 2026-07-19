@@ -1,0 +1,48 @@
+{
+  "status": "playable",
+  "poolOrder": 20,
+  "implementationNote": "Implemented with COST_REDUCED predicate.",
+  "defId": "federal-courthouse",
+  "version": 1,
+  "name": "Federal Courthouse",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "COST_REDUCED",
+            "target": {
+              "kind": "SELF"
+            }
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 3
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "FEDERAL COURTHOUSE",
+    "description": "Cards that had their Cost reduced have +3 Power here.",
+    "accent": "#ffd166",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral2.png",
+        "kind": "image"
+      }
+    }
+  }
+}

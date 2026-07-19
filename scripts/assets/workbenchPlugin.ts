@@ -291,21 +291,21 @@ const updateCardManifestPath = async (root: string, assetId: string, targetPath:
 };
 
 const updateLocationManifestPath = async (root: string, assetId: string, targetPath: string): Promise<void> => {
-  const filePath = safeJoin(root, 'services/playgame/engine/manifest/content/locations.ts');
-  const content = await readFile(filePath, 'utf8');
-  const start = content.indexOf(`defId: '${assetId}'`);
-  if (start === -1) throw new Error(`Could not find location defId ${assetId}`);
-  const end = content.indexOf('\n};', start + 1);
-  const blockEnd = end === -1 ? content.length : end;
-  const before = content.slice(0, start);
-  const block = content.slice(start, blockEnd);
-  const after = content.slice(blockEnd);
-  const nextBlock = block.replace(
-    /(map:\s*\{\s*path:\s*)'[^']*'(\s*,\s*kind:\s*'image'\s*\})/,
-    `$1'${targetPath}'$2`,
+  const filePath = safeJoin(
+    root,
+    `services/playgame/engine/manifest/location-sets/core-v1/locations/${assetId}/location.json`,
   );
-  if (nextBlock === block) throw new Error(`Could not update map path for ${assetId}`);
-  await writeFile(filePath, before + nextBlock + after);
+  const parsed = JSON.parse(await readFile(filePath, 'utf8')) as {
+    defId?: unknown;
+    cosmetic?: { art?: { map?: { path?: unknown } } };
+  };
+  if (parsed.defId !== assetId) throw new Error(`Could not find location defId ${assetId}`);
+  const map = parsed.cosmetic?.art?.map;
+  if (!map || typeof map.path !== 'string') {
+    throw new Error(`Could not update map path for ${assetId}`);
+  }
+  map.path = targetPath;
+  await writeFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`);
 };
 
 const promoteCandidate = async (

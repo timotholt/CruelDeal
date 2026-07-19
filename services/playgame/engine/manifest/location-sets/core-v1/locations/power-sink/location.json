@@ -1,0 +1,39 @@
+{
+  "status": "playable",
+  "poolOrder": 34,
+  "implementationNote": "Implemented with POWER_ADD -2.",
+  "defId": "power-sink",
+  "version": 1,
+  "name": "Power Sink",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "POWER SINK",
+    "description": "Cards here have -2 Power.",
+    "accent": "#ef6a2e",
+    "art": {
+      "map": {
+        "path": "/art/maps/LavaFlow.png",
+        "kind": "image"
+      }
+    }
+  }
+}

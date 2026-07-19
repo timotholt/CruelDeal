@@ -1,0 +1,35 @@
+{
+  "status": "playable",
+  "poolOrder": 21,
+  "implementationNote": "Implemented with BLOCK_POWER_INCREASE aura.",
+  "defId": "courthouse",
+  "version": 1,
+  "name": "Courthouse",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "BLOCK_POWER_INCREASE",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "stack": "SINGLE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "COURTHOUSE",
+    "description": "Cards here cannot have their Power increased.",
+    "accent": "#aab2bd",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral2.png",
+        "kind": "image"
+      }
+    }
+  }
+}

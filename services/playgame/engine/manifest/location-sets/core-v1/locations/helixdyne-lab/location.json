@@ -1,0 +1,38 @@
+{
+  "status": "playable",
+  "poolOrder": 6,
+  "implementationNote": "Implemented with LANE_POWER_MULTIPLIER.",
+  "defId": "helixdyne-lab",
+  "version": 1,
+  "name": "HelixDyne Lab",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "LANE_POWER_MULTIPLIER",
+        "laneScope": {
+          "laneOf": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "factor": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "HELIXDYNE LAB",
+    "description": "Both players total Power is doubled here.",
+    "accent": "#6aa9d6",
+    "art": {
+      "map": {
+        "path": "/art/maps/Laboratory.png",
+        "kind": "image"
+      }
+    }
+  }
+}

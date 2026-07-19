@@ -1,0 +1,34 @@
+{
+  "status": "playable",
+  "poolOrder": 13,
+  "implementationNote": "Implemented with location onCardEnteredHere and EVENT_CARD.",
+  "defId": "gun-store",
+  "version": 1,
+  "name": "Gun Store",
+  "rarity": 1,
+  "abilities": {
+    "onCardEnteredHere": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "EVENT_CARD"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "GUN STORE",
+    "description": "Cards added to this location have +2 Power.",
+    "accent": "#c0c7d4",
+    "art": {
+      "map": {
+        "path": "/art/maps/AlienStarship.png",
+        "kind": "image"
+      }
+    }
+  }
+}

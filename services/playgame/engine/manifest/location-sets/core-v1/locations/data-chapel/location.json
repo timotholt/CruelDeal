@@ -1,0 +1,59 @@
+{
+  "status": "playable",
+  "poolOrder": 22,
+  "implementationNote": "Implemented with HAS_COPIED_TEXT/TEXT_DISABLED predicates.",
+  "defId": "data-chapel",
+  "version": 1,
+  "name": "Data Chapel",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "WHERE",
+          "of": {
+            "kind": "SAME_LANE",
+            "of": {
+              "kind": "SELF"
+            },
+            "ownerFilter": "ANY_OWNER"
+          },
+          "pred": {
+            "kind": "OR",
+            "any": [
+              {
+                "kind": "HAS_COPIED_TEXT",
+                "target": {
+                  "kind": "SELF"
+                }
+              },
+              {
+                "kind": "TEXT_DISABLED",
+                "target": {
+                  "kind": "SELF"
+                }
+              }
+            ]
+          }
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 3
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "DATA CHAPEL",
+    "description": "Cards with copied or disabled text have +3 Power here.",
+    "accent": "#9cffcb",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral.png",
+        "kind": "image"
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { GENERATED_PATH, generateCardModulesSource } from '../../../../scripts/cards/generate-card-modules';
 import { getActiveCardModules, validateCardModule } from './card-set-loader';
-import { LOCATIONS_INDEX } from './content/locations';
+import { loadLocationsFromSets } from './location-set-loader';
 
 let failures = 0;
 let warnings = 0;
@@ -13,7 +13,8 @@ const fail = (message: string): void => {
 
 const modules = getActiveCardModules(['core-v1']);
 const seen = new Set<string>();
-const locationIds = new Set(LOCATIONS_INDEX.map((location) => location.defId));
+const locations = Object.values(loadLocationsFromSets(['core-v1']).locations);
+const locationIds = new Set(locations.map((location) => location.defId));
 
 if (!existsSync(GENERATED_PATH)) {
   fail(`${GENERATED_PATH}: generated module index is missing`);
@@ -82,7 +83,7 @@ for (const module of modules) {
   visitRefs(module.card.abilities, `card ${module.card.defId}`);
 }
 
-for (const location of LOCATIONS_INDEX) {
+for (const location of locations) {
   visitRefs(location.abilities, `location ${location.defId}`);
 }
 

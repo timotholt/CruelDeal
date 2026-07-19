@@ -1,0 +1,13 @@
+{
+  "setId": "core-v1",
+  "displayName": "Core V1 Locations",
+  "status": "active",
+  "locationsPath": "locations",
+  "world": {
+    "name": "Vantaris",
+    "fullName": "Vantaris Free Metro",
+    "publicSlogan": "Tomorrow, financed today.",
+    "streetSlogan": "Every miracle has interest."
+  },
+  "notes": "Primary Vantaris location deck plus engine-owned system locations."
+}

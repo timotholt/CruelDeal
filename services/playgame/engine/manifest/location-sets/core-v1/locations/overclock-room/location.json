@@ -1,0 +1,64 @@
+{
+  "status": "playable",
+  "poolOrder": 35,
+  "implementationNote": "Implemented with owner-scoped location counters.",
+  "defId": "overclock-room",
+  "version": 1,
+  "name": "Overclock Room",
+  "rarity": 1,
+  "abilities": {
+    "onCardPlayedHere": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "LOCATION_COUNTER",
+            "name": "played-here",
+            "owner": "EVENT_OWNER"
+          },
+          "op": "==",
+          "b": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "then": [
+          {
+            "kind": "ADD_POWER",
+            "target": {
+              "kind": "EVENT_CARD"
+            },
+            "delta": {
+              "kind": "LIT",
+              "n": 4
+            }
+          },
+          {
+            "kind": "MODIFY_LOCATION_COUNTER",
+            "lane": {
+              "kind": "SELF"
+            },
+            "name": "played-here",
+            "owner": "EVENT_OWNER",
+            "delta": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "OVERCLOCK ROOM",
+    "description": "The first card each player plays here gets +4 Power.",
+    "accent": "#ffbe0b",
+    "art": {
+      "map": {
+        "path": "/art/maps/Laboratory.png",
+        "kind": "image"
+      }
+    }
+  }
+}

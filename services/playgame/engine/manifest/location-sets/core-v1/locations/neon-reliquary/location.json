@@ -1,0 +1,39 @@
+{
+  "status": "playable",
+  "poolOrder": 0,
+  "implementationNote": "Implemented with ON_REVEAL_MULTIPLIER.",
+  "defId": "neon-reliquary",
+  "version": 1,
+  "name": "Neon Reliquary",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "ON_REVEAL_MULTIPLIER",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "factor": {
+          "kind": "LIT",
+          "n": 2
+        },
+        "stack": "MULTIPLICATIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "NEON RELIQUARY",
+    "description": "On Reveal effects here trigger twice.",
+    "accent": "#d4b87a",
+    "art": {
+      "map": {
+        "path": "/art/maps/Cathedral.png",
+        "kind": "image"
+      }
+    }
+  }
+}

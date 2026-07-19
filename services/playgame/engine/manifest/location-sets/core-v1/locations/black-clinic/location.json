@@ -1,0 +1,66 @@
+{
+  "status": "playable",
+  "poolOrder": 36,
+  "implementationNote": "Implemented with owner-scoped location counters and TRANSFORM_CARD.",
+  "defId": "black-clinic",
+  "version": 1,
+  "name": "Black Clinic",
+  "rarity": 1,
+  "abilities": {
+    "onCardPlayedHere": [
+      {
+        "kind": "CONDITIONAL",
+        "if": {
+          "kind": "NUM_CMP",
+          "a": {
+            "kind": "LOCATION_COUNTER",
+            "name": "played-here",
+            "owner": "EVENT_OWNER"
+          },
+          "op": "==",
+          "b": {
+            "kind": "LIT",
+            "n": 0
+          }
+        },
+        "then": [
+          {
+            "kind": "TRANSFORM_CARD",
+            "target": {
+              "kind": "EVENT_CARD"
+            },
+            "pool": {
+              "kind": "COST_RANGE",
+              "ownerDeck": "EVENT_OWNER",
+              "min": 5,
+              "max": 5
+            }
+          },
+          {
+            "kind": "MODIFY_LOCATION_COUNTER",
+            "lane": {
+              "kind": "SELF"
+            },
+            "name": "played-here",
+            "owner": "EVENT_OWNER",
+            "delta": {
+              "kind": "LIT",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "BLACK CLINIC",
+    "description": "Transform the next card you play here into a random 5-Cost card.",
+    "accent": "#ff5d8f",
+    "art": {
+      "map": {
+        "path": "/art/maps/Laboratory.png",
+        "kind": "image"
+      }
+    }
+  }
+}

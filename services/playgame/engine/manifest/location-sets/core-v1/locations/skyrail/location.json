@@ -1,0 +1,43 @@
+{
+  "status": "playable",
+  "poolOrder": 25,
+  "implementationNote": "Implemented with onCardPlayedHere, EVENT_CARD, and MOVE.",
+  "defId": "skyrail",
+  "version": 1,
+  "name": "Skyrail",
+  "rarity": 1,
+  "abilities": {
+    "onCardPlayedHere": [
+      {
+        "kind": "MOVE",
+        "target": {
+          "kind": "EVENT_CARD"
+        },
+        "to": {
+          "kind": "RANDOM_N",
+          "count": {
+            "kind": "LIT",
+            "n": 1
+          },
+          "of": {
+            "kind": "OTHER_LANES",
+            "of": {
+              "kind": "EVENT_CARD"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SKYRAIL",
+    "description": "After you play a card here, move it to another location if possible.",
+    "accent": "#58c7ff",
+    "art": {
+      "map": {
+        "path": "/art/maps/AlienStarship.png",
+        "kind": "image"
+      }
+    }
+  }
+}

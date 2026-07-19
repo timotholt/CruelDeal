@@ -1,0 +1,39 @@
+{
+  "status": "playable",
+  "poolOrder": 5,
+  "implementationNote": "Implemented with POWER_ADD -1.",
+  "defId": "public-pool",
+  "version": 1,
+  "name": "Public Pool",
+  "rarity": 1,
+  "abilities": {
+    "ongoing": [
+      {
+        "kind": "POWER_ADD",
+        "target": {
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        },
+        "stack": "ADDITIVE"
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "PUBLIC POOL",
+    "description": "Cards here have -1 Power.",
+    "accent": "#8fd5e8",
+    "art": {
+      "map": {
+        "path": "/art/maps/IcyRoad.png",
+        "kind": "image"
+      }
+    }
+  }
+}

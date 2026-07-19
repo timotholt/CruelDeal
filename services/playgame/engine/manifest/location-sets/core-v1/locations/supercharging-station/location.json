@@ -1,0 +1,40 @@
+{
+  "status": "playable",
+  "poolOrder": 7,
+  "implementationNote": "Implemented with ADJUST_ENERGY for both players.",
+  "defId": "supercharging-station",
+  "version": 1,
+  "name": "Supercharging Station",
+  "rarity": 1,
+  "abilities": {
+    "onReveal": [
+      {
+        "kind": "ADJUST_ENERGY",
+        "owner": "P0",
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        }
+      },
+      {
+        "kind": "ADJUST_ENERGY",
+        "owner": "P1",
+        "delta": {
+          "kind": "LIT",
+          "n": 1
+        }
+      }
+    ]
+  },
+  "cosmetic": {
+    "displayName": "SUPERCHARGING STATION",
+    "description": "When revealed, each player gains 1 Energy.",
+    "accent": "#8d78ff",
+    "art": {
+      "map": {
+        "path": "/art/maps/AlienStarship.png",
+        "kind": "image"
+      }
+    }
+  }
+}
