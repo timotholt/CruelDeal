@@ -6,7 +6,13 @@
  * See spec §5.
  */
 
-export { getCardPower, getCardPowerModifiers, getLanePower, getLanePowerBreakdown } from './power';
+export {
+  getCardPower,
+  getCardPowerAfterStoredMutation,
+  getCardPowerModifiers,
+  getLanePower,
+  getLanePowerBreakdown,
+} from './power';
 export {
   getCurrentCard,
   type CurrentCard,

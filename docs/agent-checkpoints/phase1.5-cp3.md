@@ -7,7 +7,7 @@ Status: complete.
 Permanent card-power changes now enter one governed operation:
 
 ```text
-services/playgame/engine/operations/power.ts
+services/playgame/engine/kernel/operations/power.ts
 ```
 
 `ADD_POWER`, `SET_POWER`, `RESET_POWER`, hand-entry debuffs, and every current
@@ -74,5 +74,5 @@ The acceptance matrix proves:
 - focused production lint for every migrated runtime/UI source: green
 - production build: green
 
-Checkpoint 4 may now build the committed lifecycle reaction dispatcher on top
-of the stable semantic power event and contribution model.
+Checkpoint 4A subsequently moved this operation behind the transactional
+kernel. See `phase1.5-cp4a-implementation.md`; C4B is the next active slice.

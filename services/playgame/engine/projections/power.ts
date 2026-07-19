@@ -9,7 +9,7 @@
  */
 
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
-import type { MatchState } from '../types/state';
+import type { MatchState, PowerMutation } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import { collectAllOngoings, ongoingsTargeting } from './ongoing';
 import { ctxForCard, ctxForLocation, ctxForTargetCard, type SourcedOngoing } from './context';
@@ -22,6 +22,7 @@ import {
   isPowerIncreaseBlocked,
 } from './power-restrictions';
 import {
+  activePowerContributions,
   effectivePermanentPowerDelta,
   storedPowerDelta,
 } from '../powerLedger';
@@ -65,6 +66,28 @@ export interface LanePowerBreakdown {
 }
 
 export function getCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
+  return getCardPowerWithStoredMutation(state, cardId, manifest, null);
+}
+
+/**
+ * Project a card's exact effective power after a proposed stored mutation.
+ * This pure query neither constructs nor applies a MatchEvent.
+ */
+export function getCardPowerAfterStoredMutation(
+  state: MatchState,
+  cardId: CardId,
+  mutation: PowerMutation,
+  manifest: Manifest,
+): number {
+  return getCardPowerWithStoredMutation(state, cardId, manifest, mutation);
+}
+
+function getCardPowerWithStoredMutation(
+  state: MatchState,
+  cardId: CardId,
+  manifest: Manifest,
+  mutation: PowerMutation | null,
+): number {
   const card = getCardRuntime(state, cardId, manifest);
   if (!card) return 0;
   const def = getCardTemplate(manifest, card.defId);
@@ -85,7 +108,14 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
 
   // Stage 3: fold the permanent semantic ledger. Restricted lanes suppress
   // each positive active contribution independently without deleting it.
-  power += effectivePermanentPowerDelta(card, def.basePower, increaseBlocked);
+  power += mutation === null
+    ? effectivePermanentPowerDelta(card, def.basePower, increaseBlocked)
+    : effectiveStoredDeltaAfterMutation(
+        card,
+        def.basePower,
+        mutation,
+        increaseBlocked,
+      );
 
   // Stage 4: per-card pending buffs (Shuri tag).
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
@@ -96,6 +126,33 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
   }
 
   return power;
+}
+
+function effectiveStoredDeltaAfterMutation(
+  card: Parameters<typeof activePowerContributions>[0],
+  basePower: number,
+  mutation: PowerMutation,
+  suppressPositive: boolean,
+): number {
+  const current = activePowerContributions(card, basePower)
+    .map(contribution => contribution.delta);
+  const projected = (() => {
+    switch (mutation.kind) {
+      case 'ADD':
+        return mutation.delta === 0 ? current : [...current, mutation.delta];
+      case 'SET': {
+        const delta = mutation.value - basePower;
+        return delta === 0 ? [] : [delta];
+      }
+      case 'RESET':
+        return [];
+    }
+  })();
+
+  return projected.reduce(
+    (total, delta) => suppressPositive && delta > 0 ? total : total + delta,
+    0,
+  );
 }
 
 export function getCardPowerModifiers(

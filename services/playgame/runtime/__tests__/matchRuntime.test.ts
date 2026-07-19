@@ -6,6 +6,7 @@ import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine
 import { getStoredCardPowerDelta } from '../../engine/powerLedger';
 import type { Deck } from '../../engine/manifest/types';
 import type { CardId, Seat } from '../../engine/types/ids';
+import { KernelInvariantError } from '../../engine/kernel';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
 import type { IntentEnvelope, MatchBootstrap, ParticipantController, RuntimeIntent } from '../contracts';
 import { defaultLocationDeckFactory } from '../locationDeckFactory';
@@ -22,6 +23,7 @@ function cheapDeck(): Deck {
 function runtimeFixture(
   seed = 'phase1-checkpoint3-runtime',
   remoteController: ParticipantController = 'LOCAL_AI',
+  debugDeterminism = false,
 ): MatchRuntime {
   const deck = cheapDeck();
   const ruleset = BOOTSTRAP_MANIFEST.rulesets.standard;
@@ -78,6 +80,7 @@ function runtimeFixture(
       P1: validation.value.decks.P1.entries,
     },
     locationDeck: validation.value.decks.LOCATIONS.entries,
+    debugDeterminism,
   });
 }
 
@@ -510,5 +513,93 @@ describe('createMatchRuntime', () => {
     });
     expect(runtime.transactions()).toHaveLength(openingCount + 1);
     expect(runtime.transactions().at(-1)?.intent.seat).toBe('SYSTEM');
+  });
+
+  it('rejects a failed second lock atomically and permits the same intent ID to retry', async () => {
+    const reconcileRuntimeRecord = replayExport.reconcileRuntimeRecord;
+    let failNextTurnResolution = true;
+    const reconcile = vi.spyOn(replayExport, 'reconcileRuntimeRecord').mockImplementation(
+      (...args: Parameters<typeof replayExport.reconcileRuntimeRecord>) => {
+        const latestIntent = args[0].transactions.at(-1)?.intent.intentId;
+        if (failNextTurnResolution && latestIntent?.startsWith('resolve-turn-')) {
+          failNextTurnResolution = false;
+          throw new Error('forced candidate reconciliation failure');
+        }
+        return reconcileRuntimeRecord(...args);
+      },
+    );
+
+    try {
+      const runtime = runtimeFixture(
+        'atomic-second-lock-failure',
+        'REMOTE_PLAYER',
+        true,
+      );
+      const firstLock = await runtime.submitIntent({
+        matchId: 'phase1-runtime-match',
+        seat: 'P0',
+        intentId: 'atomic-p0-lock',
+        expectedRevision: runtime.revision(),
+        intent: { type: 'END_TURN' },
+      });
+      expect(firstLock).toMatchObject({ status: 'accepted', commit: 'PRIVATE' });
+
+      const retryableSecondLock: IntentEnvelope = {
+        matchId: 'phase1-runtime-match',
+        seat: 'P1',
+        intentId: 'atomic-p1-lock',
+        expectedRevision: runtime.revision(),
+        intent: { type: 'END_TURN' },
+      };
+      const beforeFailure = {
+        revision: runtime.revision(),
+        frame: runtime.frame(),
+        state: runtime.state(),
+        transactions: runtime.transactions(),
+        rngDraws: runtime.state().rng.draws,
+      };
+
+      const failed = runtime.submitIntent(retryableSecondLock);
+      await expect(failed).rejects.toBeInstanceOf(KernelInvariantError);
+      await expect(failed).rejects.toMatchObject({
+        failure: {
+          kind: 'KERNEL_FAILURE',
+          code: 'REDUCER_INVARIANT',
+          message: 'forced candidate reconciliation failure',
+        },
+      });
+
+      expect(runtime.revision()).toBe(beforeFailure.revision);
+      expect(runtime.frame()).toBe(beforeFailure.frame);
+      expect(runtime.state()).toBe(beforeFailure.state);
+      expect(runtime.state().rng.draws).toBe(beforeFailure.rngDraws);
+      expect(runtime.transactions()).toBe(beforeFailure.transactions);
+
+      await expect(runtime.submitIntent({
+        matchId: 'phase1-runtime-match',
+        seat: 'P0',
+        intentId: 'atomic-p0-second-lock',
+        expectedRevision: runtime.revision(),
+        intent: { type: 'END_TURN' },
+      })).resolves.toMatchObject({
+        status: 'illegal',
+        code: 'PHASE_INVALID',
+        message: 'seat is already locked',
+      });
+
+      await expect(runtime.submitIntent(retryableSecondLock)).resolves.toMatchObject({
+        status: 'accepted',
+        commit: 'COMMITTED',
+        revision: beforeFailure.revision + 1,
+        transaction: {
+          intent: {
+            seat: 'SYSTEM',
+          },
+        },
+      });
+      expect(runtime.transactions()).toHaveLength(beforeFailure.transactions.length + 1);
+    } finally {
+      reconcile.mockRestore();
+    }
   });
 });

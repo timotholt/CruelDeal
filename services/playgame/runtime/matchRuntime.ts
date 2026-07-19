@@ -39,6 +39,7 @@ import type {
 import { getCardPlacement } from '../engine/projections/cardRuntime';
 import { buildOpeningTransaction } from './opening';
 import { buildLocationSetupTransaction } from '../engine/locationSetup';
+import { KernelInvariantError } from '../engine/kernel';
 import {
   canonicalJson,
   DeterminismDriftError,
@@ -97,6 +98,7 @@ export interface MatchRuntimeConfig {
 interface QueuedIntent {
   readonly envelope: IntentEnvelope;
   readonly resolve: (result: IntentAcceptanceResult) => void;
+  readonly reject: (reason: unknown) => void;
   readonly after?: (result: IntentAcceptanceResult) => void;
 }
 
@@ -277,6 +279,19 @@ function illegalResult(
     code,
     ...(message === undefined ? {} : { message }),
   };
+}
+
+function asKernelInvariantError(error: unknown): KernelInvariantError {
+  if (error instanceof KernelInvariantError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new KernelInvariantError(Object.freeze({
+    kind: 'KERNEL_FAILURE',
+    code: 'REDUCER_INVARIANT',
+    message,
+    workItemsConsumed: 0,
+    eventsProduced: 0,
+    reactionsScheduled: 0,
+  }));
 }
 
 /**
@@ -566,7 +581,25 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     return result;
   };
 
-  const commitLockedTurn = (): void => {
+  const acceptCommittedLock = (
+    key: IntentReceiptKey,
+    envelope: IntentEnvelope,
+    transaction: CommittedTransactionRecord,
+  ): AcceptedIntentResult => {
+    const result: AcceptedIntentResult = Object.freeze({
+      status: 'accepted',
+      matchId: envelope.matchId,
+      seat: envelope.seat,
+      intentId: envelope.intentId,
+      revision: currentRevision,
+      commit: 'COMMITTED',
+      transaction,
+    });
+    receipts.set(key, result);
+    return result;
+  };
+
+  const commitLockedTurn = (): CommittedCandidate => {
     let mergedState = authoritativeState;
     const events: MatchEvent[] = [];
     let resolveMs = 0;
@@ -636,6 +669,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     planningPrelude.P1 = null;
     locked.P0 = false;
     locked.P1 = false;
+    return committed;
   };
 
   const enqueueAiTurn = (seat: Seat): void => {
@@ -674,6 +708,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       queue.unshift({
         envelope,
         resolve: () => undefined,
+        reject: () => undefined,
         ...(play ? { after: enqueueNext } : {}),
       });
     };
@@ -804,12 +839,15 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         if (locked[envelope.seat]) {
           return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is already locked'));
         }
-        locked[envelope.seat] = true;
-        const result = acceptPrivate(key, envelope);
         const other: Seat = envelope.seat === 'P0' ? 'P1' : 'P0';
         if (locked[other]) {
-          commitLockedTurn();
-        } else if (config.controllers[other] === 'LOCAL_AI') {
+          const committed = commitLockedTurn();
+          return acceptCommittedLock(key, envelope, committed.timeline.transaction);
+        }
+
+        locked[envelope.seat] = true;
+        const result = acceptPrivate(key, envelope);
+        if (config.controllers[other] === 'LOCAL_AI') {
           enqueueAiTurn(other);
         }
         return result;
@@ -852,13 +890,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       publish(committed.timeline);
       return committed.result!;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return storeRejection(key, illegalResult(
-        envelope,
-        currentRevision,
-        'RULES_INVALID',
-        message,
-      ));
+      throw asKernelInvariantError(error);
     }
   };
 
@@ -869,9 +901,13 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     try {
       while (queue.length > 0) {
         const queued = queue.shift()!;
-        const result = acceptAtDequeue(queued.envelope);
-        queued.resolve(result);
-        queued.after?.(result);
+        try {
+          const result = acceptAtDequeue(queued.envelope);
+          queued.resolve(result);
+          queued.after?.(result);
+        } catch (error) {
+          queued.reject(error);
+        }
       }
     } finally {
       draining = false;
@@ -884,8 +920,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
   const submitIntent = (envelope: IntentEnvelope): Promise<IntentAcceptanceResult> => {
     const copied = copyEnvelope(envelope);
-    const pending = new Promise<IntentAcceptanceResult>((resolveResult) => {
-      queue.push({ envelope: copied, resolve: resolveResult });
+    const pending = new Promise<IntentAcceptanceResult>((resolveResult, rejectResult) => {
+      queue.push({ envelope: copied, resolve: resolveResult, reject: rejectResult });
     });
     if (!draining && !drainScheduled) {
       drainScheduled = true;

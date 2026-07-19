@@ -12,9 +12,9 @@ and the permanent engine/content rule-control plane are now governed by
 conflicts with the older Phase 1.5 implementation detail in this roadmap, the
 transactional-rules-kernel specification wins.
 
-Checkpoint 4A prework is complete and executable at
-`docs/agent-checkpoints/phase1.5-cp4a-readiness.md`. Implementation may begin
-with the permanent stored-power kernel pilot.
+Checkpoint 4A is implemented and exit-proven at
+`docs/agent-checkpoints/phase1.5-cp4a-implementation.md`. The next implementation
+slice is C4B: governed destroy and banish.
 
 ## Cost Model
 

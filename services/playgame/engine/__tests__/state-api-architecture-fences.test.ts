@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,6 +49,35 @@ function violations(
   return results;
 }
 
+function violationsInFiles(
+  repositoryPaths: readonly string[],
+  pattern: RegExp,
+): string[] {
+  const results: string[] = [];
+  for (const repositoryPath of repositoryPaths) {
+    const path = resolve(playgameRoot, repositoryPath);
+    readFileSync(path, 'utf8').split('\n').forEach((line, index) => {
+      pattern.lastIndex = 0;
+      if (pattern.test(line)) {
+        results.push(`${repositoryPath}:${index + 1}: ${line.trim()}`);
+      }
+    });
+  }
+  return results;
+}
+
+function productionRepositoryPaths(): string[] {
+  return productionFiles().map(path => relative(playgameRoot, path));
+}
+
+function reducerCaseSource(eventType: string): string {
+  const source = readFileSync(resolve(engineRoot, 'apply.ts'), 'utf8');
+  const start = source.indexOf(`case '${eventType}'`);
+  if (start < 0) throw new Error(`Reducer case ${eventType} is missing.`);
+  const nextCase = source.indexOf("\n    case '", start + 1);
+  return source.slice(start, nextCase < 0 ? undefined : nextCase);
+}
+
 describe('opaque card and location state architecture', () => {
   it('permanently removes the superseded public record type names', () => {
     expect(violations(
@@ -96,10 +125,71 @@ describe('opaque card and location state architecture', () => {
     expect(violations(
       new RegExp(`type:\\s*'(?:${mutationEvents})'`),
       new Set([
+        'engine/kernel/operations/power.ts',
         'engine/operations/cardMutations.ts',
-        'engine/operations/power.ts',
         'engine/types/events.ts',
       ]),
+    )).toEqual([]);
+  });
+
+  it('keeps raw stored-power construction solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'CARD_POWER_CHANGED'/,
+      new Set([
+        'engine/kernel/operations/power.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(existsSync(resolve(engineRoot, 'operations/power.ts'))).toBe(false);
+    expect(violations(/\bresolveCardPower[A-Za-z0-9_]*\b/, new Set()))
+      .toEqual([]);
+  });
+
+  it('keeps kernel operations and policies pure proposal producers', () => {
+    const governedFiles = productionRepositoryPaths().filter(path =>
+      path.startsWith('engine/kernel/operations/')
+      || path.startsWith('engine/kernel/policies/')
+    );
+    expect(violationsInFiles(
+      governedFiles,
+      /from\s*['"][^'"]*\/apply['"]|\bapply(?:Framed)?\s*\(/,
+    )).toEqual([]);
+  });
+
+  it('keeps live power-ledger writes in CARD_POWER_CHANGED only', () => {
+    const transformedReducer = reducerCaseSource('CARD_TRANSFORMED');
+    const powerReducer = reducerCaseSource('CARD_POWER_CHANGED');
+    const applySource = readFileSync(resolve(engineRoot, 'apply.ts'), 'utf8');
+    const liveLedgerAppends = applySource.match(
+      /powerLedger:\s*\[\s*\.\.\.[^\]]*powerLedger[^\]]*\]/g,
+    ) ?? [];
+
+    expect(transformedReducer).not.toMatch(/\bpowerLedger\b/);
+    expect(powerReducer).toMatch(
+      /powerLedger:\s*\[\s*\.\.\.card\.powerLedger,\s*entry\s*\]/,
+    );
+    expect(liveLedgerAppends).toHaveLength(1);
+  });
+
+  it('keeps replay and presentation paths from invoking the kernel', () => {
+    const presentationFiles = productionRepositoryPaths().filter(path =>
+      path === 'engine/replay.ts'
+      || path.startsWith('debug/')
+      || path.startsWith('presentation/')
+    );
+    expect(violationsInFiles(
+      presentationFiles,
+      /from\s*['"][^'"]*\/kernel(?:\/[^'"]*)?['"]|\b(?:resolveKernelTransaction|changeStoredPower|planStoredPowerCommand|dispatchKernelReactions|runKernel)\s*\(/,
+    )).toEqual([]);
+  });
+
+  it('keeps Frame and RNG authority outside the kernel implementation', () => {
+    const kernelFiles = productionRepositoryPaths().filter(path =>
+      path.startsWith('engine/kernel/')
+    );
+    expect(violationsInFiles(
+      kernelFiles,
+      /from\s*['"][^'"]*\/(?:timeline|transactionTimeline|rng)['"]|\b(?:frameAndFoldEvents|frameSingleEvent|advanceGameplayRng|createRng|nextFrame)\s*\(|\breadonly\s+(?:frame|rng)\s*:/,
     )).toEqual([]);
   });
 

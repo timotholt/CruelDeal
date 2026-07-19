@@ -18,14 +18,12 @@ import {
 import {
   addCardTag,
   adjustCardCost,
-  adjustCardPower,
   changeCardCounter,
   removeCardTag,
   replaceCardText,
-  resetCardPower,
   setCardCost,
-  setCardPower,
 } from '../operations/cardMutations';
+import { changeStoredPower } from '../kernel/powerTransaction';
 import { getCurrentCard } from './card';
 import {
   getCardLifecycle,
@@ -110,16 +108,22 @@ describe('current card API', () => {
       invalidCause,
       manifest,
     )).toThrow('card mutation reason must be non-empty');
-    expect(() => setCardPower(
+    expect(() => changeStoredPower(
       initial,
       cardId,
-      5,
+      { kind: 'SET', value: 5 },
       invalidCause,
       manifest,
-    )).toThrow('card mutation reason must be non-empty');
+    )).toThrow('Stored-power command reason must be non-empty');
 
     const cost = setCardCost(initial, cardId, 1, cause, manifest);
-    const power = setCardPower(cost.state, cardId, 5, cause, manifest);
+    const power = changeStoredPower(
+      cost.state,
+      cardId,
+      { kind: 'SET', value: 5 },
+      cause,
+      manifest,
+    );
     expect(getCurrentCard(power.state, cardId, manifest)).toMatchObject({
       cost: { current: 1 },
       power: { current: 5 },
@@ -136,9 +140,27 @@ describe('current card API', () => {
     const calls = [
       () => adjustCardCost(initial, cardId, -1, emptyReason, manifest),
       () => setCardCost(initial, cardId, 0, emptyReason, manifest),
-      () => adjustCardPower(initial, cardId, 1, emptyReason, manifest),
-      () => setCardPower(initial, cardId, 3, emptyReason, manifest),
-      () => resetCardPower(initial, cardId, emptyReason, manifest),
+      () => changeStoredPower(
+        initial,
+        cardId,
+        { kind: 'ADD', delta: 1 },
+        emptyReason,
+        manifest,
+      ),
+      () => changeStoredPower(
+        initial,
+        cardId,
+        { kind: 'SET', value: 3 },
+        emptyReason,
+        manifest,
+      ),
+      () => changeStoredPower(
+        initial,
+        cardId,
+        { kind: 'RESET' },
+        emptyReason,
+        manifest,
+      ),
       () => replaceCardText(initial, cardId, { kind: 'BLANK_ALL' }, emptyReason, manifest),
       () => addCardTag(initial, cardId, { kind: 'EVER_MOVED' }, emptyReason, manifest),
       () => removeCardTag(initial, cardId, 'EVER_MOVED', emptyReason, manifest),
@@ -149,7 +171,13 @@ describe('current card API', () => {
     }
     expect(() => setCardCost(initial, cardId, 0, emptySource, manifest))
       .toThrow(/sourceId must be non-empty/);
-    expect(() => setCardPower(initial, cardId, 3, emptySource, manifest))
+    expect(() => changeStoredPower(
+      initial,
+      cardId,
+      { kind: 'SET', value: 3 },
+      emptySource,
+      manifest,
+    ))
       .toThrow(/sourceId must be non-empty/);
   });
 
@@ -193,9 +221,21 @@ describe('current card API', () => {
         .toThrow(/finite integer/);
       expect(() => adjustCardCost(initial, cardId, value, cause, manifest))
         .toThrow(/finite integer/);
-      expect(() => setCardPower(initial, cardId, value, cause, manifest))
+      expect(() => changeStoredPower(
+        initial,
+        cardId,
+        { kind: 'SET', value },
+        cause,
+        manifest,
+      ))
         .toThrow(/finite integer/);
-      expect(() => adjustCardPower(initial, cardId, value, cause, manifest))
+      expect(() => changeStoredPower(
+        initial,
+        cardId,
+        { kind: 'ADD', delta: value },
+        cause,
+        manifest,
+      ))
         .toThrow(/finite integer/);
       expect(() => changeCardCounter(initial, cardId, 'uses', value, cause, manifest))
         .toThrow(/finite integer/);
@@ -211,7 +251,13 @@ describe('current card API', () => {
 
     const sameCost = setCardCost(clamped.state, cardId, 0, cause, manifest);
     const zeroCostDelta = adjustCardCost(clamped.state, cardId, 0, cause, manifest);
-    const zeroPowerDelta = adjustCardPower(clamped.state, cardId, 0, cause, manifest);
+    const zeroPowerDelta = changeStoredPower(
+      clamped.state,
+      cardId,
+      { kind: 'ADD', delta: 0 },
+      cause,
+      manifest,
+    );
     const missing = setCardCost(
       clamped.state,
       'missing-card' as CardId,
@@ -267,9 +313,27 @@ describe('current card API', () => {
   it('records SET, ADD, and RESET power mutations without losing provenance', () => {
     const initial = state();
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
-    const set = setCardPower(initial, cardId, 8, cause, manifest);
-    const add = adjustCardPower(set.state, cardId, -3, cause, manifest);
-    const reset = resetCardPower(add.state, cardId, cause, manifest);
+    const set = changeStoredPower(
+      initial,
+      cardId,
+      { kind: 'SET', value: 8 },
+      cause,
+      manifest,
+    );
+    const add = changeStoredPower(
+      set.state,
+      cardId,
+      { kind: 'ADD', delta: -3 },
+      cause,
+      manifest,
+    );
+    const reset = changeStoredPower(
+      add.state,
+      cardId,
+      { kind: 'RESET' },
+      cause,
+      manifest,
+    );
     expect(getCurrentCard(reset.state, cardId, manifest)?.power?.current).toBe(2);
     expect(getCardRuntime(reset.state, cardId, manifest)?.powerLedger.map(entry => entry.mutation))
       .toEqual([

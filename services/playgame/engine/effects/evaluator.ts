@@ -32,9 +32,9 @@ import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
 import {
-  resolveCardPowerAdd,
-  resolveCardPowerMutation,
-} from '../operations/power';
+  addStoredPower,
+  changeStoredPower,
+} from '../kernel/powerTransaction';
 import {
   addCardTag,
   adjustCardCost,
@@ -620,7 +620,7 @@ export function evalEffect(
           selfOwner: getCardRuntime(s, id, manifest)?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
-        const change = resolveCardPowerAdd(s, id, delta, ctx.source, manifest);
+        const change = addStoredPower(s, id, delta, ctx.source, manifest);
         events.push(...change.events);
         s = change.state;
       }
@@ -636,7 +636,7 @@ export function evalEffect(
         const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const value = evalNum(effect.value, { ...liveCtx, state: s, self: id });
-        const change = resolveCardPowerMutation(
+        const change = changeStoredPower(
           s,
           id,
           { kind: 'SET', value },
@@ -1071,6 +1071,17 @@ export function evalEffect(
         if (!card) continue;
         const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.scope(`transform:${id}`), ctx.eventOwner ?? null);
         if (!defId || defId === card.defId) continue;
+        if (effect.resetStats) {
+          const powerReset = changeStoredPower(
+            s,
+            id,
+            { kind: 'RESET' },
+            ctx.source,
+            manifest,
+          );
+          events.push(...powerReset.events);
+          s = powerReset.state;
+        }
         const e: MatchEvent = {
           type: 'CARD_TRANSFORMED',
           cardId: id,
@@ -1298,7 +1309,7 @@ export function evalEffect(
         if (!isPowerBearingCard(s, id, manifest)) continue;
         const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
-        const change = resolveCardPowerMutation(
+        const change = changeStoredPower(
           s,
           id,
           { kind: 'RESET' },
@@ -1479,7 +1490,7 @@ export function applyHandEntryDebuffs(
       if (b.kind !== 'CALL_BUILTIN' || b.fn !== 'DEBUFF_ENEMY_ON_HAND_ENTRY') continue;
       const delta: number = b.args?.delta ?? -1;
       if (delta === 0) continue;
-      const change = resolveCardPowerAdd(
+      const change = addStoredPower(
         s,
         cardId,
         delta,

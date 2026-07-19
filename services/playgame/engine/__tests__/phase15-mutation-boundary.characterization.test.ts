@@ -97,7 +97,7 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_TAG_REMOVED: 1,
     CARD_TEXT_OVERRIDDEN: 1,
   },
-  'services/playgame/engine/operations/power.ts': {
+  'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
   },
   'services/playgame/engine/resolve.ts': {

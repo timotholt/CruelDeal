@@ -1,5 +1,8 @@
 # Phase 1.5 C4A Readiness
 
+> Historical readiness checkpoint. C4A is now complete; see
+> `docs/agent-checkpoints/phase1.5-cp4a-implementation.md`.
+
 Status: complete  
 Date: 2026-07-19  
 Scope: behavior-neutral prework required before kernel implementation  
@@ -191,5 +194,6 @@ work-loop types from being designed in a way that blocks the later C4D cascade.
 - protocol schema check: green;
 - no production gameplay behavior changed by this prework.
 
-The next action is C4A implementation, beginning with the private transaction
-types/work loop and permanent stored-power vertical slice.
+The readiness action was completed by
+`docs/agent-checkpoints/phase1.5-cp4a-implementation.md`. The next action is
+C4B: governed destroy and banish.

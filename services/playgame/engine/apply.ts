@@ -360,16 +360,6 @@ function applyEventBody(
         defId: event.newDefId,
         variantId: undefined,
         ...(event.resetStats ? {
-          powerLedger: [
-            ...card.powerLedger,
-            {
-              id: `${event.cardId}:power:${eventFrame}`,
-              frame: eventFrame,
-              turn: state.turn,
-              mutation: { kind: 'RESET' },
-              cause: event.cause,
-            },
-          ],
           costDelta: 0,
           costLog: [],
           counters: {},

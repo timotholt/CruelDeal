@@ -76,13 +76,10 @@ export {
 export {
   addCardTag,
   adjustCardCost,
-  adjustCardPower,
   changeCardCounter,
   removeCardTag,
   replaceCardText,
-  resetCardPower,
   setCardCost,
-  setCardPower,
   type CardMutationResult,
 } from './operations/cardMutations';
 export {

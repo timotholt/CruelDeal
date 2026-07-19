@@ -6,11 +6,6 @@ import type { EffectRef, TextOverride } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
 import type { CardTag, MatchState } from '../types/state';
-import {
-  resolveCardPowerAdd,
-  resolveCardPowerMutation,
-  type PowerMutationResult,
-} from './power';
 
 export interface CardMutationResult {
   readonly events: readonly MatchEvent[];
@@ -83,52 +78,6 @@ export function setCardCost(
     state,
     cardId,
     desired - getCardCost(state, cardId, manifest),
-    cause,
-    manifest,
-  );
-}
-
-export function setCardPower(
-  state: MatchState,
-  cardId: CardId,
-  value: number,
-  cause: EffectRef,
-  manifest: Manifest,
-): PowerMutationResult {
-  requireCause(cause);
-  requireFiniteInteger(value, 'card power');
-  return resolveCardPowerMutation(
-    state,
-    cardId,
-    { kind: 'SET', value },
-    cause,
-    manifest,
-  );
-}
-
-export function adjustCardPower(
-  state: MatchState,
-  cardId: CardId,
-  delta: number,
-  cause: EffectRef,
-  manifest: Manifest,
-): PowerMutationResult {
-  requireCause(cause);
-  requireFiniteInteger(delta, 'card power delta');
-  return resolveCardPowerAdd(state, cardId, delta, cause, manifest);
-}
-
-export function resetCardPower(
-  state: MatchState,
-  cardId: CardId,
-  cause: EffectRef,
-  manifest: Manifest,
-): PowerMutationResult {
-  requireCause(cause);
-  return resolveCardPowerMutation(
-    state,
-    cardId,
-    { kind: 'RESET' },
     cause,
     manifest,
   );

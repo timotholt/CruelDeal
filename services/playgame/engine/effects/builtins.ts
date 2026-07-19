@@ -24,7 +24,10 @@ import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
-import { resolveCardPowerAdd } from '../operations/power';
+import {
+  addStoredPower,
+  changeStoredPower,
+} from '../kernel/powerTransaction';
 import {
   addCardTag,
   adjustCardCost,
@@ -100,7 +103,7 @@ function powerToDestroyer(
   const sourceId = ctx.source.sourceId as CardId;
   const srcCard = getCardRuntime(state, sourceId, manifest);
   if (!srcCard || !delta || !isPowerBearingCard(state, sourceId, manifest)) return noop(state);
-  return resolveCardPowerAdd(state, sourceId, delta, ctx.source, manifest);
+  return addStoredPower(state, sourceId, delta, ctx.source, manifest);
 }
 
 /**
@@ -360,7 +363,7 @@ function overclockChip(
   const events: MatchEvent[] = [];
   let s = state;
 
-  const powerChange = resolveCardPowerAdd(s, targetId, delta, ctx.source, manifest);
+  const powerChange = addStoredPower(s, targetId, delta, ctx.source, manifest);
   events.push(...powerChange.events);
   s = powerChange.state;
 
@@ -642,7 +645,7 @@ function securityDetail(
     if (addEvent.type !== 'CARD_ADDED_TO_LANE') continue;
     const delta = sourcePower - guardBasePower;
     if (delta === 0) continue;
-    const powerChange = resolveCardPowerAdd(s, addEvent.cardId, delta, ctx.source, manifest);
+    const powerChange = addStoredPower(s, addEvent.cardId, delta, ctx.source, manifest);
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -666,7 +669,7 @@ function recklessRecruiter(
       events.push(...mutation.events);
       s = mutation.state;
     } else {
-      const powerChange = resolveCardPowerAdd(s, cardId, 2, ctx.source, manifest);
+      const powerChange = addStoredPower(s, cardId, 2, ctx.source, manifest);
       events.push(...powerChange.events);
       s = powerChange.state;
     }
@@ -696,7 +699,7 @@ function barracadeCheck(
   if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
 
   const delta = (args.delta as number) ?? 4;
-  return resolveCardPowerAdd(state, self, delta, ctx.source, manifest);
+  return addStoredPower(state, self, delta, ctx.source, manifest);
 }
 
 function leonReturn(
@@ -721,7 +724,7 @@ function leonReturn(
   if (getCardRuntime(s, self, manifest)?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
   const delta = (args.delta as number) ?? 2;
-  const powerChange = resolveCardPowerAdd(s, self, delta, ctx.source, manifest);
+  const powerChange = addStoredPower(s, self, delta, ctx.source, manifest);
   events.push(...powerChange.events);
   s = powerChange.state;
   return { events, state: s };
@@ -740,7 +743,7 @@ function riotSquad(
   if (!isPowerBearingCard(state, self, manifest)) return noop(state);
 
   const delta = (args.delta as number) ?? 2;
-  return resolveCardPowerAdd(state, self, delta, ctx.source, manifest);
+  return addStoredPower(state, self, delta, ctx.source, manifest);
 }
 
 function corporateClimber(
@@ -768,7 +771,7 @@ function corporateClimber(
     s = apply(s, destroyEvent, manifest);
   }
   if (gainedPower > 0 && getCardRuntime(s, self, manifest)?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
-    const powerChange = resolveCardPowerAdd(s, self, gainedPower, ctx.source, manifest);
+    const powerChange = addStoredPower(s, self, gainedPower, ctx.source, manifest);
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -827,6 +830,15 @@ function socialWorker(
       .map(def => def.defId);
     if (candidates.length === 0) continue;
     const newDefId = ctx.rng.scope(`social:${cardId}`).pick(candidates);
+    const powerReset = changeStoredPower(
+      s,
+      cardId,
+      { kind: 'RESET' },
+      ctx.source,
+      manifest,
+    );
+    events.push(...powerReset.events);
+    s = powerReset.state;
     const event: MatchEvent = {
       type: 'CARD_TRANSFORMED',
       cardId,
