@@ -95,12 +95,16 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
         sfx: [],
       };
 
-    case 'CARD_POWER_CHANGED':
+    case 'CARD_POWER_CHANGED': {
+      const delta = event.mutation.kind === 'ADD' ? event.mutation.delta : 0;
       return {
         structural: { kind: 'dispatch-only' },
-        vfx: [{ kind: 'power-flash', cardId: event.cardId, delta: event.delta }],
-        sfx: [{ name: event.delta > 0 ? 'buff' : 'debuff', timing: 'after-dispatch' }],
+        vfx: [{ kind: 'power-flash', cardId: event.cardId, delta }],
+        sfx: delta === 0
+          ? []
+          : [{ name: delta > 0 ? 'buff' : 'debuff', timing: 'after-dispatch' }],
       };
+    }
 
     case 'CARD_DESTROYED':
       return {

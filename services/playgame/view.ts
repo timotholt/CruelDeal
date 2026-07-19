@@ -9,8 +9,14 @@
  * way to project any MatchState snapshot into the UI.
  */
 
-import type { CardZone, CostLogEntry, MatchResult, MatchState as EngineMatchState, PowerLogEntry } from './engine/types/state';
-import type { CardId, LaneId, Owner, Seat } from './engine/types/ids';
+import type {
+  CardZone,
+  CostLogEntry,
+  MatchResult,
+  MatchState as EngineMatchState,
+  PowerLedgerEntry,
+} from './engine/types/state';
+import type { CardId, LaneId, Seat } from './engine/types/ids';
 import type { Manifest, CardDef as ManifestCardDef } from './engine/manifest/types';
 import type { CostModifierEntry, PowerModifierEntry } from './engine/projections';
 import {
@@ -21,6 +27,7 @@ import {
   getLanePower as getEngineLanePower,
 } from './engine/projections';
 import { laneById, locationCardAtLane } from './engine/laneTopology';
+import { storedPowerDelta } from './engine/powerLedger';
 import { newShortId } from '@/utils/id';
 
 // ── UI-only sidecar state (re-exported here to avoid a circular dep between
@@ -55,7 +62,7 @@ export interface ResolvedCard {
   cost: number;
   /** Base cost from manifest. */
   baseCost: number;
-  /** Effective power = basePower + powerDelta. */
+  /** Effective power after ledger, ongoing modifiers, and restrictions. */
   power: number;
   basePower: number;
   /** Accent color hex (from manifest cosmetic, or fallback). */
@@ -68,8 +75,8 @@ export interface ResolvedCard {
   text: string;
   /** True when one or more ability text boxes are currently disabled/blanked. */
   textDisabled: boolean;
-  /** Permanent power change history for this card. Empty until a card effect fires. */
-  powerLog: readonly PowerLogEntry[];
+  /** Authoritative permanent power mutation ledger. */
+  powerLedger: readonly PowerLedgerEntry[];
   /** Live power modifiers affecting this card right now. */
   powerModifiers: readonly PowerModifierEntry[];
   /** Live cost modifiers affecting this card right now. */
@@ -80,7 +87,7 @@ export interface ResolvedCard {
   owner: Seat;
   zone: string;
   revealed: boolean;
-  powerDelta: number;
+  storedPowerDelta: number;
 }
 
 /** A location ready for rendering. */
@@ -135,8 +142,8 @@ export function resolveCard(
     owner: inst.owner,
     zone: inst.zone,
     revealed: inst.revealed,
-    powerDelta: inst.powerDelta,
-    powerLog: inst.powerLog,
+    storedPowerDelta: storedPowerDelta(inst, def.basePower),
+    powerLedger: inst.powerLedger,
     powerModifiers: getCardPowerModifiers(state, cardId as CardId, manifest),
     costLog: getCardCostModifiers(state, cardId as CardId, manifest),
     costHistory: inst.costLog,
@@ -271,9 +278,8 @@ export function newEngineCardInstance(
     lane: null,
     zone: 'HAND',
     revealed: false,
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,

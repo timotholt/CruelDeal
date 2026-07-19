@@ -30,12 +30,13 @@ import { collectAllOngoings, ongoingsTargeting, sourceCtx } from '../projections
 import { getOnRevealMultiplier, isOnRevealDisabled, isRevealDelayed } from '../projections/reveal';
 import { findLanes } from '../projections/query';
 import { getCardCost } from '../projections/cost';
-import { getCardPower } from '../projections/power';
 import { isPowerBearingCard } from '../projections/power-bearing';
-import { isPowerIncreaseBlocked } from '../projections/power-restrictions';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin } from './builtins';
-import { resolveCardPowerChange } from './power-change';
+import {
+  resolveCardPowerAdd,
+  resolveCardPowerMutation,
+} from '../operations/power';
 import {
   addLocationTag,
   changeLocationCounter,
@@ -586,7 +587,7 @@ export function evalEffect(
           selfOwner: s.cards[id]?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
-        const change = resolveCardPowerChange(s, id, delta, ctx.source, manifest);
+        const change = resolveCardPowerAdd(s, id, delta, ctx.source, manifest);
         events.push(...change.events);
         s = change.state;
       }
@@ -594,8 +595,6 @@ export function evalEffect(
     }
 
     case 'SET_POWER': {
-      // "Set your power to N": compute delta = N - (base + powerDelta).
-      // Ongoing buffs are not subtracted — they layer on top of the new base.
       const targets = select(effect.target, liveCtx);
       const events: MatchEvent[] = [];
       let s = state;
@@ -605,14 +604,13 @@ export function evalEffect(
         const def = card ? manifest.cards[card.defId] : undefined;
         if (!card || !def) continue;
         const value = evalNum(effect.value, { ...liveCtx, state: s, self: id });
-        // A set above the card's currently visible Power is still an
-        // increase even when a larger pre-Courthouse delta is hidden.
-        if (isPowerIncreaseBlocked(s, id, manifest) && value > getCardPower(s, id, manifest)) {
-          continue;
-        }
-        const currentBase = def.basePower + card.powerDelta;
-        const delta = value - currentBase;
-        const change = resolveCardPowerChange(s, id, delta, ctx.source, manifest);
+        const change = resolveCardPowerMutation(
+          s,
+          id,
+          { kind: 'SET', value },
+          ctx.source,
+          manifest,
+        );
         events.push(...change.events);
         s = change.state;
       }
@@ -1188,22 +1186,22 @@ export function evalEffect(
     }
 
     case 'RESET_POWER': {
-      // Restore powerDelta to 0 by emitting a negating CARD_POWER_CHANGED.
       const targets = select(effect.target, liveCtx);
       const events: MatchEvent[] = [];
       let s = state;
       for (const id of targets) {
         if (!isPowerBearingCard(s, id, manifest)) continue;
         const card = s.cards[id];
-        if (!card || card.powerDelta === 0) continue;
-        const e: MatchEvent = {
-          type: 'CARD_POWER_CHANGED',
-          cardId: id,
-          delta: -card.powerDelta,
-          cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+        if (!card) continue;
+        const change = resolveCardPowerMutation(
+          s,
+          id,
+          { kind: 'RESET' },
+          ctx.source,
+          manifest,
+        );
+        events.push(...change.events);
+        s = change.state;
       }
       return { events, state: s };
     }
@@ -1373,14 +1371,15 @@ export function applyHandEntryDebuffs(
       if (b.kind !== 'CALL_BUILTIN' || b.fn !== 'DEBUFF_ENEMY_ON_HAND_ENTRY') continue;
       const delta: number = b.args?.delta ?? -1;
       if (delta === 0) continue;
-      const e: MatchEvent = {
-        type: 'CARD_POWER_CHANGED',
+      const change = resolveCardPowerAdd(
+        s,
         cardId,
         delta,
-        cause: { sourceId: card.id, effectKind: 'ONGOING' },
-      };
-      events.push(e);
-      s = apply(s, e, manifest);
+        { sourceId: card.id, effectKind: 'ONGOING' },
+        manifest,
+      );
+      events.push(...change.events);
+      s = change.state;
     }
   }
   return { events, state: s };

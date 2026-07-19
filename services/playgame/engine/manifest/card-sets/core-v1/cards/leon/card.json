@@ -6,7 +6,7 @@
   "cost": 1,
   "abilities": {
     "onTurnStart": [
-      { "kind": "CALL_BUILTIN", "fn": "LEON_RETURN", "args": { "powerDelta": 2 } }
+      { "kind": "CALL_BUILTIN", "fn": "LEON_RETURN", "args": { "delta": 2 } }
     ]
   },
   "cosmetic": {

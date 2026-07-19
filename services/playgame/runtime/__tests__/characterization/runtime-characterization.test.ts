@@ -16,6 +16,7 @@ import {
   type RuntimeLaneSpec,
 } from '../../../engine/testkit';
 import type { Manifest } from '../../../engine/manifest/types';
+import { getStoredCardPowerDelta } from '../../../engine/powerLedger';
 
 const emptyLanes = (): [RuntimeLaneSpec, RuntimeLaneSpec, RuntimeLaneSpec] => [
   { P0: [], P1: [] },
@@ -138,7 +139,11 @@ describe('Phase 0 runtime characterization', () => {
     const endedIndex = events.findIndex((event) => event.type === 'TURN_ENDED');
     expect(buffIndex).toBeGreaterThanOrEqual(0);
     expect(buffIndex).toBeLessThan(endedIndex);
-    expect(state.cards['already-face-up'].powerDelta).toBe(3);
+    expect(getStoredCardPowerDelta(
+      state,
+      'already-face-up' as never,
+      testManifest([eotBuffer]),
+    )).toBe(3);
   });
 
   it('preserves one reveal and its triggered event cascade as adjacent frames', () => {
@@ -162,7 +167,11 @@ describe('Phase 0 runtime characterization', () => {
       'CARD_POWER_CHANGED',
       'OR_WINDOW_CLOSE',
     ]);
-    expect(transitions[close].after.cards['cascade-card'].powerDelta).toBe(6);
+    expect(getStoredCardPowerDelta(
+      transitions[close].after,
+      'cascade-card' as never,
+      testManifest([revealCascade]),
+    )).toBe(6);
   });
 
   it('reveals multiple staged cards in priority-owner order', () => {
@@ -239,7 +248,11 @@ describe('Phase 0 runtime characterization', () => {
     expect(revealIndex).toBeLessThan(effectIndex);
     const locationId = state.lanesById[1].locationSlot.locationCardId!;
     expect(state.locationCards[locationId].face).toBe('FACE_UP');
-    expect(state.cards['rally-target'].powerDelta).toBe(2);
+    expect(getStoredCardPowerDelta(
+      state,
+      'rally-target' as never,
+      testManifest([plain], [rally]),
+    )).toBe(2);
   });
 
   const handCards = (owner: Owner, count: number): RuntimeCardSpec[] =>

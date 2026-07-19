@@ -15,6 +15,7 @@ import type { MatchEvent } from '../types/events';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardInstance, MatchState } from '../types/state';
 import { asFrame } from '../types/timeline';
+import { getStoredCardPowerDelta } from '../powerLedger';
 
 /**
  * Phase 1.5 checkpoint-1 characterization.
@@ -81,9 +82,8 @@ function card(
     lane,
     zone,
     revealed: zone === 'LANE',
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,
@@ -272,8 +272,8 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(unstaged.cards[stagedCard.id]).toMatchObject({
       zone: 'HAND',
       lane: null,
-      powerDelta: 2,
     });
+    expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(2);
   });
 
   it('freezes generic MOVE reactions versus the builtin move bypass', () => {
@@ -308,10 +308,8 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[mover.id]).toMatchObject({
-      lane: 1,
-      powerDelta: 3,
-    });
+    expect(generic.state.cards[mover.id]).toMatchObject({ lane: 1 });
+    expect(getStoredCardPowerDelta(generic.state, mover.id, gameManifest)).toBe(3);
 
     let builtinState = stateWith([mover], {
       locations: [
@@ -328,7 +326,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
 
     expect(builtin.events.map(event => event.type)).toEqual(['CARD_MOVED']);
     expect(builtinState.cards[mover.id]?.lane).not.toBe(0);
-    expect(builtinState.cards[mover.id]?.powerDelta).toBe(0);
+    expect(getStoredCardPowerDelta(builtinState, mover.id, gameManifest)).toBe(0);
   });
 
   it('freezes generic DESTROY reactions versus Corporate Climber direct destruction', () => {
@@ -363,10 +361,8 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_POWER_CHANGED',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[victim.id]).toMatchObject({
-      zone: 'DESTROYED',
-      powerDelta: 3,
-    });
+    expect(generic.state.cards[victim.id]).toMatchObject({ zone: 'DESTROYED' });
+    expect(getStoredCardPowerDelta(generic.state, victim.id, gameManifest)).toBe(3);
 
     const climber = card('climber', 'climber', 'P0', 'LANE', 0);
     const builtinVictim = card('builtin-victim', 'victim', 'P0', 'LANE', 0);
@@ -385,9 +381,9 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     ]);
     expect(builtin.state.cards[builtinVictim.id]).toMatchObject({
       zone: 'DESTROYED',
-      powerDelta: 0,
+      powerLedger: [],
     });
-    expect(builtin.state.cards[climber.id]?.powerDelta).toBe(2);
+    expect(getStoredCardPowerDelta(builtin.state, climber.id, gameManifest)).toBe(2);
   });
 
   it('freezes generic lane creation reactions versus builtin token creation', () => {
@@ -424,7 +420,11 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_POWER_CHANGED',
     ]);
     expect(genericCreated).toBeDefined();
-    expect(generic.state.cards[genericCreated!.cardId]?.powerDelta).toBe(1);
+    expect(getStoredCardPowerDelta(
+      generic.state,
+      genericCreated!.cardId,
+      gameManifest,
+    )).toBe(1);
 
     const builtinState = stateWith([creator], {
       locations: [
@@ -444,7 +444,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     ]);
     for (const event of builtin.events) {
       if (event.type === 'CARD_ADDED_TO_LANE') {
-        expect(builtin.state.cards[event.cardId]?.powerDelta).toBe(0);
+        expect(getStoredCardPowerDelta(builtin.state, event.cardId, gameManifest)).toBe(0);
       }
     }
   });
@@ -476,8 +476,8 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(generic.state.cards[returning.id]).toMatchObject({
       zone: 'LANE',
       lane: 0,
-      powerDelta: 1,
     });
+    expect(getStoredCardPowerDelta(generic.state, returning.id, gameManifest)).toBe(1);
 
     const trauma = card('trauma', 'source', 'P0', 'LANE', 0);
     const priorVictim = card('prior-victim', 'returning', 'P0', 'DESTROYED');
@@ -522,7 +522,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(builtin.state.cards[priorVictim.id]).toMatchObject({
       zone: 'LANE',
       lane: 0,
-      powerDelta: 0,
+      powerLedger: [],
     });
   });
 
@@ -551,7 +551,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_DRAWN',
       'CARD_POWER_CHANGED',
     ]);
-    expect(generic.state.cards[deckCard.id]?.powerDelta).toBe(-1);
+    expect(getStoredCardPowerDelta(generic.state, deckCard.id, gameManifest)).toBe(-1);
 
     const builtin = evaluate(initial, gameManifest, drawer, {
       kind: 'CALL_BUILTIN',
@@ -559,7 +559,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       args: {},
     });
     expect(builtin.events.map(event => event.type)).toEqual(['CARD_DRAWN']);
-    expect(builtin.state.cards[deckCard.id]?.powerDelta).toBe(0);
+    expect(getStoredCardPowerDelta(builtin.state, deckCard.id, gameManifest)).toBe(0);
   });
 
   it('freezes SPAWN_AND_REVEAL as both location entry and played-here', () => {
@@ -603,6 +603,10 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     ]);
     expect(result.events.some(event => event.type === 'CARD_FLIPPED')).toBe(false);
     expect(spawned).toBeDefined();
-    expect(result.state.cards[spawned!.cardId]?.powerDelta).toBe(7);
+    expect(getStoredCardPowerDelta(
+      result.state,
+      spawned!.cardId,
+      gameManifest,
+    )).toBe(7);
   });
 });

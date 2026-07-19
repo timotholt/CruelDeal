@@ -20,6 +20,7 @@ import {
   withTestLocation,
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
+import { getStoredCardPowerDelta } from './powerLedger';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -50,9 +51,8 @@ function mkCardInstance(id: string, defId: string, owner: Owner = 'P0'): CardIns
     lane: null,
     zone: 'DECK',
     revealed: false,
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,
@@ -153,7 +153,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s2.cards['s1' as CardId]!.revealed, true, 'CARD_FLIPPED: revealed=true');
 }
 
-// -- CARD_POWER_CHANGED: accumulates in powerDelta and affects getCardPower
+// -- CARD_POWER_CHANGED: appends semantic ledger entries and affects getCardPower
 
 {
   const s0 = stateWithSentinelInHand();
@@ -165,19 +165,19 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(getCardPower(staged, 's1' as CardId, BOOTSTRAP_MANIFEST), 5, 'pre-delta: Armored Van card power = 5');
   const bumped = run(
     staged,
-    { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, delta: 3,
+    { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, mutation: { kind: 'ADD', delta: 3 },
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
   );
-  eq(bumped.cards['s1' as CardId]!.powerDelta, 3, 'CARD_POWER_CHANGED: powerDelta = 3');
+  eq(getStoredCardPowerDelta(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 3, 'CARD_POWER_CHANGED: stored delta = 3');
   eq(getCardPower(bumped, 's1' as CardId, BOOTSTRAP_MANIFEST), 8, 'projected power picks up delta: 5+3=8');
 
   // Stacks additively.
   const bumpedAgain = run(
     bumped,
-    { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, delta: -2,
+    { type: 'CARD_POWER_CHANGED', cardId: 's1' as CardId, mutation: { kind: 'ADD', delta: -2 },
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM' } },
   );
-  eq(bumpedAgain.cards['s1' as CardId]!.powerDelta, 1, 'CARD_POWER_CHANGED: deltas stack (3 + -2 = 1)');
+  eq(getStoredCardPowerDelta(bumpedAgain, 's1' as CardId, BOOTSTRAP_MANIFEST), 1, 'CARD_POWER_CHANGED: deltas stack (3 + -2 = 1)');
 }
 
 // -- CARD_DESTROYED: zone=DISCARD, removed from lane, tagged

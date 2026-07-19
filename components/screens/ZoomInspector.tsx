@@ -203,7 +203,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
 
   return (
     <div
-      ref={containerRef}
+      ref={(element) => { containerRef = element; }}
       style={{
         position: 'fixed',
         top: '0',
@@ -215,7 +215,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       }}
     >
       <div
-        ref={cloneRef}
+        ref={(element) => { cloneRef = element; }}
         style={{
           position: 'relative',
           width: '100%',
@@ -273,7 +273,7 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
           basePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.basePower}
           effectivePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.power}
           baseCost={(props.target as { kind: 'card'; card: ResolvedCard }).card.baseCost}
-          powerLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerLog}
+          powerLedger={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerLedger}
           powerModifiers={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerModifiers}
           costLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.costLog}
           costHistory={(props.target as { kind: 'card'; card: ResolvedCard }).card.costHistory}

@@ -83,7 +83,7 @@ export interface CardFilter {
   cost?: NumComparison;              // manifest base cost
   basePower?: NumComparison;         // manifest base power
   power?: NumComparison;             // current projected power (base+delta+ongoings)
-  powerDelta?: NumComparison;        // raw delta only
+  storedPowerDelta?: NumComparison;  // folded permanent ledger delta
 
   // ── Taxonomy ────────────────────────────────────────────────────
   tribe?: StringComparison;          // matches ANY tribe
@@ -407,7 +407,7 @@ Create a new `EntityFilter` interface following the same pattern. The matcher bo
 
 ## Open Questions
 
-1. **Power resolution:** `CardFilter.power` requires calling `getCardPower` which is O(n) per card. Should we expose a cheaper `powerDelta`-only filter for hot paths? **A:** Yes, both are in the design.
+1. **Power resolution:** `CardFilter.power` requires calling `getCardPower` which is O(n) per card. Should we expose a cheaper `storedPowerDelta` ledger filter for hot paths? **A:** Yes, both are in the design.
 
 2. **Caching:** Should query results be memoized? **A:** No. Keep it pure and stateless. Callers can memoize at their layer if needed.
 

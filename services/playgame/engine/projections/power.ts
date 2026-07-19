@@ -21,6 +21,10 @@ import {
   isLanePowerIncreaseBlocked,
   isPowerIncreaseBlocked,
 } from './power-restrictions';
+import {
+  effectivePermanentPowerDelta,
+  storedPowerDelta,
+} from '../powerLedger';
 
 export interface PowerModifierEntry {
   readonly sourceId: CardId | LocationCardInstanceId;
@@ -77,12 +81,9 @@ export function getCardPower(state: MatchState, cardId: CardId, manifest: Manife
     power += entry.delta;
   }
 
-  // Stage 3: one-shot accumulated deltas (Hex Witch OR, Ice Lance OR, etc.)
-  // A restricted lane suppresses positive Power earned before the card
-  // arrived without erasing it. Moving away therefore restores that stored
-  // delta; positive changes attempted while restricted are rejected before
-  // they can enter powerDelta.
-  power += increaseBlocked ? Math.min(0, card.powerDelta) : card.powerDelta;
+  // Stage 3: fold the permanent semantic ledger. Restricted lanes suppress
+  // each positive active contribution independently without deleting it.
+  power += effectivePermanentPowerDelta(card, def.basePower, increaseBlocked);
 
   // Stage 4: per-card pending buffs (Shuri tag).
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
@@ -145,7 +146,9 @@ export function getLanePowerBreakdown(
     const card = state.cards[id];
     const def = card ? manifest.cards[card.defId] : null;
     const basePower = def?.basePower ?? 0;
-    const permanentDelta = card?.powerDelta ?? 0;
+    const permanentDelta = card && isPowerBearingDef(def ?? undefined)
+      ? storedPowerDelta(card, basePower)
+      : 0;
     const ongoingModifiers = getCardPowerModifiers(state, id, manifest);
     const ongoingDelta = ongoingModifiers.reduce((sum, entry) => sum + entry.delta, 0);
     return {

@@ -25,6 +25,7 @@ import {
 } from './query';
 import {
   emptyTestMatchState,
+  testPowerLedger,
   testLaneRegistry,
   testLaneState,
 } from '../testkit/runtimeFixture';
@@ -69,7 +70,7 @@ interface CardSpec {
   lane: LaneId | null;
   zone?: CardInstance['zone'];
   revealed?: boolean;
-  powerDelta?: number;
+  storedPowerDelta?: number;
   costDelta?: number;
   tags?: CardInstance['tags'];
   counters?: Record<string, number>;
@@ -94,9 +95,13 @@ const buildState = (specs: CardSpec[]): MatchState => {
       id, defId: s.def, version: 1, owner: s.owner,
       lane: zone === 'LANE' ? s.lane : null, zone,
       revealed: s.revealed ?? (zone === 'LANE'),
-      powerDelta: s.powerDelta ?? 0,
+      powerLedger: testPowerLedger(
+        id,
+        s.storedPowerDelta === undefined
+          ? []
+          : [{ kind: 'ADD', delta: s.storedPowerDelta }],
+      ),
       costDelta: s.costDelta ?? 0,
-      powerLog: [],
       costLog: [],
       tags: s.tags ?? [],
       textOverride: null,

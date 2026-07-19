@@ -11,6 +11,7 @@ import {
   emptyTestMatchState,
   testLaneRegistry,
   testLaneState,
+  testPowerLedger,
   withTestLocation,
 } from '../testkit/runtimeFixture';
 
@@ -27,7 +28,7 @@ const ongoing: OngoingExpr = {
   stack: 'ADDITIVE',
 };
 
-function card(id: CardId, defId: string, powerDelta = 0): CardInstance {
+function card(id: CardId, defId: string, storedDelta = 0): CardInstance {
   return {
     id,
     defId,
@@ -36,9 +37,11 @@ function card(id: CardId, defId: string, powerDelta = 0): CardInstance {
     lane: 0,
     zone: 'LANE',
     revealed: true,
-    powerDelta,
+    powerLedger: testPowerLedger(
+      id,
+      storedDelta === 0 ? [] : [{ kind: 'ADD', delta: storedDelta }],
+    ),
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,

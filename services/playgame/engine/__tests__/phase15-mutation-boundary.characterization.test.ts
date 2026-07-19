@@ -56,7 +56,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_FLIPPED: 1,
     CARD_MOVED: 1,
     CARD_MOVED_TO_ZONE: 2,
-    CARD_POWER_CHANGED: 2,
     CARD_RETURNED_TO_LANE: 1,
     CARD_TAG_ADDED: 1,
     CARD_TAG_REMOVED: 1,
@@ -67,9 +66,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     MAX_ENERGY_CHANGED: 1,
     NEXT_TURN_ENERGY_BONUS_CHANGED: 1,
     PENDING_EFFECT_ADDED: 1,
-  },
-  'services/playgame/engine/effects/power-change.ts': {
-    CARD_POWER_CHANGED: 1,
   },
   'services/playgame/engine/locationLifecycle.ts': {
     LANE_CREATED: 1,
@@ -99,6 +95,9 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LOCATION_DECK_INITIALIZED: 1,
     LOCATION_SLOT_REVEAL_SCHEDULED: 1,
     MATCH_SETUP_COMPLETED: 1,
+  },
+  'services/playgame/engine/operations/power.ts': {
+    CARD_POWER_CHANGED: 1,
   },
   'services/playgame/engine/resolve.ts': {
     CARD_STAGED: 1,

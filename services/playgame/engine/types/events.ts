@@ -10,7 +10,14 @@
  */
 
 import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from './ids';
-import type { CardTag, EnergyReason, LaneTag, PendingEffect, SpawnSource } from './state';
+import type {
+  CardTag,
+  EnergyReason,
+  LaneTag,
+  PendingEffect,
+  PowerMutation,
+  SpawnSource,
+} from './state';
 import type { EffectRef, TextOverride } from './ability';
 
 /**
@@ -56,7 +63,7 @@ export type MatchEvent =
   | { type: 'OR_WINDOW_CLOSE'; cardId: CardId }
 
   // --- Card mutations ---
-  | { type: 'CARD_POWER_CHANGED'; cardId: CardId; delta: number; cause: EffectRef }
+  | { type: 'CARD_POWER_CHANGED'; cardId: CardId; mutation: PowerMutation; cause: EffectRef }
   | { type: 'CARD_COST_CHANGED'; cardId: CardId; delta: number; cause: EffectRef }
   | { type: 'CARD_DESTROYED'; cardId: CardId; cause: EffectRef }   // board → DESTROYED pile
   | { type: 'CARD_DISCARDED'; cardId: CardId; reason: DiscardReason; cause: EffectRef }  // hand → DISCARD pile

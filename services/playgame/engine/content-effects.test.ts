@@ -18,6 +18,7 @@ import {
   withTestLocation,
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
+import { getStoredCardPowerDelta } from './powerLedger';
 
 // ---- Tiny assertion shim ---------------------------------------------------
 
@@ -78,7 +79,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const result = revealPlayedCard(state, grinder, BOOTSTRAP_MANIFEST, createRng('content-grinder-crew-empty'));
 
   truthy(!result.events.some((event) => event.type === 'CARD_DESTROYED'), 'Grinder Crew destroys nothing in an empty lane');
-  eq(result.state.cards[grinder]?.powerDelta, 0, 'Grinder Crew gains no power when nothing is destroyed');
+  eq(getStoredCardPowerDelta(result.state, grinder, BOOTSTRAP_MANIFEST), 0, 'Grinder Crew gains no power when nothing is destroyed');
 }
 
 {
@@ -100,7 +101,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
   truthy(result.events.some((event) => event.type === 'CARD_DESTROYED' && event.cardId === pup), 'Meat Grinder destroys enemy 1-cost cards here');
   eq(result.state.cards[pup]?.zone, 'DESTROYED', 'Meat Grinder enemy victim zone is DESTROYED');
-  eq(result.state.cards[grinder]?.powerDelta, 2, 'Meat Grinder gains +2 per destroyed 1-cost card');
+  eq(getStoredCardPowerDelta(result.state, grinder, BOOTSTRAP_MANIFEST), 2, 'Meat Grinder gains +2 per destroyed 1-cost card');
 }
 
 // ---- Union Rep -------------------------------------------------------------

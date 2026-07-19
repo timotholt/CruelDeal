@@ -133,20 +133,17 @@ export type EnergyReason =
 
 // ---- Stat change logs ------------------------------------------------------
 
-/**
- * One permanent power adjustment on a card. Appended every time
- * CARD_POWER_CHANGED fires; persists for the card's lifetime.
- * Ongoing (POWER_ADD) contributions are NOT here — they're computed
- * live from the projection system and shown separately.
- */
-export interface PowerLogEntry {
-  /** Turn the change fired on. */
+export type PowerMutation =
+  | { readonly kind: 'ADD'; readonly delta: number }
+  | { readonly kind: 'SET'; readonly value: number }
+  | { readonly kind: 'RESET' };
+
+/** Append-only authoritative history for one governed power mutation. */
+export interface PowerLedgerEntry {
+  readonly id: string;
+  readonly frame: Frame;
   readonly turn: number;
-  /** Signed amount of this change. */
-  readonly delta: number;
-  /** card.powerDelta AFTER applying this entry (base not included). */
-  readonly runningDelta: number;
-  /** What caused the change — sourceId is the card or location. */
+  readonly mutation: PowerMutation;
   readonly cause: EffectRef;
 }
 
@@ -232,17 +229,15 @@ export interface CardInstance {
   readonly lane: LaneId | null;
   readonly zone: CardZone;
   readonly revealed: boolean;
-  /** Accumulated one-shot power adjustments from ADD_POWER / SET_POWER
-   *  effects. Read by `getCardPower` after Ongoing POWER_ADDs and before
-   *  Shuri doubling. Deltas survive cross-turn; resets only on destroy. */
-  readonly powerDelta: number;
+  /**
+   * Authoritative semantic history of permanent power mutations.
+   * Active contributions and stored/effective deltas are derived by folding
+   * this ledger; no scalar or modifier cache is stored beside it.
+   */
+  readonly powerLedger: readonly PowerLedgerEntry[];
   /** Accumulated one-shot cost adjustments from ADJUST_COST effects.
    *  Read by `getCardCost` before live ongoing COST_ADD modifiers. */
   readonly costDelta: number;
-  /** Ordered history of every permanent power change on this card.
-   *  Ongoing (POWER_ADD) contributions are NOT here — computed live.
-   *  Append-only; never truncated. */
-  readonly powerLog: readonly PowerLogEntry[];
   /** Ordered history of every permanent cost change on this card.
    *  Ongoing (COST_ADD) contributions are NOT here — computed live. */
   readonly costLog: readonly CostLogEntry[];

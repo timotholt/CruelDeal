@@ -4,6 +4,7 @@ import { evalEffect, type EffectCtx } from '../effects/evaluator';
 import { BOOTSTRAP_MANIFEST } from '../manifest';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardPower, getLanePower } from '../projections/power';
+import { getStoredCardPowerDelta } from '../powerLedger';
 import { createRng } from '../rng';
 import {
   buildRuntimeFixture,
@@ -86,6 +87,7 @@ function fixtureState(
   options: {
     readonly hand?: readonly RuntimeCardSpec[];
     readonly lane0?: readonly RuntimeCardSpec[];
+    readonly lane0P1?: readonly RuntimeCardSpec[];
     readonly lane1?: readonly RuntimeCardSpec[];
     readonly lane2?: readonly RuntimeCardSpec[];
     readonly courthouseLane?: LaneId;
@@ -101,7 +103,7 @@ function fixtureState(
     decks: { P0: [], P1: [] },
     hands: { P0: options.hand ?? [], P1: [] },
     lanes: [
-      { P0: options.lane0 ?? [], P1: [] },
+      { P0: options.lane0 ?? [], P1: options.lane0P1 ?? [] },
       { P0: options.lane1 ?? [], P1: [] },
       { P0: options.lane2 ?? [], P1: [] },
     ],
@@ -124,6 +126,7 @@ function effectCtx(
   manifest: Manifest,
   self: CardId,
   lane: LaneId,
+  owner: 'P0' | 'P1' = 'P0',
 ): EffectCtx {
   return {
     state,
@@ -131,7 +134,7 @@ function effectCtx(
     self,
     selfKind: 'card',
     selfLane: lane,
-    selfOwner: 'P0',
+    selfOwner: owner,
     rng: createRng('courthouse-effect'),
     source: { sourceId: self, effectKind: 'ON_REVEAL' },
     depth: 0,
@@ -142,7 +145,11 @@ describe('Courthouse Power contract', () => {
   it('suppresses a hand buff on play without erasing it, then restores it after movement', () => {
     const manifest = manifestWithCourthouse();
     const initial = fixtureState({
-      hand: [{ id: 'subject', defId: 'subject', powerDelta: 4 }],
+      hand: [{
+        id: 'subject',
+        defId: 'subject',
+        powerMutations: [{ kind: 'ADD', delta: 4 }],
+      }],
     });
     const stagedEvent: MatchEvent = {
       type: 'CARD_STAGED',
@@ -154,7 +161,7 @@ describe('Courthouse Power contract', () => {
     };
     const atCourthouse = apply(initial, stagedEvent, manifest);
 
-    expect(atCourthouse.cards['subject' as CardId]?.powerDelta).toBe(4);
+    expect(getStoredCardPowerDelta(atCourthouse, 'subject' as CardId, manifest)).toBe(4);
     expect(getCardPower(atCourthouse, 'subject' as CardId, manifest)).toBe(3);
 
     const moved = apply(atCourthouse, {
@@ -165,7 +172,7 @@ describe('Courthouse Power contract', () => {
       cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM' },
     }, manifest);
 
-    expect(moved.cards['subject' as CardId]?.powerDelta).toBe(4);
+    expect(getStoredCardPowerDelta(moved, 'subject' as CardId, manifest)).toBe(4);
     expect(getCardPower(moved, 'subject' as CardId, manifest)).toBe(7);
   });
 
@@ -187,14 +194,19 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'CARD_POWER_CHANGED' }));
-    expect(result.state.cards['subject' as CardId]?.powerDelta).toBe(0);
+    expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(0);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(3);
   });
 
   it('blocks an upward SET_POWER even when a larger stored buff is hidden', () => {
     const manifest = manifestWithCourthouse();
     const state = fixtureState({
-      lane0: [{ id: 'subject', defId: 'subject', revealed: true, powerDelta: 4 }],
+      lane0: [{
+        id: 'subject',
+        defId: 'subject',
+        revealed: true,
+        powerMutations: [{ kind: 'ADD', delta: 4 }],
+      }],
     });
     const effect: EffectExpr = {
       kind: 'SET_POWER',
@@ -209,8 +221,39 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'CARD_POWER_CHANGED' }));
-    expect(result.state.cards['subject' as CardId]?.powerDelta).toBe(4);
+    expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(4);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(3);
+  });
+
+  it('allows a downward SET_POWER and replaces the hidden stored history semantically', () => {
+    const manifest = manifestWithCourthouse();
+    const state = fixtureState({
+      lane0: [{
+        id: 'subject',
+        defId: 'subject',
+        revealed: true,
+        powerMutations: [{ kind: 'ADD', delta: 4 }],
+      }],
+    });
+    const result = evalEffect(
+      state,
+      {
+        kind: 'SET_POWER',
+        target: SELF,
+        value: { kind: 'LIT', n: 1 },
+      },
+      effectCtx(state, manifest, 'subject' as CardId, 0),
+      manifest,
+    );
+
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      type: 'CARD_POWER_CHANGED',
+      mutation: { kind: 'SET', value: 1 },
+    });
+    expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(-2);
+    expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
+    expect(result.state.cards['subject' as CardId]?.powerLedger).toHaveLength(2);
   });
 
   it('allows reductions while suppressing positive stored Power', () => {
@@ -230,8 +273,91 @@ describe('Courthouse Power contract', () => {
       manifest,
     );
 
-    expect(result.state.cards['subject' as CardId]?.powerDelta).toBe(-2);
+    expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(-2);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
+  });
+
+  it('suppresses positive contributions individually without erasing later reductions', () => {
+    const manifest = manifestWithCourthouse();
+    const state = fixtureState({
+      lane0: [{
+        id: 'subject',
+        defId: 'subject',
+        revealed: true,
+        powerMutations: [
+          { kind: 'ADD', delta: 4 },
+          { kind: 'ADD', delta: -2 },
+        ],
+      }],
+    });
+
+    expect(getStoredCardPowerDelta(state, 'subject' as CardId, manifest)).toBe(2);
+    expect(getCardPower(state, 'subject' as CardId, manifest)).toBe(1);
+
+    const moved = apply(state, {
+      type: 'CARD_MOVED',
+      cardId: 'subject' as CardId,
+      fromLane: 0,
+      toLane: 1,
+      cause: { sourceId: 'subject' as CardId, effectKind: 'SYSTEM' },
+    }, manifest);
+
+    expect(getStoredCardPowerDelta(moved, 'subject' as CardId, manifest)).toBe(2);
+    expect(getCardPower(moved, 'subject' as CardId, manifest)).toBe(5);
+    expect(moved.cards['subject' as CardId]?.powerLedger)
+      .toEqual(state.cards['subject' as CardId]?.powerLedger);
+  });
+
+  it('rejects RESET_POWER when clearing a reduction would increase visible Power', () => {
+    const manifest = manifestWithCourthouse();
+    const state = fixtureState({
+      lane0: [{
+        id: 'subject',
+        defId: 'subject',
+        revealed: true,
+        powerMutations: [
+          { kind: 'ADD', delta: 4 },
+          { kind: 'ADD', delta: -2 },
+        ],
+      }],
+    });
+    const result = evalEffect(
+      state,
+      { kind: 'RESET_POWER', target: SELF },
+      effectCtx(state, manifest, 'subject' as CardId, 0),
+      manifest,
+    );
+
+    expect(result.events).toEqual([]);
+    expect(result.state.cards['subject' as CardId]?.powerLedger)
+      .toEqual(state.cards['subject' as CardId]?.powerLedger);
+    expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
+  });
+
+  it('applies the same policy to both seats', () => {
+    const manifest = manifestWithCourthouse();
+    const state = fixtureState({
+      lane0: [{ id: 'p0-subject', defId: 'subject', revealed: true }],
+      lane0P1: [{ id: 'p1-subject', defId: 'subject', revealed: true }],
+    });
+    const effect: EffectExpr = {
+      kind: 'ADD_POWER',
+      target: SELF,
+      delta: { kind: 'LIT', n: 2 },
+    };
+
+    for (const owner of ['P0', 'P1'] as const) {
+      const cardId = `${owner.toLowerCase()}-subject` as CardId;
+      const result = evalEffect(
+        state,
+        effect,
+        effectCtx(state, manifest, cardId, 0, owner),
+        manifest,
+      );
+      expect(result.events).toEqual([]);
+      expect(getStoredCardPowerDelta(result.state, cardId, manifest)).toBe(0);
+      expect(getCardPower(result.state, cardId, manifest)).toBe(3);
+    }
   });
 
   it('suppresses positive per-card and lane-level Ongoings while they are active there', () => {
@@ -279,7 +405,11 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.state.cards['victim' as CardId]?.zone).toBe('DESTROYED');
-    expect(result.state.cards['climber' as CardId]?.powerDelta).toBe(0);
+    expect(getStoredCardPowerDelta(
+      result.state,
+      'climber' as CardId,
+      BOOTSTRAP_MANIFEST,
+    )).toBe(0);
     expect(result.events).not.toContainEqual(expect.objectContaining({
       type: 'CARD_POWER_CHANGED',
       cardId: 'climber',

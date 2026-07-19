@@ -97,7 +97,7 @@ describe('replay debug presentation', () => {
     const event: MatchEvent = {
       type: 'CARD_POWER_CHANGED',
       cardId,
-      delta: 2,
+      mutation: { kind: 'ADD', delta: 2 },
       cause: { sourceId: cardId, effectKind: 'ON_REVEAL' },
     };
     const snapshot = structuredClone(event);
@@ -112,7 +112,7 @@ describe('replay debug presentation', () => {
     expect(describeReplayCause(step({
       type: 'CARD_POWER_CHANGED',
       cardId,
-      delta: 1,
+      mutation: { kind: 'ADD', delta: 1 },
       cause: { sourceId: cardId, effectKind: 'ONGOING' },
     }), names)).toBe('caused by Bone Market (P0)');
 

@@ -24,7 +24,7 @@ import type { Rng } from './rng';
 import { apply } from './apply';
 import { revealPlayedCard, forceRevealPlayedCard, evalEffect, fireLocationTrigger, applyHandEntryDebuffs, type EffectCtx } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
-import { getLanePower } from './projections/power';
+import { getCardPower, getLanePower } from './projections/power';
 import { isRevealDelayed } from './projections/reveal';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
@@ -344,8 +344,16 @@ export function resolveTurn(
   //             power changes on cards that have the reactive draw trigger.
   {
     const snapshot = [...events];
+    let scanState = state;
     for (const e of snapshot) {
-      if (e.type !== 'CARD_POWER_CHANGED' || e.delta <= 0) continue;
+      const before = e.type === 'CARD_POWER_CHANGED'
+        ? getCardPower(scanState, e.cardId, manifest)
+        : 0;
+      scanState = apply(scanState, e, manifest);
+      if (
+        e.type !== 'CARD_POWER_CHANGED'
+        || getCardPower(scanState, e.cardId, manifest) <= before
+      ) continue;
       const card = s.cards[e.cardId];
       if (!card || !card.revealed) continue;
       const def = manifest.cards[card.defId];

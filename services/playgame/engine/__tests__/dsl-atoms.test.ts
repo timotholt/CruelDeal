@@ -15,7 +15,12 @@ import type { MatchState, CardInstance, TrackedVariables } from '../types/state'
 import type { CardId, Owner } from '../types/ids';
 import type { CardDef, Manifest } from '../manifest/types';
 import type { EvalCtx } from '../projections/context';
-import { emptyTestMatchState, testLaneRegistry, testLaneState } from '../testkit/runtimeFixture';
+import {
+  emptyTestMatchState,
+  testLaneRegistry,
+  testLaneState,
+  testPowerLedger,
+} from '../testkit/runtimeFixture';
 
 // ---- Fixture helpers -------------------------------------------------------
 
@@ -52,9 +57,8 @@ function mkCard(
     lane: 0,
     zone: 'LANE',
     revealed: true,
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,
@@ -274,8 +278,10 @@ describe('Predicate: WAS_CREATED', () => {
 });
 
 describe('Predicate: POWER_INCREASED', () => {
-  it('true when powerDelta > 0', () => {
-    const c = mkCard('c1', 'def', 'P0', { powerDelta: 2 });
+  it('true when the folded permanent power ledger is positive', () => {
+    const c = mkCard('c1', 'def', 'P0', {
+      powerLedger: testPowerLedger('c1', [{ kind: 'ADD', delta: 2 }]),
+    });
     const manifest = mkManifest([mkDef('def', 3, 2)]);
     const state = buildState([c]);
     expect(evalPredicate(
@@ -284,7 +290,7 @@ describe('Predicate: POWER_INCREASED', () => {
     )).toBe(true);
   });
 
-  it('false when powerDelta = 0', () => {
+  it('false when the folded permanent power ledger is zero', () => {
     const c = mkCard('c1', 'def', 'P0');
     const manifest = mkManifest([mkDef('def', 3, 2)]);
     const state = buildState([c]);

@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { evalEffect } from '../effects/evaluator';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
+import { getStoredCardPowerDelta } from '../powerLedger';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
 import type { MatchState, CardInstance } from '../types/state';
@@ -56,8 +57,8 @@ function mkCard(
 ): CardInstance {
   return {
     id: id as CardId, defId, version: 1, owner, lane, zone,
-    revealed: zone === 'LANE', powerDelta: 0, costDelta: 0,
-    powerLog: [], costLog: [], tags: [], textOverride: null, counters: {},
+    revealed: zone === 'LANE', powerLedger: [], costDelta: 0,
+    costLog: [], tags: [], textOverride: null, counters: {},
     spawnSource: { kind: 'DECK_CREATION' },
     ...extra,
   };
@@ -154,7 +155,7 @@ describe('CALL_BUILTIN: POWER_TO_DESTROYER', () => {
       source: { sourceId: 'src' as CardId, effectKind: 'ON_REVEAL' },
     };
     const { state: after } = evalEffect(state, effect, ctx, manifest);
-    expect(after.cards['src' as CardId]!.powerDelta).toBe(2);
+    expect(getStoredCardPowerDelta(after, 'src' as CardId, manifest)).toBe(2);
   });
 });
 
@@ -384,7 +385,7 @@ describe('CALL_BUILTIN: SECURITY_DETAIL', () => {
     expect(getCardPower(after, 'self' as CardId, manifest)).toBe(4);
     expect(guards).toHaveLength(2);
     expect(guards.map(id => getCardPower(after, id, manifest))).toEqual([2, 2]);
-    expect(guards.map(id => after.cards[id]!.powerDelta)).toEqual([0, 0]);
+    expect(guards.map(id => getStoredCardPowerDelta(after, id, manifest))).toEqual([0, 0]);
   });
 });
 
@@ -425,10 +426,10 @@ describe('CALL_BUILTIN: OVERCLOCK_CHIP', () => {
     const target = mkCard('target', 'a', 'P0', 'LANE', 0);
     const manifest = buildManifest([mkDef('a', 3, 2)]);
     const state = buildState({ P0: [self, target], P1: [] });
-    const { state: after } = runBuiltin('OVERCLOCK_CHIP', { powerDelta: 5 }, state, manifest, 'self' as CardId, 'P0', 0);
+    const { state: after } = runBuiltin('OVERCLOCK_CHIP', { delta: 5 }, state, manifest, 'self' as CardId, 'P0', 0);
 
     const targetAfter = after.cards['target' as CardId]!;
-    expect(targetAfter.powerDelta).toBe(5);
+    expect(getStoredCardPowerDelta(after, targetAfter.id, manifest)).toBe(5);
     // Should have a SCHEDULED pending effect for end-of-next-turn destruction
     expect(after.pendingEffects.some(pe => pe.kind === 'SCHEDULED' && pe.when === 'END_OF_NEXT_TURN')).toBe(true);
   });

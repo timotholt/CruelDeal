@@ -71,7 +71,7 @@ const buildState = (
       id, defId: s.def, version: 1, owner: s.owner,
       lane: zone === 'LANE' ? s.lane : null, zone,
       revealed: zone === 'LANE',
-      powerDelta: 0, costDelta: 0, powerLog: [], costLog: [], tags: [], textOverride: null, counters: {},
+      powerLedger: [], costDelta: 0, costLog: [], tags: [], textOverride: null, counters: {},
       spawnSource: { kind: 'DECK_CREATION' },
     };
     cards[id] = inst;

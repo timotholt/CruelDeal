@@ -25,6 +25,7 @@ import { getCardCost, getCardPower } from '../projections';
 import {
   testLaneRegistry,
   testLaneState,
+  testPowerLedger,
   withTestLocation,
 } from '../testkit/runtimeFixture';
 
@@ -89,7 +90,7 @@ interface CardSpec {
   lane: LaneId | null;
   zone?: 'LANE' | 'HAND' | 'DECK';
   revealed?: boolean;
-  powerDelta?: number;
+  powerMutations?: CardInstance['powerLedger'][number]['mutation'][];
 }
 
 function buildState(
@@ -114,9 +115,8 @@ function buildState(
       lane: zone === 'LANE' ? spec.lane : null,
       zone,
       revealed: spec.revealed ?? (zone === 'LANE'),
-      powerDelta: spec.powerDelta ?? 0,
+      powerLedger: testPowerLedger(id, spec.powerMutations ?? []),
       costDelta: 0,
-      powerLog: [],
       costLog: [],
       tags: [],
       textOverride: null,
@@ -214,7 +214,12 @@ function buildState(
 
   const powerChanges = res.events.filter(e => e.type === 'CARD_POWER_CHANGED');
   eq(powerChanges.length, 1, 'Hex Witch: exactly one POWER_CHANGED (random 1 target)');
-  truthy((powerChanges[0] as { delta: number }).delta === 1, 'Hex Witch: delta = +1');
+  truthy(
+    powerChanges[0]?.type === 'CARD_POWER_CHANGED'
+      && powerChanges[0].mutation.kind === 'ADD'
+      && powerChanges[0].mutation.delta === 1,
+    'Hex Witch: delta = +1',
+  );
 
   // Power projection picks up the delta.
   const buffed = (powerChanges[0] as { cardId: CardId }).cardId;

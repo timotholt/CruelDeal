@@ -80,7 +80,7 @@ const fixture = buildRuntimeFixture({
         id: 'created-ender',
         defId: 'ender',
         revealed: true,
-        powerDelta: 2,
+        powerMutations: [{ kind: 'ADD', delta: 2 }],
         tags: [{ kind: 'EVER_MOVED' }],
         spawnSource: {
           kind: 'CARD_CREATED',

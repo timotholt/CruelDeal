@@ -24,11 +24,12 @@ import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard, isPowerBearingDef } from '../projections/power-bearing';
-import { resolveCardPowerChange } from './power-change';
+import { resolveCardPowerAdd } from '../operations/power';
 import { activeLaneIds } from '../laneTopology';
+import { storedPowerDelta } from '../powerLedger';
 
 type BuiltinArgs = Record<string, unknown>;
-type BuiltinResult = { events: MatchEvent[]; state: MatchState };
+type BuiltinResult = { events: readonly MatchEvent[]; state: MatchState };
 type BuiltinHandler = (
   state: MatchState,
   fn: string,
@@ -67,7 +68,7 @@ function getPermanentCardPower(state: MatchState, cardId: CardId, manifest: Mani
   const def = manifest.cards[card.defId];
   if (!isPowerBearingDef(def)) return 0;
 
-  let power = def.basePower + card.powerDelta;
+  let power = def.basePower + storedPowerDelta(card, def.basePower);
   if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
     power = Math.floor(power * 2);
   }
@@ -85,7 +86,7 @@ function powerToDestroyer(
   const sourceId = ctx.source.sourceId as CardId;
   const srcCard = state.cards[sourceId];
   if (!srcCard || !delta || !isPowerBearingCard(state, sourceId, manifest)) return noop(state);
-  return resolveCardPowerChange(state, sourceId, delta, ctx.source, manifest);
+  return resolveCardPowerAdd(state, sourceId, delta, ctx.source, manifest);
 }
 
 /**
@@ -318,14 +319,14 @@ function drawLowestCostCard(
 }
 
 /**
- * On Reveal: Give a random friendly card here +powerDelta Power.
+ * On Reveal: Give a random friendly card here +delta Power.
  * Destroy it at end of next turn (via SCHEDULED pending).
  */
 function overclockChip(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
 ): BuiltinResult {
-  const powerDelta = (args.powerDelta as number) ?? 5;
+  const delta = (args.delta as number) ?? 5;
   const owner = ctx.selfOwner;
   if (owner === null || ctx.selfLane === null) return noop(state);
 
@@ -337,7 +338,7 @@ function overclockChip(
   const events: MatchEvent[] = [];
   let s = state;
 
-  const powerChange = resolveCardPowerChange(s, targetId, powerDelta, ctx.source, manifest);
+  const powerChange = resolveCardPowerAdd(s, targetId, delta, ctx.source, manifest);
   events.push(...powerChange.events);
   s = powerChange.state;
 
@@ -614,7 +615,7 @@ function securityDetail(
     if (addEvent.type !== 'CARD_ADDED_TO_LANE') continue;
     const delta = sourcePower - guardBasePower;
     if (delta === 0) continue;
-    const powerChange = resolveCardPowerChange(s, addEvent.cardId, delta, ctx.source, manifest);
+    const powerChange = resolveCardPowerAdd(s, addEvent.cardId, delta, ctx.source, manifest);
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -643,7 +644,7 @@ function recklessRecruiter(
       events.push(event);
       s = apply(s, event, manifest);
     } else {
-      const powerChange = resolveCardPowerChange(s, card.id, 2, ctx.source, manifest);
+      const powerChange = resolveCardPowerAdd(s, card.id, 2, ctx.source, manifest);
       events.push(...powerChange.events);
       s = powerChange.state;
     }
@@ -675,8 +676,8 @@ function barracadeCheck(
   if (!card || card.zone !== 'LANE' || !isPowerBearingCard(state, self, manifest)) return noop(state);
   if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
 
-  const delta = (args.powerDelta as number) ?? 4;
-  return resolveCardPowerChange(state, self, delta, ctx.source, manifest);
+  const delta = (args.delta as number) ?? 4;
+  return resolveCardPowerAdd(state, self, delta, ctx.source, manifest);
 }
 
 function leonReturn(
@@ -700,8 +701,8 @@ function leonReturn(
   s = apply(s, moveEvent, manifest);
   if (s.cards[self]?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
-  const delta = (args.powerDelta as number) ?? 2;
-  const powerChange = resolveCardPowerChange(s, self, delta, ctx.source, manifest);
+  const delta = (args.delta as number) ?? 2;
+  const powerChange = resolveCardPowerAdd(s, self, delta, ctx.source, manifest);
   events.push(...powerChange.events);
   s = powerChange.state;
   return { events, state: s };
@@ -719,8 +720,8 @@ function riotSquad(
   if (cardWasPlayedAtLaneThisTurn(state, lane, enemy)) return noop(state);
   if (!isPowerBearingCard(state, self, manifest)) return noop(state);
 
-  const delta = (args.powerDelta as number) ?? 2;
-  return resolveCardPowerChange(state, self, delta, ctx.source, manifest);
+  const delta = (args.delta as number) ?? 2;
+  return resolveCardPowerAdd(state, self, delta, ctx.source, manifest);
 }
 
 function corporateClimber(
@@ -748,7 +749,7 @@ function corporateClimber(
     s = apply(s, destroyEvent, manifest);
   }
   if (gainedPower > 0 && s.cards[self]?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
-    const powerChange = resolveCardPowerChange(s, self, gainedPower, ctx.source, manifest);
+    const powerChange = resolveCardPowerAdd(s, self, gainedPower, ctx.source, manifest);
     events.push(...powerChange.events);
     s = powerChange.state;
   }

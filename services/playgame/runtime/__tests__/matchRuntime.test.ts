@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine';
+import { getStoredCardPowerDelta } from '../../engine/powerLedger';
 import type { Deck } from '../../engine/manifest/types';
 import type { CardId, Seat } from '../../engine/types/ids';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
@@ -291,7 +292,11 @@ describe('createMatchRuntime', () => {
     expect(secondCard).toBeDefined();
 
     await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-first', runtime.revision(), 'P0', firstCard.id));
-    expect(runtime.state().cards[firstCard.id].powerDelta).toBe(2);
+    expect(getStoredCardPowerDelta(
+      runtime.state(),
+      firstCard.id,
+      BOOTSTRAP_MANIFEST,
+    )).toBe(2);
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P0',

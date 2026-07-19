@@ -11,7 +11,7 @@
         "effect": {
           "kind": "SCHEDULED",
           "when": "END_OF_NEXT_TURN",
-          "effect": { "kind": "CALL_BUILTIN", "fn": "BARRACADE_CHECK", "args": { "powerDelta": 4 } }
+          "effect": { "kind": "CALL_BUILTIN", "fn": "BARRACADE_CHECK", "args": { "delta": 4 } }
         }
       }
     ]

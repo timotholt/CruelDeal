@@ -219,7 +219,11 @@ export function describeReplayStep(
       summary = `${cardName(event.cardId)} finished resolving its reveal effect.`;
       break;
     case 'CARD_POWER_CHANGED':
-      summary = `${cardName(event.cardId)} ${signedChange(event.delta, 'gained', 'lost')} power.`;
+      summary = event.mutation.kind === 'ADD'
+        ? `${cardName(event.cardId)} ${signedChange(event.mutation.delta, 'gained', 'lost')} power.`
+        : event.mutation.kind === 'SET'
+          ? `${cardName(event.cardId)}'s power was set to ${event.mutation.value}.`
+          : `${cardName(event.cardId)}'s permanent power was reset.`;
       break;
     case 'CARD_COST_CHANGED':
       summary = `${cardOwner(event.cardId)} - ${cardName(event.cardId)}'s cost ${signedChange(event.delta, 'increased by', 'decreased by')}.`;

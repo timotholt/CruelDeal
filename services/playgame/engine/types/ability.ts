@@ -99,9 +99,9 @@ export type Predicate =
   | { kind: 'WAS_CREATED'; target: Selector }
   /** True if the card has a non-null textOverride (its text was copied from another card). */
   | { kind: 'HAS_COPIED_TEXT'; target: Selector }
-  /** True if the card's powerDelta > 0 (net buffed from base). */
+  /** True if the card's folded permanent power ledger is net-positive. */
   | { kind: 'POWER_INCREASED'; target: Selector }
-  /** True if the card's powerDelta < 0 (net debuffed from base). */
+  /** True if the card's folded permanent power ledger is net-negative. */
   | { kind: 'POWER_REDUCED'; target: Selector }
   /** True if the card's costDelta < 0 (cost was reduced this game). */
   | { kind: 'COST_REDUCED'; target: Selector }
@@ -196,7 +196,7 @@ export type EffectExpr =
   | { kind: 'SET_POWER'; target: Selector; value: NumExpr }
   | { kind: 'ADJUST_COST'; target: Selector; delta: NumExpr }
   /**
-   * Reset a card's powerDelta to 0, returning it to base power.
+   * Append a reset mutation, returning permanent power to base.
    * Does NOT undo Ongoing contributions (those are computed live).
    * Use for "reset to base Power" effects (System Crash, Hard Reset).
    */

@@ -10,10 +10,12 @@ import type {
   MatchPhase,
   MatchState,
   PendingEffect,
+  PowerLedgerEntry,
+  PowerMutation,
   SpawnSource,
 } from '../types/state';
 import { EMPTY_TRACKED_VARIABLES } from '../types/state';
-import { GENESIS_FRAME } from '../types/timeline';
+import { asFrame, GENESIS_FRAME } from '../types/timeline';
 import type { LocationSetupDeck } from '../locationSetup';
 
 /**
@@ -36,7 +38,7 @@ export interface RuntimeCardSpec {
   readonly defId: string;
   readonly variantId?: string;
   readonly revealed?: boolean;
-  readonly powerDelta?: number;
+  readonly powerMutations?: readonly PowerMutation[];
   readonly costDelta?: number;
   readonly tags?: readonly CardTag[];
   readonly spawnSource?: SpawnSource;
@@ -203,8 +205,20 @@ export function withTestLocation(
   };
 }
 
-const EMPTY_POWER_LOG = [] as const;
 const EMPTY_COST_LOG = [] as const;
+
+export function testPowerLedger(
+  cardId: string,
+  mutations: readonly PowerMutation[],
+): readonly PowerLedgerEntry[] {
+  return mutations.map((mutation, index) => ({
+    id: `${cardId}:fixture-power:${index + 1}`,
+    frame: asFrame(index + 1),
+    turn: 0,
+    mutation,
+    cause: { sourceId: cardId as CardId, effectKind: 'SYSTEM' },
+  }));
+}
 
 function buildCard(
   spec: RuntimeCardSpec,
@@ -221,9 +235,8 @@ function buildCard(
     lane,
     zone,
     revealed: spec.revealed ?? false,
-    powerDelta: spec.powerDelta ?? 0,
+    powerLedger: testPowerLedger(spec.id, spec.powerMutations ?? []),
     costDelta: spec.costDelta ?? 0,
-    powerLog: EMPTY_POWER_LOG,
     costLog: EMPTY_COST_LOG,
     tags: spec.tags ?? [],
     textOverride: null,

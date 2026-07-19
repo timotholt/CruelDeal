@@ -81,9 +81,8 @@ function mkCardInstance(defId: string, owner: Owner = 'P0'): CardInstance {
     lane: null,
     zone: 'DECK',
     revealed: false,
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,
@@ -614,7 +613,10 @@ function resolveCurrentTurn(
   eq(getCardPower(after, h.cardId, manifest), 5, 'onEndOfTurn: 3 + 2 = 5');
   // Ordering: the +2 event must fire BEFORE TURN_ENDED (the cleanup event).
   const idxBuff = events.findIndex(
-    (e) => e.type === 'CARD_POWER_CHANGED' && e.cardId === h.cardId && e.delta === 2,
+    (e) => e.type === 'CARD_POWER_CHANGED'
+      && e.cardId === h.cardId
+      && e.mutation.kind === 'ADD'
+      && e.mutation.delta === 2,
   );
   const idxEnded = events.findIndex((e) => e.type === 'TURN_ENDED');
   truthy(idxBuff >= 0 && idxBuff < idxEnded, 'onEndOfTurn fires BEFORE TURN_ENDED');

@@ -10,7 +10,7 @@
         "kind": "CALL_BUILTIN",
         "fn": "OVERCLOCK_CHIP",
         "args": {
-          "powerDelta": 5
+          "delta": 5
         }
       }
     ]

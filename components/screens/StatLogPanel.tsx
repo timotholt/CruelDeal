@@ -4,10 +4,11 @@
  * clicks the power or cost number on a zoomed card.
  */
 
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { usePlayGame } from '@/contexts/PlayGameContext';
-import type { CostLogEntry, PowerLogEntry } from '@/services/playgame/engine/types/state';
+import type { CostLogEntry, PowerLedgerEntry } from '@/services/playgame/engine/types/state';
 import type { CostModifierEntry, PowerModifierEntry } from '@/services/playgame/engine/projections';
+import { storedPowerDelta } from '@/services/playgame/engine/powerLedger';
 
 interface StatLogPanelProps {
   kind: 'power' | 'cost';
@@ -18,7 +19,7 @@ interface StatLogPanelProps {
   /** Card's base cost — used to compute final cost per row (cost mode only). */
   baseCost?: number;
   /** Permanent power change log (power mode). */
-  powerLog?: readonly PowerLogEntry[];
+  powerLedger?: readonly PowerLedgerEntry[];
   /** Live power modifiers affecting the card right now (power mode). */
   powerModifiers?: readonly PowerModifierEntry[];
   /** Live cost modifiers affecting the card right now (cost mode). */
@@ -74,15 +75,31 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
     window.addEventListener('pointercancel', handlePointerUp);
   };
 
+  const ledgerDelta = (entries: readonly PowerLedgerEntry[] | undefined) => (
+    storedPowerDelta({ powerLedger: entries ?? [] }, props.basePower ?? 0)
+  );
+
   const loggedPowerTotal = () => (
     (props.basePower ?? 0)
-    + (props.powerLog?.at(-1)?.runningDelta ?? 0)
+    + ledgerDelta(props.powerLedger)
     + (props.powerModifiers?.reduce((sum, item) => sum + item.delta, 0) ?? 0)
   );
 
+  const powerLedgerRows = createMemo(() => (
+    (props.powerLedger ?? []).map((entry, index, entries) => {
+      const before = ledgerDelta(entries.slice(0, index));
+      const after = ledgerDelta(entries.slice(0, index + 1));
+      return {
+        entry,
+        delta: after - before,
+        total: (props.basePower ?? 0) + after,
+      };
+    })
+  ));
+
   return (
     <div
-      ref={panelRef}
+      ref={(element) => { panelRef = element; }}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
@@ -126,7 +143,7 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
           {props.kind === 'power' ? 'Power Log' : 'Cost Log'}
         </span>
         <button
-          onClick={props.onClose}
+          onClick={() => props.onClose()}
           style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', 'font-size': '1rem', 'line-height': '1', padding: '0 0 0 8px' }}
         >×</button>
       </div>
@@ -135,13 +152,12 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
       <div style={{ 'overflow-y': 'auto', display: 'flex', 'flex-direction': 'column', gap: '3px' }}>
         <Show when={props.kind === 'power'}>
           <PowerRow label="Base" delta={props.basePower ?? 0} total={(props.basePower ?? 0)} isBase />
-          <Show when={(props.powerLog?.length ?? 0) > 0}>
-            <For each={props.powerLog}>
-              {(entry) => {
-                const total = (props.basePower ?? 0) + entry.runningDelta;
-                const name = resolveName(entry.cause.sourceId);
-                const label = `T${entry.turn} ${name}`;
-                return <PowerRow label={label} delta={entry.delta} total={total} />;
+          <Show when={(props.powerLedger?.length ?? 0) > 0}>
+            <For each={powerLedgerRows()}>
+              {(row) => {
+                const name = resolveName(row.entry.cause.sourceId);
+                const label = `T${row.entry.turn} · F${row.entry.frame} ${name}`;
+                return <PowerRow label={label} delta={row.delta} total={row.total} />;
               }}
             </For>
           </Show>
@@ -156,7 +172,7 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
                   delta={entry.delta}
                   total={
                     (props.basePower ?? 0)
-                    + (props.powerLog?.at(-1)?.runningDelta ?? 0)
+                    + ledgerDelta(props.powerLedger)
                     + (props.powerModifiers?.slice(0, (props.powerModifiers?.indexOf(entry) ?? -1) + 1)
                       .reduce((sum, item) => sum + item.delta, 0) ?? 0)
                   }
@@ -174,7 +190,7 @@ export const StatLogPanel = (props: StatLogPanelProps) => {
               total={props.effectivePower ?? 0}
             />
           </Show>
-          <Show when={(props.powerLog?.length ?? 0) === 0 && (props.powerModifiers?.length ?? 0) === 0}>
+          <Show when={(props.powerLedger?.length ?? 0) === 0 && (props.powerModifiers?.length ?? 0) === 0}>
             <span style={{ color: '#475569', 'font-size': '0.65rem', 'text-align': 'center', padding: '8px 0' }}>
               No power changes yet
             </span>

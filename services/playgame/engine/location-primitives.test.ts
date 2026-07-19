@@ -12,6 +12,7 @@ import {
   withTestLocation,
 } from './testkit/runtimeFixture';
 import { locationCardAtLane } from './laneTopology';
+import { getStoredCardPowerDelta } from './powerLedger';
 
 const pass = (label: string) => console.log(`PASS: ${label}`);
 const fail = (label: string, extra?: unknown): never => {
@@ -68,10 +69,9 @@ const card = (defId: string, owner: Owner, zone: CardInstance['zone'], lane: Lan
   lane,
   zone,
   revealed: zone === 'LANE',
-  powerDelta: 0,
+  powerLedger: [],
   costDelta: 0,
-  powerLog: [],
-  costLog: [],
+    costLog: [],
   tags: [],
   textOverride: null,
   counters: {},
@@ -170,7 +170,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   let s = stateWith([c], backdoor);
   s = replay(s, resolve(s, { type: 'STAGE_CARD', intentId: 'backdoor', owner: 'P0', cardId: c.id, lane: 0 }, createRng('backdoor-stage'), m), m);
   const out = resolveCurrentTurn(s, m, 'backdoor-turn');
-  expectEq(out.state.cards[c.id]?.powerDelta, 4, 'TRIGGER_ON_REVEAL re-fires On Reveal once without replaying location play trigger');
+  expectEq(getStoredCardPowerDelta(out.state, c.id, m), 4, 'TRIGGER_ON_REVEAL re-fires On Reveal once without replaying location play trigger');
   expectEq(
     locationCardAtLane(out.state, 0)?.counters['P0:played-here'],
     1,
@@ -210,7 +210,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   expectEq(beforeEnd.state.cards[c.id]?.revealed, false, 'DELAY_REVEAL keeps card face-down before end game');
   const end = resolveCurrentTurn(beforeEnd.state, m, 'delay-turn-6');
   expectEq(end.state.cards[c.id]?.revealed, true, 'DELAY_REVEAL force-reveals at end game');
-  expectEq(end.state.cards[c.id]?.powerDelta, 2, 'end-game force reveal fires On Reveal');
+  expectEq(getStoredCardPowerDelta(end.state, c.id, m), 2, 'end-game force reveal fires On Reveal');
 }
 
 console.log('\nAll location primitive tests passed.');

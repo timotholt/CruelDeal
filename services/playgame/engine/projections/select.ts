@@ -21,6 +21,7 @@ import { isPowerBearingCard } from './power-bearing';
 import { activeLaneIds } from '../laneTopology';
 import { hasAnyCardAbility, hasCardAbility } from './abilityPresence';
 import { matchesCardPosition } from './cardPosition';
+import { storedPowerDelta } from '../powerLedger';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -323,7 +324,8 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       return ids.some(id => {
         if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
         const c = ctx.state.cards[id];
-        return (c?.powerDelta ?? 0) > 0;
+        const def = c ? ctx.manifest.cards[c.defId] : undefined;
+        return !!c && !!def && storedPowerDelta(c, def.basePower) > 0;
       });
     }
 
@@ -332,7 +334,8 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       return ids.some(id => {
         if (!isPowerBearingCard(ctx.state, id, ctx.manifest)) return false;
         const c = ctx.state.cards[id];
-        return (c?.powerDelta ?? 0) < 0;
+        const def = c ? ctx.manifest.cards[c.defId] : undefined;
+        return !!c && !!def && storedPowerDelta(c, def.basePower) < 0;
       });
     }
 

@@ -28,6 +28,7 @@ import type {
   LaneTag,
   SpawnSource,
 } from '../types/state';
+import { storedPowerDelta } from '../powerLedger';
 import type { CardDef, CardType, Manifest } from '../manifest/types';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardPositionCriteria } from '../types/cardPosition';
@@ -123,7 +124,7 @@ export interface CardFilter extends CardPositionCriteria {
   cost?: NumComparison;
   basePower?: NumComparison;
   power?: NumComparison;
-  powerDelta?: NumComparison;
+  storedPowerDelta?: NumComparison;
 
   // Taxonomy
   cardType?: CardType | readonly CardType[];
@@ -216,8 +217,11 @@ export function matchesCard(
     const p = getCardPower(state, card.id, manifest);
     if (!matchesNum(p, filter.power)) return false;
   }
-  if (filter.powerDelta !== undefined) {
-    if (!isPowerBearingDef(def) || !matchesNum(card.powerDelta, filter.powerDelta)) return false;
+  if (filter.storedPowerDelta !== undefined) {
+    if (
+      !isPowerBearingDef(def)
+      || !matchesNum(storedPowerDelta(card, def.basePower), filter.storedPowerDelta)
+    ) return false;
   }
 
   // ── Taxonomy ──────────────────────────────────────────────────────────

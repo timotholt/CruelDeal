@@ -25,7 +25,7 @@ import type {
   MatchState,
   PendingEffect,
   PlayerTrackedVars,
-  PowerLogEntry,
+  PowerLedgerEntry,
   SpawnSource,
   TrackedVariables,
 } from './types/state';
@@ -160,16 +160,17 @@ function applyBody(
     case 'CARD_POWER_CHANGED': {
       const card = state.cards[event.cardId];
       if (!card) return state;
-      const newDelta = card.powerDelta + event.delta;
-      const pEntry: PowerLogEntry = {
+      const def = manifest.cards[card.defId];
+      if (!def || def.cardType === 'spell') return state;
+      const entry: PowerLedgerEntry = {
+        id: `${event.cardId}:power:${eventFrame}`,
+        frame: eventFrame,
         turn: state.turn,
-        delta: event.delta,
-        runningDelta: newDelta,
+        mutation: event.mutation,
         cause: event.cause,
       };
       return patchCard(state, event.cardId, {
-        powerDelta: newDelta,
-        powerLog: [...card.powerLog, pEntry],
+        powerLedger: [...card.powerLedger, entry],
       });
     }
 
@@ -274,9 +275,17 @@ function applyBody(
         defId: event.newDefId,
         variantId: undefined,
         ...(event.resetStats ? {
-          powerDelta: 0,
+          powerLedger: [
+            ...card.powerLedger,
+            {
+              id: `${event.cardId}:power:${eventFrame}`,
+              frame: eventFrame,
+              turn: state.turn,
+              mutation: { kind: 'RESET' },
+              cause: event.cause,
+            },
+          ],
           costDelta: 0,
-          powerLog: [],
           costLog: [],
           counters: {},
           tags: [],
@@ -1033,9 +1042,8 @@ function mintOrUpdate(
     lane,
     zone,
     revealed: zone === 'LANE' ? false : false,
-    powerDelta: 0,
+    powerLedger: [],
     costDelta: 0,
-    powerLog: [],
     costLog: [],
     tags: [],
     textOverride: null,

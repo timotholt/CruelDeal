@@ -9,7 +9,7 @@ import { ongoingsTargeting } from './ongoing';
  * from benefiting from positive Power changes.
  *
  * The restriction is deliberately projected from the card's current lane.
- * Existing permanent powerDelta remains stored, so moving away restores only
+ * Existing permanent ledger contributions remain stored, so moving away restores only
  * Power that the card had already earned before entering the restricted lane.
  */
 export function isPowerIncreaseBlocked(

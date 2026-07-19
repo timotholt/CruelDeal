@@ -6,7 +6,7 @@
   "cost": 1,
   "abilities": {
     "onEndOfTurn": [
-      { "kind": "CALL_BUILTIN", "fn": "RIOT_SQUAD", "args": { "powerDelta": 2 } }
+      { "kind": "CALL_BUILTIN", "fn": "RIOT_SQUAD", "args": { "delta": 2 } }
     ]
   },
   "cosmetic": {

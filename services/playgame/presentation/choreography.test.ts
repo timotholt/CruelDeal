@@ -121,7 +121,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
   const choreography = describeEventChoreography(event({
     type: 'CARD_POWER_CHANGED',
     cardId: 'c1' as CardId,
-    delta: 2,
+    mutation: { kind: 'ADD', delta: 2 },
     cause: source,
   }));
 
@@ -136,7 +136,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
   const choreography = describeEventChoreography(event({
     type: 'CARD_POWER_CHANGED',
     cardId: 'c1' as CardId,
-    delta: -1,
+    mutation: { kind: 'ADD', delta: -1 },
     cause: source,
   }));
 
