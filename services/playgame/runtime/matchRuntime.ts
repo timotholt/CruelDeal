@@ -379,11 +379,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         })
       : undefined;
 
-    // Local atomic commit: no callbacks, promises, or awaits may enter this block.
-    authoritativeState = built.finalState;
-    committedTransactions = Object.freeze([...committedTransactions, transaction]);
-    currentRevision = revision;
-    if (candidate.receiptKey && result) receipts.set(candidate.receiptKey, result);
+    const nextTransactions = Object.freeze([...committedTransactions, transaction]);
+    let nextCheckpoints = checkpoints;
     if (config.debugDeterminism) {
       const additions = built.transitions
         .filter(transition => (
@@ -396,17 +393,27 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           stateJson: canonicalJson(transition.after),
         }));
       if (additions.length > 0) {
-        checkpoints = Object.freeze([...checkpoints, ...additions]);
+        nextCheckpoints = Object.freeze([...checkpoints, ...additions]);
       }
     }
-    if (config.debugDeterminism) {
+    const endsMatch = built.transitions
+      .some(transition => transition.event.type === 'MATCH_ENDED');
+    if (config.debugDeterminism || endsMatch) {
       const reconciliation = reconcileRuntimeRecord({
         version: 3,
         genesis: genesisState,
-        transactions: committedTransactions,
-      }, config.matchId, manifest, authoritativeState, checkpoints);
+        transactions: nextTransactions,
+      }, config.matchId, manifest, built.finalState, nextCheckpoints);
       if (!reconciliation.ok) throw new DeterminismDriftError(reconciliation);
     }
+
+    // Local atomic commit: no callbacks, promises, awaits, or fallible
+    // reconciliation may enter this block.
+    authoritativeState = built.finalState;
+    committedTransactions = nextTransactions;
+    checkpoints = nextCheckpoints;
+    currentRevision = revision;
+    if (candidate.receiptKey && result) receipts.set(candidate.receiptKey, result);
 
     return { result, timeline };
   };

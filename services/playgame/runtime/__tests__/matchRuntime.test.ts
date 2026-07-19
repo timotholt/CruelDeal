@@ -1,6 +1,6 @@
 import { getCardCost } from '../../engine/projections/cost';
 import { getAllLocationStates, getLocationState } from '../../engine/projections/locationRuntime';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine';
 import { getStoredCardPowerDelta } from '../../engine/powerLedger';
@@ -10,6 +10,7 @@ import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapVali
 import type { IntentEnvelope, MatchBootstrap, ParticipantController, RuntimeIntent } from '../contracts';
 import { defaultLocationDeckFactory } from '../locationDeckFactory';
 import { createMatchRuntime, type MatchRuntime } from '../matchRuntime';
+import * as replayExport from '../replayExport';
 
 function cheapDeck(): Deck {
   return Object.values(BOOTSTRAP_MANIFEST.cards)
@@ -270,6 +271,30 @@ describe('createMatchRuntime', () => {
       status: 'duplicate',
       original: { status: 'stale' },
     });
+  });
+
+  it('reconciles a non-debug match before committing its terminal transaction', async () => {
+    const reconcile = vi.spyOn(replayExport, 'reconcileRuntimeRecord');
+    try {
+      const runtime = runtimeFixture('terminal-reconciliation');
+      expect(reconcile).not.toHaveBeenCalled();
+
+      await expect(runtime.submitIntent({
+        matchId: 'phase1-runtime-match',
+        seat: 'P0',
+        intentId: 'terminal-concede',
+        expectedRevision: runtime.revision(),
+        intent: { type: 'CONCEDE' },
+      })).resolves.toMatchObject({ status: 'accepted', commit: 'COMMITTED' });
+
+      expect(reconcile).toHaveBeenCalledTimes(1);
+      expect(reconcile.mock.calls[0][3]).toBe(runtime.state());
+      expect(reconcile.mock.results[0].value).toMatchObject({ ok: true });
+      expect(runtime.transactions().at(-1)?.framedEvents.at(-1)?.event.type)
+        .toBe('MATCH_ENDED');
+    } finally {
+      reconcile.mockRestore();
+    }
   });
 
   it('refolds private Gun Store stages for latest, suffix, and full-turn undo without replay residue', async () => {
