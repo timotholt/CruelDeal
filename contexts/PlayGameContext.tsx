@@ -47,7 +47,7 @@ export interface PlayGameContextValue {
     stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
     undoPendingCard: (cardId: string) => Promise<boolean>;
-    endTurn: () => Promise<CommittedTransactionTimeline | null>;
+    endTurn: (onWaitingForSeat?: (seat: Seat) => void) => Promise<CommittedTransactionTimeline | null>;
     presentCommittedFrame: (frame: EventTransition) => void;
     recordFramePresentationTiming: (timing: FramePresentationTiming) => void;
     finishTurnPresentation: () => void;
@@ -181,7 +181,9 @@ export const PlayGameProvider = (props: {
     return lastStaged ? undoPendingCard(lastStaged) : false;
   };
 
-  const endTurn = async (): Promise<CommittedTransactionTimeline | null> => {
+  const endTurn = async (
+    onWaitingForSeat?: (seat: Seat) => void,
+  ): Promise<CommittedTransactionTimeline | null> => {
     setPresentationBusy(true);
     let resolveTimeline!: (timeline: CommittedTransactionTimeline) => void;
     const timelinePromise = new Promise<CommittedTransactionTimeline>((resolve) => {
@@ -194,6 +196,9 @@ export const PlayGameProvider = (props: {
       syncFromRuntime();
       setPresentationBusy(false);
       return null;
+    }
+    if (result.commit === 'PRIVATE') {
+      onWaitingForSeat?.(remoteSeat);
     }
     return timelinePromise;
   };

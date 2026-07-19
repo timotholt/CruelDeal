@@ -65,6 +65,12 @@ interface PlayBoardProps {
   onExit?: () => void;
 }
 
+type ReplayClientActivity =
+  | { readonly kind: 'PROCESSING_EVENTS' }
+  | { readonly kind: 'PLAYING_ANIMATIONS' }
+  | { readonly kind: 'WAITING_FOR_PLAYER'; readonly seat: 'P0' | 'P1' }
+  | null;
+
 export const PlayBoard = (props: PlayBoardProps) => {
   const pg = usePlayGame();
   const {
@@ -76,6 +82,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const [replayCursor, setReplayCursor] = createSignal(0);
   const [replayFollowingLive, setReplayFollowingLive] = createSignal(true);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
+  const [replayClientActivity, setReplayClientActivity] = createSignal<ReplayClientActivity>(null);
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
   const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
 
@@ -94,6 +101,26 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const timeline = replayTimeline();
     if (!timeline) return null;
     return timeline.steps[replayCursor()] ?? null;
+  });
+  const replayClientStatus = createMemo(() => {
+    const activity = replayClientActivity();
+    if (activity?.kind === 'PROCESSING_EVENTS') return 'Processing events';
+    if (activity?.kind === 'PLAYING_ANIMATIONS') return 'Playing animations';
+    if (activity?.kind === 'WAITING_FOR_PLAYER') {
+      return `Waiting for Player ${activity.seat === 'P0' ? 1 : 2}`;
+    }
+
+    switch (engineState().phase) {
+      case 'SETUP':
+      case 'RESOLVING':
+      case 'BETWEEN_TURNS':
+        return 'Processing events';
+      case 'ENDED':
+        return 'Game ended';
+      case 'AWAITING_INTENT':
+      default:
+        return `Waiting for Player ${localSeat === 'P0' ? 1 : 2}`;
+    }
   });
   const inspectingReplayHistory = createMemo(() => replayCursor() < replayLastCursor());
   const presentedState = createMemo<EngineMatchState>(() => (
@@ -187,7 +214,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
     // both the restored card and the shuffled hand into place.
     const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
     const oldRects = captureHandRects(allIds, cardRefs);
-    const undone = await actions.undoPending();
+    setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
+    const undone = await actions.undoPending().finally(() => setReplayClientActivity(null));
     if (!undone) return;
     queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
   };
@@ -223,8 +251,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
       localHand: interactiveHand,
       cardRefs,
       motionSurface: motion,
-      stageCardInLane: actions.stageCardInLane,
-      undoPendingCard: actions.undoPendingCard,
+      stageCardInLane: async (cardId, lane) => {
+        setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
+        return actions.stageCardInLane(cardId, lane)
+          .finally(() => setReplayClientActivity(null));
+      },
+      undoPendingCard: async (cardId) => {
+        setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
+        return actions.undoPendingCard(cardId)
+          .finally(() => setReplayClientActivity(null));
+      },
     });
     onCleanup(unbindDnd);
 
@@ -255,7 +291,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
       ctx.motionSurface.cardMotion.cancelAll('presentation-invalidated');
     };
     script = createScript(ctx);
-    void script.run(openingSequence(openingTimeline));
+    setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
+    void script.run(openingSequence(openingTimeline))
+      .finally(() => setReplayClientActivity(null));
     onCleanup(() => script?.cancel());
   });
 
@@ -443,9 +481,19 @@ export const PlayBoard = (props: PlayBoardProps) => {
               onClick={() => {
                 if (!boardInteractive() || !script || turnFlowRunning()) return;
                 setTurnFlowRunning(true);
-                void actions.endTurn()
-                  .then((timeline) => timeline ? script?.run(resolveTurnFlow(timeline)) : undefined)
-                  .finally(() => setTurnFlowRunning(false));
+                setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
+                void actions.endTurn((seat) => {
+                  setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
+                })
+                  .then((timeline) => {
+                    if (!timeline) return undefined;
+                    setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
+                    return script?.run(resolveTurnFlow(timeline));
+                  })
+                  .finally(() => {
+                    setReplayClientActivity(null);
+                    setTurnFlowRunning(false);
+                  });
               }}
             >
               END TURN
@@ -477,12 +525,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
               followingLive={replayFollowingLive()}
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
-              seed={engineState().rng.seed}
               steps={timeline().steps}
               manifest={manifest}
               replay={runtimeReplay()!}
               performanceProfile={pg.performanceProfile()}
               selectedStep={replayStep()}
+              clientStatus={replayClientStatus()}
               onCursorChange={selectReplayCursor}
               onCopyFrameJson={copyFrameJson}
               onCopyGameJson={copyGameJson}
