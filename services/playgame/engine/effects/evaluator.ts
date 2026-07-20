@@ -48,6 +48,7 @@ import {
 import { resolveCostTransaction } from '../kernel/costTransaction';
 import { resolveEnergyTransaction } from '../kernel/energyTransaction';
 import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
+import { resolveLocationMetadataTransaction } from '../kernel/locationMetadataTransaction';
 import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
@@ -62,12 +63,12 @@ import type {
   ChangeCardCounterCommand,
   ChangeCardTagCommand,
   ChangeEnergyCommand,
+  ChangeLocationCounterCommand,
+  ChangeLocationTagCommand,
   ChangeStoredPowerCommand,
   OverrideCardTextCommand,
 } from '../kernel/types';
 import {
-  addLocationTag,
-  changeLocationCounter,
   destroyAllOtherLanes,
   destroyLane,
   replaceLocationCard,
@@ -277,6 +278,23 @@ export function executeCardMetadataCommands(
   manifest: Manifest,
 ): EvalResult {
   const transaction = resolveCardMetadataTransaction(
+    state,
+    commands,
+    manifest,
+  );
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute location tags and counters through stable location-card identity. */
+export function executeLocationMetadataCommands(
+  state: MatchState,
+  commands: readonly (
+    | ChangeLocationTagCommand
+    | ChangeLocationCounterCommand
+  )[],
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveLocationMetadataTransaction(
     state,
     commands,
     manifest,
@@ -1390,21 +1408,20 @@ export function evalEffect(
 
     case 'ADD_LOCATION_TAG': {
       const lanes = selectLanes(effect.lane, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const lane of lanes) {
-        const mutation = addLocationTag(
-          s,
-          lane,
-          effect.tag,
-          ctx.source,
-          manifest,
-        );
-        if (!mutation.ok) continue;
-        events.push(...mutation.events);
-        s = mutation.state;
-      }
-      return { events, state: s };
+      const locationIds = lanes.flatMap(lane => {
+        const location = locationCardAtLane(state, lane);
+        return location ? [location.id] : [];
+      });
+      return executeLocationMetadataCommands(
+        state,
+        locationIds.map(locationId => ({
+          type: 'CHANGE_LOCATION_TAG',
+          locationId,
+          mutation: { kind: 'ADD', tag: effect.tag },
+          cause: { ...ctx.source },
+        })),
+        manifest,
+      );
     }
 
     case 'REPLACE_LOCATION': {
@@ -1446,27 +1463,35 @@ export function evalEffect(
 
     case 'MODIFY_LOCATION_COUNTER': {
       const lanes = selectLanes(effect.lane, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
       const owner = effect.owner ? resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null) : undefined;
-      if (effect.owner && !owner) return { events, state };
-      for (const lane of lanes) {
-        const delta = Math.trunc(evalNum(effect.delta, { ...liveCtx, state: s }));
-        if (delta === 0) continue;
-        const mutation = changeLocationCounter(
-          s,
-          lane,
-          effect.name,
-          delta,
-          ctx.source,
+      if (effect.owner && !owner) return { events: [], state };
+      const locationIds = lanes.flatMap(lane => {
+        const location = locationCardAtLane(state, lane);
+        return location ? [location.id] : [];
+      });
+      const events: MatchEvent[] = [];
+      let candidate = state;
+      for (const locationId of locationIds) {
+        const delta = Math.trunc(evalNum(effect.delta, {
+          ...liveCtx,
+          state: candidate,
+        }));
+        const transaction = executeLocationMetadataCommands(
+          candidate,
+          [{
+            type: 'CHANGE_LOCATION_COUNTER',
+            locationId,
+            name: effect.name,
+            owner: owner ?? null,
+            delta,
+            cause: { ...ctx.source },
+          }],
           manifest,
-          owner ?? undefined,
         );
-        if (!mutation.ok) continue;
-        events.push(...mutation.events);
-        s = mutation.state;
+        events.push(...transaction.events);
+        candidate = transaction.state;
       }
-      return { events, state: s };
+      return { events, state: candidate };
     }
 
     case 'COPY_TEXT_OF': {

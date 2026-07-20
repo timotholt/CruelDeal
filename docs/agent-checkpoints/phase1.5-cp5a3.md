@@ -1,6 +1,6 @@
 # Phase 1.5 C5A-3 — Metadata, Pending Work, and Transform
 
-Status: in progress — C5A-3a complete; C5A-3b through C5A-3d planned
+Status: in progress — C5A-3a and C5A-3b complete; C5A-3c and C5A-3d planned
 
 Date: 2026-07-19
 
@@ -62,17 +62,33 @@ Exit evidence:
 
 ### C5A-3b — Location Metadata by Stable Identity
 
-Status: planned after C5A-3a
+Status: complete
 
-Replace lane-keyed location metadata mutation with
-`LocationCardInstanceId`-keyed commands and events. Lane selectors resolve to
-the exact current location instance at command execution. Nested replacement,
-Ruin, movement, or lane topology changes must never redirect an already
-planned metadata mutation to a different location card.
+`CHANGE_LOCATION_TAG` and `CHANGE_LOCATION_COUNTER` now exclusively govern
+location-card metadata. Commands and events carry `LocationCardInstanceId`;
+lane-oriented authored selectors are lowered once to current stable IDs before
+mutation work starts. Reducer application patches that exact opaque location
+record even after movement, replacement, or removal from a lane.
 
-Exit requires sole event ownership, exact identity semantics, owner-scoped
-counter coverage, nested replacement tests, and removal of lane fallback
-shapes.
+Owner-neutral and owner-scoped counters use one injective canonical key
+encoding (`neutral:<name>` and `owner:<owner>:<name>`). Names remain
+unrestricted, so neutral `P0:uses` cannot collide with owner-P0 `uses`.
+
+Exit evidence:
+
+- one pure operation is the sole producer of the three location metadata
+  events;
+- lane-keyed event fields and the lifecycle helper wrappers were removed
+  outright;
+- private candidate folding, exact no-ops, signed safe-integer arithmetic,
+  provenance snapshots, semantic transition facts, budgets, and rollback are
+  covered;
+- adversarial tests prove a planned event still mutates the destroyed old
+  instance after Ruin replacement and never touches Ruin;
+- moved, discarded, destroyed, and missing stable identities are covered;
+- neutral, P0, P1, and collision-shaped counter names are covered;
+- Phase 1.5 is green at 19 files and 133 tests, focused location/evaluator
+  scripts pass, and the production build is green.
 
 ### C5A-3c — Stable-ID Pending Scheduling
 
@@ -119,7 +135,6 @@ Stop and redesign a slice if it introduces:
 
 ## Current Exit Decision
 
-C5A-3 is not complete. C5A-3a is complete and exit-proven. C5A-3b is the next
-implementation slice. C5A-3c and C5A-3d remain planned and must not be reported
-as implemented until their code, architecture fences, and full validation
-evidence land.
+C5A-3 is not complete. C5A-3a and C5A-3b are complete and exit-proven. C5A-3c
+and C5A-3d remain planned and must not be reported as implemented until their
+code, architecture fences, and full validation evidence land.

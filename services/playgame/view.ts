@@ -134,8 +134,7 @@ export function resolveCard(
     portraitPath: def.portraitPath,
     type: inst.domain,
     text: inst.text.rulesText,
-    textDisabled: inst.text.override?.kind === 'BLANK_ONGOING' ||
-      inst.text.override?.kind === 'BLANK_ALL' ||
+    textDisabled: inst.text.override?.kind === 'BLANKED_TEXT' ||
       inst.tags.some((tag) => tag.kind === 'ONGOING_DISABLED'),
     owner: inst.owner,
     zone: inst.zone,

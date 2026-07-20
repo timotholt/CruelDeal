@@ -16,13 +16,10 @@ import { createRng } from '../rng';
 import { apply } from '../apply';
 import { evalEffect, revealPlayedCard } from '../effects/evaluator';
 import {
-  addLocationTag,
-  changeLocationCounter,
   createLane,
   destroyLocationCard,
   moveLocation,
   removeLocation,
-  removeLocationTag,
   replaceLocationCard,
   returnLocationToDeck,
   revealLocation,
@@ -271,9 +268,6 @@ describe('location card lifecycle', () => {
       () => moveLocation(input, 0, 1, blankReason, manifest),
       () => removeLocation(input, 0, 'DISCARD', blankReason, manifest),
       () => returnLocationToDeck(input, locationId, 'TOP', blankReason, manifest),
-      () => addLocationTag(input, 0, { kind: 'FLOODED' }, blankReason, manifest),
-      () => removeLocationTag(input, 0, 'FLOODED', blankReason, manifest),
-      () => changeLocationCounter(input, 0, 'uses', 1, blankReason, manifest),
       () => replaceLocationCard(input, 0, {
         cause: blankReason,
         newId: 'blank-replacement' as LocationCardInstanceId,
@@ -307,22 +301,6 @@ describe('location card lifecycle', () => {
     }
     expect(() => revealLocation(input, 0, blankSource, manifest))
       .toThrow(/sourceId must be non-empty/);
-  });
-
-  it('validates location counters before no-op handling and retains signed values', () => {
-    const input = state();
-    for (const value of [Number.NaN, Infinity, -Infinity, 1.5]) {
-      expect(() => changeLocationCounter(input, 0, 'uses', value, systemCause, manifest))
-        .toThrow(/finite integer/);
-    }
-    expect(() => changeLocationCounter(input, 0, ' \t', 0, systemCause, manifest))
-      .toThrow(/counter name must be non-empty/);
-
-    const raised = changeLocationCounter(input, 0, 'uses', 3, systemCause, manifest);
-    expect(raised.ok).toBe(true);
-    const lowered = changeLocationCounter(raised.state, 0, 'uses', -5, systemCause, manifest);
-    expect(lowered.ok).toBe(true);
-    expect(locationCardAtLane(lowered.state, 0)?.counters.uses).toBe(-2);
   });
 
   it('snapshots caller-owned location provenance before returning events', () => {

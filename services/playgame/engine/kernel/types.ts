@@ -14,6 +14,7 @@ import type {
 import type {
   EnergyReason,
   CardTag,
+  LaneTag,
   PowerMutation,
   SpawnSource,
 } from '../types/state';
@@ -46,6 +47,8 @@ export type GameCommand =
   | ChangeCardTagCommand
   | ChangeCardCounterCommand
   | OverrideCardTextCommand
+  | ChangeLocationTagCommand
+  | ChangeLocationCounterCommand
   | LocationLifecycleCommand
   | LaneLifecycleCommand;
 
@@ -207,6 +210,25 @@ export interface OverrideCardTextCommand extends CausedCommand {
   readonly type: 'OVERRIDE_CARD_TEXT';
   readonly cardId: CardId;
   readonly override: TextOverride | null;
+}
+
+export interface ChangeLocationTagCommand extends CausedCommand {
+  readonly type: 'CHANGE_LOCATION_TAG';
+  readonly locationId: LocationCardInstanceId;
+  readonly mutation:
+    | { readonly kind: 'ADD'; readonly tag: LaneTag }
+    | {
+        readonly kind: 'REMOVE';
+        readonly tag: LaneTag['kind'];
+      };
+}
+
+export interface ChangeLocationCounterCommand extends CausedCommand {
+  readonly type: 'CHANGE_LOCATION_COUNTER';
+  readonly locationId: LocationCardInstanceId;
+  readonly name: string;
+  readonly owner: Owner | null;
+  readonly delta: number;
 }
 
 export interface LocationLifecycleCommand extends CausedCommand {

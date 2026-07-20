@@ -644,16 +644,22 @@ function projectAnimationEvent(
         },
       };
     case 'LOCATION_TAG_ADDED':
-      return { type: event.type, data: { lane: event.lane, tag: event.tag.kind } };
+      return {
+        type: event.type,
+        data: { location: location(event.locationId), tag: event.tag.kind },
+      };
     case 'LOCATION_TAG_REMOVED':
-      return { type: event.type, data: { lane: event.lane, tag: event.tag } };
+      return {
+        type: event.type,
+        data: { location: location(event.locationId), tag: event.tag },
+      };
     case 'LOCATION_COUNTER_CHANGED':
       return {
         type: event.type,
         data: {
-          lane: event.lane,
+          location: location(event.locationId),
           name: event.name,
-          ...(event.owner === undefined ? {} : { owner: event.owner }),
+          owner: event.owner,
           delta: event.delta,
         },
       };

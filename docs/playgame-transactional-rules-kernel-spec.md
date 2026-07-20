@@ -1387,6 +1387,14 @@ retain the location-card ID, its lane snapshot when applicable, definition
 identity, cause/reason, and the same closed prior/result metadata facts used by
 card metadata.
 
+Owner scope is committed explicitly as `Owner | null`; absence is not an
+implicit scope. Counter storage uses one injective encoding:
+`neutral:<name>` for owner-neutral counters and
+`owner:<owner>:<name>` for owner-scoped counters. The same canonical key
+function owns operation validation, reducer writes, semantic capture, and
+numeric projection reads. Counter names are not restricted to make the key
+encoding work.
+
 No-op, validation, ordering, candidate folding, budget, and atomicity rules
 match C5A-3a. The cutover replaces lane-keyed mutation events and helpers
 outright; there is no lane fallback or dual event shape.

@@ -349,13 +349,13 @@ export function describeReplayStep(
       summary = `${locationName(event.locationId)} returned to the ${event.placement.toLowerCase()} of the location deck.`;
       break;
     case 'LOCATION_TAG_ADDED':
-      summary = `The ${laneLabel(event.lane)} gained the “${humanizeToken(event.tag.kind)}” status.`;
+      summary = `${locationName(event.locationId)} gained the “${humanizeToken(event.tag.kind)}” status.`;
       break;
     case 'LOCATION_TAG_REMOVED':
-      summary = `The ${laneLabel(event.lane)} lost the “${humanizeToken(event.tag)}” status.`;
+      summary = `${locationName(event.locationId)} lost the “${humanizeToken(event.tag)}” status.`;
       break;
     case 'LOCATION_COUNTER_CHANGED':
-      summary = `The ${laneLabel(event.lane)}'s ${event.name} counter ${signedChange(event.delta, 'increased by', 'decreased by')}${event.owner ? ` for ${player(event.owner)}` : ''}.`;
+      summary = `${locationName(event.locationId)}'s ${event.name} counter ${signedChange(event.delta, 'increased by', 'decreased by')}${event.owner ? ` for ${player(event.owner)}` : ''}.`;
       break;
     case 'LANE_DESTRUCTION_STARTED':
       summary = `Destruction of the ${laneLabel(event.lane)} began.`;

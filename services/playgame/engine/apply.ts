@@ -54,6 +54,7 @@ import {
 } from './internal/locationStore';
 import { advanceGameplayRng } from './rng';
 import { cardTagsEqual } from './cardTagIdentity';
+import { locationCounterKey } from './locationCounterKey';
 
 export function apply(
   state: MatchState,
@@ -108,7 +109,10 @@ function requireEventProvenance(event: MatchEvent): void {
     || event.type === 'CARD_TAG_ADDED'
     || event.type === 'CARD_TAG_REMOVED'
     || event.type === 'CARD_COUNTER_CHANGED'
-    || event.type === 'CARD_TEXT_OVERRIDDEN';
+    || event.type === 'CARD_TEXT_OVERRIDDEN'
+    || event.type === 'LOCATION_TAG_ADDED'
+    || event.type === 'LOCATION_TAG_REMOVED'
+    || event.type === 'LOCATION_COUNTER_CHANGED';
   if (!('cause' in event) || event.cause === undefined) {
     if (provenanceRequired) {
       throw new Error(`${event.type} cause is required`);
@@ -951,17 +955,17 @@ function applyEventBody(
     }
 
     case 'LOCATION_TAG_ADDED': {
-      const location = locationAtLane(state, event.lane);
+      const location = readLocationInternal(state, event.locationId);
       if (!location) return state;
       const exists = location.tags.some(t => t.kind === event.tag.kind);
       if (exists) return state;
       return patchLocationCard(state, location.id, {
-        tags: [...location.tags, event.tag],
+        tags: [...location.tags, structuredClone(event.tag)],
       });
     }
 
     case 'LOCATION_TAG_REMOVED': {
-      const location = locationAtLane(state, event.lane);
+      const location = readLocationInternal(state, event.locationId);
       if (!location) return state;
       return patchLocationCard(state, location.id, {
         tags: location.tags.filter(t => t.kind !== event.tag),
@@ -969,10 +973,22 @@ function applyEventBody(
     }
 
     case 'LOCATION_COUNTER_CHANGED': {
-      const location = locationAtLane(state, event.lane);
+      const location = readLocationInternal(state, event.locationId);
       if (!location) return state;
-      const key = event.owner ? `${event.owner}:${event.name}` : event.name;
+      if (event.name.trim().length === 0) {
+        throw new Error('LOCATION_COUNTER_CHANGED name must be non-empty');
+      }
+      if (!Number.isSafeInteger(event.delta)) {
+        throw new Error('LOCATION_COUNTER_CHANGED delta must be a safe integer');
+      }
+      const key = locationCounterKey(event.name, event.owner);
       const prev = location.counters[key] ?? 0;
+      if (
+        !Number.isSafeInteger(prev)
+        || !Number.isSafeInteger(prev + event.delta)
+      ) {
+        throw new Error('LOCATION_COUNTER_CHANGED result must be a safe integer');
+      }
       return patchLocationCard(state, location.id, {
         counters: {
           ...location.counters,

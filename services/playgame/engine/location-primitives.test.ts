@@ -195,7 +195,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const out = resolveCurrentTurn(s, m, 'backdoor-turn');
   expectEq(getStoredCardPowerDelta(out.state, c.id, m), 4, 'TRIGGER_ON_REVEAL re-fires On Reveal once without replaying location play trigger');
   expectEq(
-    locationCardAtLane(out.state, 0)?.counters['P0:played-here'],
+    locationCardAtLane(out.state, 0)?.counters['owner:P0:played-here'],
     1,
     'location play counter increments once after retrigger',
   );

@@ -12,6 +12,7 @@ import { select, selectLanes, evalPredicate } from './select';
 import { getCardPower } from './power';
 import { getCardCost } from './cost';
 import { locationCardAtLane } from '../laneTopology';
+import { locationCounterKey } from '../locationCounterKey';
 
 export function evalNum(expr: NumExpr, ctx: EvalCtx): number {
   switch (expr.kind) {
@@ -48,7 +49,7 @@ export function evalNum(expr: NumExpr, ctx: EvalCtx): number {
       if (!loc) return 0;
       const owner = expr.owner ? resolveOwnerRef(expr.owner, ctx) : null;
       if (expr.owner && owner === null) return 0;
-      return loc.counters[counterKey(expr.name, owner)] ?? 0;
+      return loc.counters[locationCounterKey(expr.name, owner)] ?? 0;
     }
 
     case 'IF_ELSE': {
@@ -93,8 +94,4 @@ function resolveOwnerRef(
   if (ref === 'EVENT_OWNER') return ctx.eventOwner ?? null;
   if (ref === 'EVENT_OPP_OWNER') return flipOwner(ctx.eventOwner ?? null);
   return null;
-}
-
-function counterKey(name: string, owner: 'P0' | 'P1' | null): string {
-  return owner ? `${owner}:${name}` : name;
 }

@@ -43,7 +43,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LANE_DESTRUCTION_STARTED: 1,
     LOCATION_CARD_CREATED: 1,
     LOCATION_CARD_PLAYED: 1,
-    LOCATION_COUNTER_CHANGED: 1,
     LOCATION_MOVED: 1,
     LOCATION_REMOVED_FROM_LANE: 1,
     LOCATION_REPLACED: 1,
@@ -51,8 +50,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LOCATION_REVEALED: 2,
     LOCATION_SHOWN_TO_SEATS: 1,
     LOCATION_SLOT_REVEAL_SCHEDULED: 1,
-    LOCATION_TAG_ADDED: 1,
-    LOCATION_TAG_REMOVED: 1,
     LOCATION_TURNED_FACE_DOWN: 1,
     LOCATIONS_SWAPPED: 1,
   },
@@ -70,6 +67,11 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_TAG_ADDED: 1,
     CARD_TAG_REMOVED: 1,
     CARD_TEXT_OVERRIDDEN: 1,
+  },
+  'services/playgame/engine/kernel/operations/locationMetadata.ts': {
+    LOCATION_COUNTER_CHANGED: 1,
+    LOCATION_TAG_ADDED: 1,
+    LOCATION_TAG_REMOVED: 1,
   },
   'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
@@ -221,7 +223,7 @@ describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(13);
+      .toBe(14);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

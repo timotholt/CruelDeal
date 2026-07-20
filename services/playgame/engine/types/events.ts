@@ -215,13 +215,23 @@ export type MatchEvent =
       placement: 'TOP' | 'BOTTOM';
       cause: EffectRef;
     }
-  | { type: 'LOCATION_TAG_ADDED'; lane: LaneId; tag: LaneTag; cause: EffectRef }
-  | { type: 'LOCATION_TAG_REMOVED'; lane: LaneId; tag: LaneTag['kind']; cause: EffectRef }
+  | {
+      type: 'LOCATION_TAG_ADDED';
+      locationId: LocationCardInstanceId;
+      tag: LaneTag;
+      cause: EffectRef;
+    }
+  | {
+      type: 'LOCATION_TAG_REMOVED';
+      locationId: LocationCardInstanceId;
+      tag: LaneTag['kind'];
+      cause: EffectRef;
+    }
   | {
       type: 'LOCATION_COUNTER_CHANGED';
-      lane: LaneId;
+      locationId: LocationCardInstanceId;
       name: string;
-      owner?: Owner;
+      owner: Owner | null;
       delta: number;
       cause: EffectRef;
     }

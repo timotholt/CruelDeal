@@ -75,8 +75,6 @@ export {
 } from './projections';
 export {
   activeLaneIds,
-  addLocationTag,
-  changeLocationCounter,
   createLane,
   destroyLocationCard,
   isActiveLane,
@@ -86,7 +84,6 @@ export {
   MINIMUM_ACTIVE_LANES,
   moveLocation,
   removeLocation,
-  removeLocationTag,
   replaceLocationCard,
   returnLocationToDeck,
   revealLocation,

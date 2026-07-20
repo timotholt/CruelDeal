@@ -552,13 +552,13 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const locId = 'loc1' as LocationCardInstanceId;
   const s0 = withTestLocation(emptyState(), 1, 'jungle-trail', true, locId);
   const s1 = run(s0,
-    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' }, cause: locationCause },
-    { type: 'LOCATION_TAG_ADDED', lane: 1, tag: { kind: 'ON_FIRE' }, cause: locationCause }, // dup
+    { type: 'LOCATION_TAG_ADDED', locationId: locId, tag: { kind: 'ON_FIRE' }, cause: locationCause },
+    { type: 'LOCATION_TAG_ADDED', locationId: locId, tag: { kind: 'ON_FIRE' }, cause: locationCause }, // dup
   );
   eq(locationCardAtLane(s1, 1)!.tags.length, 1, 'LOCATION_TAG_ADDED: idempotent');
   const s2 = run(s1, {
     type: 'LOCATION_TAG_REMOVED',
-    lane: 1,
+    locationId: locId,
     tag: 'ON_FIRE',
     cause: locationCause,
   });

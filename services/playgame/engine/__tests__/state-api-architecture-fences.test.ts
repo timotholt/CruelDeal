@@ -205,6 +205,20 @@ describe('opaque card and location state architecture', () => {
       .toBe(false);
   });
 
+  it('keeps raw location-metadata construction solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'(?:LOCATION_TAG_ADDED|LOCATION_TAG_REMOVED|LOCATION_COUNTER_CHANGED)'/,
+      new Set([
+        'engine/kernel/operations/locationMetadata.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(violations(
+      /\b(?:addLocationTag|removeLocationTag|changeLocationCounter)\b/,
+      new Set(),
+    )).toEqual([]);
+  });
+
   it('keeps live card-tag writes inside metadata reduction or transform reset', () => {
     const tagPatchCases = [...reducerCases()]
       .filter(([, source]) =>

@@ -93,10 +93,37 @@ describe('Phase 1.2 location architecture fences', () => {
       productionFiles,
       new RegExp(`type:\\s*'(${eventNames})'`),
       new Set([
+        'engine/kernel/operations/locationMetadata.ts',
         'engine/locationLifecycle.ts',
         'engine/locationSetup.ts',
         'engine/types/events.ts',
       ]),
+    )).toEqual([]);
+  });
+
+  it('keeps location metadata stable-ID only and removes lifecycle wrappers', () => {
+    const eventSource = readFileSync(
+      resolve(engineRoot, 'types/events.ts'),
+      'utf8',
+    );
+    for (const eventType of [
+      'LOCATION_TAG_ADDED',
+      'LOCATION_TAG_REMOVED',
+      'LOCATION_COUNTER_CHANGED',
+    ]) {
+      const start = eventSource.indexOf(`type: '${eventType}'`);
+      const next = eventSource.indexOf("\n  | {", start + 1);
+      const declaration = eventSource.slice(
+        start,
+        next < 0 ? undefined : next,
+      );
+      expect(declaration).toMatch(/locationId:\s*LocationCardInstanceId/);
+      expect(declaration).not.toMatch(/\blane:\s*LaneId/);
+    }
+    expect(violations(
+      productionFiles,
+      /\b(?:addLocationTag|removeLocationTag|changeLocationCounter)\b/,
+      new Set(),
     )).toEqual([]);
   });
 
