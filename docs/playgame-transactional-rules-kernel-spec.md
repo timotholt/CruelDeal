@@ -1275,8 +1275,7 @@ The second C5A slice governs:
 
 - permanent card-Cost `ADD` and effective-Cost `SET` mutations;
 - current Energy, maximum Energy, and next-turn Energy bonus mutations;
-- stage payment, unstage refund, undo refund, turn ramp, turn refill, and
-  next-turn bonus consumption;
+- stage payment, turn ramp, turn refill, and next-turn bonus consumption;
 - exact payment provenance for unresolved hand-origin plays.
 
 `CARD_COST_CHANGED` has one owning operation.
@@ -1286,7 +1285,7 @@ mutation records a non-empty semantic cause. The reducer rejects provenance-
 free cost or Energy events rather than creating history that cannot explain
 itself.
 
-An unresolved play is stored canonically as:
+A committed unresolved play is stored canonically as:
 
 ```ts
 interface StagedPlay {
@@ -1297,15 +1296,16 @@ interface StagedPlay {
 
 `MatchState.stagedPlays` replaces the old ID-only staging order. `CARD_STAGED`
 records the exact non-negative integer payment accepted by the stage
-transaction. Unstage and undo refund only that stored amount; they never
-re-project the card's Cost. A later permanent or ongoing Cost change therefore
-cannot mint Energy, destroy Energy, or retroactively rewrite the historical
-payment.
+transaction. A later permanent or ongoing Cost change cannot mint Energy,
+destroy Energy, or retroactively rewrite that historical payment. Unstage and
+undo are private intent-plan edits: the runtime removes the uncommitted plan
+suffix and deterministically refolds from its authoritative base. They do not
+publish an inverse event or Energy refund into match history.
 
-Reveal, unstage, destruction, banishment/zone removal, and turn cleanup close
-the corresponding staged-play record. Movement and transformation retain it
-until the original unresolved play closes. Invalid payment provenance rejects
-the whole intent before any unstage/refund prefix is published.
+Reveal, destruction, banishment/zone removal, and turn cleanup close the
+corresponding staged-play record. Movement and transformation retain it until
+the original unresolved play closes. Invalid payment provenance rejects the
+whole stage intent before any transition is published.
 
 Cost and Energy batches use private candidate folding, closed transition
 semantics, deterministic command order, work/event budgets, and all-or-nothing
@@ -1483,6 +1483,181 @@ neither constructs or applies `CARD_TRANSFORMED` directly.
 All reset and transform work is one private atomic transaction. The cutover
 removes the optional reducer-level `resetStats` behavior and all direct
 transform-event producers rather than retaining a legacy transform path.
+
+#### C5A-4 — Governed Location Cards and Lane Topology
+
+C5A-4 replaces the Phase 1.2 location lifecycle façade with governed
+operations. Phase 1.2 remains the product contract for a location deck,
+stable location-card identities, reveal schedules, Ruin replacement, and
+one-to-three active lanes; it is no longer mutation authority.
+
+C5A-4 is split into three clean-cutover slices.
+
+##### C5A-4a — Location-Card Lifecycle
+
+Use explicit commands for location-deck initialization, location-card
+creation, draw, play, reveal scheduling, reveal, concealment, private
+disclosure, movement, swap, replacement, removal, and return to deck. Delete
+the generic `CHANGE_LOCATION_LIFECYCLE` action union rather than growing it
+into a second command language.
+
+One location-lifecycle operation exclusively proposes:
+
+- `LOCATION_DECK_INITIALIZED`;
+- `LOCATION_CARD_CREATED`;
+- `LOCATION_CARD_DRAWN`;
+- `LOCATION_CARD_PLAYED`;
+- `LOCATION_SLOT_REVEAL_SCHEDULED`;
+- `LOCATION_REVEALED`;
+- `LOCATION_TURNED_FACE_DOWN`;
+- `LOCATION_SHOWN_TO_SEATS`;
+- `LOCATION_MOVED`;
+- `LOCATIONS_SWAPPED`;
+- `LOCATION_REPLACED`;
+- `LOCATION_REMOVED_FROM_LANE`;
+- `LOCATION_RETURNED_TO_DECK`.
+
+Every mutation event, including setup events, carries a non-empty immutable
+cause. Reveal scheduling carries both the lane slot and the exact current
+`LocationCardInstanceId`; stale work cannot silently retarget a replacement.
+Lane-oriented authored selectors are resolved against private candidate state
+immediately before command execution.
+
+`LOCATION_REPLACED` remains one atomic transition. Destroying a location is
+only replacement with Ruin; there is no separate destroy-location event or
+reducer path. Location swap is simultaneous and cannot expose an intermediate
+empty or duplicated slot.
+
+##### C5A-4b — Location Reveal Reactions and Lane Topology
+
+`REVEAL_LOCATION` commits the exact stable location identity and snapshots its
+post-commit On-Reveal rules. Those reactions enter the same private kernel
+queue and budget as the reveal. Opening and turn-start callers submit the
+command once; they do not manually invoke a second location trigger.
+
+Replace `CHANGE_LANE_LIFECYCLE` with explicit `CREATE_LANE`, `DESTROY_LANE`,
+and `DESTROY_OTHER_LANES` commands. Lane identities are allocated
+monotonically from candidate `nextLaneId`; callers cannot select or reuse an
+identity.
+
+Lane destruction is one atomic transaction in this order:
+
+1. commit `LANE_DESTRUCTION_STARTED`;
+2. snapshot and destroy occupants through the governed card-destruction
+   operation, including all reactions;
+3. re-check candidate state for survivors or newly entered occupants;
+4. remove the current location through the governed location operation;
+5. cancel every pending item whose frozen `sourceLane` is the destroyed lane,
+   by exact pending-effect ID through the governed pending operation;
+6. commit `LANE_DESTROYED`.
+
+An immune survivor, a card created or moved into the destroying lane, nested
+interpreter failure, reducer invariant, or exhausted shared budget rolls back
+the whole batch. Destroy-other-lanes snapshots targets in canonical topology
+order and resolves all targets inside that same outer transaction.
+
+Lane creation commits start, deterministic location acquisition, play,
+schedule, activation, and optional reveal/reaction as one transaction.
+Minimum/maximum lane count and topology-position rules are operation policy,
+not reducer guesses.
+
+##### C5A-4c — Callers, Setup, Protocol, and Exit
+
+Location setup retains deterministic weighted selection and scoped RNG, then
+submits governed initialization and lane-creation commands. It constructs no
+location/lane mutation event. Evaluator, opening, and turn flow become command
+clients. Delete the old `locationLifecycle.ts` mutation façade and its public
+compatibility exports; do not leave wrappers around the new transaction.
+
+Exit proof includes closed prior/result semantics, immutable payload/cause
+snapshots, stable-ID stale-target behavior, all replacement reveal policies,
+slot scheduling versus moved cards, atomic swap, zone conservation, setup RNG
+and replay parity, exactly-once reveal reactions, source replacement/removal
+during reactions, monotonic safe lane allocation, one/two/three-lane topology,
+protected-survivor rollback, nested destruction hooks, cancellation of
+pending work created during destruction, unrelated pending survival,
+destroy-two atomicity, budget/interpreter/reducer rollback, protocol and
+reconciliation parity, and source fences proving that only the owning
+operation constructs location/lane mutation events.
+
+#### C5A-5 — Governed Staged Play and Reveal Timing
+
+Private planning and authoritative match history are separate domains.
+`STAGE_PLAY` validates owner, hand placement, active lane, capacity, play
+policy, effective Cost, and Energy against private candidate state. The kernel
+determines and commits the exact payment; callers cannot supply
+`energyPaid`.
+
+One staged-play transaction owns this exact trace:
+
+1. `CARD_STAGED`;
+2. governed `ENERGY_CHANGED` for the exact payment;
+3. governed `CARD_REVEAL_SCHEDULED` for the resolved timing.
+
+`CARD_STAGED` no longer writes an implicit default reveal time. One
+`SET_CARD_REVEAL_TIMING` command and one operation exclusively own
+`CARD_REVEAL_SCHEDULED`, whether timing is ordinary, delayed, end-of-game, or
+authored after staging. The post-stage reveal policy observes the card in its
+candidate lane.
+
+`CARD_UNSTAGED` is deleted from canonical events, reducer, protocol, replay,
+projection, and presentation. Unstage and undo edit the private intent plan
+and re-resolve from its authoritative base; they do not publish inverse
+mechanical history. Exact payment restoration follows from deterministic
+refolding rather than a refund event. C5A-2's payment-provenance contract
+continues to govern a committed staged play, but its former unstage-refund
+wording is superseded by this private-plan boundary.
+
+Exit proof includes the exact stage/payment/timing trace, default and
+overridden reveal timing, invalid play rejection, ordered multi-stage
+candidate folding, absence of gameplay reactions, atomic rollback, equal
+state/command determinism, private unstage/undo restoration, runtime
+lock-and-resolve parity, replay/protocol/presentation parity, and source fences
+proving exclusive stage and schedule production with no `CARD_UNSTAGED`
+alphabet remaining.
+
+#### C5A-6 — Governed Setup, Turn, and Match Boundaries
+
+One system-only match-lifecycle operation exclusively proposes:
+
+- `MATCH_SETUP_COMPLETED`;
+- `TURN_RESOLUTION_STARTED`;
+- `TURN_ENDED`;
+- `TURN_STARTED`;
+- `MATCH_ENDED`.
+
+Callers request `COMPLETE_SETUP`, `BEGIN_RESOLUTION`, `END_TURN`,
+`START_TURN`, or `END_MATCH`. Final-score termination computes the result from
+private candidate state; concession supplies the conceding owner rather than
+an injectable result object. Boundary semantics close prior/result phase,
+turn, priority, staged-play cleanup, tracked-variable snapshots, and terminal
+result.
+
+`MATCH_SETUP_COMPLETED` occurs only after location setup and the complete
+opening transaction. Opening work is never artificially framed as setup after
+state already entered `AWAITING_INTENT`.
+
+On the final turn, end-of-game delayed reveals resolve before `TURN_ENDED`.
+Then the engine closes the turn, computes the settled score, and commits
+`MATCH_ENDED`. Final-turn tracked variables therefore include those completed
+plays.
+
+The accepted phase graph is exact:
+
+`SETUP -> AWAITING_INTENT -> RESOLVING -> BETWEEN_TURNS ->
+AWAITING_INTENT | ENDED`.
+
+Stale, skipped, duplicate, or phase-invalid boundaries are kernel failures,
+not no-ops. Timeline validation remains the publication-ingress defense, but
+it is not mutation authority.
+
+Exit proof includes strict phase and turn progression, terminal immutability,
+concession and final-score calculation, safe integer results, complete-opening
+ordering, delayed final-reveal bookkeeping, empty turns, extended final turns,
+RNG ordering, rollback after late failure, and framed live/replay/
+reconciliation parity. Source fences prove that the owning operation is the
+only producer of all five lifecycle events and that resolver/setup code does
+not call `apply`.
 
 ### C5B — Delete Superseded Control Paths
 
