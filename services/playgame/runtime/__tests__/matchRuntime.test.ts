@@ -141,7 +141,10 @@ describe('createMatchRuntime', () => {
     );
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_DRAWN')).toHaveLength(3);
     expect(setupEvents.filter((event) => event.type === 'LOCATION_CARD_PLAYED')).toHaveLength(3);
-    expect(setupEvents.at(-1)?.type).toBe('MATCH_SETUP_COMPLETED');
+    expect(setupEvents.at(-1)?.type).toBe('GAMEPLAY_RNG_ADVANCED');
+    expect(initialization.setup.finalState.phase).toBe('SETUP');
+    expect(openingEvents.at(-1)?.type).toBe('MATCH_SETUP_COMPLETED');
+    expect(initialization.opening.finalState.phase).toBe('AWAITING_INTENT');
     expect(setup.framedEvents.map(({ frame }) => frame))
       .toEqual(setupEvents.map((_, index) => index + 1));
     expect(opening.framedEvents[0]?.frame).toBe(setup.framedEvents.at(-1)!.frame + 1);

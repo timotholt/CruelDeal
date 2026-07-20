@@ -1,14 +1,14 @@
-import type { Manifest } from '../engine/manifest/types';
+import type { Manifest } from './manifest/types';
 import {
   executeHandCommands,
   executeRulesCommands,
-} from '../engine/effects/evaluator';
-import { createRng } from '../engine/rng';
-import { appendGameplayRngAdvance } from '../engine/rng/transaction';
-import type { MatchEvent } from '../engine/types/events';
-import type { MatchState } from '../engine/types/state';
-import type { CardId } from '../engine/types/ids';
-import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
+} from './effects/evaluator';
+import { createRng } from './rng';
+import { appendGameplayRngAdvance } from './rng/transaction';
+import type { MatchEvent } from './types/events';
+import type { MatchState } from './types/state';
+import type { CardId } from './types/ids';
+import { activeLaneIds, locationCardAtLane } from './laneTopology';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -126,6 +126,14 @@ export function buildOpeningTransaction(
     events.push(...draw.events);
     state = draw.state;
   }
+
+  const completed = executeRulesCommands(state, [{
+    type: 'COMPLETE_SETUP',
+    authority: 'SYSTEM',
+  }], {
+    rng: openingRng.scope('complete-setup'),
+  }, manifest);
+  events.push(...completed.events);
 
   return Object.freeze({
     transactionId: `opening:${genesis.rng.seed}`,

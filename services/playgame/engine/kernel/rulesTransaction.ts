@@ -84,6 +84,10 @@ import {
   type LocationLifecycleSemantics,
 } from './locationLifecycleSemantics';
 import {
+  captureMatchLifecycleSemantics,
+  type MatchLifecycleSemantics,
+} from './matchLifecycleTransaction';
+import {
   captureStagedPlaySemantics,
   planStagedPlayCommand,
   planStagedRevealTiming,
@@ -104,6 +108,10 @@ import {
   type LocationLifecycleCommand,
   type LocationLifecycleEvent,
 } from './operations/locationLifecycle';
+import {
+  planMatchLifecycleCommand,
+  type MatchLifecycleEvent,
+} from './operations/matchLifecycle';
 import {
   planPendingEffectConsumption,
   planPendingEffectCommand,
@@ -154,6 +162,7 @@ import type {
   GameCommand,
   KernelReaction,
   KernelWork,
+  MatchLifecycleCommand,
   SetCardRevealTimingCommand,
   StagePlayCommand,
   TransformCardCommand,
@@ -252,6 +261,7 @@ function captureControlFlowSemantics(
 }
 
 export type CanonicalRulesSemantics =
+  | MatchLifecycleSemantics
   | StagedPlaySemantics
   | LaneTopologySemantics
   | DestructionLifecycleSemantics
@@ -379,6 +389,26 @@ function isLocationCommand(
     || command.type === 'REPLACE_LOCATION'
     || command.type === 'REMOVE_LOCATION'
     || command.type === 'RETURN_LOCATION_TO_DECK';
+}
+
+function isMatchLifecycleCommand(
+  command: GameCommand,
+): command is MatchLifecycleCommand {
+  return command.type === 'COMPLETE_SETUP'
+    || command.type === 'BEGIN_RESOLUTION'
+    || command.type === 'END_TURN'
+    || command.type === 'START_TURN'
+    || command.type === 'END_MATCH';
+}
+
+function isMatchLifecycleEvent(
+  event: MatchEvent,
+): event is MatchLifecycleEvent {
+  return event.type === 'MATCH_SETUP_COMPLETED'
+    || event.type === 'TURN_RESOLUTION_STARTED'
+    || event.type === 'TURN_ENDED'
+    || event.type === 'TURN_STARTED'
+    || event.type === 'MATCH_ENDED';
 }
 
 function isPendingCommand(
@@ -544,6 +574,9 @@ function captureSemantics(
   after: MatchState,
   manifest: Manifest,
 ) {
+  if (isMatchLifecycleEvent(event)) {
+    return captureMatchLifecycleSemantics(before, event, after);
+  }
   if (event.type === 'CARD_STAGED') {
     return captureStagedPlaySemantics(before, event, after);
   }
@@ -784,6 +817,13 @@ function executeCommand(
 ): KernelStepResult<
   KernelWorkExpansion<CanonicalRulesWork>
 > {
+  if (isMatchLifecycleCommand(work.command)) {
+    return planMatchLifecycleCommand(
+      state,
+      work as CommandWork<MatchLifecycleCommand>,
+      manifest,
+    ) as KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>>;
+  }
   if (work.command.type === 'STAGE_PLAY') {
     return planStagedPlayCommand(
       state,

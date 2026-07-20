@@ -3,6 +3,7 @@ export * from './deque';
 export * from './failure';
 export * from './kernel';
 export * from './lifecycleTransaction';
+export * from './matchLifecycleTransaction';
 export * from './placementTransaction';
 export * from './revealTransaction';
 export * from './powerTransaction';

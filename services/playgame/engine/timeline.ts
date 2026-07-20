@@ -289,6 +289,10 @@ function scopeForEvent(
   }
 
   switch (event.type) {
+    case 'MATCH_SETUP_COMPLETED': {
+      assertPreviousPhase(event.type, previous.phase, ['SETUP']);
+      return previous;
+    }
     case 'TURN_RESOLUTION_STARTED': {
       assertEventTurn(event.type, event.turn, previous.turn);
       assertPreviousPhase(event.type, previous.phase, ['SETUP', 'START', 'ACTION']);
@@ -305,6 +309,7 @@ function scopeForEvent(
       return { turn: event.turn, phase: 'START' };
     }
     case 'MATCH_ENDED':
+      assertPreviousPhase(event.type, previous.phase, ['END']);
       return { turn: previous.turn, phase: 'MATCH_END' };
     case 'CARD_STAGED':
     case 'INTENT_REJECTED':

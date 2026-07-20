@@ -19,11 +19,10 @@
 
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
-import type { MatchResult, MatchState } from './types/state';
+import type { MatchState } from './types/state';
 import type { CardId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
-import { apply } from './apply';
 import {
   revealPlayedCard,
   revealPlayedCardAtEndOfGame,
@@ -32,7 +31,6 @@ import {
   executePendingEffectCommands,
   executeRulesCommands,
 } from './effects/evaluator';
-import { getLanePower } from './projections/power';
 import { getFinalTurn } from './projections/gameEnd';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 import {
@@ -42,6 +40,9 @@ import {
 } from './projections/cardRuntime';
 import { resolveEnergyTransaction } from './kernel/energyTransaction';
 import { KernelInvariantError } from './kernel/failure';
+import {
+  getPriorityStanding,
+} from './kernel/operations/matchLifecycle';
 
 // ============================================================================
 // resolve — intent → events
@@ -65,14 +66,18 @@ export function resolve(
         `${intent.type} is a private planning operation`,
       );
     case 'END_TURN': {
-      const started: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: state.turn };
-      const resolvingState = apply(state, started, manifest);
+      const begun = executeRulesCommands(state, [{
+        type: 'BEGIN_RESOLUTION',
+        authority: 'SYSTEM',
+      }], {
+        rng: rng.scope(`turn:${state.turn}:begin-resolution`),
+      }, manifest);
       return [
-        started,
-        ...resolveTurn(resolvingState, manifest, rng.scope(`turn:${state.turn}`)).events,
+        ...begun.events,
+        ...resolveTurn(begun.state, manifest, rng.scope(`turn:${state.turn}`)).events,
       ];
     }
-    case 'CONCEDE':      return resolveConcede(state, intent);
+    case 'CONCEDE':      return resolveConcede(state, intent, manifest, rng);
   }
 }
 
@@ -112,18 +117,17 @@ function resolveStage(
 function resolveConcede(
   state: MatchState,
   intent: Extract<MatchIntent, { type: 'CONCEDE' }>,
+  manifest: Manifest,
+  rng: Rng,
 ): MatchEvent[] {
-  const winner: Owner = intent.owner === 'P0' ? 'P1' : 'P0';
-  return [
-    {
-      type: 'MATCH_ENDED',
-      result: {
-        winner,
-        lanesWon: { P0: 0, P1: 0 } as Record<Owner, number>,
-        totalPower: { P0: 0, P1: 0 } as Record<Owner, number>,
-      },
-    },
-  ];
+  return [...executeRulesCommands(state, [{
+    type: 'END_MATCH',
+    authority: 'SYSTEM',
+    reason: 'CONCESSION',
+    concedingOwner: intent.owner,
+  }], {
+    rng: rng.scope(`concession:${intent.owner}`),
+  }, manifest).events];
 }
 
 // ============================================================================
@@ -234,25 +238,36 @@ export function resolveTurn(
     }
   }
 
-  // Phase 2  TURN_ENDED — clears stagedPlays. Lifecycle markers are derived
-  //          from indexed turns and require no end-of-turn mutation.
-  //          location `atTurnEnd` abilities will be dispatched in a later
-  //          tier; they must run BEFORE this cleanup event.
-  const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
-  events.push(turnEnded);
-  s = apply(s, turnEnded, manifest);
-
-  // Phase 3  Winner check — only after all end-of-turn bookkeeping has
-  //          settled. If the last turn just finished, the match ends here
-  //          and NO start-of-turn bookkeeping runs.
-  if (s.turn >= getFinalTurn(s, manifest)) {
+  const isFinalTurn = s.turn >= getFinalTurn(s, manifest);
+  if (isFinalTurn) {
     const delayed = revealScheduledCards(s, manifest, rng.scope('endgame-reveal'), 'END_OF_GAME');
     events.push(...delayed.events);
     s = delayed.state;
-    const result = computeMatchResult(s, manifest);
-    const endEvt: MatchEvent = { type: 'MATCH_ENDED', result };
-    events.push(endEvt);
-    s = apply(s, endEvt, manifest);
+  }
+
+  // Phase 2  TURN_ENDED — after every ordinary and final-turn delayed reveal.
+  // The governed boundary snapshots tracked variables and clears staged plays.
+  const ended = executeRulesCommands(s, [{
+    type: 'END_TURN',
+    authority: 'SYSTEM',
+  }], {
+    rng: rng.scope(`turn:${s.turn}:end-boundary`),
+  }, manifest);
+  events.push(...ended.events);
+  s = ended.state;
+
+  // Phase 3  Terminal score is derived inside the governed lifecycle
+  // operation from the settled post-cleanup candidate.
+  if (isFinalTurn) {
+    const terminated = executeRulesCommands(s, [{
+      type: 'END_MATCH',
+      authority: 'SYSTEM',
+      reason: 'FINAL_SCORE',
+    }], {
+      rng: rng.scope(`turn:${s.turn}:match-end`),
+    }, manifest);
+    events.push(...terminated.events);
+    s = terminated.state;
     return { events, state: s };
   }
 
@@ -277,16 +292,33 @@ export function resolveTurn(
   const nextTurn = s.turn + 1;
 
   // Phase 4  Compute priority, then emit the canonical turn boundary.
-  //          `TURN_STARTED` advances `state.turn` to `nextTurn` via apply().
-  const newPriority = computePriorityForNextTurn(s, manifest, rng.scope(`priority:${nextTurn}`));
-  const started: MatchEvent = {
-    type: 'TURN_STARTED',
-    turn: nextTurn,
-    priority: newPriority.owner,
-    priorityReason: newPriority.reason,
-  };
-  events.push(started);
-  s = apply(s, started, manifest);
+  //          `TURN_STARTED` advances `state.turn` through the governed reducer.
+  const standing = getPriorityStanding(s, manifest);
+  if (standing.ok === false) {
+    throw new KernelInvariantError({
+      kind: 'KERNEL_FAILURE',
+      code: standing.fault.code,
+      message: standing.fault.message,
+      workItemsConsumed: 0,
+      eventsProduced: 0,
+      reactionsScheduled: 0,
+      ...(standing.fault.sourceInstanceId === undefined
+        ? {}
+        : { sourceInstanceId: standing.fault.sourceInstanceId }),
+    });
+  }
+  const tiedPriority = standing.value === null
+    ? (rng.scope(`priority:${nextTurn}`).int(0, 1) === 0 ? 'P0' : 'P1')
+    : null;
+  const started = executeRulesCommands(s, [{
+    type: 'START_TURN',
+    authority: 'SYSTEM',
+    tiedPriority,
+  }], {
+    rng: rng.scope(`turn:${nextTurn}:start-boundary`),
+  }, manifest);
+  events.push(...started.events);
+  s = started.state;
 
   // Phase 5  Ramp `maxEnergy` (+1 per owner), refill `energy` to
   //          `maxEnergy + nextTurnEnergyBonus`, then consume the bonus.
@@ -531,58 +563,6 @@ function revealScheduledCards(
     s = res.state;
   }
   return { events, state: s };
-}
-
-export function computeMatchResult(state: MatchState, manifest: Manifest): MatchResult {
-  let lanesP = 0;
-  let lanesO = 0;
-  let totP = 0;
-  let totO = 0;
-  for (const lane of activeLaneIds(state)) {
-    const p = getLanePower(state, lane, 'P0', manifest);
-    const o = getLanePower(state, lane, 'P1', manifest);
-    totP += p;
-    totO += o;
-    if (p > o) lanesP++;
-    else if (o > p) lanesO++;
-  }
-  const winner: Owner | 'DRAW' =
-      lanesP > lanesO ? 'P0'
-    : lanesO > lanesP ? 'P1'
-    : totP > totO     ? 'P0'
-    : totO > totP     ? 'P1'
-    :                   'DRAW';
-  return {
-    winner,
-    lanesWon:   { P0: lanesP, P1: lanesO } as Record<Owner, number>,
-    totalPower: { P0: totP,   P1: totO   } as Record<Owner, number>,
-  };
-}
-
-function computePriorityForNextTurn(
-  state: MatchState,
-  manifest: Manifest,
-  rng: Rng,
-): { owner: Owner; reason: 'MORE_LANES' | 'MORE_POWER' | 'COIN_FLIP' } {
-  let lanesP = 0;
-  let lanesO = 0;
-  let totP = 0;
-  let totO = 0;
-  for (const lane of activeLaneIds(state)) {
-    const p = getLanePower(state, lane, 'P0', manifest);
-    const o = getLanePower(state, lane, 'P1', manifest);
-    totP += p;
-    totO += o;
-    if (p > o) lanesP++;
-    else if (o > p) lanesO++;
-  }
-  if (lanesP !== lanesO) {
-    return { owner: lanesP > lanesO ? 'P0' : 'P1', reason: 'MORE_LANES' };
-  }
-  if (totP !== totO) {
-    return { owner: totP > totO ? 'P0' : 'P1', reason: 'MORE_POWER' };
-  }
-  return { owner: rng.int(0, 1) === 0 ? 'P0' : 'P1', reason: 'COIN_FLIP' };
 }
 
 // Re-exports for Step 8+ wiring convenience.

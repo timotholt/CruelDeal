@@ -1,6 +1,6 @@
 # Phase 1.5 C5A-4 through C5A-6 — Remaining Lifecycle Governance
 
-Status: C5A-4 implemented and exit-proven; C5A-5 ready to build
+Status: C5A-4 through C5A-6 implemented and exit-proven
 
 Date: 2026-07-19
 
@@ -66,6 +66,9 @@ schemas, or fallback reads are permitted.
 
 ## C5A-5 — Governed Staged Play and Reveal Timing
 
+Implemented and exit-proven. See
+`docs/agent-checkpoints/phase1.5-cp5a5.md`.
+
 - Add `STAGE_PLAY` and `SET_CARD_REVEAL_TIMING`.
 - The kernel computes payment and owns the exact
   `CARD_STAGED -> ENERGY_CHANGED -> CARD_REVEAL_SCHEDULED` trace.
@@ -75,6 +78,9 @@ schemas, or fallback reads are permitted.
 - Prove payment, timing, play-policy, rollback, replay, and runtime parity.
 
 ## C5A-6 — Governed Match Lifecycle
+
+Implemented and exit-proven. See
+`docs/agent-checkpoints/phase1.5-cp5a6.md`.
 
 - Add one system-only operation for setup completion, resolution start, turn
   end/start, and match end.

@@ -1152,27 +1152,10 @@ function applyEventBody(
 
     // ---- Turn flow --------------------------------------------------------
 
-    case 'MATCH_SETUP_COMPLETED': {
-      if (
-        state.phase !== 'SETUP'
-        || state.activeLaneOrder.length !== 3
-        || state.activeLaneOrder.some((laneId) => {
-          const lane = state.lanesById[laneId];
-          const locationId = lane?.locationSlot.locationCardId;
-          const location = locationId ? readLocationInternal(state, locationId) : null;
-          return lane?.status !== 'ACTIVE'
-            || !location
-            || location.zone !== 'LANE'
-            || location.face !== 'FACE_DOWN';
-        })
-      ) {
-        return state;
-      }
+    case 'MATCH_SETUP_COMPLETED':
       return { ...state, phase: 'AWAITING_INTENT' };
-    }
 
     case 'TURN_RESOLUTION_STARTED':
-      if (event.turn !== state.turn) return state;
       return {
         ...state,
         phase: 'RESOLVING',

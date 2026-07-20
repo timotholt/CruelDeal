@@ -40,7 +40,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     expect(validateLocationState(genesis)).toEqual([]);
   });
 
-  it('initializes, draws, and plays three state-randomized face-down locations before opening intent', () => {
+  it('initializes, draws, and plays three face-down locations while setup remains active', () => {
     const genesis = createMatchGenesis('checkpoint-3-events', manifest, decks);
     const setup = buildLocationSetupTransaction(genesis, manifest, orderedLocations);
     const eventTypes = setup.events.map(event => event.type);
@@ -63,7 +63,6 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
       'LOCATION_SLOT_REVEAL_SCHEDULED',
       'LANE_CREATED',
       'GAMEPLAY_RNG_ADVANCED',
-      'MATCH_SETUP_COMPLETED',
     ]);
 
     const folded = frameAndFoldEvents({
@@ -75,7 +74,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
     });
     const state = folded.finalState;
 
-    expect(state.phase).toBe('AWAITING_INTENT');
+    expect(state.phase).toBe('SETUP');
     expect(state.activeLaneOrder).toEqual([0, 1, 2]);
     expect(state.locationDeck.staging).toEqual([]);
     const initialized = setup.events[0];

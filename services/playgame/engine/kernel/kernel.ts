@@ -96,6 +96,11 @@ export interface CompletedKernelTransaction<S, M, Semantics> {
 type WorkShape<C extends GameCommand, E, X, M> = KernelWork<C, E, X, M>;
 
 const COMMAND_TYPES = new Set<GameCommand['type']>([
+  'COMPLETE_SETUP',
+  'BEGIN_RESOLUTION',
+  'END_TURN',
+  'START_TURN',
+  'END_MATCH',
   'STAGE_PLAY',
   'PLAY_CARD',
   'SET_CARD_REVEAL_TIMING',

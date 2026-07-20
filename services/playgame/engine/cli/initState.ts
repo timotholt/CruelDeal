@@ -31,6 +31,7 @@ import {
   buildLocationSetupTransaction,
   type LocationSetupDeck,
 } from '../locationSetup';
+import { buildOpeningTransaction } from '../opening';
 import { frameAndFoldEvents } from '../transactionTimeline';
 import type { EventTransactionFold } from '../transactionTimeline';
 import { createCardStoreInternal } from '../internal/cardStore';
@@ -46,7 +47,8 @@ export type InitialLocationDeck = LocationSetupDeck;
 
 export interface CreatedMatchSetup {
   readonly genesis: MatchState;
-  readonly transaction: EventTransactionFold;
+  readonly locationSetup: EventTransactionFold;
+  readonly opening: EventTransactionFold;
   readonly state: MatchState;
 }
 
@@ -180,7 +182,7 @@ export function createInitialMatchState(
   return createSetupMatch(seed, manifest, decks, locationDeck).state;
 }
 
-/** Materialize genesis plus its canonical framed location-setup transaction. */
+/** Materialize genesis plus canonical location-setup and opening transactions. */
 export function createSetupMatch(
   seed: string,
   manifest: Manifest,
@@ -193,16 +195,25 @@ export function createSetupMatch(
     manifest,
     locationDeck,
   );
-  const transaction = frameAndFoldEvents({
+  const locationSetup = frameAndFoldEvents({
     transactionId: setup.transactionId,
     initialState: genesis,
     events: setup.events,
     manifest,
     initialPhase: 'SETUP',
   });
+  const openingBatch = buildOpeningTransaction(locationSetup.finalState, manifest);
+  const opening = frameAndFoldEvents({
+    transactionId: openingBatch.transactionId,
+    initialState: locationSetup.finalState,
+    events: openingBatch.events,
+    manifest,
+    initialPhase: 'SETUP',
+  });
   return Object.freeze({
     genesis,
-    transaction,
-    state: transaction.finalState,
+    locationSetup,
+    opening,
+    state: opening.finalState,
   });
 }

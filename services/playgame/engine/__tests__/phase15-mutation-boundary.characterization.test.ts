@@ -48,8 +48,12 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LOCATION_TURNED_FACE_DOWN: 1,
     LOCATIONS_SWAPPED: 1,
   },
-  'services/playgame/engine/locationSetup.ts': {
+  'services/playgame/engine/kernel/operations/matchLifecycle.ts': {
     MATCH_SETUP_COMPLETED: 1,
+    MATCH_ENDED: 1,
+    TURN_ENDED: 1,
+    TURN_RESOLUTION_STARTED: 1,
+    TURN_STARTED: 1,
   },
   'services/playgame/engine/kernel/operations/cardMetadata.ts': {
     CARD_COUNTER_CHANGED: 1,
@@ -103,12 +107,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_MOVED: 1,
     CARD_RETURNED_TO_LANE: 1,
     CARD_ZONE_CHANGED: 1,
-  },
-  'services/playgame/engine/resolve.ts': {
-    MATCH_ENDED: 2,
-    TURN_ENDED: 1,
-    TURN_RESOLUTION_STARTED: 1,
-    TURN_STARTED: 1,
   },
   'services/playgame/engine/rng/transaction.ts': {
     GAMEPLAY_RNG_ADVANCED: 1,
@@ -213,7 +211,7 @@ describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
     const { mutationConstructions } = collectCurrentInventory();
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
-    expect(Object.keys(mutationConstructions)).toHaveLength(18);
+    expect(Object.keys(mutationConstructions)).toHaveLength(17);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

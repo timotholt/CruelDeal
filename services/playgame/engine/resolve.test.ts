@@ -292,15 +292,17 @@ function resolveCurrentTurn(
   truthy((events[0] as { reason: string }).reason.includes('full'), 'reason mentions "full"');
 }
 
-// -- CONCEDE: emits MATCH_ENDED with opponent winning -----------------------
+// -- CONCEDE: closes the active turn and gives the opponent the match -------
 
 {
   const manifest = mkManifest([]);
   const s = baseState();
   const events = resolve(s, { type: 'CONCEDE', intentId: 'c', owner: 'P0' }, createRng('r'), manifest);
-  eq(events.length, 1, 'CONCEDE: single event');
-  eq(events[0].type, 'MATCH_ENDED', 'CONCEDE: MATCH_ENDED');
-  eq((events[0] as { result: { winner: string } }).result.winner, 'P1', 'CONCEDE: opponent wins');
+  eq(events.length, 3, 'CONCEDE: exact lifecycle boundary trace');
+  eq(events[0].type, 'TURN_RESOLUTION_STARTED', 'CONCEDE: resolution starts');
+  eq(events[1].type, 'TURN_ENDED', 'CONCEDE: turn closes');
+  eq(events[2].type, 'MATCH_ENDED', 'CONCEDE: match ends');
+  eq((events[2] as { result: { winner: string } }).result.winner, 'P1', 'CONCEDE: opponent wins');
 }
 
 // ============================================================================

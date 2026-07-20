@@ -21,6 +21,11 @@ const energyCause = {
   effectKind: 'SYSTEM',
   reason: 'TEST_ENERGY',
 } as const;
+const stagedCause = {
+  sourceId: 'system:timeline-stage' as CardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST_STAGE',
+} as const;
 
 function fixtureState() {
   return buildRuntimeFixture({
@@ -54,7 +59,15 @@ describe('Phase 1.1 canonical timeline', () => {
         destination: { kind: 'HAND' },
         cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
-      { type: 'CARD_STAGED', intentId: 'play-1', owner: 'P0', cardId, lane: 0, energyPaid: 1 },
+      {
+        type: 'CARD_STAGED',
+        intentId: 'play-1',
+        owner: 'P0',
+        cardId,
+        lane: 0,
+        energyPaid: 1,
+        cause: stagedCause,
+      },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_PLAY' } },
       {

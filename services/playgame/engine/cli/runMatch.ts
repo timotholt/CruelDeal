@@ -24,7 +24,6 @@ import {
   type InitialLocationDeck,
 } from './initState';
 import { planEnemyTurnFromHand } from '../ai';
-import { buildOpeningTransaction } from '../../runtime/opening';
 import { frameAndFoldEvents } from '../transactionTimeline';
 
 export interface RunMatchOptions {
@@ -172,24 +171,14 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
   const onEvent = opts.onEvent ?? ((): void => undefined);
 
   const setup = createSetupMatch(seed, manifest, {}, locationDeck);
-  for (const transition of setup.transaction.transitions) {
-    events.push(transition.event);
-    framedEvents.push(transition.framedEvent);
-    onEvent(transition.event, transition.before);
+  for (const transaction of [setup.locationSetup, setup.opening]) {
+    for (const transition of transaction.transitions) {
+      events.push(transition.event);
+      framedEvents.push(transition.framedEvent);
+      onEvent(transition.event, transition.before);
+    }
   }
-  let state = setup.transaction.finalState;
-
-  const opening = buildOpeningTransaction(state, manifest);
-  state = commitBatch(
-    opening.transactionId,
-    state,
-    opening.events,
-    manifest,
-    onEvent,
-    events,
-    framedEvents,
-    'SETUP',
-  );
+  let state = setup.state;
   const rng = createRng(state.rng);
 
   let turnsPlayed = 0;

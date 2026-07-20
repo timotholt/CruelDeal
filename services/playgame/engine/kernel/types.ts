@@ -29,6 +29,7 @@ import type {
  * work or provide an arbitrary callback as a command.
  */
 export type GameCommand =
+  | MatchLifecycleCommand
   | StagePlayCommand
   | PlayCardCommand
   | SetCardRevealTimingCommand
@@ -72,6 +73,49 @@ export type GameCommand =
   | CreateLaneCommand
   | DestroyLaneCommand
   | DestroyOtherLanesCommand;
+
+interface SystemMatchLifecycleCommand {
+  readonly authority: 'SYSTEM';
+}
+
+export interface CompleteSetupCommand extends SystemMatchLifecycleCommand {
+  readonly type: 'COMPLETE_SETUP';
+}
+
+export interface BeginResolutionCommand extends SystemMatchLifecycleCommand {
+  readonly type: 'BEGIN_RESOLUTION';
+}
+
+export interface EndTurnCommand extends SystemMatchLifecycleCommand {
+  readonly type: 'END_TURN';
+}
+
+export interface StartTurnCommand extends SystemMatchLifecycleCommand {
+  readonly type: 'START_TURN';
+  /**
+   * Supplied only when the governed board standing is exactly tied. The
+   * operation recomputes that standing and rejects injected/non-tie values.
+   */
+  readonly tiedPriority: Owner | null;
+}
+
+export type EndMatchCommand =
+  | (SystemMatchLifecycleCommand & {
+      readonly type: 'END_MATCH';
+      readonly reason: 'FINAL_SCORE';
+    })
+  | (SystemMatchLifecycleCommand & {
+      readonly type: 'END_MATCH';
+      readonly reason: 'CONCESSION';
+      readonly concedingOwner: Owner;
+    });
+
+export type MatchLifecycleCommand =
+  | CompleteSetupCommand
+  | BeginResolutionCommand
+  | EndTurnCommand
+  | StartTurnCommand
+  | EndMatchCommand;
 
 interface CausedCommand {
   readonly cause: EffectRef;

@@ -9,7 +9,8 @@ import {
 } from '../effects/evaluator';
 import { locationCardAtLane } from '../laneTopology';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
-import { computeMatchResult, resolve } from '../resolve';
+import { computeMatchResult } from '../kernel/operations/matchLifecycle';
+import { resolve } from '../resolve';
 import { createRng } from '../rng';
 import {
   getCardState,
@@ -120,8 +121,8 @@ const state = (): MatchState => createInitialMatchState(
   'location-lifecycle',
   manifest,
   {
-    P0: [{ defId: 'vanilla' }],
-    P1: [{ defId: 'vanilla' }],
+    P0: Array.from({ length: 4 }, () => ({ defId: 'vanilla' })),
+    P1: Array.from({ length: 4 }, () => ({ defId: 'vanilla' })),
   },
   [{ defId: 'alpha' }, { defId: 'beta' }, { defId: 'gamma' }],
 );
@@ -321,25 +322,22 @@ describe('canonical location/lane integration', () => {
 
   it('excludes destroyed lanes from scoring', () => {
     const card = withLaneCard(state(), 0);
-    expect(computeMatchResult(card.state, manifest).totalPower.P0).toBe(2);
+    const before = computeMatchResult(card.state, manifest);
+    expect(before.ok).toBe(true);
+    if (before.ok === false) throw new Error(before.failure.message);
+    expect(before.value.totalPower.P0).toBe(2);
 
     const destroyed = destroyLane(card.state, 0);
-    expect(computeMatchResult(destroyed.state, manifest).totalPower.P0).toBe(0);
+    const after = computeMatchResult(destroyed.state, manifest);
+    expect(after.ok).toBe(true);
+    if (after.ok === false) throw new Error(after.failure.message);
+    expect(after.value.totalPower.P0).toBe(0);
   });
 
   it('rejects play intents that target a destroyed lane', () => {
     const initial = state();
-    const handCardId = initial.deck.P0[0];
-    const handInstance = {
-      ...getCardState(initial, handCardId)!,
-      zone: 'HAND' as const,
-    };
-    const inHand = upsertTestCard({
-      ...initial,
-      deck: { ...initial.deck, P0: [] },
-      hand: { ...initial.hand, P0: [handCardId] },
-    }, handInstance);
-    const destroyed = destroyLane(inHand, 0);
+    const handCardId = initial.hand.P0[0];
+    const destroyed = destroyLane(initial, 0);
 
     expect(resolve(destroyed.state, {
       type: 'STAGE_CARD',
@@ -350,24 +348,17 @@ describe('canonical location/lane integration', () => {
     }, createRng('stage-destroyed'), manifest)).toEqual([
       expect.objectContaining({
         type: 'INTENT_REJECTED',
-        reason: 'lane is not active',
+        reason: 'Stage-play destination lane is not active.',
       }),
     ]);
   });
 
   it('plans AI plays only into the sole active lane', () => {
     const initial = state();
-    const handCardId = initial.deck.P1[0];
-    const handInstance = {
-      ...getCardState(initial, handCardId)!,
-      zone: 'HAND' as const,
-    };
-    const inHand = upsertTestCard({
+    const inHand = {
       ...initial,
       energy: { ...initial.energy, P1: 3 },
-      deck: { ...initial.deck, P1: [] },
-      hand: { ...initial.hand, P1: [handCardId] },
-    }, handInstance);
+    };
     const destroyed = destroyOthers(inHand, 1);
     const plays = planEnemyTurnFromHand(
       destroyed.state,
@@ -376,8 +367,8 @@ describe('canonical location/lane integration', () => {
       createRng('one-lane-ai'),
     );
 
-    expect(plays).toHaveLength(1);
-    expect(plays[0].lane).toBe(1);
+    expect(plays.length).toBeGreaterThan(0);
+    expect(plays.every(play => play.lane === 1)).toBe(true);
   });
 
   it('produces replayable deterministic topology event sequences', () => {

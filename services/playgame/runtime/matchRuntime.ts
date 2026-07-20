@@ -37,7 +37,7 @@ import type {
   DebugMatchCheckpoint,
 } from './contracts';
 import { getCardPlacement } from '../engine/projections/cardRuntime';
-import { buildOpeningTransaction } from './opening';
+import { buildOpeningTransaction } from '../engine/opening';
 import { buildLocationSetupTransaction } from '../engine/locationSetup';
 import { KernelInvariantError } from '../engine/kernel';
 import {

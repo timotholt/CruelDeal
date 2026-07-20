@@ -16,7 +16,6 @@ import {
   type Owner,
   type Rng,
 } from '../../../engine';
-import { buildOpeningTransaction } from '../../opening';
 import { defaultLocationDeckFactory } from '../../locationDeckFactory';
 
 export interface GeneratedMatchCase {
@@ -104,10 +103,9 @@ export function createOpenedMatch(
     input.decks,
     locationDeck.entries,
   );
-  const opening = buildOpeningTransaction(setup.state, manifest);
   const openingEvents = [
-    ...setup.transaction.framedEvents.map(event => event.event),
-    ...opening.events,
+    ...setup.locationSetup.framedEvents.map(event => event.event),
+    ...setup.opening.framedEvents.map(event => event.event),
   ];
   const committedOpening = frameAndFoldEvents({
     transactionId: `property-opening:${input.matchSeed}`,

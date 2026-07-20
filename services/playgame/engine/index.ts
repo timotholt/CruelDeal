@@ -36,6 +36,7 @@ export { appendGameplayRngAdvance } from './rng/transaction';
 export { apply, applyFramed } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
+export { buildOpeningTransaction } from './opening';
 export { getFinalTurn } from './projections/gameEnd';
 export {
   getCurrentCard,

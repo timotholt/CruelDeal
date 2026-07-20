@@ -222,22 +222,27 @@ describe('Canonical framing edge cases', () => {
       cardId,
       lane: 0,
       energyPaid: 1,
+      cause: systemCause,
     }]);
 
     expect(framed[0].scope).toEqual({ turn: 4, phase: 'ACTION' });
   });
 
-  it('moves directly into MATCH_END when a match-ending event commits', () => {
-    const framed = frameEventSequence(fixtureState(), [{
-      type: 'MATCH_ENDED',
-      result: {
-        winner: 'DRAW',
-        lanesWon: { P0: 0, P1: 0 },
-        totalPower: { P0: 0, P1: 0 },
+  it('moves into MATCH_END only after resolution reaches the turn-end boundary', () => {
+    const framed = frameEventSequence(fixtureState(), [
+      { type: 'TURN_RESOLUTION_STARTED', turn: 3 },
+      { type: 'TURN_ENDED', turn: 3 },
+      {
+        type: 'MATCH_ENDED',
+        result: {
+          winner: 'DRAW',
+          lanesWon: { P0: 0, P1: 0 },
+          totalPower: { P0: 0, P1: 0 },
+        },
       },
-    }]);
+    ]);
 
-    expect(framed[0].scope).toEqual({ turn: 3, phase: 'MATCH_END' });
+    expect(framed[2].scope).toEqual({ turn: 3, phase: 'MATCH_END' });
   });
 
   it('canonicalizes caller-owned frames once, then preserves internal identity', () => {
@@ -369,6 +374,8 @@ describe('Canonical scope validation edge cases', () => {
 
   it('rejects mechanical events after MATCH_ENDED', () => {
     expect(() => frameEventSequence(fixtureState(), [
+      { type: 'TURN_RESOLUTION_STARTED', turn: 3 },
+      { type: 'TURN_ENDED', turn: 3 },
       {
         type: 'MATCH_ENDED',
         result: {
@@ -383,6 +390,8 @@ describe('Canonical scope validation edge cases', () => {
 
   it('keeps post-match diagnostics inside MATCH_END scope', () => {
     const framed = frameEventSequence(fixtureState(), [
+      { type: 'TURN_RESOLUTION_STARTED', turn: 3 },
+      { type: 'TURN_ENDED', turn: 3 },
       {
         type: 'MATCH_ENDED',
         result: {
@@ -395,6 +404,8 @@ describe('Canonical scope validation edge cases', () => {
     ]);
 
     expect(framed.map(({ scope }) => scope)).toEqual([
+      { turn: 3, phase: 'RESOLUTION' },
+      { turn: 3, phase: 'END' },
       { turn: 3, phase: 'MATCH_END' },
       { turn: 3, phase: 'MATCH_END' },
     ]);
@@ -449,7 +460,15 @@ describe('Timeline query and lifecycle edge cases', () => {
       initialState: fixtureState(),
       events: [
         addToHand(cardId),
-        { type: 'CARD_STAGED', intentId: 'first', owner: 'P0', cardId, lane: 0, energyPaid: 1 },
+        {
+          type: 'CARD_STAGED',
+          intentId: 'first',
+          owner: 'P0',
+          cardId,
+          lane: 0,
+          energyPaid: 1,
+          cause: systemCause,
+        },
         { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
         { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: systemCause },
         {
@@ -458,7 +477,15 @@ describe('Timeline query and lifecycle edge cases', () => {
           destination: { kind: 'HAND' },
           cause: systemCause,
         },
-        { type: 'CARD_STAGED', intentId: 'second', owner: 'P0', cardId, lane: 1, energyPaid: 1 },
+        {
+          type: 'CARD_STAGED',
+          intentId: 'second',
+          owner: 'P0',
+          cardId,
+          lane: 1,
+          energyPaid: 1,
+          cause: systemCause,
+        },
         { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
         { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 1, cause: systemCause },
         { type: 'CARD_BANISHED', cardId, cause: systemCause },

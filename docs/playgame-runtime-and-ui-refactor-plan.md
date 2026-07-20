@@ -12,10 +12,10 @@ and the permanent engine/content rule-control plane are now governed by
 conflicts with the older Phase 1.5 implementation detail in this roadmap, the
 transactional-rules-kernel specification wins.
 
-Checkpoints 4A and 4B are implemented and exit-proven at
-`docs/agent-checkpoints/phase1.5-cp4a-implementation.md` and
-`docs/agent-checkpoints/phase1.5-cp4b-implementation.md`. The next
-implementation slice is C4C: move, enter, leave, create, and return.
+Checkpoint 4 and C5A are implemented and exit-proven. The active authority is
+recorded in `docs/agent-checkpoints/phase1.5-cp4-exit.md` and the C5A
+checkpoint files. The next implementation slice is C5B: delete superseded
+evaluator and control paths.
 
 ## Cost Model
 

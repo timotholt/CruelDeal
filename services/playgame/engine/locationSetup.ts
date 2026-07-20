@@ -139,7 +139,7 @@ export function buildLocationSetupTransaction(
   const events = appendGameplayRngAdvance(
     genesis,
     setupRng,
-    [...governed.events, { type: 'MATCH_SETUP_COMPLETED' }],
+    governed.events,
   );
 
   return Object.freeze({

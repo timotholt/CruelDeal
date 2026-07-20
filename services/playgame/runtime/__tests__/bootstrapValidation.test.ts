@@ -1,7 +1,6 @@
 import { getAllCardStates, getCardState } from '../../engine/projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 
-import { apply } from '../../engine/apply';
 import { buildDebugMatchState } from '../../debug/buildDebugState';
 import {
   createInitialMatchState,
@@ -9,13 +8,11 @@ import {
 } from '../../engine/cli/initState';
 import { runMatch } from '../../engine/cli/runMatch';
 import { replayMatch } from '../../engine/replay';
-import { frameAndFoldEvents } from '../../engine/transactionTimeline';
 import { testCardDef, testLocationDef, testManifest } from '../../engine/testkit';
 import type { CardDef, Deck, Manifest } from '../../engine/manifest/types';
 import type { MatchBootstrap } from '../contracts';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
 import { defaultLocationDeckFactory } from '../locationDeckFactory';
-import { buildOpeningTransaction } from '../opening';
 
 function manifestFixture(): Manifest {
   const plainVariant = testCardDef('card-0');
@@ -260,22 +257,14 @@ describe('card variants and opening initialization', () => {
 
     expect(selected).toBeDefined();
     expect(selected?.defId).toBe('card-0');
-    const opening = buildOpeningTransaction(setup.state, manifest);
-    const openingTransaction = frameAndFoldEvents({
-      transactionId: opening.transactionId,
-      initialState: setup.state,
-      events: opening.events,
-      manifest,
-      initialPhase: 'SETUP',
-    });
-    const finalState = openingTransaction.finalState;
+    const finalState = setup.state;
     const replayed = replayMatch({
       seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
       framedEvents: [
-        ...setup.transaction.framedEvents,
-        ...openingTransaction.framedEvents,
+        ...setup.locationSetup.framedEvents,
+        ...setup.opening.framedEvents,
       ],
     });
 
@@ -288,31 +277,26 @@ describe('card variants and opening initialization', () => {
     const manifest = manifestFixture();
     const decks = { P0: deckFixture(), P1: deckFixture() } as const;
     const locationDeck = locationDeckFixture(manifest, 'symmetric-opening');
-    const firstGenesis = createInitialMatchState(
+    const first = createSetupMatch(
       'symmetric-opening',
       manifest,
       decks,
       locationDeck,
     );
-    const secondGenesis = createInitialMatchState(
+    const second = createSetupMatch(
       'symmetric-opening',
       manifest,
       decks,
       locationDeck,
     );
-    const first = buildOpeningTransaction(firstGenesis, manifest);
-    const second = buildOpeningTransaction(secondGenesis, manifest);
 
-    expect(first).toEqual(second);
-    expect(first.events
+    expect(first.opening).toEqual(second.opening);
+    expect(first.opening.transitions.map(({ event }) => event)
       .filter((event) => event.type === 'CARD_DRAWN')
       .map((event) => event.owner)).toEqual([
       'P0', 'P0', 'P0', 'P1', 'P1', 'P1', 'P0', 'P1',
     ]);
-    const opened = first.events.reduce(
-      (state, event) => apply(state, event, manifest),
-      firstGenesis,
-    );
+    const opened = first.state;
     const openingHandSize = manifest.constants.startingHandSize + manifest.constants.turnStartDraw;
     expect(opened.hand.P0).toHaveLength(openingHandSize);
     expect(opened.hand.P1).toHaveLength(openingHandSize);
@@ -348,11 +332,11 @@ describe('card variants and opening initialization', () => {
       locationDeckFixture(manifest, 'opening-location-once'),
     );
 
-    const opening = buildOpeningTransaction(setup.state, manifest);
-    const revealIndex = opening.events.findIndex(
+    const openingEvents = setup.opening.transitions.map(({ event }) => event);
+    const revealIndex = openingEvents.findIndex(
       event => event.type === 'LOCATION_REVEALED',
     );
-    const locationEffects = opening.events.filter(
+    const locationEffects = openingEvents.filter(
       event =>
         event.type === 'ENERGY_CHANGED'
         && event.owner === 'P0'
@@ -362,7 +346,7 @@ describe('card variants and opening initialization', () => {
 
     expect(revealIndex).toBeGreaterThanOrEqual(0);
     expect(locationEffects).toHaveLength(1);
-    expect(opening.events.indexOf(locationEffects[0])).toBeGreaterThan(revealIndex);
+    expect(openingEvents.indexOf(locationEffects[0])).toBeGreaterThan(revealIndex);
   });
 
   it('makes the headless driver consume the shared 3+1 opening transaction', () => {
@@ -389,17 +373,12 @@ describe('card variants and opening initialization', () => {
       ...base,
       constants: { ...base.constants, turnStartDraw: 2 },
     };
-    const genesis = createInitialMatchState(
+    const opened = createInitialMatchState(
       'manifest-turn-start-draw',
       manifest,
       { P0: deckFixture(), P1: deckFixture() },
       locationDeckFixture(manifest, 'manifest-turn-start-draw'),
     );
-    const opened = buildOpeningTransaction(genesis, manifest).events.reduce(
-      (state, event) => apply(state, event, manifest),
-      genesis,
-    );
-
     expect(opened.hand.P0).toHaveLength(5);
     expect(opened.hand.P1).toHaveLength(5);
     expect(opened.deck.P0).toHaveLength(7);

@@ -66,12 +66,24 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 
 {
   const setup = createSetupMatch('replay-custom-initial', BOOTSTRAP_MANIFEST, {
-    P0: [{ defId: 'drill-instructor' }],
-    P1: [{ defId: 'junk-card' }],
+    P0: [
+      { defId: 'drill-instructor' },
+      { defId: 'drill-instructor' },
+      { defId: 'drill-instructor' },
+      { defId: 'drill-instructor' },
+      { defId: 'drill-instructor' },
+    ],
+    P1: [
+      { defId: 'junk-card' },
+      { defId: 'junk-card' },
+      { defId: 'junk-card' },
+      { defId: 'junk-card' },
+      { defId: 'junk-card' },
+    ],
   }, locationDeck);
   const initialState = setup.genesis;
   const initialSnapshot = clone(initialState);
-  const cardId = initialState.deck.P0[0];
+  const cardId = setup.state.deck.P0[0];
   const draw: MatchEvent = {
     type: 'CARD_DRAWN',
     owner: 'P0',
@@ -94,7 +106,8 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
     framedEvents: [
-      ...setup.transaction.framedEvents,
+      ...setup.locationSetup.framedEvents,
+      ...setup.opening.framedEvents,
       ...drawTransaction.framedEvents,
     ],
   });
