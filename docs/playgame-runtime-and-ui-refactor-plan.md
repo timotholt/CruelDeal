@@ -2,7 +2,8 @@
 
 ## Status
 
-Phase 1.5 is implemented and exit-proven. Phase 2 is the next active phase.
+Phases 1.5 and 2 are implemented and exit-proven. Phase 3a is the next active
+phase.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -13,8 +14,10 @@ conflicts with the older Phase 1.5 implementation detail in this roadmap, the
 transactional-rules-kernel specification wins.
 
 Final Phase 1.5 evidence is recorded in
-`docs/agent-checkpoints/phase1.5-exit.md`. The next implementation phase is
-Phase 2: split the provider boundary without reopening engine authority.
+`docs/agent-checkpoints/phase1.5-exit.md`. Final Phase 2 evidence is recorded in
+`docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. The next
+implementation phase is Phase 3a: make the presentation director the sole
+committed-frame iterator and move DOM-anchor ownership into its host.
 
 ## Cost Model
 
