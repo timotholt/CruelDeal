@@ -1313,6 +1313,145 @@ publication. They do not dispatch reactions in this slice, but they use the
 same transaction kernel so future policies and reactions have one governed
 extension point.
 
+#### C5A-3 — Metadata, Pending Work, and Transform
+
+C5A-3 is intentionally split into four ordered clean-cutover slices. Each
+slice removes the superseded producer paths before the next begins; none may
+leave a governed and ungoverned producer for the same mutation family.
+
+##### C5A-3a — Card Metadata
+
+Govern:
+
+- authored persistent card-tag addition and removal;
+- signed card-counter changes;
+- setting and clearing card text overrides.
+
+Engine-owned play, move, and destruction chronology is lifecycle state, not
+card-tag metadata. `PLAYED_THIS_TURN`, `MOVED_THIS_TURN`,
+`DESTROYED_THIS_TURN`, and `EVER_MOVED` are derived from lifecycle frames and
+turn indexes and must never be stored in the card tag collection. Transform
+metadata reset is exclusively deferred to C5A-3d, which removes the temporary
+reducer-level `resetStats` behavior.
+
+`CHANGE_CARD_TAG`, `CHANGE_CARD_COUNTER`, and `OVERRIDE_CARD_TEXT` are the only
+commands for these mutations. One card-metadata operation exclusively proposes
+`CARD_TAG_ADDED`, `CARD_TAG_REMOVED`, `CARD_COUNTER_CHANGED`, and
+`CARD_TEXT_OVERRIDDEN`.
+
+The operation resolves a stable card instance at command execution, validates
+complete provenance, and snapshots object payloads before they cross the
+operation boundary. Tag addition uses exact runtime payload identity, so
+source-bearing tags of the same kind but different sources coexist; removal is
+deliberately kind-scoped. Adding an exact existing tag, removing an absent tag
+kind, applying a zero counter delta, and writing a semantically identical text
+override are exact no-ops. Semantic text equality is recursive and independent
+of object-key insertion order. Counter names must be non-empty and both the
+requested delta and resulting value must be safe integers.
+
+Text removal uses one compositional `BLANKED_TEXT` representation containing
+the materialized remaining abilities and truthful rules text. Sequential
+On-Reveal, Ongoing, and all-text removals therefore compose instead of
+reinterpreting the printed definition. If the effective text was copied, its
+source provenance remains attached to `BLANKED_TEXT` until copied text is
+explicitly cleared.
+
+Committed semantics retain the affected card ID, cause and reason, plus:
+
+- prior/result tag presence for tag changes;
+- prior value, result value, and signed change for counters;
+- immutable prior/result override snapshots for text changes.
+
+Card metadata commands preserve caller order and fold each commit into private
+candidate state before planning the next command. Invalid commands, invalid
+reducer results, missing semantics, or exhausted budgets publish no prefix.
+
+##### C5A-3b — Location Metadata by Stable Identity
+
+Govern:
+
+- location-tag addition and removal;
+- owner-neutral and owner-scoped location-counter changes.
+
+Location metadata targets `LocationCardInstanceId`, never a lane as the
+mutation identity. A lane is mutable placement: its location card may be
+replaced, destroyed into Ruin, returned, or shifted before nested work runs.
+Lane-oriented authored selectors are resolved at command execution to the
+exact current location-card instance, and the resulting command/event carries
+that stable identity.
+
+One location-metadata operation exclusively proposes the location tag/counter
+events. Reducer application patches that exact location record and must not
+look up whichever card happens to occupy the lane later. Committed semantics
+retain the location-card ID, its lane snapshot when applicable, definition
+identity, cause/reason, and the same closed prior/result metadata facts used by
+card metadata.
+
+No-op, validation, ordering, candidate folding, budget, and atomicity rules
+match C5A-3a. The cutover replaces lane-keyed mutation events and helpers
+outright; there is no lane fallback or dual event shape.
+
+##### C5A-3c — Stable-ID Pending Scheduling
+
+Every pending effect has a match-unique stable pending-effect ID. Scheduling
+and consumption address that ID; structural object equality is not an
+identity mechanism. IDs are allocated deterministically from canonical match
+state and are replayed as committed data. Wall time, object identity, array
+position, and a second Frame-like chronology are forbidden.
+
+One pending-effect operation exclusively proposes schedule and consume
+transitions. A scheduled item captures the immutable effect payload, timing,
+source context, owner/lane context, and provenance required to execute after
+the original source has moved or left play. Duplicate IDs are invalid, and
+consuming an absent ID is a defined no-op or typed invariant according to the
+owning command contract—not an equality search for a similar payload.
+
+When an item becomes due, ordering is:
+
+1. snapshot the exact pending item by stable ID;
+2. commit consumption of that ID into private candidate state;
+3. interpret the snapshotted effect;
+4. resolve all nested work under the same transaction and budget.
+
+Consume-before-effect prevents nested resolution from observing and firing the
+same pending item again. Atomic publication still means a later failure
+publishes neither the consumption nor any effect result. Multiple due items
+use their canonical pending order with stable ID as the final tie-breaker.
+
+The clean cutover replaces payload-based
+`PENDING_EFFECT_REMOVED` equality, direct queue filtering, and producer-owned
+schedule events. No compatibility read of ID-less pending state remains.
+
+##### C5A-3d — Transform After Stored-Power Reset
+
+`TRANSFORM_CARD` becomes the only transform command, and one transform
+operation exclusively proposes `CARD_TRANSFORMED`. Selection of the target
+definition uses the transaction's scoped deterministic RNG and is fixed before
+the transform sequence is enqueued.
+
+For a transform that requests stat reset, ordering is mandatory:
+
+1. execute governed `CHANGE_STORED_POWER { kind: 'RESET' }` against the old
+   card identity and definition;
+2. commit and resolve any resulting stored-Power reactions;
+3. only then commit `CARD_TRANSFORMED`.
+
+`CARD_TRANSFORMED` never writes, replaces, or clears the Power ledger. This
+keeps Power policy and reaction routing exclusive and ensures that reset
+semantics observe the pre-transform definition. If the Power reset or any
+nested reaction fails, the transform is not published.
+
+The transform commit preserves the card instance, owner, zone, lane, staged
+payment record, and lifecycle classification while changing definition
+identity and applying the transform operation's explicitly declared metadata
+reset policy. It is not creation, play, movement, return, or reveal and emits
+none of those reactions. Evaluator and built-in clients issue the same command;
+neither constructs or applies `CARD_TRANSFORMED` directly.
+
+All reset and transform work is one private atomic transaction. The cutover
+removes the optional reducer-level `resetStats` behavior and all direct
+transform-event producers rather than retaining a legacy transform path.
+
 ### C5B — Delete Superseded Control Paths
 
 Delete:

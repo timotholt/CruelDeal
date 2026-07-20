@@ -107,8 +107,7 @@ export function ctxForTargetCard(
   };
 }
 
-/** All cards currently "alive" and capable of emitting Ongoings —
- *  revealed, in a lane, not tagged as destroyed-this-turn. */
+/** All cards currently "alive" and capable of emitting Ongoings. */
 export function liveCardSources(
   state: MatchState,
   manifest: Manifest,
@@ -116,7 +115,6 @@ export function liveCardSources(
   const out: CardRuntime[] = [];
   for (const card of getCardsInZone(state, manifest, 'LANE')) {
     if (!card.revealed) continue;
-    if (card.tags.some(t => t.kind === 'DESTROYED_THIS_TURN')) continue;
     out.push(card);
   }
   return out;

@@ -73,6 +73,7 @@ interface CardSpec {
   revealed?: boolean;
   storedPowerDelta?: number;
   costDelta?: number;
+  lifecycle?: InternalCardRecord['lifecycle'];
   tags?: InternalCardRecord['tags'];
   counters?: Record<string, number>;
   spawnSource?: InternalCardRecord['spawnSource'];
@@ -100,7 +101,7 @@ const buildState = (specs: CardSpec[]): MatchState => {
       revealTiming: !revealed && s.lane !== null
         ? { kind: 'TURN', turn: 1 }
         : null,
-      lifecycle: { ...EMPTY_CARD_LIFECYCLE },
+      lifecycle: s.lifecycle ?? { ...EMPTY_CARD_LIFECYCLE },
       powerLedger: testPowerLedger(
         id,
         s.storedPowerDelta === undefined
@@ -252,7 +253,15 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([mkCard('grunt', 2, 1)]);
   const state = buildState([
-    { id: 'a', def: 'grunt', owner: 'P0', lane: 0, revealed: true,  tags: [{ kind: 'MOVED_THIS_TURN' }], counters: { charges: 3 } },
+    {
+      id: 'a',
+      def: 'grunt',
+      owner: 'P0',
+      lane: 0,
+      revealed: true,
+      lifecycle: { frameLastMoved: 1 as never, turnLastMoved: 1 },
+      counters: { charges: 3 },
+    },
     { id: 'b', def: 'grunt', owner: 'P0', lane: 0, revealed: false, tags: [] },
     { id: 'c', def: 'grunt', owner: 'P0', lane: 0, revealed: true,  tags: [{ kind: 'SHURI_DOUBLED' }] },
   ]);

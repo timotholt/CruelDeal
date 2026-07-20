@@ -1023,7 +1023,11 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     const veteran: InternalCardRecord = {
       ...card('veteran', 'veteran', 'P0', 'DECK'),
       costDelta: -1,
-      tags: [{ kind: 'EVER_MOVED' }],
+      lifecycle: {
+        ...EMPTY_CARD_LIFECYCLE,
+        frameLastMoved: 3 as never,
+        turnLastMoved: 1,
+      },
       spawnSource: {
         kind: 'CARD_CREATED',
         sourceCardId: deployer.id,
@@ -1062,7 +1066,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       zone: 'LANE',
       lane: 1,
       costDelta: -1,
-      tags: [{ kind: 'EVER_MOVED' }],
+      lifecycle: veteran.lifecycle,
       spawnSource: veteran.spawnSource,
       powerLedger: veteran.powerLedger,
     });

@@ -65,7 +65,7 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     LOCATION_SLOT_REVEAL_SCHEDULED: 1,
     MATCH_SETUP_COMPLETED: 1,
   },
-  'services/playgame/engine/operations/cardMutations.ts': {
+  'services/playgame/engine/kernel/operations/cardMetadata.ts': {
     CARD_COUNTER_CHANGED: 1,
     CARD_TAG_ADDED: 1,
     CARD_TAG_REMOVED: 1,

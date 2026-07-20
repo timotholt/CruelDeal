@@ -402,8 +402,13 @@ describe('Predicate: HAS_UNSPENT_ENERGY', () => {
 });
 
 describe('Predicate: EVER_MOVED', () => {
-  it('true when card has EVER_MOVED tag', () => {
-    const c = mkCard('c1', 'def', 'P0', { tags: [{ kind: 'EVER_MOVED' }] });
+  it('true when card has a movement lifecycle index', () => {
+    const c = mkCard('c1', 'def', 'P0', {
+      lifecycle: {
+        frameLastMoved: 4 as never,
+        turnLastMoved: 2,
+      },
+    });
     const manifest = mkManifest([mkDef('def', 3, 2)]);
     const state = buildState([c]);
     expect(evalPredicate(

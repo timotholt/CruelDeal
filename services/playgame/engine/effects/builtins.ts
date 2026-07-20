@@ -20,13 +20,15 @@ import type { HandCommand } from '../kernel/operations/hand';
 import type { RevealCommand } from '../kernel/revealTransaction';
 import type {
   ChangeCostCommand,
+  ChangeCardCounterCommand,
+  ChangeCardTagCommand,
   ChangeStoredPowerCommand,
+  OverrideCardTextCommand,
 } from '../kernel/types';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
-import { addCardTag } from '../operations/cardMutations';
 import { activeLaneIds } from '../laneTopology';
 import { getPermanentCardPower } from '../powerLedger';
 import {
@@ -81,6 +83,15 @@ export interface BuiltinLifecycleCapabilities {
   readonly executeCostCommands: (
     state: MatchState,
     commands: readonly ChangeCostCommand[],
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executeCardMetadataCommands: (
+    state: MatchState,
+    commands: readonly (
+      | ChangeCardTagCommand
+      | ChangeCardCounterCommand
+      | OverrideCardTextCommand
+    )[],
     manifest: Manifest,
   ) => BuiltinResult;
   readonly destroyCards: (
@@ -779,6 +790,7 @@ function addDiscardedCardToHand(
 function disableOngoingsThisLaneThisTurn(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   if (ctx.selfLane === null || ctx.self === null) return noop(state);
   const sourceId = ctx.self as CardId;
@@ -788,11 +800,10 @@ function disableOngoingsThisLaneThisTurn(
     ...state.lanesById[ctx.selfLane].cards.P1,
   ];
 
-  const events: MatchEvent[] = [];
-  let s = state;
+  const commands: ChangeCardTagCommand[] = [];
   for (const id of allInLane) {
     if (id === sourceId) continue; // don't disable yourself
-    const card = getCardRuntime(s, id, manifest);
+    const card = getCardRuntime(state, id, manifest);
     if (!card) continue;
     // Only disable cards that have an ongoing
     if ((card.text.abilities.ongoing?.length ?? 0) === 0) continue;
@@ -802,17 +813,17 @@ function disableOngoingsThisLaneThisTurn(
     );
     if (alreadyDisabled) continue;
 
-    const mutation = addCardTag(
-      s,
-      id,
-      { kind: 'ONGOING_DISABLED', sourceId },
-      ctx.source,
-      manifest,
-    );
-    events.push(...mutation.events);
-    s = mutation.state;
+    commands.push({
+      type: 'CHANGE_CARD_TAG',
+      cardId: id,
+      mutation: {
+        kind: 'ADD',
+        tag: { kind: 'ONGOING_DISABLED', sourceId },
+      },
+      cause: { ...ctx.source },
+    });
   }
-  return { events, state: s };
+  return lifecycle.executeCardMetadataCommands(state, commands, manifest);
 }
 
 function executeRevealCreationPlan(

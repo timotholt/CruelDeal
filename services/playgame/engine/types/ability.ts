@@ -105,7 +105,7 @@ export type Predicate =
   | { kind: 'POWER_REDUCED'; target: Selector }
   /** True if the card's costDelta < 0 (cost was reduced this game). */
   | { kind: 'COST_REDUCED'; target: Selector }
-  /** True if the target has an ONGOING_DISABLED tag or a BLANK_* TextOverride. */
+  /** True if the target has an ONGOING_DISABLED tag or BLANKED_TEXT override. */
   | { kind: 'TEXT_DISABLED'; target: Selector }
   /** True if the card has at least one ongoing ability defined in its CardDef (or TextOverride). */
   | { kind: 'HAS_ONGOING'; target: Selector }
@@ -125,7 +125,7 @@ export type Predicate =
   | { kind: 'HAND_EMPTY'; owner: OwnerRef }
   /** True if the target owner has any unspent energy right now. */
   | { kind: 'HAS_UNSPENT_ENERGY'; owner: OwnerRef }
-  /** True if the card has the EVER_MOVED tag (has been moved at least once this match). */
+  /** True if the card has moved at least once this match. */
   | { kind: 'EVER_MOVED'; target: Selector };
 
 export type CmpOp = '<' | '<=' | '==' | '>=' | '>';
@@ -249,8 +249,9 @@ export type EffectExpr =
   | { kind: 'COPY_TEXT_OF'; into: Selector; source: Selector; copyKind?: CopyTextKind }
   /**
    * Blank out text on the target card.
-   * Creates a BLANK_ONGOING or BLANK_ALL TextOverride.
-   * 'ONGOING' removes only Ongoing effects; 'ALL' removes all ability text.
+   * Creates a materialized BLANKED_TEXT override.
+   * 'ON_REVEAL' and 'ONGOING' remove only that slot; 'ALL' removes every
+   * ability.
    */
   | { kind: 'REMOVE_TEXT'; target: Selector; textKind: RemoveTextKind }
   /**
@@ -262,7 +263,11 @@ export type EffectExpr =
   // --- Tag / metadata atoms ---
   | { kind: 'ADD_PENDING'; effect: PendingEffectSpec }
   | { kind: 'ADD_CARD_TAG'; target: Selector; tag: CardTagSpec }
-  | { kind: 'REMOVE_CARD_TAG'; target: Selector; tag: string }
+  | {
+      kind: 'REMOVE_CARD_TAG';
+      target: Selector;
+      tag: CardTagSpec['kind'];
+    }
   | { kind: 'ADD_LOCATION_TAG'; lane: Selector; tag: LaneTagSpec }
   | { kind: 'REPLACE_LOCATION'; lane: Selector; newDefId: string }
   | { kind: 'MODIFY_COUNTER'; target: Selector; name: string; delta: NumExpr }
@@ -382,31 +387,32 @@ export type TextOverride =
       abilities: CardAbilities;
       rulesText: string;
     }
-  /** Ongoing text stripped (card behaves as if it has no Ongoing). */
-  | { kind: 'BLANK_ONGOING' }
-  /** All ability text stripped (card is a vanilla body). */
-  | { kind: 'BLANK_ALL' };
+  /**
+   * Materialized effective text after one or more authored removals.
+   * Copy provenance survives scoped removal so subsequent removals compose
+   * and REMOVE_COPIED_TEXT can still clear the complete copied-text lineage.
+   */
+  | {
+      kind: 'BLANKED_TEXT';
+      abilities: CardAbilities;
+      rulesText: string;
+      copiedFrom:
+        | {
+            sourceCardId: CardId;
+            sourceDefId: string;
+            scope: 'ALL' | 'ON_REVEAL' | 'ONGOING';
+          }
+        | null;
+    };
 
 // ---- Tag / pending-effect specs (used inside EffectExpr authoring) ---------
 // Runtime shapes (with resolved owner/lane/source) live in `state.ts`.
 
 export type CardTagSpec =
-  | { kind: 'MOVED_THIS_TURN' }
-  | { kind: 'DESTROYED_THIS_TURN' }
   | { kind: 'SHURI_DOUBLED' }
   | { kind: 'ONGOING_DISABLED'; sourceRef: 'SELF' }
   | { kind: 'FROM_SPAWN' }
-  | { kind: 'DESTROY_IMMUNE' }
-  /**
-   * Set by the engine when a card is played; cleared at end of turn.
-   * Used by Exploit Artist / Predictive Cop to detect "opponent played here".
-   */
-  | { kind: 'PLAYED_THIS_TURN' }
-  /**
-   * Set the first time a card moves; never cleared.
-   * Used by Escape Route to buff cards that have ever been repositioned.
-   */
-  | { kind: 'EVER_MOVED' };
+  | { kind: 'DESTROY_IMMUNE' };
 
 export type LaneTagSpec =
   | { kind: 'FLOODED' }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { CardId } from '../types/ids';
-import { replaceCardText } from '../operations/cardMutations';
+import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -83,7 +83,10 @@ const fixture = buildRuntimeFixture({
         revealed: true,
         powerMutations: [{ kind: 'ADD', delta: 2 }],
         costDelta: -2,
-        tags: [{ kind: 'EVER_MOVED' }],
+        lifecycle: {
+          frameLastMoved: 4 as never,
+          turnLastMoved: 2,
+        },
         spawnSource: {
           kind: 'CARD_CREATED',
           sourceCardId: 'creator' as CardId,
@@ -205,17 +208,21 @@ describe('live InternalCardRecord queries', () => {
       effectKind: 'SYSTEM' as const,
       reason: 'QUERY_EFFECTIVE_TEXT_BOUNDARY',
     };
-    const blanked = replaceCardText(
-      state,
-      'hand-revealer' as CardId,
-      { kind: 'BLANK_ALL' },
-      source,
-      manifest,
-    );
-    const copied = replaceCardText(
-      blanked.state,
-      'hand-vanilla' as CardId,
-      {
+    const blanked = resolveCardMetadataTransaction(state, [{
+      type: 'OVERRIDE_CARD_TEXT',
+      cardId: 'hand-revealer' as CardId,
+      override: {
+        kind: 'BLANKED_TEXT',
+        abilities: {},
+        rulesText: '',
+        copiedFrom: null,
+      },
+      cause: source,
+    }], manifest);
+    const copied = resolveCardMetadataTransaction(blanked.state, [{
+      type: 'OVERRIDE_CARD_TEXT',
+      cardId: 'hand-vanilla' as CardId,
+      override: {
         kind: 'COPIED_TEXT',
         sourceCardId: 'hand-revealer' as CardId,
         sourceDefId: 'revealer',
@@ -223,9 +230,8 @@ describe('live InternalCardRecord queries', () => {
         abilities: { onReveal: [selfPower] },
         rulesText: 'On Reveal: Gain +1 Power.',
       },
-      source,
-      manifest,
-    );
+      cause: source,
+    }], manifest);
 
     expect(findCards(copied.state, manifest, {
       zone: 'HAND',

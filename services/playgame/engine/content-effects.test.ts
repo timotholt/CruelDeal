@@ -372,7 +372,7 @@ const cardIdInDeck = (
   const result = revealPlayedCard(state, blackIce, BOOTSTRAP_MANIFEST, createRng('content-black-ice'));
 
   truthy(result.events.some((event) => event.type === 'CARD_TEXT_OVERRIDDEN' && event.cardId === bruiser), 'Black ICE removes enemy Ongoing text here');
-  eq(getCardState(result.state, bruiser)!?.textOverride?.kind, 'BLANK_ONGOING', 'Black ICE marks target Ongoing text as blanked');
+  eq(getCardState(result.state, bruiser)!?.textOverride?.kind, 'BLANKED_TEXT', 'Black ICE marks target Ongoing text as blanked');
 }
 
 if (failures > 0) {

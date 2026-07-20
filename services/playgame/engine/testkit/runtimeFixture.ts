@@ -4,6 +4,7 @@ import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type {
   InternalCardRecord,
   CardRevealTiming,
+  CardLifecycleState,
   CardTag,
   CardZone,
   LaneState,
@@ -53,6 +54,7 @@ export interface RuntimeCardSpec {
   readonly variantId?: string;
   readonly revealed?: boolean;
   readonly revealTiming?: CardRevealTiming | null;
+  readonly lifecycle?: CardLifecycleState;
   readonly powerMutations?: readonly PowerMutation[];
   readonly costDelta?: number;
   readonly tags?: readonly CardTag[];
@@ -335,7 +337,9 @@ function buildCard(
     revealed,
     revealTiming: spec.revealTiming
       ?? (zone === 'LANE' && !revealed ? { kind: 'TURN', turn } : null),
-    lifecycle: { ...EMPTY_CARD_LIFECYCLE },
+    lifecycle: spec.lifecycle
+      ? { ...spec.lifecycle }
+      : { ...EMPTY_CARD_LIFECYCLE },
     powerLedger: testPowerLedger(spec.id, spec.powerMutations ?? []),
     costDelta: spec.costDelta ?? 0,
     costLog: EMPTY_COST_LOG,

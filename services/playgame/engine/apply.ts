@@ -53,6 +53,7 @@ import {
   writeLocationRecordsInternal,
 } from './internal/locationStore';
 import { advanceGameplayRng } from './rng';
+import { cardTagsEqual } from './cardTagIdentity';
 
 export function apply(
   state: MatchState,
@@ -103,7 +104,11 @@ function requireEventProvenance(event: MatchEvent): void {
   const provenanceRequired = event.type === 'CARD_COST_CHANGED'
     || event.type === 'ENERGY_CHANGED'
     || event.type === 'MAX_ENERGY_CHANGED'
-    || event.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED';
+    || event.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED'
+    || event.type === 'CARD_TAG_ADDED'
+    || event.type === 'CARD_TAG_REMOVED'
+    || event.type === 'CARD_COUNTER_CHANGED'
+    || event.type === 'CARD_TEXT_OVERRIDDEN';
   if (!('cause' in event) || event.cause === undefined) {
     if (provenanceRequired) {
       throw new Error(`${event.type} cause is required`);
@@ -170,7 +175,6 @@ function applyEventBody(
               lanePlayed: event.lane,
             }
           : EMPTY_CARD_LIFECYCLE,
-        tags: card1 ? addTagUnique(card1.tags, { kind: 'PLAYED_THIS_TURN' }) : [],
       });
       const s3 = addToLane(s2, event.owner, event.lane, event.cardId);
       return {
@@ -351,7 +355,6 @@ function applyEventBody(
           ...card.lifecycle,
           turnDestroyed: state.turn,
         },
-        tags: addTagUnique(card.tags, { kind: 'DESTROYED_THIS_TURN' }),
       });
       return {
         ...s,
@@ -382,11 +385,13 @@ function applyEventBody(
       if (!card) return state;
       const s1 = removeFromLane(state, card.owner, event.fromLane, event.cardId);
       const s2 = addToLane(s1, card.owner, event.toLane, event.cardId);
-      const tagsWithMove = addTagUnique(card.tags, { kind: 'MOVED_THIS_TURN' });
-      const tagsWithEver = addTagUnique(tagsWithMove, { kind: 'EVER_MOVED' });
       return patchCard(s2, event.cardId, {
         lane: event.toLane,
-        tags: tagsWithEver,
+        lifecycle: {
+          ...card.lifecycle,
+          frameLastMoved: eventFrame,
+          turnLastMoved: state.turn,
+        },
       });
     }
 
@@ -465,7 +470,19 @@ function applyEventBody(
     case 'CARD_COUNTER_CHANGED': {
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
+      if (event.name.trim().length === 0) {
+        throw new Error('CARD_COUNTER_CHANGED name must be non-empty');
+      }
+      if (!Number.isSafeInteger(event.delta)) {
+        throw new Error('CARD_COUNTER_CHANGED delta must be a safe integer');
+      }
       const prev = card.counters[event.name] ?? 0;
+      if (
+        !Number.isSafeInteger(prev)
+        || !Number.isSafeInteger(prev + event.delta)
+      ) {
+        throw new Error('CARD_COUNTER_CHANGED result must be a safe integer');
+      }
       return patchCard(state, event.cardId, {
         counters: { ...card.counters, [event.name]: prev + event.delta },
       });
@@ -1089,23 +1106,10 @@ function applyEventBody(
       };
 
     case 'TURN_ENDED': {
-      // End-of-turn housekeeping: DESTROYED_THIS_TURN / MOVED_THIS_TURN tags
-      // are transient — clear them so they don't leak into next turn's
-      // projections. Also clear unresolved staged-play provenance.
-      const cards: Record<string, InternalCardRecord> = {};
-      for (const [id, c] of Object.entries(cardRecordsInternal(state))) {
-        cards[id] = {
-          ...c,
-          tags: c.tags.filter(t =>
-            t.kind !== 'DESTROYED_THIS_TURN' &&
-            t.kind !== 'MOVED_THIS_TURN' &&
-            t.kind !== 'PLAYED_THIS_TURN',
-          ),
-        };
-      }
+      // Lifecycle markers are derived by comparing their indexed turn to the
+      // current turn, so no card metadata is rewritten at turn boundaries.
       return {
         ...state,
-        cardStore: createCardStoreInternal(cards),
         stagedPlays: [],
         phase: 'BETWEEN_TURNS',
       };
@@ -1247,7 +1251,7 @@ function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId)
 }
 
 function addTagUnique(tags: readonly CardTag[], t: CardTag): readonly CardTag[] {
-  if (tags.some(existing => existing.kind === t.kind)) return tags;
+  if (tags.some(existing => cardTagsEqual(existing, t))) return tags;
   return [...tags, t];
 }
 

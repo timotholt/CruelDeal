@@ -1,4 +1,9 @@
-import type { EffectExpr, EffectRef, Selector } from '../types/ability';
+import type {
+  EffectExpr,
+  EffectRef,
+  Selector,
+  TextOverride,
+} from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type {
   CardId,
@@ -8,6 +13,7 @@ import type {
 } from '../types/ids';
 import type {
   EnergyReason,
+  CardTag,
   PowerMutation,
   SpawnSource,
 } from '../types/state';
@@ -37,6 +43,9 @@ export type GameCommand =
   | ChangeStoredPowerCommand
   | ChangeCostCommand
   | ChangeEnergyCommand
+  | ChangeCardTagCommand
+  | ChangeCardCounterCommand
+  | OverrideCardTextCommand
   | LocationLifecycleCommand
   | LaneLifecycleCommand;
 
@@ -177,6 +186,27 @@ export interface ChangeEnergyCommand extends CausedCommand {
   readonly owner: Owner;
   readonly delta: number;
   readonly reason: EnergyReason;
+}
+
+export interface ChangeCardTagCommand extends CausedCommand {
+  readonly type: 'CHANGE_CARD_TAG';
+  readonly cardId: CardId;
+  readonly mutation:
+    | { readonly kind: 'ADD'; readonly tag: CardTag }
+    | { readonly kind: 'REMOVE'; readonly tag: CardTag['kind'] };
+}
+
+export interface ChangeCardCounterCommand extends CausedCommand {
+  readonly type: 'CHANGE_CARD_COUNTER';
+  readonly cardId: CardId;
+  readonly name: string;
+  readonly delta: number;
+}
+
+export interface OverrideCardTextCommand extends CausedCommand {
+  readonly type: 'OVERRIDE_CARD_TEXT';
+  readonly cardId: CardId;
+  readonly override: TextOverride | null;
 }
 
 export interface LocationLifecycleCommand extends CausedCommand {

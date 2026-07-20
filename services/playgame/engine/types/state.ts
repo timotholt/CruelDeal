@@ -244,6 +244,10 @@ export interface CardLifecycleState {
   readonly turnPlayed?: number;
   /** Supports current-turn lane-specific play mechanics. */
   readonly lanePlayed?: LaneId;
+  /** Latest movement frame; presence also answers "has ever moved". */
+  readonly frameLastMoved?: Frame;
+  /** Supports current-turn movement mechanics. */
+  readonly turnLastMoved?: number;
   /** Supports "destroyed last turn" mechanics. */
   readonly turnDestroyed?: number;
 }
@@ -342,16 +346,22 @@ export interface LocationDeckState {
 // ---- Tags (concrete runtime shapes, distinct from EffectExpr-authoring specs) --
 
 export type CardTag =
-  | { kind: 'MOVED_THIS_TURN' }
-  | { kind: 'DESTROYED_THIS_TURN' }
   | { kind: 'SHURI_DOUBLED' }
   | { kind: 'ONGOING_DISABLED'; sourceId: CardId }
   | { kind: 'FROM_SPAWN'; sourceId: CardId }
-  | { kind: 'DESTROY_IMMUNE' }
-  /** Set by the engine when a card is played; cleared at TURN_ENDED. */
-  | { kind: 'PLAYED_THIS_TURN' }
-  /** Set the first time a card moves; never cleared. Used by Escape Route. */
-  | { kind: 'EVER_MOVED' };
+  | { kind: 'DESTROY_IMMUNE' };
+
+/**
+ * Engine-owned lifecycle facts exposed through authored HAS_TAG/query syntax.
+ * They are derived from CardLifecycleState and are never stored in `tags`.
+ */
+export type CardLifecycleMarker =
+  | 'PLAYED_THIS_TURN'
+  | 'MOVED_THIS_TURN'
+  | 'DESTROYED_THIS_TURN'
+  | 'EVER_MOVED';
+
+export type CardStatusKind = CardTag['kind'] | CardLifecycleMarker;
 
 export type LaneTag =
   | { kind: 'FLOODED' }

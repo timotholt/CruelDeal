@@ -47,6 +47,7 @@ import {
 } from '../kernel/handTransaction';
 import { resolveCostTransaction } from '../kernel/costTransaction';
 import { resolveEnergyTransaction } from '../kernel/energyTransaction';
+import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
 import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
@@ -58,15 +59,12 @@ import type { PlacementCommand } from '../kernel/operations/placement';
 import type { HandCommand } from '../kernel/operations/hand';
 import type {
   ChangeCostCommand,
+  ChangeCardCounterCommand,
+  ChangeCardTagCommand,
   ChangeEnergyCommand,
   ChangeStoredPowerCommand,
+  OverrideCardTextCommand,
 } from '../kernel/types';
-import {
-  addCardTag,
-  changeCardCounter,
-  removeCardTag,
-  replaceCardText,
-} from '../operations/cardMutations';
 import {
   addLocationTag,
   changeLocationCounter,
@@ -265,6 +263,24 @@ export function executeEnergyCommands(
   manifest: Manifest,
 ): EvalResult {
   const transaction = resolveEnergyTransaction(state, commands, manifest);
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute tags, counters, and text overrides through the canonical kernel. */
+export function executeCardMetadataCommands(
+  state: MatchState,
+  commands: readonly (
+    | ChangeCardTagCommand
+    | ChangeCardCounterCommand
+    | OverrideCardTextCommand
+  )[],
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveCardMetadataTransaction(
+    state,
+    commands,
+    manifest,
+  );
   return { events: transaction.events, state: transaction.state };
 }
 
@@ -1344,34 +1360,32 @@ export function evalEffect(
 
     case 'ADD_CARD_TAG': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
       const runtimeTag = resolveCardTagSpec(effect.tag, ctx.source);
-      if (!runtimeTag) return { events, state };
-      for (const id of targets) {
-        const mutation = addCardTag(s, id, runtimeTag, ctx.source, manifest);
-        events.push(...mutation.events);
-        s = mutation.state;
-      }
-      return { events, state: s };
+      if (!runtimeTag) return { events: [], state };
+      return executeCardMetadataCommands(
+        state,
+        targets.map(id => ({
+          type: 'CHANGE_CARD_TAG',
+          cardId: id,
+          mutation: { kind: 'ADD', tag: runtimeTag },
+          cause: { ...ctx.source },
+        })),
+        manifest,
+      );
     }
 
     case 'REMOVE_CARD_TAG': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of targets) {
-        const mutation = removeCardTag(
-          s,
-          id,
-          effect.tag as never,
-          ctx.source,
-          manifest,
-        );
-        events.push(...mutation.events);
-        s = mutation.state;
-      }
-      return { events, state: s };
+      return executeCardMetadataCommands(
+        state,
+        targets.map(id => ({
+          type: 'CHANGE_CARD_TAG',
+          cardId: id,
+          mutation: { kind: 'REMOVE', tag: effect.tag },
+          cause: { ...ctx.source },
+        })),
+        manifest,
+      );
     }
 
     case 'ADD_LOCATION_TAG': {
@@ -1417,23 +1431,17 @@ export function evalEffect(
 
     case 'MODIFY_COUNTER': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of targets) {
-        const delta = evalNum(effect.delta, { ...liveCtx, state: s, self: id });
-        if (delta === 0) continue;
-        const mutation = changeCardCounter(
-          s,
-          id,
-          effect.name,
-          delta,
-          ctx.source,
-          manifest,
-        );
-        events.push(...mutation.events);
-        s = mutation.state;
-      }
-      return { events, state: s };
+      return executeCardMetadataCommands(
+        state,
+        targets.map(id => ({
+          type: 'CHANGE_CARD_COUNTER',
+          cardId: id,
+          name: effect.name,
+          delta: evalNum(effect.delta, { ...liveCtx, self: id }),
+          cause: { ...ctx.source },
+        })),
+        manifest,
+      );
     }
 
     case 'MODIFY_LOCATION_COUNTER': {
@@ -1476,12 +1484,12 @@ export function evalEffect(
           }
         : srcCard.text.abilities;
       const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of into) {
-        const mutation = replaceCardText(
-          s,
-          id,
-          {
+      const mutation = executeCardMetadataCommands(
+        state,
+        into.map(id => ({
+          type: 'OVERRIDE_CARD_TEXT',
+          cardId: id,
+          override: {
             kind: 'COPIED_TEXT',
             sourceCardId: srcCard.id,
             sourceDefId: srcCard.defId,
@@ -1489,13 +1497,12 @@ export function evalEffect(
             abilities,
             rulesText: srcCard.text.rulesText,
           },
-          ctx.source,
-          manifest,
-        );
-        events.push(...mutation.events);
-        s = mutation.state;
-      }
-      return { events, state: s };
+          cause: { ...ctx.source },
+        })),
+        manifest,
+      );
+      events.push(...mutation.events);
+      return { events, state: mutation.state };
     }
 
     case 'RESET_POWER': {
@@ -1523,50 +1530,72 @@ export function evalEffect(
 
     case 'REMOVE_TEXT': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
+      const commands: OverrideCardTextCommand[] = [];
       for (const id of targets) {
-        const card = getCardRuntime(s, id, manifest);
+        const card = getCardRuntime(state, id, manifest);
         if (!card) continue;
-        const textKind = effect.textKind;
-        const override = textKind === 'ONGOING' ? { kind: 'BLANK_ONGOING' as const }
-                       : textKind === 'ALL'     ? { kind: 'BLANK_ALL' as const }
-                       : null; // 'ON_REVEAL' — no TextOverride kind for that yet; skip
-        if (!override) continue;
-        const mutation = replaceCardText(
-          s,
-          id,
-          override,
-          ctx.source,
-          manifest,
-        );
-        events.push(...mutation.events);
-        s = mutation.state;
+        const abilities = structuredClone(card.text.abilities);
+        if (effect.textKind === 'ON_REVEAL') {
+          if (abilities.onReveal === undefined) continue;
+          delete abilities.onReveal;
+        } else if (effect.textKind === 'ONGOING') {
+          if (abilities.ongoing === undefined) continue;
+          delete abilities.ongoing;
+        } else {
+          if (Object.keys(abilities).length === 0) continue;
+          for (
+            const slot of Object.keys(abilities) as (keyof typeof abilities)[]
+          ) {
+            delete abilities[slot];
+          }
+        }
+        const priorOverride = card.text.override;
+        const copiedFrom = priorOverride?.kind === 'COPIED_TEXT'
+          ? {
+              sourceCardId: priorOverride.sourceCardId,
+              sourceDefId: priorOverride.sourceDefId,
+              scope: priorOverride.scope,
+            }
+          : priorOverride?.kind === 'BLANKED_TEXT'
+            ? priorOverride.copiedFrom
+            : null;
+        commands.push({
+          type: 'OVERRIDE_CARD_TEXT',
+          cardId: id,
+          override: {
+            kind: 'BLANKED_TEXT',
+            abilities,
+            // Rules text is not segmented by ability slot. Empty is truthful;
+            // retaining the old prose would describe a removed ability.
+            rulesText: '',
+            copiedFrom,
+          },
+          cause: { ...ctx.source },
+        });
       }
-      return { events, state: s };
+      return executeCardMetadataCommands(state, commands, manifest);
     }
 
     case 'REMOVE_COPIED_TEXT': {
       // Clear an immutable copied-text snapshot.
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
+      const commands: OverrideCardTextCommand[] = [];
       for (const id of targets) {
-        const card = getCardRuntime(s, id, manifest);
+        const card = getCardRuntime(state, id, manifest);
         if (!card) continue;
         const ov = card.text.override;
-        if (ov?.kind !== 'COPIED_TEXT') continue;
-        const mutation = replaceCardText(
-          s,
-          id,
-          null,
-          ctx.source,
-          manifest,
-        );
-        events.push(...mutation.events);
-        s = mutation.state;
+        if (
+          ov?.kind !== 'COPIED_TEXT'
+          && !(ov?.kind === 'BLANKED_TEXT' && ov.copiedFrom !== null)
+        ) continue;
+        commands.push({
+          type: 'OVERRIDE_CARD_TEXT',
+          cardId: id,
+          override: null,
+          cause: { ...ctx.source },
+        });
       }
-      return { events, state: s };
+      return executeCardMetadataCommands(state, commands, manifest);
     }
 
     case 'ADD_PENDING': {
@@ -1696,6 +1725,7 @@ export function evalEffect(
           executeHandCommands,
           executePowerCommands,
           executeCostCommands,
+          executeCardMetadataCommands,
         },
       );
   }
@@ -1732,8 +1762,6 @@ function resolveCardTagSpec(
   source: EffectRef,
 ): import('../types/state').CardTag | null {
   switch (spec.kind) {
-    case 'MOVED_THIS_TURN':
-    case 'DESTROYED_THIS_TURN':
     case 'SHURI_DOUBLED':
       return { kind: spec.kind };
     case 'ONGOING_DISABLED':
@@ -1742,9 +1770,6 @@ function resolveCardTagSpec(
       return { kind: 'FROM_SPAWN', sourceId: source.sourceId as CardId };
     case 'DESTROY_IMMUNE':
       return { kind: 'DESTROY_IMMUNE' };
-    case 'PLAYED_THIS_TURN':
-    case 'EVER_MOVED':
-      return { kind: spec.kind };
   }
 }
 

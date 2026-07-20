@@ -29,6 +29,7 @@ import {
   getEffectiveCardText,
 } from './cardRuntime';
 import { getCardTemplate } from './cardTemplate';
+import { hasCardStatus } from './cardStatus';
 
 // ---- Public entry ----------------------------------------------------------
 
@@ -268,7 +269,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
         const c = getCardRuntime(ctx.state, id, ctx.manifest);
-        return !!c && c.tags.some(t => t.kind === pred.tag);
+        return !!c && hasCardStatus(c, pred.tag, ctx.state.turn);
       });
     }
 
@@ -321,7 +322,11 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
         const override = getEffectiveCardText(ctx.state, id, ctx.manifest)?.override;
-        return override?.kind === 'COPIED_TEXT';
+        return override?.kind === 'COPIED_TEXT'
+          || (
+            override?.kind === 'BLANKED_TEXT'
+            && override.copiedFrom !== null
+          );
       });
     }
 
@@ -363,8 +368,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
         const c = getCardRuntime(ctx.state, id, ctx.manifest);
         if (!c) return false;
         return c.tags.some(t => t.kind === 'ONGOING_DISABLED') ||
-               c.text.override?.kind === 'BLANK_ONGOING' ||
-               c.text.override?.kind === 'BLANK_ALL';
+               c.text.override?.kind === 'BLANKED_TEXT';
       });
     }
 
@@ -443,7 +447,7 @@ export function evalPredicate(pred: Predicate, ctx: EvalCtx): boolean {
       const ids = select(pred.target, ctx);
       return ids.some(id => {
         const c = getCardRuntime(ctx.state, id, ctx.manifest);
-        return c?.tags.some(t => t.kind === 'EVER_MOVED') ?? false;
+        return c ? hasCardStatus(c, 'EVER_MOVED', ctx.state.turn) : false;
       });
     }
   }

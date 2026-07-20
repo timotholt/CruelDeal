@@ -23,7 +23,7 @@
 import type {
   MatchState,
   CardZone,
-  CardTag,
+  CardStatusKind,
   LaneTag,
   SpawnSource,
 } from '../types/state';
@@ -47,6 +47,7 @@ import {
   getCardTemplate,
   type CardTemplate,
 } from './cardTemplate';
+import { hasCardStatus } from './cardStatus';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Comparison primitives
@@ -152,8 +153,8 @@ export interface CardFilter extends CardPositionCriteria {
 
   // Runtime state
   revealed?: boolean;
-  hasTag?: CardTag['kind'] | readonly CardTag['kind'][];
-  noTag?: CardTag['kind'];
+  hasTag?: CardStatusKind | readonly CardStatusKind[];
+  noTag?: CardStatusKind;
   hasCounter?: string;
   counter?: { name: string } & (
     | { eq?: number; ne?: number; lt?: number; lte?: number; gt?: number; gte?: number; in?: readonly number[]; nin?: readonly number[]; between?: readonly [number, number] }
@@ -263,11 +264,12 @@ export function matchesCard(
   if (filter.revealed !== undefined && card.revealed !== filter.revealed) return false;
   if (filter.hasTag !== undefined) {
     const tagKinds = arrayOrOne(filter.hasTag);
-    const hit = tagKinds.some((k) => card.tags.some((t) => t.kind === k));
+    const hit = tagKinds.some((kind) =>
+      hasCardStatus(card, kind, state.turn));
     if (!hit) return false;
   }
   if (filter.noTag !== undefined) {
-    if (card.tags.some((t) => t.kind === filter.noTag)) return false;
+    if (hasCardStatus(card, filter.noTag, state.turn)) return false;
   }
   if (filter.hasCounter !== undefined) {
     if (!(filter.hasCounter in card.counters)) return false;

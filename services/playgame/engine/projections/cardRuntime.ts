@@ -213,20 +213,6 @@ export function getEffectiveCardText(
   };
   const override = card.textOverride;
   if (!override) return printed;
-  if (override.kind === 'BLANK_ALL') {
-    return { abilities: {}, abilityLabels: [], rulesText: '', override };
-  }
-  if (override.kind === 'BLANK_ONGOING') {
-    const abilities = { ...printed.abilities };
-    delete abilities.ongoing;
-    return {
-      abilities,
-      abilityLabels: labelsForAbilities(abilities),
-      rulesText: printed.rulesText,
-      override,
-    };
-  }
-
   return {
     abilities: override.abilities,
     abilityLabels: labelsForAbilities(override.abilities),

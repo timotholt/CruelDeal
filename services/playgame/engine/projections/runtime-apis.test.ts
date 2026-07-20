@@ -10,19 +10,14 @@ import {
 } from '../testkit/runtimeFixture';
 import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
-import type { EffectRef } from '../types/ability';
-import type { MatchState, PowerMutation } from '../types/state';
+import type { EffectRef, TextOverride } from '../types/ability';
+import type { CardTag, MatchState, PowerMutation } from '../types/state';
 import { frameAndFoldEvents } from '../transactionTimeline';
 import {
   cardLifecycleFrames,
   locationLifecycleFrames,
 } from '../timeline';
-import {
-  addCardTag,
-  changeCardCounter,
-  removeCardTag,
-  replaceCardText,
-} from '../operations/cardMutations';
+import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
 import { resolveCostTransaction } from '../kernel/costTransaction';
 import { resolveStoredPowerTransaction } from '../kernel/powerTransaction';
 import { getCurrentCard } from './card';
@@ -73,6 +68,56 @@ const setCardCost = (
   type: 'CHANGE_COST',
   cardId,
   mutation: { kind: 'SET', value },
+  cause: source,
+}], activeManifest);
+const replaceCardText = (
+  current: MatchState,
+  cardId: CardId,
+  override: TextOverride | null,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCardMetadataTransaction(current, [{
+  type: 'OVERRIDE_CARD_TEXT',
+  cardId,
+  override,
+  cause: source,
+}], activeManifest);
+const addCardTag = (
+  current: MatchState,
+  cardId: CardId,
+  tag: CardTag,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCardMetadataTransaction(current, [{
+  type: 'CHANGE_CARD_TAG',
+  cardId,
+  mutation: { kind: 'ADD', tag },
+  cause: source,
+}], activeManifest);
+const removeCardTag = (
+  current: MatchState,
+  cardId: CardId,
+  tag: CardTag['kind'],
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCardMetadataTransaction(current, [{
+  type: 'CHANGE_CARD_TAG',
+  cardId,
+  mutation: { kind: 'REMOVE', tag },
+  cause: source,
+}], activeManifest);
+const changeCardCounter = (
+  current: MatchState,
+  cardId: CardId,
+  name: string,
+  delta: number,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCardMetadataTransaction(current, [{
+  type: 'CHANGE_CARD_COUNTER',
+  cardId,
+  name,
+  delta,
   cause: source,
 }], activeManifest);
 import { getLocationRuntime } from './locationRuntime';
@@ -203,9 +248,14 @@ describe('current card API', () => {
         emptyReason,
         manifest,
       ),
-      () => replaceCardText(initial, cardId, { kind: 'BLANK_ALL' }, emptyReason, manifest),
-      () => addCardTag(initial, cardId, { kind: 'EVER_MOVED' }, emptyReason, manifest),
-      () => removeCardTag(initial, cardId, 'EVER_MOVED', emptyReason, manifest),
+      () => replaceCardText(initial, cardId, {
+        kind: 'BLANKED_TEXT',
+        abilities: {},
+        rulesText: '',
+        copiedFrom: null,
+      }, emptyReason, manifest),
+      () => addCardTag(initial, cardId, { kind: 'DESTROY_IMMUNE' }, emptyReason, manifest),
+      () => removeCardTag(initial, cardId, 'DESTROY_IMMUNE', emptyReason, manifest),
       () => changeCardCounter(initial, cardId, 'uses', 1, emptyReason, manifest),
     ];
     for (const call of calls) {
@@ -242,7 +292,12 @@ describe('current card API', () => {
     const mutableEvent: Extract<MatchEvent, { type: 'CARD_TEXT_OVERRIDDEN' }> = {
       type: 'CARD_TEXT_OVERRIDDEN',
       cardId,
-      override: { kind: 'BLANK_ALL' },
+      override: {
+        kind: 'BLANKED_TEXT',
+        abilities: {},
+        rulesText: '',
+        copiedFrom: null,
+      },
       cause: { ...cause },
     };
     const next = apply(initial, mutableEvent, manifest);
@@ -250,7 +305,12 @@ describe('current card API', () => {
     mutableEvent.cause.reason = 'MUTATED_AFTER_APPLY';
     expect(getCurrentCard(next, cardId, manifest)?.text.abilityLabels).toEqual([]);
     expect(getCardState(next, cardId)?.textLog.at(-1)).toMatchObject({
-      override: { kind: 'BLANK_ALL' },
+      override: {
+        kind: 'BLANKED_TEXT',
+        abilities: {},
+        rulesText: '',
+        copiedFrom: null,
+      },
       cause: { reason: 'RUNTIME_API_TEST' },
     });
   });
@@ -260,9 +320,9 @@ describe('current card API', () => {
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     for (const value of [Number.NaN, Infinity, -Infinity, 1.5]) {
       expect(() => setCardCost(initial, cardId, value, cause, manifest))
-        .toThrow(/finite integer/);
+        .toThrow(/integer/);
       expect(() => adjustCardCost(initial, cardId, value, cause, manifest))
-        .toThrow(/finite integer/);
+        .toThrow(/integer/);
       expect(() => changeStoredPower(
         initial,
         cardId,
@@ -270,7 +330,7 @@ describe('current card API', () => {
         cause,
         manifest,
       ))
-        .toThrow(/finite integer/);
+        .toThrow(/integer/);
       expect(() => changeStoredPower(
         initial,
         cardId,
@@ -278,9 +338,9 @@ describe('current card API', () => {
         cause,
         manifest,
       ))
-        .toThrow(/finite integer/);
+        .toThrow(/integer/);
       expect(() => changeCardCounter(initial, cardId, 'uses', value, cause, manifest))
-        .toThrow(/finite integer/);
+        .toThrow(/integer/);
     }
   });
 

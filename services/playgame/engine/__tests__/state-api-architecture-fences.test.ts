@@ -78,6 +78,22 @@ function reducerCaseSource(eventType: string): string {
   return source.slice(start, nextCase < 0 ? undefined : nextCase);
 }
 
+function reducerCases(): ReadonlyMap<string, string> {
+  const source = readFileSync(resolve(engineRoot, 'apply.ts'), 'utf8');
+  const reducerStart = source.indexOf('\nfunction applyEventBody(');
+  const reducerEnd = source.indexOf('\n// ---- Structural helpers');
+  if (reducerStart < 0 || reducerEnd <= reducerStart) {
+    throw new Error('applyEventBody reducer boundary is missing.');
+  }
+  const reducer = source.slice(reducerStart, reducerEnd);
+  const matches = [...reducer.matchAll(/\n    case '([^']+)'/g)];
+  return new Map(matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? reducer.length;
+    return [match[1], reducer.slice(start, end)];
+  }));
+}
+
 describe('opaque card and location state architecture', () => {
   it('permanently removes the superseded public record type names', () => {
     expect(violations(
@@ -133,8 +149,8 @@ describe('opaque card and location state architecture', () => {
       new RegExp(`type:\\s*'(?:${mutationEvents})'`),
       new Set([
         'engine/kernel/operations/cost.ts',
+        'engine/kernel/operations/cardMetadata.ts',
         'engine/kernel/operations/power.ts',
-        'engine/operations/cardMutations.ts',
         'engine/types/events.ts',
       ]),
     )).toEqual([]);
@@ -175,6 +191,60 @@ describe('opaque card and location state architecture', () => {
         'engine/types/events.ts',
       ]),
     )).toEqual([]);
+  });
+
+  it('keeps raw card-metadata construction solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'(?:CARD_TAG_ADDED|CARD_TAG_REMOVED|CARD_COUNTER_CHANGED|CARD_TEXT_OVERRIDDEN)'/,
+      new Set([
+        'engine/kernel/operations/cardMetadata.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(existsSync(resolve(engineRoot, 'operations/cardMutations.ts')))
+      .toBe(false);
+  });
+
+  it('keeps live card-tag writes inside metadata reduction or transform reset', () => {
+    const tagPatchCases = [...reducerCases()]
+      .filter(([, source]) =>
+        source.includes('patchCard(') && /\btags\s*:/.test(source))
+      .map(([eventType]) => eventType);
+
+    expect(tagPatchCases).toEqual([
+      'CARD_TRANSFORMED',
+      'CARD_TAG_ADDED',
+      'CARD_TAG_REMOVED',
+    ]);
+  });
+
+  it('keeps engine lifecycle markers out of authored card metadata types', () => {
+    const stateTypes = readFileSync(
+      resolve(engineRoot, 'types/state.ts'),
+      'utf8',
+    );
+    const abilityTypes = readFileSync(
+      resolve(engineRoot, 'types/ability.ts'),
+      'utf8',
+    );
+    const cardTagBlock = stateTypes.slice(
+      stateTypes.indexOf('export type CardTag ='),
+      stateTypes.indexOf('export type CardLifecycleMarker ='),
+    );
+    const cardTagSpecBlock = abilityTypes.slice(
+      abilityTypes.indexOf('export type CardTagSpec ='),
+      abilityTypes.indexOf('export type LaneTagSpec ='),
+    );
+
+    for (const marker of [
+      'PLAYED_THIS_TURN',
+      'MOVED_THIS_TURN',
+      'DESTROYED_THIS_TURN',
+      'EVER_MOVED',
+    ]) {
+      expect(cardTagBlock).not.toContain(marker);
+      expect(cardTagSpecBlock).not.toContain(marker);
+    }
   });
 
   it('keeps kernel operations and policies pure proposal producers', () => {

@@ -259,7 +259,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(getStoredCardPowerDelta(bumpedAgain, 's1' as CardId, BOOTSTRAP_MANIFEST), 1, 'CARD_POWER_CHANGED: deltas stack (3 + -2 = 1)');
 }
 
-// -- CARD_DESTROYED: zone=DISCARD, removed from lane, tagged
+// -- CARD_DESTROYED: zone=DISCARD, removed from lane, lifecycle indexed
 
 {
   const s0 = stateWithSentinelInHand();
@@ -273,7 +273,8 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.zone, 'DESTROYED', 'CARD_DESTROYED: zone=DESTROYED (separate from DISCARD)');
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
   eq(destroyed.lanesById[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
-  truthy(c.tags.some(t => t.kind === 'DESTROYED_THIS_TURN'), 'CARD_DESTROYED: tagged DESTROYED_THIS_TURN');
+  eq(c.lifecycle.turnDestroyed, destroyed.turn, 'CARD_DESTROYED: indexes destruction turn');
+  truthy(!c.tags.some(t => t.kind === 'DESTROY_IMMUNE'), 'CARD_DESTROYED: does not mutate metadata tags');
   eq(
     destroyed.stagedPlays.length,
     0,
@@ -281,7 +282,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   );
 }
 
-// -- CARD_MOVED: swaps lane membership and tags MOVED_THIS_TURN
+// -- CARD_MOVED: swaps lane membership and indexes movement lifecycle
 
 {
   const s0 = stateWithSentinelInHand();
@@ -294,7 +295,15 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(moved.lanesById[0].cards.P0.length, 0, 'CARD_MOVED: gone from lane 0');
   eq(moved.lanesById[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
   eq(getCardState(moved, 's1' as CardId)!.lane, 2, 'CARD_MOVED: card.lane updated');
-  truthy(getCardState(moved, 's1' as CardId)!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
+  eq(
+    getCardState(moved, 's1' as CardId)!.lifecycle.turnLastMoved,
+    moved.turn,
+    'CARD_MOVED: indexes movement turn',
+  );
+  truthy(
+    getCardState(moved, 's1' as CardId)!.lifecycle.frameLastMoved !== undefined,
+    'CARD_MOVED: indexes movement frame',
+  );
   eq(
     moved.stagedPlays,
     [{ cardId: 's1' as CardId, energyPaid: 3 }],
@@ -604,17 +613,20 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 
   const s1 = run(resolving,
     { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
-    // Give the card a transient tag...
     {
-      type: 'CARD_TAG_ADDED',
+      type: 'CARD_MOVED',
       cardId: 's1' as CardId,
-      tag: { kind: 'MOVED_THIS_TURN' },
+      fromLane: 0,
+      toLane: 1,
       cause: locationCause,
     },
     { type: 'TURN_ENDED', turn: 1 },
   );
-  truthy(!getCardState(s1, 's1' as CardId)!.tags.some(t => t.kind === 'MOVED_THIS_TURN'),
-    'TURN_ENDED: transient tags cleared');
+  eq(
+    getCardState(s1, 's1' as CardId)!.lifecycle.turnLastMoved,
+    1,
+    'TURN_ENDED: lifecycle indexes remain immutable',
+  );
   eq(s1.stagedPlays.length, 0, 'TURN_ENDED: stagedPlays cleared');
   eq(s1.phase, 'BETWEEN_TURNS', 'TURN_ENDED: phase = BETWEEN_TURNS');
 

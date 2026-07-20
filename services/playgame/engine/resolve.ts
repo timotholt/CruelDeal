@@ -413,8 +413,8 @@ export function resolveTurn(
     }
   }
 
-  // Phase 2  TURN_ENDED — clears transient tags (DESTROYED_THIS_TURN,
-  //          MOVED_THIS_TURN) + stagedPlays. `@migrate:atTurnEnd` is where
+  // Phase 2  TURN_ENDED — clears stagedPlays. Lifecycle markers are derived
+  //          from indexed turns and require no end-of-turn mutation.
   //          location `atTurnEnd` abilities will be dispatched in a later
   //          tier; they must run BEFORE this cleanup event.
   const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };

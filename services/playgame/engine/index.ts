@@ -74,13 +74,6 @@ export {
   type LocationTemplate,
 } from './projections';
 export {
-  addCardTag,
-  changeCardCounter,
-  removeCardTag,
-  replaceCardText,
-  type CardMutationResult,
-} from './operations/cardMutations';
-export {
   activeLaneIds,
   addLocationTag,
   changeLocationCounter,
