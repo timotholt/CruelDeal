@@ -207,7 +207,7 @@ const REQUIRED_DSL_FIELDS: Readonly<Record<string, readonly string[]>> = {
   SEQUENCE: ['items'],
   TEXT_DISABLED: ['target'],
   TURN: ['turn'],
-  TRANSFORM_CARD: ['target', 'pool'],
+  TRANSFORM_CARD: ['target', 'pool', 'metadataPolicy'],
   TRIGGER_ON_REVEAL: ['target'],
   WHERE: ['of', 'pred'],
 };
@@ -223,7 +223,7 @@ const OPTIONAL_DSL_FIELDS: Readonly<Record<string, readonly string[]>> = {
   OTHER_LANES: ['ownerFilter'],
   RETURN_TO_LANE: ['revealed'],
   SAME_LANE: ['ownerFilter', 'exclude'],
-  TRANSFORM_CARD: ['resetStats'],
+  TRANSFORM_CARD: [],
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -298,6 +298,16 @@ const validateDslValue = (
         && (!Array.isArray(value.ids) || value.ids.some((id) => typeof id !== 'string'))
       ) {
         issues.push({ locationId, message: `${path}.ids must be an array of defId strings` });
+      }
+      if (
+        value.kind === 'TRANSFORM_CARD'
+        && value.metadataPolicy !== 'PRESERVE'
+        && value.metadataPolicy !== 'RESET_TO_DEFINITION'
+      ) {
+        issues.push({
+          locationId,
+          message: `${path}.metadataPolicy must be PRESERVE or RESET_TO_DEFINITION`,
+        });
       }
     }
   }

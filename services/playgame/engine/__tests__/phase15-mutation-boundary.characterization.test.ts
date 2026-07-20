@@ -27,12 +27,8 @@ const MANUAL_REACTION_CALLS = new Set([
 type CountInventory = Readonly<Record<string, Readonly<Record<string, number>>>>;
 
 const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
-  'services/playgame/engine/effects/builtins.ts': {
-    CARD_TRANSFORMED: 1,
-  },
   'services/playgame/engine/effects/evaluator.ts': {
     CARD_REVEAL_SCHEDULED: 1,
-    CARD_TRANSFORMED: 1,
   },
   'services/playgame/engine/locationLifecycle.ts': {
     LANE_CREATED: 1,
@@ -77,6 +73,9 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/kernel/operations/pendingEffect.ts': {
     PENDING_EFFECT_CONSUMED: 1,
     PENDING_EFFECT_SCHEDULED: 1,
+  },
+  'services/playgame/engine/kernel/operations/transform.ts': {
+    CARD_TRANSFORMED: 1,
   },
   'services/playgame/engine/kernel/operations/hand.ts': {
     CARD_DISCARDED: 1,

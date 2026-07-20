@@ -233,6 +233,39 @@ describe('opaque card and location state architecture', () => {
     )).toEqual([]);
   });
 
+  it('keeps card transformation solely in the transform operation', () => {
+    expect(violations(
+      /type:\s*'CARD_TRANSFORMED'/,
+      new Set([
+        'engine/kernel/operations/transform.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(violations(/\bresetStats\b/, new Set())).toEqual([]);
+
+    const kernelTypes = readFileSync(
+      resolve(engineRoot, 'kernel/types.ts'),
+      'utf8',
+    );
+    const commandStart = kernelTypes.indexOf(
+      'export interface TransformCardCommand',
+    );
+    const commandEnd = kernelTypes.indexOf(
+      '\nexport interface ',
+      commandStart + 1,
+    );
+    const commandSource = kernelTypes.slice(commandStart, commandEnd);
+    const operationSource = readFileSync(
+      resolve(engineRoot, 'kernel/operations/transform.ts'),
+      'utf8',
+    );
+    expect(commandSource).toContain('readonly newDefId: string');
+    expect(commandSource).not.toMatch(/\b(?:pool|rng|eventOwner)\b/i);
+    expect(operationSource).not.toMatch(
+      /\b(?:pickDefIdFromPool|listDefIdsFromPool|Rng)\b/,
+    );
+  });
+
   it('keeps direct pending-effect queue writes inside canonical reduction', () => {
     expect(violations(
       /\bpendingEffects\s*:/,
@@ -262,7 +295,7 @@ describe('opaque card and location state architecture', () => {
     expect(stateSource).toContain('readonly nextPendingEffectSequence: number');
   });
 
-  it('keeps live card-tag writes inside metadata reduction or transform reset', () => {
+  it('keeps live card-tag writes inside metadata or transform-policy reduction', () => {
     const tagPatchCases = [...reducerCases()]
       .filter(([, source]) =>
         source.includes('patchCard(') && /\btags\s*:/.test(source))
@@ -312,6 +345,16 @@ describe('opaque card and location state architecture', () => {
     expect(violationsInFiles(
       governedFiles,
       /from\s*['"][^'"]*\/apply['"]|\bapply(?:Framed)?\s*\(/,
+    )).toEqual([]);
+  });
+
+  it('keeps the kernel independent from effect clients and interpreters', () => {
+    const kernelFiles = productionRepositoryPaths().filter(path =>
+      path.startsWith('engine/kernel/')
+    );
+    expect(violationsInFiles(
+      kernelFiles,
+      /from\s*['"][^'"]*\/effects(?:\/[^'"]*)?['"]/,
     )).toEqual([]);
   });
 

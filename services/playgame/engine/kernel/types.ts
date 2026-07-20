@@ -53,6 +53,7 @@ export type GameCommand =
   | ChangeLocationCounterCommand
   | SchedulePendingEffectCommand
   | ConsumePendingEffectCommand
+  | TransformCardCommand
   | LocationLifecycleCommand
   | LaneLifecycleCommand;
 
@@ -244,6 +245,13 @@ export interface ConsumePendingEffectCommand extends CausedCommand {
   readonly type: 'CONSUME_PENDING_EFFECT';
   readonly pendingEffectId: PendingEffectId;
   readonly mode: 'EXECUTE' | 'CANCEL';
+}
+
+export interface TransformCardCommand extends CausedCommand {
+  readonly type: 'TRANSFORM_CARD';
+  readonly cardId: CardId;
+  readonly newDefId: string;
+  readonly metadataPolicy: 'PRESERVE' | 'RESET_TO_DEFINITION';
 }
 
 export interface LocationLifecycleCommand extends CausedCommand {

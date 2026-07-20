@@ -1,6 +1,6 @@
 # Phase 1.5 C5A-3 — Metadata, Pending Work, and Transform
 
-Status: in progress — C5A-3a and C5A-3b complete; C5A-3c and C5A-3d planned
+Status: complete — C5A-3a through C5A-3d exit-proven
 
 Date: 2026-07-19
 
@@ -92,7 +92,7 @@ Exit evidence:
 
 ### C5A-3c — Stable-ID Pending Scheduling
 
-Status: implementation and adversarial proof in progress
+Status: complete
 
 Give every pending effect a deterministic match-unique stable ID. Schedule and
 consume by ID rather than structural equality. When due, snapshot the item,
@@ -123,27 +123,59 @@ The clean contract is:
   deliberately leaves the frozen item scheduled; it never silently filters
   pending state inside an unrelated reducer case.
 
-Adversarial exit proof must cover same-payload distinct IDs, exact-ID consume,
-missing and repeated consume, candidate folding across multiple schedules,
-safe-integer sequence exhaustion, caller-payload snapshotting, allocation
-determinism from equal canonical state, budget rollback, consume-before-effect
-reentrancy, nested interpreter failure rollback, replay/reconciliation, and
-architecture fences against old events, ID-less state, producer-owned event
-construction, and direct queue mutation.
+Exit evidence:
+
+- same-payload distinct IDs, exact-ID consume, missing and repeated consume,
+  candidate folding across multiple schedules, safe-integer sequence
+  exhaustion, caller-payload snapshotting, and allocation determinism from
+  equal canonical state are covered;
+- consume-before-effect reentrancy, cancellation, nested interpreter failure,
+  and budget failure prove all-or-nothing publication;
+- framed replay/reconciliation preserves the stable ID, frozen payload,
+  provenance, queue order, and allocator;
+- lane destruction explicitly cancels pending work through the canonical
+  consume operation rather than filtering the queue in an unrelated reducer;
+- architecture fences permanently reject the removed ID-less state, legacy
+  named variants, old event names, producer-owned event construction, and
+  direct pending-queue writes;
+- `npm run verify:playgame:phase15` is green:
+  - Phase 1.5: 20 files, 146 tests;
+  - Phase 0/runtime: 12 files, 81 tests with 200 generated matches per
+    property run;
+  - TypeScript protocol: 6 tests;
+  - Rust protocol: 2 tests;
+  - protocol schema, 128 cards, 38 locations, lint, and production build.
 
 ### C5A-3d — Transform After Stored-Power Reset
 
-Status: planned after C5A-3c
+Status: complete
 
 Make one transform operation the sole `CARD_TRANSFORMED` producer. A resetting
 transform must execute governed stored-Power reset and its nested reactions
 before the transform commit. The transform reducer event must never mutate the
 Power ledger.
 
-Exit requires evaluator/built-in parity, deterministic scoped-RNG selection,
-reset-before-transform trace tests, atomic rollback coverage, lifecycle
-classification tests, and removal of reducer-level `resetStats` and all direct
-transform event producers.
+Exit evidence:
+
+- the evaluator and built-ins select a target definition through their scoped
+  deterministic RNG, then submit one command carrying the fixed `newDefId`;
+  permanent fences keep RNG, pools, and re-selection outside the kernel;
+- the transform operation is the sole `CARD_TRANSFORMED` producer, while
+  evaluator and built-in clients have behavior-level parity through the same
+  transaction;
+- reset-before-transform traces prove governed stored-Power reset and nested
+  gain reactions observe the old definition before the transform commits;
+- interpreter failure, policy denial, and budget exhaustion publish no reset,
+  nested-reaction, or transform prefix;
+- preserve/reset metadata policies retain identity, ownership, zone, lane,
+  lifecycle classification, spawn provenance, and staged payment, while Power
+  history remains exclusively owned by `CARD_POWER_CHANGED`;
+- deterministic client selection, fixed-command execution, framed replay,
+  lifecycle/staged provenance, nested reactions, rollback, and direct-producer
+  fences are green in the focused C5A-3d suites;
+- the complete Phase 1.5 test gate is green at 21 files and 155 tests;
+- the former reducer-level stat-reset flag and direct transform producers are
+  removed rather than retained as compatibility paths.
 
 ## Ordering and Stop Rules
 
@@ -163,6 +195,8 @@ Stop and redesign a slice if it introduces:
 
 ## Current Exit Decision
 
-C5A-3 is not complete. C5A-3a and C5A-3b are complete and exit-proven. C5A-3c
-and C5A-3d remain planned and must not be reported as implemented until their
-code, architecture fences, and full validation evidence land.
+C5A-3 is complete across all four ordered slices. Card metadata, stable
+location metadata, stable-ID pending work, and transform now each have one
+canonical governed producer with focused adversarial proof and permanent
+architecture fences. The aggregate Phase 1.5 verifier remains the release gate
+for merging or tagging this checkpoint.

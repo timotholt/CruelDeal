@@ -230,7 +230,12 @@ export type EffectExpr =
         | { kind: 'TOP' }
         | { kind: 'FIRST_MATCHING'; selector: Selector };
     }
-  | { kind: 'TRANSFORM_CARD'; target: Selector; pool: PoolRef; resetStats?: boolean }
+  | {
+      kind: 'TRANSFORM_CARD';
+      target: Selector;
+      pool: PoolRef;
+      metadataPolicy: 'PRESERVE' | 'RESET_TO_DEFINITION';
+    }
   /** Schedule unresolved board cards to perform their real reveal later. */
   | {
       kind: 'SCHEDULE_REVEAL';

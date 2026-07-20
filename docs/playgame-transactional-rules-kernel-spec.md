@@ -1455,9 +1455,11 @@ old events and all direct queue writes are absent.
 ##### C5A-3d — Transform After Stored-Power Reset
 
 `TRANSFORM_CARD` becomes the only transform command, and one transform
-operation exclusively proposes `CARD_TRANSFORMED`. Selection of the target
-definition uses the transaction's scoped deterministic RNG and is fixed before
-the transform sequence is enqueued.
+operation exclusively proposes `CARD_TRANSFORMED`. The authoritative
+evaluator or built-in client uses its scoped deterministic RNG to select the
+target definition immediately before issuing the command. The command carries
+that fixed `newDefId`; the kernel never owns RNG, samples a pool, or re-picks
+after candidate state changes.
 
 For a transform that requests stat reset, ordering is mandatory:
 

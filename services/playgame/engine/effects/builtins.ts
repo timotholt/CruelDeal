@@ -26,7 +26,7 @@ import type {
   OverrideCardTextCommand,
 } from '../kernel/types';
 import type { PendingEffectCommand } from '../kernel/pendingEffectTransaction';
-import { apply } from '../apply';
+import type { TransformCardCommand } from '../kernel/transformTransaction';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
@@ -98,6 +98,15 @@ export interface BuiltinLifecycleCapabilities {
   readonly executePendingEffectCommands: (
     state: MatchState,
     commands: readonly PendingEffectCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
+      readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executeTransformCommands: (
+    state: MatchState,
+    commands: readonly TransformCardCommand[],
     options: {
       readonly rng: EffectCtx['rng'];
       readonly depth?: number;
@@ -205,6 +214,21 @@ function runPending(
   lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   return lifecycle.executePendingEffectCommands(
+    state,
+    commands,
+    { rng: ctx.rng, depth: ctx.depth },
+    manifest,
+  );
+}
+
+function runTransform(
+  state: MatchState,
+  commands: readonly TransformCardCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executeTransformCommands(
     state,
     commands,
     { rng: ctx.rng, depth: ctx.depth },
@@ -1133,24 +1157,15 @@ function socialWorker(
       .map(def => def.defId);
     if (candidates.length === 0) continue;
     const newDefId = ctx.rng.scope(`social:${cardId}`).pick(candidates);
-    const powerReset = runPower(s, [{
-      type: 'CHANGE_STORED_POWER',
+    const transformed = runTransform(s, [{
+      type: 'TRANSFORM_CARD',
       cardId,
-      mutation: { kind: 'RESET' },
+      newDefId,
+      metadataPolicy: 'RESET_TO_DEFINITION',
       cause: { ...ctx.source },
     }], ctx, manifest, lifecycle);
-    events.push(...powerReset.events);
-    s = powerReset.state;
-    const event: MatchEvent = {
-      type: 'CARD_TRANSFORMED',
-      cardId,
-      oldDefId: card.defId,
-      newDefId,
-      cause: ctx.source,
-      resetStats: true,
-    };
-    events.push(event);
-    s = apply(s, event, manifest);
+    events.push(...transformed.events);
+    s = transformed.state;
   }
   return { events, state: s };
 }

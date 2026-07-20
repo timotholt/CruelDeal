@@ -69,7 +69,7 @@ describe('location-set loader', () => {
     expect(locations.map((location) => location.defId)).toEqual(EXPECTED_LOCATION_ORDER);
     expect(loaded.disabledLocationIds).toEqual([]);
     expect(createHash('sha256').update(normalized).digest('hex')).toBe(
-      'e4e2a7dd710517d6f7465c321f3f9144b37b2a44922460c8290b0bd73633be09',
+      '0423559df99d93a83bcafba642c36df13a187ccb3ff40d2d4ed4f5b2797ea1f8',
     );
   });
 
@@ -160,6 +160,42 @@ describe('location-set loader', () => {
       folder: source.folder,
       location,
     })).toEqual([]);
+  });
+
+  it('requires an explicit supported transform metadata policy', () => {
+    const source = getActiveLocationModules(['core-v1']).find(
+      (module) => module.location.defId === 'black-clinic',
+    );
+    expect(source).toBeDefined();
+
+    const missing = cloneLocation(source!.location);
+    const missingTransform = (
+      missing.abilities.onCardPlayedHere?.[0] as {
+        then: Record<string, unknown>[];
+      }
+    ).then[0];
+    delete missingTransform.metadataPolicy;
+
+    const invalid = cloneLocation(source!.location);
+    const invalidTransform = (
+      invalid.abilities.onCardPlayedHere?.[0] as {
+        then: Record<string, unknown>[];
+      }
+    ).then[0];
+    invalidTransform.metadataPolicy = 'LEGACY_RESET';
+
+    expect(validateLocationModule({
+      folder: source!.folder,
+      location: missing,
+    }).map((issue) => issue.message)).toContain(
+      'abilities.onCardPlayedHere[0].then[0].metadataPolicy is required for TRANSFORM_CARD',
+    );
+    expect(validateLocationModule({
+      folder: source!.folder,
+      location: invalid,
+    }).map((issue) => issue.message)).toContain(
+      'abilities.onCardPlayedHere[0].then[0].metadataPolicy must be PRESERVE or RESET_TO_DEFINITION',
+    );
   });
 
   it('rejects folder drift, malformed parameters, and non-pool system rarity', () => {

@@ -314,6 +314,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     cardId: 's1' as CardId,
     oldDefId: 'armored-van',
     newDefId: 'guard',
+    metadataPolicy: 'PRESERVE',
     cause: locationCause,
   });
   eq(

@@ -77,12 +77,12 @@ export interface FrozenPowerEffectContext {
   readonly scopePath: readonly string[];
 }
 
-type PowerReactionEffect = {
+export type PowerReactionEffect = {
   readonly kind: 'AUTHORED';
   readonly effect: EffectExpr;
 };
 
-type PowerWork = KernelWork<
+export type PowerWork = KernelWork<
   ChangeStoredPowerCommand,
   PowerReactionEffect,
   FrozenPowerEffectContext,
@@ -115,7 +115,7 @@ export interface StoredPowerTransactionResult {
   readonly usage: KernelBudgetUsage;
 }
 
-function captureStoredPowerSemantics(
+export function captureStoredPowerSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,
@@ -201,7 +201,7 @@ function laneOrdinal(state: MatchState, lane: LaneId | null): number {
   return index < 0 ? Number.MAX_SAFE_INTEGER : index;
 }
 
-function collectPowerReactions(
+export function collectPowerReactions(
   before: MatchState,
   transition: CommittedTransition<MatchEvent, PowerSemantics>,
   baseDepth: number,

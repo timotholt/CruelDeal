@@ -426,10 +426,23 @@ function applyEventBody(
     case 'CARD_TRANSFORMED': {
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
+      if (card.defId !== event.oldDefId) {
+        throw new Error(
+          `CARD_TRANSFORMED expected ${event.oldDefId}, found ${card.defId}`,
+        );
+      }
+      if (
+        event.metadataPolicy !== 'PRESERVE'
+        && event.metadataPolicy !== 'RESET_TO_DEFINITION'
+      ) {
+        throw new Error(
+          'CARD_TRANSFORMED requires an explicit metadata policy',
+        );
+      }
       return patchCard(state, event.cardId, {
         defId: event.newDefId,
         variantId: undefined,
-        ...(event.resetStats ? {
+        ...(event.metadataPolicy === 'RESET_TO_DEFINITION' ? {
           costDelta: 0,
           costLog: [],
           counters: {},

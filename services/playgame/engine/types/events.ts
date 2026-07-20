@@ -97,7 +97,14 @@ export type MatchEvent =
   | { type: 'CARD_BANISHED'; cardId: CardId; cause: EffectRef }    // anywhere → BANISHED (inaccessible)
   | { type: 'CARD_MOVED'; cardId: CardId; fromLane: LaneId; toLane: LaneId; cause: EffectRef }
   | { type: 'CARD_RETURNED_TO_LANE'; cardId: CardId; lane: LaneId; revealed: boolean; cause: EffectRef }
-  | { type: 'CARD_TRANSFORMED'; cardId: CardId; oldDefId: string; newDefId: string; cause: EffectRef; resetStats?: boolean }
+  | {
+      type: 'CARD_TRANSFORMED';
+      cardId: CardId;
+      oldDefId: string;
+      newDefId: string;
+      metadataPolicy: 'PRESERVE' | 'RESET_TO_DEFINITION';
+      cause: EffectRef;
+    }
   | { type: 'CARD_TAG_ADDED'; cardId: CardId; tag: CardTag; cause: EffectRef }
   | { type: 'CARD_TAG_REMOVED'; cardId: CardId; tag: CardTag['kind']; cause: EffectRef }
   | { type: 'CARD_TEXT_OVERRIDDEN'; cardId: CardId; override: TextOverride | null; cause: EffectRef }

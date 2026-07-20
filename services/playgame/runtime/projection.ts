@@ -492,8 +492,12 @@ function projectAnimationEvent(
         type: event.type,
         data: {
           card: card(event.cardId),
-          ...(visible ? { defId: event.newDefId } : {}),
-          ...(event.resetStats === undefined ? {} : { resetStats: event.resetStats }),
+          ...(visible
+            ? {
+                defId: event.newDefId,
+                metadataPolicy: event.metadataPolicy,
+              }
+            : {}),
         },
       };
     }

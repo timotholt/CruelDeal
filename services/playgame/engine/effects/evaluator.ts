@@ -54,6 +54,10 @@ import {
   type PendingEffectCommand,
 } from '../kernel/pendingEffectTransaction';
 import {
+  resolveTransformTransaction,
+  type TransformCardCommand,
+} from '../kernel/transformTransaction';
+import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
   type RevealCommand,
@@ -337,6 +341,27 @@ export function executePendingEffectCommands(
           },
           depth: options.depth ?? 0,
         },
+        manifest,
+      ),
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Resolve definition selection and transform metadata policy atomically. */
+export function executeTransformCommands(
+  state: MatchState,
+  commands: readonly TransformCardCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveTransformTransaction(state, commands, {
+    manifest,
+    baseDepth: options.depth ?? 0,
+    interpretEffect: (candidate, reaction, frozen) =>
+      evalEffect(
+        candidate,
+        reaction.effect,
+        effectContextFromPower(candidate, frozen, options.rng, manifest),
         manifest,
       ),
   });
@@ -1336,34 +1361,32 @@ export function evalEffect(
       const targets = select(effect.target, liveCtx);
       const events: MatchEvent[] = [];
       let s = state;
-      for (const id of targets) {
-        const card = getCardRuntime(s, id, manifest);
+      for (const cardId of targets) {
+        const card = getCardRuntime(s, cardId, manifest);
         if (!card) continue;
-        const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.scope(`transform:${id}`), ctx.eventOwner ?? null);
-        if (!defId || defId === card.defId) continue;
-        if (effect.resetStats) {
-          const powerReset = executePowerCommands(s, [{
-            type: 'CHANGE_STORED_POWER',
-            cardId: id,
-            mutation: { kind: 'RESET' },
+        const newDefId = pickDefIdFromPool(
+          effect.pool,
+          s,
+          manifest,
+          card.owner,
+          ctx.rng.scope(`transform:${cardId}`),
+          ctx.eventOwner ?? null,
+        );
+        if (!newDefId || newDefId === card.defId) continue;
+        const transformed = executeTransformCommands(
+          s,
+          [{
+            type: 'TRANSFORM_CARD',
+            cardId,
+            newDefId,
+            metadataPolicy: effect.metadataPolicy,
             cause: { ...ctx.source },
-          }], {
-            rng: ctx.rng.scope(`transform-power-reset:${id}`),
-            depth: ctx.depth,
-          }, manifest);
-          events.push(...powerReset.events);
-          s = powerReset.state;
-        }
-        const e: MatchEvent = {
-          type: 'CARD_TRANSFORMED',
-          cardId: id,
-          oldDefId: card.defId,
-          newDefId: defId,
-          cause: ctx.source,
-          resetStats: effect.resetStats,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
+          }],
+          { rng: ctx.rng, depth: ctx.depth },
+          manifest,
+        );
+        events.push(...transformed.events);
+        s = transformed.state;
       }
       return { events, state: s };
     }
@@ -1796,6 +1819,7 @@ export function evalEffect(
           executeCostCommands,
           executeCardMetadataCommands,
           executePendingEffectCommands,
+          executeTransformCommands,
         },
       );
   }

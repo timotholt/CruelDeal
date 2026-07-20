@@ -34,7 +34,8 @@
               "ownerDeck": "EVENT_OWNER",
               "min": 5,
               "max": 5
-            }
+            },
+            "metadataPolicy": "PRESERVE"
           },
           {
             "kind": "MODIFY_LOCATION_COUNTER",
