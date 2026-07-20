@@ -8,7 +8,13 @@ import type { Deck } from '../../engine/manifest/types';
 import type { CardId, Seat } from '../../engine/types/ids';
 import { KernelInvariantError } from '../../engine/kernel';
 import { computeDeckContentHash, validateMatchBootstrap } from '../bootstrapValidation';
-import type { IntentEnvelope, MatchBootstrap, ParticipantController, RuntimeIntent } from '../contracts';
+import type {
+  CommittedTransactionTimeline,
+  IntentEnvelope,
+  MatchBootstrap,
+  ParticipantController,
+  RuntimeIntent,
+} from '../contracts';
 import { defaultLocationDeckFactory } from '../locationDeckFactory';
 import { createMatchRuntime, type MatchRuntime } from '../matchRuntime';
 import * as replayExport from '../replayExport';
@@ -190,14 +196,20 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture();
     const baseRevision = runtime.revision();
     let publications = 0;
+    let publishedTimeline: CommittedTransactionTimeline | null = null;
+    let stateDuringPublication: ReturnType<MatchRuntime['state']> | null = null;
+    let projectionError: unknown = null;
     runtime.subscribeCommittedTransactions((timeline) => {
       publications++;
-      expect(runtime.state()).toBe(timeline.finalState);
-      expect(runtime.revision()).toBe(timeline.transaction.revision);
-      expect(runtime.transactions().at(-1)).toBe(timeline.transaction);
-      expect(timeline.transitions).toHaveLength(timeline.transaction.framedEvents.length);
-      expect(timeline.transitions.at(-1)?.after).toBe(timeline.finalState);
-      expect(timeline.transitions[0].before.lanesById[1]).toBe(timeline.transitions[0].after.lanesById[1]);
+      publishedTimeline = timeline;
+      try {
+        stateDuringPublication = runtime.state();
+        for (const frame of timeline.transitions) {
+          runtime.projectWorkingState(frame.after);
+        }
+      } catch (error) {
+        projectionError = error;
+      }
     });
 
     const result = await runtime.submitIntent(stageEnvelope(runtime, 'atomic-publication'));
@@ -214,6 +226,17 @@ describe('createMatchRuntime', () => {
       intent: { type: 'END_TURN' },
     });
     expect(publications).toBe(1);
+    expect(projectionError).toBeNull();
+    expect(publishedTimeline).not.toBeNull();
+    expect(stateDuringPublication).toBe(publishedTimeline?.finalState);
+    expect(runtime.revision()).toBe(publishedTimeline?.transaction.revision);
+    expect(runtime.transactions().at(-1)).toBe(publishedTimeline?.transaction);
+    expect(publishedTimeline?.transitions)
+      .toHaveLength(publishedTimeline?.transaction.framedEvents.length ?? 0);
+    expect(publishedTimeline?.transitions.at(-1)?.after)
+      .toBe(publishedTimeline?.finalState);
+    expect(publishedTimeline?.transitions[0].before.lanesById[1])
+      .toBe(publishedTimeline?.transitions[0].after.lanesById[1]);
     expect(runtime.frame()).toBeGreaterThan(committedFrameBeforeLock);
   });
 

@@ -134,6 +134,17 @@ interface PlannedSequenceFold {
   readonly rejection: Extract<MatchEvent, { type: 'INTENT_REJECTED' }> | null;
 }
 
+interface PlanProjectionSnapshot {
+  readonly stages: readonly PlannedStage[];
+  readonly prelude: PlanningPrelude | null;
+}
+
+interface PlannedSequenceFoldOptions {
+  readonly baseState?: MatchState;
+  readonly prelude?: PlanningPrelude | null;
+  readonly alreadyAppliedStagePolicy?: 'REJECT' | 'SKIP';
+}
+
 const MUTATION_OPTIONAL_EVENTS = new Set<MatchEvent['type']>([
   'OR_WINDOW_OPEN',
   'OR_WINDOW_CLOSE',
@@ -326,6 +337,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const planning: Record<Seat, PlannedStage[]> = { P0: [], P1: [] };
   const planningPrelude: Record<Seat, PlanningPrelude | null> = { P0: null, P1: null };
   const locked: Record<Seat, boolean> = { P0: false, P1: false };
+  let presentationPlan: Readonly<Record<Seat, PlanProjectionSnapshot>> | null = null;
   let currentRevision: MatchRevision = 0;
   let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
   let checkpoints: readonly DebugMatchCheckpoint[] = Object.freeze([]);
@@ -360,10 +372,14 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const foldPlannedSequence = (
     seat: Seat,
     plannedStages: readonly PlannedStage[],
-    baseState: MatchState = authoritativeState,
+    options: PlannedSequenceFoldOptions = {},
   ): PlannedSequenceFold => {
+    const baseState = options.baseState ?? authoritativeState;
+    const prelude = options.prelude === undefined
+      ? planningPrelude[seat]
+      : options.prelude;
+    const alreadyAppliedStagePolicy = options.alreadyAppliedStagePolicy ?? 'REJECT';
     let state = baseState;
-    const prelude = planningPrelude[seat];
     if (prelude && state.rng.draws === prelude.baseDraws) {
       for (const event of prelude.events) {
         state = apply(state, event, manifest);
@@ -373,7 +389,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       // Presentation frames at or after this stage already contain its whole
       // event batch, including lane-entry effects. Never fold it twice.
       if (getCardPlacement(state, planned.intent.cardId)?.zone !== 'HAND') {
-        if (baseState !== authoritativeState) continue;
+        if (alreadyAppliedStagePolicy === 'SKIP') continue;
         return {
           state: baseState,
           rejection: {
@@ -419,9 +435,14 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
   const foldPlannedStages = (
     seat: Seat,
-    baseState: MatchState = authoritativeState,
+    plannedStages: readonly PlannedStage[] = planning[seat],
+    options: PlannedSequenceFoldOptions = {},
   ): MatchState => {
-    const folded = foldPlannedSequence(seat, planning[seat], baseState);
+    const folded = foldPlannedSequence(
+      seat,
+      plannedStages,
+      options,
+    );
     if (folded.rejection) {
       throw new KernelInvariantError(Object.freeze({
         kind: 'KERNEL_FAILURE',
@@ -435,9 +456,22 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     return folded.state;
   };
 
-  const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
-    foldPlannedStages(config.viewerSeat, baseState)
-  );
+  const projectWorkingState = (baseState?: MatchState): MatchState => {
+    const snapshot = baseState === undefined
+      ? undefined
+      : presentationPlan?.[config.viewerSeat];
+    return foldPlannedStages(
+      config.viewerSeat,
+      snapshot?.stages ?? planning[config.viewerSeat],
+      {
+        baseState: baseState ?? authoritativeState,
+        prelude: snapshot
+          ? snapshot.prelude
+          : planningPrelude[config.viewerSeat],
+        alreadyAppliedStagePolicy: baseState === undefined ? 'REJECT' : 'SKIP',
+      },
+    );
+  };
 
   const visibleState = (): MatchState => projectWorkingState();
 
@@ -724,17 +758,30 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       events,
       resolveMs,
     });
-    // The synchronous presentation subscriber captures each frame with the
-    // viewer's just-consumed private plan still available as an overlay.
-    // Authority is already committed; this only prevents staged cards from
-    // disappearing before their canonical CARD_STAGED frame is presented.
-    publish(committed.timeline);
+    // Active planning ends at commit. Presentation receives a separate,
+    // immutable snapshot while synchronous subscribers project the committed
+    // frame walk; it must never observe or mutate the live planning store.
+    presentationPlan = Object.freeze({
+      P0: Object.freeze({
+        stages: Object.freeze([...planning.P0]),
+        prelude: planningPrelude.P0,
+      }),
+      P1: Object.freeze({
+        stages: Object.freeze([...planning.P1]),
+        prelude: planningPrelude.P1,
+      }),
+    });
     planning.P0 = [];
     planning.P1 = [];
     planningPrelude.P0 = null;
     planningPrelude.P1 = null;
     locked.P0 = false;
     locked.P1 = false;
+    try {
+      publish(committed.timeline);
+    } finally {
+      presentationPlan = null;
+    }
     return committed;
   };
 
