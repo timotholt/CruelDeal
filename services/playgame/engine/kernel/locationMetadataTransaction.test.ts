@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { apply } from '../apply';
-import {
-  moveLocation,
-  replaceLocationCard,
-} from '../locationLifecycle';
 import { locationCounterKey } from '../locationCounterKey';
 import { locationCardAtLane } from '../laneTopology';
 import { getLocationState } from '../projections/locationRuntime';
@@ -19,11 +15,13 @@ import type { EffectRef } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId, LocationCardInstanceId } from '../types/ids';
 import { KernelInvariantError } from './failure';
+import { kernelStepSuccess } from './kernel';
 import {
   resolveLocationMetadataTransaction,
   type LocationMetadataCommand,
 } from './locationMetadataTransaction';
 import { planLocationMetadataCommand } from './operations/locationMetadata';
+import { resolveRulesTransaction } from './rulesTransaction';
 
 const LOCATION_ID = 'kernel-location' as LocationCardInstanceId;
 const REPLACEMENT_ID = 'kernel-ruin' as LocationCardInstanceId;
@@ -71,6 +69,18 @@ function run(
       input.manifest,
     ),
   };
+}
+
+function runRules(
+  state: ReturnType<typeof fixture>['state'],
+  commands: Parameters<typeof resolveRulesTransaction>[1],
+  manifest: ReturnType<typeof fixture>['manifest'],
+) {
+  return resolveRulesTransaction(state, commands, {
+    manifest,
+    baseDepth: 0,
+    expandEffect: () => kernelStepSuccess({ work: [] }),
+  });
 }
 
 describe('location metadata kernel transaction', () => {
@@ -221,8 +231,13 @@ describe('location metadata kernel transaction', () => {
 
   it('mutates the exact moved or off-lane location instance', () => {
     const { manifest, state } = fixture();
-    const moved = moveLocation(state, 0, 2, CAUSE, manifest);
-    expect(moved.ok).toBe(true);
+    const moved = runRules(state, [{
+      type: 'MOVE_LOCATION',
+      locationId: LOCATION_ID,
+      fromLane: 0,
+      toLane: 2,
+      cause: CAUSE,
+    }], manifest);
     const afterMove = resolveLocationMetadataTransaction(moved.state, [{
       type: 'CHANGE_LOCATION_TAG',
       locationId: LOCATION_ID,
@@ -232,14 +247,14 @@ describe('location metadata kernel transaction', () => {
     expect(locationCardAtLane(afterMove.state, 2)?.tags)
       .toEqual([{ kind: 'SEALED' }]);
 
-    const removed = apply(afterMove.state, {
-      type: 'LOCATION_REMOVED_FROM_LANE',
+    const removed = runRules(afterMove.state, [{
+      type: 'REMOVE_LOCATION',
       lane: 2,
       locationId: LOCATION_ID,
       destination: 'DISCARD',
       cause: CAUSE,
-    }, manifest);
-    const offLane = resolveLocationMetadataTransaction(removed, [{
+    }], manifest);
+    const offLane = resolveLocationMetadataTransaction(removed.state, [{
       type: 'CHANGE_LOCATION_COUNTER',
       locationId: LOCATION_ID,
       name: 'visits',
@@ -271,14 +286,16 @@ describe('location metadata kernel transaction', () => {
     expect(event?.kind).toBe('COMMIT');
     if (!event || event.kind !== 'COMMIT') return;
 
-    const replaced = replaceLocationCard(state, 0, {
+    const replaced = runRules(state, [{
+      type: 'REPLACE_LOCATION',
+      lane: 0,
+      oldId: LOCATION_ID,
       cause: CAUSE,
       newId: REPLACEMENT_ID,
       newDefId: 'ruin',
       oldDestination: 'DESTROYED',
       revealPolicy: 'REVEAL_IMMEDIATELY',
-    }, manifest);
-    expect(replaced.ok).toBe(true);
+    }], manifest);
     const applied = apply(replaced.state, event.event, manifest);
     expect(getLocationState(applied, LOCATION_ID)).toMatchObject({
       zone: 'DESTROYED',

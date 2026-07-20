@@ -43,7 +43,6 @@ import { currentFrame, frameSingleEvent } from './timeline';
 import { nextFrame, type FramedEvent } from './types/timeline';
 import {
   cardRecordsInternal,
-  createCardStoreInternal,
   readCardInternal,
   writeCardRecordsInternal,
 } from './internal/cardStore';
@@ -114,7 +113,24 @@ function requireEventProvenance(event: MatchEvent): void {
     || event.type === 'LOCATION_TAG_REMOVED'
     || event.type === 'LOCATION_COUNTER_CHANGED'
     || event.type === 'PENDING_EFFECT_SCHEDULED'
-    || event.type === 'PENDING_EFFECT_CONSUMED';
+    || event.type === 'PENDING_EFFECT_CONSUMED'
+    || event.type === 'LOCATION_DECK_INITIALIZED'
+    || event.type === 'LOCATION_CARD_CREATED'
+    || event.type === 'LOCATION_CARD_DRAWN'
+    || event.type === 'LOCATION_CARD_PLAYED'
+    || event.type === 'LOCATION_SLOT_REVEAL_SCHEDULED'
+    || event.type === 'LOCATION_REVEALED'
+    || event.type === 'LOCATION_TURNED_FACE_DOWN'
+    || event.type === 'LOCATION_SHOWN_TO_SEATS'
+    || event.type === 'LOCATION_REPLACED'
+    || event.type === 'LOCATIONS_SWAPPED'
+    || event.type === 'LOCATION_MOVED'
+    || event.type === 'LOCATION_REMOVED_FROM_LANE'
+    || event.type === 'LOCATION_RETURNED_TO_DECK'
+    || event.type === 'LANE_DESTRUCTION_STARTED'
+    || event.type === 'LANE_DESTROYED'
+    || event.type === 'LANE_CREATION_STARTED'
+    || event.type === 'LANE_CREATED';
   if (!('cause' in event) || event.cause === undefined) {
     if (provenanceRequired) {
       throw new Error(`${event.type} cause is required`);
@@ -360,6 +376,7 @@ function applyEventBody(
         lifecycle: {
           ...card.lifecycle,
           turnDestroyed: state.turn,
+          frameDestroyed: eventFrame,
         },
       });
       return {
@@ -558,6 +575,7 @@ function applyEventBody(
             event.cardId,
           );
       }
+      return state;
     }
 
     case 'CARD_ZONE_CHANGED': {
@@ -800,7 +818,12 @@ function applyEventBody(
 
     case 'LOCATION_SLOT_REVEAL_SCHEDULED': {
       const lane = state.lanesById[event.lane];
-      if (!lane || lane.locationSlot.locationCardId === null) return state;
+      if (
+        !lane
+        || lane.locationSlot.locationCardId !== event.locationId
+      ) {
+        return state;
+      }
       return patchLane(state, event.lane, {
         locationSlot: {
           ...lane.locationSlot,

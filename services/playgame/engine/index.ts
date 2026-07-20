@@ -75,36 +75,21 @@ export {
 } from './projections';
 export {
   activeLaneIds,
-  createLane,
-  destroyLocationCard,
   isActiveLane,
-  laneOccupantIds,
   laneStatus,
-  MAXIMUM_ACTIVE_LANES,
-  MINIMUM_ACTIVE_LANES,
-  moveLocation,
-  removeLocation,
-  replaceLocationCard,
-  returnLocationToDeck,
-  revealLocation,
-  RUIN_LOCATION_DEF_ID,
-  scheduleLocationSlotReveal,
-  showLocationToSeats,
-  swapLocations,
-  turnLocationFaceDown,
-  validateLaneTopology,
-} from './locationLifecycle';
-export type {
-  CreateLaneOptions,
-  DestroyLaneOptions,
-  LocationLifecycleFailure,
-  LocationLifecycleResult,
-  ReplaceLocationCardOptions,
-} from './locationLifecycle';
+} from './laneTopology';
 export {
-  destroyAllOtherLanesWithNormalRules as destroyAllOtherLanes,
-  destroyLaneWithNormalRules as destroyLane,
-} from './effects/evaluator';
+  resolveRulesTransaction,
+} from './kernel/rulesTransaction';
+export type {
+  CanonicalEffectContext,
+  CanonicalRulesEffect,
+  CanonicalRulesSemantics,
+  CanonicalRulesWork,
+  RulesCommand,
+  RulesTransactionOptions,
+  RulesTransactionResult,
+} from './kernel/rulesTransaction';
 export {
   assertFramedEventSequence,
   cardLifecycleFrames,

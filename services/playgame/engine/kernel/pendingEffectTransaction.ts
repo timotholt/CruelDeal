@@ -69,7 +69,7 @@ export interface PendingEffectTransactionOptions {
   };
 }
 
-function capturePendingEffectSemantics(
+export function capturePendingEffectSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,

@@ -72,6 +72,10 @@ describe('Phase 1.2 location architecture fences', () => {
 
   it('keeps lifecycle event production inside the governed operation modules', () => {
     const eventNames = [
+      'LOCATION_DECK_INITIALIZED',
+      'LOCATION_CARD_CREATED',
+      'LOCATION_CARD_DRAWN',
+      'LOCATION_CARD_PLAYED',
       'LOCATION_SLOT_REVEAL_SCHEDULED',
       'LOCATION_REVEALED',
       'LOCATION_TURNED_FACE_DOWN',
@@ -93,9 +97,9 @@ describe('Phase 1.2 location architecture fences', () => {
       productionFiles,
       new RegExp(`type:\\s*'(${eventNames})'`),
       new Set([
+        'engine/kernel/operations/laneTopology.ts',
+        'engine/kernel/operations/locationLifecycle.ts',
         'engine/kernel/operations/locationMetadata.ts',
-        'engine/locationLifecycle.ts',
-        'engine/locationSetup.ts',
         'engine/types/events.ts',
       ]),
     )).toEqual([]);

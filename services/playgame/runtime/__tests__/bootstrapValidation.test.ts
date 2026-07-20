@@ -320,6 +320,51 @@ describe('card variants and opening initialization', () => {
     expect(opened.deck.P1).toHaveLength(manifest.constants.deckSize - openingHandSize);
   });
 
+  it('reveals the opening location and runs its onReveal exactly once', () => {
+    const base = manifestFixture();
+    const manifest: Manifest = {
+      ...base,
+      locations: Object.fromEntries(
+        Object.values(base.locations).map(location => [
+          location.defId,
+          {
+            ...location,
+            abilities: {
+              ...location.abilities,
+              onReveal: [{
+                kind: 'ADJUST_ENERGY' as const,
+                owner: 'P0' as const,
+                delta: { kind: 'LIT' as const, n: 1 },
+              }],
+            },
+          },
+        ]),
+      ),
+    };
+    const setup = createSetupMatch(
+      'opening-location-once',
+      manifest,
+      { P0: deckFixture(), P1: deckFixture() },
+      locationDeckFixture(manifest, 'opening-location-once'),
+    );
+
+    const opening = buildOpeningTransaction(setup.state, manifest);
+    const revealIndex = opening.events.findIndex(
+      event => event.type === 'LOCATION_REVEALED',
+    );
+    const locationEffects = opening.events.filter(
+      event =>
+        event.type === 'ENERGY_CHANGED'
+        && event.owner === 'P0'
+        && event.cause.effectKind === 'LOCATION'
+        && event.cause.reason === 'onReveal',
+    );
+
+    expect(revealIndex).toBeGreaterThanOrEqual(0);
+    expect(locationEffects).toHaveLength(1);
+    expect(opening.events.indexOf(locationEffects[0])).toBeGreaterThan(revealIndex);
+  });
+
   it('makes the headless driver consume the shared 3+1 opening transaction', () => {
     const manifest = manifestFixture();
     const result = runMatch({

@@ -30,6 +30,7 @@ import type {
  */
 export type GameCommand =
   | PlayCardCommand
+  | SetCardRevealTimingCommand
   | RevealCardCommand
   | MoveCardCommand
   | DestroyCardCommand
@@ -54,11 +55,31 @@ export type GameCommand =
   | SchedulePendingEffectCommand
   | ConsumePendingEffectCommand
   | TransformCardCommand
-  | LocationLifecycleCommand
-  | LaneLifecycleCommand;
+  | InitializeLocationDeckCommand
+  | CreateLocationCardCommand
+  | DrawLocationCardCommand
+  | PlayLocationCardCommand
+  | ScheduleLocationRevealCommand
+  | RevealLocationCommand
+  | TurnLocationFaceDownCommand
+  | ShowLocationToSeatsCommand
+  | MoveLocationCommand
+  | SwapLocationsCommand
+  | ReplaceLocationCommand
+  | RemoveLocationCommand
+  | ReturnLocationToDeckCommand
+  | CreateLaneCommand
+  | DestroyLaneCommand
+  | DestroyOtherLanesCommand;
 
 interface CausedCommand {
   readonly cause: EffectRef;
+}
+
+export interface SetCardRevealTimingCommand extends CausedCommand {
+  readonly type: 'SET_CARD_REVEAL_TIMING';
+  readonly cardId: CardId;
+  readonly timing: import('../types/state').CardRevealTiming;
 }
 
 export interface PlayCardCommand extends CausedCommand {
@@ -254,30 +275,123 @@ export interface TransformCardCommand extends CausedCommand {
   readonly metadataPolicy: 'PRESERVE' | 'RESET_TO_DEFINITION';
 }
 
-export interface LocationLifecycleCommand extends CausedCommand {
-  readonly type: 'CHANGE_LOCATION_LIFECYCLE';
-  readonly locationId: LocationCardInstanceId;
-  readonly action:
-    | { readonly kind: 'REVEAL'; readonly lane: LaneId }
-    | { readonly kind: 'TURN_FACE_DOWN'; readonly lane: LaneId }
-    | {
-        readonly kind: 'MOVE';
-        readonly fromLane: LaneId;
-        readonly toLane: LaneId;
-      }
-    | {
-        readonly kind: 'REMOVE';
-        readonly lane: LaneId;
-        readonly destination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
-      };
+export interface InitializeLocationDeckCommand extends CausedCommand {
+  readonly type: 'INITIALIZE_LOCATION_DECK';
+  readonly locations: readonly {
+    readonly id: LocationCardInstanceId;
+    readonly defId: string;
+    readonly sourceDeckEntry: number;
+  }[];
 }
 
-export interface LaneLifecycleCommand extends CausedCommand {
-  readonly type: 'CHANGE_LANE_LIFECYCLE';
+export interface CreateLocationCardCommand extends CausedCommand {
+  readonly type: 'CREATE_LOCATION_CARD';
+  readonly locationId: LocationCardInstanceId;
+  readonly defId: string;
+  readonly pendingLane: LaneId;
+}
+
+export interface DrawLocationCardCommand extends CausedCommand {
+  readonly type: 'DRAW_LOCATION_CARD';
+  readonly locationId: LocationCardInstanceId;
+  readonly pendingLane: LaneId;
+}
+
+export interface PlayLocationCardCommand extends CausedCommand {
+  readonly type: 'PLAY_LOCATION_CARD';
+  readonly locationId: LocationCardInstanceId;
   readonly lane: LaneId;
-  readonly action:
-    | { readonly kind: 'CREATE'; readonly position: number }
-    | { readonly kind: 'DESTROY'; readonly priorPosition: number };
+}
+
+export interface ScheduleLocationRevealCommand extends CausedCommand {
+  readonly type: 'SCHEDULE_LOCATION_REVEAL';
+  readonly lane: LaneId;
+  readonly locationId: LocationCardInstanceId;
+  readonly revealAtTurn: number | null;
+}
+
+export interface RevealLocationCommand extends CausedCommand {
+  readonly type: 'REVEAL_LOCATION';
+  readonly lane: LaneId;
+  readonly locationId: LocationCardInstanceId;
+}
+
+export interface TurnLocationFaceDownCommand extends CausedCommand {
+  readonly type: 'TURN_LOCATION_FACE_DOWN';
+  readonly lane: LaneId;
+  readonly locationId: LocationCardInstanceId;
+}
+
+export interface ShowLocationToSeatsCommand extends CausedCommand {
+  readonly type: 'SHOW_LOCATION_TO_SEATS';
+  readonly lane: LaneId;
+  readonly locationId: LocationCardInstanceId;
+  readonly seats: readonly Owner[];
+}
+
+export interface MoveLocationCommand extends CausedCommand {
+  readonly type: 'MOVE_LOCATION';
+  readonly locationId: LocationCardInstanceId;
+  readonly fromLane: LaneId;
+  readonly toLane: LaneId;
+}
+
+export interface SwapLocationsCommand extends CausedCommand {
+  readonly type: 'SWAP_LOCATIONS';
+  readonly leftLane: LaneId;
+  readonly leftLocationId: LocationCardInstanceId;
+  readonly rightLane: LaneId;
+  readonly rightLocationId: LocationCardInstanceId;
+}
+
+export interface ReplaceLocationCommand extends CausedCommand {
+  readonly type: 'REPLACE_LOCATION';
+  readonly lane: LaneId;
+  readonly oldId: LocationCardInstanceId;
+  readonly newId: LocationCardInstanceId;
+  readonly newDefId: string;
+  readonly oldDestination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+  readonly revealPolicy:
+    | 'REVEAL_IMMEDIATELY'
+    | 'KEEP_SLOT_SCHEDULE'
+    | 'SCHEDULE_AT_TURN'
+    | 'FACE_DOWN_UNSCHEDULED';
+  readonly revealAtTurn?: number;
+}
+
+export interface RemoveLocationCommand extends CausedCommand {
+  readonly type: 'REMOVE_LOCATION';
+  readonly lane: LaneId;
+  readonly locationId: LocationCardInstanceId;
+  readonly destination: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+}
+
+export interface ReturnLocationToDeckCommand extends CausedCommand {
+  readonly type: 'RETURN_LOCATION_TO_DECK';
+  readonly locationId: LocationCardInstanceId;
+  readonly placement: 'TOP' | 'BOTTOM';
+}
+
+export interface CreateLaneCommand extends CausedCommand {
+  readonly type: 'CREATE_LANE';
+  readonly position: number;
+  readonly location:
+    | { readonly kind: 'DRAW_TOP' }
+    | { readonly kind: 'CREATE_RUIN' };
+  readonly reveal:
+    | { readonly kind: 'IMMEDIATE' }
+    | { readonly kind: 'SCHEDULE'; readonly turn: number }
+    | { readonly kind: 'FACE_DOWN' };
+}
+
+export interface DestroyLaneCommand extends CausedCommand {
+  readonly type: 'DESTROY_LANE';
+  readonly lane: LaneId;
+}
+
+export interface DestroyOtherLanesCommand extends CausedCommand {
+  readonly type: 'DESTROY_OTHER_LANES';
+  readonly survivor: LaneId;
 }
 
 export interface CommandWork<C extends GameCommand = GameCommand> {

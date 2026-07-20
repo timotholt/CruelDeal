@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import {
   evalEffect,
+  executeRulesCommands,
   executePlacementCommands,
   revealPlayedCard,
   type EffectCtx,
@@ -23,6 +24,7 @@ import type { InternalCardRecord, MatchState } from '../types/state';
 import { EMPTY_CARD_LIFECYCLE } from '../types/state';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import { locationCardAtLane } from '../laneTopology';
+import { asFrame } from '../types/timeline';
 
 /**
  * Phase 1.5 checkpoint-1 characterization.
@@ -571,6 +573,148 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getStoredCardPowerDelta(builtin.state, climber.id, gameManifest)).toBe(2);
   });
 
+  it('keeps Corporate Climber destruction and its committed-result award on the canonical reveal queue', () => {
+    const climberDefinition = cardDef('canonical-climber', {
+      onReveal: [{
+        kind: 'CALL_BUILTIN',
+        fn: 'CORPORATE_CLIMBER',
+        args: {},
+      }],
+    });
+    const gameManifest = manifest([
+      climberDefinition,
+      cardDef('canonical-victim', {}, 3),
+      cardDef('immune-victim', {}, 7),
+    ]);
+    const climber = {
+      ...card('canonical-climber', climberDefinition.defId, 'P0', 'LANE', 0),
+      revealed: false,
+    };
+    const victim = card(
+      'canonical-victim',
+      'canonical-victim',
+      'P0',
+      'LANE',
+      0,
+    );
+    const immune = {
+      ...card('immune-victim', 'immune-victim', 'P0', 'LANE', 0),
+      tags: [{ kind: 'DESTROY_IMMUNE' as const }],
+    };
+    const initial = stateWith([climber, victim, immune]);
+
+    const result = revealPlayedCard(
+      initial,
+      climber.id,
+      gameManifest,
+      createRng('canonical-corporate-climber'),
+    );
+
+    expect(getCardState(result.state, victim.id)?.zone).toBe('DESTROYED');
+    expect(getCardState(result.state, immune.id)?.zone).toBe('LANE');
+    expect(getStoredCardPowerDelta(
+      result.state,
+      climber.id,
+      gameManifest,
+    )).toBe(3);
+    expect(result.events.filter(event =>
+      event.type === 'CARD_POWER_CHANGED'
+      && event.cardId === climber.id,
+    )).toHaveLength(1);
+  });
+
+  it('awards Corporate Climber for a repeated committed destroy even when onDestroyed returns the victim', () => {
+    const climberDefinition = cardDef('return-climber', {
+      onReveal: [{
+        kind: 'CALL_BUILTIN',
+        fn: 'CORPORATE_CLIMBER',
+        args: {},
+      }],
+    });
+    const returningVictimDefinition = cardDef('returning-victim', {
+      onDestroyed: [{
+        kind: 'RETURN_TO_LANE',
+        target: { kind: 'EVENT_CARD' },
+        to: { kind: 'SELF' },
+        revealed: true,
+      }],
+    }, 3);
+    const gameManifest = manifest([
+      climberDefinition,
+      returningVictimDefinition,
+    ]);
+    const climber = {
+      ...card('return-climber', climberDefinition.defId, 'P0', 'LANE', 0),
+      revealed: false,
+    };
+    const victim = {
+      ...card(
+        'returning-victim',
+        returningVictimDefinition.defId,
+        'P0',
+        'LANE',
+        0,
+      ),
+      lifecycle: {
+        ...EMPTY_CARD_LIFECYCLE,
+        turnDestroyed: 1,
+        frameDestroyed: asFrame(0),
+      },
+    };
+
+    const result = revealPlayedCard(
+      stateWith([climber, victim]),
+      climber.id,
+      gameManifest,
+      createRng('corporate-climber-returned-victim'),
+    );
+
+    expect(getCardState(result.state, victim.id)).toMatchObject({
+      zone: 'LANE',
+      lane: 0,
+    });
+    expect(
+      getCardState(result.state, victim.id)?.lifecycle.frameDestroyed,
+    ).not.toBe(asFrame(0));
+    expect(getStoredCardPowerDelta(
+      result.state,
+      climber.id,
+      gameManifest,
+    )).toBe(3);
+  });
+
+  it('grants Leon return power only after the governed return leaves him in hand', () => {
+    const leonDefinition = cardDef('canonical-leon', {
+      onReveal: [{
+        kind: 'CALL_BUILTIN',
+        fn: 'LEON_RETURN',
+        args: { delta: 2 },
+      }],
+    });
+    const gameManifest = manifest([leonDefinition]);
+    const leon = {
+      ...card('canonical-leon', leonDefinition.defId, 'P0', 'LANE', 0),
+      revealed: false,
+    };
+
+    const result = revealPlayedCard(
+      stateWith([leon]),
+      leon.id,
+      gameManifest,
+      createRng('leon-returned-by-location'),
+    );
+
+    expect(getCardState(result.state, leon.id)).toMatchObject({
+      zone: 'HAND',
+      lane: null,
+    });
+    expect(getStoredCardPowerDelta(
+      result.state,
+      leon.id,
+      gameManifest,
+    )).toBe(2);
+  });
+
   it('keeps the original location reaction frozen across nested replacement', () => {
     const replacement = locationDef('replacement-location', {});
     const original = locationDef('original-location', {
@@ -616,6 +760,53 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       && event.cause?.sourceId === 'location-0'
       && event.cause?.reason === 'onCardDestroyedHere',
     )).toHaveLength(1);
+  });
+
+  it('keeps nested location-domain work atomic on one queue', () => {
+    const singularity = locationDef('atomic-singularity', {
+      onReveal: [{
+        kind: 'SEQUENCE',
+        items: [
+          { kind: 'DESTROY_OTHER_LANES' },
+          {
+            kind: 'REPLACE_LOCATION',
+            lane: { kind: 'SELF' },
+            newDefId: 'missing-location-definition',
+          },
+        ],
+      }],
+    });
+    const ruin = locationDef('ruin', {});
+    const gameManifest = manifest([cardDef('anchor')], [singularity, ruin]);
+    const anchor = card('anchor', 'anchor', 'P0', 'LANE', 1);
+    let initial = stateWith([anchor], {
+      locations: [{ lane: 1, defId: singularity.defId }],
+    });
+    initial = withTestLocation(
+      initial,
+      1,
+      singularity.defId,
+      false,
+      'location-1' as never,
+    );
+    const before = structuredClone(initial);
+
+    expect(() => executeRulesCommands(initial, [{
+      type: 'REVEAL_LOCATION',
+      lane: 1,
+      locationId: 'location-1' as never,
+      cause: {
+        sourceId: 'location-1' as never,
+        effectKind: 'SYSTEM',
+        reason: 'ATOMIC_LOCATION_REVEAL',
+      },
+    }], {
+      rng: createRng('atomic-location-domain'),
+    }, gameManifest)).toThrow(/unknown definition/i);
+
+    expect(initial).toEqual(before);
+    expect(initial.activeLaneOrder).toEqual([0, 1, 2]);
+    expect(locationCardAtLane(initial, 1)?.face).toBe('FACE_DOWN');
   });
 
   for (const owner of ['P0', 'P1'] as const) {

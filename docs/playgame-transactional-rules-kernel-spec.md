@@ -1534,6 +1534,10 @@ empty or duplicated slot.
 post-commit On-Reveal rules. Those reactions enter the same private kernel
 queue and budget as the reveal. Opening and turn-start callers submit the
 command once; they do not manually invoke a second location trigger.
+An atomic `REPLACE_LOCATION` using `REVEAL_IMMEDIATELY` is the same semantic
+reveal edge for the newly created location identity and snapshots that new
+definition's On-Reveal rules exactly once; it does not need or emit a second
+synthetic reveal event.
 
 Replace `CHANGE_LANE_LIFECYCLE` with explicit `CREATE_LANE`, `DESTROY_LANE`,
 and `DESTROY_OTHER_LANES` commands. Lane identities are allocated

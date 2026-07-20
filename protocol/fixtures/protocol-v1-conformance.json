@@ -44,6 +44,57 @@
       }
     },
     {
+      "name": "valid governed location reveal schedule",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 68,
+          "scope": {
+            "turn": 3,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "LOCATION_SLOT_REVEAL_SCHEDULED",
+            "lane": 1,
+            "locationId": "location-1",
+            "revealAtTurn": 4,
+            "cause": {
+              "sourceId": "location-1",
+              "effectKind": "LOCATION",
+              "reason": "SCHEDULE_REVEAL"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "valid governed lane creation",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 69,
+          "scope": {
+            "turn": 3,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "LANE_CREATED",
+            "lane": 3,
+            "position": 1,
+            "cause": {
+              "sourceId": "location-1",
+              "effectKind": "LOCATION",
+              "reason": "CREATE_LANE"
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "valid intent envelope",
       "valid": true,
       "value": {
@@ -223,6 +274,80 @@
           },
           "event": {
             "type": "CARD_DREW_ITSELF"
+          }
+        }
+      }
+    },
+    {
+      "name": "governed location event requires stable identity and cause",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 2,
+          "scope": {
+            "turn": 1,
+            "phase": "SETUP"
+          },
+          "event": {
+            "type": "LOCATION_REVEALED",
+            "lane": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "governed lane event rejects unknown fields",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 3,
+          "scope": {
+            "turn": 1,
+            "phase": "SETUP"
+          },
+          "event": {
+            "type": "LANE_CREATED",
+            "lane": 0,
+            "position": 0,
+            "laneIndex": 0,
+            "cause": {
+              "sourceId": "system:setup",
+              "effectKind": "SYSTEM",
+              "reason": "MATCH_SETUP"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "scheduled replacement requires an exact reveal turn",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 4,
+          "scope": {
+            "turn": 1,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "LOCATION_REPLACED",
+            "lane": 0,
+            "oldId": "location-0",
+            "newId": "location-1",
+            "newDefId": "courthouse",
+            "oldDestination": "DISCARD",
+            "revealPolicy": "SCHEDULE_AT_TURN",
+            "cause": {
+              "sourceId": "location-0",
+              "effectKind": "LOCATION",
+              "reason": "REPLACE_LOCATION"
+            }
           }
         }
       }

@@ -156,26 +156,31 @@ export type MatchEvent =
         defId: string;
         sourceDeckEntry: number;
       }[];
+      cause: EffectRef;
     }
   | {
       type: 'LOCATION_CARD_CREATED';
       locationId: LocationCardInstanceId;
       defId: string;
       pendingLane: LaneId;
+      cause: EffectRef;
     }
   | {
       type: 'LOCATION_CARD_DRAWN';
       locationId: LocationCardInstanceId;
       pendingLane: LaneId;
+      cause: EffectRef;
     }
   | {
       type: 'LOCATION_CARD_PLAYED';
       locationId: LocationCardInstanceId;
       lane: LaneId;
+      cause: EffectRef;
     }
   | {
       type: 'LOCATION_SLOT_REVEAL_SCHEDULED';
       lane: LaneId;
+      locationId: LocationCardInstanceId;
       revealAtTurn: number | null;
       cause: EffectRef;
     }

@@ -72,7 +72,7 @@ export interface TransformTransactionResult {
   readonly usage: KernelBudgetUsage;
 }
 
-function captureTransformSemantics(
+export function captureTransformSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,

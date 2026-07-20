@@ -79,7 +79,7 @@ export interface FrozenHandEffectContext {
   readonly scopePath: readonly string[];
 }
 
-type HandReactionEffect = {
+export type HandReactionEffect = {
   readonly kind: 'AUTHORED';
   readonly effect: EffectExpr;
 };
@@ -128,7 +128,7 @@ function snapshotPlacement(
     : null;
 }
 
-function captureHandSemantics(
+export function captureHandSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,
@@ -248,7 +248,7 @@ function reaction(
   };
 }
 
-function collectHandReactions(
+export function collectHandReactions(
   before: MatchState,
   after: MatchState,
   transition: CommittedTransition<MatchEvent, HandSemantics>,

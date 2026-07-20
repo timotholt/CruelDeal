@@ -46,13 +46,13 @@ export type RevealCommand =
   | DeployFromDeckCommand
   | CreateCardCommand;
 
-interface CompletePlayEffect {
+export interface CompletePlayEffect {
   readonly kind: 'COMPLETE_PLAY';
   readonly cardId: CardId;
   readonly cause: EffectRef;
 }
 
-interface SpellCleanupEffect {
+export interface SpellCleanupEffect {
   readonly kind: 'SPELL_CLEANUP';
   readonly cardId: CardId;
   readonly cause: EffectRef;
@@ -148,6 +148,36 @@ export type RevealWork = KernelWork<
   MatchEvent
 >;
 
+/** Authors the play-completion commit after all reveal work has drained. */
+export function planCompletePlayEffect(
+  state: MatchState,
+  effect: CompletePlayEffect,
+  manifest: Manifest,
+) {
+  const card = getCardRuntime(state, effect.cardId, manifest);
+  if (
+    !card
+    || card.zone !== 'LANE'
+    || card.lane === null
+    || !card.revealed
+  ) {
+    return kernelStepSuccess<KernelWorkExpansion<RevealWork>>({ work: [] });
+  }
+  const event: Extract<
+    MatchEvent,
+    { type: 'CARD_PLAY_COMPLETED' }
+  > = {
+    type: 'CARD_PLAY_COMPLETED',
+    cardId: card.id,
+    owner: card.owner,
+    lane: card.lane,
+    cause: { ...effect.cause },
+  };
+  return kernelStepSuccess<KernelWorkExpansion<RevealWork>>({
+    work: [{ kind: 'COMMIT', event }],
+  });
+}
+
 export interface RevealEffectResult {
   readonly events: readonly MatchEvent[];
   readonly state: MatchState;
@@ -216,7 +246,7 @@ function snapshotLocation(
   };
 }
 
-function captureSemantics(
+export function captureRevealSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,
@@ -346,7 +376,7 @@ function ownerRank(priority: Owner, owner: Owner): number {
 
 function effectContext(
   state: MatchState,
-  options: RevealTransactionOptions,
+  options: Pick<RevealTransactionOptions, 'manifest'>,
   source: CardId | LocationCardInstanceId,
   sourceKind: 'card' | 'location',
   lane: LaneId,
@@ -410,10 +440,10 @@ function reaction(
   };
 }
 
-function collectReactions(
+export function collectRevealReactions(
   after: MatchState,
   transition: CommittedTransition<MatchEvent, RevealSemantics>,
-  options: RevealTransactionOptions,
+  options: Pick<RevealTransactionOptions, 'manifest'>,
 ) {
   const semantics = transition.semantics;
   if (semantics.transitionKind === 'ALREADY_RESOLVED_EFFECT_EVENT') {
@@ -583,10 +613,10 @@ function collectReactions(
   return kernelStepSuccess(out);
 }
 
-function planCommand(
+export function planRevealCommand(
   state: MatchState,
   command: RevealCommand,
-  options: RevealTransactionOptions,
+  options: Pick<RevealTransactionOptions, 'manifest'>,
 ): ReturnType<typeof kernelStepSuccess<KernelWorkExpansion<RevealWork>>> {
   const card = 'cardId' in command
     ? getCardRuntime(state, command.cardId, options.manifest)
@@ -920,35 +950,14 @@ export function resolveRevealTransaction(
     },
     {
       executeCommand: (candidate, work) =>
-        planCommand(candidate, work.command, options),
+        planRevealCommand(candidate, work.command, options),
       interpretEffect: (candidate, work) => {
         if (work.effect.kind === 'COMPLETE_PLAY') {
-          const card = getCardRuntime(
+          return planCompletePlayEffect(
             candidate,
-            work.effect.cardId,
+            work.effect,
             options.manifest,
           );
-          if (
-            !card
-            || card.zone !== 'LANE'
-            || card.lane === null
-            || !card.revealed
-          ) {
-            return kernelStepSuccess({ work: [] });
-          }
-          const event: Extract<
-            MatchEvent,
-            { type: 'CARD_PLAY_COMPLETED' }
-          > = {
-            type: 'CARD_PLAY_COMPLETED',
-            cardId: card.id,
-            owner: card.owner,
-            lane: card.lane,
-            cause: { ...work.effect.cause },
-          };
-          return kernelStepSuccess({
-            work: [{ kind: 'COMMIT', event }],
-          });
         }
         if (work.effect.kind === 'SPELL_CLEANUP') {
           const cleaned = options.cleanupSpell(
@@ -997,9 +1006,9 @@ export function resolveRevealTransaction(
         }
       },
       captureSemantics: (before, event, after) =>
-        captureSemantics(before, event, after, options.manifest),
+        captureRevealSemantics(before, event, after, options.manifest),
       collectReactions: (_before, after, transition) =>
-        collectReactions(after, transition, options),
+        collectRevealReactions(after, transition, options),
     },
   );
   assertKernelSuccess(result);

@@ -20,15 +20,16 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { MatchEvent } from '../types/events';
 import type { Manifest } from '../manifest/types';
 import type { Rng } from '../rng';
-import { apply } from '../apply';
 import { select, selectLanes } from '../projections/select';
 import { evalNum } from '../projections/numexpr';
 import { evalPredicate } from '../projections/select';
 import { type EvalCtx } from '../projections/context';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
+import { getCardPower } from '../projections/power';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin, planBuiltinRevealCreations } from './builtins';
+import { planBuiltinCommands } from './builtinCommandPlanner';
 import {
   resolveStoredPowerTransaction,
   type FrozenPowerEffectContext,
@@ -58,12 +59,21 @@ import {
   type TransformCardCommand,
 } from '../kernel/transformTransaction';
 import {
-  resolveRevealTransaction,
-  type FrozenRevealEffectContext,
   type RevealCommand,
-  type RevealWork,
 } from '../kernel/revealTransaction';
-import type { KernelWorkExpansion } from '../kernel/kernel';
+import {
+  kernelStepFailure,
+  kernelStepSuccess,
+  type KernelStepResult,
+  type KernelWorkExpansion,
+} from '../kernel/kernel';
+import {
+  resolveRulesTransaction,
+  type CanonicalEffectContext,
+  type CanonicalRulesEffect,
+  type CanonicalRulesWork,
+  type RulesCommand,
+} from '../kernel/rulesTransaction';
 import type { PlacementCommand } from '../kernel/operations/placement';
 import type { HandCommand } from '../kernel/operations/hand';
 import type {
@@ -76,14 +86,11 @@ import type {
   ChangeStoredPowerCommand,
   OverrideCardTextCommand,
 } from '../kernel/types';
+import { activeLaneIds, locationCardAtLane } from '../laneTopology';
 import {
-  destroyAllOtherLanes,
-  destroyLane,
-  replaceLocationCard,
-  type LocationLifecycleResult,
-} from '../locationLifecycle';
-import { locationCardAtLane } from '../laneTopology';
-import { getCardRuntime } from '../projections/cardRuntime';
+  getCardLifecycle,
+  getCardRuntime,
+} from '../projections/cardRuntime';
 
 /** Extra fields carried during effect evaluation, on top of EvalCtx. */
 export interface EffectCtx extends EvalCtx {
@@ -368,6 +375,999 @@ export function executeTransformCommands(
   return { events: transaction.events, state: transaction.state };
 }
 
+/**
+ * Execute location-card and lane-topology work through one domain transaction.
+ *
+ * Authored reactions discovered by that transaction are lowered into the same
+ * work queue with their frozen source context and scoped RNG. No location
+ * operation may recursively open another public domain transaction.
+ */
+export function executeRulesCommands(
+  state: MatchState,
+  commands: readonly RulesCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveRulesTransaction(state, commands, {
+    manifest,
+    baseDepth: options.depth ?? 0,
+    expandEffect: (candidate, effect, frozen) =>
+      expandCanonicalAuthoredEffect(
+        candidate,
+        effect,
+        frozen,
+        options.rng,
+        manifest,
+      ),
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+function authoredCanonicalEffect(
+  effect: CanonicalRulesEffect,
+): EffectExpr {
+  if (effect.kind === 'AUTHORED') return effect.effect;
+  if (
+    effect.kind === 'COMPLETE_PLAY'
+    || effect.kind === 'SPELL_CLEANUP'
+    || effect.kind === 'AWARD_POWER_FOR_DESTROYED_CARDS'
+    || effect.kind === 'CHANGE_STORED_POWER_IF_CARD_ZONE'
+  ) {
+    throw new Error(
+      `${effect.kind} must be consumed by the canonical rules router`,
+    );
+  }
+  return effect;
+}
+
+function effectContextFromCanonicalRules(
+  state: MatchState,
+  context: CanonicalEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): EffectCtx {
+  return {
+    state,
+    manifest,
+    self: context.self as CardId | import('../types/ids').LocationCardInstanceId,
+    selfKind: context.selfKind,
+    selfLane: context.selfLane,
+    selfOwner: context.selfOwner,
+    eventCard: typeof context.eventCard === 'string'
+      ? context.eventCard as CardId
+      : null,
+    eventLane: typeof context.eventLane === 'number'
+      ? context.eventLane as LaneId
+      : null,
+    eventOwner: context.eventOwner === 'P0' || context.eventOwner === 'P1'
+      ? context.eventOwner
+      : null,
+    ...(
+      typeof context.it === 'string'
+        ? { it: context.it as CardId }
+        : {}
+    ),
+    source: { ...context.source },
+    depth: context.depth,
+    rng: context.scopePath.reduce(
+      (scoped, purpose) => scoped.scope(purpose),
+      rootRng,
+    ),
+  };
+}
+
+function scopedCanonicalEffectContext(
+  context: CanonicalEffectContext,
+  suffix: string,
+  overrides: Partial<CanonicalEffectContext> = {},
+): CanonicalEffectContext {
+  return {
+    ...context,
+    ...overrides,
+    scopePath: [...context.scopePath, suffix],
+  } as CanonicalEffectContext;
+}
+
+/**
+ * Keep every authored command discovered inside control flow on the existing
+ * domain work queue.
+ */
+function expandCanonicalAuthoredEffect(
+  state: MatchState,
+  wrapped: CanonicalRulesEffect,
+  context: CanonicalEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>> {
+  const effect = authoredCanonicalEffect(wrapped);
+  const liveContext = effectContextFromCanonicalRules(
+    state,
+    context,
+    rootRng,
+    manifest,
+  );
+
+  if (effect.kind === 'SEQUENCE') {
+    return kernelStepSuccess({
+      work: effect.items.map((item, index): CanonicalRulesWork => ({
+        kind: 'EFFECT',
+        effect: item,
+        context: scopedCanonicalEffectContext(
+          context,
+          `sequence:${index}`,
+        ),
+        depth: context.depth,
+      })),
+    });
+  }
+
+  if (effect.kind === 'CONDITIONAL') {
+    const branch = evalPredicate(effect.if, liveContext)
+      ? effect.then
+      : effect.else ?? [];
+    return kernelStepSuccess({
+      work: branch.map((item, index): CanonicalRulesWork => ({
+        kind: 'EFFECT',
+        effect: item,
+        context: scopedCanonicalEffectContext(
+          context,
+          `conditional:${index}`,
+        ),
+        depth: context.depth,
+      })),
+    });
+  }
+
+  if (effect.kind === 'FOREACH') {
+    const targets = select(effect.over, liveContext);
+    return kernelStepSuccess({
+      work: targets.flatMap((cardId, targetIndex) => {
+        const card = getCardRuntime(state, cardId, manifest);
+        return effect.do.map((item, effectIndex): CanonicalRulesWork => ({
+          kind: 'EFFECT',
+          effect: item,
+          context: scopedCanonicalEffectContext(
+            context,
+            `foreach:${targetIndex}:${effectIndex}`,
+            {
+              self: cardId,
+              selfKind: 'card',
+              selfLane: card?.lane ?? null,
+              selfOwner: card?.owner ?? null,
+              it: cardId,
+            },
+          ),
+          depth: context.depth,
+        }));
+      }),
+    });
+  }
+
+  if (effect.kind === 'DESTROY_OTHER_LANES') {
+    if (liveContext.selfLane === null) {
+      return kernelStepSuccess({ work: [] });
+    }
+    return kernelStepSuccess({
+      work: [{
+        kind: 'COMMAND',
+        command: {
+          type: 'DESTROY_OTHER_LANES',
+          survivor: liveContext.selfLane,
+          cause: { ...context.source },
+        },
+      }],
+    });
+  }
+
+  if (effect.kind === 'REPLACE_LOCATION') {
+    const lanes = selectLanes(effect.lane, liveContext);
+    const commands: CanonicalRulesWork[] = [];
+    for (const lane of lanes) {
+      const previous = locationCardAtLane(state, lane);
+      if (!previous) continue;
+      const rng = liveContext.rng.scope(`replace:${lane}`);
+      commands.push({
+        kind: 'COMMAND',
+        command: {
+          type: 'REPLACE_LOCATION',
+          lane,
+          oldId: previous.id,
+          newId: `loc-${lane}-${rng.int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId,
+          newDefId: effect.newDefId,
+          oldDestination: 'DISCARD',
+          revealPolicy: 'KEEP_SLOT_SCHEDULE',
+          cause: { ...context.source },
+        },
+      });
+    }
+    return kernelStepSuccess({ work: commands });
+  }
+
+  const commandWork = (
+    commands: readonly RulesCommand[],
+  ): KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>> =>
+    kernelStepSuccess({
+      work: commands.map((command): CanonicalRulesWork => ({
+        kind: 'COMMAND',
+        command,
+      })),
+    });
+
+  if (effect.kind === 'ADD_POWER' || effect.kind === 'SET_POWER') {
+    return commandWork(
+      select(effect.target, liveContext).flatMap((cardId) => {
+        if (!isPowerBearingCard(state, cardId, manifest)) return [];
+        const card = getCardRuntime(state, cardId, manifest);
+        if (!card) return [];
+        const targetContext: EffectCtx = {
+          ...liveContext,
+          self: cardId,
+          selfKind: 'card',
+          selfLane: card.lane,
+          selfOwner: card.owner,
+        };
+        return [{
+          type: 'CHANGE_STORED_POWER' as const,
+          cardId,
+          mutation: effect.kind === 'ADD_POWER'
+            ? {
+                kind: 'ADD' as const,
+                delta: evalNum(effect.delta, targetContext),
+              }
+            : {
+                kind: 'SET' as const,
+                value: evalNum(effect.value, targetContext),
+              },
+          cause: { ...context.source },
+        }];
+      }),
+    );
+  }
+
+  if (effect.kind === 'RESET_POWER') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'CHANGE_STORED_POWER',
+      cardId,
+      mutation: { kind: 'RESET' },
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'ADJUST_COST') {
+    return commandWork(select(effect.target, liveContext).flatMap((cardId) => {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card) return [];
+      const delta = evalNum(effect.delta, {
+        ...liveContext,
+        self: cardId,
+        selfKind: 'card',
+        selfLane: card.lane,
+        selfOwner: card.owner,
+      });
+      return delta === 0
+        ? []
+        : [{
+            type: 'CHANGE_COST' as const,
+            cardId,
+            mutation: { kind: 'ADD' as const, delta },
+            cause: { ...context.source },
+          }];
+    }));
+  }
+
+  if (
+    effect.kind === 'ADJUST_ENERGY'
+    || effect.kind === 'ADJUST_MAX_ENERGY'
+    || effect.kind === 'ADJUST_NEXT_TURN_ENERGY_BONUS'
+  ) {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return kernelStepSuccess({ work: [] });
+    const delta = Math.trunc(evalNum(effect.delta, liveContext));
+    if (delta === 0) return kernelStepSuccess({ work: [] });
+    return commandWork([{
+      type: 'CHANGE_ENERGY',
+      target: effect.kind === 'ADJUST_ENERGY'
+        ? 'CURRENT'
+        : effect.kind === 'ADJUST_MAX_ENERGY'
+          ? 'MAXIMUM'
+          : 'NEXT_TURN_BONUS',
+      owner,
+      delta,
+      reason: 'EFFECT',
+      cause: { ...context.source },
+    }]);
+  }
+
+  if (effect.kind === 'DESTROY' || effect.kind === 'BANISH') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: effect.kind === 'DESTROY' ? 'DESTROY_CARD' : 'BANISH_CARD',
+      cardId,
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'DISCARD') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'DISCARD_CARD',
+      cardId,
+      reason: 'FORCED_EFFECT',
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'DRAW') {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return kernelStepSuccess({ work: [] });
+    const count = Math.max(0, Math.floor(evalNum(effect.count, liveContext)));
+    return commandWork(Array.from({ length: count }, () => ({
+      type: 'DRAW_CARD',
+      owner,
+      selection: { kind: 'TOP' },
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'CREATE_CARD_IN_ZONE') {
+    if (effect.setCost && effect.adjustCost) {
+      return kernelStepFailure({
+        code: 'INVALID_OPERATION_OUTPUT',
+        message: 'CREATE_CARD_IN_ZONE cannot set and adjust cost together.',
+        sourceInstanceId: String(context.source.sourceId),
+      });
+    }
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return kernelStepSuccess({ work: [] });
+    const defId = pickDefIdFromPool(
+      effect.pool,
+      state,
+      manifest,
+      liveContext.selfOwner,
+      liveContext.rng.scope('pool'),
+      liveContext.eventOwner ?? null,
+    );
+    if (!defId) return kernelStepSuccess({ work: [] });
+    const cardId = mintCardId(liveContext.rng.scope('id'));
+    const spawnSource = spawnSourceForSource(
+      context.source,
+      owner === liveContext.selfOwner,
+    );
+    let destination: Extract<
+      RulesCommand,
+      { type: 'CREATE_CARD' }
+    >['destination'];
+    if (effect.destination.kind === 'LANE') {
+      const lanes = selectLanes(effect.destination.lane, liveContext);
+      if (lanes.length === 0) return kernelStepSuccess({ work: [] });
+      const lane = lanes.length === 1
+        ? lanes[0]
+        : liveContext.rng.scope('lane').pick(lanes);
+      destination = {
+        kind: 'LANE',
+        lane,
+        revealed: effect.destination.revealed ?? true,
+      };
+    } else {
+      destination = effect.destination;
+    }
+    const commands: RulesCommand[] = [{
+      type: 'CREATE_CARD',
+      owner,
+      cardId,
+      defId,
+      depth: context.depth,
+      spawnSource,
+      destination,
+      cause: { ...context.source },
+    }];
+    if (effect.setCost) {
+      commands.push({
+        type: 'CHANGE_COST',
+        cardId,
+        mutation: {
+          kind: 'SET',
+          value: Math.max(
+            0,
+            Math.floor(evalNum(effect.setCost, liveContext)),
+          ),
+        },
+        cause: { ...context.source },
+      });
+    } else if (effect.adjustCost) {
+      commands.push({
+        type: 'CHANGE_COST',
+        cardId,
+        mutation: {
+          kind: 'ADD',
+          delta: Math.trunc(evalNum(effect.adjustCost, liveContext)),
+        },
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'DEPLOY_FROM_DECK') {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return kernelStepSuccess({ work: [] });
+    return commandWork(selectLanes(effect.lane, liveContext).map(lane => ({
+      type: 'DEPLOY_FROM_DECK',
+      owner,
+      lane,
+      selection: effect.selection,
+      depth: context.depth + 1,
+      cause: { ...context.source, reason: 'DEPLOY_FROM_DECK' },
+    })));
+  }
+
+  if (effect.kind === 'MOVE') {
+    const destinationSelector = effect.to.kind === 'RANDOM_N'
+      ? effect.to.of
+      : effect.to;
+    const destinations = selectLanes(destinationSelector, liveContext);
+    const commands: RulesCommand[] = [];
+    for (const cardId of select(effect.target, liveContext)) {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card || card.lane === null) continue;
+      const candidates = findLanes(state, manifest, {
+        laneId: destinations,
+        hasCapacity: card.owner,
+        not: { laneId: card.lane },
+      });
+      if (candidates.length === 0) continue;
+      commands.push({
+        type: 'MOVE_CARD',
+        cardId,
+        toLane: candidates.length === 1
+          ? candidates[0]
+          : liveContext.rng.scope(`move:${cardId}`).pick(candidates),
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'MOVE_CARD_TO_ZONE') {
+    const commands: RulesCommand[] = [];
+    for (const cardId of select(effect.target, liveContext)) {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card) continue;
+      if (effect.destination.kind !== 'LANE') {
+        commands.push({
+          type: 'CHANGE_CARD_ZONE',
+          cardId,
+          destination: effect.destination,
+          cause: { ...context.source },
+        });
+        continue;
+      }
+      const lanes = selectLanes(effect.destination.lane, liveContext);
+      if (lanes.length === 0) continue;
+      const lane = lanes.length === 1
+        ? lanes[0]
+        : liveContext.rng.scope(`moveZone:${cardId}`).pick(lanes);
+      commands.push({
+        type: 'CHANGE_CARD_ZONE',
+        cardId,
+        destination: {
+          kind: 'LANE',
+          lane,
+          revealed: effect.destination.revealed ?? false,
+        },
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'RETURN_TO_LANE') {
+    const lanes = selectLanes(effect.to, liveContext);
+    const commands: RulesCommand[] = [];
+    for (const cardId of select(effect.target, liveContext)) {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card) continue;
+      const candidates = findLanes(state, manifest, {
+        laneId: lanes,
+        hasCapacity: card.owner,
+      });
+      if (candidates.length === 0) continue;
+      commands.push({
+        type: 'RETURN_CARD',
+        cardId,
+        lane: candidates.length === 1
+          ? candidates[0]
+          : liveContext.rng.scope(`return:${cardId}`).pick(candidates),
+        revealed: effect.revealed ?? true,
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'TRANSFORM_CARD') {
+    const commands: RulesCommand[] = [];
+    for (const cardId of select(effect.target, liveContext)) {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card) continue;
+      const newDefId = pickDefIdFromPool(
+        effect.pool,
+        state,
+        manifest,
+        card.owner,
+        liveContext.rng.scope(`transform:${cardId}`),
+        liveContext.eventOwner ?? null,
+      );
+      if (!newDefId || newDefId === card.defId) continue;
+      commands.push({
+        type: 'TRANSFORM_CARD',
+        cardId,
+        newDefId,
+        metadataPolicy: effect.metadataPolicy,
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'SCHEDULE_REVEAL') {
+    return commandWork(select(effect.target, liveContext).flatMap((cardId) => {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card || card.zone !== 'LANE' || card.revealed) return [];
+      const timing = effect.timing.kind === 'END_OF_GAME'
+        ? { kind: 'END_OF_GAME' as const }
+        : {
+            kind: 'TURN' as const,
+            turn: Math.max(
+              1,
+              Math.floor(evalNum(effect.timing.turn, {
+                ...liveContext,
+                self: cardId,
+                selfKind: 'card',
+                selfLane: card.lane,
+                selfOwner: card.owner,
+              })),
+            ),
+          };
+      return [{
+        type: 'SET_CARD_REVEAL_TIMING' as const,
+        cardId,
+        timing,
+        cause: { ...context.source },
+      }];
+    }));
+  }
+
+  if (effect.kind === 'TRIGGER_ON_REVEAL') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'INVOKE_ON_REVEAL',
+      cardId,
+      reason: 'RETRIGGER',
+      depth: context.depth + 1,
+      cause: { ...context.source, reason: 'RETRIGGER' },
+    })));
+  }
+
+  if (effect.kind === 'ADD_CARD_TAG') {
+    const tag = resolveCardTagSpec(effect.tag, context.source);
+    if (!tag) return kernelStepSuccess({ work: [] });
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'CHANGE_CARD_TAG',
+      cardId,
+      mutation: { kind: 'ADD', tag },
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'REMOVE_CARD_TAG') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'CHANGE_CARD_TAG',
+      cardId,
+      mutation: { kind: 'REMOVE', tag: effect.tag },
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'MODIFY_COUNTER') {
+    return commandWork(select(effect.target, liveContext).map(cardId => ({
+      type: 'CHANGE_CARD_COUNTER',
+      cardId,
+      name: effect.name,
+      delta: evalNum(effect.delta, { ...liveContext, self: cardId }),
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'ADD_LOCATION_TAG') {
+    return commandWork(selectLanes(effect.lane, liveContext).flatMap((lane) => {
+      const location = locationCardAtLane(state, lane);
+      return location
+        ? [{
+            type: 'CHANGE_LOCATION_TAG' as const,
+            locationId: location.id,
+            mutation: { kind: 'ADD' as const, tag: effect.tag },
+            cause: { ...context.source },
+          }]
+        : [];
+    }));
+  }
+
+  if (effect.kind === 'MODIFY_LOCATION_COUNTER') {
+    const owner = effect.owner
+      ? resolveOwnerRef(
+          effect.owner,
+          liveContext.selfOwner,
+          liveContext.eventOwner ?? null,
+        )
+      : null;
+    if (effect.owner && !owner) return kernelStepSuccess({ work: [] });
+    return commandWork(selectLanes(effect.lane, liveContext).flatMap((lane) => {
+      const location = locationCardAtLane(state, lane);
+      return location
+        ? [{
+            type: 'CHANGE_LOCATION_COUNTER' as const,
+            locationId: location.id,
+            name: effect.name,
+            owner,
+            delta: Math.trunc(evalNum(effect.delta, liveContext)),
+            cause: { ...context.source },
+          }]
+        : [];
+    }));
+  }
+
+  if (effect.kind === 'COPY_TEXT_OF') {
+    const into = select(effect.into, liveContext);
+    const sources = select(effect.source, liveContext);
+    const source = sources.length > 0
+      ? getCardRuntime(state, sources[0], manifest)
+      : null;
+    if (!source) return kernelStepSuccess({ work: [] });
+    const abilities = effect.copyKind === 'ON_REVEAL'
+      ? {
+          ...(source.text.abilities.onReveal
+            ? { onReveal: source.text.abilities.onReveal }
+            : {}),
+        }
+      : source.text.abilities;
+    return commandWork(into.map(cardId => ({
+      type: 'OVERRIDE_CARD_TEXT',
+      cardId,
+      override: {
+        kind: 'COPIED_TEXT',
+        sourceCardId: source.id,
+        sourceDefId: source.defId,
+        scope: effect.copyKind === 'ON_REVEAL' ? 'ON_REVEAL' : 'ALL',
+        abilities,
+        rulesText: source.text.rulesText,
+      },
+      cause: { ...context.source },
+    })));
+  }
+
+  if (effect.kind === 'REMOVE_TEXT') {
+    const commands: RulesCommand[] = [];
+    for (const cardId of select(effect.target, liveContext)) {
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card) continue;
+      const abilities = structuredClone(card.text.abilities);
+      if (effect.textKind === 'ON_REVEAL') {
+        if (abilities.onReveal === undefined) continue;
+        delete abilities.onReveal;
+      } else if (effect.textKind === 'ONGOING') {
+        if (abilities.ongoing === undefined) continue;
+        delete abilities.ongoing;
+      } else {
+        if (Object.keys(abilities).length === 0) continue;
+        for (const slot of Object.keys(
+          abilities,
+        ) as (keyof typeof abilities)[]) {
+          delete abilities[slot];
+        }
+      }
+      const prior = card.text.override;
+      const copiedFrom = prior?.kind === 'COPIED_TEXT'
+        ? {
+            sourceCardId: prior.sourceCardId,
+            sourceDefId: prior.sourceDefId,
+            scope: prior.scope,
+          }
+        : prior?.kind === 'BLANKED_TEXT'
+          ? prior.copiedFrom
+          : null;
+      commands.push({
+        type: 'OVERRIDE_CARD_TEXT',
+        cardId,
+        override: {
+          kind: 'BLANKED_TEXT',
+          abilities,
+          rulesText: '',
+          copiedFrom,
+        },
+        cause: { ...context.source },
+      });
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'REMOVE_COPIED_TEXT') {
+    return commandWork(select(effect.target, liveContext).flatMap((cardId) => {
+      const card = getCardRuntime(state, cardId, manifest);
+      const override = card?.text.override;
+      return override?.kind === 'COPIED_TEXT'
+        || (
+          override?.kind === 'BLANKED_TEXT'
+          && override.copiedFrom !== null
+        )
+        ? [{
+            type: 'OVERRIDE_CARD_TEXT' as const,
+            cardId,
+            override: null,
+            cause: { ...context.source },
+          }]
+        : [];
+    }));
+  }
+
+  if (effect.kind === 'ADD_PENDING') {
+    const pending = resolvePendingEffectSpec(
+      effect.effect,
+      liveContext,
+      state,
+      manifest,
+    );
+    return pending
+      ? commandWork([{
+          type: 'SCHEDULE_PENDING_EFFECT',
+          effect: pending,
+          cause: { ...context.source },
+        }])
+      : kernelStepSuccess({ work: [] });
+  }
+
+  if (effect.kind === 'CALL_BUILTIN') {
+    if (effect.fn === 'CORPORATE_CLIMBER') {
+      const owner = liveContext.selfOwner;
+      const lane = liveContext.selfLane;
+      const recipientId = liveContext.self as CardId | null;
+      if (owner === null || lane === null || recipientId === null) {
+        return kernelStepSuccess({ work: [] });
+      }
+      const victims = state.lanesById[lane].cards[owner]
+        .filter(cardId => cardId !== recipientId)
+        .map(cardId => ({
+          cardId,
+          priorPower: isPowerBearingCard(state, cardId, manifest)
+            ? getCardPower(state, cardId, manifest)
+            : 0,
+          priorFrameDestroyed:
+            getCardLifecycle(state, cardId)?.frameDestroyed ?? null,
+        }));
+      if (victims.length === 0) {
+        return kernelStepSuccess({ work: [] });
+      }
+      return kernelStepSuccess({
+        work: [
+          ...victims.map((victim): CanonicalRulesWork => ({
+            kind: 'COMMAND',
+            command: {
+              type: 'DESTROY_CARD',
+              cardId: victim.cardId,
+              cause: { ...context.source },
+            },
+          })),
+          {
+            kind: 'EFFECT',
+            effect: {
+              kind: 'AWARD_POWER_FOR_DESTROYED_CARDS',
+              recipientId,
+              victims,
+              cause: { ...context.source },
+            },
+            context: scopedCanonicalEffectContext(
+              context,
+              'corporate-climber:award',
+            ),
+            depth: context.depth,
+          },
+        ],
+      });
+    }
+
+    if (effect.fn === 'LEON_RETURN') {
+      const cardId = liveContext.self as CardId;
+      const card = getCardRuntime(state, cardId, manifest);
+      if (!card || card.zone !== 'LANE') {
+        return kernelStepSuccess({ work: [] });
+      }
+      const work: CanonicalRulesWork[] = [
+          {
+            kind: 'COMMAND',
+            command: {
+              type: 'CHANGE_CARD_ZONE',
+              cardId,
+              destination: { kind: 'HAND' },
+              cause: { ...context.source },
+            },
+          },
+          {
+            kind: 'EFFECT',
+            effect: {
+              kind: 'CHANGE_STORED_POWER_IF_CARD_ZONE',
+              cardId,
+              zone: 'HAND',
+              delta: (effect.args.delta as number) ?? 2,
+              cause: { ...context.source },
+            },
+            context: scopedCanonicalEffectContext(
+              context,
+              'leon-return:award',
+            ),
+            depth: context.depth,
+          },
+        ];
+      return kernelStepSuccess({ work });
+    }
+
+    if (effect.fn === 'RIOT_SQUAD') {
+      const owner = liveContext.selfOwner;
+      const lane = liveContext.selfLane;
+      const self = liveContext.self as CardId | null;
+      if (owner === null || lane === null || !self) {
+        return kernelStepSuccess({ work: [] });
+      }
+      const enemy: Owner = owner === 'P0' ? 'P1' : 'P0';
+      const enemyPlayedHere = state.lanesById[lane].cards[enemy].some(
+        cardId => {
+          const card = getCardRuntime(state, cardId, manifest);
+          return card?.lifecycle.turnPlayed === state.turn
+            && card.lifecycle.lanePlayed === lane;
+        },
+      );
+      if (
+        enemyPlayedHere
+        || !isPowerBearingCard(state, self, manifest)
+      ) {
+        return kernelStepSuccess({ work: [] });
+      }
+      return commandWork([{
+        type: 'CHANGE_STORED_POWER',
+        cardId: self,
+        mutation: {
+          kind: 'ADD',
+          delta: (effect.args.delta as number) ?? 2,
+        },
+        cause: { ...context.source },
+      }]);
+    }
+
+    if (
+      effect.fn === 'MOVE_ENEMY_CARD_TO_OTHER_LANE'
+      || effect.fn === 'MOVE_SELF_TO_RANDOM_OTHER_LANE'
+      || effect.fn === 'MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE'
+      || effect.fn === 'MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE'
+    ) {
+      const owner = liveContext.selfOwner;
+      const lane = liveContext.selfLane;
+      if (owner === null || lane === null) {
+        return kernelStepSuccess({ work: [] });
+      }
+      const enemy: Owner = owner === 'P0' ? 'P1' : 'P0';
+      let targetId: CardId | null;
+      let targetOwner = owner;
+      if (effect.fn === 'MOVE_SELF_TO_RANDOM_OTHER_LANE') {
+        targetId = liveContext.self as CardId;
+      } else if (effect.fn === 'MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE') {
+        const candidates = state.lanesById[lane].cards[owner].filter(
+          cardId => cardId !== liveContext.self,
+        );
+        targetId = candidates.length === 0
+          ? null
+          : liveContext.rng.scope('target').pick(candidates);
+      } else {
+        targetOwner = enemy;
+        const candidates = state.lanesById[lane].cards[enemy];
+        if (effect.fn === 'MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE') {
+          targetId = candidates
+            .filter(cardId => isPowerBearingCard(state, cardId, manifest))
+            .sort((left, right) =>
+              getCardPower(state, left, manifest)
+              - getCardPower(state, right, manifest))[0] ?? null;
+        } else {
+          targetId = candidates.length === 0
+            ? null
+            : liveContext.rng.scope('target').pick([...candidates]);
+        }
+      }
+      if (!targetId) return kernelStepSuccess({ work: [] });
+      const destinations = activeLaneIds(state).filter(candidate =>
+        candidate !== lane
+        && state.lanesById[candidate].cards[targetOwner].length
+          < manifest.constants.laneCapacity);
+      if (destinations.length === 0) return kernelStepSuccess({ work: [] });
+      return commandWork([{
+        type: 'MOVE_CARD',
+        cardId: targetId,
+        toLane: liveContext.rng.scope('lane').pick(destinations),
+        cause: { ...context.source },
+      }]);
+    }
+
+    const plans = planBuiltinRevealCreations(
+      state,
+      effect.fn,
+      liveContext,
+      manifest,
+    );
+    if (plans !== null) {
+      const commands: RulesCommand[] = [];
+      for (const plan of plans) {
+        commands.push({
+          type: 'CREATE_CARD',
+          cardId: plan.cardId,
+          defId: plan.defId,
+          owner: plan.owner,
+          depth: context.depth + 1,
+          destination: {
+            kind: 'LANE',
+            lane: plan.lane,
+            revealed: true,
+          },
+          spawnSource: plan.spawnSource,
+          cause: {
+            ...context.source,
+            reason: `BUILTIN_${effect.fn}_CREATE_AND_REVEAL`,
+          },
+        });
+        if (plan.powerDelta !== 0) {
+          commands.push({
+            type: 'CHANGE_STORED_POWER',
+            cardId: plan.cardId,
+            mutation: { kind: 'ADD', delta: plan.powerDelta },
+            cause: { ...context.source },
+          });
+        }
+      }
+      return commandWork(commands);
+    }
+    const plan = planBuiltinCommands(
+      state,
+      effect.fn,
+      effect.args,
+      liveContext,
+      manifest,
+    );
+    if (plan !== null) return commandWork(plan.commands);
+    return kernelStepFailure({
+      code: 'INVALID_OPERATION_OUTPUT',
+      message: `Builtin ${effect.fn} has no canonical command planner.`,
+      sourceInstanceId: String(context.source.sourceId),
+    });
+  }
+
+  const unhandled: never = effect;
+  void unhandled;
+  return kernelStepFailure({
+    code: 'INVALID_OPERATION_OUTPUT',
+    message: 'Canonical authored effect planner is not exhaustive.',
+    sourceInstanceId: String(context.source.sourceId),
+  });
+}
+
 function placementRng(
   root: Rng,
   context: FrozenPlacementEffectContext,
@@ -476,73 +1476,9 @@ function effectContextFromLifecycle(
   };
 }
 
-const normalLaneOccupantDestruction = (
-  state: MatchState,
-  cardIds: readonly CardId[],
-  laneId: LaneId,
-  cause: EffectRef,
-  rng: Rng,
-  manifest: Manifest,
-): EvalResult => destroyCards(state, cardIds, {
-  source: cause,
-  rng,
-  sourceLane: laneId,
-}, manifest);
-
-export function destroyLaneWithNormalRules(
-  state: MatchState,
-  laneId: LaneId,
-  source: EffectRef,
-  rng: Rng,
-  manifest: Manifest,
-): LocationLifecycleResult {
-  return destroyLane(state, laneId, {
-    cause: source,
-    rng,
-    destroyOccupants: normalLaneOccupantDestruction,
-  }, manifest);
-}
-
-export function destroyAllOtherLanesWithNormalRules(
-  state: MatchState,
-  survivor: LaneId,
-  source: EffectRef,
-  rng: Rng,
-  manifest: Manifest,
-): LocationLifecycleResult {
-  return destroyAllOtherLanes(state, survivor, {
-    cause: source,
-    rng,
-    destroyOccupants: normalLaneOccupantDestruction,
-  }, manifest);
-}
-
 // ============================================================================
 // Reveal cascade
 // ============================================================================
-
-function banishResolvedSpell(
-  state: MatchState,
-  cardId: CardId,
-  manifest: Manifest,
-  rng: Rng,
-  depth: number,
-): EvalResult {
-  const card = getCardRuntime(state, cardId, manifest);
-  if (!card || card.domain !== 'spell' || card.zone !== 'LANE') {
-    return { events: [], state };
-  }
-  return banishCards(state, [cardId], {
-    source: {
-      sourceId: cardId,
-      effectKind: 'SYSTEM',
-      reason: 'SPELL_RESOLVED',
-    },
-    rng,
-    sourceLane: card.lane,
-    depth,
-  }, manifest);
-}
 
 /**
  * Reveal a newly-played/spawned card. This is the full "card was played here"
@@ -630,37 +1566,7 @@ export function executeRevealCommands(
   options: { readonly rng: Rng },
   manifest: Manifest,
 ): EvalResult {
-  const transaction = resolveRevealTransaction(state, commands, {
-    manifest,
-    expandAuthoredEffect: (candidate, effect, context) =>
-      expandRevealAuthoredEffect(
-        candidate,
-        effect,
-        context,
-        options.rng,
-        manifest,
-      ),
-    interpretAtomicEffect: (candidate, effect, context) =>
-      evalEffect(
-        candidate,
-        effect,
-        {
-          ...context,
-          state: candidate,
-          rng: revealRng(options.rng, context),
-        },
-        manifest,
-      ),
-    cleanupSpell: (candidate, cardId, _cause, context) =>
-      banishResolvedSpell(
-        candidate,
-        cardId,
-        manifest,
-        revealRng(options.rng, context).scope(`spell-cleanup:${cardId}`),
-        context.depth,
-      ),
-  });
-  return { events: transaction.events, state: transaction.state };
+  return executeRulesCommands(state, commands, { rng: options.rng }, manifest);
 }
 
 /**
@@ -668,254 +1574,6 @@ export function executeRevealCommands(
  * transaction queue used by play, reveal, create-and-reveal, and retriggers.
  */
 export const executeReactionCommands = executeRevealCommands;
-
-function revealRng(
-  root: Rng,
-  context: FrozenRevealEffectContext,
-): Rng {
-  return context.scopePath.reduce(
-    (rng, purpose) => rng.scope(purpose),
-    root,
-  );
-}
-
-function scopedRevealContext(
-  context: FrozenRevealEffectContext,
-  state: MatchState,
-  suffix: string,
-): FrozenRevealEffectContext {
-  return {
-    ...context,
-    state,
-    scopePath: [...context.scopePath, suffix],
-  };
-}
-
-function expandRevealAuthoredEffect(
-  state: MatchState,
-  effect: EffectExpr,
-  context: FrozenRevealEffectContext,
-  rootRng: Rng,
-  manifest: Manifest,
-): KernelWorkExpansion<RevealWork> | null {
-  const rng = revealRng(rootRng, context);
-  const liveContext: EffectCtx = {
-    ...context,
-    state,
-    rng,
-  };
-  if (effect.kind === 'SEQUENCE') {
-    return {
-      work: effect.items.map((item, index) => {
-        const child = scopedRevealContext(
-          context,
-          state,
-          `sequence:${index}`,
-        );
-        return {
-          kind: 'EFFECT',
-          effect: { kind: 'AUTHORED', effect: item },
-          context: child,
-          depth: context.depth,
-        };
-      }),
-    };
-  }
-  if (effect.kind === 'CONDITIONAL') {
-    const branch = evalPredicate(effect.if, liveContext)
-      ? effect.then
-      : effect.else ?? [];
-    return {
-      work: branch.map((item, index) => {
-        const child = scopedRevealContext(
-          context,
-          state,
-          `conditional:${index}`,
-        );
-        return {
-          kind: 'EFFECT',
-          effect: { kind: 'AUTHORED', effect: item },
-          context: child,
-          depth: context.depth,
-        };
-      }),
-    };
-  }
-  if (effect.kind === 'FOREACH') {
-    const targets = select(effect.over, liveContext);
-    return {
-      work: targets.flatMap((cardId, targetIndex) => {
-        const card = getCardRuntime(state, cardId, manifest);
-        return effect.do.map((item, effectIndex) => {
-          const child = scopedRevealContext(
-            {
-              ...context,
-              self: cardId,
-              selfKind: 'card',
-              selfLane: card?.lane ?? null,
-              selfOwner: card?.owner ?? null,
-              it: cardId,
-            },
-            state,
-            `foreach:${targetIndex}:${effectIndex}`,
-          );
-          return {
-            kind: 'EFFECT' as const,
-            effect: { kind: 'AUTHORED' as const, effect: item },
-            context: child,
-            depth: context.depth,
-          };
-        });
-      }),
-    };
-  }
-  if (effect.kind === 'TRIGGER_ON_REVEAL') {
-    return {
-      work: select(effect.target, liveContext).map((cardId) => ({
-        kind: 'COMMAND',
-        command: {
-          type: 'INVOKE_ON_REVEAL',
-          cardId,
-          reason: 'RETRIGGER',
-          depth: context.depth + 1,
-          cause: { ...context.source, reason: 'RETRIGGER' },
-        },
-      })),
-    };
-  }
-  if (effect.kind === 'DEPLOY_FROM_DECK') {
-    const owner = resolveOwnerRef(
-      effect.owner,
-      liveContext.selfOwner,
-      liveContext.eventOwner ?? null,
-    );
-    if (!owner) return { work: [] };
-    return {
-      work: selectLanes(effect.lane, liveContext).map((lane) => ({
-        kind: 'COMMAND',
-        command: {
-          type: 'DEPLOY_FROM_DECK',
-          owner,
-          lane,
-          depth: context.depth + 1,
-          selection: effect.selection,
-          cause: { ...context.source, reason: 'DEPLOY_FROM_DECK' },
-        },
-      })),
-    };
-  }
-  if (
-    effect.kind === 'CREATE_CARD_IN_ZONE'
-    && effect.destination.kind === 'LANE'
-    && !effect.setCost
-    && !effect.adjustCost
-  ) {
-    const owner = resolveOwnerRef(
-      effect.owner,
-      liveContext.selfOwner,
-      liveContext.eventOwner ?? null,
-    );
-    if (!owner) return { work: [] };
-    const defId = pickDefIdFromPool(
-      effect.pool,
-      state,
-      manifest,
-      liveContext.selfOwner,
-      rng.scope('create:pool'),
-      liveContext.eventOwner ?? null,
-    );
-    if (!defId) return { work: [] };
-    const lanes = selectLanes(effect.destination.lane, liveContext);
-    if (lanes.length === 0) return { work: [] };
-    const lane = lanes.length === 1
-      ? lanes[0]
-      : rng.scope('create:lane').pick(lanes);
-    const cardId = mintCardId(rng.scope('create:id'));
-    return {
-      work: [{
-        kind: 'COMMAND',
-        command: {
-          type: 'CREATE_CARD',
-          cardId,
-          defId,
-          owner,
-          depth: context.depth + 1,
-          destination: {
-            kind: 'LANE',
-            lane,
-            revealed: effect.destination.revealed ?? true,
-          },
-          spawnSource: spawnSourceForSource(
-            context.source,
-            owner === context.selfOwner,
-          ),
-          cause: { ...context.source, reason: 'CREATE_AND_REVEAL' },
-        },
-      }],
-    };
-  }
-  if (effect.kind === 'CALL_BUILTIN') {
-    const plans = planBuiltinRevealCreations(
-      state,
-      effect.fn,
-      liveContext,
-      manifest,
-    );
-    if (plans === null) return null;
-    return {
-      work: plans.flatMap((plan, index): RevealWork[] => {
-        const childContext = scopedRevealContext(
-          {
-            ...context,
-            eventCard: plan.cardId,
-            eventLane: plan.lane,
-            eventOwner: plan.owner,
-          },
-          state,
-          `builtin:${effect.fn}:${plan.lane}:${index}`,
-        );
-        const create: RevealWork = {
-          kind: 'COMMAND',
-          command: {
-            type: 'CREATE_CARD',
-            cardId: plan.cardId,
-            defId: plan.defId,
-            owner: plan.owner,
-            depth: context.depth + 1,
-            destination: {
-              kind: 'LANE',
-              lane: plan.lane,
-              revealed: true,
-            },
-            spawnSource: plan.spawnSource,
-            cause: {
-              ...context.source,
-              reason: `BUILTIN_${effect.fn}_CREATE_AND_REVEAL`,
-            },
-          },
-        };
-        if (plan.powerDelta === 0) return [create];
-        return [
-          create,
-          {
-            kind: 'EFFECT',
-            effect: {
-              kind: 'AUTHORED',
-              effect: {
-                kind: 'ADD_POWER',
-                target: { kind: 'EVENT_CARD' },
-                delta: { kind: 'LIT', n: plan.powerDelta },
-              },
-            },
-            context: childContext,
-            depth: context.depth + 1,
-          },
-        ];
-      }),
-    };
-  }
-  return null;
-}
 
 // ============================================================================
 // evalEffect — one case per EffectExpr variant
@@ -1045,16 +1703,19 @@ export function evalEffect(
 
     case 'DESTROY_OTHER_LANES': {
       if (liveCtx.selfLane === null) return { events: [], state };
-      const result = destroyAllOtherLanesWithNormalRules(
+      return executeRulesCommands(
         state,
-        liveCtx.selfLane,
-        ctx.source,
-        ctx.rng.scope(`destroy-other-lanes:${liveCtx.selfLane}`),
+        [{
+          type: 'DESTROY_OTHER_LANES',
+          survivor: liveCtx.selfLane,
+          cause: { ...ctx.source },
+        }],
+        {
+          rng: ctx.rng.scope(`destroy-other-lanes:${liveCtx.selfLane}`),
+          depth: ctx.depth,
+        },
         manifest,
       );
-      return result.ok
-        ? { events: result.events, state: result.state }
-        : { events: [], state };
     }
 
     case 'BANISH': {
@@ -1393,14 +2054,13 @@ export function evalEffect(
 
     case 'SCHEDULE_REVEAL': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
+      const commands: RulesCommand[] = [];
       for (const id of targets) {
-        const card = getCardRuntime(s, id, manifest);
+        const card = getCardRuntime(state, id, manifest);
         if (!card || card.zone !== 'LANE' || card.revealed) continue;
         const perTargetCtx: EffectCtx = {
           ...liveCtx,
-          state: s,
+          state,
           self: id,
           selfKind: 'card',
           selfLane: card.lane,
@@ -1412,16 +2072,19 @@ export function evalEffect(
               kind: 'TURN' as const,
               turn: Math.max(1, Math.floor(evalNum(effect.timing.turn, perTargetCtx))),
             };
-        const event: MatchEvent = {
-          type: 'CARD_REVEAL_SCHEDULED',
+        commands.push({
+          type: 'SET_CARD_REVEAL_TIMING',
           cardId: id,
           timing,
-          cause: ctx.source,
-        };
-        events.push(event);
-        s = apply(s, event, manifest);
+          cause: { ...ctx.source },
+        });
       }
-      return { events, state: s };
+      return executeRulesCommands(
+        state,
+        commands,
+        { rng: ctx.rng, depth: ctx.depth },
+        manifest,
+      );
     }
 
     case 'TRIGGER_ON_REVEAL': {
@@ -1490,24 +2153,31 @@ export function evalEffect(
 
     case 'REPLACE_LOCATION': {
       const lanes = selectLanes(effect.lane, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
+      const commands: RulesCommand[] = [];
       for (const lane of lanes) {
-        const prev = locationCardAtLane(s, lane);
+        const prev = locationCardAtLane(state, lane);
         if (!prev) continue;
         const newId = `loc-${lane}-${ctx.rng.scope(`replace:${lane}`).int(0, 2 ** 30).toString(36)}` as import('../types/ids').LocationCardInstanceId;
-        const replacement = replaceLocationCard(s, lane, {
+        commands.push({
+          type: 'REPLACE_LOCATION',
+          lane,
+          oldId: prev.id,
           newId,
           newDefId: effect.newDefId,
           cause: ctx.source,
           oldDestination: 'DISCARD',
           revealPolicy: 'KEEP_SLOT_SCHEDULE',
-        }, manifest);
-        if (!replacement.ok) continue;
-        events.push(...replacement.events);
-        s = replacement.state;
+        });
       }
-      return { events, state: s };
+      return executeRulesCommands(
+        state,
+        commands,
+        {
+          rng: ctx.rng.scope('replace-locations'),
+          depth: ctx.depth,
+        },
+        manifest,
+      );
     }
 
     case 'MODIFY_COUNTER': {

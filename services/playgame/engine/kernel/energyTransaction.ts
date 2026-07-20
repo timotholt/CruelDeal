@@ -108,7 +108,7 @@ function transitionKind(
     : 'NEXT_TURN_BONUS_DECREASE';
 }
 
-function captureEnergySemantics(
+export function captureEnergySemantics(
   before: MatchState,
   event: EnergyChangedEvent,
   after: MatchState,

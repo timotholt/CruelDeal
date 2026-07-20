@@ -38,6 +38,38 @@ export type PendingEffectKernelWork = KernelWork<
   MatchEvent
 >;
 
+export interface PendingEffectConsumption {
+  readonly event: PendingEffectEvent;
+  readonly pending: PendingEffect;
+}
+
+/** Snapshots the exact pending item and authors its governed consume event. */
+export function planPendingEffectConsumption(
+  state: MatchState,
+  command: ConsumePendingEffectCommand,
+): KernelStepResult<PendingEffectConsumption | null> {
+  const causeError = invalidCause(command);
+  if (causeError) {
+    return kernelStepFailure({
+      code: 'INVALID_OPERATION_OUTPUT',
+      message: causeError,
+      sourceInstanceId: String(command.cause.sourceId),
+    });
+  }
+  const pending = state.pendingEffects.find(
+    effect => effect.id === command.pendingEffectId,
+  );
+  if (!pending) return kernelStepSuccess(null);
+  return kernelStepSuccess({
+    pending: structuredClone(pending),
+    event: {
+      type: 'PENDING_EFFECT_CONSUMED',
+      pendingEffectId: command.pendingEffectId,
+      cause: { ...command.cause },
+    },
+  });
+}
+
 function invalidCause(command: PendingEffectCommand): string | null {
   if (String(command.cause.sourceId).trim().length === 0) {
     return 'Pending-effect command sourceId must be non-empty.';
@@ -116,23 +148,16 @@ export function planPendingEffectCommand(
     });
   }
 
-  const pending = state.pendingEffects.find(
-    effect => effect.id === command.pendingEffectId,
-  );
-  if (!pending) return kernelStepSuccess({ work: [] });
-  const snapshot = structuredClone(pending);
-  const consumed: PendingEffectEvent = {
-    type: 'PENDING_EFFECT_CONSUMED',
-    pendingEffectId: command.pendingEffectId,
-    cause: { ...command.cause },
-  };
+  const planned = planPendingEffectConsumption(state, command);
+  if (planned.ok === false) return planned;
+  if (!planned.value) return kernelStepSuccess({ work: [] });
   return kernelStepSuccess({
     work: [
-      { kind: 'COMMIT', event: consumed },
+      { kind: 'COMMIT', event: planned.value.event },
       ...(command.mode === 'EXECUTE'
         ? [{
             kind: 'EFFECT' as const,
-            effect: snapshot,
+            effect: planned.value.pending,
             context: {},
             depth: 0,
           }]

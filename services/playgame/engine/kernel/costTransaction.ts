@@ -71,7 +71,7 @@ function snapshotCost(
   };
 }
 
-function captureCostSemantics(
+export function captureCostSemantics(
   before: MatchState,
   event: CostChangedEvent,
   after: MatchState,

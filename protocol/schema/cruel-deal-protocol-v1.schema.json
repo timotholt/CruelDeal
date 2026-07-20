@@ -256,6 +256,606 @@
       ],
       "additionalProperties": true
     },
+    "LocationCardDeckEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceDeckEntry": {
+          "$ref": "#/$defs/SafeInteger"
+        }
+      },
+      "required": [
+        "id",
+        "defId",
+        "sourceDeckEntry"
+      ],
+      "additionalProperties": false
+    },
+    "LocationDeckInitializedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_DECK_INITIALIZED"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocationCardDeckEntry"
+          },
+          "minItems": 1
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "locations",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationCardCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_CARD_CREATED"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pendingLane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "locationId",
+        "defId",
+        "pendingLane",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationCardDrawnEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_CARD_DRAWN"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pendingLane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "locationId",
+        "pendingLane",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationCardPlayedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_CARD_PLAYED"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "locationId",
+        "lane",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationSlotRevealScheduledEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_SLOT_REVEAL_SCHEDULED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revealAtTurn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PositiveInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "locationId",
+        "revealAtTurn",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationRevealedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_REVEALED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "locationId",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationTurnedFaceDownEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_TURNED_FACE_DOWN"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "locationId",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationShownToSeatsEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_SHOWN_TO_SEATS"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Seat"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "locationId",
+        "seats",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "UnscheduledLocationReplacementRevealPolicy": {
+      "enum": [
+        "REVEAL_IMMEDIATELY",
+        "KEEP_SLOT_SCHEDULE",
+        "FACE_DOWN_UNSCHEDULED"
+      ]
+    },
+    "ScheduledLocationReplacedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_REPLACED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "oldId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newDefId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "oldDestination": {
+          "enum": [
+            "DISCARD",
+            "DESTROYED",
+            "BANISHED"
+          ]
+        },
+        "revealPolicy": {
+          "const": "SCHEDULE_AT_TURN"
+        },
+        "revealAtTurn": {
+          "$ref": "#/$defs/PositiveInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "oldId",
+        "newId",
+        "newDefId",
+        "oldDestination",
+        "revealPolicy",
+        "revealAtTurn",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "UnscheduledLocationReplacedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_REPLACED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "oldId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newDefId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "oldDestination": {
+          "enum": [
+            "DISCARD",
+            "DESTROYED",
+            "BANISHED"
+          ]
+        },
+        "revealPolicy": {
+          "$ref": "#/$defs/UnscheduledLocationReplacementRevealPolicy"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "oldId",
+        "newId",
+        "newDefId",
+        "oldDestination",
+        "revealPolicy",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationReplacedEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ScheduledLocationReplacedEvent"
+        },
+        {
+          "$ref": "#/$defs/UnscheduledLocationReplacedEvent"
+        }
+      ]
+    },
+    "LocationSwapLeg": {
+      "type": "object",
+      "properties": {
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fromLane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "toLane": {
+          "$ref": "#/$defs/LaneId"
+        }
+      },
+      "required": [
+        "locationId",
+        "fromLane",
+        "toLane"
+      ],
+      "additionalProperties": false
+    },
+    "LocationsSwappedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATIONS_SWAPPED"
+        },
+        "left": {
+          "$ref": "#/$defs/LocationSwapLeg"
+        },
+        "right": {
+          "$ref": "#/$defs/LocationSwapLeg"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "left",
+        "right",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationMovedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_MOVED"
+        },
+        "fromLane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "toLane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "fromLane",
+        "toLane",
+        "locationId",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationRemovedFromLaneEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_REMOVED_FROM_LANE"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination": {
+          "enum": [
+            "DISCARD",
+            "DESTROYED",
+            "BANISHED"
+          ]
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "locationId",
+        "destination",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LocationReturnedToDeckEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LOCATION_RETURNED_TO_DECK"
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "enum": [
+            "STAGING",
+            "DISCARD",
+            "DESTROYED"
+          ]
+        },
+        "placement": {
+          "enum": [
+            "TOP",
+            "BOTTOM"
+          ]
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "locationId",
+        "from",
+        "placement",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LaneDestructionStartedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LANE_DESTRUCTION_STARTED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "priorPosition": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "priorPosition",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LaneDestroyedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LANE_DESTROYED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "priorPosition": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "priorPosition",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LaneCreationStartedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LANE_CREATION_STARTED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "position": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "position",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "LaneCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "LANE_CREATED"
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "position": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "lane",
+        "position",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
     "ScheduledPendingEffect": {
       "type": "object",
       "properties": {
@@ -392,26 +992,9 @@
             "CARD_CREATED",
             "CARD_ZONE_CHANGED",
             "DECK_SHUFFLED",
-            "LOCATION_DECK_INITIALIZED",
-            "LOCATION_CARD_CREATED",
-            "LOCATION_CARD_DRAWN",
-            "LOCATION_CARD_PLAYED",
-            "LOCATION_SLOT_REVEAL_SCHEDULED",
-            "LOCATION_REVEALED",
-            "LOCATION_TURNED_FACE_DOWN",
-            "LOCATION_SHOWN_TO_SEATS",
-            "LOCATION_REPLACED",
-            "LOCATIONS_SWAPPED",
-            "LOCATION_MOVED",
-            "LOCATION_REMOVED_FROM_LANE",
-            "LOCATION_RETURNED_TO_DECK",
             "LOCATION_TAG_ADDED",
             "LOCATION_TAG_REMOVED",
             "LOCATION_COUNTER_CHANGED",
-            "LANE_DESTRUCTION_STARTED",
-            "LANE_DESTROYED",
-            "LANE_CREATION_STARTED",
-            "LANE_CREATED",
             "MATCH_SETUP_COMPLETED",
             "RECURSION_LIMIT_HIT",
             "INTENT_REJECTED"
@@ -442,6 +1025,57 @@
         },
         {
           "$ref": "#/$defs/PendingEffectConsumedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationDeckInitializedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationCardCreatedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationCardDrawnEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationCardPlayedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationSlotRevealScheduledEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationRevealedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationTurnedFaceDownEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationShownToSeatsEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationReplacedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationsSwappedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationMovedEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationRemovedFromLaneEvent"
+        },
+        {
+          "$ref": "#/$defs/LocationReturnedToDeckEvent"
+        },
+        {
+          "$ref": "#/$defs/LaneDestructionStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/LaneDestroyedEvent"
+        },
+        {
+          "$ref": "#/$defs/LaneCreationStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/LaneCreatedEvent"
         },
         {
           "$ref": "#/$defs/OtherMatchEvent"

@@ -28,6 +28,7 @@ import {
   executeReactionCommands,
   executeHandCommands,
   executePendingEffectCommands,
+  executeRulesCommands,
 } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
@@ -35,7 +36,6 @@ import { getFinalTurn } from './projections/gameEnd';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
-import { revealLocation } from './locationLifecycle';
 import {
   getAllCardIds,
   getCardLifecycle,
@@ -628,33 +628,20 @@ export function resolveTurn(
       && s.lanesById[laneId]?.status === 'ACTIVE'
       && s.lanesById[laneId].locationSlot.revealAtTurn === s.turn
     ) {
-      const reveal = revealLocation(s, laneId, {
-        sourceId: loc.id,
-        effectKind: 'SYSTEM',
-        reason: 'TURN_START_LOCATION_REVEAL',
-      }, manifest);
-      if (!reveal.ok) {
-        throw new Error(`turn-start location reveal failed: ${reveal.message}`);
-      }
-      events.push(...reveal.events);
-      s = reveal.state;
-
-      const locationTrigger = executeReactionCommands(s, [{
-        type: 'INVOKE_LOCATION_TRIGGER',
-        locationId: loc.id,
+      const reveal = executeRulesCommands(s, [{
+        type: 'REVEAL_LOCATION',
         lane: laneId,
-        slot: 'REVEAL',
-        depth: 0,
+        locationId: loc.id,
         cause: {
           sourceId: loc.id,
-          effectKind: 'LOCATION',
-          reason: 'LOCATION_ON_REVEAL',
+          effectKind: 'SYSTEM',
+          reason: 'TURN_START_LOCATION_REVEAL',
         },
       }], {
         rng: rng.scope(`location-reveal:${loc.id}`),
       }, manifest);
-      events.push(...locationTrigger.events);
-      s = locationTrigger.state;
+      events.push(...reveal.events);
+      s = reveal.state;
     }
   }
 

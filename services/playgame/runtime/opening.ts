@@ -1,7 +1,7 @@
 import type { Manifest } from '../engine/manifest/types';
 import {
   executeHandCommands,
-  executeReactionCommands,
+  executeRulesCommands,
 } from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
 import { appendGameplayRngAdvance } from '../engine/rng/transaction';
@@ -9,7 +9,6 @@ import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
 import type { CardId } from '../engine/types/ids';
 import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
-import { revealLocation } from '../engine/locationLifecycle';
 
 export interface OpeningTransaction {
   readonly transactionId: string;
@@ -90,33 +89,20 @@ export function buildOpeningTransaction(
     ) {
       continue;
     }
-    const reveal = revealLocation(state, lane, {
-      sourceId: location.id,
-      effectKind: 'SYSTEM',
-      reason: 'OPENING_LOCATION_REVEAL',
-    }, manifest);
-    if (!reveal.ok) {
-      throw new Error(`opening location reveal failed: ${reveal.message}`);
-    }
-    events.push(...reveal.events);
-    state = reveal.state;
-
-    const locationTrigger = executeReactionCommands(state, [{
-      type: 'INVOKE_LOCATION_TRIGGER',
-      locationId: location.id,
+    const reveal = executeRulesCommands(state, [{
+      type: 'REVEAL_LOCATION',
       lane,
-      slot: 'REVEAL',
-      depth: 0,
+      locationId: location.id,
       cause: {
-          sourceId: location.id,
-          effectKind: 'LOCATION',
-          reason: 'OPENING_LOCATION_ON_REVEAL',
+        sourceId: location.id,
+        effectKind: 'SYSTEM',
+        reason: 'OPENING_LOCATION_REVEAL',
       },
     }], {
       rng: openingRng.scope(`opening:location:${location.id}`),
     }, manifest);
-    events.push(...locationTrigger.events);
-    state = locationTrigger.state;
+    events.push(...reveal.events);
+    state = reveal.state;
   }
 
   // Turn 1 begins after the initial location is live. Use the same normal

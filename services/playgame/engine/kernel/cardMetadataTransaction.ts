@@ -62,7 +62,7 @@ export interface CardMetadataTransactionResult {
   readonly usage: KernelBudgetUsage;
 }
 
-function captureCardMetadataSemantics(
+export function captureCardMetadataSemantics(
   before: MatchState,
   event: CardMetadataEvent,
   after: MatchState,

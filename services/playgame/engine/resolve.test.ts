@@ -15,15 +15,12 @@ import { getCardCost } from './projections/cost';
 import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type {
   InternalCardRecord,
-  LaneState,
-  InternalLocationRecord,
   MatchState,
 } from './types/state';
-import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from './types/state';
+import { EMPTY_CARD_LIFECYCLE } from './types/state';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from './types/ids';
 import {
   emptyTestMatchState,
-  testLaneState,
   upsertTestCard,
   withTestLocation,
 } from './testkit/runtimeFixture';
@@ -71,10 +68,6 @@ function mkManifest(cards: CardDef[], locations: LocationCardDef[] = []): Manife
 
 let idCounter = 0;
 const nextCardId = (): CardId => `r${++idCounter}` as CardId;
-
-function blankLane(i: LaneId): LaneState {
-  return testLaneState(i);
-}
 
 function mkCardInstance(defId: string, owner: Owner = 'P0'): InternalCardRecord {
   return {
@@ -542,7 +535,19 @@ function resolveCurrentTurn(
 // -- Location reveal at start of turn 2 (for lane 1) ------------------------
 
 {
-  const manifest = mkManifest([]);
+  const location: LocationCardDef = {
+    defId: 'some-loc',
+    version: 1,
+    name: 'Some Location',
+    rarity: 1,
+    abilities: {},
+    cosmetic: {
+      displayName: 'Some Location',
+      description: '',
+      art: { map: { path: '' } },
+    },
+  };
+  const manifest = mkManifest([], [location]);
   let s = baseState({ turn: 1, priority: 'P0' });
   s = withLocation(s, 1, 'some-loc', false);
   const { events, state: after } = resolveCurrentTurn(s, manifest, createRng('loc'));

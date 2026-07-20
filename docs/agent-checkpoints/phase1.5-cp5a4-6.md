@@ -1,6 +1,6 @@
 # Phase 1.5 C5A-4 through C5A-6 — Remaining Lifecycle Governance
 
-Status: ready to build
+Status: C5A-4 implemented and exit-proven; C5A-5 ready to build
 
 Date: 2026-07-19
 
@@ -20,6 +20,22 @@ producer paths are removed. No compatibility wrappers, event aliases, dual
 schemas, or fallback reads are permitted.
 
 ## C5A-4 — Governed Location Cards and Lane Topology
+
+### Exit evidence
+
+- One canonical `GameCommand` queue and one shared transaction budget now own
+  location reveal, authored effects, nested card/location reactions, and lane
+  topology.
+- The old location lifecycle façade and generic location/lane mutation APIs
+  are deleted; source fences restrict event production to owning operations.
+- All registered builtins lower onto the canonical queue. Continuation-sensitive
+  effects use typed internal work rather than nested transactions.
+- Reducer and protocol ingress strictly validate every governed location/lane
+  event, including non-empty cause and stable identity fields.
+- Phase 1.5: 236/236 tests passed.
+- Phase 0: 82/82 tests passed with 1,000 generated matches per property run.
+- TypeScript and Rust protocol conformance, schema freshness, manifest
+  validation, build, lint, and diff checks passed.
 
 ### C5A-4a — Location-Card Lifecycle
 

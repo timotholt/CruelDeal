@@ -167,7 +167,7 @@ function snapshotHistoricalLocation(
   };
 }
 
-function captureLifecycleSemantics(
+export function captureLifecycleSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,
@@ -301,7 +301,7 @@ function effectReaction(
   };
 }
 
-function collectLifecycleReactions(
+export function collectLifecycleReactions(
   before: MatchState,
   transition: CommittedTransition<
     MatchEvent,

@@ -183,7 +183,7 @@ function snapshotLocation(
   };
 }
 
-function capturePlacementSemantics(
+export function capturePlacementSemantics(
   before: MatchState,
   event: MatchEvent,
   after: MatchState,
@@ -363,7 +363,7 @@ function reaction(
   };
 }
 
-function collectPlacementReactions(
+export function collectPlacementReactions(
   before: MatchState,
   after: MatchState,
   transition: CommittedTransition<MatchEvent, PlacementSemantics>,

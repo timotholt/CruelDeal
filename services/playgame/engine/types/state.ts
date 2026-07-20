@@ -251,6 +251,8 @@ export interface CardLifecycleState {
   readonly turnLastMoved?: number;
   /** Supports "destroyed last turn" mechanics. */
   readonly turnDestroyed?: number;
+  /** Exact frame of the latest committed destruction. */
+  readonly frameDestroyed?: Frame;
 }
 
 export const EMPTY_CARD_LIFECYCLE: CardLifecycleState = Object.freeze({});

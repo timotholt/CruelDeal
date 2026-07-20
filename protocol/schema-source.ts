@@ -48,6 +48,26 @@ const CORE_BOUNDARY_EVENT_TYPES = [
   'MATCH_ENDED',
 ] as const;
 
+const GOVERNED_LOCATION_EVENT_TYPES = [
+  'LOCATION_DECK_INITIALIZED',
+  'LOCATION_CARD_CREATED',
+  'LOCATION_CARD_DRAWN',
+  'LOCATION_CARD_PLAYED',
+  'LOCATION_SLOT_REVEAL_SCHEDULED',
+  'LOCATION_REVEALED',
+  'LOCATION_TURNED_FACE_DOWN',
+  'LOCATION_SHOWN_TO_SEATS',
+  'LOCATION_REPLACED',
+  'LOCATIONS_SWAPPED',
+  'LOCATION_MOVED',
+  'LOCATION_REMOVED_FROM_LANE',
+  'LOCATION_RETURNED_TO_DECK',
+  'LANE_DESTRUCTION_STARTED',
+  'LANE_DESTROYED',
+  'LANE_CREATION_STARTED',
+  'LANE_CREATED',
+] as const;
+
 export const PROTOCOL_MATCH_EVENT_TYPES = [
   'GAMEPLAY_RNG_ADVANCED',
   'CARD_STAGED',
@@ -117,6 +137,7 @@ void ALL_MATCH_EVENT_TYPES_ARE_COVERED;
 const OTHER_EVENT_TYPES = PROTOCOL_MATCH_EVENT_TYPES.filter(
   (type) => !([
     ...CORE_BOUNDARY_EVENT_TYPES,
+    ...GOVERNED_LOCATION_EVENT_TYPES,
     'PENDING_EFFECT_SCHEDULED',
     'PENDING_EFFECT_CONSUMED',
   ] as readonly string[]).includes(type),
@@ -219,6 +240,230 @@ export const PROTOCOL_SCHEMA = {
       required: ['kind'],
       additionalProperties: true,
     },
+    LocationCardDeckEntry: object(
+      {
+        id: string(),
+        defId: string(),
+        sourceDeckEntry: ref('SafeInteger'),
+      },
+      ['id', 'defId', 'sourceDeckEntry'],
+    ),
+    LocationDeckInitializedEvent: tagged(
+      'LOCATION_DECK_INITIALIZED',
+      {
+        locations: array(ref('LocationCardDeckEntry'), { minItems: 1 }),
+        cause: ref('EffectRef'),
+      },
+      ['locations', 'cause'],
+    ),
+    LocationCardCreatedEvent: tagged(
+      'LOCATION_CARD_CREATED',
+      {
+        locationId: string(),
+        defId: string(),
+        pendingLane: ref('LaneId'),
+        cause: ref('EffectRef'),
+      },
+      ['locationId', 'defId', 'pendingLane', 'cause'],
+    ),
+    LocationCardDrawnEvent: tagged(
+      'LOCATION_CARD_DRAWN',
+      {
+        locationId: string(),
+        pendingLane: ref('LaneId'),
+        cause: ref('EffectRef'),
+      },
+      ['locationId', 'pendingLane', 'cause'],
+    ),
+    LocationCardPlayedEvent: tagged(
+      'LOCATION_CARD_PLAYED',
+      {
+        locationId: string(),
+        lane: ref('LaneId'),
+        cause: ref('EffectRef'),
+      },
+      ['locationId', 'lane', 'cause'],
+    ),
+    LocationSlotRevealScheduledEvent: tagged(
+      'LOCATION_SLOT_REVEAL_SCHEDULED',
+      {
+        lane: ref('LaneId'),
+        locationId: string(),
+        revealAtTurn: {
+          anyOf: [ref('PositiveInteger'), { type: 'null' }],
+        },
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'locationId', 'revealAtTurn', 'cause'],
+    ),
+    LocationRevealedEvent: tagged(
+      'LOCATION_REVEALED',
+      {
+        lane: ref('LaneId'),
+        locationId: string(),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'locationId', 'cause'],
+    ),
+    LocationTurnedFaceDownEvent: tagged(
+      'LOCATION_TURNED_FACE_DOWN',
+      {
+        lane: ref('LaneId'),
+        locationId: string(),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'locationId', 'cause'],
+    ),
+    LocationShownToSeatsEvent: tagged(
+      'LOCATION_SHOWN_TO_SEATS',
+      {
+        lane: ref('LaneId'),
+        locationId: string(),
+        seats: array(ref('Seat'), { minItems: 1, uniqueItems: true }),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'locationId', 'seats', 'cause'],
+    ),
+    UnscheduledLocationReplacementRevealPolicy: {
+      enum: [
+        'REVEAL_IMMEDIATELY',
+        'KEEP_SLOT_SCHEDULE',
+        'FACE_DOWN_UNSCHEDULED',
+      ],
+    },
+    ScheduledLocationReplacedEvent: tagged(
+      'LOCATION_REPLACED',
+      {
+        lane: ref('LaneId'),
+        oldId: string(),
+        newId: string(),
+        newDefId: string(),
+        oldDestination: { enum: ['DISCARD', 'DESTROYED', 'BANISHED'] },
+        revealPolicy: { const: 'SCHEDULE_AT_TURN' },
+        revealAtTurn: ref('PositiveInteger'),
+        cause: ref('EffectRef'),
+      },
+      [
+        'lane',
+        'oldId',
+        'newId',
+        'newDefId',
+        'oldDestination',
+        'revealPolicy',
+        'revealAtTurn',
+        'cause',
+      ],
+    ),
+    UnscheduledLocationReplacedEvent: tagged(
+      'LOCATION_REPLACED',
+      {
+        lane: ref('LaneId'),
+        oldId: string(),
+        newId: string(),
+        newDefId: string(),
+        oldDestination: { enum: ['DISCARD', 'DESTROYED', 'BANISHED'] },
+        revealPolicy: ref('UnscheduledLocationReplacementRevealPolicy'),
+        cause: ref('EffectRef'),
+      },
+      [
+        'lane',
+        'oldId',
+        'newId',
+        'newDefId',
+        'oldDestination',
+        'revealPolicy',
+        'cause',
+      ],
+    ),
+    LocationReplacedEvent: {
+      oneOf: [
+        ref('ScheduledLocationReplacedEvent'),
+        ref('UnscheduledLocationReplacedEvent'),
+      ],
+    },
+    LocationSwapLeg: object(
+      {
+        locationId: string(),
+        fromLane: ref('LaneId'),
+        toLane: ref('LaneId'),
+      },
+      ['locationId', 'fromLane', 'toLane'],
+    ),
+    LocationsSwappedEvent: tagged(
+      'LOCATIONS_SWAPPED',
+      {
+        left: ref('LocationSwapLeg'),
+        right: ref('LocationSwapLeg'),
+        cause: ref('EffectRef'),
+      },
+      ['left', 'right', 'cause'],
+    ),
+    LocationMovedEvent: tagged(
+      'LOCATION_MOVED',
+      {
+        fromLane: ref('LaneId'),
+        toLane: ref('LaneId'),
+        locationId: string(),
+        cause: ref('EffectRef'),
+      },
+      ['fromLane', 'toLane', 'locationId', 'cause'],
+    ),
+    LocationRemovedFromLaneEvent: tagged(
+      'LOCATION_REMOVED_FROM_LANE',
+      {
+        lane: ref('LaneId'),
+        locationId: string(),
+        destination: { enum: ['DISCARD', 'DESTROYED', 'BANISHED'] },
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'locationId', 'destination', 'cause'],
+    ),
+    LocationReturnedToDeckEvent: tagged(
+      'LOCATION_RETURNED_TO_DECK',
+      {
+        locationId: string(),
+        from: { enum: ['STAGING', 'DISCARD', 'DESTROYED'] },
+        placement: { enum: ['TOP', 'BOTTOM'] },
+        cause: ref('EffectRef'),
+      },
+      ['locationId', 'from', 'placement', 'cause'],
+    ),
+    LaneDestructionStartedEvent: tagged(
+      'LANE_DESTRUCTION_STARTED',
+      {
+        lane: ref('LaneId'),
+        priorPosition: ref('SafeInteger'),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'priorPosition', 'cause'],
+    ),
+    LaneDestroyedEvent: tagged(
+      'LANE_DESTROYED',
+      {
+        lane: ref('LaneId'),
+        priorPosition: ref('SafeInteger'),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'priorPosition', 'cause'],
+    ),
+    LaneCreationStartedEvent: tagged(
+      'LANE_CREATION_STARTED',
+      {
+        lane: ref('LaneId'),
+        position: ref('SafeInteger'),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'position', 'cause'],
+    ),
+    LaneCreatedEvent: tagged(
+      'LANE_CREATED',
+      {
+        lane: ref('LaneId'),
+        position: ref('SafeInteger'),
+        cause: ref('EffectRef'),
+      },
+      ['lane', 'position', 'cause'],
+    ),
     ScheduledPendingEffect: object(
       {
         id: string(),
@@ -285,6 +530,23 @@ export const PROTOCOL_SCHEMA = {
         ref('MatchEndedEvent'),
         ref('PendingEffectScheduledEvent'),
         ref('PendingEffectConsumedEvent'),
+        ref('LocationDeckInitializedEvent'),
+        ref('LocationCardCreatedEvent'),
+        ref('LocationCardDrawnEvent'),
+        ref('LocationCardPlayedEvent'),
+        ref('LocationSlotRevealScheduledEvent'),
+        ref('LocationRevealedEvent'),
+        ref('LocationTurnedFaceDownEvent'),
+        ref('LocationShownToSeatsEvent'),
+        ref('LocationReplacedEvent'),
+        ref('LocationsSwappedEvent'),
+        ref('LocationMovedEvent'),
+        ref('LocationRemovedFromLaneEvent'),
+        ref('LocationReturnedToDeckEvent'),
+        ref('LaneDestructionStartedEvent'),
+        ref('LaneDestroyedEvent'),
+        ref('LaneCreationStartedEvent'),
+        ref('LaneCreatedEvent'),
         ref('OtherMatchEvent'),
       ],
     },

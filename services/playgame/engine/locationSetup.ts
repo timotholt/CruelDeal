@@ -1,9 +1,16 @@
 import type { Manifest } from './manifest/types';
+import {
+  kernelStepFailure,
+} from './kernel/kernel';
+import {
+  resolveRulesTransaction,
+  type RulesCommand,
+} from './kernel/rulesTransaction';
 import { createRng, type Rng } from './rng';
 import { appendGameplayRngAdvance } from './rng/transaction';
 import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
-import type { LaneId, LocationCardInstanceId } from './types/ids';
+import type { LocationCardInstanceId } from './types/ids';
 import type { MatchState } from './types/state';
 import { getAllLocationIds } from './projections/locationRuntime';
 import { getLocationTemplate } from './projections/locationTemplate';
@@ -106,50 +113,37 @@ export function buildLocationSetupTransaction(
       });
     });
 
-  const events: MatchEvent[] = [{
-    type: 'LOCATION_DECK_INITIALIZED',
-    locations,
-  }];
-
-  for (let position = 0; position < 3; position++) {
-    const lane = (genesis.nextLaneId + position) as LaneId;
-    const location = locations[position];
-    events.push(
-      {
-        type: 'LANE_CREATION_STARTED',
-        lane,
-        position,
-        cause: SETUP_CAUSE,
-      },
-      {
-        type: 'LOCATION_CARD_DRAWN',
-        locationId: location.id,
-        pendingLane: lane,
-      },
-      {
-        type: 'LOCATION_CARD_PLAYED',
-        locationId: location.id,
-        lane,
-      },
-      {
-        type: 'LOCATION_SLOT_REVEAL_SCHEDULED',
-        lane,
-        revealAtTurn: position + 1,
-        cause: SETUP_CAUSE,
-      },
-      {
-        type: 'LANE_CREATED',
-        lane,
-        position,
-        cause: SETUP_CAUSE,
-      },
-    );
-  }
-
-  events.push({ type: 'MATCH_SETUP_COMPLETED' });
+  const commands: RulesCommand[] = [
+    {
+      type: 'INITIALIZE_LOCATION_DECK',
+      locations,
+      cause: SETUP_CAUSE,
+    },
+    ...[0, 1, 2].map(position => ({
+      type: 'CREATE_LANE' as const,
+      position,
+      location: { kind: 'DRAW_TOP' as const },
+      reveal: { kind: 'SCHEDULE' as const, turn: position + 1 },
+      cause: SETUP_CAUSE,
+    })),
+  ];
+  const governed = resolveRulesTransaction(genesis, commands, {
+    manifest,
+    baseDepth: 0,
+    expandEffect: () => kernelStepFailure({
+      code: 'INVALID_OPERATION_OUTPUT',
+      message: 'Location setup cannot execute authored effects.',
+      sourceInstanceId: String(SETUP_CAUSE.sourceId),
+    }),
+  });
+  const events = appendGameplayRngAdvance(
+    genesis,
+    setupRng,
+    [...governed.events, { type: 'MATCH_SETUP_COMPLETED' }],
+  );
 
   return Object.freeze({
     transactionId: `setup:${genesis.rng.seed}`,
-    events: appendGameplayRngAdvance(genesis, setupRng, events),
+    events,
   });
 }

@@ -59,7 +59,7 @@ export interface LocationMetadataTransactionResult {
   readonly usage: KernelBudgetUsage;
 }
 
-function captureLocationMetadataSemantics(
+export function captureLocationMetadataSemantics(
   before: MatchState,
   event: LocationMetadataEvent,
   after: MatchState,
