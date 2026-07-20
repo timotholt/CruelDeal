@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -385,5 +385,169 @@ describe('C5C permanent Phase 1.5 architecture gates', () => {
     );
     expect(captureAt).toBeGreaterThan(0);
     expect(collectAt).toBeGreaterThan(captureAt);
+  });
+
+  it('keeps each active card and location locally authored and generated', () => {
+    const authoringContracts = [
+      {
+        root: resolve(
+          engineRoot,
+          'manifest/card-sets/core-v1/cards',
+        ),
+        definition: 'card.json',
+        generated: source(
+          'services/playgame/engine/manifest/card-sets/core-v1/cards.generated.ts',
+        ),
+        importPrefix: './cards',
+      },
+      {
+        root: resolve(
+          engineRoot,
+          'manifest/location-sets/core-v1/locations',
+        ),
+        definition: 'location.json',
+        generated: source(
+          'services/playgame/engine/manifest/location-sets/core-v1/locations.generated.ts',
+        ),
+        importPrefix: './locations',
+      },
+    ] as const;
+
+    for (const contract of authoringContracts) {
+      const folders = readdirSync(contract.root, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .filter(folder => existsSync(resolve(
+          contract.root,
+          folder,
+          contract.definition,
+        )))
+        .sort();
+      expect(folders.length).toBeGreaterThan(0);
+      for (const folder of folders) {
+        expect(contract.generated).toContain(
+          `${contract.importPrefix}/${folder}/${contract.definition}`,
+        );
+      }
+    }
+  });
+
+  it('keeps reducers and projections policy-blind and mutation-free', () => {
+    const reducerImports = moduleSpecifiers(
+      resolve(engineRoot, 'apply.ts'),
+    );
+    expect(reducerImports.filter(specifier =>
+      /(?:^|\/)(?:kernel|effects)(?:\/|$)/.test(specifier)
+    )).toEqual([]);
+
+    const violations: string[] = [];
+    for (const path of productionTypeScriptFiles(resolve(
+      engineRoot,
+      'projections',
+    ))) {
+      const current = repositoryPath(path);
+      for (const specifier of moduleSpecifiers(path)) {
+        if (
+          /(?:^|\/)(?:apply|kernel|effects\/rulesInterpreter)$/.test(
+            specifier,
+          )
+        ) {
+          violations.push(`${current}: imports ${specifier}`);
+        }
+      }
+      visit(parsed(path), node => {
+        if (
+          ts.isCallExpression(node)
+          && ts.isIdentifier(node.expression)
+          && /^(?:apply|applyFramed|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
+            .test(node.expression.text)
+        ) {
+          violations.push(`${current}: calls ${node.expression.text}`);
+        }
+      });
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('restricts exceptional builtins to queries, command data, and scoped RNG', () => {
+    const builtinPath = resolve(
+      engineRoot,
+      'effects/builtinCommandPlanner.ts',
+    );
+    const allowedImports = new Set([
+      '../manifest/types',
+      '../projections/cost',
+      '../projections/cardRuntime',
+      '../projections/cardTemplate',
+      '../projections/power',
+      '../projections/power-bearing',
+      '../laneTopology',
+      '../powerLedger',
+      '../types/ids',
+      '../types/state',
+      '../kernel/types',
+      './rulesInterpreter',
+    ]);
+    expect(moduleSpecifiers(builtinPath).filter(specifier =>
+      !allowedImports.has(specifier)
+    )).toEqual([]);
+
+    const forbiddenCalls: string[] = [];
+    visit(parsed(builtinPath), node => {
+      if (
+        ts.isCallExpression(node)
+        && ts.isIdentifier(node.expression)
+        && /^(?:apply|applyFramed|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
+          .test(node.expression.text)
+      ) {
+        forbiddenCalls.push(node.expression.text);
+      }
+    });
+    expect(forbiddenCalls).toEqual([]);
+  });
+
+  it('forbids mutable rule subscriptions and deleted parallel routes', () => {
+    const violations: string[] = [];
+    for (const root of [
+      resolve(engineRoot, 'kernel'),
+      resolve(engineRoot, 'effects'),
+    ]) {
+      for (const path of productionTypeScriptFiles(root)) {
+        const current = repositoryPath(path);
+        visit(parsed(path), node => {
+          if (!ts.isCallExpression(node)) return;
+          const calledName = ts.isIdentifier(node.expression)
+            ? node.expression.text
+            : ts.isPropertyAccessExpression(node.expression)
+              ? node.expression.name.text
+              : null;
+          if (
+            calledName
+            && /^(?:subscribe|unsubscribe|register|unregister|addListener|removeListener)$/
+              .test(calledName)
+          ) {
+            violations.push(`${current}: calls ${calledName}`);
+          }
+        });
+      }
+    }
+
+    const deletedEntrypoints = [
+      'evalEffect',
+      'revealPlayedCard',
+      'triggerOnReveal',
+      'planEnemyTurnFromPool',
+    ];
+    const activeSources = productionTypeScriptFiles(playgameRoot)
+      .map(path => readFileSync(path, 'utf8'))
+      .join('\n');
+    for (const entrypoint of deletedEntrypoints) {
+      if (new RegExp(`\\b${entrypoint}\\b`).test(activeSources)) {
+        violations.push(`deleted entrypoint returned: ${entrypoint}`);
+      }
+    }
+    expect(existsSync(resolve(engineRoot, 'effects/evaluator.ts'))).toBe(false);
+    expect(existsSync(resolve(engineRoot, 'effects/builtins.ts'))).toBe(false);
+    expect(violations).toEqual([]);
   });
 });

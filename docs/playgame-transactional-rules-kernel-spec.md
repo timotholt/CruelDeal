@@ -1,6 +1,6 @@
 # Playgame Transactional Rules Kernel
 
-Status: authoritative implementation specification  
+Status: implemented and exit-proven
 Date: 2026-07-19  
 Scope: Phase 1.5 Checkpoints 4 and 5 and the permanent engine/content boundary  
 Compatibility policy: clean replacement; no legacy event, replay, fixture, or

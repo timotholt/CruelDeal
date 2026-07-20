@@ -2,20 +2,19 @@
 
 ## Status
 
-Amended after Phase 1 completion with a review-ready Phase 1.5 engine-capability and location-authoring dependency before Phases 2 and 3.
+Phase 1.5 is implemented and exit-proven. Phase 2 is the next active phase.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
-Phase 1.5 Checkpoints 1 through 3 are complete. Phase 1.5 Checkpoints 4 and 5
-and the permanent engine/content rule-control plane are now governed by
+Phase 1.5 Checkpoints 1 through 5 and the permanent engine/content
+rule-control plane are governed by
 `docs/playgame-transactional-rules-kernel-spec.md`. Where that specification
 conflicts with the older Phase 1.5 implementation detail in this roadmap, the
 transactional-rules-kernel specification wins.
 
-Checkpoint 4 and C5A are implemented and exit-proven. The active authority is
-recorded in `docs/agent-checkpoints/phase1.5-cp4-exit.md` and the C5A
-checkpoint files. The next implementation slice is C5B: delete superseded
-evaluator and control paths.
+Final Phase 1.5 evidence is recorded in
+`docs/agent-checkpoints/phase1.5-exit.md`. The next implementation phase is
+Phase 2: split the provider boundary without reopening engine authority.
 
 ## Cost Model
 
