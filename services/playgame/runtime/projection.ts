@@ -24,12 +24,81 @@ import type {
 } from '../engine/types/ids';
 import type { Frame, TemporalScope } from '../engine/types/timeline';
 import type {
+  CommittedTransactionTimeline,
   CommittedTransactionRecord,
+  MatchBootstrap,
+  MatchMode,
   MatchRevision,
+  ParticipantController,
 } from './contracts';
 
 export type SeatCardToken = string;
 export type SeatLocationToken = string;
+
+export interface SeatParticipant {
+  readonly participantId: string;
+  readonly controller: ParticipantController;
+  readonly displayName: string;
+  readonly avatarId?: string;
+}
+
+export interface SeatDeckMetadata {
+  readonly kind: 'PLAYER' | 'LOCATION';
+  readonly deckId: string;
+  readonly revision: number;
+  readonly name: string;
+  readonly cardCount: number;
+}
+
+export interface SeatBootstrap {
+  readonly version: 1;
+  readonly matchId: string;
+  readonly mode: MatchMode;
+  readonly rulesetId: string;
+  readonly manifestVersion: number;
+  readonly viewerSeat: Seat;
+  readonly participants: Readonly<Record<Seat, SeatParticipant>>;
+  readonly decks: Readonly<Record<Seat | 'LOCATIONS', SeatDeckMetadata>>;
+}
+
+export function projectBootstrapForSeat(
+  bootstrap: MatchBootstrap,
+): SeatBootstrap {
+  const participant = (seat: Seat): SeatParticipant => ({
+    participantId: bootstrap.participants[seat].participantId,
+    controller: bootstrap.participants[seat].controller,
+    displayName: bootstrap.participants[seat].displayName,
+    ...(bootstrap.participants[seat].avatarId === undefined
+      ? {}
+      : { avatarId: bootstrap.participants[seat].avatarId }),
+  });
+  const deck = (
+    slot: Seat | 'LOCATIONS',
+  ): SeatDeckMetadata => ({
+    kind: bootstrap.decks[slot].kind,
+    deckId: bootstrap.decks[slot].deckId,
+    revision: bootstrap.decks[slot].revision,
+    name: bootstrap.decks[slot].name,
+    cardCount: bootstrap.decks[slot].entries.length,
+  });
+  return {
+    version: 1,
+    matchId: bootstrap.matchId,
+    mode: bootstrap.mode,
+    rulesetId: bootstrap.rulesetId,
+    manifestVersion: bootstrap.manifestVersion,
+    viewerSeat: bootstrap.viewerSeat,
+    participants: {
+      P0: participant('P0'),
+      P1: participant('P1'),
+    },
+    decks: {
+      P0: deck('P0'),
+      P1: deck('P1'),
+      LOCATIONS: deck('LOCATIONS'),
+    },
+  };
+}
 
 export interface SeatVisibleCard {
   readonly token: SeatCardToken;
@@ -129,6 +198,34 @@ export interface SeatCommittedTransaction {
   readonly postState: SeatVisibleMatchState;
 }
 
+/**
+ * Short-lived player-facing presentation frame. It carries the canonical
+ * gameplay coordinate but no canonical state, event, or engine identity.
+ */
+export interface SeatTransactionFrame {
+  readonly index: number;
+  readonly transactionId: string;
+  readonly frame: Frame;
+  readonly scope: TemporalScope;
+  readonly event: SeatAnimationEvent | null;
+  readonly before: SeatVisibleMatchState;
+  readonly after: SeatVisibleMatchState;
+}
+
+/**
+ * Local presentation wrapper over one committed transaction. Replay storage
+ * continues to retain canonical framed events, never these materialized views.
+ */
+export interface SeatTransactionTimeline {
+  readonly transactionId: string;
+  readonly matchId: string;
+  readonly baseRevision: MatchRevision;
+  readonly revision: MatchRevision;
+  readonly viewerSeat: Seat;
+  readonly frames: readonly SeatTransactionFrame[];
+  readonly finalState: SeatVisibleMatchState;
+}
+
 export interface SeatResyncRequest {
   readonly version: 1;
   readonly matchId: string;
@@ -162,6 +259,21 @@ function cardToken(
   cardId: string,
 ): SeatCardToken {
   return opaqueToken(state, viewerSeat, 'card', cardId);
+}
+
+/**
+ * Trusted authority-side lookup for converting an opaque player reference
+ * back into a canonical card identity. Never expose this function or its
+ * result through a player-facing context or protocol payload.
+ */
+export function resolveSeatCardTokenForAuthority(
+  state: MatchState,
+  viewerSeat: Seat,
+  token: SeatCardToken,
+): CardId | null {
+  return getAllCardStates(state)
+    .find(card => cardToken(state, viewerSeat, card.id) === token)
+    ?.id ?? null;
 }
 
 function locationToken(
@@ -332,7 +444,7 @@ function cardEventVisible(
     || cardIdentityVisible(transition.after, cardId, viewerSeat);
 }
 
-function projectAnimationEvent(
+export function projectAnimationEventForSeat(
   transition: EventTransition,
   viewerSeat: Seat,
 ): SeatAnimationEvent | null {
@@ -700,7 +812,7 @@ export function projectTransactionForSeat(
     throw new Error('projectTransactionForSeat: a committed transaction cannot be empty');
   }
   const events = transitions.flatMap((transition): SeatFramedAnimationEvent[] => {
-    const projected = projectAnimationEvent(transition, viewerSeat);
+    const projected = projectAnimationEventForSeat(transition, viewerSeat);
     return projected === null ? [] : [{
       frame: transition.frame,
       scope: { ...transition.scope },
@@ -717,6 +829,53 @@ export function projectTransactionForSeat(
     viewerSeat,
     events,
     postState: projectMatchStateForSeat(finalState, viewerSeat, manifest),
+  };
+}
+
+/**
+ * Materialize the short-lived local presentation view of a committed
+ * transaction. `projectAuthorityState` may overlay the viewer's private plan
+ * while the runtime is synchronously publishing the transaction.
+ */
+export function projectTransactionTimelineForSeat(
+  timeline: CommittedTransactionTimeline,
+  viewerSeat: Seat,
+  manifest: Manifest,
+  projectAuthorityState: (state: MatchState) => MatchState = state => state,
+): SeatTransactionTimeline {
+  const frames = timeline.transitions.map(
+    (transition): SeatTransactionFrame => ({
+      index: transition.index,
+      transactionId: transition.transactionId,
+      frame: transition.frame,
+      scope: { ...transition.scope },
+      event: projectAnimationEventForSeat(transition, viewerSeat),
+      before: projectMatchStateForSeat(
+        projectAuthorityState(transition.before),
+        viewerSeat,
+        manifest,
+      ),
+      after: projectMatchStateForSeat(
+        projectAuthorityState(transition.after),
+        viewerSeat,
+        manifest,
+      ),
+    }),
+  );
+  const finalState = frames.at(-1)?.after;
+  if (!finalState) {
+    throw new Error(
+      'projectTransactionTimelineForSeat: a committed transaction cannot be empty',
+    );
+  }
+  return {
+    transactionId: timeline.transaction.transactionId,
+    matchId: timeline.transaction.matchId,
+    baseRevision: timeline.transaction.baseRevision,
+    revision: timeline.transaction.revision,
+    viewerSeat,
+    frames,
+    finalState,
   };
 }
 
