@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import type { Manifest } from '../manifest/types';
 import { getCardCost } from '../projections/cost';
 import { getCardRuntime } from '../projections/cardRuntime';
@@ -6,22 +5,13 @@ import { getCardTemplate } from '../projections/cardTemplate';
 import type { EffectRef } from '../types/ability';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardZone, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
 import {
-  planCostCommand,
   type CostChangedEvent,
 } from './operations/cost';
-import type {
-  ChangeCostCommand,
-  CommittedTransition,
-} from './types';
 
 export interface CostSnapshot {
   readonly owner: Owner;
@@ -41,16 +31,6 @@ export interface CostSemantics {
   readonly prior: CostSnapshot;
   readonly result: CostSnapshot;
   readonly signedPermanentChange: number;
-}
-
-export interface CostTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly CostChangedEvent[];
-  readonly transitions: readonly CommittedTransition<
-    CostChangedEvent,
-    CostSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
 }
 
 function snapshotCost(
@@ -123,68 +103,6 @@ export function captureCostSemantics(
     result,
     signedPermanentChange,
   });
-}
-
-/**
- * Resolves an ordered, all-or-nothing batch of governed cost commands.
- *
- * The generic kernel owns private candidate folding and failure atomicity.
- * Cost currently has no committed reactions, so successful commands produce
- * only their canonical CARD_COST_CHANGED transitions.
- */
-export function resolveCostTransaction(
-  state: MatchState,
-  commands: readonly ChangeCostCommand[],
-  manifest: Manifest,
-  budget?: ResolutionBudget,
-): CostTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    ChangeCostCommand,
-    never,
-    Readonly<Record<string, never>>,
-    CostChangedEvent,
-    CostSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(budget === undefined ? {} : { budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planCostCommand(candidate, work, manifest),
-      interpretEffect: () =>
-        kernelStepFailure({
-          code: 'INVALID_OPERATION_OUTPUT',
-          message: 'Cost transactions do not accept effect work.',
-        }),
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Cost reducer failed.',
-            sourceInstanceId: String(event.cardId),
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureCostSemantics(before, event, after, manifest),
-      collectReactions: () => kernelStepSuccess([]),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { CostChangedEvent };

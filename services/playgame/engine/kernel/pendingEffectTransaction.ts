@@ -1,23 +1,15 @@
-import { apply } from '../apply';
-import type { Manifest } from '../manifest/types';
 import type { EffectRef } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { PendingEffectId } from '../types/ids';
 import type { MatchState, PendingEffect } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
 import {
-  planPendingEffectCommand,
   type PendingEffectCommand,
   type PendingEffectEvent,
 } from './operations/pendingEffect';
-import type { CommittedTransition } from './types';
 
 export type PendingEffectSemantics =
   | {
@@ -46,28 +38,6 @@ export type PendingEffectSemantics =
       readonly eventType: MatchEvent['type'];
       readonly transitionKind: 'ALREADY_RESOLVED_EFFECT_EVENT';
     };
-
-export interface PendingEffectTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    PendingEffectSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
-
-export interface PendingEffectTransactionOptions {
-  readonly manifest: Manifest;
-  readonly budget?: ResolutionBudget;
-  readonly interpretEffect?: (
-    state: MatchState,
-    effect: PendingEffect,
-  ) => {
-    readonly state: MatchState;
-    readonly events: readonly MatchEvent[];
-  };
-}
 
 export function capturePendingEffectSemantics(
   before: MatchState,
@@ -137,69 +107,6 @@ export function capturePendingEffectSemantics(
     eventType: event.type,
     transitionKind: 'ALREADY_RESOLVED_EFFECT_EVENT',
   });
-}
-
-export function resolvePendingEffectTransaction(
-  state: MatchState,
-  commands: readonly PendingEffectCommand[],
-  options: PendingEffectTransactionOptions,
-): PendingEffectTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    PendingEffectCommand,
-    PendingEffect,
-    Readonly<Record<string, never>>,
-    MatchEvent,
-    PendingEffectSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map(command => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planPendingEffectCommand(candidate, work),
-      interpretEffect: (candidate, work) => {
-        if (!options.interpretEffect) {
-          return kernelStepFailure({
-            code: 'INVALID_OPERATION_OUTPUT',
-            message: 'Pending execution requires an effect interpreter.',
-            sourceInstanceId: String(work.effect.id),
-          });
-        }
-        const interpreted = options.interpretEffect(candidate, work.effect);
-        return kernelStepSuccess({
-          work: interpreted.events.map(event => ({
-            kind: 'COMMIT' as const,
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED' as const,
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Pending-effect reducer failed.',
-          });
-        }
-      },
-      captureSemantics: capturePendingEffectSemantics,
-      collectReactions: () => kernelStepSuccess([]),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { PendingEffectCommand, PendingEffectEvent };

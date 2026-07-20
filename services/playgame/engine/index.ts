@@ -10,7 +10,7 @@
  *   - Step 3: populated manifest
  *   - Step 4: projections
  *   - Step 5: apply reducer
- *   - Step 6: revealPlayedCard / triggerOnReveal + evalEffect
+ *   - Step 6: canonical rules-command execution
  *   - Step 7: resolve (staging intents)
  *   - Step 8: resolveTurn
  */
@@ -113,13 +113,8 @@ export type {
   FrameAndFoldEventsOptions,
 } from './transactionTimeline';
 
-// ---- Evaluator (usually consumed indirectly via resolveTurn) --------------
-export {
-  revealPlayedCard,
-  revealPlayedCardAtEndOfGame,
-  triggerOnReveal,
-  evalEffect,
-} from './effects/evaluator';
+// ---- Canonical rules interpreter ------------------------------------------
+export { executeRulesCommands } from './effects/rulesInterpreter';
 
 // ---- CLI (headless match driver) -----------------------------------------
 export {

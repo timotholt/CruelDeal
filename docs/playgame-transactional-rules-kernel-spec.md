@@ -64,7 +64,7 @@ and generated output. It should not require editing:
 
 - `resolve.ts`;
 - `apply.ts`;
-- `effects/evaluator.ts`;
+- `effects/rulesInterpreter.ts`;
 - runtime/session code;
 - replay code;
 - providers;
@@ -1023,14 +1023,13 @@ Direct `apply` use is allowed only in:
 - explicit headless/testkit folds;
 - tests.
 
-`resolve.ts`, `effects/evaluator.ts`, `effects/builtins.ts`, content, providers,
-and presentation are not permanent exceptions.
+`resolve.ts`, the rules interpreter, builtin planners, content, providers, and
+presentation are not exceptions.
 
 ### Reaction Invocation
 
 Only the kernel dispatcher may create a `ReactionInvocation`. No producer may
-also call `fireLocationTrigger`, `fireCardTrigger`, `evalEffect`, or an
-equivalent manual reaction path after proposing an event.
+invoke a manual trigger or parallel effect executor after proposing an event.
 
 ### Content Imports
 
@@ -1674,6 +1673,12 @@ Delete:
 - fallback event/envelope fields;
 - dual schemas and compatibility aliases;
 - obsolete characterization expectations replaced by target behavior.
+
+C5B is complete when the legacy evaluator and imperative builtin registry are
+deleted; per-domain modules expose semantic capture/reaction logic but no
+standalone transaction executor; the canonical rules transaction is the only
+simulation-side reducer client; tests exercise the canonical path; and a
+source fence prevents any deleted entry point from returning.
 
 ### C5C — Permanent Architecture Gates
 

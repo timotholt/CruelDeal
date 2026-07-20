@@ -988,9 +988,13 @@ function executeCommand(
   });
 }
 
-export function resolveRulesTransaction(
+/**
+ * Internal all-work entrypoint used by the canonical interpreter and its
+ * testkit. Product/runtime callers must enter through present-tense commands.
+ */
+export function resolveRulesWorkTransaction(
   state: MatchState,
-  commands: readonly RulesCommand[],
+  initialWork: readonly CanonicalRulesWork[],
   options: RulesTransactionOptions,
 ): RulesTransactionResult {
   const result = resolveKernelTransaction<
@@ -1003,7 +1007,7 @@ export function resolveRulesTransaction(
   >(
     {
       initialState: state,
-      initialWork: commands.map(command => ({ kind: 'COMMAND', command })),
+      initialWork,
       ...(options.budget === undefined ? {} : { budget: options.budget }),
     },
     {
@@ -1167,4 +1171,16 @@ export function resolveRulesTransaction(
     transitions: result.value.transitions,
     usage: result.value.usage,
   };
+}
+
+export function resolveRulesTransaction(
+  state: MatchState,
+  commands: readonly RulesCommand[],
+  options: RulesTransactionOptions,
+): RulesTransactionResult {
+  return resolveRulesWorkTransaction(
+    state,
+    commands.map(command => ({ kind: 'COMMAND', command })),
+    options,
+  );
 }

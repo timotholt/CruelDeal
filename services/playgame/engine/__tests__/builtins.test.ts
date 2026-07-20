@@ -1,13 +1,12 @@
 import { getCardState } from '../projections/cardRuntime';
 /**
- * Tests for CALL_BUILTIN handlers in builtins.ts.
+ * Tests for CALL_BUILTIN command planning in the canonical interpreter.
  * Each test fires an On Reveal / onDestroyed effect that delegates to a
  * builtin and verifies the resulting state changes.
  */
 
 import { describe, it, expect } from 'vitest';
-import { evalEffect } from '../effects/evaluator';
-import { apply } from '../apply';
+import { executeEffectForTest } from '../testkit/rulesExecution';
 import { getCardPower } from '../projections/power';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
@@ -15,7 +14,7 @@ import { createRng } from '../rng';
 import type { MatchState, InternalCardRecord } from '../types/state';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
-import type { EffectCtx } from '../effects/evaluator';
+import type { EffectCtx } from '../effects/rulesInterpreter';
 import type { EffectExpr } from '../types/ability';
 import {
   emptyTestMatchState,
@@ -142,7 +141,7 @@ function runBuiltin(
 ) {
   const effect: EffectExpr = { kind: 'CALL_BUILTIN', fn, args };
   const ctx = makeCtx(state, manifest, selfId, selfOwner, selfLane);
-  return evalEffect(state, effect, ctx, manifest);
+  return executeEffectForTest(state, effect, ctx, manifest);
 }
 
 // ---- POWER_TO_DESTROYER ----------------------------------------------------
@@ -160,7 +159,7 @@ describe('CALL_BUILTIN: POWER_TO_DESTROYER', () => {
       ...makeCtx(state, manifest, 'vic' as CardId, 'P0'),
       source: { sourceId: 'src' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' },
     };
-    const { state: after } = evalEffect(state, effect, ctx, manifest);
+    const { state: after } = executeEffectForTest(state, effect, ctx, manifest);
     expect(getStoredCardPowerDelta(after, 'src' as CardId, manifest)).toBe(2);
   });
 });
@@ -204,7 +203,7 @@ describe('CALL_BUILTIN: MOVE_SELF_TO_RANDOM_OTHER_LANE', () => {
     const state = buildState({ P0: [self], P1: [] });
     const { state: after } = runBuiltin('MOVE_SELF_TO_RANDOM_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const newLane = getCardState(after, 'self' as CardId)!!.lane;
+    const newLane = getCardState(after, 'self' as CardId)!.lane;
     expect(newLane).not.toBe(0); // moved away from lane 0
     expect(newLane).not.toBeNull();
   });
@@ -229,7 +228,7 @@ describe('CALL_BUILTIN: MOVE_SELF_TO_RANDOM_OTHER_LANE', () => {
       ]),
     }, cardMap);
     const { state: after } = runBuiltin('MOVE_SELF_TO_RANDOM_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
-    expect(getCardState(after, 'self' as CardId)!!.lane).toBe(0); // didn't move
+    expect(getCardState(after, 'self' as CardId)!.lane).toBe(0); // didn't move
   });
 });
 
@@ -243,7 +242,7 @@ describe('CALL_BUILTIN: MOVE_ENEMY_CARD_TO_OTHER_LANE', () => {
     const state = buildState({ P0: [self], P1: [enemy] });
     const { state: after } = runBuiltin('MOVE_ENEMY_CARD_TO_OTHER_LANE', { selector: 'RANDOM_ENEMY_HERE' }, state, manifest, 'self' as CardId, 'P0', 0);
 
-    expect(getCardState(after, 'enemy' as CardId)!!.lane).not.toBe(0);
+    expect(getCardState(after, 'enemy' as CardId)!.lane).not.toBe(0);
     expect(after.lanesById[0].cards.P1).not.toContain('enemy');
   });
 
@@ -279,8 +278,8 @@ describe('CALL_BUILTIN: MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', () => {
       0,
     );
 
-    expect(getCardState(after, 'spell' as CardId)!?.lane).toBe(0);
-    expect(getCardState(after, 'operative' as CardId)!?.lane).not.toBe(0);
+    expect(getCardState(after, 'spell' as CardId)?.lane).toBe(0);
+    expect(getCardState(after, 'operative' as CardId)?.lane).not.toBe(0);
   });
 });
 
@@ -294,7 +293,7 @@ describe('CALL_BUILTIN: MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', () => {
     const state = buildState({ P0: [self, friendly], P1: [] });
     const { state: after } = runBuiltin('MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    expect(getCardState(after, 'friend' as CardId)!!.lane).not.toBe(0);
+    expect(getCardState(after, 'friend' as CardId)!.lane).not.toBe(0);
   });
 });
 
@@ -422,7 +421,7 @@ describe('CALL_BUILTIN: DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', () => {
     const state = buildState({ P0: [self], P1: [enemy] });
     const { state: after } = runBuiltin('DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const enemyTags = getCardState(after, 'enemy' as CardId)!!.tags;
+    const enemyTags = getCardState(after, 'enemy' as CardId)!.tags;
     expect(enemyTags.some(t => t.kind === 'ONGOING_DISABLED')).toBe(true);
   });
 
@@ -433,7 +432,7 @@ describe('CALL_BUILTIN: DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', () => {
     const state = buildState({ P0: [self], P1: [plain] });
     const { state: after } = runBuiltin('DISABLE_ONGOINGS_THIS_LANE_THIS_TURN', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const plainTags = getCardState(after, 'plain' as CardId)!!.tags;
+    const plainTags = getCardState(after, 'plain' as CardId)!.tags;
     expect(plainTags.some(t => t.kind === 'ONGOING_DISABLED')).toBe(false);
   });
 });
@@ -448,7 +447,7 @@ describe('CALL_BUILTIN: OVERCLOCK_CHIP', () => {
     const state = buildState({ P0: [self, target], P1: [] });
     const { state: after } = runBuiltin('OVERCLOCK_CHIP', { delta: 5 }, state, manifest, 'self' as CardId, 'P0', 0);
 
-    const targetAfter = getCardState(after, 'target' as CardId)!!;
+    const targetAfter = getCardState(after, 'target' as CardId)!;
     expect(getStoredCardPowerDelta(after, targetAfter.id, manifest)).toBe(5);
     // Should have a SCHEDULED pending effect for end-of-next-turn destruction
     expect(after.pendingEffects.some(pe => pe.kind === 'SCHEDULED' && pe.when === 'END_OF_NEXT_TURN')).toBe(true);

@@ -1,6 +1,7 @@
 import { getCardState } from './cardRuntime';
 import { describe, expect, it } from 'vitest';
-import { evalEffect, type EffectCtx } from '../effects/evaluator';
+import type { EffectCtx } from '../effects/rulesInterpreter';
+import { executeEffectForTest } from '../testkit/rulesExecution';
 import type { CardDef, Manifest } from '../manifest/types';
 import { createRng } from '../rng';
 import {
@@ -141,7 +142,7 @@ function barricadeStyleDef(): CardDef {
   };
 }
 
-function protectedState(manifest: Manifest): MatchState {
+function protectedState(_manifest: Manifest): MatchState {
   return buildRuntimeFixture({
     seed: 'first-row-destroy-protection',
     localSeat: 'P0',
@@ -213,7 +214,7 @@ describe('row-targeted destruction protection', () => {
 
   it('can protect any first-row card from an enemy destroy effect', () => {
     const state = protectedState(manifest);
-    const result = evalEffect(state, destroyRow(1), destroyCtx(state, manifest), manifest);
+    const result = executeEffectForTest(state, destroyRow(1), destroyCtx(state, manifest), manifest);
 
     expect(result.events.filter((event) => event.type === 'CARD_DESTROYED')).toEqual([]);
     expect(getCardState(result.state, 'protector' as CardId)!.zone).toBe('LANE');
@@ -222,7 +223,7 @@ describe('row-targeted destruction protection', () => {
 
   it('does not protect a matching card in the second row', () => {
     const state = protectedState(manifest);
-    const result = evalEffect(state, destroyRow(2), destroyCtx(state, manifest), manifest);
+    const result = executeEffectForTest(state, destroyRow(2), destroyCtx(state, manifest), manifest);
 
     expect(result.events.filter((event) => event.type === 'CARD_DESTROYED')).toHaveLength(1);
     expect(getCardState(result.state, 'rear-victim' as CardId)!.zone).toBe('DESTROYED');

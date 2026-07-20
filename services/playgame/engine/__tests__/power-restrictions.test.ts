@@ -1,7 +1,8 @@
 import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
-import { evalEffect, type EffectCtx } from '../effects/evaluator';
+import type { EffectCtx } from '../effects/rulesInterpreter';
+import { executeEffectForTest } from '../testkit/rulesExecution';
 import { BOOTSTRAP_MANIFEST } from '../manifest';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardPower, getLanePower } from '../projections/power';
@@ -192,7 +193,7 @@ describe('Courthouse Power contract', () => {
       target: SELF,
       delta: { kind: 'LIT', n: 4 },
     };
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       effect,
       effectCtx(state, manifest, 'subject' as CardId, 0),
@@ -219,7 +220,7 @@ describe('Courthouse Power contract', () => {
       target: SELF,
       value: { kind: 'LIT', n: 5 },
     };
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       effect,
       effectCtx(state, manifest, 'subject' as CardId, 0),
@@ -241,7 +242,7 @@ describe('Courthouse Power contract', () => {
         powerMutations: [{ kind: 'ADD', delta: 4 }],
       }],
     });
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       {
         kind: 'SET_POWER',
@@ -259,7 +260,7 @@ describe('Courthouse Power contract', () => {
     });
     expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(-2);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
-    expect(getCardState(result.state, 'subject' as CardId)!?.powerLedger).toHaveLength(2);
+    expect(getCardState(result.state, 'subject' as CardId)?.powerLedger).toHaveLength(2);
   });
 
   it('allows reductions while suppressing positive stored Power', () => {
@@ -272,7 +273,7 @@ describe('Courthouse Power contract', () => {
       target: SELF,
       delta: { kind: 'LIT', n: -2 },
     };
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       effect,
       effectCtx(state, manifest, 'subject' as CardId, 0),
@@ -310,8 +311,8 @@ describe('Courthouse Power contract', () => {
 
     expect(getStoredCardPowerDelta(moved, 'subject' as CardId, manifest)).toBe(2);
     expect(getCardPower(moved, 'subject' as CardId, manifest)).toBe(5);
-    expect(getCardState(moved, 'subject' as CardId)!?.powerLedger)
-      .toEqual(getCardState(state, 'subject' as CardId)!?.powerLedger);
+    expect(getCardState(moved, 'subject' as CardId)?.powerLedger)
+      .toEqual(getCardState(state, 'subject' as CardId)?.powerLedger);
   });
 
   it('rejects RESET_POWER when clearing a reduction would increase visible Power', () => {
@@ -327,7 +328,7 @@ describe('Courthouse Power contract', () => {
         ],
       }],
     });
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       { kind: 'RESET_POWER', target: SELF },
       effectCtx(state, manifest, 'subject' as CardId, 0),
@@ -335,8 +336,8 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.events).toEqual([]);
-    expect(getCardState(result.state, 'subject' as CardId)!?.powerLedger)
-      .toEqual(getCardState(state, 'subject' as CardId)!?.powerLedger);
+    expect(getCardState(result.state, 'subject' as CardId)?.powerLedger)
+      .toEqual(getCardState(state, 'subject' as CardId)?.powerLedger);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(1);
   });
 
@@ -354,7 +355,7 @@ describe('Courthouse Power contract', () => {
 
     for (const owner of ['P0', 'P1'] as const) {
       const cardId = `${owner.toLowerCase()}-subject` as CardId;
-      const result = evalEffect(
+      const result = executeEffectForTest(
         state,
         effect,
         effectCtx(state, manifest, cardId, 0, owner),
@@ -403,14 +404,14 @@ describe('Courthouse Power contract', () => {
       fn: 'CORPORATE_CLIMBER',
       args: {},
     };
-    const result = evalEffect(
+    const result = executeEffectForTest(
       state,
       effect,
       effectCtx(state, BOOTSTRAP_MANIFEST, 'climber' as CardId, 0),
       BOOTSTRAP_MANIFEST,
     );
 
-    expect(getCardState(result.state, 'victim' as CardId)!?.zone).toBe('DESTROYED');
+    expect(getCardState(result.state, 'victim' as CardId)?.zone).toBe('DESTROYED');
     expect(getStoredCardPowerDelta(
       result.state,
       'climber' as CardId,

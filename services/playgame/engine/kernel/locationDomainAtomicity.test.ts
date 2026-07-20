@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { executeRulesCommands } from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import { createRng } from '../rng';
 import {
@@ -386,36 +386,30 @@ describe('C5A-4 location-domain atomicity regressions', () => {
   });
 });
 
-describe('C5A-4 location-domain authored-expansion source fence', () => {
-  it('does not escape the shared queue through evaluators, command wrappers, or public transactions', () => {
-    const evaluatorPath = resolve(kernelRoot, '../effects/evaluator.ts');
-    const source = readFileSync(evaluatorPath, 'utf8');
-    const start = source.indexOf('function expandCanonicalAuthoredEffect(');
-    const end = source.indexOf(
-      '\nfunction placementRng(',
-      start,
+describe('C5B canonical authored-expansion source fence', () => {
+  it('has deleted the legacy evaluator and keeps authored expansion on the shared queue', () => {
+    const legacyEvaluatorPath = resolve(kernelRoot, '../effects/evaluator.ts');
+    expect(existsSync(legacyEvaluatorPath)).toBe(false);
+
+    const interpreterPath = resolve(
+      kernelRoot,
+      '../effects/rulesInterpreter.ts',
     );
+    const source = readFileSync(interpreterPath, 'utf8');
+    const start = source.indexOf('function expandCanonicalAuthoredEffect(');
 
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    const expansionSource = source.slice(start, end);
+    const expansionSource = source.slice(start);
     const forbidden = [
-      {
-        label: 'evalEffect',
-        pattern: /\bevalEffect\s*\(/g,
-      },
-      {
-        label: 'execute*Commands',
-        pattern: /\bexecute[A-Za-z0-9_]*Commands\s*\(/g,
-      },
-      {
-        label: 'resolve*Transaction',
-        pattern: /\bresolve[A-Za-z0-9_]*Transaction\s*\(/g,
-      },
+      /\bevalEffect\s*\(/g,
+      /\brevealPlayedCard\s*\(/g,
+      /\btriggerOnReveal\s*\(/g,
+      /\bexecute(?:Hand|Placement|Power|Reaction|Reveal)Commands\s*\(/g,
+      /\bresolve(?:Hand|Placement|Power|Reveal)Transaction\s*\(/g,
     ];
-    const violations = forbidden.flatMap(({ label, pattern }) =>
+    const violations = forbidden.flatMap(pattern =>
       [...expansionSource.matchAll(pattern)].map(match =>
-        `${label} at expansion offset ${match.index ?? -1}`,
+        `${match[0]} at expansion offset ${match.index ?? -1}`,
       ),
     );
 

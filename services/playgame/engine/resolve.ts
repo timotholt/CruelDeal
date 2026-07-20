@@ -23,14 +23,7 @@ import type { MatchState } from './types/state';
 import type { CardId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
-import {
-  revealPlayedCard,
-  revealPlayedCardAtEndOfGame,
-  executeReactionCommands,
-  executeHandCommands,
-  executePendingEffectCommands,
-  executeRulesCommands,
-} from './effects/evaluator';
+import { executeRulesCommands } from './effects/rulesInterpreter';
 import { getFinalTurn } from './projections/gameEnd';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 import {
@@ -38,7 +31,6 @@ import {
   getCardLifecycle,
   getCardRuntime,
 } from './projections/cardRuntime';
-import { resolveEnergyTransaction } from './kernel/energyTransaction';
 import { KernelInvariantError } from './kernel/failure';
 import {
   getPriorityStanding,
@@ -203,7 +195,7 @@ export function resolveTurn(
         },
       });
     }
-    const triggered = executeReactionCommands(
+    const triggered = executeRulesCommands(
       s,
       commands,
       { rng: rng.scope('turn-end-reactions') },
@@ -223,7 +215,7 @@ export function resolveTurn(
         p.fireTurn <= s.turn,
     );
     for (const pe of scheduled) {
-      const consumed = executePendingEffectCommands(s, [{
+      const consumed = executeRulesCommands(s, [{
         type: 'CONSUME_PENDING_EFFECT',
         pendingEffectId: pe.id,
         mode: 'EXECUTE',
@@ -328,7 +320,7 @@ export function resolveTurn(
   //            3. NEXT_TURN_ENERGY_BONUS_CHANGED (zero the one-shot bonus)
   //          Mirrors: `currentEnergy = maxEnergy + energyEarnedLastTurn`.
   for (const owner of ['P0', 'P1'] as const) {
-    const ramp = resolveEnergyTransaction(s, [{
+    const ramp = executeRulesCommands(s, [{
       type: 'CHANGE_ENERGY',
       target: 'MAXIMUM',
       owner,
@@ -339,7 +331,7 @@ export function resolveTurn(
         effectKind: 'SYSTEM',
         reason: 'TURN_START_MAX_ENERGY_RAMP',
       },
-    }], manifest);
+    }], { rng: rng.scope(`turn:${nextTurn}:energy-ramp:${owner}`) }, manifest);
     events.push(...ramp.events);
     s = ramp.state;
 
@@ -347,7 +339,7 @@ export function resolveTurn(
     const target = s.maxEnergy[owner] + bonus;
     const refillDelta = target - s.energy[owner];
     if (refillDelta !== 0) {
-      const refill = resolveEnergyTransaction(s, [{
+      const refill = executeRulesCommands(s, [{
         type: 'CHANGE_ENERGY',
         target: 'CURRENT',
         owner,
@@ -358,13 +350,13 @@ export function resolveTurn(
           effectKind: 'SYSTEM',
           reason: 'TURN_START_ENERGY_REFILL',
         },
-      }], manifest);
+      }], { rng: rng.scope(`turn:${nextTurn}:energy-refill:${owner}`) }, manifest);
       events.push(...refill.events);
       s = refill.state;
     }
 
     if (bonus !== 0) {
-      const consume = resolveEnergyTransaction(s, [{
+      const consume = executeRulesCommands(s, [{
         type: 'CHANGE_ENERGY',
         target: 'NEXT_TURN_BONUS',
         owner,
@@ -375,7 +367,7 @@ export function resolveTurn(
           effectKind: 'SYSTEM',
           reason: 'TURN_START_BONUS_CONSUMED',
         },
-      }], manifest);
+      }], { rng: rng.scope(`turn:${nextTurn}:bonus-consume:${owner}`) }, manifest);
       events.push(...consume.events);
       s = consume.state;
     }
@@ -391,7 +383,7 @@ export function resolveTurn(
         p.fireTurn <= s.turn,
     );
     for (const pe of scheduled) {
-      const consumed = executePendingEffectCommands(s, [{
+      const consumed = executeRulesCommands(s, [{
         type: 'CONSUME_PENDING_EFFECT',
         pendingEffectId: pe.id,
         mode: 'EXECUTE',
@@ -447,7 +439,7 @@ export function resolveTurn(
         },
       });
     }
-    const triggered = executeReactionCommands(
+    const triggered = executeRulesCommands(
       s,
       commands,
       { rng: rng.scope('turn-start-reactions') },
@@ -459,7 +451,7 @@ export function resolveTurn(
 
   // Phase 6  Manifest-declared turn-start draws per owner, hand-cap permitting.
   for (const owner of ['P0', 'P1'] as const) {
-    const draw = executeHandCommands(
+    const draw = executeRulesCommands(
       s,
       Array.from({ length: manifest.constants.turnStartDraw }, () => ({
         type: 'DRAW_CARD' as const,
@@ -555,10 +547,40 @@ function revealScheduledCards(
 
   for (const id of ordered) {
     const card = getCardRuntime(s, id, manifest);
-    if (!card) continue; // may have been destroyed by a prior reveal
-    const res = window === 'END_OF_GAME'
-      ? revealPlayedCardAtEndOfGame(s, id, manifest, rng.scope(`end-game:${id}`))
-      : revealPlayedCard(s, id, manifest, rng.scope(`turn:${id}`));
+    if (!card || card.lane === null) continue;
+    const cause = {
+      sourceId: id,
+      effectKind: 'SYSTEM' as const,
+      reason: card.lifecycle.framePlayed === undefined
+        ? 'SCHEDULED_REVEAL'
+        : 'COMMITTED_HAND_PLAY',
+    };
+    const res = executeRulesCommands(
+      s,
+      [
+        card.lifecycle.framePlayed === undefined
+          ? {
+              type: 'REVEAL_CARD',
+              cardId: id,
+              depth: 0,
+              cleanupSpell: true,
+              cause,
+            }
+          : {
+              type: 'PLAY_CARD',
+              cardId: id,
+              lane: card.lane,
+              depth: 0,
+              cause,
+            },
+      ],
+      {
+        rng: rng.scope(
+          window === 'END_OF_GAME' ? `end-game:${id}` : `turn:${id}`,
+        ),
+      },
+      manifest,
+    );
     events.push(...res.events);
     s = res.state;
   }

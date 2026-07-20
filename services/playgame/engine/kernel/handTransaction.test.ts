@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { executeHandCommands } from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import type { CardDef, Manifest } from '../manifest/types';
 import { getCardState } from '../projections/cardRuntime';
 import { getStoredCardPowerDelta } from '../powerLedger';
@@ -13,7 +13,6 @@ import type { EffectExpr, EffectRef, OngoingExpr } from '../types/ability';
 import type { CardId } from '../types/ids';
 import type { MatchState } from '../types/state';
 import { KernelInvariantError } from './failure';
-import { resolveHandTransaction } from './handTransaction';
 
 const CAUSE: EffectRef = {
   sourceId: 'hand-test-source' as CardId,
@@ -94,9 +93,9 @@ function fixture(
 function execute(
   state: MatchState,
   manifest: Manifest,
-  commands: Parameters<typeof executeHandCommands>[1],
+  commands: Parameters<typeof executeRulesCommands>[1],
 ) {
-  return executeHandCommands(
+  return executeRulesCommands(
     state,
     commands,
     { rng: createRng('hand-transaction-test') },
@@ -303,15 +302,14 @@ describe('hand kernel transaction', () => {
 
     let thrown: unknown;
     try {
-      resolveHandTransaction(state, [{
+      executeRulesCommands(state, [{
         type: 'DRAW_CARD',
         owner: 'P0',
         selection: { kind: 'TOP' },
         cause: CAUSE,
       }], {
-        manifest,
-        baseDepth: 0,
-        interpretEffect: candidate => ({ state: candidate, events: [] }),
+        rng: createRng('hand-transaction-budget'),
+        depth: 0,
         budget: {
           maxWorkItems: 1,
           maxEvents: 10,
@@ -319,7 +317,7 @@ describe('hand kernel transaction', () => {
           maxEffectDepth: 10,
           maxCreatedEntities: 10,
         },
-      });
+      }, manifest);
     } catch (error) {
       thrown = error;
     }

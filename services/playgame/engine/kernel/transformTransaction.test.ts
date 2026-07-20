@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { getCardState } from '../projections/cardRuntime';
 import { getStoredCardPowerDelta } from '../powerLedger';
+import { createRng } from '../rng';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -9,7 +11,6 @@ import {
 } from '../testkit/runtimeFixture';
 import type { CardId } from '../types/ids';
 import { KernelInvariantError } from './failure';
-import { resolveTransformTransaction } from './transformTransaction';
 
 const CARD_ID = 'transform-transaction-card' as CardId;
 const SOURCE_ID = 'transform-transaction-source' as CardId;
@@ -56,16 +57,15 @@ function transform(
   metadataPolicy: 'PRESERVE' | 'RESET_TO_DEFINITION',
   maxEvents?: number,
 ) {
-  return resolveTransformTransaction(state, [{
+  return executeRulesCommands(state, [{
     type: 'TRANSFORM_CARD',
     cardId: CARD_ID,
     newDefId: 'transform-transaction-b',
     metadataPolicy,
     cause: CAUSE,
   }], {
-    manifest,
-    baseDepth: 0,
-    interpretEffect: candidate => ({ state: candidate, events: [] }),
+    rng: createRng('transform-transaction-test'),
+    depth: 0,
     ...(maxEvents === undefined
       ? {}
       : {
@@ -77,7 +77,7 @@ function transform(
             maxCreatedEntities: 20,
           },
         }),
-  });
+  }, manifest);
 }
 
 describe('transform kernel transaction', () => {
@@ -175,17 +175,16 @@ describe('transform kernel transaction', () => {
       }, null, null],
     }).state;
 
-    expect(() => resolveTransformTransaction(state, [{
+    expect(() => executeRulesCommands(state, [{
       type: 'TRANSFORM_CARD',
       cardId: CARD_ID,
       newDefId: 'transform-transaction-a',
       metadataPolicy: 'RESET_TO_DEFINITION',
       cause: CAUSE,
     }], {
-      manifest: blockedManifest,
-      baseDepth: 0,
-      interpretEffect: candidate => ({ state: candidate, events: [] }),
-    })).toThrow(KernelInvariantError);
+      rng: createRng('transform-blocked-reset'),
+      depth: 0,
+    }, blockedManifest)).toThrow(KernelInvariantError);
     expect(getCardState(state, CARD_ID)?.defId)
       .toBe('transform-transaction-old');
     expect(getStoredCardPowerDelta(state, CARD_ID, blockedManifest)).toBe(-2);

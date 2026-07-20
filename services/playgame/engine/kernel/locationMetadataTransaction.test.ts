@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { apply } from '../apply';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { locationCounterKey } from '../locationCounterKey';
 import { locationCardAtLane } from '../laneTopology';
 import { getLocationState } from '../projections/locationRuntime';
+import { createRng } from '../rng';
 import {
   buildRuntimeFixture,
   removeTestLocation,
@@ -15,9 +17,9 @@ import type { EffectRef } from '../types/ability';
 import type { MatchEvent } from '../types/events';
 import type { CardId, LocationCardInstanceId } from '../types/ids';
 import { KernelInvariantError } from './failure';
+import type { ResolutionBudget } from './contracts';
 import { kernelStepSuccess } from './kernel';
 import {
-  resolveLocationMetadataTransaction,
   type LocationMetadataCommand,
 } from './locationMetadataTransaction';
 import { planLocationMetadataCommand } from './operations/locationMetadata';
@@ -30,6 +32,23 @@ const CAUSE: EffectRef = {
   effectKind: 'SYSTEM',
   reason: 'KERNEL_LOCATION_METADATA_TEST',
 };
+
+function executeLocationMetadataCommands(
+  state: ReturnType<typeof fixture>['state'],
+  commands: readonly LocationMetadataCommand[],
+  manifest: ReturnType<typeof fixture>['manifest'],
+  budget?: ResolutionBudget,
+) {
+  return executeRulesCommands(
+    state,
+    commands,
+    {
+      rng: createRng('location-metadata-transaction-test'),
+      ...(budget === undefined ? {} : { budget }),
+    },
+    manifest,
+  );
+}
 
 function fixture() {
   const alpha = testLocationDef('alpha');
@@ -63,7 +82,7 @@ function run(
 ) {
   return {
     ...input,
-    result: resolveLocationMetadataTransaction(
+    result: executeLocationMetadataCommands(
       input.state,
       commands,
       input.manifest,
@@ -203,7 +222,7 @@ describe('location metadata kernel transaction', () => {
     expect(added.result.events[0]).toMatchObject({
       cause: { reason: 'KERNEL_LOCATION_METADATA_TEST' },
     });
-    const noOp = resolveLocationMetadataTransaction(added.result.state, [
+    const noOp = executeLocationMetadataCommands(added.result.state, [
       {
         type: 'CHANGE_LOCATION_TAG',
         locationId: LOCATION_ID,
@@ -238,7 +257,7 @@ describe('location metadata kernel transaction', () => {
       toLane: 2,
       cause: CAUSE,
     }], manifest);
-    const afterMove = resolveLocationMetadataTransaction(moved.state, [{
+    const afterMove = executeLocationMetadataCommands(moved.state, [{
       type: 'CHANGE_LOCATION_TAG',
       locationId: LOCATION_ID,
       mutation: { kind: 'ADD', tag: { kind: 'SEALED' } },
@@ -254,7 +273,7 @@ describe('location metadata kernel transaction', () => {
       destination: 'DISCARD',
       cause: CAUSE,
     }], manifest);
-    const offLane = resolveLocationMetadataTransaction(removed.state, [{
+    const offLane = executeLocationMetadataCommands(removed.state, [{
       type: 'CHANGE_LOCATION_COUNTER',
       locationId: LOCATION_ID,
       name: 'visits',
@@ -332,13 +351,13 @@ describe('location metadata kernel transaction', () => {
     ];
     for (const command of invalid) {
       expect(() =>
-        resolveLocationMetadataTransaction(state, [command], manifest))
+        executeLocationMetadataCommands(state, [command], manifest))
         .toThrow(KernelInvariantError);
       expect(getLocationState(state, LOCATION_ID))
         .toMatchObject({ tags: [], counters: {} });
     }
 
-    expect(() => resolveLocationMetadataTransaction(state, [
+    expect(() => executeLocationMetadataCommands(state, [
       {
         type: 'CHANGE_LOCATION_TAG',
         locationId: LOCATION_ID,
@@ -364,7 +383,7 @@ describe('location metadata kernel transaction', () => {
       ...getLocationState(state, LOCATION_ID)!,
       counters: { 'neutral:uses': Number.MAX_SAFE_INTEGER },
     });
-    expect(() => resolveLocationMetadataTransaction(saturated, [{
+    expect(() => executeLocationMetadataCommands(saturated, [{
       type: 'CHANGE_LOCATION_COUNTER',
       locationId: LOCATION_ID,
       name: 'uses',
@@ -373,14 +392,14 @@ describe('location metadata kernel transaction', () => {
       cause: CAUSE,
     }], manifest)).toThrow(KernelInvariantError);
 
-    expect(() => resolveLocationMetadataTransaction(state, [{
+    expect(() => executeLocationMetadataCommands(state, [{
       type: 'CHANGE_LOCATION_TAG',
       locationId: LOCATION_ID,
       mutation: { kind: 'ADD', tag: { kind: 'FLOODED' } },
       cause: CAUSE,
     }], manifest, {
       maxWorkItems: 1,
-      maxEvents: 10,
+      maxEvents: 0,
       maxReactions: 10,
       maxEffectDepth: 10,
       maxCreatedEntities: 10,
@@ -404,7 +423,7 @@ describe('location metadata kernel transaction', () => {
       .toThrow(/cause is required/);
 
     const missing = removeTestLocation(state, LOCATION_ID);
-    const result = resolveLocationMetadataTransaction(missing, [{
+    const result = executeLocationMetadataCommands(missing, [{
       type: 'CHANGE_LOCATION_TAG',
       locationId: LOCATION_ID,
       mutation: { kind: 'ADD', tag: { kind: 'FLOODED' } },

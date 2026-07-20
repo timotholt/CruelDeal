@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
+import { createRng } from '../rng';
 import type { EffectExpr, OngoingExpr } from '../types/ability';
 import type { CardId } from '../types/ids';
-import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -208,7 +209,7 @@ describe('live InternalCardRecord queries', () => {
       effectKind: 'SYSTEM' as const,
       reason: 'QUERY_EFFECTIVE_TEXT_BOUNDARY',
     };
-    const blanked = resolveCardMetadataTransaction(state, [{
+    const blanked = executeRulesCommands(state, [{
       type: 'OVERRIDE_CARD_TEXT',
       cardId: 'hand-revealer' as CardId,
       override: {
@@ -218,8 +219,8 @@ describe('live InternalCardRecord queries', () => {
         copiedFrom: null,
       },
       cause: source,
-    }], manifest);
-    const copied = resolveCardMetadataTransaction(blanked.state, [{
+    }], { rng: createRng('query-api-blank-text') }, manifest);
+    const copied = executeRulesCommands(blanked.state, [{
       type: 'OVERRIDE_CARD_TEXT',
       cardId: 'hand-vanilla' as CardId,
       override: {
@@ -231,7 +232,7 @@ describe('live InternalCardRecord queries', () => {
         rulesText: 'On Reveal: Gain +1 Power.',
       },
       cause: source,
-    }], manifest);
+    }], { rng: createRng('query-api-copy-text') }, manifest);
 
     expect(findCards(copied.state, manifest, {
       zone: 'HAND',

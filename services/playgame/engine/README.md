@@ -4,7 +4,7 @@ Authoritative, pure, deterministic, framework-free game engine for `/play`.
 Server and client both import from this folder to run identical code against
 identical state.
 
-**Specification**: `docs/spec-engine-isolation.md` (Roadmap 0.2).
+**Specification**: `docs/playgame-transactional-rules-kernel-spec.md`.
 
 ## Purity contract (ESLint-enforced; see `eslint.config.js`)
 
@@ -30,9 +30,14 @@ Code in `engine/` MUST NOT use:
 ```
 engine/
   apply.ts              pure reducer: (state, event) → state
-  resolve.ts            intent → events (validator + event generator)
-  resolveTurn.ts        full-turn orchestration
-  eval.ts               recursive OR evaluator (revealPlayedCard, triggerOnReveal, evalEffect)
+  resolve.ts            intent/turn orchestration → governed commands
+  effects/
+    rulesInterpreter.ts authored rules → canonical command/effect work
+    builtinCommandPlanner.ts exceptional builtins → commands
+  kernel/
+    rulesTransaction.ts one private candidate-state work queue
+    operations/         command validation and event planning
+    reactions/          deterministic reaction discovery
   rng/                  seeded PRNG (sfc32) + Rng interface
   manifest/             versioned game-data contract + bootstrap
     types.ts            Manifest, CardDef, LocationDef, ...
@@ -46,19 +51,13 @@ engine/
     ids.ts
 ```
 
-## Migration status (spec §10)
+## Mutation authority
 
-- [x] **Step 1** — skeleton + isolation (types, stubs, ESLint).
-- [ ] **Step 2** — RNG (sfc32) + unit tests.
-- [ ] **Step 3** — BOOTSTRAP_MANIFEST populated from current demo cards.
-- [ ] **Step 4** — projections (power, lane power, priority, OR multiplier).
-- [ ] **Step 5** — `apply` reducer, every variant.
-- [ ] **Step 6** — selectors, predicates, numexpr, `evalEffect`, `revealPlayedCard`, `triggerOnReveal`.
-- [ ] **Step 7** — `resolve` for STAGE_CARD / UNSTAGE_CARD intents.
-- [ ] **Step 8** — `resolveTurn` full orchestration + enemy AI.
-- [ ] **Step 9** — event → animation adapter.
-- [ ] **Step 10** — legacy `script/actions.ts` deletion.
-- [ ] **Step 11** — `pnpm engine:cli` headless match harness in CI.
+Product callers submit present-tense commands through
+`executeRulesCommands`. The rules transaction is the only simulation-side
+client of `apply`; domain transaction modules expose pure semantic capture and
+reaction collection, not standalone executors. Authored effects and builtins
+may plan commands but cannot construct or apply mutation events directly.
 
-Until a step lands, its function throws `not implemented`. This guarantees
-we never silently run an incomplete engine.
+The runtime remains the publication/replay authority. It folds committed
+events, but it does not make gameplay decisions.

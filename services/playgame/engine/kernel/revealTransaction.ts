@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from '../laneTopology';
 import type { Manifest } from '../manifest/types';
 import type { EvalCtx } from '../projections/context';
@@ -14,13 +13,9 @@ import type {
   Owner,
 } from '../types/ids';
 import type { MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
   type KernelWorkExpansion,
 } from './kernel';
 import { planPlacementCommand } from './operations/placement';
@@ -176,42 +171,6 @@ export function planCompletePlayEffect(
   return kernelStepSuccess<KernelWorkExpansion<RevealWork>>({
     work: [{ kind: 'COMMIT', event }],
   });
-}
-
-export interface RevealEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface RevealTransactionOptions {
-  readonly manifest: Manifest;
-  readonly expandAuthoredEffect: (
-    state: MatchState,
-    effect: EffectExpr,
-    context: FrozenRevealEffectContext,
-  ) => KernelWorkExpansion<RevealWork> | null;
-  readonly interpretAtomicEffect: (
-    state: MatchState,
-    effect: EffectExpr,
-    context: FrozenRevealEffectContext,
-  ) => RevealEffectResult;
-  readonly cleanupSpell: (
-    state: MatchState,
-    cardId: CardId,
-    cause: EffectRef,
-    context: FrozenRevealEffectContext,
-  ) => RevealEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface RevealTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    RevealSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
 }
 
 function snapshotCard(
@@ -376,7 +335,7 @@ function ownerRank(priority: Owner, owner: Owner): number {
 
 function effectContext(
   state: MatchState,
-  options: Pick<RevealTransactionOptions, 'manifest'>,
+  options: { readonly manifest: Manifest },
   source: CardId | LocationCardInstanceId,
   sourceKind: 'card' | 'location',
   lane: LaneId,
@@ -443,7 +402,7 @@ function reaction(
 export function collectRevealReactions(
   after: MatchState,
   transition: CommittedTransition<MatchEvent, RevealSemantics>,
-  options: Pick<RevealTransactionOptions, 'manifest'>,
+  options: { readonly manifest: Manifest },
 ) {
   const semantics = transition.semantics;
   if (semantics.transitionKind === 'ALREADY_RESOLVED_EFFECT_EVENT') {
@@ -616,7 +575,7 @@ export function collectRevealReactions(
 export function planRevealCommand(
   state: MatchState,
   command: RevealCommand,
-  options: Pick<RevealTransactionOptions, 'manifest'>,
+  options: { readonly manifest: Manifest },
 ): ReturnType<typeof kernelStepSuccess<KernelWorkExpansion<RevealWork>>> {
   const card = 'cardId' in command
     ? getCardRuntime(state, command.cardId, options.manifest)
@@ -928,94 +887,4 @@ export function planRevealCommand(
     ],
     createdEntities: planned.value.createdEntities,
   });
-}
-
-export function resolveRevealTransaction(
-  state: MatchState,
-  commands: readonly RevealCommand[],
-  options: RevealTransactionOptions,
-): RevealTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    RevealCommand,
-    RevealReactionEffect,
-    FrozenRevealEffectContext,
-    MatchEvent,
-    RevealSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planRevealCommand(candidate, work.command, options),
-      interpretEffect: (candidate, work) => {
-        if (work.effect.kind === 'COMPLETE_PLAY') {
-          return planCompletePlayEffect(
-            candidate,
-            work.effect,
-            options.manifest,
-          );
-        }
-        if (work.effect.kind === 'SPELL_CLEANUP') {
-          const cleaned = options.cleanupSpell(
-            candidate,
-            work.effect.cardId,
-            work.effect.cause,
-            { ...work.context, state: candidate },
-          );
-          return kernelStepSuccess({
-            work: cleaned.events.map((event): RevealWork => ({
-              kind: 'COMMIT',
-              event,
-              reactionPolicy: 'ALREADY_RESOLVED',
-            })),
-          });
-        }
-        const planned = options.expandAuthoredEffect(
-          candidate,
-          work.effect.effect,
-          work.context,
-        );
-        if (planned) return kernelStepSuccess(planned);
-        const interpreted = options.interpretAtomicEffect(
-          candidate,
-          work.effect.effect,
-          { ...work.context, state: candidate },
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): RevealWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Reveal reducer failed.',
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureRevealSemantics(before, event, after, options.manifest),
-      collectReactions: (_before, after, transition) =>
-        collectRevealReactions(after, transition, options),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }

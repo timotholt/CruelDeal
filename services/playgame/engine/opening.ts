@@ -1,8 +1,5 @@
 import type { Manifest } from './manifest/types';
-import {
-  executeHandCommands,
-  executeRulesCommands,
-} from './effects/evaluator';
+import { executeRulesCommands } from './effects/rulesInterpreter';
 import { createRng } from './rng';
 import { appendGameplayRngAdvance } from './rng/transaction';
 import type { MatchEvent } from './types/events';
@@ -55,7 +52,7 @@ export function buildOpeningTransaction(
         `buildOpeningTransaction: ${owner} deck has ${genesis.deck[owner].length} cards; needs ${openingHandSize}`,
       );
     }
-    const draw = executeHandCommands(
+    const draw = executeRulesCommands(
       state,
       Array.from({ length: startingHandSize }, () => ({
         type: 'DRAW_CARD' as const,
@@ -108,7 +105,7 @@ export function buildOpeningTransaction(
   // Turn 1 begins after the initial location is live. Use the same normal
   // draw selection and hand-entry reaction pipeline as later turn starts.
   for (const owner of ['P0', 'P1'] as const) {
-    const draw = executeHandCommands(
+    const draw = executeRulesCommands(
       state,
       Array.from({ length: turnStartDraw }, () => ({
         type: 'DRAW_CARD' as const,

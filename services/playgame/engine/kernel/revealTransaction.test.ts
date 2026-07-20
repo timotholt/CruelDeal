@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { executeRevealCommands } from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardPower } from '../projections/power';
@@ -191,7 +191,7 @@ function reveal(
   cardId: CardId,
   gameManifest: Manifest,
 ) {
-  return executeRevealCommands(state, [{
+  return executeRulesCommands(state, [{
     type: 'REVEAL_CARD',
     cardId,
     depth: 0,
@@ -366,7 +366,7 @@ describe('C4D reveal transaction golden traces', () => {
       },
     };
     const initial = stateWith([source, played], playedHere.defId);
-    const result = executeRevealCommands(initial, [{
+    const result = executeRulesCommands(initial, [{
       type: 'PLAY_CARD',
       cardId: played.id,
       lane: 0,
@@ -415,7 +415,7 @@ describe('C4D reveal transaction golden traces', () => {
         lanePlayed: 0,
       },
     };
-    const result = executeRevealCommands(
+    const result = executeRulesCommands(
       stateWith([played], playedHere.defId),
       [{
         type: 'PLAY_CARD',
@@ -478,7 +478,7 @@ describe('C4D reveal transaction golden traces', () => {
     const clock = card('clock', 'clock', 'LANE', 0);
     const initial = stateWith([clock], turnLocation.defId);
     const locationId = 'golden-location' as never;
-    const start = executeRevealCommands(initial, [
+    const start = executeRulesCommands(initial, [
       {
         type: 'INVOKE_CARD_TRIGGER',
         cardId: clock.id,
@@ -503,7 +503,7 @@ describe('C4D reveal transaction golden traces', () => {
         },
       },
     ], { rng: createRng('turn-start-hooks') }, gameManifest);
-    const end = executeRevealCommands(start.state, [
+    const end = executeRulesCommands(start.state, [
       {
         type: 'INVOKE_CARD_TRIGGER',
         cardId: clock.id,
@@ -554,7 +554,7 @@ describe('C4D reveal transaction golden traces', () => {
     const resident = card('resident', 'resident', 'LANE', 0);
     const initial = stateWith([resident], revealedLocation.defId);
     const locationId = 'golden-location' as never;
-    const result = executeRevealCommands(initial, [{
+    const result = executeRulesCommands(initial, [{
       type: 'INVOKE_LOCATION_TRIGGER',
       locationId,
       lane: 0,

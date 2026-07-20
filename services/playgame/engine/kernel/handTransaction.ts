@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import { activeLaneIds } from '../laneTopology';
 import type { Manifest } from '../manifest/types';
 import { getCardRuntime } from '../projections/cardRuntime';
@@ -11,18 +10,10 @@ import type {
   Owner,
 } from '../types/ids';
 import type { CardZone, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
-import {
-  planHandCommand,
-  type HandCommand,
-} from './operations/hand';
 import { collectHandEntryReactionRules } from './reactions/handEntry';
 import type {
   CommittedTransition,
@@ -90,32 +81,6 @@ type HandWork = KernelWork<
   FrozenHandEffectContext,
   MatchEvent
 >;
-
-export interface HandEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface HandTransactionOptions {
-  readonly manifest: Manifest;
-  readonly baseDepth: number;
-  readonly interpretEffect: (
-    state: MatchState,
-    effect: HandReactionEffect,
-    context: FrozenHandEffectContext,
-  ) => HandEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface HandTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    HandSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 function snapshotPlacement(
   state: MatchState,
@@ -338,75 +303,4 @@ export function collectHandReactions(
     ));
   }
   return kernelStepSuccess(out);
-}
-
-export function resolveHandTransaction(
-  state: MatchState,
-  commands: readonly HandCommand[],
-  options: HandTransactionOptions,
-): HandTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    HandCommand,
-    HandReactionEffect,
-    FrozenHandEffectContext,
-    MatchEvent,
-    HandSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planHandCommand(candidate, work, options.manifest),
-      interpretEffect: (candidate, work) => {
-        const interpreted = options.interpretEffect(
-          candidate,
-          work.effect,
-          work.context,
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): HandWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Hand reducer failed.',
-            sourceInstanceId:
-              'cardId' in event ? String(event.cardId) : undefined,
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureHandSemantics(before, event, after, options.manifest),
-      collectReactions: (before, after, transition) =>
-        collectHandReactions(
-          before,
-          after,
-          transition,
-          options.manifest,
-          options.baseDepth,
-        ),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }

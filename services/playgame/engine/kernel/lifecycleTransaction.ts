@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import { activeLaneIds, locationCardAtLane } from '../laneTopology';
 import type { Manifest } from '../manifest/types';
 import { getCardRuntime } from '../projections/cardRuntime';
@@ -12,18 +11,10 @@ import type {
   Owner,
 } from '../types/ids';
 import type { CardZone, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
-import {
-  planDestructionLifecycleCommand,
-  type DestructionLifecycleCommand,
-} from './operations/lifecycle';
 import type {
   CommittedTransition,
   KernelReaction,
@@ -97,32 +88,6 @@ type LifecycleWork = KernelWork<
   FrozenLifecycleEffectContext,
   MatchEvent
 >;
-
-export interface LifecycleEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface DestructionLifecycleTransactionOptions {
-  readonly manifest: Manifest;
-  readonly baseDepth: number;
-  readonly interpretEffect: (
-    state: MatchState,
-    effect: EffectExpr,
-    context: FrozenLifecycleEffectContext,
-  ) => LifecycleEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface DestructionLifecycleTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    DestructionLifecycleSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 function snapshotPlacement(
   state: MatchState,
@@ -409,79 +374,4 @@ export function collectLifecycleReactions(
   }
 
   return kernelStepSuccess(reactions);
-}
-
-export function resolveDestructionLifecycleTransaction(
-  state: MatchState,
-  commands: readonly DestructionLifecycleCommand[],
-  options: DestructionLifecycleTransactionOptions,
-): DestructionLifecycleTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    DestructionLifecycleCommand,
-    EffectExpr,
-    FrozenLifecycleEffectContext,
-    MatchEvent,
-    DestructionLifecycleSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planDestructionLifecycleCommand(
-          candidate,
-          work,
-          options.manifest,
-        ),
-      interpretEffect: (candidate, work) => {
-        const interpreted = options.interpretEffect(
-          candidate,
-          work.effect,
-          work.context,
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): LifecycleWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(
-            candidate,
-            event,
-            options.manifest,
-          ));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Lifecycle reducer failed.',
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureLifecycleSemantics(
-          before,
-          event,
-          after,
-          options.manifest,
-        ),
-      collectReactions: (before, _after, transition) =>
-        collectLifecycleReactions(before, transition, options.baseDepth),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { createInitialMatchState } from '../cli/initState';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import type { LocationCardDef, Manifest } from '../manifest/types';
 import {
   orderedTestLocationDeck,
@@ -13,13 +14,11 @@ import type { CardId } from '../types/ids';
 import type { EffectRef, TextOverride } from '../types/ability';
 import type { CardTag, MatchState, PowerMutation } from '../types/state';
 import { frameAndFoldEvents } from '../transactionTimeline';
+import { createRng } from '../rng';
 import {
   cardLifecycleFrames,
   locationLifecycleFrames,
 } from '../timeline';
-import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
-import { resolveCostTransaction } from '../kernel/costTransaction';
-import { resolveStoredPowerTransaction } from '../kernel/powerTransaction';
 import { getCurrentCard } from './card';
 import {
   getCardLifecycle,
@@ -36,76 +35,74 @@ const changeStoredPower = (
   mutation: PowerMutation,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveStoredPowerTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_STORED_POWER',
   cardId,
   mutation,
   cause: source,
 }], {
-  manifest: activeManifest,
-  baseDepth: 0,
-  interpretEffect: (candidate) => ({ events: [], state: candidate }),
-});
+  rng: createRng('runtime-api-power-test'),
+}, activeManifest);
 const adjustCardCost = (
   current: MatchState,
   cardId: CardId,
   delta: number,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCostTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_COST',
   cardId,
   mutation: { kind: 'ADD', delta },
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-cost-adjust-test') }, activeManifest);
 const setCardCost = (
   current: MatchState,
   cardId: CardId,
   value: number,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCostTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_COST',
   cardId,
   mutation: { kind: 'SET', value },
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-cost-set-test') }, activeManifest);
 const replaceCardText = (
   current: MatchState,
   cardId: CardId,
   override: TextOverride | null,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCardMetadataTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'OVERRIDE_CARD_TEXT',
   cardId,
   override,
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-text-test') }, activeManifest);
 const addCardTag = (
   current: MatchState,
   cardId: CardId,
   tag: CardTag,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCardMetadataTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_CARD_TAG',
   cardId,
   mutation: { kind: 'ADD', tag },
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-tag-add-test') }, activeManifest);
 const removeCardTag = (
   current: MatchState,
   cardId: CardId,
   tag: CardTag['kind'],
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCardMetadataTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_CARD_TAG',
   cardId,
   mutation: { kind: 'REMOVE', tag },
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-tag-remove-test') }, activeManifest);
 const changeCardCounter = (
   current: MatchState,
   cardId: CardId,
@@ -113,13 +110,13 @@ const changeCardCounter = (
   delta: number,
   source: EffectRef,
   activeManifest: Manifest,
-) => resolveCardMetadataTransaction(current, [{
+) => executeRulesCommands(current, [{
   type: 'CHANGE_CARD_COUNTER',
   cardId,
   name,
   delta,
   cause: source,
-}], activeManifest);
+}], { rng: createRng('runtime-api-counter-test') }, activeManifest);
 import { getLocationRuntime } from './locationRuntime';
 import { getLocationTemplate } from './locationTemplate';
 import { findCards } from './query';
@@ -168,8 +165,8 @@ function state() {
     'runtime-api-test',
     manifest,
     {
-      P0: [{ defId: historian.defId }],
-      P1: [{ defId: historian.defId }],
+      P0: Array.from({ length: 5 }, () => ({ defId: historian.defId })),
+      P1: Array.from({ length: 5 }, () => ({ defId: historian.defId })),
     },
     orderedTestLocationDeck(manifest),
   );
@@ -453,12 +450,12 @@ describe('current card API', () => {
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
+      { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', energyPaid: 3, cause },
       { type: 'CARD_POWER_CHANGED', cardId, mutation: { kind: 'ADD', delta: 2 }, cause },
       { type: 'CARD_COST_CHANGED', cardId, delta: -1, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
-      { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', energyPaid: 2 },
+      { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', energyPaid: 2, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
 
@@ -509,13 +506,13 @@ describe('current card API', () => {
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
+      { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', energyPaid: 3, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'TURN_RESOLUTION_STARTED', turn: 1 },
       { type: 'TURN_ENDED', turn: 1 },
       { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' },
-      { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', energyPaid: 3 },
+      { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', energyPaid: 3, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
     const lifecycle = getCardLifecycle(current, cardId);
@@ -552,7 +549,7 @@ describe('current card API', () => {
       initialState: initial,
       events: [
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
+      { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', energyPaid: 3, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_PLAY_COMPLETED', cardId, owner: 'P0', lane: 0, cause },
       { type: 'CARD_DESTROYED', cardId, cause },

@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import { activeLaneIds, locationCardAtLane } from '../laneTopology';
 import type { Manifest } from '../manifest/types';
 import { getCardRuntime } from '../projections/cardRuntime';
@@ -12,18 +11,10 @@ import type {
   Owner,
 } from '../types/ids';
 import type { CardZone, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
-import {
-  planPlacementCommand,
-  type PlacementCommand,
-} from './operations/placement';
 import { collectHandEntryReactionRules } from './reactions/handEntry';
 import type {
   CommittedTransition,
@@ -119,32 +110,6 @@ type PlacementWork = KernelWork<
   FrozenPlacementEffectContext,
   MatchEvent
 >;
-
-export interface PlacementEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface PlacementTransactionOptions {
-  readonly manifest: Manifest;
-  readonly baseDepth: number;
-  readonly interpretEffect: (
-    state: MatchState,
-    effect: PlacementReactionEffect,
-    context: FrozenPlacementEffectContext,
-  ) => PlacementEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface PlacementTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    PlacementSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 function snapshotPlacement(
   state: MatchState,
@@ -521,72 +486,4 @@ export function collectPlacementReactions(
   }
 
   return kernelStepSuccess(out);
-}
-
-export function resolvePlacementTransaction(
-  state: MatchState,
-  commands: readonly PlacementCommand[],
-  options: PlacementTransactionOptions,
-): PlacementTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    PlacementCommand,
-    PlacementReactionEffect,
-    FrozenPlacementEffectContext,
-    MatchEvent,
-    PlacementSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planPlacementCommand(candidate, work, options.manifest),
-      interpretEffect: (candidate, work) => {
-        const interpreted = options.interpretEffect(
-          candidate,
-          work.effect,
-          work.context,
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): PlacementWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Placement reducer failed.',
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        capturePlacementSemantics(before, event, after, options.manifest),
-      collectReactions: (before, after, transition) =>
-        collectPlacementReactions(
-          before,
-          after,
-          transition,
-          options.manifest,
-          options.baseDepth,
-        ),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }

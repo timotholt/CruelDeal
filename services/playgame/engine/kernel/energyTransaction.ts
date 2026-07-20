@@ -1,24 +1,14 @@
-import { apply } from '../apply';
-import type { Manifest } from '../manifest/types';
 import type { EffectRef } from '../types/ability';
 import type { Owner } from '../types/ids';
 import type { EnergyReason, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
 import {
-  planEnergyCommand,
   type EnergyChangedEvent,
 } from './operations/energy';
-import type {
-  ChangeEnergyCommand,
-  CommittedTransition,
-} from './types';
+import type { ChangeEnergyCommand } from './types';
 
 export interface EnergySnapshot {
   readonly current: number;
@@ -43,16 +33,6 @@ export interface EnergySemantics {
   readonly prior: EnergySnapshot;
   readonly result: EnergySnapshot;
   readonly signedChange: number;
-}
-
-export interface EnergyTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly EnergyChangedEvent[];
-  readonly transitions: readonly CommittedTransition<
-    EnergyChangedEvent,
-    EnergySemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
 }
 
 function snapshotEnergy(state: MatchState, owner: Owner): EnergySnapshot {
@@ -148,67 +128,6 @@ export function captureEnergySemantics(
     result,
     signedChange,
   });
-}
-
-/**
- * Resolves an ordered, all-or-nothing batch of governed Energy commands.
- *
- * Energy currently has no committed reactions. The generic kernel still owns
- * private candidate folding, semantics capture, budgeting, and failure
- * atomicity for mixed current/maximum/next-turn mutations.
- */
-export function resolveEnergyTransaction(
-  state: MatchState,
-  commands: readonly ChangeEnergyCommand[],
-  manifest: Manifest,
-  budget?: ResolutionBudget,
-): EnergyTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    ChangeEnergyCommand,
-    never,
-    Readonly<Record<string, never>>,
-    EnergyChangedEvent,
-    EnergySemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(budget === undefined ? {} : { budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planEnergyCommand(candidate, work),
-      interpretEffect: () =>
-        kernelStepFailure({
-          code: 'INVALID_OPERATION_OUTPUT',
-          message: 'Energy transactions do not accept effect work.',
-        }),
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Energy reducer failed.',
-            sourceInstanceId: event.owner,
-          });
-        }
-      },
-      captureSemantics: captureEnergySemantics,
-      collectReactions: () => kernelStepSuccess([]),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { EnergyChangedEvent };

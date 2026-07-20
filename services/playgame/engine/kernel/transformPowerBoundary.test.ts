@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
-import { evalEffect, type EffectCtx } from '../effects/evaluator';
+import {
+  executeRulesCommands,
+  type EffectCtx,
+} from '../effects/rulesInterpreter';
+import { executeEffectForTest } from '../testkit/rulesExecution';
 import type { CardDef, Manifest } from '../manifest/types';
 import { getCardState } from '../projections/cardRuntime';
 import { getStoredCardPowerDelta } from '../powerLedger';
@@ -15,16 +19,14 @@ import {
   frameAndFoldEvents,
 } from '../transactionTimeline';
 import type { EffectExpr } from '../types/ability';
-import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
 import type { MatchState } from '../types/state';
-import { DEFAULT_RESOLUTION_BUDGET } from './contracts';
-import { KernelInvariantError } from './failure';
 import {
-  resolveTransformTransaction,
-  type TransformCardCommand,
-  type TransformTransactionOptions,
-} from './transformTransaction';
+  DEFAULT_RESOLUTION_BUDGET,
+  type ResolutionBudget,
+} from './contracts';
+import { KernelInvariantError } from './failure';
+import type { TransformCardCommand } from './transformTransaction';
 
 const CARD_ID = 'transform-subject' as CardId;
 const SOURCE_ID = 'transform-source' as CardId;
@@ -138,14 +140,13 @@ function runTransform(
   state: MatchState,
   gameManifest: Manifest,
   transformCommand = command('RESET_TO_DEFINITION'),
-  overrides: Partial<TransformTransactionOptions> = {},
+  overrides: { readonly budget?: ResolutionBudget } = {},
 ) {
-  return resolveTransformTransaction(state, [transformCommand], {
-    manifest: gameManifest,
-    baseDepth: 0,
-    interpretEffect: candidate => ({ state: candidate, events: [] }),
+  return executeRulesCommands(state, [transformCommand], {
+    rng: createRng('transform-power-boundary-test'),
+    depth: 0,
     ...overrides,
-  });
+  }, gameManifest);
 }
 
 function evaluatorContext(
@@ -173,32 +174,10 @@ describe('transform transaction boundary', () => {
       withGainReaction: true,
       powerDelta: -2,
     });
-    const observedDefinitions: string[] = [];
     const result = runTransform(
       state,
       gameManifest,
       command('RESET_TO_DEFINITION'),
-      {
-        interpretEffect: (candidate, effect, context) => {
-          observedDefinitions.push(
-            getCardState(candidate, CARD_ID)?.defId ?? 'missing',
-          );
-          expect(effect).toMatchObject({
-            kind: 'AUTHORED',
-            effect: { kind: 'DRAW' },
-          });
-          const draw: MatchEvent = {
-            type: 'CARD_DRAWN',
-            owner: 'P0',
-            cardId: DRAWN_ID,
-            cause: context.source,
-          };
-          return {
-            events: [draw],
-            state: apply(candidate, draw, gameManifest),
-          };
-        },
-      },
     );
 
     expect(result.events.map(({ type }) => type)).toEqual([
@@ -215,7 +194,6 @@ describe('transform transaction boundary', () => {
         reason: 'TRANSFORM_POWER_BOUNDARY_TEST',
       },
     });
-    expect(observedDefinitions).toEqual(['transform-old']);
     expect(result.state.hand.P0).toEqual([DRAWN_ID]);
     expect(getCardState(result.state, CARD_ID)?.defId)
       .toBe('transform-new-a');
@@ -223,7 +201,7 @@ describe('transform transaction boundary', () => {
       .toBe(0);
   });
 
-  it('publishes no reset, nested reaction, or transform prefix after interpreter or budget failure', () => {
+  it('publishes no reset, nested reaction, or transform prefix after budget failure', () => {
     const { state, manifest: gameManifest } = initialState({
       withGainReaction: true,
       powerDelta: -2,
@@ -235,32 +213,9 @@ describe('transform transaction boundary', () => {
       gameManifest,
       command('RESET_TO_DEFINITION'),
       {
-        interpretEffect: () => {
-          throw new Error('nested reaction failed');
-        },
-      },
-    )).toThrow(KernelInvariantError);
-
-    expect(() => runTransform(
-      state,
-      gameManifest,
-      command('RESET_TO_DEFINITION'),
-      {
         budget: {
           ...DEFAULT_RESOLUTION_BUDGET,
           maxEvents: 1,
-        },
-        interpretEffect: (candidate, _effect, context) => {
-          const draw: MatchEvent = {
-            type: 'CARD_DRAWN',
-            owner: 'P0',
-            cardId: DRAWN_ID,
-            cause: context.source,
-          };
-          return {
-            events: [draw],
-            state: apply(candidate, draw, gameManifest),
-          };
         },
       },
     )).toThrow(KernelInvariantError);
@@ -389,13 +344,13 @@ describe('transform transaction boundary', () => {
       },
       metadataPolicy: 'PRESERVE',
     };
-    const first = evalEffect(
+    const first = executeEffectForTest(
       state,
       effect,
       evaluatorContext(state, CARD_ID, gameManifest),
       gameManifest,
     );
-    const second = evalEffect(
+    const second = executeEffectForTest(
       state,
       effect,
       evaluatorContext(state, CARD_ID, gameManifest),
@@ -453,13 +408,13 @@ describe('transform transaction boundary', () => {
       pool: { kind: 'DEF_ID_LIST', ids: ['transform-new-a'] },
       metadataPolicy: 'RESET_TO_DEFINITION',
     };
-    const direct = evalEffect(
+    const direct = executeEffectForTest(
       state,
       directEffect,
       evaluatorContext(state, SOURCE_ID, gameManifest),
       gameManifest,
     );
-    const builtin = evalEffect(
+    const builtin = executeEffectForTest(
       state,
       { kind: 'CALL_BUILTIN', fn: 'SOCIAL_WORKER', args: {} },
       evaluatorContext(state, SOURCE_ID, gameManifest),

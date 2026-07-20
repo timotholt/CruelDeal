@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import type { CardDef, Manifest } from '../manifest/types';
 import { getCardCost } from '../projections/cost';
 import { getCardState } from '../projections/cardRuntime';
+import { createRng } from '../rng';
 import {
   buildRuntimeFixture,
   testCardDef,
@@ -11,7 +13,6 @@ import {
 import type { EffectRef } from '../types/ability';
 import type { CardId } from '../types/ids';
 import type { MatchState } from '../types/state';
-import { resolveCostTransaction } from './costTransaction';
 import type { ResolutionBudget } from './contracts';
 import { KernelInvariantError } from './failure';
 import type { ChangeCostCommand } from './types';
@@ -112,7 +113,15 @@ function run(
   commands: readonly ChangeCostCommand[],
   budget?: ResolutionBudget,
 ) {
-  return resolveCostTransaction(state, commands, manifest, budget);
+  return executeRulesCommands(
+    state,
+    commands,
+    {
+      rng: createRng('cost-transaction-test'),
+      ...(budget === undefined ? {} : { budget }),
+    },
+    manifest,
+  );
 }
 
 describe('cost kernel transaction', () => {

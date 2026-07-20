@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import type { Manifest } from '../manifest/types';
+import { createRng } from '../rng';
 import {
   buildRuntimeFixture,
   testManifest,
@@ -9,7 +11,6 @@ import type { EffectRef } from '../types/ability';
 import type { CardId } from '../types/ids';
 import type { EnergyReason, MatchState } from '../types/state';
 import type { ResolutionBudget } from './contracts';
-import { resolveEnergyTransaction } from './energyTransaction';
 import { KernelInvariantError } from './failure';
 import type { ChangeEnergyCommand } from './types';
 
@@ -67,7 +68,15 @@ function run(
   commands: readonly ChangeEnergyCommand[],
   budget?: ResolutionBudget,
 ) {
-  return resolveEnergyTransaction(state, commands, manifest, budget);
+  return executeRulesCommands(
+    state,
+    commands,
+    {
+      rng: createRng('energy-transaction-test'),
+      ...(budget === undefined ? {} : { budget }),
+    },
+    manifest,
+  );
 }
 
 describe('energy kernel transaction', () => {

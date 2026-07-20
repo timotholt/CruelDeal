@@ -1,24 +1,17 @@
-import { apply } from '../apply';
 import { cardTagsEqual } from '../cardTagIdentity';
 import type { Manifest } from '../manifest/types';
 import { getCardRuntime } from '../projections/cardRuntime';
 import type { EffectRef, TextOverride } from '../types/ability';
 import type { CardId } from '../types/ids';
 import type { CardTag, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
 import {
-  planCardMetadataCommand,
   type CardMetadataCommand,
   type CardMetadataEvent,
 } from './operations/cardMetadata';
-import type { CommittedTransition } from './types';
 
 export type CardMetadataSemantics =
   | {
@@ -51,16 +44,6 @@ export type CardMetadataSemantics =
       readonly prior: TextOverride | null;
       readonly result: TextOverride | null;
     };
-
-export interface CardMetadataTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly CardMetadataEvent[];
-  readonly transitions: readonly CommittedTransition<
-    CardMetadataEvent,
-    CardMetadataSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 export function captureCardMetadataSemantics(
   before: MatchState,
@@ -171,64 +154,6 @@ export function captureCardMetadataSemantics(
       });
     }
   }
-}
-
-/**
- * Resolves an ordered, all-or-nothing batch of governed card metadata
- * commands. Candidate state never escapes a failed batch.
- */
-export function resolveCardMetadataTransaction(
-  state: MatchState,
-  commands: readonly CardMetadataCommand[],
-  manifest: Manifest,
-  budget?: ResolutionBudget,
-): CardMetadataTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    CardMetadataCommand,
-    never,
-    Readonly<Record<string, never>>,
-    CardMetadataEvent,
-    CardMetadataSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map(command => ({ kind: 'COMMAND', command })),
-      ...(budget === undefined ? {} : { budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planCardMetadataCommand(candidate, work, manifest),
-      interpretEffect: () =>
-        kernelStepFailure({
-          code: 'INVALID_OPERATION_OUTPUT',
-          message: 'Card metadata transactions do not accept effect work.',
-        }),
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Card metadata reducer failed.',
-            sourceInstanceId: String(event.cardId),
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureCardMetadataSemantics(before, event, after, manifest),
-      collectReactions: () => kernelStepSuccess([]),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { CardMetadataCommand, CardMetadataEvent };

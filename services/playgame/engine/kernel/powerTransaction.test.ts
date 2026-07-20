@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { executePowerCommands } from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardState } from '../projections/cardRuntime';
 import { getCardPower } from '../projections/power';
@@ -15,7 +15,6 @@ import type { CardId } from '../types/ids';
 import type { EffectRef } from '../types/ability';
 import type { MatchState, PowerMutation } from '../types/state';
 import { KernelInvariantError } from './failure';
-import { resolveStoredPowerTransaction } from './powerTransaction';
 import type { ResolutionBudget } from './contracts';
 import { createRng } from '../rng';
 
@@ -26,17 +25,16 @@ const changeStoredPower = (
   cause: EffectRef,
   manifest: Manifest,
   budget?: ResolutionBudget,
-) => resolveStoredPowerTransaction(state, [{
+) => executeRulesCommands(state, [{
   type: 'CHANGE_STORED_POWER',
   cardId,
   mutation,
   cause,
 }], {
-  manifest,
-  baseDepth: 0,
-  interpretEffect: (candidate) => ({ events: [], state: candidate }),
+  rng: createRng('power-transaction-test'),
+  depth: 0,
   ...(budget === undefined ? {} : { budget }),
-});
+}, manifest);
 
 const CARD_ID = 'kernel-power-card' as CardId;
 const SOURCE_ID = 'kernel-power-source' as CardId;
@@ -155,7 +153,7 @@ describe('stored-power kernel transaction', () => {
       state: MatchState,
       delta: number,
       manifest: Manifest = gameManifest,
-    ) => executePowerCommands(state, [{
+    ) => executeRulesCommands(state, [{
       type: 'CHANGE_STORED_POWER',
       cardId: CARD_ID,
       mutation: { kind: 'ADD', delta },

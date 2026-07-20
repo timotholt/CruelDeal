@@ -3,10 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { planEnemyTurnFromHand } from '../ai';
 import { apply } from '../apply';
 import { createInitialMatchState } from '../cli/initState';
-import {
-  executeRulesCommands,
-  revealPlayedCard,
-} from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
+import { executeCardRevealForTest } from '../testkit/rulesExecution';
 import { locationCardAtLane } from '../laneTopology';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { computeMatchResult } from '../kernel/operations/matchLifecycle';
@@ -306,7 +304,7 @@ describe('canonical location/lane integration', () => {
       staged: true,
     });
     const destroyed = destroyOthers(staged.state, 2);
-    const resolved = revealPlayedCard(
+    const resolved = executeCardRevealForTest(
       destroyed.state,
       staged.cardId,
       manifest,

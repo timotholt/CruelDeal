@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import { activeLaneIds } from '../laneTopology';
 import type { Manifest } from '../manifest/types';
 import { getStoredCardPowerDelta } from '../powerLedger';
@@ -15,20 +14,12 @@ import type {
   CardZone,
   MatchState,
 } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
-import {
-  planStoredPowerCommand,
-  type PowerChangedEvent,
-} from './operations/power';
+import type { PowerChangedEvent } from './operations/power';
 import type {
-  ChangeStoredPowerCommand,
   CommittedTransition,
   KernelReaction,
   KernelWork,
@@ -88,32 +79,6 @@ export type PowerWork = KernelWork<
   FrozenPowerEffectContext,
   MatchEvent
 >;
-
-export interface PowerEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface PowerTransactionOptions {
-  readonly manifest: Manifest;
-  readonly baseDepth: number;
-  readonly interpretEffect: (
-    state: MatchState,
-    effect: PowerReactionEffect,
-    context: FrozenPowerEffectContext,
-  ) => PowerEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface StoredPowerTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    PowerSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 export function captureStoredPowerSemantics(
   before: MatchState,
@@ -267,71 +232,6 @@ export function collectPowerReactions(
       };
     }),
   );
-}
-
-export function resolveStoredPowerTransaction(
-  state: MatchState,
-  commands: readonly ChangeStoredPowerCommand[],
-  options: PowerTransactionOptions,
-): StoredPowerTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    ChangeStoredPowerCommand,
-    PowerReactionEffect,
-    FrozenPowerEffectContext,
-    MatchEvent,
-    PowerSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map((command) => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planStoredPowerCommand(candidate, work, options.manifest),
-      interpretEffect: (candidate, work) => {
-        const interpreted = options.interpretEffect(
-          candidate,
-          work.effect,
-          work.context,
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): PowerWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Stored-power reducer failed.',
-            sourceInstanceId:
-              'cardId' in event ? String(event.cardId) : undefined,
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureStoredPowerSemantics(before, event, after, options.manifest),
-      collectReactions: (before, _after, transition) =>
-        collectPowerReactions(before, transition, options.baseDepth),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { PowerChangedEvent };

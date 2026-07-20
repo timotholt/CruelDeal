@@ -1,13 +1,12 @@
 import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
+import type { EffectCtx } from '../effects/rulesInterpreter';
 import {
-  evalEffect,
-  executeRulesCommands,
-  executePlacementCommands,
-  revealPlayedCard,
-  type EffectCtx,
-} from '../effects/evaluator';
+  executeCardRevealForTest,
+  executeEffectForTest,
+} from '../testkit/rulesExecution';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { createRng } from '../rng';
 import { resolve } from '../resolve';
@@ -220,7 +219,7 @@ function evaluate(
   effect: EffectExpr,
   eventCard?: CardId,
 ) {
-  return evalEffect(
+  return executeEffectForTest(
     state,
     effect,
     effectCtx(state, gameManifest, source, eventCard),
@@ -315,7 +314,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       locations: [{ lane: 0, defId: wongLane.defId }],
     });
 
-    const result = revealPlayedCard(
+    const result = executeCardRevealForTest(
       initial,
       source.id,
       gameManifest,
@@ -369,7 +368,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       'CARD_REVEAL_SCHEDULED',
     ]);
     expect(getStoredCardPowerDelta(staged, stagedCard.id, gameManifest)).toBe(0);
-    const played = revealPlayedCard(
+    const played = executeCardRevealForTest(
       staged,
       stagedCard.id,
       gameManifest,
@@ -378,7 +377,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(played.events.map(event => event.type)).toContain('CARD_PLAY_COMPLETED');
     expect(getStoredCardPowerDelta(played.state, stagedCard.id, gameManifest)).toBe(2);
 
-    const movedAway = executePlacementCommands(played.state, [{
+    const movedAway = executeRulesCommands(played.state, [{
       type: 'MOVE_CARD',
       cardId: stagedCard.id,
       toLane: 1,
@@ -388,7 +387,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
         reason: 'TEST_MOVE_AWAY',
       },
     }], { rng: createRng('move-away') }, gameManifest);
-    const movedBack = executePlacementCommands(movedAway.state, [{
+    const movedBack = executeRulesCommands(movedAway.state, [{
       type: 'MOVE_CARD',
       cardId: stagedCard.id,
       toLane: 0,
@@ -566,7 +565,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     };
     const initial = stateWith([climber, victim, immune]);
 
-    const result = revealPlayedCard(
+    const result = executeCardRevealForTest(
       initial,
       climber.id,
       gameManifest,
@@ -625,7 +624,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       },
     };
 
-    const result = revealPlayedCard(
+    const result = executeCardRevealForTest(
       stateWith([climber, victim]),
       climber.id,
       gameManifest,
@@ -660,7 +659,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       revealed: false,
     };
 
-    const result = revealPlayedCard(
+    const result = executeCardRevealForTest(
       stateWith([leon]),
       leon.id,
       gameManifest,
@@ -1199,7 +1198,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       }],
     };
     const initial = stateWith([deployer, veteran]);
-    const result = executePlacementCommands(initial, [{
+    const result = executeRulesCommands(initial, [{
       type: 'DEPLOY_FROM_DECK',
       owner: 'P0',
       lane: 1,
@@ -1214,6 +1213,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
 
     expect(result.events.map(event => event.type)).toEqual([
       'CARD_ZONE_CHANGED',
+      'CARD_REVEALED',
     ]);
     expect(getCardState(result.state, veteran.id)).toMatchObject({
       id: veteran.id,

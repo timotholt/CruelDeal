@@ -1,4 +1,4 @@
-import { registeredBuiltinNames } from '../effects/builtins';
+import { registeredBuiltinNames } from '../effects/builtinCommandPlanner';
 import type {
   CardAbilities,
   LocationAbilities,

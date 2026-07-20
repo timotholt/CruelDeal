@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { apply } from '../apply';
-import { evalEffect, type EffectCtx } from '../effects/evaluator';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
+import type { EffectCtx } from '../effects/rulesInterpreter';
+import { executeEffectForTest } from '../testkit/rulesExecution';
 import type { CardDef, Manifest } from '../manifest/types';
 import { getCardState, getCardRuntime } from '../projections/cardRuntime';
 import { evalPredicate } from '../projections/select';
@@ -17,10 +19,7 @@ import type { CardId } from '../types/ids';
 import type { CardTag, MatchState } from '../types/state';
 import { KernelInvariantError } from './failure';
 import type { ResolutionBudget } from './contracts';
-import {
-  resolveCardMetadataTransaction,
-  type CardMetadataCommand,
-} from './cardMetadataTransaction';
+import type { CardMetadataCommand } from './cardMetadataTransaction';
 
 const CARD_ID = 'kernel-metadata-card' as CardId;
 const CAUSE: EffectRef = {
@@ -64,7 +63,15 @@ function run(
   commands: readonly CardMetadataCommand[],
   budget?: ResolutionBudget,
 ) {
-  return resolveCardMetadataTransaction(state, commands, manifest, budget);
+  return executeRulesCommands(
+    state,
+    commands,
+    {
+      rng: createRng('card-metadata-transaction-test'),
+      ...(budget === undefined ? {} : { budget }),
+    },
+    manifest,
+  );
 }
 
 describe('card metadata kernel transaction', () => {
@@ -491,7 +498,7 @@ describe('card metadata kernel transaction', () => {
       source: CAUSE,
       depth: 0,
     };
-    const result = evalEffect(printedState, {
+    const result = executeEffectForTest(printedState, {
       kind: 'REMOVE_TEXT',
       target: { kind: 'SELF' },
       textKind: 'ON_REVEAL',
@@ -510,7 +517,7 @@ describe('card metadata kernel transaction', () => {
     expect(afterRevealRemoval?.text.abilities.ongoing).toHaveLength(1);
     expect(afterRevealRemoval?.text.rulesText).toBe('');
 
-    const composed = evalEffect(result.state, {
+    const composed = executeEffectForTest(result.state, {
       kind: 'REMOVE_TEXT',
       target: { kind: 'SELF' },
       textKind: 'ONGOING',
@@ -519,7 +526,7 @@ describe('card metadata kernel transaction', () => {
     expect(afterBoth?.text.abilities).toEqual({});
     expect(afterBoth?.text.rulesText).toBe('');
 
-    const repeated = evalEffect(composed.state, {
+    const repeated = executeEffectForTest(composed.state, {
       kind: 'REMOVE_TEXT',
       target: { kind: 'SELF' },
       textKind: 'ONGOING',
@@ -583,7 +590,7 @@ describe('card metadata kernel transaction', () => {
       source: CAUSE,
       depth: 0,
     };
-    const removed = evalEffect(copiedState, {
+    const removed = executeEffectForTest(copiedState, {
       kind: 'REMOVE_TEXT',
       target: { kind: 'SELF' },
       textKind: 'ON_REVEAL',
@@ -606,7 +613,7 @@ describe('card metadata kernel transaction', () => {
       target: { kind: 'SELF' },
     }, { ...context, state: removed.state })).toBe(true);
 
-    const cleared = evalEffect(removed.state, {
+    const cleared = executeEffectForTest(removed.state, {
       kind: 'REMOVE_COPIED_TEXT',
       target: { kind: 'SELF' },
     }, { ...context, state: removed.state }, manifest);

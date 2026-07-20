@@ -12,15 +12,113 @@ import {
 } from '../projections/cardTemplate';
 import { getCardPower } from '../projections/power';
 import { isPowerBearingCard } from '../projections/power-bearing';
+import { activeLaneIds } from '../laneTopology';
+import { getPermanentCardPower } from '../powerLedger';
 import type { CardId, LaneId, Owner } from '../types/ids';
 import type { MatchState, SpawnSource } from '../types/state';
 import type { GameCommand } from '../kernel/types';
-import type { EffectCtx } from './evaluator';
+import type { EffectCtx } from './rulesInterpreter';
 
 type BuiltinArgs = Readonly<Record<string, unknown>>;
 
 export interface BuiltinCommandPlan {
   readonly commands: readonly GameCommand[];
+}
+
+const REGISTERED_BUILTIN_NAMES = [
+  'ADD_DISCARDED_CARD_TO_HAND',
+  'ADD_DISCOUNTED_CARD_TO_HAND',
+  'BARRACADE_CHECK',
+  'COPY_ONGOING_OF_CHEAPEST_ONGOING',
+  'COPY_TOP_ENEMY_DECK_CARD_TO_HAND',
+  'CORPORATE_CLIMBER',
+  'DISABLE_ONGOINGS_THIS_LANE_THIS_TURN',
+  'DRAW_LOWEST_COST_CARD',
+  'FULL_LANES_POWER',
+  'LEON_RETURN',
+  'MOVE_ENEMY_CARD_TO_OTHER_LANE',
+  'MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE',
+  'MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE',
+  'MOVE_SELF_TO_RANDOM_OTHER_LANE',
+  'OVERCLOCK_CHIP',
+  'POWER_TO_DESTROYER',
+  'RECKLESS_RECRUITER',
+  'REPLACE_CREATED_HAND_CARD_HIGHER_COST',
+  'REPLACE_HAND_CARD_HIGHER_COST',
+  'REPLACE_LOWEST_POWER_HAND_WITH_COST',
+  'RIFF_RAFF',
+  'RIOT_SQUAD',
+  'SECURITY_DETAIL',
+  'SOCIAL_WORKER',
+  'TRAUMA_TEAM',
+] as const;
+
+export function registeredBuiltinNames(): readonly string[] {
+  return [...REGISTERED_BUILTIN_NAMES];
+}
+
+export interface BuiltinRevealCreationPlan {
+  readonly cardId: CardId;
+  readonly owner: Owner;
+  readonly lane: LaneId;
+  readonly defId: string;
+  readonly spawnSource: SpawnSource;
+  readonly powerDelta: number;
+}
+
+/**
+ * Lower lane-token built-ins to immutable create-and-reveal plans. The
+ * canonical rules queue consumes the plans without opening a nested
+ * transaction or handing a built-in mutation capabilities.
+ */
+export function planBuiltinRevealCreations(
+  state: MatchState,
+  fn: string,
+  ctx: EffectCtx,
+  manifest: Manifest,
+): readonly BuiltinRevealCreationPlan[] | null {
+  const owner = ctx.selfOwner;
+  const sourceLane = ctx.selfLane;
+  if (fn !== 'SECURITY_DETAIL' && fn !== 'RIFF_RAFF') return null;
+  if (owner === null || sourceLane === null) return [];
+
+  if (fn === 'SECURITY_DETAIL') {
+    const count = Math.max(
+      0,
+      Math.min(
+        2,
+        manifest.constants.laneCapacity
+          - state.lanesById[sourceLane].cards[owner].length,
+      ),
+    );
+    const sourcePower = ctx.self
+      ? getPermanentCardPower(state, ctx.self as CardId, manifest)
+      : 0;
+    const guardBasePower =
+      getCardTemplate(manifest, 'guard')?.basePower ?? sourcePower;
+    return Array.from({ length: count }, (_, index) => ({
+      cardId: mintCardId(ctx, `guard:${index}`),
+      owner,
+      lane: sourceLane,
+      defId: 'guard',
+      spawnSource: spawnSource(ctx, owner),
+      powerDelta: sourcePower - guardBasePower,
+    }));
+  }
+
+  return activeLaneIds(state)
+    .filter((lane) =>
+      lane !== sourceLane
+      && state.lanesById[lane].cards[owner].length
+        < manifest.constants.laneCapacity)
+    .map((lane) => ({
+      cardId: mintCardId(ctx, `riff:${lane}`),
+      owner,
+      lane,
+      defId: 'riff-raff-token',
+      spawnSource: spawnSource(ctx, owner),
+      powerDelta: 0,
+    }));
 }
 
 function mintCardId(ctx: EffectCtx, salt: string): CardId {

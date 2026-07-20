@@ -3,9 +3,11 @@ import { BOOTSTRAP_MANIFEST } from '../manifest';
 import { createRng } from '../rng';
 import { emptyTestMatchState } from '../testkit/runtimeFixture';
 import type { CardId } from '../types/ids';
-import { registeredBuiltinNames } from './builtins';
-import { planBuiltinCommands } from './builtinCommandPlanner';
-import type { EffectCtx } from './evaluator';
+import {
+  planBuiltinCommands,
+  registeredBuiltinNames,
+} from './builtinCommandPlanner';
+import type { EffectCtx } from './rulesInterpreter';
 
 const DEDICATED_SAME_QUEUE_BUILTINS = [
   'CORPORATE_CLIMBER',

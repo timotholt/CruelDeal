@@ -1,4 +1,3 @@
-import { apply } from '../apply';
 import type { Manifest } from '../manifest/types';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import {
@@ -7,31 +6,14 @@ import {
 } from '../projections/cardRuntime';
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
-import { planStoredPowerCommand } from './operations/power';
-import {
-  planTransformCardCommand,
-  type TransformKernelCommand,
-  type TransformKernelWork,
-} from './operations/transform';
 import {
   captureStoredPowerSemantics,
-  collectPowerReactions,
-  type FrozenPowerEffectContext,
-  type PowerReactionEffect,
-  type PowerSemantics,
 } from './powerTransaction';
-import type {
-  CommittedTransition,
-  TransformCardCommand,
-} from './types';
+import type { TransformCardCommand } from './types';
 
 export interface CardTransformSemantics {
   readonly eventType: 'CARD_TRANSFORMED';
@@ -45,32 +27,6 @@ export interface CardTransformSemantics {
 }
 
 export type TransformSemantics = PowerSemantics | CardTransformSemantics;
-
-export interface TransformEffectResult {
-  readonly events: readonly MatchEvent[];
-  readonly state: MatchState;
-}
-
-export interface TransformTransactionOptions {
-  readonly manifest: Manifest;
-  readonly baseDepth: number;
-  readonly interpretEffect: (
-    state: MatchState,
-    effect: PowerReactionEffect,
-    context: FrozenPowerEffectContext,
-  ) => TransformEffectResult;
-  readonly budget?: ResolutionBudget;
-}
-
-export interface TransformTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly MatchEvent[];
-  readonly transitions: readonly CommittedTransition<
-    MatchEvent,
-    TransformSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 export function captureTransformSemantics(
   before: MatchState,
@@ -158,92 +114,6 @@ export function captureTransformSemantics(
     cause: { ...event.cause },
     reason: event.cause.reason,
   });
-}
-
-/**
- * Resolves transform selection, optional stored-Power reset, all reset
- * reactions, and the transform commit as one private all-or-nothing batch.
- */
-export function resolveTransformTransaction(
-  state: MatchState,
-  commands: readonly TransformCardCommand[],
-  options: TransformTransactionOptions,
-): TransformTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    TransformKernelCommand,
-    PowerReactionEffect,
-    FrozenPowerEffectContext,
-    MatchEvent,
-    TransformSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map(command => ({ kind: 'COMMAND', command })),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
-    },
-    {
-      executeCommand: (candidate, work) => {
-        const command = work.command;
-        return command.type === 'TRANSFORM_CARD'
-          ? planTransformCardCommand(
-              candidate,
-              { kind: 'COMMAND', command },
-              options.manifest,
-            )
-          : planStoredPowerCommand(
-              candidate,
-              { kind: 'COMMAND', command },
-              options.manifest,
-            );
-      },
-      interpretEffect: (candidate, work) => {
-        const interpreted = options.interpretEffect(
-          candidate,
-          work.effect,
-          work.context,
-        );
-        return kernelStepSuccess({
-          work: interpreted.events.map((event): TransformKernelWork => ({
-            kind: 'COMMIT',
-            event,
-            reactionPolicy: 'ALREADY_RESOLVED',
-          })),
-        });
-      },
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, options.manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Transform reducer failed.',
-            sourceInstanceId:
-              'cardId' in event ? String(event.cardId) : undefined,
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureTransformSemantics(before, event, after, options.manifest),
-      collectReactions: (before, _after, transition) =>
-        transition.semantics.transitionKind === 'CARD_TRANSFORMED'
-          ? kernelStepSuccess([])
-          : collectPowerReactions(
-              before,
-              transition as CommittedTransition<MatchEvent, PowerSemantics>,
-              options.baseDepth,
-            ),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { TransformCardCommand };

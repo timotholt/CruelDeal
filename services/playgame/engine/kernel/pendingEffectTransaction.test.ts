@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
+import { createRng } from '../rng';
 import { frameAndFoldEvents, foldFramedEvents } from '../transactionTimeline';
 import { buildRuntimeFixture } from '../testkit/runtimeFixture';
 import type { EffectRef } from '../types/ability';
 import type { CardId, PendingEffectId } from '../types/ids';
 import type {
   MatchState,
-  PendingEffect,
   PendingEffectPayload,
 } from '../types/state';
-import { DEFAULT_RESOLUTION_BUDGET } from './contracts';
+import {
+  DEFAULT_RESOLUTION_BUDGET,
+  type ResolutionBudget,
+} from './contracts';
 import { KernelInvariantError } from './failure';
 import {
-  resolvePendingEffectTransaction,
   type PendingEffectCommand,
 } from './pendingEffectTransaction';
 
@@ -56,41 +59,50 @@ function fixture(): MatchState {
   }).state;
 }
 
+function executePendingCommands(
+  state: MatchState,
+  commands: readonly PendingEffectCommand[],
+  budget?: ResolutionBudget,
+) {
+  return executeRulesCommands(
+    state,
+    commands,
+    {
+      rng: createRng('pending-effect-transaction-test'),
+      ...(budget === undefined ? {} : { budget }),
+    },
+    BOOTSTRAP_MANIFEST,
+  );
+}
+
 function schedule(effect = payload(), state = fixture()) {
-  return resolvePendingEffectTransaction(state, [{
+  return executePendingCommands(state, [{
     type: 'SCHEDULE_PENDING_EFFECT',
     effect,
     cause: CAUSE,
-  }], { manifest: BOOTSTRAP_MANIFEST });
+  }]);
 }
 
 function consume(
   state: MatchState,
   pendingEffectId: PendingEffectId,
   mode: 'EXECUTE' | 'CANCEL' = 'CANCEL',
-  interpretEffect?: (candidate: MatchState, effect: PendingEffect) => {
-    readonly state: MatchState;
-    readonly events: readonly [];
-  },
 ) {
-  return resolvePendingEffectTransaction(state, [{
+  return executePendingCommands(state, [{
     type: 'CONSUME_PENDING_EFFECT',
     pendingEffectId,
     mode,
     cause: CAUSE,
-  }], {
-    manifest: BOOTSTRAP_MANIFEST,
-    ...(interpretEffect === undefined ? {} : { interpretEffect }),
-  });
+  }]);
 }
 
 describe('pending-effect kernel transaction', () => {
   it('allocates deterministic distinct IDs for identical payloads and folds the candidate sequence', () => {
     const effect = payload();
-    const result = resolvePendingEffectTransaction(fixture(), [
+    const result = executePendingCommands(fixture(), [
       { type: 'SCHEDULE_PENDING_EFFECT', effect, cause: CAUSE },
       { type: 'SCHEDULE_PENDING_EFFECT', effect, cause: CAUSE },
-    ], { manifest: BOOTSTRAP_MANIFEST });
+    ]);
 
     expect(result.events.map(event =>
       event.type === 'PENDING_EFFECT_SCHEDULED' ? event.effect.id : null))
@@ -112,10 +124,10 @@ describe('pending-effect kernel transaction', () => {
         },
       ]);
 
-    const repeated = resolvePendingEffectTransaction(fixture(), [
+    const repeated = executePendingCommands(fixture(), [
       { type: 'SCHEDULE_PENDING_EFFECT', effect, cause: CAUSE },
       { type: 'SCHEDULE_PENDING_EFFECT', effect, cause: CAUSE },
-    ], { manifest: BOOTSTRAP_MANIFEST });
+    ]);
     expect(repeated.events).toEqual(result.events);
     expect(repeated.state).toEqual(result.state);
   });
@@ -132,11 +144,11 @@ describe('pending-effect kernel transaction', () => {
       effect: { kind: 'SEQUENCE' as const, items: mutableItems },
     };
     const mutableCause = { ...CAUSE };
-    const result = resolvePendingEffectTransaction(fixture(), [{
+    const result = executePendingCommands(fixture(), [{
       type: 'SCHEDULE_PENDING_EFFECT',
       effect: mutableEffect,
       cause: mutableCause,
-    }], { manifest: BOOTSTRAP_MANIFEST });
+    }]);
 
     mutableItems.push({ kind: 'SEQUENCE', items: [] });
     mutableCause.reason = 'MUTATED_AFTER_SCHEDULE';
@@ -152,7 +164,7 @@ describe('pending-effect kernel transaction', () => {
   });
 
   it('consumes only the exact ID and makes missing or repeated consumption an exact no-op', () => {
-    const scheduled = resolvePendingEffectTransaction(fixture(), [
+    const scheduled = executePendingCommands(fixture(), [
       {
         type: 'SCHEDULE_PENDING_EFFECT',
         effect: payload(),
@@ -163,7 +175,7 @@ describe('pending-effect kernel transaction', () => {
         effect: payload(),
         cause: CAUSE,
       },
-    ], { manifest: BOOTSTRAP_MANIFEST });
+    ]);
     const firstId = scheduled.state.pendingEffects[0]!.id;
     const secondId = scheduled.state.pendingEffects[1]!.id;
     const consumed = consume(scheduled.state, firstId);
@@ -190,7 +202,7 @@ describe('pending-effect kernel transaction', () => {
   });
 
   it('can schedule and consume the newly allocated ID in one candidate transaction', () => {
-    const result = resolvePendingEffectTransaction(fixture(), [
+    const result = executePendingCommands(fixture(), [
       {
         type: 'SCHEDULE_PENDING_EFFECT',
         effect: payload(),
@@ -202,7 +214,7 @@ describe('pending-effect kernel transaction', () => {
         mode: 'CANCEL',
         cause: CAUSE,
       },
-    ], { manifest: BOOTSTRAP_MANIFEST });
+    ]);
 
     expect(result.events.map(event => event.type)).toEqual([
       'PENDING_EFFECT_SCHEDULED',
@@ -212,54 +224,40 @@ describe('pending-effect kernel transaction', () => {
     expect(result.state.nextPendingEffectSequence).toBe(1);
   });
 
-  it('commits consumption before interpreting the frozen effect and prevents reentrant refire', () => {
-    const scheduled = schedule();
-    const id = scheduled.state.pendingEffects[0]!.id;
-    const observed: Array<{
-      present: boolean;
-      nestedEvents: number;
-      effect: PendingEffect;
-    }> = [];
-
-    const result = consume(
-      scheduled.state,
-      id,
-      'EXECUTE',
-      (candidate, frozen) => {
-        const nested = consume(candidate, id);
-        observed.push({
-          present: candidate.pendingEffects.some(item => item.id === id),
-          nestedEvents: nested.events.length,
-          effect: frozen,
-        });
-        return { state: candidate, events: [] };
+  it('commits consumption before executing the frozen authored effect', () => {
+    const scheduled = schedule(payload({
+      effect: {
+        kind: 'ADJUST_ENERGY',
+        owner: 'P0',
+        delta: { kind: 'LIT', n: 2 },
       },
-    );
+    }));
+    const id = scheduled.state.pendingEffects[0]!.id;
+    const result = consume(scheduled.state, id, 'EXECUTE');
 
-    expect(observed).toEqual([{
-      present: false,
-      nestedEvents: 0,
-      effect: scheduled.state.pendingEffects[0],
-    }]);
     expect(result.events.map(event => event.type))
-      .toEqual(['PENDING_EFFECT_CONSUMED']);
+      .toEqual(['PENDING_EFFECT_CONSUMED', 'ENERGY_CHANGED']);
     expect(result.state.pendingEffects).toEqual([]);
+    expect(result.state.energy.P0).toBe(scheduled.state.energy.P0 + 2);
   });
 
-  it('does not invoke the interpreter for cancellation', () => {
-    const scheduled = schedule();
-    let calls = 0;
+  it('does not execute the frozen authored effect for cancellation', () => {
+    const scheduled = schedule(payload({
+      effect: {
+        kind: 'ADJUST_ENERGY',
+        owner: 'P0',
+        delta: { kind: 'LIT', n: 2 },
+      },
+    }));
     const result = consume(
       scheduled.state,
       scheduled.state.pendingEffects[0]!.id,
       'CANCEL',
-      (candidate) => {
-        calls += 1;
-        return { state: candidate, events: [] };
-      },
     );
-    expect(calls).toBe(0);
+    expect(result.events.map(event => event.type))
+      .toEqual(['PENDING_EFFECT_CONSUMED']);
     expect(result.state.pendingEffects).toEqual([]);
+    expect(result.state.energy).toEqual(scheduled.state.energy);
   });
 
   it('rejects duplicate allocation and unsafe sequence exhaustion atomically', () => {
@@ -283,41 +281,24 @@ describe('pending-effect kernel transaction', () => {
       .toBe(Number.MAX_SAFE_INTEGER);
   });
 
-  it('rolls back private consumption on interpreter and work-budget failure', () => {
+  it('rolls back private consumption on work-budget failure', () => {
     const scheduled = schedule();
     const id = scheduled.state.pendingEffects[0]!.id;
-    expect(() => resolvePendingEffectTransaction(scheduled.state, [{
+    expect(() => executePendingCommands(scheduled.state, [{
       type: 'CONSUME_PENDING_EFFECT',
       pendingEffectId: id,
       mode: 'EXECUTE',
       cause: CAUSE,
     }], {
-      manifest: BOOTSTRAP_MANIFEST,
-      interpretEffect: () => {
-        throw new Error('nested interpreter failed');
-      },
-    })).toThrow(KernelInvariantError);
-    expect(scheduled.state.pendingEffects.map(item => item.id)).toEqual([id]);
-
-    expect(() => resolvePendingEffectTransaction(scheduled.state, [{
-      type: 'CONSUME_PENDING_EFFECT',
-      pendingEffectId: id,
-      mode: 'EXECUTE',
-      cause: CAUSE,
-    }], {
-      manifest: BOOTSTRAP_MANIFEST,
-      budget: {
         ...DEFAULT_RESOLUTION_BUDGET,
         maxWorkItems: 1,
-      },
-      interpretEffect: candidate => ({ state: candidate, events: [] }),
-    })).toThrow(KernelInvariantError);
+      })).toThrow(KernelInvariantError);
     expect(scheduled.state.pendingEffects.map(item => item.id)).toEqual([id]);
   });
 
   it('preserves stable IDs, payload, cause, and allocator through framed replay', () => {
     const state = fixture();
-    const transaction = resolvePendingEffectTransaction(state, [
+    const transaction = executePendingCommands(state, [
       {
         type: 'SCHEDULE_PENDING_EFFECT',
         effect: payload(),
@@ -334,7 +315,7 @@ describe('pending-effect kernel transaction', () => {
         mode: 'CANCEL',
         cause: CAUSE,
       },
-    ], { manifest: BOOTSTRAP_MANIFEST });
+    ]);
     const live = frameAndFoldEvents({
       transactionId: 'pending:live',
       initialState: state,
@@ -376,9 +357,8 @@ describe('pending-effect kernel transaction', () => {
     ];
 
     for (const command of invalidCommands) {
-      expect(() => resolvePendingEffectTransaction(state, [command], {
-        manifest: BOOTSTRAP_MANIFEST,
-      })).toThrow(KernelInvariantError);
+      expect(() => executePendingCommands(state, [command]))
+        .toThrow(KernelInvariantError);
       expect(state.pendingEffects).toEqual([]);
       expect(state.nextPendingEffectSequence).toBe(0);
     }

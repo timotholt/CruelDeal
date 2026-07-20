@@ -1,24 +1,16 @@
-import { apply } from '../apply';
 import { locationCounterKey } from '../locationCounterKey';
-import type { Manifest } from '../manifest/types';
 import { getLocationState } from '../projections/locationRuntime';
 import type { EffectRef } from '../types/ability';
 import type { LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { LaneTag, MatchState } from '../types/state';
-import type { ResolutionBudget } from './contracts';
 import {
-  assertKernelSuccess,
   kernelStepFailure,
   kernelStepSuccess,
-  resolveKernelTransaction,
-  type KernelBudgetUsage,
 } from './kernel';
 import {
-  planLocationMetadataCommand,
   type LocationMetadataCommand,
   type LocationMetadataEvent,
 } from './operations/locationMetadata';
-import type { CommittedTransition } from './types';
 
 interface LocationIdentitySnapshot {
   readonly definitionId: string;
@@ -48,16 +40,6 @@ export type LocationMetadataSemantics =
       readonly resultValue: number;
       readonly signedChange: number;
     };
-
-export interface LocationMetadataTransactionResult {
-  readonly state: MatchState;
-  readonly events: readonly LocationMetadataEvent[];
-  readonly transitions: readonly CommittedTransition<
-    LocationMetadataEvent,
-    LocationMetadataSemantics
-  >[];
-  readonly usage: KernelBudgetUsage;
-}
 
 export function captureLocationMetadataSemantics(
   before: MatchState,
@@ -161,64 +143,6 @@ export function captureLocationMetadataSemantics(
       });
     }
   }
-}
-
-/**
- * Resolves an ordered, all-or-nothing batch of stable-ID location metadata
- * commands. Candidate state never escapes a failed batch.
- */
-export function resolveLocationMetadataTransaction(
-  state: MatchState,
-  commands: readonly LocationMetadataCommand[],
-  manifest: Manifest,
-  budget?: ResolutionBudget,
-): LocationMetadataTransactionResult {
-  const result = resolveKernelTransaction<
-    MatchState,
-    LocationMetadataCommand,
-    never,
-    Readonly<Record<string, never>>,
-    LocationMetadataEvent,
-    LocationMetadataSemantics
-  >(
-    {
-      initialState: state,
-      initialWork: commands.map(command => ({ kind: 'COMMAND', command })),
-      ...(budget === undefined ? {} : { budget }),
-    },
-    {
-      executeCommand: (candidate, work) =>
-        planLocationMetadataCommand(candidate, work),
-      interpretEffect: () =>
-        kernelStepFailure({
-          code: 'INVALID_OPERATION_OUTPUT',
-          message: 'Location metadata transactions do not accept effect work.',
-        }),
-      applyCandidate: (candidate, event) => {
-        try {
-          return kernelStepSuccess(apply(candidate, event, manifest));
-        } catch (error) {
-          return kernelStepFailure({
-            code: 'REDUCER_INVARIANT',
-            message: error instanceof Error
-              ? error.message
-              : 'Location metadata reducer failed.',
-            sourceInstanceId: String(event.locationId),
-          });
-        }
-      },
-      captureSemantics: (before, event, after) =>
-        captureLocationMetadataSemantics(before, event, after),
-      collectReactions: () => kernelStepSuccess([]),
-    },
-  );
-  assertKernelSuccess(result);
-  return {
-    state: result.value.state,
-    events: result.value.transitions.map(({ event }) => event),
-    transitions: result.value.transitions,
-    usage: result.value.usage,
-  };
 }
 
 export type { LocationMetadataCommand, LocationMetadataEvent };
