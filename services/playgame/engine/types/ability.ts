@@ -248,10 +248,10 @@ export type EffectExpr =
   // --- Text manipulation ---
   /**
    * Copy text from `source` into `into`.
-   * `copyKind` limits what text is copied; defaults to 'FULL' for backwards compat.
+   * `copyKind` explicitly selects the copied text scope.
    * The result is stored as a TextOverride on the `into` card.
    */
-  | { kind: 'COPY_TEXT_OF'; into: Selector; source: Selector; copyKind?: CopyTextKind }
+  | { kind: 'COPY_TEXT_OF'; into: Selector; source: Selector; copyKind: CopyTextKind }
   /**
    * Blank out text on the target card.
    * Creates a materialized BLANKED_TEXT override.

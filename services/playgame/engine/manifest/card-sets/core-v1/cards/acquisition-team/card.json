@@ -46,7 +46,8 @@
                   "kind": "SELF"
                 }
               }
-            }
+            },
+            "copyKind": "FULL"
           },
           {
             "kind": "DESTROY",

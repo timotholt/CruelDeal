@@ -24,7 +24,7 @@ export interface ReplayBundle {
   readonly protocolVersion: number;
   readonly seed: string;
   readonly manifestSnapshot: Manifest;
-  readonly initialState?: MatchState;
+  readonly initialState: MatchState;
   readonly framedEvents: readonly FramedEvent[];
   readonly metadata?: {
     readonly createdAt?: string;
@@ -75,9 +75,6 @@ export interface ExportReplayBundleOptions {
 }
 
 export function replayMatch(opts: ReplayMatchOptions): ReplayResult {
-  if (!opts.initialState) {
-    throw new Error('replayMatch: initialState is required; refusing to rebuild replay state from seed');
-  }
   if (opts.initialState.rng.seed !== opts.seed) {
     throw new Error(`replayMatch: seed mismatch initialState=${opts.initialState.rng.seed} replay=${opts.seed}`);
   }
@@ -128,9 +125,6 @@ export function exportReplayBundle(
     initialState,
     framedEvents,
   } = options;
-  if (!initialState) {
-    throw new Error('exportReplayBundle: initialState is required');
-  }
   if (initialState.rng.seed !== finalState.rng.seed) {
     throw new Error(
       `exportReplayBundle: seed mismatch initialState=${initialState.rng.seed} state=${finalState.rng.seed}`,
@@ -162,7 +156,7 @@ export function replayBundle(bundle: ReplayBundle): ReplayResult {
   return replayMatch({
     seed: bundle.seed,
     manifest: bundle.manifestSnapshot,
-    initialState: bundle.initialState!,
+    initialState: bundle.initialState,
     framedEvents: bundle.framedEvents,
   });
 }
@@ -184,9 +178,6 @@ export function assertReplayBundle(bundle: ReplayBundle): void {
     throw new Error(
       `Replay protocol version mismatch: bundle=${bundle.protocolVersion} snapshot=${bundle.manifestSnapshot.protocolVersion}`,
     );
-  }
-  if (!bundle.initialState) {
-    throw new Error('Replay bundle is missing initialState');
   }
   if (bundle.initialState.rng.seed !== bundle.seed) {
     throw new Error(`Replay seed mismatch: bundle=${bundle.seed} initialState=${bundle.initialState.rng.seed}`);
@@ -251,9 +242,6 @@ export function validateReplayBundle(
   if (!Array.isArray(bundle.framedEvents)) {
     errors.push('Replay bundle framedEvents must be an array');
   }
-  if (!bundle.initialState) {
-    errors.push('Replay bundle is missing initialState');
-  }
   if (!bundle.manifestSnapshot) {
     errors.push('Replay bundle is missing manifestSnapshot');
   }
@@ -262,7 +250,7 @@ export function validateReplayBundle(
     replayMatch({
       seed: bundle.seed,
       manifest: bundle.manifestSnapshot,
-      initialState: bundle.initialState!,
+      initialState: bundle.initialState,
       framedEvents: bundle.framedEvents,
     });
   }

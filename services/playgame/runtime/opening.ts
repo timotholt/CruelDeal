@@ -1,5 +1,4 @@
 import type { Manifest } from '../engine/manifest/types';
-import { apply } from '../engine/apply';
 import {
   executeHandCommands,
   executeReactionCommands,

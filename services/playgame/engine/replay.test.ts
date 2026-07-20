@@ -156,26 +156,6 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
 }
 
 {
-  const result = runMatch({
-    seed: 'replay-missing-initial',
-    manifest: BOOTSTRAP_MANIFEST,
-    locationDeck,
-  });
-  let threw = false;
-  try {
-    replayMatch({
-      seed: result.finalState.rng.seed,
-      manifest: BOOTSTRAP_MANIFEST,
-      initialState: undefined as never,
-      framedEvents: result.framedEvents,
-    });
-  } catch {
-    threw = true;
-  }
-  truthy(threw, 'replayMatch: missing initialState throws');
-}
-
-{
   const currentState = createMatchGenesis('replay-bad-export', BOOTSTRAP_MANIFEST);
   const badInitial = {
     ...currentState,

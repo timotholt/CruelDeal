@@ -1564,7 +1564,7 @@ export function evalEffect(
       if (source.length === 0) return { events: [], state };
       const srcCard = getCardRuntime(state, source[0], manifest);
       if (!srcCard) return { events: [], state };
-      const copyKind = effect.copyKind ?? 'FULL';
+      const copyKind = effect.copyKind;
       const abilities = copyKind === 'ON_REVEAL'
         ? {
             ...(srcCard.text.abilities.onReveal

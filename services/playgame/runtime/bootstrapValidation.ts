@@ -9,8 +9,8 @@ import type {
   MatchBootstrap,
   MatchBootstrapValidationIssue,
   MatchBootstrapValidationResult,
-  MatchDeckBootstrap,
   MatchParticipantBootstrap,
+  PlayerDeckBootstrap,
   ValidatedMatchBootstrap,
 } from './contracts';
 
@@ -124,7 +124,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 function validateDeckContents(
-  deck: MatchDeckBootstrap,
+  deck: PlayerDeckBootstrap,
   seat: Seat,
   manifest: Manifest,
   ruleset: MatchRuleset | undefined,
@@ -307,7 +307,7 @@ function cloneBootstrap(bootstrap: MatchBootstrap): MatchBootstrap {
     displayName: participant.displayName,
     ...(participant.avatarId === undefined ? {} : { avatarId: participant.avatarId }),
   });
-  const cloneDeck = (deck: MatchDeckBootstrap): MatchDeckBootstrap => ({
+  const cloneDeck = (deck: PlayerDeckBootstrap): PlayerDeckBootstrap => ({
     kind: 'PLAYER',
     deckId: deck.deckId,
     revision: deck.revision,

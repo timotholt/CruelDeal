@@ -526,6 +526,7 @@ export const CYBERPUNK_CARDS: readonly CardDef[] = [
               },
             },
             source: { kind: 'MIN_COST_OF', of: SELF_LANE_FRIENDLY_EXCL_SELF },
+            copyKind: 'FULL',
           },
           {
             kind: 'DESTROY',

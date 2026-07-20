@@ -41,9 +41,6 @@ export interface LocationDeckBootstrap
   readonly order: 'WEIGHTED_RANDOM';
 }
 
-/** @deprecated Use PlayerDeckBootstrap. */
-export type MatchDeckBootstrap = PlayerDeckBootstrap;
-
 export type MatchDeckSlot = Seat | 'LOCATIONS';
 
 /**
