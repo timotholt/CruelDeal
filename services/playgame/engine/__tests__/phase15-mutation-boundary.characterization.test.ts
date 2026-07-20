@@ -29,12 +29,10 @@ type CountInventory = Readonly<Record<string, Readonly<Record<string, number>>>>
 const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/effects/builtins.ts': {
     CARD_TRANSFORMED: 1,
-    PENDING_EFFECT_ADDED: 2,
   },
   'services/playgame/engine/effects/evaluator.ts': {
     CARD_REVEAL_SCHEDULED: 1,
     CARD_TRANSFORMED: 1,
-    PENDING_EFFECT_ADDED: 1,
   },
   'services/playgame/engine/locationLifecycle.ts': {
     LANE_CREATED: 1,
@@ -76,6 +74,10 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
   },
+  'services/playgame/engine/kernel/operations/pendingEffect.ts': {
+    PENDING_EFFECT_CONSUMED: 1,
+    PENDING_EFFECT_SCHEDULED: 1,
+  },
   'services/playgame/engine/kernel/operations/hand.ts': {
     CARD_DISCARDED: 1,
     CARD_DRAWN: 1,
@@ -107,7 +109,6 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_STAGED: 1,
     CARD_UNSTAGED: 2,
     MATCH_ENDED: 2,
-    PENDING_EFFECT_REMOVED: 2,
     TURN_ENDED: 1,
     TURN_RESOLUTION_STARTED: 1,
     TURN_STARTED: 1,
@@ -218,12 +219,12 @@ function logicalConstructionSurface(file: string): string {
 }
 
 describe('Phase 1.5 checkpoint 1 mutation-boundary characterization', () => {
-  it('locks the nine governed logical production mutation-construction surfaces', () => {
+  it('locks the governed logical production mutation-construction surfaces', () => {
     const { mutationConstructions } = collectCurrentInventory();
 
     expect(mutationConstructions).toEqual(EXPECTED_MUTATION_CONSTRUCTION_SURFACES);
     expect(new Set(Object.keys(mutationConstructions).map(logicalConstructionSurface)).size)
-      .toBe(14);
+      .toBe(15);
   });
 
   it('locks every existing manual reaction call surface until the dispatcher replaces them', () => {

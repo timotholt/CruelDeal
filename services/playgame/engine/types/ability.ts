@@ -431,13 +431,8 @@ export type LaneTagSpec =
 export type PendingWhen = 'START_OF_NEXT_TURN' | 'END_OF_NEXT_TURN';
 
 export type PendingEffectSpec =
-  // Named card-specific pending effects (retained for back-compat).
-  | { kind: 'SHURI_DOUBLE_NEXT' }
-  | { kind: 'COULSON_TRIGGER_NEXT' }
-  | { kind: 'EGO_OVERRIDE' }
-  | { kind: 'RICKETY_BRIDGE_DESTROY' }
   // Generic scheduled effect: run any EffectExpr at a future phase.
-  | { kind: 'SCHEDULED'; when: PendingWhen; effect: EffectExpr };
+  { kind: 'SCHEDULED'; when: PendingWhen; effect: EffectExpr };
 
 // ---- Effect provenance (emitted on every mutation event) -------------------
 

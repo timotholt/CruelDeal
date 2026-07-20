@@ -92,7 +92,7 @@ Exit evidence:
 
 ### C5A-3c — Stable-ID Pending Scheduling
 
-Status: planned after C5A-3b
+Status: implementation and adversarial proof in progress
 
 Give every pending effect a deterministic match-unique stable ID. Schedule and
 consume by ID rather than structural equality. When due, snapshot the item,
@@ -102,6 +102,34 @@ same atomic transaction.
 Exit requires deterministic ID allocation, stable multi-item ordering,
 consume-before-effect reentrancy coverage, exact replay/reconciliation, and
 removal of ID-less pending state and direct queue filtering.
+
+The clean contract is:
+
+- one branded `PendingEffectId` allocated as `pending:<sequence>` from the
+  canonical `MatchState.nextPendingEffectSequence`;
+- one executable `SCHEDULED` payload shape; the unused named compatibility
+  variants are deleted rather than wrapped;
+- `SCHEDULE_PENDING_EFFECT` snapshots payload and cause, allocates one ID, and
+  advances the sequence only through its committed schedule event;
+- `CONSUME_PENDING_EFFECT` addresses one ID and records whether the caller is
+  executing or cancelling the item;
+- an execute consume snapshots the exact item, commits removal first, then
+  interprets the frozen payload inside the same private candidate transaction;
+- an absent consume is an exact no-op, while a duplicate scheduled ID is a
+  reducer/operation invariant failure;
+- due items retain canonical queue order, using stable ID only as a final
+  deterministic tie-breaker;
+- lane teardown performs explicit cancellation through the same operation or
+  deliberately leaves the frozen item scheduled; it never silently filters
+  pending state inside an unrelated reducer case.
+
+Adversarial exit proof must cover same-payload distinct IDs, exact-ID consume,
+missing and repeated consume, candidate folding across multiple schedules,
+safe-integer sequence exhaustion, caller-payload snapshotting, allocation
+determinism from equal canonical state, budget rollback, consume-before-effect
+reentrancy, nested interpreter failure rollback, replay/reconciliation, and
+architecture fences against old events, ID-less state, producer-owned event
+construction, and direct queue mutation.
 
 ### C5A-3d — Transform After Stored-Power Reset
 

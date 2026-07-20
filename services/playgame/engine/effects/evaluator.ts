@@ -50,6 +50,10 @@ import { resolveEnergyTransaction } from '../kernel/energyTransaction';
 import { resolveCardMetadataTransaction } from '../kernel/cardMetadataTransaction';
 import { resolveLocationMetadataTransaction } from '../kernel/locationMetadataTransaction';
 import {
+  resolvePendingEffectTransaction,
+  type PendingEffectCommand,
+} from '../kernel/pendingEffectTransaction';
+import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
   type RevealCommand,
@@ -75,10 +79,7 @@ import {
   type LocationLifecycleResult,
 } from '../locationLifecycle';
 import { locationCardAtLane } from '../laneTopology';
-import {
-  getAllCardIds,
-  getCardRuntime,
-} from '../projections/cardRuntime';
+import { getCardRuntime } from '../projections/cardRuntime';
 
 /** Extra fields carried during effect evaluation, on top of EvalCtx. */
 export interface EffectCtx extends EvalCtx {
@@ -299,6 +300,46 @@ export function executeLocationMetadataCommands(
     commands,
     manifest,
   );
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Schedule, execute, or cancel pending work through stable match-local IDs. */
+export function executePendingEffectCommands(
+  state: MatchState,
+  commands: readonly PendingEffectCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolvePendingEffectTransaction(state, commands, {
+    manifest,
+    interpretEffect: (candidate, pending) =>
+      evalEffect(
+        candidate,
+        pending.effect,
+        {
+          state: candidate,
+          manifest,
+          self: pending.sourceId,
+          selfKind: pending.scheduledBy.effectKind === 'LOCATION'
+            ? 'location'
+            : 'card',
+          selfLane: pending.sourceLane,
+          selfOwner: pending.sourceOwner,
+          rng: options.rng.scope(`pending:${pending.id}`),
+          source: {
+            sourceId: pending.sourceId,
+            effectKind: pending.scheduledBy.effectKind === 'LOCATION'
+              ? 'LOCATION'
+              : 'ON_REVEAL',
+            reason: pending.when === 'START_OF_NEXT_TURN'
+              ? 'SCHEDULED_START_OF_NEXT_TURN'
+              : 'SCHEDULED_END_OF_NEXT_TURN',
+          },
+          depth: options.depth ?? 0,
+        },
+        manifest,
+      ),
+  });
   return { events: transaction.events, state: transaction.state };
 }
 
@@ -1626,8 +1667,11 @@ export function evalEffect(
     case 'ADD_PENDING': {
       const runtime = resolvePendingEffectSpec(effect.effect, ctx, state, manifest);
       if (!runtime) return { events: [], state };
-      const e: MatchEvent = { type: 'PENDING_EFFECT_ADDED', effect: runtime };
-      return { events: [e], state: apply(state, e, manifest) };
+      return executePendingEffectCommands(state, [{
+        type: 'SCHEDULE_PENDING_EFFECT',
+        effect: runtime,
+        cause: { ...ctx.source },
+      }], { rng: ctx.rng, depth: ctx.depth }, manifest);
     }
 
     // ---- Control flow ----------------------------------------------------
@@ -1751,6 +1795,7 @@ export function evalEffect(
           executePowerCommands,
           executeCostCommands,
           executeCardMetadataCommands,
+          executePendingEffectCommands,
         },
       );
   }
@@ -1799,7 +1844,7 @@ function resolveCardTagSpec(
 }
 
 /**
- * Resolve an authoring-time PendingEffectSpec into a runtime PendingEffect
+ * Resolve an authoring-time PendingEffectSpec into a frozen runtime payload
  * by filling in owner/lane/sourceId from the source card's context.
  */
 function resolvePendingEffectSpec(
@@ -1807,36 +1852,25 @@ function resolvePendingEffectSpec(
   ctx: EffectCtx,
   state: MatchState,
   manifest: Manifest,
-): import('../types/state').PendingEffect | null {
-  const sourceId = ctx.source.sourceId as CardId;
-  const sourceCard = getCardRuntime(state, sourceId, manifest);
+): import('../types/state').PendingEffectPayload | null {
+  const sourceId = ctx.source.sourceId;
+  const sourceCard = ctx.selfKind === 'card'
+    ? getCardRuntime(state, sourceId as CardId, manifest)
+    : null;
   const owner = ctx.selfOwner ?? sourceCard?.owner ?? null;
   const lane = ctx.selfLane ?? sourceCard?.lane ?? null;
-  switch (spec.kind) {
-    case 'SHURI_DOUBLE_NEXT':
-    case 'COULSON_TRIGGER_NEXT':
-      if (owner === null || lane === null) return null;
-      return { kind: spec.kind, owner, lane, sourceId };
-    case 'EGO_OVERRIDE':
-      // Authoring-time spec has no turn; default to current + 1 (next turn).
-      return { kind: 'EGO_OVERRIDE', turn: state.turn + 1 };
-    case 'RICKETY_BRIDGE_DESTROY':
-      if (lane === null) return null;
-      return { kind: 'RICKETY_BRIDGE_DESTROY', lane, atEndOfTurn: state.turn };
-    case 'SCHEDULED':
-      // Freeze sourceOwner/sourceLane at authoring time so the scheduled
-      // effect resolves SELF-relative selectors correctly even if the
-      // source card moves or is destroyed before it fires.
-      return {
-        kind: 'SCHEDULED',
-        when: spec.when,
-        sourceId,
-        sourceOwner: owner,
-        sourceLane: lane,
-        fireTurn: state.turn + 1,
-        effect: spec.effect,
-      };
-  }
+  // Freeze sourceOwner/sourceLane at authoring time so the scheduled effect
+  // resolves SELF-relative selectors correctly even if the source card moves
+  // or is destroyed before it fires.
+  return {
+    kind: 'SCHEDULED',
+    when: spec.when,
+    sourceId,
+    sourceOwner: owner,
+    sourceLane: lane,
+    fireTurn: state.turn + 1,
+    effect: spec.effect,
+  };
 }
 
 /** Generate a deterministic fresh card id from an rng fork. */

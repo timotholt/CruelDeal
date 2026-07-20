@@ -146,6 +146,7 @@ export function createMatchGenesis(
     lanesById: {},
     activeLaneOrder: [],
     nextLaneId: 0,
+    nextPendingEffectSequence: 0,
     locationStore: createLocationStoreInternal(),
     locationDeck: {
       drawPile: [],

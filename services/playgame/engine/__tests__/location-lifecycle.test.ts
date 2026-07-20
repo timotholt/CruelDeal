@@ -928,16 +928,42 @@ describe('destroy/create sequencing', () => {
   it('cancels pending lane-bound effects when their lane is destroyed', () => {
     const input: MatchState = {
       ...state(),
+      nextPendingEffectSequence: 2,
       pendingEffects: [
-        { kind: 'RICKETY_BRIDGE_DESTROY', lane: 0, atEndOfTurn: 2 },
-        { kind: 'RICKETY_BRIDGE_DESTROY', lane: 1, atEndOfTurn: 2 },
+        {
+          id: 'pending:0' as import('../types/ids').PendingEffectId,
+          kind: 'SCHEDULED',
+          when: 'END_OF_NEXT_TURN',
+          sourceId: 'lane-zero-source' as CardId,
+          sourceOwner: 'P0',
+          sourceLane: 0,
+          fireTurn: 2,
+          effect: { kind: 'SEQUENCE', items: [] },
+          scheduledBy: systemCause,
+        },
+        {
+          id: 'pending:1' as import('../types/ids').PendingEffectId,
+          kind: 'SCHEDULED',
+          when: 'END_OF_NEXT_TURN',
+          sourceId: 'lane-one-source' as CardId,
+          sourceOwner: 'P0',
+          sourceLane: 1,
+          fireTurn: 2,
+          effect: { kind: 'SEQUENCE', items: [] },
+          scheduledBy: systemCause,
+        },
       ],
     };
     const result = destroyLane(input, 0);
     expect(result.ok).toBe(true);
-    expect(result.state.pendingEffects).toEqual([
-      { kind: 'RICKETY_BRIDGE_DESTROY', lane: 1, atEndOfTurn: 2 },
-    ]);
+    expect(result.events).toContainEqual({
+      type: 'PENDING_EFFECT_CONSUMED',
+      pendingEffectId: 'pending:0',
+      cause: systemCause,
+    });
+    expect(result.state.pendingEffects.map(effect => effect.id))
+      .toEqual(['pending:1']);
+    expect(result.state.nextPendingEffectSequence).toBe(2);
   });
 
   it('produces replayable deterministic lifecycle event sequences', () => {

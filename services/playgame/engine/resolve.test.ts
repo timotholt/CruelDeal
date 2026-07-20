@@ -790,18 +790,28 @@ function resolveCurrentTurn(
   eq(after.maxEnergy['P0'], 3, 'maxEnergy ramped to 3');
   eq(after.energy['P0'], 4, 'SCHEDULED fired: energy = maxEnergy + 1');
 
-  // Pending queue must be empty — PENDING_EFFECT_REMOVED fires alongside.
+  // Pending queue must be empty — exact-ID consumption fires alongside.
   eq(after.pendingEffects.length, 0, 'SCHEDULED consumed from pending queue');
 
-  // Event ordering: TURN_STARTED precedes the SCHEDULED effect's ENERGY_CHANGED(EFFECT),
-  // which precedes PENDING_EFFECT_REMOVED.
+  // Event ordering is consume-before-effect: TURN_STARTED precedes the exact-ID
+  // consume, and the effect cannot observe itself in the pending queue.
   const idxStarted = events.findIndex((e) => e.type === 'TURN_STARTED');
+  const idxConsumed = events.findIndex(
+    (e) => e.type === 'PENDING_EFFECT_CONSUMED',
+  );
   const idxEffect = events.findIndex(
     (e) => e.type === 'ENERGY_CHANGED' && e.reason === 'EFFECT',
   );
-  const idxRemoved = events.findIndex((e) => e.type === 'PENDING_EFFECT_REMOVED');
-  truthy(idxStarted < idxEffect && idxEffect < idxRemoved,
-    'SCHEDULED order: TURN_STARTED < EFFECT < PENDING_EFFECT_REMOVED');
+  truthy(idxStarted < idxConsumed && idxConsumed < idxEffect,
+    'SCHEDULED order: TURN_STARTED < PENDING_EFFECT_CONSUMED < EFFECT');
+  const scheduledEvent = events.find(
+    (e) => e.type === 'PENDING_EFFECT_SCHEDULED',
+  );
+  truthy(
+    scheduledEvent?.type === 'PENDING_EFFECT_SCHEDULED'
+      && scheduledEvent.effect.id === 'pending:0',
+    'SCHEDULED uses the first deterministic stable pending ID',
+  );
 }
 
 // ---- Exit ------------------------------------------------------------------

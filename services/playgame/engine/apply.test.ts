@@ -482,15 +482,51 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.deck.P0, ['c', 'a', 'b'] as CardId[], 'DECK_SHUFFLED: order matches newOrder');
 }
 
-// -- PENDING_EFFECT_ADDED / REMOVED
+// -- PENDING_EFFECT_SCHEDULED / CONSUMED
 
 {
   const s0 = emptyState();
-  const pe = { kind: 'EGO_OVERRIDE' as const, turn: 6 };
-  const s1 = run(s0, { type: 'PENDING_EFFECT_ADDED', effect: pe });
-  eq(s1.pendingEffects.length, 1, 'PENDING_EFFECT_ADDED: queue has 1');
-  const s2 = run(s1, { type: 'PENDING_EFFECT_REMOVED', effect: pe });
-  eq(s2.pendingEffects.length, 0, 'PENDING_EFFECT_REMOVED: queue empty');
+  const pe = {
+    id: 'pending:0' as import('./types/ids').PendingEffectId,
+    kind: 'SCHEDULED' as const,
+    when: 'START_OF_NEXT_TURN' as const,
+    sourceId: 's1' as CardId,
+    sourceOwner: 'P0' as const,
+    sourceLane: 0,
+    fireTurn: 6,
+    effect: { kind: 'SEQUENCE' as const, items: [] },
+    scheduledBy: locationCause,
+  };
+  const s1 = run(s0, {
+    type: 'PENDING_EFFECT_SCHEDULED',
+    effect: pe,
+    cause: locationCause,
+  });
+  eq(s1.pendingEffects, [pe], 'PENDING_EFFECT_SCHEDULED: queue has exact item');
+  eq(s1.nextPendingEffectSequence, 1, 'PENDING_EFFECT_SCHEDULED: allocator advanced');
+  const s2 = run(s1, {
+    type: 'PENDING_EFFECT_CONSUMED',
+    pendingEffectId: pe.id,
+    cause: locationCause,
+  });
+  eq(s2.pendingEffects.length, 0, 'PENDING_EFFECT_CONSUMED: queue empty');
+  eq(s2.nextPendingEffectSequence, 1, 'PENDING_EFFECT_CONSUMED: allocator unchanged');
+
+  let missingConsumeRejected = false;
+  try {
+    run(s2, {
+      type: 'PENDING_EFFECT_CONSUMED',
+      pendingEffectId: pe.id,
+      cause: locationCause,
+    });
+  } catch {
+    missingConsumeRejected = true;
+  }
+  truthy(
+    missingConsumeRejected,
+    'PENDING_EFFECT_CONSUMED: impossible replay of missing ID rejected',
+  );
+  eq(s2.pendingEffects.length, 0, 'rejected missing consume leaves source state unchanged');
 }
 
 // -- LOCATION_REVEALED: flips revealed bit on the matching lane

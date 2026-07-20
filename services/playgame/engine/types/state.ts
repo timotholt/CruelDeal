@@ -15,6 +15,7 @@ import type {
   LaneId,
   LocationCardInstanceId,
   Owner,
+  PendingEffectId,
   Seat,
 } from './ids';
 import type { Frame, TemporalScope } from './timeline';
@@ -370,27 +371,24 @@ export type LaneTag =
 
 // ---- Pending one-shot effects ----------------------------------------------
 
-export type PendingEffect =
-  | { kind: 'SHURI_DOUBLE_NEXT'; owner: Owner; lane: LaneId; sourceId: CardId }
-  | { kind: 'COULSON_TRIGGER_NEXT'; owner: Owner; lane: LaneId; sourceId: CardId }
-  | { kind: 'EGO_OVERRIDE'; turn: number }
-  | { kind: 'RICKETY_BRIDGE_DESTROY'; lane: LaneId; atEndOfTurn: number }
-  /**
-   * Generic scheduled effect. The DSL's `ADD_PENDING` with a `SCHEDULED`
-   * spec produces this shape. `sourceId` / `owner` / `lane` carry the
-   * authoring-time ctx so the effect resolves SELF/SELF_OWNER selectors
-   * correctly at fire-time (the original source card may have moved,
-   * been destroyed, or been revealed by then).
-   */
-  | {
-      kind: 'SCHEDULED';
-      when: import('./ability').PendingWhen;
-      sourceId: CardId;
-      sourceOwner: Owner | null;
-      sourceLane: LaneId | null;
-      fireTurn: number;
-      effect: import('./ability').EffectExpr;
-    };
+export interface PendingEffectPayload {
+  readonly kind: 'SCHEDULED';
+  readonly when: import('./ability').PendingWhen;
+  readonly sourceId: CardId | LocationCardInstanceId;
+  readonly sourceOwner: Owner | null;
+  readonly sourceLane: LaneId | null;
+  readonly fireTurn: number;
+  readonly effect: import('./ability').EffectExpr;
+}
+
+/**
+ * Frozen, match-local pending work. Identity is explicit and independent of
+ * payload equality, queue position, Frame, RNG, and wall time.
+ */
+export interface PendingEffect extends PendingEffectPayload {
+  readonly id: PendingEffectId;
+  readonly scheduledBy: EffectRef;
+}
 
 // ---- Lane state ------------------------------------------------------------
 
@@ -470,6 +468,8 @@ export interface MatchState {
   readonly activeLaneOrder: readonly LaneId[];
   /** Next monotonic stable lane ID. */
   readonly nextLaneId: LaneId;
+  /** Monotonic match-local allocator; not a chronology or Frame substitute. */
+  readonly nextPendingEffectSequence: number;
   /** Every location card instance, regardless of current zone. */
   readonly locationStore: LocationStore;
   readonly locationDeck: LocationDeckState;

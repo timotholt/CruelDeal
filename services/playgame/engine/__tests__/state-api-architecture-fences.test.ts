@@ -219,6 +219,49 @@ describe('opaque card and location state architecture', () => {
     )).toEqual([]);
   });
 
+  it('keeps pending-effect scheduling and consumption solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'(?:PENDING_EFFECT_SCHEDULED|PENDING_EFFECT_CONSUMED)'/,
+      new Set([
+        'engine/kernel/operations/pendingEffect.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(violations(
+      /\b(?:PENDING_EFFECT_ADDED|PENDING_EFFECT_REMOVED)\b/,
+      new Set(),
+    )).toEqual([]);
+  });
+
+  it('keeps direct pending-effect queue writes inside canonical reduction', () => {
+    expect(violations(
+      /\bpendingEffects\s*:/,
+      new Set([
+        'engine/apply.ts',
+        'engine/cli/initState.ts',
+        'engine/testkit/runtimeFixture.ts',
+        'engine/types/state.ts',
+      ]),
+    )).toEqual([]);
+    const queueWriteCases = [...reducerCases()]
+      .filter(([, source]) => /\bpendingEffects\s*:/.test(source))
+      .map(([eventType]) => eventType);
+    expect(queueWriteCases).toEqual([
+      'PENDING_EFFECT_SCHEDULED',
+      'PENDING_EFFECT_CONSUMED',
+    ]);
+  });
+
+  it('permanently removes ID-less pending state and legacy named payloads', () => {
+    expect(violations(
+      /\b(?:SHURI_DOUBLE_NEXT|COULSON_TRIGGER_NEXT|EGO_OVERRIDE|RICKETY_BRIDGE_DESTROY)\b/,
+      new Set(),
+    )).toEqual([]);
+    const stateSource = readFileSync(resolve(engineRoot, 'types/state.ts'), 'utf8');
+    expect(stateSource).toContain('readonly id: PendingEffectId');
+    expect(stateSource).toContain('readonly nextPendingEffectSequence: number');
+  });
+
   it('keeps live card-tag writes inside metadata reduction or transform reset', () => {
     const tagPatchCases = [...reducerCases()]
       .filter(([, source]) =>

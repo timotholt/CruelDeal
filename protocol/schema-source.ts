@@ -76,8 +76,8 @@ export const PROTOCOL_MATCH_EVENT_TYPES = [
   'CARD_CREATED',
   'CARD_ZONE_CHANGED',
   'DECK_SHUFFLED',
-  'PENDING_EFFECT_ADDED',
-  'PENDING_EFFECT_REMOVED',
+  'PENDING_EFFECT_SCHEDULED',
+  'PENDING_EFFECT_CONSUMED',
   'LOCATION_DECK_INITIALIZED',
   'LOCATION_CARD_CREATED',
   'LOCATION_CARD_DRAWN',
@@ -115,7 +115,11 @@ const ALL_MATCH_EVENT_TYPES_ARE_COVERED: MissingMatchEventType extends never ? t
 void ALL_MATCH_EVENT_TYPES_ARE_COVERED;
 
 const OTHER_EVENT_TYPES = PROTOCOL_MATCH_EVENT_TYPES.filter(
-  (type) => !(CORE_BOUNDARY_EVENT_TYPES as readonly string[]).includes(type),
+  (type) => !([
+    ...CORE_BOUNDARY_EVENT_TYPES,
+    'PENDING_EFFECT_SCHEDULED',
+    'PENDING_EFFECT_CONSUMED',
+  ] as readonly string[]).includes(type),
 );
 
 const protocolMessage = (kind: string, payload: string): JsonSchema => object(
@@ -200,6 +204,71 @@ export const PROTOCOL_SCHEMA = {
       { result: ref('MatchResult') },
       ['result'],
     ),
+    EffectRef: object(
+      {
+        sourceId: string(),
+        effectKind: { enum: ['ON_REVEAL', 'ONGOING', 'LOCATION', 'SYSTEM'] },
+        exprIdx: ref('SafeInteger'),
+        reason: string(),
+      },
+      ['sourceId', 'effectKind', 'reason'],
+    ),
+    EffectExpr: {
+      type: 'object',
+      properties: { kind: string() },
+      required: ['kind'],
+      additionalProperties: true,
+    },
+    ScheduledPendingEffect: object(
+      {
+        id: string(),
+        kind: { const: 'SCHEDULED' },
+        when: { enum: ['START_OF_NEXT_TURN', 'END_OF_NEXT_TURN'] },
+        sourceId: string(),
+        sourceOwner: {
+          anyOf: [
+            ref('Seat'),
+            { type: 'null' },
+          ],
+        },
+        sourceLane: {
+          anyOf: [
+            ref('LaneId'),
+            { type: 'null' },
+          ],
+        },
+        fireTurn: ref('PositiveInteger'),
+        effect: ref('EffectExpr'),
+        scheduledBy: ref('EffectRef'),
+      },
+      [
+        'id',
+        'kind',
+        'when',
+        'sourceId',
+        'sourceOwner',
+        'sourceLane',
+        'fireTurn',
+        'effect',
+        'scheduledBy',
+      ],
+    ),
+    PendingEffectScheduledEvent: tagged(
+      'PENDING_EFFECT_SCHEDULED',
+      {
+        effect: ref('ScheduledPendingEffect'),
+        cause: ref('EffectRef'),
+      },
+      ['effect', 'cause'],
+    ),
+    PendingEffectConsumedEvent: tagged(
+      'PENDING_EFFECT_CONSUMED',
+      {
+        pendingEffectId: string(),
+        cause: ref('EffectRef'),
+      },
+      ['pendingEffectId', 'cause'],
+    ),
     OtherMatchEvent: {
       type: 'object',
       properties: {
@@ -214,6 +283,8 @@ export const PROTOCOL_SCHEMA = {
         ref('TurnStartedEvent'),
         ref('TurnEndedEvent'),
         ref('MatchEndedEvent'),
+        ref('PendingEffectScheduledEvent'),
+        ref('PendingEffectConsumedEvent'),
         ref('OtherMatchEvent'),
       ],
     },

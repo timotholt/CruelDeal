@@ -299,11 +299,11 @@ export function describeReplayStep(
     case 'DECK_SHUFFLED':
       summary = `${player(event.owner)}'s deck was shuffled.`;
       break;
-    case 'PENDING_EFFECT_ADDED':
-      summary = `The “${humanizeToken(event.effect.kind)}” effect was scheduled.`;
+    case 'PENDING_EFFECT_SCHEDULED':
+      summary = `Pending effect “${event.effect.id}” was scheduled for ${humanizeToken(event.effect.when).toLowerCase()}.`;
       break;
-    case 'PENDING_EFFECT_REMOVED':
-      summary = `The “${humanizeToken(event.effect.kind)}” effect finished.`;
+    case 'PENDING_EFFECT_CONSUMED':
+      summary = `Pending effect “${event.pendingEffectId}” was consumed.`;
       break;
     case 'LOCATION_DECK_INITIALIZED':
       summary = `The location deck was initialized with ${event.locations.length} cards.`;

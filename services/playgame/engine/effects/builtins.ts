@@ -25,6 +25,7 @@ import type {
   ChangeStoredPowerCommand,
   OverrideCardTextCommand,
 } from '../kernel/types';
+import type { PendingEffectCommand } from '../kernel/pendingEffectTransaction';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
@@ -92,6 +93,15 @@ export interface BuiltinLifecycleCapabilities {
       | ChangeCardCounterCommand
       | OverrideCardTextCommand
     )[],
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executePendingEffectCommands: (
+    state: MatchState,
+    commands: readonly PendingEffectCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
+      readonly depth?: number;
+    },
     manifest: Manifest,
   ) => BuiltinResult;
   readonly destroyCards: (
@@ -185,6 +195,21 @@ function runCost(
   lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   return lifecycle.executeCostCommands(state, commands, manifest);
+}
+
+function runPending(
+  state: MatchState,
+  commands: readonly PendingEffectCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executePendingEffectCommands(
+    state,
+    commands,
+    { rng: ctx.rng, depth: ctx.depth },
+    manifest,
+  );
 }
 type BuiltinHandler = (
   state: MatchState,
@@ -518,8 +543,8 @@ function addDiscountedCardToHand(
       target: { kind: 'ALL_CARDS', ownerFilter: 'SELF_OWNER', zoneFilter: 'HAND' },
       delta: { kind: 'LIT', n: -costDelta },
     };
-    const pendingEvt: MatchEvent = {
-      type: 'PENDING_EFFECT_ADDED',
+    const scheduled = runPending(s, [{
+      type: 'SCHEDULE_PENDING_EFFECT',
       effect: {
         kind: 'SCHEDULED',
         when: 'END_OF_NEXT_TURN',
@@ -529,9 +554,10 @@ function addDiscountedCardToHand(
         fireTurn: state.turn + 1,
         effect: revertEffect,
       },
-    };
-    events.push(pendingEvt);
-    s = apply(s, pendingEvt, manifest);
+      cause: { ...ctx.source },
+    }], ctx, manifest, lifecycle);
+    events.push(...scheduled.events);
+    s = scheduled.state;
   }
 
   return { events, state: s };
@@ -596,8 +622,8 @@ function overclockChip(
     kind: 'DESTROY',
     target: { kind: 'ALL_CARDS', ownerFilter: 'SELF_OWNER', zoneFilter: 'LANE' },
   };
-  const pendingEvt: MatchEvent = {
-    type: 'PENDING_EFFECT_ADDED',
+  const scheduled = runPending(s, [{
+    type: 'SCHEDULE_PENDING_EFFECT',
     effect: {
       kind: 'SCHEDULED',
       when: 'END_OF_NEXT_TURN',
@@ -607,9 +633,10 @@ function overclockChip(
       fireTurn: state.turn + 1,
       effect: destroyEffect,
     },
-  };
-  events.push(pendingEvt);
-  s = apply(s, pendingEvt, manifest);
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
+  events.push(...scheduled.events);
+  s = scheduled.state;
 
   return { events, state: s };
 }

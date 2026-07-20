@@ -10,11 +10,13 @@ import type {
   LaneId,
   LocationCardInstanceId,
   Owner,
+  PendingEffectId,
 } from '../types/ids';
 import type {
   EnergyReason,
   CardTag,
   LaneTag,
+  PendingEffectPayload,
   PowerMutation,
   SpawnSource,
 } from '../types/state';
@@ -49,6 +51,8 @@ export type GameCommand =
   | OverrideCardTextCommand
   | ChangeLocationTagCommand
   | ChangeLocationCounterCommand
+  | SchedulePendingEffectCommand
+  | ConsumePendingEffectCommand
   | LocationLifecycleCommand
   | LaneLifecycleCommand;
 
@@ -229,6 +233,17 @@ export interface ChangeLocationCounterCommand extends CausedCommand {
   readonly name: string;
   readonly owner: Owner | null;
   readonly delta: number;
+}
+
+export interface SchedulePendingEffectCommand extends CausedCommand {
+  readonly type: 'SCHEDULE_PENDING_EFFECT';
+  readonly effect: PendingEffectPayload;
+}
+
+export interface ConsumePendingEffectCommand extends CausedCommand {
+  readonly type: 'CONSUME_PENDING_EFFECT';
+  readonly pendingEffectId: PendingEffectId;
+  readonly mode: 'EXECUTE' | 'CANCEL';
 }
 
 export interface LocationLifecycleCommand extends CausedCommand {

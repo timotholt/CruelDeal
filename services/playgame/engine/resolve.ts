@@ -17,7 +17,7 @@
 
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
-import type { MatchResult, MatchState, PendingEffect } from './types/state';
+import type { MatchResult, MatchState } from './types/state';
 import type { CardId, LaneId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
@@ -27,8 +27,7 @@ import {
   revealPlayedCardAtEndOfGame,
   executeReactionCommands,
   executeHandCommands,
-  evalEffect,
-  type EffectCtx,
+  executePendingEffectCommands,
 } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
@@ -382,34 +381,23 @@ export function resolveTurn(
   // clears transient tags/staging order.
   {
     const scheduled = s.pendingEffects.filter(
-      (p): p is Extract<PendingEffect, { kind: 'SCHEDULED' }> =>
-        p.kind === 'SCHEDULED' &&
+      p =>
         p.when === 'END_OF_NEXT_TURN' &&
-        ((p.fireTurn ?? s.turn) <= s.turn),
+        p.fireTurn <= s.turn,
     );
-    for (let i = 0; i < scheduled.length; i++) {
-      const pe = scheduled[i];
-      const subCtx: EffectCtx = {
-        state: s,
-        manifest,
-        self: pe.sourceId,
-        selfKind: 'card',
-        selfLane: pe.sourceLane,
-        selfOwner: pe.sourceOwner,
-        rng: rng.scope(`scheduled-end:${pe.sourceId}:${i}`),
-        source: {
+    for (const pe of scheduled) {
+      const consumed = executePendingEffectCommands(s, [{
+        type: 'CONSUME_PENDING_EFFECT',
+        pendingEffectId: pe.id,
+        mode: 'EXECUTE',
+        cause: {
           sourceId: pe.sourceId,
-          effectKind: 'ON_REVEAL',
-          reason: 'SCHEDULED_END_OF_NEXT_TURN',
+          effectKind: 'SYSTEM',
+          reason: 'PENDING_END_OF_TURN_DUE',
         },
-        depth: 0,
-      };
-      const res = evalEffect(s, pe.effect, subCtx, manifest);
-      events.push(...res.events);
-      s = res.state;
-      const remove: MatchEvent = { type: 'PENDING_EFFECT_REMOVED', effect: pe };
-      events.push(remove);
-      s = apply(s, remove, manifest);
+      }], { rng: rng.scope('scheduled-end'), depth: 0 }, manifest);
+      events.push(...consumed.events);
+      s = consumed.state;
     }
   }
 
@@ -529,41 +517,27 @@ export function resolveTurn(
   }
 
   // Phase 5.5  Fire any SCHEDULED pending effects with when='START_OF_NEXT_TURN'.
-  //            These are the generic DSL counterpart to named pending
-  //            kinds (SHURI/EGO/…) and let cards schedule arbitrary
-  //            EffectExprs to run at the top of the next turn. Remove
-  //            each one as we fire it via PENDING_EFFECT_REMOVED.
+  //            Consume each stable pending identity before executing its
+  //            frozen effect so nested work cannot observe it as still due.
   {
     const scheduled = s.pendingEffects.filter(
-      (p): p is Extract<PendingEffect, { kind: 'SCHEDULED' }> =>
-        p.kind === 'SCHEDULED' &&
+      p =>
         p.when === 'START_OF_NEXT_TURN' &&
-        ((p.fireTurn ?? s.turn) <= s.turn),
+        p.fireTurn <= s.turn,
     );
-    for (let i = 0; i < scheduled.length; i++) {
-      const pe = scheduled[i];
-      const subCtx: EffectCtx = {
-        state: s,
-        manifest,
-        self: pe.sourceId,
-        selfKind: 'card',
-        selfLane: pe.sourceLane,
-        selfOwner: pe.sourceOwner,
-        rng: rng.scope(`scheduled:${pe.sourceId}:${i}`),
-        source: {
+    for (const pe of scheduled) {
+      const consumed = executePendingEffectCommands(s, [{
+        type: 'CONSUME_PENDING_EFFECT',
+        pendingEffectId: pe.id,
+        mode: 'EXECUTE',
+        cause: {
           sourceId: pe.sourceId,
-          effectKind: 'ON_REVEAL',
-          reason: 'SCHEDULED_START_OF_NEXT_TURN',
+          effectKind: 'SYSTEM',
+          reason: 'PENDING_START_OF_TURN_DUE',
         },
-        depth: 0,
-      };
-      const res = evalEffect(s, pe.effect, subCtx, manifest);
-      events.push(...res.events);
-      s = res.state;
-      // Remove the pending after it fires. Uses structural equality in apply.ts.
-      const remove: MatchEvent = { type: 'PENDING_EFFECT_REMOVED', effect: pe };
-      events.push(remove);
-      s = apply(s, remove, manifest);
+      }], { rng: rng.scope('scheduled-start'), depth: 0 }, manifest);
+      events.push(...consumed.events);
+      s = consumed.state;
     }
   }
 

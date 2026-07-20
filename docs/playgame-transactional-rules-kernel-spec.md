@@ -1407,12 +1407,21 @@ identity mechanism. IDs are allocated deterministically from canonical match
 state and are replayed as committed data. Wall time, object identity, array
 position, and a second Frame-like chronology are forbidden.
 
+The canonical allocation state is a safe-integer
+`MatchState.nextPendingEffectSequence`; the branded ID is
+`pending:<sequence>`. A successful schedule commit advances the sequence
+exactly once. A no-op or failed transaction advances it zero times. Exhaustion,
+an unsafe stored sequence, or an attempted duplicate ID is an invariant
+failure, not a fallback to RNG, Frame, queue length, or payload hashing.
+
 One pending-effect operation exclusively proposes schedule and consume
 transitions. A scheduled item captures the immutable effect payload, timing,
 source context, owner/lane context, and provenance required to execute after
 the original source has moved or left play. Duplicate IDs are invalid, and
-consuming an absent ID is a defined no-op or typed invariant according to the
-owning command contract—not an equality search for a similar payload.
+consuming an absent ID is an exact no-op—not an equality search for a similar
+payload. `CONSUME_PENDING_EFFECT` records `EXECUTE` versus `CANCEL` intent in
+the command contract even though both remove the addressed item mechanically.
+Only `EXECUTE` schedules interpretation of the frozen payload.
 
 When an item becomes due, ordering is:
 
@@ -1425,10 +1434,23 @@ Consume-before-effect prevents nested resolution from observing and firing the
 same pending item again. Atomic publication still means a later failure
 publishes neither the consumption nor any effect result. Multiple due items
 use their canonical pending order with stable ID as the final tie-breaker.
+Identical payloads scheduled twice remain two distinct items and are each
+consumed exactly once.
 
 The clean cutover replaces payload-based
 `PENDING_EFFECT_REMOVED` equality, direct queue filtering, and producer-owned
 schedule events. No compatibility read of ID-less pending state remains.
+Unrelated reducers, including lane destruction, may not silently delete
+pending items. Cancellation is an explicit consume transition through the
+same operation, or the frozen item remains scheduled according to its authored
+timing.
+
+Exit proof includes deterministic allocation from equal canonical states,
+candidate folding for multiple schedules, exact-ID and missing-ID consumption,
+same-payload identity separation, safe-integer exhaustion, payload snapshotting,
+stable due ordering, consume-before-effect reentrancy, interpreter and budget
+failure rollback, framed replay/reconciliation, and source fences proving the
+old events and all direct queue writes are absent.
 
 ##### C5A-3d — Transform After Stored-Power Reset
 

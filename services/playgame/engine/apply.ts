@@ -23,7 +23,6 @@ import type {
   LaneState,
   InternalLocationRecord,
   MatchState,
-  PendingEffect,
   PlayerTrackedVars,
   PowerLedgerEntry,
   SpawnSource,
@@ -38,6 +37,7 @@ import type {
   LocationCardInstanceId,
   Owner,
 } from './types/ids';
+import { pendingEffectIdForSequence } from './types/ids';
 import type { Manifest } from './manifest/types';
 import { currentFrame, frameSingleEvent } from './timeline';
 import { nextFrame, type FramedEvent } from './types/timeline';
@@ -112,7 +112,9 @@ function requireEventProvenance(event: MatchEvent): void {
     || event.type === 'CARD_TEXT_OVERRIDDEN'
     || event.type === 'LOCATION_TAG_ADDED'
     || event.type === 'LOCATION_TAG_REMOVED'
-    || event.type === 'LOCATION_COUNTER_CHANGED';
+    || event.type === 'LOCATION_COUNTER_CHANGED'
+    || event.type === 'PENDING_EFFECT_SCHEDULED'
+    || event.type === 'PENDING_EFFECT_CONSUMED';
   if (!('cause' in event) || event.cause === undefined) {
     if (provenanceRequired) {
       throw new Error(`${event.type} cause is required`);
@@ -593,14 +595,64 @@ function applyEventBody(
 
     // ---- Pending effects --------------------------------------------------
 
-    case 'PENDING_EFFECT_ADDED':
-      return { ...state, pendingEffects: [...state.pendingEffects, event.effect] };
-
-    case 'PENDING_EFFECT_REMOVED':
+    case 'PENDING_EFFECT_SCHEDULED': {
+      if (
+        !Number.isSafeInteger(state.nextPendingEffectSequence)
+        || state.nextPendingEffectSequence < 0
+        || state.nextPendingEffectSequence >= Number.MAX_SAFE_INTEGER
+      ) {
+        throw new Error(
+          'PENDING_EFFECT_SCHEDULED allocator must be an available non-negative safe integer',
+        );
+      }
+      const expectedId = pendingEffectIdForSequence(
+        state.nextPendingEffectSequence,
+      );
+      if (event.effect.id !== expectedId) {
+        throw new Error(
+          `PENDING_EFFECT_SCHEDULED expected ID ${expectedId}, received ${event.effect.id}`,
+        );
+      }
+      if (state.pendingEffects.some(effect => effect.id === event.effect.id)) {
+        throw new Error(
+          `PENDING_EFFECT_SCHEDULED duplicate ID ${event.effect.id}`,
+        );
+      }
+      if (
+        event.effect.scheduledBy.sourceId !== event.cause.sourceId
+        || event.effect.scheduledBy.effectKind !== event.cause.effectKind
+        || event.effect.scheduledBy.exprIdx !== event.cause.exprIdx
+        || event.effect.scheduledBy.reason !== event.cause.reason
+      ) {
+        throw new Error(
+          'PENDING_EFFECT_SCHEDULED scheduledBy must match event cause',
+        );
+      }
       return {
         ...state,
-        pendingEffects: state.pendingEffects.filter(e => !pendingEffectEq(e, event.effect)),
+        nextPendingEffectSequence: state.nextPendingEffectSequence + 1,
+        pendingEffects: [
+          ...state.pendingEffects,
+          structuredClone(event.effect),
+        ],
       };
+    }
+
+    case 'PENDING_EFFECT_CONSUMED': {
+      if (!state.pendingEffects.some(
+        effect => effect.id === event.pendingEffectId,
+      )) {
+        throw new Error(
+          `PENDING_EFFECT_CONSUMED missing ID ${event.pendingEffectId}`,
+        );
+      }
+      return {
+        ...state,
+        pendingEffects: state.pendingEffects.filter(
+          effect => effect.id !== event.pendingEffectId,
+        ),
+      };
+    }
 
     // ---- Location ---------------------------------------------------------
 
@@ -1027,10 +1079,6 @@ function applyEventBody(
           destroyedAt: eventFrame,
         }),
         activeLaneOrder,
-        pendingEffects: state.pendingEffects.filter(effect =>
-          !('lane' in effect && effect.lane === event.lane)
-          && !('sourceLane' in effect && effect.sourceLane === event.lane),
-        ),
       };
     }
 
@@ -1269,11 +1317,6 @@ function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId)
 function addTagUnique(tags: readonly CardTag[], t: CardTag): readonly CardTag[] {
   if (tags.some(existing => cardTagsEqual(existing, t))) return tags;
   return [...tags, t];
-}
-
-function pendingEffectEq(a: PendingEffect, b: PendingEffect): boolean {
-  // Simple structural compare; pending effects have small primitive payloads.
-  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function laneStatus(lane: LaneState): NonNullable<LaneState['status']> {

@@ -10,6 +10,9 @@ export type CardId = string & { readonly __brand: 'CardId' };
 export type LocationCardInstanceId = string & {
   readonly __brand: 'LocationCardInstanceId';
 };
+export type PendingEffectId = string & {
+  readonly __brand: 'PendingEffectId';
+};
 
 export type Seat = 'P0' | 'P1';
 export type Owner = Seat;
@@ -27,4 +30,9 @@ export const otherSeat = (seat: Seat): Seat => (seat === 'P0' ? 'P1' : 'P0');
 export const mkCardId = (s: string): CardId => s as CardId;
 export const mkLocationCardInstanceId = (s: string): LocationCardInstanceId =>
   s as LocationCardInstanceId;
+export const mkPendingEffectId = (s: string): PendingEffectId =>
+  s as PendingEffectId;
+export const pendingEffectIdForSequence = (
+  sequence: number,
+): PendingEffectId => `pending:${sequence}` as PendingEffectId;
 export const mkLaneId = (value: number): LaneId => value;

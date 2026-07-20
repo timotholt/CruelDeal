@@ -349,8 +349,8 @@ function projectAnimationEvent(
   );
   switch (event.type) {
     case 'GAMEPLAY_RNG_ADVANCED':
-    case 'PENDING_EFFECT_ADDED':
-    case 'PENDING_EFFECT_REMOVED':
+    case 'PENDING_EFFECT_SCHEDULED':
+    case 'PENDING_EFFECT_CONSUMED':
     case 'OR_WINDOW_OPEN':
     case 'OR_WINDOW_CLOSE':
     case 'RECURSION_LIMIT_HIT':

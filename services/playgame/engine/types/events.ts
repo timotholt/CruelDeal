@@ -9,7 +9,14 @@
  * subscribes to this event stream and maps each to a CSS class / animation.
  */
 
-import type { CardId, LaneId, LocationCardInstanceId, Owner, Seat } from './ids';
+import type {
+  CardId,
+  LaneId,
+  LocationCardInstanceId,
+  Owner,
+  PendingEffectId,
+  Seat,
+} from './ids';
 import type {
   CardRevealTiming,
   CardTag,
@@ -123,8 +130,16 @@ export type MatchEvent =
   | { type: 'DECK_SHUFFLED'; owner: Owner; newOrder: readonly CardId[] }
 
   // --- Pending effects ---
-  | { type: 'PENDING_EFFECT_ADDED'; effect: PendingEffect }
-  | { type: 'PENDING_EFFECT_REMOVED'; effect: PendingEffect }
+  | {
+      type: 'PENDING_EFFECT_SCHEDULED';
+      effect: PendingEffect;
+      cause: EffectRef;
+    }
+  | {
+      type: 'PENDING_EFFECT_CONSUMED';
+      pendingEffectId: PendingEffectId;
+      cause: EffectRef;
+    }
 
   // --- Location ---
   | {

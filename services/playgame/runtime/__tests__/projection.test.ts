@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { buildDebugMatchBootstrap } from '../../debug/buildDebugBootstrap';
 import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { BOOTSTRAP_MANIFEST } from '../../engine/manifest/bootstrap';
+import type { EventTransition } from '../../engine/transactionTimeline';
+import type { MatchEvent } from '../../engine/types/events';
+import { mkPendingEffectId } from '../../engine/types/ids';
+import { asFrame } from '../../engine/types/timeline';
 import {
   validateSeatCommittedTransactionWire,
   validateSeatMatchSnapshotWire,
 } from '../../protocol';
 import { MatchSession } from '../matchSession';
+import type { CommittedTransactionRecord } from '../contracts';
 import {
   applySeatCommittedTransaction,
   projectSnapshotForSeat,
@@ -95,6 +100,105 @@ describe('seat-safe JSON projection', () => {
     expect(openingJson).not.toContain('"newOrder"');
     expect(openingJson).not.toContain('"cause"');
     expect(openingJson).not.toContain('"rng"');
+  });
+
+  it('filters stable pending-effect identity events without projecting their payloads', () => {
+    const session = sessionFixture('seat-pending-effect-fixture');
+    const before = session.runtime.state();
+    const pendingEffectId = mkPendingEffectId('pending:projection:1');
+    const cause = {
+      sourceId: before.hand.P0[0],
+      effectKind: 'ON_REVEAL' as const,
+      reason: 'TEST_PENDING_PROJECTION',
+    };
+    const events: readonly MatchEvent[] = [
+      {
+        type: 'PENDING_EFFECT_SCHEDULED',
+        effect: {
+          id: pendingEffectId,
+          kind: 'SCHEDULED',
+          when: 'START_OF_NEXT_TURN',
+          sourceId: before.hand.P0[0],
+          sourceOwner: 'P0',
+          sourceLane: null,
+          fireTurn: before.turn + 1,
+          effect: { kind: 'SEQUENCE', items: [] },
+          scheduledBy: cause,
+        },
+        cause,
+      },
+      {
+        type: 'PENDING_EFFECT_CONSUMED',
+        pendingEffectId,
+        cause: {
+          sourceId: before.hand.P0[0],
+          effectKind: 'SYSTEM',
+          reason: 'PENDING_EFFECT_FIRED',
+        },
+      },
+    ];
+    const scope = { turn: before.turn, phase: 'ACTION' as const };
+    const firstFrame = asFrame(before.timeline.frame + 1);
+    const secondFrame = asFrame(firstFrame + 1);
+    const afterScheduled = {
+      ...before,
+      timeline: { frame: firstFrame, scope },
+    };
+    const afterConsumed = {
+      ...afterScheduled,
+      timeline: { frame: secondFrame, scope },
+    };
+    const framedEvents = events.map((event, index) => ({
+      frame: index === 0 ? firstFrame : secondFrame,
+      scope,
+      event,
+    }));
+    const transitions: readonly EventTransition[] = [
+      {
+        index: 0,
+        transactionId: 'pending-projection-tx',
+        framedEvent: framedEvents[0]!,
+        frame: firstFrame,
+        scope,
+        event: events[0]!,
+        before,
+        after: afterScheduled,
+      },
+      {
+        index: 1,
+        transactionId: 'pending-projection-tx',
+        framedEvent: framedEvents[1]!,
+        frame: secondFrame,
+        scope,
+        event: events[1]!,
+        before: afterScheduled,
+        after: afterConsumed,
+      },
+    ];
+    const transaction: CommittedTransactionRecord = {
+      transactionId: 'pending-projection-tx',
+      matchId: session.bootstrap.matchId,
+      baseRevision: session.runtime.revision(),
+      revision: session.runtime.revision() + 1,
+      intent: {
+        matchId: session.bootstrap.matchId,
+        seat: 'SYSTEM',
+        intentId: 'pending-projection',
+      },
+      framedEvents,
+      rngDrawsBefore: before.rng.draws,
+      rngDrawsAfter: before.rng.draws,
+    };
+
+    const projected = projectTransactionForSeat(
+      transaction,
+      transitions,
+      'P0',
+      BOOTSTRAP_MANIFEST,
+    );
+    expect(projected.events).toEqual([]);
+    expect(JSON.stringify(projected)).not.toContain(pendingEffectId);
+    expect(validateSeatCommittedTransactionWire(projected).ok).toBe(true);
   });
 
   it('reconnects from a snapshot plus a projected transaction suffix', () => {

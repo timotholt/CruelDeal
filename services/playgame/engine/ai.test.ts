@@ -95,6 +95,7 @@ const buildState = (
     lanesById: testLaneRegistry(lanes),
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
+    nextPendingEffectSequence: 0,
     locationDeck: {
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },

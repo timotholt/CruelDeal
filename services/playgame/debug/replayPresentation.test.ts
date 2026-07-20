@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { ReplayStep } from '../engine/replay';
-import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
+import {
+  mkPendingEffectId,
+  type CardId,
+  type LocationCardInstanceId,
+} from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import { GENESIS_FRAME, asFrame } from '../engine/types/timeline';
 import { locationCardAtLane } from '../engine/laneTopology';
@@ -164,6 +168,44 @@ describe('replay debug presentation', () => {
       cause: { sourceId: location.id, effectKind: 'SYSTEM', reason: 'TEST' },
     }), names, actors).summary).toBe(
       `${BOOTSTRAP_MANIFEST.locations[location.defId].name} was destroyed and replaced by Ruin in the left lane - caused by game rules.`,
+    );
+  });
+
+  it('presents pending effects by stable identity rather than payload equality', () => {
+    const pendingEffectId = mkPendingEffectId('pending:1');
+    const scheduledBy = {
+      sourceId: cardId,
+      effectKind: 'ON_REVEAL' as const,
+      reason: 'TEST_PENDING',
+    };
+    expect(describeReplayStep(step({
+      type: 'PENDING_EFFECT_SCHEDULED',
+      effect: {
+        id: pendingEffectId,
+        kind: 'SCHEDULED',
+        when: 'START_OF_NEXT_TURN',
+        sourceId: cardId,
+        sourceOwner: 'P0',
+        sourceLane: 0,
+        fireTurn: 2,
+        effect: { kind: 'SEQUENCE', items: [] },
+        scheduledBy,
+      },
+      cause: scheduledBy,
+    }), names, actors).summary).toBe(
+      `Pending effect “${pendingEffectId}” was scheduled for start of next turn - caused by Bone Market (P0).`,
+    );
+
+    expect(describeReplayStep(step({
+      type: 'PENDING_EFFECT_CONSUMED',
+      pendingEffectId,
+      cause: {
+        sourceId: cardId,
+        effectKind: 'SYSTEM',
+        reason: 'PENDING_EFFECT_FIRED',
+      },
+    }), names, actors).summary).toBe(
+      `Pending effect “${pendingEffectId}” was consumed - caused by game rules: Pending effect fired.`,
     );
   });
 

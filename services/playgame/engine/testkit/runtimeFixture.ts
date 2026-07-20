@@ -161,6 +161,7 @@ export function emptyTestMatchState(
     lanesById: testLaneRegistry(),
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
+    nextPendingEffectSequence: 0,
     locationStore: createLocationStoreInternal(),
     locationDeck: {
       drawPile: [],
@@ -448,6 +449,7 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     lanesById,
     activeLaneOrder: [0, 1, 2],
     nextLaneId: 3,
+    nextPendingEffectSequence: 0,
     locationStore: createLocationStoreInternal(locationCards),
     locationDeck: {
       drawPile: [],

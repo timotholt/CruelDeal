@@ -25,6 +25,7 @@ import {
 } from './projections/cardRuntime';
 import { getLocationState } from './projections/locationRuntime';
 import { getLocationTemplate } from './projections/locationTemplate';
+import { resolvePendingEffectTransaction } from './kernel/pendingEffectTransaction';
 
 export {
   activeLaneIds,
@@ -564,6 +565,24 @@ export function destroyLane(
   }
   events.push(...removal.events);
   working = removal.state;
+
+  const pendingFromLane = working.pendingEffects.filter(
+    effect => effect.sourceLane === laneId,
+  );
+  if (pendingFromLane.length > 0) {
+    const cancelled = resolvePendingEffectTransaction(
+      working,
+      pendingFromLane.map(effect => ({
+        type: 'CONSUME_PENDING_EFFECT' as const,
+        pendingEffectId: effect.id,
+        mode: 'CANCEL' as const,
+        cause,
+      })),
+      { manifest },
+    );
+    events.push(...cancelled.events);
+    working = cancelled.state;
+  }
 
   const destroyed: MatchEvent = {
     type: 'LANE_DESTROYED',

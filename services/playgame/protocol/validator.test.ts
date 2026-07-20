@@ -67,6 +67,54 @@ describe('Cruel Deal protocol v1 TypeScript validator', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('accepts stable pending-effect identity events and rejects payload-equality removal', () => {
+    const cause = {
+      sourceId: 'card-0',
+      effectKind: 'ON_REVEAL',
+      reason: 'TEST_PENDING',
+    };
+    expect(validateFramedEventWire({
+      frame: 1,
+      scope: { turn: 1, phase: 'ACTION' },
+      event: {
+        type: 'PENDING_EFFECT_SCHEDULED',
+        effect: {
+          id: 'pending:1',
+          kind: 'SCHEDULED',
+          when: 'START_OF_NEXT_TURN',
+          sourceId: 'card-0',
+          sourceOwner: 'P0',
+          sourceLane: 0,
+          fireTurn: 2,
+          effect: { kind: 'SEQUENCE', items: [] },
+          scheduledBy: cause,
+        },
+        cause,
+      },
+    }).ok).toBe(true);
+    expect(validateFramedEventWire({
+      frame: 2,
+      scope: { turn: 2, phase: 'START' },
+      event: {
+        type: 'PENDING_EFFECT_CONSUMED',
+        pendingEffectId: 'pending:1',
+        cause: { sourceId: 'rules', effectKind: 'SYSTEM', reason: 'PENDING_FIRED' },
+      },
+    }).ok).toBe(true);
+
+    expect(validateFramedEventWire({
+      frame: 2,
+      scope: { turn: 2, phase: 'START' },
+      event: {
+        type: 'PENDING_EFFECT_REMOVED',
+        effect: {
+          id: 'pending:1',
+          kind: 'SCHEDULED',
+        },
+      },
+    }).ok).toBe(false);
+  });
+
   it('throws a typed boundary error from the assertion API', () => {
     expect(() => assertProtocolPayload('INTENT_ENVELOPE', {
       matchId: 'match',

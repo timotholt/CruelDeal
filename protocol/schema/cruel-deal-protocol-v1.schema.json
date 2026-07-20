@@ -213,6 +213,153 @@
       ],
       "additionalProperties": false
     },
+    "EffectRef": {
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effectKind": {
+          "enum": [
+            "ON_REVEAL",
+            "ONGOING",
+            "LOCATION",
+            "SYSTEM"
+          ]
+        },
+        "exprIdx": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "sourceId",
+        "effectKind",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "EffectExpr": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": true
+    },
+    "ScheduledPendingEffect": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "SCHEDULED"
+        },
+        "when": {
+          "enum": [
+            "START_OF_NEXT_TURN",
+            "END_OF_NEXT_TURN"
+          ]
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceOwner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Seat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceLane": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaneId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fireTurn": {
+          "$ref": "#/$defs/PositiveInteger"
+        },
+        "effect": {
+          "$ref": "#/$defs/EffectExpr"
+        },
+        "scheduledBy": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "when",
+        "sourceId",
+        "sourceOwner",
+        "sourceLane",
+        "fireTurn",
+        "effect",
+        "scheduledBy"
+      ],
+      "additionalProperties": false
+    },
+    "PendingEffectScheduledEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "PENDING_EFFECT_SCHEDULED"
+        },
+        "effect": {
+          "$ref": "#/$defs/ScheduledPendingEffect"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "effect",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "PendingEffectConsumedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "PENDING_EFFECT_CONSUMED"
+        },
+        "pendingEffectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "pendingEffectId",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
     "OtherMatchEvent": {
       "type": "object",
       "properties": {
@@ -245,8 +392,6 @@
             "CARD_CREATED",
             "CARD_ZONE_CHANGED",
             "DECK_SHUFFLED",
-            "PENDING_EFFECT_ADDED",
-            "PENDING_EFFECT_REMOVED",
             "LOCATION_DECK_INITIALIZED",
             "LOCATION_CARD_CREATED",
             "LOCATION_CARD_DRAWN",
@@ -291,6 +436,12 @@
         },
         {
           "$ref": "#/$defs/MatchEndedEvent"
+        },
+        {
+          "$ref": "#/$defs/PendingEffectScheduledEvent"
+        },
+        {
+          "$ref": "#/$defs/PendingEffectConsumedEvent"
         },
         {
           "$ref": "#/$defs/OtherMatchEvent"
@@ -1158,8 +1309,8 @@
             "CARD_CREATED",
             "CARD_ZONE_CHANGED",
             "DECK_SHUFFLED",
-            "PENDING_EFFECT_ADDED",
-            "PENDING_EFFECT_REMOVED",
+            "PENDING_EFFECT_SCHEDULED",
+            "PENDING_EFFECT_CONSUMED",
             "LOCATION_DECK_INITIALIZED",
             "LOCATION_CARD_CREATED",
             "LOCATION_CARD_DRAWN",
